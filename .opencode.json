@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "paper-factory": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "./mcp/paper-state-server.mjs"
+      ]
+    }
+  }
+}

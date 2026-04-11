@@ -1,0 +1,87 @@
+{
+  "version": 3,
+  "paper": {
+    "title": "Untitled Paper",
+    "venue": "Unspecified",
+    "objective": "Capture the paper's goal and contribution.",
+    "deadline": "",
+    "thesis": "Describe the paper's core claim in one sentence.",
+    "audience": "TBD"
+  },
+  "pipeline": {
+    "currentStage": "init",
+    "lastCompletedStage": null,
+    "resumeCommand": "project:paper.orchestrate",
+    "updatedAt": "1970-01-01T00:00:00.000Z"
+  },
+  "orchestration": {
+    "boardPath": ".paper/orchestration/board.json",
+    "handoffPath": ".paper/orchestration/handoffs.md",
+    "phase": "init",
+    "assignedRole": "planner",
+    "activeTaskIds": [],
+    "blockerIds": [],
+    "evidenceLinks": [],
+    "experimentIds": [],
+    "rebuttalIssueIds": [],
+    "currentVersionId": null,
+    "activeComparisonTargets": []
+  },
+  "sections": {
+    "abstract": { "id": "abstract", "title": "Abstract", "status": "planned", "summary": "", "draftPath": ".paper/drafts/abstract.md", "claimIds": [] },
+    "introduction": { "id": "introduction", "title": "Introduction", "status": "planned", "summary": "", "draftPath": ".paper/drafts/introduction.md", "claimIds": [] },
+    "related-work": { "id": "related-work", "title": "Related Work", "status": "planned", "summary": "", "draftPath": ".paper/drafts/related-work.md", "claimIds": [] },
+    "method": { "id": "method", "title": "Method", "status": "planned", "summary": "", "draftPath": ".paper/drafts/method.md", "claimIds": [] },
+    "experiments": { "id": "experiments", "title": "Experiments", "status": "planned", "summary": "", "draftPath": ".paper/drafts/experiments.md", "claimIds": [] },
+    "limitations": { "id": "limitations", "title": "Limitations", "status": "planned", "summary": "", "draftPath": ".paper/drafts/limitations.md", "claimIds": [] },
+    "conclusion": { "id": "conclusion", "title": "Conclusion", "status": "planned", "summary": "", "draftPath": ".paper/drafts/conclusion.md", "claimIds": [] },
+    "rebuttal": { "id": "rebuttal", "title": "Rebuttal Notes", "status": "planned", "summary": "", "draftPath": ".paper/drafts/rebuttal.md", "claimIds": [] }
+  },
+  "artifacts": {
+    "paperRoot": ".paper",
+    "state": ".paper/state.json",
+    "readme": ".paper/README.md",
+    "project": ".paper/project.md",
+    "researchContract": ".paper/contracts/research-contract.md",
+    "orchestrationBoard": ".paper/orchestration/board.json",
+    "orchestrationHandoffs": ".paper/orchestration/handoffs.md",
+    "researchBrief": ".paper/research/brief.md",
+    "researchAgenda": ".paper/research/agenda.json",
+    "plan": ".paper/plans/current-plan.md",
+    "outline": ".paper/outline/current-outline.md",
+    "findings": ".paper/findings.md",
+    "experimentLog": ".paper/experiments/EXPERIMENT_LOG.md",
+    "experimentPlans": ".paper/experiments/plans.json",
+    "experimentResults": ".paper/experiments/results.json",
+    "sources": ".paper/sources/index.json",
+    "notes": ".paper/notes/index.json",
+    "evidence": ".paper/evidence/index.json",
+    "claims": ".paper/claims/CLAIMS_FROM_RESULTS.md",
+    "draftsDir": ".paper/drafts",
+    "reviewLog": ".paper/reviews/log.md",
+    "reviewState": ".paper/reviews/REVIEW_STATE.json",
+    "revisionPlan": ".paper/revision-plans/current-plan.md",
+    "wiki": ".paper/wiki/index.md",
+    "queryPack": ".paper/wiki/query_pack.md",
+    "checklist": ".paper/checklists/paper.md",
+    "bibliography": ".paper/bibliography/references.bib",
+    "citationLog": ".paper/bibliography/citation-log.md",
+    "figuresReadme": ".paper/figures/README.md",
+    "figuresIndex": ".paper/figures/index.json",
+    "rebuttalIssues": ".paper/rebuttal/issues.json",
+    "rebuttalStrategy": ".paper/rebuttal/strategy.md",
+    "rebuttalResponseDraft": ".paper/rebuttal/response-draft.md",
+    "versionsIndex": ".paper/versions/index.json",
+    "versionComparisons": ".paper/versions/comparisons.json",
+    "versionComparisonReport": ".paper/versions/LATEST_COMPARISON.md",
+    "versionSnapshotsDir": ".paper/versions/snapshots"
+  },
+  "reviews": {
+    "lastVerdict": "not-reviewed",
+    "lastReviewedAt": null,
+    "openItems": []
+  },
+  "settings": {
+    "strictMode": false
+  }
+}

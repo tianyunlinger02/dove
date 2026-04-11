@@ -1,0 +1,22 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+import { readJson } from "../../src/core/index.mjs";
+
+test("readJson repairs malformed JSON using the fallback and preserves a backup", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-json-"));
+  const relative = ".paper/state.json";
+  fs.mkdirSync(path.join(root, ".paper"), { recursive: true });
+  fs.writeFileSync(path.join(root, relative), "{broken json", "utf8");
+
+  const recovered = readJson(root, relative, { version: 1, ok: true });
+  assert.equal(recovered.ok, true);
+
+  const entries = fs.readdirSync(path.join(root, ".paper"));
+  assert.ok(entries.some((entry) => entry.startsWith("state.json.broken-")));
+  const repaired = JSON.parse(fs.readFileSync(path.join(root, relative), "utf8"));
+  assert.equal(repaired.ok, true);
+});
