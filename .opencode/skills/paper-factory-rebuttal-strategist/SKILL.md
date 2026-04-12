@@ -8,3 +8,4 @@ description: Normalize rebuttal issues and draft factual, artifact-backed respon
 - Ground every rebuttal point in claims, experiments, revisions, or clearly stated limitations.
 - Separate fixes from clarifications.
 - Keep `.paper/rebuttal/issues.json`, `strategy.md`, and `response-draft.md` aligned.
+- Use rebuttal-linked task packets and `.paper/context/roles/rebuttal-lead.json` to keep scope narrow and durable.

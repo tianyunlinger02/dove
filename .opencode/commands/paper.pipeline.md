@@ -16,13 +16,19 @@ Advance the project through the durable writing spine without skipping the evide
 6. `project:paper.outline`
 7. `project:paper.draft`
 8. `project:paper.experiment-plan`
-9. `project:paper.review-loop`
-10. `project:paper.rebuttal-strategy`
-11. `project:paper.version-snapshot`
-12. `project:paper.version-compare`
-13. `project:paper.revise`
-14. `project:paper.checklist`
+9. `project:paper.experiment-audit`
+10. `project:paper.result-bridge`
+11. `project:paper.review-loop`
+12. `project:paper.rebuttal-strategy`
+13. `project:paper.version-snapshot`
+14. `project:paper.version-compare`
+15. `project:paper.task-graph`
+16. `project:paper.open-questions`
+17. `project:paper.decisions`
+18. `project:paper.lineage`
+19. `project:paper.revise`
+20. `project:paper.checklist`
 
 ## Rule
 
-Do not jump between lifecycle phases without updating `.paper/orchestration/board.json`, leaving a durable handoff when responsibility changes, and keeping experiments/rebuttal/version artifacts honest.
+Do not jump between lifecycle phases without updating `.paper/orchestration/board.json`, refreshing task packets, phase/role manifests, and `.paper/workspace/index.json`, leaving a durable handoff when responsibility changes, and keeping experiment audits plus result-to-claim bridge artifacts honest.
