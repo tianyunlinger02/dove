@@ -10,6 +10,7 @@ The supported install path today is:
 2. let OpenCode discover commands from `.opencode/commands/`
 3. let OpenCode discover skills from `.opencode/skills/`
 4. optionally let OpenCode start the local `paper-factory` MCP server from `.opencode.json`
+5. bootstrap missing `.paper/` artifacts without overwriting user-owned workspace state
 
 ## Project-local install
 
@@ -27,6 +28,12 @@ node ./bin/paper-factory.mjs doctor .
 
 The doctor command checks for the required command pack, skill pack, `.paper/state.json`, `.opencode.json`, and the MCP entrypoint.
 It also parses key JSON artifacts and probes the local MCP server so a workspace cannot look healthy purely because files exist.
+
+## Update boundary safety
+
+`install` and `sync` treat `.paper/` as **user-owned workspace data**. The CLI bootstraps missing `.paper` artifacts via the workspace initializer, but it no longer copies the packaged `.paper/` tree over the target project as managed code.
+
+The durable boundary description lives in `.paper/workflow-pack/boundaries.json`.
 
 ## Validation
 
