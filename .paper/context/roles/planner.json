@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "roleId": "planner",
+  "label": "Planner",
+  "charter": "Keeps the board current, sequences work, and maintains plan/review gates.",
+  "contextPaths": [
+    ".paper/state.json",
+    ".paper/orchestration/board.json",
+    ".paper/orchestration/handoffs.md",
+    ".paper/task-packets/index.json",
+    ".paper/sessions/LATEST_SUMMARY.md",
+    ".paper/wiki/navigation.md",
+    ".paper/workspace/index.json",
+    ".paper/wiki/entities.json",
+    ".paper/wiki/relations.json",
+    ".paper/plans/current-plan.md",
+    ".paper/outline/current-outline.md",
+    ".paper/revision-plans/current-plan.md",
+    ".paper/checklists/paper.md"
+  ],
+  "activeTaskPacketIds": [],
+  "openQuestionIds": [],
+  "decisionIds": [
+    "board-current-role",
+    "board-next-action"
+  ],
+  "workspaceIndexPath": ".paper/workspace/index.json",
+  "currentFocus": null,
+  "generatedAt": "2026-04-12T10:53:11.346Z"
+}

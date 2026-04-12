@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "roleId": "reviewer",
+  "label": "Reviewer",
+  "charter": "Runs evidence-aware review and records blockers or revision items.",
+  "contextPaths": [
+    ".paper/state.json",
+    ".paper/orchestration/board.json",
+    ".paper/orchestration/handoffs.md",
+    ".paper/task-packets/index.json",
+    ".paper/sessions/LATEST_SUMMARY.md",
+    ".paper/wiki/navigation.md",
+    ".paper/workspace/index.json",
+    ".paper/wiki/entities.json",
+    ".paper/wiki/relations.json",
+    ".paper/evidence/index.json",
+    ".paper/reviews/log.md",
+    ".paper/reviews/REVIEW_STATE.json",
+    ".paper/reviews/concerns.json",
+    ".paper/reviews/adversarial-state.json",
+    ".paper/experiments/audits.json",
+    ".paper/claims/bridge-log.json",
+    ".paper/revision-plans/current-plan.md",
+    ".paper/checklists/paper.md"
+  ],
+  "activeTaskPacketIds": [],
+  "openQuestionIds": [],
+  "decisionIds": [
+    "board-current-role",
+    "board-next-action"
+  ],
+  "workspaceIndexPath": ".paper/workspace/index.json",
+  "currentFocus": null,
+  "generatedAt": "2026-04-12T10:53:11.347Z"
+}

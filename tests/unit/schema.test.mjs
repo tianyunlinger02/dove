@@ -25,6 +25,9 @@ test("createDefaultState exposes durable artifact paths", () => {
   const state = createDefaultState();
   assert.equal(state.artifacts.plan, ".paper/plans/current-plan.md");
   assert.equal(state.artifacts.orchestrationBoard, ".paper/orchestration/board.json");
+  assert.equal(state.artifacts.taskPacketsIndex, ".paper/task-packets/index.json");
+  assert.equal(state.artifacts.sessionSummary, ".paper/sessions/LATEST_SUMMARY.md");
+  assert.equal(state.artifacts.workflowBoundaries, ".paper/workflow-pack/boundaries.json");
   assert.equal(state.artifacts.researchBrief, ".paper/research/brief.md");
   assert.equal(state.artifacts.rebuttalIssues, ".paper/rebuttal/issues.json");
   assert.equal(state.artifacts.versionsIndex, ".paper/versions/index.json");

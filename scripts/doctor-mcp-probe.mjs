@@ -85,12 +85,13 @@ async function main() {
 
   const listed = await call("tools/list");
   const names = new Set(listed.tools.map((tool) => tool.name));
-  for (const required of ["ensure_workspace", "read_state", "run_review_loop", "sync_citations", "refresh_wiki", "build_rebuttal"]) {
+  for (const required of ["ensure_workspace", "read_state", "query_workspace_index", "run_experiment_audit", "bridge_result_to_claim", "run_review_loop", "sync_citations", "refresh_wiki", "build_rebuttal"]) {
     assert.equal(names.has(required), true, `Missing MCP tool ${required}`);
   }
 
   await call("tools/call", { name: "ensure_workspace", arguments: {} });
   await call("tools/call", { name: "read_state", arguments: {} });
+  await call("tools/call", { name: "query_workspace_index", arguments: {} });
 }
 
 try {

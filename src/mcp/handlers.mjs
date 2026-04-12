@@ -1,6 +1,7 @@
 import {
   appendHandoff,
   appendReviewLog,
+  bridgeExperimentResultToClaim,
   buildRebuttal,
   buildRebuttalStrategy,
   compareVersions,
@@ -9,9 +10,17 @@ import {
   initProject,
   listWorkspaceArtifacts,
   normalizeRebuttalIssues,
+  readBoundaryReport,
+  queryDecisions,
+  queryLineage,
+  queryOpenQuestions,
+  queryTaskGraph,
+  queryWorkspaceIndex,
   readState,
+  readRoleContextManifest,
   refreshWiki,
   registerSource,
+  runExperimentAudit,
   runReviewLoop,
   setSectionStatus,
   syncChecklist,
@@ -26,7 +35,8 @@ import {
   upsertOutline,
   upsertOrchestrationBoard,
   upsertPlan,
-  upsertRevisionPlan
+  upsertRevisionPlan,
+  summarizeSessionJournal
 } from "../core/index.mjs";
 
 function makeTextResult(data) {
@@ -51,6 +61,22 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(initProject(root, args));
       case "read_state":
         return makeTextResult(readState(root));
+      case "query_task_graph":
+        return makeTextResult(queryTaskGraph(root));
+      case "query_open_questions":
+        return makeTextResult(queryOpenQuestions(root));
+      case "query_decisions":
+        return makeTextResult(queryDecisions(root));
+      case "query_lineage":
+        return makeTextResult(queryLineage(root));
+      case "query_workspace_index":
+        return makeTextResult(queryWorkspaceIndex(root));
+      case "query_boundary_report":
+        return makeTextResult(readBoundaryReport(root));
+      case "read_role_context_manifest":
+        return makeTextResult(readRoleContextManifest(root, args.roleId));
+      case "summarize_session_journal":
+        return makeTextResult(summarizeSessionJournal(root));
       case "upsert_orchestration_board":
         return makeTextResult(upsertOrchestrationBoard(root, args));
       case "append_handoff":
@@ -67,6 +93,10 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(upsertExperimentPlan(root, args));
       case "upsert_experiment_result":
         return makeTextResult(upsertExperimentResult(root, args));
+      case "run_experiment_audit":
+        return makeTextResult(runExperimentAudit(root, args));
+      case "bridge_result_to_claim":
+        return makeTextResult(bridgeExperimentResultToClaim(root, args));
       case "upsert_plan":
         return makeTextResult(upsertPlan(root, args));
       case "upsert_outline":

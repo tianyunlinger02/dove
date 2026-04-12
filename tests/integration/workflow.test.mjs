@@ -127,7 +127,8 @@ test("single-paper workflow creates durable artifacts", () => {
     claimId: "claim-1",
     outcome: "supports",
     summary: "Durable workflow preserved more evidence links.",
-    evidenceLinks: [".paper/experiments/EXPERIMENT_LOG.md"]
+    evidenceLinks: [".paper/experiments/EXPERIMENT_LOG.md"],
+    comparisonTargets: ["baseline-ad-hoc"]
   });
 
   const review = runReviewLoop(root, { scope: "introduction" });

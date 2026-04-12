@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "roleId": "experiment-planner",
+  "label": "Experiment Planner",
+  "charter": "Defines claim-driven experiments and tracks results-to-claim closure.",
+  "contextPaths": [
+    ".paper/state.json",
+    ".paper/orchestration/board.json",
+    ".paper/orchestration/handoffs.md",
+    ".paper/task-packets/index.json",
+    ".paper/sessions/LATEST_SUMMARY.md",
+    ".paper/wiki/navigation.md",
+    ".paper/workspace/index.json",
+    ".paper/wiki/entities.json",
+    ".paper/wiki/relations.json",
+    ".paper/evidence/index.json",
+    ".paper/experiments/plans.json",
+    ".paper/experiments/results.json",
+    ".paper/experiments/audits.json",
+    ".paper/claims/bridge-log.json",
+    ".paper/experiments/EXPERIMENT_LOG.md"
+  ],
+  "activeTaskPacketIds": [],
+  "openQuestionIds": [],
+  "decisionIds": [
+    "board-current-role",
+    "board-next-action"
+  ],
+  "workspaceIndexPath": ".paper/workspace/index.json",
+  "currentFocus": null,
+  "generatedAt": "2026-04-12T10:53:11.347Z"
+}

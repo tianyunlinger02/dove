@@ -19,12 +19,34 @@ test("CLI install copies the workflow pack into a target workspace", () => {
   assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "paper.pipeline.md")));
   assert.ok(fs.existsSync(path.join(target, ".opencode", "skills", "paper-factory-pipeline", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(target, ".paper", "state.json")));
+   assert.ok(fs.existsSync(path.join(target, ".paper", "workflow-pack", "boundaries.json")));
+   assert.ok(fs.existsSync(path.join(target, ".paper", "task-packets", "index.json")));
   assert.ok(fs.existsSync(path.join(target, "bin", "paper-factory.mjs")));
   assert.ok(fs.existsSync(path.join(target, "mcp", "paper-state-server.mjs")));
   assert.ok(fs.existsSync(path.join(target, "scripts", "validate-mcp.mjs")));
   assert.ok(fs.existsSync(path.join(target, "src", "mcp", "server.mjs")));
   const config = JSON.parse(fs.readFileSync(path.join(target, ".opencode.json"), "utf8"));
   assert.equal(Object.hasOwn(config, "$schema"), false);
+});
+
+test("CLI sync preserves user-owned .paper workspace state", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-sync-"));
+  spawnSync("node", [CLI, "install", target, "--force"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  const draftPath = path.join(target, ".paper", "drafts", "introduction.md");
+  fs.mkdirSync(path.dirname(draftPath), { recursive: true });
+  fs.writeFileSync(draftPath, "# Introduction\n\nUser-owned draft content.\n", "utf8");
+
+  const result = spawnSync("node", [CLI, "sync", target, "--force"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(fs.readFileSync(draftPath, "utf8"), /User-owned draft content/);
 });
 
 test("CLI doctor returns non-zero for unhealthy workspaces", () => {

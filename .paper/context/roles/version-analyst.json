@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "roleId": "version-analyst",
+  "label": "Version Analyst",
+  "charter": "Snapshots versions, tracks lineage, and compares changes honestly.",
+  "contextPaths": [
+    ".paper/state.json",
+    ".paper/orchestration/board.json",
+    ".paper/orchestration/handoffs.md",
+    ".paper/task-packets/index.json",
+    ".paper/sessions/LATEST_SUMMARY.md",
+    ".paper/wiki/navigation.md",
+    ".paper/workspace/index.json",
+    ".paper/wiki/entities.json",
+    ".paper/wiki/relations.json",
+    ".paper/versions/index.json",
+    ".paper/versions/comparisons.json",
+    ".paper/versions/LATEST_COMPARISON.md"
+  ],
+  "activeTaskPacketIds": [],
+  "openQuestionIds": [],
+  "decisionIds": [
+    "board-current-role",
+    "board-next-action"
+  ],
+  "workspaceIndexPath": ".paper/workspace/index.json",
+  "currentFocus": null,
+  "generatedAt": "2026-04-12T10:53:11.347Z"
+}

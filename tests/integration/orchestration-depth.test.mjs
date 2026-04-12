@@ -6,6 +6,7 @@ import path from "node:path";
 
 import {
   appendHandoff,
+  appendReviewLog,
   buildRebuttalStrategy,
   compareVersions,
   createVersionSnapshot,
@@ -13,6 +14,7 @@ import {
   initProject,
   normalizeRebuttalIssues,
   readState,
+  runReviewLoop,
   updateResearchBrief,
   upsertClaims,
   upsertExperimentPlan,
@@ -98,6 +100,15 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   const strategy = buildRebuttalStrategy(root);
   assert.equal(strategy.issueCount, 1);
 
+  appendReviewLog(root, {
+    stage: "depth-flow-signoff",
+    scope: "orchestration-depth",
+    verdict: "coherent",
+    summary: "Artifacts are coherent for snapshot testing.",
+    findings: [],
+    actionItems: [],
+    reviewRequiredBeforeFinalize: false
+  });
   const v1 = createVersionSnapshot(root, { versionId: "depth-v1", summary: "First snapshot" });
   upsertOrchestrationBoard(root, { phase: "versions", assignedRole: "version-analyst" });
   const v2 = createVersionSnapshot(root, { versionId: "depth-v2", parentVersionId: v1.id, summary: "Second snapshot" });
@@ -111,8 +122,29 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   assert.ok(Array.isArray(comparison.changedDraftSections));
   const handoffs = fs.readFileSync(path.join(root, ".paper", "orchestration", "handoffs.md"), "utf8");
   assert.match(handoffs, /planner -> researcher/);
-  assert.match(handoffs, /researcher -> rebuttal-lead|planner -> version-analyst|rebuttal-lead -> version-analyst/);
+  assert.match(handoffs, /experiment-planner -> rebuttal-lead|reviewer -> version-analyst|planner -> experiment-planner/);
   assert.ok(fs.existsSync(path.join(root, ".paper", "orchestration", "handoffs.md")));
   assert.ok(fs.existsSync(path.join(root, ".paper", "rebuttal", "strategy.md")));
   assert.ok(fs.existsSync(path.join(root, ".paper", "versions", "LATEST_COMPARISON.md")));
+});
+
+test("version actions are blocked until coherent review clears finalize gate", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, {
+    title: "Finalize Gate",
+    objective: "Verify finalize review gate.",
+    thesis: "Review gate should block premature version snapshots."
+  });
+
+  upsertOrchestrationBoard(root, {
+    phase: "review",
+    assignedRole: "reviewer",
+    reviewRequiredBeforeFinalize: true,
+    blockers: [{ summary: "Need coherent review before snapshot.", status: "open", assignedRole: "reviewer" }]
+  });
+
+  assert.throws(() => {
+    createVersionSnapshot(root, { versionId: "blocked-version" });
+  }, /requires a coherent review/);
 });

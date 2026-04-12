@@ -96,6 +96,7 @@ async function main() {
   assert.deepEqual(toolNames, [
     "append_handoff",
     "append_review_log",
+    "bridge_result_to_claim",
     "build_rebuttal",
     "build_rebuttal_strategy",
     "compare_versions",
@@ -104,11 +105,20 @@ async function main() {
     "init_project",
     "list_artifacts",
     "normalize_rebuttal_issues",
+    "query_boundary_report",
+    "query_decisions",
+    "query_lineage",
+    "query_open_questions",
+    "query_task_graph",
+    "query_workspace_index",
+    "read_role_context_manifest",
     "read_state",
     "refresh_wiki",
     "register_source",
+    "run_experiment_audit",
     "run_review_loop",
     "set_section_status",
+    "summarize_session_journal",
     "sync_checklist",
     "sync_citations",
     "update_research_brief",
@@ -240,6 +250,24 @@ async function main() {
     }
   }));
 
+  const audit = extractJson(await call("tools/call", {
+    name: "run_experiment_audit",
+    arguments: {
+      experimentId: "workflow-compare"
+    }
+  }));
+  assert.equal(audit.experimentId, "workflow-compare");
+
+  const bridge = extractJson(await call("tools/call", {
+    name: "bridge_result_to_claim",
+    arguments: {
+      experimentId: "workflow-compare",
+      auditIds: [audit.id],
+      reason: "Validator explicitly checked the result-to-claim bridge."
+    }
+  }));
+  assert.equal(bridge.claimId, "claim-1");
+
   extractJson(await call("tools/call", {
     name: "upsert_plan",
     arguments: {
@@ -279,6 +307,19 @@ async function main() {
   }));
   assert.notEqual(review.verdict, undefined);
 
+  extractJson(await call("tools/call", {
+    name: "append_review_log",
+    arguments: {
+      stage: "validator-signoff",
+      scope: "validator",
+      verdict: "coherent",
+      summary: "Validation signoff clears finalize gate.",
+      findings: [],
+      actionItems: [],
+      reviewRequiredBeforeFinalize: false
+    }
+  }));
+
   const citations = extractJson(await call("tools/call", { name: "sync_citations", arguments: {} }));
   assert.equal(Array.isArray(citations.missingKeys), true);
 
@@ -301,6 +342,30 @@ async function main() {
   const rebuttal = extractJson(await call("tools/call", { name: "build_rebuttal", arguments: {} }));
   assert.equal(rebuttal.draftPath, ".paper/drafts/rebuttal.md");
 
+  extractJson(await call("tools/call", {
+    name: "append_review_log",
+    arguments: {
+      stage: "validator-post-rebuttal-signoff",
+      scope: "validator",
+      verdict: "coherent",
+      summary: "Post-rebuttal validation signoff clears finalize gate again.",
+      findings: [],
+      actionItems: [],
+      reviewRequiredBeforeFinalize: false
+    }
+  }));
+
+  extractJson(await call("tools/call", {
+    name: "upsert_orchestration_board",
+    arguments: {
+      phase: "versions",
+      assignedRole: "version-analyst",
+      reviewRequiredBeforeFinalize: false,
+      currentFocus: "Validator signoff cleared finalize gate.",
+      nextAction: "Create and compare version snapshots."
+    }
+  }));
+
   const snapshotA = extractJson(await call("tools/call", {
     name: "create_version_snapshot",
     arguments: {
@@ -317,6 +382,17 @@ async function main() {
       title: "Method",
       body: "# Method\n\nWe keep a board-first workflow [cite:smith2026paperfactory].\n",
       status: "drafting"
+    }
+  }));
+
+  extractJson(await call("tools/call", {
+    name: "upsert_orchestration_board",
+    arguments: {
+      phase: "versions",
+      assignedRole: "version-analyst",
+      reviewRequiredBeforeFinalize: false,
+      currentFocus: "Second validator snapshot is ready.",
+      nextAction: "Create the follow-up snapshot and compare lineage."
     }
   }));
 
@@ -338,6 +414,33 @@ async function main() {
     }
   }));
   assert.equal(comparison.fromVersionId, "validator-v1");
+
+  const taskGraph = extractJson(await call("tools/call", { name: "query_task_graph", arguments: {} }));
+  assert.equal(Array.isArray(taskGraph.nodes), true);
+
+  const boundaryReport = extractJson(await call("tools/call", { name: "query_boundary_report", arguments: {} }));
+  assert.equal(Array.isArray(boundaryReport.missingBootstrapArtifacts), true);
+
+  const questions = extractJson(await call("tools/call", { name: "query_open_questions", arguments: {} }));
+  assert.equal(Array.isArray(questions.items), true);
+
+  const decisions = extractJson(await call("tools/call", { name: "query_decisions", arguments: {} }));
+  assert.equal(Array.isArray(decisions.items), true);
+
+  const lineage = extractJson(await call("tools/call", { name: "query_lineage", arguments: {} }));
+  assert.equal(Array.isArray(lineage.lineage), true);
+
+  const workspaceIndex = extractJson(await call("tools/call", { name: "query_workspace_index", arguments: {} }));
+  assert.equal(Array.isArray(workspaceIndex.activePackets), true);
+
+  const reviewerManifest = extractJson(await call("tools/call", {
+    name: "read_role_context_manifest",
+    arguments: { roleId: "reviewer" }
+  }));
+  assert.equal(reviewerManifest.roleId, "reviewer");
+
+  const journalSummary = extractJson(await call("tools/call", { name: "summarize_session_journal", arguments: {} }));
+  assert.equal(journalSummary.summaryPath, ".paper/sessions/LATEST_SUMMARY.md");
 
   extractJson(await call("tools/call", { name: "sync_checklist", arguments: {} }));
 

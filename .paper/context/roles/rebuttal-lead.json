@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "roleId": "rebuttal-lead",
+  "label": "Rebuttal Lead",
+  "charter": "Normalizes reviewer issues, writes strategy, and keeps responses factual.",
+  "contextPaths": [
+    ".paper/state.json",
+    ".paper/orchestration/board.json",
+    ".paper/orchestration/handoffs.md",
+    ".paper/task-packets/index.json",
+    ".paper/sessions/LATEST_SUMMARY.md",
+    ".paper/wiki/navigation.md",
+    ".paper/workspace/index.json",
+    ".paper/wiki/entities.json",
+    ".paper/wiki/relations.json",
+    ".paper/reviews/REVIEW_STATE.json",
+    ".paper/reviews/concerns.json",
+    ".paper/rebuttal/issues.json",
+    ".paper/rebuttal/strategy.md",
+    ".paper/rebuttal/response-draft.md"
+  ],
+  "activeTaskPacketIds": [],
+  "openQuestionIds": [],
+  "decisionIds": [
+    "board-current-role",
+    "board-next-action"
+  ],
+  "workspaceIndexPath": ".paper/workspace/index.json",
+  "currentFocus": null,
+  "generatedAt": "2026-04-12T10:53:11.347Z"
+}

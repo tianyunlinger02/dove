@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "roleId": "researcher",
+  "label": "Researcher",
+  "charter": "Expands sources, notes, claims, and durable research briefs.",
+  "contextPaths": [
+    ".paper/state.json",
+    ".paper/orchestration/board.json",
+    ".paper/orchestration/handoffs.md",
+    ".paper/task-packets/index.json",
+    ".paper/sessions/LATEST_SUMMARY.md",
+    ".paper/wiki/navigation.md",
+    ".paper/workspace/index.json",
+    ".paper/wiki/entities.json",
+    ".paper/wiki/relations.json",
+    ".paper/research/brief.md",
+    ".paper/research/agenda.json",
+    ".paper/sources/index.json",
+    ".paper/notes/index.json",
+    ".paper/evidence/index.json",
+    ".paper/wiki/query_pack.md"
+  ],
+  "activeTaskPacketIds": [],
+  "openQuestionIds": [],
+  "decisionIds": [
+    "board-current-role",
+    "board-next-action"
+  ],
+  "workspaceIndexPath": ".paper/workspace/index.json",
+  "currentFocus": null,
+  "generatedAt": "2026-04-12T10:53:11.347Z"
+}
