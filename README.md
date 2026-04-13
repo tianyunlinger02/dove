@@ -22,6 +22,7 @@ The result is not a fake clone of either project. It is an honest OpenCode-nativ
 - a **CLI installer/doctor** at `bin/paper-factory.mjs`
 - a durable **`.paper/` artifact model** for orchestration, handoffs, research briefs, experiment audits, result-to-claim bridge logs, typed wiki/workspace indexes, rebuttal issues/strategy, version lineage/comparisons, figure artifact contracts, plus the classic paper-writing artifacts
 - durable **task packets, packet/role context manifests, session summaries, and navigation reports** that narrow context without inventing a hidden runtime
+- a proposal-only **meta-optimize / outer-loop layer** that turns repeated repair and review patterns into evidence-backed recommendations under `.paper/meta/`
 - stronger **artifact-local and action-local context bundles** under `.paper/context/artifacts/` and `.paper/context/actions/` so commands can read the nearest guidance before mutating workflow state
 - an optional **strict mode** that prevents out-of-order drafting when evidence gates have not been satisfied
 
@@ -72,7 +73,8 @@ npm pack --dry-run
 15. `project:paper.open-questions`
 16. `project:paper.decisions`
 17. `project:paper.lineage`
-18. `project:paper.checklist`
+18. `project:paper.meta-optimize`
+19. `project:paper.checklist`
 
 ## Why `.paper/` matters
 
@@ -128,6 +130,10 @@ npm pack --dry-run
 - `.paper/wiki/relations.json`
 - `.paper/wiki/navigation.md`
 - `.paper/workspace/index.json`
+- `.paper/meta/events.json`
+- `.paper/meta/recommendations.json`
+- `.paper/meta/optimizer-state.json`
+- `.paper/meta/LATEST_OPTIMIZER_REPORT.md`
 - `.paper/bibliography/citation-log.md`
 
 ## Portable Trellis-inspired additions
@@ -150,6 +156,7 @@ Additional phase-2 upgrades:
 - **Adversarial review + experiment integrity**: `.paper/reviews/concerns.json`, `.paper/reviews/adversarial-state.json`, `.paper/experiments/audits.json`, and `.paper/claims/bridge-log.json` keep review memory, experiment audits, and result-to-claim transitions durable.
 - **Typed wiki + workspace index**: `.paper/wiki/entities.json`, `.paper/wiki/relations.json`, and `.paper/workspace/index.json` make top-level state more queryable and resumable, including stronger queues, dependency health, ownership summaries, and handoff obligations.
 - **Figure artifact contracts**: `.paper/figures/briefs.json`, `segments.json`, `templates.json`, `editable-index.json`, `final-index.json`, and `qa.json` provide staged figure artifacts plus durable QA/linkage outputs without pretending the package ships a render/editor backend.
+- **Proposal-only meta-optimize layer**: `.paper/meta/events.json`, `recommendations.json`, `optimizer-state.json`, and `LATEST_OPTIMIZER_REPORT.md` summarize repeated workflow weaknesses into explicit recommendations without auto-applying any change.
 
 Intentionally out of scope:
 

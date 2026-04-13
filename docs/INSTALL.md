@@ -27,7 +27,7 @@ node ./bin/paper-factory.mjs doctor .
 ```
 
 The doctor command checks for the required command pack, skill pack, `.paper/state.json`, `.opencode.json`, and the MCP entrypoint.
-It also parses key JSON artifacts and probes the local MCP server so a workspace cannot look healthy purely because files exist.
+It also parses key JSON artifacts, reports degraded typed-wiki or figure-managed internals explicitly, and probes the local MCP server so a workspace cannot look healthy purely because files exist.
 
 ## Update boundary safety
 

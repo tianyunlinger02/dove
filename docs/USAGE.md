@@ -23,6 +23,8 @@
 - `.paper/context/actions/*.json` adds explicit pre-action bundles that tell commands which local context files to read first.
 - `.paper/sessions/` keeps portable workspace summaries and journal entries.
 - `.paper/workspace/index.json` gives a resumable top-level workspace overview, work queues, dependency health, ownership summaries, and handoff obligations.
+- `.paper/workspace/index.json` now also carries a compact `repairFrontier` so degraded typed-wiki relations and related managed artifact issues stay visible in the same outer-loop surface.
+- `.paper/meta/` adds a proposal-only meta-optimize layer that records derived signal observations and evidence-backed workflow recommendations without auto-applying changes.
 - Commands and skills provide role behavior, but there is **no hidden scheduler or swarm runtime**.
 - Optional MCP helpers mutate those files deterministically; they do not replace them as the source of truth.
 
@@ -86,8 +88,13 @@ The workflow is no longer lifecycle-only. Use these file-backed inspection comma
 - `project:paper.open-questions` for unresolved research/review uncertainty
 - `project:paper.decisions` for durable operational and comparison decisions
 - `project:paper.lineage` for version/comparison lineage
+- `project:paper.meta-optimize` for the proposal-only optimization frontier and recommendations
 
 These commands refresh `.paper/wiki/navigation.md`, `.paper/task-packets/index.json`, `.paper/context/roles/*.json`, `.paper/context/phases/*.json`, `.paper/context/packets/*.json`, `.paper/workspace/index.json`, and `.paper/sessions/LATEST_SUMMARY.md` without introducing unsupported host hooks.
+
+The meta-optimize command also refreshes `.paper/meta/events.json`, `.paper/meta/recommendations.json`, `.paper/meta/optimizer-state.json`, and `.paper/meta/LATEST_OPTIMIZER_REPORT.md` from existing durable signals such as the session journal, review concerns, experiment audits, claim bridges, figure QA, version comparisons, board state, and workspace state.
+
+When typed wiki relations or staged figure artifacts degrade, the repair frontier is surfaced directly through `.paper/workspace/index.json`, `.paper/wiki/navigation.md`, and `.paper/sessions/LATEST_SUMMARY.md` rather than through a hidden optimizer runtime.
 
 For deeper local-context discipline, read the nearest generated surfaces before acting:
 
@@ -110,6 +117,7 @@ The optional MCP layer exposes deterministic helpers:
 - `query_decisions`
 - `query_lineage`
 - `query_workspace_index`
+- `query_meta_optimize`
 - `read_role_context_manifest`
 - `read_phase_context_manifest`
 - `read_packet_context_manifest`
