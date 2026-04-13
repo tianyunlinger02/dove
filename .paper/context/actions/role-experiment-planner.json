@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "scopeType": "role",
+  "scopeId": "experiment-planner",
+  "summary": "Role-scoped pre-action bundle for experiment-planner.",
+  "boardPhase": "init",
+  "boardAssignedRole": "planner",
+  "roleId": "experiment-planner",
+  "phaseId": "init",
+  "packetId": null,
+  "artifactPath": null,
+  "explicitOnly": true,
+  "noHiddenRuntime": true,
+  "requiredReadPaths": [
+    ".paper/context/actions/role-experiment-planner.json",
+    ".paper/context/artifacts/paper-claims-bridge-log-json.json",
+    ".paper/context/artifacts/paper-context-phases-experiments-json.json",
+    ".paper/context/artifacts/paper-evidence-index-json.json",
+    ".paper/context/artifacts/paper-experiments-audits-json.json",
+    ".paper/context/artifacts/paper-experiments-experiment-log-md.json",
+    ".paper/context/artifacts/paper-experiments-plans-json.json",
+    ".paper/context/artifacts/paper-experiments-results-json.json",
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-orchestration-handoffs-md.json",
+    ".paper/context/artifacts/paper-sessions-latest-summary-md.json",
+    ".paper/context/artifacts/paper-state-json.json",
+    ".paper/context/artifacts/paper-task-packets-index-json.json",
+    ".paper/context/artifacts/paper-wiki-entities-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-wiki-relations-json.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json",
+    ".paper/context/phases/init.json",
+    ".paper/context/roles/experiment-planner.json"
+  ],
+  "localRules": [
+    "Do not treat board ownership as permission to skip packet or artifact-local guidance.",
+    "Keep role decisions and handoffs explicit in durable artifacts.",
+    "Prefer the narrowest durable guidance surface that matches the task."
+  ],
+  "generatedAt": "2026-04-13T04:42:00.205Z"
+}

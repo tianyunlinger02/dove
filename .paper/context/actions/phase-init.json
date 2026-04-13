@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "scopeType": "phase",
+  "scopeId": "init",
+  "summary": "Phase-scoped pre-action bundle for init.",
+  "boardPhase": "init",
+  "boardAssignedRole": "planner",
+  "roleId": "planner",
+  "phaseId": "init",
+  "packetId": null,
+  "artifactPath": null,
+  "explicitOnly": true,
+  "noHiddenRuntime": true,
+  "requiredReadPaths": [
+    ".paper/context/actions/phase-init.json",
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json",
+    ".paper/context/phases/init.json",
+    ".paper/context/roles/planner.json"
+  ],
+  "localRules": [
+    "Keep phase guidance explicit and file-backed.",
+    "Start with the board owner and queue state, then drop into packet and artifact context.",
+    "Treat stale, review-needed, and handoff packets as higher-priority than general queue work."
+  ],
+  "generatedAt": "2026-04-13T04:42:00.205Z"
+}

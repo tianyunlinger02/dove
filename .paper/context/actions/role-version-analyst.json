@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "scopeType": "role",
+  "scopeId": "version-analyst",
+  "summary": "Role-scoped pre-action bundle for version-analyst.",
+  "boardPhase": "init",
+  "boardAssignedRole": "planner",
+  "roleId": "version-analyst",
+  "phaseId": "init",
+  "packetId": null,
+  "artifactPath": null,
+  "explicitOnly": true,
+  "noHiddenRuntime": true,
+  "requiredReadPaths": [
+    ".paper/context/actions/role-version-analyst.json",
+    ".paper/context/artifacts/paper-context-phases-versions-json.json",
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-orchestration-handoffs-md.json",
+    ".paper/context/artifacts/paper-sessions-latest-summary-md.json",
+    ".paper/context/artifacts/paper-state-json.json",
+    ".paper/context/artifacts/paper-task-packets-index-json.json",
+    ".paper/context/artifacts/paper-versions-comparisons-json.json",
+    ".paper/context/artifacts/paper-versions-index-json.json",
+    ".paper/context/artifacts/paper-versions-latest-comparison-md.json",
+    ".paper/context/artifacts/paper-wiki-entities-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-wiki-relations-json.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json",
+    ".paper/context/phases/init.json",
+    ".paper/context/roles/version-analyst.json"
+  ],
+  "localRules": [
+    "Do not treat board ownership as permission to skip packet or artifact-local guidance.",
+    "Keep role decisions and handoffs explicit in durable artifacts.",
+    "Prefer the narrowest durable guidance surface that matches the task."
+  ],
+  "generatedAt": "2026-04-13T04:42:00.205Z"
+}

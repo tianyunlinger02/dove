@@ -19,8 +19,52 @@
     ".paper/revision-plans/current-plan.md",
     ".paper/checklists/paper.md"
   ],
+  "localArtifactContextPaths": [
+    ".paper/context/artifacts/paper-checklists-paper-md.json",
+    ".paper/context/artifacts/paper-context-phases-plan-json.json",
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-orchestration-handoffs-md.json",
+    ".paper/context/artifacts/paper-outline-current-outline-md.json",
+    ".paper/context/artifacts/paper-plans-current-plan-md.json",
+    ".paper/context/artifacts/paper-revision-plans-current-plan-md.json",
+    ".paper/context/artifacts/paper-sessions-latest-summary-md.json",
+    ".paper/context/artifacts/paper-state-json.json",
+    ".paper/context/artifacts/paper-task-packets-index-json.json",
+    ".paper/context/artifacts/paper-wiki-entities-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-wiki-relations-json.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json"
+  ],
   "activeTaskPacketIds": [],
   "packetContextPaths": [],
+  "actionContextPath": ".paper/context/actions/role-planner.json",
+  "preActionReadPaths": [
+    ".paper/context/actions/role-planner.json",
+    ".paper/context/artifacts/paper-checklists-paper-md.json",
+    ".paper/context/artifacts/paper-context-phases-plan-json.json",
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-orchestration-handoffs-md.json",
+    ".paper/context/artifacts/paper-outline-current-outline-md.json",
+    ".paper/context/artifacts/paper-plans-current-plan-md.json",
+    ".paper/context/artifacts/paper-revision-plans-current-plan-md.json",
+    ".paper/context/artifacts/paper-sessions-latest-summary-md.json",
+    ".paper/context/artifacts/paper-state-json.json",
+    ".paper/context/artifacts/paper-task-packets-index-json.json",
+    ".paper/context/artifacts/paper-wiki-entities-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-wiki-relations-json.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json",
+    ".paper/context/phases/init.json",
+    ".paper/context/roles/planner.json"
+  ],
+  "behaviorDiscipline": {
+    "summary": "Read the nearest role, packet, and artifact context before acting as planner.",
+    "localRules": [
+      "Prefer the narrowest durable guidance surface that matches the task.",
+      "Do not treat board ownership as permission to skip packet or artifact-local guidance.",
+      "Keep role decisions and handoffs explicit in durable artifacts."
+    ]
+  },
   "openQuestionIds": [],
   "decisionIds": [
     "board-current-role",
@@ -42,5 +86,5 @@
     "staleCount": 0
   },
   "handoffCandidateIds": [],
-  "generatedAt": "2026-04-12T20:41:44.853Z"
+  "generatedAt": "2026-04-13T04:42:00.204Z"
 }

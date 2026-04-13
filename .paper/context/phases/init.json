@@ -19,11 +19,33 @@
     ".paper/wiki/navigation.md",
     ".paper/workspace/index.json"
   ],
+  "artifactContextPaths": [
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json"
+  ],
+  "actionContextPath": ".paper/context/actions/phase-init.json",
+  "preActionReadPaths": [
+    ".paper/context/actions/phase-init.json",
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json",
+    ".paper/context/phases/init.json",
+    ".paper/context/roles/planner.json"
+  ],
+  "behaviorDiscipline": {
+    "summary": "Use this phase manifest to narrow local guidance before phase-scoped work.",
+    "localRules": [
+      "Start with the board owner and queue state, then drop into packet and artifact context.",
+      "Treat stale, review-needed, and handoff packets as higher-priority than general queue work.",
+      "Keep phase guidance explicit and file-backed."
+    ]
+  },
   "resumeGuidance": {
     "command": "project:paper.orchestrate",
     "prioritizedPacketIds": [],
     "packetContextPaths": [],
     "handoffCandidateIds": []
   },
-  "generatedAt": "2026-04-12T20:41:44.854Z"
+  "generatedAt": "2026-04-13T04:42:00.205Z"
 }

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "scopeType": "current",
+  "scopeId": "current",
+  "summary": "Current workspace pre-action bundle. Read this before mutating durable workflow state.",
+  "boardPhase": "init",
+  "boardAssignedRole": "planner",
+  "roleId": "planner",
+  "phaseId": "init",
+  "packetId": null,
+  "artifactPath": ".paper/context/artifacts/paper-orchestration-board-json.json",
+  "explicitOnly": true,
+  "noHiddenRuntime": true,
+  "requiredReadPaths": [
+    ".paper/context/actions/current.json",
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json",
+    ".paper/context/phases/init.json",
+    ".paper/context/roles/planner.json"
+  ],
+  "localRules": [
+    "Do not assume hidden rule loading; read the surfaced files explicitly before acting.",
+    "Start from the current action bundle, then follow the required read order.",
+    "Use packet and artifact-local guidance instead of broad top-level rules when available."
+  ],
+  "generatedAt": "2026-04-13T04:42:00.205Z"
+}

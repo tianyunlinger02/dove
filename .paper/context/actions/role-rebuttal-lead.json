@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "scopeType": "role",
+  "scopeId": "rebuttal-lead",
+  "summary": "Role-scoped pre-action bundle for rebuttal-lead.",
+  "boardPhase": "init",
+  "boardAssignedRole": "planner",
+  "roleId": "rebuttal-lead",
+  "phaseId": "init",
+  "packetId": null,
+  "artifactPath": null,
+  "explicitOnly": true,
+  "noHiddenRuntime": true,
+  "requiredReadPaths": [
+    ".paper/context/actions/role-rebuttal-lead.json",
+    ".paper/context/artifacts/paper-context-phases-rebuttal-json.json",
+    ".paper/context/artifacts/paper-figures-editable-index-json.json",
+    ".paper/context/artifacts/paper-figures-final-index-json.json",
+    ".paper/context/artifacts/paper-figures-qa-json.json",
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-orchestration-handoffs-md.json",
+    ".paper/context/artifacts/paper-rebuttal-issues-json.json",
+    ".paper/context/artifacts/paper-rebuttal-response-draft-md.json",
+    ".paper/context/artifacts/paper-rebuttal-strategy-md.json",
+    ".paper/context/artifacts/paper-reviews-concerns-json.json",
+    ".paper/context/artifacts/paper-reviews-review-state-json.json",
+    ".paper/context/artifacts/paper-sessions-latest-summary-md.json",
+    ".paper/context/artifacts/paper-state-json.json",
+    ".paper/context/artifacts/paper-task-packets-index-json.json",
+    ".paper/context/artifacts/paper-wiki-entities-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-wiki-relations-json.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json",
+    ".paper/context/phases/init.json",
+    ".paper/context/roles/rebuttal-lead.json"
+  ],
+  "localRules": [
+    "Do not treat board ownership as permission to skip packet or artifact-local guidance.",
+    "Keep role decisions and handoffs explicit in durable artifacts.",
+    "Prefer the narrowest durable guidance surface that matches the task."
+  ],
+  "generatedAt": "2026-04-13T04:42:00.204Z"
+}

@@ -18,8 +18,50 @@
     ".paper/versions/comparisons.json",
     ".paper/versions/LATEST_COMPARISON.md"
   ],
+  "localArtifactContextPaths": [
+    ".paper/context/artifacts/paper-context-phases-versions-json.json",
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-orchestration-handoffs-md.json",
+    ".paper/context/artifacts/paper-sessions-latest-summary-md.json",
+    ".paper/context/artifacts/paper-state-json.json",
+    ".paper/context/artifacts/paper-task-packets-index-json.json",
+    ".paper/context/artifacts/paper-versions-comparisons-json.json",
+    ".paper/context/artifacts/paper-versions-index-json.json",
+    ".paper/context/artifacts/paper-versions-latest-comparison-md.json",
+    ".paper/context/artifacts/paper-wiki-entities-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-wiki-relations-json.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json"
+  ],
   "activeTaskPacketIds": [],
   "packetContextPaths": [],
+  "actionContextPath": ".paper/context/actions/role-version-analyst.json",
+  "preActionReadPaths": [
+    ".paper/context/actions/role-version-analyst.json",
+    ".paper/context/artifacts/paper-context-phases-versions-json.json",
+    ".paper/context/artifacts/paper-orchestration-board-json.json",
+    ".paper/context/artifacts/paper-orchestration-handoffs-md.json",
+    ".paper/context/artifacts/paper-sessions-latest-summary-md.json",
+    ".paper/context/artifacts/paper-state-json.json",
+    ".paper/context/artifacts/paper-task-packets-index-json.json",
+    ".paper/context/artifacts/paper-versions-comparisons-json.json",
+    ".paper/context/artifacts/paper-versions-index-json.json",
+    ".paper/context/artifacts/paper-versions-latest-comparison-md.json",
+    ".paper/context/artifacts/paper-wiki-entities-json.json",
+    ".paper/context/artifacts/paper-wiki-navigation-md.json",
+    ".paper/context/artifacts/paper-wiki-relations-json.json",
+    ".paper/context/artifacts/paper-workspace-index-json.json",
+    ".paper/context/phases/init.json",
+    ".paper/context/roles/version-analyst.json"
+  ],
+  "behaviorDiscipline": {
+    "summary": "Read the nearest role, packet, and artifact context before acting as version-analyst.",
+    "localRules": [
+      "Prefer the narrowest durable guidance surface that matches the task.",
+      "Do not treat board ownership as permission to skip packet or artifact-local guidance.",
+      "Keep role decisions and handoffs explicit in durable artifacts."
+    ]
+  },
   "openQuestionIds": [],
   "decisionIds": [
     "board-current-role",
@@ -41,5 +83,5 @@
     "staleCount": 0
   },
   "handoffCandidateIds": [],
-  "generatedAt": "2026-04-12T20:41:44.854Z"
+  "generatedAt": "2026-04-13T04:42:00.205Z"
 }
