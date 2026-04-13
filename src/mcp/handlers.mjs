@@ -13,6 +13,7 @@ import {
   readBoundaryReport,
   queryDecisions,
   queryLineage,
+  queryMetaOptimize,
   queryOpenQuestions,
   queryTaskGraph,
   queryWorkspaceIndex,
@@ -76,6 +77,8 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(queryLineage(root));
       case "query_workspace_index":
         return makeTextResult(queryWorkspaceIndex(root));
+      case "query_meta_optimize":
+        return makeTextResult(queryMetaOptimize(root));
       case "query_boundary_report":
         return makeTextResult(readBoundaryReport(root));
       case "read_role_context_manifest":

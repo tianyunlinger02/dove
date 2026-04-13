@@ -108,6 +108,7 @@ async function main() {
     "query_boundary_report",
     "query_decisions",
     "query_lineage",
+    "query_meta_optimize",
     "query_open_questions",
     "query_task_graph",
     "query_workspace_index",
@@ -153,6 +154,13 @@ async function main() {
     }
   }));
   assert.equal(state.paper.title, "Deterministic Paper Factory");
+
+  const metaOptimize = extractJson(await call("tools/call", {
+    name: "query_meta_optimize",
+    arguments: {}
+  }));
+  assert.equal(metaOptimize.proposalOnly, true);
+  assert.equal(metaOptimize.reportPath, ".paper/meta/LATEST_OPTIMIZER_REPORT.md");
 
   extractJson(await call("tools/call", {
     name: "append_handoff",
@@ -321,6 +329,10 @@ async function main() {
     }
   }));
   assert.equal(figurePlan.qaPath, ".paper/figures/qa.json");
+
+  fs.writeFileSync(path.join(tempWorkspace, ".paper", "figures", "workflow-figure.template.svg"), "<svg />\n", "utf8");
+  fs.writeFileSync(path.join(tempWorkspace, ".paper", "figures", "workflow-figure.editable.svg"), "<svg />\n", "utf8");
+  fs.writeFileSync(path.join(tempWorkspace, ".paper", "figures", "workflow-figure.final.svg"), "<svg />\n", "utf8");
 
   const figureQa = extractJson(await call("tools/call", { name: "validate_figure_pipeline", arguments: {} }));
   assert.equal(figureQa.issueCount, 0);

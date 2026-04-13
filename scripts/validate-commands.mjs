@@ -27,6 +27,7 @@ const requiredCommands = [
   "paper.open-questions.md",
   "paper.decisions.md",
   "paper.lineage.md",
+  "paper.meta-optimize.md",
   "paper.wiki.md",
   "paper.checklist.md",
   "paper.citations.md",
