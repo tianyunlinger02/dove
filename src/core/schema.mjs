@@ -135,6 +135,7 @@ export const ARTIFACT_PATHS = {
   metaDir: ".paper/meta",
   metaEvents: ".paper/meta/events.json",
   metaLongHorizonMemory: ".paper/meta/long-horizon-memory.json",
+  metaRemediationPacks: ".paper/meta/remediation-packs.json",
   metaRecommendations: ".paper/meta/recommendations.json",
   metaOptimizerState: ".paper/meta/optimizer-state.json",
   metaOptimizerReport: ".paper/meta/LATEST_OPTIMIZER_REPORT.md"
@@ -572,6 +573,7 @@ export function normalizeWorkspaceIndex(raw = {}) {
       relationIssueCount: Number.isFinite(repairFrontier.relationIssueCount) ? repairFrontier.relationIssueCount : base.repairFrontier.relationIssueCount,
       relationFamilyIssueCount: Number.isFinite(repairFrontier.relationFamilyIssueCount) ? repairFrontier.relationFamilyIssueCount : base.repairFrontier.relationFamilyIssueCount,
       managedArtifactIssueCount: Number.isFinite(repairFrontier.managedArtifactIssueCount) ? repairFrontier.managedArtifactIssueCount : base.repairFrontier.managedArtifactIssueCount,
+      governanceIssueCount: Number.isFinite(repairFrontier.governanceIssueCount) ? repairFrontier.governanceIssueCount : base.repairFrontier.governanceIssueCount,
       topDegradedFamilyIds: normalizeStringArray(repairFrontier.topDegradedFamilyIds),
       topDegradedGroupIds: normalizeStringArray(repairFrontier.topDegradedGroupIds),
       taxonomyOverview: normalizeString(repairFrontier.taxonomyOverview, base.repairFrontier.taxonomyOverview),
@@ -615,7 +617,8 @@ export function normalizeWorkflowBoundaries(raw = {}) {
         ...normalizeObject(managedArtifacts.codePack)
       },
       workflowBoundaries: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workflowBoundaries),
-      workspaceIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex)
+      workspaceIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
+      remediationPacks: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaRemediationPacks)
     },
     notes: normalizeStringArray(raw.notes, base.notes),
     updatedAt: raw.updatedAt ?? base.updatedAt
@@ -853,6 +856,58 @@ export function normalizeMetaLongHorizonMemory(raw = {}) {
   };
 }
 
+export function createMetaRemediationPacksIndex() {
+  return {
+    version: 1,
+    proposalOnly: true,
+    packs: [],
+    summary: {
+      packCount: 0,
+      topPackIds: [],
+      topClusterIds: [],
+      overview: "No proposal-only remediation packs have been generated yet.",
+      packsPath: ARTIFACT_PATHS.metaRemediationPacks
+    },
+    sourceArtifacts: [
+      ARTIFACT_PATHS.metaRecommendations,
+      ARTIFACT_PATHS.metaLongHorizonMemory,
+      ARTIFACT_PATHS.reviewConcerns,
+      ARTIFACT_PATHS.figureQa,
+      ARTIFACT_PATHS.workspaceIndex,
+      ARTIFACT_PATHS.navigationReport,
+      ARTIFACT_PATHS.sessionSummary
+    ],
+    updatedAt: null
+  };
+}
+
+export function normalizeMetaRemediationPacksIndex(raw = {}) {
+  const base = createMetaRemediationPacksIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    proposalOnly: normalizeBoolean(raw.proposalOnly, base.proposalOnly),
+    packs: normalizeObjectArray(raw.packs),
+    summary: {
+      ...base.summary,
+      ...summary,
+      packCount: normalizeNumber(summary.packCount, base.summary.packCount),
+      topPackIds: normalizeStringArray(summary.topPackIds),
+      topClusterIds: normalizeStringArray(summary.topClusterIds),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      packsPath: normalizeString(summary.packsPath, base.summary.packsPath)
+    },
+    sourceArtifacts: normalizeStringArray(raw.sourceArtifacts, base.sourceArtifacts),
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
 export function createMetaRecommendationsIndex() {
   return {
     version: 3,
@@ -975,7 +1030,7 @@ export function normalizeMetaRecommendationsIndex(raw = {}) {
 
 export function createMetaOptimizerState() {
   return {
-    version: 4,
+    version: 5,
     proposalOnly: true,
     sourceArtifacts: [
       ARTIFACT_PATHS.sessionJournal,
@@ -986,6 +1041,7 @@ export function createMetaOptimizerState() {
       ARTIFACT_PATHS.figureQa,
       ARTIFACT_PATHS.versionComparisons,
       ARTIFACT_PATHS.metaLongHorizonMemory,
+      ARTIFACT_PATHS.metaRemediationPacks,
       ARTIFACT_PATHS.orchestrationBoard,
       ARTIFACT_PATHS.workspaceIndex
     ],
@@ -1008,10 +1064,18 @@ export function createMetaOptimizerState() {
       reportPath: ARTIFACT_PATHS.metaOptimizerReport,
       recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
       statePath: ARTIFACT_PATHS.metaOptimizerState,
-      longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory
-    },
-    clusters: [],
-    longHorizon: {
+       longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
+       remediationPacksPath: ARTIFACT_PATHS.metaRemediationPacks
+     },
+     clusters: [],
+     remediationPacks: {
+       packCount: 0,
+       topPackIds: [],
+       topClusterIds: [],
+       overview: "No proposal-only remediation packs have been generated yet.",
+       packsPath: ARTIFACT_PATHS.metaRemediationPacks
+     },
+     longHorizon: {
       familyCount: 0,
       recurringFamilyCount: 0,
       risingFamilyCount: 0,
@@ -1066,12 +1130,22 @@ export function normalizeMetaOptimizerState(raw = {}) {
       rankingMethod: normalizeString(frontier.rankingMethod, base.frontier.rankingMethod),
       tieBreakOrder: normalizeStringArray(frontier.tieBreakOrder, base.frontier.tieBreakOrder),
       reportPath: normalizeString(frontier.reportPath, base.frontier.reportPath),
-      recommendationsPath: normalizeString(frontier.recommendationsPath, base.frontier.recommendationsPath),
-      statePath: normalizeString(frontier.statePath, base.frontier.statePath),
-      longHorizonPath: normalizeString(frontier.longHorizonPath, base.frontier.longHorizonPath)
-    },
-    clusters: normalizeObjectArray(raw.clusters),
-    longHorizon: {
+       recommendationsPath: normalizeString(frontier.recommendationsPath, base.frontier.recommendationsPath),
+       statePath: normalizeString(frontier.statePath, base.frontier.statePath),
+       longHorizonPath: normalizeString(frontier.longHorizonPath, base.frontier.longHorizonPath),
+       remediationPacksPath: normalizeString(frontier.remediationPacksPath, base.frontier.remediationPacksPath)
+     },
+     clusters: normalizeObjectArray(raw.clusters),
+     remediationPacks: {
+       ...base.remediationPacks,
+       ...normalizeObject(raw.remediationPacks),
+       packCount: normalizeNumber(raw.remediationPacks?.packCount, base.remediationPacks.packCount),
+       topPackIds: normalizeStringArray(raw.remediationPacks?.topPackIds),
+       topClusterIds: normalizeStringArray(raw.remediationPacks?.topClusterIds),
+       overview: normalizeString(raw.remediationPacks?.overview, base.remediationPacks.overview),
+       packsPath: normalizeString(raw.remediationPacks?.packsPath, base.remediationPacks.packsPath)
+     },
+     longHorizon: {
       ...base.longHorizon,
       ...longHorizon,
       familyCount: normalizeNumber(longHorizon.familyCount, base.longHorizon.familyCount),
@@ -1101,6 +1175,7 @@ export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
   }
 
   const longHorizon = normalizeObject(raw.longHorizon);
+  const remediationPacks = normalizeObject(raw.remediationPacks);
 
   return {
     ...base,
@@ -1122,10 +1197,19 @@ export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
     rankingMethod: normalizeString(raw.rankingMethod, base.rankingMethod),
     tieBreakOrder: normalizeStringArray(raw.tieBreakOrder, base.tieBreakOrder),
     reportPath: normalizeString(raw.reportPath, base.reportPath),
-    recommendationsPath: normalizeString(raw.recommendationsPath, base.recommendationsPath),
-    statePath: normalizeString(raw.statePath, base.statePath),
-    longHorizonPath: normalizeString(raw.longHorizonPath, base.longHorizonPath),
-    longHorizon: {
+     recommendationsPath: normalizeString(raw.recommendationsPath, base.recommendationsPath),
+     statePath: normalizeString(raw.statePath, base.statePath),
+     longHorizonPath: normalizeString(raw.longHorizonPath, base.longHorizonPath),
+     remediationPacks: {
+       ...base.remediationPacks,
+       ...remediationPacks,
+       packCount: normalizeNumber(remediationPacks.packCount, base.remediationPacks.packCount),
+       topPackIds: normalizeStringArray(remediationPacks.topPackIds),
+       topClusterIds: normalizeStringArray(remediationPacks.topClusterIds),
+       overview: normalizeString(remediationPacks.overview, base.remediationPacks.overview),
+       packsPath: normalizeString(remediationPacks.packsPath, base.remediationPacks.packsPath)
+     },
+     longHorizon: {
       ...base.longHorizon,
       ...longHorizon,
       familyCount: normalizeNumber(longHorizon.familyCount, base.longHorizon.familyCount),
@@ -1200,7 +1284,7 @@ export function createWikiRelationsIndex() {
 
 export function createWorkspaceIndex() {
   return {
-    version: 6,
+    version: 7,
     managed: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
     boardPhase: "init",
     boardAssignedRole: "planner",
@@ -1253,6 +1337,7 @@ export function createWorkspaceIndex() {
       relationIssueCount: 0,
       relationFamilyIssueCount: 0,
       managedArtifactIssueCount: 0,
+      governanceIssueCount: 0,
       topDegradedFamilyIds: [],
       topDegradedGroupIds: [],
       taxonomyOverview: "No degraded typed wiki relation families are currently summarized.",
@@ -1277,11 +1362,18 @@ export function createWorkspaceIndex() {
       frontierSummary: "No proposal-only optimizer recommendations have been generated yet.",
       rankingMethod: "durable-signal-frontier-v1",
       tieBreakOrder: ["score-desc", "priority-rank", "cluster-rank", "cluster-id", "category", "id"],
-      reportPath: ARTIFACT_PATHS.metaOptimizerReport,
-      recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
-      statePath: ARTIFACT_PATHS.metaOptimizerState,
-      longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
-       longHorizon: {
+       reportPath: ARTIFACT_PATHS.metaOptimizerReport,
+       recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
+       statePath: ARTIFACT_PATHS.metaOptimizerState,
+       longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
+       remediationPacks: {
+         packCount: 0,
+         topPackIds: [],
+         topClusterIds: [],
+         overview: "No proposal-only remediation packs have been generated yet.",
+         packsPath: ARTIFACT_PATHS.metaRemediationPacks
+       },
+        longHorizon: {
          familyCount: 0,
          recurringFamilyCount: 0,
          risingFamilyCount: 0,
@@ -1359,9 +1451,10 @@ export function createWorkflowBoundaries() {
     ".paper/versions/index.json",
     ".paper/versions/comparisons.json",
     ".paper/versions/LATEST_COMPARISON.md",
-    ".paper/meta/events.json",
-    ".paper/meta/long-horizon-memory.json",
-    ".paper/meta/recommendations.json",
+     ".paper/meta/events.json",
+     ".paper/meta/long-horizon-memory.json",
+     ".paper/meta/remediation-packs.json",
+     ".paper/meta/recommendations.json",
     ".paper/meta/optimizer-state.json",
     ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
     ".paper/sessions/journal.json",

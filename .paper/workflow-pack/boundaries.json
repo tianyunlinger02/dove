@@ -98,6 +98,13 @@
       "generatedByVersion": "0.2.0",
       "managedKind": "bootstrap-only",
       "path": ".paper/workspace/index.json"
+    },
+    "remediationPacks": {
+      "revisionId": "schema-v5:bootstrap-only",
+      "templateHash": "5e165878b802da6967958a897b731b27cbe370c7e5418772dfae99510b273ba5",
+      "generatedByVersion": "0.2.0",
+      "managedKind": "bootstrap-only",
+      "path": ".paper/meta/remediation-packs.json"
     }
   },
   "notes": [

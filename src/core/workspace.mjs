@@ -20,6 +20,7 @@ import {
     createFiguresIndex,
   createMetaEventsIndex,
   createMetaLongHorizonMemory,
+  createMetaRemediationPacksIndex,
   createMetaOptimizerState,
   createMetaRecommendationsIndex,
     createNotesIndex,
@@ -37,6 +38,7 @@ import {
   createWorkflowBoundaries,
   createWorkspaceIndex,
   normalizeMetaLongHorizonMemory,
+  normalizeMetaRemediationPacksIndex,
   normalizeMetaOptimizerState,
   normalizeMetaRecommendationsIndex,
   normalizeWorkflowBoundaries,
@@ -252,6 +254,7 @@ export function ensureWorkspace(root) {
     [ARTIFACT_PATHS.claimBridgeLog, createClaimBridgeLog],
     [ARTIFACT_PATHS.metaEvents, createMetaEventsIndex],
     [ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory],
+    [ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex],
     [ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex],
     [ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState],
     [ARTIFACT_PATHS.rebuttalIssues, createRebuttalIssuesIndex],
@@ -271,6 +274,7 @@ export function ensureWorkspace(root) {
 
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.workflowBoundaries, createWorkflowBoundaries, normalizeWorkflowBoundaries);
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory, normalizeMetaLongHorizonMemory);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex, normalizeMetaRemediationPacksIndex);
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex, normalizeMetaRecommendationsIndex);
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState, normalizeMetaOptimizerState);
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex, normalizeWorkspaceIndex);

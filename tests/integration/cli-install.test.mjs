@@ -342,4 +342,6 @@ test("CLI doctor reports workspace metaOptimize mirror drift explicitly", () => 
   assert.match(result.stdout, /workspace metaOptimize recommendation count drift/);
   assert.match(result.stdout, /workspace metaOptimize reportPath drift/);
   assert.match(result.stdout, /workspace metaOptimize statePath drift/);
+  assert.match(result.stdout, /proposalFrontier/);
+  assert.match(result.stdout, /meta-optimize-drift/);
 });

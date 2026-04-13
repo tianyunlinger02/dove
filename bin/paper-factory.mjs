@@ -325,7 +325,8 @@ function collectRawMetaOptimizeConsistencyCheck(target) {
     return {
       check: "raw-meta-optimize-mirror-consistency",
       ok: true,
-      message: "skipped"
+      message: "skipped",
+      mismatches: []
     };
   }
 
@@ -339,7 +340,8 @@ function collectRawMetaOptimizeConsistencyCheck(target) {
     return {
       check: "raw-meta-optimize-mirror-consistency",
       ok: true,
-      message: "skipped due to raw shape issues"
+      message: "skipped due to raw shape issues",
+      mismatches: []
     };
   }
 
@@ -463,7 +465,8 @@ function collectRawMetaOptimizeConsistencyCheck(target) {
   return {
     check: "raw-meta-optimize-mirror-consistency",
     ok: mismatches.length === 0,
-    message: mismatches.length === 0 ? "ok" : mismatches.join(" | ")
+    message: mismatches.length === 0 ? "ok" : mismatches.join(" | "),
+    mismatches
   };
 }
 
@@ -530,9 +533,11 @@ function inspectWorkspaceRepairFrontier(target) {
     count: items.length,
     relationFamilyIssueCount: relationFamilySummaries.length,
     relationGroupIssueCount: relationGroupSummaries.length,
+    governanceIssueCount: Number.isFinite(inspected.value?.repairFrontier?.governanceIssueCount) ? inspected.value.repairFrontier.governanceIssueCount : 0,
     itemIds: items.map((item) => item.id),
     familyIds: relationFamilySummaries.map((item) => item.id),
     groupIds: relationGroupSummaries.map((item) => item.id),
+    prioritizedItems: items,
     taxonomyOverview: inspected.value?.repairFrontier?.taxonomyOverview ?? null,
     reasons: [
       inspected.value?.repairFrontier?.taxonomyOverview ?? null,
@@ -540,6 +545,39 @@ function inspectWorkspaceRepairFrontier(target) {
       ...relationGroupSummaries.map((item) => item.overview ?? item.label ?? item.id),
       ...items.map((item) => item.summary ?? item.id)
     ].filter(Boolean).slice(0, 10)
+  };
+}
+
+function buildDoctorProposalFrontier(managedArtifacts, rawMetaOptimizeConsistency) {
+  const workspaceItems = (managedArtifacts.workspaceRepairFrontier?.prioritizedItems ?? []).map((item) => ({
+    ...item,
+    proposalOnly: true,
+    explicitOnly: true,
+    noAutoApply: true
+  }));
+  const metaDriftItems = (rawMetaOptimizeConsistency?.mismatches ?? []).length > 0
+    ? [{
+      id: "repair-meta-optimize-drift",
+      frontierType: "meta-optimize-drift",
+      severity: "high",
+      proposalOnly: true,
+      explicitOnly: true,
+      noAutoApply: true,
+      summary: "Repair meta-optimize mirror drift so workspace and optimizer frontier stay aligned.",
+      reasons: rawMetaOptimizeConsistency.mismatches.join(" | "),
+      reasonCodes: rawMetaOptimizeConsistency.mismatches,
+      artifactPath: ".paper/meta/recommendations.json",
+      relatedArtifactPaths: [".paper/meta/optimizer-state.json", ".paper/meta/long-horizon-memory.json", ".paper/workspace/index.json"],
+      nextAction: "Refresh the durable surfaces or repair the drifted meta artifacts explicitly, then rerun doctor until the proposal-only frontier is clear."
+    }]
+    : [];
+  const prioritizedItems = [...workspaceItems, ...metaDriftItems];
+  return {
+    proposalOnly: true,
+    explicitOnly: true,
+    noAutoApply: true,
+    count: prioritizedItems.length,
+    prioritizedItems
   };
 }
 
@@ -704,7 +742,8 @@ function doctor(target) {
   }
 
   result.checks.push(...collectRawManagedArtifactChecks(target));
-  result.checks.push(collectRawMetaOptimizeConsistencyCheck(target));
+  const rawMetaOptimizeConsistency = collectRawMetaOptimizeConsistencyCheck(target);
+  result.checks.push(rawMetaOptimizeConsistency);
 
   if (rawJsonChecksPassed && boundaryRawParseOk) {
     ensureWorkspace(target);
@@ -755,6 +794,7 @@ function doctor(target) {
     metaOptimize: inspectMetaOptimize(target)
   };
   result.managedArtifacts = managedArtifacts;
+  result.proposalFrontier = buildDoctorProposalFrontier(managedArtifacts, rawMetaOptimizeConsistency);
   result.checks.push({
     check: "typed-wiki-relations-health",
     ok: managedArtifacts.wikiRelations.status === "ok",
