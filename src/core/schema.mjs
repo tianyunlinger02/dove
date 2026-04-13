@@ -131,7 +131,12 @@ export const ARTIFACT_PATHS = {
   versionsIndex: ".paper/versions/index.json",
   versionComparisons: ".paper/versions/comparisons.json",
   versionComparisonReport: ".paper/versions/LATEST_COMPARISON.md",
-  versionSnapshotsDir: ".paper/versions/snapshots"
+   versionSnapshotsDir: ".paper/versions/snapshots",
+   metaDir: ".paper/meta",
+   metaEvents: ".paper/meta/events.json",
+   metaRecommendations: ".paper/meta/recommendations.json",
+   metaOptimizerState: ".paper/meta/optimizer-state.json",
+   metaOptimizerReport: ".paper/meta/LATEST_OPTIMIZER_REPORT.md"
 };
 
 function digestText(value) {
@@ -351,6 +356,27 @@ function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function normalizeString(value, fallback) {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function normalizeStringArray(value, fallback = []) {
+  const source = Array.isArray(value) ? value : fallback;
+  return source.filter((item) => typeof item === "string" && item.trim());
+}
+
+function normalizeObjectArray(value) {
+  return Array.isArray(value) ? value.filter((item) => item && typeof item === "object" && !Array.isArray(item)) : [];
+}
+
+function normalizeObject(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+}
+
+function normalizeBoolean(value, fallback) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function normalizeContinuation(value) {
   if (!value || typeof value !== "object") {
     return createContinuationState();
@@ -450,6 +476,139 @@ export function normalizeState(raw = {}) {
       ...defaults.settings,
       ...(raw.settings ?? {})
     }
+  };
+}
+
+export function normalizeWorkspaceIndex(raw = {}) {
+  const base = createWorkspaceIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+
+  const workQueues = normalizeObject(raw.workQueues);
+  const resumeGuidance = normalizeObject(raw.resumeGuidance);
+  const contextSurfaces = normalizeObject(raw.contextSurfaces);
+  const behaviorDiscipline = normalizeObject(raw.behaviorDiscipline);
+  const dependencyHealth = normalizeObject(raw.dependencyHealth);
+  const repairFrontier = normalizeObject(raw.repairFrontier);
+  const metaOptimize = normalizeObject(raw.metaOptimize);
+  const latestVersions = normalizeObject(raw.latestVersions);
+
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    managed: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
+    boardPhase: normalizeString(raw.boardPhase, base.boardPhase),
+    boardAssignedRole: normalizeString(raw.boardAssignedRole, base.boardAssignedRole),
+    boardIntentType: normalizeString(raw.boardIntentType, base.boardIntentType),
+    currentFocus: normalizeString(raw.currentFocus, base.currentFocus),
+    nextAction: normalizeString(raw.nextAction, base.nextAction),
+    continuationState: normalizeContinuation(raw.continuationState),
+    activePackets: normalizeObjectArray(raw.activePackets),
+    workQueues: {
+      ready: normalizeObjectArray(workQueues.ready),
+      waiting: normalizeObjectArray(workQueues.waiting),
+      reviewNeeded: normalizeObjectArray(workQueues.reviewNeeded),
+      handoff: normalizeObjectArray(workQueues.handoff),
+      stale: normalizeObjectArray(workQueues.stale),
+      archived: normalizeObjectArray(workQueues.archived)
+    },
+    ownershipSummary: normalizeObjectArray(raw.ownershipSummary),
+    packetLifecycleCounts: normalizeObject(raw.packetLifecycleCounts),
+    handoffObligations: normalizeObjectArray(raw.handoffObligations),
+    resumeGuidance: {
+      ...base.resumeGuidance,
+      ...resumeGuidance,
+      command: normalizeString(resumeGuidance.command, base.resumeGuidance.command),
+      summary: normalizeString(resumeGuidance.summary, base.resumeGuidance.summary),
+      prioritizedPacketIds: normalizeStringArray(resumeGuidance.prioritizedPacketIds),
+      packetContextPaths: normalizeStringArray(resumeGuidance.packetContextPaths),
+      handoffCandidateIds: normalizeStringArray(resumeGuidance.handoffCandidateIds)
+    },
+    contextSurfaces: {
+      ...base.contextSurfaces,
+      ...contextSurfaces,
+      currentRoleContextPath: normalizeString(contextSurfaces.currentRoleContextPath, base.contextSurfaces.currentRoleContextPath),
+      currentPhaseContextPath: normalizeString(contextSurfaces.currentPhaseContextPath, base.contextSurfaces.currentPhaseContextPath),
+      currentActionContextPath: normalizeString(contextSurfaces.currentActionContextPath, base.contextSurfaces.currentActionContextPath),
+      prioritizedArtifactContextPaths: normalizeStringArray(contextSurfaces.prioritizedArtifactContextPaths),
+      prioritizedPacketActionContextPaths: normalizeStringArray(contextSurfaces.prioritizedPacketActionContextPaths)
+    },
+    behaviorDiscipline: {
+      ...base.behaviorDiscipline,
+      ...behaviorDiscipline,
+      summary: normalizeString(behaviorDiscipline.summary, base.behaviorDiscipline.summary),
+      explicitOnly: normalizeBoolean(behaviorDiscipline.explicitOnly, base.behaviorDiscipline.explicitOnly),
+      noHiddenRuntime: normalizeBoolean(behaviorDiscipline.noHiddenRuntime, base.behaviorDiscipline.noHiddenRuntime),
+      requiredReadOrder: normalizeStringArray(behaviorDiscipline.requiredReadOrder)
+    },
+    dependencyHealth: {
+      blockedPacketIds: normalizeStringArray(dependencyHealth.blockedPacketIds),
+      healthyPacketIds: normalizeStringArray(dependencyHealth.healthyPacketIds),
+      waitingPacketIds: normalizeStringArray(dependencyHealth.waitingPacketIds),
+      stalePacketIds: normalizeStringArray(dependencyHealth.stalePacketIds),
+      missingDependencyIds: normalizeStringArray(dependencyHealth.missingDependencyIds),
+      orphanPacketIds: normalizeStringArray(dependencyHealth.orphanPacketIds)
+    },
+    repairFrontier: {
+      ...base.repairFrontier,
+      ...repairFrontier,
+      count: Number.isFinite(repairFrontier.count) ? repairFrontier.count : base.repairFrontier.count,
+      relationIssueCount: Number.isFinite(repairFrontier.relationIssueCount) ? repairFrontier.relationIssueCount : base.repairFrontier.relationIssueCount,
+      managedArtifactIssueCount: Number.isFinite(repairFrontier.managedArtifactIssueCount) ? repairFrontier.managedArtifactIssueCount : base.repairFrontier.managedArtifactIssueCount,
+      prioritizedItems: normalizeObjectArray(repairFrontier.prioritizedItems)
+    },
+    metaOptimize: {
+      ...base.metaOptimize,
+      ...metaOptimize,
+      proposalOnly: normalizeBoolean(metaOptimize.proposalOnly, base.metaOptimize.proposalOnly),
+      recommendationCount: Number.isFinite(metaOptimize.recommendationCount) ? metaOptimize.recommendationCount : base.metaOptimize.recommendationCount,
+      criticalCount: Number.isFinite(metaOptimize.criticalCount) ? metaOptimize.criticalCount : base.metaOptimize.criticalCount,
+      activeSignalTypes: normalizeStringArray(metaOptimize.activeSignalTypes),
+      reportPath: normalizeString(metaOptimize.reportPath, base.metaOptimize.reportPath),
+      recommendationsPath: normalizeString(metaOptimize.recommendationsPath, base.metaOptimize.recommendationsPath),
+      statePath: normalizeString(metaOptimize.statePath, base.metaOptimize.statePath)
+    },
+    activeRoles: normalizeStringArray(raw.activeRoles),
+    unresolvedConcernIds: normalizeStringArray(raw.unresolvedConcernIds),
+    mostRecentSessions: normalizeObjectArray(raw.mostRecentSessions),
+    latestVersions: {
+      ...base.latestVersions,
+      ...latestVersions,
+      currentVersionId: latestVersions.currentVersionId ?? base.latestVersions.currentVersionId,
+      activeTargets: normalizeStringArray(latestVersions.activeTargets),
+      latestSnapshotIds: normalizeStringArray(latestVersions.latestSnapshotIds)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeWorkflowBoundaries(raw = {}) {
+  const base = createWorkflowBoundaries();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+
+  const managedArtifacts = normalizeObject(raw.managedArtifacts);
+
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    managedPaths: normalizeStringArray(raw.managedPaths, base.managedPaths),
+    paperBootstrapOnlyPaths: normalizeStringArray(raw.paperBootstrapOnlyPaths, base.paperBootstrapOnlyPaths),
+    userOwnedPaths: normalizeStringArray(raw.userOwnedPaths, base.userOwnedPaths),
+    managedArtifacts: {
+      codePack: {
+        ...createManagedArtifactMeta("managed-replaceable", "src"),
+        ...normalizeObject(managedArtifacts.codePack)
+      },
+      workflowBoundaries: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workflowBoundaries),
+      workspaceIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex)
+    },
+    notes: normalizeStringArray(raw.notes, base.notes),
+    updatedAt: raw.updatedAt ?? base.updatedAt
   };
 }
 
@@ -578,6 +737,57 @@ export function createClaimBridgeLog() {
   return { version: 1, items: [], updatedAt: null };
 }
 
+export function createMetaEventsIndex() {
+  return {
+    version: 1,
+    proposalOnly: true,
+    items: [],
+    updatedAt: null
+  };
+}
+
+export function createMetaRecommendationsIndex() {
+  return {
+    version: 1,
+    proposalOnly: true,
+    items: [],
+    summary: {
+      recommendationCount: 0,
+      criticalCount: 0,
+      categories: {},
+      signalTypes: []
+    },
+    updatedAt: null
+  };
+}
+
+export function createMetaOptimizerState() {
+  return {
+    version: 1,
+    proposalOnly: true,
+    sourceArtifacts: [
+      ARTIFACT_PATHS.sessionJournal,
+      ARTIFACT_PATHS.reviewConcerns,
+      ARTIFACT_PATHS.adversarialReviewState,
+      ARTIFACT_PATHS.experimentAudits,
+      ARTIFACT_PATHS.claimBridgeLog,
+      ARTIFACT_PATHS.figureQa,
+      ARTIFACT_PATHS.versionComparisons,
+      ARTIFACT_PATHS.orchestrationBoard,
+      ARTIFACT_PATHS.workspaceIndex
+    ],
+    frontier: {
+      recommendationCount: 0,
+      criticalCount: 0,
+      activeSignalTypes: [],
+      reportPath: ARTIFACT_PATHS.metaOptimizerReport,
+      recommendationsPath: ARTIFACT_PATHS.metaRecommendations
+    },
+    lastRefreshedAt: null,
+    updatedAt: null
+  };
+}
+
 export function createRebuttalIssuesIndex() {
   return { version: 1, items: [], updatedAt: null };
 }
@@ -601,12 +811,24 @@ export function createWikiEntitiesIndex() {
 }
 
 export function createWikiRelationsIndex() {
-  return { version: 1, items: [], updatedAt: null };
+  return {
+    version: 2,
+    items: [],
+    summary: {
+      totalRelations: 0,
+      healthyCount: 0,
+      degradedCount: 0,
+      relationTypeCounts: {},
+      integrityReasonCounts: {},
+      repairFrontier: []
+    },
+    updatedAt: null
+  };
 }
 
 export function createWorkspaceIndex() {
   return {
-    version: 3,
+    version: 5,
     managed: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
     boardPhase: "init",
     boardAssignedRole: "planner",
@@ -653,6 +875,21 @@ export function createWorkspaceIndex() {
       stalePacketIds: [],
       missingDependencyIds: [],
       orphanPacketIds: []
+    },
+    repairFrontier: {
+      count: 0,
+      relationIssueCount: 0,
+      managedArtifactIssueCount: 0,
+      prioritizedItems: []
+    },
+    metaOptimize: {
+      proposalOnly: true,
+      recommendationCount: 0,
+      criticalCount: 0,
+      activeSignalTypes: [],
+      reportPath: ARTIFACT_PATHS.metaOptimizerReport,
+      recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
+      statePath: ARTIFACT_PATHS.metaOptimizerState
     },
     activeRoles: [],
     unresolvedConcernIds: [],
@@ -715,6 +952,10 @@ export function createWorkflowBoundaries() {
     ".paper/versions/index.json",
     ".paper/versions/comparisons.json",
     ".paper/versions/LATEST_COMPARISON.md",
+    ".paper/meta/events.json",
+    ".paper/meta/recommendations.json",
+    ".paper/meta/optimizer-state.json",
+    ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
     ".paper/sessions/journal.json",
     ".paper/sessions/LATEST_SUMMARY.md",
     ".paper/workspace/index.json",

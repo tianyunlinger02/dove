@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import {
   ARTIFACT_PATHS,
   PIPELINE_STAGE_ORDER,
@@ -18,6 +21,7 @@ import {
   nowIso,
   readJson,
   readText,
+  resolvePath,
   saveState,
   writeJson,
   writeText
@@ -46,6 +50,9 @@ function normalizeRelativePath(value, fallback) {
 }
 
 function figurePathLooksPortable(relativePath) {
+  if (typeof relativePath !== "string") {
+    return false;
+  }
   return relativePath.startsWith(".paper/figures/");
 }
 
@@ -164,6 +171,43 @@ function figureIssueId(figureId, code) {
   return `${figureId}-${code}`;
 }
 
+function normalizeFigureArtifactPath(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().replace(/\\/g, "/").replace(/^\.\//, "");
+  return normalized || null;
+}
+
+function isSafeProjectRelativePath(relativePath) {
+  if (!relativePath || path.posix.isAbsolute(relativePath)) {
+    return false;
+  }
+  const normalized = path.posix.normalize(relativePath);
+  return normalized !== ".." && !normalized.startsWith("../");
+}
+
+function arraysEqual(left = [], right = []) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function buildPathIssue({ figure, code, severity, stage, summary, artifactPaths, timestamp, claimIds, experimentIds, reviewConcernIds, rebuttalIssueIds }) {
+  return {
+    id: figureIssueId(figure.id, code),
+    figureId: figure.id,
+    severity,
+    code,
+    stage,
+    summary,
+    claimIds: claimIds ?? figure.targetClaimIds,
+    experimentIds: experimentIds ?? figure.relatedExperimentIds,
+    reviewConcernIds: reviewConcernIds ?? figure.reviewConcernIds,
+    rebuttalIssueIds: rebuttalIssueIds ?? figure.rebuttalIssueIds,
+    artifactPaths,
+    updatedAt: timestamp
+  };
+}
+
 function buildFigureQa(root) {
   const state = loadState(root);
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
@@ -190,12 +234,49 @@ function buildFigureQa(root) {
   const templateByFigure = new Map((templates.items ?? []).map((item) => [item.figureId, item]));
   const editableByFigure = new Map((editable.items ?? []).map((item) => [item.figureId, item]));
   const finalByFigure = new Map((finals.items ?? []).map((item) => [item.figureId, item]));
+  const stagePathUsage = new Map();
   const timestamp = nowIso();
   const items = [];
   const issues = [];
 
+  function normalizeFigureListField(figure, field, stage, artifactPaths) {
+    const rawValue = figure[field];
+    const normalized = normalizeStringArray(rawValue);
+    const malformed = rawValue !== undefined && rawValue !== null && !Array.isArray(rawValue);
+    if (malformed) {
+      issues.push(buildPathIssue({
+        figure,
+        code: `malformed-${field}`,
+        severity: "medium",
+        stage,
+        summary: `Figure ${figure.id} has a malformed ${field} field and it was ignored during QA validation.`,
+        artifactPaths,
+        timestamp
+      }));
+    }
+    return normalized;
+  }
+
+  for (const figure of figures.items ?? []) {
+    for (const [field, stage] of [["templateSvgPath", "template"], ["editableSvgPath", "editable"], ["finalSvgPath", "final-contract"]]) {
+      const normalizedPath = normalizeFigureArtifactPath(figure[field]);
+      if (!normalizedPath || !isSafeProjectRelativePath(normalizedPath)) {
+        continue;
+      }
+      const current = stagePathUsage.get(normalizedPath) ?? [];
+      current.push({ figureId: figure.id, field, stage });
+      stagePathUsage.set(normalizedPath, current);
+    }
+  }
+
   for (const figure of figures.items ?? []) {
     const figureIssues = [];
+    const sourceSections = normalizeFigureListField(figure, "sourceSections", "brief", [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa]);
+    const sourceArtifactPaths = normalizeFigureListField(figure, "sourceArtifactPaths", "brief", [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa]);
+    const targetClaimIds = normalizeFigureListField(figure, "targetClaimIds", "brief", [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa]);
+    const relatedExperimentIds = normalizeFigureListField(figure, "relatedExperimentIds", "brief", [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa]);
+    const reviewConcernIdsForFigure = normalizeFigureListField(figure, "reviewConcernIds", "editable", [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureQa]);
+    const rebuttalIssueIdsForFigure = normalizeFigureListField(figure, "rebuttalIssueIds", "final-contract", [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa]);
     const brief = briefByFigure.get(figure.id);
     const segment = segmentByFigure.get(figure.id);
     const template = templateByFigure.get(figure.id);
@@ -217,6 +298,10 @@ function buildFigureQa(root) {
       ARTIFACT_PATHS.figureFinalIndex,
       ARTIFACT_PATHS.figureQa
     ];
+    const fileChecks = {
+      stagedArtifacts: {},
+      sourceArtifacts: []
+    };
 
     for (const [stageName, present] of Object.entries(stageArtifacts)) {
       if (!present) {
@@ -237,7 +322,7 @@ function buildFigureQa(root) {
       }
     }
 
-    if ((figure.targetClaimIds ?? []).length === 0) {
+    if (targetClaimIds.length === 0) {
       figureIssues.push({
         id: figureIssueId(figure.id, "missing-claim-linkage"),
         figureId: figure.id,
@@ -246,15 +331,15 @@ function buildFigureQa(root) {
         stage: "brief",
         summary: `Figure ${figure.id} has no linked target claims.`,
         claimIds: [],
-        experimentIds: figure.relatedExperimentIds,
-        reviewConcernIds: figure.reviewConcernIds,
-        rebuttalIssueIds: figure.rebuttalIssueIds,
+        experimentIds: relatedExperimentIds,
+        reviewConcernIds: reviewConcernIdsForFigure,
+        rebuttalIssueIds: rebuttalIssueIdsForFigure,
         artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
         updatedAt: timestamp
       });
     }
 
-    const missingSections = (figure.sourceSections ?? []).filter((sectionId) => !sectionIds.has(sectionId));
+    const missingSections = sourceSections.filter((sectionId) => !sectionIds.has(sectionId));
     if (missingSections.length > 0) {
       figureIssues.push({
         id: figureIssueId(figure.id, "missing-source-sections"),
@@ -263,16 +348,16 @@ function buildFigureQa(root) {
         code: "missing-source-sections",
         stage: "brief",
         summary: `Figure ${figure.id} references unknown source sections: ${missingSections.join(", ")}.`,
-        claimIds: figure.targetClaimIds,
-        experimentIds: figure.relatedExperimentIds,
-        reviewConcernIds: figure.reviewConcernIds,
-        rebuttalIssueIds: figure.rebuttalIssueIds,
+        claimIds: targetClaimIds,
+        experimentIds: relatedExperimentIds,
+        reviewConcernIds: reviewConcernIdsForFigure,
+        rebuttalIssueIds: rebuttalIssueIdsForFigure,
         artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
         updatedAt: timestamp
       });
     }
 
-    const missingClaims = (figure.targetClaimIds ?? []).filter((claimId) => !claimIds.has(claimId));
+    const missingClaims = targetClaimIds.filter((claimId) => !claimIds.has(claimId));
     if (missingClaims.length > 0) {
       figureIssues.push({
         id: figureIssueId(figure.id, "unknown-claims"),
@@ -281,16 +366,16 @@ function buildFigureQa(root) {
         code: "unknown-claims",
         stage: "brief",
         summary: `Figure ${figure.id} references unknown target claims: ${missingClaims.join(", ")}.`,
-        claimIds: figure.targetClaimIds,
-        experimentIds: figure.relatedExperimentIds,
-        reviewConcernIds: figure.reviewConcernIds,
-        rebuttalIssueIds: figure.rebuttalIssueIds,
+        claimIds: targetClaimIds,
+        experimentIds: relatedExperimentIds,
+        reviewConcernIds: reviewConcernIdsForFigure,
+        rebuttalIssueIds: rebuttalIssueIdsForFigure,
         artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
         updatedAt: timestamp
       });
     }
 
-    const missingExperiments = (figure.relatedExperimentIds ?? []).filter((experimentId) => !experimentIds.has(experimentId));
+    const missingExperiments = relatedExperimentIds.filter((experimentId) => !experimentIds.has(experimentId));
     if (missingExperiments.length > 0) {
       figureIssues.push({
         id: figureIssueId(figure.id, "unknown-experiments"),
@@ -299,16 +384,16 @@ function buildFigureQa(root) {
         code: "unknown-experiments",
         stage: "brief",
         summary: `Figure ${figure.id} references unknown related experiments: ${missingExperiments.join(", ")}.`,
-        claimIds: figure.targetClaimIds,
-        experimentIds: figure.relatedExperimentIds,
-        reviewConcernIds: figure.reviewConcernIds,
-        rebuttalIssueIds: figure.rebuttalIssueIds,
+        claimIds: targetClaimIds,
+        experimentIds: relatedExperimentIds,
+        reviewConcernIds: reviewConcernIdsForFigure,
+        rebuttalIssueIds: rebuttalIssueIdsForFigure,
         artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
         updatedAt: timestamp
       });
     }
 
-    const missingReviewConcerns = (figure.reviewConcernIds ?? []).filter((id) => !reviewConcernIds.has(id));
+    const missingReviewConcerns = reviewConcernIdsForFigure.filter((id) => !reviewConcernIds.has(id));
     if (missingReviewConcerns.length > 0) {
       figureIssues.push({
         id: figureIssueId(figure.id, "unknown-review-concerns"),
@@ -317,16 +402,16 @@ function buildFigureQa(root) {
         code: "unknown-review-concerns",
         stage: "editable",
         summary: `Figure ${figure.id} references unknown review concerns: ${missingReviewConcerns.join(", ")}.`,
-        claimIds: figure.targetClaimIds,
-        experimentIds: figure.relatedExperimentIds,
-        reviewConcernIds: figure.reviewConcernIds,
-        rebuttalIssueIds: figure.rebuttalIssueIds,
+        claimIds: targetClaimIds,
+        experimentIds: relatedExperimentIds,
+        reviewConcernIds: reviewConcernIdsForFigure,
+        rebuttalIssueIds: rebuttalIssueIdsForFigure,
         artifactPaths: [ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.figureQa],
         updatedAt: timestamp
       });
     }
 
-    const missingRebuttalIssues = (figure.rebuttalIssueIds ?? []).filter((id) => !rebuttalIssueIds.has(id));
+    const missingRebuttalIssues = rebuttalIssueIdsForFigure.filter((id) => !rebuttalIssueIds.has(id));
     if (missingRebuttalIssues.length > 0) {
       figureIssues.push({
         id: figureIssueId(figure.id, "unknown-rebuttal-issues"),
@@ -335,10 +420,10 @@ function buildFigureQa(root) {
         code: "unknown-rebuttal-issues",
         stage: "final-contract",
         summary: `Figure ${figure.id} references unknown rebuttal issues: ${missingRebuttalIssues.join(", ")}.`,
-        claimIds: figure.targetClaimIds,
-        experimentIds: figure.relatedExperimentIds,
-        reviewConcernIds: figure.reviewConcernIds,
-        rebuttalIssueIds: figure.rebuttalIssueIds,
+        claimIds: targetClaimIds,
+        experimentIds: relatedExperimentIds,
+        reviewConcernIds: reviewConcernIdsForFigure,
+        rebuttalIssueIds: rebuttalIssueIdsForFigure,
         artifactPaths: [ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.figureQa],
         updatedAt: timestamp
       });
@@ -353,13 +438,194 @@ function buildFigureQa(root) {
         code: "non-portable-paths",
         stage: "template",
         summary: `Figure ${figure.id} uses non-portable artifact paths: ${portablePathProblems.join(", ")}.`,
-        claimIds: figure.targetClaimIds,
-        experimentIds: figure.relatedExperimentIds,
-        reviewConcernIds: figure.reviewConcernIds,
-        rebuttalIssueIds: figure.rebuttalIssueIds,
+        claimIds: targetClaimIds,
+        experimentIds: relatedExperimentIds,
+        reviewConcernIds: reviewConcernIdsForFigure,
+        rebuttalIssueIds: rebuttalIssueIdsForFigure,
         artifactPaths: [ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa],
         updatedAt: timestamp
       });
+    }
+
+    const stagePathChecks = [
+      {
+        field: "templateSvgPath",
+        stage: "template",
+        label: "template SVG",
+        value: figure.templateSvgPath,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureQa]
+      },
+      {
+        field: "editableSvgPath",
+        stage: "editable",
+        label: "editable SVG",
+        value: figure.editableSvgPath,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureQa]
+      },
+      {
+        field: "finalSvgPath",
+        stage: "final-contract",
+        label: "final SVG",
+        value: figure.finalSvgPath,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa]
+      }
+    ];
+
+    for (const pathCheck of stagePathChecks) {
+      const normalizedPath = normalizeFigureArtifactPath(pathCheck.value);
+      const exists = normalizedPath && isSafeProjectRelativePath(normalizedPath)
+        ? fs.existsSync(resolvePath(root, normalizedPath))
+        : false;
+      fileChecks.stagedArtifacts[pathCheck.field] = { path: normalizedPath, exists };
+
+      if (!normalizedPath || !isSafeProjectRelativePath(normalizedPath)) {
+        figureIssues.push(buildPathIssue({
+          figure,
+          code: `malformed-${pathCheck.field}`,
+          severity: "high",
+          stage: pathCheck.stage,
+          summary: `Figure ${figure.id} has a malformed ${pathCheck.label.toLowerCase()} path.`,
+          artifactPaths: pathCheck.artifactPaths,
+          timestamp
+        }));
+        continue;
+      }
+
+      if (!exists) {
+        figureIssues.push(buildPathIssue({
+          figure,
+          code: `missing-${pathCheck.field}-file`,
+          severity: "high",
+          stage: pathCheck.stage,
+          summary: `Figure ${figure.id} is missing the ${pathCheck.label.toLowerCase()} file at ${normalizedPath}.`,
+          artifactPaths: pathCheck.artifactPaths,
+          timestamp
+        }));
+      }
+    }
+
+    const distinctStagePaths = stagePathChecks
+      .map((item) => normalizeFigureArtifactPath(item.value))
+      .filter((item) => item && isSafeProjectRelativePath(item));
+    if (new Set(distinctStagePaths).size !== distinctStagePaths.length) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "colliding-stage-paths",
+        severity: "high",
+        stage: "template",
+        summary: `Figure ${figure.id} reuses the same file path for multiple staged SVG artifacts.`,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    }
+
+    for (const pathCheck of stagePathChecks) {
+      const normalizedPath = normalizeFigureArtifactPath(pathCheck.value);
+      const collisions = normalizedPath ? stagePathUsage.get(normalizedPath) ?? [] : [];
+      if (collisions.some((entry) => entry.figureId !== figure.id)) {
+        const otherFigureIds = Array.from(new Set(collisions.filter((entry) => entry.figureId !== figure.id).map((entry) => entry.figureId))).sort();
+        figureIssues.push(buildPathIssue({
+          figure,
+          code: `shared-${pathCheck.field}`,
+          severity: "high",
+          stage: pathCheck.stage,
+          summary: `Figure ${figure.id} shares ${pathCheck.label.toLowerCase()} path ${normalizedPath} with ${otherFigureIds.join(", ")}.`,
+          artifactPaths: pathCheck.artifactPaths,
+          timestamp
+        }));
+      }
+    }
+
+    const normalizedSourceArtifactPaths = sourceArtifactPaths.map(normalizeFigureArtifactPath);
+    for (let index = 0; index < normalizedSourceArtifactPaths.length; index += 1) {
+      const sourcePath = normalizedSourceArtifactPaths[index];
+      const exists = sourcePath && isSafeProjectRelativePath(sourcePath)
+        ? fs.existsSync(resolvePath(root, sourcePath))
+        : false;
+      fileChecks.sourceArtifacts.push({ path: sourcePath, exists });
+
+      if (!sourcePath || !isSafeProjectRelativePath(sourcePath)) {
+        figureIssues.push(buildPathIssue({
+          figure,
+          code: `malformed-source-artifact-${index + 1}`,
+          severity: "medium",
+          stage: "brief",
+          summary: `Figure ${figure.id} has a malformed source artifact path entry.`,
+          artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
+          timestamp
+        }));
+        continue;
+      }
+
+      if (!exists) {
+        figureIssues.push(buildPathIssue({
+          figure,
+          code: `missing-source-artifact-${index + 1}`,
+          severity: "medium",
+          stage: "brief",
+          summary: `Figure ${figure.id} references a missing source artifact at ${sourcePath}.`,
+          artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
+          timestamp
+        }));
+      }
+    }
+
+    const templatePathMismatch = template && [
+      template.templateSvgPath !== figure.templateSvgPath,
+      template.editableSvgPath !== figure.editableSvgPath,
+      template.finalSvgPath !== figure.finalSvgPath
+    ].some(Boolean);
+    if (templatePathMismatch) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "inconsistent-template-stage-paths",
+        severity: "high",
+        stage: "template",
+        summary: `Figure ${figure.id} has inconsistent staged SVG paths between the figure index and template artifact.`,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    }
+
+    const editablePathMismatch = editableArtifact && [
+      editableArtifact.templateSvgPath !== figure.templateSvgPath,
+      editableArtifact.editableSvgPath !== figure.editableSvgPath,
+      editableArtifact.finalSvgPath !== figure.finalSvgPath
+    ].some(Boolean);
+    if (editablePathMismatch) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "inconsistent-editable-stage-paths",
+        severity: "high",
+        stage: "editable",
+        summary: `Figure ${figure.id} has inconsistent staged SVG paths between the figure index and editable artifact.`,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    }
+
+    if (finalArtifact && finalArtifact.finalSvgPath !== figure.finalSvgPath) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "inconsistent-final-contract-path",
+        severity: "high",
+        stage: "final-contract",
+        summary: `Figure ${figure.id} has inconsistent final SVG paths between the figure index and final contract.`,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    }
+
+    if (brief && !arraysEqual(brief.sourceArtifactPaths ?? [], figure.sourceArtifactPaths ?? [])) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "inconsistent-source-artifact-paths",
+        severity: "medium",
+        stage: "brief",
+        summary: `Figure ${figure.id} has inconsistent source artifact paths between the figure index and brief artifact.`,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
     }
 
     if (editableArtifact && editableArtifact.finalSvgPath !== figure.finalSvgPath) {
@@ -410,6 +676,7 @@ function buildFigureQa(root) {
       relatedExperimentIds: figure.relatedExperimentIds,
       reviewConcernIds: figure.reviewConcernIds,
       rebuttalIssueIds: figure.rebuttalIssueIds,
+      fileChecks,
       updatedAt: timestamp
     });
   }
@@ -743,7 +1010,209 @@ function renderRebuttalDraft(reviewState, claimsIndex, issuesPath, strategyPath,
   ].join("\n");
 }
 
-function createWikiArtifacts(state, board, sourcesIndex, notesIndex, evidenceIndex, concernsIndex, decisions, questions, plans, results, issues) {
+const WIKI_RELATION_DEFINITIONS = {
+  "uses-source": {
+    fromEntityType: "idea",
+    toEntityType: "source",
+    semantics: "Tracks that a note idea draws on a registered source.",
+    sourceArtifactPaths: [ARTIFACT_PATHS.notes, ARTIFACT_PATHS.sources]
+  },
+  "supported-by-source": {
+    fromEntityType: "claim",
+    toEntityType: "source",
+    semantics: "Tracks that a claim cites a registered source directly.",
+    sourceArtifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.sources]
+  },
+  "supported-by-idea": {
+    fromEntityType: "claim",
+    toEntityType: "idea",
+    semantics: "Tracks that a claim is grounded in a durable note or idea.",
+    sourceArtifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.notes]
+  },
+  "tested-by-experiment": {
+    fromEntityType: "claim",
+    toEntityType: "experiment",
+    semantics: "Tracks that a claim should be validated by an experiment artifact.",
+    sourceArtifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults]
+  },
+  "tests-claim": {
+    fromEntityType: "experiment",
+    toEntityType: "claim",
+    semantics: "Tracks that an experiment plan is scoped to validate a claim.",
+    sourceArtifactPaths: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.evidence]
+  },
+  "concerns-claim": {
+    fromEntityType: "review concern",
+    toEntityType: "claim",
+    semantics: "Tracks that a review concern challenges or blocks a claim.",
+    sourceArtifactPaths: [ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.evidence]
+  }
+};
+
+function uniqueStringArray(values = []) {
+  return Array.from(new Set(values.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim())));
+}
+
+function countBy(items, resolveKey) {
+  return items.reduce((accumulator, item) => {
+    const key = resolveKey(item);
+    accumulator[key] = (accumulator[key] ?? 0) + 1;
+    return accumulator;
+  }, {});
+}
+
+function relationIssueSeverity(code) {
+  if (["dangling-from-entity", "dangling-to-entity", "invalid-from-entity-type", "invalid-to-entity-type", "missing-source-artifact-file"].includes(code)) {
+    return "high";
+  }
+  return "medium";
+}
+
+function buildWikiRelation(root, relation, entityById, relationIdCounts) {
+  const definition = WIKI_RELATION_DEFINITIONS[relation.relationType] ?? null;
+  const fromEntity = entityById.get(relation.fromId) ?? null;
+  const toEntity = entityById.get(relation.toId) ?? null;
+  const sourceArtifactPaths = uniqueStringArray(relation.sourceArtifactPaths ?? definition?.sourceArtifactPaths ?? []);
+  const reasons = [];
+
+  if (!definition) {
+    reasons.push({
+      code: "unknown-relation-type",
+      severity: "medium",
+      message: `Relation ${relation.id} uses unsupported relationType ${relation.relationType}.`
+    });
+  }
+  if (!fromEntity) {
+    reasons.push({
+      code: "dangling-from-entity",
+      severity: "high",
+      message: `Relation ${relation.id} points to a missing source endpoint ${relation.fromId}.`,
+      entityId: relation.fromId
+    });
+  }
+  if (!toEntity) {
+    reasons.push({
+      code: "dangling-to-entity",
+      severity: "high",
+      message: `Relation ${relation.id} points to a missing target endpoint ${relation.toId}.`,
+      entityId: relation.toId
+    });
+  }
+  if (definition?.fromEntityType && fromEntity && fromEntity.entityType !== definition.fromEntityType) {
+    reasons.push({
+      code: "invalid-from-entity-type",
+      severity: "high",
+      message: `Relation ${relation.id} expects ${definition.fromEntityType} at ${relation.fromId} but found ${fromEntity.entityType}.`,
+      entityId: relation.fromId,
+      expectedEntityType: definition.fromEntityType,
+      actualEntityType: fromEntity.entityType
+    });
+  }
+  if (definition?.toEntityType && toEntity && toEntity.entityType !== definition.toEntityType) {
+    reasons.push({
+      code: "invalid-to-entity-type",
+      severity: "high",
+      message: `Relation ${relation.id} expects ${definition.toEntityType} at ${relation.toId} but found ${toEntity.entityType}.`,
+      entityId: relation.toId,
+      expectedEntityType: definition.toEntityType,
+      actualEntityType: toEntity.entityType
+    });
+  }
+  if ((relationIdCounts.get(relation.id) ?? 0) > 1) {
+    reasons.push({
+      code: "duplicate-relation-id",
+      severity: "medium",
+      message: `Relation id ${relation.id} is duplicated in the typed wiki index.`
+    });
+  }
+
+  const sourceArtifactChecks = sourceArtifactPaths.map((artifactPath) => {
+    const exists = fs.existsSync(resolvePath(root, artifactPath));
+    if (!exists) {
+      reasons.push({
+        code: "missing-source-artifact-file",
+        severity: "high",
+        message: `Relation ${relation.id} depends on missing source artifact ${artifactPath}.`,
+        artifactPath
+      });
+    }
+    return { artifactPath, exists };
+  });
+
+  const endpointChecks = [
+    {
+      endpoint: "from",
+      entityId: relation.fromId,
+      exists: Boolean(fromEntity),
+      expectedEntityType: definition?.fromEntityType ?? null,
+      actualEntityType: fromEntity?.entityType ?? null
+    },
+    {
+      endpoint: "to",
+      entityId: relation.toId,
+      exists: Boolean(toEntity),
+      expectedEntityType: definition?.toEntityType ?? null,
+      actualEntityType: toEntity?.entityType ?? null
+    }
+  ];
+  const integrityStatus = reasons.length > 0 ? "degraded" : "healthy";
+  const highestSeverity = reasons.some((reason) => reason.severity === "high") ? "high" : reasons.length > 0 ? "medium" : "none";
+
+  return {
+    ...relation,
+    fromEntityType: fromEntity?.entityType ?? null,
+    toEntityType: toEntity?.entityType ?? null,
+    sourceArtifactPaths,
+    semantics: {
+      relationType: relation.relationType,
+      label: definition?.semantics ?? "Typed wiki relation",
+      expectedFromEntityType: definition?.fromEntityType ?? null,
+      expectedToEntityType: definition?.toEntityType ?? null
+    },
+    integrity: {
+      status: integrityStatus,
+      severity: highestSeverity,
+      reasons,
+      endpointChecks,
+      sourceArtifactChecks
+    }
+  };
+}
+
+function buildRelationRepairItem(relation) {
+  const reasonCodes = uniqueStringArray((relation.integrity?.reasons ?? []).map((reason) => reason.code));
+  const severity = (relation.integrity?.reasons ?? []).reduce((level, reason) => {
+    if (reason.severity === "high") return "high";
+    return level === "high" ? level : "medium";
+  }, "medium");
+  const reasonText = (relation.integrity?.reasons ?? []).map((reason) => reason.message).join(" ");
+  return {
+    id: `repair-${relation.id}`,
+    frontierType: "typed-wiki-relation",
+    severity,
+    relationId: relation.id,
+    summary: `Repair typed wiki relation ${relation.id} (${relation.relationType}).`,
+    reasons: reasonText || `Relation ${relation.id} is degraded.`,
+    reasonCodes,
+    artifactPath: ARTIFACT_PATHS.wikiRelations,
+    relatedArtifactPaths: uniqueStringArray([ARTIFACT_PATHS.wikiEntities, ...relation.sourceArtifactPaths]),
+    nextAction: `Repair the local artifacts for ${relation.id}, then rerun project:paper.wiki or refresh_wiki.`
+  };
+}
+
+function summarizeWikiRelations(relations) {
+  const degraded = relations.filter((relation) => relation.integrity?.status === "degraded");
+  return {
+    totalRelations: relations.length,
+    healthyCount: relations.length - degraded.length,
+    degradedCount: degraded.length,
+    relationTypeCounts: countBy(relations, (relation) => relation.relationType ?? "unknown"),
+    integrityReasonCounts: countBy(degraded.flatMap((relation) => relation.integrity?.reasons ?? []), (reason) => reason.code ?? "unknown"),
+    repairFrontier: degraded.map(buildRelationRepairItem)
+  };
+}
+
+function createWikiArtifacts(root, state, board, sourcesIndex, notesIndex, evidenceIndex, concernsIndex, decisions, questions, plans, results, issues) {
   const entities = [];
   const relations = [];
   entities.push({ id: "paper-current", entityType: "paper", label: state.paper.title, summary: state.paper.objective, status: board.currentPhase, updatedAt: nowIso() });
@@ -754,7 +1223,7 @@ function createWikiArtifacts(state, board, sourcesIndex, notesIndex, evidenceInd
     }
   }
   for (const source of sourcesIndex.items ?? []) {
-    entities.push({ id: source.id, entityType: "paper", label: source.title, summary: source.abstract ?? "", status: source.sourceType ?? "source", updatedAt: source.addedAt ?? nowIso() });
+    entities.push({ id: source.id, entityType: "source", label: source.title, summary: source.abstract ?? "", status: source.sourceType ?? "source", updatedAt: source.addedAt ?? nowIso() });
   }
   for (const claim of evidenceIndex.claims ?? []) {
     entities.push({ id: claim.id, entityType: "claim", label: claim.text, summary: `${claim.status}/${claim.confidence}`, sectionId: claim.sectionId, status: claim.status, updatedAt: evidenceIndex.updatedAt ?? nowIso() });
@@ -779,9 +1248,12 @@ function createWikiArtifacts(state, board, sourcesIndex, notesIndex, evidenceInd
   for (const question of questions) {
     entities.push({ id: `question-${question.id}`, entityType: "question", label: question.summary, summary: question.origin ?? "", packetId: question.packetId ?? null, sectionId: question.sectionId ?? null, status: question.status, updatedAt: nowIso() });
   }
+  const entityById = new Map(entities.map((entity) => [entity.id, entity]));
+  const relationIdCounts = relations.reduce((accumulator, relation) => accumulator.set(relation.id, (accumulator.get(relation.id) ?? 0) + 1), new Map());
+  const typedRelations = relations.map((relation) => buildWikiRelation(root, relation, entityById, relationIdCounts));
   return {
     entities: { version: 1, items: entities, updatedAt: nowIso() },
-    relations: { version: 1, items: relations, updatedAt: nowIso() }
+    relations: { version: 2, items: typedRelations, summary: summarizeWikiRelations(typedRelations), updatedAt: nowIso() }
   };
 }
 
@@ -1267,7 +1739,7 @@ export function refreshWiki(root) {
     artifactPaths: [ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.workspaceIndex]
   });
   const workspaceIndex = queryWorkspaceIndex(root);
-  const typed = createWikiArtifacts(state, board, sources, notes, evidence, concerns, navigation.decisions, navigation.openQuestions, plans, results, issues);
+  const typed = createWikiArtifacts(root, state, board, sources, notes, evidence, concerns, navigation.decisions, navigation.openQuestions, plans, results, issues);
   writeJson(root, ARTIFACT_PATHS.wikiEntities, typed.entities);
   writeJson(root, ARTIFACT_PATHS.wikiRelations, typed.relations);
   writeText(root, ARTIFACT_PATHS.wiki, renderWiki(state, board, sources, notes, evidence, concerns, issues, plans, results, versions, workspaceIndex));

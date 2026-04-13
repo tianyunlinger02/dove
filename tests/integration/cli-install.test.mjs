@@ -75,3 +75,53 @@ test("CLI doctor fails when key JSON artifacts are malformed", () => {
   assert.equal(result.status, 1, result.stdout);
   assert.match(result.stdout, /json:.paper\/state.json/);
 });
+
+test("CLI doctor reports degraded typed wiki relations explicitly", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-doctor-wiki-health-"));
+  spawnSync("node", [CLI, "install", target, "--force"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  fs.writeFileSync(path.join(target, ".paper", "wiki", "relations.json"), `${JSON.stringify({
+    version: 2,
+    items: [{
+      id: "claim-bad-supported-by-source",
+      fromId: "claim-bad",
+      toId: "missing-source",
+      relationType: "supported-by-source",
+      sourceArtifactPaths: [".paper/evidence/index.json", ".paper/sources/index.json"],
+      semantics: {
+        relationType: "supported-by-source",
+        label: "Tracks that a claim cites a registered source directly.",
+        expectedFromEntityType: "claim",
+        expectedToEntityType: "source"
+      },
+      integrity: {
+        status: "degraded",
+        severity: "high",
+        reasons: [{ code: "dangling-to-entity", severity: "high", message: "Relation claim-bad-supported-by-source points to a missing target endpoint missing-source." }],
+        endpointChecks: [],
+        sourceArtifactChecks: []
+      },
+      updatedAt: new Date(0).toISOString()
+    }],
+    summary: {
+      totalRelations: 1,
+      healthyCount: 0,
+      degradedCount: 1,
+      relationTypeCounts: { "supported-by-source": 1 },
+      integrityReasonCounts: { "dangling-to-entity": 1 },
+      repairFrontier: []
+    },
+    updatedAt: new Date(0).toISOString()
+  }, null, 2)}\n`, "utf8");
+
+  const result = spawnSync("node", [CLI, "doctor", target], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(result.stdout, /typed-wiki-relations-health/);
+  assert.match(result.stdout, /dangling-to-entity|missing target endpoint/);
+});

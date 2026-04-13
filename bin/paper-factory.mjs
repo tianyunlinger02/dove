@@ -79,6 +79,65 @@ function installOrSync(target, force) {
   };
 }
 
+function readJsonFile(target, relativePath) {
+  const fullPath = path.join(target, relativePath);
+  if (!fs.existsSync(fullPath)) {
+    return { status: "missing", value: null, message: `${relativePath} is missing.` };
+  }
+  try {
+    return { status: "ok", value: JSON.parse(fs.readFileSync(fullPath, "utf8")), message: "ok" };
+  } catch (error) {
+    return {
+      status: "invalid",
+      value: null,
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+function inspectWikiRelations(target) {
+  const inspected = readJsonFile(target, ".paper/wiki/relations.json");
+  if (inspected.status !== "ok") {
+    return { status: inspected.status, degradedCount: 0, reasons: [inspected.message], relationIds: [] };
+  }
+  const items = Array.isArray(inspected.value?.items) ? inspected.value.items : [];
+  const degraded = items.filter((item) => item?.integrity?.status === "degraded");
+  return {
+    status: degraded.length > 0 ? "degraded" : "ok",
+    degradedCount: degraded.length,
+    relationIds: degraded.map((item) => item.id),
+    reasons: degraded.flatMap((item) => (item.integrity?.reasons ?? []).map((reason) => reason.message)).slice(0, 10)
+  };
+}
+
+function inspectFigureQa(target) {
+  const inspected = readJsonFile(target, ".paper/figures/qa.json");
+  if (inspected.status !== "ok") {
+    return { status: inspected.status, issueCount: 0, reasons: [inspected.message], issueIds: [] };
+  }
+  const issues = Array.isArray(inspected.value?.issues) ? inspected.value.issues : [];
+  return {
+    status: issues.length > 0 ? "degraded" : "ok",
+    issueCount: issues.length,
+    issueIds: issues.map((issue) => issue.id),
+    reasons: issues.map((issue) => issue.summary ?? issue.code ?? issue.id).slice(0, 10)
+  };
+}
+
+function inspectWorkspaceRepairFrontier(target) {
+  const inspected = readJsonFile(target, ".paper/workspace/index.json");
+  if (inspected.status !== "ok") {
+    return { status: inspected.status, count: 0, reasons: [inspected.message], itemIds: [] };
+  }
+  const items = Array.isArray(inspected.value?.repairFrontier?.prioritizedItems) ? inspected.value.repairFrontier.prioritizedItems : [];
+  return {
+    status: items.length > 0 ? "degraded" : "ok",
+    count: items.length,
+    itemIds: items.map((item) => item.id),
+    reasons: items.map((item) => item.summary ?? item.id).slice(0, 10)
+  };
+}
+
 function doctor(target) {
   const boundariesPath = path.join(target, ".paper", "workflow-pack", "boundaries.json");
   const required = [
@@ -91,6 +150,9 @@ function doctor(target) {
     ".opencode/skills/paper-factory-planner/SKILL.md",
     ".opencode.json",
     ".paper/state.json",
+    ".paper/wiki/entities.json",
+    ".paper/wiki/relations.json",
+    ".paper/figures/qa.json",
     ".paper/workspace/index.json",
     "mcp/paper-state-server.mjs",
     "src/mcp/server.mjs"
@@ -103,7 +165,8 @@ function doctor(target) {
     healthy: missing.length === 0,
     missing,
     checks: [],
-    boundaryPolicy: null
+    boundaryPolicy: null,
+    managedArtifacts: null
   };
 
   const jsonChecks = [
@@ -178,6 +241,34 @@ function doctor(target) {
       message: probe.status === 0 ? "ok" : (probe.stderr || probe.stdout || `exit ${probe.status}`)
     });
   }
+
+  const managedArtifacts = {
+    wikiRelations: inspectWikiRelations(target),
+    figureQa: inspectFigureQa(target),
+    workspaceRepairFrontier: inspectWorkspaceRepairFrontier(target)
+  };
+  result.managedArtifacts = managedArtifacts;
+  result.checks.push({
+    check: "typed-wiki-relations-health",
+    ok: managedArtifacts.wikiRelations.status === "ok",
+    message: managedArtifacts.wikiRelations.status === "ok"
+      ? "typed wiki relations are healthy"
+      : managedArtifacts.wikiRelations.reasons.join(" | ") || `degraded relations: ${managedArtifacts.wikiRelations.relationIds.join(", ")}`
+  });
+  result.checks.push({
+    check: "figure-qa-health",
+    ok: managedArtifacts.figureQa.status === "ok",
+    message: managedArtifacts.figureQa.status === "ok"
+      ? "figure qa is healthy"
+      : managedArtifacts.figureQa.reasons.join(" | ") || `figure issues: ${managedArtifacts.figureQa.issueIds.join(", ")}`
+  });
+  result.checks.push({
+    check: "workspace-repair-frontier",
+    ok: managedArtifacts.workspaceRepairFrontier.status === "ok",
+    message: managedArtifacts.workspaceRepairFrontier.status === "ok"
+      ? "workspace repair frontier is clear"
+      : managedArtifacts.workspaceRepairFrontier.reasons.join(" | ") || `repair items: ${managedArtifacts.workspaceRepairFrontier.itemIds.join(", ")}`
+  });
 
   result.healthy = result.healthy && result.checks.every((check) => check.ok);
 

@@ -5,20 +5,23 @@ import {
   ARTIFACT_PATHS,
   createAdversarialReviewState,
   createClaimBridgeLog,
-  createDefaultBoard,
-  createDefaultState,
-  createEvidenceIndex,
-  createExperimentAuditsIndex,
-  createExperimentPlansIndex,
-  createExperimentResultsIndex,
+    createDefaultBoard,
+    createDefaultState,
+    createEvidenceIndex,
+    createExperimentAuditsIndex,
+    createExperimentPlansIndex,
+    createExperimentResultsIndex,
   createFigureBriefsIndex,
   createFigureEditableIndex,
   createFigureFinalIndex,
   createFigureQaIndex,
   createFigureSegmentsIndex,
-  createFigureTemplatesIndex,
-  createFiguresIndex,
-  createNotesIndex,
+    createFigureTemplatesIndex,
+    createFiguresIndex,
+    createMetaEventsIndex,
+    createMetaOptimizerState,
+    createMetaRecommendationsIndex,
+    createNotesIndex,
   createResearchAgenda,
   createReviewConcernsIndex,
   createReviewState,
@@ -32,6 +35,8 @@ import {
   createWikiRelationsIndex,
   createWorkflowBoundaries,
   createWorkspaceIndex,
+  normalizeWorkflowBoundaries,
+  normalizeWorkspaceIndex,
   normalizeState
 } from "./schema.mjs";
 
@@ -86,6 +91,23 @@ export function writeJson(root, relativePath, value) {
   const fullPath = resolvePath(root, relativePath);
   ensureDir(path.dirname(fullPath));
   fs.writeFileSync(fullPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function writeJsonIfChanged(root, relativePath, value) {
+  const fullPath = resolvePath(root, relativePath);
+  const nextContent = `${JSON.stringify(value, null, 2)}\n`;
+  ensureDir(path.dirname(fullPath));
+  if (fs.existsSync(fullPath) && fs.readFileSync(fullPath, "utf8") === nextContent) {
+    return false;
+  }
+  fs.writeFileSync(fullPath, nextContent, "utf8");
+  return true;
+}
+
+function reconcileManagedJsonArtifact(root, relativePath, fallback, normalize) {
+  const normalized = normalize(readJson(root, relativePath, fallback));
+  writeJsonIfChanged(root, relativePath, normalized);
+  return normalized;
 }
 
 export function readText(root, relativePath, fallback = "") {
@@ -143,6 +165,7 @@ function starterMarkdown(state) {
     [ARTIFACT_PATHS.rebuttalStrategy]: `# Rebuttal strategy\n\nNo issue strategy has been generated yet.\n`,
     [ARTIFACT_PATHS.rebuttalResponseDraft]: `# Rebuttal response draft\n\nDraft concise, evidence-backed responses here after normalizing reviewer issues.\n`,
     [ARTIFACT_PATHS.versionComparisonReport]: `# Latest version comparison\n\nNo comparison has been generated yet.\n`,
+    [ARTIFACT_PATHS.metaOptimizerReport]: `# Latest optimizer report\n\n- Proposal only: true\n- No meta-optimization recommendations have been generated yet.\n`,
     [ARTIFACT_PATHS.sessionSummary]: `# Latest session summary\n\n- No durable session summary has been generated yet.\n`,
     [path.join(ARTIFACT_PATHS.draftsDir, "README.md")]: `# Drafts\n\nStore one section per markdown file.\n`,
     [path.join(ARTIFACT_PATHS.claims.replace("CLAIMS_FROM_RESULTS.md", "README.md"))]: `# Claims\n\nThis directory holds evidence-grounded claim artifacts.\n`
@@ -185,6 +208,7 @@ export function ensureWorkspace(root) {
     ".paper/figures",
     ".paper/rebuttal",
     ".paper/versions",
+    ARTIFACT_PATHS.metaDir,
     ARTIFACT_PATHS.versionSnapshotsDir
   ]) {
     ensureDir(resolvePath(root, relativeDir));
@@ -222,6 +246,9 @@ export function ensureWorkspace(root) {
     [ARTIFACT_PATHS.experimentResults, createExperimentResultsIndex],
     [ARTIFACT_PATHS.experimentAudits, createExperimentAuditsIndex],
     [ARTIFACT_PATHS.claimBridgeLog, createClaimBridgeLog],
+    [ARTIFACT_PATHS.metaEvents, createMetaEventsIndex],
+    [ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex],
+    [ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState],
     [ARTIFACT_PATHS.rebuttalIssues, createRebuttalIssuesIndex],
     [ARTIFACT_PATHS.versionsIndex, createVersionsIndex],
     [ARTIFACT_PATHS.versionComparisons, createVersionComparisonsIndex],
@@ -237,17 +264,8 @@ export function ensureWorkspace(root) {
     }
   }
 
-  const expectedBoundaries = createWorkflowBoundaries();
-  const existingBoundaries = readJson(root, ARTIFACT_PATHS.workflowBoundaries, createWorkflowBoundaries);
-  if ((existingBoundaries.version ?? 0) < expectedBoundaries.version || !existingBoundaries.managedArtifacts?.workflowBoundaries?.revisionId) {
-    writeJson(root, ARTIFACT_PATHS.workflowBoundaries, expectedBoundaries);
-  }
-
-  const expectedWorkspaceIndex = createWorkspaceIndex();
-  const existingWorkspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex);
-  if (!existingWorkspaceIndex.managed?.revisionId) {
-    writeJson(root, ARTIFACT_PATHS.workspaceIndex, expectedWorkspaceIndex);
-  }
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.workflowBoundaries, createWorkflowBoundaries, normalizeWorkflowBoundaries);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex, normalizeWorkspaceIndex);
 
   return { root, created };
 }
