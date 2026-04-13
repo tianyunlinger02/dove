@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "managed": {
     "revisionId": "schema-v5:bootstrap-only",
     "templateHash": "05b331fb8b58cd1295bb4d3e0ebade581b2fc1543ee9a321f59116a0ba99acde",
@@ -88,6 +88,30 @@
     "packetContextPaths": [],
     "handoffCandidateIds": []
   },
+  "contextSurfaces": {
+    "currentRoleContextPath": ".paper/context/roles/planner.json",
+    "currentPhaseContextPath": ".paper/context/phases/init.json",
+    "currentActionContextPath": ".paper/context/actions/current.json",
+    "prioritizedArtifactContextPaths": [
+      ".paper/context/artifacts/paper-orchestration-board-json.json",
+      ".paper/context/artifacts/paper-wiki-navigation-md.json",
+      ".paper/context/artifacts/paper-workspace-index-json.json"
+    ],
+    "prioritizedPacketActionContextPaths": []
+  },
+  "behaviorDiscipline": {
+    "summary": "Read the current action bundle, then the role/phase/packet/artifact context surfaces before mutating durable state.",
+    "explicitOnly": true,
+    "noHiddenRuntime": true,
+    "requiredReadOrder": [
+      ".paper/context/actions/current.json",
+      ".paper/context/artifacts/paper-orchestration-board-json.json",
+      ".paper/context/artifacts/paper-wiki-navigation-md.json",
+      ".paper/context/artifacts/paper-workspace-index-json.json",
+      ".paper/context/phases/init.json",
+      ".paper/context/roles/planner.json"
+    ]
+  },
   "dependencyHealth": {
     "blockedPacketIds": [],
     "healthyPacketIds": [],
@@ -102,74 +126,74 @@
   "unresolvedConcernIds": [],
   "mostRecentSessions": [
     {
-      "id": "2026-04-12T20:41:44.853Z-query-workspace-index",
+      "id": "2026-04-13T04:42:00.202Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T20:41:44.853Z"
+      "timestamp": "2026-04-13T04:42:00.202Z"
     },
     {
-      "id": "2026-04-12T20:41:44.841Z-query-workspace-index",
+      "id": "2026-04-13T04:42:00.186Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T20:41:44.841Z"
+      "timestamp": "2026-04-13T04:42:00.186Z"
     },
     {
-      "id": "2026-04-12T20:39:06.509Z-query-workspace-index",
+      "id": "2026-04-13T04:25:43.935Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T20:39:06.509Z"
+      "timestamp": "2026-04-13T04:25:43.935Z"
     },
     {
-      "id": "2026-04-12T20:39:06.497Z-query-workspace-index",
+      "id": "2026-04-13T04:25:43.919Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T20:39:06.497Z"
+      "timestamp": "2026-04-13T04:25:43.920Z"
     },
     {
-      "id": "2026-04-12T20:37:28.733Z-query-workspace-index",
+      "id": "2026-04-13T04:20:39.002Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T20:37:28.733Z"
+      "timestamp": "2026-04-13T04:20:39.002Z"
     },
     {
-      "id": "2026-04-12T20:37:28.730Z-query-workspace-index",
+      "id": "2026-04-13T04:20:38.986Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T20:37:28.730Z"
+      "timestamp": "2026-04-13T04:20:38.986Z"
     },
     {
-      "id": "2026-04-12T19:38:51.618Z-query-workspace-index",
+      "id": "2026-04-13T04:12:45.340Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T19:38:51.618Z"
+      "timestamp": "2026-04-13T04:12:45.340Z"
     },
     {
-      "id": "2026-04-12T19:38:51.614Z-query-workspace-index",
+      "id": "2026-04-13T04:12:45.324Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T19:38:51.615Z"
+      "timestamp": "2026-04-13T04:12:45.324Z"
     },
     {
-      "id": "2026-04-12T19:05:33.912Z-query-workspace-index",
+      "id": "2026-04-13T04:09:28.202Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T19:05:33.912Z"
+      "timestamp": "2026-04-13T04:09:28.202Z"
     },
     {
-      "id": "2026-04-12T19:05:33.908Z-query-workspace-index",
+      "id": "2026-04-13T04:09:28.186Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T19:05:33.909Z"
+      "timestamp": "2026-04-13T04:09:28.187Z"
     }
   ],
   "latestVersions": {
@@ -177,5 +201,5 @@
     "activeTargets": [],
     "latestSnapshotIds": []
   },
-  "updatedAt": "2026-04-12T20:41:44.853Z"
+  "updatedAt": "2026-04-13T04:42:00.203Z"
 }

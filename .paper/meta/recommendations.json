@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "proposalOnly": true,
+  "items": [],
+  "summary": {
+    "recommendationCount": 0,
+    "criticalCount": 0,
+    "categories": {},
+    "signalTypes": []
+  },
+  "updatedAt": null
+}

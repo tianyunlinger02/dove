@@ -5,6 +5,9 @@ import {
   ARTIFACT_PATHS,
   ROLE_IDS,
   createDefaultBoard,
+  createMetaEventsIndex,
+  createMetaOptimizerState,
+  createMetaRecommendationsIndex,
   createSessionJournal,
   createTaskPacketsIndex,
   createVersionComparisonsIndex,
@@ -331,6 +334,19 @@ function artifactGuidance(relativePath) {
     };
   }
 
+  if ([ARTIFACT_PATHS.wiki, ARTIFACT_PATHS.wikiEntities, ARTIFACT_PATHS.wikiRelations, ARTIFACT_PATHS.queryPack].includes(normalized)) {
+    return {
+      category: "wiki",
+      summary: "Wiki artifacts should keep typed entity and relation integrity explicit so repair work stays file-backed and review-visible.",
+      localRules: [
+        "Keep entity and relation ids stable enough for downstream navigation surfaces to reuse them.",
+        "Treat dangling relation endpoints and invalid endpoint typing as explicit repair work, not hidden cleanup.",
+        "Refresh workspace and navigation surfaces after wiki changes so the same repair frontier is visible everywhere."
+      ],
+      readBeforeMutating: [ARTIFACT_PATHS.wikiEntities, ARTIFACT_PATHS.wikiRelations, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.navigationReport]
+    };
+  }
+
   if ([ARTIFACT_PATHS.plan, ARTIFACT_PATHS.outline, ARTIFACT_PATHS.checklist].includes(normalized) || normalized.startsWith(`${ARTIFACT_PATHS.draftsDir}/`)) {
     return {
       category: "writing",
@@ -393,6 +409,19 @@ function artifactGuidance(relativePath) {
         "Do not finalize around an uncleared review gate."
       ],
       readBeforeMutating: [ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.versionComparisons]
+    };
+  }
+
+  if ([ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport].includes(normalized)) {
+    return {
+      category: "meta-optimize",
+      summary: "Meta-optimize artifacts are proposal-only summaries built from durable workflow signals.",
+      localRules: [
+        "Do not auto-apply recommendations from this layer.",
+        "Keep every recommendation tied to concrete evidence artifacts and ids.",
+        "Use this layer to surface workflow/process/artifact health, not hidden self-modification."
+      ],
+      readBeforeMutating: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog, ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.versionComparisons]
     };
   }
 
@@ -924,6 +953,10 @@ function renderSessionSummary(state, board, packets, openQuestions, decisions, r
     `- Unresolved concerns: ${(workspaceIndex.unresolvedConcernIds ?? []).join(", ") || "none"}`,
     `- Dependency health: blocked=${workspaceIndex.dependencyHealth?.blockedPacketIds?.length ?? 0} waiting=${workspaceIndex.dependencyHealth?.waitingPacketIds?.length ?? 0} stale=${workspaceIndex.dependencyHealth?.stalePacketIds?.length ?? 0} missing=${workspaceIndex.dependencyHealth?.missingDependencyIds?.length ?? 0}`,
     `- Handoff obligations: ${(workspaceIndex.handoffObligations ?? []).map((item) => item.packetId).join(", ") || "none"}`,
+    `- Repair frontier: ${workspaceIndex.repairFrontier?.count ?? 0} items`,
+    ...((workspaceIndex.repairFrontier?.prioritizedItems ?? []).slice(0, 4).map((item) => `  - ${item.frontierType}: ${item.summary}`)),
+    `- Meta-optimize frontier: ${workspaceIndex.metaOptimize?.recommendationCount ?? 0} recommendations (${workspaceIndex.metaOptimize?.criticalCount ?? 0} critical)`,
+    `- Meta-optimize report: ${workspaceIndex.metaOptimize?.reportPath ?? ARTIFACT_PATHS.metaOptimizerReport}`,
     "",
     "## Role context manifests",
     "",
@@ -931,7 +964,7 @@ function renderSessionSummary(state, board, packets, openQuestions, decisions, r
   ].join("\n");
 }
 
-function renderNavigationReport(board, taskGraph, openQuestions, decisions, versionsIndex, comparisons) {
+function renderNavigationReport(board, taskGraph, openQuestions, decisions, versionsIndex, comparisons, workspaceIndex) {
   const readyForHandoff = sortPacketsForQueue(taskGraph.nodes.filter((packet) => packet.lifecycleStatus === "ready-for-handoff"));
   const stalePackets = sortPacketsForQueue(taskGraph.nodes.filter((packet) => packet.lifecycleStatus === "stale"));
   return [
@@ -953,6 +986,11 @@ function renderNavigationReport(board, taskGraph, openQuestions, decisions, vers
     "",
     `- Ready for handoff: ${readyForHandoff.map((packet) => packet.id).join(", ") || "none"}`,
     `- Stale packets: ${stalePackets.map((packet) => packet.id).join(", ") || "none"}`,
+    `- Repair frontier items: ${workspaceIndex.repairFrontier?.count ?? 0}`,
+    ...((workspaceIndex.repairFrontier?.prioritizedItems ?? []).slice(0, 5).map((item) => `  - ${item.frontierType}: ${item.summary}`)),
+    `- Meta-optimize recommendations: ${workspaceIndex.metaOptimize?.recommendationCount ?? 0}`,
+    `- Meta-optimize critical items: ${workspaceIndex.metaOptimize?.criticalCount ?? 0}`,
+    `- Meta-optimize report: ${workspaceIndex.metaOptimize?.reportPath ?? ARTIFACT_PATHS.metaOptimizerReport}`,
     "",
     "## Open questions",
     "",
@@ -1075,7 +1113,423 @@ function buildPhaseManifest(board, packets, workspaceIndex) {
   };
 }
 
-function buildWorkspaceIndex(state, board, packets, reviewState, journal, versionsIndex, comparisons) {
+function severityRank(value) {
+  return value === "high" ? 0 : value === "medium" ? 1 : 2;
+}
+
+function recommendationSortRank(value) {
+  return value === "critical" ? 0 : value === "high" ? 1 : value === "medium" ? 2 : 3;
+}
+
+function summarizeLinkedEvidence(paths = [], ids = []) {
+  return uniqueSorted([...(paths ?? []), ...(ids ?? [])]);
+}
+
+function pushMetaEvent(collection, event = {}) {
+  collection.push({
+    id: event.id,
+    signalType: event.signalType,
+    severity: event.severity ?? "medium",
+    summary: event.summary,
+    evidenceArtifactPaths: uniqueSorted(event.evidenceArtifactPaths ?? []),
+    evidenceIds: uniqueSorted(event.evidenceIds ?? []),
+    recommendationIds: uniqueSorted(event.recommendationIds ?? []),
+    observedAt: event.observedAt ?? nowIso()
+  });
+}
+
+function pushRecommendation(collection, recommendation = {}) {
+  collection.push({
+    id: recommendation.id,
+    category: recommendation.category,
+    priority: recommendation.priority ?? "medium",
+    proposalOnly: true,
+    summary: recommendation.summary,
+    rationale: recommendation.rationale,
+    nextAction: recommendation.nextAction,
+    scope: recommendation.scope ?? "workflow",
+    responseOwnerRole: recommendation.responseOwnerRole ?? null,
+    evidenceArtifactPaths: uniqueSorted(recommendation.evidenceArtifactPaths ?? []),
+    evidenceIds: uniqueSorted(recommendation.evidenceIds ?? []),
+    signalTypes: uniqueSorted(recommendation.signalTypes ?? []),
+    relatedRecommendationIds: uniqueSorted(recommendation.relatedRecommendationIds ?? []),
+    generatedAt: recommendation.generatedAt ?? nowIso()
+  });
+}
+
+function buildRepairFrontier(wikiRelations, figureQa) {
+  const relationItems = (wikiRelations.items ?? [])
+    .filter((relation) => relation.integrity?.status === "degraded")
+    .map((relation) => ({
+      id: `repair-${relation.id}`,
+      frontierType: "typed-wiki-relation",
+      severity: relation.integrity?.severity ?? "medium",
+      summary: `Repair typed wiki relation ${relation.id} (${relation.relationType}).`,
+      reasons: (relation.integrity?.reasons ?? []).map((reason) => reason.message).join(" "),
+      reasonCodes: uniqueSorted((relation.integrity?.reasons ?? []).map((reason) => reason.code)),
+      artifactPath: ARTIFACT_PATHS.wikiRelations,
+      relatedArtifactPaths: uniqueSorted([ARTIFACT_PATHS.wikiEntities, ...(relation.sourceArtifactPaths ?? [])]),
+      nextAction: `Repair the local artifacts for ${relation.id}, then rerun project:paper.wiki or refresh_wiki.`
+    }));
+  const figureItems = (figureQa.issues ?? []).map((issue) => ({
+    id: `repair-${issue.id}`,
+    frontierType: "figure-qa",
+    severity: issue.severity ?? "medium",
+    summary: `Repair figure artifact issue ${issue.id}.`,
+    reasons: issue.summary ?? `Figure issue ${issue.code}.`,
+    reasonCodes: uniqueSorted([issue.code]),
+    artifactPath: ARTIFACT_PATHS.figureQa,
+    relatedArtifactPaths: uniqueSorted([ARTIFACT_PATHS.figuresIndex, ...(issue.artifactPaths ?? [])]),
+    nextAction: `Repair the staged figure artifacts for ${issue.figureId ?? issue.id}, then rerun validate_figure_pipeline.`
+  }));
+  const prioritizedItems = [...relationItems, ...figureItems]
+    .sort((left, right) => {
+      const severityDelta = severityRank(left.severity) - severityRank(right.severity);
+      if (severityDelta !== 0) {
+        return severityDelta;
+      }
+      return left.id.localeCompare(right.id);
+    })
+    .slice(0, 12);
+  return {
+    count: relationItems.length + figureItems.length,
+    relationIssueCount: relationItems.length,
+    managedArtifactIssueCount: figureItems.length,
+    prioritizedItems
+  };
+}
+
+function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcerns, reviewState, adversarialState, experimentAudits, bridgeLog, figureQa, comparisons }) {
+  const events = [];
+  const recommendations = [];
+  const recentEntries = [...(journal.entries ?? [])].slice(-40);
+  const unresolvedConcerns = (reviewConcerns.items ?? []).filter((item) => !["resolved", "retired"].includes(item.status));
+  const escalatedConcerns = unresolvedConcerns.filter((item) => ["escalated", "contested"].includes(item.status));
+  const recurringConcerns = unresolvedConcerns.filter((item) => (item.recurrenceCount ?? 0) >= 2);
+  const blockedAudits = (experimentAudits.items ?? []).filter((item) => item.auditVerdict === "blocked" || (item.integrityFlags ?? []).length > 0);
+  const heldBridges = (bridgeLog.items ?? []).filter((item) => item.bridgeStatus === "held-for-review" || item.auditVerdict === "blocked" || (item.auditIds ?? []).length === 0);
+  const figureIssues = figureQa.issues ?? [];
+  const stalePackets = workspaceIndex.workQueues?.stale ?? [];
+  const handoffObligations = workspaceIndex.handoffObligations ?? [];
+  const latestComparison = (comparisons.items ?? []).at(-1) ?? null;
+  const repairItems = workspaceIndex.repairFrontier?.prioritizedItems ?? [];
+  const repeatedRepairishEvents = recentEntries.reduce((accumulator, entry) => {
+    if (!/(review|revision|audit|bridge|figure|version|workspace-index|meta-optimize)/.test(entry.type ?? "")) {
+      return accumulator;
+    }
+    accumulator[entry.type] = (accumulator[entry.type] ?? 0) + 1;
+    return accumulator;
+  }, {});
+
+  for (const concern of escalatedConcerns) {
+    const recommendationId = `meta-review-${concern.id}`;
+    pushMetaEvent(events, {
+      id: `event-${recommendationId}`,
+      signalType: "review-concern",
+      severity: concern.severity === "high" ? "high" : "medium",
+      summary: `Concern ${concern.id} remains ${concern.status} after ${concern.recurrenceCount} review rounds.`,
+      evidenceArtifactPaths: [ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.reviewState],
+      evidenceIds: [concern.id],
+      recommendationIds: [recommendationId]
+    });
+    pushRecommendation(recommendations, {
+      id: recommendationId,
+      category: "review-discipline",
+      priority: concern.severity === "high" ? "critical" : "high",
+      summary: `Escalate durable workflow attention to review concern ${concern.id}.`,
+      rationale: `The concern is still ${concern.status} with recurrence count ${concern.recurrenceCount}, so the workflow is repeatedly revisiting the same review debt without closure.`,
+      nextAction: `Resolve concern ${concern.id}, update the linked artifacts, then rerun project:paper.review-loop before finalization claims.`,
+      scope: "review-artifact health",
+      responseOwnerRole: concern.responseOwnerRole,
+      evidenceArtifactPaths: summarizeLinkedEvidence([ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.reviewState], concern.linkedArtifactPaths),
+      evidenceIds: [concern.id, ...(concern.linkedAuditIds ?? []), ...(concern.linkedBridgeIds ?? [])],
+      signalTypes: ["review-concern", "adversarial-review"]
+    });
+  }
+
+  for (const concern of recurringConcerns.filter((item) => !escalatedConcerns.some((other) => other.id === item.id)).slice(0, 4)) {
+    const recommendationId = `meta-recurring-review-${concern.id}`;
+    pushMetaEvent(events, {
+      id: `event-${recommendationId}`,
+      signalType: "recurring-review-concern",
+      severity: "medium",
+      summary: `Concern ${concern.id} has recurred across ${concern.recurrenceCount} review rounds.`,
+      evidenceArtifactPaths: [ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.reviewState],
+      evidenceIds: [concern.id],
+      recommendationIds: [recommendationId]
+    });
+    pushRecommendation(recommendations, {
+      id: recommendationId,
+      category: "repair-pattern",
+      priority: "high",
+      summary: `Turn recurring concern ${concern.id} into a more explicit workflow checkpoint.`,
+      rationale: `The same concern has been seen ${concern.recurrenceCount} times, which suggests the current workflow guidance is not forcing a durable close-out step.`,
+      nextAction: `Add an explicit checklist or revision-plan item tied to ${concern.id} so future passes verify closure instead of rediscovering the same issue.`,
+      scope: "workflow checkpointing",
+      responseOwnerRole: concern.responseOwnerRole,
+      evidenceArtifactPaths: summarizeLinkedEvidence([ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.reviewState], concern.linkedArtifactPaths),
+      evidenceIds: [concern.id],
+      signalTypes: ["review-concern"]
+    });
+  }
+
+  for (const item of repairItems.slice(0, 5)) {
+    const recommendationId = `meta-repair-${slugify(item.id)}`;
+    pushMetaEvent(events, {
+      id: `event-${recommendationId}`,
+      signalType: item.frontierType,
+      severity: item.severity ?? "medium",
+      summary: item.summary,
+      evidenceArtifactPaths: [item.artifactPath, ...(item.relatedArtifactPaths ?? [])],
+      evidenceIds: [item.id],
+      recommendationIds: [recommendationId]
+    });
+    pushRecommendation(recommendations, {
+      id: recommendationId,
+      category: "artifact-health",
+      priority: item.severity === "high" ? "critical" : "high",
+      summary: `Keep ${item.frontierType} visible as explicit repair work, not background maintenance.`,
+      rationale: item.reasons || `The repair frontier still carries ${item.frontierType} debt, so the workflow should preserve an explicit repair surface until it clears.`,
+      nextAction: item.nextAction,
+      scope: "artifact health",
+      evidenceArtifactPaths: [item.artifactPath, ...(item.relatedArtifactPaths ?? [])],
+      evidenceIds: [item.id, ...(item.reasonCodes ?? [])],
+      signalTypes: [item.frontierType]
+    });
+  }
+
+  for (const audit of blockedAudits.slice(0, 4)) {
+    const recommendationId = `meta-audit-${audit.id}`;
+    pushMetaEvent(events, {
+      id: `event-${recommendationId}`,
+      signalType: "experiment-audit",
+      severity: audit.auditVerdict === "blocked" ? "high" : "medium",
+      summary: `Audit ${audit.id} is ${audit.auditVerdict} with integrity flags: ${(audit.integrityFlags ?? []).join(", ") || "none"}.`,
+      evidenceArtifactPaths: [ARTIFACT_PATHS.experimentAudits],
+      evidenceIds: [audit.id, ...(audit.integrityFlags ?? [])],
+      recommendationIds: [recommendationId]
+    });
+    pushRecommendation(recommendations, {
+      id: recommendationId,
+      category: "experiment-integrity",
+      priority: audit.auditVerdict === "blocked" ? "critical" : "high",
+      summary: `Treat audit ${audit.id} as a workflow gate before more claim promotion.`,
+      rationale: `This audit is not clean, so downstream claim updates or review closure would be relying on unstable experiment evidence.`,
+      nextAction: `Repair the experiment artifacts referenced by ${audit.id}, rerun project:paper.experiment-audit, and only then bridge results into claims.`,
+      scope: "experiment integrity",
+      responseOwnerRole: "experiment-planner",
+      evidenceArtifactPaths: [ARTIFACT_PATHS.experimentAudits, ...(audit.reviewedArtifactRefs ?? [])],
+      evidenceIds: [audit.id, audit.resultId, audit.experimentId, ...(audit.integrityFlags ?? [])],
+      signalTypes: ["experiment-audit"]
+    });
+  }
+
+  for (const bridge of heldBridges.slice(0, 4)) {
+    const recommendationId = `meta-bridge-${bridge.id}`;
+    pushMetaEvent(events, {
+      id: `event-${recommendationId}`,
+      signalType: "claim-bridge",
+      severity: bridge.auditVerdict === "blocked" ? "high" : "medium",
+      summary: `Bridge ${bridge.id} is ${bridge.bridgeStatus} with audit verdict ${bridge.auditVerdict ?? "missing"}.`,
+      evidenceArtifactPaths: [ARTIFACT_PATHS.claimBridgeLog],
+      evidenceIds: [bridge.id, bridge.resultId, bridge.experimentId],
+      recommendationIds: [recommendationId]
+    });
+    pushRecommendation(recommendations, {
+      id: recommendationId,
+      category: "claim-bridge",
+      priority: bridge.auditVerdict === "blocked" ? "critical" : "high",
+      summary: `Keep claim bridge ${bridge.id} in proposal-only review until its audit trail is clean.`,
+      rationale: bridge.reason ?? `The bridge is not safely applied, which means the workflow still needs an explicit review step before stronger claim status changes.`,
+      nextAction: `Resolve the blocked or missing audits for ${bridge.id}, then rerun project:paper.result-bridge with the repaired evidence trail.`,
+      scope: "result-to-claim transition health",
+      responseOwnerRole: "experiment-planner",
+      evidenceArtifactPaths: [ARTIFACT_PATHS.claimBridgeLog, ARTIFACT_PATHS.experimentAudits],
+      evidenceIds: [bridge.id, bridge.resultId, bridge.experimentId, ...(bridge.auditIds ?? []), ...(bridge.integrityFlags ?? [])],
+      signalTypes: ["claim-bridge", "experiment-audit"]
+    });
+  }
+
+  if (stalePackets.length > 0 || handoffObligations.length > 0) {
+    const recommendationId = "meta-work-queue-discipline";
+    pushMetaEvent(events, {
+      id: `event-${recommendationId}`,
+      signalType: "workspace-queue",
+      severity: stalePackets.length > 0 ? "medium" : "low",
+      summary: `Workspace has ${stalePackets.length} stale packets and ${handoffObligations.length} handoff obligations.`,
+      evidenceArtifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.orchestrationBoard],
+      evidenceIds: [...stalePackets.map((packet) => packet.id), ...handoffObligations.map((item) => item.packetId)],
+      recommendationIds: [recommendationId]
+    });
+    pushRecommendation(recommendations, {
+      id: recommendationId,
+      category: "workflow-queue",
+      priority: stalePackets.length > 0 ? "high" : "medium",
+      summary: "Reduce stale or cross-role queue churn before adding more concurrent work.",
+      rationale: `The workspace index already shows stale packets or unresolved handoffs, so more work will likely amplify coordination debt instead of closing it.`,
+      nextAction: stalePackets[0]?.nextAction ?? handoffObligations[0]?.nextAction ?? board.nextAction,
+      scope: "orchestration discipline",
+      responseOwnerRole: board.assignedRole,
+      evidenceArtifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.orchestrationBoard],
+      evidenceIds: [...stalePackets.map((packet) => packet.id), ...handoffObligations.map((item) => item.packetId)],
+      signalTypes: ["workspace-queue"]
+    });
+  }
+
+  if (latestComparison && (latestComparison.unresolvedConcernsAdded ?? []).length > 0) {
+    const recommendationId = `meta-version-${latestComparison.id}`;
+    pushMetaEvent(events, {
+      id: `event-${recommendationId}`,
+      signalType: "version-comparison",
+      severity: "medium",
+      summary: `Comparison ${latestComparison.id} introduced ${(latestComparison.unresolvedConcernsAdded ?? []).length} unresolved concerns.`,
+      evidenceArtifactPaths: [ARTIFACT_PATHS.versionComparisons, ARTIFACT_PATHS.versionComparisonReport],
+      evidenceIds: [latestComparison.id, ...(latestComparison.unresolvedConcernsAdded ?? [])],
+      recommendationIds: [recommendationId]
+    });
+    pushRecommendation(recommendations, {
+      id: recommendationId,
+      category: "version-evolution",
+      priority: "medium",
+      summary: `Explain newly introduced concern debt in version comparison ${latestComparison.id}.`,
+      rationale: `The latest comparison added unresolved concerns, so the version report should stay coupled to an explicit explanation of why those regressions were accepted or how they will be repaired.`,
+      nextAction: `Review ${ARTIFACT_PATHS.versionComparisonReport} and connect the added unresolved concerns to concrete revision tasks before treating the newer version as stable.`,
+      scope: "version comparison discipline",
+      responseOwnerRole: "version-analyst",
+      evidenceArtifactPaths: [ARTIFACT_PATHS.versionComparisons, ARTIFACT_PATHS.versionComparisonReport],
+      evidenceIds: [latestComparison.id, ...(latestComparison.unresolvedConcernsAdded ?? [])],
+      signalTypes: ["version-comparison"]
+    });
+  }
+
+  for (const [eventType, count] of Object.entries(repeatedRepairishEvents).filter(([, count]) => count >= 4).slice(0, 3)) {
+    const recommendationId = `meta-journal-${slugify(eventType)}`;
+    pushMetaEvent(events, {
+      id: `event-${recommendationId}`,
+      signalType: "session-journal",
+      severity: "low",
+      summary: `Recent session journal repeated ${eventType} ${count} times.`,
+      evidenceArtifactPaths: [ARTIFACT_PATHS.sessionJournal],
+      evidenceIds: [eventType],
+      recommendationIds: [recommendationId]
+    });
+    pushRecommendation(recommendations, {
+      id: recommendationId,
+      category: "workflow-observability",
+      priority: "low",
+      summary: `Inspect whether repeated ${eventType} actions indicate workflow churn.`,
+      rationale: `The journal shows ${count} recent ${eventType} events, which can be a signal that operators are repeatedly refreshing or repairing the same surface instead of closing a durable issue.`,
+      nextAction: `Inspect the newest ${eventType} entries in ${ARTIFACT_PATHS.sessionJournal} and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.`,
+      scope: "session/workflow observability",
+      responseOwnerRole: board.assignedRole,
+      evidenceArtifactPaths: [ARTIFACT_PATHS.sessionJournal],
+      evidenceIds: [eventType],
+      signalTypes: ["session-journal"]
+    });
+  }
+
+  const sortedRecommendations = recommendations
+    .sort((left, right) => {
+      const priorityDelta = recommendationSortRank(left.priority) - recommendationSortRank(right.priority);
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+      return left.id.localeCompare(right.id);
+    })
+    .slice(0, 12);
+  const keptRecommendationIds = new Set(sortedRecommendations.map((item) => item.id));
+  const sortedEvents = events
+    .filter((item) => item.recommendationIds.some((id) => keptRecommendationIds.has(id)))
+    .sort((left, right) => {
+      const severityDelta = severityRank(left.severity) - severityRank(right.severity);
+      if (severityDelta !== 0) {
+        return severityDelta;
+      }
+      return left.id.localeCompare(right.id);
+    });
+  const categoryCounts = sortedRecommendations.reduce((accumulator, item) => {
+    accumulator[item.category] = (accumulator[item.category] ?? 0) + 1;
+    return accumulator;
+  }, {});
+  const signalTypes = uniqueSorted(sortedRecommendations.flatMap((item) => item.signalTypes));
+  const criticalCount = sortedRecommendations.filter((item) => item.priority === "critical").length;
+  const metaEvents = {
+    ...createMetaEventsIndex(),
+    items: sortedEvents,
+    updatedAt: nowIso()
+  };
+  const metaRecommendations = {
+    ...createMetaRecommendationsIndex(),
+    items: sortedRecommendations,
+    summary: {
+      recommendationCount: sortedRecommendations.length,
+      criticalCount,
+      categories: categoryCounts,
+      signalTypes
+    },
+    updatedAt: nowIso()
+  };
+  const metaOptimizerState = {
+    ...createMetaOptimizerState(),
+    frontier: {
+      recommendationCount: sortedRecommendations.length,
+      criticalCount,
+      activeSignalTypes: signalTypes,
+      reportPath: ARTIFACT_PATHS.metaOptimizerReport,
+      recommendationsPath: ARTIFACT_PATHS.metaRecommendations
+    },
+    lastRefreshedAt: nowIso(),
+    updatedAt: nowIso()
+  };
+  const reportLines = [
+    "# Latest optimizer report",
+    "",
+    "- Proposal only: true",
+    `- Generated: ${nowIso()}`,
+    `- Recommendation count: ${sortedRecommendations.length}`,
+    `- Critical recommendations: ${criticalCount}`,
+    `- Active signal types: ${signalTypes.join(", ") || "none"}`,
+    `- Board phase: ${board.currentPhase}`,
+    `- Board role: ${board.assignedRole}`,
+    "",
+    "## Evidence-backed recommendations",
+    "",
+    ...(sortedRecommendations.length > 0
+      ? sortedRecommendations.flatMap((item) => [
+          `### ${item.id} [${item.priority}]`,
+          `- Category: ${item.category}`,
+          `- Scope: ${item.scope}`,
+          `- Summary: ${item.summary}`,
+          `- Why: ${item.rationale}`,
+          `- Next action: ${item.nextAction}`,
+          `- Evidence artifacts: ${item.evidenceArtifactPaths.join(", ") || "none"}`,
+          `- Evidence ids: ${item.evidenceIds.join(", ") || "none"}`,
+          `- Response owner: ${item.responseOwnerRole ?? "none"}`,
+          ""
+        ])
+      : ["- No recommendations generated from the current durable signals."]),
+    "## Signal observations",
+    "",
+    ...(sortedEvents.length > 0
+      ? sortedEvents.map((item) => `- [${item.severity}] ${item.signalType}: ${item.summary}`)
+      : ["- No signal observations captured."]),
+    "",
+    "## Explicit non-goals",
+    "",
+    "- This layer does not auto-apply workflow, prompt, code, or config changes.",
+    "- This layer only summarizes durable signals and recommends explicit next steps.",
+    "- Operators must choose whether to act on any recommendation."
+  ];
+
+  return {
+    metaEvents,
+    metaRecommendations,
+    metaOptimizerState,
+    metaOptimizerReport: reportLines.join("\n")
+  };
+}
+
+function buildWorkspaceIndex(state, board, packets, reviewState, journal, versionsIndex, comparisons, wikiRelations, figureQa, metaOptimize = null) {
   const base = createWorkspaceIndex();
   const packetById = new Map(packets.map((packet) => [packet.id, packet]));
   const enrichedPackets = sortPacketsForQueue(packets.map((packet) => ({
@@ -1098,9 +1552,10 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
     healthyPacketIds: uniqueSorted(enrichedPackets.filter((packet) => packet.dependencyHealth.state === "clear").map((packet) => packet.id)),
     waitingPacketIds: uniqueSorted(waitingPackets.map((packet) => packet.id)),
     stalePacketIds: uniqueSorted(stalePackets.map((packet) => packet.id)),
-    missingDependencyIds: uniqueSorted(enrichedPackets.flatMap((packet) => packet.dependencyHealth.missingDependencyIds)),
-    orphanPacketIds: uniqueSorted(enrichedPackets.filter((packet) => packet.parentPacketId && !packetById.has(packet.parentPacketId)).map((packet) => packet.id))
+      missingDependencyIds: uniqueSorted(enrichedPackets.flatMap((packet) => packet.dependencyHealth.missingDependencyIds)),
+      orphanPacketIds: uniqueSorted(enrichedPackets.filter((packet) => packet.parentPacketId && !packetById.has(packet.parentPacketId)).map((packet) => packet.id))
   };
+  const repairFrontier = buildRepairFrontier(wikiRelations, figureQa);
   const handoffObligations = handoffPackets.map((packet) => ({
     packetId: packet.id,
     fromRole: board.assignedRole,
@@ -1120,6 +1575,7 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
     artifactContextPath(ARTIFACT_PATHS.orchestrationBoard),
     artifactContextPath(ARTIFACT_PATHS.workspaceIndex),
     artifactContextPath(ARTIFACT_PATHS.navigationReport),
+    ...repairFrontier.prioritizedItems.flatMap((item) => [item.artifactPath, ...(item.relatedArtifactPaths ?? [])].filter(Boolean).map(artifactContextPath)),
     ...prioritizedPackets.flatMap((packet) => [packet.packetPath, ...(packet.outputPaths ?? []), ...(packet.evidenceLinks ?? [])].filter(Boolean).map(artifactContextPath))
   ]);
   return {
@@ -1144,7 +1600,7 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
     handoffObligations,
     resumeGuidance: {
       command: state.pipeline.resumeCommand ?? resolveResumeCommandForPhase(board.currentPhase),
-      summary: prioritizedPackets[0]?.nextAction ?? board.nextAction,
+      summary: repairFrontier.prioritizedItems[0]?.nextAction ?? prioritizedPackets[0]?.nextAction ?? board.nextAction,
       prioritizedPacketIds: prioritizedPackets.map((packet) => packet.id),
       packetContextPaths: prioritizedPackets.slice(0, 8).map((packet) => packet.packetContextPath),
       handoffCandidateIds: handoffPackets.map((packet) => packet.id)
@@ -1169,6 +1625,8 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
       ])
     },
     dependencyHealth,
+    repairFrontier,
+    metaOptimize: metaOptimize ?? base.metaOptimize,
     activeRoles: Array.from(new Set([board.assignedRole, ...enrichedPackets.filter((packet) => packet.active).map((packet) => packet.assignedRole)])),
     unresolvedConcernIds: reviewState.unresolvedConcernIds ?? [],
     mostRecentSessions: [...(journal.entries ?? [])].slice(-10).reverse().map((entry) => ({
@@ -1193,12 +1651,18 @@ export function refreshDurableSurfaces(root, event = {}) {
   const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, () => createDefaultBoard(state));
   const notesIndex = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
   const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 2, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
+  const reviewConcerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
+  const adversarialState = readJson(root, ARTIFACT_PATHS.adversarialReviewState, { version: 2, unresolvedConcernIds: [], escalatedConcernIds: [], pendingAuthorResponseIds: [], pendingReviewerRulingIds: [], concernStatusCounts: {}, updatedAt: null });
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
+  const experimentAudits = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
+  const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
   const issuesIndex = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   const versionsIndex = readJson(root, ARTIFACT_PATHS.versionsIndex, createVersionsIndex);
   const comparisons = readJson(root, ARTIFACT_PATHS.versionComparisons, createVersionComparisonsIndex);
   const taskPacketIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex);
   const wikiEntities = readJson(root, ARTIFACT_PATHS.wikiEntities, createWikiEntitiesIndex);
+  const wikiRelations = readJson(root, ARTIFACT_PATHS.wikiRelations, createWikiRelationsIndex);
+  const figureQa = readJson(root, ARTIFACT_PATHS.figureQa, { version: 1, items: [], issues: [], updatedAt: null });
 
   const existingById = loadExistingPacketMap(root, taskPacketIndex.items ?? []);
   const refreshed = [
@@ -1261,14 +1725,43 @@ export function refreshDurableSurfaces(root, event = {}) {
   const entries = [...(journal.entries ?? []).slice(-199), entry];
   writeJson(root, ARTIFACT_PATHS.sessionJournal, { version: 1, entries, updatedAt: nowIso() });
 
-  const workspaceIndex = buildWorkspaceIndex(state, board, packetsWithHealth, reviewState, { entries }, versionsIndex, comparisons);
+  const preliminaryWorkspaceIndex = buildWorkspaceIndex(state, board, packetsWithHealth, reviewState, { entries }, versionsIndex, comparisons, wikiRelations, figureQa);
+  const metaOptimize = buildMetaOptimizeSurface({
+    board,
+    workspaceIndex: preliminaryWorkspaceIndex,
+    journal: { entries },
+    reviewConcerns,
+    reviewState,
+    adversarialState,
+    experimentAudits,
+    bridgeLog,
+    figureQa,
+    comparisons
+  });
+  const workspaceIndex = buildWorkspaceIndex(state, board, packetsWithHealth, reviewState, { entries }, versionsIndex, comparisons, wikiRelations, figureQa, {
+    proposalOnly: true,
+    recommendationCount: metaOptimize.metaRecommendations.items.length,
+    criticalCount: metaOptimize.metaRecommendations.summary.criticalCount,
+    activeSignalTypes: metaOptimize.metaRecommendations.summary.signalTypes,
+    reportPath: ARTIFACT_PATHS.metaOptimizerReport,
+    recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
+    statePath: ARTIFACT_PATHS.metaOptimizerState
+  });
   writeJson(root, ARTIFACT_PATHS.workspaceIndex, workspaceIndex);
+  writeJson(root, ARTIFACT_PATHS.metaEvents, metaOptimize.metaEvents);
+  writeJson(root, ARTIFACT_PATHS.metaRecommendations, metaOptimize.metaRecommendations);
+  writeJson(root, ARTIFACT_PATHS.metaOptimizerState, metaOptimize.metaOptimizerState);
+  writeText(root, ARTIFACT_PATHS.metaOptimizerReport, metaOptimize.metaOptimizerReport);
   const packetByIdForManifest = new Map(packetsWithHealth.map((packet) => [packet.id, packet]));
   const artifactPaths = uniqueSorted([
     ARTIFACT_PATHS.orchestrationBoard,
     ARTIFACT_PATHS.orchestrationHandoffs,
     ARTIFACT_PATHS.taskPacketsIndex,
     ARTIFACT_PATHS.workspaceIndex,
+    ARTIFACT_PATHS.metaEvents,
+    ARTIFACT_PATHS.metaRecommendations,
+    ARTIFACT_PATHS.metaOptimizerState,
+    ARTIFACT_PATHS.metaOptimizerReport,
     ARTIFACT_PATHS.sessionSummary,
     ARTIFACT_PATHS.navigationReport,
     ...packetsWithHealth.flatMap((packet) => [packet.packetPath, ...(packet.outputPaths ?? []), ...(packet.evidenceLinks ?? [])].filter(Boolean))
@@ -1344,9 +1837,9 @@ export function refreshDurableSurfaces(root, event = {}) {
   }));
 
   writeText(root, ARTIFACT_PATHS.sessionSummary, renderSessionSummary(state, board, packetsWithHealth, openQuestions, decisions, roleRoster, workspaceIndex));
-  writeText(root, ARTIFACT_PATHS.navigationReport, renderNavigationReport(board, taskGraph, openQuestions, decisions, versionsIndex, comparisons));
+  writeText(root, ARTIFACT_PATHS.navigationReport, renderNavigationReport(board, taskGraph, openQuestions, decisions, versionsIndex, comparisons, workspaceIndex));
 
-  return { packetIndex, openQuestions, decisions, taskGraph, workspaceIndex };
+  return { packetIndex, openQuestions, decisions, taskGraph, workspaceIndex, metaOptimize: metaOptimize.metaOptimizerState };
 }
 
 export function queryTaskGraph(root) {
@@ -1400,6 +1893,27 @@ export function queryWorkspaceIndex(root) {
     artifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary]
   });
   return workspaceIndex;
+}
+
+export function queryMetaOptimize(root) {
+  refreshDurableSurfaces(root, {
+    type: "query-meta-optimize",
+    summary: "Refreshed proposal-only meta-optimize surfaces.",
+    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
+  });
+  const events = readJson(root, ARTIFACT_PATHS.metaEvents, createMetaEventsIndex);
+  const recommendations = readJson(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex);
+  const state = readJson(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState);
+  return {
+    proposalOnly: true,
+    events: events.items ?? [],
+    recommendations: recommendations.items ?? [],
+    summary: recommendations.summary ?? state.frontier,
+    state,
+    reportPath: ARTIFACT_PATHS.metaOptimizerReport,
+    recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
+    eventsPath: ARTIFACT_PATHS.metaEvents
+  };
 }
 
 export function readPhaseContextManifest(root, phaseId = null) {

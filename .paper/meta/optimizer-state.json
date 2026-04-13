@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "proposalOnly": true,
+  "sourceArtifacts": [
+    ".paper/sessions/journal.json",
+    ".paper/reviews/concerns.json",
+    ".paper/reviews/adversarial-state.json",
+    ".paper/experiments/audits.json",
+    ".paper/claims/bridge-log.json",
+    ".paper/figures/qa.json",
+    ".paper/versions/comparisons.json",
+    ".paper/orchestration/board.json",
+    ".paper/workspace/index.json"
+  ],
+  "frontier": {
+    "recommendationCount": 0,
+    "criticalCount": 0,
+    "activeSignalTypes": [],
+    "reportPath": ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+    "recommendationsPath": ".paper/meta/recommendations.json"
+  },
+  "lastRefreshedAt": null,
+  "updatedAt": null
+}

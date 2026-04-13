@@ -138,6 +138,7 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(workspaceIndex.handoffObligations.some((item) => item.packetId === "task-packet-review-task"));
   assert.ok(workspaceIndex.resumeGuidance.prioritizedPacketIds.includes("task-packet-review-task"));
   assert.ok(workspaceIndex.resumeGuidance.packetContextPaths.includes(".paper/context/packets/task-packet-review-task.json"));
+  assert.equal(workspaceIndex.repairFrontier.count, 0);
   assert.equal(workspaceIndex.contextSurfaces.currentActionContextPath, ".paper/context/actions/current.json");
   assert.ok(workspaceIndex.contextSurfaces.prioritizedArtifactContextPaths.some((item) => item.endsWith("orchestration-board-json.json")));
   assert.ok(workspaceIndex.behaviorDiscipline.requiredReadOrder.includes(".paper/context/actions/current.json"));

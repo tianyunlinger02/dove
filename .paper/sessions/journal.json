@@ -364,7 +364,137 @@
         ".paper/workspace/index.json",
         ".paper/sessions/LATEST_SUMMARY.md"
       ]
+    },
+    {
+      "id": "2026-04-13T04:09:28.186Z-query-workspace-index",
+      "timestamp": "2026-04-13T04:09:28.187Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T04:09:28.202Z-query-workspace-index",
+      "timestamp": "2026-04-13T04:09:28.202Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T04:12:45.324Z-query-workspace-index",
+      "timestamp": "2026-04-13T04:12:45.324Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T04:12:45.340Z-query-workspace-index",
+      "timestamp": "2026-04-13T04:12:45.340Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T04:20:38.986Z-query-workspace-index",
+      "timestamp": "2026-04-13T04:20:38.986Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T04:20:39.002Z-query-workspace-index",
+      "timestamp": "2026-04-13T04:20:39.002Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T04:25:43.919Z-query-workspace-index",
+      "timestamp": "2026-04-13T04:25:43.920Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T04:25:43.935Z-query-workspace-index",
+      "timestamp": "2026-04-13T04:25:43.935Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T04:42:00.186Z-query-workspace-index",
+      "timestamp": "2026-04-13T04:42:00.186Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T04:42:00.202Z-query-workspace-index",
+      "timestamp": "2026-04-13T04:42:00.202Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
     }
   ],
-  "updatedAt": "2026-04-12T20:41:44.853Z"
+  "updatedAt": "2026-04-13T04:42:00.202Z"
 }
