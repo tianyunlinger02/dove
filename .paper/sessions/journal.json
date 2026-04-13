@@ -804,7 +804,50 @@
         ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
         ".paper/workspace/index.json"
       ]
+    },
+    {
+      "id": "2026-04-13T14:43:51.786Z-query-workspace-index",
+      "timestamp": "2026-04-13T14:43:51.786Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T14:43:51.808Z-query-workspace-index",
+      "timestamp": "2026-04-13T14:43:51.808Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-13T14:43:51.816Z-query-meta-optimize",
+      "timestamp": "2026-04-13T14:43:51.816Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
     }
   ],
-  "updatedAt": "2026-04-13T13:50:29.815Z"
+  "updatedAt": "2026-04-13T14:43:51.816Z"
 }

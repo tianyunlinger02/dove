@@ -1,7 +1,7 @@
 # Latest optimizer report
 
 - Proposal only: true
-- Generated: 2026-04-13T13:50:29.815Z
+- Generated: 2026-04-13T14:43:51.816Z
 - Meta-optimize frontier: 1 recommendations across 1 clusters (0 critical, score 64)
 - Meta-optimize frontier summary: 1 ranked recommendations across 1 deterministic clusters (0 critical, frontier score 64). Top clusters: queue-discipline.
 - Meta-optimize top clusters: queue-discipline
@@ -9,6 +9,9 @@
 - Meta-optimize top taxonomy families: none
 - Meta-optimize top taxonomy groups: none
 - Meta-optimize pressure areas: none
+- Remediation packs: 1 proposal-only packs (remediation-pack-queue-discipline)
+- Remediation pack focus: 1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.
+- Remediation packs path: .paper/meta/remediation-packs.json
 - Long-horizon memory: 1 long-horizon workflow families across 10 optimizer snapshots. Top families: workflow-churn.
 - Long-horizon snapshots: 10
 - Long-horizon last action: unchanged
@@ -49,7 +52,7 @@
 - Category: workflow-observability
 - Scope: session/workflow observability
 - Summary: Inspect whether repeated query-workspace-index actions indicate workflow churn.
-- Why: The journal shows 32 recent query-workspace-index events, which can be a signal that operators are repeatedly refreshing or repairing the same surface instead of closing a durable issue.
+- Why: The journal shows 31 recent query-workspace-index events, which can be a signal that operators are repeatedly refreshing or repairing the same surface instead of closing a durable issue.
 - Next action: Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.
 - Score: 64
 - Ranking basis: priority=low, recurrence=6, evidenceDensity=2, crossSessionRecurrence=6, repairFrontierOverlap=0, auditCriticality=0, bridgeCriticality=0, queueChurn=0, taxonomyFamilyPressure=0, taxonomyGroupPressure=0
@@ -60,6 +63,20 @@
 - Response owner: planner
 - Stable sort key: 9935:03:01:queue-discipline:workflow-observability:meta-journal-query-workspace-index
 - Stable tie-break key: 9935:03:queue-discipline:workflow-observability:meta-journal-query-workspace-index
+
+## Remediation packs
+
+### 1. Queue discipline remediation pack [low]
+- Pack id: remediation-pack-queue-discipline
+- Cluster: queue-discipline
+- Summary: Queue churn and repeated workflow activity that suggest coordination debt is accumulating. This pack keeps the cluster's repair frontier, evidence links, taxonomy anchors, and manual next steps together for operator review.
+- Taxonomy anchors: No typed wiki taxonomy pressure is active in this optimizer surface.
+- Linked review concerns: none
+- Linked figure QA: none
+- Long-horizon memory: workflow-churn
+- Packet pointers: none
+- Workspace pointers: .paper/context/actions/current.json, .paper/context/phases/init.json, .paper/context/roles/planner.json, .paper/meta/LATEST_OPTIMIZER_REPORT.md, .paper/meta/long-horizon-memory.json, .paper/meta/recommendations.json, .paper/meta/remediation-packs.json, .paper/sessions/journal.json, .paper/sessions/LATEST_SUMMARY.md, .paper/wiki/navigation.md, .paper/workspace/index.json
+- Manual next actions: Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit. | Read .paper/meta/LATEST_OPTIMIZER_REPORT.md and inspect cluster queue-discipline before changing any workflow artifact.
 
 ## Long-horizon workflow memory
 
@@ -79,7 +96,7 @@
 
 ## Signal observations
 
-- [low] session-journal: Recent session journal repeated query-workspace-index 32 times.
+- [low] session-journal: Recent session journal repeated query-workspace-index 31 times.
 
 ## Explicit non-goals
 

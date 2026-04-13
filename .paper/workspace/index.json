@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "managed": {
     "revisionId": "schema-v5:bootstrap-only",
     "templateHash": "05b331fb8b58cd1295bb4d3e0ebade581b2fc1543ee9a321f59116a0ba99acde",
@@ -188,6 +188,17 @@
     "recommendationsPath": ".paper/meta/recommendations.json",
     "statePath": ".paper/meta/optimizer-state.json",
     "longHorizonPath": ".paper/meta/long-horizon-memory.json",
+    "remediationPacks": {
+      "packCount": 1,
+      "topPackIds": [
+        "remediation-pack-queue-discipline"
+      ],
+      "topClusterIds": [
+        "queue-discipline"
+      ],
+      "overview": "1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.",
+      "packsPath": ".paper/meta/remediation-packs.json"
+    },
     "longHorizon": {
       "familyCount": 1,
       "recurringFamilyCount": 1,
@@ -212,6 +223,27 @@
   ],
   "unresolvedConcernIds": [],
   "mostRecentSessions": [
+    {
+      "id": "2026-04-13T14:43:51.816Z-query-meta-optimize",
+      "type": "query-meta-optimize",
+      "phase": "init",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "timestamp": "2026-04-13T14:43:51.816Z"
+    },
+    {
+      "id": "2026-04-13T14:43:51.808Z-query-workspace-index",
+      "type": "query-workspace-index",
+      "phase": "init",
+      "summary": "Refreshed workspace index query surface.",
+      "timestamp": "2026-04-13T14:43:51.808Z"
+    },
+    {
+      "id": "2026-04-13T14:43:51.786Z-query-workspace-index",
+      "type": "query-workspace-index",
+      "phase": "init",
+      "summary": "Refreshed workspace index query surface.",
+      "timestamp": "2026-04-13T14:43:51.786Z"
+    },
     {
       "id": "2026-04-13T13:50:29.815Z-query-meta-optimize",
       "type": "query-meta-optimize",
@@ -260,27 +292,6 @@
       "phase": "init",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
       "timestamp": "2026-04-13T12:46:29.171Z"
-    },
-    {
-      "id": "2026-04-13T12:46:29.164Z-query-workspace-index",
-      "type": "query-workspace-index",
-      "phase": "init",
-      "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T12:46:29.164Z"
-    },
-    {
-      "id": "2026-04-13T12:46:29.142Z-query-workspace-index",
-      "type": "query-workspace-index",
-      "phase": "init",
-      "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T12:46:29.142Z"
-    },
-    {
-      "id": "2026-04-13T12:10:40.579Z-query-meta-optimize",
-      "type": "query-meta-optimize",
-      "phase": "init",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "timestamp": "2026-04-13T12:10:40.579Z"
     }
   ],
   "latestVersions": {
@@ -288,5 +299,5 @@
     "activeTargets": [],
     "latestSnapshotIds": []
   },
-  "updatedAt": "2026-04-13T13:50:29.816Z"
+  "updatedAt": "2026-04-13T14:43:51.817Z"
 }

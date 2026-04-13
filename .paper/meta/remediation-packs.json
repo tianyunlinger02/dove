@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "proposalOnly": true,
+  "packs": [
+    {
+      "id": "remediation-pack-queue-discipline",
+      "title": "Queue discipline remediation pack",
+      "proposalOnly": true,
+      "explicitOnly": true,
+      "noAutoApply": true,
+      "rank": 1,
+      "clusterId": "queue-discipline",
+      "clusterLabel": "Queue discipline",
+      "priority": "low",
+      "score": 64,
+      "summary": "Queue churn and repeated workflow activity that suggest coordination debt is accumulating. This pack keeps the cluster's repair frontier, evidence links, taxonomy anchors, and manual next steps together for operator review.",
+      "frontier": {
+        "clusterId": "queue-discipline",
+        "recommendationIds": [
+          "meta-journal-query-workspace-index"
+        ],
+        "repairItemIds": [],
+        "repairCount": 0,
+        "frontierSummary": "1 ranked recommendations across 1 deterministic clusters (0 critical, frontier score 64). Top clusters: queue-discipline."
+      },
+      "taxonomyAnchors": {
+        "familyIds": [],
+        "familyLabels": [],
+        "groupIds": [],
+        "groupLabels": [],
+        "overview": "No typed wiki taxonomy pressure is active in this optimizer surface."
+      },
+      "evidence": {
+        "artifactPaths": [
+          ".paper/sessions/journal.json"
+        ],
+        "ids": [
+          "query-workspace-index"
+        ],
+        "longHorizonFamilyIds": [
+          "workflow-churn"
+        ],
+        "reviewConcernIds": [],
+        "figureIssueIds": []
+      },
+      "reviewConcerns": [],
+      "figureQa": [],
+      "longHorizonMemory": [
+        {
+          "id": "workflow-churn",
+          "label": "Workflow churn",
+          "summary": "Queue and observability work keeps repeating instead of closing out cleanly.",
+          "trend": "rising",
+          "relatedTaxonomyFamilyIds": [],
+          "relatedTaxonomyGroupIds": [],
+          "evidenceArtifactPaths": [
+            ".paper/sessions/journal.json"
+          ]
+        }
+      ],
+      "packetPointers": [],
+      "workspacePointers": [
+        ".paper/context/actions/current.json",
+        ".paper/context/phases/init.json",
+        ".paper/context/roles/planner.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/meta/long-horizon-memory.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/sessions/journal.json",
+        ".paper/sessions/LATEST_SUMMARY.md",
+        ".paper/wiki/navigation.md",
+        ".paper/workspace/index.json"
+      ],
+      "manualNextActions": [
+        "Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.",
+        "Read .paper/meta/LATEST_OPTIMIZER_REPORT.md and inspect cluster queue-discipline before changing any workflow artifact."
+      ],
+      "generatedAt": "2026-04-13T14:43:51.817Z"
+    }
+  ],
+  "summary": {
+    "packCount": 1,
+    "topPackIds": [
+      "remediation-pack-queue-discipline"
+    ],
+    "topClusterIds": [
+      "queue-discipline"
+    ],
+    "overview": "1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.",
+    "packsPath": ".paper/meta/remediation-packs.json"
+  },
+  "sourceArtifacts": [
+    ".paper/meta/recommendations.json",
+    ".paper/meta/long-horizon-memory.json",
+    ".paper/reviews/concerns.json",
+    ".paper/figures/qa.json",
+    ".paper/workspace/index.json",
+    ".paper/wiki/navigation.md",
+    ".paper/sessions/LATEST_SUMMARY.md"
+  ],
+  "updatedAt": "2026-04-13T14:43:51.817Z"
+}

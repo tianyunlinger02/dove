@@ -7,6 +7,7 @@ import {
   createDefaultBoard,
   createMetaEventsIndex,
   createMetaLongHorizonMemory,
+  createMetaRemediationPacksIndex,
   createMetaOptimizerState,
   createMetaRecommendationsIndex,
   createSessionJournal,
@@ -18,6 +19,7 @@ import {
   createWikiEntitiesIndex,
   createWikiRelationsIndex,
   normalizeMetaLongHorizonMemory,
+  normalizeMetaRemediationPacksIndex,
   normalizeMetaOptimizerState,
   normalizeMetaRecommendationsIndex,
   resolveResumeCommandForPhase
@@ -416,7 +418,7 @@ function artifactGuidance(relativePath) {
     };
   }
 
-  if ([ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport].includes(normalized)) {
+  if ([ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport].includes(normalized)) {
     return {
       category: "meta-optimize",
       summary: "Meta-optimize artifacts are proposal-only summaries built from durable workflow signals.",
@@ -477,7 +479,7 @@ function buildArtifactContextManifest(root, relativePath, board, packets, worksp
   };
 }
 
-function buildActionContextBundle({ scopeType, scopeId, summary, board, workspaceIndex, packet = null, roleId = null, phaseId = null, artifactPath = null, requiredReadPaths = [], localRules = [], nextAction = null }) {
+function buildActionContextBundle({ scopeType, scopeId, summary, board, workspaceIndex, packet = null, roleId = null, phaseId = null, artifactPath = null, requiredReadPaths = [], localRules = [], nextAction = null, operatorGuidance = null }) {
   return {
     version: 1,
     scopeType,
@@ -495,7 +497,64 @@ function buildActionContextBundle({ scopeType, scopeId, summary, board, workspac
     noHiddenRuntime: true,
     requiredReadPaths: uniqueSorted(requiredReadPaths),
     localRules: uniqueSorted(localRules),
+    operatorGuidance,
     generatedAt: nowIso()
+  };
+}
+
+function isGovernanceRepairFrontierItem(item = {}) {
+  return ["workflow-governance", "version-governance", "meta-optimize-drift"].includes(item.frontierType);
+}
+
+function selectTopRemediationPack(remediationPacks = {}, { roleId = null, packetId = null } = {}) {
+  const packs = remediationPacks?.packs ?? [];
+  if (packetId) {
+    const packetMatch = packs.find((pack) => (pack.packetPointers ?? []).some((pointer) => pointer.id === packetId));
+    if (packetMatch) {
+      return packetMatch;
+    }
+  }
+  if (roleId) {
+    const roleMatch = packs.find((pack) => (pack.packetPointers ?? []).some((pointer) => pointer.assignedRole === roleId)
+      || (pack.reviewConcerns ?? []).some((concern) => concern.responseOwnerRole === roleId));
+    if (roleMatch) {
+      return roleMatch;
+    }
+  }
+  return packs[0] ?? null;
+}
+
+function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, { roleId = null, packetId = null } = {}) {
+  const topRepairItems = (workspaceIndex.repairFrontier?.prioritizedItems ?? []).slice(0, 3).map((item) => ({
+    id: item.id,
+    frontierType: item.frontierType,
+    severity: item.severity ?? "medium",
+    summary: item.summary,
+    nextAction: item.nextAction
+  }));
+  const topRemediationPack = selectTopRemediationPack(remediationPacks, { roleId, packetId });
+  return {
+    repairFrontier: {
+      count: workspaceIndex.repairFrontier?.count ?? 0,
+      governanceIssueCount: workspaceIndex.repairFrontier?.governanceIssueCount ?? 0,
+      taxonomyOverview: workspaceIndex.repairFrontier?.taxonomyOverview ?? "No degraded typed wiki relation families are currently summarized.",
+      topItems: topRepairItems
+    },
+    taxonomyPressure: {
+      overview: workspaceIndex.metaOptimize?.taxonomyOverview ?? "No typed wiki taxonomy pressure is currently active in the optimizer frontier.",
+      pressureAreas: workspaceIndex.metaOptimize?.pressureAreas ?? [],
+      topTaxonomyFamilyIds: workspaceIndex.metaOptimize?.topTaxonomyFamilyIds ?? [],
+      topTaxonomyGroupIds: workspaceIndex.metaOptimize?.topTaxonomyGroupIds ?? []
+    },
+    remediationPack: topRemediationPack ? {
+      id: topRemediationPack.id,
+      title: topRemediationPack.title,
+      clusterId: topRemediationPack.clusterId,
+      summary: topRemediationPack.summary,
+      taxonomyOverview: topRemediationPack.taxonomyAnchors?.overview ?? "No typed wiki taxonomy pressure is active in this remediation pack.",
+      manualNextActions: (topRemediationPack.manualNextActions ?? []).slice(0, 3),
+      workspacePointers: (topRemediationPack.workspacePointers ?? []).slice(0, 5)
+    } : null
   };
 }
 
@@ -957,7 +1016,7 @@ function renderSessionSummary(state, board, packets, openQuestions, decisions, r
     `- Unresolved concerns: ${(workspaceIndex.unresolvedConcernIds ?? []).join(", ") || "none"}`,
     `- Dependency health: blocked=${workspaceIndex.dependencyHealth?.blockedPacketIds?.length ?? 0} waiting=${workspaceIndex.dependencyHealth?.waitingPacketIds?.length ?? 0} stale=${workspaceIndex.dependencyHealth?.stalePacketIds?.length ?? 0} missing=${workspaceIndex.dependencyHealth?.missingDependencyIds?.length ?? 0}`,
     `- Handoff obligations: ${(workspaceIndex.handoffObligations ?? []).map((item) => item.packetId).join(", ") || "none"}`,
-    `- Repair frontier: ${workspaceIndex.repairFrontier?.count ?? 0} items (relations ${(workspaceIndex.repairFrontier?.relationIssueCount ?? 0)}, degraded families ${(workspaceIndex.repairFrontier?.relationFamilyIssueCount ?? 0)}, managed artifacts ${(workspaceIndex.repairFrontier?.managedArtifactIssueCount ?? 0)})`,
+    `- Repair frontier: ${workspaceIndex.repairFrontier?.count ?? 0} items (relations ${(workspaceIndex.repairFrontier?.relationIssueCount ?? 0)}, degraded families ${(workspaceIndex.repairFrontier?.relationFamilyIssueCount ?? 0)}, managed artifacts ${(workspaceIndex.repairFrontier?.managedArtifactIssueCount ?? 0)}, governance ${(workspaceIndex.repairFrontier?.governanceIssueCount ?? 0)})`,
     `- Relation taxonomy: ${workspaceIndex.repairFrontier?.taxonomyOverview ?? "No degraded typed wiki relation families are currently summarized."}`,
     ...((workspaceIndex.repairFrontier?.relationFamilySummaries ?? []).slice(0, 3).map((family) => `  - family ${family.id}: ${family.overview}`)),
     ...((workspaceIndex.repairFrontier?.relationGroupSummaries ?? []).slice(0, 3).map((group) => `  - group ${group.id}: ${group.overview}`)),
@@ -992,7 +1051,7 @@ function renderNavigationReport(board, taskGraph, openQuestions, decisions, vers
     "",
     `- Ready for handoff: ${readyForHandoff.map((packet) => packet.id).join(", ") || "none"}`,
     `- Stale packets: ${stalePackets.map((packet) => packet.id).join(", ") || "none"}`,
-    `- Repair frontier items: ${workspaceIndex.repairFrontier?.count ?? 0} (relations ${(workspaceIndex.repairFrontier?.relationIssueCount ?? 0)}, degraded families ${(workspaceIndex.repairFrontier?.relationFamilyIssueCount ?? 0)}, managed artifacts ${(workspaceIndex.repairFrontier?.managedArtifactIssueCount ?? 0)})`,
+    `- Repair frontier items: ${workspaceIndex.repairFrontier?.count ?? 0} (relations ${(workspaceIndex.repairFrontier?.relationIssueCount ?? 0)}, degraded families ${(workspaceIndex.repairFrontier?.relationFamilyIssueCount ?? 0)}, managed artifacts ${(workspaceIndex.repairFrontier?.managedArtifactIssueCount ?? 0)}, governance ${(workspaceIndex.repairFrontier?.governanceIssueCount ?? 0)})`,
     `- Relation taxonomy: ${workspaceIndex.repairFrontier?.taxonomyOverview ?? "No degraded typed wiki relation families are currently summarized."}`,
     ...((workspaceIndex.repairFrontier?.relationFamilySummaries ?? []).slice(0, 3).map((family) => `  - family ${family.id}: ${family.overview}`)),
     ...((workspaceIndex.repairFrontier?.relationGroupSummaries ?? []).slice(0, 3).map((group) => `  - group ${group.id}: ${group.overview}`)),
@@ -1019,7 +1078,7 @@ function renderNavigationReport(board, taskGraph, openQuestions, decisions, vers
   ].join("\n");
 }
 
-function buildRoleManifest(role, packets, openQuestions, decisions, workspaceIndex) {
+function buildRoleManifest(role, packets, openQuestions, decisions, workspaceIndex, remediationPacks = {}) {
   const rolePackets = packets.filter((packet) => packet.assignedRole === role.id && packet.active);
   const roleQuestionIds = rolePackets.flatMap((packet) => (packet.questions ?? []).filter((item) => item.status !== "answered").map((item) => item.id));
   const roleDecisionIds = decisions.filter((item) => item.packetId ? rolePackets.some((packet) => packet.id === item.packetId) : ["board-current-role", "board-next-action"].includes(item.id)).map((item) => item.id);
@@ -1060,11 +1119,12 @@ function buildRoleManifest(role, packets, openQuestions, decisions, workspaceInd
     currentFocus: rolePackets[0]?.currentFocus ?? workspaceIndex.currentFocus ?? null,
     queueSummary: workspaceIndex.ownershipSummary?.find((entry) => entry.roleId === role.id) ?? null,
     handoffCandidateIds: (workspaceIndex.handoffObligations ?? []).filter((item) => item.toRole === role.id || item.fromRole === role.id).map((item) => item.packetId),
+    operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, { roleId: role.id }),
     generatedAt: nowIso()
   };
 }
 
-function buildPhaseManifest(board, packets, workspaceIndex) {
+function buildPhaseManifest(board, packets, workspaceIndex, remediationPacks = {}) {
   const phasePackets = sortPacketsForQueue(packets.filter((packet) => packet.phase === board.currentPhase && packet.active));
   const artifactContextPaths = uniqueSorted([
     artifactContextPath(ARTIFACT_PATHS.orchestrationBoard),
@@ -1115,6 +1175,7 @@ function buildPhaseManifest(board, packets, workspaceIndex) {
         "Keep phase guidance explicit and file-backed."
       ]
     },
+    operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, { roleId: board.assignedRole }),
     resumeGuidance: workspaceIndex.resumeGuidance,
     generatedAt: nowIso()
   };
@@ -1741,7 +1802,7 @@ function buildLongHorizonMemory(existingMemory, rankedRecommendations, clusters,
   };
 }
 
-function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory) {
+function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks) {
   return {
     proposalOnly: true,
     recommendationCount: metaRecommendations.items.length,
@@ -1763,6 +1824,7 @@ function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory) {
     recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
     statePath: ARTIFACT_PATHS.metaOptimizerState,
     longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
+    remediationPacks: remediationPacks.summary,
     longHorizon: {
       ...longHorizonMemory.summary,
       memoryPath: ARTIFACT_PATHS.metaLongHorizonMemory
@@ -1779,6 +1841,9 @@ function renderMetaOptimizeOverviewLines(metaOptimize = {}) {
     `- Meta-optimize top taxonomy families: ${(metaOptimize.topTaxonomyFamilyIds ?? []).join(", ") || "none"}`,
     `- Meta-optimize top taxonomy groups: ${(metaOptimize.topTaxonomyGroupIds ?? []).join(", ") || "none"}`,
     `- Meta-optimize pressure areas: ${(metaOptimize.pressureAreas ?? []).join(", ") || "none"}`,
+    `- Remediation packs: ${metaOptimize.remediationPacks?.packCount ?? 0} proposal-only packs (${(metaOptimize.remediationPacks?.topPackIds ?? []).join(", ") || "none"})`,
+    `- Remediation pack focus: ${metaOptimize.remediationPacks?.overview ?? "No proposal-only remediation packs have been generated yet."}`,
+    `- Remediation packs path: ${metaOptimize.remediationPacks?.packsPath ?? ARTIFACT_PATHS.metaRemediationPacks}`,
     `- Long-horizon memory: ${metaOptimize.longHorizon?.overview ?? "No long-horizon workflow memory has been summarized yet."}`,
     `- Long-horizon snapshots: ${metaOptimize.longHorizon?.snapshotCount ?? 0}`,
     `- Long-horizon last action: ${metaOptimize.longHorizon?.lastAction ?? "unchanged"}`,
@@ -1801,6 +1866,163 @@ function clusterSortKey(cluster = {}) {
 
 function summarizeLinkedEvidence(paths = [], ids = []) {
   return uniqueSorted([...(paths ?? []), ...(ids ?? [])]);
+}
+
+function intersects(values = [], otherValues = []) {
+  const target = new Set(otherValues);
+  return values.some((value) => target.has(value));
+}
+
+function summarizeConcernForPack(concern = {}) {
+  return {
+    id: concern.id,
+    summary: concern.summary,
+    severity: concern.severity ?? "medium",
+    status: concern.status ?? "open",
+    responseOwnerRole: concern.responseOwnerRole ?? null,
+    linkedArtifactPaths: uniqueSorted(concern.linkedArtifactPaths ?? []),
+    linkedAuditIds: uniqueSorted(concern.linkedAuditIds ?? []),
+    linkedBridgeIds: uniqueSorted(concern.linkedBridgeIds ?? [])
+  };
+}
+
+function summarizeFigureIssueForPack(issue = {}) {
+  return {
+    id: issue.id,
+    figureId: issue.figureId ?? null,
+    severity: issue.severity ?? "medium",
+    code: issue.code ?? null,
+    summary: issue.summary ?? `Figure issue ${issue.id}`,
+    artifactPaths: uniqueSorted(issue.artifactPaths ?? [])
+  };
+}
+
+function buildRemediationPacks({ clusters, recommendations, longHorizonMemory, reviewConcerns, figureQa, workspaceIndex }) {
+  const generatedAt = nowIso();
+  const packs = clusters.map((cluster) => {
+    const clusterRecommendations = recommendations.filter((item) => item.clusterId === cluster.id);
+    const recommendationIds = clusterRecommendations.map((item) => item.id);
+    const evidenceArtifactPaths = uniqueSorted(clusterRecommendations.flatMap((item) => item.evidenceArtifactPaths ?? []));
+    const evidenceIds = uniqueSorted(clusterRecommendations.flatMap((item) => item.evidenceIds ?? []));
+    const taxonomyAnchors = {
+      familyIds: uniqueSorted(cluster.taxonomyPressure?.familyIds ?? []),
+      familyLabels: uniqueSorted(cluster.taxonomyPressure?.familyLabels ?? []),
+      groupIds: uniqueSorted(cluster.taxonomyPressure?.groupIds ?? []),
+      groupLabels: uniqueSorted(cluster.taxonomyPressure?.groupLabels ?? []),
+      overview: cluster.taxonomyPressure?.overview ?? "No typed wiki taxonomy pressure is active in this remediation pack."
+    };
+    const repairItems = (workspaceIndex.repairFrontier?.prioritizedItems ?? []).filter((item) => {
+      const repairFamilyIds = uniqueSorted([item.taxonomyFamilyId, ...(item.taxonomyFamilyIds ?? [])].filter(Boolean));
+      const repairGroupIds = uniqueSorted([item.taxonomyGroupId, ...(item.taxonomyGroupIds ?? [])].filter(Boolean));
+      return intersects(repairFamilyIds, taxonomyAnchors.familyIds)
+        || intersects(repairGroupIds, taxonomyAnchors.groupIds)
+        || intersects(uniqueSorted([item.artifactPath, ...(item.relatedArtifactPaths ?? [])]), evidenceArtifactPaths);
+    });
+    const packReviewConcerns = (reviewConcerns.items ?? []).filter((concern) => {
+      const concernEvidenceIds = uniqueSorted([concern.id, ...(concern.linkedAuditIds ?? []), ...(concern.linkedBridgeIds ?? [])]);
+      return concernEvidenceIds.some((id) => evidenceIds.includes(id))
+        || intersects(concern.linkedArtifactPaths ?? [], evidenceArtifactPaths);
+    }).map(summarizeConcernForPack);
+    const packFigureIssues = (figureQa.issues ?? []).filter((issue) => {
+      const issueIds = uniqueSorted([issue.id, issue.figureId].filter(Boolean));
+      return issueIds.some((id) => evidenceIds.includes(id))
+        || intersects(issue.artifactPaths ?? [], evidenceArtifactPaths)
+        || clusterRecommendations.some((item) => (item.signalTypes ?? []).includes("figure-qa") || (item.signalTypes ?? []).includes("figure-qa"));
+    }).map(summarizeFigureIssueForPack);
+    const memoryFamilies = (longHorizonMemory.families ?? []).filter((family) => intersects(family.topClusterIds ?? [], [cluster.id]) || intersects(family.topRecommendationIds ?? [], recommendationIds))
+      .slice(0, 4)
+      .map((family) => ({
+        id: family.id,
+        label: family.label,
+        summary: family.summary,
+        trend: family.trend?.status ?? "stable",
+        relatedTaxonomyFamilyIds: uniqueSorted(family.relatedTaxonomyFamilyIds ?? []),
+        relatedTaxonomyGroupIds: uniqueSorted(family.relatedTaxonomyGroupIds ?? []),
+        evidenceArtifactPaths: uniqueSorted(family.evidenceArtifactPaths ?? [])
+      }));
+    const packetPointers = (workspaceIndex.activePackets ?? [])
+      .filter((packet) => (cluster.responseOwnerRoles ?? []).includes(packet.assignedRole) || intersects(packet.evidenceLinks ?? [], evidenceArtifactPaths))
+      .slice(0, 4)
+      .map((packet) => ({
+        id: packet.id,
+        assignedRole: packet.assignedRole,
+        lifecycleStatus: packet.lifecycleStatus,
+        nextAction: packet.nextAction,
+        packetContextPath: packet.packetContextPath ?? null
+      }));
+    const workspacePointers = uniqueSorted([
+      ARTIFACT_PATHS.workspaceIndex,
+      ARTIFACT_PATHS.navigationReport,
+      ARTIFACT_PATHS.sessionSummary,
+      ARTIFACT_PATHS.metaOptimizerReport,
+      ARTIFACT_PATHS.metaRecommendations,
+      ARTIFACT_PATHS.metaLongHorizonMemory,
+      ARTIFACT_PATHS.metaRemediationPacks,
+      workspaceIndex.contextSurfaces?.currentActionContextPath,
+      workspaceIndex.contextSurfaces?.currentRoleContextPath,
+      workspaceIndex.contextSurfaces?.currentPhaseContextPath,
+      ...packetPointers.map((packet) => packet.packetContextPath),
+      ...evidenceArtifactPaths
+    ]);
+    const manualNextActions = uniqueSorted([
+      `Read ${ARTIFACT_PATHS.metaOptimizerReport} and inspect cluster ${cluster.id} before changing any workflow artifact.`,
+      ...repairItems.slice(0, 2).map((item) => item.nextAction),
+      ...clusterRecommendations.slice(0, 2).map((item) => item.nextAction),
+      packReviewConcerns[0] ? `Review concern ${packReviewConcerns[0].id} and update its linked artifacts explicitly.` : null,
+      packFigureIssues[0] ? `Inspect figure QA issue ${packFigureIssues[0].id} before treating the frontier as closed.` : null,
+      packetPointers[0]?.nextAction ?? null
+    ]);
+    return {
+      id: `remediation-pack-${cluster.id}`,
+      title: `${cluster.label} remediation pack`,
+      proposalOnly: true,
+      explicitOnly: true,
+      noAutoApply: true,
+      rank: cluster.rank,
+      clusterId: cluster.id,
+      clusterLabel: cluster.label,
+      priority: cluster.priority,
+      score: cluster.score,
+      summary: `${cluster.summary} This pack keeps the cluster's repair frontier, evidence links, taxonomy anchors, and manual next steps together for operator review.`,
+      frontier: {
+        clusterId: cluster.id,
+        recommendationIds,
+        repairItemIds: repairItems.map((item) => item.id),
+        repairCount: repairItems.length,
+        frontierSummary: workspaceIndex.metaOptimize?.frontierSummary ?? "No proposal-only optimizer recommendations have been generated yet."
+      },
+      taxonomyAnchors,
+      evidence: {
+        artifactPaths: evidenceArtifactPaths,
+        ids: evidenceIds,
+        longHorizonFamilyIds: memoryFamilies.map((family) => family.id),
+        reviewConcernIds: packReviewConcerns.map((concern) => concern.id),
+        figureIssueIds: packFigureIssues.map((issue) => issue.id)
+      },
+      reviewConcerns: packReviewConcerns,
+      figureQa: packFigureIssues,
+      longHorizonMemory: memoryFamilies,
+      packetPointers,
+      workspacePointers,
+      manualNextActions,
+      generatedAt
+    };
+  });
+  const summary = {
+    packCount: packs.length,
+    topPackIds: packs.slice(0, 3).map((pack) => pack.id),
+    topClusterIds: packs.slice(0, 3).map((pack) => pack.clusterId),
+    overview: packs.length > 0
+      ? `${packs.length} proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.`
+      : "No proposal-only remediation packs have been generated yet.",
+    packsPath: ARTIFACT_PATHS.metaRemediationPacks
+  };
+  return {
+    ...createMetaRemediationPacksIndex(),
+    packs,
+    summary,
+    updatedAt: generatedAt
+  };
 }
 
 function pushMetaEvent(collection, event = {}) {
@@ -1844,7 +2066,7 @@ function pushRecommendation(collection, recommendation = {}) {
   });
 }
 
-function buildRepairFrontier(wikiRelations, figureQa) {
+function buildRepairFrontier({ wikiRelations, figureQa, stalePackets = [], handoffObligations = [], latestComparison = null, board = null }) {
   const relationGroupSummaries = (wikiRelations.summary?.taxonomy?.groups ?? [])
     .filter((group) => group.degradedCount > 0)
     .map((group) => ({
@@ -1898,7 +2120,37 @@ function buildRepairFrontier(wikiRelations, figureQa) {
     relatedArtifactPaths: uniqueSorted([ARTIFACT_PATHS.figuresIndex, ...(issue.artifactPaths ?? [])]),
     nextAction: `Repair the staged figure artifacts for ${issue.figureId ?? issue.id}, then rerun validate_figure_pipeline.`
   }));
-  const prioritizedItems = [...relationFamilyItems, ...relationItems, ...figureItems]
+  const governanceItems = [];
+  if (stalePackets.length > 0 || handoffObligations.length > 0) {
+    governanceItems.push({
+      id: "repair-workflow-governance",
+      frontierType: "workflow-governance",
+      severity: stalePackets.length > 0 ? "high" : "medium",
+      summary: `Reduce ${stalePackets.length} stale packets and ${handoffObligations.length} handoff obligations before expanding concurrent work.`,
+      reasons: `The workspace already carries ${stalePackets.length} stale packets and ${handoffObligations.length} cross-role handoff obligations, so coordination debt is staying operator-visible instead of closing cleanly.`,
+      reasonCodes: uniqueSorted([
+        ...(stalePackets.length > 0 ? ["stale-packets"] : []),
+        ...(handoffObligations.length > 0 ? ["handoff-obligations"] : [])
+      ]),
+      artifactPath: ARTIFACT_PATHS.workspaceIndex,
+      relatedArtifactPaths: uniqueSorted([ARTIFACT_PATHS.orchestrationBoard, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.navigationReport]),
+      nextAction: stalePackets[0]?.nextAction ?? handoffObligations[0]?.nextAction ?? board?.nextAction ?? "Repair the queue governance debt before widening the active frontier."
+    });
+  }
+  if (latestComparison && (latestComparison.unresolvedConcernsAdded ?? []).length > 0) {
+    governanceItems.push({
+      id: `repair-version-governance-${latestComparison.id}`,
+      frontierType: "version-governance",
+      severity: "medium",
+      summary: `Explain or repair unresolved concern debt introduced by version comparison ${latestComparison.id}.`,
+      reasons: `Comparison ${latestComparison.id} added ${(latestComparison.unresolvedConcernsAdded ?? []).length} unresolved concerns, so version movement still needs an explicit repair or acceptance trail.`,
+      reasonCodes: ["version-comparison-unresolved-concerns"],
+      artifactPath: ARTIFACT_PATHS.versionComparisons,
+      relatedArtifactPaths: [ARTIFACT_PATHS.versionComparisonReport],
+      nextAction: `Review ${ARTIFACT_PATHS.versionComparisonReport} and connect the added unresolved concerns to explicit revision or repair work before treating the newer version as stable.`
+    });
+  }
+  const prioritizedItems = [...relationFamilyItems, ...relationItems, ...figureItems, ...governanceItems]
     .sort((left, right) => {
       const severityDelta = severityRank(left.severity) - severityRank(right.severity);
       if (severityDelta !== 0) {
@@ -1908,10 +2160,11 @@ function buildRepairFrontier(wikiRelations, figureQa) {
     })
     .slice(0, 12);
   return {
-    count: relationFamilyItems.length + relationItems.length + figureItems.length,
+    count: relationFamilyItems.length + relationItems.length + figureItems.length + governanceItems.length,
     relationIssueCount: relationItems.length,
     relationFamilyIssueCount: relationFamilyItems.length,
     managedArtifactIssueCount: figureItems.length,
+    governanceIssueCount: governanceItems.length,
     topDegradedFamilyIds: relationFamilySummaries.slice(0, 3).map((family) => family.id),
     topDegradedGroupIds: relationGroupSummaries.slice(0, 3).map((group) => group.id),
     taxonomyOverview: wikiRelations.summary?.taxonomy?.overview ?? "No degraded typed wiki relation families are currently summarized.",
@@ -2006,6 +2259,9 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
   }
 
   for (const item of repairItems.slice(0, 5)) {
+    if (isGovernanceRepairFrontierItem(item)) {
+      continue;
+    }
     const recommendationId = `meta-repair-${slugify(item.id)}`;
     const taxonomyPressure = buildTaxonomyPressure(
       [item.taxonomyFamilyId, ...(item.taxonomyFamilyIds ?? [])].filter(Boolean),
@@ -2443,32 +2699,46 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
     updatedAt: generatedAt
   };
   const longHorizonMemory = buildLongHorizonMemory(existingLongHorizonMemory, rankedRecommendations, clusters, metaRecommendations.frontier, generatedAt);
-  const metaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory);
+  const metaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, createMetaRemediationPacksIndex());
+  const remediationPacks = buildRemediationPacks({
+    clusters,
+    recommendations: rankedRecommendations,
+    longHorizonMemory,
+    reviewConcerns,
+    figureQa,
+    workspaceIndex: {
+      ...workspaceIndex,
+      metaOptimize: metaOptimizeMirror
+    }
+  });
+  const finalMetaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks);
   const metaOptimizerState = {
     ...createMetaOptimizerState(),
     frontier: {
-      recommendationCount: metaOptimizeMirror.recommendationCount,
-      criticalCount: metaOptimizeMirror.criticalCount,
-      clusterCount: metaOptimizeMirror.clusterCount,
-      frontierScore: metaOptimizeMirror.frontierScore,
-      activeSignalTypes: metaOptimizeMirror.activeSignalTypes,
-      topClusterIds: metaOptimizeMirror.topClusterIds,
-      topRecommendationIds: metaOptimizeMirror.topRecommendationIds,
-      topClusters: metaOptimizeMirror.topClusters,
-      frontierSummary: metaOptimizeMirror.frontierSummary,
-      rankingMethod: metaOptimizeMirror.rankingMethod,
-      tieBreakOrder: metaOptimizeMirror.tieBreakOrder,
-      reportPath: metaOptimizeMirror.reportPath,
-      recommendationsPath: metaOptimizeMirror.recommendationsPath,
-      statePath: metaOptimizeMirror.statePath,
-      longHorizonPath: metaOptimizeMirror.longHorizonPath,
-      topTaxonomyFamilyIds: metaOptimizeMirror.topTaxonomyFamilyIds,
-      topTaxonomyGroupIds: metaOptimizeMirror.topTaxonomyGroupIds,
-      pressureAreas: metaOptimizeMirror.pressureAreas,
-      taxonomyOverview: metaOptimizeMirror.taxonomyOverview
+      recommendationCount: finalMetaOptimizeMirror.recommendationCount,
+      criticalCount: finalMetaOptimizeMirror.criticalCount,
+      clusterCount: finalMetaOptimizeMirror.clusterCount,
+      frontierScore: finalMetaOptimizeMirror.frontierScore,
+      activeSignalTypes: finalMetaOptimizeMirror.activeSignalTypes,
+      topClusterIds: finalMetaOptimizeMirror.topClusterIds,
+      topRecommendationIds: finalMetaOptimizeMirror.topRecommendationIds,
+      topClusters: finalMetaOptimizeMirror.topClusters,
+      frontierSummary: finalMetaOptimizeMirror.frontierSummary,
+      rankingMethod: finalMetaOptimizeMirror.rankingMethod,
+      tieBreakOrder: finalMetaOptimizeMirror.tieBreakOrder,
+      reportPath: finalMetaOptimizeMirror.reportPath,
+      recommendationsPath: finalMetaOptimizeMirror.recommendationsPath,
+      statePath: finalMetaOptimizeMirror.statePath,
+      longHorizonPath: finalMetaOptimizeMirror.longHorizonPath,
+      remediationPacksPath: ARTIFACT_PATHS.metaRemediationPacks,
+      topTaxonomyFamilyIds: finalMetaOptimizeMirror.topTaxonomyFamilyIds,
+      topTaxonomyGroupIds: finalMetaOptimizeMirror.topTaxonomyGroupIds,
+      pressureAreas: finalMetaOptimizeMirror.pressureAreas,
+      taxonomyOverview: finalMetaOptimizeMirror.taxonomyOverview
     },
-    clusters: metaOptimizeMirror.topClusters,
-    longHorizon: metaOptimizeMirror.longHorizon,
+    clusters: finalMetaOptimizeMirror.topClusters,
+    remediationPacks: remediationPacks.summary,
+    longHorizon: finalMetaOptimizeMirror.longHorizon,
     lastRefreshedAt: generatedAt,
     updatedAt: generatedAt
   };
@@ -2477,10 +2747,10 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
     "",
     "- Proposal only: true",
     `- Generated: ${generatedAt}`,
-    ...renderMetaOptimizeOverviewLines(metaOptimizeMirror),
+    ...renderMetaOptimizeOverviewLines(finalMetaOptimizeMirror),
     `- Active signal types: ${signalTypes.join(", ") || "none"}`,
-    `- Ranking method: ${metaOptimizeMirror.rankingMethod}`,
-    `- Stable tie-break order: ${metaOptimizeMirror.tieBreakOrder.join(", ")}`,
+    `- Ranking method: ${finalMetaOptimizeMirror.rankingMethod}`,
+    `- Stable tie-break order: ${finalMetaOptimizeMirror.tieBreakOrder.join(", ")}`,
     `- Long-horizon history policy: ${longHorizonMemory.historyPolicy.mode} (${longHorizonMemory.historyPolicy.lastAction}: ${longHorizonMemory.historyPolicy.reason})`,
     `- Board phase: ${board.currentPhase}`,
     `- Board role: ${board.assignedRole}`,
@@ -2533,6 +2803,24 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
             ])
         ])
       : ["- No recommendations generated from the current durable signals."]),
+    "## Remediation packs",
+    "",
+    ...(remediationPacks.packs.length > 0
+      ? remediationPacks.packs.flatMap((pack) => [
+          `### ${pack.rank}. ${pack.title} [${pack.priority}]`,
+          `- Pack id: ${pack.id}`,
+          `- Cluster: ${pack.clusterId}`,
+          `- Summary: ${pack.summary}`,
+          `- Taxonomy anchors: ${pack.taxonomyAnchors.overview}`,
+          `- Linked review concerns: ${pack.reviewConcerns.map((item) => item.id).join(", ") || "none"}`,
+          `- Linked figure QA: ${pack.figureQa.map((item) => item.id).join(", ") || "none"}`,
+          `- Long-horizon memory: ${pack.longHorizonMemory.map((item) => item.id).join(", ") || "none"}`,
+          `- Packet pointers: ${pack.packetPointers.map((item) => item.id).join(", ") || "none"}`,
+          `- Workspace pointers: ${pack.workspacePointers.join(", ") || "none"}`,
+          `- Manual next actions: ${pack.manualNextActions.join(" | ") || "none"}`,
+          ""
+        ])
+      : ["- No remediation packs generated from the current durable signals."]),
     "## Long-horizon workflow memory",
     "",
     ...(longHorizonMemory.families.length > 0
@@ -2568,6 +2856,7 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
 
   return {
     metaEvents,
+    remediationPacks,
     longHorizonMemory,
     metaRecommendations,
     metaOptimizerState,
@@ -2601,7 +2890,6 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
       missingDependencyIds: uniqueSorted(enrichedPackets.flatMap((packet) => packet.dependencyHealth.missingDependencyIds)),
       orphanPacketIds: uniqueSorted(enrichedPackets.filter((packet) => packet.parentPacketId && !packetById.has(packet.parentPacketId)).map((packet) => packet.id))
   };
-  const repairFrontier = buildRepairFrontier(wikiRelations, figureQa);
   const handoffObligations = handoffPackets.map((packet) => ({
     packetId: packet.id,
     fromRole: board.assignedRole,
@@ -2610,6 +2898,15 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
     nextAction: packet.nextAction,
     packetContextPath: packet.packetContextPath
   }));
+  const latestComparison = (comparisons.items ?? []).at(-1) ?? null;
+  const repairFrontier = buildRepairFrontier({
+    wikiRelations,
+    figureQa,
+    stalePackets,
+    handoffObligations,
+    latestComparison,
+    board
+  });
   const prioritizedPackets = [
     ...stalePackets,
     ...reviewNeededPackets,
@@ -2796,11 +3093,12 @@ export function refreshDurableSurfaces(root, event = {}) {
     comparisons,
     wikiRelations,
     figureQa,
-    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory)
+    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks)
   );
   writeJson(root, ARTIFACT_PATHS.workspaceIndex, workspaceIndex);
   writeJson(root, ARTIFACT_PATHS.metaEvents, metaOptimize.metaEvents);
   writeJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, metaOptimize.longHorizonMemory);
+  writeJson(root, ARTIFACT_PATHS.metaRemediationPacks, metaOptimize.remediationPacks);
   writeJson(root, ARTIFACT_PATHS.metaRecommendations, metaOptimize.metaRecommendations);
   writeJson(root, ARTIFACT_PATHS.metaOptimizerState, metaOptimize.metaOptimizerState);
   writeText(root, ARTIFACT_PATHS.metaOptimizerReport, metaOptimize.metaOptimizerReport);
@@ -2812,6 +3110,7 @@ export function refreshDurableSurfaces(root, event = {}) {
     ARTIFACT_PATHS.workspaceIndex,
     ARTIFACT_PATHS.metaEvents,
     ARTIFACT_PATHS.metaLongHorizonMemory,
+    ARTIFACT_PATHS.metaRemediationPacks,
     ARTIFACT_PATHS.metaRecommendations,
     ARTIFACT_PATHS.metaOptimizerState,
     ARTIFACT_PATHS.metaOptimizerReport,
@@ -2840,11 +3139,12 @@ export function refreshDurableSurfaces(root, event = {}) {
         path.join(ARTIFACT_PATHS.phaseContextsDir, `${packet.phase}.json`),
         ...manifest.artifactContextPaths
       ],
-      localRules: manifest.behaviorDiscipline.localRules
+      localRules: manifest.behaviorDiscipline.localRules,
+      operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, { roleId: packet.assignedRole, packetId: packet.id })
     }));
   }
   for (const role of roleRoster) {
-    const manifest = buildRoleManifest(role, packetsWithHealth, openQuestions, decisions, workspaceIndex);
+    const manifest = buildRoleManifest(role, packetsWithHealth, openQuestions, decisions, workspaceIndex, metaOptimize.remediationPacks);
     writeJson(root, path.join(ARTIFACT_PATHS.roleContextsDir, `${role.id}.json`), manifest);
     writeJson(root, actionContextPath(`role-${role.id}`), buildActionContextBundle({
       scopeType: "role",
@@ -2855,11 +3155,12 @@ export function refreshDurableSurfaces(root, event = {}) {
       roleId: role.id,
       phaseId: workspaceIndex.boardPhase,
       requiredReadPaths: manifest.preActionReadPaths,
-      localRules: manifest.behaviorDiscipline.localRules
+      localRules: manifest.behaviorDiscipline.localRules,
+      operatorGuidance: manifest.operatorGuidance
     }));
   }
   const phaseManifestPath = path.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`);
-  const phaseManifest = buildPhaseManifest(board, packetsWithHealth, workspaceIndex);
+  const phaseManifest = buildPhaseManifest(board, packetsWithHealth, workspaceIndex, metaOptimize.remediationPacks);
   writeJson(root, phaseManifestPath, phaseManifest);
   writeJson(root, actionContextPath(`phase-${board.currentPhase}`), buildActionContextBundle({
     scopeType: "phase",
@@ -2870,7 +3171,8 @@ export function refreshDurableSurfaces(root, event = {}) {
     roleId: board.assignedRole,
     phaseId: board.currentPhase,
     requiredReadPaths: phaseManifest.preActionReadPaths,
-    localRules: phaseManifest.behaviorDiscipline.localRules
+    localRules: phaseManifest.behaviorDiscipline.localRules,
+    operatorGuidance: phaseManifest.operatorGuidance
   }));
   writeJson(root, actionContextPath("current"), buildActionContextBundle({
     scopeType: "current",
@@ -2886,7 +3188,8 @@ export function refreshDurableSurfaces(root, event = {}) {
       "Start from the current action bundle, then follow the required read order.",
       "Use packet and artifact-local guidance instead of broad top-level rules when available.",
       "Do not assume hidden rule loading; read the surfaced files explicitly before acting."
-    ]
+    ],
+    operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, { roleId: board.assignedRole })
   }));
 
   writeText(root, ARTIFACT_PATHS.sessionSummary, renderSessionSummary(state, board, packetsWithHealth, openQuestions, decisions, roleRoster, workspaceIndex));
@@ -2952,15 +3255,17 @@ export function queryMetaOptimize(root) {
   refreshDurableSurfaces(root, {
     type: "query-meta-optimize",
     summary: "Refreshed proposal-only meta-optimize surfaces.",
-    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
+    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
   });
   const events = readJson(root, ARTIFACT_PATHS.metaEvents, createMetaEventsIndex);
   const longHorizonMemory = normalizeMetaLongHorizonMemory(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory));
+  const remediationPacks = normalizeMetaRemediationPacksIndex(readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex));
   const recommendations = normalizeMetaRecommendationsIndex(readJson(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex));
   const state = normalizeMetaOptimizerState(readJson(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState));
   return {
     proposalOnly: true,
     events: events.items ?? [],
+    remediationPacks,
     longHorizon: longHorizonMemory,
     recommendations: recommendations.items ?? [],
     clusters: recommendations.clusters ?? [],
@@ -2976,6 +3281,7 @@ export function queryMetaOptimize(root) {
     reportPath: ARTIFACT_PATHS.metaOptimizerReport,
     recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
     eventsPath: ARTIFACT_PATHS.metaEvents,
+    remediationPacksPath: ARTIFACT_PATHS.metaRemediationPacks,
     longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory
   };
 }
