@@ -1,6 +1,6 @@
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
-import { loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
+import { assertRoleBoundMutation, loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
 import { extractCitationKeysFromText, nowIso, readJson, readText, writeJson, writeText, listDraftFiles } from "./workspace.mjs";
 
 function slugify(value) {
@@ -21,7 +21,10 @@ function normalizeClaim(claim, index) {
     evidenceLinks: Array.isArray(claim.evidenceLinks) ? claim.evidenceLinks : [],
     status: claim.status ?? "draft",
     confidence: claim.confidence ?? "medium",
+    latestAuditId: claim.latestAuditId ?? null,
+    latestAuditVerdict: claim.latestAuditVerdict ?? null,
     latestBridgeId: claim.latestBridgeId ?? null,
+    bridgeStatus: claim.bridgeStatus ?? null,
     gap: claim.gap ?? ""
   };
 }
@@ -41,7 +44,10 @@ function renderClaimsMarkdown(claims) {
       `- Evidence links: ${claim.evidenceLinks.join(", ") || "none"}`,
       `- Status: ${claim.status}`,
       `- Confidence: ${claim.confidence}`,
+      claim.latestAuditId ? `- Latest audit: ${claim.latestAuditId}` : null,
+      claim.latestAuditVerdict ? `- Latest audit verdict: ${claim.latestAuditVerdict}` : null,
       claim.latestBridgeId ? `- Latest bridge event: ${claim.latestBridgeId}` : null,
+      claim.bridgeStatus ? `- Bridge status: ${claim.bridgeStatus}` : null,
       claim.gap ? `- Gap: ${claim.gap}` : null,
       ""
     ].filter(Boolean))
@@ -49,6 +55,10 @@ function renderClaimsMarkdown(claims) {
 }
 
 export function upsertClaims(root, args = {}) {
+  assertRoleBoundMutation(root, args, {
+    actionLabel: "Updating evidence-backed claims",
+    expectedRole: "researcher"
+  });
   const current = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
@@ -112,10 +122,13 @@ export function evaluateEvidence(root) {
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
+  const experimentResults = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
   const audits = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
   const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
   const sourceById = new Map(sources.items.flatMap((item) => [[item.id, item], item.citationKey ? [item.citationKey, item] : null].filter(Boolean)));
   const noteIds = new Set(notes.items.map((item) => item.id));
+  const auditsById = new Map((audits.items ?? []).map((item) => [item.id, item]));
+  const resultsById = new Map((experimentResults.items ?? []).map((item) => [item.id, item]));
   const unsupportedClaims = [];
   const weakClaims = [];
   const missingSourceRefs = [];
@@ -150,6 +163,18 @@ export function evaluateEvidence(root) {
     if (latestBridge && latestBridge.statusAfter !== claim.status) {
       claimBridgeProblems.push({ claim, reason: "stale-bridge-state", bridgeId: latestBridge.id });
     }
+    if (latestBridge && (!Array.isArray(latestBridge.auditIds) || latestBridge.auditIds.length === 0)) {
+      claimBridgeProblems.push({ claim, reason: "missing-audit-link", bridgeId: latestBridge.id });
+    }
+    if (latestBridge) {
+      const unknownAuditIds = (latestBridge.auditIds ?? []).filter((id) => !auditsById.has(id));
+      if (unknownAuditIds.length > 0) {
+        claimBridgeProblems.push({ claim, reason: "unknown-audit-link", bridgeId: latestBridge.id, auditIds: unknownAuditIds });
+      }
+      if (latestBridge.bridgeStatus === "held-for-review" || latestBridge.auditVerdict === "blocked") {
+        claimBridgeProblems.push({ claim, reason: "bridge-held-for-review", bridgeId: latestBridge.id, auditIds: latestBridge.auditIds ?? [] });
+      }
+    }
 
     const draftPath = `${ARTIFACT_PATHS.draftsDir}/${claim.sectionId}.md`;
     const draftContent = readText(root, draftPath, "");
@@ -168,8 +193,15 @@ export function evaluateEvidence(root) {
   }
 
   for (const audit of audits.items ?? []) {
-    if ((audit.integrityFlags ?? []).length > 0) {
+    const result = audit.resultId ? resultsById.get(audit.resultId) : null;
+    if ((audit.integrityFlags ?? []).length > 0 || audit.auditVerdict === "blocked") {
       auditIntegrityFlags.push(audit);
+    }
+    if ((audit.reviewedArtifactRefs ?? []).length === 0) {
+      auditIntegrityFlags.push({ ...audit, integrityFlags: [...(audit.integrityFlags ?? []), "missing-reviewed-artifact-refs"] });
+    }
+    if (result?.latestAuditId && result.latestAuditId !== audit.id && result.id === audit.resultId) {
+      auditIntegrityFlags.push({ ...audit, integrityFlags: [...(audit.integrityFlags ?? []), "stale-result-audit-pointer"] });
     }
   }
 

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { compareVersions, ensureWorkspace } from "../../src/core/index.mjs";
+import { compareVersions, ensureWorkspace, upsertOrchestrationBoard } from "../../src/core/index.mjs";
 
 function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-legacy-snapshot-"));
@@ -29,6 +29,12 @@ test("compareVersions tolerates legacy snapshot shapes with missing modern field
     sections: {},
     claimIds: ["claim-a", "claim-b"]
   }, null, 2));
+
+  upsertOrchestrationBoard(root, {
+    phase: "versions",
+    assignedRole: "version-analyst",
+    reviewRequiredBeforeFinalize: false
+  });
 
   const comparison = compareVersions(root, { fromVersionId: "legacy-a", toVersionId: "legacy-b" });
   assert.equal(comparison.fromVersionId, "legacy-a");

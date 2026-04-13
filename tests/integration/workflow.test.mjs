@@ -10,7 +10,6 @@ import {
   createVersionSnapshot,
   ensureWorkspace,
   initProject,
-  normalizeRebuttalIssues,
   registerSource,
   runReviewLoop,
   syncChecklist,
@@ -43,18 +42,11 @@ test("single-paper workflow creates durable artifacts", () => {
 
   upsertOrchestrationBoard(root, {
     phase: "research",
-    assignedRole: "planner",
+    assignedRole: "researcher",
     tasks: [
       { title: "Expand source coverage", assignedRole: "researcher", status: "in-progress" },
       { title: "Plan comparison experiment", assignedRole: "experiment-planner", status: "pending" }
     ]
-  });
-  appendHandoff(root, {
-    fromRole: "planner",
-    toRole: "researcher",
-    phase: "research",
-    summary: "Handing off for evidence collection.",
-    nextActions: ["Register sources", "Refresh research brief"]
   });
   updateResearchBrief(root, {
     objective: "Validate the end-to-end writing pipeline.",
@@ -113,6 +105,14 @@ test("single-paper workflow creates durable artifacts", () => {
     status: "drafting"
   });
 
+  appendHandoff(root, {
+    fromRole: "researcher",
+    toRole: "experiment-planner",
+    phase: "experiments",
+    summary: "Handing off to plan the claim-linked experiment.",
+    nextActions: ["Record the experiment plan", "Capture the result and audit it"]
+  });
+
   const experimentPlan = upsertExperimentPlan(root, {
     id: "durable-comparison",
     title: "Durable vs ad-hoc workflow comparison",
@@ -131,17 +131,21 @@ test("single-paper workflow creates durable artifacts", () => {
     comparisonTargets: ["baseline-ad-hoc"]
   });
 
+  appendHandoff(root, {
+    fromRole: "experiment-planner",
+    toRole: "reviewer",
+    phase: "review",
+    summary: "Handing off for evidence-aware review.",
+    nextActions: ["Run the review loop", "Triage rebuttal issues"]
+  });
+
   const review = runReviewLoop(root, { scope: "introduction" });
-  normalizeRebuttalIssues(root, {
-    issues: [
-      {
-        reviewer: "reviewer-1",
-        summary: "Clarify the evaluation protocol.",
-        severity: "medium",
-        evidenceLinks: [".paper/experiments/EXPERIMENT_LOG.md"],
-        experimentIds: [experimentPlan.id]
-      }
-    ]
+  appendHandoff(root, {
+    fromRole: "rebuttal-lead",
+    toRole: "version-analyst",
+    phase: "versions",
+    summary: "Handing off for durable snapshotting after rebuttal triage.",
+    nextActions: ["Create the next snapshot", "Compare the new lineage step"]
   });
   const snapshotA = createVersionSnapshot(root, {
     versionId: "v1-initial",
@@ -153,6 +157,13 @@ test("single-paper workflow creates durable artifacts", () => {
     title: "Introduction",
     body: "# Introduction\n\nDurable workflows reduce context loss [cite:lee2026durable] and improve review traceability [cite:kim2026workflow].\n",
     status: "drafting"
+  });
+  appendHandoff(root, {
+    fromRole: "researcher",
+    toRole: "version-analyst",
+    phase: "versions",
+    summary: "Handing off again after draft edits so versioning stays explicit.",
+    nextActions: ["Create the revised snapshot"]
   });
   const snapshotB = createVersionSnapshot(root, {
     versionId: "v2-revised",

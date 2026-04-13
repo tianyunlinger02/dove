@@ -30,6 +30,33 @@ export const PIPELINE_STAGE_ORDER = [
   "checklist"
 ];
 
+export function resolveResumeCommandForPhase(phase) {
+  switch (phase) {
+    case "sources":
+      return "project:paper.research";
+    case "notes":
+    case "research":
+      return "project:paper.claim-gate";
+    case "plan":
+      return "project:paper.outline";
+    case "outline":
+      return "project:paper.draft";
+    case "draft":
+    case "experiments":
+      return "project:paper.review-loop";
+    case "review":
+      return "project:paper.rebuttal-strategy";
+    case "rebuttal":
+      return "project:paper.version-snapshot";
+    case "versions":
+      return "project:paper.version-compare";
+    case "checklist":
+      return "project:paper.checklist";
+    default:
+      return "project:paper.orchestrate";
+  }
+}
+
 export const ROLE_IDS = [
   "planner",
   "researcher",
@@ -52,6 +79,9 @@ export const ARTIFACT_PATHS = {
   taskPacketsIndex: ".paper/task-packets/index.json",
   roleContextsDir: ".paper/context/roles",
   phaseContextsDir: ".paper/context/phases",
+  packetContextsDir: ".paper/context/packets",
+  artifactContextsDir: ".paper/context/artifacts",
+  actionContextsDir: ".paper/context/actions",
   sessionJournal: ".paper/sessions/journal.json",
   sessionSummary: ".paper/sessions/LATEST_SUMMARY.md",
   workspaceDir: ".paper/workspace",
@@ -93,6 +123,8 @@ export const ARTIFACT_PATHS = {
   figureSegments: ".paper/figures/segments.json",
   figureTemplates: ".paper/figures/templates.json",
   figureEditableIndex: ".paper/figures/editable-index.json",
+  figureFinalIndex: ".paper/figures/final-index.json",
+  figureQa: ".paper/figures/qa.json",
   rebuttalIssues: ".paper/rebuttal/issues.json",
   rebuttalStrategy: ".paper/rebuttal/strategy.md",
   rebuttalResponseDraft: ".paper/rebuttal/response-draft.md",
@@ -434,29 +466,54 @@ export function createEvidenceIndex() {
 }
 
 export function createTaskPacketsIndex() {
-  return { version: 2, items: [], updatedAt: null };
+  return {
+    version: 3,
+    items: [],
+    lifecycleCounts: {},
+    dependencyHealth: {
+      blockedPacketIds: [],
+      readyPacketIds: [],
+      stalePacketIds: [],
+      missingDependencyIds: []
+    },
+    updatedAt: null
+  };
 }
 
 export function createReviewState() {
   return {
-    version: 2,
+    version: 3,
     lastVerdict: "not-reviewed",
     lastReviewedAt: null,
     history: [],
     openItems: [],
-    unresolvedConcernIds: []
+    unresolvedConcernIds: [],
+    escalatedConcernIds: [],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 0,
+    reviewerIndependence: {
+      reviewerRole: "reviewer",
+      responseOwnerRoles: [],
+      separationMaintained: true
+    }
   };
 }
 
 export function createReviewConcernsIndex() {
-  return { version: 1, items: [], updatedAt: null };
+  return { version: 2, items: [], updatedAt: null };
 }
 
 export function createAdversarialReviewState() {
   return {
-    version: 1,
+    version: 2,
     round: 0,
     unresolvedConcernIds: [],
+    escalatedConcernIds: [],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    concernStatusCounts: {},
+    escalationThresholds: { high: 1, medium: 2, low: 3 },
     lastAuditIds: [],
     lastBridgeIds: [],
     updatedAt: null
@@ -481,6 +538,14 @@ export function createFigureTemplatesIndex() {
 
 export function createFigureEditableIndex() {
   return { version: 1, items: [], updatedAt: null };
+}
+
+export function createFigureFinalIndex() {
+  return { version: 1, items: [], updatedAt: null };
+}
+
+export function createFigureQaIndex() {
+  return { version: 1, items: [], issues: [], updatedAt: null };
 }
 
 export function createResearchAgenda() {
@@ -541,9 +606,54 @@ export function createWikiRelationsIndex() {
 
 export function createWorkspaceIndex() {
   return {
-    version: 1,
+    version: 3,
     managed: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
+    boardPhase: "init",
+    boardAssignedRole: "planner",
+    boardIntentType: "plan",
+    currentFocus: "Align the durable workflow state.",
+    nextAction: "Refresh the board and choose the next role-owned step.",
+    continuationState: createContinuationState(),
     activePackets: [],
+    workQueues: {
+      ready: [],
+      waiting: [],
+      reviewNeeded: [],
+      handoff: [],
+      stale: [],
+      archived: []
+    },
+    ownershipSummary: [],
+    packetLifecycleCounts: {},
+    handoffObligations: [],
+    resumeGuidance: {
+      command: "project:paper.orchestrate",
+      summary: "Refresh the board and choose the next role-owned step.",
+      prioritizedPacketIds: [],
+      packetContextPaths: [],
+      handoffCandidateIds: []
+    },
+    contextSurfaces: {
+      currentRoleContextPath: `${ARTIFACT_PATHS.roleContextsDir}/planner.json`,
+      currentPhaseContextPath: `${ARTIFACT_PATHS.phaseContextsDir}/init.json`,
+      currentActionContextPath: `${ARTIFACT_PATHS.actionContextsDir}/current.json`,
+      prioritizedArtifactContextPaths: [],
+      prioritizedPacketActionContextPaths: []
+    },
+    behaviorDiscipline: {
+      summary: "Read the closest role, phase, packet, and artifact context before mutating durable workflow state.",
+      explicitOnly: true,
+      noHiddenRuntime: true,
+      requiredReadOrder: []
+    },
+    dependencyHealth: {
+      blockedPacketIds: [],
+      healthyPacketIds: [],
+      waitingPacketIds: [],
+      stalePacketIds: [],
+      missingDependencyIds: [],
+      orphanPacketIds: []
+    },
     activeRoles: [],
     unresolvedConcernIds: [],
     mostRecentSessions: [],
@@ -597,6 +707,8 @@ export function createWorkflowBoundaries() {
     ".paper/figures/segments.json",
     ".paper/figures/templates.json",
     ".paper/figures/editable-index.json",
+    ".paper/figures/final-index.json",
+    ".paper/figures/qa.json",
     ".paper/rebuttal/issues.json",
     ".paper/rebuttal/strategy.md",
     ".paper/rebuttal/response-draft.md",
@@ -609,7 +721,7 @@ export function createWorkflowBoundaries() {
     ".paper/workflow-pack/boundaries.json"
   ];
   return {
-    version: 2,
+    version: 3,
     managedPaths: [
       ".opencode",
       ".opencode.json",
@@ -631,8 +743,11 @@ export function createWorkflowBoundaries() {
       ".paper/rebuttal",
       ".paper/versions/snapshots",
       ".paper/task-packets/packets",
-      ".paper/context/roles",
-      ".paper/context/phases",
+    ".paper/context/roles",
+    ".paper/context/phases",
+    ".paper/context/packets",
+      ".paper/context/artifacts",
+      ".paper/context/actions",
       ".paper/sessions"
     ],
     managedArtifacts: {

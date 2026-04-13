@@ -2,7 +2,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 import { refreshDurableSurfaces } from "./navigation.mjs";
-import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard } from "./schema.mjs";
+import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, resolveResumeCommandForPhase } from "./schema.mjs";
 import { loadState, nowIso, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
 
 const ALLOWED_TRANSITIONS = {
@@ -21,6 +21,40 @@ const ALLOWED_TRANSITIONS = {
   checklist: ["checklist", "research", "plan", "draft"]
 };
 
+const PHASE_ROLE_OWNERS = {
+  init: "planner",
+  sources: "researcher",
+  notes: "researcher",
+  research: "researcher",
+  plan: "planner",
+  outline: "planner",
+  draft: "researcher",
+  experiments: "experiment-planner",
+  citations: "researcher",
+  review: "reviewer",
+  rebuttal: "rebuttal-lead",
+  versions: "version-analyst",
+  checklist: "planner"
+};
+
+const GOVERNANCE_LIFECYCLE_STATUSES = new Set([
+  "queued",
+  "active",
+  "waiting",
+  "blocked",
+  "review-needed",
+  "ready-for-handoff",
+  "stale",
+  "archived",
+  "archived-with-lineage"
+]);
+
+const ACTIVE_WORK_STATUSES = new Set(["in-progress", "active", "current", "working"]);
+const WAITING_WORK_STATUSES = new Set(["pending", "planned", "queued", "open", "paused", "blocked"]);
+const REVIEW_WORK_STATUSES = new Set(["review-needed", "needs-review", "awaiting-review", "review"]);
+const TERMINAL_TASK_STATUSES = new Set(["done", "cancelled"]);
+const TERMINAL_BLOCKER_STATUSES = new Set(["resolved", "retired"]);
+
 function slugify(value) {
   return String(value)
     .toLowerCase()
@@ -34,6 +68,82 @@ function normalizeStringArray(value) {
     : [];
 }
 
+function isIsoTimestamp(value) {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+function normalizeLifecycleStatus(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return GOVERNANCE_LIFECYCLE_STATUSES.has(normalized) ? normalized : null;
+}
+
+function normalizeUpdatedAt(value) {
+  return isIsoTimestamp(value) ? value : null;
+}
+
+function packetHasLineageLinks(item = {}) {
+  return [
+    item.parentPacketId,
+    ...(item.childPacketIds ?? []),
+    ...(item.claimIds ?? []),
+    ...(item.noteIds ?? []),
+    ...(item.experimentIds ?? []),
+    ...(item.rebuttalIssueIds ?? []),
+    ...(item.versionIds ?? []),
+    ...(item.outputPaths ?? []),
+    ...(item.evidenceLinks ?? [])
+  ].filter(Boolean).length > 0;
+}
+
+function deriveGovernanceLifecycle({
+  kind,
+  status,
+  explicitLifecycleStatus,
+  blockedBy = [],
+  continuationState = {},
+  updatedAt,
+  assignedRole,
+  boardAssignedRole,
+  hasLineage = false
+} = {}) {
+  const explicit = normalizeLifecycleStatus(explicitLifecycleStatus);
+  if (explicit) {
+    return explicit;
+  }
+
+  const normalizedStatus = typeof status === "string" ? status.trim().toLowerCase() : "pending";
+  const continuationStatus = typeof continuationState?.status === "string"
+    ? continuationState.status.trim().toLowerCase()
+    : "";
+  const normalizedUpdatedAt = normalizeUpdatedAt(updatedAt) ?? normalizeUpdatedAt(continuationState?.updatedAt);
+  const ageMs = normalizedUpdatedAt ? Date.now() - Date.parse(normalizedUpdatedAt) : 0;
+  const isStale = ageMs > 1000 * 60 * 60 * 24 * 7;
+  const terminalStatuses = kind === "blocker" ? TERMINAL_BLOCKER_STATUSES : TERMINAL_TASK_STATUSES;
+
+  if (terminalStatuses.has(normalizedStatus) || continuationStatus === "completed") {
+    return hasLineage ? "archived-with-lineage" : "archived";
+  }
+  if (REVIEW_WORK_STATUSES.has(normalizedStatus) || continuationStatus === "review-needed") {
+    return "review-needed";
+  }
+  if (blockedBy.length > 0 || continuationStatus === "blocked") {
+    return normalizedStatus === "blocked" ? "blocked" : "waiting";
+  }
+  if (assignedRole && boardAssignedRole && assignedRole !== boardAssignedRole && !WAITING_WORK_STATUSES.has(normalizedStatus)) {
+    return "ready-for-handoff";
+  }
+  if (isStale) {
+    return "stale";
+  }
+  if (ACTIVE_WORK_STATUSES.has(normalizedStatus) || continuationStatus === "in-progress") {
+    return "active";
+  }
+  if (WAITING_WORK_STATUSES.has(normalizedStatus) || continuationStatus === "ready-to-resume") {
+    return "waiting";
+  }
+  return "queued";
+}
+
 function hashText(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
@@ -43,6 +153,40 @@ function transitionAllowed(fromPhase, toPhase) {
   return allowed.includes(toPhase);
 }
 
+function expectedRoleForPhase(phase) {
+  return PHASE_ROLE_OWNERS[phase] ?? "planner";
+}
+
+function normalizePolicyOverride(args = {}) {
+  const reason = typeof args.policyOverrideReason === "string" ? args.policyOverrideReason.trim() : "";
+  return {
+    active: reason.length > 0,
+    reason,
+    actorRole: ROLE_IDS.includes(args.actorRole) ? args.actorRole : null
+  };
+}
+
+function policyOverrideSuffix(policyOverride) {
+  if (!policyOverride?.active) {
+    return "";
+  }
+  return ` Policy override: ${policyOverride.reason}.`;
+}
+
+function formatExpectedRoleMessage(actionLabel, phase, role) {
+  return `${actionLabel} requires role ${role} for phase ${phase}. Use appendHandoff or upsertOrchestrationBoard to transfer ownership first, or provide policyOverrideReason for traceable manual maintenance.`;
+}
+
+function assertPhaseRoleOwnership(phase, role, actionLabel, policyOverride) {
+  if (policyOverride?.active) {
+    return;
+  }
+  const expectedRole = expectedRoleForPhase(phase);
+  if (role !== expectedRole) {
+    throw new Error(formatExpectedRoleMessage(actionLabel, phase, expectedRole));
+  }
+}
+
 function assertLegalTransition(currentPhase, nextPhase, strictMode) {
   if (!strictMode || !currentPhase || !nextPhase) {
     return;
@@ -50,6 +194,31 @@ function assertLegalTransition(currentPhase, nextPhase, strictMode) {
   if (!transitionAllowed(currentPhase, nextPhase)) {
     throw new Error(`Illegal orchestration phase transition: ${currentPhase} -> ${nextPhase}`);
   }
+}
+
+function validateBoardMutation(currentBoard, nextPhase, nextAssignedRole, policyOverride, strictMode, actionLabel) {
+  assertLegalTransition(currentBoard.currentPhase, nextPhase, strictMode);
+  assertPhaseRoleOwnership(nextPhase, nextAssignedRole, actionLabel, policyOverride);
+}
+
+export function assertRoleBoundMutation(root, args = {}, { actionLabel, expectedRole } = {}) {
+  const board = loadBoard(root);
+  const policyOverride = normalizePolicyOverride(args);
+  if (policyOverride.active) {
+    return { board, policyOverride };
+  }
+  const currentPhaseOwner = expectedRoleForPhase(board.currentPhase);
+  if (board.assignedRole !== currentPhaseOwner) {
+    throw new Error(
+      `${actionLabel} requires the board owner to match the current phase contract (${currentPhaseOwner} for phase ${board.currentPhase}). Current board owner is ${board.assignedRole}. Repair the board with appendHandoff or upsertOrchestrationBoard first, or provide policyOverrideReason for traceable manual maintenance.`
+    );
+  }
+  if (board.assignedRole !== expectedRole) {
+    throw new Error(
+      `${actionLabel} requires board role ${expectedRole}, but the current owner is ${board.assignedRole} in phase ${board.currentPhase}. Transfer ownership explicitly with appendHandoff or upsertOrchestrationBoard, or provide policyOverrideReason for traceable manual maintenance.`
+    );
+  }
+  return { board, policyOverride };
 }
 
 export function classifyWorkflowIntent({ phase, tasks = [], blockers = [] } = {}) {
@@ -180,8 +349,10 @@ function mergeContinuationState(current, incoming, defaults = {}) {
   };
 }
 
-function normalizeTask(task = {}, index = 0) {
+function normalizeTask(task = {}, index = 0, boardAssignedRole = null) {
   const id = slugify(task.id ?? task.title ?? `task-${index + 1}`);
+  const updatedAt = normalizeUpdatedAt(task.updatedAt) ?? nowIso();
+  const hasLineage = packetHasLineageLinks(task);
   return {
     id,
     packetId: task.packetId ? slugify(task.packetId) : undefined,
@@ -190,7 +361,17 @@ function normalizeTask(task = {}, index = 0) {
     phaseContextId: task.phaseContextId ?? null,
     title: task.title ?? `Task ${index + 1}`,
     status: task.status ?? "pending",
-    lifecycleStatus: task.lifecycleStatus ?? task.status ?? "pending",
+    lifecycleStatus: deriveGovernanceLifecycle({
+      kind: "task",
+      status: task.status,
+      explicitLifecycleStatus: task.lifecycleStatus,
+      blockedBy: normalizeStringArray(task.blockedBy),
+      continuationState: task.continuationState,
+      updatedAt: task.updatedAt,
+      assignedRole: task.assignedRole,
+      boardAssignedRole,
+      hasLineage
+    }),
     assignedRole: ROLE_IDS.includes(task.assignedRole) ? task.assignedRole : "planner",
     currentFocus: task.currentFocus ?? task.title ?? `Task ${index + 1}`,
     nextAction: task.nextAction ?? "Continue the assigned task and refresh durable state.",
@@ -208,12 +389,15 @@ function normalizeTask(task = {}, index = 0) {
     outputPaths: normalizeStringArray(task.outputPaths),
     questions: Array.isArray(task.questions) ? task.questions : [],
     decisions: Array.isArray(task.decisions) ? task.decisions : [],
-    notes: task.notes ?? ""
+    notes: task.notes ?? "",
+    updatedAt
   };
 }
 
-function normalizeBlocker(blocker = {}, index = 0) {
+function normalizeBlocker(blocker = {}, index = 0, boardAssignedRole = null) {
   const id = slugify(blocker.id ?? blocker.summary ?? `blocker-${index + 1}`);
+  const updatedAt = normalizeUpdatedAt(blocker.updatedAt) ?? nowIso();
+  const hasLineage = packetHasLineageLinks(blocker);
   return {
     id,
     packetId: blocker.packetId ? slugify(blocker.packetId) : undefined,
@@ -222,7 +406,17 @@ function normalizeBlocker(blocker = {}, index = 0) {
     phaseContextId: blocker.phaseContextId ?? null,
     summary: blocker.summary ?? `Blocker ${index + 1}`,
     status: blocker.status ?? "open",
-    lifecycleStatus: blocker.lifecycleStatus ?? blocker.status ?? "open",
+    lifecycleStatus: deriveGovernanceLifecycle({
+      kind: "blocker",
+      status: blocker.status,
+      explicitLifecycleStatus: blocker.lifecycleStatus,
+      blockedBy: normalizeStringArray(blocker.blockedBy),
+      continuationState: blocker.continuationState,
+      updatedAt: blocker.updatedAt,
+      assignedRole: blocker.assignedRole,
+      boardAssignedRole,
+      hasLineage
+    }),
     assignedRole: ROLE_IDS.includes(blocker.assignedRole) ? blocker.assignedRole : "planner",
     currentFocus: blocker.currentFocus ?? blocker.summary ?? `Blocker ${index + 1}`,
     nextAction: blocker.nextAction ?? "Resolve the blocker before moving downstream.",
@@ -239,7 +433,8 @@ function normalizeBlocker(blocker = {}, index = 0) {
     blockedBy: normalizeStringArray(blocker.blockedBy),
     outputPaths: normalizeStringArray(blocker.outputPaths),
     questions: Array.isArray(blocker.questions) ? blocker.questions : [],
-    decisions: Array.isArray(blocker.decisions) ? blocker.decisions : []
+    decisions: Array.isArray(blocker.decisions) ? blocker.decisions : [],
+    updatedAt
   };
 }
 
@@ -252,7 +447,7 @@ function computeUnresolvedBlockersByRole(blockers = []) {
   return grouped;
 }
 
-function renderHandoffEntry({ timestamp, fromRole, toRole, phase, intentType, summary, currentFocus, nextAction, nextActions, evidenceLinks, blockerIds }) {
+function renderHandoffEntry({ timestamp, fromRole, toRole, phase, intentType, summary, currentFocus, nextAction, nextActions, evidenceLinks, blockerIds, policyOverrideReason }) {
   return [
     `\n## ${timestamp} — ${fromRole} -> ${toRole}`,
     "",
@@ -265,8 +460,9 @@ function renderHandoffEntry({ timestamp, fromRole, toRole, phase, intentType, su
     ...(nextActions.length > 0 ? nextActions.map((item) => `  - ${item}`) : ["  - None recorded"]),
     `- Evidence links: ${evidenceLinks.join(", ") || "none"}`,
     `- Blockers: ${blockerIds.join(", ") || "none"}`,
+    policyOverrideReason ? `- Policy override: ${policyOverrideReason}` : null,
     ""
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function appendHandoffEntry(root, payload) {
@@ -325,38 +521,44 @@ function renderClaimsMarkdown(claims) {
       `- Evidence links: ${claim.evidenceLinks.join(", ") || "none"}`,
       `- Status: ${claim.status}`,
       `- Confidence: ${claim.confidence}`,
+      claim.latestAuditId ? `- Latest audit: ${claim.latestAuditId}` : null,
+      claim.latestAuditVerdict ? `- Latest audit verdict: ${claim.latestAuditVerdict}` : null,
       claim.latestBridgeId ? `- Latest bridge event: ${claim.latestBridgeId}` : null,
+      claim.bridgeStatus ? `- Bridge status: ${claim.bridgeStatus}` : null,
       claim.gap ? `- Gap: ${claim.gap}` : null,
       ""
     ].filter(Boolean))
   ].join("\n");
 }
 
-function phaseResumeCommand(phase) {
-  switch (phase) {
-    case "sources":
-      return "project:paper.research";
-    case "notes":
-    case "research":
-      return "project:paper.claim-gate";
-    case "plan":
-      return "project:paper.outline";
-    case "outline":
-      return "project:paper.draft";
-    case "draft":
-    case "experiments":
-      return "project:paper.review-loop";
-    case "review":
-      return "project:paper.rebuttal-strategy";
-    case "rebuttal":
-      return "project:paper.version-snapshot";
-    case "versions":
-      return "project:paper.version-compare";
-    case "checklist":
-      return "project:paper.checklist";
-    default:
-      return "project:paper.orchestrate";
+function collectFinalizeBlockersFromClaims(root) {
+  const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
+  const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
+  const bridgeById = new Map((bridgeLog.items ?? []).map((item) => [item.id, item]));
+  const blockedClaimIds = new Set();
+
+  for (const claim of evidence.claims ?? []) {
+    if (!claim || typeof claim !== "object") {
+      continue;
+    }
+    if (claim.bridgeStatus === "held-for-review" || claim.latestAuditVerdict === "blocked") {
+      blockedClaimIds.add(claim.id);
+      continue;
+    }
+    const bridge = claim.latestBridgeId ? bridgeById.get(claim.latestBridgeId) : null;
+    if ((claim.experimentIds ?? []).length > 0 && !bridge) {
+      blockedClaimIds.add(claim.id);
+      continue;
+    }
+    if (!bridge) {
+      continue;
+    }
+    if (bridge.bridgeStatus === "held-for-review" || bridge.auditVerdict === "blocked") {
+      blockedClaimIds.add(claim.id);
+    }
   }
+
+  return Array.from(blockedClaimIds);
 }
 
 function assertFinalizeReviewGate(root, actionLabel) {
@@ -364,12 +566,16 @@ function assertFinalizeReviewGate(root, actionLabel) {
   if (!board.reviewRequiredBeforeFinalize) {
     return;
   }
-  const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 2, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
-  const concerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 1, items: [], updatedAt: null });
-  const unresolvedConcernIds = new Set((reviewState.unresolvedConcernIds ?? []).concat((concerns.items ?? []).filter((item) => ["open", "contested"].includes(item.status)).map((item) => item.id)));
+  const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 3, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
+  const concerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
+  const unresolvedConcernIds = new Set((reviewState.unresolvedConcernIds ?? []).concat((concerns.items ?? []).filter((item) => !["resolved", "retired"].includes(item.status)).map((item) => item.id)));
   const reviewIsClear = reviewState.lastVerdict === "coherent" && unresolvedConcernIds.size === 0;
+  const blockedClaimIds = collectFinalizeBlockersFromClaims(root);
   if (!reviewIsClear) {
     throw new Error(`${actionLabel} requires a coherent review with no unresolved concerns while reviewRequiredBeforeFinalize is true.`);
+  }
+  if (blockedClaimIds.length > 0) {
+    throw new Error(`${actionLabel} is blocked by experiment integrity: claim(s) ${blockedClaimIds.join(", ")} are held for review. Resolve bridge/audit issues before finalization.`);
   }
 }
 
@@ -385,7 +591,7 @@ function syncStateWithBoard(root, board, state = loadState(root)) {
       currentStage: board.currentPhase,
       lastCompletedStage: board.currentPhase,
       updatedAt: board.updatedAt ?? nowIso(),
-      resumeCommand: phaseResumeCommand(board.currentPhase)
+      resumeCommand: resolveResumeCommandForPhase(board.currentPhase)
     },
     orchestration: {
       ...state.orchestration,
@@ -412,8 +618,8 @@ function syncStateWithBoard(root, board, state = loadState(root)) {
 export function saveBoard(root, board) {
   const state = loadState(root);
   const withDefaults = { ...createDefaultBoard(state), ...board };
-  const tasks = Array.isArray(withDefaults.tasks) ? withDefaults.tasks.map(normalizeTask) : [];
-  const blockers = Array.isArray(withDefaults.blockers) ? withDefaults.blockers.map(normalizeBlocker) : [];
+  const tasks = Array.isArray(withDefaults.tasks) ? withDefaults.tasks.map((task, index) => normalizeTask(task, index, withDefaults.assignedRole)) : [];
+  const blockers = Array.isArray(withDefaults.blockers) ? withDefaults.blockers.map((blocker, index) => normalizeBlocker(blocker, index, withDefaults.assignedRole)) : [];
   const intentType = withDefaults.intentType ?? classifyWorkflowIntent({ phase: withDefaults.currentPhase, tasks, blockers });
   const currentFocus = withDefaults.currentFocus ?? defaultFocusForPhase(withDefaults.currentPhase, { ...withDefaults, tasks, blockers });
   const nextAction = withDefaults.nextAction ?? defaultNextActionForPhase(withDefaults.currentPhase);
@@ -458,10 +664,11 @@ export function upsertOrchestrationBoard(root, args = {}) {
   const state = loadState(root);
   const current = loadBoard(root);
   const nextPhase = args.phase ?? current.currentPhase;
-  assertLegalTransition(current.currentPhase, nextPhase, state.settings?.strictMode);
   const nextAssignedRole = args.assignedRole ?? current.assignedRole;
-  const tasks = Array.isArray(args.tasks) ? args.tasks.map(normalizeTask) : current.tasks;
-  const blockers = Array.isArray(args.blockers) ? args.blockers.map(normalizeBlocker) : current.blockers;
+  const policyOverride = normalizePolicyOverride(args);
+  validateBoardMutation(current, nextPhase, nextAssignedRole, policyOverride, state.settings?.strictMode, "Updating the orchestration board");
+  const tasks = Array.isArray(args.tasks) ? args.tasks.map((task, index) => normalizeTask(task, index, nextAssignedRole)) : current.tasks;
+  const blockers = Array.isArray(args.blockers) ? args.blockers.map((blocker, index) => normalizeBlocker(blocker, index, nextAssignedRole)) : current.blockers;
   const intentType = args.intentType ?? classifyWorkflowIntent({ phase: nextPhase, tasks, blockers });
   const currentFocus = args.currentFocus ?? current.currentFocus ?? defaultFocusForPhase(nextPhase, { tasks, blockers });
   const nextAction = args.nextAction ?? current.nextAction ?? defaultNextActionForPhase(nextPhase);
@@ -482,7 +689,8 @@ export function upsertOrchestrationBoard(root, args = {}) {
       nextAction,
       nextActions: normalizeStringArray(args.nextActions ?? [nextAction]),
       evidenceLinks: normalizeStringArray(args.evidenceLinks ?? current.evidenceLinks),
-      blockerIds: normalizeStringArray(blockers.filter((item) => item.status !== "resolved").map((item) => item.id))
+      blockerIds: normalizeStringArray(blockers.filter((item) => item.status !== "resolved").map((item) => item.id)),
+      policyOverrideReason: policyOverride.reason || null
     });
   }
 
@@ -515,11 +723,15 @@ export function upsertOrchestrationBoard(root, args = {}) {
 export function appendHandoff(root, args = {}) {
   const board = loadBoard(root);
   const state = loadState(root);
+  const policyOverride = normalizePolicyOverride(args);
   const timestamp = args.timestamp ?? nowIso();
   const fromRole = args.fromRole ?? board.assignedRole;
   const toRole = args.toRole ?? board.assignedRole;
   const phase = args.phase ?? board.currentPhase;
-  assertLegalTransition(board.currentPhase, phase, state.settings?.strictMode);
+  validateBoardMutation(board, phase, toRole, policyOverride, state.settings?.strictMode, "Appending a handoff");
+  if (!policyOverride.active && fromRole !== board.assignedRole) {
+    throw new Error(`Appending a handoff requires fromRole ${board.assignedRole}, but received ${fromRole}. Use policyOverrideReason for traceable manual maintenance if you need to repair the handoff log.`);
+  }
   const intentType = args.intentType ?? board.intentType ?? classifyWorkflowIntent({ phase, tasks: board.tasks, blockers: board.blockers });
   const currentFocus = args.currentFocus ?? board.currentFocus;
   const nextAction = args.nextAction ?? board.nextAction;
@@ -534,7 +746,8 @@ export function appendHandoff(root, args = {}) {
     nextAction,
     nextActions: Array.isArray(args.nextActions) ? args.nextActions : [nextAction],
     evidenceLinks: normalizeStringArray(args.evidenceLinks ?? board.evidenceLinks),
-    blockerIds: normalizeStringArray(args.blockerIds ?? board.blockers.filter((item) => item.status !== "resolved").map((item) => item.id))
+    blockerIds: normalizeStringArray(args.blockerIds ?? board.blockers.filter((item) => item.status !== "resolved").map((item) => item.id)),
+    policyOverrideReason: policyOverride.reason || null
   });
 
   return upsertOrchestrationBoard(root, {
@@ -649,7 +862,7 @@ function renderExperimentLog(plans, results, audits = []) {
     "## Experiment audits",
     "",
     ...(audits.length > 0 ? audits.slice(-10).reverse().flatMap((audit) => [
-      `- ${audit.id}: ${audit.experimentId} [confidence=${audit.confidence}] flags=${audit.integrityFlags.join(", ") || "none"}`
+      `- ${audit.id}: ${audit.experimentId} [verdict=${audit.auditVerdict ?? "concern"} confidence=${audit.confidence}] flags=${audit.integrityFlags.join(", ") || "none"}`
     ]) : ["- No audits recorded."])
   ].join("\n");
 }
@@ -676,10 +889,18 @@ function normalizeExperimentAudit(audit = {}, index = 0) {
     resultId: audit.resultId ?? "",
     claimId: audit.claimId ?? "",
     reviewedArtifactRefs: normalizeStringArray(audit.reviewedArtifactRefs),
+    requiredArtifactRefs: normalizeStringArray(audit.requiredArtifactRefs),
+    missingArtifactRefs: normalizeStringArray(audit.missingArtifactRefs),
     auditFindings: Array.isArray(audit.auditFindings) ? audit.auditFindings : [],
     integrityFlags: normalizeStringArray(audit.integrityFlags),
     confidence: audit.confidence ?? "medium",
     outcomeMapping: audit.outcomeMapping ?? "inconclusive",
+    auditVerdict: audit.auditVerdict ?? "concern",
+    bridgeReadiness: audit.bridgeReadiness ?? "blocked",
+    resultOutcome: audit.resultOutcome ?? "pending",
+    evidenceLinkCount: Number.isInteger(audit.evidenceLinkCount) ? audit.evidenceLinkCount : 0,
+    comparisonTargetCount: Number.isInteger(audit.comparisonTargetCount) ? audit.comparisonTargetCount : 0,
+    claimStateBefore: audit.claimStateBefore ?? null,
     updatedAt: nowIso()
   };
 }
@@ -691,8 +912,13 @@ function confidenceAfterSupport(current) {
 }
 
 export function runExperimentAudit(root, args = {}) {
+  assertRoleBoundMutation(root, args, {
+    actionLabel: "Running an experiment audit",
+    expectedRole: "experiment-planner"
+  });
   const resultsIndex = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
+  const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const auditsIndex = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
   const rawResult = args.result
     ?? (args.resultId ? resultsIndex.items.find((item) => item.id === args.resultId) : null)
@@ -701,8 +927,14 @@ export function runExperimentAudit(root, args = {}) {
     throw new Error("Experiment audit requires an existing result or resultId.");
   }
   const linkedPlan = plansIndex.items.find((item) => item.id === rawResult.experimentId);
+  const linkedClaim = rawResult.claimId ? evidence.claims.find((item) => item.id === rawResult.claimId) : null;
   const integrityFlags = [];
   const auditFindings = [];
+  const requiredArtifactRefs = [ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentLog, ...(rawResult.evidenceLinks ?? [])];
+  if (linkedPlan) {
+    requiredArtifactRefs.unshift(ARTIFACT_PATHS.experimentPlans);
+  }
+  const missingArtifactRefs = [];
   if (!linkedPlan) {
     integrityFlags.push("missing-plan");
     auditFindings.push("No linked experiment plan was found.");
@@ -715,6 +947,18 @@ export function runExperimentAudit(root, args = {}) {
     integrityFlags.push("missing-evidence-links");
     auditFindings.push("Result has no durable evidence links.");
   }
+  if (!(rawResult.summary ?? "").trim()) {
+    integrityFlags.push("missing-result-summary");
+    auditFindings.push("Result summary is empty, making downstream review harder.");
+  }
+  if (!linkedPlan?.methodology?.trim()) {
+    integrityFlags.push("missing-methodology");
+    auditFindings.push("Experiment plan is missing methodology details.");
+  }
+  if (!linkedPlan?.successMetric?.trim()) {
+    integrityFlags.push("missing-success-metric");
+    auditFindings.push("Experiment plan is missing a success metric.");
+  }
   if ((linkedPlan?.comparisonTargets ?? []).length > 0 && (rawResult.comparisonTargets ?? []).length === 0) {
     integrityFlags.push("missing-comparison-context");
     auditFindings.push("Result omitted comparison targets declared in the plan.");
@@ -723,22 +967,51 @@ export function runExperimentAudit(root, args = {}) {
     integrityFlags.push("pending-outcome");
     auditFindings.push("Result is still pending and cannot strongly support a claim yet.");
   }
+  const reviewedArtifactRefs = args.reviewedArtifactRefs
+    ?? [
+      ...(linkedPlan ? [ARTIFACT_PATHS.experimentPlans] : []),
+      ARTIFACT_PATHS.experimentResults,
+      ARTIFACT_PATHS.experimentLog,
+      ...rawResult.evidenceLinks
+    ];
+  for (const ref of requiredArtifactRefs) {
+    if (!reviewedArtifactRefs.includes(ref)) {
+      missingArtifactRefs.push(ref);
+    }
+  }
+  if (missingArtifactRefs.length > 0) {
+    integrityFlags.push("missing-reviewed-artifact-refs");
+    auditFindings.push(`Audit omitted required artifact refs: ${missingArtifactRefs.join(", ")}.`);
+  }
   const confidence = integrityFlags.length > 0 ? "low" : rawResult.outcome === "supports" ? "high" : "medium";
   const outcomeMapping = rawResult.outcome === "supports"
     ? "supports"
     : rawResult.outcome === "refutes" || rawResult.outcome === "failed"
       ? "refutes"
       : "inconclusive";
+  const auditVerdict = integrityFlags.length === 0
+    ? "clean"
+    : integrityFlags.some((flag) => ["missing-plan", "missing-claim-link", "missing-evidence-links", "missing-methodology", "missing-success-metric", "missing-reviewed-artifact-refs", "pending-outcome"].includes(flag))
+      ? "blocked"
+      : "concern";
   const audit = normalizeExperimentAudit({
     ...args,
     experimentId: rawResult.experimentId,
     resultId: rawResult.id,
     claimId: rawResult.claimId,
-    reviewedArtifactRefs: args.reviewedArtifactRefs ?? [ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentLog, ...rawResult.evidenceLinks],
+    reviewedArtifactRefs,
+    requiredArtifactRefs,
+    missingArtifactRefs,
     auditFindings,
     integrityFlags,
     confidence,
-    outcomeMapping
+    outcomeMapping,
+    auditVerdict,
+    bridgeReadiness: auditVerdict === "clean" ? "ready" : "blocked",
+    resultOutcome: rawResult.outcome,
+    evidenceLinkCount: (rawResult.evidenceLinks ?? []).length,
+    comparisonTargetCount: (rawResult.comparisonTargets ?? []).length,
+    claimStateBefore: linkedClaim ? { status: linkedClaim.status, confidence: linkedClaim.confidence } : null
   }, auditsIndex.items.length);
   const existingIndex = auditsIndex.items.findIndex((item) => item.id === audit.id);
   if (existingIndex >= 0) {
@@ -752,8 +1025,13 @@ export function runExperimentAudit(root, args = {}) {
 }
 
 export function bridgeExperimentResultToClaim(root, args = {}) {
+  assertRoleBoundMutation(root, args, {
+    actionLabel: "Bridging an experiment result to a claim",
+    expectedRole: "experiment-planner"
+  });
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const resultsIndex = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
+  const auditsIndex = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
   const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
   const result = args.result
     ?? (args.resultId ? resultsIndex.items.find((item) => item.id === args.resultId) : null)
@@ -767,20 +1045,42 @@ export function bridgeExperimentResultToClaim(root, args = {}) {
   }
   const currentClaim = evidence.claims[claimIndex];
   const before = { status: currentClaim.status, confidence: currentClaim.confidence };
+  const auditIds = normalizeStringArray(args.auditIds);
+  const audits = auditIds.length > 0
+    ? auditIds.map((id) => auditsIndex.items.find((item) => item.id === id)).filter(Boolean)
+    : auditsIndex.items.filter((item) => item.resultId === result.id);
+  const auditVerdict = audits.some((audit) => audit.auditVerdict === "blocked")
+    ? "blocked"
+    : audits.some((audit) => audit.auditVerdict === "concern")
+      ? "concern"
+      : audits.length > 0
+        ? "clean"
+        : "missing";
+  const aggregatedIntegrityFlags = Array.from(new Set(audits.flatMap((audit) => audit.integrityFlags ?? [])));
   let mapping = "inconclusive";
   let after = { ...before };
-  if (result.outcome === "supports") {
+  let bridgeStatus = auditVerdict === "clean" ? "applied" : "held-for-review";
+  let stateChange = "hold";
+  if (auditVerdict !== "clean") {
+    mapping = "integrity-hold";
+    after = { status: "needs-review", confidence: "low" };
+    stateChange = "hold";
+  } else if (result.outcome === "supports") {
     mapping = "supports";
     after = { status: "supported", confidence: confidenceAfterSupport(currentClaim.confidence) };
+    stateChange = "promote";
   } else if (result.outcome === "refutes") {
     mapping = "refutes";
     after = { status: "refuted", confidence: "low" };
+    stateChange = "downgrade";
   } else if (result.outcome === "failed") {
     mapping = "refutes";
     after = { status: "challenged", confidence: "low" };
+    stateChange = "downgrade";
   } else {
     mapping = "inconclusive";
     after = { status: "inconclusive", confidence: "low" };
+    stateChange = "downgrade";
   }
   const bridgeEvent = {
     id: slugify(args.id ?? `${result.id}-${mapping}-bridge`),
@@ -792,8 +1092,17 @@ export function bridgeExperimentResultToClaim(root, args = {}) {
     confidenceAfter: after.confidence,
     statusBefore: before.status,
     statusAfter: after.status,
-    auditIds: normalizeStringArray(args.auditIds),
-    reason: args.reason ?? result.summary ?? `Experiment ${result.experimentId} returned ${result.outcome}.`,
+    claimStateBefore: before,
+    claimStateAfter: after,
+    auditIds,
+    auditVerdict,
+    integrityFlags: aggregatedIntegrityFlags,
+    bridgeStatus,
+    stateChange,
+    reviewRequiredBeforeFinalize: auditVerdict !== "clean" || mapping !== "supports",
+    reason: args.reason ?? (auditVerdict !== "clean"
+      ? `Experiment ${result.experimentId} cannot update claim ${result.claimId} cleanly because audit verdict is ${auditVerdict}.`
+      : result.summary ?? `Experiment ${result.experimentId} returned ${result.outcome}.`),
     updatedAt: nowIso()
   };
   bridgeLog.items.push(bridgeEvent);
@@ -804,7 +1113,10 @@ export function bridgeExperimentResultToClaim(root, args = {}) {
     ...currentClaim,
     status: after.status,
     confidence: after.confidence,
+    latestAuditId: audits[0]?.id ?? currentClaim.latestAuditId ?? null,
+    latestAuditVerdict: auditVerdict === "missing" ? currentClaim.latestAuditVerdict ?? null : auditVerdict,
     latestBridgeId: bridgeEvent.id,
+    bridgeStatus,
     experimentIds: Array.from(new Set([...(currentClaim.experimentIds ?? []), result.experimentId]))
   };
   evidence.updatedAt = nowIso();
@@ -814,6 +1126,10 @@ export function bridgeExperimentResultToClaim(root, args = {}) {
 }
 
 export function upsertExperimentPlan(root, args = {}) {
+  assertRoleBoundMutation(root, args, {
+    actionLabel: "Updating an experiment plan",
+    expectedRole: "experiment-planner"
+  });
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   const rawPlan = args.plan ?? args;
@@ -865,6 +1181,10 @@ export function upsertExperimentPlan(root, args = {}) {
 }
 
 export function upsertExperimentResult(root, args = {}) {
+  assertRoleBoundMutation(root, args, {
+    actionLabel: "Updating an experiment result",
+    expectedRole: "experiment-planner"
+  });
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const resultsIndex = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
@@ -895,8 +1215,17 @@ export function upsertExperimentResult(root, args = {}) {
   resultsIndex.updatedAt = nowIso();
   writeJson(root, ARTIFACT_PATHS.experimentResults, resultsIndex);
 
-  const audit = runExperimentAudit(root, { resultId: result.id });
-  const bridgeEvent = bridgeExperimentResultToClaim(root, { resultId: result.id, auditIds: [audit.id] });
+  const audit = runExperimentAudit(root, {
+    resultId: result.id,
+    policyOverrideReason: args.policyOverrideReason,
+    actorRole: args.actorRole
+  });
+  const bridgeEvent = bridgeExperimentResultToClaim(root, {
+    resultId: result.id,
+    auditIds: [audit.id],
+    policyOverrideReason: args.policyOverrideReason,
+    actorRole: args.actorRole
+  });
   const resultIndex = resultsIndex.items.findIndex((item) => item.id === result.id);
   resultsIndex.items[resultIndex] = {
     ...resultsIndex.items[resultIndex],
@@ -912,7 +1241,9 @@ export function upsertExperimentResult(root, args = {}) {
   const blockers = (result.outcome === "failed" || result.outcome === "refutes" || bridgeEvent.mapping !== "supports")
     ? ensureBlocker(board.blockers, {
         id: `${result.experimentId}-needs-followup`,
-        summary: `Experiment ${result.experimentId} produced ${result.outcome}; reconcile the linked claim before finalization.`,
+        summary: bridgeEvent.mapping === "integrity-hold"
+          ? `Experiment ${result.experimentId} cannot cleanly update claim ${result.claimId} until audit integrity gaps are resolved.`
+          : `Experiment ${result.experimentId} produced ${result.outcome}; reconcile the linked claim before finalization.`,
         status: "open",
         assignedRole: "reviewer",
         evidenceLinks: result.evidenceLinks,
@@ -927,10 +1258,14 @@ export function upsertExperimentResult(root, args = {}) {
     intentType: bridgeEvent.mapping === "supports" ? "experiment" : "repair",
     currentFocus: bridgeEvent.mapping === "supports"
       ? `Experiment ${result.experimentId} now supports ${result.claimId}.`
-      : `Experiment ${result.experimentId} needs claim reconciliation.`,
+      : bridgeEvent.mapping === "integrity-hold"
+        ? `Experiment ${result.experimentId} is held for review until audit gaps are closed.`
+        : `Experiment ${result.experimentId} needs claim reconciliation.`,
     nextAction: bridgeEvent.mapping === "supports"
       ? "Refresh the review surfaces before making stronger claims."
-      : "Run the review loop and resolve the concern before finalization.",
+      : bridgeEvent.mapping === "integrity-hold"
+        ? "Repair the experiment audit provenance, then re-run review before finalization."
+        : "Run the review loop and resolve the concern before finalization.",
     blockers,
     evidenceLinks: Array.from(new Set([...board.evidenceLinks, ...result.evidenceLinks, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog])),
     activeComparisonTargets: Array.from(new Set([...board.activeComparisonTargets, ...result.comparisonTargets])),
@@ -965,6 +1300,10 @@ function normalizeIssue(issue = {}, index = 0) {
 }
 
 export function normalizeRebuttalIssues(root, args = {}) {
+  assertRoleBoundMutation(root, args, {
+    actionLabel: "Normalizing rebuttal issues",
+    expectedRole: "reviewer"
+  });
   const issuesIndex = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   const provided = Array.isArray(args.issues) ? args.issues.map(normalizeIssue) : [];
   const merged = new Map((issuesIndex.items ?? []).map((issue, index) => {
@@ -1000,7 +1339,11 @@ export function normalizeRebuttalIssues(root, args = {}) {
   return next;
 }
 
-export function buildRebuttalStrategy(root) {
+export function buildRebuttalStrategy(root, args = {}) {
+  assertRoleBoundMutation(root, args, {
+    actionLabel: "Building the rebuttal strategy",
+    expectedRole: "rebuttal-lead"
+  });
   const issues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   const board = loadBoard(root);
   const strategy = [
@@ -1104,6 +1447,10 @@ function readSnapshot(root, snapshotId) {
 }
 
 export function createVersionSnapshot(root, args = {}) {
+  assertRoleBoundMutation(root, args, {
+    actionLabel: "Creating a version snapshot",
+    expectedRole: "version-analyst"
+  });
   assertFinalizeReviewGate(root, "Creating a version snapshot");
   const state = loadState(root);
   const board = loadBoard(root);
@@ -1193,6 +1540,10 @@ export function createVersionSnapshot(root, args = {}) {
 }
 
 export function compareVersions(root, args = {}) {
+  assertRoleBoundMutation(root, args, {
+    actionLabel: "Comparing versions",
+    expectedRole: "version-analyst"
+  });
   assertFinalizeReviewGate(root, "Comparing versions");
   const fromId = args.fromVersionId;
   const toId = args.toVersionId;

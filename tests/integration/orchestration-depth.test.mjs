@@ -13,6 +13,7 @@ import {
   ensureWorkspace,
   initProject,
   normalizeRebuttalIssues,
+  readRoleContextManifest,
   readState,
   runReviewLoop,
   updateResearchBrief,
@@ -38,7 +39,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
 
   const board = upsertOrchestrationBoard(root, {
     phase: "research",
-    assignedRole: "planner",
+    assignedRole: "researcher",
     tasks: [
       { title: "Research baseline", assignedRole: "researcher", status: "pending", evidenceLinks: [".paper/research/brief.md"] }
     ],
@@ -49,12 +50,6 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   });
   assert.equal(board.currentPhase, "research");
 
-  appendHandoff(root, {
-    fromRole: "planner",
-    toRole: "researcher",
-    summary: "Move into evidence collection.",
-    nextActions: ["Refresh agenda"]
-  });
   updateResearchBrief(root, {
     agenda: ["Collect comparable workflow evidence"],
     evidenceBacklog: ["Need experiment result for baseline-a"]
@@ -75,6 +70,14 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     claims: [{ id: "claim-depth", text: "Board-first workflows improve resumability.", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["introduction-depth-note"] }]
   });
 
+  appendHandoff(root, {
+    fromRole: "planner",
+    toRole: "experiment-planner",
+    phase: "experiments",
+    summary: "Move into experiment planning.",
+    nextActions: ["Record the comparison plan"]
+  });
+
   const experimentPlan = upsertExperimentPlan(root, {
     id: "baseline-a-check",
     title: "Baseline A comparison",
@@ -92,6 +95,14 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     comparisonTargets: ["baseline-a"]
   });
 
+  appendHandoff(root, {
+    fromRole: "experiment-planner",
+    toRole: "reviewer",
+    phase: "review",
+    summary: "Move into review triage after the experiment result.",
+    nextActions: ["Normalize rebuttal issues"]
+  });
+
   normalizeRebuttalIssues(root, {
     issues: [
       { summary: "Need clearer comparison framing.", severity: "medium", responseDirection: "clarify" }
@@ -99,6 +110,14 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   });
   const strategy = buildRebuttalStrategy(root);
   assert.equal(strategy.issueCount, 1);
+
+  appendHandoff(root, {
+    fromRole: "rebuttal-lead",
+    toRole: "reviewer",
+    phase: "review",
+    summary: "Return to review for signoff.",
+    nextActions: ["Record the coherent review verdict"]
+  });
 
   appendReviewLog(root, {
     stage: "depth-flow-signoff",
@@ -109,14 +128,24 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     actionItems: [],
     reviewRequiredBeforeFinalize: false
   });
+  appendHandoff(root, {
+    fromRole: "reviewer",
+    toRole: "version-analyst",
+    phase: "versions",
+    summary: "Move into version analysis after signoff.",
+    nextActions: ["Create the next version snapshot"]
+  });
   const v1 = createVersionSnapshot(root, { versionId: "depth-v1", summary: "First snapshot" });
-  upsertOrchestrationBoard(root, { phase: "versions", assignedRole: "version-analyst" });
   const v2 = createVersionSnapshot(root, { versionId: "depth-v2", parentVersionId: v1.id, summary: "Second snapshot" });
   const comparison = compareVersions(root, { fromVersionId: v1.id, toVersionId: v2.id });
 
   const state = readState(root);
+  const versionManifest = readRoleContextManifest(root, "version-analyst");
   assert.equal(state.orchestrationBoard.versionLineage.currentVersionId, v2.id);
   assert.deepEqual(state.orchestrationBoard.activeComparisonTargets, [v1.id, v2.id]);
+  assert.equal(state.workspaceIndex.boardAssignedRole, "version-analyst");
+  assert.ok(state.workspaceIndex.activeRoles.includes("version-analyst"));
+  assert.equal(versionManifest.isCurrentBoardOwner, true);
   assert.equal(comparison.toVersionId, v2.id);
   assert.ok(Array.isArray(comparison.addedEvidenceLinks));
   assert.ok(Array.isArray(comparison.changedDraftSections));
@@ -144,7 +173,50 @@ test("version actions are blocked until coherent review clears finalize gate", (
     blockers: [{ summary: "Need coherent review before snapshot.", status: "open", assignedRole: "reviewer" }]
   });
 
+  appendHandoff(root, {
+    fromRole: "reviewer",
+    toRole: "version-analyst",
+    phase: "versions",
+    summary: "Attempting version analysis before the finalize gate is cleared.",
+    nextActions: ["Create the blocked snapshot"]
+  });
+
   assert.throws(() => {
     createVersionSnapshot(root, { versionId: "blocked-version" });
   }, /requires a coherent review/);
+});
+
+test("board role-phase contract rejects mismatches unless an override is explicit and traceable", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, {
+    title: "Role Contract",
+    objective: "Verify board role enforcement.",
+    thesis: "Explicit handoffs should govern role ownership."
+  });
+
+  appendHandoff(root, {
+    fromRole: "planner",
+    toRole: "researcher",
+    phase: "research",
+    summary: "Move into research."
+  });
+
+  assert.throws(() => {
+    upsertOrchestrationBoard(root, {
+      phase: "review",
+      assignedRole: "planner"
+    });
+  }, /requires role reviewer for phase review/);
+
+  const overridden = upsertOrchestrationBoard(root, {
+    phase: "review",
+    assignedRole: "planner",
+    policyOverrideReason: "manual board repair after importing an older workspace"
+  });
+
+  const handoffs = fs.readFileSync(path.join(root, ".paper", "orchestration", "handoffs.md"), "utf8");
+  assert.equal(overridden.currentPhase, "review");
+  assert.equal(overridden.assignedRole, "planner");
+  assert.match(handoffs, /Policy override: manual board repair after importing an older workspace/);
 });
