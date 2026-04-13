@@ -17,8 +17,12 @@
 - `.paper/orchestration/handoffs.md` is the durable role-transition log.
 - `.paper/task-packets/` stores durable task/work packets linked to claims, experiments, rebuttal issues, and versions.
 - `.paper/context/roles/*.json` narrows the context surface for each durable role.
+- `.paper/context/phases/*.json` keeps the current phase queue and read order explicit.
+- `.paper/context/packets/*.json` adds packet-scoped context bundles with dependency health, linked artifacts, and resume coupling.
+- `.paper/context/artifacts/*.json` adds artifact-scoped guidance tied to concrete durable paths.
+- `.paper/context/actions/*.json` adds explicit pre-action bundles that tell commands which local context files to read first.
 - `.paper/sessions/` keeps portable workspace summaries and journal entries.
-- `.paper/workspace/index.json` gives a resumable top-level workspace overview.
+- `.paper/workspace/index.json` gives a resumable top-level workspace overview, work queues, dependency health, ownership summaries, and handoff obligations.
 - Commands and skills provide role behavior, but there is **no hidden scheduler or swarm runtime**.
 - Optional MCP helpers mutate those files deterministically; they do not replace them as the source of truth.
 
@@ -83,7 +87,16 @@ The workflow is no longer lifecycle-only. Use these file-backed inspection comma
 - `project:paper.decisions` for durable operational and comparison decisions
 - `project:paper.lineage` for version/comparison lineage
 
-These commands refresh `.paper/wiki/navigation.md`, `.paper/task-packets/index.json`, `.paper/context/roles/*.json`, `.paper/context/phases/*.json`, `.paper/workspace/index.json`, and `.paper/sessions/LATEST_SUMMARY.md` without introducing unsupported host hooks.
+These commands refresh `.paper/wiki/navigation.md`, `.paper/task-packets/index.json`, `.paper/context/roles/*.json`, `.paper/context/phases/*.json`, `.paper/context/packets/*.json`, `.paper/workspace/index.json`, and `.paper/sessions/LATEST_SUMMARY.md` without introducing unsupported host hooks.
+
+For deeper local-context discipline, read the nearest generated surfaces before acting:
+
+- `.paper/context/actions/current.json` for the current workspace-level pre-action bundle
+- `.paper/context/actions/role-*.json` for role-scoped behavior guidance
+- `.paper/context/actions/packet-*.json` for packet-scoped pre-action read order
+- `.paper/context/artifacts/*.json` for artifact-local rules tied to actual paths
+
+These files are explicit helper surfaces. They do not imply automatic host-side loading.
 
 ## MCP tools
 
@@ -98,6 +111,10 @@ The optional MCP layer exposes deterministic helpers:
 - `query_lineage`
 - `query_workspace_index`
 - `read_role_context_manifest`
+- `read_phase_context_manifest`
+- `read_packet_context_manifest`
+- `read_artifact_context_manifest`
+- `read_action_context_bundle`
 - `summarize_session_journal`
 - `upsert_orchestration_board`
 - `append_handoff`

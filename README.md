@@ -1,6 +1,6 @@
 # paper_factory
 
-`paper_factory` is a mature academic-paper-writing workflow pack for OpenCode.
+`paper_factory` is an OpenCode-native, file-first, board-first academic workflow pack.
 
 It deliberately borrows two different kinds of strength:
 
@@ -21,7 +21,8 @@ The result is not a fake clone of either project. It is an honest OpenCode-nativ
 - an optional **`paper-factory` stdio MCP server** for deterministic state mutations
 - a **CLI installer/doctor** at `bin/paper-factory.mjs`
 - a durable **`.paper/` artifact model** for orchestration, handoffs, research briefs, experiment audits, result-to-claim bridge logs, typed wiki/workspace indexes, rebuttal issues/strategy, version lineage/comparisons, figure artifact contracts, plus the classic paper-writing artifacts
-- durable **task packets, role context manifests, session summaries, and navigation reports** that narrow context without inventing a hidden runtime
+- durable **task packets, packet/role context manifests, session summaries, and navigation reports** that narrow context without inventing a hidden runtime
+- stronger **artifact-local and action-local context bundles** under `.paper/context/artifacts/` and `.paper/context/actions/` so commands can read the nearest guidance before mutating workflow state
 - an optional **strict mode** that prevents out-of-order drafting when evidence gates have not been satisfied
 
 ## Quick start
@@ -94,7 +95,11 @@ npm pack --dry-run
 - `.paper/orchestration/handoffs.md`
 - `.paper/task-packets/index.json`
 - `.paper/task-packets/packets/*.json`
+- `.paper/context/packets/*.json`
 - `.paper/context/roles/*.json`
+- `.paper/context/phases/*.json`
+- `.paper/context/artifacts/*.json`
+- `.paper/context/actions/*.json`
 - `.paper/sessions/journal.json`
 - `.paper/sessions/LATEST_SUMMARY.md`
 - `.paper/research/brief.md`
@@ -130,7 +135,10 @@ npm pack --dry-run
 This release absorbs the strongest portable Trellis-style ideas plus the highest-value phase-2 integrity upgrades without pretending OpenCode has Trellis-native hooks or a hidden scheduler:
 
 - **Durable task packets**: work objects live under `.paper/task-packets/` and link tasks to experiments, rebuttal issues, and versions.
+- **Packet-scoped context manifests**: `.paper/context/packets/*.json` couples each packet to its dependency health, linked artifacts, and resume bundle.
 - **Per-role context manifests**: `.paper/context/roles/*.json` narrows the durable context surface for planner, researcher, reviewer, rebuttal, experiment, and version roles.
+- **Artifact-local guidance**: `.paper/context/artifacts/*.json` ties local rules and read-before-mutate guidance to real durable artifact paths.
+- **Pre-action context bundles**: `.paper/context/actions/*.json` surfaces the exact files a command or operator should read before acting, without pretending OpenCode auto-loads them.
 - **Session/workspace persistence**: `.paper/sessions/journal.json` and `.paper/sessions/LATEST_SUMMARY.md` preserve resumable workspace context.
 - **Query/navigation surfaces**: `project:paper.task-graph`, `project:paper.open-questions`, `project:paper.decisions`, and `project:paper.lineage` expose file-backed navigation instead of lifecycle-only commands.
 - **Safer pack updates**: install/sync now bootstrap `.paper/` without overwriting user-owned workspace data.
@@ -138,9 +146,10 @@ This release absorbs the strongest portable Trellis-style ideas plus the highest
 Additional phase-2 upgrades:
 
 - **Intent + continuation discipline**: the board now persists `intentType`, `currentFocus`, `nextAction`, continuation checkpoints, and review-before-finalize status.
+- **Board-enforced role-chain contract**: role ownership is enforced on board mutations and critical evidence/experiment/review/version writes; manual repairs must use explicit handoffs or a traceable override reason.
 - **Adversarial review + experiment integrity**: `.paper/reviews/concerns.json`, `.paper/reviews/adversarial-state.json`, `.paper/experiments/audits.json`, and `.paper/claims/bridge-log.json` keep review memory, experiment audits, and result-to-claim transitions durable.
-- **Typed wiki + workspace index**: `.paper/wiki/entities.json`, `.paper/wiki/relations.json`, and `.paper/workspace/index.json` make top-level state more queryable and resumable.
-- **Figure artifact contracts**: `.paper/figures/briefs.json`, `segments.json`, `templates.json`, and `editable-index.json` provide staged figure artifacts without pretending the package ships a render/editor backend.
+- **Typed wiki + workspace index**: `.paper/wiki/entities.json`, `.paper/wiki/relations.json`, and `.paper/workspace/index.json` make top-level state more queryable and resumable, including stronger queues, dependency health, ownership summaries, and handoff obligations.
+- **Figure artifact contracts**: `.paper/figures/briefs.json`, `segments.json`, `templates.json`, `editable-index.json`, `final-index.json`, and `qa.json` provide staged figure artifacts plus durable QA/linkage outputs without pretending the package ships a render/editor backend.
 
 Intentionally out of scope:
 
@@ -155,3 +164,4 @@ Intentionally out of scope:
 - `docs/PACKAGING.md`
 - `docs/CAPABILITY_MATRIX.md`
 - `docs/PAPER_FACTORY_SYSTEM_ORIGINS.zh-CN.md`
+- `docs/REFERENCE_ARCHITECTURES.zh-CN.md`

@@ -20,8 +20,9 @@ This file turns the phrase “absorb the advantages of oh-my-openagent and ARIS�
 | Board-first orchestration | Implemented | `.paper/orchestration/*`, `paper.orchestrate` | File-first contract rather than hidden runtime state |
 | Durable task packets | Implemented | `.paper/task-packets/*`, `paper.task-graph` | Portable work objects linked to task, experiment, rebuttal, and version state |
 | Per-role context manifests | Implemented | `.paper/context/roles/*.json` | Narrows context by role without hidden context routing |
+| Packet-scoped context manifests | Implemented | `.paper/context/packets/*.json`, MCP packet-context reader | Adds packet-local dependency, artifact, and resume bundles without host hooks |
 | Session/workspace persistence surfaces | Implemented | `.paper/sessions/*`, `.paper/wiki/navigation.md` | File-backed summary/journal surfaces preserve resumability |
-| Durable workspace index | Implemented | `.paper/workspace/index.json` | Top-level resumable overview of active packets, roles, sessions, and version state |
+| Durable workspace index | Implemented | `.paper/workspace/index.json` | Top-level resumable overview of active packets, work queues, dependency health, ownership, sessions, and version state |
 | Managed-vs-user-owned update boundary | Implemented | `bin/paper-factory.mjs`, `.paper/workflow-pack/boundaries.json` | Install/sync bootstrap `.paper` safely instead of overwriting user state |
 | Query/navigation workflow UX | Implemented | `paper.task-graph`, `paper.open-questions`, `paper.decisions`, `paper.lineage`, MCP query tools | Users can inspect graph/questions/decisions/lineage directly |
 | Composable workflow packaging | Implemented | command/skill split + `.paper` artifacts | Lifecycle phases are exposed as honest commands |
@@ -44,7 +45,7 @@ This file turns the phrase “absorb the advantages of oh-my-openagent and ARIS�
 | Version evolution/comparison | Implemented | `.paper/versions/*`, `paper.version-*` | Snapshot lineage and comparison targets are durable |
 | Stronger explanatory comparisons | Implemented | `.paper/versions/LATEST_COMPARISON.md` | Comparison reports now include review delta context in addition to evidence/citation drift |
 | Typed wiki + relations | Implemented | `.paper/wiki/entities.json`, `.paper/wiki/relations.json` | Query surfaces can rely on typed records instead of markdown alone |
-| Figure artifact contracts | Partial | `.paper/figures/*.json`, `paper.figure` | Durable staged figure records exist, but no render/editor backend is claimed |
+| Figure artifact contracts | Partial | `.paper/figures/*.json`, `paper.figure`, `validate_figure_pipeline` | Durable brief → segment → template → editable → final-contract records and figure QA exist, but no render/editor backend is claimed |
 | Stage discipline | Implemented | strict mode + orchestration board gates | Optional strict mode, durable board phases, and review blockers |
 | Autonomous experiment orchestration | Deferred | N/A | No fake scheduler or daemon is claimed |
 | Full ARIS research/reviewer subsystem parity | Deferred | N/A | Current package is inspired by ARIS, not a clone |
