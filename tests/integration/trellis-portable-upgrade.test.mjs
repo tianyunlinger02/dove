@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  appendHandoff,
   ensureWorkspace,
   initProject,
   queryBoundaryReport,
@@ -12,6 +13,11 @@ import {
   queryLineage,
   queryOpenQuestions,
   queryTaskGraph,
+  queryWorkspaceIndex,
+  readActionContextBundle,
+  readArtifactContextManifest,
+  readPacketContextManifest,
+  readPhaseContextManifest,
   readRoleContextManifest,
   registerSource,
   summarizeSessionJournal,
@@ -56,6 +62,13 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
       noteIds: [note.id]
     }]
   });
+  appendHandoff(root, {
+    fromRole: "planner",
+    toRole: "experiment-planner",
+    phase: "experiments",
+    summary: "Move into experiment planning for the packet validation flow.",
+    nextActions: ["Write the packet validation experiment"]
+  });
   upsertExperimentPlan(root, {
     id: "packet-exp",
     title: "Packet validation experiment",
@@ -65,12 +78,12 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   });
   upsertOrchestrationBoard(root, {
     phase: "research",
-    assignedRole: "planner",
+    assignedRole: "researcher",
     tasks: [{
       id: "packet-review-task",
       title: "Validate packet linkage",
       assignedRole: "reviewer",
-      status: "pending",
+      status: "in-progress",
       claimIds: ["claim-packets"],
       noteIds: [note.id],
       experimentIds: ["packet-exp"],
@@ -84,10 +97,17 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   const decisions = queryDecisions(root);
   const lineage = queryLineage(root);
   const boundaryReport = queryBoundaryReport(root);
+  const workspaceIndex = queryWorkspaceIndex(root);
   const reviewerManifest = readRoleContextManifest(root, "reviewer");
+  const phaseManifest = readPhaseContextManifest(root, "research");
+  const packetManifest = readPacketContextManifest(root, "task-packet-review-task");
+  const artifactManifest = readArtifactContextManifest(root, ".paper/orchestration/board.json");
+  const currentActionBundle = readActionContextBundle(root);
+  const packetActionBundle = readActionContextBundle(root, { scopeType: "packet", packetId: "task-packet-review-task" });
   const sessionSummary = summarizeSessionJournal(root);
 
   assert.ok(taskGraph.nodes.some((node) => node.id === "task-packet-review-task"));
+  assert.equal(taskGraph.nodes.find((node) => node.id === "task-packet-review-task").lifecycleStatus, "ready-for-handoff");
   assert.ok(questions.items.some((item) => /follow-up validation|packet lineage/i.test(item.summary)));
   assert.ok(decisions.items.some((item) => /file-first/i.test(item.summary) || /Current role owner/i.test(item.summary)));
   assert.ok(Array.isArray(lineage.lineage));
@@ -95,9 +115,40 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(Array.isArray(boundaryReport.userOwnedExistingPaths));
   assert.ok(reviewerManifest.contextPaths.includes(".paper/task-packets/index.json"));
   assert.ok(reviewerManifest.activeTaskPacketIds.includes("task-packet-review-task"));
+  assert.ok(reviewerManifest.packetContextPaths.includes(".paper/context/packets/task-packet-review-task.json"));
+  assert.ok(reviewerManifest.handoffCandidateIds.includes("task-packet-review-task"));
+  assert.ok(reviewerManifest.preActionReadPaths.includes(".paper/context/actions/role-reviewer.json"));
+  assert.equal(packetManifest.packetId, "task-packet-review-task");
+  assert.equal(packetManifest.lifecycleStatus, "ready-for-handoff");
+  assert.equal(packetManifest.taskWorkspaceCoupling.workspaceIndexPath, ".paper/workspace/index.json");
+  assert.ok(packetManifest.linkedIds.claims.includes("claim-packets"));
+  assert.ok(packetManifest.linkedArtifacts.includes(".paper/context/packets/task-packet-review-task.json"));
+  assert.ok(packetManifest.linkedArtifacts.includes(".paper/task-packets/packets/task-packet-review-task.json"));
+  assert.ok(packetManifest.preActionReadPaths.includes(".paper/context/actions/packet-task-packet-review-task.json"));
+  assert.equal(packetManifest.dependencyHealth.state, "clear");
+  assert.equal(phaseManifest.phaseId, "research");
+  assert.ok(phaseManifest.preActionReadPaths.includes(".paper/context/actions/phase-research.json"));
+  assert.equal(artifactManifest.artifactPath, ".paper/orchestration/board.json");
+  assert.equal(artifactManifest.category, "orchestration");
+  assert.ok(artifactManifest.readBeforeMutating.includes(".paper/workspace/index.json"));
+  assert.equal(currentActionBundle.scopeType, "current");
+  assert.ok(currentActionBundle.requiredReadPaths.includes(".paper/context/actions/current.json"));
+  assert.equal(packetActionBundle.scopeType, "packet");
+  assert.equal(packetActionBundle.packetId, "task-packet-review-task");
+  assert.ok(workspaceIndex.handoffObligations.some((item) => item.packetId === "task-packet-review-task"));
+  assert.ok(workspaceIndex.resumeGuidance.prioritizedPacketIds.includes("task-packet-review-task"));
+  assert.ok(workspaceIndex.resumeGuidance.packetContextPaths.includes(".paper/context/packets/task-packet-review-task.json"));
+  assert.equal(workspaceIndex.contextSurfaces.currentActionContextPath, ".paper/context/actions/current.json");
+  assert.ok(workspaceIndex.contextSurfaces.prioritizedArtifactContextPaths.some((item) => item.endsWith("orchestration-board-json.json")));
+  assert.ok(workspaceIndex.behaviorDiscipline.requiredReadOrder.includes(".paper/context/actions/current.json"));
+  assert.ok(phaseManifest.queueSummary.handoff.includes("task-packet-review-task"));
+  assert.ok(phaseManifest.contextPaths.includes(".paper/context/packets/task-packet-review-task.json"));
   assert.equal(sessionSummary.summaryPath, ".paper/sessions/LATEST_SUMMARY.md");
   assert.ok(fs.existsSync(path.join(root, ".paper", "wiki", "navigation.md")));
   assert.ok(fs.existsSync(path.join(root, ".paper", "task-packets", "packets", "task-packet-review-task.json")));
+  assert.ok(fs.existsSync(path.join(root, ".paper", "context", "packets", "task-packet-review-task.json")));
+  assert.ok(fs.existsSync(path.join(root, ".paper", "context", "artifacts", "paper-orchestration-board-json.json")));
+  assert.ok(fs.existsSync(path.join(root, ".paper", "context", "actions", "current.json")));
   assert.ok(fs.existsSync(path.join(root, ".paper", "context", "roles", "reviewer.json")));
   assert.ok(fs.existsSync(path.join(root, ".paper", "sessions", "journal.json")));
   assert.ok(fs.existsSync(path.join(root, ".paper", "workflow-pack", "boundaries.json")));

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "managedPaths": [
     ".opencode",
     ".opencode.json",
@@ -74,6 +74,7 @@
     ".paper/task-packets/packets",
     ".paper/context/roles",
     ".paper/context/phases",
+    ".paper/context/packets",
     ".paper/sessions"
   ],
   "managedArtifacts": {

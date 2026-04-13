@@ -11,6 +11,7 @@
     ".paper/sessions/LATEST_SUMMARY.md",
     ".paper/wiki/navigation.md",
     ".paper/workspace/index.json",
+    ".paper/context/phases/rebuttal.json",
     ".paper/wiki/entities.json",
     ".paper/wiki/relations.json",
     ".paper/reviews/REVIEW_STATE.json",
@@ -20,12 +21,27 @@
     ".paper/rebuttal/response-draft.md"
   ],
   "activeTaskPacketIds": [],
+  "packetContextPaths": [],
   "openQuestionIds": [],
   "decisionIds": [
     "board-current-role",
     "board-next-action"
   ],
   "workspaceIndexPath": ".paper/workspace/index.json",
+  "isCurrentBoardOwner": false,
+  "boardPhase": "init",
+  "boardAssignedRole": "planner",
   "currentFocus": null,
-  "generatedAt": "2026-04-12T10:53:11.347Z"
+  "queueSummary": {
+    "roleId": "rebuttal-lead",
+    "isBoardOwner": false,
+    "packetIds": [],
+    "activeCount": 0,
+    "waitingCount": 0,
+    "reviewNeededCount": 0,
+    "handoffReadyCount": 0,
+    "staleCount": 0
+  },
+  "handoffCandidateIds": [],
+  "generatedAt": "2026-04-12T20:41:44.853Z"
 }

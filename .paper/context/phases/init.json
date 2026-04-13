@@ -4,5 +4,26 @@
   "assignedRole": "planner",
   "activePacketIds": [],
   "blockerIds": [],
-  "generatedAt": "2026-04-12T10:53:11.347Z"
+  "queueSummary": {
+    "ready": [],
+    "waiting": [],
+    "reviewNeeded": [],
+    "handoff": [],
+    "stale": []
+  },
+  "contextPaths": [
+    ".paper/orchestration/board.json",
+    ".paper/orchestration/handoffs.md",
+    ".paper/sessions/LATEST_SUMMARY.md",
+    ".paper/task-packets/index.json",
+    ".paper/wiki/navigation.md",
+    ".paper/workspace/index.json"
+  ],
+  "resumeGuidance": {
+    "command": "project:paper.orchestrate",
+    "prioritizedPacketIds": [],
+    "packetContextPaths": [],
+    "handoffCandidateIds": []
+  },
+  "generatedAt": "2026-04-12T20:41:44.854Z"
 }

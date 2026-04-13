@@ -1,5 +1,12 @@
 {
-  "version": 2,
+  "version": 3,
   "items": [],
-  "updatedAt": "2026-04-12T10:53:11.346Z"
+  "lifecycleCounts": {},
+  "dependencyHealth": {
+    "blockedPacketIds": [],
+    "readyPacketIds": [],
+    "stalePacketIds": [],
+    "missingDependencyIds": []
+  },
+  "updatedAt": "2026-04-12T20:41:44.853Z"
 }

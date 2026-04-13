@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "managed": {
     "revisionId": "schema-v5:bootstrap-only",
     "templateHash": "05b331fb8b58cd1295bb4d3e0ebade581b2fc1543ee9a321f59116a0ba99acde",
@@ -7,79 +7,169 @@
     "managedKind": "bootstrap-only",
     "path": ".paper/workspace/index.json"
   },
+  "boardPhase": "init",
+  "boardAssignedRole": "planner",
   "activePackets": [],
-  "activeRoles": [],
+  "workQueues": {
+    "ready": [],
+    "waiting": [],
+    "reviewNeeded": [],
+    "handoff": [],
+    "stale": [],
+    "archived": []
+  },
+  "ownershipSummary": [
+    {
+      "roleId": "planner",
+      "isBoardOwner": true,
+      "packetIds": [],
+      "activeCount": 0,
+      "waitingCount": 0,
+      "reviewNeededCount": 0,
+      "handoffReadyCount": 0,
+      "staleCount": 0
+    },
+    {
+      "roleId": "researcher",
+      "isBoardOwner": false,
+      "packetIds": [],
+      "activeCount": 0,
+      "waitingCount": 0,
+      "reviewNeededCount": 0,
+      "handoffReadyCount": 0,
+      "staleCount": 0
+    },
+    {
+      "roleId": "reviewer",
+      "isBoardOwner": false,
+      "packetIds": [],
+      "activeCount": 0,
+      "waitingCount": 0,
+      "reviewNeededCount": 0,
+      "handoffReadyCount": 0,
+      "staleCount": 0
+    },
+    {
+      "roleId": "rebuttal-lead",
+      "isBoardOwner": false,
+      "packetIds": [],
+      "activeCount": 0,
+      "waitingCount": 0,
+      "reviewNeededCount": 0,
+      "handoffReadyCount": 0,
+      "staleCount": 0
+    },
+    {
+      "roleId": "experiment-planner",
+      "isBoardOwner": false,
+      "packetIds": [],
+      "activeCount": 0,
+      "waitingCount": 0,
+      "reviewNeededCount": 0,
+      "handoffReadyCount": 0,
+      "staleCount": 0
+    },
+    {
+      "roleId": "version-analyst",
+      "isBoardOwner": false,
+      "packetIds": [],
+      "activeCount": 0,
+      "waitingCount": 0,
+      "reviewNeededCount": 0,
+      "handoffReadyCount": 0,
+      "staleCount": 0
+    }
+  ],
+  "packetLifecycleCounts": {},
+  "handoffObligations": [],
+  "resumeGuidance": {
+    "command": "project:paper.orchestrate",
+    "prioritizedPacketIds": [],
+    "packetContextPaths": [],
+    "handoffCandidateIds": []
+  },
+  "dependencyHealth": {
+    "blockedPacketIds": [],
+    "healthyPacketIds": [],
+    "waitingPacketIds": [],
+    "stalePacketIds": [],
+    "missingDependencyIds": [],
+    "orphanPacketIds": []
+  },
+  "activeRoles": [
+    "planner"
+  ],
   "unresolvedConcernIds": [],
   "mostRecentSessions": [
     {
-      "id": "2026-04-12T10:53:11.346Z-query-workspace-index",
+      "id": "2026-04-12T20:41:44.853Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T10:53:11.346Z"
+      "timestamp": "2026-04-12T20:41:44.853Z"
     },
     {
-      "id": "2026-04-12T10:53:11.343Z-query-workspace-index",
+      "id": "2026-04-12T20:41:44.841Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T10:53:11.343Z"
+      "timestamp": "2026-04-12T20:41:44.841Z"
     },
     {
-      "id": "2026-04-12T09:14:26.263Z-query-workspace-index",
+      "id": "2026-04-12T20:39:06.509Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T09:14:26.263Z"
+      "timestamp": "2026-04-12T20:39:06.509Z"
     },
     {
-      "id": "2026-04-12T09:14:26.259Z-query-workspace-index",
+      "id": "2026-04-12T20:39:06.497Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T09:14:26.260Z"
+      "timestamp": "2026-04-12T20:39:06.497Z"
     },
     {
-      "id": "2026-04-12T09:06:42.215Z-query-workspace-index",
+      "id": "2026-04-12T20:37:28.733Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T09:06:42.215Z"
+      "timestamp": "2026-04-12T20:37:28.733Z"
     },
     {
-      "id": "2026-04-12T09:06:42.212Z-query-workspace-index",
+      "id": "2026-04-12T20:37:28.730Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T09:06:42.212Z"
+      "timestamp": "2026-04-12T20:37:28.730Z"
     },
     {
-      "id": "2026-04-12T09:01:16.053Z-query-workspace-index",
+      "id": "2026-04-12T19:38:51.618Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T09:01:16.054Z"
+      "timestamp": "2026-04-12T19:38:51.618Z"
     },
     {
-      "id": "2026-04-12T09:01:16.050Z-query-workspace-index",
+      "id": "2026-04-12T19:38:51.614Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T09:01:16.050Z"
+      "timestamp": "2026-04-12T19:38:51.615Z"
     },
     {
-      "id": "2026-04-12T08:57:43.458Z-query-workspace-index",
+      "id": "2026-04-12T19:05:33.912Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T08:57:43.458Z"
+      "timestamp": "2026-04-12T19:05:33.912Z"
     },
     {
-      "id": "2026-04-12T08:57:43.455Z-query-workspace-index",
+      "id": "2026-04-12T19:05:33.908Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-12T08:57:43.455Z"
+      "timestamp": "2026-04-12T19:05:33.909Z"
     }
   ],
   "latestVersions": {
@@ -87,5 +177,5 @@
     "activeTargets": [],
     "latestSnapshotIds": []
   },
-  "updatedAt": "2026-04-12T10:53:11.346Z"
+  "updatedAt": "2026-04-12T20:41:44.853Z"
 }

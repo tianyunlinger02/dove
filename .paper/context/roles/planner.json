@@ -11,6 +11,7 @@
     ".paper/sessions/LATEST_SUMMARY.md",
     ".paper/wiki/navigation.md",
     ".paper/workspace/index.json",
+    ".paper/context/phases/plan.json",
     ".paper/wiki/entities.json",
     ".paper/wiki/relations.json",
     ".paper/plans/current-plan.md",
@@ -19,12 +20,27 @@
     ".paper/checklists/paper.md"
   ],
   "activeTaskPacketIds": [],
+  "packetContextPaths": [],
   "openQuestionIds": [],
   "decisionIds": [
     "board-current-role",
     "board-next-action"
   ],
   "workspaceIndexPath": ".paper/workspace/index.json",
+  "isCurrentBoardOwner": true,
+  "boardPhase": "init",
+  "boardAssignedRole": "planner",
   "currentFocus": null,
-  "generatedAt": "2026-04-12T10:53:11.346Z"
+  "queueSummary": {
+    "roleId": "planner",
+    "isBoardOwner": true,
+    "packetIds": [],
+    "activeCount": 0,
+    "waitingCount": 0,
+    "reviewNeededCount": 0,
+    "handoffReadyCount": 0,
+    "staleCount": 0
+  },
+  "handoffCandidateIds": [],
+  "generatedAt": "2026-04-12T20:41:44.853Z"
 }

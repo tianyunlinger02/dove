@@ -10,6 +10,11 @@
 
 - No task packets generated yet.
 
+## Operating queues
+
+- Ready for handoff: none
+- Stale packets: none
+
 ## Open questions
 
 - No open questions recorded yet.

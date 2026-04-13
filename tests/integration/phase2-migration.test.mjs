@@ -5,8 +5,10 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  appendHandoff,
   ensureWorkspace,
   initProject,
+  readState,
   queryTaskGraph,
   queryWorkspaceIndex,
   refreshWiki,
@@ -52,6 +54,7 @@ test("continuation focus and next action remain durable across refresh", () => {
 
   const graph = queryTaskGraph(root);
   const workspaceIndex = queryWorkspaceIndex(root);
+  const state = readState(root);
   const board = JSON.parse(fs.readFileSync(path.join(root, ".paper", "orchestration", "board.json"), "utf8"));
 
   assert.equal(board.currentFocus, "Resolve the evaluation plan.");
@@ -59,6 +62,12 @@ test("continuation focus and next action remain durable across refresh", () => {
   assert.equal(board.continuationState.status, "ready-to-resume");
   assert.equal(graph.nodes.find((node) => node.id === "task-plan-eval").nextAction, "Link the evaluation packet to the comparison experiment.");
   assert.equal(workspaceIndex.currentFocus, "Resolve the evaluation plan.");
+  assert.equal(workspaceIndex.resumeGuidance.command, state.pipeline.resumeCommand);
+  assert.ok(workspaceIndex.workQueues.waiting.some((packet) => packet.id === "task-plan-eval"));
+  assert.ok(workspaceIndex.resumeGuidance.prioritizedPacketIds.includes("task-plan-eval"));
+  assert.ok(workspaceIndex.resumeGuidance.packetContextPaths.includes(".paper/context/packets/task-plan-eval.json"));
+  assert.equal(graph.nodes.find((node) => node.id === "task-plan-eval").packetContextPath, ".paper/context/packets/task-plan-eval.json");
+  assert.ok(fs.existsSync(path.join(root, ".paper", "context", "packets", "task-plan-eval.json")));
 });
 
 test("experiment audits and claim bridge records persist separately from raw results", () => {
@@ -70,6 +79,13 @@ test("experiment audits and claim bridge records persist separately from raw res
   const note = upsertNote(root, { title: "Audit note", sectionId: "method", sourceIds: [source.id], summary: "Method note." });
   upsertClaims(root, {
     claims: [{ id: "claim-audit", text: "Audited experiment improves trust.", sectionId: "method", sourceIds: [source.id], noteIds: [note.id] }]
+  });
+  appendHandoff(root, {
+    fromRole: "planner",
+    toRole: "experiment-planner",
+    phase: "experiments",
+    summary: "Move into experiment planning for the audit flow.",
+    nextActions: ["Write the experiment plan"]
   });
   upsertExperimentPlan(root, {
     id: "audit-exp",
@@ -108,6 +124,13 @@ test("refreshWiki writes typed wiki indexes and workspace summary surfaces", () 
   upsertClaims(root, {
     claims: [{ id: "claim-wiki", text: "Typed wiki records improve resumability.", sectionId: "introduction", sourceIds: [source.id], noteIds: [note.id] }]
   });
+  appendHandoff(root, {
+    fromRole: "planner",
+    toRole: "reviewer",
+    phase: "review",
+    summary: "Move into review to populate the wiki review surfaces.",
+    nextActions: ["Run the review loop"]
+  });
   runReviewLoop(root, { scope: "typed wiki" });
   const wiki = refreshWiki(root);
 
@@ -125,6 +148,29 @@ test("figure artifact planning writes staged contract files without claiming ren
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Figure Contract Test", objective: "Plan a durable figure contract." });
+  registerSource(root, {
+    citationKey: "figure-source",
+    title: "Figure Source",
+    authors: ["Doe"],
+    year: 2026,
+    sourceType: "paper"
+  });
+  upsertNote(root, {
+    noteId: "figure-note",
+    title: "Figure note",
+    sectionId: "method",
+    sourceIds: ["figure-source"],
+    summary: "Supports the main figure claim."
+  });
+  upsertClaims(root, {
+    claims: [{
+      id: "claim-main",
+      text: "The main figure explains the method-to-result flow.",
+      sectionId: "method",
+      sourceIds: ["figure-source"],
+      noteIds: ["figure-note"]
+    }]
+  });
 
   const figurePlan = upsertFigurePlan(root, {
     items: [{
@@ -144,12 +190,18 @@ test("figure artifact planning writes staged contract files without claiming ren
   const segments = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "segments.json"), "utf8"));
   const templates = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "templates.json"), "utf8"));
   const editable = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "editable-index.json"), "utf8"));
+  const finalIndex = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "final-index.json"), "utf8"));
+  const qa = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "qa.json"), "utf8"));
   const readme = fs.readFileSync(path.join(root, ".paper", "figures", "README.md"), "utf8");
 
   assert.equal(figurePlan.figureCount, 1);
+  assert.equal(figurePlan.qaPath, ".paper/figures/qa.json");
   assert.equal(briefs.items[0].figureId, "main-figure");
   assert.ok(Array.isArray(segments.items[0].placeholderSegments));
   assert.equal(templates.items[0].templateSvgPath, ".paper/figures/main-figure.template.svg");
   assert.equal(editable.items[0].finalSvgPath, ".paper/figures/main-figure.final.svg");
+  assert.equal(finalIndex.items[0].figureId, "main-figure");
+  assert.equal(qa.items[0].qaStatus, "ready");
   assert.match(readme, /does not claim to ship a render backend/i);
+  assert.match(readme, /Stage contract/i);
 });

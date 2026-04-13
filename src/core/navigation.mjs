@@ -12,7 +12,8 @@ import {
   createWorkflowBoundaries,
   createWorkspaceIndex,
   createWikiEntitiesIndex,
-  createWikiRelationsIndex
+  createWikiRelationsIndex,
+  resolveResumeCommandForPhase
 } from "./schema.mjs";
 import { ensureWorkspace, loadState, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 
@@ -20,6 +21,133 @@ function normalizeStringArray(value) {
   return Array.isArray(value)
     ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean)))
     : [];
+}
+
+const GOVERNANCE_TERMINAL_LIFECYCLES = new Set(["archived", "archived-with-lineage"]);
+const GOVERNANCE_ACTIVE_LIFECYCLES = new Set(["active", "ready-for-handoff", "review-needed", "stale"]);
+
+function isIsoTimestamp(value) {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+function normalizeUpdatedAt(value) {
+  return isIsoTimestamp(value) ? value : null;
+}
+
+function uniqueSorted(items = []) {
+  return Array.from(new Set(items.filter(Boolean))).sort((left, right) => left.localeCompare(right));
+}
+
+function lifecycleSortRank(packet) {
+  const order = {
+    stale: 0,
+    "review-needed": 1,
+    "ready-for-handoff": 2,
+    blocked: 3,
+    waiting: 4,
+    active: 5,
+    queued: 6,
+    "archived-with-lineage": 7,
+    archived: 8
+  };
+  return order[packet.lifecycleStatus] ?? 99;
+}
+
+function sortPacketsForQueue(items = []) {
+  return [...items].sort((left, right) => {
+    const lifecycleDelta = lifecycleSortRank(left) - lifecycleSortRank(right);
+    if (lifecycleDelta !== 0) {
+      return lifecycleDelta;
+    }
+    return (left.id ?? "").localeCompare(right.id ?? "");
+  });
+}
+
+function hasLineageLinks(packet = {}) {
+  return [
+    packet.parentPacketId,
+    ...(packet.childPacketIds ?? []),
+    ...(packet.claimIds ?? []),
+    ...(packet.noteIds ?? []),
+    ...(packet.experimentIds ?? []),
+    ...(packet.rebuttalIssueIds ?? []),
+    ...(packet.versionIds ?? []),
+    ...(packet.outputPaths ?? []),
+    ...(packet.evidenceLinks ?? [])
+  ].filter(Boolean).length > 0;
+}
+
+function derivePacketLifecycle(packet = {}, existing = {}) {
+  const explicit = typeof packet.lifecycleStatus === "string" ? packet.lifecycleStatus.trim().toLowerCase() : "";
+  if (explicit) {
+    return explicit;
+  }
+  const normalizedStatus = typeof packet.status === "string" ? packet.status.trim().toLowerCase() : "pending";
+  const continuationStatus = typeof packet.continuationState?.status === "string"
+    ? packet.continuationState.status.trim().toLowerCase()
+    : "";
+  const updatedAt = normalizeUpdatedAt(packet.updatedAt) ?? normalizeUpdatedAt(existing.updatedAt) ?? normalizeUpdatedAt(packet.continuationState?.updatedAt);
+  const isStale = updatedAt ? Date.now() - Date.parse(updatedAt) > 1000 * 60 * 60 * 24 * 7 : false;
+  const dependencyCount = normalizeStringArray(packet.dependencies).length;
+  const lineageLinked = hasLineageLinks({ ...existing, ...packet });
+
+  if (["done", "resolved", "cancelled", "retired", "archived"].includes(normalizedStatus) || continuationStatus === "completed") {
+    return lineageLinked ? "archived-with-lineage" : "archived";
+  }
+  if (["review-needed", "needs-review", "awaiting-review", "review"].includes(normalizedStatus) || continuationStatus === "review-needed") {
+    return "review-needed";
+  }
+  if (dependencyCount > 0 || continuationStatus === "blocked") {
+    return normalizedStatus === "blocked" ? "blocked" : "waiting";
+  }
+  if (packet.assignedRole && packet.boardAssignedRole && packet.assignedRole !== packet.boardAssignedRole && !["pending", "planned", "queued", "open"].includes(normalizedStatus)) {
+    return "ready-for-handoff";
+  }
+  if (isStale) {
+    return "stale";
+  }
+  if (["in-progress", "active", "current", "working"].includes(normalizedStatus) || continuationStatus === "in-progress") {
+    return "active";
+  }
+  if (["pending", "planned", "queued", "open", "paused", "blocked"].includes(normalizedStatus) || continuationStatus === "ready-to-resume") {
+    return "waiting";
+  }
+  return "queued";
+}
+
+function buildPacketDependencyHealth(packet, packetById) {
+  const dependencies = normalizeStringArray(packet.dependencies);
+  const missingDependencyIds = dependencies.filter((dependencyId) => !packetById.has(dependencyId));
+  const blockingPacketIds = dependencies.filter((dependencyId) => {
+    const dependency = packetById.get(dependencyId);
+    return dependency && !GOVERNANCE_TERMINAL_LIFECYCLES.has(dependency.lifecycleStatus);
+  });
+  return {
+    state: missingDependencyIds.length > 0
+      ? "missing-dependencies"
+      : blockingPacketIds.length > 0
+        ? "blocked-by-dependencies"
+        : dependencies.length > 0
+          ? "ready-after-dependencies"
+          : "clear",
+    dependencyIds: dependencies,
+    missingDependencyIds,
+    blockingPacketIds
+  };
+}
+
+function summarizePacket(packet) {
+  return {
+    id: packet.id,
+    title: packet.title,
+    status: packet.status,
+    lifecycleStatus: packet.lifecycleStatus,
+    assignedRole: packet.assignedRole,
+    phase: packet.phase,
+    nextAction: packet.nextAction,
+    dependencyState: packet.dependencyHealth?.state ?? "clear",
+    packetContextPath: packet.packetContextPath ?? null
+  };
 }
 
 function slugify(value) {
@@ -95,6 +223,8 @@ function mergeDecisions(incoming, existing) {
 }
 
 function normalizePacket(packet = {}) {
+  const lifecycleStatus = derivePacketLifecycle(packet);
+  const updatedAt = normalizeUpdatedAt(packet.updatedAt) ?? nowIso();
   return {
     ...packet,
     id: slugify(packet.id),
@@ -105,8 +235,8 @@ function normalizePacket(packet = {}) {
     phase: packet.phase ?? "init",
     phaseContextId: packet.phaseContextId ?? `phase-${packet.phase ?? "init"}`,
     status: packet.status ?? "pending",
-    lifecycleStatus: packet.lifecycleStatus ?? packet.status ?? "pending",
-    active: packet.active ?? true,
+    lifecycleStatus,
+    active: packet.active ?? !GOVERNANCE_TERMINAL_LIFECYCLES.has(lifecycleStatus),
     assignedRole: ROLE_IDS.includes(packet.assignedRole) ? packet.assignedRole : "planner",
     parentPacketId: packet.parentPacketId ? slugify(packet.parentPacketId) : null,
     childPacketIds: normalizeStringArray(packet.childPacketIds),
@@ -124,8 +254,9 @@ function normalizePacket(packet = {}) {
     decisions: Array.isArray(packet.decisions) ? packet.decisions : [],
     lineage: packet.lineage ?? {},
     continuationState: packet.continuationState ?? { status: packet.active ? "in-progress" : "ready-to-resume", lastCheckpoint: packet.summary ?? packet.title ?? packet.id },
-    updatedAt: packet.updatedAt ?? nowIso(),
-    packetPath: packet.packetPath ?? packetFilePath(packet.id)
+    updatedAt,
+    packetPath: packet.packetPath ?? packetFilePath(packet.id),
+    packetContextPath: packet.packetContextPath ?? path.join(ARTIFACT_PATHS.packetContextsDir, `${slugify(packet.id)}.json`)
   };
 }
 
@@ -138,6 +269,7 @@ function roleContextPaths(roleId) {
     ARTIFACT_PATHS.sessionSummary,
     ARTIFACT_PATHS.navigationReport,
     ARTIFACT_PATHS.workspaceIndex,
+    path.join(ARTIFACT_PATHS.phaseContextsDir, `${roleId === "researcher" ? "research" : roleId === "reviewer" ? "review" : roleId === "rebuttal-lead" ? "rebuttal" : roleId === "experiment-planner" ? "experiments" : roleId === "version-analyst" ? "versions" : "plan"}.json`),
     ARTIFACT_PATHS.wikiEntities,
     ARTIFACT_PATHS.wikiRelations
   ];
@@ -146,9 +278,9 @@ function roleContextPaths(roleId) {
     case "researcher":
       return [...shared, ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.researchAgenda, ARTIFACT_PATHS.sources, ARTIFACT_PATHS.notes, ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.queryPack];
     case "reviewer":
-      return [...shared, ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog, ARTIFACT_PATHS.revisionPlan, ARTIFACT_PATHS.checklist];
+      return [...shared, ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.revisionPlan, ARTIFACT_PATHS.checklist];
     case "rebuttal-lead":
-      return [...shared, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft];
+      return [...shared, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft];
     case "experiment-planner":
       return [...shared, ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog, ARTIFACT_PATHS.experimentLog];
     case "version-analyst":
@@ -156,6 +288,182 @@ function roleContextPaths(roleId) {
     default:
       return [...shared, ARTIFACT_PATHS.plan, ARTIFACT_PATHS.outline, ARTIFACT_PATHS.revisionPlan, ARTIFACT_PATHS.checklist];
   }
+}
+
+function artifactContextPath(relativePath) {
+  return path.join(ARTIFACT_PATHS.artifactContextsDir, `${slugify(relativePath)}.json`);
+}
+
+function actionContextPath(scopeId) {
+  return path.join(ARTIFACT_PATHS.actionContextsDir, `${slugify(scopeId)}.json`);
+}
+
+function normalizeArtifactPath(relativePath) {
+  return String(relativePath ?? "").replace(/^\.\//, "").replace(/\\/g, "/");
+}
+
+function artifactGuidance(relativePath) {
+  const normalized = normalizeArtifactPath(relativePath);
+
+  if ([ARTIFACT_PATHS.orchestrationBoard, ARTIFACT_PATHS.orchestrationHandoffs, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport].includes(normalized)) {
+    return {
+      category: "orchestration",
+      summary: "Treat this artifact as workflow control state and refresh the nearest role/phase/packet context before mutating it.",
+      localRules: [
+        "Preserve explicit role ownership, currentFocus, nextAction, and continuation checkpoints.",
+        "Prefer durable handoffs and packet updates over implicit intent changes.",
+        "Refresh query/navigation surfaces after changes so downstream commands read the same file state."
+      ],
+      readBeforeMutating: [ARTIFACT_PATHS.orchestrationBoard, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.navigationReport]
+    };
+  }
+
+  if ([ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.researchAgenda, ARTIFACT_PATHS.sources, ARTIFACT_PATHS.notes, ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.queryPack, ARTIFACT_PATHS.claims].includes(normalized)) {
+    return {
+      category: "evidence",
+      summary: "Research artifacts should stay provenance-aware and only promote evidence-backed claims.",
+      localRules: [
+        "Do not cite from memory or invent support that is not present in durable artifacts.",
+        "Keep source, note, claim, and query surfaces aligned when evidence changes.",
+        "Escalate uncertainty into open questions instead of hiding it in prose."
+      ],
+      readBeforeMutating: [ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.sources, ARTIFACT_PATHS.notes, ARTIFACT_PATHS.evidence]
+    };
+  }
+
+  if ([ARTIFACT_PATHS.plan, ARTIFACT_PATHS.outline, ARTIFACT_PATHS.checklist].includes(normalized) || normalized.startsWith(`${ARTIFACT_PATHS.draftsDir}/`)) {
+    return {
+      category: "writing",
+      summary: "Writing artifacts should follow the current plan and preserve evidence/review gates before completion claims.",
+      localRules: [
+        "Use durable plan and outline state to scope edits before drafting.",
+        "Leave explicit citation TODO markers instead of fabricating support.",
+        "Treat review-before-finalize as a workflow gate, not a suggestion."
+      ],
+      readBeforeMutating: [ARTIFACT_PATHS.plan, ARTIFACT_PATHS.outline, ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.reviewState]
+    };
+  }
+
+  if ([ARTIFACT_PATHS.experimentLog, ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog].includes(normalized)) {
+    return {
+      category: "experiments",
+      summary: "Experiment artifacts should keep plans, results, audits, and claim bridges distinct and traceable.",
+      localRules: [
+        "Record results separately from audits and bridge events.",
+        "Keep reviewed artifact refs and audit flags explicit.",
+        "Update claim state only through durable result-to-claim linkage."
+      ],
+      readBeforeMutating: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog]
+    };
+  }
+
+  if ([ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.reviewDebateLog, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.revisionPlan, ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft].includes(normalized)) {
+    return {
+      category: "review",
+      summary: "Review and rebuttal artifacts should preserve reviewer independence, blocker visibility, and response traceability.",
+      localRules: [
+        "Keep reviewer-raised concerns durable and assign responses to non-reviewer roles when needed.",
+        "Turn findings into explicit blockers, revision items, or rebuttal issues.",
+        "Do not collapse review state into a single prose summary when structured state exists."
+      ],
+      readBeforeMutating: [ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.revisionPlan, ARTIFACT_PATHS.rebuttalIssues]
+    };
+  }
+
+  if ([ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.figuresReadme].includes(normalized)) {
+    return {
+      category: "figures",
+      summary: "Figure artifacts should preserve staged progression, claim linkage, and durable QA without inventing a render runtime.",
+      localRules: [
+        "Keep figure briefs, segment placeholders, templates, editable records, final contracts, and QA outputs in sync.",
+        "Link figures to source sections, target claims, experiments, and review/rebuttal context when those relationships exist.",
+        "Treat missing staged artifacts or broken figure linkage as review-visible issues, not informal notes."
+      ],
+      readBeforeMutating: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.reviewState]
+    };
+  }
+
+  if ([ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.versionComparisons, ARTIFACT_PATHS.versionComparisonReport].includes(normalized) || normalized.startsWith(`${ARTIFACT_PATHS.versionSnapshotsDir}/`)) {
+    return {
+      category: "versions",
+      summary: "Version artifacts should preserve honest lineage and explicit comparison targets.",
+      localRules: [
+        "Snapshot before major revisions and keep parent lineage explicit.",
+        "Record comparison deltas instead of relying on memory.",
+        "Do not finalize around an uncleared review gate."
+      ],
+      readBeforeMutating: [ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.versionComparisons]
+    };
+  }
+
+  return {
+    category: "general",
+    summary: "Read the nearest local context surfaces before mutating this durable artifact.",
+    localRules: [
+      "Prefer explicit file-backed guidance over broad top-level instructions.",
+      "Keep related artifacts in sync when this path changes.",
+      "Avoid hidden state; make the next action legible in durable files."
+    ],
+    readBeforeMutating: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.navigationReport]
+  };
+}
+
+function buildArtifactContextManifest(root, relativePath, board, packets, workspaceIndex) {
+  const normalized = normalizeArtifactPath(relativePath);
+  const guidance = artifactGuidance(normalized);
+  const relatedPackets = packets.filter((packet) => [packet.packetPath, packet.packetContextPath, ...(packet.outputPaths ?? []), ...(packet.evidenceLinks ?? [])].includes(normalized));
+  const relatedRoles = ROLE_IDS.filter((roleId) => roleContextPaths(roleId).includes(normalized));
+  return {
+    version: 1,
+    artifactPath: normalized,
+    exists: fs.existsSync(resolvePath(root, normalized)),
+    category: guidance.category,
+    summary: guidance.summary,
+    boardPhase: board.currentPhase,
+    boardAssignedRole: board.assignedRole,
+    currentFocus: board.currentFocus,
+    nextAction: board.nextAction,
+    localRules: guidance.localRules,
+    readBeforeMutating: uniqueSorted([
+      ...guidance.readBeforeMutating,
+      path.join(ARTIFACT_PATHS.roleContextsDir, `${board.assignedRole}.json`),
+      path.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`),
+      ARTIFACT_PATHS.workspaceIndex,
+      ARTIFACT_PATHS.navigationReport
+    ]),
+    relatedPacketIds: relatedPackets.map((packet) => packet.id),
+    relatedPacketContextPaths: relatedPackets.map((packet) => packet.packetContextPath),
+    relatedRoleIds: relatedRoles,
+    relatedRoleContextPaths: relatedRoles.map((roleId) => path.join(ARTIFACT_PATHS.roleContextsDir, `${roleId}.json`)),
+    workspaceCoupling: {
+      workspaceIndexPath: ARTIFACT_PATHS.workspaceIndex,
+      navigationReportPath: ARTIFACT_PATHS.navigationReport,
+      currentActionContextPath: actionContextPath("current")
+    },
+    generatedAt: nowIso()
+  };
+}
+
+function buildActionContextBundle({ scopeType, scopeId, summary, board, workspaceIndex, packet = null, roleId = null, phaseId = null, artifactPath = null, requiredReadPaths = [], localRules = [], nextAction = null }) {
+  return {
+    version: 1,
+    scopeType,
+    scopeId,
+    summary,
+    boardPhase: board.currentPhase,
+    boardAssignedRole: board.assignedRole,
+    currentFocus: packet?.currentFocus ?? workspaceIndex.currentFocus ?? board.currentFocus,
+    nextAction: nextAction ?? packet?.nextAction ?? workspaceIndex.nextAction ?? board.nextAction,
+    roleId,
+    phaseId,
+    packetId: packet?.id ?? null,
+    artifactPath,
+    explicitOnly: true,
+    noHiddenRuntime: true,
+    requiredReadPaths: uniqueSorted(requiredReadPaths),
+    localRules: uniqueSorted(localRules),
+    generatedAt: nowIso()
+  };
 }
 
 function deriveBoardPackets(board, existingById) {
@@ -182,6 +490,7 @@ function deriveBoardPackets(board, existingById) {
       currentFocus: task.currentFocus ?? task.title,
       nextAction: task.nextAction,
       dependencies: task.blockedBy,
+      boardAssignedRole: board.assignedRole,
       evidenceLinks: task.evidenceLinks,
       claimIds: task.claimIds,
       noteIds: task.noteIds,
@@ -224,6 +533,7 @@ function deriveBoardPackets(board, existingById) {
       currentFocus: blocker.currentFocus ?? blocker.summary,
       nextAction: blocker.nextAction,
       dependencies: blocker.blockedBy,
+      boardAssignedRole: board.assignedRole,
       evidenceLinks: blocker.evidenceLinks,
       claimIds: blocker.claimIds,
       noteIds: blocker.noteIds,
@@ -263,6 +573,7 @@ function deriveExperimentPackets(plansIndex) {
     currentFocus: plan.title,
     nextAction: "Record or audit the experiment result.",
     dependencies: [],
+    boardAssignedRole: "experiment-planner",
     evidenceLinks: [],
     claimIds: plan.claimId ? [plan.claimId] : [],
     noteIds: [],
@@ -293,6 +604,7 @@ function deriveIssuePackets(issuesIndex) {
     currentFocus: issue.summary,
     nextAction: issue.responseDirection === "fix" ? "Revise the evidence or experiment record first." : "Clarify the response with the strongest durable evidence.",
     dependencies: [],
+    boardAssignedRole: "rebuttal-lead",
     evidenceLinks: issue.evidenceLinks,
     claimIds: issue.claimIds,
     noteIds: [],
@@ -323,6 +635,7 @@ function deriveVersionPackets(versionsIndex) {
     currentFocus: item.label ?? item.id,
     nextAction: "Compare this version with the active target when claims move.",
     dependencies: item.parentVersionId ? [`version-${item.parentVersionId}`] : [],
+    boardAssignedRole: "version-analyst",
     evidenceLinks: [],
     claimIds: [],
     noteIds: [],
@@ -340,10 +653,119 @@ function deriveVersionPackets(versionsIndex) {
 function markInactiveLegacyPackets(items, activeIds) {
   return items.map((packet) => {
     if (!activeIds.has(packet.id) && ["task", "blocker"].includes(packet.sourceType)) {
-      return { ...packet, active: false };
+      const lifecycleStatus = GOVERNANCE_TERMINAL_LIFECYCLES.has(packet.lifecycleStatus) ? packet.lifecycleStatus : hasLineageLinks(packet) ? "archived-with-lineage" : "archived";
+      return { ...packet, active: false, lifecycleStatus };
     }
     return packet;
   });
+}
+
+function buildOwnershipSummary(board, packets) {
+  const packetByRole = new Map();
+  for (const roleId of ROLE_IDS) {
+    packetByRole.set(roleId, []);
+  }
+  for (const packet of packets.filter((item) => item.active)) {
+    packetByRole.get(packet.assignedRole)?.push(packet);
+  }
+  return ROLE_IDS.map((roleId) => {
+    const owned = sortPacketsForQueue(packetByRole.get(roleId) ?? []);
+    return {
+      roleId,
+      isBoardOwner: board.assignedRole === roleId,
+      packetIds: owned.map((packet) => packet.id),
+      activeCount: owned.length,
+      waitingCount: owned.filter((packet) => ["waiting", "blocked"].includes(packet.lifecycleStatus)).length,
+      reviewNeededCount: owned.filter((packet) => packet.lifecycleStatus === "review-needed").length,
+      handoffReadyCount: owned.filter((packet) => packet.lifecycleStatus === "ready-for-handoff").length,
+      staleCount: owned.filter((packet) => packet.lifecycleStatus === "stale").length
+    };
+  });
+}
+
+function buildPacketContextManifest(root, board, packet, packetById, workspaceIndex) {
+  const dependencyHealth = packet.dependencyHealth ?? buildPacketDependencyHealth(packet, packetById);
+  const preferredPhaseContextPath = path.join(ARTIFACT_PATHS.phaseContextsDir, `${packet.phase}.json`);
+  const fallbackPhaseContextPath = path.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`);
+  const phaseContextPath = fs.existsSync(resolvePath(root, preferredPhaseContextPath))
+    ? preferredPhaseContextPath
+    : fallbackPhaseContextPath;
+  const upstreamPackets = dependencyHealth.dependencyIds.map((dependencyId) => summarizePacket(packetById.get(dependencyId) ?? { id: dependencyId, title: dependencyId, status: "missing", lifecycleStatus: "waiting", assignedRole: "planner", phase: packet.phase, nextAction: "Repair missing dependency reference." }));
+  const downstreamPackets = Array.from(packetById.values())
+    .filter((candidate) => (candidate.dependencies ?? []).includes(packet.id))
+    .map(summarizePacket);
+  const artifactContextPaths = uniqueSorted([
+    ...[packet.packetPath, ...(packet.outputPaths ?? []), ...(packet.evidenceLinks ?? [])].filter(Boolean).map(artifactContextPath),
+    artifactContextPath(ARTIFACT_PATHS.workspaceIndex),
+    artifactContextPath(ARTIFACT_PATHS.navigationReport)
+  ]);
+  const actionBundlePath = actionContextPath(`packet-${packet.id}`);
+  return {
+    version: 1,
+    packetId: packet.id,
+    title: packet.title,
+    sourceType: packet.sourceType,
+    sourceId: packet.sourceId,
+    phase: packet.phase,
+    lifecycleStatus: packet.lifecycleStatus,
+    assignedRole: packet.assignedRole,
+    boardPhase: board.currentPhase,
+    boardAssignedRole: board.assignedRole,
+    currentFocus: packet.currentFocus,
+    nextAction: packet.nextAction,
+    continuationState: packet.continuationState,
+    taskWorkspaceCoupling: {
+      packetPath: packet.packetPath,
+      packetContextPath: packet.packetContextPath,
+      phaseContextPath,
+      workspaceIndexPath: ARTIFACT_PATHS.workspaceIndex,
+      sessionSummaryPath: ARTIFACT_PATHS.sessionSummary,
+      navigationReportPath: ARTIFACT_PATHS.navigationReport
+    },
+    dependencyHealth,
+    upstreamPackets,
+    downstreamPackets,
+    linkedArtifacts: uniqueSorted([
+      packet.packetPath,
+      packet.packetContextPath,
+      phaseContextPath,
+      ARTIFACT_PATHS.workspaceIndex,
+      ARTIFACT_PATHS.taskPacketsIndex,
+      ARTIFACT_PATHS.sessionSummary,
+      ARTIFACT_PATHS.navigationReport,
+      ...(packet.outputPaths ?? []),
+      ...(packet.evidenceLinks ?? [])
+    ]),
+    artifactContextPaths,
+    actionContextPath: actionBundlePath,
+    preActionReadPaths: uniqueSorted([
+      actionBundlePath,
+      packet.packetContextPath,
+      phaseContextPath,
+      path.join(ARTIFACT_PATHS.roleContextsDir, `${packet.assignedRole}.json`),
+      ...artifactContextPaths
+    ]),
+    behaviorDiscipline: {
+      summary: "Read the packet, phase, and linked artifact context before advancing this packet.",
+      localRules: [
+        "Preserve explicit dependency and handoff state.",
+        "Use linked artifact paths as the source of truth for local guidance.",
+        "Refresh durable surfaces after packet state changes."
+      ]
+    },
+    linkedIds: {
+      dependencies: dependencyHealth.dependencyIds,
+      claims: uniqueSorted(packet.claimIds),
+      notes: uniqueSorted(packet.noteIds),
+      experiments: uniqueSorted(packet.experimentIds),
+      rebuttalIssues: uniqueSorted(packet.rebuttalIssueIds),
+      versions: uniqueSorted(packet.versionIds),
+      children: uniqueSorted(packet.childPacketIds),
+      parentPacketId: packet.parentPacketId ?? null
+    },
+    ownershipSummary: workspaceIndex.ownershipSummary?.find((entry) => entry.roleId === packet.assignedRole) ?? null,
+    generatedAt: nowIso()
+  };
 }
 
 function buildOpenQuestions(notesIndex, packets, reviewState, wikiEntities) {
@@ -455,7 +877,7 @@ function buildTaskGraph(packets) {
 }
 
 function renderSessionSummary(state, board, packets, openQuestions, decisions, roleRoster, workspaceIndex) {
-  const activePackets = packets.filter((packet) => packet.active && !["done", "resolved", "archived", "cancelled"].includes(packet.status));
+  const activePackets = sortPacketsForQueue(packets.filter((packet) => packet.active));
   return [
     "# Latest session summary",
     "",
@@ -467,13 +889,22 @@ function renderSessionSummary(state, board, packets, openQuestions, decisions, r
     `- Current focus: ${board.currentFocus}`,
     `- Next action: ${board.nextAction}`,
     `- Continuation state: ${board.continuationState?.status ?? "unknown"}`,
+      `- Resume guidance: ${workspaceIndex.resumeGuidance?.command ?? state.pipeline.resumeCommand ?? resolveResumeCommandForPhase(board.currentPhase)}`,
     `- Current version: ${board.versionLineage?.currentVersionId ?? "none"}`,
     "",
     "## Active task packets",
     "",
     ...(activePackets.length > 0
-      ? activePackets.map((packet) => `- ${packet.id}: ${packet.title} [${packet.status}] (${packet.assignedRole}) → next: ${packet.nextAction}`)
+      ? activePackets.map((packet) => `- ${packet.id}: ${packet.title} [${packet.status} | ${packet.lifecycleStatus}] (${packet.assignedRole}) → next: ${packet.nextAction}`)
       : ["- No active task packets."]),
+    "",
+    "## Work queues",
+    "",
+    `- Ready: ${(workspaceIndex.workQueues?.ready ?? []).map((packet) => packet.id).join(", ") || "none"}`,
+    `- Waiting: ${(workspaceIndex.workQueues?.waiting ?? []).map((packet) => packet.id).join(", ") || "none"}`,
+    `- Review needed: ${(workspaceIndex.workQueues?.reviewNeeded ?? []).map((packet) => packet.id).join(", ") || "none"}`,
+    `- Ready for handoff: ${(workspaceIndex.workQueues?.handoff ?? []).map((packet) => packet.id).join(", ") || "none"}`,
+    `- Stale: ${(workspaceIndex.workQueues?.stale ?? []).map((packet) => packet.id).join(", ") || "none"}`,
     "",
     "## Open questions",
     "",
@@ -491,6 +922,8 @@ function renderSessionSummary(state, board, packets, openQuestions, decisions, r
     "",
     `- Active roles: ${(workspaceIndex.activeRoles ?? []).join(", ") || "none"}`,
     `- Unresolved concerns: ${(workspaceIndex.unresolvedConcernIds ?? []).join(", ") || "none"}`,
+    `- Dependency health: blocked=${workspaceIndex.dependencyHealth?.blockedPacketIds?.length ?? 0} waiting=${workspaceIndex.dependencyHealth?.waitingPacketIds?.length ?? 0} stale=${workspaceIndex.dependencyHealth?.stalePacketIds?.length ?? 0} missing=${workspaceIndex.dependencyHealth?.missingDependencyIds?.length ?? 0}`,
+    `- Handoff obligations: ${(workspaceIndex.handoffObligations ?? []).map((item) => item.packetId).join(", ") || "none"}`,
     "",
     "## Role context manifests",
     "",
@@ -499,6 +932,8 @@ function renderSessionSummary(state, board, packets, openQuestions, decisions, r
 }
 
 function renderNavigationReport(board, taskGraph, openQuestions, decisions, versionsIndex, comparisons) {
+  const readyForHandoff = sortPacketsForQueue(taskGraph.nodes.filter((packet) => packet.lifecycleStatus === "ready-for-handoff"));
+  const stalePackets = sortPacketsForQueue(taskGraph.nodes.filter((packet) => packet.lifecycleStatus === "stale"));
   return [
     "# Navigation",
     "",
@@ -511,8 +946,13 @@ function renderNavigationReport(board, taskGraph, openQuestions, decisions, vers
     "## Task graph",
     "",
     ...(taskGraph.nodes.length > 0
-      ? taskGraph.nodes.map((packet) => `- ${packet.id}: ${packet.title} [${packet.status}] parent=${packet.parentPacketId || "none"} depends on ${packet.dependencies.join(", ") || "none"} → next ${packet.nextAction}`)
+      ? taskGraph.nodes.map((packet) => `- ${packet.id}: ${packet.title} [${packet.status} | ${packet.lifecycleStatus}] parent=${packet.parentPacketId || "none"} depends on ${packet.dependencies.join(", ") || "none"} dependency-health=${packet.dependencyHealth?.state ?? "clear"} → next ${packet.nextAction}`)
       : ["- No task packets generated yet."]),
+    "",
+    "## Operating queues",
+    "",
+    `- Ready for handoff: ${readyForHandoff.map((packet) => packet.id).join(", ") || "none"}`,
+    `- Stale packets: ${stalePackets.map((packet) => packet.id).join(", ") || "none"}`,
     "",
     "## Open questions",
     "",
@@ -538,22 +978,56 @@ function buildRoleManifest(role, packets, openQuestions, decisions, workspaceInd
   const rolePackets = packets.filter((packet) => packet.assignedRole === role.id && packet.active);
   const roleQuestionIds = rolePackets.flatMap((packet) => (packet.questions ?? []).filter((item) => item.status !== "answered").map((item) => item.id));
   const roleDecisionIds = decisions.filter((item) => item.packetId ? rolePackets.some((packet) => packet.id === item.packetId) : ["board-current-role", "board-next-action"].includes(item.id)).map((item) => item.id);
+  const localArtifactContextPaths = uniqueSorted(roleContextPaths(role.id).map(artifactContextPath));
+  const actionBundlePath = actionContextPath(`role-${role.id}`);
   return {
     version: 1,
     roleId: role.id,
     label: role.label,
     charter: role.charter,
     contextPaths: roleContextPaths(role.id),
+    localArtifactContextPaths,
     activeTaskPacketIds: rolePackets.map((packet) => packet.id),
+    packetContextPaths: rolePackets.map((packet) => packet.packetContextPath),
+    actionContextPath: actionBundlePath,
+    preActionReadPaths: uniqueSorted([
+      actionBundlePath,
+      path.join(ARTIFACT_PATHS.roleContextsDir, `${role.id}.json`),
+      path.join(ARTIFACT_PATHS.phaseContextsDir, `${workspaceIndex.boardPhase}.json`),
+      ...rolePackets.map((packet) => packet.packetContextPath),
+      ...localArtifactContextPaths
+    ]),
+    behaviorDiscipline: {
+      summary: `Read the nearest role, packet, and artifact context before acting as ${role.id}.`,
+      localRules: [
+        "Prefer the narrowest durable guidance surface that matches the task.",
+        "Do not treat board ownership as permission to skip packet or artifact-local guidance.",
+        "Keep role decisions and handoffs explicit in durable artifacts."
+      ]
+    },
     openQuestionIds: Array.from(new Set(roleQuestionIds.concat(openQuestions.filter((item) => item.origin === "review-state" && role.id === "reviewer").map((item) => item.id)))),
     decisionIds: Array.from(new Set(roleDecisionIds)),
     workspaceIndexPath: ARTIFACT_PATHS.workspaceIndex,
+    isCurrentBoardOwner: workspaceIndex.boardAssignedRole === role.id,
+    boardPhase: workspaceIndex.boardPhase,
+    boardAssignedRole: workspaceIndex.boardAssignedRole,
+    boardIntentType: workspaceIndex.boardIntentType,
     currentFocus: rolePackets[0]?.currentFocus ?? workspaceIndex.currentFocus ?? null,
+    queueSummary: workspaceIndex.ownershipSummary?.find((entry) => entry.roleId === role.id) ?? null,
+    handoffCandidateIds: (workspaceIndex.handoffObligations ?? []).filter((item) => item.toRole === role.id || item.fromRole === role.id).map((item) => item.packetId),
     generatedAt: nowIso()
   };
 }
 
-function buildPhaseManifest(board, packets) {
+function buildPhaseManifest(board, packets, workspaceIndex) {
+  const phasePackets = sortPacketsForQueue(packets.filter((packet) => packet.phase === board.currentPhase && packet.active));
+  const artifactContextPaths = uniqueSorted([
+    artifactContextPath(ARTIFACT_PATHS.orchestrationBoard),
+    artifactContextPath(ARTIFACT_PATHS.workspaceIndex),
+    artifactContextPath(ARTIFACT_PATHS.navigationReport),
+    ...phasePackets.flatMap((packet) => [packet.packetPath, ...(packet.outputPaths ?? []), ...(packet.evidenceLinks ?? [])].filter(Boolean).map(artifactContextPath))
+  ]);
+  const actionBundlePath = actionContextPath(`phase-${board.currentPhase}`);
   return {
     version: 1,
     phaseId: board.currentPhase,
@@ -561,28 +1035,141 @@ function buildPhaseManifest(board, packets) {
     currentFocus: board.currentFocus,
     nextAction: board.nextAction,
     assignedRole: board.assignedRole,
-    activePacketIds: packets.filter((packet) => packet.phase === board.currentPhase && packet.active).map((packet) => packet.id),
+    activePacketIds: phasePackets.map((packet) => packet.id),
     blockerIds: packets.filter((packet) => packet.sourceType === "blocker" && packet.active).map((packet) => packet.id),
+    queueSummary: {
+      ready: phasePackets.filter((packet) => ["active", "queued"].includes(packet.lifecycleStatus)).map((packet) => packet.id),
+      waiting: phasePackets.filter((packet) => ["waiting", "blocked"].includes(packet.lifecycleStatus)).map((packet) => packet.id),
+      reviewNeeded: phasePackets.filter((packet) => packet.lifecycleStatus === "review-needed").map((packet) => packet.id),
+      handoff: phasePackets.filter((packet) => packet.lifecycleStatus === "ready-for-handoff").map((packet) => packet.id),
+      stale: phasePackets.filter((packet) => packet.lifecycleStatus === "stale").map((packet) => packet.id)
+    },
+    contextPaths: uniqueSorted([
+      ARTIFACT_PATHS.orchestrationBoard,
+      ARTIFACT_PATHS.orchestrationHandoffs,
+      ARTIFACT_PATHS.taskPacketsIndex,
+      ARTIFACT_PATHS.workspaceIndex,
+      ARTIFACT_PATHS.sessionSummary,
+      ARTIFACT_PATHS.navigationReport,
+      ...phasePackets.map((packet) => packet.packetContextPath)
+    ]),
+    artifactContextPaths,
+    actionContextPath: actionBundlePath,
+    preActionReadPaths: uniqueSorted([
+      actionBundlePath,
+      path.join(ARTIFACT_PATHS.roleContextsDir, `${board.assignedRole}.json`),
+      path.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`),
+      ...phasePackets.map((packet) => packet.packetContextPath),
+      ...artifactContextPaths
+    ]),
+    behaviorDiscipline: {
+      summary: "Use this phase manifest to narrow local guidance before phase-scoped work.",
+      localRules: [
+        "Start with the board owner and queue state, then drop into packet and artifact context.",
+        "Treat stale, review-needed, and handoff packets as higher-priority than general queue work.",
+        "Keep phase guidance explicit and file-backed."
+      ]
+    },
+    resumeGuidance: workspaceIndex.resumeGuidance,
     generatedAt: nowIso()
   };
 }
 
-function buildWorkspaceIndex(board, packets, reviewState, journal, versionsIndex, comparisons) {
+function buildWorkspaceIndex(state, board, packets, reviewState, journal, versionsIndex, comparisons) {
   const base = createWorkspaceIndex();
+  const packetById = new Map(packets.map((packet) => [packet.id, packet]));
+  const enrichedPackets = sortPacketsForQueue(packets.map((packet) => ({
+    ...packet,
+    dependencyHealth: buildPacketDependencyHealth(packet, packetById)
+  })));
+  const lifecycleCounts = enrichedPackets.reduce((accumulator, packet) => {
+    accumulator[packet.lifecycleStatus] = (accumulator[packet.lifecycleStatus] ?? 0) + 1;
+    return accumulator;
+  }, {});
+  const readyPackets = enrichedPackets.filter((packet) => packet.active && ["queued", "active"].includes(packet.lifecycleStatus));
+  const waitingPackets = enrichedPackets.filter((packet) => packet.lifecycleStatus === "waiting" || packet.lifecycleStatus === "blocked");
+  const reviewNeededPackets = enrichedPackets.filter((packet) => packet.lifecycleStatus === "review-needed");
+  const handoffPackets = enrichedPackets.filter((packet) => packet.lifecycleStatus === "ready-for-handoff");
+  const stalePackets = enrichedPackets.filter((packet) => packet.lifecycleStatus === "stale");
+  const archivedPackets = enrichedPackets.filter((packet) => GOVERNANCE_TERMINAL_LIFECYCLES.has(packet.lifecycleStatus));
+  const ownershipSummary = buildOwnershipSummary(board, enrichedPackets);
+  const dependencyHealth = {
+    blockedPacketIds: uniqueSorted(enrichedPackets.filter((packet) => packet.dependencyHealth.state === "blocked-by-dependencies").map((packet) => packet.id)),
+    healthyPacketIds: uniqueSorted(enrichedPackets.filter((packet) => packet.dependencyHealth.state === "clear").map((packet) => packet.id)),
+    waitingPacketIds: uniqueSorted(waitingPackets.map((packet) => packet.id)),
+    stalePacketIds: uniqueSorted(stalePackets.map((packet) => packet.id)),
+    missingDependencyIds: uniqueSorted(enrichedPackets.flatMap((packet) => packet.dependencyHealth.missingDependencyIds)),
+    orphanPacketIds: uniqueSorted(enrichedPackets.filter((packet) => packet.parentPacketId && !packetById.has(packet.parentPacketId)).map((packet) => packet.id))
+  };
+  const handoffObligations = handoffPackets.map((packet) => ({
+    packetId: packet.id,
+    fromRole: board.assignedRole,
+    toRole: packet.assignedRole,
+    summary: `${packet.id} is active under ${packet.assignedRole} while the board owner is ${board.assignedRole}.`,
+    nextAction: packet.nextAction,
+    packetContextPath: packet.packetContextPath
+  }));
+  const prioritizedPackets = [
+    ...stalePackets,
+    ...reviewNeededPackets,
+    ...handoffPackets,
+    ...waitingPackets,
+    ...readyPackets
+  ];
+  const prioritizedArtifactContextPaths = uniqueSorted([
+    artifactContextPath(ARTIFACT_PATHS.orchestrationBoard),
+    artifactContextPath(ARTIFACT_PATHS.workspaceIndex),
+    artifactContextPath(ARTIFACT_PATHS.navigationReport),
+    ...prioritizedPackets.flatMap((packet) => [packet.packetPath, ...(packet.outputPaths ?? []), ...(packet.evidenceLinks ?? [])].filter(Boolean).map(artifactContextPath))
+  ]);
   return {
     ...base,
     currentFocus: board.currentFocus,
     nextAction: board.nextAction,
+    boardPhase: board.currentPhase,
+    boardAssignedRole: board.assignedRole,
+    boardIntentType: board.intentType,
     continuationState: board.continuationState,
-    activePackets: packets.filter((packet) => packet.active && !["done", "resolved", "archived", "cancelled"].includes(packet.status)).map((packet) => ({
-      id: packet.id,
-      title: packet.title,
-      status: packet.status,
-      assignedRole: packet.assignedRole,
-      phase: packet.phase,
-      nextAction: packet.nextAction
-    })),
-    activeRoles: Array.from(new Set(packets.filter((packet) => packet.active).map((packet) => packet.assignedRole))),
+    activePackets: enrichedPackets.filter((packet) => packet.active).map(summarizePacket),
+    workQueues: {
+      ready: readyPackets.map(summarizePacket),
+      waiting: waitingPackets.map(summarizePacket),
+      reviewNeeded: reviewNeededPackets.map(summarizePacket),
+      handoff: handoffPackets.map(summarizePacket),
+      stale: stalePackets.map(summarizePacket),
+      archived: archivedPackets.map(summarizePacket)
+    },
+    ownershipSummary,
+    packetLifecycleCounts: lifecycleCounts,
+    handoffObligations,
+    resumeGuidance: {
+      command: state.pipeline.resumeCommand ?? resolveResumeCommandForPhase(board.currentPhase),
+      summary: prioritizedPackets[0]?.nextAction ?? board.nextAction,
+      prioritizedPacketIds: prioritizedPackets.map((packet) => packet.id),
+      packetContextPaths: prioritizedPackets.slice(0, 8).map((packet) => packet.packetContextPath),
+      handoffCandidateIds: handoffPackets.map((packet) => packet.id)
+    },
+    contextSurfaces: {
+      currentRoleContextPath: path.join(ARTIFACT_PATHS.roleContextsDir, `${board.assignedRole}.json`),
+      currentPhaseContextPath: path.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`),
+      currentActionContextPath: actionContextPath("current"),
+      prioritizedArtifactContextPaths,
+      prioritizedPacketActionContextPaths: prioritizedPackets.slice(0, 8).map((packet) => actionContextPath(`packet-${packet.id}`))
+    },
+    behaviorDiscipline: {
+      summary: "Read the current action bundle, then the role/phase/packet/artifact context surfaces before mutating durable state.",
+      explicitOnly: true,
+      noHiddenRuntime: true,
+      requiredReadOrder: uniqueSorted([
+        actionContextPath("current"),
+        path.join(ARTIFACT_PATHS.roleContextsDir, `${board.assignedRole}.json`),
+        path.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`),
+        ...prioritizedPackets.slice(0, 3).map((packet) => packet.packetContextPath),
+        ...prioritizedArtifactContextPaths.slice(0, 6)
+      ])
+    },
+    dependencyHealth,
+    activeRoles: Array.from(new Set([board.assignedRole, ...enrichedPackets.filter((packet) => packet.active).map((packet) => packet.assignedRole)])),
     unresolvedConcernIds: reviewState.unresolvedConcernIds ?? [],
     mostRecentSessions: [...(journal.entries ?? [])].slice(-10).reverse().map((entry) => ({
       id: entry.id,
@@ -632,15 +1219,32 @@ export function refreshDurableSurfaces(root, event = {}) {
   const activeIds = new Set(refreshed.map((packet) => packet.id));
   const preserved = (taskPacketIndex.items ?? []).filter((packet) => !activeIds.has(packet.id) && !["task", "blocker", "experiment", "rebuttal-issue", "version"].includes(packet.sourceType));
   const packets = markInactiveLegacyPackets([...refreshed, ...preserved].map(normalizePacket), activeIds).sort((left, right) => left.id.localeCompare(right.id));
-  const packetIndex = { version: 2, items: packets, updatedAt: nowIso() };
+  const packetById = new Map(packets.map((packet) => [packet.id, packet]));
+  const packetsWithHealth = packets.map((packet) => ({ ...packet, dependencyHealth: buildPacketDependencyHealth(packet, packetById) }));
+  const lifecycleCounts = packetsWithHealth.reduce((accumulator, packet) => {
+    accumulator[packet.lifecycleStatus] = (accumulator[packet.lifecycleStatus] ?? 0) + 1;
+    return accumulator;
+  }, {});
+  const packetIndex = {
+    version: 3,
+    items: packetsWithHealth,
+    lifecycleCounts,
+    dependencyHealth: {
+      blockedPacketIds: uniqueSorted(packetsWithHealth.filter((packet) => packet.dependencyHealth.state === "blocked-by-dependencies").map((packet) => packet.id)),
+      readyPacketIds: uniqueSorted(packetsWithHealth.filter((packet) => packet.active && GOVERNANCE_ACTIVE_LIFECYCLES.has(packet.lifecycleStatus)).map((packet) => packet.id)),
+      stalePacketIds: uniqueSorted(packetsWithHealth.filter((packet) => packet.lifecycleStatus === "stale").map((packet) => packet.id)),
+      missingDependencyIds: uniqueSorted(packetsWithHealth.flatMap((packet) => packet.dependencyHealth.missingDependencyIds))
+    },
+    updatedAt: nowIso()
+  };
   writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, packetIndex);
-  for (const packet of packets) {
+  for (const packet of packetsWithHealth) {
     writeJson(root, packetFilePath(packet.id), packet);
   }
 
-  const openQuestions = buildOpenQuestions(notesIndex, packets, reviewState, wikiEntities).sort((left, right) => left.id.localeCompare(right.id));
-  const decisions = buildDecisions(board, versionsIndex, comparisons, packets, wikiEntities);
-  const taskGraph = buildTaskGraph(packets);
+  const openQuestions = buildOpenQuestions(notesIndex, packetsWithHealth, reviewState, wikiEntities).sort((left, right) => left.id.localeCompare(right.id));
+  const decisions = buildDecisions(board, versionsIndex, comparisons, packetsWithHealth, wikiEntities);
+  const taskGraph = buildTaskGraph(packetsWithHealth);
   const roleRoster = Array.isArray(board.roleRoster) ? board.roleRoster : [];
 
   const journal = readJson(root, ARTIFACT_PATHS.sessionJournal, createSessionJournal);
@@ -651,21 +1255,95 @@ export function refreshDurableSurfaces(root, event = {}) {
     summary: event.summary ?? `Refreshed durable surfaces during ${board.currentPhase}.`,
     phase: board.currentPhase,
     assignedRole: board.assignedRole,
-    taskPacketIds: packets.filter((packet) => packet.active).map((packet) => packet.id),
-    artifactPaths: normalizeStringArray(event.artifactPaths ?? [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.workspaceIndex])
-  };
+     taskPacketIds: packetsWithHealth.filter((packet) => packet.active).map((packet) => packet.id),
+     artifactPaths: normalizeStringArray(event.artifactPaths ?? [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.workspaceIndex])
+   };
   const entries = [...(journal.entries ?? []).slice(-199), entry];
   writeJson(root, ARTIFACT_PATHS.sessionJournal, { version: 1, entries, updatedAt: nowIso() });
 
-  const workspaceIndex = buildWorkspaceIndex(board, packets, reviewState, { entries }, versionsIndex, comparisons);
+  const workspaceIndex = buildWorkspaceIndex(state, board, packetsWithHealth, reviewState, { entries }, versionsIndex, comparisons);
   writeJson(root, ARTIFACT_PATHS.workspaceIndex, workspaceIndex);
-  for (const role of roleRoster) {
-    const manifest = buildRoleManifest(role, packets, openQuestions, decisions, workspaceIndex);
-    writeJson(root, path.join(ARTIFACT_PATHS.roleContextsDir, `${role.id}.json`), manifest);
+  const packetByIdForManifest = new Map(packetsWithHealth.map((packet) => [packet.id, packet]));
+  const artifactPaths = uniqueSorted([
+    ARTIFACT_PATHS.orchestrationBoard,
+    ARTIFACT_PATHS.orchestrationHandoffs,
+    ARTIFACT_PATHS.taskPacketsIndex,
+    ARTIFACT_PATHS.workspaceIndex,
+    ARTIFACT_PATHS.sessionSummary,
+    ARTIFACT_PATHS.navigationReport,
+    ...packetsWithHealth.flatMap((packet) => [packet.packetPath, ...(packet.outputPaths ?? []), ...(packet.evidenceLinks ?? [])].filter(Boolean))
+  ]);
+  for (const relativePath of artifactPaths) {
+    writeJson(root, artifactContextPath(relativePath), buildArtifactContextManifest(root, relativePath, board, packetsWithHealth, workspaceIndex));
   }
-  writeJson(root, path.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`), buildPhaseManifest(board, packets));
+  for (const packet of packetsWithHealth) {
+    const manifest = buildPacketContextManifest(root, board, packet, packetByIdForManifest, workspaceIndex);
+    writeJson(root, packet.packetContextPath, manifest);
+    writeJson(root, actionContextPath(`packet-${packet.id}`), buildActionContextBundle({
+      scopeType: "packet",
+      scopeId: packet.id,
+      summary: `Packet-scoped pre-action bundle for ${packet.id}.`,
+      board,
+      workspaceIndex,
+      packet,
+      roleId: packet.assignedRole,
+      phaseId: packet.phase,
+      requiredReadPaths: [
+        packet.packetContextPath,
+        path.join(ARTIFACT_PATHS.roleContextsDir, `${packet.assignedRole}.json`),
+        path.join(ARTIFACT_PATHS.phaseContextsDir, `${packet.phase}.json`),
+        ...manifest.artifactContextPaths
+      ],
+      localRules: manifest.behaviorDiscipline.localRules
+    }));
+  }
+  for (const role of roleRoster) {
+    const manifest = buildRoleManifest(role, packetsWithHealth, openQuestions, decisions, workspaceIndex);
+    writeJson(root, path.join(ARTIFACT_PATHS.roleContextsDir, `${role.id}.json`), manifest);
+    writeJson(root, actionContextPath(`role-${role.id}`), buildActionContextBundle({
+      scopeType: "role",
+      scopeId: role.id,
+      summary: `Role-scoped pre-action bundle for ${role.id}.`,
+      board,
+      workspaceIndex,
+      roleId: role.id,
+      phaseId: workspaceIndex.boardPhase,
+      requiredReadPaths: manifest.preActionReadPaths,
+      localRules: manifest.behaviorDiscipline.localRules
+    }));
+  }
+  const phaseManifestPath = path.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`);
+  const phaseManifest = buildPhaseManifest(board, packetsWithHealth, workspaceIndex);
+  writeJson(root, phaseManifestPath, phaseManifest);
+  writeJson(root, actionContextPath(`phase-${board.currentPhase}`), buildActionContextBundle({
+    scopeType: "phase",
+    scopeId: board.currentPhase,
+    summary: `Phase-scoped pre-action bundle for ${board.currentPhase}.`,
+    board,
+    workspaceIndex,
+    roleId: board.assignedRole,
+    phaseId: board.currentPhase,
+    requiredReadPaths: phaseManifest.preActionReadPaths,
+    localRules: phaseManifest.behaviorDiscipline.localRules
+  }));
+  writeJson(root, actionContextPath("current"), buildActionContextBundle({
+    scopeType: "current",
+    scopeId: "current",
+    summary: "Current workspace pre-action bundle. Read this before mutating durable workflow state.",
+    board,
+    workspaceIndex,
+    roleId: board.assignedRole,
+    phaseId: board.currentPhase,
+    artifactPath: workspaceIndex.contextSurfaces?.prioritizedArtifactContextPaths?.[0] ?? null,
+    requiredReadPaths: workspaceIndex.behaviorDiscipline.requiredReadOrder,
+    localRules: [
+      "Start from the current action bundle, then follow the required read order.",
+      "Use packet and artifact-local guidance instead of broad top-level rules when available.",
+      "Do not assume hidden rule loading; read the surfaced files explicitly before acting."
+    ]
+  }));
 
-  writeText(root, ARTIFACT_PATHS.sessionSummary, renderSessionSummary(state, board, packets, openQuestions, decisions, roleRoster, workspaceIndex));
+  writeText(root, ARTIFACT_PATHS.sessionSummary, renderSessionSummary(state, board, packetsWithHealth, openQuestions, decisions, roleRoster, workspaceIndex));
   writeText(root, ARTIFACT_PATHS.navigationReport, renderNavigationReport(board, taskGraph, openQuestions, decisions, versionsIndex, comparisons));
 
   return { packetIndex, openQuestions, decisions, taskGraph, workspaceIndex };
@@ -724,6 +1402,17 @@ export function queryWorkspaceIndex(root) {
   return workspaceIndex;
 }
 
+export function readPhaseContextManifest(root, phaseId = null) {
+  refreshDurableSurfaces(root, {
+    type: "read-phase-context-manifest",
+    summary: `Refreshed phase context manifest for ${phaseId ?? "current phase"}.`,
+    artifactPaths: [path.join(ARTIFACT_PATHS.phaseContextsDir, `${phaseId ?? "current"}.json`), ARTIFACT_PATHS.workspaceIndex]
+  });
+  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard);
+  const resolvedPhaseId = phaseId ?? board.currentPhase;
+  return readJson(root, path.join(ARTIFACT_PATHS.phaseContextsDir, `${resolvedPhaseId}.json`), null);
+}
+
 export function readRoleContextManifest(root, roleId) {
   if (!ROLE_IDS.includes(roleId)) {
     throw new Error(`Unknown roleId: ${roleId}`);
@@ -734,6 +1423,61 @@ export function readRoleContextManifest(root, roleId) {
     artifactPaths: [path.join(ARTIFACT_PATHS.roleContextsDir, `${roleId}.json`)]
   });
   return readJson(root, path.join(ARTIFACT_PATHS.roleContextsDir, `${roleId}.json`), null);
+}
+
+export function readPacketContextManifest(root, packetId) {
+  const normalizedPacketId = slugify(packetId);
+  refreshDurableSurfaces(root, {
+    type: "read-packet-context-manifest",
+    summary: `Refreshed packet context manifest for ${normalizedPacketId}.`,
+    artifactPaths: [path.join(ARTIFACT_PATHS.packetContextsDir, `${normalizedPacketId}.json`), ARTIFACT_PATHS.workspaceIndex]
+  });
+  return readJson(root, path.join(ARTIFACT_PATHS.packetContextsDir, `${normalizedPacketId}.json`), null);
+}
+
+export function readArtifactContextManifest(root, artifactPath) {
+  const normalizedArtifactPath = normalizeArtifactPath(artifactPath);
+  refreshDurableSurfaces(root, {
+    type: "read-artifact-context-manifest",
+    summary: `Refreshed artifact context manifest for ${normalizedArtifactPath}.`,
+    artifactPaths: [artifactContextPath(normalizedArtifactPath), ARTIFACT_PATHS.workspaceIndex]
+  });
+  return readJson(root, artifactContextPath(normalizedArtifactPath), null);
+}
+
+export function readActionContextBundle(root, args = {}) {
+  const scopeType = args.scopeType ?? "current";
+  let scopeId = "current";
+  if (scopeType === "role") {
+    scopeId = `role-${args.roleId}`;
+  } else if (scopeType === "packet") {
+    scopeId = `packet-${args.packetId}`;
+  } else if (scopeType === "phase") {
+    scopeId = `phase-${args.phaseId}`;
+  } else if (scopeType === "artifact") {
+    scopeId = `artifact-${normalizeArtifactPath(args.artifactPath)}`;
+  }
+  refreshDurableSurfaces(root, {
+    type: "read-action-context-bundle",
+    summary: `Refreshed action context bundle for ${scopeType}.`,
+    artifactPaths: [actionContextPath(scopeId), ARTIFACT_PATHS.workspaceIndex]
+  });
+
+  if (scopeType === "artifact") {
+    const artifactManifest = readArtifactContextManifest(root, args.artifactPath);
+    return buildActionContextBundle({
+      scopeType: "artifact",
+      scopeId,
+      summary: `Artifact-scoped pre-action bundle for ${artifactManifest?.artifactPath ?? normalizeArtifactPath(args.artifactPath)}.`,
+      board: readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard),
+      workspaceIndex: readJson(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex),
+      artifactPath: artifactManifest?.artifactPath ?? normalizeArtifactPath(args.artifactPath),
+      requiredReadPaths: [artifactContextPath(artifactManifest?.artifactPath ?? normalizeArtifactPath(args.artifactPath)), ...(artifactManifest?.readBeforeMutating ?? [])],
+      localRules: artifactManifest?.localRules ?? []
+    });
+  }
+
+  return readJson(root, actionContextPath(scopeId), null);
 }
 
 export function summarizeSessionJournal(root) {
