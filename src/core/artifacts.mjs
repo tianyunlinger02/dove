@@ -1012,39 +1012,165 @@ function renderRebuttalDraft(reviewState, claimsIndex, issuesPath, strategyPath,
 
 const WIKI_RELATION_DEFINITIONS = {
   "uses-source": {
-    fromEntityType: "idea",
-    toEntityType: "source",
+    familyId: "evidence-grounding",
+    familyLabel: "Evidence grounding",
+    familySummary: "Links ideas and claims back to durable notes and registered sources.",
+    groupId: "idea-source-grounding",
+    groupLabel: "Idea-to-source grounding",
+    groupSummary: "Shows which note ideas are explicitly backed by registered sources.",
+    fromEntityTypes: ["idea"],
+    toEntityTypes: ["source"],
     semantics: "Tracks that a note idea draws on a registered source.",
+    directionalMeaning: {
+      forward: "Idea uses source",
+      reverse: "Source informs idea"
+    },
+    endpointSemantics: {
+      from: {
+        role: "grounded-idea",
+        summary: "A durable note or idea that should stay traceable to source evidence."
+      },
+      to: {
+        role: "registered-source",
+        summary: "A bibliographic source that can legitimately ground note content."
+      }
+    },
+    companionRelationTypes: ["supported-by-idea", "supported-by-source"],
     sourceArtifactPaths: [ARTIFACT_PATHS.notes, ARTIFACT_PATHS.sources]
   },
   "supported-by-source": {
-    fromEntityType: "claim",
-    toEntityType: "source",
+    familyId: "evidence-grounding",
+    familyLabel: "Evidence grounding",
+    familySummary: "Links ideas and claims back to durable notes and registered sources.",
+    groupId: "claim-source-support",
+    groupLabel: "Claim-to-source support",
+    groupSummary: "Shows which claims directly cite registered sources.",
+    fromEntityTypes: ["claim"],
+    toEntityTypes: ["source"],
     semantics: "Tracks that a claim cites a registered source directly.",
+    directionalMeaning: {
+      forward: "Claim cites source",
+      reverse: "Source supports claim"
+    },
+    endpointSemantics: {
+      from: {
+        role: "evidence-backed-claim",
+        summary: "A claim that should preserve traceable source coverage."
+      },
+      to: {
+        role: "registered-source",
+        summary: "A source that can directly support a durable claim."
+      }
+    },
+    companionRelationTypes: ["supported-by-idea", "uses-source"],
     sourceArtifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.sources]
   },
   "supported-by-idea": {
-    fromEntityType: "claim",
-    toEntityType: "idea",
+    familyId: "evidence-grounding",
+    familyLabel: "Evidence grounding",
+    familySummary: "Links ideas and claims back to durable notes and registered sources.",
+    groupId: "claim-idea-grounding",
+    groupLabel: "Claim-to-idea grounding",
+    groupSummary: "Shows which claims remain anchored to durable notes or ideas.",
+    fromEntityTypes: ["claim"],
+    toEntityTypes: ["idea"],
     semantics: "Tracks that a claim is grounded in a durable note or idea.",
+    directionalMeaning: {
+      forward: "Claim is grounded by idea",
+      reverse: "Idea informs claim"
+    },
+    endpointSemantics: {
+      from: {
+        role: "evidence-backed-claim",
+        summary: "A claim that should retain note-level grounding before broader drafting."
+      },
+      to: {
+        role: "durable-note-idea",
+        summary: "A note-derived idea that preserves intermediate reasoning or evidence capture."
+      }
+    },
+    companionRelationTypes: ["supported-by-source", "uses-source"],
     sourceArtifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.notes]
   },
   "tested-by-experiment": {
-    fromEntityType: "claim",
-    toEntityType: "experiment",
+    familyId: "validation-loop",
+    familyLabel: "Validation loop",
+    familySummary: "Connects claims to experiments so validation obligations stay explicit and resumable.",
+    groupId: "claim-experiment-validation",
+    groupLabel: "Claim-to-experiment validation",
+    groupSummary: "Shows which claims still depend on experimental validation work.",
+    fromEntityTypes: ["claim"],
+    toEntityTypes: ["experiment"],
     semantics: "Tracks that a claim should be validated by an experiment artifact.",
+    directionalMeaning: {
+      forward: "Claim is tested by experiment",
+      reverse: "Experiment validates claim"
+    },
+    endpointSemantics: {
+      from: {
+        role: "validation-target-claim",
+        summary: "A claim that still carries an experimental validation obligation."
+      },
+      to: {
+        role: "experiment-artifact",
+        summary: "A planned or completed experiment that can validate the claim."
+      }
+    },
+    companionRelationTypes: ["tests-claim"],
     sourceArtifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults]
   },
   "tests-claim": {
-    fromEntityType: "experiment",
-    toEntityType: "claim",
+    familyId: "validation-loop",
+    familyLabel: "Validation loop",
+    familySummary: "Connects claims to experiments so validation obligations stay explicit and resumable.",
+    groupId: "experiment-claim-scope",
+    groupLabel: "Experiment-to-claim scope",
+    groupSummary: "Shows which claims each experiment plan is explicitly scoped to validate.",
+    fromEntityTypes: ["experiment"],
+    toEntityTypes: ["claim"],
     semantics: "Tracks that an experiment plan is scoped to validate a claim.",
+    directionalMeaning: {
+      forward: "Experiment tests claim",
+      reverse: "Claim is under experiment scope"
+    },
+    endpointSemantics: {
+      from: {
+        role: "experiment-artifact",
+        summary: "A durable experiment plan or related experiment artifact."
+      },
+      to: {
+        role: "validation-target-claim",
+        summary: "A claim that the experiment should confirm, qualify, or refute."
+      }
+    },
+    companionRelationTypes: ["tested-by-experiment"],
     sourceArtifactPaths: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.evidence]
   },
   "concerns-claim": {
-    fromEntityType: "review concern",
-    toEntityType: "claim",
+    familyId: "review-pressure",
+    familyLabel: "Review pressure",
+    familySummary: "Captures where reviewer pressure or integrity risk is concentrated across claims.",
+    groupId: "concern-claim-pressure",
+    groupLabel: "Concern-to-claim pressure",
+    groupSummary: "Shows which claims are directly challenged by review concerns.",
+    fromEntityTypes: ["review concern"],
+    toEntityTypes: ["claim"],
     semantics: "Tracks that a review concern challenges or blocks a claim.",
+    directionalMeaning: {
+      forward: "Concern challenges claim",
+      reverse: "Claim is pressured by concern"
+    },
+    endpointSemantics: {
+      from: {
+        role: "review-concern",
+        summary: "A reviewer-raised concern that needs durable resolution."
+      },
+      to: {
+        role: "pressured-claim",
+        summary: "A claim carrying active review pressure or blockage."
+      }
+    },
+    companionRelationTypes: [],
     sourceArtifactPaths: [ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.evidence]
   }
 };
@@ -1061,6 +1187,27 @@ function countBy(items, resolveKey) {
   }, {});
 }
 
+function summarizeSeverityCounts(items = []) {
+  return items.reduce((accumulator, item) => {
+    const severity = item?.severity ?? "unknown";
+    accumulator[severity] = (accumulator[severity] ?? 0) + 1;
+    return accumulator;
+  }, {});
+}
+
+function expectedEntityTypesFor(definition, endpoint) {
+  const key = endpoint === "from" ? "fromEntityTypes" : "toEntityTypes";
+  const legacyKey = endpoint === "from" ? "fromEntityType" : "toEntityType";
+  return uniqueStringArray(definition?.[key] ?? (definition?.[legacyKey] ? [definition[legacyKey]] : []));
+}
+
+function topCountKeys(counts = {}, limit = 3) {
+  return Object.entries(counts)
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, limit)
+    .map(([key]) => key);
+}
+
 function relationIssueSeverity(code) {
   if (["dangling-from-entity", "dangling-to-entity", "invalid-from-entity-type", "invalid-to-entity-type", "missing-source-artifact-file"].includes(code)) {
     return "high";
@@ -1073,6 +1220,8 @@ function buildWikiRelation(root, relation, entityById, relationIdCounts) {
   const fromEntity = entityById.get(relation.fromId) ?? null;
   const toEntity = entityById.get(relation.toId) ?? null;
   const sourceArtifactPaths = uniqueStringArray(relation.sourceArtifactPaths ?? definition?.sourceArtifactPaths ?? []);
+  const expectedFromEntityTypes = expectedEntityTypesFor(definition, "from");
+  const expectedToEntityTypes = expectedEntityTypesFor(definition, "to");
   const reasons = [];
 
   if (!definition) {
@@ -1098,23 +1247,25 @@ function buildWikiRelation(root, relation, entityById, relationIdCounts) {
       entityId: relation.toId
     });
   }
-  if (definition?.fromEntityType && fromEntity && fromEntity.entityType !== definition.fromEntityType) {
+  if (expectedFromEntityTypes.length > 0 && fromEntity && !expectedFromEntityTypes.includes(fromEntity.entityType)) {
     reasons.push({
       code: "invalid-from-entity-type",
       severity: "high",
-      message: `Relation ${relation.id} expects ${definition.fromEntityType} at ${relation.fromId} but found ${fromEntity.entityType}.`,
+      message: `Relation ${relation.id} expects ${expectedFromEntityTypes.join("/")} at ${relation.fromId} but found ${fromEntity.entityType}.`,
       entityId: relation.fromId,
-      expectedEntityType: definition.fromEntityType,
+      expectedEntityType: expectedFromEntityTypes[0] ?? null,
+      expectedEntityTypes: expectedFromEntityTypes,
       actualEntityType: fromEntity.entityType
     });
   }
-  if (definition?.toEntityType && toEntity && toEntity.entityType !== definition.toEntityType) {
+  if (expectedToEntityTypes.length > 0 && toEntity && !expectedToEntityTypes.includes(toEntity.entityType)) {
     reasons.push({
       code: "invalid-to-entity-type",
       severity: "high",
-      message: `Relation ${relation.id} expects ${definition.toEntityType} at ${relation.toId} but found ${toEntity.entityType}.`,
+      message: `Relation ${relation.id} expects ${expectedToEntityTypes.join("/")} at ${relation.toId} but found ${toEntity.entityType}.`,
       entityId: relation.toId,
-      expectedEntityType: definition.toEntityType,
+      expectedEntityType: expectedToEntityTypes[0] ?? null,
+      expectedEntityTypes: expectedToEntityTypes,
       actualEntityType: toEntity.entityType
     });
   }
@@ -1144,14 +1295,16 @@ function buildWikiRelation(root, relation, entityById, relationIdCounts) {
       endpoint: "from",
       entityId: relation.fromId,
       exists: Boolean(fromEntity),
-      expectedEntityType: definition?.fromEntityType ?? null,
+      expectedEntityType: expectedFromEntityTypes[0] ?? null,
+      expectedEntityTypes: expectedFromEntityTypes,
       actualEntityType: fromEntity?.entityType ?? null
     },
     {
       endpoint: "to",
       entityId: relation.toId,
       exists: Boolean(toEntity),
-      expectedEntityType: definition?.toEntityType ?? null,
+      expectedEntityType: expectedToEntityTypes[0] ?? null,
+      expectedEntityTypes: expectedToEntityTypes,
       actualEntityType: toEntity?.entityType ?? null
     }
   ];
@@ -1163,11 +1316,40 @@ function buildWikiRelation(root, relation, entityById, relationIdCounts) {
     fromEntityType: fromEntity?.entityType ?? null,
     toEntityType: toEntity?.entityType ?? null,
     sourceArtifactPaths,
+    taxonomy: {
+      familyId: definition?.familyId ?? "uncategorized",
+      familyLabel: definition?.familyLabel ?? "Uncategorized",
+      familySummary: definition?.familySummary ?? "Typed wiki relation family.",
+      groupId: definition?.groupId ?? "uncategorized",
+      groupLabel: definition?.groupLabel ?? "Uncategorized",
+      groupSummary: definition?.groupSummary ?? "Typed wiki relation group.",
+      companionRelationTypes: uniqueStringArray(definition?.companionRelationTypes ?? []),
+      directionalMeaning: {
+        forward: definition?.directionalMeaning?.forward ?? definition?.semantics ?? "Typed wiki relation",
+        reverse: definition?.directionalMeaning?.reverse ?? "Reverse meaning not documented."
+      },
+      endpointSemantics: {
+        from: {
+          role: definition?.endpointSemantics?.from?.role ?? null,
+          summary: definition?.endpointSemantics?.from?.summary ?? null
+        },
+        to: {
+          role: definition?.endpointSemantics?.to?.role ?? null,
+          summary: definition?.endpointSemantics?.to?.summary ?? null
+        }
+      }
+    },
     semantics: {
       relationType: relation.relationType,
       label: definition?.semantics ?? "Typed wiki relation",
-      expectedFromEntityType: definition?.fromEntityType ?? null,
-      expectedToEntityType: definition?.toEntityType ?? null
+      expectedFromEntityType: expectedFromEntityTypes[0] ?? null,
+      expectedToEntityType: expectedToEntityTypes[0] ?? null,
+      expectedFromEntityTypes,
+      expectedToEntityTypes,
+      directionalMeaning: {
+        forward: definition?.directionalMeaning?.forward ?? definition?.semantics ?? "Typed wiki relation",
+        reverse: definition?.directionalMeaning?.reverse ?? "Reverse meaning not documented."
+      }
     },
     integrity: {
       status: integrityStatus,
@@ -1191,7 +1373,9 @@ function buildRelationRepairItem(relation) {
     frontierType: "typed-wiki-relation",
     severity,
     relationId: relation.id,
-    summary: `Repair typed wiki relation ${relation.id} (${relation.relationType}).`,
+    taxonomyFamilyId: relation.taxonomy?.familyId ?? null,
+    taxonomyGroupId: relation.taxonomy?.groupId ?? null,
+    summary: `Repair typed wiki relation ${relation.id} (${relation.relationType}, ${relation.taxonomy?.familyLabel ?? "uncategorized"} / ${relation.taxonomy?.groupLabel ?? "uncategorized"}).`,
     reasons: reasonText || `Relation ${relation.id} is degraded.`,
     reasonCodes,
     artifactPath: ARTIFACT_PATHS.wikiRelations,
@@ -1200,15 +1384,114 @@ function buildRelationRepairItem(relation) {
   };
 }
 
+function buildRelationFamilyRepairItem(familySummary) {
+  const topReasonCodes = topCountKeys(familySummary.integrityReasonCounts, 4);
+  return {
+    id: `repair-relation-family-${familySummary.id}`,
+    frontierType: "typed-wiki-relation-family",
+    severity: familySummary.severity === "high" ? "high" : "medium",
+    taxonomyFamilyId: familySummary.id,
+    taxonomyGroupIds: familySummary.groupIds,
+    summary: `Repair typed wiki relation family ${familySummary.label} (${familySummary.degradedCount}/${familySummary.totalRelations} degraded relations).`,
+    reasons: `${familySummary.overview}${topReasonCodes.length > 0 ? ` Top issues: ${topReasonCodes.join(", ")}.` : ""}`,
+    reasonCodes: topReasonCodes,
+    artifactPath: ARTIFACT_PATHS.wikiRelations,
+    relatedArtifactPaths: uniqueStringArray([ARTIFACT_PATHS.wikiEntities, ...familySummary.sourceArtifactPaths]),
+    nextAction: `Repair ${familySummary.degradedCount} degraded ${familySummary.label.toLowerCase()} relations, then rerun project:paper.wiki or refresh_wiki.`
+  };
+}
+
+function summarizeTaxonomyBucket({ id, label, summary, relations, kind }) {
+  const degraded = relations.filter((relation) => relation.integrity?.status === "degraded");
+  const integrityReasonCounts = countBy(degraded.flatMap((relation) => relation.integrity?.reasons ?? []), (reason) => reason.code ?? "unknown");
+  const severityCounts = summarizeSeverityCounts(degraded.map((relation) => ({ severity: relation.integrity?.severity ?? "medium" })));
+  const sourceArtifactPaths = uniqueStringArray(relations.flatMap((relation) => relation.sourceArtifactPaths ?? []));
+  const companionRelationTypes = uniqueStringArray(relations.flatMap((relation) => relation.taxonomy?.companionRelationTypes ?? []));
+  const groupIds = uniqueStringArray(relations.map((relation) => relation.taxonomy?.groupId).filter(Boolean));
+  const endpointPairs = uniqueStringArray(relations.map((relation) => `${relation.semantics?.expectedFromEntityType ?? relation.fromEntityType ?? "unknown"}->${relation.semantics?.expectedToEntityType ?? relation.toEntityType ?? "unknown"}`));
+  const topReasonCodes = topCountKeys(integrityReasonCounts, 3);
+  const topRelationType = topCountKeys(countBy(relations, (relation) => relation.relationType ?? "unknown"), 1)[0] ?? "none";
+  return {
+    id,
+    label,
+    summary,
+    totalRelations: relations.length,
+    healthyCount: relations.length - degraded.length,
+    degradedCount: degraded.length,
+    relationTypeCounts: countBy(relations, (relation) => relation.relationType ?? "unknown"),
+    integrityReasonCounts,
+    severityCounts,
+    severity: severityCounts.high > 0 ? "high" : degraded.length > 0 ? "medium" : "none",
+    relationIds: relations.map((relation) => relation.id),
+    degradedRelationIds: degraded.map((relation) => relation.id),
+    groupIds,
+    sourceArtifactPaths,
+    companionRelationTypes,
+    endpointPairs,
+    topReasonCodes,
+    overview: degraded.length > 0
+      ? `${label} has ${degraded.length} degraded ${kind} relation${degraded.length === 1 ? "" : "s"} out of ${relations.length}; dominant type ${topRelationType}; top issues ${topReasonCodes.join(", ") || "none"}.`
+      : `${label} covers ${relations.length} ${kind} relation${relations.length === 1 ? "" : "s"} and is currently healthy.`
+  };
+}
+
 function summarizeWikiRelations(relations) {
   const degraded = relations.filter((relation) => relation.integrity?.status === "degraded");
+  const familyBuckets = new Map();
+  const groupBuckets = new Map();
+  for (const relation of relations) {
+    const familyId = relation.taxonomy?.familyId ?? "uncategorized";
+    const groupId = relation.taxonomy?.groupId ?? "uncategorized";
+    if (!familyBuckets.has(familyId)) {
+      familyBuckets.set(familyId, {
+        id: familyId,
+        label: relation.taxonomy?.familyLabel ?? "Uncategorized",
+        summary: relation.taxonomy?.familySummary ?? "Typed wiki relation family.",
+        relations: []
+      });
+    }
+    familyBuckets.get(familyId).relations.push(relation);
+    if (!groupBuckets.has(groupId)) {
+      groupBuckets.set(groupId, {
+        id: groupId,
+        label: relation.taxonomy?.groupLabel ?? "Uncategorized",
+        summary: relation.taxonomy?.groupSummary ?? "Typed wiki relation group.",
+        relations: []
+      });
+    }
+    groupBuckets.get(groupId).relations.push(relation);
+  }
+  const families = Array.from(familyBuckets.values())
+    .map((bucket) => summarizeTaxonomyBucket({ ...bucket, kind: "family" }))
+    .sort((left, right) => right.degradedCount - left.degradedCount || right.totalRelations - left.totalRelations || left.id.localeCompare(right.id));
+  const groups = Array.from(groupBuckets.values())
+    .map((bucket) => summarizeTaxonomyBucket({ ...bucket, kind: "group" }))
+    .sort((left, right) => right.degradedCount - left.degradedCount || right.totalRelations - left.totalRelations || left.id.localeCompare(right.id));
+  const degradedFamilies = families.filter((family) => family.degradedCount > 0);
+  const degradedGroups = groups.filter((group) => group.degradedCount > 0);
   return {
     totalRelations: relations.length,
     healthyCount: relations.length - degraded.length,
     degradedCount: degraded.length,
     relationTypeCounts: countBy(relations, (relation) => relation.relationType ?? "unknown"),
     integrityReasonCounts: countBy(degraded.flatMap((relation) => relation.integrity?.reasons ?? []), (reason) => reason.code ?? "unknown"),
-    repairFrontier: degraded.map(buildRelationRepairItem)
+    repairFrontier: degraded.map(buildRelationRepairItem),
+    taxonomyRepairFrontier: degradedFamilies.map(buildRelationFamilyRepairItem),
+    taxonomy: {
+      familyCount: families.length,
+      groupCount: groups.length,
+      degradedFamilyCount: degradedFamilies.length,
+      degradedGroupCount: degradedGroups.length,
+      familyCounts: countBy(relations, (relation) => relation.taxonomy?.familyId ?? "uncategorized"),
+      groupCounts: countBy(relations, (relation) => relation.taxonomy?.groupId ?? "uncategorized"),
+      topDegradedFamilyIds: degradedFamilies.slice(0, 3).map((family) => family.id),
+      topDegradedGroupIds: degradedGroups.slice(0, 3).map((group) => group.id),
+      families,
+      groups,
+      overview: families.length > 0
+        ? `${families.length} typed wiki relation families across ${groups.length} groups; ${degradedFamilies.length} families currently degraded.`
+        : "No typed wiki relation taxonomy has been summarized yet."
+    }
   };
 }
 
@@ -1253,7 +1536,7 @@ function createWikiArtifacts(root, state, board, sourcesIndex, notesIndex, evide
   const typedRelations = relations.map((relation) => buildWikiRelation(root, relation, entityById, relationIdCounts));
   return {
     entities: { version: 1, items: entities, updatedAt: nowIso() },
-    relations: { version: 2, items: typedRelations, summary: summarizeWikiRelations(typedRelations), updatedAt: nowIso() }
+    relations: { version: 3, items: typedRelations, summary: summarizeWikiRelations(typedRelations), updatedAt: nowIso() }
   };
 }
 

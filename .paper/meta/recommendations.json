@@ -1,12 +1,225 @@
 {
-  "version": 1,
+  "version": 3,
   "proposalOnly": true,
-  "items": [],
-  "summary": {
-    "recommendationCount": 0,
-    "criticalCount": 0,
-    "categories": {},
-    "signalTypes": []
+  "items": [
+    {
+      "id": "meta-journal-query-workspace-index",
+      "category": "workflow-observability",
+      "priority": "low",
+      "proposalOnly": true,
+      "summary": "Inspect whether repeated query-workspace-index actions indicate workflow churn.",
+      "rationale": "The journal shows 32 recent query-workspace-index events, which can be a signal that operators are repeatedly refreshing or repairing the same surface instead of closing a durable issue.",
+      "nextAction": "Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.",
+      "scope": "session/workflow observability",
+      "responseOwnerRole": "planner",
+      "evidenceArtifactPaths": [
+        ".paper/sessions/journal.json"
+      ],
+      "evidenceIds": [
+        "query-workspace-index"
+      ],
+      "signalTypes": [
+        "session-journal"
+      ],
+      "relatedRecommendationIds": [],
+      "recurrenceCount": 32,
+      "repairFrontierOverlap": 0,
+      "auditCriticality": 0,
+      "bridgeCriticality": 0,
+      "queueChurnCount": 0,
+      "taxonomyPressure": {
+        "familyIds": [],
+        "groupIds": [],
+        "familyLabels": [],
+        "groupLabels": [],
+        "pressureAreas": [],
+        "overview": "No typed wiki taxonomy pressure is active in this optimizer surface."
+      },
+      "score": 64,
+      "rankingBasis": [
+        "priority=low",
+        "recurrence=6",
+        "evidenceDensity=2",
+        "crossSessionRecurrence=6",
+        "repairFrontierOverlap=0",
+        "auditCriticality=0",
+        "bridgeCriticality=0",
+        "queueChurn=0",
+        "taxonomyFamilyPressure=0",
+        "taxonomyGroupPressure=0"
+      ],
+      "tieBreakKey": "9935:03:queue-discipline:workflow-observability:meta-journal-query-workspace-index",
+      "generatedAt": "2026-04-13T13:50:29.815Z",
+      "clusterId": "queue-discipline",
+      "clusterLabel": "Queue discipline",
+      "clusterSummary": "Queue churn and repeated workflow activity that suggest coordination debt is accumulating.",
+      "clusterOperatorGoal": "Reduce stale work and coordination churn before expanding concurrent work.",
+      "signalStrength": {
+        "evidenceDensity": 2,
+        "recurrenceCount": 6,
+        "crossSessionRecurrence": 6,
+        "repairFrontierOverlap": 0,
+        "auditCriticality": 0,
+        "bridgeCriticality": 0,
+        "queueChurn": 0,
+        "taxonomyFamilyPressure": 0,
+        "taxonomyGroupPressure": 0
+      },
+      "rank": 1,
+      "sortKey": "9935:03:01:queue-discipline:workflow-observability:meta-journal-query-workspace-index"
+    }
+  ],
+  "clusters": [
+    {
+      "id": "queue-discipline",
+      "label": "Queue discipline",
+      "summary": "Queue churn and repeated workflow activity that suggest coordination debt is accumulating.",
+      "operatorGoal": "Reduce stale work and coordination churn before expanding concurrent work.",
+      "priority": "low",
+      "score": 64,
+      "recommendationCount": 1,
+      "criticalCount": 0,
+      "topRecommendationId": "meta-journal-query-workspace-index",
+      "recommendationIds": [
+        "meta-journal-query-workspace-index"
+      ],
+      "categories": {
+        "workflow-observability": 1
+      },
+      "responseOwnerRoles": [
+        "planner"
+      ],
+      "evidenceArtifactPaths": [
+        ".paper/sessions/journal.json"
+      ],
+      "evidenceIds": [
+        "query-workspace-index"
+      ],
+      "signalTypes": [
+        "session-journal"
+      ],
+      "maxRecommendationScore": 64,
+      "maxRecurrenceCount": 6,
+      "queueChurnCount": 0,
+      "repairFrontierOverlap": 0,
+      "auditCriticality": 0,
+      "bridgeCriticality": 0,
+      "taxonomyPressure": {
+        "familyIds": [],
+        "groupIds": [],
+        "familyLabels": [],
+        "groupLabels": [],
+        "pressureAreas": [],
+        "overview": "No typed wiki taxonomy pressure is active in this optimizer surface."
+      },
+      "summaryLine": "1 recommendations, 0 critical, score 64",
+      "membershipPreview": [
+        {
+          "id": "meta-journal-query-workspace-index",
+          "rank": 1,
+          "priority": "low",
+          "score": 64,
+          "summary": "Inspect whether repeated query-workspace-index actions indicate workflow churn.",
+          "tieBreakKey": "9935:03:queue-discipline:workflow-observability:meta-journal-query-workspace-index"
+        }
+      ],
+      "rank": 1,
+      "sortKey": "03:999935:queue-discipline"
+    }
+  ],
+  "ranking": {
+    "method": "durable-signal-frontier-v1",
+    "signals": [
+      "priority",
+      "recurrenceCount",
+      "evidenceDensity",
+      "crossSessionRecurrence",
+      "repairFrontierOverlap",
+      "auditCriticality",
+      "bridgeCriticality",
+      "queueChurn",
+      "taxonomyFamilyPressure",
+      "taxonomyGroupPressure"
+    ],
+    "tieBreakOrder": [
+      "score-desc",
+      "priority-rank",
+      "cluster-rank",
+      "cluster-id",
+      "category",
+      "id"
+    ]
   },
-  "updatedAt": null
+  "frontier": {
+    "recommendationCount": 1,
+    "criticalCount": 0,
+    "clusterCount": 1,
+    "frontierScore": 64,
+    "topClusterIds": [
+      "queue-discipline"
+    ],
+    "topRecommendationIds": [
+      "meta-journal-query-workspace-index"
+    ],
+    "activeSignalTypes": [
+      "session-journal"
+    ],
+    "topTaxonomyFamilyIds": [],
+    "topTaxonomyGroupIds": [],
+    "pressureAreas": [],
+    "taxonomyOverview": "No typed wiki taxonomy pressure is currently active in the optimizer frontier.",
+    "frontierSummary": "1 ranked recommendations across 1 deterministic clusters (0 critical, frontier score 64). Top clusters: queue-discipline.",
+    "rankingMethod": "durable-signal-frontier-v1"
+  },
+  "summary": {
+    "recommendationCount": 1,
+    "criticalCount": 0,
+    "clusterCount": 1,
+    "frontierScore": 64,
+    "categories": {
+      "workflow-observability": 1
+    },
+    "signalTypes": [
+      "session-journal"
+    ],
+    "topClusterIds": [
+      "queue-discipline"
+    ],
+    "topRecommendationIds": [
+      "meta-journal-query-workspace-index"
+    ],
+    "topTaxonomyFamilyIds": [],
+    "topTaxonomyGroupIds": [],
+    "pressureAreas": [],
+    "taxonomyOverview": "No typed wiki taxonomy pressure is currently active in the optimizer frontier.",
+    "clusterMembership": {
+      "queue-discipline": [
+        "meta-journal-query-workspace-index"
+      ]
+    },
+    "topClusters": [
+      {
+        "id": "queue-discipline",
+        "label": "Queue discipline",
+        "rank": 1,
+        "priority": "low",
+        "score": 64,
+        "recommendationCount": 1,
+        "criticalCount": 0,
+        "summary": "Queue churn and repeated workflow activity that suggest coordination debt is accumulating.",
+        "operatorGoal": "Reduce stale work and coordination churn before expanding concurrent work.",
+        "topRecommendationId": "meta-journal-query-workspace-index",
+        "taxonomyPressure": {
+          "familyIds": [],
+          "groupIds": [],
+          "familyLabels": [],
+          "groupLabels": [],
+          "pressureAreas": [],
+          "overview": "No typed wiki taxonomy pressure is active in this optimizer surface."
+        },
+        "sortKey": "03:999935:queue-discipline"
+      }
+    ]
+  },
+  "updatedAt": "2026-04-13T13:50:29.815Z"
 }

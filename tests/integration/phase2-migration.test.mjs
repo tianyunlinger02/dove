@@ -141,12 +141,17 @@ test("refreshWiki writes typed wiki indexes and workspace summary surfaces", () 
   assert.equal(wiki.wikiPath, ".paper/wiki/index.md");
   assert.ok(entities.items.some((item) => item.entityType === "claim" && item.id === "claim-wiki"));
   assert.ok(relations.items.some((item) => item.fromId === "claim-wiki"));
-  assert.equal(relations.version, 2);
+  assert.equal(relations.version, 3);
   assert.ok(relations.items.every((item) => item.semantics?.relationType === item.relationType));
+  assert.ok(relations.items.every((item) => typeof item.taxonomy?.familyId === "string" && typeof item.taxonomy?.groupId === "string"));
+  assert.ok(relations.items.every((item) => typeof item.semantics?.directionalMeaning?.forward === "string"));
   assert.ok(relations.items.every((item) => Array.isArray(item.integrity?.endpointChecks)));
   assert.equal(relations.summary.degradedCount, 0);
+  assert.equal(relations.summary.taxonomy.familyCount >= 2, true);
+  assert.equal(relations.summary.taxonomy.degradedFamilyCount, 0);
   assert.ok(Array.isArray(workspaceIndex.activePackets));
   assert.equal(workspaceIndex.repairFrontier.count, 0);
+  assert.equal(workspaceIndex.repairFrontier.relationFamilyIssueCount, 0);
 });
 
 test("figure artifact planning writes staged contract files without claiming render backend", () => {

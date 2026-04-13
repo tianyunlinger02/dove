@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 6,
   "managed": {
     "revisionId": "schema-v5:bootstrap-only",
     "templateHash": "05b331fb8b58cd1295bb4d3e0ebade581b2fc1543ee9a321f59116a0ba99acde",
@@ -120,80 +120,167 @@
     "missingDependencyIds": [],
     "orphanPacketIds": []
   },
+  "repairFrontier": {
+    "count": 0,
+    "relationIssueCount": 0,
+    "relationFamilyIssueCount": 0,
+    "managedArtifactIssueCount": 0,
+    "topDegradedFamilyIds": [],
+    "topDegradedGroupIds": [],
+    "taxonomyOverview": "No degraded typed wiki relation families are currently summarized.",
+    "relationFamilySummaries": [],
+    "relationGroupSummaries": [],
+    "prioritizedItems": []
+  },
+  "metaOptimize": {
+    "proposalOnly": true,
+    "recommendationCount": 1,
+    "criticalCount": 0,
+    "clusterCount": 1,
+    "frontierScore": 64,
+    "activeSignalTypes": [
+      "session-journal"
+    ],
+    "topClusterIds": [
+      "queue-discipline"
+    ],
+    "topRecommendationIds": [
+      "meta-journal-query-workspace-index"
+    ],
+    "topClusters": [
+      {
+        "id": "queue-discipline",
+        "label": "Queue discipline",
+        "rank": 1,
+        "priority": "low",
+        "score": 64,
+        "recommendationCount": 1,
+        "criticalCount": 0,
+        "summary": "Queue churn and repeated workflow activity that suggest coordination debt is accumulating.",
+        "operatorGoal": "Reduce stale work and coordination churn before expanding concurrent work.",
+        "topRecommendationId": "meta-journal-query-workspace-index",
+        "taxonomyPressure": {
+          "familyIds": [],
+          "groupIds": [],
+          "familyLabels": [],
+          "groupLabels": [],
+          "pressureAreas": [],
+          "overview": "No typed wiki taxonomy pressure is active in this optimizer surface."
+        },
+        "sortKey": "03:999935:queue-discipline"
+      }
+    ],
+    "topTaxonomyFamilyIds": [],
+    "topTaxonomyGroupIds": [],
+    "pressureAreas": [],
+    "taxonomyOverview": "No typed wiki taxonomy pressure is currently active in the optimizer frontier.",
+    "frontierSummary": "1 ranked recommendations across 1 deterministic clusters (0 critical, frontier score 64). Top clusters: queue-discipline.",
+    "rankingMethod": "durable-signal-frontier-v1",
+    "tieBreakOrder": [
+      "score-desc",
+      "priority-rank",
+      "cluster-rank",
+      "cluster-id",
+      "category",
+      "id"
+    ],
+    "reportPath": ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+    "recommendationsPath": ".paper/meta/recommendations.json",
+    "statePath": ".paper/meta/optimizer-state.json",
+    "longHorizonPath": ".paper/meta/long-horizon-memory.json",
+    "longHorizon": {
+      "familyCount": 1,
+      "recurringFamilyCount": 1,
+      "risingFamilyCount": 1,
+      "stableFamilyCount": 0,
+      "coolingFamilyCount": 0,
+      "snapshotCount": 10,
+      "lastObservedAt": "2026-04-13T12:46:29.151Z",
+      "lastAction": "unchanged",
+      "topFamilyIds": [
+        "workflow-churn"
+      ],
+      "topTaxonomyFamilyIds": [],
+      "topTaxonomyGroupIds": [],
+      "pressureAreas": [],
+      "overview": "1 long-horizon workflow families across 10 optimizer snapshots. Top families: workflow-churn.",
+      "memoryPath": ".paper/meta/long-horizon-memory.json"
+    }
+  },
   "activeRoles": [
     "planner"
   ],
   "unresolvedConcernIds": [],
   "mostRecentSessions": [
     {
-      "id": "2026-04-13T04:42:00.202Z-query-workspace-index",
-      "type": "query-workspace-index",
+      "id": "2026-04-13T13:50:29.815Z-query-meta-optimize",
+      "type": "query-meta-optimize",
       "phase": "init",
-      "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T04:42:00.202Z"
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "timestamp": "2026-04-13T13:50:29.815Z"
     },
     {
-      "id": "2026-04-13T04:42:00.186Z-query-workspace-index",
+      "id": "2026-04-13T13:50:29.808Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T04:42:00.186Z"
+      "timestamp": "2026-04-13T13:50:29.808Z"
     },
     {
-      "id": "2026-04-13T04:25:43.935Z-query-workspace-index",
+      "id": "2026-04-13T13:50:29.786Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T04:25:43.935Z"
+      "timestamp": "2026-04-13T13:50:29.786Z"
     },
     {
-      "id": "2026-04-13T04:25:43.919Z-query-workspace-index",
-      "type": "query-workspace-index",
+      "id": "2026-04-13T13:04:54.645Z-query-meta-optimize",
+      "type": "query-meta-optimize",
       "phase": "init",
-      "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T04:25:43.920Z"
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "timestamp": "2026-04-13T13:04:54.645Z"
     },
     {
-      "id": "2026-04-13T04:20:39.002Z-query-workspace-index",
+      "id": "2026-04-13T13:04:54.637Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T04:20:39.002Z"
+      "timestamp": "2026-04-13T13:04:54.637Z"
     },
     {
-      "id": "2026-04-13T04:20:38.986Z-query-workspace-index",
+      "id": "2026-04-13T13:04:54.616Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T04:20:38.986Z"
+      "timestamp": "2026-04-13T13:04:54.616Z"
     },
     {
-      "id": "2026-04-13T04:12:45.340Z-query-workspace-index",
-      "type": "query-workspace-index",
+      "id": "2026-04-13T12:46:29.171Z-query-meta-optimize",
+      "type": "query-meta-optimize",
       "phase": "init",
-      "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T04:12:45.340Z"
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "timestamp": "2026-04-13T12:46:29.171Z"
     },
     {
-      "id": "2026-04-13T04:12:45.324Z-query-workspace-index",
+      "id": "2026-04-13T12:46:29.164Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T04:12:45.324Z"
+      "timestamp": "2026-04-13T12:46:29.164Z"
     },
     {
-      "id": "2026-04-13T04:09:28.202Z-query-workspace-index",
+      "id": "2026-04-13T12:46:29.142Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T04:09:28.202Z"
+      "timestamp": "2026-04-13T12:46:29.142Z"
     },
     {
-      "id": "2026-04-13T04:09:28.186Z-query-workspace-index",
-      "type": "query-workspace-index",
+      "id": "2026-04-13T12:10:40.579Z-query-meta-optimize",
+      "type": "query-meta-optimize",
       "phase": "init",
-      "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T04:09:28.187Z"
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "timestamp": "2026-04-13T12:10:40.579Z"
     }
   ],
   "latestVersions": {
@@ -201,5 +288,5 @@
     "activeTargets": [],
     "latestSnapshotIds": []
   },
-  "updatedAt": "2026-04-13T04:42:00.203Z"
+  "updatedAt": "2026-04-13T13:50:29.816Z"
 }

@@ -6,6 +6,7 @@ import {
   ROLE_IDS,
   createDefaultBoard,
   createMetaEventsIndex,
+  createMetaLongHorizonMemory,
   createMetaOptimizerState,
   createMetaRecommendationsIndex,
   createSessionJournal,
@@ -16,6 +17,9 @@ import {
   createWorkspaceIndex,
   createWikiEntitiesIndex,
   createWikiRelationsIndex,
+  normalizeMetaLongHorizonMemory,
+  normalizeMetaOptimizerState,
+  normalizeMetaRecommendationsIndex,
   resolveResumeCommandForPhase
 } from "./schema.mjs";
 import { ensureWorkspace, loadState, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
@@ -953,10 +957,12 @@ function renderSessionSummary(state, board, packets, openQuestions, decisions, r
     `- Unresolved concerns: ${(workspaceIndex.unresolvedConcernIds ?? []).join(", ") || "none"}`,
     `- Dependency health: blocked=${workspaceIndex.dependencyHealth?.blockedPacketIds?.length ?? 0} waiting=${workspaceIndex.dependencyHealth?.waitingPacketIds?.length ?? 0} stale=${workspaceIndex.dependencyHealth?.stalePacketIds?.length ?? 0} missing=${workspaceIndex.dependencyHealth?.missingDependencyIds?.length ?? 0}`,
     `- Handoff obligations: ${(workspaceIndex.handoffObligations ?? []).map((item) => item.packetId).join(", ") || "none"}`,
-    `- Repair frontier: ${workspaceIndex.repairFrontier?.count ?? 0} items`,
+    `- Repair frontier: ${workspaceIndex.repairFrontier?.count ?? 0} items (relations ${(workspaceIndex.repairFrontier?.relationIssueCount ?? 0)}, degraded families ${(workspaceIndex.repairFrontier?.relationFamilyIssueCount ?? 0)}, managed artifacts ${(workspaceIndex.repairFrontier?.managedArtifactIssueCount ?? 0)})`,
+    `- Relation taxonomy: ${workspaceIndex.repairFrontier?.taxonomyOverview ?? "No degraded typed wiki relation families are currently summarized."}`,
+    ...((workspaceIndex.repairFrontier?.relationFamilySummaries ?? []).slice(0, 3).map((family) => `  - family ${family.id}: ${family.overview}`)),
+    ...((workspaceIndex.repairFrontier?.relationGroupSummaries ?? []).slice(0, 3).map((group) => `  - group ${group.id}: ${group.overview}`)),
     ...((workspaceIndex.repairFrontier?.prioritizedItems ?? []).slice(0, 4).map((item) => `  - ${item.frontierType}: ${item.summary}`)),
-    `- Meta-optimize frontier: ${workspaceIndex.metaOptimize?.recommendationCount ?? 0} recommendations (${workspaceIndex.metaOptimize?.criticalCount ?? 0} critical)`,
-    `- Meta-optimize report: ${workspaceIndex.metaOptimize?.reportPath ?? ARTIFACT_PATHS.metaOptimizerReport}`,
+    ...renderMetaOptimizeOverviewLines(workspaceIndex.metaOptimize),
     "",
     "## Role context manifests",
     "",
@@ -986,11 +992,12 @@ function renderNavigationReport(board, taskGraph, openQuestions, decisions, vers
     "",
     `- Ready for handoff: ${readyForHandoff.map((packet) => packet.id).join(", ") || "none"}`,
     `- Stale packets: ${stalePackets.map((packet) => packet.id).join(", ") || "none"}`,
-    `- Repair frontier items: ${workspaceIndex.repairFrontier?.count ?? 0}`,
+    `- Repair frontier items: ${workspaceIndex.repairFrontier?.count ?? 0} (relations ${(workspaceIndex.repairFrontier?.relationIssueCount ?? 0)}, degraded families ${(workspaceIndex.repairFrontier?.relationFamilyIssueCount ?? 0)}, managed artifacts ${(workspaceIndex.repairFrontier?.managedArtifactIssueCount ?? 0)})`,
+    `- Relation taxonomy: ${workspaceIndex.repairFrontier?.taxonomyOverview ?? "No degraded typed wiki relation families are currently summarized."}`,
+    ...((workspaceIndex.repairFrontier?.relationFamilySummaries ?? []).slice(0, 3).map((family) => `  - family ${family.id}: ${family.overview}`)),
+    ...((workspaceIndex.repairFrontier?.relationGroupSummaries ?? []).slice(0, 3).map((group) => `  - group ${group.id}: ${group.overview}`)),
     ...((workspaceIndex.repairFrontier?.prioritizedItems ?? []).slice(0, 5).map((item) => `  - ${item.frontierType}: ${item.summary}`)),
-    `- Meta-optimize recommendations: ${workspaceIndex.metaOptimize?.recommendationCount ?? 0}`,
-    `- Meta-optimize critical items: ${workspaceIndex.metaOptimize?.criticalCount ?? 0}`,
-    `- Meta-optimize report: ${workspaceIndex.metaOptimize?.reportPath ?? ARTIFACT_PATHS.metaOptimizerReport}`,
+    ...renderMetaOptimizeOverviewLines(workspaceIndex.metaOptimize),
     "",
     "## Open questions",
     "",
@@ -1121,6 +1128,677 @@ function recommendationSortRank(value) {
   return value === "critical" ? 0 : value === "high" ? 1 : value === "medium" ? 2 : 3;
 }
 
+function recommendationPriorityWeight(value) {
+  return value === "critical" ? 40 : value === "high" ? 24 : value === "medium" ? 12 : 4;
+}
+
+const TAXONOMY_OPERATOR_PRESSURE_BY_FAMILY = {
+  "evidence-grounding": {
+    clusterId: "evidence-grounding-pressure",
+    clusterLabel: "Evidence grounding pressure",
+    clusterSummary: "Typed wiki degradation shows evidence-grounding links are slipping, so claim and idea support may be less trustworthy than the workflow expects.",
+    clusterOperatorGoal: "Restore source and idea grounding before promoting claims, summaries, or revisions.",
+    longHorizonFamilyId: "taxonomy-evidence-grounding",
+    longHorizonLabel: "Evidence grounding pressure",
+    longHorizonSummary: "Evidence-grounding relation families keep degrading across optimizer snapshots.",
+    pressureArea: "evidence-grounding"
+  },
+  "validation-loop": {
+    clusterId: "validation-loop-pressure",
+    clusterLabel: "Validation-loop pressure",
+    clusterSummary: "Typed wiki degradation shows claim-to-experiment validation links are drifting, so experiment-backed closure remains unstable.",
+    clusterOperatorGoal: "Repair validation-loop relations before treating experiments or claims as cleanly connected.",
+    longHorizonFamilyId: "taxonomy-validation-loop",
+    longHorizonLabel: "Validation-loop pressure",
+    longHorizonSummary: "Validation-loop relation families keep degrading across optimizer snapshots.",
+    pressureArea: "validation-loop"
+  },
+  "review-pressure": {
+    clusterId: "review-pressure",
+    clusterLabel: "Review pressure",
+    clusterSummary: "Typed wiki degradation shows review-pressure links are accumulating, so reviewer concerns are staying active around important claims.",
+    clusterOperatorGoal: "Reduce review-pressure before treating concerns as closed or rebuttal-ready.",
+    longHorizonFamilyId: "taxonomy-review-pressure",
+    longHorizonLabel: "Review pressure",
+    longHorizonSummary: "Review-pressure relation families keep degrading across optimizer snapshots.",
+    pressureArea: "review-pressure"
+  }
+};
+
+function taxonomyPressureMetadata(familyId, fallbackLabel = null) {
+  const normalizedFamilyId = typeof familyId === "string" && familyId.trim() ? familyId.trim() : "uncategorized";
+  const configured = TAXONOMY_OPERATOR_PRESSURE_BY_FAMILY[normalizedFamilyId];
+  if (configured) {
+    return configured;
+  }
+  const readable = fallbackLabel ?? normalizedFamilyId.replace(/-/g, " ");
+  return {
+    clusterId: `taxonomy-${normalizedFamilyId}`,
+    clusterLabel: `${readable[0]?.toUpperCase() ?? "T"}${readable.slice(1)} pressure`,
+    clusterSummary: `${readable[0]?.toUpperCase() ?? "T"}${readable.slice(1)} relation degradation remains visible in the repair frontier and should stay operator-visible until repaired.`,
+    clusterOperatorGoal: `Repair ${readable} relation degradation before it compounds into broader workflow debt.`,
+    longHorizonFamilyId: `taxonomy-${normalizedFamilyId}`,
+    longHorizonLabel: `${readable[0]?.toUpperCase() ?? "T"}${readable.slice(1)} pressure`,
+    longHorizonSummary: `${readable[0]?.toUpperCase() ?? "T"}${readable.slice(1)} relation degradation keeps appearing across optimizer snapshots.`,
+    pressureArea: normalizedFamilyId
+  };
+}
+
+function toLabelMap(items = []) {
+  return new Map(
+    (items ?? [])
+      .filter((item) => item && typeof item === "object" && typeof item.id === "string" && item.id.trim())
+      .map((item) => [item.id, item.label ?? item.id])
+  );
+}
+
+function buildTaxonomyPressure(familyIds = [], groupIds = [], familyLabelMap = new Map(), groupLabelMap = new Map()) {
+  const normalizedFamilyIds = uniqueSorted((familyIds ?? []).filter(Boolean));
+  const normalizedGroupIds = uniqueSorted((groupIds ?? []).filter(Boolean));
+  const pressureAreas = uniqueSorted(normalizedFamilyIds.map((familyId) => taxonomyPressureMetadata(familyId, familyLabelMap.get(familyId)).pressureArea));
+  const familyLabels = normalizedFamilyIds.map((familyId) => familyLabelMap.get(familyId) ?? familyId);
+  const groupLabels = normalizedGroupIds.map((groupId) => groupLabelMap.get(groupId) ?? groupId);
+  const overview = normalizedFamilyIds.length > 0
+    ? `Taxonomy pressure is concentrated in ${familyLabels.join(", ")}${groupLabels.length > 0 ? ` via ${groupLabels.join(", ")}` : ""}.`
+    : "No typed wiki taxonomy pressure is active in this optimizer surface.";
+  return {
+    familyIds: normalizedFamilyIds,
+    groupIds: normalizedGroupIds,
+    familyLabels,
+    groupLabels,
+    pressureAreas,
+    overview
+  };
+}
+
+function collectTaxonomyPressureSummary(items = []) {
+  const familyCounts = {};
+  const groupCounts = {};
+  const familyLabelMap = new Map();
+  const groupLabelMap = new Map();
+  for (const item of items ?? []) {
+    const taxonomyPressure = item?.taxonomyPressure ?? {};
+    for (const [index, familyId] of (taxonomyPressure.familyIds ?? []).entries()) {
+      incrementObjectCount(familyCounts, familyId);
+      familyLabelMap.set(familyId, taxonomyPressure.familyLabels?.[index] ?? familyId);
+    }
+    for (const [index, groupId] of (taxonomyPressure.groupIds ?? []).entries()) {
+      incrementObjectCount(groupCounts, groupId);
+      groupLabelMap.set(groupId, taxonomyPressure.groupLabels?.[index] ?? groupId);
+    }
+  }
+  const topTaxonomyFamilyIds = topFrequencyIds(Object.entries(familyCounts).flatMap(([familyId, count]) => Array(count).fill(familyId)));
+  const topTaxonomyGroupIds = topFrequencyIds(Object.entries(groupCounts).flatMap(([groupId, count]) => Array(count).fill(groupId)));
+  const pressureAreas = uniqueSorted(topTaxonomyFamilyIds.map((familyId) => taxonomyPressureMetadata(familyId, familyLabelMap.get(familyId)).pressureArea));
+  const taxonomyOverview = topTaxonomyFamilyIds.length > 0
+    ? `Taxonomy-aware optimizer pressure is led by ${topTaxonomyFamilyIds.map((familyId) => familyLabelMap.get(familyId) ?? familyId).join(", ")}${topTaxonomyGroupIds.length > 0 ? ` across ${topTaxonomyGroupIds.map((groupId) => groupLabelMap.get(groupId) ?? groupId).join(", ")}` : ""}.`
+    : "No typed wiki taxonomy pressure is currently active in the optimizer frontier.";
+  return {
+    familyCounts,
+    groupCounts,
+    topTaxonomyFamilyIds,
+    topTaxonomyGroupIds,
+    pressureAreas,
+    taxonomyOverview
+  };
+}
+
+function deriveRecommendationCluster(recommendation = {}) {
+  const taxonomyPressure = recommendation.taxonomyPressure ?? {};
+  if (recommendation.category === "artifact-health" && (taxonomyPressure.familyIds ?? []).length > 0) {
+    const primaryFamilyId = taxonomyPressure.familyIds[0];
+    const metadata = taxonomyPressureMetadata(primaryFamilyId, taxonomyPressure.familyLabels?.[0]);
+    return {
+      id: metadata.clusterId,
+      label: metadata.clusterLabel,
+      summary: metadata.clusterSummary,
+      operatorGoal: metadata.clusterOperatorGoal
+    };
+  }
+  switch (recommendation.category) {
+    case "review-discipline":
+    case "repair-pattern":
+      return {
+        id: "review-closure",
+        label: "Review closure",
+        summary: "Recurring or escalated review debt that needs an explicit closure checkpoint.",
+        operatorGoal: "Close durable reviewer concerns instead of rediscovering them in later passes."
+      };
+    case "experiment-integrity":
+    case "claim-bridge":
+      return {
+        id: "evidence-integrity",
+        label: "Evidence integrity",
+        summary: "Blocked audits and result-to-claim transitions that should stay visible as workflow gates.",
+        operatorGoal: "Repair experiment evidence and bridge trails before stronger claim promotion."
+      };
+    case "artifact-health":
+      return {
+        id: "repair-frontier",
+        label: "Repair frontier",
+        summary: "Typed relation and managed-artifact repair items that should remain operator-visible until cleared.",
+        operatorGoal: "Treat degraded artifacts as first-class repair work, not background maintenance."
+      };
+    case "workflow-queue":
+    case "workflow-observability":
+      return {
+        id: "queue-discipline",
+        label: "Queue discipline",
+        summary: "Queue churn and repeated workflow activity that suggest coordination debt is accumulating.",
+        operatorGoal: "Reduce stale work and coordination churn before expanding concurrent work."
+      };
+    case "version-evolution":
+      return {
+        id: "version-governance",
+        label: "Version governance",
+        summary: "Version-comparison regressions that need explicit explanation or repair linkage.",
+        operatorGoal: "Keep version movement honest by pairing regressions with concrete repair intent."
+      };
+    default:
+      return {
+        id: "workflow-governance",
+        label: "Workflow governance",
+        summary: "General workflow optimization guidance derived from durable signals.",
+        operatorGoal: "Keep the durable workflow legible and proposal-only."
+      };
+  }
+}
+
+function deriveCrossSessionRecurrence(recommendation = {}, journalSignalCounts = {}) {
+  const patterns = recommendation.category === "review-discipline" || recommendation.category === "repair-pattern"
+    ? [/review/, /revision/]
+    : recommendation.category === "experiment-integrity" || recommendation.category === "claim-bridge"
+      ? [/audit/, /bridge/]
+      : recommendation.category === "artifact-health"
+        ? [/figure/, /workspace-index/, /wiki/]
+        : recommendation.category === "workflow-queue" || recommendation.category === "workflow-observability"
+          ? [/workspace-index/, /meta-optimize/, /review/, /revision/]
+          : recommendation.category === "version-evolution"
+            ? [/version/]
+            : [];
+  const total = Object.entries(journalSignalCounts).reduce((sum, [eventType, count]) => {
+    return patterns.some((pattern) => pattern.test(eventType)) ? sum + count : sum;
+  }, 0);
+  return Math.min(total, 6);
+}
+
+function buildRecommendationScorecard(recommendation = {}, journalSignalCounts = {}) {
+  const taxonomyPressure = recommendation.taxonomyPressure ?? {};
+  const evidenceDensity = Math.min((recommendation.evidenceArtifactPaths?.length ?? 0) + (recommendation.evidenceIds?.length ?? 0), 8);
+  const recurrenceCount = Math.min(recommendation.recurrenceCount ?? 0, 6);
+  const crossSessionRecurrence = deriveCrossSessionRecurrence(recommendation, journalSignalCounts);
+  const repairFrontierOverlap = Math.min(recommendation.repairFrontierOverlap ?? 0, 3);
+  const auditCriticality = Math.min(recommendation.auditCriticality ?? 0, 3);
+  const bridgeCriticality = Math.min(recommendation.bridgeCriticality ?? 0, 3);
+  const queueChurn = Math.min(recommendation.queueChurnCount ?? 0, 6);
+  const taxonomyFamilyPressure = Math.min(taxonomyPressure.familyIds?.length ?? 0, 3);
+  const taxonomyGroupPressure = Math.min(taxonomyPressure.groupIds?.length ?? 0, 4);
+  const score = recommendationPriorityWeight(recommendation.priority)
+    + recurrenceCount * 7
+    + evidenceDensity * 3
+    + crossSessionRecurrence * 2
+    + repairFrontierOverlap * 5
+    + auditCriticality * 8
+    + bridgeCriticality * 8
+    + queueChurn * 2
+    + taxonomyFamilyPressure * 6
+    + taxonomyGroupPressure * 4;
+  return {
+    score,
+    evidenceDensity,
+    recurrenceCount,
+    crossSessionRecurrence,
+    repairFrontierOverlap,
+    auditCriticality,
+    bridgeCriticality,
+    queueChurn,
+    taxonomyFamilyPressure,
+    taxonomyGroupPressure
+  };
+}
+
+function buildFrontierSummary(recommendationCount, clusterCount, criticalCount, frontierScore, topClusterIds = [], taxonomyPressure = {}) {
+  if (recommendationCount === 0) {
+    return "No proposal-only optimizer recommendations are active.";
+  }
+  const taxonomySuffix = (taxonomyPressure.topTaxonomyFamilyIds ?? []).length > 0
+    ? ` Dominant taxonomy pressure: ${(taxonomyPressure.topTaxonomyFamilyIds ?? []).join(", ")}${(taxonomyPressure.topTaxonomyGroupIds ?? []).length > 0 ? ` via ${(taxonomyPressure.topTaxonomyGroupIds ?? []).join(", ")}` : ""}.`
+    : "";
+  return `${recommendationCount} ranked recommendations across ${clusterCount} deterministic clusters (${criticalCount} critical, frontier score ${frontierScore}). Top clusters: ${topClusterIds.join(", ") || "none"}.${taxonomySuffix}`;
+}
+
+function longHorizonTrendRank(status) {
+  const order = {
+    rising: 0,
+    stable: 1,
+    cooling: 2,
+    dormant: 3
+  };
+  return order[status] ?? 99;
+}
+
+function describeLongHorizonFamily(familyId) {
+  if (typeof familyId === "string" && familyId.startsWith("taxonomy-")) {
+    const taxonomyFamilyId = familyId.replace(/^taxonomy-/, "");
+    const metadata = taxonomyPressureMetadata(taxonomyFamilyId);
+    return {
+      label: metadata.longHorizonLabel,
+      summary: metadata.longHorizonSummary
+    };
+  }
+  switch (familyId) {
+    case "review-recurrence":
+      return {
+        label: "Review recurrence",
+        summary: "Review and revision debt keeps coming back across optimizer refreshes."
+      };
+    case "audit-integrity":
+      return {
+        label: "Audit integrity",
+        summary: "Experiment audits keep surfacing as workflow gates over time."
+      };
+    case "claim-bridge-regressions":
+      return {
+        label: "Claim bridge regressions",
+        summary: "Result-to-claim transitions keep needing explicit re-review."
+      };
+    case "repair-frontier-persistence":
+      return {
+        label: "Repair frontier persistence",
+        summary: "Artifact repairs remain visible across multiple optimizer snapshots."
+      };
+    case "workflow-churn":
+      return {
+        label: "Workflow churn",
+        summary: "Queue and observability work keeps repeating instead of closing out cleanly."
+      };
+    case "version-regressions":
+      return {
+        label: "Version regressions",
+        summary: "Version comparisons keep reintroducing unresolved concern debt."
+      };
+    default:
+      return {
+        label: "Workflow governance",
+        summary: "Long-horizon workflow governance signals remain active."
+      };
+  }
+}
+
+function recommendationLongHorizonFamilyId(recommendation = {}) {
+  if (recommendation.category === "artifact-health" && (recommendation.taxonomyPressure?.familyIds ?? []).length > 0) {
+    return taxonomyPressureMetadata(recommendation.taxonomyPressure.familyIds[0], recommendation.taxonomyPressure.familyLabels?.[0]).longHorizonFamilyId;
+  }
+  switch (recommendation.category) {
+    case "review-discipline":
+    case "repair-pattern":
+      return "review-recurrence";
+    case "experiment-integrity":
+      return "audit-integrity";
+    case "claim-bridge":
+      return "claim-bridge-regressions";
+    case "artifact-health":
+      return "repair-frontier-persistence";
+    case "workflow-queue":
+    case "workflow-observability":
+      return "workflow-churn";
+    case "version-evolution":
+      return "version-regressions";
+    default:
+      return "workflow-governance";
+  }
+}
+
+function incrementObjectCount(target, key, amount = 1) {
+  if (!key) {
+    return;
+  }
+  target[key] = (target[key] ?? 0) + amount;
+}
+
+function topFrequencyIds(items = [], limit = 3) {
+  const counts = items.reduce((accumulator, item) => {
+    if (item) {
+      accumulator[item] = (accumulator[item] ?? 0) + 1;
+    }
+    return accumulator;
+  }, {});
+  return Object.entries(counts)
+    .sort((left, right) => {
+      const countDelta = right[1] - left[1];
+      if (countDelta !== 0) {
+        return countDelta;
+      }
+      return left[0].localeCompare(right[0]);
+    })
+    .slice(0, limit)
+    .map(([id]) => id);
+}
+
+function normalizeLongHorizonFamilyCounts(record = {}) {
+  return Object.fromEntries(
+    Object.entries(record ?? {})
+      .map(([key, value]) => [String(key).trim(), Number(value)])
+      .filter(([key, value]) => key && Number.isFinite(value) && value > 0)
+      .sort((left, right) => left[0].localeCompare(right[0]))
+  );
+}
+
+function normalizeLongHorizonStringArrayRecord(record = {}) {
+  return Object.fromEntries(
+    Object.entries(record ?? {})
+      .map(([key, value]) => [String(key).trim(), uniqueSorted(Array.isArray(value) ? value.map((item) => String(item).trim()) : [])])
+      .filter(([key, value]) => key && value.length > 0)
+      .sort((left, right) => left[0].localeCompare(right[0]))
+  );
+}
+
+function buildLongHorizonHistoryEntry(rankedRecommendations, clusters, frontier, observedAt) {
+  const taxonomyPressure = collectTaxonomyPressureSummary(rankedRecommendations);
+  const recommendationsByFamily = rankedRecommendations.reduce((accumulator, recommendation) => {
+    const familyId = recommendationLongHorizonFamilyId(recommendation);
+    const existing = accumulator.get(familyId) ?? {
+      recommendationIds: [],
+      clusterIds: [],
+      taxonomyFamilyIds: [],
+      taxonomyGroupIds: [],
+      operatorPressureAreas: [],
+      evidenceArtifactPaths: [],
+      signalTypes: []
+    };
+    existing.recommendationIds.push(recommendation.id);
+    existing.clusterIds.push(recommendation.clusterId);
+    existing.taxonomyFamilyIds.push(...(recommendation.taxonomyPressure?.familyIds ?? []));
+    existing.taxonomyGroupIds.push(...(recommendation.taxonomyPressure?.groupIds ?? []));
+    existing.operatorPressureAreas.push(...(recommendation.taxonomyPressure?.pressureAreas ?? []));
+    existing.evidenceArtifactPaths.push(...(recommendation.evidenceArtifactPaths ?? []));
+    existing.signalTypes.push(...(recommendation.signalTypes ?? []));
+    accumulator.set(familyId, existing);
+    return accumulator;
+  }, new Map());
+  const familyCounts = Object.fromEntries(Array.from(recommendationsByFamily.entries()).map(([familyId, value]) => [familyId, value.recommendationIds.length]));
+  const familyTopRecommendationIds = Object.fromEntries(Array.from(recommendationsByFamily.entries()).map(([familyId, value]) => [familyId, value.recommendationIds.slice(0, 3)]));
+  const familyTopClusterIds = Object.fromEntries(Array.from(recommendationsByFamily.entries()).map(([familyId, value]) => [familyId, uniqueSorted(value.clusterIds).slice(0, 3)]));
+  return {
+    observedAt,
+    frontierScore: frontier.frontierScore ?? 0,
+    recommendationCount: frontier.recommendationCount ?? rankedRecommendations.length,
+    criticalCount: frontier.criticalCount ?? rankedRecommendations.filter((item) => item.priority === "critical").length,
+    clusterCount: frontier.clusterCount ?? clusters.length,
+    topClusterIds: frontier.topClusterIds ?? [],
+    topRecommendationIds: frontier.topRecommendationIds ?? [],
+    familyCounts,
+    familyTopRecommendationIds,
+    familyTopClusterIds,
+    taxonomyFamilyCounts: taxonomyPressure.familyCounts,
+    taxonomyGroupCounts: taxonomyPressure.groupCounts,
+    topTaxonomyFamilyIds: taxonomyPressure.topTaxonomyFamilyIds,
+    topTaxonomyGroupIds: taxonomyPressure.topTaxonomyGroupIds
+  };
+}
+
+function comparableLongHorizonHistoryEntry(entry = {}) {
+  return {
+    frontierScore: Number(entry.frontierScore ?? 0),
+    recommendationCount: Number(entry.recommendationCount ?? 0),
+    criticalCount: Number(entry.criticalCount ?? 0),
+    clusterCount: Number(entry.clusterCount ?? 0),
+    topClusterIds: uniqueSorted(entry.topClusterIds ?? []),
+    topRecommendationIds: uniqueSorted(entry.topRecommendationIds ?? []),
+    familyCounts: normalizeLongHorizonFamilyCounts(entry.familyCounts),
+    familyTopRecommendationIds: normalizeLongHorizonStringArrayRecord(entry.familyTopRecommendationIds),
+    familyTopClusterIds: normalizeLongHorizonStringArrayRecord(entry.familyTopClusterIds),
+    taxonomyFamilyCounts: normalizeLongHorizonFamilyCounts(entry.taxonomyFamilyCounts),
+    taxonomyGroupCounts: normalizeLongHorizonFamilyCounts(entry.taxonomyGroupCounts),
+    topTaxonomyFamilyIds: uniqueSorted(entry.topTaxonomyFamilyIds ?? []),
+    topTaxonomyGroupIds: uniqueSorted(entry.topTaxonomyGroupIds ?? [])
+  };
+}
+
+function resolveLongHorizonHistoryMutation(previousHistory, nextEntry, historyWindowSize) {
+  const lastEntry = previousHistory.at(-1) ?? null;
+  if (!lastEntry) {
+    return {
+      action: "append",
+      reason: "Recorded the first long-horizon snapshot.",
+      history: [...previousHistory.slice(-(historyWindowSize - 1)), nextEntry]
+    };
+  }
+
+  const nextComparable = comparableLongHorizonHistoryEntry(nextEntry);
+  const lastComparable = comparableLongHorizonHistoryEntry(lastEntry);
+  if (JSON.stringify(lastComparable) !== JSON.stringify(nextComparable)) {
+    return {
+      action: "append",
+      reason: "Frontier or family state changed in a meaningful way.",
+      history: [...previousHistory.slice(-(historyWindowSize - 1)), nextEntry]
+    };
+  }
+
+  const refreshedObservedAt = isIsoTimestamp(lastEntry.observedAt) ? lastEntry.observedAt : nextEntry.observedAt;
+  const refreshedLastEntry = {
+    ...lastEntry,
+    ...nextComparable,
+    observedAt: refreshedObservedAt
+  };
+  const normalizedLastEntry = {
+    ...lastEntry,
+    ...lastComparable,
+    observedAt: isIsoTimestamp(lastEntry.observedAt) ? lastEntry.observedAt : null
+  };
+  if (JSON.stringify(normalizedLastEntry) !== JSON.stringify(refreshedLastEntry)) {
+    return {
+      action: "refresh",
+      reason: "Canonical state stayed the same, so the current snapshot was normalized in place.",
+      history: [...previousHistory.slice(0, -1), refreshedLastEntry]
+    };
+  }
+
+  return {
+    action: "unchanged",
+    reason: "Canonical frontier and long-horizon state were unchanged, so no new snapshot was added.",
+    history: previousHistory
+  };
+}
+
+function buildLongHorizonMemory(existingMemory, rankedRecommendations, clusters, frontier, observedAt) {
+  const base = createMetaLongHorizonMemory();
+  const previousHistory = Array.isArray(existingMemory?.history) ? existingMemory.history : [];
+  const currentTaxonomyPressure = collectTaxonomyPressureSummary(rankedRecommendations);
+  const recommendationsByFamily = rankedRecommendations.reduce((accumulator, recommendation) => {
+    const familyId = recommendationLongHorizonFamilyId(recommendation);
+    const existing = accumulator.get(familyId) ?? {
+      recommendationIds: [],
+      clusterIds: [],
+      taxonomyFamilyIds: [],
+      taxonomyGroupIds: [],
+      operatorPressureAreas: [],
+      evidenceArtifactPaths: [],
+      signalTypes: []
+    };
+    existing.recommendationIds.push(recommendation.id);
+    existing.clusterIds.push(recommendation.clusterId);
+    existing.taxonomyFamilyIds.push(...(recommendation.taxonomyPressure?.familyIds ?? []));
+    existing.taxonomyGroupIds.push(...(recommendation.taxonomyPressure?.groupIds ?? []));
+    existing.operatorPressureAreas.push(...(recommendation.taxonomyPressure?.pressureAreas ?? []));
+    existing.evidenceArtifactPaths.push(...(recommendation.evidenceArtifactPaths ?? []));
+    existing.signalTypes.push(...(recommendation.signalTypes ?? []));
+    accumulator.set(familyId, existing);
+    return accumulator;
+  }, new Map());
+  const historyWindowSize = Number.isFinite(existingMemory?.historyWindowSize) ? existingMemory.historyWindowSize : base.historyWindowSize;
+  const historyEntry = buildLongHorizonHistoryEntry(rankedRecommendations, clusters, frontier, observedAt);
+  const historyDecision = resolveLongHorizonHistoryMutation(previousHistory, historyEntry, historyWindowSize);
+  const history = historyDecision.history;
+  const recentWindow = history.slice(-5);
+  const previousWindow = history.slice(-10, -5);
+  const familyIds = uniqueSorted(history.flatMap((entry) => Object.keys(entry.familyCounts ?? {})));
+  const families = familyIds.map((familyId) => {
+    const metadata = describeLongHorizonFamily(familyId);
+    const totalCount = history.reduce((sum, entry) => sum + (entry.familyCounts?.[familyId] ?? 0), 0);
+    const recentCount = recentWindow.reduce((sum, entry) => sum + (entry.familyCounts?.[familyId] ?? 0), 0);
+    const previousCount = previousWindow.reduce((sum, entry) => sum + (entry.familyCounts?.[familyId] ?? 0), 0);
+    const activeSnapshots = history.filter((entry) => (entry.familyCounts?.[familyId] ?? 0) > 0);
+    const current = recommendationsByFamily.get(familyId) ?? {
+      recommendationIds: [],
+      clusterIds: [],
+      taxonomyFamilyIds: [],
+      taxonomyGroupIds: [],
+      operatorPressureAreas: [],
+      evidenceArtifactPaths: [],
+      signalTypes: []
+    };
+    const trendStatus = recentCount > previousCount
+      ? "rising"
+      : recentCount < previousCount
+        ? "cooling"
+        : recentCount > 0
+          ? "stable"
+          : "dormant";
+    return {
+      id: familyId,
+      label: metadata.label,
+      summary: metadata.summary,
+      currentCount: current.recommendationIds.length,
+      totalCount,
+      activeSnapshotCount: activeSnapshots.length,
+      recurring: activeSnapshots.length >= 2,
+      trend: {
+        status: trendStatus,
+        recentCount,
+        previousCount
+      },
+      topRecommendationIds: topFrequencyIds(history.flatMap((entry) => entry.familyTopRecommendationIds?.[familyId] ?? [])),
+      topClusterIds: topFrequencyIds(history.flatMap((entry) => entry.familyTopClusterIds?.[familyId] ?? [])),
+      relatedRecommendationIds: current.recommendationIds.slice(0, 5),
+      relatedTaxonomyFamilyIds: uniqueSorted(current.taxonomyFamilyIds ?? []),
+      relatedTaxonomyGroupIds: uniqueSorted(current.taxonomyGroupIds ?? []),
+      operatorPressureAreas: uniqueSorted(current.operatorPressureAreas ?? []),
+      evidenceArtifactPaths: uniqueSorted(current.evidenceArtifactPaths),
+      signalTypes: uniqueSorted(current.signalTypes),
+      firstObservedAt: activeSnapshots[0]?.observedAt ?? null,
+      lastObservedAt: activeSnapshots.at(-1)?.observedAt ?? null
+    };
+  }).sort((left, right) => {
+    const recurringDelta = Number(right.recurring) - Number(left.recurring);
+    if (recurringDelta !== 0) {
+      return recurringDelta;
+    }
+    const trendDelta = longHorizonTrendRank(left.trend.status) - longHorizonTrendRank(right.trend.status);
+    if (trendDelta !== 0) {
+      return trendDelta;
+    }
+    const recentDelta = right.trend.recentCount - left.trend.recentCount;
+    if (recentDelta !== 0) {
+      return recentDelta;
+    }
+    const totalDelta = right.totalCount - left.totalCount;
+    if (totalDelta !== 0) {
+      return totalDelta;
+    }
+    return left.id.localeCompare(right.id);
+  });
+  const summary = {
+    familyCount: families.length,
+      recurringFamilyCount: families.filter((item) => item.recurring).length,
+      risingFamilyCount: families.filter((item) => item.trend.status === "rising").length,
+      stableFamilyCount: families.filter((item) => item.trend.status === "stable").length,
+      coolingFamilyCount: families.filter((item) => item.trend.status === "cooling").length,
+      snapshotCount: history.length,
+      lastObservedAt: history.at(-1)?.observedAt ?? null,
+      lastAction: historyDecision.action,
+      topFamilyIds: families.slice(0, 3).map((item) => item.id),
+      topTaxonomyFamilyIds: currentTaxonomyPressure.topTaxonomyFamilyIds,
+      topTaxonomyGroupIds: currentTaxonomyPressure.topTaxonomyGroupIds,
+      pressureAreas: currentTaxonomyPressure.pressureAreas,
+      overview: families.length > 0
+        ? `${families.length} long-horizon workflow families across ${history.length} optimizer snapshots. Top families: ${families.slice(0, 3).map((item) => item.id).join(", ") || "none"}.${currentTaxonomyPressure.topTaxonomyFamilyIds.length > 0 ? ` Dominant taxonomy pressure: ${currentTaxonomyPressure.topTaxonomyFamilyIds.join(", ")}${currentTaxonomyPressure.topTaxonomyGroupIds.length > 0 ? ` via ${currentTaxonomyPressure.topTaxonomyGroupIds.join(", ")}` : ""}.` : ""}`
+        : "No long-horizon workflow memory has been summarized yet."
+    };
+  return {
+    ...base,
+    historyWindowSize,
+    horizon: {
+      sessionEntriesAnalyzed: Math.min(history.length, historyWindowSize),
+      reviewRoundsObserved: history.length,
+      versionComparisonsAnalyzed: history.length,
+      auditRecordsAnalyzed: history.reduce((sum, entry) => sum + (entry.familyCounts?.["audit-integrity"] ?? 0), 0),
+      bridgeRecordsAnalyzed: history.reduce((sum, entry) => sum + (entry.familyCounts?.["claim-bridge-regressions"] ?? 0), 0)
+    },
+    summary,
+    historyPolicy: {
+      mode: "deterministic-noop-drift-guard-v1",
+      lastAction: historyDecision.action,
+      reason: historyDecision.reason,
+      comparedAt: observedAt,
+      lastMeaningfulChangeAt: historyDecision.action === "append"
+        ? observedAt
+        : (existingMemory?.historyPolicy?.lastMeaningfulChangeAt ?? history.at(-1)?.observedAt ?? null)
+    },
+    history,
+    families,
+    updatedAt: observedAt
+  };
+}
+
+function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory) {
+  return {
+    proposalOnly: true,
+    recommendationCount: metaRecommendations.items.length,
+    criticalCount: metaRecommendations.summary.criticalCount,
+    clusterCount: metaRecommendations.summary.clusterCount,
+    frontierScore: metaRecommendations.summary.frontierScore,
+    activeSignalTypes: metaRecommendations.summary.signalTypes,
+    topClusterIds: metaRecommendations.summary.topClusterIds,
+    topRecommendationIds: metaRecommendations.summary.topRecommendationIds,
+    topClusters: metaRecommendations.summary.topClusters,
+    topTaxonomyFamilyIds: metaRecommendations.summary.topTaxonomyFamilyIds ?? [],
+    topTaxonomyGroupIds: metaRecommendations.summary.topTaxonomyGroupIds ?? [],
+    pressureAreas: metaRecommendations.summary.pressureAreas ?? [],
+    taxonomyOverview: metaRecommendations.summary.taxonomyOverview ?? "No typed wiki taxonomy pressure is currently active in the optimizer frontier.",
+    frontierSummary: metaRecommendations.frontier.frontierSummary,
+    rankingMethod: metaRecommendations.frontier.rankingMethod,
+    tieBreakOrder: metaRecommendations.ranking.tieBreakOrder,
+    reportPath: ARTIFACT_PATHS.metaOptimizerReport,
+    recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
+    statePath: ARTIFACT_PATHS.metaOptimizerState,
+    longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
+    longHorizon: {
+      ...longHorizonMemory.summary,
+      memoryPath: ARTIFACT_PATHS.metaLongHorizonMemory
+    }
+  };
+}
+
+function renderMetaOptimizeOverviewLines(metaOptimize = {}) {
+  return [
+    `- Meta-optimize frontier: ${metaOptimize.recommendationCount ?? 0} recommendations across ${metaOptimize.clusterCount ?? 0} clusters (${metaOptimize.criticalCount ?? 0} critical, score ${metaOptimize.frontierScore ?? 0})`,
+    `- Meta-optimize frontier summary: ${metaOptimize.frontierSummary ?? "No proposal-only optimizer recommendations have been generated yet."}`,
+    `- Meta-optimize top clusters: ${(metaOptimize.topClusterIds ?? []).join(", ") || "none"}`,
+    `- Meta-optimize taxonomy pressure: ${metaOptimize.taxonomyOverview ?? "No typed wiki taxonomy pressure is currently active in the optimizer frontier."}`,
+    `- Meta-optimize top taxonomy families: ${(metaOptimize.topTaxonomyFamilyIds ?? []).join(", ") || "none"}`,
+    `- Meta-optimize top taxonomy groups: ${(metaOptimize.topTaxonomyGroupIds ?? []).join(", ") || "none"}`,
+    `- Meta-optimize pressure areas: ${(metaOptimize.pressureAreas ?? []).join(", ") || "none"}`,
+    `- Long-horizon memory: ${metaOptimize.longHorizon?.overview ?? "No long-horizon workflow memory has been summarized yet."}`,
+    `- Long-horizon snapshots: ${metaOptimize.longHorizon?.snapshotCount ?? 0}`,
+    `- Long-horizon last action: ${metaOptimize.longHorizon?.lastAction ?? "unchanged"}`,
+    `- Long-horizon last observed: ${metaOptimize.longHorizon?.lastObservedAt ?? "none"}`,
+    `- Long-horizon top families: ${(metaOptimize.longHorizon?.topFamilyIds ?? []).join(", ") || "none"}`,
+    `- Long-horizon taxonomy families: ${(metaOptimize.longHorizon?.topTaxonomyFamilyIds ?? []).join(", ") || "none"}`,
+    `- Long-horizon taxonomy groups: ${(metaOptimize.longHorizon?.topTaxonomyGroupIds ?? []).join(", ") || "none"}`,
+    `- Meta-optimize report: ${metaOptimize.reportPath ?? ARTIFACT_PATHS.metaOptimizerReport}`,
+    `- Long-horizon memory path: ${metaOptimize.longHorizonPath ?? ARTIFACT_PATHS.metaLongHorizonMemory}`
+  ];
+}
+
+function clusterSortKey(cluster = {}) {
+  return [
+    String(recommendationSortRank(cluster.priority)).padStart(2, "0"),
+    String(999999 - (cluster.score ?? 0)).padStart(6, "0"),
+    cluster.id ?? "cluster"
+  ].join(":");
+}
+
 function summarizeLinkedEvidence(paths = [], ids = []) {
   return uniqueSorted([...(paths ?? []), ...(ids ?? [])]);
 }
@@ -1153,18 +1831,56 @@ function pushRecommendation(collection, recommendation = {}) {
     evidenceIds: uniqueSorted(recommendation.evidenceIds ?? []),
     signalTypes: uniqueSorted(recommendation.signalTypes ?? []),
     relatedRecommendationIds: uniqueSorted(recommendation.relatedRecommendationIds ?? []),
+    recurrenceCount: recommendation.recurrenceCount ?? 0,
+    repairFrontierOverlap: recommendation.repairFrontierOverlap ?? 0,
+    auditCriticality: recommendation.auditCriticality ?? 0,
+    bridgeCriticality: recommendation.bridgeCriticality ?? 0,
+    queueChurnCount: recommendation.queueChurnCount ?? 0,
+    taxonomyPressure: recommendation.taxonomyPressure ?? buildTaxonomyPressure(),
+    score: recommendation.score ?? 0,
+    rankingBasis: normalizeStringArray(recommendation.rankingBasis ?? []),
+    tieBreakKey: recommendation.tieBreakKey ?? null,
     generatedAt: recommendation.generatedAt ?? nowIso()
   });
 }
 
 function buildRepairFrontier(wikiRelations, figureQa) {
+  const relationGroupSummaries = (wikiRelations.summary?.taxonomy?.groups ?? [])
+    .filter((group) => group.degradedCount > 0)
+    .map((group) => ({
+      id: group.id,
+      label: group.label,
+      degradedCount: group.degradedCount,
+      totalRelations: group.totalRelations,
+      severity: group.severity ?? "medium",
+      topReasonCodes: uniqueSorted(group.topReasonCodes ?? []),
+      overview: group.overview ?? `${group.label} has degraded typed wiki relations.`
+    }));
+  const relationFamilySummaries = (wikiRelations.summary?.taxonomy?.families ?? [])
+    .filter((family) => family.degradedCount > 0)
+    .map((family) => ({
+      id: family.id,
+      label: family.label,
+      degradedCount: family.degradedCount,
+      totalRelations: family.totalRelations,
+      severity: family.severity ?? "medium",
+      topReasonCodes: uniqueSorted(family.topReasonCodes ?? []),
+      overview: family.overview ?? `${family.label} has degraded typed wiki relations.`
+    }));
+  const relationFamilyItems = (wikiRelations.summary?.taxonomyRepairFrontier ?? []).map((item) => ({
+    ...item,
+    taxonomyFamilyId: item.taxonomyFamilyId ?? null,
+    taxonomyGroupIds: uniqueSorted(item.taxonomyGroupIds ?? [])
+  }));
   const relationItems = (wikiRelations.items ?? [])
     .filter((relation) => relation.integrity?.status === "degraded")
     .map((relation) => ({
       id: `repair-${relation.id}`,
       frontierType: "typed-wiki-relation",
       severity: relation.integrity?.severity ?? "medium",
-      summary: `Repair typed wiki relation ${relation.id} (${relation.relationType}).`,
+      taxonomyFamilyId: relation.taxonomy?.familyId ?? null,
+      taxonomyGroupId: relation.taxonomy?.groupId ?? null,
+      summary: `Repair typed wiki relation ${relation.id} (${relation.relationType}, ${relation.taxonomy?.familyLabel ?? "uncategorized"} / ${relation.taxonomy?.groupLabel ?? "uncategorized"}).`,
       reasons: (relation.integrity?.reasons ?? []).map((reason) => reason.message).join(" "),
       reasonCodes: uniqueSorted((relation.integrity?.reasons ?? []).map((reason) => reason.code)),
       artifactPath: ARTIFACT_PATHS.wikiRelations,
@@ -1182,7 +1898,7 @@ function buildRepairFrontier(wikiRelations, figureQa) {
     relatedArtifactPaths: uniqueSorted([ARTIFACT_PATHS.figuresIndex, ...(issue.artifactPaths ?? [])]),
     nextAction: `Repair the staged figure artifacts for ${issue.figureId ?? issue.id}, then rerun validate_figure_pipeline.`
   }));
-  const prioritizedItems = [...relationItems, ...figureItems]
+  const prioritizedItems = [...relationFamilyItems, ...relationItems, ...figureItems]
     .sort((left, right) => {
       const severityDelta = severityRank(left.severity) - severityRank(right.severity);
       if (severityDelta !== 0) {
@@ -1192,14 +1908,21 @@ function buildRepairFrontier(wikiRelations, figureQa) {
     })
     .slice(0, 12);
   return {
-    count: relationItems.length + figureItems.length,
+    count: relationFamilyItems.length + relationItems.length + figureItems.length,
     relationIssueCount: relationItems.length,
+    relationFamilyIssueCount: relationFamilyItems.length,
     managedArtifactIssueCount: figureItems.length,
+    topDegradedFamilyIds: relationFamilySummaries.slice(0, 3).map((family) => family.id),
+    topDegradedGroupIds: relationGroupSummaries.slice(0, 3).map((group) => group.id),
+    taxonomyOverview: wikiRelations.summary?.taxonomy?.overview ?? "No degraded typed wiki relation families are currently summarized.",
+    relationFamilySummaries,
+    relationGroupSummaries,
     prioritizedItems
   };
 }
 
-function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcerns, reviewState, adversarialState, experimentAudits, bridgeLog, figureQa, comparisons }) {
+function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcerns, reviewState, adversarialState, experimentAudits, bridgeLog, figureQa, comparisons, existingLongHorizonMemory }) {
+  const generatedAt = nowIso();
   const events = [];
   const recommendations = [];
   const recentEntries = [...(journal.entries ?? [])].slice(-40);
@@ -1213,7 +1936,12 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
   const handoffObligations = workspaceIndex.handoffObligations ?? [];
   const latestComparison = (comparisons.items ?? []).at(-1) ?? null;
   const repairItems = workspaceIndex.repairFrontier?.prioritizedItems ?? [];
+  const repairFamilyLabelMap = toLabelMap(workspaceIndex.repairFrontier?.relationFamilySummaries ?? []);
+  const repairGroupLabelMap = toLabelMap(workspaceIndex.repairFrontier?.relationGroupSummaries ?? []);
   const repeatedRepairishEvents = recentEntries.reduce((accumulator, entry) => {
+    if (entry.type === "query-meta-optimize") {
+      return accumulator;
+    }
     if (!/(review|revision|audit|bridge|figure|version|workspace-index|meta-optimize)/.test(entry.type ?? "")) {
       return accumulator;
     }
@@ -1243,7 +1971,10 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       responseOwnerRole: concern.responseOwnerRole,
       evidenceArtifactPaths: summarizeLinkedEvidence([ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.reviewState], concern.linkedArtifactPaths),
       evidenceIds: [concern.id, ...(concern.linkedAuditIds ?? []), ...(concern.linkedBridgeIds ?? [])],
-      signalTypes: ["review-concern", "adversarial-review"]
+      signalTypes: ["review-concern", "adversarial-review"],
+      recurrenceCount: concern.recurrenceCount ?? 0,
+      auditCriticality: (concern.linkedAuditIds ?? []).length > 0 ? 1 : 0,
+      bridgeCriticality: (concern.linkedBridgeIds ?? []).length > 0 ? 1 : 0
     });
   }
 
@@ -1269,12 +2000,21 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       responseOwnerRole: concern.responseOwnerRole,
       evidenceArtifactPaths: summarizeLinkedEvidence([ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.reviewState], concern.linkedArtifactPaths),
       evidenceIds: [concern.id],
-      signalTypes: ["review-concern"]
+      signalTypes: ["review-concern"],
+      recurrenceCount: concern.recurrenceCount ?? 0
     });
   }
 
   for (const item of repairItems.slice(0, 5)) {
     const recommendationId = `meta-repair-${slugify(item.id)}`;
+    const taxonomyPressure = buildTaxonomyPressure(
+      [item.taxonomyFamilyId, ...(item.taxonomyFamilyIds ?? [])].filter(Boolean),
+      [item.taxonomyGroupId, ...(item.taxonomyGroupIds ?? [])].filter(Boolean),
+      repairFamilyLabelMap,
+      repairGroupLabelMap
+    );
+    const primaryPressure = taxonomyPressure.pressureAreas[0] ?? item.frontierType;
+    const primaryFamilyLabel = taxonomyPressure.familyLabels[0] ?? item.frontierType;
     pushMetaEvent(events, {
       id: `event-${recommendationId}`,
       signalType: item.frontierType,
@@ -1288,13 +2028,20 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       id: recommendationId,
       category: "artifact-health",
       priority: item.severity === "high" ? "critical" : "high",
-      summary: `Keep ${item.frontierType} visible as explicit repair work, not background maintenance.`,
-      rationale: item.reasons || `The repair frontier still carries ${item.frontierType} debt, so the workflow should preserve an explicit repair surface until it clears.`,
+      summary: taxonomyPressure.familyIds.length > 0
+        ? `Keep ${primaryPressure} visible as explicit repair work, not background maintenance.`
+        : `Keep ${item.frontierType} visible as explicit repair work, not background maintenance.`,
+      rationale: taxonomyPressure.familyIds.length > 0
+        ? `${item.reasons || `The repair frontier still carries ${item.frontierType} debt.`} This is now explicit ${primaryPressure} pressure in the typed wiki taxonomy (${primaryFamilyLabel}${taxonomyPressure.groupLabels.length > 0 ? ` via ${taxonomyPressure.groupLabels.join(", ")}` : ""}), so operators can see exactly whether the weakness is in evidence-grounding, validation-loop, review-pressure, or another relation family.`
+        : (item.reasons || `The repair frontier still carries ${item.frontierType} debt, so the workflow should preserve an explicit repair surface until it clears.`),
       nextAction: item.nextAction,
-      scope: "artifact health",
+      scope: taxonomyPressure.familyIds.length > 0 ? `${primaryPressure} / artifact health` : "artifact health",
       evidenceArtifactPaths: [item.artifactPath, ...(item.relatedArtifactPaths ?? [])],
       evidenceIds: [item.id, ...(item.reasonCodes ?? [])],
-      signalTypes: [item.frontierType]
+      signalTypes: [item.frontierType],
+      repairFrontierOverlap: 1,
+      recurrenceCount: Math.min(item.degradedCount ?? 1, 6),
+      taxonomyPressure
     });
   }
 
@@ -1320,7 +2067,8 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       responseOwnerRole: "experiment-planner",
       evidenceArtifactPaths: [ARTIFACT_PATHS.experimentAudits, ...(audit.reviewedArtifactRefs ?? [])],
       evidenceIds: [audit.id, audit.resultId, audit.experimentId, ...(audit.integrityFlags ?? [])],
-      signalTypes: ["experiment-audit"]
+      signalTypes: ["experiment-audit"],
+      auditCriticality: audit.auditVerdict === "blocked" ? 2 : 1
     });
   }
 
@@ -1346,7 +2094,9 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       responseOwnerRole: "experiment-planner",
       evidenceArtifactPaths: [ARTIFACT_PATHS.claimBridgeLog, ARTIFACT_PATHS.experimentAudits],
       evidenceIds: [bridge.id, bridge.resultId, bridge.experimentId, ...(bridge.auditIds ?? []), ...(bridge.integrityFlags ?? [])],
-      signalTypes: ["claim-bridge", "experiment-audit"]
+      signalTypes: ["claim-bridge", "experiment-audit"],
+      auditCriticality: bridge.auditVerdict === "blocked" ? 1 : 0,
+      bridgeCriticality: bridge.bridgeStatus === "held-for-review" || bridge.auditVerdict === "blocked" ? 2 : 1
     });
   }
 
@@ -1372,7 +2122,8 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       responseOwnerRole: board.assignedRole,
       evidenceArtifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.orchestrationBoard],
       evidenceIds: [...stalePackets.map((packet) => packet.id), ...handoffObligations.map((item) => item.packetId)],
-      signalTypes: ["workspace-queue"]
+      signalTypes: ["workspace-queue"],
+      queueChurnCount: stalePackets.length + handoffObligations.length
     });
   }
 
@@ -1398,7 +2149,8 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       responseOwnerRole: "version-analyst",
       evidenceArtifactPaths: [ARTIFACT_PATHS.versionComparisons, ARTIFACT_PATHS.versionComparisonReport],
       evidenceIds: [latestComparison.id, ...(latestComparison.unresolvedConcernsAdded ?? [])],
-      signalTypes: ["version-comparison"]
+      signalTypes: ["version-comparison"],
+      recurrenceCount: (latestComparison.unresolvedConcernsAdded ?? []).length
     });
   }
 
@@ -1424,20 +2176,180 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       responseOwnerRole: board.assignedRole,
       evidenceArtifactPaths: [ARTIFACT_PATHS.sessionJournal],
       evidenceIds: [eventType],
-      signalTypes: ["session-journal"]
+      signalTypes: ["session-journal"],
+      recurrenceCount: count
     });
   }
 
-  const sortedRecommendations = recommendations
+  const rankedRecommendations = recommendations
+    .map((recommendation) => {
+      const cluster = deriveRecommendationCluster(recommendation);
+      const scorecard = buildRecommendationScorecard(recommendation, repeatedRepairishEvents);
+      const rankingBasis = [
+        `priority=${recommendation.priority}`,
+        `recurrence=${scorecard.recurrenceCount}`,
+        `evidenceDensity=${scorecard.evidenceDensity}`,
+        `crossSessionRecurrence=${scorecard.crossSessionRecurrence}`,
+        `repairFrontierOverlap=${scorecard.repairFrontierOverlap}`,
+        `auditCriticality=${scorecard.auditCriticality}`,
+        `bridgeCriticality=${scorecard.bridgeCriticality}`,
+        `queueChurn=${scorecard.queueChurn}`,
+        `taxonomyFamilyPressure=${scorecard.taxonomyFamilyPressure}`,
+        `taxonomyGroupPressure=${scorecard.taxonomyGroupPressure}`
+      ];
+      return {
+        ...recommendation,
+        clusterId: cluster.id,
+        clusterLabel: cluster.label,
+        clusterSummary: cluster.summary,
+        clusterOperatorGoal: cluster.operatorGoal,
+        score: scorecard.score,
+        rankingBasis,
+        signalStrength: {
+          evidenceDensity: scorecard.evidenceDensity,
+          recurrenceCount: scorecard.recurrenceCount,
+          crossSessionRecurrence: scorecard.crossSessionRecurrence,
+          repairFrontierOverlap: scorecard.repairFrontierOverlap,
+          auditCriticality: scorecard.auditCriticality,
+          bridgeCriticality: scorecard.bridgeCriticality,
+          queueChurn: scorecard.queueChurn,
+          taxonomyFamilyPressure: scorecard.taxonomyFamilyPressure,
+          taxonomyGroupPressure: scorecard.taxonomyGroupPressure
+        }
+      };
+    })
+    .sort((left, right) => {
+      const scoreDelta = right.score - left.score;
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+      const priorityDelta = recommendationSortRank(left.priority) - recommendationSortRank(right.priority);
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+      const clusterDelta = left.clusterId.localeCompare(right.clusterId);
+      if (clusterDelta !== 0) {
+        return clusterDelta;
+      }
+      return left.id.localeCompare(right.id);
+    })
+    .slice(0, 12)
+    .map((recommendation, index) => ({
+      ...recommendation,
+      rank: index + 1,
+      sortKey: [
+        String(9999 - recommendation.score).padStart(4, "0"),
+        String(recommendationSortRank(recommendation.priority)).padStart(2, "0"),
+        String(index + 1).padStart(2, "0"),
+        recommendation.clusterId,
+        recommendation.category,
+        recommendation.id
+      ].join(":"),
+      tieBreakKey: [
+        String(9999 - recommendation.score).padStart(4, "0"),
+        String(recommendationSortRank(recommendation.priority)).padStart(2, "0"),
+        recommendation.clusterId,
+        recommendation.category,
+        recommendation.id
+      ].join(":")
+    }));
+  const clusterMap = new Map();
+  for (const recommendation of rankedRecommendations) {
+    const existing = clusterMap.get(recommendation.clusterId) ?? {
+      id: recommendation.clusterId,
+      label: recommendation.clusterLabel,
+      summary: recommendation.clusterSummary,
+      operatorGoal: recommendation.clusterOperatorGoal,
+      priority: recommendation.priority,
+      score: 0,
+      recommendationCount: 0,
+      criticalCount: 0,
+      topRecommendationId: recommendation.id,
+      recommendationIds: [],
+      categories: {},
+      responseOwnerRoles: [],
+      evidenceArtifactPaths: [],
+      evidenceIds: [],
+      signalTypes: [],
+      maxRecommendationScore: 0,
+      maxRecurrenceCount: 0,
+      queueChurnCount: 0,
+      repairFrontierOverlap: 0,
+      auditCriticality: 0,
+      bridgeCriticality: 0,
+      taxonomyPressure: buildTaxonomyPressure()
+    };
+    existing.priority = recommendationSortRank(recommendation.priority) < recommendationSortRank(existing.priority)
+      ? recommendation.priority
+      : existing.priority;
+    existing.score += recommendation.score;
+    existing.recommendationCount += 1;
+    existing.criticalCount += recommendation.priority === "critical" ? 1 : 0;
+    existing.topRecommendationId = existing.topRecommendationId === recommendation.id || recommendation.score > existing.maxRecommendationScore
+      ? recommendation.id
+      : existing.topRecommendationId;
+    existing.recommendationIds.push(recommendation.id);
+    existing.categories[recommendation.category] = (existing.categories[recommendation.category] ?? 0) + 1;
+    if (recommendation.responseOwnerRole) {
+      existing.responseOwnerRoles.push(recommendation.responseOwnerRole);
+    }
+    existing.evidenceArtifactPaths.push(...recommendation.evidenceArtifactPaths);
+    existing.evidenceIds.push(...recommendation.evidenceIds);
+    existing.signalTypes.push(...recommendation.signalTypes);
+    existing.maxRecommendationScore = Math.max(existing.maxRecommendationScore, recommendation.score);
+    existing.maxRecurrenceCount = Math.max(existing.maxRecurrenceCount, recommendation.signalStrength.recurrenceCount);
+    existing.queueChurnCount += recommendation.signalStrength.queueChurn;
+    existing.repairFrontierOverlap += recommendation.signalStrength.repairFrontierOverlap;
+    existing.auditCriticality += recommendation.signalStrength.auditCriticality;
+    existing.bridgeCriticality += recommendation.signalStrength.bridgeCriticality;
+    existing.taxonomyPressure = buildTaxonomyPressure(
+      [...(existing.taxonomyPressure.familyIds ?? []), ...(recommendation.taxonomyPressure?.familyIds ?? [])],
+      [...(existing.taxonomyPressure.groupIds ?? []), ...(recommendation.taxonomyPressure?.groupIds ?? [])],
+      new Map([
+        ...(existing.taxonomyPressure.familyIds ?? []).map((familyId, index) => [familyId, existing.taxonomyPressure.familyLabels?.[index] ?? familyId]),
+        ...(recommendation.taxonomyPressure?.familyIds ?? []).map((familyId, index) => [familyId, recommendation.taxonomyPressure.familyLabels?.[index] ?? familyId])
+      ]),
+      new Map([
+        ...(existing.taxonomyPressure.groupIds ?? []).map((groupId, index) => [groupId, existing.taxonomyPressure.groupLabels?.[index] ?? groupId]),
+        ...(recommendation.taxonomyPressure?.groupIds ?? []).map((groupId, index) => [groupId, recommendation.taxonomyPressure.groupLabels?.[index] ?? groupId])
+      ])
+    );
+    clusterMap.set(recommendation.clusterId, existing);
+  }
+  const taxonomyPressure = collectTaxonomyPressureSummary(rankedRecommendations);
+  const clusters = Array.from(clusterMap.values())
+    .map((cluster) => ({
+      ...cluster,
+      recommendationIds: uniqueSorted(cluster.recommendationIds),
+      responseOwnerRoles: uniqueSorted(cluster.responseOwnerRoles),
+      evidenceArtifactPaths: uniqueSorted(cluster.evidenceArtifactPaths),
+      evidenceIds: uniqueSorted(cluster.evidenceIds),
+      signalTypes: uniqueSorted(cluster.signalTypes),
+      taxonomyPressure: cluster.taxonomyPressure,
+      summaryLine: `${cluster.recommendationCount} recommendations, ${cluster.criticalCount} critical, score ${cluster.score}`,
+      membershipPreview: rankedRecommendations.filter((item) => item.clusterId === cluster.id).slice(0, 3).map((item) => ({
+        id: item.id,
+        rank: item.rank,
+        priority: item.priority,
+        score: item.score,
+        summary: item.summary,
+        tieBreakKey: item.tieBreakKey
+      }))
+    }))
     .sort((left, right) => {
       const priorityDelta = recommendationSortRank(left.priority) - recommendationSortRank(right.priority);
       if (priorityDelta !== 0) {
         return priorityDelta;
       }
+      const scoreDelta = right.score - left.score;
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
       return left.id.localeCompare(right.id);
     })
-    .slice(0, 12);
-  const keptRecommendationIds = new Set(sortedRecommendations.map((item) => item.id));
+    .map((cluster, index) => ({ ...cluster, rank: index + 1, sortKey: clusterSortKey(cluster) }));
+  const clusterMembership = Object.fromEntries(clusters.map((cluster) => [cluster.id, cluster.recommendationIds]));
+  const keptRecommendationIds = new Set(rankedRecommendations.map((item) => item.id));
   const sortedEvents = events
     .filter((item) => item.recommendationIds.some((id) => keptRecommendationIds.has(id)))
     .sort((left, right) => {
@@ -1447,67 +2359,200 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       }
       return left.id.localeCompare(right.id);
     });
-  const categoryCounts = sortedRecommendations.reduce((accumulator, item) => {
+  const categoryCounts = rankedRecommendations.reduce((accumulator, item) => {
     accumulator[item.category] = (accumulator[item.category] ?? 0) + 1;
     return accumulator;
   }, {});
-  const signalTypes = uniqueSorted(sortedRecommendations.flatMap((item) => item.signalTypes));
-  const criticalCount = sortedRecommendations.filter((item) => item.priority === "critical").length;
+  const signalTypes = uniqueSorted(rankedRecommendations.flatMap((item) => item.signalTypes));
+  const criticalCount = rankedRecommendations.filter((item) => item.priority === "critical").length;
+  const clusterCount = clusters.length;
+  const frontierScore = rankedRecommendations.reduce((sum, item) => sum + item.score, 0);
+  const topClusterIds = clusters.slice(0, 3).map((cluster) => cluster.id);
+  const topRecommendationIds = rankedRecommendations.slice(0, 5).map((item) => item.id);
+  const frontierSummary = buildFrontierSummary(rankedRecommendations.length, clusterCount, criticalCount, frontierScore, topClusterIds, taxonomyPressure);
+  const topClusters = clusters.slice(0, 3).map((cluster) => ({
+    id: cluster.id,
+    label: cluster.label,
+    rank: cluster.rank,
+    priority: cluster.priority,
+    score: cluster.score,
+    recommendationCount: cluster.recommendationCount,
+    criticalCount: cluster.criticalCount,
+    summary: cluster.summary,
+    operatorGoal: cluster.operatorGoal,
+    topRecommendationId: cluster.topRecommendationId,
+    taxonomyPressure: cluster.taxonomyPressure,
+    sortKey: cluster.sortKey
+  }));
   const metaEvents = {
     ...createMetaEventsIndex(),
     items: sortedEvents,
-    updatedAt: nowIso()
+    updatedAt: generatedAt
   };
   const metaRecommendations = {
     ...createMetaRecommendationsIndex(),
-    items: sortedRecommendations,
-    summary: {
-      recommendationCount: sortedRecommendations.length,
-      criticalCount,
-      categories: categoryCounts,
-      signalTypes
+    items: rankedRecommendations,
+    clusters,
+    ranking: {
+      method: "durable-signal-frontier-v1",
+      signals: [
+        "priority",
+        "recurrenceCount",
+        "evidenceDensity",
+        "crossSessionRecurrence",
+        "repairFrontierOverlap",
+        "auditCriticality",
+        "bridgeCriticality",
+        "queueChurn",
+        "taxonomyFamilyPressure",
+        "taxonomyGroupPressure"
+      ],
+      tieBreakOrder: ["score-desc", "priority-rank", "cluster-rank", "cluster-id", "category", "id"]
     },
-    updatedAt: nowIso()
+    frontier: {
+      recommendationCount: rankedRecommendations.length,
+      criticalCount,
+      clusterCount,
+      frontierScore,
+      topClusterIds,
+      topRecommendationIds,
+      activeSignalTypes: signalTypes,
+      topTaxonomyFamilyIds: taxonomyPressure.topTaxonomyFamilyIds,
+      topTaxonomyGroupIds: taxonomyPressure.topTaxonomyGroupIds,
+      pressureAreas: taxonomyPressure.pressureAreas,
+      taxonomyOverview: taxonomyPressure.taxonomyOverview,
+      frontierSummary,
+      rankingMethod: "durable-signal-frontier-v1"
+    },
+    summary: {
+      recommendationCount: rankedRecommendations.length,
+      criticalCount,
+      clusterCount,
+      frontierScore,
+      categories: categoryCounts,
+      signalTypes,
+      topClusterIds,
+      topRecommendationIds,
+      topTaxonomyFamilyIds: taxonomyPressure.topTaxonomyFamilyIds,
+      topTaxonomyGroupIds: taxonomyPressure.topTaxonomyGroupIds,
+      pressureAreas: taxonomyPressure.pressureAreas,
+      taxonomyOverview: taxonomyPressure.taxonomyOverview,
+      clusterMembership,
+      topClusters
+    },
+    updatedAt: generatedAt
   };
+  const longHorizonMemory = buildLongHorizonMemory(existingLongHorizonMemory, rankedRecommendations, clusters, metaRecommendations.frontier, generatedAt);
+  const metaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory);
   const metaOptimizerState = {
     ...createMetaOptimizerState(),
     frontier: {
-      recommendationCount: sortedRecommendations.length,
-      criticalCount,
-      activeSignalTypes: signalTypes,
-      reportPath: ARTIFACT_PATHS.metaOptimizerReport,
-      recommendationsPath: ARTIFACT_PATHS.metaRecommendations
+      recommendationCount: metaOptimizeMirror.recommendationCount,
+      criticalCount: metaOptimizeMirror.criticalCount,
+      clusterCount: metaOptimizeMirror.clusterCount,
+      frontierScore: metaOptimizeMirror.frontierScore,
+      activeSignalTypes: metaOptimizeMirror.activeSignalTypes,
+      topClusterIds: metaOptimizeMirror.topClusterIds,
+      topRecommendationIds: metaOptimizeMirror.topRecommendationIds,
+      topClusters: metaOptimizeMirror.topClusters,
+      frontierSummary: metaOptimizeMirror.frontierSummary,
+      rankingMethod: metaOptimizeMirror.rankingMethod,
+      tieBreakOrder: metaOptimizeMirror.tieBreakOrder,
+      reportPath: metaOptimizeMirror.reportPath,
+      recommendationsPath: metaOptimizeMirror.recommendationsPath,
+      statePath: metaOptimizeMirror.statePath,
+      longHorizonPath: metaOptimizeMirror.longHorizonPath,
+      topTaxonomyFamilyIds: metaOptimizeMirror.topTaxonomyFamilyIds,
+      topTaxonomyGroupIds: metaOptimizeMirror.topTaxonomyGroupIds,
+      pressureAreas: metaOptimizeMirror.pressureAreas,
+      taxonomyOverview: metaOptimizeMirror.taxonomyOverview
     },
-    lastRefreshedAt: nowIso(),
-    updatedAt: nowIso()
+    clusters: metaOptimizeMirror.topClusters,
+    longHorizon: metaOptimizeMirror.longHorizon,
+    lastRefreshedAt: generatedAt,
+    updatedAt: generatedAt
   };
   const reportLines = [
     "# Latest optimizer report",
     "",
     "- Proposal only: true",
-    `- Generated: ${nowIso()}`,
-    `- Recommendation count: ${sortedRecommendations.length}`,
-    `- Critical recommendations: ${criticalCount}`,
+    `- Generated: ${generatedAt}`,
+    ...renderMetaOptimizeOverviewLines(metaOptimizeMirror),
     `- Active signal types: ${signalTypes.join(", ") || "none"}`,
+    `- Ranking method: ${metaOptimizeMirror.rankingMethod}`,
+    `- Stable tie-break order: ${metaOptimizeMirror.tieBreakOrder.join(", ")}`,
+    `- Long-horizon history policy: ${longHorizonMemory.historyPolicy.mode} (${longHorizonMemory.historyPolicy.lastAction}: ${longHorizonMemory.historyPolicy.reason})`,
     `- Board phase: ${board.currentPhase}`,
     `- Board role: ${board.assignedRole}`,
     "",
-    "## Evidence-backed recommendations",
+    "## Optimization frontier",
     "",
-    ...(sortedRecommendations.length > 0
-      ? sortedRecommendations.flatMap((item) => [
-          `### ${item.id} [${item.priority}]`,
-          `- Category: ${item.category}`,
-          `- Scope: ${item.scope}`,
-          `- Summary: ${item.summary}`,
-          `- Why: ${item.rationale}`,
-          `- Next action: ${item.nextAction}`,
-          `- Evidence artifacts: ${item.evidenceArtifactPaths.join(", ") || "none"}`,
-          `- Evidence ids: ${item.evidenceIds.join(", ") || "none"}`,
-          `- Response owner: ${item.responseOwnerRole ?? "none"}`,
+    ...(clusters.length > 0
+      ? clusters.flatMap((cluster) => [
+          `### ${cluster.rank}. ${cluster.label} [${cluster.priority}]`,
+          `- Cluster id: ${cluster.id}`,
+          `- Summary: ${cluster.summary}`,
+          `- Operator goal: ${cluster.operatorGoal}`,
+          `- Recommendation count: ${cluster.recommendationCount}`,
+          `- Cluster score: ${cluster.score}`,
+          `- Cluster sort key: ${cluster.sortKey}`,
+          `- Top recommendation: ${cluster.topRecommendationId}`,
+          `- Response owners: ${cluster.responseOwnerRoles.join(", ") || "none"}`,
+          `- Signal types: ${cluster.signalTypes.join(", ") || "none"}`,
+          `- Taxonomy pressure: ${cluster.taxonomyPressure?.overview ?? "No typed wiki taxonomy pressure is active in this cluster."}`,
+          `- Evidence artifacts: ${cluster.evidenceArtifactPaths.join(", ") || "none"}`,
+          `- Membership: ${cluster.recommendationIds.join(", ") || "none"}`,
           ""
         ])
+      : ["- No clusters generated from the current durable signals."]),
+    "## Evidence-backed recommendations",
+    "",
+    ...(clusters.length > 0
+      ? clusters.flatMap((cluster) => [
+          `### Cluster ${cluster.rank}: ${cluster.label}`,
+          ...rankedRecommendations
+            .filter((item) => item.clusterId === cluster.id)
+            .flatMap((item) => [
+              `#### ${item.rank}. ${item.id} [${item.priority}]`,
+              `- Cluster: ${item.clusterLabel}`,
+              `- Category: ${item.category}`,
+              `- Scope: ${item.scope}`,
+              `- Summary: ${item.summary}`,
+              `- Why: ${item.rationale}`,
+              `- Next action: ${item.nextAction}`,
+              `- Score: ${item.score}`,
+              `- Ranking basis: ${item.rankingBasis.join(", ")}`,
+              `- Signal strength: recurrence=${item.signalStrength.recurrenceCount} evidence=${item.signalStrength.evidenceDensity} cross-session=${item.signalStrength.crossSessionRecurrence} repair=${item.signalStrength.repairFrontierOverlap} audit=${item.signalStrength.auditCriticality} bridge=${item.signalStrength.bridgeCriticality} queue=${item.signalStrength.queueChurn} taxonomy-family=${item.signalStrength.taxonomyFamilyPressure} taxonomy-group=${item.signalStrength.taxonomyGroupPressure}`,
+              `- Taxonomy pressure: ${item.taxonomyPressure?.overview ?? "No typed wiki taxonomy pressure is active in this recommendation."}`,
+              `- Evidence artifacts: ${item.evidenceArtifactPaths.join(", ") || "none"}`,
+              `- Evidence ids: ${item.evidenceIds.join(", ") || "none"}`,
+              `- Response owner: ${item.responseOwnerRole ?? "none"}`,
+              `- Stable sort key: ${item.sortKey}`,
+              `- Stable tie-break key: ${item.tieBreakKey}`,
+              ""
+            ])
+        ])
       : ["- No recommendations generated from the current durable signals."]),
+    "## Long-horizon workflow memory",
+    "",
+    ...(longHorizonMemory.families.length > 0
+      ? longHorizonMemory.families.flatMap((family) => [
+          `### ${family.label} [${family.trend.status}]`,
+          `- Family id: ${family.id}`,
+          `- Summary: ${family.summary}`,
+          `- Current recommendation count: ${family.currentCount}`,
+          `- Total observations: ${family.totalCount}`,
+          `- Active snapshots: ${family.activeSnapshotCount}`,
+          `- Trend: recent=${family.trend.recentCount} previous=${family.trend.previousCount}`,
+          `- Taxonomy families: ${family.relatedTaxonomyFamilyIds.join(", ") || "none"}`,
+          `- Taxonomy groups: ${family.relatedTaxonomyGroupIds.join(", ") || "none"}`,
+          `- Pressure areas: ${family.operatorPressureAreas.join(", ") || "none"}`,
+          `- Top recommendations: ${family.topRecommendationIds.join(", ") || "none"}`,
+          `- Top clusters: ${family.topClusterIds.join(", ") || "none"}`,
+          `- Evidence artifacts: ${family.evidenceArtifactPaths.join(", ") || "none"}`,
+          ""
+        ])
+      : ["- No long-horizon memory families have been observed yet."]),
     "## Signal observations",
     "",
     ...(sortedEvents.length > 0
@@ -1523,6 +2568,7 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
 
   return {
     metaEvents,
+    longHorizonMemory,
     metaRecommendations,
     metaOptimizerState,
     metaOptimizerReport: reportLines.join("\n")
@@ -1659,6 +2705,7 @@ export function refreshDurableSurfaces(root, event = {}) {
   const issuesIndex = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   const versionsIndex = readJson(root, ARTIFACT_PATHS.versionsIndex, createVersionsIndex);
   const comparisons = readJson(root, ARTIFACT_PATHS.versionComparisons, createVersionComparisonsIndex);
+  const existingLongHorizonMemory = normalizeMetaLongHorizonMemory(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory));
   const taskPacketIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex);
   const wikiEntities = readJson(root, ARTIFACT_PATHS.wikiEntities, createWikiEntitiesIndex);
   const wikiRelations = readJson(root, ARTIFACT_PATHS.wikiRelations, createWikiRelationsIndex);
@@ -1736,19 +2783,24 @@ export function refreshDurableSurfaces(root, event = {}) {
     experimentAudits,
     bridgeLog,
     figureQa,
-    comparisons
+    comparisons,
+    existingLongHorizonMemory
   });
-  const workspaceIndex = buildWorkspaceIndex(state, board, packetsWithHealth, reviewState, { entries }, versionsIndex, comparisons, wikiRelations, figureQa, {
-    proposalOnly: true,
-    recommendationCount: metaOptimize.metaRecommendations.items.length,
-    criticalCount: metaOptimize.metaRecommendations.summary.criticalCount,
-    activeSignalTypes: metaOptimize.metaRecommendations.summary.signalTypes,
-    reportPath: ARTIFACT_PATHS.metaOptimizerReport,
-    recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
-    statePath: ARTIFACT_PATHS.metaOptimizerState
-  });
+  const workspaceIndex = buildWorkspaceIndex(
+    state,
+    board,
+    packetsWithHealth,
+    reviewState,
+    { entries },
+    versionsIndex,
+    comparisons,
+    wikiRelations,
+    figureQa,
+    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory)
+  );
   writeJson(root, ARTIFACT_PATHS.workspaceIndex, workspaceIndex);
   writeJson(root, ARTIFACT_PATHS.metaEvents, metaOptimize.metaEvents);
+  writeJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, metaOptimize.longHorizonMemory);
   writeJson(root, ARTIFACT_PATHS.metaRecommendations, metaOptimize.metaRecommendations);
   writeJson(root, ARTIFACT_PATHS.metaOptimizerState, metaOptimize.metaOptimizerState);
   writeText(root, ARTIFACT_PATHS.metaOptimizerReport, metaOptimize.metaOptimizerReport);
@@ -1759,6 +2811,7 @@ export function refreshDurableSurfaces(root, event = {}) {
     ARTIFACT_PATHS.taskPacketsIndex,
     ARTIFACT_PATHS.workspaceIndex,
     ARTIFACT_PATHS.metaEvents,
+    ARTIFACT_PATHS.metaLongHorizonMemory,
     ARTIFACT_PATHS.metaRecommendations,
     ARTIFACT_PATHS.metaOptimizerState,
     ARTIFACT_PATHS.metaOptimizerReport,
@@ -1902,17 +2955,28 @@ export function queryMetaOptimize(root) {
     artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
   });
   const events = readJson(root, ARTIFACT_PATHS.metaEvents, createMetaEventsIndex);
-  const recommendations = readJson(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex);
-  const state = readJson(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState);
+  const longHorizonMemory = normalizeMetaLongHorizonMemory(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory));
+  const recommendations = normalizeMetaRecommendationsIndex(readJson(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex));
+  const state = normalizeMetaOptimizerState(readJson(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState));
   return {
     proposalOnly: true,
     events: events.items ?? [],
+    longHorizon: longHorizonMemory,
     recommendations: recommendations.items ?? [],
+    clusters: recommendations.clusters ?? [],
+    groupedFrontier: {
+      ranking: recommendations.ranking ?? state.frontier?.ranking ?? null,
+      frontier: recommendations.frontier ?? state.frontier,
+      topClusters: recommendations.summary?.topClusters ?? state.frontier?.topClusters ?? [],
+      clusterMembership: recommendations.summary?.clusterMembership ?? {}
+    },
+    frontier: recommendations.frontier ?? state.frontier,
     summary: recommendations.summary ?? state.frontier,
     state,
     reportPath: ARTIFACT_PATHS.metaOptimizerReport,
     recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
-    eventsPath: ARTIFACT_PATHS.metaEvents
+    eventsPath: ARTIFACT_PATHS.metaEvents,
+    longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory
   };
 }
 

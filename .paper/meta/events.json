@@ -1,6 +1,23 @@
 {
   "version": 1,
   "proposalOnly": true,
-  "items": [],
-  "updatedAt": null
+  "items": [
+    {
+      "id": "event-meta-journal-query-workspace-index",
+      "signalType": "session-journal",
+      "severity": "low",
+      "summary": "Recent session journal repeated query-workspace-index 32 times.",
+      "evidenceArtifactPaths": [
+        ".paper/sessions/journal.json"
+      ],
+      "evidenceIds": [
+        "query-workspace-index"
+      ],
+      "recommendationIds": [
+        "meta-journal-query-workspace-index"
+      ],
+      "observedAt": "2026-04-13T13:50:29.815Z"
+    }
+  ],
+  "updatedAt": "2026-04-13T13:50:29.815Z"
 }
