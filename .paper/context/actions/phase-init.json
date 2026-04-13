@@ -24,5 +24,5 @@
     "Start with the board owner and queue state, then drop into packet and artifact context.",
     "Treat stale, review-needed, and handoff packets as higher-priority than general queue work."
   ],
-  "generatedAt": "2026-04-13T13:50:29.818Z"
+  "generatedAt": "2026-04-13T14:43:51.820Z"
 }

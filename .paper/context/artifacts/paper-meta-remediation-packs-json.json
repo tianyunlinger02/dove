@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "artifactPath": ".paper/meta/recommendations.json",
+  "artifactPath": ".paper/meta/remediation-packs.json",
   "exists": true,
   "category": "meta-optimize",
   "summary": "Meta-optimize artifacts are proposal-only summaries built from durable workflow signals.",

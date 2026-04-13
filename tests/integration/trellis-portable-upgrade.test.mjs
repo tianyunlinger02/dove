@@ -5,12 +5,14 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  ARTIFACT_PATHS,
   appendHandoff,
   ensureWorkspace,
   initProject,
   queryBoundaryReport,
   queryDecisions,
   queryLineage,
+  queryMetaOptimize,
   queryOpenQuestions,
   queryTaskGraph,
   queryWorkspaceIndex,
@@ -24,7 +26,8 @@ import {
   upsertClaims,
   upsertExperimentPlan,
   upsertNote,
-  upsertOrchestrationBoard
+  upsertOrchestrationBoard,
+  writeJson
 } from "../../src/core/index.mjs";
 
 function tempRoot() {
@@ -138,12 +141,16 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(workspaceIndex.handoffObligations.some((item) => item.packetId === "task-packet-review-task"));
   assert.ok(workspaceIndex.resumeGuidance.prioritizedPacketIds.includes("task-packet-review-task"));
   assert.ok(workspaceIndex.resumeGuidance.packetContextPaths.includes(".paper/context/packets/task-packet-review-task.json"));
-  assert.equal(workspaceIndex.repairFrontier.count, 0);
+  assert.equal(workspaceIndex.repairFrontier.count, 1);
+  assert.equal(workspaceIndex.repairFrontier.governanceIssueCount, 1);
+  assert.ok(workspaceIndex.repairFrontier.prioritizedItems.some((item) => item.frontierType === "workflow-governance"));
   assert.equal(workspaceIndex.contextSurfaces.currentActionContextPath, ".paper/context/actions/current.json");
   assert.ok(workspaceIndex.contextSurfaces.prioritizedArtifactContextPaths.some((item) => item.endsWith("orchestration-board-json.json")));
   assert.ok(workspaceIndex.behaviorDiscipline.requiredReadOrder.includes(".paper/context/actions/current.json"));
   assert.ok(phaseManifest.queueSummary.handoff.includes("task-packet-review-task"));
   assert.ok(phaseManifest.contextPaths.includes(".paper/context/packets/task-packet-review-task.json"));
+  assert.equal(reviewerManifest.operatorGuidance.repairFrontier.governanceIssueCount, 1);
+  assert.equal(currentActionBundle.operatorGuidance.repairFrontier.governanceIssueCount, 1);
   assert.equal(sessionSummary.summaryPath, ".paper/sessions/LATEST_SUMMARY.md");
   assert.ok(fs.existsSync(path.join(root, ".paper", "wiki", "navigation.md")));
   assert.ok(fs.existsSync(path.join(root, ".paper", "task-packets", "packets", "task-packet-review-task.json")));
@@ -153,6 +160,88 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(fs.existsSync(path.join(root, ".paper", "context", "roles", "reviewer.json")));
   assert.ok(fs.existsSync(path.join(root, ".paper", "sessions", "journal.json")));
   assert.ok(fs.existsSync(path.join(root, ".paper", "workflow-pack", "boundaries.json")));
+});
+
+test("remediation packs stay durable and visible through operator-facing surfaces", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, {
+    title: "Remediation Pack Visibility",
+    objective: "Expose durable remediation packs through workspace and meta surfaces.",
+    thesis: "Proposal-only remediation packs should stay file-first."
+  });
+
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{
+      id: "pack-review-gap",
+      summary: "A review concern remains unresolved.",
+      severity: "high",
+      status: "escalated",
+      responseOwnerRole: "researcher",
+      recurrenceCount: 3,
+      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    version: 3,
+    lastVerdict: "needs-work",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close the remediation pack review gap."],
+    unresolvedConcernIds: ["pack-review-gap"],
+    escalatedConcernIds: ["pack-review-gap"],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 3,
+    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["researcher"], separationMaintained: true }
+  });
+  writeJson(root, ARTIFACT_PATHS.figureQa, {
+    version: 1,
+    items: [],
+    issues: [{
+      id: "pack-figure-issue",
+      figureId: "figure-pack",
+      code: "missing-final-svg",
+      severity: "high",
+      summary: "Final SVG is still missing.",
+      artifactPaths: [ARTIFACT_PATHS.figureQa]
+    }],
+    updatedAt: null
+  });
+
+  const metaOptimize = queryMetaOptimize(root);
+  const workspaceIndex = queryWorkspaceIndex(root);
+  const navigation = fs.readFileSync(path.join(root, ARTIFACT_PATHS.navigationReport), "utf8");
+  const sessionSummaryText = fs.readFileSync(path.join(root, ARTIFACT_PATHS.sessionSummary), "utf8");
+  const remediationPackFile = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaRemediationPacks), "utf8"));
+  const researcherManifest = readRoleContextManifest(root, "researcher");
+  const phaseManifest = readPhaseContextManifest(root, workspaceIndex.boardPhase);
+  const currentActionBundle = readActionContextBundle(root);
+
+  assert.equal(metaOptimize.remediationPacks.proposalOnly, true);
+  assert.equal(metaOptimize.remediationPacks.summary.packCount >= 1, true);
+  assert.equal(remediationPackFile.summary.packCount, metaOptimize.remediationPacks.summary.packCount);
+  assert.equal(remediationPackFile.packs[0].proposalOnly, true);
+  assert.equal(remediationPackFile.packs[0].noAutoApply, true);
+  assert.equal(remediationPackFile.packs[0].reviewConcerns.some((item) => item.id === "pack-review-gap"), true);
+  assert.equal(remediationPackFile.packs.some((pack) => pack.figureQa.some((item) => item.id === "pack-figure-issue")), true);
+  assert.equal(remediationPackFile.packs[0].workspacePointers.includes(ARTIFACT_PATHS.workspaceIndex), true);
+  assert.equal(remediationPackFile.packs[0].manualNextActions.length > 0, true);
+  assert.equal(workspaceIndex.metaOptimize.remediationPacks.packCount, remediationPackFile.summary.packCount);
+  assert.equal(workspaceIndex.metaOptimize.remediationPacks.packsPath, ARTIFACT_PATHS.metaRemediationPacks);
+  assert.equal(researcherManifest.operatorGuidance.remediationPack.id, remediationPackFile.packs[0].id);
+  assert.equal(researcherManifest.operatorGuidance.remediationPack.manualNextActions.length > 0, true);
+  assert.equal(phaseManifest.operatorGuidance.remediationPack.id, remediationPackFile.packs[0].id);
+  assert.equal(currentActionBundle.operatorGuidance.remediationPack.id, remediationPackFile.packs[0].id);
+  assert.match(currentActionBundle.operatorGuidance.taxonomyPressure.overview, /typed wiki taxonomy pressure/i);
+  assert.match(navigation, /Remediation packs:/);
+  assert.match(navigation, /Remediation packs path:/);
+  assert.match(sessionSummaryText, /Remediation packs:/);
+  assert.match(sessionSummaryText, /Remediation packs path:/);
+  assert.ok(fs.existsSync(path.join(root, ".paper", "meta", "remediation-packs.json")));
 });
 
 test("task packet refresh preserves user-added fields and invalid role manifests fail fast", () => {
