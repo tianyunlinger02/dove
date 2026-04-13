@@ -160,7 +160,15 @@ async function main() {
     arguments: {}
   }));
   assert.equal(metaOptimize.proposalOnly, true);
+  assert.ok(Array.isArray(metaOptimize.clusters));
+  assert.ok(metaOptimize.frontier && typeof metaOptimize.frontier === "object");
+  assert.ok(metaOptimize.groupedFrontier && typeof metaOptimize.groupedFrontier === "object");
+  assert.equal(metaOptimize.groupedFrontier.ranking.method, "durable-signal-frontier-v1");
+  assert.ok(Array.isArray(metaOptimize.groupedFrontier.topClusters));
+  assert.ok(metaOptimize.longHorizon && typeof metaOptimize.longHorizon === "object");
+  assert.equal(metaOptimize.longHorizon.proposalOnly, true);
   assert.equal(metaOptimize.reportPath, ".paper/meta/LATEST_OPTIMIZER_REPORT.md");
+  assert.equal(metaOptimize.longHorizonPath, ".paper/meta/long-horizon-memory.json");
 
   extractJson(await call("tools/call", {
     name: "append_handoff",
