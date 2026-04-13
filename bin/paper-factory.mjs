@@ -7,7 +7,14 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { ensureWorkspace } from "../src/core/index.mjs";
-import { createWorkflowBoundaries } from "../src/core/schema.mjs";
+import {
+  createWorkflowBoundaries,
+  normalizeMetaLongHorizonMemory,
+  normalizeMetaOptimizerState,
+  normalizeMetaRecommendationsIndex,
+  normalizeWorkspaceIndex,
+  normalizeWorkspaceMetaOptimize
+} from "../src/core/schema.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -95,18 +102,396 @@ function readJsonFile(target, relativePath) {
   }
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function describeShape(value) {
+  if (Array.isArray(value)) {
+    return "array";
+  }
+  if (value === null) {
+    return "null";
+  }
+  return typeof value;
+}
+
+function requireObject(value, label, issues) {
+  if (!isPlainObject(value)) {
+    issues.push(`${label} must be an object (found ${describeShape(value)})`);
+    return null;
+  }
+  return value;
+}
+
+function requireArray(value, label, issues) {
+  if (!Array.isArray(value)) {
+    issues.push(`${label} must be an array (found ${describeShape(value)})`);
+    return null;
+  }
+  return value;
+}
+
+function maybeObject(parent, key, label, issues) {
+  if (!isPlainObject(parent) || !(key in parent) || parent[key] === undefined) {
+    return null;
+  }
+  return requireObject(parent[key], label, issues);
+}
+
+function maybeArray(parent, key, label, issues) {
+  if (!isPlainObject(parent) || !(key in parent) || parent[key] === undefined) {
+    return null;
+  }
+  return requireArray(parent[key], label, issues);
+}
+
+function validateWikiRelationsShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/wiki/relations.json", issues);
+  if (!root) {
+    return issues;
+  }
+  maybeArray(root, "items", ".paper/wiki/relations.json.items", issues);
+  const summary = maybeObject(root, "summary", ".paper/wiki/relations.json.summary", issues);
+  const taxonomy = summary ? maybeObject(summary, "taxonomy", ".paper/wiki/relations.json.summary.taxonomy", issues) : null;
+  if (taxonomy) {
+    maybeArray(taxonomy, "families", ".paper/wiki/relations.json.summary.taxonomy.families", issues);
+  }
+  return issues;
+}
+
+function validateFigureQaShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/figures/qa.json", issues);
+  if (!root) {
+    return issues;
+  }
+  maybeArray(root, "items", ".paper/figures/qa.json.items", issues);
+  maybeArray(root, "issues", ".paper/figures/qa.json.issues", issues);
+  return issues;
+}
+
+function validateWorkspaceRepairFrontierShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/workspace/index.json", issues);
+  if (!root) {
+    return issues;
+  }
+  const repairFrontier = maybeObject(root, "repairFrontier", ".paper/workspace/index.json.repairFrontier", issues);
+  if (repairFrontier) {
+    maybeArray(repairFrontier, "prioritizedItems", ".paper/workspace/index.json.repairFrontier.prioritizedItems", issues);
+    maybeArray(repairFrontier, "relationFamilySummaries", ".paper/workspace/index.json.repairFrontier.relationFamilySummaries", issues);
+    maybeArray(repairFrontier, "relationGroupSummaries", ".paper/workspace/index.json.repairFrontier.relationGroupSummaries", issues);
+    maybeArray(repairFrontier, "topDegradedGroupIds", ".paper/workspace/index.json.repairFrontier.topDegradedGroupIds", issues);
+  }
+  const metaOptimize = maybeObject(root, "metaOptimize", ".paper/workspace/index.json.metaOptimize", issues);
+  if (metaOptimize) {
+    maybeArray(metaOptimize, "topClusterIds", ".paper/workspace/index.json.metaOptimize.topClusterIds", issues);
+    maybeArray(metaOptimize, "topRecommendationIds", ".paper/workspace/index.json.metaOptimize.topRecommendationIds", issues);
+    maybeArray(metaOptimize, "topClusters", ".paper/workspace/index.json.metaOptimize.topClusters", issues);
+    maybeArray(metaOptimize, "topTaxonomyFamilyIds", ".paper/workspace/index.json.metaOptimize.topTaxonomyFamilyIds", issues);
+    maybeArray(metaOptimize, "topTaxonomyGroupIds", ".paper/workspace/index.json.metaOptimize.topTaxonomyGroupIds", issues);
+    maybeArray(metaOptimize, "pressureAreas", ".paper/workspace/index.json.metaOptimize.pressureAreas", issues);
+    const longHorizon = maybeObject(metaOptimize, "longHorizon", ".paper/workspace/index.json.metaOptimize.longHorizon", issues);
+    if (longHorizon) {
+      maybeArray(longHorizon, "topFamilyIds", ".paper/workspace/index.json.metaOptimize.longHorizon.topFamilyIds", issues);
+      maybeArray(longHorizon, "topTaxonomyFamilyIds", ".paper/workspace/index.json.metaOptimize.longHorizon.topTaxonomyFamilyIds", issues);
+      maybeArray(longHorizon, "topTaxonomyGroupIds", ".paper/workspace/index.json.metaOptimize.longHorizon.topTaxonomyGroupIds", issues);
+      maybeArray(longHorizon, "pressureAreas", ".paper/workspace/index.json.metaOptimize.longHorizon.pressureAreas", issues);
+    }
+  }
+  return issues;
+}
+
+function validateMetaRecommendationsShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/meta/recommendations.json", issues);
+  if (!root) {
+    return issues;
+  }
+  maybeArray(root, "items", ".paper/meta/recommendations.json.items", issues);
+  maybeArray(root, "clusters", ".paper/meta/recommendations.json.clusters", issues);
+  const ranking = maybeObject(root, "ranking", ".paper/meta/recommendations.json.ranking", issues);
+  if (ranking) {
+    maybeArray(ranking, "signals", ".paper/meta/recommendations.json.ranking.signals", issues);
+    maybeArray(ranking, "tieBreakOrder", ".paper/meta/recommendations.json.ranking.tieBreakOrder", issues);
+  }
+  const frontier = maybeObject(root, "frontier", ".paper/meta/recommendations.json.frontier", issues);
+  if (frontier) {
+    maybeArray(frontier, "topClusterIds", ".paper/meta/recommendations.json.frontier.topClusterIds", issues);
+    maybeArray(frontier, "topRecommendationIds", ".paper/meta/recommendations.json.frontier.topRecommendationIds", issues);
+    maybeArray(frontier, "activeSignalTypes", ".paper/meta/recommendations.json.frontier.activeSignalTypes", issues);
+    maybeArray(frontier, "topTaxonomyFamilyIds", ".paper/meta/recommendations.json.frontier.topTaxonomyFamilyIds", issues);
+    maybeArray(frontier, "topTaxonomyGroupIds", ".paper/meta/recommendations.json.frontier.topTaxonomyGroupIds", issues);
+    maybeArray(frontier, "pressureAreas", ".paper/meta/recommendations.json.frontier.pressureAreas", issues);
+  }
+  const summary = maybeObject(root, "summary", ".paper/meta/recommendations.json.summary", issues);
+  if (summary) {
+    maybeArray(summary, "signalTypes", ".paper/meta/recommendations.json.summary.signalTypes", issues);
+    maybeArray(summary, "topClusterIds", ".paper/meta/recommendations.json.summary.topClusterIds", issues);
+    maybeArray(summary, "topRecommendationIds", ".paper/meta/recommendations.json.summary.topRecommendationIds", issues);
+    maybeArray(summary, "topTaxonomyFamilyIds", ".paper/meta/recommendations.json.summary.topTaxonomyFamilyIds", issues);
+    maybeArray(summary, "topTaxonomyGroupIds", ".paper/meta/recommendations.json.summary.topTaxonomyGroupIds", issues);
+    maybeArray(summary, "pressureAreas", ".paper/meta/recommendations.json.summary.pressureAreas", issues);
+    maybeArray(summary, "topClusters", ".paper/meta/recommendations.json.summary.topClusters", issues);
+  }
+  return issues;
+}
+
+function validateMetaOptimizerStateShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/meta/optimizer-state.json", issues);
+  if (!root) {
+    return issues;
+  }
+  maybeArray(root, "sourceArtifacts", ".paper/meta/optimizer-state.json.sourceArtifacts", issues);
+  const frontier = maybeObject(root, "frontier", ".paper/meta/optimizer-state.json.frontier", issues);
+  if (frontier) {
+    maybeArray(frontier, "activeSignalTypes", ".paper/meta/optimizer-state.json.frontier.activeSignalTypes", issues);
+    maybeArray(frontier, "topClusterIds", ".paper/meta/optimizer-state.json.frontier.topClusterIds", issues);
+    maybeArray(frontier, "topRecommendationIds", ".paper/meta/optimizer-state.json.frontier.topRecommendationIds", issues);
+    maybeArray(frontier, "topClusters", ".paper/meta/optimizer-state.json.frontier.topClusters", issues);
+    maybeArray(frontier, "topTaxonomyFamilyIds", ".paper/meta/optimizer-state.json.frontier.topTaxonomyFamilyIds", issues);
+    maybeArray(frontier, "topTaxonomyGroupIds", ".paper/meta/optimizer-state.json.frontier.topTaxonomyGroupIds", issues);
+    maybeArray(frontier, "pressureAreas", ".paper/meta/optimizer-state.json.frontier.pressureAreas", issues);
+    maybeArray(frontier, "tieBreakOrder", ".paper/meta/optimizer-state.json.frontier.tieBreakOrder", issues);
+  }
+  maybeArray(root, "clusters", ".paper/meta/optimizer-state.json.clusters", issues);
+  const longHorizon = maybeObject(root, "longHorizon", ".paper/meta/optimizer-state.json.longHorizon", issues);
+  if (longHorizon) {
+    maybeArray(longHorizon, "topFamilyIds", ".paper/meta/optimizer-state.json.longHorizon.topFamilyIds", issues);
+    maybeArray(longHorizon, "topTaxonomyFamilyIds", ".paper/meta/optimizer-state.json.longHorizon.topTaxonomyFamilyIds", issues);
+    maybeArray(longHorizon, "topTaxonomyGroupIds", ".paper/meta/optimizer-state.json.longHorizon.topTaxonomyGroupIds", issues);
+    maybeArray(longHorizon, "pressureAreas", ".paper/meta/optimizer-state.json.longHorizon.pressureAreas", issues);
+  }
+  return issues;
+}
+
+function validateMetaLongHorizonShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/meta/long-horizon-memory.json", issues);
+  if (!root) {
+    return issues;
+  }
+  maybeObject(root, "horizon", ".paper/meta/long-horizon-memory.json.horizon", issues);
+  const summary = maybeObject(root, "summary", ".paper/meta/long-horizon-memory.json.summary", issues);
+  if (summary) {
+    maybeArray(summary, "topFamilyIds", ".paper/meta/long-horizon-memory.json.summary.topFamilyIds", issues);
+    maybeArray(summary, "topTaxonomyFamilyIds", ".paper/meta/long-horizon-memory.json.summary.topTaxonomyFamilyIds", issues);
+    maybeArray(summary, "topTaxonomyGroupIds", ".paper/meta/long-horizon-memory.json.summary.topTaxonomyGroupIds", issues);
+    maybeArray(summary, "pressureAreas", ".paper/meta/long-horizon-memory.json.summary.pressureAreas", issues);
+  }
+  maybeArray(root, "history", ".paper/meta/long-horizon-memory.json.history", issues);
+  maybeArray(root, "families", ".paper/meta/long-horizon-memory.json.families", issues);
+  return issues;
+}
+
+function collectRawManagedArtifactChecks(target) {
+  const specs = [
+    ["raw-typed-wiki-relations-shape", ".paper/wiki/relations.json", validateWikiRelationsShape],
+    ["raw-figure-qa-shape", ".paper/figures/qa.json", validateFigureQaShape],
+    ["raw-workspace-index-shape", ".paper/workspace/index.json", validateWorkspaceRepairFrontierShape],
+    ["raw-meta-recommendations-shape", ".paper/meta/recommendations.json", validateMetaRecommendationsShape],
+    ["raw-meta-optimizer-state-shape", ".paper/meta/optimizer-state.json", validateMetaOptimizerStateShape],
+    ["raw-meta-long-horizon-shape", ".paper/meta/long-horizon-memory.json", validateMetaLongHorizonShape]
+  ];
+
+  return specs.map(([check, relativePath, validate]) => {
+    const inspected = readJsonFile(target, relativePath);
+    if (inspected.status !== "ok") {
+      return {
+        check,
+        ok: inspected.status === "missing",
+        message: inspected.status === "missing" ? `${relativePath} is missing.` : inspected.message
+      };
+    }
+    const issues = validate(inspected.value);
+    return {
+      check,
+      ok: issues.length === 0,
+      message: issues.length === 0 ? "ok" : issues.join(" | ")
+    };
+  });
+}
+
+function collectRawMetaOptimizeConsistencyCheck(target) {
+  const recommendations = readJsonFile(target, ".paper/meta/recommendations.json");
+  const optimizerState = readJsonFile(target, ".paper/meta/optimizer-state.json");
+  const longHorizonMemory = readJsonFile(target, ".paper/meta/long-horizon-memory.json");
+  const workspaceIndex = readJsonFile(target, ".paper/workspace/index.json");
+
+  if ([recommendations, optimizerState, longHorizonMemory, workspaceIndex].some((item) => item.status !== "ok")) {
+    return {
+      check: "raw-meta-optimize-mirror-consistency",
+      ok: true,
+      message: "skipped"
+    };
+  }
+
+  const shapeIssues = [
+    ...validateMetaRecommendationsShape(recommendations.value),
+    ...validateMetaOptimizerStateShape(optimizerState.value),
+    ...validateMetaLongHorizonShape(longHorizonMemory.value),
+    ...validateWorkspaceRepairFrontierShape(workspaceIndex.value)
+  ];
+  if (shapeIssues.length > 0) {
+    return {
+      check: "raw-meta-optimize-mirror-consistency",
+      ok: true,
+      message: "skipped due to raw shape issues"
+    };
+  }
+
+  const normalizedRecommendations = normalizeMetaRecommendationsIndex(recommendations.value);
+  const normalizedOptimizerState = normalizeMetaOptimizerState(optimizerState.value);
+  const normalizedWorkspaceIndex = normalizeWorkspaceIndex(workspaceIndex.value);
+  const normalizedWorkspaceMetaOptimize = normalizeWorkspaceMetaOptimize(workspaceIndex.value.metaOptimize, normalizedWorkspaceIndex.metaOptimize);
+  const normalizedLongHorizonMemory = normalizeMetaLongHorizonMemory(longHorizonMemory.value);
+  const mismatches = [];
+  const topClusters = normalizedRecommendations.summary.topClusters;
+
+  if (normalizedWorkspaceMetaOptimize.recommendationCount !== normalizedRecommendations.items.length) {
+    mismatches.push("workspace metaOptimize recommendation count drift");
+  }
+  if (normalizedWorkspaceMetaOptimize.clusterCount !== normalizedRecommendations.clusters.length) {
+    mismatches.push("workspace metaOptimize cluster count drift");
+  }
+  if (normalizedWorkspaceMetaOptimize.reportPath !== normalizedOptimizerState.frontier.reportPath) {
+    mismatches.push("workspace metaOptimize reportPath drift");
+  }
+  if (normalizedWorkspaceMetaOptimize.recommendationsPath !== normalizedOptimizerState.frontier.recommendationsPath) {
+    mismatches.push("workspace metaOptimize recommendationsPath drift");
+  }
+  if (normalizedWorkspaceMetaOptimize.statePath !== normalizedOptimizerState.frontier.statePath) {
+    mismatches.push("workspace metaOptimize statePath drift");
+  }
+  if (normalizedWorkspaceMetaOptimize.longHorizonPath !== normalizedOptimizerState.frontier.longHorizonPath) {
+    mismatches.push("workspace metaOptimize longHorizonPath drift");
+  }
+  if (normalizedWorkspaceMetaOptimize.longHorizon.memoryPath !== normalizedOptimizerState.longHorizon.memoryPath) {
+    mismatches.push("workspace metaOptimize longHorizon.memoryPath drift");
+  }
+  if (JSON.stringify(normalizedRecommendations.frontier.topClusterIds) !== JSON.stringify(normalizedOptimizerState.frontier.topClusterIds)) {
+    mismatches.push("optimizer frontier topClusterIds drift");
+  }
+  if (JSON.stringify(normalizedRecommendations.frontier.topClusterIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.topClusterIds)) {
+    mismatches.push("workspace metaOptimize topClusterIds drift");
+  }
+  if (normalizedRecommendations.frontier.frontierSummary !== normalizedOptimizerState.frontier.frontierSummary) {
+    mismatches.push("optimizer frontier summary drift");
+  }
+  if (normalizedRecommendations.frontier.frontierSummary !== normalizedWorkspaceMetaOptimize.frontierSummary) {
+    mismatches.push("workspace metaOptimize frontier summary drift");
+  }
+  if (JSON.stringify(normalizedRecommendations.frontier.topTaxonomyFamilyIds) !== JSON.stringify(normalizedOptimizerState.frontier.topTaxonomyFamilyIds)) {
+    mismatches.push("optimizer frontier topTaxonomyFamilyIds drift");
+  }
+  if (JSON.stringify(normalizedRecommendations.frontier.topTaxonomyFamilyIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.topTaxonomyFamilyIds)) {
+    mismatches.push("workspace metaOptimize topTaxonomyFamilyIds drift");
+  }
+  if (JSON.stringify(normalizedRecommendations.frontier.topTaxonomyGroupIds) !== JSON.stringify(normalizedOptimizerState.frontier.topTaxonomyGroupIds)) {
+    mismatches.push("optimizer frontier topTaxonomyGroupIds drift");
+  }
+  if (JSON.stringify(normalizedRecommendations.frontier.topTaxonomyGroupIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.topTaxonomyGroupIds)) {
+    mismatches.push("workspace metaOptimize topTaxonomyGroupIds drift");
+  }
+  if (normalizedRecommendations.frontier.taxonomyOverview !== normalizedOptimizerState.frontier.taxonomyOverview) {
+    mismatches.push("optimizer frontier taxonomy overview drift");
+  }
+  if (normalizedRecommendations.frontier.taxonomyOverview !== normalizedWorkspaceMetaOptimize.taxonomyOverview) {
+    mismatches.push("workspace metaOptimize taxonomy overview drift");
+  }
+  if (JSON.stringify(normalizedRecommendations.frontier.pressureAreas) !== JSON.stringify(normalizedOptimizerState.frontier.pressureAreas)) {
+    mismatches.push("optimizer frontier pressureAreas drift");
+  }
+  if (JSON.stringify(normalizedRecommendations.frontier.pressureAreas) !== JSON.stringify(normalizedWorkspaceMetaOptimize.pressureAreas)) {
+    mismatches.push("workspace metaOptimize pressureAreas drift");
+  }
+  if (JSON.stringify(topClusters) !== JSON.stringify(normalizedOptimizerState.frontier.topClusters)) {
+    mismatches.push("optimizer frontier topClusters drift");
+  }
+  if (JSON.stringify(topClusters) !== JSON.stringify(normalizedWorkspaceMetaOptimize.topClusters)) {
+    mismatches.push("workspace metaOptimize topClusters drift");
+  }
+  if (normalizedWorkspaceMetaOptimize.longHorizon.familyCount !== normalizedLongHorizonMemory.summary.familyCount) {
+    mismatches.push("workspace metaOptimize longHorizon family count drift");
+  }
+  if (JSON.stringify(normalizedLongHorizonMemory.summary.topFamilyIds) !== JSON.stringify(normalizedOptimizerState.longHorizon.topFamilyIds)) {
+    mismatches.push("optimizer state longHorizon topFamilyIds drift");
+  }
+  if (JSON.stringify(normalizedLongHorizonMemory.summary.topFamilyIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topFamilyIds)) {
+    mismatches.push("workspace metaOptimize longHorizon topFamilyIds drift");
+  }
+  if (JSON.stringify(normalizedLongHorizonMemory.summary.topTaxonomyFamilyIds) !== JSON.stringify(normalizedOptimizerState.longHorizon.topTaxonomyFamilyIds)) {
+    mismatches.push("optimizer state longHorizon topTaxonomyFamilyIds drift");
+  }
+  if (JSON.stringify(normalizedLongHorizonMemory.summary.topTaxonomyFamilyIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topTaxonomyFamilyIds)) {
+    mismatches.push("workspace metaOptimize longHorizon topTaxonomyFamilyIds drift");
+  }
+  if (JSON.stringify(normalizedLongHorizonMemory.summary.topTaxonomyGroupIds) !== JSON.stringify(normalizedOptimizerState.longHorizon.topTaxonomyGroupIds)) {
+    mismatches.push("optimizer state longHorizon topTaxonomyGroupIds drift");
+  }
+  if (JSON.stringify(normalizedLongHorizonMemory.summary.topTaxonomyGroupIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topTaxonomyGroupIds)) {
+    mismatches.push("workspace metaOptimize longHorizon topTaxonomyGroupIds drift");
+  }
+  if (JSON.stringify(normalizedLongHorizonMemory.summary.pressureAreas) !== JSON.stringify(normalizedOptimizerState.longHorizon.pressureAreas)) {
+    mismatches.push("optimizer state longHorizon pressureAreas drift");
+  }
+  if (JSON.stringify(normalizedLongHorizonMemory.summary.pressureAreas) !== JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.pressureAreas)) {
+    mismatches.push("workspace metaOptimize longHorizon pressureAreas drift");
+  }
+  if (normalizedLongHorizonMemory.summary.overview !== normalizedOptimizerState.longHorizon.overview) {
+    mismatches.push("optimizer state longHorizon overview drift");
+  }
+  if (normalizedLongHorizonMemory.summary.overview !== normalizedWorkspaceMetaOptimize.longHorizon.overview) {
+    mismatches.push("workspace metaOptimize longHorizon overview drift");
+  }
+  if (normalizedLongHorizonMemory.summary.snapshotCount !== normalizedOptimizerState.longHorizon.snapshotCount) {
+    mismatches.push("optimizer state longHorizon snapshot count drift");
+  }
+  if (normalizedLongHorizonMemory.summary.snapshotCount !== normalizedWorkspaceMetaOptimize.longHorizon.snapshotCount) {
+    mismatches.push("workspace metaOptimize longHorizon snapshot count drift");
+  }
+  if (normalizedLongHorizonMemory.summary.lastAction !== normalizedOptimizerState.longHorizon.lastAction) {
+    mismatches.push("optimizer state longHorizon last action drift");
+  }
+  if (normalizedLongHorizonMemory.summary.lastAction !== normalizedWorkspaceMetaOptimize.longHorizon.lastAction) {
+    mismatches.push("workspace metaOptimize longHorizon last action drift");
+  }
+
+  return {
+    check: "raw-meta-optimize-mirror-consistency",
+    ok: mismatches.length === 0,
+    message: mismatches.length === 0 ? "ok" : mismatches.join(" | ")
+  };
+}
+
 function inspectWikiRelations(target) {
   const inspected = readJsonFile(target, ".paper/wiki/relations.json");
   if (inspected.status !== "ok") {
-    return { status: inspected.status, degradedCount: 0, reasons: [inspected.message], relationIds: [] };
+    return { status: inspected.status, degradedCount: 0, degradedFamilyCount: 0, reasons: [inspected.message], relationIds: [], familyIds: [] };
+  }
+  const shapeIssues = validateWikiRelationsShape(inspected.value);
+  if (shapeIssues.length > 0) {
+    return { status: "malformed", degradedCount: 0, degradedFamilyCount: 0, reasons: shapeIssues, relationIds: [], familyIds: [] };
   }
   const items = Array.isArray(inspected.value?.items) ? inspected.value.items : [];
+  const summary = inspected.value?.summary ?? {};
+  const taxonomy = summary.taxonomy ?? {};
   const degraded = items.filter((item) => item?.integrity?.status === "degraded");
+  const degradedFamilies = Array.isArray(taxonomy.families) ? taxonomy.families.filter((item) => item?.degradedCount > 0) : [];
   return {
     status: degraded.length > 0 ? "degraded" : "ok",
     degradedCount: degraded.length,
+    degradedFamilyCount: degradedFamilies.length,
     relationIds: degraded.map((item) => item.id),
-    reasons: degraded.flatMap((item) => (item.integrity?.reasons ?? []).map((reason) => reason.message)).slice(0, 10)
+    familyIds: degradedFamilies.map((item) => item.id),
+    taxonomyOverview: taxonomy.overview ?? null,
+    reasons: [
+      degradedFamilies.length > 0 ? `degraded families: ${degradedFamilies.map((item) => `${item.id}(${item.degradedCount})`).join(", ")}` : null,
+      ...degraded.flatMap((item) => (item.integrity?.reasons ?? []).map((reason) => reason.message))
+    ].filter(Boolean).slice(0, 10)
   };
 }
 
@@ -114,6 +499,10 @@ function inspectFigureQa(target) {
   const inspected = readJsonFile(target, ".paper/figures/qa.json");
   if (inspected.status !== "ok") {
     return { status: inspected.status, issueCount: 0, reasons: [inspected.message], issueIds: [] };
+  }
+  const shapeIssues = validateFigureQaShape(inspected.value);
+  if (shapeIssues.length > 0) {
+    return { status: "malformed", issueCount: 0, reasons: shapeIssues, issueIds: [] };
   }
   const issues = Array.isArray(inspected.value?.issues) ? inspected.value.issues : [];
   return {
@@ -127,14 +516,126 @@ function inspectFigureQa(target) {
 function inspectWorkspaceRepairFrontier(target) {
   const inspected = readJsonFile(target, ".paper/workspace/index.json");
   if (inspected.status !== "ok") {
-    return { status: inspected.status, count: 0, reasons: [inspected.message], itemIds: [] };
+    return { status: inspected.status, count: 0, relationFamilyIssueCount: 0, reasons: [inspected.message], itemIds: [], familyIds: [] };
+  }
+  const shapeIssues = validateWorkspaceRepairFrontierShape(inspected.value);
+  if (shapeIssues.length > 0) {
+    return { status: "malformed", count: 0, relationFamilyIssueCount: 0, reasons: shapeIssues, itemIds: [], familyIds: [] };
   }
   const items = Array.isArray(inspected.value?.repairFrontier?.prioritizedItems) ? inspected.value.repairFrontier.prioritizedItems : [];
+  const relationFamilySummaries = Array.isArray(inspected.value?.repairFrontier?.relationFamilySummaries) ? inspected.value.repairFrontier.relationFamilySummaries : [];
+  const relationGroupSummaries = Array.isArray(inspected.value?.repairFrontier?.relationGroupSummaries) ? inspected.value.repairFrontier.relationGroupSummaries : [];
   return {
     status: items.length > 0 ? "degraded" : "ok",
     count: items.length,
+    relationFamilyIssueCount: relationFamilySummaries.length,
+    relationGroupIssueCount: relationGroupSummaries.length,
     itemIds: items.map((item) => item.id),
-    reasons: items.map((item) => item.summary ?? item.id).slice(0, 10)
+    familyIds: relationFamilySummaries.map((item) => item.id),
+    groupIds: relationGroupSummaries.map((item) => item.id),
+    taxonomyOverview: inspected.value?.repairFrontier?.taxonomyOverview ?? null,
+    reasons: [
+      inspected.value?.repairFrontier?.taxonomyOverview ?? null,
+      ...relationFamilySummaries.map((item) => item.overview ?? item.label ?? item.id),
+      ...relationGroupSummaries.map((item) => item.overview ?? item.label ?? item.id),
+      ...items.map((item) => item.summary ?? item.id)
+    ].filter(Boolean).slice(0, 10)
+  };
+}
+
+function inspectMetaOptimize(target) {
+  const recommendations = readJsonFile(target, ".paper/meta/recommendations.json");
+  const optimizerState = readJsonFile(target, ".paper/meta/optimizer-state.json");
+  const longHorizonMemory = readJsonFile(target, ".paper/meta/long-horizon-memory.json");
+  const workspaceIndex = readJsonFile(target, ".paper/workspace/index.json");
+  if (recommendations.status !== "ok") {
+    return { status: recommendations.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [recommendations.message] };
+  }
+  if (optimizerState.status !== "ok") {
+    return { status: optimizerState.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [optimizerState.message] };
+  }
+  if (longHorizonMemory.status !== "ok") {
+    return { status: longHorizonMemory.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [longHorizonMemory.message] };
+  }
+  if (workspaceIndex.status !== "ok") {
+    return { status: workspaceIndex.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [workspaceIndex.message] };
+  }
+  const shapeIssues = [
+    ...validateMetaRecommendationsShape(recommendations.value),
+    ...validateMetaOptimizerStateShape(optimizerState.value),
+    ...validateMetaLongHorizonShape(longHorizonMemory.value),
+    ...validateWorkspaceRepairFrontierShape(workspaceIndex.value)
+  ];
+  if (shapeIssues.length > 0) {
+    return { status: "malformed", recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: shapeIssues };
+  }
+  const normalizedRecommendations = normalizeMetaRecommendationsIndex(recommendations.value);
+  const normalizedOptimizerState = normalizeMetaOptimizerState(optimizerState.value);
+  const normalizedLongHorizonMemory = normalizeMetaLongHorizonMemory(longHorizonMemory.value);
+  const normalizedWorkspaceIndex = normalizeWorkspaceIndex(workspaceIndex.value);
+  const normalizedWorkspaceMetaOptimize = normalizeWorkspaceMetaOptimize(workspaceIndex.value.metaOptimize, normalizedWorkspaceIndex.metaOptimize);
+  const items = normalizedRecommendations.items;
+  const clusters = normalizedRecommendations.clusters;
+  const longHorizonSummary = normalizedLongHorizonMemory.summary;
+  const frontier = {
+    ...normalizedRecommendations.frontier,
+    ...normalizedOptimizerState.frontier
+  };
+  const topClusters = Array.isArray(frontier.topClusters) && frontier.topClusters.length > 0
+    ? frontier.topClusters
+    : normalizedRecommendations.summary.topClusters;
+  const ranking = normalizedRecommendations.ranking;
+  const countMatches = (frontier.recommendationCount ?? items.length) === items.length;
+  const clusterMatches = (frontier.clusterCount ?? clusters.length) === clusters.length;
+  const topClusterMatches = topClusters.length === Math.min(clusters.length, 3);
+  const rankingPresent = typeof ranking.method === "string" && Array.isArray(ranking.tieBreakOrder);
+  const longHorizonPresent = typeof longHorizonSummary.overview === "string" && Array.isArray(longHorizonSummary.topFamilyIds);
+  const workspaceMirrorMatches = normalizedWorkspaceMetaOptimize.recommendationCount === items.length
+    && normalizedWorkspaceMetaOptimize.clusterCount === clusters.length
+    && normalizedWorkspaceMetaOptimize.reportPath === normalizedOptimizerState.frontier.reportPath
+    && normalizedWorkspaceMetaOptimize.recommendationsPath === normalizedOptimizerState.frontier.recommendationsPath
+    && normalizedWorkspaceMetaOptimize.longHorizonPath === normalizedOptimizerState.frontier.longHorizonPath
+    && normalizedWorkspaceMetaOptimize.longHorizon.memoryPath === normalizedOptimizerState.longHorizon.memoryPath
+    && JSON.stringify(normalizedWorkspaceMetaOptimize.topClusterIds) === JSON.stringify(normalizedRecommendations.frontier.topClusterIds)
+    && normalizedWorkspaceMetaOptimize.frontierSummary === normalizedRecommendations.frontier.frontierSummary
+    && JSON.stringify(normalizedWorkspaceMetaOptimize.topTaxonomyFamilyIds) === JSON.stringify(normalizedRecommendations.frontier.topTaxonomyFamilyIds)
+    && JSON.stringify(normalizedWorkspaceMetaOptimize.topTaxonomyGroupIds) === JSON.stringify(normalizedRecommendations.frontier.topTaxonomyGroupIds)
+    && JSON.stringify(normalizedWorkspaceMetaOptimize.pressureAreas) === JSON.stringify(normalizedRecommendations.frontier.pressureAreas)
+    && normalizedWorkspaceMetaOptimize.taxonomyOverview === normalizedRecommendations.frontier.taxonomyOverview
+    && JSON.stringify(normalizedWorkspaceMetaOptimize.topClusters) === JSON.stringify(normalizedRecommendations.summary.topClusters)
+    && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topFamilyIds) === JSON.stringify(longHorizonSummary.topFamilyIds)
+    && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topTaxonomyFamilyIds) === JSON.stringify(longHorizonSummary.topTaxonomyFamilyIds)
+    && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topTaxonomyGroupIds) === JSON.stringify(longHorizonSummary.topTaxonomyGroupIds)
+    && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.pressureAreas) === JSON.stringify(longHorizonSummary.pressureAreas)
+    && normalizedWorkspaceMetaOptimize.longHorizon.overview === longHorizonSummary.overview
+    && normalizedWorkspaceMetaOptimize.longHorizon.snapshotCount === longHorizonSummary.snapshotCount
+    && normalizedWorkspaceMetaOptimize.longHorizon.lastAction === longHorizonSummary.lastAction;
+  return {
+    status: countMatches && clusterMatches && topClusterMatches && rankingPresent && longHorizonPresent && workspaceMirrorMatches ? "ok" : "degraded",
+    recommendationCount: items.length,
+    clusterCount: clusters.length,
+    criticalCount: items.filter((item) => item?.priority === "critical").length,
+    topClusterIds: Array.isArray(frontier.topClusterIds) ? frontier.topClusterIds : [],
+    topRecommendationIds: Array.isArray(frontier.topRecommendationIds) ? frontier.topRecommendationIds : [],
+    topFamilyIds: Array.isArray(longHorizonSummary.topFamilyIds) ? longHorizonSummary.topFamilyIds : [],
+    topTaxonomyFamilyIds: Array.isArray(frontier.topTaxonomyFamilyIds) ? frontier.topTaxonomyFamilyIds : [],
+    topTaxonomyGroupIds: Array.isArray(frontier.topTaxonomyGroupIds) ? frontier.topTaxonomyGroupIds : [],
+    taxonomyOverview: frontier.taxonomyOverview ?? null,
+    frontierSummary: frontier.frontierSummary ?? null,
+    rankingMethod: frontier.rankingMethod ?? ranking.method ?? null,
+    topClusters,
+    reasons: [
+      !countMatches ? "optimizer frontier recommendation count drift" : null,
+      !clusterMatches ? "optimizer frontier cluster count drift" : null,
+      !topClusterMatches ? "optimizer frontier top-cluster summary drift" : null,
+      !rankingPresent ? "optimizer frontier ranking semantics missing" : null,
+      !longHorizonPresent ? "optimizer long-horizon memory summary missing" : null,
+      !workspaceMirrorMatches ? "workspace metaOptimize mirror drift" : null,
+      `grouped frontier: ${clusters.length} clusters / ${items.length} recommendations`,
+      frontier.frontierSummary ? `frontier summary: ${frontier.frontierSummary}` : null,
+      frontier.taxonomyOverview ? `taxonomy pressure: ${frontier.taxonomyOverview}` : null,
+      longHorizonSummary.overview ? `long-horizon summary: ${longHorizonSummary.overview}` : null
+    ].filter(Boolean)
   };
 }
 
@@ -153,10 +654,12 @@ function doctor(target) {
     ".paper/wiki/entities.json",
     ".paper/wiki/relations.json",
     ".paper/figures/qa.json",
+    ".paper/meta/long-horizon-memory.json",
     ".paper/workspace/index.json",
-    "mcp/paper-state-server.mjs",
-    "src/mcp/server.mjs"
-  ];
+     ".paper/meta/long-horizon-memory.json",
+     "mcp/paper-state-server.mjs",
+     "src/mcp/server.mjs"
+   ];
 
   const missing = required.filter((relativePath) => !fs.existsSync(path.join(target, relativePath)));
   const result = {
@@ -199,6 +702,9 @@ function doctor(target) {
       });
     }
   }
+
+  result.checks.push(...collectRawManagedArtifactChecks(target));
+  result.checks.push(collectRawMetaOptimizeConsistencyCheck(target));
 
   if (rawJsonChecksPassed && boundaryRawParseOk) {
     ensureWorkspace(target);
@@ -245,7 +751,8 @@ function doctor(target) {
   const managedArtifacts = {
     wikiRelations: inspectWikiRelations(target),
     figureQa: inspectFigureQa(target),
-    workspaceRepairFrontier: inspectWorkspaceRepairFrontier(target)
+    workspaceRepairFrontier: inspectWorkspaceRepairFrontier(target),
+    metaOptimize: inspectMetaOptimize(target)
   };
   result.managedArtifacts = managedArtifacts;
   result.checks.push({
@@ -253,7 +760,7 @@ function doctor(target) {
     ok: managedArtifacts.wikiRelations.status === "ok",
     message: managedArtifacts.wikiRelations.status === "ok"
       ? "typed wiki relations are healthy"
-      : managedArtifacts.wikiRelations.reasons.join(" | ") || `degraded relations: ${managedArtifacts.wikiRelations.relationIds.join(", ")}`
+      : managedArtifacts.wikiRelations.reasons.join(" | ") || `degraded relations: ${managedArtifacts.wikiRelations.relationIds.join(", ")} | degraded families: ${managedArtifacts.wikiRelations.familyIds.join(", ")}`
   });
   result.checks.push({
     check: "figure-qa-health",
@@ -267,7 +774,12 @@ function doctor(target) {
     ok: managedArtifacts.workspaceRepairFrontier.status === "ok",
     message: managedArtifacts.workspaceRepairFrontier.status === "ok"
       ? "workspace repair frontier is clear"
-      : managedArtifacts.workspaceRepairFrontier.reasons.join(" | ") || `repair items: ${managedArtifacts.workspaceRepairFrontier.itemIds.join(", ")}`
+      : managedArtifacts.workspaceRepairFrontier.reasons.join(" | ") || `repair items: ${managedArtifacts.workspaceRepairFrontier.itemIds.join(", ")} | degraded relation families: ${managedArtifacts.workspaceRepairFrontier.familyIds.join(", ")}`
+  });
+  result.checks.push({
+    check: "meta-optimize-frontier",
+    ok: managedArtifacts.metaOptimize.status === "ok",
+    message: managedArtifacts.metaOptimize.reasons.join(" | ") || `clusters=${managedArtifacts.metaOptimize.clusterCount} recommendations=${managedArtifacts.metaOptimize.recommendationCount}`
   });
 
   result.healthy = result.healthy && result.checks.every((check) => check.ok);

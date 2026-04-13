@@ -131,12 +131,13 @@ export const ARTIFACT_PATHS = {
   versionsIndex: ".paper/versions/index.json",
   versionComparisons: ".paper/versions/comparisons.json",
   versionComparisonReport: ".paper/versions/LATEST_COMPARISON.md",
-   versionSnapshotsDir: ".paper/versions/snapshots",
-   metaDir: ".paper/meta",
-   metaEvents: ".paper/meta/events.json",
-   metaRecommendations: ".paper/meta/recommendations.json",
-   metaOptimizerState: ".paper/meta/optimizer-state.json",
-   metaOptimizerReport: ".paper/meta/LATEST_OPTIMIZER_REPORT.md"
+  versionSnapshotsDir: ".paper/versions/snapshots",
+  metaDir: ".paper/meta",
+  metaEvents: ".paper/meta/events.json",
+  metaLongHorizonMemory: ".paper/meta/long-horizon-memory.json",
+  metaRecommendations: ".paper/meta/recommendations.json",
+  metaOptimizerState: ".paper/meta/optimizer-state.json",
+  metaOptimizerReport: ".paper/meta/LATEST_OPTIMIZER_REPORT.md"
 };
 
 function digestText(value) {
@@ -377,6 +378,19 @@ function normalizeBoolean(value, fallback) {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function normalizeNumber(value, fallback) {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeStringArrayRecord(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([key, items]) => [key, normalizeStringArray(items)])
+  );
+}
+
 function normalizeContinuation(value) {
   if (!value || typeof value !== "object") {
     return createContinuationState();
@@ -556,20 +570,16 @@ export function normalizeWorkspaceIndex(raw = {}) {
       ...repairFrontier,
       count: Number.isFinite(repairFrontier.count) ? repairFrontier.count : base.repairFrontier.count,
       relationIssueCount: Number.isFinite(repairFrontier.relationIssueCount) ? repairFrontier.relationIssueCount : base.repairFrontier.relationIssueCount,
+      relationFamilyIssueCount: Number.isFinite(repairFrontier.relationFamilyIssueCount) ? repairFrontier.relationFamilyIssueCount : base.repairFrontier.relationFamilyIssueCount,
       managedArtifactIssueCount: Number.isFinite(repairFrontier.managedArtifactIssueCount) ? repairFrontier.managedArtifactIssueCount : base.repairFrontier.managedArtifactIssueCount,
+      topDegradedFamilyIds: normalizeStringArray(repairFrontier.topDegradedFamilyIds),
+      topDegradedGroupIds: normalizeStringArray(repairFrontier.topDegradedGroupIds),
+      taxonomyOverview: normalizeString(repairFrontier.taxonomyOverview, base.repairFrontier.taxonomyOverview),
+      relationFamilySummaries: normalizeObjectArray(repairFrontier.relationFamilySummaries),
+      relationGroupSummaries: normalizeObjectArray(repairFrontier.relationGroupSummaries),
       prioritizedItems: normalizeObjectArray(repairFrontier.prioritizedItems)
     },
-    metaOptimize: {
-      ...base.metaOptimize,
-      ...metaOptimize,
-      proposalOnly: normalizeBoolean(metaOptimize.proposalOnly, base.metaOptimize.proposalOnly),
-      recommendationCount: Number.isFinite(metaOptimize.recommendationCount) ? metaOptimize.recommendationCount : base.metaOptimize.recommendationCount,
-      criticalCount: Number.isFinite(metaOptimize.criticalCount) ? metaOptimize.criticalCount : base.metaOptimize.criticalCount,
-      activeSignalTypes: normalizeStringArray(metaOptimize.activeSignalTypes),
-      reportPath: normalizeString(metaOptimize.reportPath, base.metaOptimize.reportPath),
-      recommendationsPath: normalizeString(metaOptimize.recommendationsPath, base.metaOptimize.recommendationsPath),
-      statePath: normalizeString(metaOptimize.statePath, base.metaOptimize.statePath)
-    },
+    metaOptimize: normalizeWorkspaceMetaOptimize(metaOptimize, base.metaOptimize),
     activeRoles: normalizeStringArray(raw.activeRoles),
     unresolvedConcernIds: normalizeStringArray(raw.unresolvedConcernIds),
     mostRecentSessions: normalizeObjectArray(raw.mostRecentSessions),
@@ -746,24 +756,226 @@ export function createMetaEventsIndex() {
   };
 }
 
-export function createMetaRecommendationsIndex() {
+export function createMetaLongHorizonMemory() {
   return {
     version: 1,
     proposalOnly: true,
+    historyWindowSize: 30,
+    horizon: {
+      sessionEntriesAnalyzed: 0,
+      reviewRoundsObserved: 0,
+      versionComparisonsAnalyzed: 0,
+      auditRecordsAnalyzed: 0,
+      bridgeRecordsAnalyzed: 0
+    },
+    summary: {
+      familyCount: 0,
+      recurringFamilyCount: 0,
+      risingFamilyCount: 0,
+      stableFamilyCount: 0,
+      coolingFamilyCount: 0,
+      snapshotCount: 0,
+      lastObservedAt: null,
+      lastAction: "unchanged",
+      topFamilyIds: [],
+      topTaxonomyFamilyIds: [],
+      topTaxonomyGroupIds: [],
+      pressureAreas: [],
+      overview: "No long-horizon workflow memory has been summarized yet."
+    },
+    historyPolicy: {
+      mode: "deterministic-noop-drift-guard-v1",
+      lastAction: "unchanged",
+      reason: "No long-horizon snapshots have been recorded yet.",
+      comparedAt: null,
+      lastMeaningfulChangeAt: null
+    },
+    history: [],
+    families: [],
+    updatedAt: null
+  };
+}
+
+export function normalizeMetaLongHorizonMemory(raw = {}) {
+  const base = createMetaLongHorizonMemory();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+
+  const horizon = normalizeObject(raw.horizon);
+  const summary = normalizeObject(raw.summary);
+  const historyPolicy = normalizeObject(raw.historyPolicy);
+
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    proposalOnly: normalizeBoolean(raw.proposalOnly, base.proposalOnly),
+    historyWindowSize: normalizeNumber(raw.historyWindowSize, base.historyWindowSize),
+    horizon: {
+      ...base.horizon,
+      ...horizon,
+      sessionEntriesAnalyzed: normalizeNumber(horizon.sessionEntriesAnalyzed, base.horizon.sessionEntriesAnalyzed),
+      reviewRoundsObserved: normalizeNumber(horizon.reviewRoundsObserved, base.horizon.reviewRoundsObserved),
+      versionComparisonsAnalyzed: normalizeNumber(horizon.versionComparisonsAnalyzed, base.horizon.versionComparisonsAnalyzed),
+      auditRecordsAnalyzed: normalizeNumber(horizon.auditRecordsAnalyzed, base.horizon.auditRecordsAnalyzed),
+      bridgeRecordsAnalyzed: normalizeNumber(horizon.bridgeRecordsAnalyzed, base.horizon.bridgeRecordsAnalyzed)
+    },
+    summary: {
+      ...base.summary,
+      ...summary,
+      familyCount: normalizeNumber(summary.familyCount, base.summary.familyCount),
+      recurringFamilyCount: normalizeNumber(summary.recurringFamilyCount, base.summary.recurringFamilyCount),
+      risingFamilyCount: normalizeNumber(summary.risingFamilyCount, base.summary.risingFamilyCount),
+      stableFamilyCount: normalizeNumber(summary.stableFamilyCount, base.summary.stableFamilyCount),
+      coolingFamilyCount: normalizeNumber(summary.coolingFamilyCount, base.summary.coolingFamilyCount),
+      snapshotCount: normalizeNumber(summary.snapshotCount, base.summary.snapshotCount),
+      lastObservedAt: summary.lastObservedAt ?? base.summary.lastObservedAt,
+      lastAction: normalizeString(summary.lastAction, base.summary.lastAction),
+      topFamilyIds: normalizeStringArray(summary.topFamilyIds),
+      topTaxonomyFamilyIds: normalizeStringArray(summary.topTaxonomyFamilyIds),
+      topTaxonomyGroupIds: normalizeStringArray(summary.topTaxonomyGroupIds),
+      pressureAreas: normalizeStringArray(summary.pressureAreas),
+      overview: normalizeString(summary.overview, base.summary.overview)
+    },
+    historyPolicy: {
+      ...base.historyPolicy,
+      ...historyPolicy,
+      mode: normalizeString(historyPolicy.mode, base.historyPolicy.mode),
+      lastAction: normalizeString(historyPolicy.lastAction, base.historyPolicy.lastAction),
+      reason: normalizeString(historyPolicy.reason, base.historyPolicy.reason),
+      comparedAt: historyPolicy.comparedAt ?? base.historyPolicy.comparedAt,
+      lastMeaningfulChangeAt: historyPolicy.lastMeaningfulChangeAt ?? base.historyPolicy.lastMeaningfulChangeAt
+    },
+    history: normalizeObjectArray(raw.history),
+    families: normalizeObjectArray(raw.families),
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function createMetaRecommendationsIndex() {
+  return {
+    version: 3,
+    proposalOnly: true,
     items: [],
+    clusters: [],
+    ranking: {
+      method: "durable-signal-frontier-v1",
+      signals: [
+        "priority",
+        "recurrenceCount",
+        "evidenceDensity",
+        "crossSessionRecurrence",
+        "repairFrontierOverlap",
+        "auditCriticality",
+        "bridgeCriticality",
+        "queueChurn",
+        "taxonomyFamilyPressure",
+        "taxonomyGroupPressure"
+      ],
+      tieBreakOrder: ["score-desc", "priority-rank", "cluster-rank", "cluster-id", "category", "id"]
+    },
+    frontier: {
+      recommendationCount: 0,
+      criticalCount: 0,
+      clusterCount: 0,
+      frontierScore: 0,
+      topClusterIds: [],
+      topRecommendationIds: [],
+      activeSignalTypes: [],
+      topTaxonomyFamilyIds: [],
+      topTaxonomyGroupIds: [],
+      pressureAreas: [],
+      taxonomyOverview: "No typed wiki taxonomy pressure is currently active in the optimizer frontier.",
+      frontierSummary: "No proposal-only optimizer recommendations have been generated yet.",
+      rankingMethod: "durable-signal-frontier-v1"
+    },
     summary: {
       recommendationCount: 0,
       criticalCount: 0,
+      clusterCount: 0,
+      frontierScore: 0,
       categories: {},
-      signalTypes: []
+      signalTypes: [],
+      topClusterIds: [],
+      topRecommendationIds: [],
+      topTaxonomyFamilyIds: [],
+      topTaxonomyGroupIds: [],
+      pressureAreas: [],
+      taxonomyOverview: "No typed wiki taxonomy pressure is currently active in the optimizer frontier.",
+      clusterMembership: {},
+      topClusters: []
     },
     updatedAt: null
   };
 }
 
+export function normalizeMetaRecommendationsIndex(raw = {}) {
+  const base = createMetaRecommendationsIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+
+  const ranking = normalizeObject(raw.ranking);
+  const frontier = normalizeObject(raw.frontier);
+  const summary = normalizeObject(raw.summary);
+
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    proposalOnly: normalizeBoolean(raw.proposalOnly, base.proposalOnly),
+    items: normalizeObjectArray(raw.items),
+    clusters: normalizeObjectArray(raw.clusters),
+    ranking: {
+      ...base.ranking,
+      ...ranking,
+      method: normalizeString(ranking.method, base.ranking.method),
+      signals: normalizeStringArray(ranking.signals, base.ranking.signals),
+      tieBreakOrder: normalizeStringArray(ranking.tieBreakOrder, base.ranking.tieBreakOrder)
+    },
+    frontier: {
+      ...base.frontier,
+      ...frontier,
+      recommendationCount: normalizeNumber(frontier.recommendationCount, base.frontier.recommendationCount),
+      criticalCount: normalizeNumber(frontier.criticalCount, base.frontier.criticalCount),
+      clusterCount: normalizeNumber(frontier.clusterCount, base.frontier.clusterCount),
+      frontierScore: normalizeNumber(frontier.frontierScore, base.frontier.frontierScore),
+      topClusterIds: normalizeStringArray(frontier.topClusterIds),
+      topRecommendationIds: normalizeStringArray(frontier.topRecommendationIds),
+      activeSignalTypes: normalizeStringArray(frontier.activeSignalTypes),
+      topTaxonomyFamilyIds: normalizeStringArray(frontier.topTaxonomyFamilyIds),
+      topTaxonomyGroupIds: normalizeStringArray(frontier.topTaxonomyGroupIds),
+      pressureAreas: normalizeStringArray(frontier.pressureAreas),
+      taxonomyOverview: normalizeString(frontier.taxonomyOverview, base.frontier.taxonomyOverview),
+      frontierSummary: normalizeString(frontier.frontierSummary, base.frontier.frontierSummary),
+      rankingMethod: normalizeString(frontier.rankingMethod, base.frontier.rankingMethod)
+    },
+    summary: {
+      ...base.summary,
+      ...summary,
+      recommendationCount: normalizeNumber(summary.recommendationCount, base.summary.recommendationCount),
+      criticalCount: normalizeNumber(summary.criticalCount, base.summary.criticalCount),
+      clusterCount: normalizeNumber(summary.clusterCount, base.summary.clusterCount),
+      frontierScore: normalizeNumber(summary.frontierScore, base.summary.frontierScore),
+      categories: normalizeObject(summary.categories),
+      signalTypes: normalizeStringArray(summary.signalTypes),
+      topClusterIds: normalizeStringArray(summary.topClusterIds),
+      topRecommendationIds: normalizeStringArray(summary.topRecommendationIds),
+      topTaxonomyFamilyIds: normalizeStringArray(summary.topTaxonomyFamilyIds),
+      topTaxonomyGroupIds: normalizeStringArray(summary.topTaxonomyGroupIds),
+      pressureAreas: normalizeStringArray(summary.pressureAreas),
+      taxonomyOverview: normalizeString(summary.taxonomyOverview, base.summary.taxonomyOverview),
+      clusterMembership: normalizeStringArrayRecord(summary.clusterMembership),
+      topClusters: normalizeObjectArray(summary.topClusters)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
 export function createMetaOptimizerState() {
   return {
-    version: 1,
+    version: 4,
     proposalOnly: true,
     sourceArtifacts: [
       ARTIFACT_PATHS.sessionJournal,
@@ -773,18 +985,164 @@ export function createMetaOptimizerState() {
       ARTIFACT_PATHS.claimBridgeLog,
       ARTIFACT_PATHS.figureQa,
       ARTIFACT_PATHS.versionComparisons,
+      ARTIFACT_PATHS.metaLongHorizonMemory,
       ARTIFACT_PATHS.orchestrationBoard,
       ARTIFACT_PATHS.workspaceIndex
     ],
     frontier: {
       recommendationCount: 0,
       criticalCount: 0,
+      clusterCount: 0,
+      frontierScore: 0,
       activeSignalTypes: [],
+      topClusterIds: [],
+      topRecommendationIds: [],
+      topClusters: [],
+      topTaxonomyFamilyIds: [],
+      topTaxonomyGroupIds: [],
+      pressureAreas: [],
+      taxonomyOverview: "No typed wiki taxonomy pressure is currently active in the optimizer frontier.",
+      frontierSummary: "No proposal-only optimizer recommendations have been generated yet.",
+      rankingMethod: "durable-signal-frontier-v1",
+      tieBreakOrder: ["score-desc", "priority-rank", "cluster-rank", "cluster-id", "category", "id"],
       reportPath: ARTIFACT_PATHS.metaOptimizerReport,
-      recommendationsPath: ARTIFACT_PATHS.metaRecommendations
+      recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
+      statePath: ARTIFACT_PATHS.metaOptimizerState,
+      longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory
+    },
+    clusters: [],
+    longHorizon: {
+      familyCount: 0,
+      recurringFamilyCount: 0,
+      risingFamilyCount: 0,
+      stableFamilyCount: 0,
+      coolingFamilyCount: 0,
+      snapshotCount: 0,
+      lastObservedAt: null,
+      lastAction: "unchanged",
+      topFamilyIds: [],
+      topTaxonomyFamilyIds: [],
+      topTaxonomyGroupIds: [],
+      pressureAreas: [],
+      overview: "No long-horizon workflow memory has been summarized yet.",
+      memoryPath: ARTIFACT_PATHS.metaLongHorizonMemory
     },
     lastRefreshedAt: null,
     updatedAt: null
+  };
+}
+
+export function normalizeMetaOptimizerState(raw = {}) {
+  const base = createMetaOptimizerState();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+
+  const frontier = normalizeObject(raw.frontier);
+  const longHorizon = normalizeObject(raw.longHorizon);
+
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    proposalOnly: normalizeBoolean(raw.proposalOnly, base.proposalOnly),
+    sourceArtifacts: normalizeStringArray(raw.sourceArtifacts, base.sourceArtifacts),
+    frontier: {
+      ...base.frontier,
+      ...frontier,
+      recommendationCount: normalizeNumber(frontier.recommendationCount, base.frontier.recommendationCount),
+      criticalCount: normalizeNumber(frontier.criticalCount, base.frontier.criticalCount),
+      clusterCount: normalizeNumber(frontier.clusterCount, base.frontier.clusterCount),
+      frontierScore: normalizeNumber(frontier.frontierScore, base.frontier.frontierScore),
+      activeSignalTypes: normalizeStringArray(frontier.activeSignalTypes),
+      topClusterIds: normalizeStringArray(frontier.topClusterIds),
+      topRecommendationIds: normalizeStringArray(frontier.topRecommendationIds),
+      topClusters: normalizeObjectArray(frontier.topClusters),
+      topTaxonomyFamilyIds: normalizeStringArray(frontier.topTaxonomyFamilyIds),
+      topTaxonomyGroupIds: normalizeStringArray(frontier.topTaxonomyGroupIds),
+      pressureAreas: normalizeStringArray(frontier.pressureAreas),
+      taxonomyOverview: normalizeString(frontier.taxonomyOverview, base.frontier.taxonomyOverview),
+      frontierSummary: normalizeString(frontier.frontierSummary, base.frontier.frontierSummary),
+      rankingMethod: normalizeString(frontier.rankingMethod, base.frontier.rankingMethod),
+      tieBreakOrder: normalizeStringArray(frontier.tieBreakOrder, base.frontier.tieBreakOrder),
+      reportPath: normalizeString(frontier.reportPath, base.frontier.reportPath),
+      recommendationsPath: normalizeString(frontier.recommendationsPath, base.frontier.recommendationsPath),
+      statePath: normalizeString(frontier.statePath, base.frontier.statePath),
+      longHorizonPath: normalizeString(frontier.longHorizonPath, base.frontier.longHorizonPath)
+    },
+    clusters: normalizeObjectArray(raw.clusters),
+    longHorizon: {
+      ...base.longHorizon,
+      ...longHorizon,
+      familyCount: normalizeNumber(longHorizon.familyCount, base.longHorizon.familyCount),
+      recurringFamilyCount: normalizeNumber(longHorizon.recurringFamilyCount, base.longHorizon.recurringFamilyCount),
+      risingFamilyCount: normalizeNumber(longHorizon.risingFamilyCount, base.longHorizon.risingFamilyCount),
+      stableFamilyCount: normalizeNumber(longHorizon.stableFamilyCount, base.longHorizon.stableFamilyCount),
+      coolingFamilyCount: normalizeNumber(longHorizon.coolingFamilyCount, base.longHorizon.coolingFamilyCount),
+      snapshotCount: normalizeNumber(longHorizon.snapshotCount, base.longHorizon.snapshotCount),
+      lastObservedAt: longHorizon.lastObservedAt ?? base.longHorizon.lastObservedAt,
+      lastAction: normalizeString(longHorizon.lastAction, base.longHorizon.lastAction),
+      topFamilyIds: normalizeStringArray(longHorizon.topFamilyIds),
+      topTaxonomyFamilyIds: normalizeStringArray(longHorizon.topTaxonomyFamilyIds),
+      topTaxonomyGroupIds: normalizeStringArray(longHorizon.topTaxonomyGroupIds),
+      pressureAreas: normalizeStringArray(longHorizon.pressureAreas),
+      overview: normalizeString(longHorizon.overview, base.longHorizon.overview),
+      memoryPath: normalizeString(longHorizon.memoryPath, base.longHorizon.memoryPath)
+    },
+    lastRefreshedAt: raw.lastRefreshedAt ?? base.lastRefreshedAt,
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
+  const base = fallback ?? createWorkspaceIndex().metaOptimize;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+
+  const longHorizon = normalizeObject(raw.longHorizon);
+
+  return {
+    ...base,
+    ...raw,
+    proposalOnly: normalizeBoolean(raw.proposalOnly, base.proposalOnly),
+    recommendationCount: normalizeNumber(raw.recommendationCount, base.recommendationCount),
+    criticalCount: normalizeNumber(raw.criticalCount, base.criticalCount),
+    clusterCount: normalizeNumber(raw.clusterCount, base.clusterCount),
+    frontierScore: normalizeNumber(raw.frontierScore, base.frontierScore),
+    activeSignalTypes: normalizeStringArray(raw.activeSignalTypes),
+    topClusterIds: normalizeStringArray(raw.topClusterIds),
+    topRecommendationIds: normalizeStringArray(raw.topRecommendationIds),
+    topClusters: normalizeObjectArray(raw.topClusters),
+    topTaxonomyFamilyIds: normalizeStringArray(raw.topTaxonomyFamilyIds),
+    topTaxonomyGroupIds: normalizeStringArray(raw.topTaxonomyGroupIds),
+    pressureAreas: normalizeStringArray(raw.pressureAreas),
+    taxonomyOverview: normalizeString(raw.taxonomyOverview, base.taxonomyOverview),
+    frontierSummary: normalizeString(raw.frontierSummary, base.frontierSummary),
+    rankingMethod: normalizeString(raw.rankingMethod, base.rankingMethod),
+    tieBreakOrder: normalizeStringArray(raw.tieBreakOrder, base.tieBreakOrder),
+    reportPath: normalizeString(raw.reportPath, base.reportPath),
+    recommendationsPath: normalizeString(raw.recommendationsPath, base.recommendationsPath),
+    statePath: normalizeString(raw.statePath, base.statePath),
+    longHorizonPath: normalizeString(raw.longHorizonPath, base.longHorizonPath),
+    longHorizon: {
+      ...base.longHorizon,
+      ...longHorizon,
+      familyCount: normalizeNumber(longHorizon.familyCount, base.longHorizon.familyCount),
+      recurringFamilyCount: normalizeNumber(longHorizon.recurringFamilyCount, base.longHorizon.recurringFamilyCount),
+      risingFamilyCount: normalizeNumber(longHorizon.risingFamilyCount, base.longHorizon.risingFamilyCount),
+      stableFamilyCount: normalizeNumber(longHorizon.stableFamilyCount, base.longHorizon.stableFamilyCount),
+      coolingFamilyCount: normalizeNumber(longHorizon.coolingFamilyCount, base.longHorizon.coolingFamilyCount),
+      snapshotCount: normalizeNumber(longHorizon.snapshotCount, base.longHorizon.snapshotCount),
+      lastObservedAt: longHorizon.lastObservedAt ?? base.longHorizon.lastObservedAt,
+      lastAction: normalizeString(longHorizon.lastAction, base.longHorizon.lastAction),
+      topFamilyIds: normalizeStringArray(longHorizon.topFamilyIds),
+      topTaxonomyFamilyIds: normalizeStringArray(longHorizon.topTaxonomyFamilyIds),
+      topTaxonomyGroupIds: normalizeStringArray(longHorizon.topTaxonomyGroupIds),
+      pressureAreas: normalizeStringArray(longHorizon.pressureAreas),
+      overview: normalizeString(longHorizon.overview, base.longHorizon.overview),
+      memoryPath: normalizeString(longHorizon.memoryPath, base.longHorizon.memoryPath)
+    }
   };
 }
 
@@ -812,7 +1170,7 @@ export function createWikiEntitiesIndex() {
 
 export function createWikiRelationsIndex() {
   return {
-    version: 2,
+    version: 3,
     items: [],
     summary: {
       totalRelations: 0,
@@ -820,7 +1178,21 @@ export function createWikiRelationsIndex() {
       degradedCount: 0,
       relationTypeCounts: {},
       integrityReasonCounts: {},
-      repairFrontier: []
+      repairFrontier: [],
+      taxonomyRepairFrontier: [],
+      taxonomy: {
+        familyCount: 0,
+        groupCount: 0,
+        degradedFamilyCount: 0,
+        degradedGroupCount: 0,
+        familyCounts: {},
+        groupCounts: {},
+        topDegradedFamilyIds: [],
+        topDegradedGroupIds: [],
+        families: [],
+        groups: [],
+        overview: "No typed wiki relation taxonomy has been summarized yet."
+      }
     },
     updatedAt: null
   };
@@ -828,7 +1200,7 @@ export function createWikiRelationsIndex() {
 
 export function createWorkspaceIndex() {
   return {
-    version: 5,
+    version: 6,
     managed: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
     boardPhase: "init",
     boardAssignedRole: "planner",
@@ -879,17 +1251,52 @@ export function createWorkspaceIndex() {
     repairFrontier: {
       count: 0,
       relationIssueCount: 0,
+      relationFamilyIssueCount: 0,
       managedArtifactIssueCount: 0,
+      topDegradedFamilyIds: [],
+      topDegradedGroupIds: [],
+      taxonomyOverview: "No degraded typed wiki relation families are currently summarized.",
+      relationFamilySummaries: [],
+      relationGroupSummaries: [],
       prioritizedItems: []
     },
     metaOptimize: {
       proposalOnly: true,
       recommendationCount: 0,
       criticalCount: 0,
+      clusterCount: 0,
+      frontierScore: 0,
       activeSignalTypes: [],
+      topClusterIds: [],
+      topRecommendationIds: [],
+      topClusters: [],
+      topTaxonomyFamilyIds: [],
+      topTaxonomyGroupIds: [],
+      pressureAreas: [],
+      taxonomyOverview: "No typed wiki taxonomy pressure is currently active in the optimizer frontier.",
+      frontierSummary: "No proposal-only optimizer recommendations have been generated yet.",
+      rankingMethod: "durable-signal-frontier-v1",
+      tieBreakOrder: ["score-desc", "priority-rank", "cluster-rank", "cluster-id", "category", "id"],
       reportPath: ARTIFACT_PATHS.metaOptimizerReport,
       recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
-      statePath: ARTIFACT_PATHS.metaOptimizerState
+      statePath: ARTIFACT_PATHS.metaOptimizerState,
+      longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
+       longHorizon: {
+         familyCount: 0,
+         recurringFamilyCount: 0,
+         risingFamilyCount: 0,
+         stableFamilyCount: 0,
+         coolingFamilyCount: 0,
+         snapshotCount: 0,
+          lastObservedAt: null,
+          lastAction: "unchanged",
+          topFamilyIds: [],
+          topTaxonomyFamilyIds: [],
+          topTaxonomyGroupIds: [],
+          pressureAreas: [],
+          overview: "No long-horizon workflow memory has been summarized yet.",
+          memoryPath: ARTIFACT_PATHS.metaLongHorizonMemory
+        }
     },
     activeRoles: [],
     unresolvedConcernIds: [],
@@ -953,6 +1360,7 @@ export function createWorkflowBoundaries() {
     ".paper/versions/comparisons.json",
     ".paper/versions/LATEST_COMPARISON.md",
     ".paper/meta/events.json",
+    ".paper/meta/long-horizon-memory.json",
     ".paper/meta/recommendations.json",
     ".paper/meta/optimizer-state.json",
     ".paper/meta/LATEST_OPTIMIZER_REPORT.md",

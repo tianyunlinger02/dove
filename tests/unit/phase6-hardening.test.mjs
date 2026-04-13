@@ -18,6 +18,7 @@ import {
   validateFigurePipeline,
   writeJson
 } from "../../src/core/index.mjs";
+import { createMetaLongHorizonMemory, createMetaOptimizerState } from "../../src/core/schema.mjs";
 
 function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-phase6-"));
@@ -40,13 +41,44 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
     version: 1,
     currentFocus: "Legacy focus",
     workQueues: { ready: "bad-shape" },
-    managed: { revisionId: "legacy-workspace" }
+    managed: { revisionId: "legacy-workspace" },
+    metaOptimize: {
+      proposalOnly: true,
+      topClusterIds: "bad-shape",
+      longHorizon: "bad-shape"
+    }
+  }, null, 2));
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaRecommendations), JSON.stringify({
+    version: 1,
+    items: [{ id: "legacy-rec" }],
+    clusters: "bad-shape",
+    ranking: { method: "legacy", tieBreakOrder: "bad-shape" },
+    frontier: { recommendationCount: 1, topClusterIds: "bad-shape" },
+    summary: { topClusters: "bad-shape", clusterMembership: { legacy: "bad-shape" } }
+  }, null, 2));
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerState), JSON.stringify({
+    version: 1,
+    sourceArtifacts: "bad-shape",
+    frontier: { recommendationCount: 1, topClusters: "bad-shape", tieBreakOrder: "bad-shape" },
+    clusters: "bad-shape",
+    longHorizon: { topFamilyIds: "bad-shape" }
+  }, null, 2));
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaLongHorizonMemory), JSON.stringify({
+    version: 1,
+    historyWindowSize: "bad-shape",
+    horizon: "bad-shape",
+    summary: { topFamilyIds: "bad-shape" },
+    history: "bad-shape",
+    families: "bad-shape"
   }, null, 2));
 
   ensureWorkspace(root);
 
   const boundaries = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.workflowBoundaries), "utf8"));
   const workspaceIndex = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.workspaceIndex), "utf8"));
+  const recommendations = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaRecommendations), "utf8"));
+  const optimizerState = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerState), "utf8"));
+  const longHorizonMemory = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaLongHorizonMemory), "utf8"));
 
   assert.equal(boundaries.version, 3);
   assert.equal(boundaries.managedArtifacts.workflowBoundaries.revisionId, "schema-v5:bootstrap-only");
@@ -54,15 +86,220 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.deepEqual(boundaries.managedPaths, [".opencode", ".opencode.json", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.notes, ["legacy note"]);
 
-  assert.equal(workspaceIndex.version, 5);
+  assert.equal(workspaceIndex.version, 6);
   assert.equal(workspaceIndex.managed.revisionId, "schema-v5:bootstrap-only");
   assert.equal(workspaceIndex.currentFocus, "Legacy focus");
   assert.deepEqual(workspaceIndex.workQueues.ready, []);
   assert.deepEqual(workspaceIndex.resumeGuidance.prioritizedPacketIds, []);
   assert.equal(workspaceIndex.behaviorDiscipline.explicitOnly, true);
   assert.equal(workspaceIndex.repairFrontier.count, 0);
+  assert.deepEqual(workspaceIndex.repairFrontier.topDegradedGroupIds, []);
   assert.equal(workspaceIndex.metaOptimize.proposalOnly, true);
   assert.equal(workspaceIndex.metaOptimize.reportPath, ".paper/meta/LATEST_OPTIMIZER_REPORT.md");
+  assert.equal(workspaceIndex.metaOptimize.rankingMethod, "durable-signal-frontier-v1");
+  assert.deepEqual(workspaceIndex.metaOptimize.tieBreakOrder, ["score-desc", "priority-rank", "cluster-rank", "cluster-id", "category", "id"]);
+  assert.equal(workspaceIndex.metaOptimize.longHorizonPath, ".paper/meta/long-horizon-memory.json");
+  assert.deepEqual(workspaceIndex.metaOptimize.topTaxonomyFamilyIds, []);
+  assert.deepEqual(workspaceIndex.metaOptimize.topTaxonomyGroupIds, []);
+  assert.deepEqual(workspaceIndex.metaOptimize.pressureAreas, []);
+  assert.equal(workspaceIndex.metaOptimize.longHorizon.memoryPath, ".paper/meta/long-horizon-memory.json");
+  assert.deepEqual(workspaceIndex.metaOptimize.topClusterIds, []);
+  assert.deepEqual(workspaceIndex.metaOptimize.longHorizon.topFamilyIds, []);
+  assert.deepEqual(workspaceIndex.metaOptimize.longHorizon.topTaxonomyFamilyIds, []);
+  assert.deepEqual(workspaceIndex.metaOptimize.longHorizon.topTaxonomyGroupIds, []);
+  assert.equal(workspaceIndex.metaOptimize.longHorizon.snapshotCount, 0);
+  assert.equal(workspaceIndex.metaOptimize.longHorizon.lastAction, "unchanged");
+
+  assert.equal(recommendations.version, 3);
+  assert.equal(recommendations.items[0].id, "legacy-rec");
+  assert.deepEqual(recommendations.clusters, []);
+  assert.deepEqual(recommendations.ranking.tieBreakOrder, ["score-desc", "priority-rank", "cluster-rank", "cluster-id", "category", "id"]);
+  assert.deepEqual(recommendations.frontier.topClusterIds, []);
+  assert.deepEqual(recommendations.frontier.topTaxonomyFamilyIds, []);
+  assert.deepEqual(recommendations.frontier.topTaxonomyGroupIds, []);
+  assert.deepEqual(recommendations.summary.topClusters, []);
+  assert.deepEqual(recommendations.summary.clusterMembership, { legacy: [] });
+
+  assert.equal(optimizerState.version, 4);
+  assert.deepEqual(optimizerState.sourceArtifacts, createMetaOptimizerState().sourceArtifacts);
+  assert.deepEqual(optimizerState.frontier.topClusters, []);
+  assert.deepEqual(optimizerState.frontier.tieBreakOrder, ["score-desc", "priority-rank", "cluster-rank", "cluster-id", "category", "id"]);
+  assert.deepEqual(optimizerState.frontier.topTaxonomyFamilyIds, []);
+  assert.deepEqual(optimizerState.frontier.topTaxonomyGroupIds, []);
+  assert.deepEqual(optimizerState.clusters, []);
+  assert.deepEqual(optimizerState.longHorizon.topFamilyIds, []);
+  assert.deepEqual(optimizerState.longHorizon.topTaxonomyFamilyIds, []);
+  assert.deepEqual(optimizerState.longHorizon.topTaxonomyGroupIds, []);
+  assert.equal(optimizerState.longHorizon.snapshotCount, 0);
+  assert.equal(optimizerState.longHorizon.lastAction, "unchanged");
+
+  assert.equal(longHorizonMemory.version, 1);
+  assert.equal(longHorizonMemory.historyWindowSize, 30);
+  assert.deepEqual(longHorizonMemory.horizon, createMetaLongHorizonMemory().horizon);
+  assert.deepEqual(longHorizonMemory.summary.topFamilyIds, []);
+  assert.deepEqual(longHorizonMemory.summary.topTaxonomyFamilyIds, []);
+  assert.deepEqual(longHorizonMemory.summary.topTaxonomyGroupIds, []);
+  assert.equal(longHorizonMemory.summary.snapshotCount, 0);
+  assert.equal(longHorizonMemory.summary.lastAction, "unchanged");
+  assert.equal(longHorizonMemory.historyPolicy.mode, "deterministic-noop-drift-guard-v1");
+  assert.deepEqual(longHorizonMemory.history, []);
+  assert.deepEqual(longHorizonMemory.families, []);
+});
+
+test("queryMetaOptimize carries forward legacy long-horizon history while rewriting normalized meta surfaces", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Legacy Meta", objective: "Normalize legacy meta artifacts through explicit refresh." });
+
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{
+      id: "legacy-review-gap",
+      summary: "Legacy concern persists.",
+      severity: "high",
+      status: "escalated",
+      responseOwnerRole: "researcher",
+      recurrenceCount: 2,
+      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaLongHorizonMemory), JSON.stringify({
+    version: 1,
+    proposalOnly: true,
+    historyWindowSize: 12,
+    horizon: { reviewRoundsObserved: 1 },
+    summary: {
+      familyCount: 1,
+      recurringFamilyCount: 0,
+      risingFamilyCount: 0,
+      stableFamilyCount: 1,
+      coolingFamilyCount: 0,
+      topFamilyIds: ["review-recurrence"],
+      overview: "Legacy memory overview."
+    },
+    history: [{
+      observedAt: "2026-01-01T00:00:00.000Z",
+      frontierScore: 1,
+      recommendationCount: 1,
+      criticalCount: 0,
+      clusterCount: 1,
+      topClusterIds: ["review-closure"],
+      topRecommendationIds: ["legacy-rec"],
+      familyCounts: { "review-recurrence": 1 },
+      familyTopRecommendationIds: { "review-recurrence": ["legacy-rec"] },
+      familyTopClusterIds: { "review-recurrence": ["review-closure"] }
+    }],
+    families: [{
+      id: "review-recurrence",
+      label: "Review recurrence",
+      summary: "Legacy family summary.",
+      currentCount: 1,
+      totalCount: 1,
+      activeSnapshotCount: 1,
+      recurring: false,
+      trend: { status: "stable", recentCount: 1, previousCount: 0 },
+      topRecommendationIds: ["legacy-rec"],
+      topClusterIds: ["review-closure"],
+      relatedRecommendationIds: ["legacy-rec"],
+      evidenceArtifactPaths: [ARTIFACT_PATHS.reviewConcerns],
+      signalTypes: ["review-concern"],
+      firstObservedAt: "2026-01-01T00:00:00.000Z",
+      lastObservedAt: "2026-01-01T00:00:00.000Z"
+    }],
+    updatedAt: "2026-01-01T00:00:00.000Z"
+  }, null, 2));
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaRecommendations), JSON.stringify({
+    version: 1,
+    items: [],
+    ranking: { method: "legacy-ranking" },
+    summary: { topClusterIds: ["legacy-cluster"] }
+  }, null, 2));
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerState), JSON.stringify({
+    version: 1,
+    frontier: { recommendationCount: 99, topClusterIds: ["legacy-cluster"] },
+    longHorizon: { overview: "Legacy state overview." }
+  }, null, 2));
+
+  const result = queryMetaOptimize(root);
+  const longHorizonMemory = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory);
+  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 6 });
+
+  assert.equal(result.proposalOnly, true);
+  assert.equal(longHorizonMemory.history.length >= 2, true);
+  assert.equal(longHorizonMemory.historyWindowSize, 12);
+  assert.equal(longHorizonMemory.history[0].observedAt, "2026-01-01T00:00:00.000Z");
+  assert.equal(longHorizonMemory.summary.topFamilyIds.includes("review-recurrence"), true);
+  assert.equal(longHorizonMemory.summary.snapshotCount, longHorizonMemory.history.length);
+  assert.equal(longHorizonMemory.summary.lastAction, "append");
+  assert.equal(result.longHorizon.history.length, longHorizonMemory.history.length);
+  assert.equal(workspaceIndex.metaOptimize.recommendationCount, result.recommendations.length);
+  assert.equal(workspaceIndex.metaOptimize.clusterCount, result.clusters.length);
+  assert.equal(workspaceIndex.metaOptimize.longHorizonPath, ARTIFACT_PATHS.metaLongHorizonMemory);
+  assert.equal(workspaceIndex.metaOptimize.longHorizon.snapshotCount, longHorizonMemory.summary.snapshotCount);
+  assert.equal(workspaceIndex.metaOptimize.longHorizon.lastAction, longHorizonMemory.summary.lastAction);
+});
+
+test("queryMetaOptimize avoids long-horizon history drift on repeated no-op refreshes", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Meta No-op Drift", objective: "Avoid long-horizon history churn from repeated meta refreshes." });
+
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{
+      id: "repeat-review-gap",
+      summary: "A recurring review concern remains open.",
+      severity: "high",
+      status: "escalated",
+      responseOwnerRole: "researcher",
+      recurrenceCount: 3,
+      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    version: 3,
+    lastVerdict: "needs-work",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close the recurring review concern."],
+    unresolvedConcernIds: ["repeat-review-gap"],
+    escalatedConcernIds: ["repeat-review-gap"],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 3,
+    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["researcher"], separationMaintained: true }
+  });
+
+  const first = queryMetaOptimize(root);
+  const firstMemory = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory);
+  const firstSnapshotCount = firstMemory.summary.snapshotCount;
+  const firstObservedAt = firstMemory.summary.lastObservedAt;
+  const firstOverview = firstMemory.summary.overview;
+  const firstFamilyIds = firstMemory.summary.topFamilyIds;
+
+  const second = queryMetaOptimize(root);
+  const secondMemory = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory);
+  const secondWorkspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 6 });
+  const secondOptimizerState = readJson(root, ARTIFACT_PATHS.metaOptimizerState, { version: 4, frontier: {}, longHorizon: {} });
+
+  assert.equal(firstMemory.history.length >= 1, true);
+  assert.equal(secondMemory.history.length, firstMemory.history.length);
+  assert.equal(secondMemory.summary.snapshotCount, firstSnapshotCount);
+  assert.equal(secondMemory.summary.lastObservedAt, firstObservedAt);
+  assert.equal(secondMemory.summary.overview, firstOverview);
+  assert.deepEqual(secondMemory.summary.topFamilyIds, firstFamilyIds);
+  assert.equal(secondMemory.summary.lastAction, "unchanged");
+  assert.equal(secondMemory.historyPolicy.lastAction, "unchanged");
+  assert.equal(secondMemory.historyPolicy.mode, "deterministic-noop-drift-guard-v1");
+  assert.equal(second.frontier.frontierSummary, first.frontier.frontierSummary);
+  assert.equal(secondOptimizerState.longHorizon.snapshotCount, secondMemory.summary.snapshotCount);
+  assert.equal(secondOptimizerState.longHorizon.lastAction, secondMemory.summary.lastAction);
+  assert.equal(secondWorkspaceIndex.metaOptimize.longHorizon.snapshotCount, secondMemory.summary.snapshotCount);
+  assert.equal(secondWorkspaceIndex.metaOptimize.longHorizon.lastAction, secondMemory.summary.lastAction);
 });
 
 test("queryMetaOptimize builds proposal-only recommendations from durable review, audit, bridge, and repair signals", () => {
@@ -165,25 +402,148 @@ test("queryMetaOptimize builds proposal-only recommendations from durable review
     activeTargets: ["v1", "v2"],
     updatedAt: null
   });
+  writeJson(root, ARTIFACT_PATHS.sessionJournal, {
+    version: 1,
+    entries: [
+      { id: "old-1", timestamp: "2026-01-01T00:00:00.000Z", type: "append-review-log", summary: "Older review pass.", phase: "review", assignedRole: "reviewer", taskPacketIds: [], artifactPaths: [ARTIFACT_PATHS.reviewState] },
+      { id: "old-2", timestamp: "2026-01-02T00:00:00.000Z", type: "run-review-loop", summary: "Older review loop.", phase: "review", assignedRole: "reviewer", taskPacketIds: [], artifactPaths: [ARTIFACT_PATHS.reviewLog] },
+      { id: "old-3", timestamp: "2026-01-03T00:00:00.000Z", type: "query-meta-optimize", summary: "Older optimizer check.", phase: "review", assignedRole: "planner", taskPacketIds: [], artifactPaths: [ARTIFACT_PATHS.metaOptimizerReport] },
+      { id: "recent-1", timestamp: "2026-01-04T00:00:00.000Z", type: "append-review-log", summary: "Recent review pass.", phase: "review", assignedRole: "reviewer", taskPacketIds: [], artifactPaths: [ARTIFACT_PATHS.reviewState] },
+      { id: "recent-2", timestamp: "2026-01-05T00:00:00.000Z", type: "run-review-loop", summary: "Recent review loop.", phase: "review", assignedRole: "reviewer", taskPacketIds: [], artifactPaths: [ARTIFACT_PATHS.reviewLog] },
+      { id: "recent-3", timestamp: "2026-01-06T00:00:00.000Z", type: "append-review-log", summary: "Recent review pass again.", phase: "review", assignedRole: "reviewer", taskPacketIds: [], artifactPaths: [ARTIFACT_PATHS.reviewState] },
+      { id: "recent-4", timestamp: "2026-01-07T00:00:00.000Z", type: "run-review-loop", summary: "Recent review loop again.", phase: "review", assignedRole: "reviewer", taskPacketIds: [], artifactPaths: [ARTIFACT_PATHS.reviewLog] },
+      { id: "recent-5", timestamp: "2026-01-08T00:00:00.000Z", type: "query-meta-optimize", summary: "Recent optimizer check.", phase: "review", assignedRole: "planner", taskPacketIds: [], artifactPaths: [ARTIFACT_PATHS.metaOptimizerReport] },
+      { id: "recent-6", timestamp: "2026-01-09T00:00:00.000Z", type: "append-review-log", summary: "Recent review pass third.", phase: "review", assignedRole: "reviewer", taskPacketIds: [], artifactPaths: [ARTIFACT_PATHS.reviewState] }
+    ],
+    updatedAt: null
+  });
 
   const result = queryMetaOptimize(root);
+  const longHorizonMemory = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, { version: 1, summary: {}, history: [], families: [], updatedAt: null });
   const recommendations = readJson(root, ARTIFACT_PATHS.metaRecommendations, { version: 1, items: [], summary: {}, updatedAt: null });
   const optimizerState = readJson(root, ARTIFACT_PATHS.metaOptimizerState, { version: 1, frontier: {}, updatedAt: null });
   const report = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerReport), "utf8");
-  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 5 });
+  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 6 });
+  const sessionSummary = fs.readFileSync(path.join(root, ARTIFACT_PATHS.sessionSummary), "utf8");
 
   assert.equal(result.proposalOnly, true);
+  assert.ok(Array.isArray(result.clusters));
+  assert.equal(result.groupedFrontier.ranking.method, "durable-signal-frontier-v1");
+  assert.ok(Array.isArray(result.groupedFrontier.topClusters));
+  assert.equal(result.longHorizon.proposalOnly, true);
+  assert.equal(result.longHorizon.families.find((item) => item.id === "review-recurrence")?.trend.status, "rising");
+  assert.equal(result.groupedFrontier.clusterMembership["review-closure"].includes("meta-review-review-gap-1"), true);
+  assert.equal(result.clusters[0].id, "evidence-integrity");
+  assert.equal(result.recommendations[0].id, "meta-review-review-gap-1");
   assert.ok(result.recommendations.some((item) => item.category === "review-discipline"));
   assert.ok(result.recommendations.some((item) => item.category === "experiment-integrity"));
   assert.ok(result.recommendations.some((item) => item.category === "claim-bridge"));
   assert.ok(result.recommendations.some((item) => item.category === "artifact-health"));
+  assert.equal(result.frontier.clusterCount, recommendations.clusters.length);
   assert.ok(recommendations.summary.criticalCount >= 1);
+  assert.ok(recommendations.summary.clusterCount >= 3);
+  assert.equal(recommendations.frontier.topClusterIds[0], "evidence-integrity");
+  assert.equal(recommendations.frontier.rankingMethod, "durable-signal-frontier-v1");
+  assert.match(recommendations.frontier.frontierSummary, /ranked recommendations across/);
+  assert.equal(recommendations.summary.topClusters[0].id, "evidence-integrity");
+  assert.equal(recommendations.summary.clusterMembership["review-closure"].includes("meta-review-review-gap-1"), true);
+  assert.match(recommendations.items[0].sortKey, /^\d{4}:\d{2}:/);
+  assert.match(recommendations.items[0].tieBreakKey, /^\d{4}:\d{2}:/);
+  assert.ok(Array.isArray(recommendations.items[0].rankingBasis));
   assert.equal(optimizerState.proposalOnly, true);
+  assert.equal(optimizerState.frontier.clusterCount, recommendations.clusters.length);
   assert.equal(optimizerState.frontier.reportPath, ARTIFACT_PATHS.metaOptimizerReport);
+  assert.equal(optimizerState.frontier.rankingMethod, "durable-signal-frontier-v1");
+  assert.equal(optimizerState.frontier.longHorizonPath, ARTIFACT_PATHS.metaLongHorizonMemory);
+  assert.equal(optimizerState.frontier.topClusters[0].id, "evidence-integrity");
+  assert.equal(optimizerState.longHorizon.memoryPath, ARTIFACT_PATHS.metaLongHorizonMemory);
+  assert.equal(optimizerState.longHorizon.snapshotCount, longHorizonMemory.summary.snapshotCount);
+  assert.equal(optimizerState.longHorizon.lastAction, longHorizonMemory.summary.lastAction);
+  assert.ok(Array.isArray(longHorizonMemory.history));
+  assert.equal(longHorizonMemory.history.length >= 1, true);
+  assert.equal(longHorizonMemory.families.find((item) => item.id === "review-recurrence")?.trend.status, "rising");
+  assert.equal(longHorizonMemory.summary.snapshotCount, longHorizonMemory.history.length);
   assert.match(report, /Proposal only: true/);
+  assert.match(report, /Optimization frontier/);
+  assert.match(report, /Meta-optimize frontier summary:/);
+  assert.match(report, /Long-horizon workflow memory/);
+  assert.match(report, /Long-horizon snapshots:/);
+  assert.match(report, /Long-horizon last action:/);
+  assert.match(report, /Long-horizon history policy:/);
+  assert.match(report, /Cluster 1: Evidence integrity/);
   assert.match(report, /Evidence-backed recommendations/);
+  assert.match(report, /Stable tie-break order/);
+  assert.match(report, /Ranking basis:/);
   assert.equal(workspaceIndex.metaOptimize.proposalOnly, true);
   assert.equal(workspaceIndex.metaOptimize.recommendationCount, recommendations.items.length);
+  assert.equal(workspaceIndex.metaOptimize.clusterCount, recommendations.clusters.length);
+  assert.equal(workspaceIndex.metaOptimize.topClusterIds[0], "evidence-integrity");
+  assert.equal(workspaceIndex.metaOptimize.topClusters[0].id, "evidence-integrity");
+  assert.equal(workspaceIndex.metaOptimize.frontierSummary, recommendations.frontier.frontierSummary);
+  assert.equal(workspaceIndex.metaOptimize.longHorizonPath, ARTIFACT_PATHS.metaLongHorizonMemory);
+  assert.equal(workspaceIndex.metaOptimize.longHorizon.familyCount >= 3, true);
+  assert.equal(workspaceIndex.metaOptimize.longHorizon.snapshotCount, longHorizonMemory.summary.snapshotCount);
+  assert.equal(workspaceIndex.metaOptimize.longHorizon.lastAction, longHorizonMemory.summary.lastAction);
+  assert.match(sessionSummary, /Long-horizon memory:/);
+  assert.match(sessionSummary, /Meta-optimize frontier summary:/);
+  assert.match(sessionSummary, /Long-horizon snapshots:/);
+  assert.match(sessionSummary, /Long-horizon last action:/);
+  assert.match(sessionSummary, /Long-horizon memory path:/);
+});
+
+test("queryMetaOptimize uses stable id tie-breaking for equal-scored recommendations inside a cluster", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Meta Tie Breaks", objective: "Keep equal-scored optimizer recommendations deterministic." });
+
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [
+      {
+        id: "alpha",
+        summary: "Recurring alpha concern.",
+        severity: "medium",
+        status: "open",
+        responseOwnerRole: "researcher",
+        recurrenceCount: 2,
+        linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+        updatedAt: new Date(0).toISOString()
+      },
+      {
+        id: "beta",
+        summary: "Recurring beta concern.",
+        severity: "medium",
+        status: "open",
+        responseOwnerRole: "researcher",
+        recurrenceCount: 2,
+        linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+        updatedAt: new Date(0).toISOString()
+      }
+    ],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    version: 3,
+    lastVerdict: "needs-revision",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close recurring concerns."],
+    unresolvedConcernIds: ["alpha", "beta"],
+    escalatedConcernIds: [],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 2,
+    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["researcher"], separationMaintained: true }
+  });
+
+  const result = queryMetaOptimize(root);
+  const recurring = result.recommendations.filter((item) => item.clusterId === "review-closure");
+
+  assert.equal(recurring[0].id, "meta-recurring-review-alpha");
+  assert.equal(recurring[1].id, "meta-recurring-review-beta");
+  assert.equal(recurring[0].score, recurring[1].score);
+  assert.ok(recurring[0].sortKey < recurring[1].sortKey);
+  assert.ok(recurring[0].tieBreakKey < recurring[1].tieBreakKey);
 });
 
 test("refreshWiki records typed relation integrity failures and exposes them through the workspace repair frontier", () => {
@@ -215,20 +575,113 @@ test("refreshWiki records typed relation integrity failures and exposes them thr
 
   refreshWiki(root);
 
-  const relations = readJson(root, ARTIFACT_PATHS.wikiRelations, { version: 2, items: [], summary: {}, updatedAt: null });
+  const relations = readJson(root, ARTIFACT_PATHS.wikiRelations, { version: 3, items: [], summary: {}, updatedAt: null });
   const workspaceIndex = queryWorkspaceIndex(root);
   const degradedRelation = relations.items.find((item) => item.id === "claim-frontier-tested-by-bad-exp");
+  const degradedFamily = relations.summary.taxonomy?.families?.find((item) => item.id === "validation-loop");
   const degradedReasonCodes = new Set(relations.items.flatMap((item) => (item.integrity?.reasons ?? []).map((reason) => reason.code)));
 
-  assert.equal(relations.version, 2);
+  assert.equal(relations.version, 3);
   assert.equal(relations.summary.degradedCount > 0, true);
   assert.equal(degradedRelation.integrity.status, "degraded");
   assert.equal(degradedRelation.semantics.expectedToEntityType, "experiment");
+  assert.equal(degradedRelation.taxonomy.familyId, "validation-loop");
+  assert.equal(degradedRelation.taxonomy.groupId, "claim-experiment-validation");
+  assert.match(degradedRelation.semantics.directionalMeaning.forward, /Claim is tested by experiment/);
   assert.equal(degradedRelation.toEntityType, "source");
   assert.ok(degradedReasonCodes.has("dangling-to-entity"));
   assert.ok(degradedReasonCodes.has("invalid-to-entity-type"));
+  assert.equal(relations.summary.taxonomy.degradedFamilyCount > 0, true);
+  assert.equal(relations.summary.taxonomy.topDegradedFamilyIds.includes("validation-loop"), true);
+  assert.equal(degradedFamily.degradedCount > 0, true);
+  assert.ok(Array.isArray(relations.summary.taxonomyRepairFrontier));
   assert.equal(workspaceIndex.repairFrontier.relationIssueCount > 0, true);
+  assert.equal(workspaceIndex.repairFrontier.relationFamilyIssueCount > 0, true);
+  assert.match(workspaceIndex.repairFrontier.taxonomyOverview, /families currently degraded/);
+  assert.equal(workspaceIndex.repairFrontier.topDegradedFamilyIds.includes("validation-loop"), true);
+  assert.equal(workspaceIndex.repairFrontier.relationFamilySummaries.some((item) => item.id === "validation-loop"), true);
   assert.ok(workspaceIndex.repairFrontier.prioritizedItems.some((item) => item.frontierType === "typed-wiki-relation"));
+  assert.ok(workspaceIndex.repairFrontier.prioritizedItems.some((item) => item.frontierType === "typed-wiki-relation-family"));
+});
+
+test("queryMetaOptimize carries typed wiki taxonomy pressure through clusters, summaries, and long-horizon memory", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Taxonomy-aware Meta", objective: "Make optimizer recommendations explicitly aware of typed wiki taxonomy pressure." });
+
+  registerSource(root, { citationKey: "taxonomy-source", title: "Taxonomy Source", authors: ["Chen"], year: 2026 });
+  upsertNote(root, { noteId: "taxonomy-note", title: "Taxonomy note", sectionId: "method", sourceIds: ["taxonomy-source"], summary: "Ground a note in a source." });
+  writeJson(root, ARTIFACT_PATHS.sources, {
+    version: 1,
+    items: [{ id: "experiment-wrong-exp", citationKey: "wrong-exp-source", title: "Wrong endpoint type", authors: [], year: 2026, sourceType: "paper", abstract: "", origin: "manual", addedAt: new Date(0).toISOString() }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.evidence, {
+    version: 3,
+    claims: [{
+      id: "claim-taxonomy",
+      text: "Taxonomy pressure should reach the optimizer frontier.",
+      sectionId: "experiments",
+      status: "supported",
+      confidence: "medium",
+      sourceIds: ["missing-source"],
+      noteIds: ["missing-note"],
+      experimentIds: ["wrong-exp"]
+    }],
+    updatedAt: null
+  });
+
+  refreshWiki(root);
+
+  const result = queryMetaOptimize(root);
+  const recommendations = readJson(root, ARTIFACT_PATHS.metaRecommendations, { items: [], frontier: {}, summary: {}, clusters: [], updatedAt: null });
+  const optimizerState = readJson(root, ARTIFACT_PATHS.metaOptimizerState, { frontier: {}, longHorizon: {}, updatedAt: null });
+  const longHorizonMemory = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, { summary: {}, families: [], history: [], updatedAt: null });
+  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { repairFrontier: {}, metaOptimize: {} });
+  const report = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerReport), "utf8");
+
+  const taxonomyRecommendation = result.recommendations.find((item) => item.taxonomyPressure?.familyIds?.includes("validation-loop"));
+  const taxonomyCluster = result.clusters.find((item) => item.id === "validation-loop-pressure");
+  const taxonomyFamily = longHorizonMemory.families.find((item) => item.id === "taxonomy-validation-loop");
+
+  assert.ok(taxonomyRecommendation);
+  assert.equal(taxonomyRecommendation.scope, "validation-loop / artifact health");
+  assert.equal(taxonomyRecommendation.taxonomyPressure.familyIds.includes("validation-loop"), true);
+  assert.equal(taxonomyRecommendation.taxonomyPressure.groupIds.includes("claim-experiment-validation"), true);
+  assert.equal(taxonomyRecommendation.signalStrength.taxonomyFamilyPressure > 0, true);
+  assert.equal(taxonomyRecommendation.signalStrength.taxonomyGroupPressure > 0, true);
+  assert.ok(taxonomyRecommendation.rankingBasis.some((item) => item.startsWith("taxonomyFamilyPressure=")));
+  assert.ok(taxonomyRecommendation.rankingBasis.some((item) => item.startsWith("taxonomyGroupPressure=")));
+
+  assert.ok(taxonomyCluster);
+  assert.equal(taxonomyCluster.taxonomyPressure.familyIds.includes("validation-loop"), true);
+  assert.equal(taxonomyCluster.taxonomyPressure.groupIds.includes("claim-experiment-validation"), true);
+  assert.equal(recommendations.frontier.topTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.match(recommendations.frontier.taxonomyOverview, /Validation loop/i);
+  assert.equal(recommendations.summary.topTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.equal(recommendations.summary.topClusters.some((item) => item.taxonomyPressure?.familyIds?.includes("validation-loop")), true);
+  assert.match(recommendations.frontier.frontierSummary, /Dominant taxonomy pressure/);
+
+  assert.equal(optimizerState.frontier.topTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.match(optimizerState.frontier.taxonomyOverview, /validation loop/i);
+
+  assert.equal(workspaceIndex.repairFrontier.topDegradedGroupIds.includes("claim-experiment-validation"), true);
+  assert.equal(workspaceIndex.repairFrontier.relationGroupSummaries.some((item) => item.id === "claim-experiment-validation"), true);
+  assert.equal(workspaceIndex.metaOptimize.topTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.equal(workspaceIndex.metaOptimize.longHorizon.topTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.match(workspaceIndex.metaOptimize.taxonomyOverview, /Validation loop/i);
+
+  assert.ok(taxonomyFamily);
+  assert.equal(taxonomyFamily.relatedTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.equal(taxonomyFamily.relatedTaxonomyGroupIds.includes("claim-experiment-validation"), true);
+  assert.equal(longHorizonMemory.summary.topTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.match(longHorizonMemory.summary.overview, /Dominant taxonomy pressure/);
+  assert.equal(longHorizonMemory.history.at(-1).topTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.equal(longHorizonMemory.history.at(-1).taxonomyGroupCounts["claim-experiment-validation"] > 0, true);
+
+  assert.match(report, /Meta-optimize taxonomy pressure:/);
+  assert.match(report, /Long-horizon taxonomy families:/);
+  assert.match(report, /Taxonomy pressure:/);
 });
 
 test("figure QA records missing staged files and source artifacts in qa.json", () => {

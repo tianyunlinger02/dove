@@ -33,6 +33,7 @@ test("createDefaultState exposes durable artifact paths", () => {
   assert.equal(state.artifacts.workflowBoundaries, ".paper/workflow-pack/boundaries.json");
   assert.equal(state.artifacts.researchBrief, ".paper/research/brief.md");
   assert.equal(state.artifacts.rebuttalIssues, ".paper/rebuttal/issues.json");
+  assert.equal(state.artifacts.metaLongHorizonMemory, ".paper/meta/long-horizon-memory.json");
   assert.equal(state.artifacts.versionsIndex, ".paper/versions/index.json");
   assert.equal(state.reviews.lastVerdict, "not-reviewed");
 });

@@ -18,9 +18,10 @@ import {
   createFigureSegmentsIndex,
     createFigureTemplatesIndex,
     createFiguresIndex,
-    createMetaEventsIndex,
-    createMetaOptimizerState,
-    createMetaRecommendationsIndex,
+  createMetaEventsIndex,
+  createMetaLongHorizonMemory,
+  createMetaOptimizerState,
+  createMetaRecommendationsIndex,
     createNotesIndex,
   createResearchAgenda,
   createReviewConcernsIndex,
@@ -35,6 +36,9 @@ import {
   createWikiRelationsIndex,
   createWorkflowBoundaries,
   createWorkspaceIndex,
+  normalizeMetaLongHorizonMemory,
+  normalizeMetaOptimizerState,
+  normalizeMetaRecommendationsIndex,
   normalizeWorkflowBoundaries,
   normalizeWorkspaceIndex,
   normalizeState
@@ -247,6 +251,7 @@ export function ensureWorkspace(root) {
     [ARTIFACT_PATHS.experimentAudits, createExperimentAuditsIndex],
     [ARTIFACT_PATHS.claimBridgeLog, createClaimBridgeLog],
     [ARTIFACT_PATHS.metaEvents, createMetaEventsIndex],
+    [ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory],
     [ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex],
     [ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState],
     [ARTIFACT_PATHS.rebuttalIssues, createRebuttalIssuesIndex],
@@ -265,6 +270,9 @@ export function ensureWorkspace(root) {
   }
 
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.workflowBoundaries, createWorkflowBoundaries, normalizeWorkflowBoundaries);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory, normalizeMetaLongHorizonMemory);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex, normalizeMetaRecommendationsIndex);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState, normalizeMetaOptimizerState);
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex, normalizeWorkspaceIndex);
 
   return { root, created };

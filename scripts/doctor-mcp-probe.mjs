@@ -85,13 +85,22 @@ async function main() {
 
   const listed = await call("tools/list");
   const names = new Set(listed.tools.map((tool) => tool.name));
-  for (const required of ["ensure_workspace", "read_state", "query_workspace_index", "run_experiment_audit", "bridge_result_to_claim", "run_review_loop", "sync_citations", "refresh_wiki", "build_rebuttal"]) {
+  for (const required of ["ensure_workspace", "read_state", "query_workspace_index", "query_meta_optimize", "run_experiment_audit", "bridge_result_to_claim", "run_review_loop", "sync_citations", "refresh_wiki", "build_rebuttal"]) {
     assert.equal(names.has(required), true, `Missing MCP tool ${required}`);
   }
 
   await call("tools/call", { name: "ensure_workspace", arguments: {} });
   await call("tools/call", { name: "read_state", arguments: {} });
   await call("tools/call", { name: "query_workspace_index", arguments: {} });
+  const metaOptimize = await call("tools/call", { name: "query_meta_optimize", arguments: {} });
+  const parsed = JSON.parse(metaOptimize.content[0].text);
+  assert.equal(parsed.proposalOnly, true);
+  assert.ok(Array.isArray(parsed.clusters), "Expected grouped optimizer clusters");
+  assert.ok(parsed.frontier && typeof parsed.frontier === "object", "Expected optimizer frontier summary");
+  assert.ok(parsed.groupedFrontier && typeof parsed.groupedFrontier === "object", "Expected grouped frontier envelope");
+  assert.equal(parsed.groupedFrontier.ranking?.method, "durable-signal-frontier-v1");
+  assert.ok(parsed.longHorizon && typeof parsed.longHorizon === "object", "Expected long-horizon optimizer memory");
+  assert.equal(parsed.longHorizon.proposalOnly, true);
 }
 
 try {
