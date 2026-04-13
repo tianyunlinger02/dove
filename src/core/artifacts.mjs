@@ -35,6 +35,403 @@ function normalizeIdentifier(value, fallback) {
   return slugify(value ?? fallback);
 }
 
+function normalizeStringArray(values, fallback = []) {
+  const source = Array.isArray(values) ? values : fallback;
+  return Array.from(new Set(source.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim())));
+}
+
+function normalizeRelativePath(value, fallback) {
+  const normalized = String(value ?? fallback).trim().replace(/\\/g, "/").replace(/^\.\//, "");
+  return normalized || fallback;
+}
+
+function figurePathLooksPortable(relativePath) {
+  return relativePath.startsWith(".paper/figures/");
+}
+
+function placeholderSegmentsForFigure(item) {
+  const placeholders = Array.isArray(item.segmentPlaceholders) && item.segmentPlaceholders.length > 0
+    ? item.segmentPlaceholders
+    : item.requiredVisualElements;
+  return placeholders.map((segment, index) => {
+    if (typeof segment === "string") {
+      return {
+        id: `${item.id}-segment-${index + 1}`,
+        label: segment,
+        stageStatus: "placeholder",
+        sourceSectionIds: item.sourceSections,
+        targetClaimIds: item.targetClaimIds,
+        notes: []
+      };
+    }
+    return {
+      id: normalizeIdentifier(segment?.id, `${item.id}-segment-${index + 1}`),
+      label: segment?.label ?? segment?.title ?? `Segment ${index + 1}`,
+      stageStatus: segment?.stageStatus ?? "placeholder",
+      sourceSectionIds: normalizeStringArray(segment?.sourceSectionIds, item.sourceSections),
+      targetClaimIds: normalizeStringArray(segment?.targetClaimIds, item.targetClaimIds),
+      notes: Array.isArray(segment?.notes) ? segment.notes : []
+    };
+  });
+}
+
+function buildFigureContractArtifacts(item, timestamp) {
+  const placeholderSegments = placeholderSegmentsForFigure(item);
+  const brief = {
+    id: item.briefId,
+    figureId: item.id,
+    stage: "brief",
+    stageOrder: 1,
+    sourceSections: item.sourceSections,
+    sourceArtifactPaths: item.sourceArtifactPaths,
+    targetClaimIds: item.targetClaimIds,
+    relatedExperimentIds: item.relatedExperimentIds,
+    reviewConcernIds: item.reviewConcernIds,
+    rebuttalIssueIds: item.rebuttalIssueIds,
+    narrativeIntent: item.narrativeIntent,
+    requiredVisualElements: item.requiredVisualElements,
+    downstreamArtifactIds: [item.segmentId, item.templateId, item.editableArtifactId, item.finalArtifactId],
+    updatedAt: timestamp
+  };
+  const segments = {
+    id: item.segmentId,
+    figureId: item.id,
+    stage: "segments",
+    stageOrder: 2,
+    briefId: item.briefId,
+    templateId: item.templateId,
+    placeholderSegments,
+    updatedAt: timestamp
+  };
+  const templates = {
+    id: item.templateId,
+    figureId: item.id,
+    stage: "template",
+    stageOrder: 3,
+    briefId: item.briefId,
+    segmentId: item.segmentId,
+    templateSvgPath: item.templateSvgPath,
+    editableSvgPath: item.editableSvgPath,
+    finalSvgPath: item.finalSvgPath,
+    templatePlan: `Use ${item.requiredVisualElements.join(", ") || "the planned visual elements"} to build an editable SVG template tied to ${item.targetClaimIds.join(", ") || "the planned claims"}.`,
+    updatedAt: timestamp
+  };
+  const editable = {
+    id: item.editableArtifactId,
+    figureId: item.id,
+    stage: "editable",
+    stageOrder: 4,
+    templateId: item.templateId,
+    editableSvgPath: item.editableSvgPath,
+    templateSvgPath: item.templateSvgPath,
+    finalSvgPath: item.finalSvgPath,
+    reviewNotes: item.reviewNotes,
+    linkedReviewConcernIds: item.reviewConcernIds,
+    linkedRebuttalIssueIds: item.rebuttalIssueIds,
+    updatedAt: timestamp
+  };
+  const final = {
+    id: item.finalArtifactId,
+    figureId: item.id,
+    stage: "final-contract",
+    stageOrder: 5,
+    editableArtifactId: item.editableArtifactId,
+    finalSvgPath: item.finalSvgPath,
+    sourceSections: item.sourceSections,
+    targetClaimIds: item.targetClaimIds,
+    relatedExperimentIds: item.relatedExperimentIds,
+    reviewConcernIds: item.reviewConcernIds,
+    rebuttalIssueIds: item.rebuttalIssueIds,
+    readinessStatus: item.status === "final" || item.status === "approved" ? "ready-for-finalization" : "needs-review",
+    deliveryChecklist: [
+      "Confirm claim linkage remains current.",
+      "Confirm staged artifact paths are portable.",
+      "Keep review notes durable before finalization claims."
+    ],
+    updatedAt: timestamp
+  };
+  return { brief, segments, templates, editable, final };
+}
+
+function responseOwnerForFigureIssue(issue) {
+  if ((issue.rebuttalIssueIds ?? []).length > 0) return "rebuttal-lead";
+  if ((issue.experimentIds ?? []).length > 0) return "experiment-planner";
+  if ((issue.claimIds ?? []).length > 0) return "researcher";
+  return "planner";
+}
+
+function figureIssueId(figureId, code) {
+  return `${figureId}-${code}`;
+}
+
+function buildFigureQa(root) {
+  const state = loadState(root);
+  const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
+  const experimentPlans = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
+  const experimentResults = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
+  const reviewConcerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
+  const rebuttalIssues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
+  const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: null });
+  const briefs = readJson(root, ARTIFACT_PATHS.figureBriefs, { version: 1, items: [], updatedAt: null });
+  const segments = readJson(root, ARTIFACT_PATHS.figureSegments, { version: 1, items: [], updatedAt: null });
+  const templates = readJson(root, ARTIFACT_PATHS.figureTemplates, { version: 1, items: [], updatedAt: null });
+  const editable = readJson(root, ARTIFACT_PATHS.figureEditableIndex, { version: 1, items: [], updatedAt: null });
+  const finals = readJson(root, ARTIFACT_PATHS.figureFinalIndex, { version: 1, items: [], updatedAt: null });
+  const claimIds = new Set((evidence.claims ?? []).map((claim) => claim.id));
+  const sectionIds = new Set(Object.keys(state.sections ?? {}));
+  const experimentIds = new Set([
+    ...(experimentPlans.items ?? []).map((item) => item.id),
+    ...(experimentResults.items ?? []).map((item) => item.experimentId)
+  ]);
+  const reviewConcernIds = new Set((reviewConcerns.items ?? []).map((item) => item.id));
+  const rebuttalIssueIds = new Set((rebuttalIssues.items ?? []).map((item) => item.id));
+  const briefByFigure = new Map((briefs.items ?? []).map((item) => [item.figureId, item]));
+  const segmentByFigure = new Map((segments.items ?? []).map((item) => [item.figureId, item]));
+  const templateByFigure = new Map((templates.items ?? []).map((item) => [item.figureId, item]));
+  const editableByFigure = new Map((editable.items ?? []).map((item) => [item.figureId, item]));
+  const finalByFigure = new Map((finals.items ?? []).map((item) => [item.figureId, item]));
+  const timestamp = nowIso();
+  const items = [];
+  const issues = [];
+
+  for (const figure of figures.items ?? []) {
+    const figureIssues = [];
+    const brief = briefByFigure.get(figure.id);
+    const segment = segmentByFigure.get(figure.id);
+    const template = templateByFigure.get(figure.id);
+    const editableArtifact = editableByFigure.get(figure.id);
+    const finalArtifact = finalByFigure.get(figure.id);
+    const stageArtifacts = {
+      brief: Boolean(brief),
+      segments: Boolean(segment),
+      template: Boolean(template),
+      editable: Boolean(editableArtifact),
+      finalContract: Boolean(finalArtifact)
+    };
+    const stageArtifactPaths = [
+      ARTIFACT_PATHS.figuresIndex,
+      ARTIFACT_PATHS.figureBriefs,
+      ARTIFACT_PATHS.figureSegments,
+      ARTIFACT_PATHS.figureTemplates,
+      ARTIFACT_PATHS.figureEditableIndex,
+      ARTIFACT_PATHS.figureFinalIndex,
+      ARTIFACT_PATHS.figureQa
+    ];
+
+    for (const [stageName, present] of Object.entries(stageArtifacts)) {
+      if (!present) {
+        figureIssues.push({
+          id: figureIssueId(figure.id, `missing-${stageName}`),
+          figureId: figure.id,
+          severity: "high",
+          code: "missing-stage-artifact",
+          stage: stageName,
+          summary: `Figure ${figure.id} is missing the ${stageName} stage artifact.`,
+          claimIds: figure.targetClaimIds,
+          experimentIds: figure.relatedExperimentIds,
+          reviewConcernIds: figure.reviewConcernIds,
+          rebuttalIssueIds: figure.rebuttalIssueIds,
+          artifactPaths: stageArtifactPaths,
+          updatedAt: timestamp
+        });
+      }
+    }
+
+    if ((figure.targetClaimIds ?? []).length === 0) {
+      figureIssues.push({
+        id: figureIssueId(figure.id, "missing-claim-linkage"),
+        figureId: figure.id,
+        severity: "high",
+        code: "missing-claim-linkage",
+        stage: "brief",
+        summary: `Figure ${figure.id} has no linked target claims.`,
+        claimIds: [],
+        experimentIds: figure.relatedExperimentIds,
+        reviewConcernIds: figure.reviewConcernIds,
+        rebuttalIssueIds: figure.rebuttalIssueIds,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
+        updatedAt: timestamp
+      });
+    }
+
+    const missingSections = (figure.sourceSections ?? []).filter((sectionId) => !sectionIds.has(sectionId));
+    if (missingSections.length > 0) {
+      figureIssues.push({
+        id: figureIssueId(figure.id, "missing-source-sections"),
+        figureId: figure.id,
+        severity: "medium",
+        code: "missing-source-sections",
+        stage: "brief",
+        summary: `Figure ${figure.id} references unknown source sections: ${missingSections.join(", ")}.`,
+        claimIds: figure.targetClaimIds,
+        experimentIds: figure.relatedExperimentIds,
+        reviewConcernIds: figure.reviewConcernIds,
+        rebuttalIssueIds: figure.rebuttalIssueIds,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
+        updatedAt: timestamp
+      });
+    }
+
+    const missingClaims = (figure.targetClaimIds ?? []).filter((claimId) => !claimIds.has(claimId));
+    if (missingClaims.length > 0) {
+      figureIssues.push({
+        id: figureIssueId(figure.id, "unknown-claims"),
+        figureId: figure.id,
+        severity: "high",
+        code: "unknown-claims",
+        stage: "brief",
+        summary: `Figure ${figure.id} references unknown target claims: ${missingClaims.join(", ")}.`,
+        claimIds: figure.targetClaimIds,
+        experimentIds: figure.relatedExperimentIds,
+        reviewConcernIds: figure.reviewConcernIds,
+        rebuttalIssueIds: figure.rebuttalIssueIds,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
+        updatedAt: timestamp
+      });
+    }
+
+    const missingExperiments = (figure.relatedExperimentIds ?? []).filter((experimentId) => !experimentIds.has(experimentId));
+    if (missingExperiments.length > 0) {
+      figureIssues.push({
+        id: figureIssueId(figure.id, "unknown-experiments"),
+        figureId: figure.id,
+        severity: "medium",
+        code: "unknown-experiments",
+        stage: "brief",
+        summary: `Figure ${figure.id} references unknown related experiments: ${missingExperiments.join(", ")}.`,
+        claimIds: figure.targetClaimIds,
+        experimentIds: figure.relatedExperimentIds,
+        reviewConcernIds: figure.reviewConcernIds,
+        rebuttalIssueIds: figure.rebuttalIssueIds,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
+        updatedAt: timestamp
+      });
+    }
+
+    const missingReviewConcerns = (figure.reviewConcernIds ?? []).filter((id) => !reviewConcernIds.has(id));
+    if (missingReviewConcerns.length > 0) {
+      figureIssues.push({
+        id: figureIssueId(figure.id, "unknown-review-concerns"),
+        figureId: figure.id,
+        severity: "medium",
+        code: "unknown-review-concerns",
+        stage: "editable",
+        summary: `Figure ${figure.id} references unknown review concerns: ${missingReviewConcerns.join(", ")}.`,
+        claimIds: figure.targetClaimIds,
+        experimentIds: figure.relatedExperimentIds,
+        reviewConcernIds: figure.reviewConcernIds,
+        rebuttalIssueIds: figure.rebuttalIssueIds,
+        artifactPaths: [ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.figureQa],
+        updatedAt: timestamp
+      });
+    }
+
+    const missingRebuttalIssues = (figure.rebuttalIssueIds ?? []).filter((id) => !rebuttalIssueIds.has(id));
+    if (missingRebuttalIssues.length > 0) {
+      figureIssues.push({
+        id: figureIssueId(figure.id, "unknown-rebuttal-issues"),
+        figureId: figure.id,
+        severity: "medium",
+        code: "unknown-rebuttal-issues",
+        stage: "final-contract",
+        summary: `Figure ${figure.id} references unknown rebuttal issues: ${missingRebuttalIssues.join(", ")}.`,
+        claimIds: figure.targetClaimIds,
+        experimentIds: figure.relatedExperimentIds,
+        reviewConcernIds: figure.reviewConcernIds,
+        rebuttalIssueIds: figure.rebuttalIssueIds,
+        artifactPaths: [ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.figureQa],
+        updatedAt: timestamp
+      });
+    }
+
+    const portablePathProblems = [figure.templateSvgPath, figure.editableSvgPath, figure.finalSvgPath].filter((relativePath) => !figurePathLooksPortable(relativePath));
+    if (portablePathProblems.length > 0) {
+      figureIssues.push({
+        id: figureIssueId(figure.id, "non-portable-paths"),
+        figureId: figure.id,
+        severity: "high",
+        code: "non-portable-paths",
+        stage: "template",
+        summary: `Figure ${figure.id} uses non-portable artifact paths: ${portablePathProblems.join(", ")}.`,
+        claimIds: figure.targetClaimIds,
+        experimentIds: figure.relatedExperimentIds,
+        reviewConcernIds: figure.reviewConcernIds,
+        rebuttalIssueIds: figure.rebuttalIssueIds,
+        artifactPaths: [ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa],
+        updatedAt: timestamp
+      });
+    }
+
+    if (editableArtifact && editableArtifact.finalSvgPath !== figure.finalSvgPath) {
+      figureIssues.push({
+        id: figureIssueId(figure.id, "inconsistent-final-path"),
+        figureId: figure.id,
+        severity: "high",
+        code: "inconsistent-final-path",
+        stage: "editable",
+        summary: `Figure ${figure.id} has inconsistent final SVG paths across staged artifacts.`,
+        claimIds: figure.targetClaimIds,
+        experimentIds: figure.relatedExperimentIds,
+        reviewConcernIds: figure.reviewConcernIds,
+        rebuttalIssueIds: figure.rebuttalIssueIds,
+        artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa],
+        updatedAt: timestamp
+      });
+    }
+
+    if (((figure.reviewConcernIds ?? []).length > 0 || (figure.rebuttalIssueIds ?? []).length > 0) && (figure.reviewNotes ?? []).length === 0) {
+      figureIssues.push({
+        id: figureIssueId(figure.id, "missing-review-notes"),
+        figureId: figure.id,
+        severity: "medium",
+        code: "missing-review-notes",
+        stage: "editable",
+        summary: `Figure ${figure.id} links to review or rebuttal context but has no durable review notes.`,
+        claimIds: figure.targetClaimIds,
+        experimentIds: figure.relatedExperimentIds,
+        reviewConcernIds: figure.reviewConcernIds,
+        rebuttalIssueIds: figure.rebuttalIssueIds,
+        artifactPaths: [ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.figureQa],
+        updatedAt: timestamp
+      });
+    }
+
+    issues.push(...figureIssues.map((issue) => ({
+      ...issue,
+      responseOwnerRole: responseOwnerForFigureIssue(issue)
+    })));
+    items.push({
+      figureId: figure.id,
+      qaStatus: figureIssues.some((issue) => issue.severity === "high") ? "blocked" : figureIssues.length > 0 ? "needs-review" : "ready",
+      issueCount: figureIssues.length,
+      openIssueIds: figureIssues.map((issue) => issue.id),
+      stageArtifacts,
+      targetClaimIds: figure.targetClaimIds,
+      relatedExperimentIds: figure.relatedExperimentIds,
+      reviewConcernIds: figure.reviewConcernIds,
+      rebuttalIssueIds: figure.rebuttalIssueIds,
+      updatedAt: timestamp
+    });
+  }
+
+  return { version: 1, items, issues, updatedAt: timestamp };
+}
+
+export function evaluateFigurePipeline(root) {
+  return buildFigureQa(root);
+}
+
+export function validateFigurePipeline(root) {
+  const qa = buildFigureQa(root);
+  writeJson(root, ARTIFACT_PATHS.figureQa, qa);
+  refreshDurableSurfaces(root, {
+    type: "validate-figure-pipeline",
+    summary: `Validated figure pipeline for ${qa.items.length} figures with ${qa.issues.length} issues.`,
+    artifactPaths: [ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex]
+  });
+  return { figureCount: qa.items.length, issueCount: qa.issues.length, qaPath: ARTIFACT_PATHS.figureQa };
+}
+
 function isStrictMode(state, args = {}) {
   return Boolean(args.strictMode ?? state.settings?.strictMode);
 }
@@ -396,10 +793,14 @@ function normalizeFigureItem(item = {}, index = 0) {
     id,
     name: item.name ?? item.id ?? `Figure ${index + 1}`,
     purpose: item.purpose ?? item.narrativeIntent ?? "TBD",
-    sourceSections: Array.isArray(item.sourceSections) ? item.sourceSections : (item.sourceSection ? [item.sourceSection] : []),
-    targetClaimIds: Array.isArray(item.targetClaimIds) ? item.targetClaimIds : (item.targetClaimId ? [item.targetClaimId] : []),
+    sourceSections: normalizeStringArray(item.sourceSections, item.sourceSection ? [item.sourceSection] : []),
+    sourceArtifactPaths: normalizeStringArray(item.sourceArtifactPaths, item.sourceArtifactPath ? [item.sourceArtifactPath] : []),
+    targetClaimIds: normalizeStringArray(item.targetClaimIds, item.targetClaimId ? [item.targetClaimId] : []),
+    relatedExperimentIds: normalizeStringArray(item.relatedExperimentIds, item.experimentIds),
+    reviewConcernIds: normalizeStringArray(item.reviewConcernIds, item.reviewConcernId ? [item.reviewConcernId] : []),
+    rebuttalIssueIds: normalizeStringArray(item.rebuttalIssueIds, item.rebuttalIssueId ? [item.rebuttalIssueId] : []),
     narrativeIntent: item.narrativeIntent ?? item.purpose ?? "Explain the linked method/result clearly.",
-    requiredVisualElements: Array.isArray(item.requiredVisualElements) ? item.requiredVisualElements : (Array.isArray(item.inputs) ? item.inputs : []),
+    requiredVisualElements: normalizeStringArray(item.requiredVisualElements, Array.isArray(item.inputs) ? item.inputs : []),
     owner: item.owner ?? "manual",
     mode: item.mode ?? "manual",
     status: item.status ?? "planned",
@@ -407,9 +808,18 @@ function normalizeFigureItem(item = {}, index = 0) {
     segmentId: `${id}-segments`,
     templateId,
     editableArtifactId: `${id}-editable`,
-    templateSvgPath: item.templateSvgPath ?? `.paper/figures/${id}.template.svg`,
-    finalSvgPath: item.finalSvgPath ?? `.paper/figures/${id}.final.svg`,
-    reviewNotes: item.reviewNotes ?? []
+    finalArtifactId: `${id}-final`,
+    templateSvgPath: normalizeRelativePath(item.templateSvgPath, `.paper/figures/${id}.template.svg`),
+    editableSvgPath: normalizeRelativePath(item.editableSvgPath, `.paper/figures/${id}.editable.svg`),
+    finalSvgPath: normalizeRelativePath(item.finalSvgPath, `.paper/figures/${id}.final.svg`),
+    reviewNotes: Array.isArray(item.reviewNotes) ? item.reviewNotes : [],
+    segmentPlaceholders: placeholderSegmentsForFigure({
+      ...item,
+      id,
+      sourceSections: normalizeStringArray(item.sourceSections, item.sourceSection ? [item.sourceSection] : []),
+      targetClaimIds: normalizeStringArray(item.targetClaimIds, item.targetClaimId ? [item.targetClaimId] : []),
+      requiredVisualElements: normalizeStringArray(item.requiredVisualElements, Array.isArray(item.inputs) ? item.inputs : [])
+    })
   };
 }
 
@@ -704,62 +1114,64 @@ export function syncChecklist(root) {
 export function upsertFigurePlan(root, args = {}) {
   const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: null });
   const normalizedItems = (Array.isArray(args.items) ? args.items : []).map(normalizeFigureItem);
-  figures.items = normalizedItems;
-  figures.updatedAt = nowIso();
+  const timestamp = nowIso();
+  const stagedArtifacts = normalizedItems.map((item) => buildFigureContractArtifacts(item, timestamp));
+  figures.items = normalizedItems.map((item) => ({
+    ...item,
+    qaArtifactPath: ARTIFACT_PATHS.figureQa,
+    stageArtifacts: {
+      briefId: item.briefId,
+      segmentId: item.segmentId,
+      templateId: item.templateId,
+      editableArtifactId: item.editableArtifactId,
+      finalArtifactId: item.finalArtifactId
+    },
+    updatedAt: timestamp
+  }));
+  figures.updatedAt = timestamp;
   writeJson(root, ARTIFACT_PATHS.figuresIndex, figures);
 
   writeJson(root, ARTIFACT_PATHS.figureBriefs, {
     version: 1,
-    items: normalizedItems.map((item) => ({
-      id: item.briefId,
-      figureId: item.id,
-      sourceSections: item.sourceSections,
-      targetClaimIds: item.targetClaimIds,
-      narrativeIntent: item.narrativeIntent,
-      requiredVisualElements: item.requiredVisualElements,
-      updatedAt: nowIso()
-    })),
-    updatedAt: nowIso()
+    items: stagedArtifacts.map((item) => item.brief),
+    updatedAt: timestamp
   });
   writeJson(root, ARTIFACT_PATHS.figureSegments, {
     version: 1,
-    items: normalizedItems.map((item) => ({
-      id: item.segmentId,
-      figureId: item.id,
-      placeholderSegments: item.requiredVisualElements.map((element, index) => ({ id: `${item.id}-segment-${index + 1}`, label: element })),
-      updatedAt: nowIso()
-    })),
-    updatedAt: nowIso()
+    items: stagedArtifacts.map((item) => item.segments),
+    updatedAt: timestamp
   });
   writeJson(root, ARTIFACT_PATHS.figureTemplates, {
     version: 1,
-    items: normalizedItems.map((item) => ({
-      id: item.templateId,
-      figureId: item.id,
-      templateSvgPath: item.templateSvgPath,
-      finalSvgPath: item.finalSvgPath,
-      templatePlan: `Use ${item.requiredVisualElements.join(", ") || "the planned visual elements"} to build an editable SVG template.`,
-      updatedAt: nowIso()
-    })),
-    updatedAt: nowIso()
+    items: stagedArtifacts.map((item) => item.templates),
+    updatedAt: timestamp
   });
   writeJson(root, ARTIFACT_PATHS.figureEditableIndex, {
     version: 1,
-    items: normalizedItems.map((item) => ({
-      id: item.editableArtifactId,
-      figureId: item.id,
-      templateSvgPath: item.templateSvgPath,
-      finalSvgPath: item.finalSvgPath,
-      reviewNotes: item.reviewNotes,
-      updatedAt: nowIso()
-    })),
-    updatedAt: nowIso()
+    items: stagedArtifacts.map((item) => item.editable),
+    updatedAt: timestamp
   });
+  writeJson(root, ARTIFACT_PATHS.figureFinalIndex, {
+    version: 1,
+    items: stagedArtifacts.map((item) => item.final),
+    updatedAt: timestamp
+  });
+
+  const qa = buildFigureQa(root);
+  writeJson(root, ARTIFACT_PATHS.figureQa, qa);
 
   const content = [
     "# Figures backlog",
     "",
     "This staged figure contract does not claim to ship a render backend.",
+    "",
+    "## Stage contract",
+    "",
+    "1. Brief -> define source sections, target claims, experiments, and review/rebuttal linkage.",
+    "2. Segments -> break the figure into durable placeholders tied back to the brief.",
+    "3. Template -> record the portable SVG template/editable/final paths and the template plan.",
+    "4. Editable -> preserve durable review notes before claiming a figure is ready.",
+    "5. Final contract -> record the delivery checklist and readiness state without pretending a render backend exists.",
     "",
     ...(normalizedItems.length > 0
       ? normalizedItems.flatMap((item) => [
@@ -767,14 +1179,21 @@ export function upsertFigurePlan(root, args = {}) {
           "",
           `- Purpose: ${item.purpose}`,
           `- Source sections: ${item.sourceSections.join(", ") || "none"}`,
+          `- Source artifacts: ${item.sourceArtifactPaths.join(", ") || "none"}`,
           `- Target claims: ${item.targetClaimIds.join(", ") || "none"}`,
+          `- Related experiments: ${item.relatedExperimentIds.join(", ") || "none"}`,
+          `- Review concerns: ${item.reviewConcernIds.join(", ") || "none"}`,
+          `- Rebuttal issues: ${item.rebuttalIssueIds.join(", ") || "none"}`,
           `- Narrative intent: ${item.narrativeIntent}`,
           `- Required visual elements: ${item.requiredVisualElements.join(", ") || "none"}`,
+          `- Segment placeholders: ${item.segmentPlaceholders.map((segment) => segment.label).join(", ") || "none"}`,
           `- Template SVG path: ${item.templateSvgPath}`,
+          `- Editable SVG path: ${item.editableSvgPath}`,
           `- Final SVG path: ${item.finalSvgPath}`,
           `- Owner: ${item.owner}`,
           `- Mode: ${item.mode}`,
           `- Status: ${item.status}`,
+          `- Review notes: ${item.reviewNotes.join(" | ") || "none"}`,
           ""
         ])
       : ["No figures planned yet."])
@@ -783,9 +1202,9 @@ export function upsertFigurePlan(root, args = {}) {
   refreshDurableSurfaces(root, {
     type: "upsert-figure-plan",
     summary: `Updated figure backlog with ${normalizedItems.length} items.`,
-    artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figuresReadme]
+    artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.figuresReadme]
   });
-  return { figureCount: normalizedItems.length };
+  return { figureCount: normalizedItems.length, qaIssueCount: qa.issues.length, qaPath: ARTIFACT_PATHS.figureQa };
 }
 
 export function syncCitations(root, args = {}) {
