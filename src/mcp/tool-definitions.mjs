@@ -1,3 +1,12 @@
+const policyProps = {
+  actorRole: { type: "string" },
+  policyOverrideReason: { type: "string" }
+};
+
+function withPolicy(properties = {}) {
+  return { ...properties, ...policyProps };
+}
+
 export const toolDefinitions = [
   { name: "ensure_workspace", description: "Ensure the canonical .paper workspace and starter artifacts exist.", inputSchema: { type: "object", properties: {} } },
   {
@@ -13,16 +22,20 @@ export const toolDefinitions = [
   { name: "query_workspace_index", description: "Refresh and read the top-level workspace index for resumable state.", inputSchema: { type: "object", properties: {} } },
   { name: "query_boundary_report", description: "Read the workflow-pack boundary report for managed versus user-owned state.", inputSchema: { type: "object", properties: {} } },
   { name: "read_role_context_manifest", description: "Refresh and read a narrower per-role context manifest.", inputSchema: { type: "object", properties: { roleId: { type: "string" } } } },
+  { name: "read_phase_context_manifest", description: "Refresh and read a phase-scoped context manifest.", inputSchema: { type: "object", properties: { phaseId: { type: "string" } } } },
+  { name: "read_packet_context_manifest", description: "Refresh and read a packet-scoped context manifest with dependency and resume guidance.", inputSchema: { type: "object", properties: { packetId: { type: "string" } } } },
+  { name: "read_artifact_context_manifest", description: "Refresh and read an artifact-scoped local context manifest tied to a durable path.", inputSchema: { type: "object", properties: { artifactPath: { type: "string" } } } },
+  { name: "read_action_context_bundle", description: "Refresh and read an explicit pre-action local-context bundle for the current, role, phase, packet, or artifact scope.", inputSchema: { type: "object", properties: { scopeType: { type: "string" }, roleId: { type: "string" }, phaseId: { type: "string" }, packetId: { type: "string" }, artifactPath: { type: "string" } } } },
   { name: "summarize_session_journal", description: "Refresh and summarize durable session/workspace persistence surfaces.", inputSchema: { type: "object", properties: {} } },
   {
     name: "upsert_orchestration_board",
     description: "Update the canonical orchestration board under .paper/orchestration/board.json.",
-    inputSchema: { type: "object", properties: { objective: { type: "string" }, phase: { type: "string" }, assignedRole: { type: "string" }, intentType: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, continuationState: { type: "object" }, reviewRequiredBeforeFinalize: { type: "boolean" }, tasks: { type: "array", items: { type: "object" } }, blockers: { type: "array", items: { type: "object" } }, evidenceLinks: { type: "array", items: { type: "string" } }, experimentIds: { type: "array", items: { type: "string" } }, rebuttalIssueIds: { type: "array", items: { type: "string" } }, activeComparisonTargets: { type: "array", items: { type: "string" } }, versionLineage: { type: "object" } } }
+    inputSchema: { type: "object", properties: withPolicy({ objective: { type: "string" }, phase: { type: "string" }, assignedRole: { type: "string" }, intentType: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, continuationState: { type: "object" }, reviewRequiredBeforeFinalize: { type: "boolean" }, tasks: { type: "array", items: { type: "object" } }, blockers: { type: "array", items: { type: "object" } }, evidenceLinks: { type: "array", items: { type: "string" } }, experimentIds: { type: "array", items: { type: "string" } }, rebuttalIssueIds: { type: "array", items: { type: "string" } }, activeComparisonTargets: { type: "array", items: { type: "string" } }, versionLineage: { type: "object" } }) }
   },
   {
     name: "append_handoff",
     description: "Append a durable handoff entry and update the assigned role.",
-    inputSchema: { type: "object", properties: { fromRole: { type: "string" }, toRole: { type: "string" }, phase: { type: "string" }, intentType: { type: "string" }, summary: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, nextActions: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, blockerIds: { type: "array", items: { type: "string" } } } }
+    inputSchema: { type: "object", properties: withPolicy({ fromRole: { type: "string" }, toRole: { type: "string" }, phase: { type: "string" }, intentType: { type: "string" }, summary: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, nextActions: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, blockerIds: { type: "array", items: { type: "string" } } }) }
   },
   {
     name: "update_research_brief",
@@ -41,8 +54,8 @@ export const toolDefinitions = [
   },
   {
     name: "upsert_claims",
-    description: "Write claims derived from results into the evidence store.",
-    inputSchema: { type: "object", properties: { claims: { type: "array", items: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, sectionId: { type: "string" }, sourceIds: { type: "array", items: { type: "string" } }, noteIds: { type: "array", items: { type: "string" } }, experimentIds: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, status: { type: "string" }, confidence: { type: "string" }, gap: { type: "string" } } } } } }
+    description: "Write claims derived from results into the evidence store; requires the researcher role unless a traceable override is provided.",
+    inputSchema: { type: "object", properties: withPolicy({ claims: { type: "array", items: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, sectionId: { type: "string" }, sourceIds: { type: "array", items: { type: "string" } }, noteIds: { type: "array", items: { type: "string" } }, experimentIds: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, status: { type: "string" }, confidence: { type: "string" }, gap: { type: "string" } } } } }) }
   },
   {
     name: "upsert_plan",
@@ -61,48 +74,49 @@ export const toolDefinitions = [
   },
   {
     name: "upsert_experiment_plan",
-    description: "Create or update a claim-driven experiment plan.",
-    inputSchema: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, claimId: { type: "string" }, hypothesis: { type: "string" }, methodology: { type: "string" }, successMetric: { type: "string" }, comparisonTargets: { type: "array", items: { type: "string" } }, status: { type: "string" }, owner: { type: "string" } } }
+    description: "Create or update a claim-driven experiment plan; requires the experiment-planner role unless a traceable override is provided.",
+    inputSchema: { type: "object", properties: withPolicy({ id: { type: "string" }, title: { type: "string" }, claimId: { type: "string" }, hypothesis: { type: "string" }, methodology: { type: "string" }, successMetric: { type: "string" }, comparisonTargets: { type: "array", items: { type: "string" } }, status: { type: "string" }, owner: { type: "string" } }) }
   },
   {
     name: "upsert_experiment_result",
-    description: "Create or update a durable experiment result entry.",
-    inputSchema: { type: "object", properties: { id: { type: "string" }, experimentId: { type: "string" }, claimId: { type: "string" }, outcome: { type: "string" }, summary: { type: "string" }, evidenceLinks: { type: "array", items: { type: "string" } }, comparisonTargets: { type: "array", items: { type: "string" } } } }
+    description: "Create or update a durable experiment result entry; requires the experiment-planner role unless a traceable override is provided.",
+    inputSchema: { type: "object", properties: withPolicy({ id: { type: "string" }, experimentId: { type: "string" }, claimId: { type: "string" }, outcome: { type: "string" }, summary: { type: "string" }, evidenceLinks: { type: "array", items: { type: "string" } }, comparisonTargets: { type: "array", items: { type: "string" } } }) }
   },
   {
     name: "run_experiment_audit",
-    description: "Create or update a durable experiment audit record distinct from raw results.",
-    inputSchema: { type: "object", properties: { resultId: { type: "string" }, experimentId: { type: "string" }, reviewedArtifactRefs: { type: "array", items: { type: "string" } }, auditFindings: { type: "array", items: { type: "string" } }, integrityFlags: { type: "array", items: { type: "string" } }, confidence: { type: "string" }, outcomeMapping: { type: "string" } } }
+    description: "Create or update a durable experiment audit record distinct from raw results; requires the experiment-planner role unless a traceable override is provided.",
+    inputSchema: { type: "object", properties: withPolicy({ resultId: { type: "string" }, experimentId: { type: "string" }, reviewedArtifactRefs: { type: "array", items: { type: "string" } }, auditFindings: { type: "array", items: { type: "string" } }, integrityFlags: { type: "array", items: { type: "string" } }, confidence: { type: "string" }, outcomeMapping: { type: "string" } }) }
   },
   {
     name: "bridge_result_to_claim",
-    description: "Persist an explicit result-to-claim bridge event and update claim state.",
-    inputSchema: { type: "object", properties: { resultId: { type: "string" }, experimentId: { type: "string" }, auditIds: { type: "array", items: { type: "string" } }, reason: { type: "string" } } }
+    description: "Persist an explicit result-to-claim bridge event and update claim state; requires the experiment-planner role unless a traceable override is provided.",
+    inputSchema: { type: "object", properties: withPolicy({ resultId: { type: "string" }, experimentId: { type: "string" }, auditIds: { type: "array", items: { type: "string" } }, reason: { type: "string" } }) }
   },
   {
     name: "run_review_loop",
-    description: "Run an evidence-aware review pass and generate a revision plan.",
-    inputSchema: { type: "object", properties: { scope: { type: "string" }, stage: { type: "string" } } }
+    description: "Run an evidence-aware review pass and generate a revision plan; requires the reviewer role unless a traceable override is provided.",
+    inputSchema: { type: "object", properties: withPolicy({ scope: { type: "string" }, stage: { type: "string" } }) }
   },
   {
     name: "append_review_log",
-    description: "Append a structured manual review entry.",
-    inputSchema: { type: "object", properties: { timestamp: { type: "string" }, stage: { type: "string" }, scope: { type: "string" }, verdict: { type: "string" }, summary: { type: "string" }, findings: { type: "array", items: { type: "object" } }, actionItems: { type: "array", items: { type: "string" } } } }
+    description: "Append a structured manual review entry; requires the reviewer role unless a traceable override is provided.",
+    inputSchema: { type: "object", properties: withPolicy({ timestamp: { type: "string" }, stage: { type: "string" }, scope: { type: "string" }, verdict: { type: "string" }, summary: { type: "string" }, findings: { type: "array", items: { type: "object" } }, actionItems: { type: "array", items: { type: "string" } } }) }
   },
   {
     name: "upsert_revision_plan",
-    description: "Write a manual revision plan artifact.",
-    inputSchema: { type: "object", properties: { summary: { type: "string" }, items: { type: "array", items: { type: "string" } }, updatedAt: { type: "string" } } }
+    description: "Write a manual revision plan artifact; requires the planner role unless a traceable override is provided.",
+    inputSchema: { type: "object", properties: withPolicy({ summary: { type: "string" }, items: { type: "array", items: { type: "string" } }, updatedAt: { type: "string" } }) }
   },
   { name: "set_section_status", description: "Update the status and summary for a section.", inputSchema: { type: "object", properties: { sectionId: { type: "string" }, status: { type: "string" }, summary: { type: "string" } } } },
   { name: "sync_checklist", description: "Regenerate the checklist from current state and review findings.", inputSchema: { type: "object", properties: {} } },
   { name: "sync_citations", description: "Audit citations and regenerate references.bib plus the citation log.", inputSchema: { type: "object", properties: { citedOnly: { type: "boolean" } } } },
   { name: "refresh_wiki", description: "Regenerate the durable research wiki and typed wiki indexes from current sources, notes, claims, and review state.", inputSchema: { type: "object", properties: {} } },
-  { name: "normalize_rebuttal_issues", description: "Normalize reviewer issues into a durable rebuttal issue board.", inputSchema: { type: "object", properties: { issues: { type: "array", items: { type: "object" } } } } },
-  { name: "build_rebuttal_strategy", description: "Generate the rebuttal strategy and response draft from normalized issues.", inputSchema: { type: "object", properties: {} } },
+  { name: "normalize_rebuttal_issues", description: "Normalize reviewer issues into a durable rebuttal issue board; requires the reviewer role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({ issues: { type: "array", items: { type: "object" } } }) } },
+  { name: "build_rebuttal_strategy", description: "Generate the rebuttal strategy and response draft from normalized issues; requires the rebuttal-lead role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({}) } },
   { name: "build_rebuttal", description: "Generate an artifact-backed rebuttal draft from review and evidence state.", inputSchema: { type: "object", properties: {} } },
-  { name: "create_version_snapshot", description: "Snapshot the current paper state and update version lineage.", inputSchema: { type: "object", properties: { versionId: { type: "string" }, label: { type: "string" }, parentVersionId: { type: "string" }, summary: { type: "string" } } } },
-  { name: "compare_versions", description: "Compare two durable paper snapshots and record the comparison.", inputSchema: { type: "object", properties: { fromVersionId: { type: "string" }, toVersionId: { type: "string" } } } },
+  { name: "create_version_snapshot", description: "Snapshot the current paper state and update version lineage; requires the version-analyst role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({ versionId: { type: "string" }, label: { type: "string" }, parentVersionId: { type: "string" }, summary: { type: "string" } }) } },
+  { name: "compare_versions", description: "Compare two durable paper snapshots and record the comparison; requires the version-analyst role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({ fromVersionId: { type: "string" }, toVersionId: { type: "string" } }) } },
   { name: "list_artifacts", description: "List the expected paper_factory artifacts and whether they exist.", inputSchema: { type: "object", properties: {} } },
-  { name: "upsert_figure_plan", description: "Write the staged figure backlog and artifact contracts.", inputSchema: { type: "object", properties: { items: { type: "array", items: { type: "object" } } } } }
+  { name: "upsert_figure_plan", description: "Write the staged figure backlog, linkage metadata, and artifact contracts.", inputSchema: { type: "object", properties: { items: { type: "array", items: { type: "object" } } } } },
+  { name: "validate_figure_pipeline", description: "Regenerate durable figure QA and stage-validation outputs.", inputSchema: { type: "object", properties: {} } }
 ];

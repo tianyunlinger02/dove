@@ -111,6 +111,10 @@ async function main() {
     "query_open_questions",
     "query_task_graph",
     "query_workspace_index",
+    "read_action_context_bundle",
+    "read_artifact_context_manifest",
+    "read_packet_context_manifest",
+    "read_phase_context_manifest",
     "read_role_context_manifest",
     "read_state",
     "refresh_wiki",
@@ -131,7 +135,8 @@ async function main() {
     "upsert_orchestration_board",
     "upsert_outline",
     "upsert_plan",
-    "upsert_revision_plan"
+    "upsert_revision_plan",
+    "validate_figure_pipeline"
   ]);
 
   extractJson(await call("tools/call", { name: "ensure_workspace", arguments: {} }));
@@ -150,21 +155,11 @@ async function main() {
   assert.equal(state.paper.title, "Deterministic Paper Factory");
 
   extractJson(await call("tools/call", {
-    name: "upsert_orchestration_board",
-    arguments: {
-      phase: "research",
-      assignedRole: "planner",
-      tasks: [
-        { title: "Expand sources", assignedRole: "researcher", status: "in-progress" }
-      ]
-    }
-  }));
-
-  extractJson(await call("tools/call", {
     name: "append_handoff",
     arguments: {
       fromRole: "planner",
       toRole: "researcher",
+      phase: "research",
       summary: "Proceed with evidence collection.",
       nextActions: ["Update research brief"]
     }
@@ -222,6 +217,17 @@ async function main() {
           gap: "Needs a confirming source."
         }
       ]
+    }
+  }));
+
+  extractJson(await call("tools/call", {
+    name: "append_handoff",
+    arguments: {
+      fromRole: "planner",
+      toRole: "experiment-planner",
+      phase: "experiments",
+      summary: "Proceed with the experiment plan.",
+      nextActions: ["Record the experiment result"]
     }
   }));
 
@@ -299,6 +305,37 @@ async function main() {
     }
   }));
 
+  const figurePlan = extractJson(await call("tools/call", {
+    name: "upsert_figure_plan",
+    arguments: {
+      items: [{
+        id: "workflow-figure",
+        name: "Workflow Figure",
+        sourceSections: ["method", "introduction"],
+        targetClaimIds: ["claim-1"],
+        relatedExperimentIds: ["workflow-compare"],
+        narrativeIntent: "Show the durable workflow from evidence to review.",
+        requiredVisualElements: ["board", "evidence links", "review gate"],
+        reviewNotes: ["Keep labels editable."]
+      }]
+    }
+  }));
+  assert.equal(figurePlan.qaPath, ".paper/figures/qa.json");
+
+  const figureQa = extractJson(await call("tools/call", { name: "validate_figure_pipeline", arguments: {} }));
+  assert.equal(figureQa.issueCount, 0);
+
+  extractJson(await call("tools/call", {
+    name: "append_handoff",
+    arguments: {
+      fromRole: "researcher",
+      toRole: "reviewer",
+      phase: "review",
+      summary: "Proceed with review.",
+      nextActions: ["Run the review loop"]
+    }
+  }));
+
   const review = extractJson(await call("tools/call", {
     name: "run_review_loop",
     arguments: {
@@ -306,6 +343,17 @@ async function main() {
     }
   }));
   assert.notEqual(review.verdict, undefined);
+
+  extractJson(await call("tools/call", {
+    name: "append_handoff",
+    arguments: {
+      fromRole: "rebuttal-lead",
+      toRole: "reviewer",
+      phase: "review",
+      summary: "Return to reviewer for validation signoff.",
+      nextActions: ["Record the coherent validation verdict"]
+    }
+  }));
 
   extractJson(await call("tools/call", {
     name: "append_review_log",
@@ -326,6 +374,17 @@ async function main() {
   const wiki = extractJson(await call("tools/call", { name: "refresh_wiki", arguments: {} }));
   assert.equal(wiki.wikiPath, ".paper/wiki/index.md");
 
+  extractJson(await call("tools/call", {
+    name: "append_handoff",
+    arguments: {
+      fromRole: "researcher",
+      toRole: "reviewer",
+      phase: "review",
+      summary: "Return to reviewer to finalize the rebuttal issue board.",
+      nextActions: ["Normalize rebuttal issues"]
+    }
+  }));
+
   const issues = extractJson(await call("tools/call", {
     name: "normalize_rebuttal_issues",
     arguments: {
@@ -341,6 +400,17 @@ async function main() {
 
   const rebuttal = extractJson(await call("tools/call", { name: "build_rebuttal", arguments: {} }));
   assert.equal(rebuttal.draftPath, ".paper/drafts/rebuttal.md");
+
+  extractJson(await call("tools/call", {
+    name: "append_handoff",
+    arguments: {
+      fromRole: "rebuttal-lead",
+      toRole: "reviewer",
+      phase: "review",
+      summary: "Return to reviewer for post-rebuttal signoff.",
+      nextActions: ["Record the final review verdict"]
+    }
+  }));
 
   extractJson(await call("tools/call", {
     name: "append_review_log",
@@ -417,6 +487,13 @@ async function main() {
 
   const taskGraph = extractJson(await call("tools/call", { name: "query_task_graph", arguments: {} }));
   assert.equal(Array.isArray(taskGraph.nodes), true);
+  assert.ok(taskGraph.nodes.length > 0);
+
+  const packetManifest = extractJson(await call("tools/call", {
+    name: "read_packet_context_manifest",
+    arguments: { packetId: taskGraph.nodes[0].id }
+  }));
+  assert.equal(packetManifest.packetId, taskGraph.nodes[0].id);
 
   const boundaryReport = extractJson(await call("tools/call", { name: "query_boundary_report", arguments: {} }));
   assert.equal(Array.isArray(boundaryReport.missingBootstrapArtifacts), true);
@@ -433,11 +510,23 @@ async function main() {
   const workspaceIndex = extractJson(await call("tools/call", { name: "query_workspace_index", arguments: {} }));
   assert.equal(Array.isArray(workspaceIndex.activePackets), true);
 
+  const currentActionBundle = extractJson(await call("tools/call", { name: "read_action_context_bundle", arguments: {} }));
+  assert.equal(currentActionBundle.scopeType, "current");
+
+  const phaseManifest = extractJson(await call("tools/call", { name: "read_phase_context_manifest", arguments: {} }));
+  assert.ok(phaseManifest.phaseId);
+
   const reviewerManifest = extractJson(await call("tools/call", {
     name: "read_role_context_manifest",
     arguments: { roleId: "reviewer" }
   }));
   assert.equal(reviewerManifest.roleId, "reviewer");
+
+  const artifactManifest = extractJson(await call("tools/call", {
+    name: "read_artifact_context_manifest",
+    arguments: { artifactPath: ".paper/orchestration/board.json" }
+  }));
+  assert.equal(artifactManifest.artifactPath, ".paper/orchestration/board.json");
 
   const journalSummary = extractJson(await call("tools/call", { name: "summarize_session_journal", arguments: {} }));
   assert.equal(journalSummary.summaryPath, ".paper/sessions/LATEST_SUMMARY.md");

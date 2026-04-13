@@ -16,6 +16,10 @@ import {
   queryOpenQuestions,
   queryTaskGraph,
   queryWorkspaceIndex,
+  readActionContextBundle,
+  readArtifactContextManifest,
+  readPacketContextManifest,
+  readPhaseContextManifest,
   readState,
   readRoleContextManifest,
   refreshWiki,
@@ -36,6 +40,7 @@ import {
   upsertOrchestrationBoard,
   upsertPlan,
   upsertRevisionPlan,
+  validateFigurePipeline,
   summarizeSessionJournal
 } from "../core/index.mjs";
 
@@ -75,6 +80,14 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(readBoundaryReport(root));
       case "read_role_context_manifest":
         return makeTextResult(readRoleContextManifest(root, args.roleId));
+      case "read_phase_context_manifest":
+        return makeTextResult(readPhaseContextManifest(root, args.phaseId));
+      case "read_packet_context_manifest":
+        return makeTextResult(readPacketContextManifest(root, args.packetId));
+      case "read_artifact_context_manifest":
+        return makeTextResult(readArtifactContextManifest(root, args.artifactPath));
+      case "read_action_context_bundle":
+        return makeTextResult(readActionContextBundle(root, args));
       case "summarize_session_journal":
         return makeTextResult(summarizeSessionJournal(root));
       case "upsert_orchestration_board":
@@ -131,6 +144,8 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(listWorkspaceArtifacts(root));
       case "upsert_figure_plan":
         return makeTextResult(upsertFigurePlan(root, args));
+      case "validate_figure_pipeline":
+        return makeTextResult(validateFigurePipeline(root));
       default:
         return makeErrorResult(`Unknown tool: ${name}`);
     }

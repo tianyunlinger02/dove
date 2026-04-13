@@ -10,5 +10,5 @@ Persist an experiment audit in `.paper/experiments/audits.json` that is distinct
 
 1. Read `.paper/experiments/plans.json`, `.paper/experiments/results.json`, `.paper/experiments/audits.json`, and the linked evidence artifacts.
 2. If `paper-factory` MCP is available, call `run_experiment_audit`.
-3. Keep the audit file-first: integrity flags, reviewed artifact refs, audit findings, and confidence must be durable and queryable.
-4. If the audit raises flags, convert them into review blockers or concerns before claiming the experiment cleanly supports a result.
+3. Keep the audit file-first: integrity flags, required/reviewed artifact refs, audit findings, bridge readiness, and confidence must be durable and queryable.
+4. If the audit raises flags, block clean claim promotion and convert the gaps into review blockers or concerns before claiming the experiment cleanly supports a result.

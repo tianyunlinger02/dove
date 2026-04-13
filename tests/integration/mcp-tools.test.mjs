@@ -16,6 +16,10 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "query_workspace_index",
     "query_boundary_report",
     "read_role_context_manifest",
+    "read_phase_context_manifest",
+    "read_packet_context_manifest",
+    "read_artifact_context_manifest",
+    "read_action_context_bundle",
     "summarize_session_journal",
     "upsert_orchestration_board",
     "append_handoff",
@@ -43,6 +47,33 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "create_version_snapshot",
     "compare_versions",
     "list_artifacts",
-    "upsert_figure_plan"
+    "upsert_figure_plan",
+    "validate_figure_pipeline"
   ]);
+});
+
+test("role-bound MCP tools expose explicit override fields", () => {
+  const roleBoundTools = [
+    "upsert_orchestration_board",
+    "append_handoff",
+    "upsert_claims",
+    "upsert_experiment_plan",
+    "upsert_experiment_result",
+    "run_experiment_audit",
+    "bridge_result_to_claim",
+    "run_review_loop",
+    "append_review_log",
+    "upsert_revision_plan",
+    "normalize_rebuttal_issues",
+    "build_rebuttal_strategy",
+    "create_version_snapshot",
+    "compare_versions"
+  ];
+
+  for (const name of roleBoundTools) {
+    const tool = toolDefinitions.find((item) => item.name === name);
+    assert.ok(tool, `missing tool definition for ${name}`);
+    assert.ok(tool.inputSchema.properties.actorRole, `${name} should expose actorRole`);
+    assert.ok(tool.inputSchema.properties.policyOverrideReason, `${name} should expose policyOverrideReason`);
+  }
 });
