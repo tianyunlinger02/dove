@@ -132,6 +132,7 @@ npm pack --dry-run
 - `.paper/workspace/index.json`
 - `.paper/meta/events.json`
 - `.paper/meta/long-horizon-memory.json`
+- `.paper/meta/operator-playbooks.json`
 - `.paper/meta/recommendations.json`
 - `.paper/meta/optimizer-state.json`
 - `.paper/meta/LATEST_OPTIMIZER_REPORT.md`
@@ -157,7 +158,7 @@ Additional phase-2 upgrades:
 - **Adversarial review + experiment integrity**: `.paper/reviews/concerns.json`, `.paper/reviews/adversarial-state.json`, `.paper/experiments/audits.json`, and `.paper/claims/bridge-log.json` keep review memory, experiment audits, and result-to-claim transitions durable.
 - **Typed wiki + workspace index**: `.paper/wiki/entities.json`, `.paper/wiki/relations.json`, and `.paper/workspace/index.json` make top-level state more queryable and resumable, including stronger relation taxonomy/family summaries, stronger queues, dependency health, ownership summaries, and handoff obligations.
 - **Figure artifact contracts**: `.paper/figures/briefs.json`, `segments.json`, `templates.json`, `editable-index.json`, `final-index.json`, and `qa.json` provide staged figure artifacts plus durable QA/linkage outputs without pretending the package ships a render/editor backend.
-- **Proposal-only meta-optimize layer**: `.paper/meta/events.json`, `long-horizon-memory.json`, `recommendations.json`, `optimizer-state.json`, and `LATEST_OPTIMIZER_REPORT.md` summarize repeated workflow weaknesses into grouped optimization clusters, explicit ranked recommendations, persisted frontier summaries, stable tie-break semantics, and longer-horizon recurrence trends without auto-applying any change.
+- **Proposal-only meta-optimize layer**: `.paper/meta/events.json`, `long-horizon-memory.json`, `operator-playbooks.json`, `recommendations.json`, `optimizer-state.json`, and `LATEST_OPTIMIZER_REPORT.md` summarize repeated workflow weaknesses into grouped optimization clusters, explicit ranked recommendations, family-level operator playbooks, persisted frontier summaries, stable tie-break semantics, and longer-horizon recurrence trends without auto-applying any change.
 
 Intentionally out of scope:
 
