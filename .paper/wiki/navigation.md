@@ -14,7 +14,7 @@
 
 - Ready for handoff: none
 - Stale packets: none
-- Repair frontier items: 0 (relations 0, degraded families 0, managed artifacts 0)
+- Repair frontier items: 0 (relations 0, degraded families 0, managed artifacts 0, governance 0)
 - Relation taxonomy: No degraded typed wiki relation families are currently summarized.
 - Meta-optimize frontier: 1 recommendations across 1 clusters (0 critical, score 64)
 - Meta-optimize frontier summary: 1 ranked recommendations across 1 deterministic clusters (0 critical, frontier score 64). Top clusters: queue-discipline.
@@ -25,7 +25,15 @@
 - Meta-optimize pressure areas: none
 - Remediation packs: 1 proposal-only packs (remediation-pack-queue-discipline)
 - Remediation pack focus: 1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.
+- Remediation pack readiness: 0 actionable, 1 partially actionable, 0 advisory-only remediation packs.
 - Remediation packs path: .paper/meta/remediation-packs.json
+- Execution bridge candidates: 1 proposal-only candidates (candidate-remediation-pack-queue-discipline-create-new-packet-task-queue-discipline)
+- Execution bridge focus: 1 proposal-only execution bridge candidates translate remediation packs and playbooks into likely manual work-item shapes without creating anything automatically.
+- Execution bridge path: .paper/meta/execution-bridge-candidates.json
+- Family playbooks: 0 proposal-only playbooks (none)
+- Family playbook focus: No proposal-only family-level operator playbooks have been generated yet.
+- Family playbook readiness: No proposal-only family-level operator playbooks have been generated yet.
+- Family playbooks path: .paper/meta/operator-playbooks.json
 - Long-horizon memory: 1 long-horizon workflow families across 10 optimizer snapshots. Top families: workflow-churn.
 - Long-horizon snapshots: 10
 - Long-horizon last action: unchanged

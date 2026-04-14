@@ -10,6 +10,8 @@
     ".paper/figures/qa.json",
     ".paper/versions/comparisons.json",
     ".paper/meta/long-horizon-memory.json",
+    ".paper/meta/execution-bridge-candidates.json",
+    ".paper/meta/operator-playbooks.json",
     ".paper/meta/remediation-packs.json",
     ".paper/orchestration/board.json",
     ".paper/workspace/index.json"
@@ -102,8 +104,34 @@
     "topClusterIds": [
       "queue-discipline"
     ],
+    "actionableCount": 0,
+    "partiallyActionableCount": 1,
+    "advisoryCount": 0,
+    "readinessOverview": "0 actionable, 1 partially actionable, 0 advisory-only remediation packs.",
     "overview": "1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.",
     "packsPath": ".paper/meta/remediation-packs.json"
+  },
+  "executionBridgeCandidates": {
+    "candidateCount": 1,
+    "topCandidateIds": [
+      "candidate-remediation-pack-queue-discipline-create-new-packet-task-queue-discipline"
+    ],
+    "candidateTypeCounts": {
+      "packet-candidate": 1
+    },
+    "overview": "1 proposal-only execution bridge candidates translate remediation packs and playbooks into likely manual work-item shapes without creating anything automatically.",
+    "candidatesPath": ".paper/meta/execution-bridge-candidates.json"
+  },
+  "operatorPlaybooks": {
+    "playbookCount": 0,
+    "topPlaybookIds": [],
+    "topTaxonomyFamilyIds": [],
+    "actionableCount": 0,
+    "partiallyActionableCount": 0,
+    "advisoryCount": 0,
+    "readinessOverview": "No proposal-only family-level operator playbooks have been generated yet.",
+    "overview": "No proposal-only family-level operator playbooks have been generated yet.",
+    "playbooksPath": ".paper/meta/operator-playbooks.json"
   },
   "longHorizon": {
     "familyCount": 1,
@@ -123,6 +151,6 @@
     "overview": "1 long-horizon workflow families across 10 optimizer snapshots. Top families: workflow-churn.",
     "memoryPath": ".paper/meta/long-horizon-memory.json"
   },
-  "lastRefreshedAt": "2026-04-13T14:43:51.816Z",
-  "updatedAt": "2026-04-13T14:43:51.816Z"
+  "lastRefreshedAt": "2026-04-13T21:29:22.439Z",
+  "updatedAt": "2026-04-13T21:29:22.439Z"
 }

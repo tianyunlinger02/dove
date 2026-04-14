@@ -125,6 +125,7 @@
     "relationIssueCount": 0,
     "relationFamilyIssueCount": 0,
     "managedArtifactIssueCount": 0,
+    "governanceIssueCount": 0,
     "topDegradedFamilyIds": [],
     "topDegradedGroupIds": [],
     "taxonomyOverview": "No degraded typed wiki relation families are currently summarized.",
@@ -196,8 +197,34 @@
       "topClusterIds": [
         "queue-discipline"
       ],
+      "actionableCount": 0,
+      "partiallyActionableCount": 1,
+      "advisoryCount": 0,
+      "readinessOverview": "0 actionable, 1 partially actionable, 0 advisory-only remediation packs.",
       "overview": "1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.",
       "packsPath": ".paper/meta/remediation-packs.json"
+    },
+    "executionBridgeCandidates": {
+      "candidateCount": 1,
+      "topCandidateIds": [
+        "candidate-remediation-pack-queue-discipline-create-new-packet-task-queue-discipline"
+      ],
+      "candidateTypeCounts": {
+        "packet-candidate": 1
+      },
+      "overview": "1 proposal-only execution bridge candidates translate remediation packs and playbooks into likely manual work-item shapes without creating anything automatically.",
+      "candidatesPath": ".paper/meta/execution-bridge-candidates.json"
+    },
+    "operatorPlaybooks": {
+      "playbookCount": 0,
+      "topPlaybookIds": [],
+      "topTaxonomyFamilyIds": [],
+      "actionableCount": 0,
+      "partiallyActionableCount": 0,
+      "advisoryCount": 0,
+      "readinessOverview": "No proposal-only family-level operator playbooks have been generated yet.",
+      "overview": "No proposal-only family-level operator playbooks have been generated yet.",
+      "playbooksPath": ".paper/meta/operator-playbooks.json"
     },
     "longHorizon": {
       "familyCount": 1,
@@ -224,74 +251,74 @@
   "unresolvedConcernIds": [],
   "mostRecentSessions": [
     {
-      "id": "2026-04-13T14:43:51.816Z-query-meta-optimize",
+      "id": "2026-04-13T21:29:22.439Z-query-meta-optimize",
       "type": "query-meta-optimize",
       "phase": "init",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "timestamp": "2026-04-13T14:43:51.816Z"
+      "timestamp": "2026-04-13T21:29:22.439Z"
     },
     {
-      "id": "2026-04-13T14:43:51.808Z-query-workspace-index",
+      "id": "2026-04-13T21:29:22.430Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T14:43:51.808Z"
+      "timestamp": "2026-04-13T21:29:22.430Z"
     },
     {
-      "id": "2026-04-13T14:43:51.786Z-query-workspace-index",
+      "id": "2026-04-13T21:29:22.403Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T14:43:51.786Z"
+      "timestamp": "2026-04-13T21:29:22.403Z"
     },
     {
-      "id": "2026-04-13T13:50:29.815Z-query-meta-optimize",
+      "id": "2026-04-13T21:16:30.485Z-query-meta-optimize",
       "type": "query-meta-optimize",
       "phase": "init",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "timestamp": "2026-04-13T13:50:29.815Z"
+      "timestamp": "2026-04-13T21:16:30.485Z"
     },
     {
-      "id": "2026-04-13T13:50:29.808Z-query-workspace-index",
+      "id": "2026-04-13T21:16:30.475Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T13:50:29.808Z"
+      "timestamp": "2026-04-13T21:16:30.475Z"
     },
     {
-      "id": "2026-04-13T13:50:29.786Z-query-workspace-index",
+      "id": "2026-04-13T21:16:30.449Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T13:50:29.786Z"
+      "timestamp": "2026-04-13T21:16:30.449Z"
     },
     {
-      "id": "2026-04-13T13:04:54.645Z-query-meta-optimize",
+      "id": "2026-04-13T21:14:10.126Z-query-meta-optimize",
       "type": "query-meta-optimize",
       "phase": "init",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "timestamp": "2026-04-13T13:04:54.645Z"
+      "timestamp": "2026-04-13T21:14:10.126Z"
     },
     {
-      "id": "2026-04-13T13:04:54.637Z-query-workspace-index",
+      "id": "2026-04-13T21:14:10.117Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T13:04:54.637Z"
+      "timestamp": "2026-04-13T21:14:10.117Z"
     },
     {
-      "id": "2026-04-13T13:04:54.616Z-query-workspace-index",
+      "id": "2026-04-13T21:14:10.091Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T13:04:54.616Z"
+      "timestamp": "2026-04-13T21:14:10.091Z"
     },
     {
-      "id": "2026-04-13T12:46:29.171Z-query-meta-optimize",
+      "id": "2026-04-13T21:14:09.914Z-query-meta-optimize",
       "type": "query-meta-optimize",
       "phase": "init",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "timestamp": "2026-04-13T12:46:29.171Z"
+      "timestamp": "2026-04-13T21:14:09.915Z"
     }
   ],
   "latestVersions": {
@@ -299,5 +326,5 @@
     "activeTargets": [],
     "latestSnapshotIds": []
   },
-  "updatedAt": "2026-04-13T14:43:51.817Z"
+  "updatedAt": "2026-04-13T21:29:22.440Z"
 }

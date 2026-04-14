@@ -1,7 +1,7 @@
 # Latest optimizer report
 
 - Proposal only: true
-- Generated: 2026-04-13T14:43:51.816Z
+- Generated: 2026-04-13T21:29:22.439Z
 - Meta-optimize frontier: 1 recommendations across 1 clusters (0 critical, score 64)
 - Meta-optimize frontier summary: 1 ranked recommendations across 1 deterministic clusters (0 critical, frontier score 64). Top clusters: queue-discipline.
 - Meta-optimize top clusters: queue-discipline
@@ -11,7 +11,15 @@
 - Meta-optimize pressure areas: none
 - Remediation packs: 1 proposal-only packs (remediation-pack-queue-discipline)
 - Remediation pack focus: 1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.
+- Remediation pack readiness: 0 actionable, 1 partially actionable, 0 advisory-only remediation packs.
 - Remediation packs path: .paper/meta/remediation-packs.json
+- Execution bridge candidates: 1 proposal-only candidates (candidate-remediation-pack-queue-discipline-create-new-packet-task-queue-discipline)
+- Execution bridge focus: 1 proposal-only execution bridge candidates translate remediation packs and playbooks into likely manual work-item shapes without creating anything automatically.
+- Execution bridge path: .paper/meta/execution-bridge-candidates.json
+- Family playbooks: 0 proposal-only playbooks (none)
+- Family playbook focus: No proposal-only family-level operator playbooks have been generated yet.
+- Family playbook readiness: No proposal-only family-level operator playbooks have been generated yet.
+- Family playbooks path: .paper/meta/operator-playbooks.json
 - Long-horizon memory: 1 long-horizon workflow families across 10 optimizer snapshots. Top families: workflow-churn.
 - Long-horizon snapshots: 10
 - Long-horizon last action: unchanged
@@ -52,7 +60,7 @@
 - Category: workflow-observability
 - Scope: session/workflow observability
 - Summary: Inspect whether repeated query-workspace-index actions indicate workflow churn.
-- Why: The journal shows 31 recent query-workspace-index events, which can be a signal that operators are repeatedly refreshing or repairing the same surface instead of closing a durable issue.
+- Why: The journal shows 22 recent query-workspace-index events, which can be a signal that operators are repeatedly refreshing or repairing the same surface instead of closing a durable issue.
 - Next action: Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.
 - Score: 64
 - Ranking basis: priority=low, recurrence=6, evidenceDensity=2, crossSessionRecurrence=6, repairFrontierOverlap=0, auditCriticality=0, bridgeCriticality=0, queueChurn=0, taxonomyFamilyPressure=0, taxonomyGroupPressure=0
@@ -76,7 +84,32 @@
 - Long-horizon memory: workflow-churn
 - Packet pointers: none
 - Workspace pointers: .paper/context/actions/current.json, .paper/context/phases/init.json, .paper/context/roles/planner.json, .paper/meta/LATEST_OPTIMIZER_REPORT.md, .paper/meta/long-horizon-memory.json, .paper/meta/recommendations.json, .paper/meta/remediation-packs.json, .paper/sessions/journal.json, .paper/sessions/LATEST_SUMMARY.md, .paper/wiki/navigation.md, .paper/workspace/index.json
+- Readiness: partially-actionable (Partially actionable guidance: 1 ranked conversion paths, 1 acceptance criteria, missing packet-pointers, repair-frontier-links.)
+- Missing ingredients: packet-pointers, repair-frontier-links
+- Acceptance criteria: Confirm long-horizon memory pressure has stopped rising or is explicitly accepted as ongoing debt.
+- Conversion hints: create-new-packet:task-queue-discipline
+- Ranked conversion paths: 1:primary:create-new-packet:task-queue-discipline
 - Manual next actions: Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit. | Read .paper/meta/LATEST_OPTIMIZER_REPORT.md and inspect cluster queue-discipline before changing any workflow artifact.
+
+## Family-level operator playbooks
+
+- No family-level operator playbooks generated from the current durable signals.
+## Execution bridge candidate scaffolds
+
+### 1. Queue discipline remediation work
+- Candidate id: candidate-remediation-pack-queue-discipline-create-new-packet-task-queue-discipline
+- Candidate type: packet-candidate
+- Target artifact: .paper/task-packets/index.json
+- Summary: Queue churn and repeated workflow activity that suggest coordination debt is accumulating. This pack keeps the cluster's repair frontier, evidence links, taxonomy anchors, and manual next steps together for operator review. Proposed as a packet-candidate from remediation pack remediation-pack-queue-discipline; review manually before creating any real work item.
+- Suggested next step: Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.
+- Source remediation packs: remediation-pack-queue-discipline
+- Source playbooks: none
+- Linked packet pointers: none
+- Workspace pointers: .paper/context/actions/current.json, .paper/context/phases/init.json, .paper/context/roles/planner.json, .paper/meta/LATEST_OPTIMIZER_REPORT.md, .paper/meta/long-horizon-memory.json, .paper/meta/recommendations.json
+- Evidence summary: artifacts=.paper/sessions/journal.json ids=query-workspace-index
+- Repair summary: repairs=none reviews=none figures=none
+- Linked repair items: none
+- Acceptance criteria: Confirm long-horizon memory pressure has stopped rising or is explicitly accepted as ongoing debt.
 
 ## Long-horizon workflow memory
 
@@ -96,7 +129,7 @@
 
 ## Signal observations
 
-- [low] session-journal: Recent session journal repeated query-workspace-index 31 times.
+- [low] session-journal: Recent session journal repeated query-workspace-index 22 times.
 
 ## Explicit non-goals
 

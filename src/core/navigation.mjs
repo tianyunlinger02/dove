@@ -6,7 +6,9 @@ import {
   ROLE_IDS,
   createDefaultBoard,
   createMetaEventsIndex,
+  createMetaExecutionBridgeCandidatesIndex,
   createMetaLongHorizonMemory,
+  createMetaOperatorPlaybooksIndex,
   createMetaRemediationPacksIndex,
   createMetaOptimizerState,
   createMetaRecommendationsIndex,
@@ -18,7 +20,9 @@ import {
   createWorkspaceIndex,
   createWikiEntitiesIndex,
   createWikiRelationsIndex,
+  normalizeMetaExecutionBridgeCandidatesIndex,
   normalizeMetaLongHorizonMemory,
+  normalizeMetaOperatorPlaybooksIndex,
   normalizeMetaRemediationPacksIndex,
   normalizeMetaOptimizerState,
   normalizeMetaRecommendationsIndex,
@@ -418,12 +422,13 @@ function artifactGuidance(relativePath) {
     };
   }
 
-  if ([ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport].includes(normalized)) {
+  if ([ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaExecutionBridgeCandidates, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport].includes(normalized)) {
     return {
       category: "meta-optimize",
       summary: "Meta-optimize artifacts are proposal-only summaries built from durable workflow signals.",
       localRules: [
         "Do not auto-apply recommendations from this layer.",
+        "Treat execution bridge candidates as manual scaffolds, not real work items.",
         "Keep every recommendation tied to concrete evidence artifacts and ids.",
         "Use this layer to surface workflow/process/artifact health, not hidden self-modification."
       ],
@@ -524,7 +529,116 @@ function selectTopRemediationPack(remediationPacks = {}, { roleId = null, packet
   return packs[0] ?? null;
 }
 
-function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, { roleId = null, packetId = null } = {}) {
+function conversionPathPriorityRank(value) {
+  return value === "primary" ? 0 : value === "secondary" ? 1 : 2;
+}
+
+function buildRankedConversionCandidates(candidates = []) {
+  return candidates
+    .map((candidate, index) => ({
+      ...candidate,
+      priority: candidate.priority ?? "secondary",
+      pathScore: Number.isFinite(candidate.pathScore) ? candidate.pathScore : 0,
+      rankingBasis: normalizeStringArray(candidate.rankingBasis ?? []),
+      deterministicKey: candidate.deterministicKey ?? [
+        String(9999 - (Number.isFinite(candidate.pathScore) ? candidate.pathScore : 0)).padStart(4, "0"),
+        String(conversionPathPriorityRank(candidate.priority ?? "secondary")).padStart(2, "0"),
+        candidate.targetType ?? "path",
+        candidate.targetId ?? `path-${index + 1}`
+      ].join(":"),
+      originalIndex: index
+    }))
+    .sort((left, right) => {
+      const scoreDelta = (right.pathScore ?? 0) - (left.pathScore ?? 0);
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+      const priorityDelta = conversionPathPriorityRank(left.priority) - conversionPathPriorityRank(right.priority);
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+      return (left.deterministicKey ?? "").localeCompare(right.deterministicKey ?? "");
+    })
+    .map((candidate, index) => ({
+      ...candidate,
+      rank: index + 1
+    }));
+}
+
+function operatorPlaybookSpecificityScore(playbook = {}, { roleId = null, packetId = null, packet = null, remediationPack = null, workspaceIndex = null } = {}) {
+  let score = 0;
+  const rankingBasis = [];
+  const matchedPacketPointer = packetId ? (playbook.packetPointers ?? []).find((pointer) => pointer.id === packetId) ?? null : null;
+  if (matchedPacketPointer) {
+    score += 80;
+    rankingBasis.push(`packet=${packetId}`);
+  }
+  if (packet?.id && packet.id === packetId) {
+    score += 36;
+    rankingBasis.push(`packetContext=${packet.id}`);
+  }
+  if (roleId && (playbook.responseOwnerRoles ?? []).includes(roleId)) {
+    score += 40;
+    rankingBasis.push(`ownerRole=${roleId}`);
+  }
+  if (roleId && (playbook.packetPointers ?? []).some((pointer) => pointer.assignedRole === roleId)) {
+    score += 24;
+    rankingBasis.push(`packetRole=${roleId}`);
+  }
+  if (roleId && (playbook.conversionHints ?? []).some((hint) => hint.assignedRole === roleId)) {
+    score += 16;
+    rankingBasis.push(`hintRole=${roleId}`);
+  }
+  const remediationFamilies = remediationPack?.taxonomyAnchors?.familyIds ?? [];
+  const remediationGroups = remediationPack?.taxonomyAnchors?.groupIds ?? [];
+  if (intersects(playbook.remediationPackIds ?? [], [remediationPack?.id].filter(Boolean))) {
+    score += 36;
+    rankingBasis.push(`pack=${remediationPack.id}`);
+  }
+  if (intersects(playbook.taxonomyFamilyId ? [playbook.taxonomyFamilyId] : [], remediationFamilies)) {
+    score += 32;
+    rankingBasis.push(`taxonomyFamily=${playbook.taxonomyFamilyId}`);
+  }
+  if (intersects(playbook.taxonomyGroupIds ?? [], remediationGroups)) {
+    score += 18;
+    rankingBasis.push(`taxonomyGroups=${(playbook.taxonomyGroupIds ?? []).filter((groupId) => remediationGroups.includes(groupId)).join(",")}`);
+  }
+  const activeFamilies = workspaceIndex?.metaOptimize?.topTaxonomyFamilyIds ?? [];
+  if (intersects(playbook.taxonomyFamilyId ? [playbook.taxonomyFamilyId] : [], activeFamilies)) {
+    score += 12;
+    rankingBasis.push(`activeFamily=${playbook.taxonomyFamilyId}`);
+  }
+  const packetTextSource = matchedPacketPointer ?? packet ?? null;
+  if (packetTextSource) {
+    const packetText = [packetTextSource.title, packetTextSource.currentFocus, packetTextSource.nextAction]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const familyTerms = uniqueSorted([
+      playbook.taxonomyFamilyId,
+      playbook.taxonomyFamilyLabel,
+      ...(playbook.taxonomyGroupIds ?? []),
+      ...(playbook.taxonomyGroupLabels ?? [])
+    ].map((value) => String(value).toLowerCase()));
+    const matchedTerms = familyTerms.filter((term) => term && packetText.includes(term));
+    if (matchedTerms.length > 0) {
+      score += 48 + matchedTerms.length * 4;
+      rankingBasis.push(`packetText=${matchedTerms.join(",")}`);
+    }
+  }
+  score += Math.min((playbook.remediationPackIds ?? []).length, 5) * 2;
+  score += Math.min((playbook.longHorizonFamilyIds ?? []).length, 5);
+  rankingBasis.push(`remediationPackCount=${(playbook.remediationPackIds ?? []).length}`);
+  rankingBasis.push(`longHorizonCount=${(playbook.longHorizonFamilyIds ?? []).length}`);
+  return { score, rankingBasis: uniqueSorted(rankingBasis) };
+}
+
+function selectTopOperatorPlaybook(operatorPlaybooks = {}, { roleId = null, packetId = null } = {}) {
+  const playbooks = operatorPlaybooks?.playbooks ?? [];
+  return playbooks[0] ?? null;
+}
+
+function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidatesIndex = {}, { roleId = null, packetId = null, packet = null } = {}) {
   const topRepairItems = (workspaceIndex.repairFrontier?.prioritizedItems ?? []).slice(0, 3).map((item) => ({
     id: item.id,
     frontierType: item.frontierType,
@@ -533,6 +647,50 @@ function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, { roleId =
     nextAction: item.nextAction
   }));
   const topRemediationPack = selectTopRemediationPack(remediationPacks, { roleId, packetId });
+  const rankedPlaybookCandidates = (operatorPlaybooks?.playbooks ?? [])
+    .map((playbook) => {
+      const specificity = operatorPlaybookSpecificityScore(playbook, {
+        roleId,
+        packetId,
+        packet,
+        remediationPack: topRemediationPack,
+        workspaceIndex
+      });
+      return {
+        ...playbook,
+        selectionScore: specificity.score,
+        selectionRankingBasis: specificity.rankingBasis
+      };
+    })
+    .sort((left, right) => {
+      const scoreDelta = (right.selectionScore ?? 0) - (left.selectionScore ?? 0);
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+      const packDelta = (right.remediationPackIds?.length ?? 0) - (left.remediationPackIds?.length ?? 0);
+      if (packDelta !== 0) {
+        return packDelta;
+      }
+      return left.taxonomyFamilyId.localeCompare(right.taxonomyFamilyId);
+    });
+  const topOperatorPlaybook = rankedPlaybookCandidates[0] ?? null;
+  const executionBridgeCandidates = (executionBridgeCandidatesIndex?.candidates ?? [])
+    .filter((candidate) => {
+      if (!candidate || typeof candidate !== "object") {
+        return false;
+      }
+      if (topOperatorPlaybook && intersects(candidate.sourcePlaybookIds ?? [], [topOperatorPlaybook.id])) {
+        return true;
+      }
+      if (topRemediationPack && intersects(candidate.sourceRemediationPackIds ?? [], [topRemediationPack.id])) {
+        return true;
+      }
+      if (roleId && (candidate.sourceConversionPath?.assignedRole === roleId || (candidate.suggestedTitle ?? "").toLowerCase().includes(roleId.toLowerCase()))) {
+        return true;
+      }
+      return false;
+    })
+    .slice(0, 4);
   return {
     repairFrontier: {
       count: workspaceIndex.repairFrontier?.count ?? 0,
@@ -551,10 +709,57 @@ function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, { roleId =
       title: topRemediationPack.title,
       clusterId: topRemediationPack.clusterId,
       summary: topRemediationPack.summary,
+      readiness: topRemediationPack.readiness,
       taxonomyOverview: topRemediationPack.taxonomyAnchors?.overview ?? "No typed wiki taxonomy pressure is active in this remediation pack.",
+      acceptanceCriteria: (topRemediationPack.acceptanceCriteria ?? []).slice(0, 3),
+      conversionHints: (topRemediationPack.conversionHints ?? []).slice(0, 3),
+      rankedConversionPaths: (topRemediationPack.rankedConversionPaths ?? []).slice(0, 4),
       manualNextActions: (topRemediationPack.manualNextActions ?? []).slice(0, 3),
       workspacePointers: (topRemediationPack.workspacePointers ?? []).slice(0, 5)
-    } : null
+    } : null,
+    familyPlaybook: topOperatorPlaybook ? {
+      id: topOperatorPlaybook.id,
+      title: topOperatorPlaybook.title,
+      taxonomyFamilyId: topOperatorPlaybook.taxonomyFamilyId,
+      taxonomyFamilyLabel: topOperatorPlaybook.taxonomyFamilyLabel,
+      summary: topOperatorPlaybook.summary,
+      readiness: topOperatorPlaybook.readiness,
+      operatorGoal: topOperatorPlaybook.operatorGoal,
+      longHorizonSummary: topOperatorPlaybook.longHorizonSummary,
+      selectionScore: topOperatorPlaybook.selectionScore,
+      selectionRankingBasis: topOperatorPlaybook.selectionRankingBasis,
+      artifactUpdateOverview: topOperatorPlaybook.artifactUpdateMap?.overview ?? `No explicit artifact targets were derived for ${topOperatorPlaybook.taxonomyFamilyLabel}.`,
+      artifactUpdateTargets: (topOperatorPlaybook.artifactUpdateMap?.targets ?? []).slice(0, 5),
+      artifactUpdateOrder: (topOperatorPlaybook.artifactUpdateMap?.updateOrder ?? []).slice(0, 5),
+      acceptanceCriteria: (topOperatorPlaybook.acceptanceCriteria ?? []).slice(0, 4),
+      conversionHints: (topOperatorPlaybook.conversionHints ?? []).slice(0, 4),
+      rankedConversionPaths: (topOperatorPlaybook.rankedConversionPaths ?? []).slice(0, 4),
+      manualNextActions: (topOperatorPlaybook.manualNextActions ?? []).slice(0, 4),
+      remediationPackIds: (topOperatorPlaybook.remediationPackIds ?? []).slice(0, 4),
+      workspacePointers: (topOperatorPlaybook.workspacePointers ?? []).slice(0, 6)
+    } : null,
+    executionBridgeCandidates: executionBridgeCandidates.map((candidate) => ({
+      id: candidate.id,
+      candidateType: candidate.candidateType,
+      targetArtifact: candidate.targetArtifact,
+      targetId: candidate.targetId,
+      suggestedTitle: candidate.suggestedTitle,
+      suggestedSummary: candidate.suggestedSummary,
+      suggestedNextStep: candidate.suggestedNextStep,
+      sourceRemediationPackIds: (candidate.sourceRemediationPackIds ?? []).slice(0, 3),
+      sourcePlaybookIds: (candidate.sourcePlaybookIds ?? []).slice(0, 3),
+      linkedRepairItemIds: (candidate.linkedRepairItemIds ?? []).slice(0, 5),
+      suggestedAcceptanceCriteria: (candidate.suggestedAcceptanceCriteria ?? []).slice(0, 4),
+      context: {
+        linkedPacketPointers: (candidate.context?.linkedPacketPointers ?? []).slice(0, 2),
+        linkedWorkspacePointers: (candidate.context?.linkedWorkspacePointers ?? []).slice(0, 4),
+        linkedRemediationPacks: (candidate.context?.linkedRemediationPacks ?? []).slice(0, 2),
+        linkedPlaybooks: (candidate.context?.linkedPlaybooks ?? []).slice(0, 2),
+        evidenceSummary: candidate.context?.evidenceSummary ?? { artifactPaths: [], ids: [] },
+        repairSummary: candidate.context?.repairSummary ?? { repairItemIds: [], reviewConcernIds: [], figureIssueIds: [] },
+        bridgeNotes: (candidate.context?.bridgeNotes ?? []).slice(0, 3)
+      }
+    }))
   };
 }
 
@@ -1078,7 +1283,7 @@ function renderNavigationReport(board, taskGraph, openQuestions, decisions, vers
   ].join("\n");
 }
 
-function buildRoleManifest(role, packets, openQuestions, decisions, workspaceIndex, remediationPacks = {}) {
+function buildRoleManifest(role, packets, openQuestions, decisions, workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidates = {}) {
   const rolePackets = packets.filter((packet) => packet.assignedRole === role.id && packet.active);
   const roleQuestionIds = rolePackets.flatMap((packet) => (packet.questions ?? []).filter((item) => item.status !== "answered").map((item) => item.id));
   const roleDecisionIds = decisions.filter((item) => item.packetId ? rolePackets.some((packet) => packet.id === item.packetId) : ["board-current-role", "board-next-action"].includes(item.id)).map((item) => item.id);
@@ -1119,12 +1324,12 @@ function buildRoleManifest(role, packets, openQuestions, decisions, workspaceInd
     currentFocus: rolePackets[0]?.currentFocus ?? workspaceIndex.currentFocus ?? null,
     queueSummary: workspaceIndex.ownershipSummary?.find((entry) => entry.roleId === role.id) ?? null,
     handoffCandidateIds: (workspaceIndex.handoffObligations ?? []).filter((item) => item.toRole === role.id || item.fromRole === role.id).map((item) => item.packetId),
-    operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, { roleId: role.id }),
+    operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, operatorPlaybooks, executionBridgeCandidates, { roleId: role.id }),
     generatedAt: nowIso()
   };
 }
 
-function buildPhaseManifest(board, packets, workspaceIndex, remediationPacks = {}) {
+function buildPhaseManifest(board, packets, workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidates = {}) {
   const phasePackets = sortPacketsForQueue(packets.filter((packet) => packet.phase === board.currentPhase && packet.active));
   const artifactContextPaths = uniqueSorted([
     artifactContextPath(ARTIFACT_PATHS.orchestrationBoard),
@@ -1175,7 +1380,7 @@ function buildPhaseManifest(board, packets, workspaceIndex, remediationPacks = {
         "Keep phase guidance explicit and file-backed."
       ]
     },
-    operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, { roleId: board.assignedRole }),
+    operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, operatorPlaybooks, executionBridgeCandidates, { roleId: board.assignedRole }),
     resumeGuidance: workspaceIndex.resumeGuidance,
     generatedAt: nowIso()
   };
@@ -1802,7 +2007,7 @@ function buildLongHorizonMemory(existingMemory, rankedRecommendations, clusters,
   };
 }
 
-function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks) {
+function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates) {
   return {
     proposalOnly: true,
     recommendationCount: metaRecommendations.items.length,
@@ -1825,6 +2030,8 @@ function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remedia
     statePath: ARTIFACT_PATHS.metaOptimizerState,
     longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
     remediationPacks: remediationPacks.summary,
+    executionBridgeCandidates: executionBridgeCandidates.summary,
+    operatorPlaybooks: operatorPlaybooks.summary,
     longHorizon: {
       ...longHorizonMemory.summary,
       memoryPath: ARTIFACT_PATHS.metaLongHorizonMemory
@@ -1843,7 +2050,15 @@ function renderMetaOptimizeOverviewLines(metaOptimize = {}) {
     `- Meta-optimize pressure areas: ${(metaOptimize.pressureAreas ?? []).join(", ") || "none"}`,
     `- Remediation packs: ${metaOptimize.remediationPacks?.packCount ?? 0} proposal-only packs (${(metaOptimize.remediationPacks?.topPackIds ?? []).join(", ") || "none"})`,
     `- Remediation pack focus: ${metaOptimize.remediationPacks?.overview ?? "No proposal-only remediation packs have been generated yet."}`,
+    `- Remediation pack readiness: ${metaOptimize.remediationPacks?.readinessOverview ?? "No proposal-only remediation packs have been generated yet."}`,
     `- Remediation packs path: ${metaOptimize.remediationPacks?.packsPath ?? ARTIFACT_PATHS.metaRemediationPacks}`,
+    `- Execution bridge candidates: ${metaOptimize.executionBridgeCandidates?.candidateCount ?? 0} proposal-only candidates (${(metaOptimize.executionBridgeCandidates?.topCandidateIds ?? []).join(", ") || "none"})`,
+    `- Execution bridge focus: ${metaOptimize.executionBridgeCandidates?.overview ?? "No proposal-only execution bridge candidates have been generated yet."}`,
+    `- Execution bridge path: ${metaOptimize.executionBridgeCandidates?.candidatesPath ?? ARTIFACT_PATHS.metaExecutionBridgeCandidates}`,
+    `- Family playbooks: ${metaOptimize.operatorPlaybooks?.playbookCount ?? 0} proposal-only playbooks (${(metaOptimize.operatorPlaybooks?.topTaxonomyFamilyIds ?? []).join(", ") || "none"})`,
+    `- Family playbook focus: ${metaOptimize.operatorPlaybooks?.overview ?? "No proposal-only family-level operator playbooks have been generated yet."}`,
+    `- Family playbook readiness: ${metaOptimize.operatorPlaybooks?.readinessOverview ?? "No proposal-only family-level operator playbooks have been generated yet."}`,
+    `- Family playbooks path: ${metaOptimize.operatorPlaybooks?.playbooksPath ?? ARTIFACT_PATHS.metaOperatorPlaybooks}`,
     `- Long-horizon memory: ${metaOptimize.longHorizon?.overview ?? "No long-horizon workflow memory has been summarized yet."}`,
     `- Long-horizon snapshots: ${metaOptimize.longHorizon?.snapshotCount ?? 0}`,
     `- Long-horizon last action: ${metaOptimize.longHorizon?.lastAction ?? "unchanged"}`,
@@ -1897,6 +2112,302 @@ function summarizeFigureIssueForPack(issue = {}) {
   };
 }
 
+function coverageLevelFromCount(count, { fullAt = 3, partialAt = 2, minimalAt = 1 } = {}) {
+  if (count >= fullAt) {
+    return "full";
+  }
+  if (count >= partialAt) {
+    return "partial";
+  }
+  if (count >= minimalAt) {
+    return "minimal";
+  }
+  return "none";
+}
+
+function readinessRank(value) {
+  return value === "actionable" ? 0 : value === "partially-actionable" ? 1 : 2;
+}
+
+function buildGuidanceReadiness({ acceptanceCriteria = [], conversionHints = [], rankedConversionPaths = [], packetPointers = [], evidenceArtifactPaths = [], longHorizonMemory = [], repairItems = [], reviewConcerns = [], figureQa = [], remediationPackIds = [] } = {}) {
+  const conversionCoverageLevel = coverageLevelFromCount(rankedConversionPaths.length, { fullAt: 3, partialAt: 2, minimalAt: 1 });
+  const acceptanceCoverageLevel = coverageLevelFromCount(acceptanceCriteria.length, { fullAt: 3, partialAt: 2, minimalAt: 1 });
+  const evidenceCoverageLevel = coverageLevelFromCount(evidenceArtifactPaths.length, { fullAt: 3, partialAt: 1, minimalAt: 1 });
+  const packetCoverageLevel = coverageLevelFromCount(packetPointers.length, { fullAt: 2, partialAt: 1, minimalAt: 1 });
+  const missingIngredients = uniqueSorted([
+    rankedConversionPaths.length === 0 ? "ranked-conversion-paths" : null,
+    acceptanceCriteria.length === 0 ? "acceptance-criteria" : null,
+    evidenceArtifactPaths.length === 0 ? "evidence-artifacts" : null,
+    packetPointers.length === 0 ? "packet-pointers" : null,
+    longHorizonMemory.length === 0 ? "long-horizon-memory" : null,
+    repairItems.length === 0 ? "repair-frontier-links" : null,
+    conversionHints.length === 0 ? "conversion-hints" : null
+  ]);
+  const operatorReadiness = rankedConversionPaths.length >= 2 && acceptanceCriteria.length >= 2 && evidenceArtifactPaths.length >= 1
+    ? "actionable"
+    : rankedConversionPaths.length >= 1 && acceptanceCriteria.length >= 1
+      ? "partially-actionable"
+      : "advisory-only";
+  const overview = operatorReadiness === "actionable"
+    ? `Actionable guidance with ${rankedConversionPaths.length} ranked conversion paths and ${acceptanceCriteria.length} acceptance criteria.`
+    : operatorReadiness === "partially-actionable"
+      ? `Partially actionable guidance: ${rankedConversionPaths.length} ranked conversion paths, ${acceptanceCriteria.length} acceptance criteria, missing ${missingIngredients.join(", ") || "none"}.`
+      : `Advisory-only guidance: missing ${missingIngredients.join(", ") || "ranked execution context"}.`;
+  return {
+    operatorReadiness,
+    conversionCoverageLevel,
+    acceptanceCoverageLevel,
+    evidenceCoverageLevel,
+    packetCoverageLevel,
+    missingIngredients,
+    linkedSignalCounts: {
+      remediationPackCount: remediationPackIds.length,
+      repairItemCount: repairItems.length,
+      reviewConcernCount: reviewConcerns.length,
+      figureIssueCount: figureQa.length,
+      longHorizonCount: longHorizonMemory.length,
+      rankedConversionPathCount: rankedConversionPaths.length,
+      acceptanceCriteriaCount: acceptanceCriteria.length,
+      evidenceArtifactCount: evidenceArtifactPaths.length,
+      packetPointerCount: packetPointers.length
+    },
+    overview
+  };
+}
+
+function isArtifactPathLike(value) {
+  return typeof value === "string"
+    && (value.startsWith(".paper/")
+      || value.startsWith("docs/")
+      || value.startsWith("README")
+      || /\.(json|md|svg|txt|mjs|yml|yaml|tex)$/i.test(value));
+}
+
+function buildPlaybookArtifactUpdateMap({ familyId, familyLabel, matchedPacks = [], repairItems = [], packetPointers = [], workspacePointers = [], taxonomyAnchors = {} }) {
+  const targetMap = new Map();
+  const pushTarget = (artifactPath, details = {}) => {
+    if (!isArtifactPathLike(artifactPath)) {
+      return;
+    }
+    const existing = targetMap.get(artifactPath) ?? {
+      artifactPath,
+      sourceKinds: [],
+      updateReasons: [],
+      relatedRepairItemIds: [],
+      relatedConversionTargetIds: [],
+      relatedPacketIds: [],
+      taxonomyFamilyIds: [],
+      taxonomyGroupIds: [],
+      priorityScore: 0
+    };
+    existing.sourceKinds.push(details.sourceKind ?? "workspace");
+    existing.updateReasons.push(details.reason ?? `Review ${artifactPath} for ${familyLabel ?? familyId} pressure.`);
+    existing.relatedRepairItemIds.push(...(details.relatedRepairItemIds ?? []));
+    existing.relatedConversionTargetIds.push(...(details.relatedConversionTargetIds ?? []));
+    existing.relatedPacketIds.push(...(details.relatedPacketIds ?? []));
+    existing.taxonomyFamilyIds.push(...(details.taxonomyFamilyIds ?? []));
+    existing.taxonomyGroupIds.push(...(details.taxonomyGroupIds ?? []));
+    existing.priorityScore = Math.max(existing.priorityScore, details.priorityScore ?? 0);
+    targetMap.set(artifactPath, existing);
+  };
+
+  for (const repairItem of repairItems) {
+    pushTarget(repairItem.artifactPath, {
+      sourceKind: "repair-frontier",
+      reason: repairItem.nextAction ?? repairItem.summary ?? `Repair ${repairItem.id}.`,
+      relatedRepairItemIds: [repairItem.id],
+      taxonomyFamilyIds: uniqueSorted([repairItem.taxonomyFamilyId, ...(repairItem.taxonomyFamilyIds ?? []), familyId].filter(Boolean)),
+      taxonomyGroupIds: uniqueSorted([repairItem.taxonomyGroupId, ...(repairItem.taxonomyGroupIds ?? [])].filter(Boolean)),
+      priorityScore: 120
+    });
+    for (const relatedPath of repairItem.relatedArtifactPaths ?? []) {
+      pushTarget(relatedPath, {
+        sourceKind: "repair-related-artifact",
+        reason: `Update alongside repair item ${repairItem.id} so related artifacts stay aligned.`,
+        relatedRepairItemIds: [repairItem.id],
+        taxonomyFamilyIds: [familyId].filter(Boolean),
+        priorityScore: 108
+      });
+    }
+  }
+
+  for (const pack of matchedPacks) {
+    for (const artifactPath of pack.evidence?.artifactPaths ?? []) {
+      pushTarget(artifactPath, {
+        sourceKind: "linked-evidence",
+        reason: `Evidence linked to remediation pack ${pack.id} should stay aligned with ${familyLabel ?? familyId} updates.`,
+        relatedConversionTargetIds: (pack.rankedConversionPaths ?? []).map((item) => item.targetId),
+        taxonomyFamilyIds: uniqueSorted([familyId, ...(pack.taxonomyAnchors?.familyIds ?? [])].filter(Boolean)),
+        taxonomyGroupIds: uniqueSorted(pack.taxonomyAnchors?.groupIds ?? []),
+        priorityScore: 96
+      });
+    }
+    for (const path of pack.workspacePointers ?? []) {
+      pushTarget(path, {
+        sourceKind: "workspace-pointer",
+        reason: `Workspace pointer from remediation pack ${pack.id} provides update context for ${familyLabel ?? familyId}.`,
+        taxonomyFamilyIds: [familyId].filter(Boolean),
+        priorityScore: 60
+      });
+    }
+    for (const conversion of pack.rankedConversionPaths ?? []) {
+      pushTarget(conversion.targetId, {
+        sourceKind: "conversion-target",
+        reason: conversion.rationale ?? `Conversion target ${conversion.targetId} is a ranked candidate update surface.`,
+        relatedConversionTargetIds: [conversion.targetId],
+        taxonomyFamilyIds: [familyId].filter(Boolean),
+        priorityScore: 100 - (conversion.rank ?? 0)
+      });
+    }
+  }
+
+  for (const packet of packetPointers) {
+    pushTarget(packet.packetContextPath, {
+      sourceKind: "packet-context",
+      reason: packet.nextAction ?? `Inspect packet ${packet.id} before mutating durable artifacts.`,
+      relatedPacketIds: [packet.id],
+      taxonomyFamilyIds: [familyId].filter(Boolean),
+      priorityScore: 92
+    });
+  }
+
+  pushTarget(ARTIFACT_PATHS.metaOperatorPlaybooks, {
+    sourceKind: "playbook-artifact",
+    reason: `Update the durable family playbook layer after reviewing ${familyLabel ?? familyId} targets.`,
+    taxonomyFamilyIds: [familyId].filter(Boolean),
+    taxonomyGroupIds: uniqueSorted(taxonomyAnchors.groupIds ?? []),
+    priorityScore: 58
+  });
+
+  const targets = Array.from(targetMap.values())
+    .map((target) => ({
+      ...target,
+      sourceKinds: uniqueSorted(target.sourceKinds),
+      updateReasons: uniqueSorted(target.updateReasons),
+      relatedRepairItemIds: uniqueSorted(target.relatedRepairItemIds),
+      relatedConversionTargetIds: uniqueSorted(target.relatedConversionTargetIds),
+      relatedPacketIds: uniqueSorted(target.relatedPacketIds),
+      taxonomyFamilyIds: uniqueSorted(target.taxonomyFamilyIds),
+      taxonomyGroupIds: uniqueSorted(target.taxonomyGroupIds)
+    }))
+    .sort((left, right) => {
+      const priorityDelta = (right.priorityScore ?? 0) - (left.priorityScore ?? 0);
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+      return left.artifactPath.localeCompare(right.artifactPath);
+    })
+    .map((target, index) => ({
+      ...target,
+      rank: index + 1
+    }));
+
+  return {
+    overview: targets.length > 0
+      ? `${targets.length} proposal-only artifact targets are ranked for ${familyLabel ?? familyId}; start with the highest-ranked repair and conversion-linked files before broader workspace pointers.`
+      : `No explicit artifact targets were derived for ${familyLabel ?? familyId}; rely on the playbook summary and remediation pack pointers instead.`,
+    targetCount: targets.length,
+    targetList: targets.map((target) => target.artifactPath),
+    updateOrder: targets.map((target) => target.artifactPath),
+    targets
+  };
+}
+
+function buildRemediationAcceptanceCriteria({ repairItems, reviewConcerns, figureQa, packetPointers, longHorizonMemory }) {
+  const criteria = [];
+  if (repairItems.length > 0) {
+    criteria.push(`Clear or explicitly accept all ${repairItems.length} linked repair-frontier item(s) before treating this pack as complete.`);
+  }
+  if (reviewConcerns.length > 0) {
+    criteria.push(`Resolve or explicitly retire linked review concerns (${reviewConcerns.map((item) => item.id).join(", ")}) with reviewer-visible artifact updates.`);
+  }
+  if (figureQa.length > 0) {
+    criteria.push(`Clear linked figure QA issues (${figureQa.map((item) => item.id).join(", ")}) and rerun validate_figure_pipeline before closure.`);
+  }
+  if (packetPointers.length > 0) {
+    criteria.push(`Advance linked packets (${packetPointers.map((item) => item.id).join(", ")}) out of stale/review-needed/handoff states, or record an explicit defer decision.`);
+  }
+  if (longHorizonMemory.length > 0) {
+    criteria.push(`Confirm long-horizon memory pressure has stopped rising or is explicitly accepted as ongoing debt.`);
+  }
+  if (criteria.length === 0) {
+    criteria.push("Confirm there is no remaining operator-visible debt before considering this remediation pack complete.");
+  }
+  return uniqueSorted(criteria);
+}
+
+function buildRemediationConversionHints({ cluster, packetPointers, repairItems, reviewConcerns, figureQa, manualNextActions, taxonomyAnchors }) {
+  const responseOwnerRole = cluster.responseOwnerRoles?.[0] ?? cluster.recommendationOwnerRoles?.[0] ?? "planner";
+  const candidates = [];
+  if (packetPointers.length > 0) {
+    const packet = packetPointers[0];
+    candidates.push({
+      targetType: "update-existing-packet",
+      targetId: packet.id,
+      assignedRole: packet.assignedRole,
+      priority: "primary",
+      pathScore: 120 + Math.min(packetPointers.length, 3) * 5,
+      rankingBasis: ["packet-pointer", `packet=${packet.id}`, `role=${packet.assignedRole}`],
+      suggestedTitle: `Update packet ${packet.id} for ${cluster.label}`,
+      rationale: `This pack already maps to packet ${packet.id}, so updating the existing packet is the cleanest manual execution path.`,
+      nextStep: packet.nextAction ?? manualNextActions[0] ?? `Inspect ${packet.packetContextPath ?? packet.id} and update it using this remediation pack.`
+    });
+  } else {
+    candidates.push({
+      targetType: "create-new-packet",
+      targetId: `task-${cluster.id}`,
+      assignedRole: responseOwnerRole,
+      priority: "primary",
+      pathScore: 88 + Math.min((taxonomyAnchors.familyIds ?? []).length, 3) * 4,
+      rankingBasis: ["new-packet", `cluster=${cluster.id}`, `role=${responseOwnerRole}`],
+      suggestedTitle: `${cluster.label} remediation work`,
+      rationale: `No active packet currently owns this pack, so a new explicit packet is the cleanest manual execution path.`,
+      nextStep: manualNextActions[0] ?? `Create a new packet for ${cluster.label} and attach the linked repair items and evidence.`
+    });
+  }
+  if (repairItems.length > 0) {
+    candidates.push({
+      targetType: "add-checklist-entry",
+      targetId: ARTIFACT_PATHS.checklist,
+      assignedRole: responseOwnerRole,
+      priority: packetPointers.length > 0 ? "secondary" : "fallback",
+      pathScore: 72 + Math.min(repairItems.length, 4) * 4,
+      rankingBasis: ["repair-frontier", `repairItems=${repairItems.length}`],
+      suggestedTitle: `${cluster.label} repair checklist item`,
+      rationale: `Checklist entries keep closure criteria visible for packs with explicit repair-frontier debt.`,
+      nextStep: `Add a checklist item referencing ${repairItems[0].id} and taxonomy pressure (${taxonomyAnchors.familyLabels.join(", ") || "none"}).`
+    });
+  }
+  if (reviewConcerns.length > 0 || figureQa.length > 0) {
+    candidates.push({
+      targetType: "add-revision-item",
+      targetId: ARTIFACT_PATHS.revisionPlan,
+      assignedRole: responseOwnerRole,
+      priority: reviewConcerns.length > 0 ? "secondary" : "fallback",
+      pathScore: 76 + Math.min(reviewConcerns.length + figureQa.length, 4) * 4,
+      rankingBasis: [
+        ...(reviewConcerns.length > 0 ? [`reviewConcerns=${reviewConcerns.length}`] : []),
+        ...(figureQa.length > 0 ? [`figureQa=${figureQa.length}`] : [])
+      ],
+      suggestedTitle: `${cluster.label} remediation follow-up`,
+      rationale: `Review concerns or figure QA issues in this pack should remain durable in the revision plan until they close.`,
+      nextStep: `Append a revision-plan item for ${reviewConcerns[0]?.id ?? figureQa[0]?.id ?? cluster.id} with the linked manual next action.`
+    });
+  }
+  const rankedPaths = buildRankedConversionCandidates(candidates);
+  return {
+    rankedPaths,
+    hints: rankedPaths.map(({ rank, priority, pathScore, rankingBasis, deterministicKey, originalIndex, ...hint }) => ({
+      ...hint,
+      rank,
+      priority,
+      pathScore,
+      rankingBasis,
+      deterministicKey
+    }))
+  };
+}
+
 function buildRemediationPacks({ clusters, recommendations, longHorizonMemory, reviewConcerns, figureQa, workspaceIndex }) {
   const generatedAt = nowIso();
   const packs = clusters.map((cluster) => {
@@ -1945,6 +2456,8 @@ function buildRemediationPacks({ clusters, recommendations, longHorizonMemory, r
       .slice(0, 4)
       .map((packet) => ({
         id: packet.id,
+        title: packet.title,
+        currentFocus: packet.currentFocus,
         assignedRole: packet.assignedRole,
         lifecycleStatus: packet.lifecycleStatus,
         nextAction: packet.nextAction,
@@ -1972,6 +2485,33 @@ function buildRemediationPacks({ clusters, recommendations, longHorizonMemory, r
       packFigureIssues[0] ? `Inspect figure QA issue ${packFigureIssues[0].id} before treating the frontier as closed.` : null,
       packetPointers[0]?.nextAction ?? null
     ]);
+    const acceptanceCriteria = buildRemediationAcceptanceCriteria({
+      repairItems,
+      reviewConcerns: packReviewConcerns,
+      figureQa: packFigureIssues,
+      packetPointers,
+      longHorizonMemory: memoryFamilies
+    });
+    const conversionGuidance = buildRemediationConversionHints({
+      cluster,
+      packetPointers,
+      repairItems,
+      reviewConcerns: packReviewConcerns,
+      figureQa: packFigureIssues,
+      manualNextActions,
+      taxonomyAnchors
+    });
+    const readiness = buildGuidanceReadiness({
+      acceptanceCriteria,
+      conversionHints: conversionGuidance.hints,
+      rankedConversionPaths: conversionGuidance.rankedPaths,
+      packetPointers,
+      evidenceArtifactPaths,
+      longHorizonMemory: memoryFamilies,
+      repairItems,
+      reviewConcerns: packReviewConcerns,
+      figureQa: packFigureIssues
+    });
     return {
       id: `remediation-pack-${cluster.id}`,
       title: `${cluster.label} remediation pack`,
@@ -2004,6 +2544,10 @@ function buildRemediationPacks({ clusters, recommendations, longHorizonMemory, r
       longHorizonMemory: memoryFamilies,
       packetPointers,
       workspacePointers,
+      readiness,
+      acceptanceCriteria,
+      conversionHints: conversionGuidance.hints,
+      rankedConversionPaths: conversionGuidance.rankedPaths,
       manualNextActions,
       generatedAt
     };
@@ -2012,6 +2556,12 @@ function buildRemediationPacks({ clusters, recommendations, longHorizonMemory, r
     packCount: packs.length,
     topPackIds: packs.slice(0, 3).map((pack) => pack.id),
     topClusterIds: packs.slice(0, 3).map((pack) => pack.clusterId),
+    actionableCount: packs.filter((pack) => pack.readiness?.operatorReadiness === "actionable").length,
+    partiallyActionableCount: packs.filter((pack) => pack.readiness?.operatorReadiness === "partially-actionable").length,
+    advisoryCount: packs.filter((pack) => pack.readiness?.operatorReadiness === "advisory-only").length,
+    readinessOverview: packs.length > 0
+      ? `${packs.filter((pack) => pack.readiness?.operatorReadiness === "actionable").length} actionable, ${packs.filter((pack) => pack.readiness?.operatorReadiness === "partially-actionable").length} partially actionable, ${packs.filter((pack) => pack.readiness?.operatorReadiness === "advisory-only").length} advisory-only remediation packs.`
+      : "No proposal-only remediation packs have been generated yet.",
     overview: packs.length > 0
       ? `${packs.length} proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.`
       : "No proposal-only remediation packs have been generated yet.",
@@ -2021,6 +2571,387 @@ function buildRemediationPacks({ clusters, recommendations, longHorizonMemory, r
     ...createMetaRemediationPacksIndex(),
     packs,
     summary,
+    updatedAt: generatedAt
+  };
+}
+
+function buildFamilyOperatorPlaybooks({ workspaceIndex, remediationPacks, longHorizonMemory }) {
+  const generatedAt = nowIso();
+  const familySummaryMap = new Map((workspaceIndex.repairFrontier?.relationFamilySummaries ?? []).map((family) => [family.id, family]));
+  const groupSummaryMap = new Map((workspaceIndex.repairFrontier?.relationGroupSummaries ?? []).map((group) => [group.id, group]));
+  const remediationPackMap = new Map((remediationPacks.packs ?? []).map((pack) => [pack.id, pack]));
+  const longHorizonByTaxonomyFamily = new Map();
+  for (const family of longHorizonMemory.families ?? []) {
+    for (const taxonomyFamilyId of family.relatedTaxonomyFamilyIds ?? []) {
+      const bucket = longHorizonByTaxonomyFamily.get(taxonomyFamilyId) ?? [];
+      bucket.push(family);
+      longHorizonByTaxonomyFamily.set(taxonomyFamilyId, bucket);
+    }
+  }
+
+  const candidateFamilyIds = uniqueSorted([
+    ...(workspaceIndex.repairFrontier?.topDegradedFamilyIds ?? []),
+    ...(workspaceIndex.metaOptimize?.topTaxonomyFamilyIds ?? []),
+    ...(workspaceIndex.metaOptimize?.longHorizon?.topTaxonomyFamilyIds ?? []),
+    ...(remediationPacks.packs ?? []).flatMap((pack) => pack.taxonomyAnchors?.familyIds ?? []),
+    ...(longHorizonMemory.families ?? []).flatMap((family) => family.relatedTaxonomyFamilyIds ?? [])
+  ]);
+
+  const playbooks = candidateFamilyIds.map((familyId) => {
+    const familySummary = familySummaryMap.get(familyId) ?? { id: familyId, label: familyId, overview: `${familyId} typed wiki pressure is active.`, topReasonCodes: [] };
+    const matchedPacks = (remediationPacks.packs ?? []).filter((pack) => (pack.taxonomyAnchors?.familyIds ?? []).includes(familyId));
+    const matchedMemoryFamilies = longHorizonByTaxonomyFamily.get(familyId) ?? [];
+    const matchedRepairItems = (workspaceIndex.repairFrontier?.prioritizedItems ?? []).filter((item) => {
+      const familyIds = uniqueSorted([item.taxonomyFamilyId, ...(item.taxonomyFamilyIds ?? [])].filter(Boolean));
+      const groupIds = uniqueSorted([item.taxonomyGroupId, ...(item.taxonomyGroupIds ?? [])].filter(Boolean));
+      return familyIds.includes(familyId)
+        || intersects(groupIds, [...(familySummary.groupIds ?? []), ...matchedPacks.flatMap((pack) => pack.taxonomyAnchors?.groupIds ?? [])]);
+    });
+    const groupIds = uniqueSorted([
+      ...(familySummary.groupIds ?? []),
+      ...matchedPacks.flatMap((pack) => pack.taxonomyAnchors?.groupIds ?? []),
+      ...matchedMemoryFamilies.flatMap((family) => family.relatedTaxonomyGroupIds ?? [])
+    ]);
+    const groupLabels = groupIds.map((groupId) => groupSummaryMap.get(groupId)?.label ?? groupId);
+    const acceptanceCriteria = uniqueSorted(matchedPacks.flatMap((pack) => pack.acceptanceCriteria ?? [])).slice(0, 6);
+    const conversionHints = matchedPacks.flatMap((pack) => pack.conversionHints ?? []).reduce((accumulator, hint) => {
+      const key = `${hint.targetType}:${hint.targetId}`;
+      if (!accumulator.some((item) => `${item.targetType}:${item.targetId}` === key)) {
+        accumulator.push(hint);
+      }
+      return accumulator;
+    }, []).slice(0, 6);
+    const rankedConversionPaths = buildRankedConversionCandidates(
+      matchedPacks.flatMap((pack) => pack.rankedConversionPaths ?? pack.conversionHints ?? []).map((hint) => ({
+        ...hint,
+        pathScore: (hint.pathScore ?? 0) + 8,
+        rankingBasis: [...(hint.rankingBasis ?? []), `playbookFamily=${familyId}`]
+      }))
+    ).slice(0, 6);
+    const manualNextActions = uniqueSorted([
+      ...matchedPacks.flatMap((pack) => pack.manualNextActions ?? []),
+      ...matchedPacks.flatMap((pack) => (pack.packetPointers ?? []).map((pointer) => pointer.nextAction)),
+      ...matchedMemoryFamilies.map((family) => `Inspect long-horizon family ${family.id} (${family.trend?.status ?? "stable"}) before declaring ${familySummary.label} pressure resolved.`)
+    ]).slice(0, 6);
+    const responseOwnerRoles = uniqueSorted([
+      ...matchedPacks.flatMap((pack) => (pack.packetPointers ?? []).map((pointer) => pointer.assignedRole)),
+      ...matchedPacks.flatMap((pack) => (pack.conversionHints ?? []).map((hint) => hint.assignedRole))
+    ]);
+    const workspacePointers = uniqueSorted([
+      ARTIFACT_PATHS.workspaceIndex,
+      ARTIFACT_PATHS.navigationReport,
+      ARTIFACT_PATHS.sessionSummary,
+      ARTIFACT_PATHS.metaOptimizerReport,
+      ARTIFACT_PATHS.metaOperatorPlaybooks,
+      ARTIFACT_PATHS.metaRemediationPacks,
+      ...matchedPacks.flatMap((pack) => pack.workspacePointers ?? []),
+      ...matchedPacks.flatMap((pack) => pack.evidence?.artifactPaths ?? []),
+      ...matchedMemoryFamilies.flatMap((family) => family.evidenceArtifactPaths ?? [])
+    ]);
+    const packetPointers = matchedPacks.flatMap((pack) => pack.packetPointers ?? []).slice(0, 6);
+    const artifactUpdateMap = buildPlaybookArtifactUpdateMap({
+      familyId,
+      familyLabel: familySummary.label,
+      matchedPacks,
+      repairItems: matchedRepairItems,
+      packetPointers,
+      workspacePointers,
+      taxonomyAnchors: {
+        familyIds: [familyId],
+        groupIds,
+        groupLabels
+      }
+    });
+    const operatorGoal = taxonomyPressureMetadata(familyId, familySummary.label).clusterOperatorGoal;
+    const longHorizonSummary = matchedMemoryFamilies.length > 0
+      ? `${matchedMemoryFamilies.length} linked long-horizon family entries remain active (${matchedMemoryFamilies.map((family) => `${family.id}:${family.trend?.status ?? "stable"}`).join(", ")}).`
+      : "No linked long-horizon family memory is currently active for this taxonomy family.";
+    const readiness = buildGuidanceReadiness({
+      acceptanceCriteria,
+      conversionHints,
+      rankedConversionPaths,
+      packetPointers,
+      evidenceArtifactPaths: uniqueSorted([
+        ...matchedPacks.flatMap((pack) => pack.evidence?.artifactPaths ?? []),
+        ...matchedMemoryFamilies.flatMap((family) => family.evidenceArtifactPaths ?? [])
+      ]),
+      longHorizonMemory: matchedMemoryFamilies,
+      repairItems: matchedPacks.flatMap((pack) => (pack.frontier?.repairItemIds ?? []).map((id) => ({ id }))),
+      reviewConcerns: matchedPacks.flatMap((pack) => pack.reviewConcerns ?? []),
+      figureQa: matchedPacks.flatMap((pack) => pack.figureQa ?? []),
+      remediationPackIds: matchedPacks.map((pack) => pack.id)
+    });
+    return {
+      id: `family-playbook-${familyId}`,
+      title: `${familySummary.label} operator playbook`,
+      proposalOnly: true,
+      explicitOnly: true,
+      noAutoApply: true,
+      taxonomyFamilyId: familyId,
+      taxonomyFamilyLabel: familySummary.label,
+      taxonomyOverview: familySummary.overview ?? `${familySummary.label} typed wiki pressure is active.`,
+      taxonomyGroupIds: groupIds,
+      taxonomyGroupLabels: groupLabels,
+      readiness,
+      artifactUpdateMap,
+      operatorGoal,
+      summary: `${familySummary.overview ?? `${familySummary.label} typed wiki pressure is active.`} This playbook aggregates the current remediation packs, acceptance criteria, conversion hints, and long-horizon memory for the ${familySummary.label} family without auto-applying any change.`,
+      longHorizonSummary,
+      topReasonCodes: uniqueSorted([
+        ...(familySummary.topReasonCodes ?? []),
+        ...matchedPacks.flatMap((pack) => pack.frontier?.repairItemIds ?? []).slice(0, 3)
+      ]).slice(0, 6),
+      remediationPackIds: matchedPacks.map((pack) => pack.id),
+      clusterIds: uniqueSorted(matchedPacks.map((pack) => pack.clusterId)),
+      responseOwnerRoles,
+      acceptanceCriteria,
+      conversionHints,
+      rankedConversionPaths,
+      manualNextActions,
+      longHorizonFamilyIds: matchedMemoryFamilies.map((family) => family.id),
+      workspacePointers,
+      packetPointers,
+      generatedAt
+    };
+  }).sort((left, right) => {
+    const readinessDelta = readinessRank(left.readiness?.operatorReadiness) - readinessRank(right.readiness?.operatorReadiness);
+    if (readinessDelta !== 0) {
+      return readinessDelta;
+    }
+    const packDelta = (right.remediationPackIds?.length ?? 0) - (left.remediationPackIds?.length ?? 0);
+    if (packDelta !== 0) {
+      return packDelta;
+    }
+    const longHorizonDelta = (right.longHorizonFamilyIds?.length ?? 0) - (left.longHorizonFamilyIds?.length ?? 0);
+    if (longHorizonDelta !== 0) {
+      return longHorizonDelta;
+    }
+    return left.taxonomyFamilyId.localeCompare(right.taxonomyFamilyId);
+  });
+
+  return {
+    ...createMetaOperatorPlaybooksIndex(),
+    playbooks,
+    summary: {
+      playbookCount: playbooks.length,
+      topPlaybookIds: playbooks.slice(0, 3).map((playbook) => playbook.id),
+      topTaxonomyFamilyIds: playbooks.slice(0, 3).map((playbook) => playbook.taxonomyFamilyId),
+      actionableCount: playbooks.filter((playbook) => playbook.readiness?.operatorReadiness === "actionable").length,
+      partiallyActionableCount: playbooks.filter((playbook) => playbook.readiness?.operatorReadiness === "partially-actionable").length,
+      advisoryCount: playbooks.filter((playbook) => playbook.readiness?.operatorReadiness === "advisory-only").length,
+      readinessOverview: playbooks.length > 0
+        ? `${playbooks.filter((playbook) => playbook.readiness?.operatorReadiness === "actionable").length} actionable, ${playbooks.filter((playbook) => playbook.readiness?.operatorReadiness === "partially-actionable").length} partially actionable, ${playbooks.filter((playbook) => playbook.readiness?.operatorReadiness === "advisory-only").length} advisory-only family playbooks.`
+        : "No proposal-only family-level operator playbooks have been generated yet.",
+      overview: playbooks.length > 0
+        ? `${playbooks.length} proposal-only family-level operator playbooks summarize taxonomy families using remediation packs, acceptance criteria, conversion hints, and long-horizon memory.`
+        : "No proposal-only family-level operator playbooks have been generated yet.",
+      playbooksPath: ARTIFACT_PATHS.metaOperatorPlaybooks
+    },
+    updatedAt: generatedAt
+  };
+}
+
+function scaffoldCandidateType(targetType, pack = {}) {
+  if (targetType === "update-existing-packet" || targetType === "create-new-packet") {
+    return "packet-candidate";
+  }
+  if (targetType === "add-checklist-entry") {
+    return "checklist-candidate";
+  }
+  if (targetType === "add-revision-item") {
+    return (pack.reviewConcerns?.length ?? 0) > 0 ? "review-follow-up-candidate" : "revision-plan-candidate";
+  }
+  return "revision-plan-candidate";
+}
+
+function scaffoldTargetArtifact(targetType, targetId, pack = {}, path = {}) {
+  if (targetType === "update-existing-packet") {
+    const pointer = (pack.packetPointers ?? []).find((item) => item.id === targetId);
+    return pointer?.packetContextPath ?? ARTIFACT_PATHS.taskPacketsIndex;
+  }
+  if (targetType === "create-new-packet") {
+    return ARTIFACT_PATHS.taskPacketsIndex;
+  }
+  if (targetType === "add-checklist-entry") {
+    return targetId ?? ARTIFACT_PATHS.checklist;
+  }
+  if (targetType === "add-revision-item") {
+    return targetId ?? ARTIFACT_PATHS.revisionPlan;
+  }
+  return targetId ?? path.targetId ?? ARTIFACT_PATHS.workspaceIndex;
+}
+
+function summarizeCandidateContext(pack = {}, operatorPlaybooks = {}, sourcePlaybookIds = [], path = null) {
+  const playbooksById = new Map((operatorPlaybooks.playbooks ?? []).map((playbook) => [playbook.id, playbook]));
+  const linkedPacketPointers = (pack.packetPointers ?? []).slice(0, 3).map((pointer) => ({
+    id: pointer.id,
+    assignedRole: pointer.assignedRole,
+    lifecycleStatus: pointer.lifecycleStatus,
+    packetContextPath: pointer.packetContextPath ?? null,
+    nextAction: pointer.nextAction ?? null
+  }));
+  const linkedWorkspacePointers = uniqueSorted(pack.workspacePointers ?? []).slice(0, 6);
+  const linkedRemediationPacks = [{
+    id: pack.id,
+    title: pack.title,
+    clusterId: pack.clusterId,
+    readiness: pack.readiness?.operatorReadiness ?? "advisory-only"
+  }];
+  const linkedPlaybooks = sourcePlaybookIds.slice(0, 3).map((playbookId) => {
+    const playbook = playbooksById.get(playbookId) ?? {};
+    return {
+      id: playbookId,
+      taxonomyFamilyId: playbook.taxonomyFamilyId ?? null,
+      title: playbook.title ?? null,
+      readiness: playbook.readiness?.operatorReadiness ?? null
+    };
+  });
+  const evidenceSummary = {
+    artifactPaths: uniqueSorted(pack.evidence?.artifactPaths ?? []).slice(0, 5),
+    ids: uniqueSorted(pack.evidence?.ids ?? []).slice(0, 5)
+  };
+  const repairSummary = {
+    repairItemIds: uniqueSorted(pack.frontier?.repairItemIds ?? []).slice(0, 5),
+    reviewConcernIds: uniqueSorted((pack.reviewConcerns ?? []).map((item) => item.id)).slice(0, 4),
+    figureIssueIds: uniqueSorted((pack.figureQa ?? []).map((item) => item.id)).slice(0, 4)
+  };
+  return {
+    linkedPacketPointers,
+    linkedWorkspacePointers,
+    linkedRemediationPacks,
+    linkedPlaybooks,
+    evidenceSummary,
+    repairSummary,
+    bridgeNotes: uniqueSorted([
+      path?.rationale ?? null,
+      pack.manualNextActions?.[0] ?? null,
+      pack.readiness?.overview ?? null
+    ]).slice(0, 3)
+  };
+}
+
+function buildExecutionBridgeCandidates({ remediationPacks, operatorPlaybooks }) {
+  const generatedAt = nowIso();
+  const playbooksById = new Map((operatorPlaybooks.playbooks ?? []).map((playbook) => [playbook.id, playbook]));
+  const playbookIdsByFamily = new Map((operatorPlaybooks.playbooks ?? []).map((playbook) => [playbook.taxonomyFamilyId, playbook.id]));
+  const candidates = [];
+
+  for (const pack of remediationPacks.packs ?? []) {
+    const sourcePlaybookIds = uniqueSorted((pack.taxonomyAnchors?.familyIds ?? []).map((familyId) => playbookIdsByFamily.get(familyId)).filter(Boolean));
+    const commonFields = {
+      proposalOnly: true,
+      noAutoApply: true,
+      sourceRemediationPackIds: [pack.id],
+      sourcePlaybookIds,
+      linkedEvidenceArtifactPaths: uniqueSorted(pack.evidence?.artifactPaths ?? []),
+      linkedEvidenceIds: uniqueSorted(pack.evidence?.ids ?? []),
+      linkedRepairItemIds: uniqueSorted(pack.frontier?.repairItemIds ?? []),
+      suggestedAcceptanceCriteria: uniqueSorted(pack.acceptanceCriteria ?? []),
+      taxonomyFamilyIds: uniqueSorted(pack.taxonomyAnchors?.familyIds ?? []),
+      taxonomyGroupIds: uniqueSorted(pack.taxonomyAnchors?.groupIds ?? []),
+      generatedAt
+    };
+
+    for (const path of pack.rankedConversionPaths ?? []) {
+      const candidateType = scaffoldCandidateType(path.targetType, pack);
+      const targetArtifact = scaffoldTargetArtifact(path.targetType, path.targetId, pack, path);
+      const context = summarizeCandidateContext(pack, operatorPlaybooks, sourcePlaybookIds, path);
+      candidates.push({
+        id: `candidate-${slugify(pack.id)}-${slugify(path.targetType)}-${slugify(path.targetId)}`,
+        candidateType,
+        priority: path.priority ?? "secondary",
+        rank: path.rank ?? 1,
+        score: (pack.score ?? 0) + (path.pathScore ?? 0),
+        targetArtifact,
+        targetId: path.targetId,
+        suggestedTitle: path.suggestedTitle ?? `${pack.clusterLabel} candidate`,
+        suggestedSummary: `${pack.summary} Proposed as a ${candidateType} from remediation pack ${pack.id}; review manually before creating any real work item.`,
+        rationale: path.rationale ?? `Use ${path.targetType} as a manual execution bridge for ${pack.clusterLabel}.`,
+        suggestedNextStep: path.nextStep ?? pack.manualNextActions?.[0] ?? `Review ${targetArtifact} before acting.`,
+        context,
+        sourceConversionPath: {
+          targetType: path.targetType,
+          targetId: path.targetId,
+          rank: path.rank ?? 1,
+          pathScore: path.pathScore ?? 0,
+          rankingBasis: normalizeStringArray(path.rankingBasis ?? [])
+        },
+        ...commonFields
+      });
+    }
+
+    if ((pack.reviewConcerns?.length ?? 0) > 0) {
+      candidates.push({
+        id: `candidate-${slugify(pack.id)}-review-follow-up`,
+        candidateType: "review-follow-up-candidate",
+        priority: "secondary",
+        rank: 99,
+        score: (pack.score ?? 0) + 50,
+        targetArtifact: ARTIFACT_PATHS.reviewConcerns,
+        targetId: pack.reviewConcerns[0].id,
+        suggestedTitle: `${pack.clusterLabel} review follow-up`,
+        suggestedSummary: `Proposal-only review follow-up candidate for remediation pack ${pack.id}; use it to convert unresolved review pressure into an explicit manual item if needed.`,
+        rationale: `Review concerns remain linked to ${pack.id}, so a review-focused follow-up candidate stays useful even if no task is created automatically.`,
+        suggestedNextStep: `Inspect review concern ${pack.reviewConcerns[0].id} and decide whether to record a manual follow-up item.`,
+        context: summarizeCandidateContext(pack, operatorPlaybooks, sourcePlaybookIds, null),
+        sourceConversionPath: null,
+        ...commonFields
+      });
+    }
+    if ((pack.figureQa?.length ?? 0) > 0) {
+      candidates.push({
+        id: `candidate-${slugify(pack.id)}-figure-follow-up`,
+        candidateType: "figure-follow-up-candidate",
+        priority: "secondary",
+        rank: 100,
+        score: (pack.score ?? 0) + 48,
+        targetArtifact: ARTIFACT_PATHS.figureQa,
+        targetId: pack.figureQa[0].id,
+        suggestedTitle: `${pack.clusterLabel} figure follow-up`,
+        suggestedSummary: `Proposal-only figure follow-up candidate for remediation pack ${pack.id}; use it to convert unresolved figure QA into an explicit manual item if needed.`,
+        rationale: `Figure QA issues remain linked to ${pack.id}, so a figure-focused follow-up candidate keeps that work visible without auto-creating anything.`,
+        suggestedNextStep: `Inspect figure QA issue ${pack.figureQa[0].id} and decide whether to record a manual follow-up item.`,
+        context: summarizeCandidateContext(pack, operatorPlaybooks, sourcePlaybookIds, null),
+        sourceConversionPath: null,
+        ...commonFields
+      });
+    }
+  }
+
+  const sortedCandidates = candidates
+    .sort((left, right) => {
+      const scoreDelta = (right.score ?? 0) - (left.score ?? 0);
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+      const rankDelta = (left.rank ?? 999) - (right.rank ?? 999);
+      if (rankDelta !== 0) {
+        return rankDelta;
+      }
+      return left.id.localeCompare(right.id);
+    })
+    .map((candidate, index) => ({
+      ...candidate,
+      globalRank: index + 1
+    }));
+
+  const candidateTypeCounts = sortedCandidates.reduce((accumulator, candidate) => {
+    accumulator[candidate.candidateType] = (accumulator[candidate.candidateType] ?? 0) + 1;
+    return accumulator;
+  }, {});
+
+  return {
+    ...createMetaExecutionBridgeCandidatesIndex(),
+    candidates: sortedCandidates,
+    summary: {
+      candidateCount: sortedCandidates.length,
+      topCandidateIds: sortedCandidates.slice(0, 5).map((candidate) => candidate.id),
+      candidateTypeCounts,
+      overview: sortedCandidates.length > 0
+        ? `${sortedCandidates.length} proposal-only execution bridge candidates translate remediation packs and playbooks into likely manual work-item shapes without creating anything automatically.`
+        : "No proposal-only execution bridge candidates have been generated yet.",
+      candidatesPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates
+    },
     updatedAt: generatedAt
   };
 }
@@ -2699,7 +3630,7 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
     updatedAt: generatedAt
   };
   const longHorizonMemory = buildLongHorizonMemory(existingLongHorizonMemory, rankedRecommendations, clusters, metaRecommendations.frontier, generatedAt);
-  const metaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, createMetaRemediationPacksIndex());
+  const metaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, createMetaRemediationPacksIndex(), createMetaOperatorPlaybooksIndex(), createMetaExecutionBridgeCandidatesIndex());
   const remediationPacks = buildRemediationPacks({
     clusters,
     recommendations: rankedRecommendations,
@@ -2711,7 +3642,19 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       metaOptimize: metaOptimizeMirror
     }
   });
-  const finalMetaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks);
+  const operatorPlaybooks = buildFamilyOperatorPlaybooks({
+    workspaceIndex: {
+      ...workspaceIndex,
+      metaOptimize: {
+        ...metaOptimizeMirror,
+        remediationPacks: remediationPacks.summary
+      }
+    },
+    remediationPacks,
+    longHorizonMemory
+  });
+  const executionBridgeCandidates = buildExecutionBridgeCandidates({ remediationPacks, operatorPlaybooks });
+  const finalMetaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates);
   const metaOptimizerState = {
     ...createMetaOptimizerState(),
     frontier: {
@@ -2737,6 +3680,8 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
       taxonomyOverview: finalMetaOptimizeMirror.taxonomyOverview
     },
     clusters: finalMetaOptimizeMirror.topClusters,
+    executionBridgeCandidates: executionBridgeCandidates.summary,
+    operatorPlaybooks: operatorPlaybooks.summary,
     remediationPacks: remediationPacks.summary,
     longHorizon: finalMetaOptimizeMirror.longHorizon,
     lastRefreshedAt: generatedAt,
@@ -2817,10 +3762,60 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
           `- Long-horizon memory: ${pack.longHorizonMemory.map((item) => item.id).join(", ") || "none"}`,
           `- Packet pointers: ${pack.packetPointers.map((item) => item.id).join(", ") || "none"}`,
           `- Workspace pointers: ${pack.workspacePointers.join(", ") || "none"}`,
+          `- Readiness: ${pack.readiness?.operatorReadiness ?? "advisory-only"} (${pack.readiness?.overview ?? "No readiness diagnostics computed."})`,
+          `- Missing ingredients: ${(pack.readiness?.missingIngredients ?? []).join(", ") || "none"}`,
+          `- Acceptance criteria: ${pack.acceptanceCriteria.join(" | ") || "none"}`,
+          `- Conversion hints: ${pack.conversionHints.map((item) => `${item.targetType}:${item.targetId}`).join(" | ") || "none"}`,
+          `- Ranked conversion paths: ${(pack.rankedConversionPaths ?? []).map((item) => `${item.rank}:${item.priority}:${item.targetType}:${item.targetId}`).join(" | ") || "none"}`,
           `- Manual next actions: ${pack.manualNextActions.join(" | ") || "none"}`,
           ""
         ])
       : ["- No remediation packs generated from the current durable signals."]),
+    "## Family-level operator playbooks",
+    "",
+    ...(operatorPlaybooks.playbooks.length > 0
+      ? operatorPlaybooks.playbooks.flatMap((playbook, index) => [
+          `### ${index + 1}. ${playbook.title}`,
+          `- Playbook id: ${playbook.id}`,
+          `- Taxonomy family: ${playbook.taxonomyFamilyId} (${playbook.taxonomyFamilyLabel})`,
+          `- Summary: ${playbook.summary}`,
+          `- Operator goal: ${playbook.operatorGoal}`,
+          `- Selection basis: ${(playbook.selectionRankingBasis ?? []).join(" | ") || "none"}`,
+          `- Readiness: ${playbook.readiness?.operatorReadiness ?? "advisory-only"} (${playbook.readiness?.overview ?? "No readiness diagnostics computed."})`,
+          `- Missing ingredients: ${(playbook.readiness?.missingIngredients ?? []).join(", ") || "none"}`,
+          `- Artifact update overview: ${playbook.artifactUpdateMap?.overview ?? "No explicit artifact targets derived."}`,
+          `- Artifact update order: ${(playbook.artifactUpdateMap?.updateOrder ?? []).join(" -> ") || "none"}`,
+          `- Artifact targets: ${(playbook.artifactUpdateMap?.targets ?? []).slice(0, 5).map((item) => `${item.rank}:${item.artifactPath}`).join(" | ") || "none"}`,
+          `- Long-horizon summary: ${playbook.longHorizonSummary}`,
+          `- Linked remediation packs: ${playbook.remediationPackIds.join(", ") || "none"}`,
+          `- Acceptance criteria: ${playbook.acceptanceCriteria.join(" | ") || "none"}`,
+          `- Conversion hints: ${playbook.conversionHints.map((item) => `${item.targetType}:${item.targetId}`).join(" | ") || "none"}`,
+          `- Ranked conversion paths: ${(playbook.rankedConversionPaths ?? []).map((item) => `${item.rank}:${item.priority}:${item.targetType}:${item.targetId}`).join(" | ") || "none"}`,
+          `- Manual next actions: ${playbook.manualNextActions.join(" | ") || "none"}`,
+          ""
+        ])
+      : ["- No family-level operator playbooks generated from the current durable signals."]),
+    "## Execution bridge candidate scaffolds",
+    "",
+    ...(executionBridgeCandidates.candidates.length > 0
+      ? executionBridgeCandidates.candidates.slice(0, 10).flatMap((candidate, index) => [
+          `### ${index + 1}. ${candidate.suggestedTitle}`,
+          `- Candidate id: ${candidate.id}`,
+          `- Candidate type: ${candidate.candidateType}`,
+          `- Target artifact: ${candidate.targetArtifact}`,
+          `- Summary: ${candidate.suggestedSummary}`,
+          `- Suggested next step: ${candidate.suggestedNextStep}`,
+          `- Source remediation packs: ${candidate.sourceRemediationPackIds.join(", ") || "none"}`,
+          `- Source playbooks: ${candidate.sourcePlaybookIds.join(", ") || "none"}`,
+          `- Linked packet pointers: ${(candidate.context?.linkedPacketPointers ?? []).map((item) => item.id).join(", ") || "none"}`,
+          `- Workspace pointers: ${(candidate.context?.linkedWorkspacePointers ?? []).join(", ") || "none"}`,
+          `- Evidence summary: artifacts=${(candidate.context?.evidenceSummary?.artifactPaths ?? []).join(", ") || "none"} ids=${(candidate.context?.evidenceSummary?.ids ?? []).join(", ") || "none"}`,
+          `- Repair summary: repairs=${(candidate.context?.repairSummary?.repairItemIds ?? []).join(", ") || "none"} reviews=${(candidate.context?.repairSummary?.reviewConcernIds ?? []).join(", ") || "none"} figures=${(candidate.context?.repairSummary?.figureIssueIds ?? []).join(", ") || "none"}`,
+          `- Linked repair items: ${candidate.linkedRepairItemIds.join(", ") || "none"}`,
+          `- Acceptance criteria: ${candidate.suggestedAcceptanceCriteria.join(" | ") || "none"}`,
+          ""
+        ])
+      : ["- No execution bridge candidates generated from the current durable signals."]),
     "## Long-horizon workflow memory",
     "",
     ...(longHorizonMemory.families.length > 0
@@ -2854,8 +3849,10 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
     "- Operators must choose whether to act on any recommendation."
   ];
 
-  return {
+    return {
     metaEvents,
+    executionBridgeCandidates,
+    operatorPlaybooks,
     remediationPacks,
     longHorizonMemory,
     metaRecommendations,
@@ -3093,11 +4090,13 @@ export function refreshDurableSurfaces(root, event = {}) {
     comparisons,
     wikiRelations,
     figureQa,
-    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks)
+    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates)
   );
   writeJson(root, ARTIFACT_PATHS.workspaceIndex, workspaceIndex);
   writeJson(root, ARTIFACT_PATHS.metaEvents, metaOptimize.metaEvents);
+  writeJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, metaOptimize.executionBridgeCandidates);
   writeJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, metaOptimize.longHorizonMemory);
+  writeJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, metaOptimize.operatorPlaybooks);
   writeJson(root, ARTIFACT_PATHS.metaRemediationPacks, metaOptimize.remediationPacks);
   writeJson(root, ARTIFACT_PATHS.metaRecommendations, metaOptimize.metaRecommendations);
   writeJson(root, ARTIFACT_PATHS.metaOptimizerState, metaOptimize.metaOptimizerState);
@@ -3109,7 +4108,9 @@ export function refreshDurableSurfaces(root, event = {}) {
     ARTIFACT_PATHS.taskPacketsIndex,
     ARTIFACT_PATHS.workspaceIndex,
     ARTIFACT_PATHS.metaEvents,
+    ARTIFACT_PATHS.metaExecutionBridgeCandidates,
     ARTIFACT_PATHS.metaLongHorizonMemory,
+    ARTIFACT_PATHS.metaOperatorPlaybooks,
     ARTIFACT_PATHS.metaRemediationPacks,
     ARTIFACT_PATHS.metaRecommendations,
     ARTIFACT_PATHS.metaOptimizerState,
@@ -3140,11 +4141,11 @@ export function refreshDurableSurfaces(root, event = {}) {
         ...manifest.artifactContextPaths
       ],
       localRules: manifest.behaviorDiscipline.localRules,
-      operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, { roleId: packet.assignedRole, packetId: packet.id })
+      operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, { roleId: packet.assignedRole, packetId: packet.id, packet })
     }));
   }
   for (const role of roleRoster) {
-    const manifest = buildRoleManifest(role, packetsWithHealth, openQuestions, decisions, workspaceIndex, metaOptimize.remediationPacks);
+    const manifest = buildRoleManifest(role, packetsWithHealth, openQuestions, decisions, workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates);
     writeJson(root, path.join(ARTIFACT_PATHS.roleContextsDir, `${role.id}.json`), manifest);
     writeJson(root, actionContextPath(`role-${role.id}`), buildActionContextBundle({
       scopeType: "role",
@@ -3160,7 +4161,7 @@ export function refreshDurableSurfaces(root, event = {}) {
     }));
   }
   const phaseManifestPath = path.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`);
-  const phaseManifest = buildPhaseManifest(board, packetsWithHealth, workspaceIndex, metaOptimize.remediationPacks);
+  const phaseManifest = buildPhaseManifest(board, packetsWithHealth, workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates);
   writeJson(root, phaseManifestPath, phaseManifest);
   writeJson(root, actionContextPath(`phase-${board.currentPhase}`), buildActionContextBundle({
     scopeType: "phase",
@@ -3189,7 +4190,7 @@ export function refreshDurableSurfaces(root, event = {}) {
       "Use packet and artifact-local guidance instead of broad top-level rules when available.",
       "Do not assume hidden rule loading; read the surfaced files explicitly before acting."
     ],
-    operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, { roleId: board.assignedRole })
+    operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, { roleId: board.assignedRole })
   }));
 
   writeText(root, ARTIFACT_PATHS.sessionSummary, renderSessionSummary(state, board, packetsWithHealth, openQuestions, decisions, roleRoster, workspaceIndex));
@@ -3255,16 +4256,20 @@ export function queryMetaOptimize(root) {
   refreshDurableSurfaces(root, {
     type: "query-meta-optimize",
     summary: "Refreshed proposal-only meta-optimize surfaces.",
-    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
+    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaExecutionBridgeCandidates, ARTIFACT_PATHS.metaOperatorPlaybooks, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
   });
   const events = readJson(root, ARTIFACT_PATHS.metaEvents, createMetaEventsIndex);
+  const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex));
   const longHorizonMemory = normalizeMetaLongHorizonMemory(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory));
+  const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex));
   const remediationPacks = normalizeMetaRemediationPacksIndex(readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex));
   const recommendations = normalizeMetaRecommendationsIndex(readJson(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex));
   const state = normalizeMetaOptimizerState(readJson(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState));
   return {
     proposalOnly: true,
     events: events.items ?? [],
+    executionBridgeCandidates,
+    operatorPlaybooks,
     remediationPacks,
     longHorizon: longHorizonMemory,
     recommendations: recommendations.items ?? [],
@@ -3281,6 +4286,8 @@ export function queryMetaOptimize(root) {
     reportPath: ARTIFACT_PATHS.metaOptimizerReport,
     recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
     eventsPath: ARTIFACT_PATHS.metaEvents,
+    executionBridgeCandidatesPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+    operatorPlaybooksPath: ARTIFACT_PATHS.metaOperatorPlaybooks,
     remediationPacksPath: ARTIFACT_PATHS.metaRemediationPacks,
     longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory
   };

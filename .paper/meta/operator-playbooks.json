@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "proposalOnly": true,
+  "playbooks": [],
+  "summary": {
+    "playbookCount": 0,
+    "topPlaybookIds": [],
+    "topTaxonomyFamilyIds": [],
+    "actionableCount": 0,
+    "partiallyActionableCount": 0,
+    "advisoryCount": 0,
+    "readinessOverview": "No proposal-only family-level operator playbooks have been generated yet.",
+    "overview": "No proposal-only family-level operator playbooks have been generated yet.",
+    "playbooksPath": ".paper/meta/operator-playbooks.json"
+  },
+  "sourceArtifacts": [
+    ".paper/wiki/relations.json",
+    ".paper/workspace/index.json",
+    ".paper/meta/recommendations.json",
+    ".paper/meta/long-horizon-memory.json",
+    ".paper/meta/remediation-packs.json",
+    ".paper/meta/LATEST_OPTIMIZER_REPORT.md"
+  ],
+  "updatedAt": "2026-04-13T21:29:22.440Z"
+}
