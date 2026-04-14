@@ -134,7 +134,9 @@ export const ARTIFACT_PATHS = {
   versionSnapshotsDir: ".paper/versions/snapshots",
   metaDir: ".paper/meta",
   metaEvents: ".paper/meta/events.json",
+  metaExecutionBridgeCandidates: ".paper/meta/execution-bridge-candidates.json",
   metaLongHorizonMemory: ".paper/meta/long-horizon-memory.json",
+  metaOperatorPlaybooks: ".paper/meta/operator-playbooks.json",
   metaRemediationPacks: ".paper/meta/remediation-packs.json",
   metaRecommendations: ".paper/meta/recommendations.json",
   metaOptimizerState: ".paper/meta/optimizer-state.json",
@@ -618,6 +620,7 @@ export function normalizeWorkflowBoundaries(raw = {}) {
       },
       workflowBoundaries: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workflowBoundaries),
       workspaceIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
+      executionBridgeCandidates: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaExecutionBridgeCandidates),
       remediationPacks: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaRemediationPacks)
     },
     notes: normalizeStringArray(raw.notes, base.notes),
@@ -865,6 +868,10 @@ export function createMetaRemediationPacksIndex() {
       packCount: 0,
       topPackIds: [],
       topClusterIds: [],
+      actionableCount: 0,
+      partiallyActionableCount: 0,
+      advisoryCount: 0,
+      readinessOverview: "No proposal-only remediation packs have been generated yet.",
       overview: "No proposal-only remediation packs have been generated yet.",
       packsPath: ARTIFACT_PATHS.metaRemediationPacks
     },
@@ -900,8 +907,121 @@ export function normalizeMetaRemediationPacksIndex(raw = {}) {
       packCount: normalizeNumber(summary.packCount, base.summary.packCount),
       topPackIds: normalizeStringArray(summary.topPackIds),
       topClusterIds: normalizeStringArray(summary.topClusterIds),
+      actionableCount: normalizeNumber(summary.actionableCount, base.summary.actionableCount),
+      partiallyActionableCount: normalizeNumber(summary.partiallyActionableCount, base.summary.partiallyActionableCount),
+      advisoryCount: normalizeNumber(summary.advisoryCount, base.summary.advisoryCount),
+      readinessOverview: normalizeString(summary.readinessOverview, base.summary.readinessOverview),
       overview: normalizeString(summary.overview, base.summary.overview),
       packsPath: normalizeString(summary.packsPath, base.summary.packsPath)
+    },
+    sourceArtifacts: normalizeStringArray(raw.sourceArtifacts, base.sourceArtifacts),
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function createMetaOperatorPlaybooksIndex() {
+  return {
+    version: 1,
+    proposalOnly: true,
+    playbooks: [],
+    summary: {
+      playbookCount: 0,
+      topPlaybookIds: [],
+      topTaxonomyFamilyIds: [],
+      actionableCount: 0,
+      partiallyActionableCount: 0,
+      advisoryCount: 0,
+      readinessOverview: "No proposal-only family-level operator playbooks have been generated yet.",
+      overview: "No proposal-only family-level operator playbooks have been generated yet.",
+      playbooksPath: ARTIFACT_PATHS.metaOperatorPlaybooks
+    },
+    sourceArtifacts: [
+      ARTIFACT_PATHS.wikiRelations,
+      ARTIFACT_PATHS.workspaceIndex,
+      ARTIFACT_PATHS.metaRecommendations,
+      ARTIFACT_PATHS.metaLongHorizonMemory,
+      ARTIFACT_PATHS.metaRemediationPacks,
+      ARTIFACT_PATHS.metaOptimizerReport
+    ],
+    updatedAt: null
+  };
+}
+
+export function createMetaExecutionBridgeCandidatesIndex() {
+  return {
+    version: 1,
+    proposalOnly: true,
+    noAutoApply: true,
+    candidates: [],
+    summary: {
+      candidateCount: 0,
+      topCandidateIds: [],
+      candidateTypeCounts: {},
+      overview: "No proposal-only execution bridge candidates have been generated yet.",
+      candidatesPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates
+    },
+    sourceArtifacts: [
+      ARTIFACT_PATHS.metaOperatorPlaybooks,
+      ARTIFACT_PATHS.metaRemediationPacks,
+      ARTIFACT_PATHS.workspaceIndex,
+      ARTIFACT_PATHS.metaOptimizerReport
+    ],
+    updatedAt: null
+  };
+}
+
+export function normalizeMetaExecutionBridgeCandidatesIndex(raw = {}) {
+  const base = createMetaExecutionBridgeCandidatesIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    proposalOnly: normalizeBoolean(raw.proposalOnly, base.proposalOnly),
+    noAutoApply: normalizeBoolean(raw.noAutoApply, base.noAutoApply),
+    candidates: normalizeObjectArray(raw.candidates),
+    summary: {
+      ...base.summary,
+      ...summary,
+      candidateCount: normalizeNumber(summary.candidateCount, base.summary.candidateCount),
+      topCandidateIds: normalizeStringArray(summary.topCandidateIds),
+      candidateTypeCounts: normalizeObject(summary.candidateTypeCounts),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      candidatesPath: normalizeString(summary.candidatesPath, base.summary.candidatesPath)
+    },
+    sourceArtifacts: normalizeStringArray(raw.sourceArtifacts, base.sourceArtifacts),
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeMetaOperatorPlaybooksIndex(raw = {}) {
+  const base = createMetaOperatorPlaybooksIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    proposalOnly: normalizeBoolean(raw.proposalOnly, base.proposalOnly),
+    playbooks: normalizeObjectArray(raw.playbooks),
+    summary: {
+      ...base.summary,
+      ...summary,
+      playbookCount: normalizeNumber(summary.playbookCount, base.summary.playbookCount),
+      topPlaybookIds: normalizeStringArray(summary.topPlaybookIds),
+      topTaxonomyFamilyIds: normalizeStringArray(summary.topTaxonomyFamilyIds),
+      actionableCount: normalizeNumber(summary.actionableCount, base.summary.actionableCount),
+      partiallyActionableCount: normalizeNumber(summary.partiallyActionableCount, base.summary.partiallyActionableCount),
+      advisoryCount: normalizeNumber(summary.advisoryCount, base.summary.advisoryCount),
+      readinessOverview: normalizeString(summary.readinessOverview, base.summary.readinessOverview),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      playbooksPath: normalizeString(summary.playbooksPath, base.summary.playbooksPath)
     },
     sourceArtifacts: normalizeStringArray(raw.sourceArtifacts, base.sourceArtifacts),
     updatedAt: raw.updatedAt ?? base.updatedAt
@@ -1041,6 +1161,8 @@ export function createMetaOptimizerState() {
       ARTIFACT_PATHS.figureQa,
       ARTIFACT_PATHS.versionComparisons,
       ARTIFACT_PATHS.metaLongHorizonMemory,
+      ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+      ARTIFACT_PATHS.metaOperatorPlaybooks,
       ARTIFACT_PATHS.metaRemediationPacks,
       ARTIFACT_PATHS.orchestrationBoard,
       ARTIFACT_PATHS.workspaceIndex
@@ -1068,14 +1190,35 @@ export function createMetaOptimizerState() {
        remediationPacksPath: ARTIFACT_PATHS.metaRemediationPacks
      },
      clusters: [],
-     remediationPacks: {
-       packCount: 0,
-       topPackIds: [],
-       topClusterIds: [],
-       overview: "No proposal-only remediation packs have been generated yet.",
-       packsPath: ARTIFACT_PATHS.metaRemediationPacks
-     },
-     longHorizon: {
+      remediationPacks: {
+        packCount: 0,
+        topPackIds: [],
+        topClusterIds: [],
+        actionableCount: 0,
+        partiallyActionableCount: 0,
+        advisoryCount: 0,
+        readinessOverview: "No proposal-only remediation packs have been generated yet.",
+        overview: "No proposal-only remediation packs have been generated yet.",
+        packsPath: ARTIFACT_PATHS.metaRemediationPacks
+      },
+      executionBridgeCandidates: {
+        candidateCount: 0,
+        topCandidateIds: [],
+        overview: "No proposal-only execution bridge candidates have been generated yet.",
+        candidatesPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates
+      },
+      operatorPlaybooks: {
+        playbookCount: 0,
+        topPlaybookIds: [],
+        topTaxonomyFamilyIds: [],
+        actionableCount: 0,
+        partiallyActionableCount: 0,
+        advisoryCount: 0,
+        readinessOverview: "No proposal-only family-level operator playbooks have been generated yet.",
+        overview: "No proposal-only family-level operator playbooks have been generated yet.",
+        playbooksPath: ARTIFACT_PATHS.metaOperatorPlaybooks
+      },
+      longHorizon: {
       familyCount: 0,
       recurringFamilyCount: 0,
       risingFamilyCount: 0,
@@ -1134,17 +1277,42 @@ export function normalizeMetaOptimizerState(raw = {}) {
        statePath: normalizeString(frontier.statePath, base.frontier.statePath),
        longHorizonPath: normalizeString(frontier.longHorizonPath, base.frontier.longHorizonPath),
        remediationPacksPath: normalizeString(frontier.remediationPacksPath, base.frontier.remediationPacksPath)
-     },
-     clusters: normalizeObjectArray(raw.clusters),
-     remediationPacks: {
+      },
+      clusters: normalizeObjectArray(raw.clusters),
+      operatorPlaybooks: {
+        ...base.operatorPlaybooks,
+        ...normalizeObject(raw.operatorPlaybooks),
+        playbookCount: normalizeNumber(raw.operatorPlaybooks?.playbookCount, base.operatorPlaybooks.playbookCount),
+        topPlaybookIds: normalizeStringArray(raw.operatorPlaybooks?.topPlaybookIds),
+        topTaxonomyFamilyIds: normalizeStringArray(raw.operatorPlaybooks?.topTaxonomyFamilyIds),
+        actionableCount: normalizeNumber(raw.operatorPlaybooks?.actionableCount, base.operatorPlaybooks.actionableCount),
+        partiallyActionableCount: normalizeNumber(raw.operatorPlaybooks?.partiallyActionableCount, base.operatorPlaybooks.partiallyActionableCount),
+        advisoryCount: normalizeNumber(raw.operatorPlaybooks?.advisoryCount, base.operatorPlaybooks.advisoryCount),
+        readinessOverview: normalizeString(raw.operatorPlaybooks?.readinessOverview, base.operatorPlaybooks.readinessOverview),
+        overview: normalizeString(raw.operatorPlaybooks?.overview, base.operatorPlaybooks.overview),
+        playbooksPath: normalizeString(raw.operatorPlaybooks?.playbooksPath, base.operatorPlaybooks.playbooksPath)
+      },
+      executionBridgeCandidates: {
+        ...base.executionBridgeCandidates,
+        ...normalizeObject(raw.executionBridgeCandidates),
+        candidateCount: normalizeNumber(raw.executionBridgeCandidates?.candidateCount, base.executionBridgeCandidates.candidateCount),
+        topCandidateIds: normalizeStringArray(raw.executionBridgeCandidates?.topCandidateIds),
+        overview: normalizeString(raw.executionBridgeCandidates?.overview, base.executionBridgeCandidates.overview),
+        candidatesPath: normalizeString(raw.executionBridgeCandidates?.candidatesPath, base.executionBridgeCandidates.candidatesPath)
+      },
+      remediationPacks: {
        ...base.remediationPacks,
        ...normalizeObject(raw.remediationPacks),
-       packCount: normalizeNumber(raw.remediationPacks?.packCount, base.remediationPacks.packCount),
-       topPackIds: normalizeStringArray(raw.remediationPacks?.topPackIds),
-       topClusterIds: normalizeStringArray(raw.remediationPacks?.topClusterIds),
-       overview: normalizeString(raw.remediationPacks?.overview, base.remediationPacks.overview),
-       packsPath: normalizeString(raw.remediationPacks?.packsPath, base.remediationPacks.packsPath)
-     },
+        packCount: normalizeNumber(raw.remediationPacks?.packCount, base.remediationPacks.packCount),
+        topPackIds: normalizeStringArray(raw.remediationPacks?.topPackIds),
+        topClusterIds: normalizeStringArray(raw.remediationPacks?.topClusterIds),
+        actionableCount: normalizeNumber(raw.remediationPacks?.actionableCount, base.remediationPacks.actionableCount),
+        partiallyActionableCount: normalizeNumber(raw.remediationPacks?.partiallyActionableCount, base.remediationPacks.partiallyActionableCount),
+        advisoryCount: normalizeNumber(raw.remediationPacks?.advisoryCount, base.remediationPacks.advisoryCount),
+        readinessOverview: normalizeString(raw.remediationPacks?.readinessOverview, base.remediationPacks.readinessOverview),
+        overview: normalizeString(raw.remediationPacks?.overview, base.remediationPacks.overview),
+        packsPath: normalizeString(raw.remediationPacks?.packsPath, base.remediationPacks.packsPath)
+      },
      longHorizon: {
       ...base.longHorizon,
       ...longHorizon,
@@ -1176,6 +1344,8 @@ export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
 
   const longHorizon = normalizeObject(raw.longHorizon);
   const remediationPacks = normalizeObject(raw.remediationPacks);
+  const operatorPlaybooks = normalizeObject(raw.operatorPlaybooks);
+  const executionBridgeCandidates = normalizeObject(raw.executionBridgeCandidates);
 
   return {
     ...base,
@@ -1200,16 +1370,41 @@ export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
      recommendationsPath: normalizeString(raw.recommendationsPath, base.recommendationsPath),
      statePath: normalizeString(raw.statePath, base.statePath),
      longHorizonPath: normalizeString(raw.longHorizonPath, base.longHorizonPath),
-     remediationPacks: {
-       ...base.remediationPacks,
-       ...remediationPacks,
-       packCount: normalizeNumber(remediationPacks.packCount, base.remediationPacks.packCount),
-       topPackIds: normalizeStringArray(remediationPacks.topPackIds),
-       topClusterIds: normalizeStringArray(remediationPacks.topClusterIds),
-       overview: normalizeString(remediationPacks.overview, base.remediationPacks.overview),
-       packsPath: normalizeString(remediationPacks.packsPath, base.remediationPacks.packsPath)
-     },
-     longHorizon: {
+      remediationPacks: {
+        ...base.remediationPacks,
+        ...remediationPacks,
+        packCount: normalizeNumber(remediationPacks.packCount, base.remediationPacks.packCount),
+        topPackIds: normalizeStringArray(remediationPacks.topPackIds),
+        topClusterIds: normalizeStringArray(remediationPacks.topClusterIds),
+        actionableCount: normalizeNumber(remediationPacks.actionableCount, base.remediationPacks.actionableCount),
+        partiallyActionableCount: normalizeNumber(remediationPacks.partiallyActionableCount, base.remediationPacks.partiallyActionableCount),
+        advisoryCount: normalizeNumber(remediationPacks.advisoryCount, base.remediationPacks.advisoryCount),
+        readinessOverview: normalizeString(remediationPacks.readinessOverview, base.remediationPacks.readinessOverview),
+        overview: normalizeString(remediationPacks.overview, base.remediationPacks.overview),
+        packsPath: normalizeString(remediationPacks.packsPath, base.remediationPacks.packsPath)
+      },
+      executionBridgeCandidates: {
+        ...base.executionBridgeCandidates,
+        ...executionBridgeCandidates,
+        candidateCount: normalizeNumber(executionBridgeCandidates.candidateCount, base.executionBridgeCandidates.candidateCount),
+        topCandidateIds: normalizeStringArray(executionBridgeCandidates.topCandidateIds),
+        overview: normalizeString(executionBridgeCandidates.overview, base.executionBridgeCandidates.overview),
+        candidatesPath: normalizeString(executionBridgeCandidates.candidatesPath, base.executionBridgeCandidates.candidatesPath)
+      },
+      operatorPlaybooks: {
+        ...base.operatorPlaybooks,
+        ...operatorPlaybooks,
+        playbookCount: normalizeNumber(operatorPlaybooks.playbookCount, base.operatorPlaybooks.playbookCount),
+        topPlaybookIds: normalizeStringArray(operatorPlaybooks.topPlaybookIds),
+        topTaxonomyFamilyIds: normalizeStringArray(operatorPlaybooks.topTaxonomyFamilyIds),
+        actionableCount: normalizeNumber(operatorPlaybooks.actionableCount, base.operatorPlaybooks.actionableCount),
+        partiallyActionableCount: normalizeNumber(operatorPlaybooks.partiallyActionableCount, base.operatorPlaybooks.partiallyActionableCount),
+        advisoryCount: normalizeNumber(operatorPlaybooks.advisoryCount, base.operatorPlaybooks.advisoryCount),
+        readinessOverview: normalizeString(operatorPlaybooks.readinessOverview, base.operatorPlaybooks.readinessOverview),
+        overview: normalizeString(operatorPlaybooks.overview, base.operatorPlaybooks.overview),
+        playbooksPath: normalizeString(operatorPlaybooks.playbooksPath, base.operatorPlaybooks.playbooksPath)
+      },
+      longHorizon: {
       ...base.longHorizon,
       ...longHorizon,
       familyCount: normalizeNumber(longHorizon.familyCount, base.longHorizon.familyCount),
@@ -1366,14 +1561,35 @@ export function createWorkspaceIndex() {
        recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
        statePath: ARTIFACT_PATHS.metaOptimizerState,
        longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
-       remediationPacks: {
-         packCount: 0,
-         topPackIds: [],
-         topClusterIds: [],
-         overview: "No proposal-only remediation packs have been generated yet.",
-         packsPath: ARTIFACT_PATHS.metaRemediationPacks
-       },
-        longHorizon: {
+        remediationPacks: {
+          packCount: 0,
+          topPackIds: [],
+          topClusterIds: [],
+          actionableCount: 0,
+          partiallyActionableCount: 0,
+          advisoryCount: 0,
+          readinessOverview: "No proposal-only remediation packs have been generated yet.",
+          overview: "No proposal-only remediation packs have been generated yet.",
+          packsPath: ARTIFACT_PATHS.metaRemediationPacks
+        },
+        executionBridgeCandidates: {
+          candidateCount: 0,
+          topCandidateIds: [],
+          overview: "No proposal-only execution bridge candidates have been generated yet.",
+          candidatesPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates
+        },
+        operatorPlaybooks: {
+          playbookCount: 0,
+          topPlaybookIds: [],
+          topTaxonomyFamilyIds: [],
+          actionableCount: 0,
+          partiallyActionableCount: 0,
+          advisoryCount: 0,
+          readinessOverview: "No proposal-only family-level operator playbooks have been generated yet.",
+          overview: "No proposal-only family-level operator playbooks have been generated yet.",
+          playbooksPath: ARTIFACT_PATHS.metaOperatorPlaybooks
+        },
+         longHorizon: {
          familyCount: 0,
          recurringFamilyCount: 0,
          risingFamilyCount: 0,
@@ -1453,6 +1669,7 @@ export function createWorkflowBoundaries() {
     ".paper/versions/LATEST_COMPARISON.md",
      ".paper/meta/events.json",
      ".paper/meta/long-horizon-memory.json",
+      ".paper/meta/operator-playbooks.json",
      ".paper/meta/remediation-packs.json",
      ".paper/meta/recommendations.json",
     ".paper/meta/optimizer-state.json",

@@ -19,7 +19,7 @@ import {
   upsertOrchestrationBoard,
   writeJson
 } from "../../src/core/index.mjs";
-import { createMetaLongHorizonMemory, createMetaOptimizerState, createMetaRemediationPacksIndex } from "../../src/core/schema.mjs";
+import { createMetaExecutionBridgeCandidatesIndex, createMetaLongHorizonMemory, createMetaOperatorPlaybooksIndex, createMetaOptimizerState, createMetaRemediationPacksIndex } from "../../src/core/schema.mjs";
 
 function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-phase6-"));
@@ -78,6 +78,18 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
     packs: "bad-shape",
     summary: { topPackIds: "bad-shape", topClusterIds: "bad-shape" }
   }, null, 2));
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorPlaybooks), JSON.stringify({
+    version: 1,
+    proposalOnly: true,
+    playbooks: "bad-shape",
+    summary: { topPlaybookIds: "bad-shape", topTaxonomyFamilyIds: "bad-shape" }
+  }, null, 2));
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates), JSON.stringify({
+    version: 1,
+    proposalOnly: true,
+    candidates: "bad-shape",
+    summary: { topCandidateIds: "bad-shape" }
+  }, null, 2));
 
   ensureWorkspace(root);
 
@@ -87,6 +99,8 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   const optimizerState = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerState), "utf8"));
   const longHorizonMemory = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaLongHorizonMemory), "utf8"));
   const remediationPacks = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaRemediationPacks), "utf8"));
+  const operatorPlaybooks = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorPlaybooks), "utf8"));
+  const executionBridgeCandidates = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates), "utf8"));
 
   assert.equal(boundaries.version, 3);
   assert.equal(boundaries.managedArtifacts.workflowBoundaries.revisionId, "schema-v5:bootstrap-only");
@@ -113,7 +127,12 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.equal(workspaceIndex.metaOptimize.longHorizon.memoryPath, ".paper/meta/long-horizon-memory.json");
   assert.equal(workspaceIndex.metaOptimize.remediationPacks.packCount, 0);
   assert.deepEqual(workspaceIndex.metaOptimize.remediationPacks.topPackIds, []);
+  assert.equal(workspaceIndex.metaOptimize.remediationPacks.readinessOverview, "No proposal-only remediation packs have been generated yet.");
   assert.equal(workspaceIndex.metaOptimize.remediationPacks.packsPath, ARTIFACT_PATHS.metaRemediationPacks);
+  assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.playbookCount, 0);
+  assert.deepEqual(workspaceIndex.metaOptimize.operatorPlaybooks.topPlaybookIds, []);
+  assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.readinessOverview, "No proposal-only family-level operator playbooks have been generated yet.");
+  assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.playbooksPath, ARTIFACT_PATHS.metaOperatorPlaybooks);
   assert.deepEqual(workspaceIndex.metaOptimize.topClusterIds, []);
   assert.deepEqual(workspaceIndex.metaOptimize.longHorizon.topFamilyIds, []);
   assert.deepEqual(workspaceIndex.metaOptimize.longHorizon.topTaxonomyFamilyIds, []);
@@ -145,7 +164,12 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.equal(optimizerState.longHorizon.lastAction, "unchanged");
   assert.equal(optimizerState.remediationPacks.packCount, 0);
   assert.deepEqual(optimizerState.remediationPacks.topPackIds, []);
+  assert.equal(optimizerState.remediationPacks.readinessOverview, "No proposal-only remediation packs have been generated yet.");
   assert.equal(optimizerState.remediationPacks.packsPath, ARTIFACT_PATHS.metaRemediationPacks);
+  assert.equal(optimizerState.operatorPlaybooks.playbookCount, 0);
+  assert.deepEqual(optimizerState.operatorPlaybooks.topPlaybookIds, []);
+  assert.equal(optimizerState.operatorPlaybooks.readinessOverview, "No proposal-only family-level operator playbooks have been generated yet.");
+  assert.equal(optimizerState.operatorPlaybooks.playbooksPath, ARTIFACT_PATHS.metaOperatorPlaybooks);
 
   assert.equal(longHorizonMemory.version, 1);
   assert.equal(longHorizonMemory.historyWindowSize, 30);
@@ -163,8 +187,22 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.deepEqual(remediationPacks.packs, []);
   assert.deepEqual(remediationPacks.summary.topPackIds, []);
   assert.deepEqual(remediationPacks.summary.topClusterIds, []);
+  assert.equal(remediationPacks.summary.readinessOverview, "No proposal-only remediation packs have been generated yet.");
   assert.equal(remediationPacks.summary.packsPath, ARTIFACT_PATHS.metaRemediationPacks);
   assert.deepEqual(remediationPacks.sourceArtifacts, createMetaRemediationPacksIndex().sourceArtifacts);
+
+  assert.equal(operatorPlaybooks.version, 1);
+  assert.deepEqual(operatorPlaybooks.playbooks, []);
+  assert.deepEqual(operatorPlaybooks.summary.topPlaybookIds, []);
+  assert.equal(operatorPlaybooks.summary.readinessOverview, "No proposal-only family-level operator playbooks have been generated yet.");
+  assert.equal(operatorPlaybooks.summary.playbooksPath, ARTIFACT_PATHS.metaOperatorPlaybooks);
+  assert.deepEqual(operatorPlaybooks.sourceArtifacts, createMetaOperatorPlaybooksIndex().sourceArtifacts);
+
+  assert.equal(executionBridgeCandidates.version, 1);
+  assert.deepEqual(executionBridgeCandidates.candidates, []);
+  assert.deepEqual(executionBridgeCandidates.summary.topCandidateIds, []);
+  assert.equal(executionBridgeCandidates.summary.candidatesPath, ARTIFACT_PATHS.metaExecutionBridgeCandidates);
+  assert.deepEqual(executionBridgeCandidates.sourceArtifacts, createMetaExecutionBridgeCandidatesIndex().sourceArtifacts);
 });
 
 test("queryMetaOptimize carries forward legacy long-horizon history while rewriting normalized meta surfaces", () => {
@@ -441,6 +479,8 @@ test("queryMetaOptimize builds proposal-only recommendations from durable review
 
   const result = queryMetaOptimize(root);
   const longHorizonMemory = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, { version: 1, summary: {}, history: [], families: [], updatedAt: null });
+  const executionBridgeCandidates = readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex);
+  const operatorPlaybooks = readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex);
   const recommendations = readJson(root, ARTIFACT_PATHS.metaRecommendations, { version: 1, items: [], summary: {}, updatedAt: null });
   const optimizerState = readJson(root, ARTIFACT_PATHS.metaOptimizerState, { version: 1, frontier: {}, updatedAt: null });
   const remediationPacks = readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex);
@@ -449,6 +489,7 @@ test("queryMetaOptimize builds proposal-only recommendations from durable review
   const sessionSummary = fs.readFileSync(path.join(root, ARTIFACT_PATHS.sessionSummary), "utf8");
 
   assert.equal(result.proposalOnly, true);
+  assert.equal(result.executionBridgeCandidates.proposalOnly, true);
   assert.ok(Array.isArray(result.clusters));
   assert.equal(result.groupedFrontier.ranking.method, "durable-signal-frontier-v1");
   assert.ok(Array.isArray(result.groupedFrontier.topClusters));
@@ -494,6 +535,7 @@ test("queryMetaOptimize builds proposal-only recommendations from durable review
   assert.match(report, /Long-horizon history policy:/);
   assert.match(report, /Cluster 1: Evidence integrity/);
   assert.match(report, /Evidence-backed recommendations/);
+  assert.match(report, /Execution bridge candidate scaffolds/);
   assert.match(report, /Stable tie-break order/);
   assert.match(report, /Ranking basis:/);
   assert.equal(workspaceIndex.metaOptimize.proposalOnly, true);
@@ -506,10 +548,20 @@ test("queryMetaOptimize builds proposal-only recommendations from durable review
   assert.equal(workspaceIndex.metaOptimize.longHorizon.familyCount >= 3, true);
   assert.equal(workspaceIndex.metaOptimize.longHorizon.snapshotCount, longHorizonMemory.summary.snapshotCount);
   assert.equal(workspaceIndex.metaOptimize.longHorizon.lastAction, longHorizonMemory.summary.lastAction);
+  assert.equal(workspaceIndex.metaOptimize.executionBridgeCandidates.candidateCount, executionBridgeCandidates.summary.candidateCount);
   assert.equal(remediationPacks.proposalOnly, true);
   assert.equal(remediationPacks.summary.packCount >= 3, true);
   assert.equal(remediationPacks.summary.topClusterIds[0], "evidence-integrity");
   assert.equal(remediationPacks.summary.packsPath, ARTIFACT_PATHS.metaRemediationPacks);
+  assert.equal(executionBridgeCandidates.summary.candidateCount > 0, true);
+  assert.equal(result.executionBridgeCandidates.summary.candidateCount, executionBridgeCandidates.summary.candidateCount);
+  assert.equal(executionBridgeCandidates.candidates[0].proposalOnly, true);
+  assert.equal(executionBridgeCandidates.candidates[0].noAutoApply, true);
+  assert.equal(Array.isArray(executionBridgeCandidates.candidates[0].context.linkedPacketPointers), true);
+  assert.equal(Array.isArray(executionBridgeCandidates.candidates[0].context.linkedWorkspacePointers), true);
+  assert.equal(Array.isArray(executionBridgeCandidates.candidates[0].context.linkedRemediationPacks), true);
+  assert.equal(Array.isArray(executionBridgeCandidates.candidates[0].context.linkedPlaybooks), true);
+  assert.ok(["packet-candidate", "checklist-candidate", "revision-plan-candidate", "review-follow-up-candidate", "figure-follow-up-candidate"].includes(executionBridgeCandidates.candidates[0].candidateType));
   assert.equal(remediationPacks.packs[0].proposalOnly, true);
   assert.equal(remediationPacks.packs[0].explicitOnly, true);
   assert.equal(remediationPacks.packs[0].noAutoApply, true);
@@ -520,19 +572,42 @@ test("queryMetaOptimize builds proposal-only recommendations from durable review
   assert.equal(remediationPacks.packs.some((pack) => pack.figureQa.some((item) => item.id === "figure-issue-1")), true);
   assert.equal(remediationPacks.packs.some((pack) => pack.longHorizonMemory.some((item) => item.id === "review-recurrence")), true);
   assert.equal(remediationPacks.packs[0].workspacePointers.includes(ARTIFACT_PATHS.workspaceIndex), true);
+  assert.equal(remediationPacks.packs[0].acceptanceCriteria.length > 0, true);
+  assert.equal(remediationPacks.packs[0].conversionHints.length > 0, true);
+  assert.equal(remediationPacks.packs[0].rankedConversionPaths.length > 1, true);
+  assert.equal(["actionable", "partially-actionable", "advisory-only"].includes(remediationPacks.packs[0].readiness.operatorReadiness), true);
+  assert.ok(Array.isArray(remediationPacks.packs[0].readiness.missingIngredients));
+  assert.equal(remediationPacks.packs[0].rankedConversionPaths[0].rank, 1);
+  assert.ok(remediationPacks.packs[0].rankedConversionPaths[0].pathScore >= remediationPacks.packs[0].rankedConversionPaths[1].pathScore);
+  assert.equal(remediationPacks.packs[0].conversionHints.some((hint) => ["create-new-packet", "update-existing-packet", "add-checklist-entry", "add-revision-item"].includes(hint.targetType)), true);
   assert.equal(remediationPacks.packs[0].manualNextActions.length > 0, true);
   assert.equal(result.remediationPacks.summary.packCount, remediationPacks.summary.packCount);
   assert.equal(result.remediationPacks.packs[0].clusterId, remediationPacks.packs[0].clusterId);
+  assert.equal(operatorPlaybooks.proposalOnly, true);
+  assert.equal(operatorPlaybooks.summary.playbookCount, 0);
+  assert.equal(result.operatorPlaybooks.summary.playbookCount, operatorPlaybooks.summary.playbookCount);
   assert.equal(workspaceIndex.metaOptimize.remediationPacks.packCount, remediationPacks.summary.packCount);
   assert.equal(workspaceIndex.metaOptimize.remediationPacks.topPackIds[0], remediationPacks.summary.topPackIds[0]);
+  assert.match(workspaceIndex.metaOptimize.remediationPacks.readinessOverview, /actionable|advisory|partially/i);
+  assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.playbookCount, operatorPlaybooks.summary.playbookCount);
+  assert.match(workspaceIndex.metaOptimize.operatorPlaybooks.readinessOverview, /actionable|advisory|partially|No proposal-only family-level operator playbooks/i);
   assert.match(sessionSummary, /Long-horizon memory:/);
   assert.match(sessionSummary, /Meta-optimize frontier summary:/);
   assert.match(sessionSummary, /Remediation packs:/);
+  assert.match(sessionSummary, /Remediation pack readiness:/);
+  assert.match(sessionSummary, /Family playbooks:/);
+  assert.match(sessionSummary, /Family playbook readiness:/);
   assert.match(sessionSummary, /Remediation packs path:/);
+  assert.match(sessionSummary, /Family playbooks path:/);
   assert.match(sessionSummary, /Long-horizon snapshots:/);
   assert.match(sessionSummary, /Long-horizon last action:/);
   assert.match(sessionSummary, /Long-horizon memory path:/);
   assert.match(report, /Remediation packs/);
+  assert.match(report, /Family-level operator playbooks/);
+  assert.match(report, /Readiness:/);
+  assert.match(report, /Missing ingredients:/);
+  assert.match(report, /Acceptance criteria:/);
+  assert.match(report, /Conversion hints:/);
   assert.match(report, /Manual next actions:/);
 });
 
@@ -729,6 +804,77 @@ test("queryMetaOptimize carries typed wiki taxonomy pressure through clusters, s
   assert.match(report, /Taxonomy pressure:/);
 });
 
+test("queryMetaOptimize derives family-level operator playbooks from taxonomy, remediation packs, and long-horizon memory", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Family Playbooks", objective: "Surface family-level operator playbooks without auto-applying anything." });
+
+  registerSource(root, { citationKey: "playbook-source", title: "Playbook Source", authors: ["Ng"], year: 2026 });
+  upsertNote(root, { noteId: "playbook-note", title: "Playbook note", sectionId: "method", sourceIds: ["playbook-source"], summary: "Family playbooks should stay file-first." });
+  writeJson(root, ARTIFACT_PATHS.sources, {
+    version: 1,
+    items: [{ id: "experiment-playbook-exp", citationKey: "playbook-exp-source", title: "Wrong endpoint type", authors: [], year: 2026, sourceType: "paper", abstract: "", origin: "manual", addedAt: new Date(0).toISOString() }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.evidence, {
+    version: 3,
+    claims: [{
+      id: "claim-playbook",
+      text: "Validation-loop playbooks should be derived from durable artifacts.",
+      sectionId: "experiments",
+      status: "supported",
+      confidence: "medium",
+      sourceIds: ["missing-source"],
+      noteIds: ["missing-note"],
+      experimentIds: ["playbook-exp"]
+    }],
+    updatedAt: null
+  });
+
+  refreshWiki(root);
+
+  const result = queryMetaOptimize(root);
+  const playbooks = readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex);
+  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { metaOptimize: {} });
+  const reviewerManifest = readJson(root, `${ARTIFACT_PATHS.roleContextsDir}/researcher.json`, {});
+  const currentActionBundle = readJson(root, `${ARTIFACT_PATHS.actionContextsDir}/current.json`, {});
+  const report = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerReport), "utf8");
+
+  const validationPlaybook = playbooks.playbooks.find((item) => item.taxonomyFamilyId === "validation-loop");
+
+  assert.ok(validationPlaybook);
+  assert.equal(validationPlaybook.proposalOnly, true);
+  assert.equal(validationPlaybook.noAutoApply, true);
+  assert.equal(["actionable", "partially-actionable", "advisory-only"].includes(validationPlaybook.readiness.operatorReadiness), true);
+  assert.equal(validationPlaybook.acceptanceCriteria.length > 0, true);
+  assert.equal(validationPlaybook.conversionHints.length > 0, true);
+  assert.equal(validationPlaybook.rankedConversionPaths.length > 1, true);
+  assert.equal(validationPlaybook.artifactUpdateMap.targetCount > 0, true);
+  assert.equal(validationPlaybook.artifactUpdateMap.updateOrder[0], validationPlaybook.artifactUpdateMap.targets[0].artifactPath);
+  assert.equal(validationPlaybook.rankedConversionPaths[0].rank, 1);
+  assert.ok(validationPlaybook.rankedConversionPaths[0].pathScore >= validationPlaybook.rankedConversionPaths[1].pathScore);
+  assert.equal(validationPlaybook.manualNextActions.length > 0, true);
+  assert.equal(validationPlaybook.remediationPackIds.length > 0, true);
+  assert.equal(validationPlaybook.longHorizonFamilyIds.includes("taxonomy-validation-loop"), true);
+  assert.equal(playbooks.summary.topTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.equal(result.operatorPlaybooks.summary.topTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.topTaxonomyFamilyIds.includes("validation-loop"), true);
+  assert.ok(reviewerManifest.operatorGuidance.familyPlaybook);
+  assert.ok(currentActionBundle.operatorGuidance.familyPlaybook);
+  assert.equal(["actionable", "partially-actionable", "advisory-only"].includes(reviewerManifest.operatorGuidance.familyPlaybook.readiness.operatorReadiness), true);
+  assert.equal(reviewerManifest.operatorGuidance.familyPlaybook.rankedConversionPaths.length > 0, true);
+  assert.equal(reviewerManifest.operatorGuidance.familyPlaybook.artifactUpdateTargets.length > 0, true);
+  assert.equal(reviewerManifest.operatorGuidance.familyPlaybook.artifactUpdateOrder.length > 0, true);
+  assert.equal(currentActionBundle.operatorGuidance.familyPlaybook.rankedConversionPaths.length > 0, true);
+  assert.equal(playbooks.summary.topTaxonomyFamilyIds.includes(reviewerManifest.operatorGuidance.familyPlaybook.taxonomyFamilyId), true);
+  assert.equal(playbooks.summary.topTaxonomyFamilyIds.includes(currentActionBundle.operatorGuidance.familyPlaybook.taxonomyFamilyId), true);
+  assert.match(report, /Family-level operator playbooks/);
+  assert.match(report, /Validation loop operator playbook/);
+  assert.match(report, /Artifact update overview:/);
+  assert.match(report, /Artifact update order:/);
+  assert.match(report, /Artifact targets:/);
+});
+
 test("workspace repair frontier and operator manifests surface governance repair plus remediation guidance", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -813,10 +959,102 @@ test("workspace repair frontier and operator manifests surface governance repair
   assert.ok(workspaceIndex.repairFrontier.prioritizedItems.some((item) => item.frontierType === "version-governance"));
   assert.equal(reviewerManifest.operatorGuidance.repairFrontier.governanceIssueCount, 2);
   assert.equal(reviewerManifest.operatorGuidance.remediationPack.manualNextActions.length > 0, true);
+  assert.equal(reviewerManifest.operatorGuidance.remediationPack.rankedConversionPaths.length > 0, true);
+  assert.equal(reviewerManifest.operatorGuidance.familyPlaybook.manualNextActions.length > 0, true);
+  assert.equal(reviewerManifest.operatorGuidance.familyPlaybook.selectionScore > 0, true);
+  assert.equal(reviewerManifest.operatorGuidance.familyPlaybook.artifactUpdateTargets.length > 0, true);
   assert.equal(reviewerManifest.operatorGuidance.taxonomyPressure.topTaxonomyFamilyIds.includes("validation-loop"), true);
   assert.equal(phaseManifest.operatorGuidance.remediationPack.manualNextActions.length > 0, true);
+  assert.equal(phaseManifest.operatorGuidance.familyPlaybook.manualNextActions.length > 0, true);
   assert.equal(currentActionBundle.operatorGuidance.remediationPack.manualNextActions.length > 0, true);
+  assert.equal(currentActionBundle.operatorGuidance.familyPlaybook.manualNextActions.length > 0, true);
+  assert.equal(currentActionBundle.operatorGuidance.familyPlaybook.artifactUpdateOrder.length > 0, true);
   assert.equal(currentActionBundle.operatorGuidance.taxonomyPressure.topTaxonomyFamilyIds.includes("validation-loop"), true);
+});
+
+test("playbook selection prefers packet and taxonomy specific matches over broad role-only fallbacks", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Playbook Specificity", objective: "Prefer the most specific family playbook under mixed guidance signals." });
+
+  registerSource(root, { citationKey: "specificity-source", title: "Specificity Source", authors: ["Rao"], year: 2026 });
+  upsertNote(root, { noteId: "specificity-note", title: "Specificity note", sectionId: "method", sourceIds: ["specificity-source"], summary: "Specificity should remain deterministic." });
+  writeJson(root, ARTIFACT_PATHS.sources, {
+    version: 1,
+    items: [{ id: "experiment-specificity-exp", citationKey: "specificity-exp-source", title: "Wrong endpoint type", authors: [], year: 2026, sourceType: "paper", abstract: "", origin: "manual", addedAt: new Date(0).toISOString() }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.evidence, {
+    version: 3,
+    claims: [{
+      id: "claim-specificity",
+      text: "Specific family playbooks should beat broad fallbacks.",
+      sectionId: "experiments",
+      status: "supported",
+      confidence: "medium",
+      sourceIds: ["missing-source"],
+      noteIds: ["missing-note"],
+      experimentIds: ["specificity-exp"]
+    }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{
+      id: "specificity-review-gap",
+      summary: "A broad review concern is still open.",
+      severity: "high",
+      status: "escalated",
+      responseOwnerRole: "researcher",
+      claimIds: ["claim-specificity"],
+      recurrenceCount: 3,
+      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    version: 3,
+    lastVerdict: "needs-work",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close the broad review concern."],
+    unresolvedConcernIds: ["specificity-review-gap"],
+    escalatedConcernIds: ["specificity-review-gap"],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 3,
+    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["researcher"], separationMaintained: true }
+  });
+  upsertOrchestrationBoard(root, {
+    phase: "research",
+    assignedRole: "researcher",
+    intentType: "advance-paper",
+    currentFocus: "Prefer the packet-specific validation playbook.",
+    nextAction: "Use the packet-specific guidance next.",
+    tasks: [{
+      id: "specific-validation-task",
+      title: "Close validation-loop packet",
+      assignedRole: "researcher",
+      status: "in-progress",
+      lifecycleStatus: "review-needed",
+      nextAction: "Repair the validation-loop relation explicitly.",
+      evidenceLinks: [ARTIFACT_PATHS.wikiRelations],
+      outputPaths: []
+    }]
+  });
+
+  refreshWiki(root);
+
+  const metaOptimize = queryMetaOptimize(root);
+  const packetBundle = readJson(root, `${ARTIFACT_PATHS.actionContextsDir}/packet-task-specific-validation-task.json`, {});
+  const roleManifest = readJson(root, `${ARTIFACT_PATHS.roleContextsDir}/researcher.json`, {});
+
+  assert.equal(metaOptimize.operatorPlaybooks.playbooks.some((item) => item.taxonomyFamilyId === "validation-loop"), true);
+  assert.equal(metaOptimize.operatorPlaybooks.playbooks.some((item) => item.taxonomyFamilyId === "evidence-grounding"), true);
+  assert.equal(packetBundle.operatorGuidance.familyPlaybook.taxonomyFamilyId, "validation-loop");
+  assert.equal(packetBundle.operatorGuidance.familyPlaybook.selectionRankingBasis.some((item) => item.startsWith("packet") || item.startsWith("packetText=")), true);
+  assert.equal(roleManifest.operatorGuidance.familyPlaybook.selectionScore > 0, true);
 });
 
 test("figure QA records missing staged files and source artifacts in qa.json", () => {

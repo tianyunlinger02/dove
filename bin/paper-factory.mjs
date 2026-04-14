@@ -9,7 +9,9 @@ import { fileURLToPath } from "node:url";
 import { ensureWorkspace } from "../src/core/index.mjs";
 import {
   createWorkflowBoundaries,
+  normalizeMetaExecutionBridgeCandidatesIndex,
   normalizeMetaLongHorizonMemory,
+  normalizeMetaOperatorPlaybooksIndex,
   normalizeMetaOptimizerState,
   normalizeMetaRecommendationsIndex,
   normalizeWorkspaceIndex,
@@ -193,6 +195,11 @@ function validateWorkspaceRepairFrontierShape(value) {
     maybeArray(metaOptimize, "topTaxonomyFamilyIds", ".paper/workspace/index.json.metaOptimize.topTaxonomyFamilyIds", issues);
     maybeArray(metaOptimize, "topTaxonomyGroupIds", ".paper/workspace/index.json.metaOptimize.topTaxonomyGroupIds", issues);
     maybeArray(metaOptimize, "pressureAreas", ".paper/workspace/index.json.metaOptimize.pressureAreas", issues);
+    const operatorPlaybooks = maybeObject(metaOptimize, "operatorPlaybooks", ".paper/workspace/index.json.metaOptimize.operatorPlaybooks", issues);
+    if (operatorPlaybooks) {
+      maybeArray(operatorPlaybooks, "topPlaybookIds", ".paper/workspace/index.json.metaOptimize.operatorPlaybooks.topPlaybookIds", issues);
+      maybeArray(operatorPlaybooks, "topTaxonomyFamilyIds", ".paper/workspace/index.json.metaOptimize.operatorPlaybooks.topTaxonomyFamilyIds", issues);
+    }
     const longHorizon = maybeObject(metaOptimize, "longHorizon", ".paper/workspace/index.json.metaOptimize.longHorizon", issues);
     if (longHorizon) {
       maybeArray(longHorizon, "topFamilyIds", ".paper/workspace/index.json.metaOptimize.longHorizon.topFamilyIds", issues);
@@ -258,6 +265,11 @@ function validateMetaOptimizerStateShape(value) {
     maybeArray(frontier, "tieBreakOrder", ".paper/meta/optimizer-state.json.frontier.tieBreakOrder", issues);
   }
   maybeArray(root, "clusters", ".paper/meta/optimizer-state.json.clusters", issues);
+  const operatorPlaybooks = maybeObject(root, "operatorPlaybooks", ".paper/meta/optimizer-state.json.operatorPlaybooks", issues);
+  if (operatorPlaybooks) {
+    maybeArray(operatorPlaybooks, "topPlaybookIds", ".paper/meta/optimizer-state.json.operatorPlaybooks.topPlaybookIds", issues);
+    maybeArray(operatorPlaybooks, "topTaxonomyFamilyIds", ".paper/meta/optimizer-state.json.operatorPlaybooks.topTaxonomyFamilyIds", issues);
+  }
   const longHorizon = maybeObject(root, "longHorizon", ".paper/meta/optimizer-state.json.longHorizon", issues);
   if (longHorizon) {
     maybeArray(longHorizon, "topFamilyIds", ".paper/meta/optimizer-state.json.longHorizon.topFamilyIds", issues);
@@ -287,6 +299,35 @@ function validateMetaLongHorizonShape(value) {
   return issues;
 }
 
+function validateMetaOperatorPlaybooksShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/meta/operator-playbooks.json", issues);
+  if (!root) {
+    return issues;
+  }
+  maybeArray(root, "playbooks", ".paper/meta/operator-playbooks.json.playbooks", issues);
+  const summary = maybeObject(root, "summary", ".paper/meta/operator-playbooks.json.summary", issues);
+  if (summary) {
+    maybeArray(summary, "topPlaybookIds", ".paper/meta/operator-playbooks.json.summary.topPlaybookIds", issues);
+    maybeArray(summary, "topTaxonomyFamilyIds", ".paper/meta/operator-playbooks.json.summary.topTaxonomyFamilyIds", issues);
+  }
+  return issues;
+}
+
+function validateMetaExecutionBridgeCandidatesShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/meta/execution-bridge-candidates.json", issues);
+  if (!root) {
+    return issues;
+  }
+  maybeArray(root, "candidates", ".paper/meta/execution-bridge-candidates.json.candidates", issues);
+  const summary = maybeObject(root, "summary", ".paper/meta/execution-bridge-candidates.json.summary", issues);
+  if (summary) {
+    maybeArray(summary, "topCandidateIds", ".paper/meta/execution-bridge-candidates.json.summary.topCandidateIds", issues);
+  }
+  return issues;
+}
+
 function collectRawManagedArtifactChecks(target) {
   const specs = [
     ["raw-typed-wiki-relations-shape", ".paper/wiki/relations.json", validateWikiRelationsShape],
@@ -294,6 +335,8 @@ function collectRawManagedArtifactChecks(target) {
     ["raw-workspace-index-shape", ".paper/workspace/index.json", validateWorkspaceRepairFrontierShape],
     ["raw-meta-recommendations-shape", ".paper/meta/recommendations.json", validateMetaRecommendationsShape],
     ["raw-meta-optimizer-state-shape", ".paper/meta/optimizer-state.json", validateMetaOptimizerStateShape],
+    ["raw-meta-operator-playbooks-shape", ".paper/meta/operator-playbooks.json", validateMetaOperatorPlaybooksShape],
+    ["raw-meta-execution-bridge-candidates-shape", ".paper/meta/execution-bridge-candidates.json", validateMetaExecutionBridgeCandidatesShape],
     ["raw-meta-long-horizon-shape", ".paper/meta/long-horizon-memory.json", validateMetaLongHorizonShape]
   ];
 
@@ -318,10 +361,12 @@ function collectRawManagedArtifactChecks(target) {
 function collectRawMetaOptimizeConsistencyCheck(target) {
   const recommendations = readJsonFile(target, ".paper/meta/recommendations.json");
   const optimizerState = readJsonFile(target, ".paper/meta/optimizer-state.json");
+  const executionBridgeCandidates = readJsonFile(target, ".paper/meta/execution-bridge-candidates.json");
+  const operatorPlaybooks = readJsonFile(target, ".paper/meta/operator-playbooks.json");
   const longHorizonMemory = readJsonFile(target, ".paper/meta/long-horizon-memory.json");
   const workspaceIndex = readJsonFile(target, ".paper/workspace/index.json");
 
-  if ([recommendations, optimizerState, longHorizonMemory, workspaceIndex].some((item) => item.status !== "ok")) {
+  if ([recommendations, optimizerState, operatorPlaybooks, longHorizonMemory, workspaceIndex].some((item) => item.status !== "ok")) {
     return {
       check: "raw-meta-optimize-mirror-consistency",
       ok: true,
@@ -333,6 +378,7 @@ function collectRawMetaOptimizeConsistencyCheck(target) {
   const shapeIssues = [
     ...validateMetaRecommendationsShape(recommendations.value),
     ...validateMetaOptimizerStateShape(optimizerState.value),
+    ...validateMetaOperatorPlaybooksShape(operatorPlaybooks.value),
     ...validateMetaLongHorizonShape(longHorizonMemory.value),
     ...validateWorkspaceRepairFrontierShape(workspaceIndex.value)
   ];
@@ -347,6 +393,7 @@ function collectRawMetaOptimizeConsistencyCheck(target) {
 
   const normalizedRecommendations = normalizeMetaRecommendationsIndex(recommendations.value);
   const normalizedOptimizerState = normalizeMetaOptimizerState(optimizerState.value);
+  const normalizedOperatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(operatorPlaybooks.value);
   const normalizedWorkspaceIndex = normalizeWorkspaceIndex(workspaceIndex.value);
   const normalizedWorkspaceMetaOptimize = normalizeWorkspaceMetaOptimize(workspaceIndex.value.metaOptimize, normalizedWorkspaceIndex.metaOptimize);
   const normalizedLongHorizonMemory = normalizeMetaLongHorizonMemory(longHorizonMemory.value);
@@ -403,6 +450,18 @@ function collectRawMetaOptimizeConsistencyCheck(target) {
   }
   if (normalizedRecommendations.frontier.taxonomyOverview !== normalizedWorkspaceMetaOptimize.taxonomyOverview) {
     mismatches.push("workspace metaOptimize taxonomy overview drift");
+  }
+  if (normalizedOptimizerState.operatorPlaybooks.playbookCount !== normalizedOperatorPlaybooks.playbooks.length) {
+    mismatches.push("optimizer state operatorPlaybooks count drift");
+  }
+  if (normalizedWorkspaceMetaOptimize.operatorPlaybooks.playbookCount !== normalizedOperatorPlaybooks.playbooks.length) {
+    mismatches.push("workspace metaOptimize operatorPlaybooks count drift");
+  }
+  if (JSON.stringify(normalizedOptimizerState.operatorPlaybooks.topPlaybookIds) !== JSON.stringify(normalizedOperatorPlaybooks.summary.topPlaybookIds)) {
+    mismatches.push("optimizer state operatorPlaybooks topPlaybookIds drift");
+  }
+  if (JSON.stringify(normalizedWorkspaceMetaOptimize.operatorPlaybooks.topPlaybookIds) !== JSON.stringify(normalizedOperatorPlaybooks.summary.topPlaybookIds)) {
+    mismatches.push("workspace metaOptimize operatorPlaybooks topPlaybookIds drift");
   }
   if (JSON.stringify(normalizedRecommendations.frontier.pressureAreas) !== JSON.stringify(normalizedOptimizerState.frontier.pressureAreas)) {
     mismatches.push("optimizer frontier pressureAreas drift");
@@ -584,6 +643,8 @@ function buildDoctorProposalFrontier(managedArtifacts, rawMetaOptimizeConsistenc
 function inspectMetaOptimize(target) {
   const recommendations = readJsonFile(target, ".paper/meta/recommendations.json");
   const optimizerState = readJsonFile(target, ".paper/meta/optimizer-state.json");
+  const executionBridgeCandidates = readJsonFile(target, ".paper/meta/execution-bridge-candidates.json");
+  const operatorPlaybooks = readJsonFile(target, ".paper/meta/operator-playbooks.json");
   const longHorizonMemory = readJsonFile(target, ".paper/meta/long-horizon-memory.json");
   const workspaceIndex = readJsonFile(target, ".paper/workspace/index.json");
   if (recommendations.status !== "ok") {
@@ -591,6 +652,12 @@ function inspectMetaOptimize(target) {
   }
   if (optimizerState.status !== "ok") {
     return { status: optimizerState.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [optimizerState.message] };
+  }
+  if (executionBridgeCandidates.status !== "ok") {
+    return { status: executionBridgeCandidates.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [executionBridgeCandidates.message] };
+  }
+  if (operatorPlaybooks.status !== "ok") {
+    return { status: operatorPlaybooks.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [operatorPlaybooks.message] };
   }
   if (longHorizonMemory.status !== "ok") {
     return { status: longHorizonMemory.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [longHorizonMemory.message] };
@@ -601,6 +668,8 @@ function inspectMetaOptimize(target) {
   const shapeIssues = [
     ...validateMetaRecommendationsShape(recommendations.value),
     ...validateMetaOptimizerStateShape(optimizerState.value),
+    ...validateMetaExecutionBridgeCandidatesShape(executionBridgeCandidates.value),
+    ...validateMetaOperatorPlaybooksShape(operatorPlaybooks.value),
     ...validateMetaLongHorizonShape(longHorizonMemory.value),
     ...validateWorkspaceRepairFrontierShape(workspaceIndex.value)
   ];
@@ -609,6 +678,8 @@ function inspectMetaOptimize(target) {
   }
   const normalizedRecommendations = normalizeMetaRecommendationsIndex(recommendations.value);
   const normalizedOptimizerState = normalizeMetaOptimizerState(optimizerState.value);
+  const normalizedExecutionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(executionBridgeCandidates.value);
+  const normalizedOperatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(operatorPlaybooks.value);
   const normalizedLongHorizonMemory = normalizeMetaLongHorizonMemory(longHorizonMemory.value);
   const normalizedWorkspaceIndex = normalizeWorkspaceIndex(workspaceIndex.value);
   const normalizedWorkspaceMetaOptimize = normalizeWorkspaceMetaOptimize(workspaceIndex.value.metaOptimize, normalizedWorkspaceIndex.metaOptimize);
@@ -658,6 +729,8 @@ function inspectMetaOptimize(target) {
     topFamilyIds: Array.isArray(longHorizonSummary.topFamilyIds) ? longHorizonSummary.topFamilyIds : [],
     topTaxonomyFamilyIds: Array.isArray(frontier.topTaxonomyFamilyIds) ? frontier.topTaxonomyFamilyIds : [],
     topTaxonomyGroupIds: Array.isArray(frontier.topTaxonomyGroupIds) ? frontier.topTaxonomyGroupIds : [],
+    topPlaybookIds: Array.isArray(normalizedOperatorPlaybooks.summary.topPlaybookIds) ? normalizedOperatorPlaybooks.summary.topPlaybookIds : [],
+    topCandidateIds: Array.isArray(normalizedExecutionBridgeCandidates.summary.topCandidateIds) ? normalizedExecutionBridgeCandidates.summary.topCandidateIds : [],
     taxonomyOverview: frontier.taxonomyOverview ?? null,
     frontierSummary: frontier.frontierSummary ?? null,
     rankingMethod: frontier.rankingMethod ?? ranking.method ?? null,
@@ -670,6 +743,10 @@ function inspectMetaOptimize(target) {
       !longHorizonPresent ? "optimizer long-horizon memory summary missing" : null,
       !workspaceMirrorMatches ? "workspace metaOptimize mirror drift" : null,
       `grouped frontier: ${clusters.length} clusters / ${items.length} recommendations`,
+      `execution bridge candidates: ${normalizedExecutionBridgeCandidates.summary.candidateCount ?? 0} candidates (${normalizedExecutionBridgeCandidates.summary.topCandidateIds.join(", ") || "none"})`,
+      `family playbooks: ${normalizedOperatorPlaybooks.summary.playbookCount ?? 0} playbooks (${normalizedOperatorPlaybooks.summary.topTaxonomyFamilyIds.join(", ") || "none"})`,
+      normalizedWorkspaceMetaOptimize.remediationPacks?.readinessOverview ? `remediation readiness: ${normalizedWorkspaceMetaOptimize.remediationPacks.readinessOverview}` : null,
+      normalizedWorkspaceMetaOptimize.operatorPlaybooks?.readinessOverview ? `playbook readiness: ${normalizedWorkspaceMetaOptimize.operatorPlaybooks.readinessOverview}` : null,
       frontier.frontierSummary ? `frontier summary: ${frontier.frontierSummary}` : null,
       frontier.taxonomyOverview ? `taxonomy pressure: ${frontier.taxonomyOverview}` : null,
       longHorizonSummary.overview ? `long-horizon summary: ${longHorizonSummary.overview}` : null
@@ -695,6 +772,7 @@ function doctor(target) {
     ".paper/meta/long-horizon-memory.json",
     ".paper/workspace/index.json",
      ".paper/meta/long-horizon-memory.json",
+      ".paper/meta/operator-playbooks.json",
      "mcp/paper-state-server.mjs",
      "src/mcp/server.mjs"
    ];

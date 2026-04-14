@@ -74,6 +74,9 @@ test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy w
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /meta-optimize-frontier/);
   assert.match(result.stdout, /grouped frontier: \d+ clusters \/ \d+ recommendations/);
+  assert.match(result.stdout, /family playbooks:/);
+  assert.match(result.stdout, /remediation readiness:/);
+  assert.match(result.stdout, /playbook readiness:/);
   assert.match(result.stdout, /frontier summary:/);
   assert.match(result.stdout, /taxonomy pressure:/);
   assert.match(result.stdout, /long-horizon summary:/);

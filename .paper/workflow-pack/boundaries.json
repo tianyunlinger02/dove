@@ -99,6 +99,13 @@
       "managedKind": "bootstrap-only",
       "path": ".paper/workspace/index.json"
     },
+    "executionBridgeCandidates": {
+      "revisionId": "schema-v5:bootstrap-only",
+      "templateHash": "9ecb817790ca465e0db71b5dd74a5302f3c3a159d8f8126493dd53274eb6f521",
+      "generatedByVersion": "0.2.0",
+      "managedKind": "bootstrap-only",
+      "path": ".paper/meta/execution-bridge-candidates.json"
+    },
     "remediationPacks": {
       "revisionId": "schema-v5:bootstrap-only",
       "templateHash": "5e165878b802da6967958a897b731b27cbe370c7e5418772dfae99510b273ba5",
