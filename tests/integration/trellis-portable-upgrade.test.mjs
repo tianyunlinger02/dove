@@ -16,6 +16,7 @@ import {
   queryOpenQuestions,
   queryTaskGraph,
   queryWorkspaceIndex,
+  refreshWiki,
   readActionContextBundle,
   readArtifactContextManifest,
   readPacketContextManifest,
@@ -216,6 +217,7 @@ test("remediation packs stay durable and visible through operator-facing surface
   const workspaceIndex = queryWorkspaceIndex(root);
   const navigation = fs.readFileSync(path.join(root, ARTIFACT_PATHS.navigationReport), "utf8");
   const sessionSummaryText = fs.readFileSync(path.join(root, ARTIFACT_PATHS.sessionSummary), "utf8");
+  const operatorPlaybooksFile = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorPlaybooks), "utf8"));
   const remediationPackFile = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaRemediationPacks), "utf8"));
   const researcherManifest = readRoleContextManifest(root, "researcher");
   const phaseManifest = readPhaseContextManifest(root, workspaceIndex.boardPhase);
@@ -230,18 +232,90 @@ test("remediation packs stay durable and visible through operator-facing surface
   assert.equal(remediationPackFile.packs.some((pack) => pack.figureQa.some((item) => item.id === "pack-figure-issue")), true);
   assert.equal(remediationPackFile.packs[0].workspacePointers.includes(ARTIFACT_PATHS.workspaceIndex), true);
   assert.equal(remediationPackFile.packs[0].manualNextActions.length > 0, true);
+  assert.equal(operatorPlaybooksFile.summary.playbookCount, 0);
   assert.equal(workspaceIndex.metaOptimize.remediationPacks.packCount, remediationPackFile.summary.packCount);
   assert.equal(workspaceIndex.metaOptimize.remediationPacks.packsPath, ARTIFACT_PATHS.metaRemediationPacks);
+  assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.playbookCount, operatorPlaybooksFile.summary.playbookCount);
   assert.equal(researcherManifest.operatorGuidance.remediationPack.id, remediationPackFile.packs[0].id);
+  assert.equal(researcherManifest.operatorGuidance.remediationPack.acceptanceCriteria.length > 0, true);
+  assert.equal(researcherManifest.operatorGuidance.remediationPack.conversionHints.length > 0, true);
+  assert.equal(researcherManifest.operatorGuidance.remediationPack.rankedConversionPaths.length > 0, true);
+  assert.equal(["actionable", "partially-actionable", "advisory-only"].includes(researcherManifest.operatorGuidance.remediationPack.readiness.operatorReadiness), true);
   assert.equal(researcherManifest.operatorGuidance.remediationPack.manualNextActions.length > 0, true);
+  assert.equal(researcherManifest.operatorGuidance.familyPlaybook, null);
   assert.equal(phaseManifest.operatorGuidance.remediationPack.id, remediationPackFile.packs[0].id);
+  assert.equal(phaseManifest.operatorGuidance.familyPlaybook, null);
   assert.equal(currentActionBundle.operatorGuidance.remediationPack.id, remediationPackFile.packs[0].id);
+  assert.equal(currentActionBundle.operatorGuidance.familyPlaybook, null);
   assert.match(currentActionBundle.operatorGuidance.taxonomyPressure.overview, /typed wiki taxonomy pressure/i);
   assert.match(navigation, /Remediation packs:/);
+  assert.match(navigation, /Remediation pack readiness:/);
+  assert.match(navigation, /Family playbooks:/);
+  assert.match(navigation, /Family playbook readiness:/);
   assert.match(navigation, /Remediation packs path:/);
+  assert.match(navigation, /Family playbooks path:/);
   assert.match(sessionSummaryText, /Remediation packs:/);
+  assert.match(sessionSummaryText, /Remediation pack readiness:/);
+  assert.match(sessionSummaryText, /Family playbooks:/);
+  assert.match(sessionSummaryText, /Family playbook readiness:/);
   assert.match(sessionSummaryText, /Remediation packs path:/);
+  assert.match(sessionSummaryText, /Family playbooks path:/);
   assert.ok(fs.existsSync(path.join(root, ".paper", "meta", "remediation-packs.json")));
+  assert.ok(fs.existsSync(path.join(root, ".paper", "meta", "operator-playbooks.json")));
+});
+
+test("playbook artifact update maps stay durable and visible through operator-facing surfaces", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Artifact Update Maps", objective: "Expose playbook-driven artifact target lists without auto-applying updates." });
+
+  registerSource(root, { citationKey: "artifact-map-source", title: "Artifact Map Source", authors: ["Kim"], year: 2026 });
+  upsertNote(root, { noteId: "artifact-map-note", title: "Artifact map note", sectionId: "method", sourceIds: ["artifact-map-source"], summary: "Artifact target maps should be explicit." });
+  writeJson(root, ARTIFACT_PATHS.sources, {
+    version: 1,
+    items: [{ id: "experiment-artifact-map-exp", citationKey: "artifact-map-exp-source", title: "Wrong endpoint type", authors: [], year: 2026, sourceType: "paper", abstract: "", origin: "manual", addedAt: new Date(0).toISOString() }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.evidence, {
+    version: 3,
+    claims: [{
+      id: "claim-artifact-map",
+      text: "Artifact update maps should surface concrete targets for validation-loop repair.",
+      sectionId: "experiments",
+      status: "supported",
+      confidence: "medium",
+      sourceIds: ["missing-source"],
+      noteIds: ["missing-note"],
+      experimentIds: ["artifact-map-exp"]
+    }],
+    updatedAt: null
+  });
+
+  refreshWiki(root);
+
+  const metaOptimize = queryMetaOptimize(root);
+  const executionBridgeFile = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates), "utf8"));
+  const operatorPlaybooksFile = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorPlaybooks), "utf8"));
+  const currentActionBundle = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.actionContextsDir, "current.json"), "utf8"));
+  const report = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerReport), "utf8");
+
+  const validationPlaybook = operatorPlaybooksFile.playbooks.find((item) => item.taxonomyFamilyId === "validation-loop");
+  assert.ok(validationPlaybook);
+  assert.equal(executionBridgeFile.summary.candidateCount > 0, true);
+  assert.equal(executionBridgeFile.candidates[0].proposalOnly, true);
+  assert.equal(executionBridgeFile.candidates[0].noAutoApply, true);
+  assert.equal(Array.isArray(executionBridgeFile.candidates[0].context.linkedWorkspacePointers), true);
+  assert.equal(Array.isArray(executionBridgeFile.candidates[0].context.linkedRemediationPacks), true);
+  assert.equal(validationPlaybook.artifactUpdateMap.targetCount > 0, true);
+  assert.equal(validationPlaybook.artifactUpdateMap.updateOrder.length > 0, true);
+  assert.equal(validationPlaybook.artifactUpdateMap.targets[0].rank, 1);
+  assert.equal(currentActionBundle.operatorGuidance.executionBridgeCandidates.length > 0, true);
+  assert.equal(Array.isArray(currentActionBundle.operatorGuidance.executionBridgeCandidates[0].context.linkedWorkspacePointers), true);
+  assert.equal(currentActionBundle.operatorGuidance.familyPlaybook.artifactUpdateTargets.length > 0, true);
+  assert.equal(currentActionBundle.operatorGuidance.familyPlaybook.artifactUpdateOrder.length > 0, true);
+  assert.match(report, /Artifact update overview:/);
+  assert.match(report, /Artifact update order:/);
+  assert.match(report, /Execution bridge candidate scaffolds/);
 });
 
 test("task packet refresh preserves user-added fields and invalid role manifests fail fast", () => {

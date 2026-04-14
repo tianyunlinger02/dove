@@ -24,5 +24,158 @@
     "Start with the board owner and queue state, then drop into packet and artifact context.",
     "Treat stale, review-needed, and handoff packets as higher-priority than general queue work."
   ],
-  "generatedAt": "2026-04-13T14:43:51.820Z"
+  "operatorGuidance": {
+    "repairFrontier": {
+      "count": 0,
+      "governanceIssueCount": 0,
+      "taxonomyOverview": "No degraded typed wiki relation families are currently summarized.",
+      "topItems": []
+    },
+    "taxonomyPressure": {
+      "overview": "No typed wiki taxonomy pressure is currently active in the optimizer frontier.",
+      "pressureAreas": [],
+      "topTaxonomyFamilyIds": [],
+      "topTaxonomyGroupIds": []
+    },
+    "remediationPack": {
+      "id": "remediation-pack-queue-discipline",
+      "title": "Queue discipline remediation pack",
+      "clusterId": "queue-discipline",
+      "summary": "Queue churn and repeated workflow activity that suggest coordination debt is accumulating. This pack keeps the cluster's repair frontier, evidence links, taxonomy anchors, and manual next steps together for operator review.",
+      "readiness": {
+        "operatorReadiness": "partially-actionable",
+        "conversionCoverageLevel": "minimal",
+        "acceptanceCoverageLevel": "minimal",
+        "evidenceCoverageLevel": "partial",
+        "packetCoverageLevel": "none",
+        "missingIngredients": [
+          "packet-pointers",
+          "repair-frontier-links"
+        ],
+        "linkedSignalCounts": {
+          "remediationPackCount": 0,
+          "repairItemCount": 0,
+          "reviewConcernCount": 0,
+          "figureIssueCount": 0,
+          "longHorizonCount": 1,
+          "rankedConversionPathCount": 1,
+          "acceptanceCriteriaCount": 1,
+          "evidenceArtifactCount": 1,
+          "packetPointerCount": 0
+        },
+        "overview": "Partially actionable guidance: 1 ranked conversion paths, 1 acceptance criteria, missing packet-pointers, repair-frontier-links."
+      },
+      "taxonomyOverview": "No typed wiki taxonomy pressure is active in this optimizer surface.",
+      "acceptanceCriteria": [
+        "Confirm long-horizon memory pressure has stopped rising or is explicitly accepted as ongoing debt."
+      ],
+      "conversionHints": [
+        {
+          "targetType": "create-new-packet",
+          "targetId": "task-queue-discipline",
+          "assignedRole": "planner",
+          "suggestedTitle": "Queue discipline remediation work",
+          "rationale": "No active packet currently owns this pack, so a new explicit packet is the cleanest manual execution path.",
+          "nextStep": "Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.",
+          "rank": 1,
+          "priority": "primary",
+          "pathScore": 88,
+          "rankingBasis": [
+            "new-packet",
+            "cluster=queue-discipline",
+            "role=planner"
+          ],
+          "deterministicKey": "9911:00:create-new-packet:task-queue-discipline"
+        }
+      ],
+      "rankedConversionPaths": [
+        {
+          "targetType": "create-new-packet",
+          "targetId": "task-queue-discipline",
+          "assignedRole": "planner",
+          "priority": "primary",
+          "pathScore": 88,
+          "rankingBasis": [
+            "new-packet",
+            "cluster=queue-discipline",
+            "role=planner"
+          ],
+          "suggestedTitle": "Queue discipline remediation work",
+          "rationale": "No active packet currently owns this pack, so a new explicit packet is the cleanest manual execution path.",
+          "nextStep": "Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.",
+          "deterministicKey": "9911:00:create-new-packet:task-queue-discipline",
+          "originalIndex": 0,
+          "rank": 1
+        }
+      ],
+      "manualNextActions": [
+        "Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.",
+        "Read .paper/meta/LATEST_OPTIMIZER_REPORT.md and inspect cluster queue-discipline before changing any workflow artifact."
+      ],
+      "workspacePointers": [
+        ".paper/context/actions/current.json",
+        ".paper/context/phases/init.json",
+        ".paper/context/roles/planner.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/meta/long-horizon-memory.json"
+      ]
+    },
+    "familyPlaybook": null,
+    "executionBridgeCandidates": [
+      {
+        "id": "candidate-remediation-pack-queue-discipline-create-new-packet-task-queue-discipline",
+        "candidateType": "packet-candidate",
+        "targetArtifact": ".paper/task-packets/index.json",
+        "targetId": "task-queue-discipline",
+        "suggestedTitle": "Queue discipline remediation work",
+        "suggestedSummary": "Queue churn and repeated workflow activity that suggest coordination debt is accumulating. This pack keeps the cluster's repair frontier, evidence links, taxonomy anchors, and manual next steps together for operator review. Proposed as a packet-candidate from remediation pack remediation-pack-queue-discipline; review manually before creating any real work item.",
+        "suggestedNextStep": "Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.",
+        "sourceRemediationPackIds": [
+          "remediation-pack-queue-discipline"
+        ],
+        "sourcePlaybookIds": [],
+        "linkedRepairItemIds": [],
+        "suggestedAcceptanceCriteria": [
+          "Confirm long-horizon memory pressure has stopped rising or is explicitly accepted as ongoing debt."
+        ],
+        "context": {
+          "linkedPacketPointers": [],
+          "linkedWorkspacePointers": [
+            ".paper/context/actions/current.json",
+            ".paper/context/phases/init.json",
+            ".paper/context/roles/planner.json",
+            ".paper/meta/LATEST_OPTIMIZER_REPORT.md"
+          ],
+          "linkedRemediationPacks": [
+            {
+              "id": "remediation-pack-queue-discipline",
+              "title": "Queue discipline remediation pack",
+              "clusterId": "queue-discipline",
+              "readiness": "partially-actionable"
+            }
+          ],
+          "linkedPlaybooks": [],
+          "evidenceSummary": {
+            "artifactPaths": [
+              ".paper/sessions/journal.json"
+            ],
+            "ids": [
+              "query-workspace-index"
+            ]
+          },
+          "repairSummary": {
+            "repairItemIds": [],
+            "reviewConcernIds": [],
+            "figureIssueIds": []
+          },
+          "bridgeNotes": [
+            "Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.",
+            "No active packet currently owns this pack, so a new explicit packet is the cleanest manual execution path.",
+            "Partially actionable guidance: 1 ranked conversion paths, 1 acceptance criteria, missing packet-pointers, repair-frontier-links."
+          ]
+        }
+      }
+    ]
+  },
+  "generatedAt": "2026-04-13T21:29:22.443Z"
 }

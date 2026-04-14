@@ -8,6 +8,7 @@
   "boardAssignedRole": "planner",
   "localRules": [
     "Do not auto-apply recommendations from this layer.",
+    "Treat execution bridge candidates as manual scaffolds, not real work items.",
     "Keep every recommendation tied to concrete evidence artifacts and ids.",
     "Use this layer to surface workflow/process/artifact health, not hidden self-modification."
   ],
@@ -31,5 +32,5 @@
     "navigationReportPath": ".paper/wiki/navigation.md",
     "currentActionContextPath": ".paper/context/actions/current.json"
   },
-  "generatedAt": "2026-04-13T14:43:51.818Z"
+  "generatedAt": "2026-04-13T21:29:22.441Z"
 }

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "artifactPath": ".paper/meta/optimizer-state.json",
+  "artifactPath": ".paper/meta/execution-bridge-candidates.json",
   "exists": true,
   "category": "meta-optimize",
   "summary": "Meta-optimize artifacts are proposal-only summaries built from durable workflow signals.",
