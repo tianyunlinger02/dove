@@ -12,9 +12,11 @@ import {
   normalizeRebuttalIssues,
   readBoundaryReport,
   queryDecisions,
+  queryGovernanceCoverageReport,
   queryLineage,
   queryMetaOptimize,
   queryOpenQuestions,
+  queryOperatorFollowThrough,
   queryTaskGraph,
   queryWorkspaceIndex,
   readActionContextBundle,
@@ -23,6 +25,7 @@ import {
   readPhaseContextManifest,
   readState,
   readRoleContextManifest,
+  recordOperatorFollowThrough,
   refreshWiki,
   registerSource,
   runExperimentAudit,
@@ -79,6 +82,10 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(queryWorkspaceIndex(root));
       case "query_meta_optimize":
         return makeTextResult(queryMetaOptimize(root));
+      case "query_governance_coverage_report":
+        return makeTextResult(queryGovernanceCoverageReport(root));
+      case "query_operator_follow_through":
+        return makeTextResult(queryOperatorFollowThrough(root));
       case "query_boundary_report":
         return makeTextResult(readBoundaryReport(root));
       case "read_role_context_manifest":
@@ -149,6 +156,8 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(upsertFigurePlan(root, args));
       case "validate_figure_pipeline":
         return makeTextResult(validateFigurePipeline(root));
+      case "record_operator_follow_through":
+        return makeTextResult(recordOperatorFollowThrough(root, args));
       default:
         return makeErrorResult(`Unknown tool: ${name}`);
     }
