@@ -1,9 +1,10 @@
+import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
 import { refreshDurableSurfaces } from "./navigation.mjs";
-import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, resolveResumeCommandForPhase } from "./schema.mjs";
-import { loadState, nowIso, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
+import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, createMetaOperatorFollowThroughIndex, normalizeMetaOperatorFollowThroughIndex, resolveResumeCommandForPhase } from "./schema.mjs";
+import { assertGovernanceMutationRegistered, assertFollowThroughReady, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
 
 const ALLOWED_TRANSITIONS = {
   init: ["init", "sources", "research"],
@@ -159,11 +160,95 @@ function expectedRoleForPhase(phase) {
 
 function normalizePolicyOverride(args = {}) {
   const reason = typeof args.policyOverrideReason === "string" ? args.policyOverrideReason.trim() : "";
+  const reasonCode = typeof args.policyOverrideReasonCode === "string" ? args.policyOverrideReasonCode.trim() : "";
   return {
     active: reason.length > 0,
     reason,
-    actorRole: ROLE_IDS.includes(args.actorRole) ? args.actorRole : null
+    reasonCode,
+    actorRole: ROLE_IDS.includes(args.actorRole) ? args.actorRole : null,
+    evidencePaths: normalizeStringArray(args.policyOverrideEvidencePaths),
+    targetArtifact: typeof args.policyOverrideTargetArtifact === "string" && args.policyOverrideTargetArtifact.trim().length > 0 ? args.policyOverrideTargetArtifact : null,
+    targetId: typeof args.policyOverrideTargetId === "string" && args.policyOverrideTargetId.trim().length > 0 ? args.policyOverrideTargetId : null,
+    sourceId: typeof args.policyOverrideSourceId === "string" && args.policyOverrideSourceId.trim().length > 0 ? args.policyOverrideSourceId : null,
+    phase: typeof args.policyOverridePhase === "string" && args.policyOverridePhase.trim().length > 0 ? args.policyOverridePhase : null,
+    expiresAt: typeof args.policyOverrideExpiresAt === "string" && args.policyOverrideExpiresAt.trim().length > 0 ? args.policyOverrideExpiresAt : null
   };
+}
+
+function targetArtifactContainsId(root, artifactPath, targetId) {
+  if (!artifactPath || !targetId) {
+    return false;
+  }
+  const fullPath = path.join(root, artifactPath);
+  if (!fs.existsSync(fullPath)) {
+    return false;
+  }
+  const extension = path.extname(artifactPath).toLowerCase();
+  if (extension === ".json") {
+    try {
+      const value = JSON.parse(fs.readFileSync(fullPath, "utf8"));
+      const queue = [value];
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (current === targetId) {
+          return true;
+        }
+        if (Array.isArray(current)) {
+          queue.push(...current);
+          continue;
+        }
+        if (current && typeof current === "object") {
+          queue.push(...Object.values(current));
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+  return fs.readFileSync(fullPath, "utf8").includes(String(targetId));
+}
+
+function assertNoBlockingFollowThrough(root, currentPhase, nextPhase, currentAssignedRole, nextAssignedRole, policyOverride) {
+  const changingGovernance = currentPhase !== nextPhase || currentAssignedRole !== nextAssignedRole;
+  if (!changingGovernance) {
+    return;
+  }
+  const followThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const items = Array.isArray(followThrough.items) ? followThrough.items : [];
+  const actionRequired = items.filter((item) => {
+    const status = item.status;
+    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "deferred", "accepted-risk", "closed", "superseded"].includes(status);
+    const dueDeferred = status === "deferred" && item.deferUntil && String(item.deferUntil) <= nowIso();
+    const targetBound = !["accepted-for-execution", "closed"].includes(status)
+      ? true
+      : targetArtifactContainsId(root, item.linkedTargetArtifact, item.linkedTargetId);
+    const acceptedExecutionOpen = status === "accepted-for-execution";
+    return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen;
+  }).map((item) => ({
+    id: item.id,
+    status: item.status,
+    linkedTargetArtifact: item.linkedTargetArtifact,
+    linkedTargetId: item.linkedTargetId
+  }));
+  if (actionRequired.length === 0) {
+    return;
+  }
+  if (policyOverride.active) {
+    const relevance = policyOverride.actorRole ? overrideEvidenceRelevantToItems(root, actionRequired, policyOverride.evidencePaths) : { ok: false, unrelatedItemIds: actionRequired.map((item) => item.id) };
+    const targetMatch = actionRequired.some((item) => item.linkedTargetArtifact === policyOverride.targetArtifact && item.linkedTargetId === policyOverride.targetId);
+    const sourceMatch = actionRequired.some((item) => item.sourceId === policyOverride.sourceId);
+    const notExpired = policyOverride.expiresAt && String(policyOverride.expiresAt) > nowIso();
+    const withinWindow = notExpired && String(policyOverride.expiresAt) <= new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const actorMatches = policyOverride.actorRole && policyOverride.actorRole === currentAssignedRole;
+    const reasonCodeAllowed = ["emergency-repair", "manual-reconciliation", "migration-compatibility", "operator-acknowledged-exception"].includes(policyOverride.reasonCode);
+    const phaseMatches = policyOverride.phase === currentPhase;
+    if (relevance.ok && targetMatch && sourceMatch && phaseMatches && withinWindow && actorMatches && reasonCodeAllowed) {
+      return;
+    }
+    throw new Error(`Cannot override follow-through governance without current-owner actorRole, matching policyOverrideSourceId, matching policyOverrideTargetArtifact/policyOverrideTargetId, matching policyOverridePhase, allowed policyOverrideReasonCode, relevant policyOverrideEvidencePaths, and a short future policyOverrideExpiresAt. Action-required records: ${actionRequired.map((item) => item.id).join(", ")}. Unrelated records: ${relevance.unrelatedItemIds.join(", ") || "none"}.`);
+  }
+  throw new Error(`Cannot advance orchestration from ${currentPhase} to ${nextPhase} while operator follow-through still requires action: ${actionRequired.map((item) => item.id).join(", ")}. Provide policyOverrideReason for traceable manual progression if this is intentional.`);
 }
 
 function policyOverrideSuffix(policyOverride) {
@@ -667,6 +752,7 @@ export function upsertOrchestrationBoard(root, args = {}) {
   const nextAssignedRole = args.assignedRole ?? current.assignedRole;
   const policyOverride = normalizePolicyOverride(args);
   validateBoardMutation(current, nextPhase, nextAssignedRole, policyOverride, state.settings?.strictMode, "Updating the orchestration board");
+  assertNoBlockingFollowThrough(root, current.currentPhase, nextPhase, current.assignedRole, nextAssignedRole, policyOverride);
   const tasks = Array.isArray(args.tasks) ? args.tasks.map((task, index) => normalizeTask(task, index, nextAssignedRole)) : current.tasks;
   const blockers = Array.isArray(args.blockers) ? args.blockers.map((blocker, index) => normalizeBlocker(blocker, index, nextAssignedRole)) : current.blockers;
   const intentType = args.intentType ?? classifyWorkflowIntent({ phase: nextPhase, tasks, blockers });
@@ -780,6 +866,8 @@ function renderResearchBrief(agenda) {
 }
 
 export function updateResearchBrief(root, args = {}) {
+  assertGovernanceMutationRegistered("update-research-brief", "guarded");
+  assertFollowThroughReady(root, "Updating the research brief", args);
   const state = loadState(root);
   const current = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: state.paper.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
   const next = {
@@ -912,6 +1000,7 @@ function confidenceAfterSupport(current) {
 }
 
 export function runExperimentAudit(root, args = {}) {
+  assertGovernanceMutationRegistered("run-experiment-audit", "guarded");
   assertRoleBoundMutation(root, args, {
     actionLabel: "Running an experiment audit",
     expectedRole: "experiment-planner"
@@ -1025,6 +1114,8 @@ export function runExperimentAudit(root, args = {}) {
 }
 
 export function bridgeExperimentResultToClaim(root, args = {}) {
+  assertGovernanceMutationRegistered("bridge-experiment-result-to-claim", "guarded");
+  assertFollowThroughReady(root, "Bridging an experiment result to a claim", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Bridging an experiment result to a claim",
     expectedRole: "experiment-planner"
@@ -1126,6 +1217,8 @@ export function bridgeExperimentResultToClaim(root, args = {}) {
 }
 
 export function upsertExperimentPlan(root, args = {}) {
+  assertGovernanceMutationRegistered("upsert-experiment-plan", "guarded");
+  assertFollowThroughReady(root, "Updating an experiment plan", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Updating an experiment plan",
     expectedRole: "experiment-planner"
@@ -1181,6 +1274,8 @@ export function upsertExperimentPlan(root, args = {}) {
 }
 
 export function upsertExperimentResult(root, args = {}) {
+  assertGovernanceMutationRegistered("upsert-experiment-result", "guarded");
+  assertFollowThroughReady(root, "Updating an experiment result", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Updating an experiment result",
     expectedRole: "experiment-planner"
@@ -1300,6 +1395,8 @@ function normalizeIssue(issue = {}, index = 0) {
 }
 
 export function normalizeRebuttalIssues(root, args = {}) {
+  assertGovernanceMutationRegistered("normalize-rebuttal-issues", "guarded");
+  assertFollowThroughReady(root, "Normalizing rebuttal issues", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Normalizing rebuttal issues",
     expectedRole: "reviewer"
@@ -1340,6 +1437,8 @@ export function normalizeRebuttalIssues(root, args = {}) {
 }
 
 export function buildRebuttalStrategy(root, args = {}) {
+  assertGovernanceMutationRegistered("build-rebuttal-strategy", "guarded");
+  assertFollowThroughReady(root, "Building the rebuttal strategy", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Building the rebuttal strategy",
     expectedRole: "rebuttal-lead"
@@ -1447,6 +1546,8 @@ function readSnapshot(root, snapshotId) {
 }
 
 export function createVersionSnapshot(root, args = {}) {
+  assertGovernanceMutationRegistered("create-version-snapshot", "guarded");
+  assertFollowThroughReady(root, "Creating a version snapshot", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Creating a version snapshot",
     expectedRole: "version-analyst"
@@ -1540,6 +1641,8 @@ export function createVersionSnapshot(root, args = {}) {
 }
 
 export function compareVersions(root, args = {}) {
+  assertGovernanceMutationRegistered("compare-versions", "guarded");
+  assertFollowThroughReady(root, "Comparing versions", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Comparing versions",
     expectedRole: "version-analyst"

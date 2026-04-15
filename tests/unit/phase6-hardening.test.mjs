@@ -6,19 +6,46 @@ import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
+  GOVERNANCE_EXEMPT_MUTATIONS,
+  GOVERNANCE_GUARDED_MUTATIONS,
+  GOVERNANCE_NEGATIVE_COVERAGE,
   ensureWorkspace,
   initProject,
   queryMetaOptimize,
+  queryOperatorFollowThrough,
+  readState,
   readJson,
+  recordOperatorFollowThrough,
   refreshWiki,
   registerSource,
+  updateResearchBrief,
+  appendHandoff,
+  appendReviewLog,
+  buildRebuttal,
+  buildRebuttalStrategy,
+  bridgeExperimentResultToClaim,
+  compareVersions,
+  createVersionSnapshot,
+  normalizeRebuttalIssues,
+  upsertClaims,
+  upsertDraft,
+  upsertExperimentPlan,
+  upsertExperimentResult,
+  upsertOutline,
+  upsertPlan,
+  upsertRevisionPlan,
   upsertNote,
+  runExperimentAudit,
+  runReviewLoop,
+  setSectionStatus,
+  syncCitations,
   upsertFigurePlan,
   queryWorkspaceIndex,
   validateFigurePipeline,
   upsertOrchestrationBoard,
   writeJson
 } from "../../src/core/index.mjs";
+import { toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
 import { createMetaExecutionBridgeCandidatesIndex, createMetaLongHorizonMemory, createMetaOperatorPlaybooksIndex, createMetaOptimizerState, createMetaRemediationPacksIndex } from "../../src/core/schema.mjs";
 
 function tempRoot() {
@@ -970,6 +997,669 @@ test("workspace repair frontier and operator manifests surface governance repair
   assert.equal(currentActionBundle.operatorGuidance.familyPlaybook.manualNextActions.length > 0, true);
   assert.equal(currentActionBundle.operatorGuidance.familyPlaybook.artifactUpdateOrder.length > 0, true);
   assert.equal(currentActionBundle.operatorGuidance.taxonomyPressure.topTaxonomyFamilyIds.includes("validation-loop"), true);
+});
+
+test("queryMetaOptimize surfaces durable operator follow-through and marks stale source fingerprints", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Follow Through", objective: "Track explicit operator follow-through decisions." });
+
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{
+      id: "follow-gap",
+      summary: "Need explicit operator handling.",
+      severity: "high",
+      status: "open",
+      responseOwnerRole: "planner",
+      recurrenceCount: 2,
+      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    version: 3,
+    lastVerdict: "needs-work",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close the follow-through gap."],
+    unresolvedConcernIds: ["follow-gap"],
+    escalatedConcernIds: [],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 1,
+    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
+  });
+
+  const meta = queryMetaOptimize(root);
+  const topPack = meta.remediationPacks.packs[0];
+  const allowedActorRole = topPack.packetPointers?.[0]?.assignedRole ?? topPack.conversionHints?.[0]?.assignedRole ?? "planner";
+  assert.ok(topPack);
+
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
+    version: 1,
+    items: [{
+      id: "task-follow-through",
+      title: "Follow-through execution task",
+      status: "pending",
+      lifecycleStatus: "waiting",
+      assignedRole: "planner",
+      phase: "research",
+      nextAction: "Take the top remediation pack into execution.",
+      packetPath: ".paper/task-packets/packets/task-follow-through.json",
+      packetContextPath: ".paper/context/packets/task-follow-through.json"
+    }],
+    clusterMembership: {},
+    dependencyMap: {},
+    summary: {
+      itemCount: 1,
+      staleCount: 0,
+      reviewNeededCount: 0,
+      handoffReadyCount: 0,
+      rootPacketIds: ["task-follow-through"],
+      topPacketIds: ["task-follow-through"]
+    },
+    updatedAt: null
+  });
+  writeJson(root, ".paper/task-packets/packets/task-follow-through.json", {
+    id: "task-follow-through",
+    title: "Follow-through execution task",
+    status: "pending"
+  });
+
+  recordOperatorFollowThrough(root, {
+    sourceType: "remediation-pack",
+    sourceId: topPack.id,
+    status: "accepted-for-execution",
+    actorRole: "planner",
+    decisionSummary: "Promote top remediation pack into manual execution.",
+    selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
+    linkedTargetArtifact: ".paper/task-packets/packets/task-follow-through.json",
+    linkedTargetId: "task-follow-through",
+    executeBy: "2099-01-01T00:00:00.000Z",
+    reviewAfter: "2099-01-01T12:00:00.000Z"
+  });
+
+  let followThrough = queryOperatorFollowThrough(root);
+  assert.equal(followThrough.summary.acceptedForExecutionCount, 1);
+  assert.equal(followThrough.summary.staleCount, 0);
+  assert.equal(followThrough.items[0].sourceType, "remediation-pack");
+  assert.equal(followThrough.items[0].linkedTargetArtifact, ".paper/task-packets/packets/task-follow-through.json");
+
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{
+      id: "follow-gap",
+      summary: "Need explicit operator handling after source change.",
+      severity: "critical",
+      status: "open",
+      responseOwnerRole: "planner",
+      recurrenceCount: 3,
+      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+
+  followThrough = queryOperatorFollowThrough(root);
+  assert.equal(followThrough.summary.staleCount, 1);
+  assert.equal(followThrough.items[0].stale, true);
+  assert.equal(followThrough.summary.topSourceIds.includes(topPack.id), true);
+
+  const followThroughPath = path.join(root, ARTIFACT_PATHS.metaOperatorFollowThrough);
+  const rawLedger = JSON.parse(fs.readFileSync(followThroughPath, "utf8"));
+  rawLedger.items[0].status = "totally-invalid";
+  fs.writeFileSync(followThroughPath, `${JSON.stringify(rawLedger, null, 2)}\n`, "utf8");
+
+  followThrough = queryOperatorFollowThrough(root);
+  assert.equal(followThrough.summary.invalidStatusCount, 1);
+  assert.equal(followThrough.items[0].invalidStatus, true);
+
+  assert.throws(() => {
+    recordOperatorFollowThrough(root, {
+      sourceType: "remediation-pack",
+      sourceId: topPack.id,
+      status: "not-a-real-status",
+      actorRole: "planner"
+    });
+  }, /Invalid follow-through status/);
+
+  assert.throws(() => {
+    recordOperatorFollowThrough(root, {
+      sourceType: "remediation-pack",
+      sourceId: topPack.id,
+      status: "accepted-for-execution",
+      actorRole: "reviewer",
+      linkedTargetArtifact: ".paper/task-packets/packets/task-follow-through.json",
+      linkedTargetId: "task-follow-through",
+      executeBy: "2099-01-01T00:00:00.000Z",
+      reviewAfter: "2099-01-01T12:00:00.000Z"
+    });
+  }, /not allowed/);
+
+  assert.throws(() => {
+    recordOperatorFollowThrough(root, {
+      sourceType: "remediation-pack",
+      sourceId: topPack.id,
+      status: "accepted-for-execution",
+      actorRole: "planner",
+      linkedTargetArtifact: ".paper/task-packets/packets/task-follow-through.json",
+      linkedTargetId: "missing-target",
+      executeBy: "2099-01-01T00:00:00.000Z",
+      reviewAfter: "2099-01-01T12:00:00.000Z"
+    });
+  }, /was not found/);
+
+  assert.throws(() => {
+    recordOperatorFollowThrough(root, {
+      sourceType: "remediation-pack",
+      sourceId: topPack.id,
+      status: "executing",
+      actorRole: allowedActorRole,
+      linkedTargetArtifact: ".paper/task-packets/packets/task-follow-through.json",
+      linkedTargetId: "task-follow-through"
+    });
+  }, /executionStartedAt/);
+
+  fs.rmSync(path.join(root, ".paper/task-packets/packets/task-follow-through.json"), { force: true });
+  followThrough = queryOperatorFollowThrough(root);
+  assert.equal(followThrough.summary.itemCount > 0, true);
+});
+
+test("queryOperatorFollowThrough summarizes combined deferred, stale, and invalid follow-through debt", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  const now = new Date().toISOString();
+  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, {
+    version: 1,
+    proposalOnly: true,
+    explicitOnly: true,
+    items: [
+      {
+        id: "ft-deferred",
+        sourceType: "remediation-pack",
+        sourceId: "pack-a",
+        sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
+        sourceFingerprint: "a",
+        sourceTitle: "A",
+        sourceSummary: "A",
+        status: "deferred",
+        actorRole: "planner",
+        deferUntil: "2000-01-01T00:00:00.000Z",
+        recordedAt: now,
+        updatedAt: now
+      },
+      {
+        id: "ft-invalid",
+        sourceType: "operator-playbook",
+        sourceId: "playbook-a",
+        sourceArtifactPath: ARTIFACT_PATHS.metaOperatorPlaybooks,
+        sourceFingerprint: "b",
+        sourceTitle: "B",
+        sourceSummary: "B",
+        status: "not-real",
+        actorRole: "planner",
+        recordedAt: now,
+        updatedAt: now
+      },
+      {
+        id: "ft-overdue",
+        sourceType: "remediation-pack",
+        sourceId: "pack-b",
+        sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
+        sourceFingerprint: "c",
+        sourceTitle: "C",
+        sourceSummary: "C",
+        status: "accepted-for-execution",
+        actorRole: "planner",
+        linkedTargetArtifact: ".paper/task-packets/packets/task-overdue.json",
+        linkedTargetId: "task-overdue",
+        executeBy: "2000-01-01T00:00:00.000Z",
+        reviewAfter: "2000-01-01T12:00:00.000Z",
+        recordedAt: now,
+        updatedAt: now
+      }
+    ],
+    summary: { itemCount: 2 },
+    updatedAt: now
+  });
+
+  const followThrough = queryOperatorFollowThrough(root);
+  assert.equal(followThrough.summary.itemCount, 3);
+  assert.equal(followThrough.summary.dueDeferredCount, 1);
+  assert.equal(followThrough.summary.dueReviewCount, 1);
+  assert.equal(followThrough.summary.invalidStatusCount, 1);
+  assert.equal(followThrough.summary.overdueExecutionCount, 1);
+  assert.equal(followThrough.summary.criticalOverdueExecutionCount, 1);
+  assert.equal(followThrough.summary.actionRequiredCount >= 3, true);
+});
+
+test("queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Governance Coverage", objective: "Audit guarded mutation coverage." });
+
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{
+      id: "coverage-gap",
+      summary: "Coverage debt should block key writes.",
+      severity: "high",
+      status: "open",
+      responseOwnerRole: "planner",
+      recurrenceCount: 2,
+      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    version: 3,
+    lastVerdict: "needs-work",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close the governance coverage gap."],
+    unresolvedConcernIds: ["coverage-gap"],
+    escalatedConcernIds: [],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 1,
+    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
+  });
+
+  const meta = queryMetaOptimize(root);
+  const governanceCoveragePath = meta.governanceCoverage.coveragePath ?? meta.governanceCoverage.summary?.coveragePath;
+  assert.equal(typeof governanceCoveragePath, "string");
+  assert.equal(governanceCoveragePath, ARTIFACT_PATHS.metaGovernanceCoverage);
+  assert.equal(meta.governanceCoverageReport.summary.reportPath, ARTIFACT_PATHS.metaGovernanceCoverageReport);
+  assert.equal(meta.governanceCoverageReport.summary.markdownPath, ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown);
+  const guardedIds = new Set(meta.governanceCoverage.guardedMutations.map((item) => item.id));
+  for (const required of ["upsert-orchestration-board", "append-handoff", "upsert-plan", "append-review-log", "update-research-brief", "upsert-experiment-plan", "run-experiment-audit", "upsert-claims", "bridge-experiment-result-to-claim", "compare-versions"]) {
+    assert.equal(guardedIds.has(required), true);
+  }
+  const claimBridgeCoverage = meta.governanceCoverage.guardedMutations.find((item) => item.id === "bridge-experiment-result-to-claim");
+  assert.equal(claimBridgeCoverage.surfaceBindings.coreFunction, "bridgeExperimentResultToClaim");
+  assert.equal(claimBridgeCoverage.surfaceBindings.mcpTool, "bridge_result_to_claim");
+  assert.equal(claimBridgeCoverage.surfaceBindings.commandIds.includes("paper.result-bridge"), true);
+  const followThroughExempt = meta.governanceCoverage.exemptMutations.find((item) => item.id === "record-operator-follow-through");
+  assert.equal(followThroughExempt.surfaceBindings.mcpTool, "record_operator_follow_through");
+  assert.equal(followThroughExempt.surfaceBindings.commandIds.includes("paper.follow-through"), true);
+  assert.equal(typeof followThroughExempt.ownerRole, "string");
+  assert.equal(typeof followThroughExempt.approvedByRole, "string");
+  assert.equal(typeof followThroughExempt.approvedAt, "string");
+  assert.equal(typeof followThroughExempt.lastReviewedAt, "string");
+  assert.equal(typeof followThroughExempt.reasonCode, "string");
+  assert.equal(typeof followThroughExempt.reviewCadence, "string");
+  assert.equal(typeof followThroughExempt.sunsetAt, "string");
+  const guardedCoreFunctions = new Set(meta.governanceCoverage.guardedMutations.map((item) => item.surfaceBindings.coreFunction));
+  for (const requiredCore of ["upsertOrchestrationBoard", "upsertClaims", "appendReviewLog", "runExperimentAudit", "bridgeExperimentResultToClaim", "compareVersions"]) {
+    assert.equal(guardedCoreFunctions.has(requiredCore), true);
+  }
+  const exemptCoreFunctions = new Set(meta.governanceCoverage.exemptMutations.map((item) => item.surfaceBindings.coreFunction));
+  assert.equal(exemptCoreFunctions.has("recordOperatorFollowThrough"), true);
+  assert.equal(exemptCoreFunctions.has("queryMetaOptimize"), true);
+
+  const topPack = meta.remediationPacks.packs[0];
+  writeJson(root, ".paper/task-packets/packets/task-coverage.json", { id: "task-coverage", title: "Coverage task", status: "pending" });
+  recordOperatorFollowThrough(root, {
+    sourceType: "remediation-pack",
+    sourceId: topPack.id,
+    status: "accepted-for-execution",
+    actorRole: "planner",
+    decisionSummary: "Take coverage pack into execution.",
+    selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
+    linkedTargetArtifact: ".paper/task-packets/packets/task-coverage.json",
+    linkedTargetId: "task-coverage",
+    executeBy: "2099-01-01T00:00:00.000Z",
+    reviewAfter: "2099-01-01T12:00:00.000Z"
+  });
+
+  assert.throws(() => upsertPlan(root, { thesis: "blocked plan" }), /blocked while operator follow-through still requires action/);
+  assert.throws(() => upsertClaims(root, {
+    claims: [{ id: "claim-blocked", text: "blocked", sectionId: "introduction", sourceIds: ["known-source"] }]
+  }), /blocked while operator follow-through still requires action/);
+  assert.throws(() => updateResearchBrief(root, { objective: "blocked brief" }), /blocked while operator follow-through still requires action/);
+  assert.throws(() => upsertExperimentPlan(root, { id: "blocked-exp", title: "Blocked experiment", methodology: "Method" }), /blocked while operator follow-through still requires action/);
+  assert.throws(() => appendReviewLog(root, { actorRole: "reviewer", stage: "blocked", summary: "blocked", findings: [], actionItems: [] }), /blocked while operator follow-through still requires action|requires board role reviewer/);
+  assert.throws(() => upsertExperimentResult(root, { id: "blocked-result", experimentId: "blocked-exp", outcome: "supports" }), /blocked while operator follow-through still requires action/);
+  assert.throws(() => runExperimentAudit(root, { experimentId: "blocked-exp" }), /blocked while operator follow-through still requires action|requires board role experiment-planner/);
+  assert.throws(() => normalizeRebuttalIssues(root, { issues: [] }), /blocked while operator follow-through still requires action/);
+  assert.throws(() => buildRebuttalStrategy(root, {}), /blocked while operator follow-through still requires action/);
+  assert.throws(() => createVersionSnapshot(root, { versionId: "guard-v1" }), /blocked while operator follow-through still requires action/);
+  assert.throws(() => compareVersions(root, { fromVersionId: "guard-v1", toVersionId: "guard-v2" }), /blocked while operator follow-through still requires action/);
+  assert.throws(() => runReviewLoop(root, { actorRole: "reviewer" }), /blocked while operator follow-through still requires action|requires board role reviewer/);
+  assert.throws(() => bridgeExperimentResultToClaim(root, { resultId: "blocked-result" }), /blocked while operator follow-through still requires action/);
+});
+
+test("governance registry completely binds the expected mutating command and MCP surfaces", () => {
+  const toolNames = new Set(toolDefinitions.map((tool) => tool.name));
+  const commandDir = path.join(process.cwd(), ".opencode", "commands");
+  const registry = [...GOVERNANCE_GUARDED_MUTATIONS, ...GOVERNANCE_EXEMPT_MUTATIONS];
+  const boundTools = new Set(registry.map((entry) => entry.surfaceBindings?.mcpTool).filter(Boolean));
+  const boundCommands = new Set(registry.flatMap((entry) => entry.surfaceBindings?.commandIds ?? []));
+
+  const expectedMutatingTools = [
+    "upsert_orchestration_board",
+    "append_handoff",
+    "update_research_brief",
+    "register_source",
+    "upsert_note",
+    "upsert_claims",
+    "upsert_plan",
+    "upsert_outline",
+    "upsert_draft",
+    "upsert_experiment_plan",
+    "upsert_experiment_result",
+    "run_experiment_audit",
+    "bridge_result_to_claim",
+    "run_review_loop",
+    "append_review_log",
+    "upsert_revision_plan",
+    "sync_citations",
+    "refresh_wiki",
+    "normalize_rebuttal_issues",
+    "build_rebuttal_strategy",
+    "create_version_snapshot",
+    "compare_versions",
+    "upsert_figure_plan",
+    "record_operator_follow_through",
+    "query_meta_optimize"
+  ];
+  for (const toolName of expectedMutatingTools) {
+    assert.equal(boundTools.has(toolName), true);
+    assert.equal(toolNames.has(toolName), true);
+  }
+
+  const expectedMutatingCommands = [
+    "paper.orchestrate",
+    "paper.research",
+    "paper.source",
+    "paper.note",
+    "paper.claim-gate",
+    "paper.plan",
+    "paper.outline",
+    "paper.draft",
+    "paper.experiment-plan",
+    "paper.experiment-audit",
+    "paper.review",
+    "paper.review-loop",
+    "paper.result-bridge",
+    "paper.revise",
+    "paper.rebuttal-strategy",
+    "paper.version-snapshot",
+    "paper.version-compare",
+    "paper.citations",
+    "paper.figure",
+    "paper.rebuttal",
+    "paper.follow-through",
+    "paper.meta-optimize"
+  ];
+  for (const commandId of expectedMutatingCommands) {
+    assert.equal(boundCommands.has(commandId), true);
+    assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), true);
+  }
+});
+
+test("a broader set of guarded write paths all reject unresolved follow-through debt", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Guard Matrix", objective: "Verify broader guarded write coverage." });
+
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{
+      id: "guard-matrix-gap",
+      summary: "Guard matrix debt should block multiple write paths.",
+      severity: "high",
+      status: "open",
+      responseOwnerRole: "planner",
+      recurrenceCount: 2,
+      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    version: 3,
+    lastVerdict: "needs-work",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close the guard matrix gap."],
+    unresolvedConcernIds: ["guard-matrix-gap"],
+    escalatedConcernIds: [],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 1,
+    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
+  });
+
+  const topPack = queryMetaOptimize(root).remediationPacks.packs[0];
+  writeJson(root, ".paper/task-packets/packets/task-guard-matrix.json", { id: "task-guard-matrix", title: "Guard matrix task", status: "pending" });
+  recordOperatorFollowThrough(root, {
+    sourceType: "remediation-pack",
+    sourceId: topPack.id,
+    status: "accepted-for-execution",
+    actorRole: "planner",
+    decisionSummary: "Take this remediation pack into execution.",
+    selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
+    linkedTargetArtifact: ".paper/task-packets/packets/task-guard-matrix.json",
+    linkedTargetId: "task-guard-matrix",
+    executeBy: "2099-01-01T00:00:00.000Z",
+    reviewAfter: "2099-01-01T12:00:00.000Z"
+  });
+
+  const guardedCalls = [
+    () => upsertOrchestrationBoard(root, { phase: "review", assignedRole: "reviewer" }),
+    () => appendHandoff(root, { fromRole: "researcher", toRole: "reviewer", summary: "Blocked handoff" }),
+    () => registerSource(root, { title: "Blocked source" }),
+    () => upsertNote(root, { title: "Blocked note", sectionId: "introduction" }),
+    () => upsertPlan(root, { thesis: "Blocked plan" }),
+    () => upsertOutline(root, { sections: [{ id: "intro", title: "Introduction" }] }),
+    () => upsertDraft(root, { sectionId: "intro", body: "# Intro" }),
+    () => setSectionStatus(root, { sectionId: "intro", status: "drafting" }),
+    () => upsertFigurePlan(root, { items: [] }),
+    () => updateResearchBrief(root, { objective: "Blocked brief" }),
+    () => upsertExperimentPlan(root, { id: "guard-exp", title: "Guard experiment", methodology: "Method" }),
+    () => upsertExperimentResult(root, { id: "guard-result", experimentId: "guard-exp", outcome: "supports" }),
+    () => runExperimentAudit(root, { experimentId: "guard-exp" }),
+    () => bridgeExperimentResultToClaim(root, { resultId: "guard-result" }),
+    () => appendReviewLog(root, { actorRole: "reviewer", stage: "blocked", summary: "blocked", findings: [], actionItems: [] }),
+    () => upsertRevisionPlan(root, { summary: "Blocked revision", items: ["One"] }),
+    () => syncCitations(root, {}),
+    () => refreshWiki(root),
+    () => buildRebuttal(root),
+    () => normalizeRebuttalIssues(root, { issues: [] }),
+    () => buildRebuttalStrategy(root, {}),
+    () => runReviewLoop(root, { actorRole: "reviewer" }),
+    () => createVersionSnapshot(root, { versionId: "guard-v1" }),
+    () => compareVersions(root, { fromVersionId: "guard-v1", toVersionId: "guard-v2" })
+  ];
+
+  for (const call of guardedCalls) {
+    assert.throws(call, /blocked while operator follow-through still requires action|Cannot advance orchestration from|requires board role reviewer|requires board role experiment-planner|requires role planner for phase init/);
+  }
+});
+
+test("follow-through overrides require expiry and exact target binding", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Override Guard", objective: "Validate override semantics." });
+
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{ id: "override-gap", summary: "Need explicit handling.", severity: "high", status: "open", responseOwnerRole: "planner", recurrenceCount: 1, linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog], updatedAt: new Date(0).toISOString() }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    version: 3,
+    lastVerdict: "needs-work",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close override gap."],
+    unresolvedConcernIds: ["override-gap"],
+    escalatedConcernIds: [],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 1,
+    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
+  });
+  upsertOrchestrationBoard(root, {
+    phase: "research",
+    assignedRole: "researcher",
+    intentType: "advance-paper",
+    currentFocus: "Resolve override-gap governance debt.",
+    nextAction: "Inspect the remediation frontier before creating new work.",
+    tasks: [{
+      id: "override-stale-task",
+      title: "Override stale task",
+      assignedRole: "researcher",
+      status: "in-progress",
+      lifecycleStatus: "stale",
+      nextAction: "Move this stale task into explicit remediation handling.",
+      evidenceLinks: [],
+      outputPaths: []
+    }]
+  });
+  const topPack = queryMetaOptimize(root).remediationPacks.packs[0];
+  const currentState = readState(root);
+  const currentBoard = currentState.orchestrationBoard;
+  const allowedActorRole = currentBoard?.assignedRole ?? "planner";
+  const currentPhase = currentState.pipeline?.currentStage ?? currentBoard?.currentPhase ?? "init";
+  writeJson(root, ".paper/task-packets/packets/task-override.json", { id: "task-override", title: "Override task", status: "pending" });
+  recordOperatorFollowThrough(root, {
+    sourceType: "remediation-pack",
+    sourceId: topPack.id,
+    status: "accepted-for-execution",
+    actorRole: allowedActorRole,
+    decisionSummary: "Take this remediation pack into execution.",
+    selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
+    linkedTargetArtifact: ".paper/task-packets/packets/task-override.json",
+    linkedTargetId: "task-override",
+    executeBy: "2099-01-01T00:00:00.000Z",
+    reviewAfter: "2099-01-01T12:00:00.000Z"
+  });
+
+  assert.throws(() => upsertPlan(root, {
+    thesis: "override without full guard",
+    actorRole: allowedActorRole,
+    policyOverrideReason: "manual",
+    policyOverrideReasonCode: "manual-reconciliation",
+    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".paper/task-packets/packets/task-override.json"],
+    policyOverrideSourceId: topPack.id
+  }), /future policyOverrideExpiresAt/);
+
+  assert.throws(() => upsertPlan(root, {
+    thesis: "override with wrong code",
+    actorRole: allowedActorRole,
+    policyOverrideReason: "manual",
+    policyOverrideReasonCode: "not-allowed",
+    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".paper/task-packets/packets/task-override.json"],
+    policyOverrideSourceId: topPack.id,
+    policyOverrideTargetArtifact: ".paper/task-packets/packets/task-override.json",
+    policyOverrideTargetId: "task-override",
+    policyOverridePhase: currentPhase,
+    policyOverrideExpiresAt: "2099-01-02T00:00:00.000Z"
+  }), /allowed policyOverrideReasonCode/);
+
+  assert.throws(() => upsertPlan(root, {
+    thesis: "override with long window",
+    actorRole: allowedActorRole,
+    policyOverrideReason: "manual",
+    policyOverrideReasonCode: "manual-reconciliation",
+    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".paper/task-packets/packets/task-override.json"],
+    policyOverrideSourceId: topPack.id,
+    policyOverrideTargetArtifact: ".paper/task-packets/packets/task-override.json",
+    policyOverrideTargetId: "task-override",
+    policyOverridePhase: currentPhase,
+    policyOverrideExpiresAt: "2099-12-31T00:00:00.000Z"
+  }), /short future policyOverrideExpiresAt/);
+
+  assert.throws(() => upsertPlan(root, {
+    thesis: "override with wrong source",
+    actorRole: allowedActorRole,
+    policyOverrideReason: "manual",
+    policyOverrideReasonCode: "manual-reconciliation",
+    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".paper/task-packets/packets/task-override.json"],
+    policyOverrideSourceId: "wrong-source",
+    policyOverrideTargetArtifact: ".paper/task-packets/packets/task-override.json",
+    policyOverrideTargetId: "task-override",
+    policyOverridePhase: currentPhase,
+    policyOverrideExpiresAt: "2099-01-02T00:00:00.000Z"
+  }), /matching policyOverrideSourceId/);
+
+});
+
+test("guarded core mutation implementations explicitly call assertFollowThroughReady", () => {
+  const files = {
+    artifacts: fs.readFileSync(path.join(process.cwd(), "src/core/artifacts.mjs"), "utf8"),
+    evidence: fs.readFileSync(path.join(process.cwd(), "src/core/evidence.mjs"), "utf8"),
+    reviews: fs.readFileSync(path.join(process.cwd(), "src/core/reviews.mjs"), "utf8"),
+    orchestration: fs.readFileSync(path.join(process.cwd(), "src/core/orchestration.mjs"), "utf8")
+  };
+
+  const guardedFunctionAssertions = [
+    [files.artifacts, "registerSource"],
+    [files.artifacts, "upsertNote"],
+    [files.artifacts, "upsertPlan"],
+    [files.artifacts, "upsertOutline"],
+    [files.artifacts, "upsertDraft"],
+    [files.artifacts, "setSectionStatus"],
+    [files.artifacts, "upsertFigurePlan"],
+    [files.artifacts, "syncCitations"],
+    [files.artifacts, "refreshWiki"],
+    [files.artifacts, "buildRebuttal"],
+    [files.evidence, "upsertClaims"],
+    [files.reviews, "appendReviewLog"],
+    [files.reviews, "upsertRevisionPlan"],
+    [files.reviews, "runReviewLoop"],
+    [files.orchestration, "updateResearchBrief"],
+    [files.orchestration, "upsertExperimentPlan"],
+    [files.orchestration, "upsertExperimentResult"],
+    [files.orchestration, "runExperimentAudit"],
+    [files.orchestration, "bridgeExperimentResultToClaim"],
+    [files.orchestration, "normalizeRebuttalIssues"],
+    [files.orchestration, "buildRebuttalStrategy"],
+    [files.orchestration, "createVersionSnapshot"],
+    [files.orchestration, "compareVersions"]
+  ];
+
+  for (const [content, fnName] of guardedFunctionAssertions) {
+    assert.match(content, new RegExp(`export function ${fnName}\\([^)]*\\) {[^]*?assertFollowThroughReady\\(`));
+  }
+});
+
+test("every governance registry entry binds to real command, MCP, and core surfaces", () => {
+  const registry = [...GOVERNANCE_GUARDED_MUTATIONS, ...GOVERNANCE_EXEMPT_MUTATIONS];
+  const toolNames = new Set(toolDefinitions.map((tool) => tool.name));
+  const commandDir = path.join(process.cwd(), ".opencode", "commands");
+  const coreFiles = [
+    fs.readFileSync(path.join(process.cwd(), "src/core/artifacts.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/evidence.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/reviews.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/orchestration.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/navigation.mjs"), "utf8")
+  ];
+
+  for (const entry of registry) {
+    const bindings = entry.surfaceBindings ?? {};
+    assert.equal(typeof bindings.coreFunction, "string");
+    assert.equal(typeof bindings.mcpTool, "string");
+    assert.equal(Array.isArray(bindings.commandIds), true);
+    assert.equal(toolNames.has(bindings.mcpTool), true, `${entry.id} missing bound MCP tool ${bindings.mcpTool}`);
+    for (const commandId of bindings.commandIds) {
+      assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), true, `${entry.id} missing command surface ${commandId}`);
+    }
+    assert.equal(coreFiles.some((content) => content.includes(`export function ${bindings.coreFunction}`) || content.includes(`function ${bindings.coreFunction}`)), true, `${entry.id} missing core function ${bindings.coreFunction}`);
+  }
+});
+
+test("every guarded governance mutation has an explicit negative coverage mapping", () => {
+  const guardedIds = new Set(GOVERNANCE_GUARDED_MUTATIONS.map((entry) => entry.id));
+  const coveredIds = new Set(GOVERNANCE_NEGATIVE_COVERAGE.map((entry) => entry.id));
+  for (const id of guardedIds) {
+    assert.equal(coveredIds.has(id), true, `Missing negative coverage mapping for ${id}`);
+  }
 });
 
 test("playbook selection prefers packet and taxonomy specific matches over broad role-only fallbacks", () => {

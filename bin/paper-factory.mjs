@@ -7,9 +7,12 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { ensureWorkspace } from "../src/core/index.mjs";
+import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
+import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE } from "../src/core/schema.mjs";
 import {
   createWorkflowBoundaries,
   normalizeMetaExecutionBridgeCandidatesIndex,
+  normalizeMetaGovernanceCoverageIndex,
   normalizeMetaLongHorizonMemory,
   normalizeMetaOperatorPlaybooksIndex,
   normalizeMetaOptimizerState,
@@ -328,6 +331,123 @@ function validateMetaExecutionBridgeCandidatesShape(value) {
   return issues;
 }
 
+function validateMetaGovernanceCoverageShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/meta/governance-coverage.json", issues);
+  if (!root) {
+    return issues;
+  }
+  maybeArray(root, "guardedMutations", ".paper/meta/governance-coverage.json.guardedMutations", issues);
+  maybeArray(root, "exemptMutations", ".paper/meta/governance-coverage.json.exemptMutations", issues);
+  return issues;
+}
+
+function validateMetaOperatorFollowThroughShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/meta/operator-follow-through.json", issues);
+  if (!root) {
+    return issues;
+  }
+  maybeArray(root, "items", ".paper/meta/operator-follow-through.json.items", issues);
+  const summary = maybeObject(root, "summary", ".paper/meta/operator-follow-through.json.summary", issues);
+  if (summary) {
+    maybeArray(summary, "topSourceIds", ".paper/meta/operator-follow-through.json.summary.topSourceIds", issues);
+  }
+  return issues;
+}
+
+function validateMetaOperatorFollowThroughTransitionsShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".paper/meta/operator-follow-through-transitions.json", issues);
+  if (!root) {
+    return issues;
+  }
+  maybeArray(root, "transitions", ".paper/meta/operator-follow-through-transitions.json.transitions", issues);
+  return issues;
+}
+
+function inspectOperatorFollowThrough(target) {
+  const ledger = readJsonFile(target, ".paper/meta/operator-follow-through.json");
+  if (ledger.status !== "ok") {
+    return {
+      status: ledger.status === "missing" ? "ok" : "degraded",
+      itemCount: 0,
+      actionRequiredCount: 0,
+      reasons: ledger.status === "missing" ? [] : [ledger.message],
+      staleIds: [],
+      dueDeferredIds: [],
+      overdueExecutionIds: [],
+      invalidStatusIds: [],
+      missingTargetIds: []
+    };
+  }
+  const items = Array.isArray(ledger.value?.items) ? ledger.value.items : [];
+  const staleIds = items.filter((item) => item?.stale).map((item) => item.id);
+  const dueDeferredIds = items.filter((item) => item?.dueDeferred).map((item) => item.id);
+  const dueReviewIds = items.filter((item) => item?.dueReview).map((item) => item.id);
+  const overdueExecutionIds = items.filter((item) => item?.overdueExecution).map((item) => item.id);
+  const invalidStatusIds = items.filter((item) => item?.invalidStatus).map((item) => item.id);
+  const missingTargetIds = items.filter((item) => item?.status === "accepted-for-execution" && (!item?.linkedTargetArtifact || !item?.linkedTargetId)).map((item) => item.id);
+  const unresolvedTargetIds = items.filter((item) => {
+    if (!["accepted-for-execution", "closed"].includes(item?.status)) {
+      return false;
+    }
+    if (!item?.linkedTargetArtifact || !item?.linkedTargetId) {
+      return false;
+    }
+    const targetPath = path.join(target, item.linkedTargetArtifact);
+    if (!fs.existsSync(targetPath)) {
+      return true;
+    }
+    const extension = path.extname(item.linkedTargetArtifact).toLowerCase();
+    if (extension === ".json") {
+      try {
+        const value = JSON.parse(fs.readFileSync(targetPath, "utf8"));
+        const queue = [value];
+        while (queue.length > 0) {
+          const current = queue.shift();
+          if (current === item.linkedTargetId) {
+            return false;
+          }
+          if (Array.isArray(current)) {
+            queue.push(...current);
+            continue;
+          }
+          if (current && typeof current === "object") {
+            queue.push(...Object.values(current));
+          }
+        }
+        return true;
+      } catch {
+        return true;
+      }
+    }
+    return !fs.readFileSync(targetPath, "utf8").includes(String(item.linkedTargetId));
+  }).map((item) => item.id);
+  const reasons = [
+    ...(staleIds.length > 0 ? [`stale follow-through: ${staleIds.join(", ")}`] : []),
+    ...(dueDeferredIds.length > 0 ? [`due deferred follow-through: ${dueDeferredIds.join(", ")}`] : []),
+    ...(dueReviewIds.length > 0 ? [`due review follow-through: ${dueReviewIds.join(", ")}`] : []),
+    ...(overdueExecutionIds.length > 0 ? [`overdue execution follow-through: ${overdueExecutionIds.join(", ")}`] : []),
+    ...(invalidStatusIds.length > 0 ? [`invalid follow-through status: ${invalidStatusIds.join(", ")}`] : []),
+    ...(missingTargetIds.length > 0 ? [`accepted-for-execution missing target linkage: ${missingTargetIds.join(", ")}`] : []),
+    ...(unresolvedTargetIds.length > 0 ? [`follow-through target not found in linked artifact: ${unresolvedTargetIds.join(", ")}`] : [])
+  ];
+  return {
+    status: reasons.length === 0 ? "ok" : "degraded",
+    itemCount: items.length,
+    actionRequiredCount: staleIds.length + dueDeferredIds.length + dueReviewIds.length + overdueExecutionIds.length + invalidStatusIds.length + missingTargetIds.length + unresolvedTargetIds.length,
+    reasons,
+    staleIds,
+    dueDeferredIds,
+    dueReviewIds,
+    overdueExecutionIds,
+    invalidStatusIds,
+    missingTargetIds,
+    unresolvedTargetIds
+  };
+}
+
 function collectRawManagedArtifactChecks(target) {
   const specs = [
     ["raw-typed-wiki-relations-shape", ".paper/wiki/relations.json", validateWikiRelationsShape],
@@ -337,6 +457,9 @@ function collectRawManagedArtifactChecks(target) {
     ["raw-meta-optimizer-state-shape", ".paper/meta/optimizer-state.json", validateMetaOptimizerStateShape],
     ["raw-meta-operator-playbooks-shape", ".paper/meta/operator-playbooks.json", validateMetaOperatorPlaybooksShape],
     ["raw-meta-execution-bridge-candidates-shape", ".paper/meta/execution-bridge-candidates.json", validateMetaExecutionBridgeCandidatesShape],
+    ["raw-meta-governance-coverage-shape", ".paper/meta/governance-coverage.json", validateMetaGovernanceCoverageShape],
+    ["raw-meta-operator-follow-through-shape", ".paper/meta/operator-follow-through.json", validateMetaOperatorFollowThroughShape],
+    ["raw-meta-operator-follow-through-transitions-shape", ".paper/meta/operator-follow-through-transitions.json", validateMetaOperatorFollowThroughTransitionsShape],
     ["raw-meta-long-horizon-shape", ".paper/meta/long-horizon-memory.json", validateMetaLongHorizonShape]
   ];
 
@@ -644,6 +767,7 @@ function inspectMetaOptimize(target) {
   const recommendations = readJsonFile(target, ".paper/meta/recommendations.json");
   const optimizerState = readJsonFile(target, ".paper/meta/optimizer-state.json");
   const executionBridgeCandidates = readJsonFile(target, ".paper/meta/execution-bridge-candidates.json");
+  const governanceCoverage = readJsonFile(target, ".paper/meta/governance-coverage.json");
   const operatorPlaybooks = readJsonFile(target, ".paper/meta/operator-playbooks.json");
   const longHorizonMemory = readJsonFile(target, ".paper/meta/long-horizon-memory.json");
   const workspaceIndex = readJsonFile(target, ".paper/workspace/index.json");
@@ -655,6 +779,9 @@ function inspectMetaOptimize(target) {
   }
   if (executionBridgeCandidates.status !== "ok") {
     return { status: executionBridgeCandidates.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [executionBridgeCandidates.message] };
+  }
+  if (governanceCoverage.status !== "ok") {
+    return { status: governanceCoverage.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [governanceCoverage.message] };
   }
   if (operatorPlaybooks.status !== "ok") {
     return { status: operatorPlaybooks.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [operatorPlaybooks.message] };
@@ -669,6 +796,7 @@ function inspectMetaOptimize(target) {
     ...validateMetaRecommendationsShape(recommendations.value),
     ...validateMetaOptimizerStateShape(optimizerState.value),
     ...validateMetaExecutionBridgeCandidatesShape(executionBridgeCandidates.value),
+    ...validateMetaGovernanceCoverageShape(governanceCoverage.value),
     ...validateMetaOperatorPlaybooksShape(operatorPlaybooks.value),
     ...validateMetaLongHorizonShape(longHorizonMemory.value),
     ...validateWorkspaceRepairFrontierShape(workspaceIndex.value)
@@ -679,6 +807,7 @@ function inspectMetaOptimize(target) {
   const normalizedRecommendations = normalizeMetaRecommendationsIndex(recommendations.value);
   const normalizedOptimizerState = normalizeMetaOptimizerState(optimizerState.value);
   const normalizedExecutionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(executionBridgeCandidates.value);
+  const normalizedGovernanceCoverage = normalizeMetaGovernanceCoverageIndex(governanceCoverage.value);
   const normalizedOperatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(operatorPlaybooks.value);
   const normalizedLongHorizonMemory = normalizeMetaLongHorizonMemory(longHorizonMemory.value);
   const normalizedWorkspaceIndex = normalizeWorkspaceIndex(workspaceIndex.value);
@@ -718,7 +847,9 @@ function inspectMetaOptimize(target) {
     && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.pressureAreas) === JSON.stringify(longHorizonSummary.pressureAreas)
     && normalizedWorkspaceMetaOptimize.longHorizon.overview === longHorizonSummary.overview
     && normalizedWorkspaceMetaOptimize.longHorizon.snapshotCount === longHorizonSummary.snapshotCount
-    && normalizedWorkspaceMetaOptimize.longHorizon.lastAction === longHorizonSummary.lastAction;
+    && normalizedWorkspaceMetaOptimize.longHorizon.lastAction === longHorizonSummary.lastAction
+    && normalizedWorkspaceMetaOptimize.governanceCoverage.guardedCount === normalizedGovernanceCoverage.summary.guardedCount
+    && normalizedWorkspaceMetaOptimize.governanceCoverage.exemptCount === normalizedGovernanceCoverage.summary.exemptCount;
   return {
     status: countMatches && clusterMatches && topClusterMatches && rankingPresent && longHorizonPresent && workspaceMirrorMatches ? "ok" : "degraded",
     recommendationCount: items.length,
@@ -729,6 +860,7 @@ function inspectMetaOptimize(target) {
     topFamilyIds: Array.isArray(longHorizonSummary.topFamilyIds) ? longHorizonSummary.topFamilyIds : [],
     topTaxonomyFamilyIds: Array.isArray(frontier.topTaxonomyFamilyIds) ? frontier.topTaxonomyFamilyIds : [],
     topTaxonomyGroupIds: Array.isArray(frontier.topTaxonomyGroupIds) ? frontier.topTaxonomyGroupIds : [],
+    governanceCoverage: normalizedGovernanceCoverage.summary,
     topPlaybookIds: Array.isArray(normalizedOperatorPlaybooks.summary.topPlaybookIds) ? normalizedOperatorPlaybooks.summary.topPlaybookIds : [],
     topCandidateIds: Array.isArray(normalizedExecutionBridgeCandidates.summary.topCandidateIds) ? normalizedExecutionBridgeCandidates.summary.topCandidateIds : [],
     taxonomyOverview: frontier.taxonomyOverview ?? null,
@@ -743,6 +875,7 @@ function inspectMetaOptimize(target) {
       !longHorizonPresent ? "optimizer long-horizon memory summary missing" : null,
       !workspaceMirrorMatches ? "workspace metaOptimize mirror drift" : null,
       `grouped frontier: ${clusters.length} clusters / ${items.length} recommendations`,
+      `governance coverage: ${normalizedGovernanceCoverage.summary.guardedCount ?? 0} guarded / ${normalizedGovernanceCoverage.summary.exemptCount ?? 0} exempt`,
       `execution bridge candidates: ${normalizedExecutionBridgeCandidates.summary.candidateCount ?? 0} candidates (${normalizedExecutionBridgeCandidates.summary.topCandidateIds.join(", ") || "none"})`,
       `family playbooks: ${normalizedOperatorPlaybooks.summary.playbookCount ?? 0} playbooks (${normalizedOperatorPlaybooks.summary.topTaxonomyFamilyIds.join(", ") || "none"})`,
       normalizedWorkspaceMetaOptimize.remediationPacks?.readinessOverview ? `remediation readiness: ${normalizedWorkspaceMetaOptimize.remediationPacks.readinessOverview}` : null,
@@ -751,6 +884,95 @@ function inspectMetaOptimize(target) {
       frontier.taxonomyOverview ? `taxonomy pressure: ${frontier.taxonomyOverview}` : null,
       longHorizonSummary.overview ? `long-horizon summary: ${longHorizonSummary.overview}` : null
     ].filter(Boolean)
+  };
+}
+
+function inspectGovernanceCoverageSurfaceBindings(target) {
+  const coverage = readJsonFile(target, ".paper/meta/governance-coverage.json");
+  if (coverage.status !== "ok") {
+    return {
+      status: "degraded",
+      bindingCount: 0,
+      reasons: [coverage.message]
+    };
+  }
+  const toolNames = new Set(toolDefinitions.map((tool) => tool.name));
+  const entries = [...(coverage.value?.guardedMutations ?? []), ...(coverage.value?.exemptMutations ?? [])];
+  const boundToolNames = new Set();
+  const boundCommandIds = new Set();
+  const boundCoreFunctions = new Set();
+  const reasons = [];
+  const exemptIds = new Set((coverage.value?.exemptMutations ?? []).map((entry) => entry.id));
+  for (const entry of entries) {
+    const bindings = entry.surfaceBindings ?? {};
+    if (exemptIds.has(entry.id) && (!entry.ownerRole || !entry.approvedByRole || !entry.approvedAt || !entry.lastReviewedAt || !entry.reasonCode || !entry.reviewCadence || !entry.sunsetAt)) {
+      reasons.push(`governance coverage entry ${entry.id} is missing ownerRole/approvedByRole/approvedAt/lastReviewedAt/reasonCode/reviewCadence/sunsetAt metadata`);
+    }
+    if (exemptIds.has(entry.id) && entry.approvedAt && entry.lastReviewedAt && Date.parse(entry.approvedAt) > Date.parse(entry.lastReviewedAt)) {
+      reasons.push(`governance coverage entry ${entry.id} has approvedAt newer than lastReviewedAt`);
+    }
+    if (exemptIds.has(entry.id) && entry.sunsetAt && entry.sunsetAt <= new Date().toISOString()) {
+      reasons.push(`governance coverage entry ${entry.id} has an expired sunsetAt`);
+    }
+    if (bindings.coreFunction) {
+      boundCoreFunctions.add(bindings.coreFunction);
+    }
+    for (const commandId of bindings.commandIds ?? []) {
+      boundCommandIds.add(commandId);
+      const commandPath = path.join(target, ".opencode", "commands", `${commandId}.md`);
+      if (!fs.existsSync(commandPath)) {
+        reasons.push(`governance coverage missing command surface ${commandId} for ${entry.id}`);
+      }
+    }
+    if (bindings.mcpTool) {
+      boundToolNames.add(bindings.mcpTool);
+      if (!toolNames.has(bindings.mcpTool)) {
+        reasons.push(`governance coverage missing MCP tool ${bindings.mcpTool} for ${entry.id}`);
+      }
+    }
+  }
+
+  const registry = [...GOVERNANCE_GUARDED_MUTATIONS, ...GOVERNANCE_EXEMPT_MUTATIONS];
+  const expectedMutatingTools = registry.map((entry) => entry.surfaceBindings?.mcpTool).filter(Boolean);
+  const expectedMutatingCommands = registry.flatMap((entry) => entry.surfaceBindings?.commandIds ?? []);
+  const expectedCoreFunctions = registry.map((entry) => entry.surfaceBindings?.coreFunction).filter(Boolean);
+  for (const toolName of expectedMutatingTools) {
+    if (!boundToolNames.has(toolName)) {
+      reasons.push(`governance coverage does not bind mutating MCP tool ${toolName}`);
+    }
+  }
+  const uncoveredTools = expectedMutatingTools.filter((toolName) => !boundToolNames.has(toolName));
+  for (const commandId of expectedMutatingCommands) {
+    if (!boundCommandIds.has(commandId)) {
+      reasons.push(`governance coverage does not bind mutating command ${commandId}`);
+    }
+  }
+  const uncoveredCommands = expectedMutatingCommands.filter((commandId) => !boundCommandIds.has(commandId));
+  for (const coreFunction of expectedCoreFunctions) {
+    if (!boundCoreFunctions.has(coreFunction)) {
+      reasons.push(`governance coverage does not bind core function ${coreFunction}`);
+    }
+  }
+  const uncoveredCoreFunctions = expectedCoreFunctions.filter((coreFunction) => !boundCoreFunctions.has(coreFunction));
+  const exemptIdsList = (coverage.value?.exemptMutations ?? []).map((entry) => entry.id);
+  const guardedIds = (coverage.value?.guardedMutations ?? []).map((entry) => entry.id);
+  const coverageIds = new Set(GOVERNANCE_NEGATIVE_COVERAGE.map((entry) => entry.id));
+  const uncoveredNegativeCoverage = guardedIds.filter((id) => !coverageIds.has(id));
+  for (const id of uncoveredNegativeCoverage) {
+    reasons.push(`governance coverage lacks negative test mapping for ${id}`);
+  }
+  return {
+    status: reasons.length === 0 ? "ok" : "degraded",
+    bindingCount: entries.length,
+    reasons,
+    audit: {
+      guardedIds,
+      exemptIds: exemptIdsList,
+      uncoveredTools,
+      uncoveredCommands,
+      uncoveredCoreFunctions,
+      uncoveredNegativeCoverage
+    }
   };
 }
 
@@ -869,7 +1091,9 @@ function doctor(target) {
     wikiRelations: inspectWikiRelations(target),
     figureQa: inspectFigureQa(target),
     workspaceRepairFrontier: inspectWorkspaceRepairFrontier(target),
-    metaOptimize: inspectMetaOptimize(target)
+    metaOptimize: inspectMetaOptimize(target),
+    operatorFollowThrough: inspectOperatorFollowThrough(target),
+    governanceCoverageBindings: inspectGovernanceCoverageSurfaceBindings(target)
   };
   result.managedArtifacts = managedArtifacts;
   result.proposalFrontier = buildDoctorProposalFrontier(managedArtifacts, rawMetaOptimizeConsistency);
@@ -898,6 +1122,20 @@ function doctor(target) {
     check: "meta-optimize-frontier",
     ok: managedArtifacts.metaOptimize.status === "ok",
     message: managedArtifacts.metaOptimize.reasons.join(" | ") || `clusters=${managedArtifacts.metaOptimize.clusterCount} recommendations=${managedArtifacts.metaOptimize.recommendationCount}`
+  });
+  result.checks.push({
+    check: "governance-coverage-bindings",
+    ok: managedArtifacts.governanceCoverageBindings.status === "ok",
+    message: managedArtifacts.governanceCoverageBindings.status === "ok"
+      ? `governance bindings verified across ${managedArtifacts.governanceCoverageBindings.bindingCount} entries`
+      : managedArtifacts.governanceCoverageBindings.reasons.join(" | ")
+  });
+  result.checks.push({
+    check: "operator-follow-through",
+    ok: managedArtifacts.operatorFollowThrough.status === "ok",
+    message: managedArtifacts.operatorFollowThrough.status === "ok"
+      ? "operator follow-through is healthy"
+      : managedArtifacts.operatorFollowThrough.reasons.join(" | ")
   });
 
   result.healthy = result.healthy && result.checks.every((check) => check.ok);

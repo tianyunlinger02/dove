@@ -30,6 +30,105 @@ export const PIPELINE_STAGE_ORDER = [
   "checklist"
 ];
 
+export const GOVERNANCE_GUARDED_MUTATIONS = [
+  { id: "upsert-orchestration-board", action: "Updating the orchestration board", artifactPath: ".paper/orchestration/board.json", surfaceBindings: { coreFunction: "upsertOrchestrationBoard", mcpTool: "upsert_orchestration_board", commandIds: ["paper.orchestrate"] } },
+  { id: "append-handoff", action: "Appending a durable handoff", artifactPath: ".paper/orchestration/handoffs.md", surfaceBindings: { coreFunction: "appendHandoff", mcpTool: "append_handoff", commandIds: ["paper.orchestrate"] } },
+  { id: "register-source", action: "Registering a source", artifactPath: ".paper/sources/index.json", surfaceBindings: { coreFunction: "registerSource", mcpTool: "register_source", commandIds: ["paper.source"] } },
+  { id: "upsert-note", action: "Recording a structured note", artifactPath: ".paper/notes/index.json", surfaceBindings: { coreFunction: "upsertNote", mcpTool: "upsert_note", commandIds: ["paper.note"] } },
+  { id: "upsert-claims", action: "Updating evidence-backed claims", artifactPath: ".paper/evidence/index.json", surfaceBindings: { coreFunction: "upsertClaims", mcpTool: "upsert_claims", commandIds: ["paper.claim-gate"] } },
+  { id: "upsert-plan", action: "Updating the paper plan", artifactPath: ".paper/plans/current-plan.md", surfaceBindings: { coreFunction: "upsertPlan", mcpTool: "upsert_plan", commandIds: ["paper.plan"] } },
+  { id: "upsert-outline", action: "Updating the paper outline", artifactPath: ".paper/outline/current-outline.md", surfaceBindings: { coreFunction: "upsertOutline", mcpTool: "upsert_outline", commandIds: ["paper.outline"] } },
+  { id: "upsert-draft", action: "Updating a draft section", artifactPath: ".paper/drafts", surfaceBindings: { coreFunction: "upsertDraft", mcpTool: "upsert_draft", commandIds: ["paper.draft"] } },
+  { id: "set-section-status", action: "Updating a section status", artifactPath: ".paper/state.json", surfaceBindings: { coreFunction: "setSectionStatus", mcpTool: "set_section_status", commandIds: ["paper.draft", "paper.revise"] } },
+  { id: "upsert-figure-plan", action: "Updating the figure plan", artifactPath: ".paper/figures/index.json", surfaceBindings: { coreFunction: "upsertFigurePlan", mcpTool: "upsert_figure_plan", commandIds: ["paper.figure"] } },
+  { id: "sync-citations", action: "Updating citation artifacts", artifactPath: ".paper/bibliography/citation-log.md", surfaceBindings: { coreFunction: "syncCitations", mcpTool: "sync_citations", commandIds: ["paper.citations"] } },
+  { id: "refresh-wiki", action: "Refreshing the wiki", artifactPath: ".paper/wiki/index.md", surfaceBindings: { coreFunction: "refreshWiki", mcpTool: "refresh_wiki", commandIds: ["paper.wiki"] } },
+  { id: "build-rebuttal", action: "Building the rebuttal draft", artifactPath: ".paper/drafts/rebuttal.md", surfaceBindings: { coreFunction: "buildRebuttal", mcpTool: "build_rebuttal", commandIds: ["paper.rebuttal"] } },
+  { id: "append-review-log", action: "Recording a review log", artifactPath: ".paper/reviews/log.md", surfaceBindings: { coreFunction: "appendReviewLog", mcpTool: "append_review_log", commandIds: ["paper.review"] } },
+  { id: "upsert-revision-plan", action: "Updating the revision plan", artifactPath: ".paper/revision-plans/current-plan.md", surfaceBindings: { coreFunction: "upsertRevisionPlan", mcpTool: "upsert_revision_plan", commandIds: ["paper.revise"] } },
+  { id: "run-review-loop", action: "Running the review loop", artifactPath: ".paper/reviews/log.md", surfaceBindings: { coreFunction: "runReviewLoop", mcpTool: "run_review_loop", commandIds: ["paper.review-loop"] } },
+  { id: "update-research-brief", action: "Updating the research brief", artifactPath: ".paper/research/brief.md", surfaceBindings: { coreFunction: "updateResearchBrief", mcpTool: "update_research_brief", commandIds: ["paper.research"] } },
+  { id: "upsert-experiment-plan", action: "Updating an experiment plan", artifactPath: ".paper/experiments/plans.json", surfaceBindings: { coreFunction: "upsertExperimentPlan", mcpTool: "upsert_experiment_plan", commandIds: ["paper.experiment-plan"] } },
+  { id: "upsert-experiment-result", action: "Updating an experiment result", artifactPath: ".paper/experiments/results.json", surfaceBindings: { coreFunction: "upsertExperimentResult", mcpTool: "upsert_experiment_result", commandIds: ["paper.experiment-plan"] } },
+  { id: "run-experiment-audit", action: "Running an experiment audit", artifactPath: ".paper/experiments/audits.json", surfaceBindings: { coreFunction: "runExperimentAudit", mcpTool: "run_experiment_audit", commandIds: ["paper.experiment-audit"] } },
+  { id: "bridge-experiment-result-to-claim", action: "Bridging an experiment result to a claim", artifactPath: ".paper/claims/bridge-log.json", surfaceBindings: { coreFunction: "bridgeExperimentResultToClaim", mcpTool: "bridge_result_to_claim", commandIds: ["paper.result-bridge"] } },
+  { id: "normalize-rebuttal-issues", action: "Normalizing rebuttal issues", artifactPath: ".paper/rebuttal/issues.json", surfaceBindings: { coreFunction: "normalizeRebuttalIssues", mcpTool: "normalize_rebuttal_issues", commandIds: ["paper.rebuttal-strategy"] } },
+  { id: "build-rebuttal-strategy", action: "Building the rebuttal strategy", artifactPath: ".paper/rebuttal/strategy.md", surfaceBindings: { coreFunction: "buildRebuttalStrategy", mcpTool: "build_rebuttal_strategy", commandIds: ["paper.rebuttal-strategy"] } },
+  { id: "create-version-snapshot", action: "Creating a version snapshot", artifactPath: ".paper/versions/index.json", surfaceBindings: { coreFunction: "createVersionSnapshot", mcpTool: "create_version_snapshot", commandIds: ["paper.version-snapshot"] } },
+  { id: "compare-versions", action: "Comparing versions", artifactPath: ".paper/versions/comparisons.json", surfaceBindings: { coreFunction: "compareVersions", mcpTool: "compare_versions", commandIds: ["paper.version-compare"] } }
+];
+
+export const GOVERNANCE_EXEMPT_MUTATIONS = [
+  { id: "record-operator-follow-through", action: "Recording follow-through decisions remains explicitly exempt so the governance system can be updated while debt exists.", artifactPath: ".paper/meta/operator-follow-through.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "governance-ledger-maintenance", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorFollowThrough", mcpTool: "record_operator_follow_through", commandIds: ["paper.follow-through"] } },
+  { id: "query-meta-optimize", action: "Refreshing proposal-only optimizer surfaces remains exempt because it is part of debt detection, not debt execution.", artifactPath: ".paper/meta/LATEST_OPTIMIZER_REPORT.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "proposal-frontier-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "queryMetaOptimize", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } },
+  { id: "init-project", action: "Project initialization bootstraps the workspace and is explicitly exempt from follow-through gating.", artifactPath: ".paper/state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "workspace-bootstrap", reviewCadence: "per-project", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "initProject", mcpTool: "init_project", commandIds: ["paper.init"] } },
+  { id: "sync-checklist", action: "Checklist syncing remains exempt because it summarizes debt instead of executing it.", artifactPath: ".paper/checklists/paper.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "summary-sync", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "syncChecklist", mcpTool: "sync_checklist", commandIds: ["paper.checklist"] } },
+  { id: "validate-figure-pipeline", action: "Figure validation is an inspection path and remains exempt from follow-through execution gating.", artifactPath: ".paper/figures/qa.json", ownerRole: "researcher", approvedByRole: "researcher", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "inspection-only", reviewCadence: "per-change", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "validateFigurePipeline", mcpTool: "validate_figure_pipeline", commandIds: ["paper.figure"] } },
+  { id: "classify-workflow-intent", action: "Workflow intent classification is analytical and remains exempt.", artifactPath: ".paper/meta/recommendations.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "analysis-only", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "classifyWorkflowIntent", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } },
+  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: "query_workspace_index", commandIds: ["paper.orchestrate"] } },
+  { id: "save-board", action: "Board persistence is an internal helper already covered by guarded orchestration updates and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "saveBoard", mcpTool: "upsert_orchestration_board", commandIds: ["paper.orchestrate"] } },
+  { id: "refresh-durable-surfaces", action: "Durable surface refresh is a proposal-only summarization step and remains exempt.", artifactPath: ".paper/workspace/index.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "summary-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "refreshDurableSurfaces", mcpTool: "query_workspace_index", commandIds: ["paper.meta-optimize", "paper.task-graph", "paper.open-questions", "paper.decisions", "paper.lineage"] } },
+  { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".paper/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } }
+];
+
+export const GOVERNANCE_READONLY_COMMANDS = [
+  "paper.pipeline",
+  "paper.task-graph",
+  "paper.open-questions",
+  "paper.decisions",
+  "paper.lineage",
+  "paper.governance-audit"
+];
+
+export const GOVERNANCE_READONLY_TOOLS = [
+  "ensure_workspace",
+  "read_state",
+  "query_task_graph",
+  "query_open_questions",
+  "query_decisions",
+  "query_lineage",
+  "query_workspace_index",
+  "query_meta_optimize",
+  "query_governance_coverage_report",
+  "query_operator_follow_through",
+  "query_boundary_report",
+  "read_role_context_manifest",
+  "read_phase_context_manifest",
+  "read_packet_context_manifest",
+  "read_artifact_context_manifest",
+  "read_action_context_bundle",
+  "summarize_session_journal",
+  "list_artifacts"
+];
+
+export const GOVERNANCE_NEGATIVE_COVERAGE = [
+  { id: "upsert-orchestration-board", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
+  { id: "append-handoff", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
+  { id: "register-source", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "upsert-note", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "upsert-claims", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
+  { id: "upsert-plan", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
+  { id: "upsert-outline", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "upsert-draft", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "set-section-status", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "upsert-figure-plan", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "sync-citations", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "refresh-wiki", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "build-rebuttal", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "append-review-log", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt", "a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "upsert-revision-plan", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
+  { id: "run-review-loop", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
+  { id: "update-research-brief", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
+  { id: "upsert-experiment-plan", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
+  { id: "upsert-experiment-result", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
+  { id: "run-experiment-audit", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
+  { id: "bridge-experiment-result-to-claim", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
+  { id: "normalize-rebuttal-issues", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
+  { id: "build-rebuttal-strategy", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
+  { id: "create-version-snapshot", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
+  { id: "compare-versions", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] }
+];
+
 export function resolveResumeCommandForPhase(phase) {
   switch (phase) {
     case "sources":
@@ -135,7 +234,12 @@ export const ARTIFACT_PATHS = {
   metaDir: ".paper/meta",
   metaEvents: ".paper/meta/events.json",
   metaExecutionBridgeCandidates: ".paper/meta/execution-bridge-candidates.json",
+  metaGovernanceCoverage: ".paper/meta/governance-coverage.json",
+  metaGovernanceCoverageReport: ".paper/meta/governance-coverage-report.json",
+  metaGovernanceCoverageReportMarkdown: ".paper/meta/LATEST_GOVERNANCE_COVERAGE_REPORT.md",
   metaLongHorizonMemory: ".paper/meta/long-horizon-memory.json",
+  metaOperatorFollowThrough: ".paper/meta/operator-follow-through.json",
+  metaOperatorFollowThroughTransitions: ".paper/meta/operator-follow-through-transitions.json",
   metaOperatorPlaybooks: ".paper/meta/operator-playbooks.json",
   metaRemediationPacks: ".paper/meta/remediation-packs.json",
   metaRecommendations: ".paper/meta/recommendations.json",
@@ -970,6 +1074,217 @@ export function createMetaExecutionBridgeCandidatesIndex() {
   };
 }
 
+export function createMetaGovernanceCoverageIndex() {
+  return {
+    version: 1,
+    proposalOnly: true,
+    guardedMutations: [],
+    exemptMutations: [],
+    summary: {
+      guardedCount: 0,
+      exemptCount: 0,
+      overview: "No governance coverage matrix has been generated yet.",
+      coveragePath: ARTIFACT_PATHS.metaGovernanceCoverage
+    },
+    updatedAt: null
+  };
+}
+
+export function createMetaGovernanceCoverageReport() {
+  return {
+    version: 1,
+    status: "pending",
+    guardedIds: [],
+    exemptIds: [],
+    surfaceBindingAudit: {
+      uncoveredTools: [],
+      uncoveredCommands: [],
+      uncoveredCoreFunctions: [],
+      uncoveredNegativeCoverage: []
+    },
+    summary: {
+      guardedCount: 0,
+      exemptCount: 0,
+      overview: "No governance coverage proof has been generated yet.",
+      reportPath: ARTIFACT_PATHS.metaGovernanceCoverageReport,
+      markdownPath: ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown
+    },
+    updatedAt: null
+  };
+}
+
+export function normalizeMetaGovernanceCoverageReport(raw = {}) {
+  const base = createMetaGovernanceCoverageReport();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const audit = normalizeObject(raw.surfaceBindingAudit);
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    status: normalizeString(raw.status, base.status),
+    guardedIds: normalizeStringArray(raw.guardedIds),
+    exemptIds: normalizeStringArray(raw.exemptIds),
+    surfaceBindingAudit: {
+      ...base.surfaceBindingAudit,
+      ...audit,
+      uncoveredTools: normalizeStringArray(audit.uncoveredTools),
+      uncoveredCommands: normalizeStringArray(audit.uncoveredCommands),
+      uncoveredCoreFunctions: normalizeStringArray(audit.uncoveredCoreFunctions),
+      uncoveredNegativeCoverage: normalizeStringArray(audit.uncoveredNegativeCoverage)
+    },
+    summary: {
+      ...base.summary,
+      ...summary,
+      guardedCount: normalizeNumber(summary.guardedCount, base.summary.guardedCount),
+      exemptCount: normalizeNumber(summary.exemptCount, base.summary.exemptCount),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      reportPath: normalizeString(summary.reportPath, base.summary.reportPath),
+      markdownPath: normalizeString(summary.markdownPath, base.summary.markdownPath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeMetaGovernanceCoverageIndex(raw = {}) {
+  const base = createMetaGovernanceCoverageIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    proposalOnly: normalizeBoolean(raw.proposalOnly, base.proposalOnly),
+    guardedMutations: normalizeObjectArray(raw.guardedMutations),
+    exemptMutations: normalizeObjectArray(raw.exemptMutations),
+    summary: {
+      ...base.summary,
+      ...summary,
+      guardedCount: normalizeNumber(summary.guardedCount, base.summary.guardedCount),
+      exemptCount: normalizeNumber(summary.exemptCount, base.summary.exemptCount),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      coveragePath: normalizeString(summary.coveragePath, base.summary.coveragePath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function createMetaOperatorFollowThroughIndex() {
+  return {
+    version: 1,
+    proposalOnly: true,
+    explicitOnly: true,
+    items: [],
+    summary: {
+      itemCount: 0,
+      acknowledgedCount: 0,
+      acceptedForExecutionCount: 0,
+      executingCount: 0,
+      overdueExecutionCount: 0,
+      criticalOverdueExecutionCount: 0,
+      deferredCount: 0,
+      acceptedRiskCount: 0,
+      closedCount: 0,
+      supersededCount: 0,
+      invalidStatusCount: 0,
+      staleCount: 0,
+      dueDeferredCount: 0,
+      topSourceIds: [],
+      overview: "No operator follow-through decisions have been recorded yet.",
+      followThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough
+    },
+    sourceArtifacts: [
+      ARTIFACT_PATHS.metaRemediationPacks,
+      ARTIFACT_PATHS.metaOperatorPlaybooks,
+      ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+      ARTIFACT_PATHS.metaOptimizerReport,
+      ARTIFACT_PATHS.workspaceIndex
+    ],
+    updatedAt: null
+  };
+}
+
+export function createMetaOperatorFollowThroughTransitionsIndex() {
+  return {
+    version: 1,
+    proposalOnly: true,
+    explicitOnly: true,
+    transitions: [],
+    summary: {
+      transitionCount: 0,
+      overview: "No operator follow-through transitions have been recorded yet.",
+      transitionsPath: ARTIFACT_PATHS.metaOperatorFollowThroughTransitions
+    },
+    updatedAt: null
+  };
+}
+
+export function normalizeMetaOperatorFollowThroughTransitionsIndex(raw = {}) {
+  const base = createMetaOperatorFollowThroughTransitionsIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    proposalOnly: normalizeBoolean(raw.proposalOnly, base.proposalOnly),
+    explicitOnly: normalizeBoolean(raw.explicitOnly, base.explicitOnly),
+    transitions: normalizeObjectArray(raw.transitions),
+    summary: {
+      ...base.summary,
+      ...summary,
+      transitionCount: normalizeNumber(summary.transitionCount, base.summary.transitionCount),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      transitionsPath: normalizeString(summary.transitionsPath, base.summary.transitionsPath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeMetaOperatorFollowThroughIndex(raw = {}) {
+  const base = createMetaOperatorFollowThroughIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    proposalOnly: normalizeBoolean(raw.proposalOnly, base.proposalOnly),
+    explicitOnly: normalizeBoolean(raw.explicitOnly, base.explicitOnly),
+    items: normalizeObjectArray(raw.items),
+    summary: {
+      ...base.summary,
+      ...summary,
+      itemCount: normalizeNumber(summary.itemCount, base.summary.itemCount),
+      acknowledgedCount: normalizeNumber(summary.acknowledgedCount, base.summary.acknowledgedCount),
+      acceptedForExecutionCount: normalizeNumber(summary.acceptedForExecutionCount, base.summary.acceptedForExecutionCount),
+      executingCount: normalizeNumber(summary.executingCount, base.summary.executingCount),
+      overdueExecutionCount: normalizeNumber(summary.overdueExecutionCount, base.summary.overdueExecutionCount),
+      criticalOverdueExecutionCount: normalizeNumber(summary.criticalOverdueExecutionCount, base.summary.criticalOverdueExecutionCount),
+      deferredCount: normalizeNumber(summary.deferredCount, base.summary.deferredCount),
+      acceptedRiskCount: normalizeNumber(summary.acceptedRiskCount, base.summary.acceptedRiskCount),
+      closedCount: normalizeNumber(summary.closedCount, base.summary.closedCount),
+      supersededCount: normalizeNumber(summary.supersededCount, base.summary.supersededCount),
+      invalidStatusCount: normalizeNumber(summary.invalidStatusCount, base.summary.invalidStatusCount),
+      staleCount: normalizeNumber(summary.staleCount, base.summary.staleCount),
+      dueDeferredCount: normalizeNumber(summary.dueDeferredCount, base.summary.dueDeferredCount),
+      topSourceIds: normalizeStringArray(summary.topSourceIds),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      followThroughPath: normalizeString(summary.followThroughPath, base.summary.followThroughPath)
+    },
+    sourceArtifacts: normalizeStringArray(raw.sourceArtifacts, base.sourceArtifacts),
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
 export function normalizeMetaExecutionBridgeCandidatesIndex(raw = {}) {
   const base = createMetaExecutionBridgeCandidatesIndex();
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -1162,6 +1477,8 @@ export function createMetaOptimizerState() {
       ARTIFACT_PATHS.versionComparisons,
       ARTIFACT_PATHS.metaLongHorizonMemory,
       ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+      ARTIFACT_PATHS.metaOperatorFollowThrough,
+      ARTIFACT_PATHS.metaOperatorFollowThroughTransitions,
       ARTIFACT_PATHS.metaOperatorPlaybooks,
       ARTIFACT_PATHS.metaRemediationPacks,
       ARTIFACT_PATHS.orchestrationBoard,
@@ -1201,11 +1518,47 @@ export function createMetaOptimizerState() {
         overview: "No proposal-only remediation packs have been generated yet.",
         packsPath: ARTIFACT_PATHS.metaRemediationPacks
       },
+      governanceCoverage: {
+        guardedCount: 0,
+        exemptCount: 0,
+        overview: "No governance coverage matrix has been summarized yet.",
+        coveragePath: ARTIFACT_PATHS.metaGovernanceCoverage
+      },
+      followThrough: {
+        itemCount: 0,
+        acknowledgedCount: 0,
+        acceptedForExecutionCount: 0,
+        executingCount: 0,
+        overdueExecutionCount: 0,
+        criticalOverdueExecutionCount: 0,
+        deferredCount: 0,
+        acceptedRiskCount: 0,
+        closedCount: 0,
+        supersededCount: 0,
+        invalidStatusCount: 0,
+        staleCount: 0,
+        dueDeferredCount: 0,
+        topSourceIds: [],
+        overview: "No operator follow-through decisions have been recorded yet.",
+        followThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough
+      },
+      governanceCoverage: {
+        guardedCount: 0,
+        exemptCount: 0,
+        overview: "No governance coverage matrix has been summarized yet.",
+        coveragePath: ARTIFACT_PATHS.metaGovernanceCoverage
+      },
       executionBridgeCandidates: {
         candidateCount: 0,
         topCandidateIds: [],
         overview: "No proposal-only execution bridge candidates have been generated yet.",
         candidatesPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates
+      },
+      governanceCoverage: {
+        guardedCount: 0,
+        exemptCount: 0,
+        overview: "No governance coverage matrix has been summarized yet.",
+        coveragePath: ARTIFACT_PATHS.metaGovernanceCoverage
       },
       operatorPlaybooks: {
         playbookCount: 0,
@@ -1300,6 +1653,14 @@ export function normalizeMetaOptimizerState(raw = {}) {
         overview: normalizeString(raw.executionBridgeCandidates?.overview, base.executionBridgeCandidates.overview),
         candidatesPath: normalizeString(raw.executionBridgeCandidates?.candidatesPath, base.executionBridgeCandidates.candidatesPath)
       },
+      governanceCoverage: {
+        ...base.governanceCoverage,
+        ...normalizeObject(raw.governanceCoverage),
+        guardedCount: normalizeNumber(raw.governanceCoverage?.guardedCount, base.governanceCoverage.guardedCount),
+        exemptCount: normalizeNumber(raw.governanceCoverage?.exemptCount, base.governanceCoverage.exemptCount),
+        overview: normalizeString(raw.governanceCoverage?.overview, base.governanceCoverage.overview),
+        coveragePath: normalizeString(raw.governanceCoverage?.coveragePath, base.governanceCoverage.coveragePath)
+      },
       remediationPacks: {
        ...base.remediationPacks,
        ...normalizeObject(raw.remediationPacks),
@@ -1313,7 +1674,27 @@ export function normalizeMetaOptimizerState(raw = {}) {
         overview: normalizeString(raw.remediationPacks?.overview, base.remediationPacks.overview),
         packsPath: normalizeString(raw.remediationPacks?.packsPath, base.remediationPacks.packsPath)
       },
-     longHorizon: {
+      followThrough: {
+        ...base.followThrough,
+        ...normalizeObject(raw.followThrough),
+        itemCount: normalizeNumber(raw.followThrough?.itemCount, base.followThrough.itemCount),
+        acknowledgedCount: normalizeNumber(raw.followThrough?.acknowledgedCount, base.followThrough.acknowledgedCount),
+        acceptedForExecutionCount: normalizeNumber(raw.followThrough?.acceptedForExecutionCount, base.followThrough.acceptedForExecutionCount),
+        executingCount: normalizeNumber(raw.followThrough?.executingCount, base.followThrough.executingCount),
+        overdueExecutionCount: normalizeNumber(raw.followThrough?.overdueExecutionCount, base.followThrough.overdueExecutionCount),
+        criticalOverdueExecutionCount: normalizeNumber(raw.followThrough?.criticalOverdueExecutionCount, base.followThrough.criticalOverdueExecutionCount),
+        deferredCount: normalizeNumber(raw.followThrough?.deferredCount, base.followThrough.deferredCount),
+        acceptedRiskCount: normalizeNumber(raw.followThrough?.acceptedRiskCount, base.followThrough.acceptedRiskCount),
+        closedCount: normalizeNumber(raw.followThrough?.closedCount, base.followThrough.closedCount),
+        supersededCount: normalizeNumber(raw.followThrough?.supersededCount, base.followThrough.supersededCount),
+        invalidStatusCount: normalizeNumber(raw.followThrough?.invalidStatusCount, base.followThrough.invalidStatusCount),
+        staleCount: normalizeNumber(raw.followThrough?.staleCount, base.followThrough.staleCount),
+        dueDeferredCount: normalizeNumber(raw.followThrough?.dueDeferredCount, base.followThrough.dueDeferredCount),
+        topSourceIds: normalizeStringArray(raw.followThrough?.topSourceIds),
+        overview: normalizeString(raw.followThrough?.overview, base.followThrough.overview),
+        followThroughPath: normalizeString(raw.followThrough?.followThroughPath, base.followThrough.followThroughPath)
+      },
+      longHorizon: {
       ...base.longHorizon,
       ...longHorizon,
       familyCount: normalizeNumber(longHorizon.familyCount, base.longHorizon.familyCount),
@@ -1346,6 +1727,14 @@ export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
   const remediationPacks = normalizeObject(raw.remediationPacks);
   const operatorPlaybooks = normalizeObject(raw.operatorPlaybooks);
   const executionBridgeCandidates = normalizeObject(raw.executionBridgeCandidates);
+  const governanceCoverage = normalizeObject(raw.governanceCoverage);
+  const followThrough = normalizeObject(raw.followThrough);
+  const baseGovernanceCoverage = normalizeObject(base.governanceCoverage, {
+    guardedCount: 0,
+    exemptCount: 0,
+    overview: "No governance coverage matrix has been summarized yet.",
+    coveragePath: ARTIFACT_PATHS.metaGovernanceCoverage
+  });
 
   return {
     ...base,
@@ -1390,6 +1779,30 @@ export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
         topCandidateIds: normalizeStringArray(executionBridgeCandidates.topCandidateIds),
         overview: normalizeString(executionBridgeCandidates.overview, base.executionBridgeCandidates.overview),
         candidatesPath: normalizeString(executionBridgeCandidates.candidatesPath, base.executionBridgeCandidates.candidatesPath)
+      },
+      governanceCoverage: {
+        ...baseGovernanceCoverage,
+        ...governanceCoverage,
+        guardedCount: normalizeNumber(governanceCoverage.guardedCount, baseGovernanceCoverage.guardedCount),
+        exemptCount: normalizeNumber(governanceCoverage.exemptCount, baseGovernanceCoverage.exemptCount),
+        overview: normalizeString(governanceCoverage.overview, baseGovernanceCoverage.overview),
+        coveragePath: normalizeString(governanceCoverage.coveragePath, baseGovernanceCoverage.coveragePath)
+      },
+      followThrough: {
+        ...base.followThrough,
+        ...followThrough,
+        itemCount: normalizeNumber(followThrough.itemCount, base.followThrough.itemCount),
+        acknowledgedCount: normalizeNumber(followThrough.acknowledgedCount, base.followThrough.acknowledgedCount),
+        acceptedForExecutionCount: normalizeNumber(followThrough.acceptedForExecutionCount, base.followThrough.acceptedForExecutionCount),
+        deferredCount: normalizeNumber(followThrough.deferredCount, base.followThrough.deferredCount),
+        acceptedRiskCount: normalizeNumber(followThrough.acceptedRiskCount, base.followThrough.acceptedRiskCount),
+        closedCount: normalizeNumber(followThrough.closedCount, base.followThrough.closedCount),
+        supersededCount: normalizeNumber(followThrough.supersededCount, base.followThrough.supersededCount),
+        staleCount: normalizeNumber(followThrough.staleCount, base.followThrough.staleCount),
+        dueDeferredCount: normalizeNumber(followThrough.dueDeferredCount, base.followThrough.dueDeferredCount),
+        topSourceIds: normalizeStringArray(followThrough.topSourceIds),
+        overview: normalizeString(followThrough.overview, base.followThrough.overview),
+        followThroughPath: normalizeString(followThrough.followThroughPath, base.followThrough.followThroughPath)
       },
       operatorPlaybooks: {
         ...base.operatorPlaybooks,
@@ -1561,18 +1974,38 @@ export function createWorkspaceIndex() {
        recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
        statePath: ARTIFACT_PATHS.metaOptimizerState,
        longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
-        remediationPacks: {
-          packCount: 0,
-          topPackIds: [],
-          topClusterIds: [],
-          actionableCount: 0,
-          partiallyActionableCount: 0,
-          advisoryCount: 0,
-          readinessOverview: "No proposal-only remediation packs have been generated yet.",
-          overview: "No proposal-only remediation packs have been generated yet.",
-          packsPath: ARTIFACT_PATHS.metaRemediationPacks
-        },
-        executionBridgeCandidates: {
+      remediationPacks: {
+        packCount: 0,
+        topPackIds: [],
+        topClusterIds: [],
+        actionableCount: 0,
+        partiallyActionableCount: 0,
+        advisoryCount: 0,
+        readinessOverview: "No proposal-only remediation packs have been generated yet.",
+        overview: "No proposal-only remediation packs have been generated yet.",
+        packsPath: ARTIFACT_PATHS.metaRemediationPacks
+      },
+      governanceCoverage: {
+        guardedCount: 0,
+        exemptCount: 0,
+        overview: "No governance coverage matrix has been summarized yet.",
+        coveragePath: ARTIFACT_PATHS.metaGovernanceCoverage
+      },
+      followThrough: {
+        itemCount: 0,
+        acknowledgedCount: 0,
+        acceptedForExecutionCount: 0,
+        deferredCount: 0,
+        acceptedRiskCount: 0,
+        closedCount: 0,
+        supersededCount: 0,
+        staleCount: 0,
+        dueDeferredCount: 0,
+        topSourceIds: [],
+        overview: "No operator follow-through decisions have been recorded yet.",
+        followThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough
+      },
+      executionBridgeCandidates: {
           candidateCount: 0,
           topCandidateIds: [],
           overview: "No proposal-only execution bridge candidates have been generated yet.",

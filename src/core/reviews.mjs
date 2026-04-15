@@ -3,7 +3,7 @@ import { evaluateFigurePipeline } from "./artifacts.mjs";
 import { evaluateEvidence } from "./evidence.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { assertRoleBoundMutation, loadBoard, normalizeRebuttalIssues, upsertOrchestrationBoard } from "./orchestration.mjs";
-import { appendText, listDraftFiles, loadState, nowIso, readJson, saveState, writeJson, writeText } from "./workspace.mjs";
+import { appendText, assertGovernanceMutationRegistered, assertFollowThroughReady, listDraftFiles, loadState, nowIso, readJson, saveState, writeJson, writeText } from "./workspace.mjs";
 
 const UNRESOLVED_CONCERN_STATUSES = new Set(["open", "awaiting-author-response", "author-response-submitted", "escalated", "contested"]);
 const AUTHOR_RESPONSE_PENDING_STATUSES = new Set(["open", "awaiting-author-response"]);
@@ -245,6 +245,8 @@ function upsertConcernLedger(root, concerns = [], context = {}) {
 }
 
 export function appendReviewLog(root, args = {}) {
+  assertGovernanceMutationRegistered("append-review-log", "guarded");
+  assertFollowThroughReady(root, "Recording a review log", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Appending a review log entry",
     expectedRole: "reviewer"
@@ -395,6 +397,8 @@ export function appendReviewLog(root, args = {}) {
 }
 
 export function upsertRevisionPlan(root, args = {}) {
+  assertGovernanceMutationRegistered("upsert-revision-plan", "guarded");
+  assertFollowThroughReady(root, "Updating the revision plan", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Updating the revision plan",
     expectedRole: "planner"
@@ -446,6 +450,8 @@ export function upsertRevisionPlan(root, args = {}) {
 }
 
 export function runReviewLoop(root, args = {}) {
+  assertGovernanceMutationRegistered("run-review-loop", "guarded");
+  assertFollowThroughReady(root, "Running the review loop", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Running the review loop",
     expectedRole: "reviewer"

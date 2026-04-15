@@ -24,8 +24,10 @@
     "mcp:serve": "node ./mcp/paper-state-server.mjs",
     "mcp:validate": "node ./scripts/validate-mcp.mjs",
     "commands:validate": "node ./scripts/validate-commands.mjs",
+    "governance:audit": "node ./scripts/audit-governance-coverage.mjs",
+    "maturity:audit": "node ./scripts/validate-maturity.mjs",
     "test": "node --test ./tests/**/*.test.mjs",
-    "check": "npm run commands:validate && npm run mcp:validate && npm test",
+    "check": "npm run commands:validate && npm run mcp:validate && npm run governance:audit && npm test",
     "pack:dry-run": "npm pack --dry-run"
   },
   "engines": {
