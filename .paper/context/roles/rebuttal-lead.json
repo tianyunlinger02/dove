@@ -194,6 +194,20 @@
         ".paper/meta/long-horizon-memory.json"
       ]
     },
+    "followThrough": {
+      "summary": {
+        "itemCount": 0,
+        "overview": "No operator follow-through decisions have been recorded yet."
+      },
+      "topRecords": [],
+      "actionRequiredItems": [],
+      "executionWindowSummary": {
+        "dueSoonCount": 0,
+        "dueReviewCount": 0,
+        "overdueCount": 0,
+        "criticalOverdueCount": 0
+      }
+    },
     "familyPlaybook": null,
     "executionBridgeCandidates": [
       {
@@ -251,5 +265,5 @@
       }
     ]
   },
-  "generatedAt": "2026-04-13T21:29:22.443Z"
+  "generatedAt": "2026-04-15T06:50:06.484Z"
 }

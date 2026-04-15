@@ -120,6 +120,40 @@
         ".paper/meta/long-horizon-memory.json"
       ]
     },
+    "followThrough": {
+      "summary": {
+        "itemCount": 0,
+        "acknowledgedCount": 0,
+        "acceptedForExecutionCount": 0,
+        "executingCount": 0,
+        "overdueExecutionCount": 0,
+        "criticalOverdueExecutionCount": 0,
+        "dueSoonExecutionCount": 0,
+        "deferredCount": 0,
+        "acceptedRiskCount": 0,
+        "closedCount": 0,
+        "supersededCount": 0,
+        "invalidStatusCount": 0,
+        "staleCount": 0,
+        "dueDeferredCount": 0,
+        "dueReviewCount": 0,
+        "unresolvedTargetCount": 0,
+        "topSourceIds": [],
+        "overview": "No operator follow-through decisions have been recorded yet.",
+        "followThroughPath": ".paper/meta/operator-follow-through.json",
+        "transitionsPath": ".paper/meta/operator-follow-through-transitions.json",
+        "actionRequiredCount": 0,
+        "actionRequiredSourceIds": []
+      },
+      "topRecords": [],
+      "actionRequiredItems": [],
+      "executionWindowSummary": {
+        "dueSoonCount": 0,
+        "dueReviewCount": 0,
+        "overdueCount": 0,
+        "criticalOverdueCount": 0
+      }
+    },
     "familyPlaybook": null,
     "executionBridgeCandidates": [
       {
@@ -177,5 +211,5 @@
       }
     ]
   },
-  "generatedAt": "2026-04-13T21:29:22.443Z"
+  "generatedAt": "2026-04-15T06:50:06.485Z"
 }

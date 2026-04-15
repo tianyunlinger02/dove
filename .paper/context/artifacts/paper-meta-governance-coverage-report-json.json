@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "artifactPath": ".paper/meta/long-horizon-memory.json",
+  "artifactPath": ".paper/meta/governance-coverage-report.json",
   "exists": true,
   "category": "general",
   "summary": "Read the nearest local context surfaces before mutating this durable artifact.",
