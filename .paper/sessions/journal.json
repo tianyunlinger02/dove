@@ -2,8 +2,8 @@
   "version": 1,
   "entries": [
     {
-      "id": "2026-04-12T07:35:52.320Z-query-workspace-index",
-      "timestamp": "2026-04-12T07:35:52.320Z",
+      "id": "2026-04-14T16:53:30.980Z-query-workspace-index",
+      "timestamp": "2026-04-14T16:53:30.980Z",
       "type": "query-workspace-index",
       "summary": "Refreshed workspace index query surface.",
       "phase": "init",
@@ -15,1264 +15,8 @@
       ]
     },
     {
-      "id": "2026-04-12T07:35:52.323Z-query-workspace-index",
-      "timestamp": "2026-04-12T07:35:52.323Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T07:39:11.036Z-query-workspace-index",
-      "timestamp": "2026-04-12T07:39:11.036Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T07:39:11.039Z-query-workspace-index",
-      "timestamp": "2026-04-12T07:39:11.039Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T07:46:44.535Z-query-workspace-index",
-      "timestamp": "2026-04-12T07:46:44.535Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T07:46:44.538Z-query-workspace-index",
-      "timestamp": "2026-04-12T07:46:44.538Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T07:50:12.044Z-query-workspace-index",
-      "timestamp": "2026-04-12T07:50:12.044Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T07:50:12.047Z-query-workspace-index",
-      "timestamp": "2026-04-12T07:50:12.047Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T08:57:43.455Z-query-workspace-index",
-      "timestamp": "2026-04-12T08:57:43.455Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T08:57:43.458Z-query-workspace-index",
-      "timestamp": "2026-04-12T08:57:43.458Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T09:01:16.050Z-query-workspace-index",
-      "timestamp": "2026-04-12T09:01:16.050Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T09:01:16.053Z-query-workspace-index",
-      "timestamp": "2026-04-12T09:01:16.054Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T09:06:42.212Z-query-workspace-index",
-      "timestamp": "2026-04-12T09:06:42.212Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T09:06:42.215Z-query-workspace-index",
-      "timestamp": "2026-04-12T09:06:42.215Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T09:14:26.259Z-query-workspace-index",
-      "timestamp": "2026-04-12T09:14:26.260Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T09:14:26.263Z-query-workspace-index",
-      "timestamp": "2026-04-12T09:14:26.263Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T10:53:11.343Z-query-workspace-index",
-      "timestamp": "2026-04-12T10:53:11.343Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T10:53:11.346Z-query-workspace-index",
-      "timestamp": "2026-04-12T10:53:11.346Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T19:05:33.908Z-query-workspace-index",
-      "timestamp": "2026-04-12T19:05:33.909Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T19:05:33.912Z-query-workspace-index",
-      "timestamp": "2026-04-12T19:05:33.912Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T19:38:51.614Z-query-workspace-index",
-      "timestamp": "2026-04-12T19:38:51.615Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T19:38:51.618Z-query-workspace-index",
-      "timestamp": "2026-04-12T19:38:51.618Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T20:37:28.730Z-query-workspace-index",
-      "timestamp": "2026-04-12T20:37:28.730Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T20:37:28.733Z-query-workspace-index",
-      "timestamp": "2026-04-12T20:37:28.733Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T20:39:06.497Z-query-workspace-index",
-      "timestamp": "2026-04-12T20:39:06.497Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T20:39:06.509Z-query-workspace-index",
-      "timestamp": "2026-04-12T20:39:06.509Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T20:41:44.841Z-query-workspace-index",
-      "timestamp": "2026-04-12T20:41:44.841Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-12T20:41:44.853Z-query-workspace-index",
-      "timestamp": "2026-04-12T20:41:44.853Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T04:09:28.186Z-query-workspace-index",
-      "timestamp": "2026-04-13T04:09:28.187Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T04:09:28.202Z-query-workspace-index",
-      "timestamp": "2026-04-13T04:09:28.202Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T04:12:45.324Z-query-workspace-index",
-      "timestamp": "2026-04-13T04:12:45.324Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T04:12:45.340Z-query-workspace-index",
-      "timestamp": "2026-04-13T04:12:45.340Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T04:20:38.986Z-query-workspace-index",
-      "timestamp": "2026-04-13T04:20:38.986Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T04:20:39.002Z-query-workspace-index",
-      "timestamp": "2026-04-13T04:20:39.002Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T04:25:43.919Z-query-workspace-index",
-      "timestamp": "2026-04-13T04:25:43.920Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T04:25:43.935Z-query-workspace-index",
-      "timestamp": "2026-04-13T04:25:43.935Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T04:42:00.186Z-query-workspace-index",
-      "timestamp": "2026-04-13T04:42:00.186Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T04:42:00.202Z-query-workspace-index",
-      "timestamp": "2026-04-13T04:42:00.202Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T10:02:07.749Z-query-workspace-index",
-      "timestamp": "2026-04-13T10:02:07.749Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T10:02:07.767Z-query-workspace-index",
-      "timestamp": "2026-04-13T10:02:07.767Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T10:02:07.773Z-query-meta-optimize",
-      "timestamp": "2026-04-13T10:02:07.773Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T10:17:43.004Z-query-meta-optimize",
-      "timestamp": "2026-04-13T10:17:43.004Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T11:41:49.256Z-query-workspace-index",
-      "timestamp": "2026-04-13T11:41:49.256Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T11:41:49.276Z-query-workspace-index",
-      "timestamp": "2026-04-13T11:41:49.276Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T11:41:49.283Z-query-meta-optimize",
-      "timestamp": "2026-04-13T11:41:49.283Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T11:44:28.818Z-query-workspace-index",
-      "timestamp": "2026-04-13T11:44:28.818Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T11:44:28.838Z-query-workspace-index",
-      "timestamp": "2026-04-13T11:44:28.838Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T11:44:28.844Z-query-meta-optimize",
-      "timestamp": "2026-04-13T11:44:28.844Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T12:10:40.551Z-query-workspace-index",
-      "timestamp": "2026-04-13T12:10:40.551Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T12:10:40.572Z-query-workspace-index",
-      "timestamp": "2026-04-13T12:10:40.572Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T12:10:40.579Z-query-meta-optimize",
-      "timestamp": "2026-04-13T12:10:40.579Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T12:46:29.142Z-query-workspace-index",
-      "timestamp": "2026-04-13T12:46:29.142Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T12:46:29.164Z-query-workspace-index",
-      "timestamp": "2026-04-13T12:46:29.164Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T12:46:29.171Z-query-meta-optimize",
-      "timestamp": "2026-04-13T12:46:29.171Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T13:04:54.616Z-query-workspace-index",
-      "timestamp": "2026-04-13T13:04:54.616Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T13:04:54.637Z-query-workspace-index",
-      "timestamp": "2026-04-13T13:04:54.637Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T13:04:54.645Z-query-meta-optimize",
-      "timestamp": "2026-04-13T13:04:54.645Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T13:50:29.786Z-query-workspace-index",
-      "timestamp": "2026-04-13T13:50:29.786Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T13:50:29.808Z-query-workspace-index",
-      "timestamp": "2026-04-13T13:50:29.808Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T13:50:29.815Z-query-meta-optimize",
-      "timestamp": "2026-04-13T13:50:29.815Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T14:43:51.786Z-query-workspace-index",
-      "timestamp": "2026-04-13T14:43:51.786Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T14:43:51.808Z-query-workspace-index",
-      "timestamp": "2026-04-13T14:43:51.808Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T14:43:51.816Z-query-meta-optimize",
-      "timestamp": "2026-04-13T14:43:51.816Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T17:27:40.464Z-query-workspace-index",
-      "timestamp": "2026-04-13T17:27:40.464Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T17:27:40.488Z-query-workspace-index",
-      "timestamp": "2026-04-13T17:27:40.488Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T17:27:40.496Z-query-meta-optimize",
-      "timestamp": "2026-04-13T17:27:40.496Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T17:39:53.943Z-query-workspace-index",
-      "timestamp": "2026-04-13T17:39:53.943Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T17:39:53.967Z-query-workspace-index",
-      "timestamp": "2026-04-13T17:39:53.967Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T17:39:53.975Z-query-meta-optimize",
-      "timestamp": "2026-04-13T17:39:53.975Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:24:54.300Z-query-workspace-index",
-      "timestamp": "2026-04-13T19:24:54.300Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:24:54.325Z-query-workspace-index",
-      "timestamp": "2026-04-13T19:24:54.325Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:24:54.333Z-query-meta-optimize",
-      "timestamp": "2026-04-13T19:24:54.333Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/operator-playbooks.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:25:22.917Z-query-meta-optimize",
-      "timestamp": "2026-04-13T19:25:22.917Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/operator-playbooks.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:25:23.009Z-query-workspace-index",
-      "timestamp": "2026-04-13T19:25:23.009Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:25:23.033Z-query-workspace-index",
-      "timestamp": "2026-04-13T19:25:23.033Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:25:23.042Z-query-meta-optimize",
-      "timestamp": "2026-04-13T19:25:23.042Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/operator-playbooks.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:49:40.861Z-query-meta-optimize",
-      "timestamp": "2026-04-13T19:49:40.861Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/operator-playbooks.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:49:41.047Z-query-workspace-index",
-      "timestamp": "2026-04-13T19:49:41.047Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:49:41.071Z-query-workspace-index",
-      "timestamp": "2026-04-13T19:49:41.071Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T19:49:41.080Z-query-meta-optimize",
-      "timestamp": "2026-04-13T19:49:41.080Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/operator-playbooks.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:08:55.353Z-query-meta-optimize",
-      "timestamp": "2026-04-13T20:08:55.353Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/operator-playbooks.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:08:55.527Z-query-workspace-index",
-      "timestamp": "2026-04-13T20:08:55.527Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:08:55.551Z-query-workspace-index",
-      "timestamp": "2026-04-13T20:08:55.551Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:08:55.560Z-query-meta-optimize",
-      "timestamp": "2026-04-13T20:08:55.560Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/operator-playbooks.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:22:32.069Z-query-meta-optimize",
-      "timestamp": "2026-04-13T20:22:32.069Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/operator-playbooks.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:22:32.269Z-query-workspace-index",
-      "timestamp": "2026-04-13T20:22:32.269Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:22:32.296Z-query-workspace-index",
-      "timestamp": "2026-04-13T20:22:32.296Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:22:32.305Z-query-meta-optimize",
-      "timestamp": "2026-04-13T20:22:32.305Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/operator-playbooks.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:24:59.722Z-query-workspace-index",
-      "timestamp": "2026-04-13T20:24:59.722Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:24:59.746Z-query-workspace-index",
-      "timestamp": "2026-04-13T20:24:59.746Z",
-      "type": "query-workspace-index",
-      "summary": "Refreshed workspace index query surface.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/workspace/index.json",
-        ".paper/sessions/LATEST_SUMMARY.md"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:24:59.755Z-query-meta-optimize",
-      "timestamp": "2026-04-13T20:24:59.755Z",
-      "type": "query-meta-optimize",
-      "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "phase": "init",
-      "assignedRole": "planner",
-      "taskPacketIds": [],
-      "artifactPaths": [
-        ".paper/meta/events.json",
-        ".paper/meta/operator-playbooks.json",
-        ".paper/meta/remediation-packs.json",
-        ".paper/meta/recommendations.json",
-        ".paper/meta/optimizer-state.json",
-        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-        ".paper/workspace/index.json"
-      ]
-    },
-    {
-      "id": "2026-04-13T20:56:30.081Z-query-meta-optimize",
-      "timestamp": "2026-04-13T20:56:30.081Z",
+      "id": "2026-04-14T16:53:30.991Z-query-meta-optimize",
+      "timestamp": "2026-04-14T16:53:30.991Z",
       "type": "query-meta-optimize",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
       "phase": "init",
@@ -1281,6 +25,7 @@
       "artifactPaths": [
         ".paper/meta/events.json",
         ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
         ".paper/meta/operator-playbooks.json",
         ".paper/meta/remediation-packs.json",
         ".paper/meta/recommendations.json",
@@ -1290,8 +35,8 @@
       ]
     },
     {
-      "id": "2026-04-13T20:56:30.265Z-query-workspace-index",
-      "timestamp": "2026-04-13T20:56:30.265Z",
+      "id": "2026-04-14T17:07:52.100Z-query-workspace-index",
+      "timestamp": "2026-04-14T17:07:52.100Z",
       "type": "query-workspace-index",
       "summary": "Refreshed workspace index query surface.",
       "phase": "init",
@@ -1303,8 +48,8 @@
       ]
     },
     {
-      "id": "2026-04-13T20:56:30.292Z-query-workspace-index",
-      "timestamp": "2026-04-13T20:56:30.292Z",
+      "id": "2026-04-14T17:07:52.129Z-query-workspace-index",
+      "timestamp": "2026-04-14T17:07:52.129Z",
       "type": "query-workspace-index",
       "summary": "Refreshed workspace index query surface.",
       "phase": "init",
@@ -1316,8 +61,8 @@
       ]
     },
     {
-      "id": "2026-04-13T20:56:30.302Z-query-meta-optimize",
-      "timestamp": "2026-04-13T20:56:30.302Z",
+      "id": "2026-04-14T17:07:52.140Z-query-meta-optimize",
+      "timestamp": "2026-04-14T17:07:52.140Z",
       "type": "query-meta-optimize",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
       "phase": "init",
@@ -1326,6 +71,7 @@
       "artifactPaths": [
         ".paper/meta/events.json",
         ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
         ".paper/meta/operator-playbooks.json",
         ".paper/meta/remediation-packs.json",
         ".paper/meta/recommendations.json",
@@ -1335,8 +81,34 @@
       ]
     },
     {
-      "id": "2026-04-13T21:14:09.914Z-query-meta-optimize",
-      "timestamp": "2026-04-13T21:14:09.915Z",
+      "id": "2026-04-14T17:14:17.445Z-query-workspace-index",
+      "timestamp": "2026-04-14T17:14:17.445Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T17:14:17.474Z-query-workspace-index",
+      "timestamp": "2026-04-14T17:14:17.474Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T17:14:17.485Z-query-meta-optimize",
+      "timestamp": "2026-04-14T17:14:17.485Z",
       "type": "query-meta-optimize",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
       "phase": "init",
@@ -1345,6 +117,7 @@
       "artifactPaths": [
         ".paper/meta/events.json",
         ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
         ".paper/meta/operator-playbooks.json",
         ".paper/meta/remediation-packs.json",
         ".paper/meta/recommendations.json",
@@ -1354,8 +127,8 @@
       ]
     },
     {
-      "id": "2026-04-13T21:14:10.091Z-query-workspace-index",
-      "timestamp": "2026-04-13T21:14:10.091Z",
+      "id": "2026-04-14T17:33:13.366Z-query-workspace-index",
+      "timestamp": "2026-04-14T17:33:13.366Z",
       "type": "query-workspace-index",
       "summary": "Refreshed workspace index query surface.",
       "phase": "init",
@@ -1367,8 +140,8 @@
       ]
     },
     {
-      "id": "2026-04-13T21:14:10.117Z-query-workspace-index",
-      "timestamp": "2026-04-13T21:14:10.117Z",
+      "id": "2026-04-14T17:33:13.394Z-query-workspace-index",
+      "timestamp": "2026-04-14T17:33:13.394Z",
       "type": "query-workspace-index",
       "summary": "Refreshed workspace index query surface.",
       "phase": "init",
@@ -1380,8 +153,8 @@
       ]
     },
     {
-      "id": "2026-04-13T21:14:10.126Z-query-meta-optimize",
-      "timestamp": "2026-04-13T21:14:10.126Z",
+      "id": "2026-04-14T17:33:13.405Z-query-meta-optimize",
+      "timestamp": "2026-04-14T17:33:13.405Z",
       "type": "query-meta-optimize",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
       "phase": "init",
@@ -1390,6 +163,7 @@
       "artifactPaths": [
         ".paper/meta/events.json",
         ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
         ".paper/meta/operator-playbooks.json",
         ".paper/meta/remediation-packs.json",
         ".paper/meta/recommendations.json",
@@ -1399,8 +173,8 @@
       ]
     },
     {
-      "id": "2026-04-13T21:16:30.449Z-query-workspace-index",
-      "timestamp": "2026-04-13T21:16:30.449Z",
+      "id": "2026-04-14T18:00:32.789Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:00:32.789Z",
       "type": "query-workspace-index",
       "summary": "Refreshed workspace index query surface.",
       "phase": "init",
@@ -1412,8 +186,8 @@
       ]
     },
     {
-      "id": "2026-04-13T21:16:30.475Z-query-workspace-index",
-      "timestamp": "2026-04-13T21:16:30.475Z",
+      "id": "2026-04-14T18:00:32.817Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:00:32.817Z",
       "type": "query-workspace-index",
       "summary": "Refreshed workspace index query surface.",
       "phase": "init",
@@ -1425,8 +199,8 @@
       ]
     },
     {
-      "id": "2026-04-13T21:16:30.485Z-query-meta-optimize",
-      "timestamp": "2026-04-13T21:16:30.485Z",
+      "id": "2026-04-14T18:00:32.828Z-query-meta-optimize",
+      "timestamp": "2026-04-14T18:00:32.828Z",
       "type": "query-meta-optimize",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
       "phase": "init",
@@ -1435,6 +209,7 @@
       "artifactPaths": [
         ".paper/meta/events.json",
         ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
         ".paper/meta/operator-playbooks.json",
         ".paper/meta/remediation-packs.json",
         ".paper/meta/recommendations.json",
@@ -1444,8 +219,8 @@
       ]
     },
     {
-      "id": "2026-04-13T21:29:22.403Z-query-workspace-index",
-      "timestamp": "2026-04-13T21:29:22.403Z",
+      "id": "2026-04-14T18:06:19.676Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:06:19.676Z",
       "type": "query-workspace-index",
       "summary": "Refreshed workspace index query surface.",
       "phase": "init",
@@ -1457,8 +232,8 @@
       ]
     },
     {
-      "id": "2026-04-13T21:29:22.430Z-query-workspace-index",
-      "timestamp": "2026-04-13T21:29:22.430Z",
+      "id": "2026-04-14T18:06:19.704Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:06:19.704Z",
       "type": "query-workspace-index",
       "summary": "Refreshed workspace index query surface.",
       "phase": "init",
@@ -1470,8 +245,8 @@
       ]
     },
     {
-      "id": "2026-04-13T21:29:22.439Z-query-meta-optimize",
-      "timestamp": "2026-04-13T21:29:22.439Z",
+      "id": "2026-04-14T18:06:19.715Z-query-meta-optimize",
+      "timestamp": "2026-04-14T18:06:19.715Z",
       "type": "query-meta-optimize",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
       "phase": "init",
@@ -1480,6 +255,2813 @@
       "artifactPaths": [
         ".paper/meta/events.json",
         ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:13:38.164Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:13:38.165Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:13:38.192Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:13:38.192Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:13:38.203Z-query-meta-optimize",
+      "timestamp": "2026-04-14T18:13:38.203Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:16:19.204Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:16:19.204Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:16:19.231Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:16:19.231Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:16:19.242Z-query-meta-optimize",
+      "timestamp": "2026-04-14T18:16:19.242Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:39:08.347Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:39:08.347Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:39:08.375Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:39:08.375Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:39:08.386Z-query-meta-optimize",
+      "timestamp": "2026-04-14T18:39:08.386Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:46:27.501Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:46:27.501Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:46:27.528Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:46:27.528Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:46:27.540Z-query-meta-optimize",
+      "timestamp": "2026-04-14T18:46:27.540Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:53:00.969Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:53:00.969Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:53:00.997Z-query-workspace-index",
+      "timestamp": "2026-04-14T18:53:00.997Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T18:53:01.008Z-query-meta-optimize",
+      "timestamp": "2026-04-14T18:53:01.008Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:06:32.285Z-query-workspace-index",
+      "timestamp": "2026-04-14T19:06:32.285Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:06:32.312Z-query-workspace-index",
+      "timestamp": "2026-04-14T19:06:32.312Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:06:32.323Z-query-meta-optimize",
+      "timestamp": "2026-04-14T19:06:32.323Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:09:13.088Z-query-workspace-index",
+      "timestamp": "2026-04-14T19:09:13.088Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:09:13.115Z-query-workspace-index",
+      "timestamp": "2026-04-14T19:09:13.115Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:09:13.126Z-query-meta-optimize",
+      "timestamp": "2026-04-14T19:09:13.126Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:42:14.907Z-query-workspace-index",
+      "timestamp": "2026-04-14T19:42:14.907Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:42:14.928Z-query-workspace-index",
+      "timestamp": "2026-04-14T19:42:14.928Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:42:14.936Z-query-meta-optimize",
+      "timestamp": "2026-04-14T19:42:14.936Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:52:18.308Z-query-workspace-index",
+      "timestamp": "2026-04-14T19:52:18.308Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:52:18.336Z-query-workspace-index",
+      "timestamp": "2026-04-14T19:52:18.336Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T19:52:18.348Z-query-meta-optimize",
+      "timestamp": "2026-04-14T19:52:18.348Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:20:01.122Z-query-workspace-index",
+      "timestamp": "2026-04-14T20:20:01.122Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:20:01.150Z-query-workspace-index",
+      "timestamp": "2026-04-14T20:20:01.150Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:20:01.161Z-query-meta-optimize",
+      "timestamp": "2026-04-14T20:20:01.161Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:34:13.090Z-query-workspace-index",
+      "timestamp": "2026-04-14T20:34:13.090Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:34:13.118Z-query-workspace-index",
+      "timestamp": "2026-04-14T20:34:13.118Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:34:13.129Z-query-meta-optimize",
+      "timestamp": "2026-04-14T20:34:13.129Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:39:14.404Z-query-workspace-index",
+      "timestamp": "2026-04-14T20:39:14.405Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:39:14.435Z-query-workspace-index",
+      "timestamp": "2026-04-14T20:39:14.435Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:39:14.447Z-query-meta-optimize",
+      "timestamp": "2026-04-14T20:39:14.447Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:55:30.729Z-query-workspace-index",
+      "timestamp": "2026-04-14T20:55:30.729Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:55:30.757Z-query-workspace-index",
+      "timestamp": "2026-04-14T20:55:30.757Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:55:30.768Z-query-meta-optimize",
+      "timestamp": "2026-04-14T20:55:30.768Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:58:28.380Z-query-workspace-index",
+      "timestamp": "2026-04-14T20:58:28.380Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:58:28.408Z-query-workspace-index",
+      "timestamp": "2026-04-14T20:58:28.408Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T20:58:28.419Z-query-meta-optimize",
+      "timestamp": "2026-04-14T20:58:28.419Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:01:22.612Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:01:22.613Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:01:22.640Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:01:22.640Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:01:22.651Z-query-meta-optimize",
+      "timestamp": "2026-04-14T21:01:22.651Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:05:30.800Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:05:30.800Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:05:30.828Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:05:30.828Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:05:30.839Z-query-meta-optimize",
+      "timestamp": "2026-04-14T21:05:30.839Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:10:59.501Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:10:59.501Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:10:59.529Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:10:59.529Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:10:59.540Z-query-meta-optimize",
+      "timestamp": "2026-04-14T21:10:59.540Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:16:57.373Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:16:57.373Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:16:57.401Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:16:57.401Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:16:57.412Z-query-meta-optimize",
+      "timestamp": "2026-04-14T21:16:57.412Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:32:09.604Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:32:09.604Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:32:09.633Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:32:09.633Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:32:09.645Z-query-meta-optimize",
+      "timestamp": "2026-04-14T21:32:09.645Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:46:40.921Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:46:40.921Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:46:40.949Z-query-workspace-index",
+      "timestamp": "2026-04-14T21:46:40.949Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T21:46:40.961Z-query-meta-optimize",
+      "timestamp": "2026-04-14T21:46:40.961Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:00:21.151Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:00:21.151Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:00:21.179Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:00:21.179Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:00:21.191Z-query-meta-optimize",
+      "timestamp": "2026-04-14T22:00:21.191Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:05:14.520Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:05:14.520Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:05:14.550Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:05:14.550Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:05:14.562Z-query-meta-optimize",
+      "timestamp": "2026-04-14T22:05:14.562Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:07:55.352Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:07:55.352Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:07:55.379Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:07:55.379Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:07:55.390Z-query-meta-optimize",
+      "timestamp": "2026-04-14T22:07:55.390Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:26:09.929Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:26:09.929Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:26:09.956Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:26:09.956Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:26:09.967Z-query-meta-optimize",
+      "timestamp": "2026-04-14T22:26:09.967Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:42:07.781Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:42:07.781Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:42:07.809Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:42:07.809Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:42:07.820Z-query-meta-optimize",
+      "timestamp": "2026-04-14T22:42:07.820Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:45:01.768Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:45:01.768Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:45:01.795Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:45:01.795Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:45:01.806Z-query-meta-optimize",
+      "timestamp": "2026-04-14T22:45:01.806Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:49:29.769Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:49:29.769Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:49:29.797Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:49:29.797Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:49:29.808Z-query-meta-optimize",
+      "timestamp": "2026-04-14T22:49:29.808Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:52:31.501Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:52:31.501Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:52:31.529Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:52:31.529Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:52:31.539Z-query-meta-optimize",
+      "timestamp": "2026-04-14T22:52:31.539Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:55:51.911Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:55:51.911Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:55:51.938Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:55:51.938Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:55:51.950Z-query-meta-optimize",
+      "timestamp": "2026-04-14T22:55:51.950Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:59:14.675Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:59:14.675Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:59:14.704Z-query-workspace-index",
+      "timestamp": "2026-04-14T22:59:14.704Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T22:59:14.716Z-query-meta-optimize",
+      "timestamp": "2026-04-14T22:59:14.716Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:02:34.967Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:02:34.967Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:02:34.995Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:02:34.995Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:02:35.006Z-query-meta-optimize",
+      "timestamp": "2026-04-14T23:02:35.006Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:09:51.609Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:09:51.609Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:09:51.637Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:09:51.637Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:09:51.647Z-query-meta-optimize",
+      "timestamp": "2026-04-14T23:09:51.647Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:20:33.570Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:20:33.570Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:20:33.598Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:20:33.598Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:20:33.608Z-query-meta-optimize",
+      "timestamp": "2026-04-14T23:20:33.608Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:26:55.101Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:26:55.101Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:26:55.129Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:26:55.129Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:26:55.140Z-query-meta-optimize",
+      "timestamp": "2026-04-14T23:26:55.140Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:34:49.644Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:34:49.644Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:34:49.672Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:34:49.672Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:34:49.683Z-query-meta-optimize",
+      "timestamp": "2026-04-14T23:34:49.683Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:57:28.080Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:57:28.080Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:57:28.108Z-query-workspace-index",
+      "timestamp": "2026-04-14T23:57:28.108Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-14T23:57:28.118Z-query-meta-optimize",
+      "timestamp": "2026-04-14T23:57:28.118Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:00:31.763Z-query-workspace-index",
+      "timestamp": "2026-04-15T00:00:31.763Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:00:31.791Z-query-workspace-index",
+      "timestamp": "2026-04-15T00:00:31.791Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:00:31.802Z-query-meta-optimize",
+      "timestamp": "2026-04-15T00:00:31.802Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:10:08.834Z-query-workspace-index",
+      "timestamp": "2026-04-15T00:10:08.835Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:10:08.863Z-query-workspace-index",
+      "timestamp": "2026-04-15T00:10:08.863Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:10:08.874Z-query-meta-optimize",
+      "timestamp": "2026-04-15T00:10:08.874Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:20:46.118Z-query-workspace-index",
+      "timestamp": "2026-04-15T00:20:46.118Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:20:46.147Z-query-workspace-index",
+      "timestamp": "2026-04-15T00:20:46.147Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:20:46.157Z-query-meta-optimize",
+      "timestamp": "2026-04-15T00:20:46.157Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:48:05.284Z-query-workspace-index",
+      "timestamp": "2026-04-15T00:48:05.284Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:48:05.304Z-query-workspace-index",
+      "timestamp": "2026-04-15T00:48:05.304Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:48:05.310Z-query-meta-optimize",
+      "timestamp": "2026-04-15T00:48:05.310Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:54:27.884Z-query-workspace-index",
+      "timestamp": "2026-04-15T00:54:27.884Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:54:27.903Z-query-workspace-index",
+      "timestamp": "2026-04-15T00:54:27.903Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T00:54:27.911Z-query-meta-optimize",
+      "timestamp": "2026-04-15T00:54:27.911Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:21:42.170Z-query-workspace-index",
+      "timestamp": "2026-04-15T01:21:42.171Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:21:42.190Z-query-workspace-index",
+      "timestamp": "2026-04-15T01:21:42.190Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:21:42.198Z-query-meta-optimize",
+      "timestamp": "2026-04-15T01:21:42.198Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:33:14.571Z-query-workspace-index",
+      "timestamp": "2026-04-15T01:33:14.571Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:33:14.602Z-query-workspace-index",
+      "timestamp": "2026-04-15T01:33:14.602Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:33:14.614Z-query-meta-optimize",
+      "timestamp": "2026-04-15T01:33:14.614Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:52:35.252Z-query-workspace-index",
+      "timestamp": "2026-04-15T01:52:35.252Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:52:35.280Z-query-workspace-index",
+      "timestamp": "2026-04-15T01:52:35.280Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:52:35.290Z-query-meta-optimize",
+      "timestamp": "2026-04-15T01:52:35.290Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:57:46.136Z-query-workspace-index",
+      "timestamp": "2026-04-15T01:57:46.136Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:57:46.165Z-query-workspace-index",
+      "timestamp": "2026-04-15T01:57:46.165Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T01:57:46.176Z-query-meta-optimize",
+      "timestamp": "2026-04-15T01:57:46.176Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:02:10.918Z-query-workspace-index",
+      "timestamp": "2026-04-15T02:02:10.918Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:02:10.947Z-query-workspace-index",
+      "timestamp": "2026-04-15T02:02:10.947Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:02:10.957Z-query-meta-optimize",
+      "timestamp": "2026-04-15T02:02:10.957Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:07:16.795Z-query-workspace-index",
+      "timestamp": "2026-04-15T02:07:16.796Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:07:16.827Z-query-workspace-index",
+      "timestamp": "2026-04-15T02:07:16.827Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:07:16.838Z-query-meta-optimize",
+      "timestamp": "2026-04-15T02:07:16.838Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:37:58.903Z-query-workspace-index",
+      "timestamp": "2026-04-15T02:37:58.903Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:37:58.931Z-query-workspace-index",
+      "timestamp": "2026-04-15T02:37:58.931Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:37:58.941Z-query-meta-optimize",
+      "timestamp": "2026-04-15T02:37:58.941Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:45:14.526Z-query-workspace-index",
+      "timestamp": "2026-04-15T02:45:14.526Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:45:14.556Z-query-workspace-index",
+      "timestamp": "2026-04-15T02:45:14.556Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T02:45:14.568Z-query-meta-optimize",
+      "timestamp": "2026-04-15T02:45:14.568Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T03:10:13.181Z-query-workspace-index",
+      "timestamp": "2026-04-15T03:10:13.181Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T03:10:13.210Z-query-workspace-index",
+      "timestamp": "2026-04-15T03:10:13.210Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T03:10:13.221Z-query-meta-optimize",
+      "timestamp": "2026-04-15T03:10:13.221Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T03:26:14.596Z-query-workspace-index",
+      "timestamp": "2026-04-15T03:26:14.596Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T03:26:14.627Z-query-workspace-index",
+      "timestamp": "2026-04-15T03:26:14.627Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T03:26:14.640Z-query-meta-optimize",
+      "timestamp": "2026-04-15T03:26:14.640Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T03:46:10.282Z-query-workspace-index",
+      "timestamp": "2026-04-15T03:46:10.282Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T03:46:10.312Z-query-workspace-index",
+      "timestamp": "2026-04-15T03:46:10.312Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T03:46:10.323Z-query-meta-optimize",
+      "timestamp": "2026-04-15T03:46:10.323Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:05:00.719Z-query-workspace-index",
+      "timestamp": "2026-04-15T04:05:00.719Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:05:00.748Z-query-workspace-index",
+      "timestamp": "2026-04-15T04:05:00.748Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:05:00.759Z-query-meta-optimize",
+      "timestamp": "2026-04-15T04:05:00.759Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:27:41.488Z-query-workspace-index",
+      "timestamp": "2026-04-15T04:27:41.489Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:27:41.517Z-query-workspace-index",
+      "timestamp": "2026-04-15T04:27:41.517Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:27:41.528Z-query-meta-optimize",
+      "timestamp": "2026-04-15T04:27:41.528Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:47:06.841Z-query-workspace-index",
+      "timestamp": "2026-04-15T04:47:06.841Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:47:06.870Z-query-workspace-index",
+      "timestamp": "2026-04-15T04:47:06.870Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:47:06.881Z-query-meta-optimize",
+      "timestamp": "2026-04-15T04:47:06.881Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:54:23.232Z-query-workspace-index",
+      "timestamp": "2026-04-15T04:54:23.232Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:54:23.261Z-query-workspace-index",
+      "timestamp": "2026-04-15T04:54:23.261Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T04:54:23.272Z-query-meta-optimize",
+      "timestamp": "2026-04-15T04:54:23.272Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T05:19:29.177Z-query-workspace-index",
+      "timestamp": "2026-04-15T05:19:29.177Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T05:19:29.207Z-query-workspace-index",
+      "timestamp": "2026-04-15T05:19:29.207Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T05:19:29.219Z-query-meta-optimize",
+      "timestamp": "2026-04-15T05:19:29.219Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T05:23:16.713Z-query-workspace-index",
+      "timestamp": "2026-04-15T05:23:16.713Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T05:23:16.746Z-query-workspace-index",
+      "timestamp": "2026-04-15T05:23:16.746Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T05:23:16.758Z-query-meta-optimize",
+      "timestamp": "2026-04-15T05:23:16.758Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T06:40:26.833Z-query-workspace-index",
+      "timestamp": "2026-04-15T06:40:26.833Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T06:40:26.862Z-query-workspace-index",
+      "timestamp": "2026-04-15T06:40:26.862Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T06:40:26.874Z-query-meta-optimize",
+      "timestamp": "2026-04-15T06:40:26.874Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T06:47:08.308Z-query-workspace-index",
+      "timestamp": "2026-04-15T06:47:08.308Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T06:47:08.337Z-query-workspace-index",
+      "timestamp": "2026-04-15T06:47:08.337Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T06:47:08.348Z-query-meta-optimize",
+      "timestamp": "2026-04-15T06:47:08.348Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
+        ".paper/meta/operator-playbooks.json",
+        ".paper/meta/remediation-packs.json",
+        ".paper/meta/recommendations.json",
+        ".paper/meta/optimizer-state.json",
+        ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+        ".paper/workspace/index.json"
+      ]
+    },
+    {
+      "id": "2026-04-15T06:50:06.440Z-query-workspace-index",
+      "timestamp": "2026-04-15T06:50:06.440Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T06:50:06.468Z-query-workspace-index",
+      "timestamp": "2026-04-15T06:50:06.468Z",
+      "type": "query-workspace-index",
+      "summary": "Refreshed workspace index query surface.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/workspace/index.json",
+        ".paper/sessions/LATEST_SUMMARY.md"
+      ]
+    },
+    {
+      "id": "2026-04-15T06:50:06.479Z-query-meta-optimize",
+      "timestamp": "2026-04-15T06:50:06.479Z",
+      "type": "query-meta-optimize",
+      "summary": "Refreshed proposal-only meta-optimize surfaces.",
+      "phase": "init",
+      "assignedRole": "planner",
+      "taskPacketIds": [],
+      "artifactPaths": [
+        ".paper/meta/events.json",
+        ".paper/meta/execution-bridge-candidates.json",
+        ".paper/meta/governance-coverage.json",
         ".paper/meta/operator-playbooks.json",
         ".paper/meta/remediation-packs.json",
         ".paper/meta/recommendations.json",
@@ -1489,5 +3071,5 @@
       ]
     }
   ],
-  "updatedAt": "2026-04-13T21:29:22.439Z"
+  "updatedAt": "2026-04-15T06:50:06.479Z"
 }

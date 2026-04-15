@@ -204,6 +204,36 @@
       "overview": "1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.",
       "packsPath": ".paper/meta/remediation-packs.json"
     },
+    "followThrough": {
+      "itemCount": 0,
+      "acknowledgedCount": 0,
+      "acceptedForExecutionCount": 0,
+      "executingCount": 0,
+      "overdueExecutionCount": 0,
+      "criticalOverdueExecutionCount": 0,
+      "dueSoonExecutionCount": 0,
+      "deferredCount": 0,
+      "acceptedRiskCount": 0,
+      "closedCount": 0,
+      "supersededCount": 0,
+      "invalidStatusCount": 0,
+      "staleCount": 0,
+      "dueDeferredCount": 0,
+      "dueReviewCount": 0,
+      "unresolvedTargetCount": 0,
+      "topSourceIds": [],
+      "overview": "No operator follow-through decisions have been recorded yet.",
+      "followThroughPath": ".paper/meta/operator-follow-through.json",
+      "transitionsPath": ".paper/meta/operator-follow-through-transitions.json",
+      "actionRequiredCount": 0,
+      "actionRequiredSourceIds": []
+    },
+    "governanceCoverage": {
+      "guardedCount": 25,
+      "exemptCount": 10,
+      "overview": "25 write paths currently require clear operator follow-through; 10 paths remain explicitly exempt.",
+      "coveragePath": ".paper/meta/governance-coverage.json"
+    },
     "executionBridgeCandidates": {
       "candidateCount": 1,
       "topCandidateIds": [
@@ -251,74 +281,74 @@
   "unresolvedConcernIds": [],
   "mostRecentSessions": [
     {
-      "id": "2026-04-13T21:29:22.439Z-query-meta-optimize",
+      "id": "2026-04-15T06:50:06.479Z-query-meta-optimize",
       "type": "query-meta-optimize",
       "phase": "init",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "timestamp": "2026-04-13T21:29:22.439Z"
+      "timestamp": "2026-04-15T06:50:06.479Z"
     },
     {
-      "id": "2026-04-13T21:29:22.430Z-query-workspace-index",
+      "id": "2026-04-15T06:50:06.468Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T21:29:22.430Z"
+      "timestamp": "2026-04-15T06:50:06.468Z"
     },
     {
-      "id": "2026-04-13T21:29:22.403Z-query-workspace-index",
+      "id": "2026-04-15T06:50:06.440Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T21:29:22.403Z"
+      "timestamp": "2026-04-15T06:50:06.440Z"
     },
     {
-      "id": "2026-04-13T21:16:30.485Z-query-meta-optimize",
+      "id": "2026-04-15T06:47:08.348Z-query-meta-optimize",
       "type": "query-meta-optimize",
       "phase": "init",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "timestamp": "2026-04-13T21:16:30.485Z"
+      "timestamp": "2026-04-15T06:47:08.348Z"
     },
     {
-      "id": "2026-04-13T21:16:30.475Z-query-workspace-index",
+      "id": "2026-04-15T06:47:08.337Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T21:16:30.475Z"
+      "timestamp": "2026-04-15T06:47:08.337Z"
     },
     {
-      "id": "2026-04-13T21:16:30.449Z-query-workspace-index",
+      "id": "2026-04-15T06:47:08.308Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T21:16:30.449Z"
+      "timestamp": "2026-04-15T06:47:08.308Z"
     },
     {
-      "id": "2026-04-13T21:14:10.126Z-query-meta-optimize",
+      "id": "2026-04-15T06:40:26.874Z-query-meta-optimize",
       "type": "query-meta-optimize",
       "phase": "init",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "timestamp": "2026-04-13T21:14:10.126Z"
+      "timestamp": "2026-04-15T06:40:26.874Z"
     },
     {
-      "id": "2026-04-13T21:14:10.117Z-query-workspace-index",
+      "id": "2026-04-15T06:40:26.862Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T21:14:10.117Z"
+      "timestamp": "2026-04-15T06:40:26.862Z"
     },
     {
-      "id": "2026-04-13T21:14:10.091Z-query-workspace-index",
+      "id": "2026-04-15T06:40:26.833Z-query-workspace-index",
       "type": "query-workspace-index",
       "phase": "init",
       "summary": "Refreshed workspace index query surface.",
-      "timestamp": "2026-04-13T21:14:10.091Z"
+      "timestamp": "2026-04-15T06:40:26.833Z"
     },
     {
-      "id": "2026-04-13T21:14:09.914Z-query-meta-optimize",
+      "id": "2026-04-15T05:23:16.758Z-query-meta-optimize",
       "type": "query-meta-optimize",
       "phase": "init",
       "summary": "Refreshed proposal-only meta-optimize surfaces.",
-      "timestamp": "2026-04-13T21:14:09.915Z"
+      "timestamp": "2026-04-15T05:23:16.758Z"
     }
   ],
   "latestVersions": {
@@ -326,5 +356,5 @@
     "activeTargets": [],
     "latestSnapshotIds": []
   },
-  "updatedAt": "2026-04-13T21:29:22.440Z"
+  "updatedAt": "2026-04-15T06:50:06.481Z"
 }

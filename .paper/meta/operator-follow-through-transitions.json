@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "proposalOnly": true,
+  "explicitOnly": true,
+  "transitions": [],
+  "summary": {
+    "transitionCount": 0,
+    "overview": "No operator follow-through transitions have been recorded yet.",
+    "transitionsPath": ".paper/meta/operator-follow-through-transitions.json"
+  },
+  "updatedAt": null
+}

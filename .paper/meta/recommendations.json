@@ -8,7 +8,7 @@
       "priority": "low",
       "proposalOnly": true,
       "summary": "Inspect whether repeated query-workspace-index actions indicate workflow churn.",
-      "rationale": "The journal shows 22 recent query-workspace-index events, which can be a signal that operators are repeatedly refreshing or repairing the same surface instead of closing a durable issue.",
+      "rationale": "The journal shows 26 recent query-workspace-index events, which can be a signal that operators are repeatedly refreshing or repairing the same surface instead of closing a durable issue.",
       "nextAction": "Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.",
       "scope": "session/workflow observability",
       "responseOwnerRole": "planner",
@@ -22,7 +22,7 @@
         "session-journal"
       ],
       "relatedRecommendationIds": [],
-      "recurrenceCount": 22,
+      "recurrenceCount": 26,
       "repairFrontierOverlap": 0,
       "auditCriticality": 0,
       "bridgeCriticality": 0,
@@ -49,7 +49,7 @@
         "taxonomyGroupPressure=0"
       ],
       "tieBreakKey": "9935:03:queue-discipline:workflow-observability:meta-journal-query-workspace-index",
-      "generatedAt": "2026-04-13T21:29:22.440Z",
+      "generatedAt": "2026-04-15T06:50:06.480Z",
       "clusterId": "queue-discipline",
       "clusterLabel": "Queue discipline",
       "clusterSummary": "Queue churn and repeated workflow activity that suggest coordination debt is accumulating.",
@@ -221,5 +221,5 @@
       }
     ]
   },
-  "updatedAt": "2026-04-13T21:29:22.439Z"
+  "updatedAt": "2026-04-15T06:50:06.480Z"
 }

@@ -1,7 +1,7 @@
 # Latest optimizer report
 
 - Proposal only: true
-- Generated: 2026-04-13T21:29:22.439Z
+- Generated: 2026-04-15T06:50:06.480Z
 - Meta-optimize frontier: 1 recommendations across 1 clusters (0 critical, score 64)
 - Meta-optimize frontier summary: 1 ranked recommendations across 1 deterministic clusters (0 critical, frontier score 64). Top clusters: queue-discipline.
 - Meta-optimize top clusters: queue-discipline
@@ -13,6 +13,14 @@
 - Remediation pack focus: 1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.
 - Remediation pack readiness: 0 actionable, 1 partially actionable, 0 advisory-only remediation packs.
 - Remediation packs path: .paper/meta/remediation-packs.json
+- Operator follow-through: 0 records (none)
+- Operator follow-through overview: No operator follow-through decisions have been recorded yet.
+- Operator follow-through debt: overdue=0, deferred-due=0, stale=0, invalid=0, action-required=0
+- Operator follow-through execution window: due-soon=0, due-review=0, critical-overdue=0
+- Operator follow-through path: .paper/meta/operator-follow-through.json
+- Governance coverage: 25 guarded / 10 exempt
+- Governance coverage overview: 25 write paths currently require clear operator follow-through; 10 paths remain explicitly exempt.
+- Governance coverage path: .paper/meta/governance-coverage.json
 - Execution bridge candidates: 1 proposal-only candidates (candidate-remediation-pack-queue-discipline-create-new-packet-task-queue-discipline)
 - Execution bridge focus: 1 proposal-only execution bridge candidates translate remediation packs and playbooks into likely manual work-item shapes without creating anything automatically.
 - Execution bridge path: .paper/meta/execution-bridge-candidates.json
@@ -60,7 +68,7 @@
 - Category: workflow-observability
 - Scope: session/workflow observability
 - Summary: Inspect whether repeated query-workspace-index actions indicate workflow churn.
-- Why: The journal shows 22 recent query-workspace-index events, which can be a signal that operators are repeatedly refreshing or repairing the same surface instead of closing a durable issue.
+- Why: The journal shows 26 recent query-workspace-index events, which can be a signal that operators are repeatedly refreshing or repairing the same surface instead of closing a durable issue.
 - Next action: Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.
 - Score: 64
 - Ranking basis: priority=low, recurrence=6, evidenceDensity=2, crossSessionRecurrence=6, repairFrontierOverlap=0, auditCriticality=0, bridgeCriticality=0, queueChurn=0, taxonomyFamilyPressure=0, taxonomyGroupPressure=0
@@ -111,6 +119,30 @@
 - Linked repair items: none
 - Acceptance criteria: Confirm long-horizon memory pressure has stopped rising or is explicitly accepted as ongoing debt.
 
+## Governance coverage matrix
+
+- Overview: 25 write paths currently require clear operator follow-through; 10 paths remain explicitly exempt.
+- Guarded mutations: 25
+- Exempt mutations: 10
+  - guarded upsert-orchestration-board: Updating the orchestration board -> .paper/orchestration/board.json
+  - guarded append-handoff: Appending a durable handoff -> .paper/orchestration/handoffs.md
+  - guarded register-source: Registering a source -> .paper/sources/index.json
+  - guarded upsert-note: Recording a structured note -> .paper/notes/index.json
+  - guarded upsert-claims: Updating evidence-backed claims -> .paper/evidence/index.json
+  - guarded upsert-plan: Updating the paper plan -> .paper/plans/current-plan.md
+  - guarded upsert-outline: Updating the paper outline -> .paper/outline/current-outline.md
+  - guarded upsert-draft: Updating a draft section -> .paper/drafts
+  - guarded set-section-status: Updating a section status -> .paper/state.json
+  - guarded upsert-figure-plan: Updating the figure plan -> .paper/figures/index.json
+  - guarded sync-citations: Updating citation artifacts -> .paper/bibliography/citation-log.md
+  - guarded refresh-wiki: Refreshing the wiki -> .paper/wiki/index.md
+  - exempt record-operator-follow-through: Recording follow-through decisions remains explicitly exempt so the governance system can be updated while debt exists. -> .paper/meta/operator-follow-through.json
+  - exempt query-meta-optimize: Refreshing proposal-only optimizer surfaces remains exempt because it is part of debt detection, not debt execution. -> .paper/meta/LATEST_OPTIMIZER_REPORT.md
+  - exempt init-project: Project initialization bootstraps the workspace and is explicitly exempt from follow-through gating. -> .paper/state.json
+  - exempt sync-checklist: Checklist syncing remains exempt because it summarizes debt instead of executing it. -> .paper/checklists/paper.md
+  - exempt validate-figure-pipeline: Figure validation is an inspection path and remains exempt from follow-through execution gating. -> .paper/figures/qa.json
+  - exempt classify-workflow-intent: Workflow intent classification is analytical and remains exempt. -> .paper/meta/recommendations.json
+
 ## Long-horizon workflow memory
 
 ### Workflow churn [rising]
@@ -129,7 +161,7 @@
 
 ## Signal observations
 
-- [low] session-journal: Recent session journal repeated query-workspace-index 22 times.
+- [low] session-journal: Recent session journal repeated query-workspace-index 26 times.
 
 ## Explicit non-goals
 

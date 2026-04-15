@@ -141,7 +141,7 @@
         "Inspect the newest query-workspace-index entries in .paper/sessions/journal.json and decide whether a narrower checklist, artifact rule, or review checkpoint should make the next step more explicit.",
         "Read .paper/meta/LATEST_OPTIMIZER_REPORT.md and inspect cluster queue-discipline before changing any workflow artifact."
       ],
-      "generatedAt": "2026-04-13T21:29:22.440Z"
+      "generatedAt": "2026-04-15T06:50:06.481Z"
     }
   ],
   "summary": {
@@ -168,5 +168,5 @@
     ".paper/wiki/navigation.md",
     ".paper/sessions/LATEST_SUMMARY.md"
   ],
-  "updatedAt": "2026-04-13T21:29:22.440Z"
+  "updatedAt": "2026-04-15T06:50:06.481Z"
 }

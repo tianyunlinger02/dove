@@ -11,6 +11,8 @@
     ".paper/versions/comparisons.json",
     ".paper/meta/long-horizon-memory.json",
     ".paper/meta/execution-bridge-candidates.json",
+    ".paper/meta/operator-follow-through.json",
+    ".paper/meta/operator-follow-through-transitions.json",
     ".paper/meta/operator-playbooks.json",
     ".paper/meta/remediation-packs.json",
     ".paper/orchestration/board.json",
@@ -111,6 +113,36 @@
     "overview": "1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.",
     "packsPath": ".paper/meta/remediation-packs.json"
   },
+  "governanceCoverage": {
+    "guardedCount": 25,
+    "exemptCount": 10,
+    "overview": "25 write paths currently require clear operator follow-through; 10 paths remain explicitly exempt.",
+    "coveragePath": ".paper/meta/governance-coverage.json"
+  },
+  "followThrough": {
+    "itemCount": 0,
+    "acknowledgedCount": 0,
+    "acceptedForExecutionCount": 0,
+    "executingCount": 0,
+    "overdueExecutionCount": 0,
+    "criticalOverdueExecutionCount": 0,
+    "dueSoonExecutionCount": 0,
+    "deferredCount": 0,
+    "acceptedRiskCount": 0,
+    "closedCount": 0,
+    "supersededCount": 0,
+    "invalidStatusCount": 0,
+    "staleCount": 0,
+    "dueDeferredCount": 0,
+    "dueReviewCount": 0,
+    "unresolvedTargetCount": 0,
+    "topSourceIds": [],
+    "overview": "No operator follow-through decisions have been recorded yet.",
+    "followThroughPath": ".paper/meta/operator-follow-through.json",
+    "transitionsPath": ".paper/meta/operator-follow-through-transitions.json",
+    "actionRequiredCount": 0,
+    "actionRequiredSourceIds": []
+  },
   "executionBridgeCandidates": {
     "candidateCount": 1,
     "topCandidateIds": [
@@ -151,6 +183,6 @@
     "overview": "1 long-horizon workflow families across 10 optimizer snapshots. Top families: workflow-churn.",
     "memoryPath": ".paper/meta/long-horizon-memory.json"
   },
-  "lastRefreshedAt": "2026-04-13T21:29:22.439Z",
-  "updatedAt": "2026-04-13T21:29:22.439Z"
+  "lastRefreshedAt": "2026-04-15T06:50:06.480Z",
+  "updatedAt": "2026-04-15T06:50:06.480Z"
 }

@@ -1,13 +1,20 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
+  GOVERNANCE_EXEMPT_MUTATIONS,
+  GOVERNANCE_GUARDED_MUTATIONS,
   ROLE_IDS,
   createDefaultBoard,
   createMetaEventsIndex,
   createMetaExecutionBridgeCandidatesIndex,
+  createMetaGovernanceCoverageIndex,
+  createMetaGovernanceCoverageReport,
   createMetaLongHorizonMemory,
+  createMetaOperatorFollowThroughIndex,
+  createMetaOperatorFollowThroughTransitionsIndex,
   createMetaOperatorPlaybooksIndex,
   createMetaRemediationPacksIndex,
   createMetaOptimizerState,
@@ -21,14 +28,18 @@ import {
   createWikiEntitiesIndex,
   createWikiRelationsIndex,
   normalizeMetaExecutionBridgeCandidatesIndex,
+  normalizeMetaGovernanceCoverageIndex,
+  normalizeMetaGovernanceCoverageReport,
   normalizeMetaLongHorizonMemory,
+  normalizeMetaOperatorFollowThroughIndex,
+  normalizeMetaOperatorFollowThroughTransitionsIndex,
   normalizeMetaOperatorPlaybooksIndex,
   normalizeMetaRemediationPacksIndex,
   normalizeMetaOptimizerState,
   normalizeMetaRecommendationsIndex,
   resolveResumeCommandForPhase
 } from "./schema.mjs";
-import { ensureWorkspace, loadState, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
+import { assertGovernanceMutationRegistered, ensureWorkspace, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 
 function normalizeStringArray(value) {
   return Array.isArray(value)
@@ -638,7 +649,7 @@ function selectTopOperatorPlaybook(operatorPlaybooks = {}, { roleId = null, pack
   return playbooks[0] ?? null;
 }
 
-function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidatesIndex = {}, { roleId = null, packetId = null, packet = null } = {}) {
+function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidatesIndex = {}, operatorFollowThrough = {}, { roleId = null, packetId = null, packet = null } = {}) {
   const topRepairItems = (workspaceIndex.repairFrontier?.prioritizedItems ?? []).slice(0, 3).map((item) => ({
     id: item.id,
     frontierType: item.frontierType,
@@ -691,6 +702,37 @@ function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, operatorPl
       return false;
     })
     .slice(0, 4);
+  const followThroughRecords = (operatorFollowThrough?.items ?? []).filter((record) => {
+    if (topRemediationPack && record.sourceType === "remediation-pack" && record.sourceId === topRemediationPack.id) {
+      return true;
+    }
+    if (topOperatorPlaybook && record.sourceType === "operator-playbook" && record.sourceId === topOperatorPlaybook.id) {
+      return true;
+    }
+    if (executionBridgeCandidates.some((candidate) => record.sourceType === "execution-bridge" && record.sourceId === candidate.id)) {
+      return true;
+    }
+    return false;
+  }).slice(0, 4).map((record) => ({
+    id: record.id,
+    sourceType: record.sourceType,
+    sourceId: record.sourceId,
+    status: record.status,
+    decisionSummary: record.decisionSummary,
+    rationale: record.rationale,
+    actorRole: record.actorRole,
+    deferUntil: record.deferUntil,
+    executeBy: record.executeBy,
+    reviewAfter: record.reviewAfter,
+    closureReason: record.closureReason,
+    stale: record.stale,
+    dueDeferred: record.dueDeferred,
+    overdueExecution: record.overdueExecution,
+    overdueExecutionSeverity: record.overdueExecutionSeverity,
+    executionWindowState: record.executionWindowState,
+    linkedTargetArtifact: record.linkedTargetArtifact,
+    linkedTargetId: record.linkedTargetId
+  }));
   return {
     repairFrontier: {
       count: workspaceIndex.repairFrontier?.count ?? 0,
@@ -717,6 +759,17 @@ function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, operatorPl
       manualNextActions: (topRemediationPack.manualNextActions ?? []).slice(0, 3),
       workspacePointers: (topRemediationPack.workspacePointers ?? []).slice(0, 5)
     } : null,
+    followThrough: {
+      summary: operatorFollowThrough.summary ?? { itemCount: 0, overview: "No operator follow-through decisions have been recorded yet." },
+      topRecords: followThroughRecords,
+      actionRequiredItems: (operatorFollowThrough.actionRequiredItems ?? []).slice(0, 4),
+      executionWindowSummary: {
+        dueSoonCount: operatorFollowThrough.summary?.dueSoonExecutionCount ?? 0,
+        dueReviewCount: operatorFollowThrough.summary?.dueReviewCount ?? 0,
+        overdueCount: operatorFollowThrough.summary?.overdueExecutionCount ?? 0,
+        criticalOverdueCount: operatorFollowThrough.summary?.criticalOverdueExecutionCount ?? 0
+      }
+    },
     familyPlaybook: topOperatorPlaybook ? {
       id: topOperatorPlaybook.id,
       title: topOperatorPlaybook.title,
@@ -2007,7 +2060,7 @@ function buildLongHorizonMemory(existingMemory, rankedRecommendations, clusters,
   };
 }
 
-function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates) {
+function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, governanceCoverage) {
   return {
     proposalOnly: true,
     recommendationCount: metaRecommendations.items.length,
@@ -2030,6 +2083,8 @@ function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remedia
     statePath: ARTIFACT_PATHS.metaOptimizerState,
     longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
     remediationPacks: remediationPacks.summary,
+    followThrough: operatorFollowThrough.summary,
+    governanceCoverage: governanceCoverage.summary,
     executionBridgeCandidates: executionBridgeCandidates.summary,
     operatorPlaybooks: operatorPlaybooks.summary,
     longHorizon: {
@@ -2052,6 +2107,14 @@ function renderMetaOptimizeOverviewLines(metaOptimize = {}) {
     `- Remediation pack focus: ${metaOptimize.remediationPacks?.overview ?? "No proposal-only remediation packs have been generated yet."}`,
     `- Remediation pack readiness: ${metaOptimize.remediationPacks?.readinessOverview ?? "No proposal-only remediation packs have been generated yet."}`,
     `- Remediation packs path: ${metaOptimize.remediationPacks?.packsPath ?? ARTIFACT_PATHS.metaRemediationPacks}`,
+    `- Operator follow-through: ${metaOptimize.followThrough?.itemCount ?? 0} records (${(metaOptimize.followThrough?.topSourceIds ?? []).join(", ") || "none"})`,
+    `- Operator follow-through overview: ${metaOptimize.followThrough?.overview ?? "No operator follow-through decisions have been recorded yet."}`,
+    `- Operator follow-through debt: overdue=${metaOptimize.followThrough?.overdueExecutionCount ?? 0}, deferred-due=${metaOptimize.followThrough?.dueDeferredCount ?? 0}, stale=${metaOptimize.followThrough?.staleCount ?? 0}, invalid=${metaOptimize.followThrough?.invalidStatusCount ?? 0}, action-required=${metaOptimize.followThrough?.actionRequiredCount ?? 0}`,
+    `- Operator follow-through execution window: due-soon=${metaOptimize.followThrough?.dueSoonExecutionCount ?? 0}, due-review=${metaOptimize.followThrough?.dueReviewCount ?? 0}, critical-overdue=${metaOptimize.followThrough?.criticalOverdueExecutionCount ?? 0}`,
+    `- Operator follow-through path: ${metaOptimize.followThrough?.followThroughPath ?? ARTIFACT_PATHS.metaOperatorFollowThrough}`,
+    `- Governance coverage: ${metaOptimize.governanceCoverage?.guardedCount ?? 0} guarded / ${metaOptimize.governanceCoverage?.exemptCount ?? 0} exempt`,
+    `- Governance coverage overview: ${metaOptimize.governanceCoverage?.overview ?? "No governance coverage matrix has been summarized yet."}`,
+    `- Governance coverage path: ${metaOptimize.governanceCoverage?.coveragePath ?? ARTIFACT_PATHS.metaGovernanceCoverage}`,
     `- Execution bridge candidates: ${metaOptimize.executionBridgeCandidates?.candidateCount ?? 0} proposal-only candidates (${(metaOptimize.executionBridgeCandidates?.topCandidateIds ?? []).join(", ") || "none"})`,
     `- Execution bridge focus: ${metaOptimize.executionBridgeCandidates?.overview ?? "No proposal-only execution bridge candidates have been generated yet."}`,
     `- Execution bridge path: ${metaOptimize.executionBridgeCandidates?.candidatesPath ?? ARTIFACT_PATHS.metaExecutionBridgeCandidates}`,
@@ -2110,6 +2173,427 @@ function summarizeFigureIssueForPack(issue = {}) {
     summary: issue.summary ?? `Figure issue ${issue.id}`,
     artifactPaths: uniqueSorted(issue.artifactPaths ?? [])
   };
+}
+
+function hashFollowThroughSource(value) {
+  return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, executionBridgeCandidates) {
+  const catalog = new Map();
+  for (const pack of remediationPacks.packs ?? []) {
+    catalog.set(`remediation-pack:${pack.id}`, {
+      sourceType: "remediation-pack",
+      sourceId: pack.id,
+      sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
+      sourceFingerprint: hashFollowThroughSource({
+        id: pack.id,
+        clusterId: pack.clusterId,
+        readiness: pack.readiness,
+        acceptanceCriteria: pack.acceptanceCriteria,
+        rankedConversionPaths: (pack.rankedConversionPaths ?? []).map((item) => [item.targetType, item.targetId, item.rank, item.pathScore]),
+        manualNextActions: pack.manualNextActions,
+        reviewConcerns: (pack.reviewConcerns ?? []).map((item) => [item.id, item.summary, item.status, item.severity]),
+        figureQa: (pack.figureQa ?? []).map((item) => [item.id, item.code, item.summary, item.severity])
+      }),
+      allowedActorRoles: uniqueSorted([...(pack.packetPointers ?? []).map((item) => item.assignedRole), ...(pack.conversionHints ?? []).map((item) => item.assignedRole)].filter(Boolean)),
+      title: pack.title,
+      summary: pack.summary
+    });
+  }
+  for (const playbook of operatorPlaybooks.playbooks ?? []) {
+    catalog.set(`operator-playbook:${playbook.id}`, {
+      sourceType: "operator-playbook",
+      sourceId: playbook.id,
+      sourceArtifactPath: ARTIFACT_PATHS.metaOperatorPlaybooks,
+      sourceFingerprint: hashFollowThroughSource({
+        id: playbook.id,
+        taxonomyFamilyId: playbook.taxonomyFamilyId,
+        readiness: playbook.readiness,
+        acceptanceCriteria: playbook.acceptanceCriteria,
+        rankedConversionPaths: (playbook.rankedConversionPaths ?? []).map((item) => [item.targetType, item.targetId, item.rank, item.pathScore]),
+        manualNextActions: playbook.manualNextActions
+      }),
+      allowedActorRoles: uniqueSorted(playbook.responseOwnerRoles ?? []),
+      title: playbook.title,
+      summary: playbook.summary
+    });
+  }
+  for (const candidate of executionBridgeCandidates.candidates ?? []) {
+    catalog.set(`execution-bridge:${candidate.id}`, {
+      sourceType: "execution-bridge",
+      sourceId: candidate.id,
+      sourceArtifactPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+      sourceFingerprint: hashFollowThroughSource({
+        id: candidate.id,
+        candidateType: candidate.candidateType,
+        targetArtifact: candidate.targetArtifact,
+        targetId: candidate.targetId,
+        suggestedAcceptanceCriteria: candidate.suggestedAcceptanceCriteria,
+        sourceRemediationPackIds: candidate.sourceRemediationPackIds,
+        sourcePlaybookIds: candidate.sourcePlaybookIds
+      }),
+      allowedActorRoles: uniqueSorted([candidate.sourceConversionPath?.assignedRole, ...(candidate.context?.linkedPacketPointers ?? []).map((item) => item.assignedRole)].filter(Boolean)),
+      title: candidate.suggestedTitle,
+      summary: candidate.suggestedSummary
+    });
+  }
+  return catalog;
+}
+
+function normalizeFollowThroughStatus(status = "acknowledged") {
+  const allowed = new Set(["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"]);
+  return allowed.has(status) ? status : "acknowledged";
+}
+
+function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestamp = nowIso()) {
+  const items = (existingIndex.items ?? []).map((item, index) => {
+    const sourceType = item.sourceType ?? "remediation-pack";
+    const sourceId = item.sourceId ?? item.id ?? `unknown-${index + 1}`;
+    const key = `${sourceType}:${sourceId}`;
+    const source = sourceCatalog.get(key);
+    const allowed = new Set(["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"]);
+    const invalidStatus = !allowed.has(item.status) || (item.status === "accepted-for-execution" && !item.reviewAfter);
+    const status = invalidStatus ? "acknowledged" : item.status;
+    const dueDeferred = status === "deferred" && item.deferUntil && String(item.deferUntil) <= timestamp;
+    const dueReview = status === "accepted-for-execution" && item.reviewAfter && String(item.reviewAfter) <= timestamp;
+    const dueSoonExecution = ["accepted-for-execution", "executing"].includes(status) && item.executeBy && String(item.executeBy) > timestamp && String(item.executeBy) <= new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+    const overdueExecution = ["accepted-for-execution", "executing"].includes(status) && item.executeBy && String(item.executeBy) <= timestamp;
+    const overdueExecutionSeverity = overdueExecution
+      ? (String(item.executeBy) <= new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() ? "critical" : "warning")
+      : (dueSoonExecution ? "at-risk" : null);
+    const executionWindowState = !["accepted-for-execution", "executing"].includes(status)
+      ? null
+      : overdueExecution
+        ? (overdueExecutionSeverity === "critical" ? "critical-overdue" : "overdue")
+        : dueSoonExecution
+          ? "due-soon"
+          : "on-track";
+    const targetBound = followThroughTargetStillBound(root, {
+      status,
+      linkedTargetArtifact: item.linkedTargetArtifact ?? null,
+      linkedTargetId: item.linkedTargetId ?? null
+    });
+    return {
+      id: item.id ?? `follow-through-${slugify(`${sourceType}-${sourceId}`)}`,
+      sourceType,
+      sourceId,
+      sourceArtifactPath: source?.sourceArtifactPath ?? item.sourceArtifactPath ?? null,
+      sourceFingerprint: source?.sourceFingerprint ?? item.sourceFingerprint ?? null,
+      sourceTitle: source?.title ?? item.sourceTitle ?? sourceId,
+      sourceSummary: source?.summary ?? item.sourceSummary ?? "",
+      status,
+      decisionSummary: item.decisionSummary ?? "",
+      rationale: item.rationale ?? "",
+      selectedConversionPathKey: item.selectedConversionPathKey ?? null,
+      linkedTargetArtifact: item.linkedTargetArtifact ?? null,
+      linkedTargetId: item.linkedTargetId ?? null,
+      deferUntil: item.deferUntil ?? null,
+      executeBy: item.executeBy ?? null,
+      executionStartedAt: item.executionStartedAt ?? null,
+      executionCompletedAt: item.executionCompletedAt ?? null,
+      reviewAfter: item.reviewAfter ?? null,
+      closureReason: item.closureReason ?? null,
+      closureArtifactPaths: normalizeStringArray(item.closureArtifactPaths),
+      actorRole: item.actorRole ?? null,
+      recordedAt: item.recordedAt ?? item.updatedAt ?? timestamp,
+      updatedAt: item.updatedAt ?? timestamp,
+      invalidStatus,
+      stale: Boolean(source && item.sourceFingerprint && item.sourceFingerprint !== source.sourceFingerprint),
+      dueDeferred,
+      dueReview,
+      overdueExecution,
+      overdueExecutionSeverity,
+      executionWindowState,
+      targetBound
+    };
+  }).sort((left, right) => left.id.localeCompare(right.id));
+
+  const summary = {
+    itemCount: items.length,
+    acknowledgedCount: items.filter((item) => item.status === "acknowledged").length,
+    acceptedForExecutionCount: items.filter((item) => item.status === "accepted-for-execution").length,
+    executingCount: items.filter((item) => item.status === "executing").length,
+    overdueExecutionCount: items.filter((item) => item.overdueExecution).length,
+    criticalOverdueExecutionCount: items.filter((item) => item.overdueExecutionSeverity === "critical").length,
+    dueSoonExecutionCount: items.filter((item) => item.executionWindowState === "due-soon").length,
+    deferredCount: items.filter((item) => item.status === "deferred").length,
+    acceptedRiskCount: items.filter((item) => item.status === "accepted-risk").length,
+    closedCount: items.filter((item) => item.status === "closed").length,
+    supersededCount: items.filter((item) => item.status === "superseded").length,
+    invalidStatusCount: items.filter((item) => item.invalidStatus).length,
+    staleCount: items.filter((item) => item.stale).length,
+    dueDeferredCount: items.filter((item) => item.dueDeferred).length,
+    dueReviewCount: items.filter((item) => item.dueReview).length,
+    unresolvedTargetCount: items.filter((item) => !item.targetBound).length,
+    topSourceIds: items.filter((item) => !["closed", "superseded"].includes(item.status)).slice(0, 5).map((item) => item.sourceId),
+    overview: items.length > 0
+      ? `${items.length} operator follow-through records: ${items.filter((item) => item.status === "accepted-for-execution").length} accepted for execution, ${items.filter((item) => item.executionWindowState === "due-soon").length} due-soon, ${items.filter((item) => item.overdueExecution).length} overdue-execution (${items.filter((item) => item.overdueExecutionSeverity === "critical").length} critical), ${items.filter((item) => item.dueReview).length} due-review, ${items.filter((item) => item.status === "deferred").length} deferred, ${items.filter((item) => item.status === "accepted-risk").length} accepted-risk, ${items.filter((item) => item.stale).length} stale, ${items.filter((item) => item.invalidStatus).length} invalid-status, ${items.filter((item) => !item.targetBound).length} target-drift.`
+      : "No operator follow-through decisions have been recorded yet.",
+    followThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough,
+    transitionsPath: ARTIFACT_PATHS.metaOperatorFollowThroughTransitions
+  };
+
+  const actionRequiredItems = items.filter((item) => item.invalidStatus || item.stale || item.dueDeferred || item.dueReview || item.overdueExecution || !item.targetBound || item.status === "accepted-for-execution" || item.status === "executing").map((item) => ({
+    id: item.id,
+    sourceType: item.sourceType,
+    sourceId: item.sourceId,
+    status: item.status,
+    stale: item.stale,
+    dueDeferred: item.dueDeferred,
+      invalidStatus: item.invalidStatus,
+      dueReview: item.dueReview,
+      overdueExecution: item.overdueExecution,
+      overdueExecutionSeverity: item.overdueExecutionSeverity,
+      executionWindowState: item.executionWindowState,
+      linkedTargetArtifact: item.linkedTargetArtifact,
+    linkedTargetId: item.linkedTargetId,
+    nextAction: !item.targetBound
+      ? "Re-bind this follow-through record to a live target artifact/id before continuing."
+      : item.overdueExecution
+        ? `Escalate this ${item.overdueExecutionSeverity ?? "warning"} accepted-for-execution record or update/close it immediately.`
+      : item.dueReview
+        ? "Review this accepted-for-execution record now or explicitly defer/close it before the review window drifts further."
+      : item.executionWindowState === "due-soon"
+        ? "Schedule execution or explicitly defer this accepted-for-execution record before it goes overdue."
+      : item.status === "executing"
+        ? "Advance this executing record to closure or explicitly defer/accept-risk it."
+      : item.status === "accepted-for-execution" && (!item.linkedTargetArtifact || !item.linkedTargetId)
+        ? "Add a durable target artifact/id before keeping this record accepted-for-execution."
+      : item.status === "accepted-for-execution"
+        ? "Carry this accepted-for-execution decision through to closure or explicitly defer/accept-risk it."
+      : item.dueDeferred
+        ? "Review or reschedule this deferred follow-through now."
+        : item.stale
+          ? "Re-open and reassess this stale follow-through against the updated source."
+          : item.invalidStatus
+            ? "Repair the invalid follow-through status in the durable ledger."
+            : "Review this follow-through record."
+  }));
+
+  return {
+    ...createMetaOperatorFollowThroughIndex(),
+    items,
+    summary: {
+      ...summary,
+      actionRequiredCount: actionRequiredItems.length,
+      actionRequiredSourceIds: actionRequiredItems.map((item) => item.sourceId)
+    },
+    actionRequiredItems,
+    updatedAt: timestamp
+  };
+}
+
+function buildGovernanceCoverage(generatedAt = nowIso()) {
+  const guardedMutations = GOVERNANCE_GUARDED_MUTATIONS;
+  const exemptMutations = GOVERNANCE_EXEMPT_MUTATIONS;
+  return {
+    ...createMetaGovernanceCoverageIndex(),
+    guardedMutations,
+    exemptMutations,
+    summary: {
+      guardedCount: guardedMutations.length,
+      exemptCount: exemptMutations.length,
+      overview: `${guardedMutations.length} write paths currently require clear operator follow-through; ${exemptMutations.length} paths remain explicitly exempt.`,
+      coveragePath: ARTIFACT_PATHS.metaGovernanceCoverage
+    },
+    updatedAt: generatedAt
+  };
+}
+
+function buildGovernanceCoverageReport(governanceCoverage, generatedAt = nowIso()) {
+  return {
+    ...createMetaGovernanceCoverageReport(),
+    status: "ok",
+    guardedIds: governanceCoverage.guardedMutations.map((item) => item.id),
+    exemptIds: governanceCoverage.exemptMutations.map((item) => item.id),
+    surfaceBindingAudit: {
+      uncoveredTools: [],
+      uncoveredCommands: [],
+      uncoveredCoreFunctions: [],
+      uncoveredNegativeCoverage: []
+    },
+    summary: {
+      guardedCount: governanceCoverage.summary.guardedCount,
+      exemptCount: governanceCoverage.summary.exemptCount,
+      overview: governanceCoverage.summary.overview,
+      reportPath: ARTIFACT_PATHS.metaGovernanceCoverageReport,
+      markdownPath: ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown
+    },
+    updatedAt: generatedAt
+  };
+}
+
+function validateFollowThroughPayload(record = {}) {
+  const status = record.status;
+  const allowed = new Set(["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"]);
+  if (!allowed.has(status)) {
+    throw new Error(`Invalid follow-through status: ${status}`);
+  }
+  if (status === "deferred" && !record.deferUntil && !record.reviewAfter) {
+    throw new Error("Deferred follow-through records require deferUntil or reviewAfter.");
+  }
+  if (status === "accepted-risk" && !record.rationale) {
+    throw new Error("Accepted-risk follow-through records require rationale.");
+  }
+  if (status === "accepted-for-execution" && (!record.linkedTargetArtifact || !record.linkedTargetId)) {
+    throw new Error("Accepted-for-execution follow-through records require linkedTargetArtifact and linkedTargetId.");
+  }
+  if (status === "accepted-for-execution" && !record.executeBy) {
+    throw new Error("Accepted-for-execution follow-through records require executeBy.");
+  }
+  if (status === "accepted-for-execution" && !record.reviewAfter) {
+    throw new Error("Accepted-for-execution follow-through records require reviewAfter.");
+  }
+  if (status === "executing" && (!record.linkedTargetArtifact || !record.linkedTargetId || !record.executionStartedAt)) {
+    throw new Error("Executing follow-through records require linkedTargetArtifact, linkedTargetId, and executionStartedAt.");
+  }
+  if (status === "closed" && normalizeStringArray(record.closureArtifactPaths).length === 0 && !record.closureReason) {
+    throw new Error("Closed follow-through records require closureArtifactPaths or closureReason.");
+  }
+  if (status === "closed" && !record.executionCompletedAt) {
+    throw new Error("Closed follow-through records require executionCompletedAt.");
+  }
+  if (!record.actorRole) {
+    throw new Error("Follow-through records require actorRole.");
+  }
+  return status;
+}
+
+function validateFollowThroughActor(root, record, source) {
+  const allowedActorRoles = normalizeStringArray(source?.allowedActorRoles ?? []);
+  if (allowedActorRoles.length === 0) {
+    return;
+  }
+  if (allowedActorRoles.includes(record.actorRole)) {
+    return;
+  }
+  const evidencePaths = normalizeStringArray(record.policyOverrideEvidencePaths);
+  const relevance = overrideEvidenceRelevantToItems(root, [{
+    id: `${record.sourceType}:${record.sourceId}`,
+    sourceId: record.sourceId,
+    sourceArtifactPath: source?.sourceArtifactPath ?? record.sourceArtifactPath ?? null,
+    linkedTargetArtifact: record.linkedTargetArtifact ?? null,
+    linkedTargetId: record.linkedTargetId ?? null,
+    closureArtifactPaths: normalizeStringArray(record.closureArtifactPaths)
+  }], evidencePaths);
+  const targetEvidencePresent = record.linkedTargetArtifact ? evidencePaths.includes(record.linkedTargetArtifact) : false;
+  const sourceEvidencePresent = [source?.sourceArtifactPath, ...normalizeStringArray(record.closureArtifactPaths)].filter(Boolean).some((artifactPath) => evidencePaths.includes(artifactPath));
+  if (record.policyOverrideReason && record.actorRole && relevance.ok && targetEvidencePresent && sourceEvidencePresent) {
+    return;
+  }
+  throw new Error(`Actor role ${record.actorRole} is not allowed for ${record.sourceType}:${record.sourceId}. Allowed roles: ${allowedActorRoles.join(", ")}. Provide policyOverrideEvidencePaths that cover both the local source and target artifacts if this is intentional.`);
+}
+
+function targetArtifactContainsId(root, artifactPath, targetId) {
+  const fullPath = resolvePath(root, artifactPath);
+  if (!fs.existsSync(fullPath)) {
+    return false;
+  }
+  const extension = path.extname(artifactPath).toLowerCase();
+  if ([".json"].includes(extension)) {
+    try {
+      const value = JSON.parse(fs.readFileSync(fullPath, "utf8"));
+      const queue = [value];
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (current === targetId) {
+          return true;
+        }
+        if (Array.isArray(current)) {
+          queue.push(...current);
+          continue;
+        }
+        if (current && typeof current === "object") {
+          queue.push(...Object.values(current));
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+  const text = fs.readFileSync(fullPath, "utf8");
+  return text.includes(String(targetId));
+}
+
+function followThroughTargetStillBound(root, item) {
+  if (!["accepted-for-execution", "closed"].includes(item.status)) {
+    return true;
+  }
+  if (!item.linkedTargetArtifact || !item.linkedTargetId) {
+    return false;
+  }
+  return targetArtifactContainsId(root, item.linkedTargetArtifact, item.linkedTargetId);
+}
+
+function validateFollowThroughTargetBinding(root, record) {
+  if (!["accepted-for-execution", "closed"].includes(record.status)) {
+    return;
+  }
+  if (!record.linkedTargetArtifact || !record.linkedTargetId) {
+    throw new Error(`${record.status} follow-through records require linkedTargetArtifact and linkedTargetId.`);
+  }
+  if (!targetArtifactContainsId(root, record.linkedTargetArtifact, record.linkedTargetId)) {
+    throw new Error(`Follow-through target ${record.linkedTargetId} was not found in ${record.linkedTargetArtifact}.`);
+  }
+  if (record.status === "closed") {
+    for (const artifactPath of normalizeStringArray(record.closureArtifactPaths)) {
+      if (!fs.existsSync(resolvePath(root, artifactPath))) {
+        throw new Error(`Closed follow-through artifact ${artifactPath} does not exist.`);
+      }
+    }
+  }
+}
+
+function buildFollowThroughTransitions(existingIndex, nextRecord, previousRecord, timestamp = nowIso()) {
+  const transitions = normalizeMetaOperatorFollowThroughTransitionsIndex(existingIndex).transitions;
+  const transition = {
+    id: `follow-through-transition-${slugify(`${nextRecord.id}-${timestamp}`)}`,
+    followThroughId: nextRecord.id,
+    sourceType: nextRecord.sourceType,
+    sourceId: nextRecord.sourceId,
+    fromStatus: previousRecord?.status ?? null,
+    toStatus: nextRecord.status,
+    actorRole: nextRecord.actorRole,
+    decisionSummary: nextRecord.decisionSummary,
+    rationale: nextRecord.rationale,
+    recordedAt: timestamp,
+    linkedTargetArtifact: nextRecord.linkedTargetArtifact,
+    linkedTargetId: nextRecord.linkedTargetId,
+    closureReason: nextRecord.closureReason ?? null,
+    closureArtifactPaths: normalizeStringArray(nextRecord.closureArtifactPaths)
+  };
+  const nextTransitions = [...transitions, transition];
+  return {
+    ...createMetaOperatorFollowThroughTransitionsIndex(),
+    transitions: nextTransitions,
+    summary: {
+      transitionCount: nextTransitions.length,
+      overview: `${nextTransitions.length} operator follow-through transitions recorded.`,
+      transitionsPath: ARTIFACT_PATHS.metaOperatorFollowThroughTransitions
+    },
+    updatedAt: timestamp
+  };
+}
+
+function validateFollowThroughTransition(previousRecord, nextRecord) {
+  const previous = previousRecord?.status ?? null;
+  const next = nextRecord.status;
+  const allowed = {
+    null: ["acknowledged", "accepted-for-execution", "deferred", "accepted-risk", "closed", "superseded"],
+    "acknowledged": ["accepted-for-execution", "deferred", "accepted-risk", "closed", "superseded", "acknowledged"],
+    "accepted-for-execution": ["executing", "deferred", "accepted-risk", "superseded", "accepted-for-execution"],
+    "executing": ["closed", "deferred", "accepted-risk", "superseded", "executing"],
+    "deferred": ["acknowledged", "accepted-for-execution", "accepted-risk", "closed", "superseded", "deferred"],
+    "accepted-risk": ["acknowledged", "closed", "superseded", "accepted-risk"],
+    "closed": ["closed"],
+    "superseded": ["superseded"]
+  };
+  const validNext = allowed[previous] ?? [];
+  if (!validNext.includes(next)) {
+    throw new Error(`Invalid follow-through transition: ${previous ?? "none"} -> ${next}`);
+  }
 }
 
 function coverageLevelFromCount(count, { fullAt = 3, partialAt = 2, minimalAt = 1 } = {}) {
@@ -3105,7 +3589,7 @@ function buildRepairFrontier({ wikiRelations, figureQa, stalePackets = [], hando
   };
 }
 
-function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcerns, reviewState, adversarialState, experimentAudits, bridgeLog, figureQa, comparisons, existingLongHorizonMemory }) {
+function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, reviewConcerns, reviewState, adversarialState, experimentAudits, bridgeLog, figureQa, comparisons, existingLongHorizonMemory }) {
   const generatedAt = nowIso();
   const events = [];
   const recommendations = [];
@@ -3630,7 +4114,9 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
     updatedAt: generatedAt
   };
   const longHorizonMemory = buildLongHorizonMemory(existingLongHorizonMemory, rankedRecommendations, clusters, metaRecommendations.frontier, generatedAt);
-  const metaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, createMetaRemediationPacksIndex(), createMetaOperatorPlaybooksIndex(), createMetaExecutionBridgeCandidatesIndex());
+  const governanceCoverage = buildGovernanceCoverage(generatedAt);
+  const governanceCoverageReport = buildGovernanceCoverageReport(governanceCoverage, generatedAt);
+  const metaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, createMetaRemediationPacksIndex(), createMetaOperatorPlaybooksIndex(), createMetaExecutionBridgeCandidatesIndex(), createMetaOperatorFollowThroughIndex(), governanceCoverage);
   const remediationPacks = buildRemediationPacks({
     clusters,
     recommendations: rankedRecommendations,
@@ -3654,7 +4140,10 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
     longHorizonMemory
   });
   const executionBridgeCandidates = buildExecutionBridgeCandidates({ remediationPacks, operatorPlaybooks });
-  const finalMetaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates);
+  const sourceCatalog = buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, executionBridgeCandidates);
+  const existingFollowThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const operatorFollowThrough = buildOperatorFollowThrough(root, existingFollowThrough, sourceCatalog, generatedAt);
+  const finalMetaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, governanceCoverage);
   const metaOptimizerState = {
     ...createMetaOptimizerState(),
     frontier: {
@@ -3681,6 +4170,8 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
     },
     clusters: finalMetaOptimizeMirror.topClusters,
     executionBridgeCandidates: executionBridgeCandidates.summary,
+    followThrough: operatorFollowThrough.summary,
+    governanceCoverage: governanceCoverage.summary,
     operatorPlaybooks: operatorPlaybooks.summary,
     remediationPacks: remediationPacks.summary,
     longHorizon: finalMetaOptimizeMirror.longHorizon,
@@ -3816,6 +4307,14 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
           ""
         ])
       : ["- No execution bridge candidates generated from the current durable signals."]),
+    "## Governance coverage matrix",
+    "",
+    `- Overview: ${governanceCoverage.summary.overview}`,
+    `- Guarded mutations: ${governanceCoverage.summary.guardedCount}`,
+    `- Exempt mutations: ${governanceCoverage.summary.exemptCount}`,
+    ...(governanceCoverage.guardedMutations.slice(0, 12).map((item) => `  - guarded ${item.id}: ${item.action} -> ${item.artifactPath}`)),
+    ...(governanceCoverage.exemptMutations.slice(0, 6).map((item) => `  - exempt ${item.id}: ${item.action} -> ${item.artifactPath}`)),
+    "",
     "## Long-horizon workflow memory",
     "",
     ...(longHorizonMemory.families.length > 0
@@ -3849,15 +4348,49 @@ function buildMetaOptimizeSurface({ board, workspaceIndex, journal, reviewConcer
     "- Operators must choose whether to act on any recommendation."
   ];
 
-    return {
+  return {
     metaEvents,
     executionBridgeCandidates,
+    governanceCoverage,
+    governanceCoverageReport,
+    operatorFollowThrough,
     operatorPlaybooks,
     remediationPacks,
     longHorizonMemory,
     metaRecommendations,
     metaOptimizerState,
-    metaOptimizerReport: reportLines.join("\n")
+    metaOptimizerReport: reportLines.join("\n"),
+    metaGovernanceCoverageReport: {
+      ...governanceCoverageReport,
+      markdown: [
+        "# Governance coverage report",
+        "",
+        `- Generated: ${generatedAt}`,
+        `- Status: ${governanceCoverageReport.status}`,
+        `- Guarded mutations: ${governanceCoverageReport.summary.guardedCount}`,
+        `- Exempt mutations: ${governanceCoverageReport.summary.exemptCount}`,
+        `- Overview: ${governanceCoverageReport.summary.overview}`,
+        "",
+        "## Guarded surfaces",
+        "",
+        ...governanceCoverage.guardedMutations.map((item) => `- ${item.id}: ${item.surfaceBindings.coreFunction} / ${item.surfaceBindings.mcpTool} / ${item.surfaceBindings.commandIds.join(", ")}`),
+        "",
+        "## Exempt surfaces",
+        "",
+        ...governanceCoverage.exemptMutations.map((item) => `- ${item.id}: ${item.surfaceBindings.coreFunction} / ${item.surfaceBindings.mcpTool} / ${item.surfaceBindings.commandIds.join(", ")} | owner=${item.ownerRole} | approvedBy=${item.approvedByRole} | cadence=${item.reviewCadence} | sunset=${item.sunsetAt}`),
+        "",
+        "## Exempt review metadata",
+        "",
+        ...governanceCoverage.exemptMutations.map((item) => `- ${item.id}: approvedAt=${item.approvedAt} | lastReviewedAt=${item.lastReviewedAt} | reviewCadence=${item.reviewCadence}`),
+        "",
+        "## Uncovered bindings",
+        "",
+        `- Tools: ${(governanceCoverageReport.surfaceBindingAudit.uncoveredTools ?? []).join(", ") || "none"}`,
+        `- Commands: ${(governanceCoverageReport.surfaceBindingAudit.uncoveredCommands ?? []).join(", ") || "none"}`,
+        `- Core functions: ${(governanceCoverageReport.surfaceBindingAudit.uncoveredCoreFunctions ?? []).join(", ") || "none"}`,
+        `- Negative coverage gaps: ${(governanceCoverageReport.surfaceBindingAudit.uncoveredNegativeCoverage ?? []).join(", ") || "none"}`
+      ].join("\n")
+    }
   };
 }
 
@@ -3986,6 +4519,7 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
 }
 
 export function refreshDurableSurfaces(root, event = {}) {
+  assertGovernanceMutationRegistered("refresh-durable-surfaces", "exempt");
   ensureWorkspace(root);
   const state = loadState(root);
   const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, () => createDefaultBoard(state));
@@ -4068,6 +4602,7 @@ export function refreshDurableSurfaces(root, event = {}) {
 
   const preliminaryWorkspaceIndex = buildWorkspaceIndex(state, board, packetsWithHealth, reviewState, { entries }, versionsIndex, comparisons, wikiRelations, figureQa);
   const metaOptimize = buildMetaOptimizeSurface({
+    root,
     board,
     workspaceIndex: preliminaryWorkspaceIndex,
     journal: { entries },
@@ -4090,17 +4625,21 @@ export function refreshDurableSurfaces(root, event = {}) {
     comparisons,
     wikiRelations,
     figureQa,
-    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates)
+    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.governanceCoverage)
   );
   writeJson(root, ARTIFACT_PATHS.workspaceIndex, workspaceIndex);
   writeJson(root, ARTIFACT_PATHS.metaEvents, metaOptimize.metaEvents);
-  writeJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, metaOptimize.executionBridgeCandidates);
+    writeJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, metaOptimize.executionBridgeCandidates);
+    writeJson(root, ARTIFACT_PATHS.metaGovernanceCoverage, metaOptimize.governanceCoverage);
+    writeJson(root, ARTIFACT_PATHS.metaGovernanceCoverageReport, metaOptimize.metaGovernanceCoverageReport);
+    writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, metaOptimize.operatorFollowThrough);
   writeJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, metaOptimize.longHorizonMemory);
   writeJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, metaOptimize.operatorPlaybooks);
   writeJson(root, ARTIFACT_PATHS.metaRemediationPacks, metaOptimize.remediationPacks);
   writeJson(root, ARTIFACT_PATHS.metaRecommendations, metaOptimize.metaRecommendations);
-  writeJson(root, ARTIFACT_PATHS.metaOptimizerState, metaOptimize.metaOptimizerState);
-  writeText(root, ARTIFACT_PATHS.metaOptimizerReport, metaOptimize.metaOptimizerReport);
+    writeJson(root, ARTIFACT_PATHS.metaOptimizerState, metaOptimize.metaOptimizerState);
+    writeText(root, ARTIFACT_PATHS.metaOptimizerReport, metaOptimize.metaOptimizerReport);
+    writeText(root, ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown, metaOptimize.metaGovernanceCoverageReport.markdown);
   const packetByIdForManifest = new Map(packetsWithHealth.map((packet) => [packet.id, packet]));
   const artifactPaths = uniqueSorted([
     ARTIFACT_PATHS.orchestrationBoard,
@@ -4108,7 +4647,11 @@ export function refreshDurableSurfaces(root, event = {}) {
     ARTIFACT_PATHS.taskPacketsIndex,
     ARTIFACT_PATHS.workspaceIndex,
     ARTIFACT_PATHS.metaEvents,
-    ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+      ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+      ARTIFACT_PATHS.metaGovernanceCoverage,
+      ARTIFACT_PATHS.metaGovernanceCoverageReport,
+      ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown,
+      ARTIFACT_PATHS.metaOperatorFollowThrough,
     ARTIFACT_PATHS.metaLongHorizonMemory,
     ARTIFACT_PATHS.metaOperatorPlaybooks,
     ARTIFACT_PATHS.metaRemediationPacks,
@@ -4141,7 +4684,7 @@ export function refreshDurableSurfaces(root, event = {}) {
         ...manifest.artifactContextPaths
       ],
       localRules: manifest.behaviorDiscipline.localRules,
-      operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, { roleId: packet.assignedRole, packetId: packet.id, packet })
+      operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, { roleId: packet.assignedRole, packetId: packet.id, packet })
     }));
   }
   for (const role of roleRoster) {
@@ -4190,7 +4733,7 @@ export function refreshDurableSurfaces(root, event = {}) {
       "Use packet and artifact-local guidance instead of broad top-level rules when available.",
       "Do not assume hidden rule loading; read the surfaced files explicitly before acting."
     ],
-    operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, { roleId: board.assignedRole })
+    operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, { roleId: board.assignedRole })
   }));
 
   writeText(root, ARTIFACT_PATHS.sessionSummary, renderSessionSummary(state, board, packetsWithHealth, openQuestions, decisions, roleRoster, workspaceIndex));
@@ -4253,13 +4796,16 @@ export function queryWorkspaceIndex(root) {
 }
 
 export function queryMetaOptimize(root) {
+  assertGovernanceMutationRegistered("query-meta-optimize", "exempt");
   refreshDurableSurfaces(root, {
     type: "query-meta-optimize",
     summary: "Refreshed proposal-only meta-optimize surfaces.",
-    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaExecutionBridgeCandidates, ARTIFACT_PATHS.metaOperatorPlaybooks, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
+    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaExecutionBridgeCandidates, ARTIFACT_PATHS.metaGovernanceCoverage, ARTIFACT_PATHS.metaOperatorPlaybooks, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
   });
   const events = readJson(root, ARTIFACT_PATHS.metaEvents, createMetaEventsIndex);
   const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex));
+  const governanceCoverage = normalizeMetaGovernanceCoverageIndex(readJson(root, ARTIFACT_PATHS.metaGovernanceCoverage, createMetaGovernanceCoverageIndex));
+  const operatorFollowThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
   const longHorizonMemory = normalizeMetaLongHorizonMemory(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory));
   const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex));
   const remediationPacks = normalizeMetaRemediationPacksIndex(readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex));
@@ -4269,6 +4815,9 @@ export function queryMetaOptimize(root) {
     proposalOnly: true,
     events: events.items ?? [],
     executionBridgeCandidates,
+    governanceCoverage,
+    governanceCoverageReport: normalizeMetaGovernanceCoverageReport(readJson(root, ARTIFACT_PATHS.metaGovernanceCoverageReport, createMetaGovernanceCoverageReport)),
+    operatorFollowThrough,
     operatorPlaybooks,
     remediationPacks,
     longHorizon: longHorizonMemory,
@@ -4287,10 +4836,91 @@ export function queryMetaOptimize(root) {
     recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
     eventsPath: ARTIFACT_PATHS.metaEvents,
     executionBridgeCandidatesPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+    governanceCoveragePath: ARTIFACT_PATHS.metaGovernanceCoverage,
+    governanceCoverageReportPath: ARTIFACT_PATHS.metaGovernanceCoverageReport,
+    governanceCoverageReportMarkdownPath: ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown,
+    operatorFollowThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough,
     operatorPlaybooksPath: ARTIFACT_PATHS.metaOperatorPlaybooks,
     remediationPacksPath: ARTIFACT_PATHS.metaRemediationPacks,
     longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory
   };
+}
+
+export function queryOperatorFollowThrough(root) {
+  assertGovernanceMutationRegistered("record-operator-follow-through", "exempt");
+  const meta = queryMetaOptimize(root);
+  return {
+    ...meta.operatorFollowThrough,
+    reportPath: ARTIFACT_PATHS.metaOptimizerReport
+  };
+}
+
+export function queryGovernanceCoverageReport(root) {
+  const meta = queryMetaOptimize(root);
+  return {
+    ...meta.governanceCoverageReport,
+    reportPath: ARTIFACT_PATHS.metaGovernanceCoverageReport,
+    markdownPath: ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown
+  };
+}
+
+export function recordOperatorFollowThrough(root, args = {}) {
+  assertGovernanceMutationRegistered("record-operator-follow-through", "exempt");
+  const meta = queryMetaOptimize(root);
+  const sourceType = args.sourceType;
+  const sourceId = args.sourceId;
+  const sourceCatalog = buildFollowThroughSourceCatalog(meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates);
+  const source = sourceCatalog.get(`${sourceType}:${sourceId}`);
+  if (!source) {
+    throw new Error(`Unknown follow-through source: ${sourceType}:${sourceId}`);
+  }
+  const status = validateFollowThroughPayload(args);
+  validateFollowThroughActor(root, args, source);
+  const existing = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const existingTransitions = normalizeMetaOperatorFollowThroughTransitionsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions, createMetaOperatorFollowThroughTransitionsIndex));
+  const recordId = args.id ?? `follow-through-${slugify(`${sourceType}-${sourceId}`)}`;
+  const previousRecord = existing.items.find((item) => item.id === recordId) ?? null;
+  const items = existing.items.filter((item) => item.id !== recordId);
+  const nextRecord = {
+    id: recordId,
+    sourceType,
+    sourceId,
+    sourceArtifactPath: source.sourceArtifactPath,
+    sourceFingerprint: source.sourceFingerprint,
+    sourceTitle: source.title,
+    sourceSummary: source.summary,
+    status,
+    decisionSummary: args.decisionSummary ?? "",
+    rationale: args.rationale ?? "",
+    selectedConversionPathKey: args.selectedConversionPathKey ?? null,
+    linkedTargetArtifact: args.linkedTargetArtifact ?? null,
+    linkedTargetId: args.linkedTargetId ?? null,
+    deferUntil: args.deferUntil ?? null,
+    executeBy: args.executeBy ?? null,
+    executionStartedAt: args.executionStartedAt ?? null,
+    executionCompletedAt: args.executionCompletedAt ?? null,
+    reviewAfter: args.reviewAfter ?? null,
+    closureReason: args.closureReason ?? null,
+    closureArtifactPaths: normalizeStringArray(args.closureArtifactPaths),
+    actorRole: args.actorRole,
+    policyOverrideReason: args.policyOverrideReason ?? "",
+    policyOverrideEvidencePaths: normalizeStringArray(args.policyOverrideEvidencePaths),
+    recordedAt: args.recordedAt ?? nowIso(),
+    updatedAt: nowIso()
+  };
+  validateFollowThroughTargetBinding(root, nextRecord);
+  validateFollowThroughTransition(previousRecord, nextRecord);
+  items.push(nextRecord);
+  const next = buildOperatorFollowThrough(root, { ...existing, items }, sourceCatalog, nowIso());
+  const nextTransitions = buildFollowThroughTransitions(existingTransitions, nextRecord, previousRecord, nowIso());
+  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, next);
+  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions, nextTransitions);
+  refreshDurableSurfaces(root, {
+    type: "record-operator-follow-through",
+    summary: `Recorded operator follow-through for ${sourceType}:${sourceId}.`,
+    artifactPaths: [ARTIFACT_PATHS.metaOperatorFollowThrough, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.metaOptimizerReport]
+  });
+  return next;
 }
 
 export function readPhaseContextManifest(root, phaseId = null) {
@@ -4372,6 +5002,7 @@ export function readActionContextBundle(root, args = {}) {
 }
 
 export function summarizeSessionJournal(root) {
+  assertGovernanceMutationRegistered("summarize-session-journal", "exempt");
   refreshDurableSurfaces(root, {
     type: "summarize-session-journal",
     summary: "Refreshed session summary surface.",

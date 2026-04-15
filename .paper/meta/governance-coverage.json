@@ -1,0 +1,510 @@
+{
+  "version": 1,
+  "proposalOnly": true,
+  "guardedMutations": [
+    {
+      "id": "upsert-orchestration-board",
+      "action": "Updating the orchestration board",
+      "artifactPath": ".paper/orchestration/board.json",
+      "surfaceBindings": {
+        "coreFunction": "upsertOrchestrationBoard",
+        "mcpTool": "upsert_orchestration_board",
+        "commandIds": [
+          "paper.orchestrate"
+        ]
+      }
+    },
+    {
+      "id": "append-handoff",
+      "action": "Appending a durable handoff",
+      "artifactPath": ".paper/orchestration/handoffs.md",
+      "surfaceBindings": {
+        "coreFunction": "appendHandoff",
+        "mcpTool": "append_handoff",
+        "commandIds": [
+          "paper.orchestrate"
+        ]
+      }
+    },
+    {
+      "id": "register-source",
+      "action": "Registering a source",
+      "artifactPath": ".paper/sources/index.json",
+      "surfaceBindings": {
+        "coreFunction": "registerSource",
+        "mcpTool": "register_source",
+        "commandIds": [
+          "paper.source"
+        ]
+      }
+    },
+    {
+      "id": "upsert-note",
+      "action": "Recording a structured note",
+      "artifactPath": ".paper/notes/index.json",
+      "surfaceBindings": {
+        "coreFunction": "upsertNote",
+        "mcpTool": "upsert_note",
+        "commandIds": [
+          "paper.note"
+        ]
+      }
+    },
+    {
+      "id": "upsert-claims",
+      "action": "Updating evidence-backed claims",
+      "artifactPath": ".paper/evidence/index.json",
+      "surfaceBindings": {
+        "coreFunction": "upsertClaims",
+        "mcpTool": "upsert_claims",
+        "commandIds": [
+          "paper.claim-gate"
+        ]
+      }
+    },
+    {
+      "id": "upsert-plan",
+      "action": "Updating the paper plan",
+      "artifactPath": ".paper/plans/current-plan.md",
+      "surfaceBindings": {
+        "coreFunction": "upsertPlan",
+        "mcpTool": "upsert_plan",
+        "commandIds": [
+          "paper.plan"
+        ]
+      }
+    },
+    {
+      "id": "upsert-outline",
+      "action": "Updating the paper outline",
+      "artifactPath": ".paper/outline/current-outline.md",
+      "surfaceBindings": {
+        "coreFunction": "upsertOutline",
+        "mcpTool": "upsert_outline",
+        "commandIds": [
+          "paper.outline"
+        ]
+      }
+    },
+    {
+      "id": "upsert-draft",
+      "action": "Updating a draft section",
+      "artifactPath": ".paper/drafts",
+      "surfaceBindings": {
+        "coreFunction": "upsertDraft",
+        "mcpTool": "upsert_draft",
+        "commandIds": [
+          "paper.draft"
+        ]
+      }
+    },
+    {
+      "id": "set-section-status",
+      "action": "Updating a section status",
+      "artifactPath": ".paper/state.json",
+      "surfaceBindings": {
+        "coreFunction": "setSectionStatus",
+        "mcpTool": "set_section_status",
+        "commandIds": [
+          "paper.draft",
+          "paper.revise"
+        ]
+      }
+    },
+    {
+      "id": "upsert-figure-plan",
+      "action": "Updating the figure plan",
+      "artifactPath": ".paper/figures/index.json",
+      "surfaceBindings": {
+        "coreFunction": "upsertFigurePlan",
+        "mcpTool": "upsert_figure_plan",
+        "commandIds": [
+          "paper.figure"
+        ]
+      }
+    },
+    {
+      "id": "sync-citations",
+      "action": "Updating citation artifacts",
+      "artifactPath": ".paper/bibliography/citation-log.md",
+      "surfaceBindings": {
+        "coreFunction": "syncCitations",
+        "mcpTool": "sync_citations",
+        "commandIds": [
+          "paper.citations"
+        ]
+      }
+    },
+    {
+      "id": "refresh-wiki",
+      "action": "Refreshing the wiki",
+      "artifactPath": ".paper/wiki/index.md",
+      "surfaceBindings": {
+        "coreFunction": "refreshWiki",
+        "mcpTool": "refresh_wiki",
+        "commandIds": [
+          "paper.wiki"
+        ]
+      }
+    },
+    {
+      "id": "build-rebuttal",
+      "action": "Building the rebuttal draft",
+      "artifactPath": ".paper/drafts/rebuttal.md",
+      "surfaceBindings": {
+        "coreFunction": "buildRebuttal",
+        "mcpTool": "build_rebuttal",
+        "commandIds": [
+          "paper.rebuttal"
+        ]
+      }
+    },
+    {
+      "id": "append-review-log",
+      "action": "Recording a review log",
+      "artifactPath": ".paper/reviews/log.md",
+      "surfaceBindings": {
+        "coreFunction": "appendReviewLog",
+        "mcpTool": "append_review_log",
+        "commandIds": [
+          "paper.review"
+        ]
+      }
+    },
+    {
+      "id": "upsert-revision-plan",
+      "action": "Updating the revision plan",
+      "artifactPath": ".paper/revision-plans/current-plan.md",
+      "surfaceBindings": {
+        "coreFunction": "upsertRevisionPlan",
+        "mcpTool": "upsert_revision_plan",
+        "commandIds": [
+          "paper.revise"
+        ]
+      }
+    },
+    {
+      "id": "run-review-loop",
+      "action": "Running the review loop",
+      "artifactPath": ".paper/reviews/log.md",
+      "surfaceBindings": {
+        "coreFunction": "runReviewLoop",
+        "mcpTool": "run_review_loop",
+        "commandIds": [
+          "paper.review-loop"
+        ]
+      }
+    },
+    {
+      "id": "update-research-brief",
+      "action": "Updating the research brief",
+      "artifactPath": ".paper/research/brief.md",
+      "surfaceBindings": {
+        "coreFunction": "updateResearchBrief",
+        "mcpTool": "update_research_brief",
+        "commandIds": [
+          "paper.research"
+        ]
+      }
+    },
+    {
+      "id": "upsert-experiment-plan",
+      "action": "Updating an experiment plan",
+      "artifactPath": ".paper/experiments/plans.json",
+      "surfaceBindings": {
+        "coreFunction": "upsertExperimentPlan",
+        "mcpTool": "upsert_experiment_plan",
+        "commandIds": [
+          "paper.experiment-plan"
+        ]
+      }
+    },
+    {
+      "id": "upsert-experiment-result",
+      "action": "Updating an experiment result",
+      "artifactPath": ".paper/experiments/results.json",
+      "surfaceBindings": {
+        "coreFunction": "upsertExperimentResult",
+        "mcpTool": "upsert_experiment_result",
+        "commandIds": [
+          "paper.experiment-plan"
+        ]
+      }
+    },
+    {
+      "id": "run-experiment-audit",
+      "action": "Running an experiment audit",
+      "artifactPath": ".paper/experiments/audits.json",
+      "surfaceBindings": {
+        "coreFunction": "runExperimentAudit",
+        "mcpTool": "run_experiment_audit",
+        "commandIds": [
+          "paper.experiment-audit"
+        ]
+      }
+    },
+    {
+      "id": "bridge-experiment-result-to-claim",
+      "action": "Bridging an experiment result to a claim",
+      "artifactPath": ".paper/claims/bridge-log.json",
+      "surfaceBindings": {
+        "coreFunction": "bridgeExperimentResultToClaim",
+        "mcpTool": "bridge_result_to_claim",
+        "commandIds": [
+          "paper.result-bridge"
+        ]
+      }
+    },
+    {
+      "id": "normalize-rebuttal-issues",
+      "action": "Normalizing rebuttal issues",
+      "artifactPath": ".paper/rebuttal/issues.json",
+      "surfaceBindings": {
+        "coreFunction": "normalizeRebuttalIssues",
+        "mcpTool": "normalize_rebuttal_issues",
+        "commandIds": [
+          "paper.rebuttal-strategy"
+        ]
+      }
+    },
+    {
+      "id": "build-rebuttal-strategy",
+      "action": "Building the rebuttal strategy",
+      "artifactPath": ".paper/rebuttal/strategy.md",
+      "surfaceBindings": {
+        "coreFunction": "buildRebuttalStrategy",
+        "mcpTool": "build_rebuttal_strategy",
+        "commandIds": [
+          "paper.rebuttal-strategy"
+        ]
+      }
+    },
+    {
+      "id": "create-version-snapshot",
+      "action": "Creating a version snapshot",
+      "artifactPath": ".paper/versions/index.json",
+      "surfaceBindings": {
+        "coreFunction": "createVersionSnapshot",
+        "mcpTool": "create_version_snapshot",
+        "commandIds": [
+          "paper.version-snapshot"
+        ]
+      }
+    },
+    {
+      "id": "compare-versions",
+      "action": "Comparing versions",
+      "artifactPath": ".paper/versions/comparisons.json",
+      "surfaceBindings": {
+        "coreFunction": "compareVersions",
+        "mcpTool": "compare_versions",
+        "commandIds": [
+          "paper.version-compare"
+        ]
+      }
+    }
+  ],
+  "exemptMutations": [
+    {
+      "id": "record-operator-follow-through",
+      "action": "Recording follow-through decisions remains explicitly exempt so the governance system can be updated while debt exists.",
+      "artifactPath": ".paper/meta/operator-follow-through.json",
+      "ownerRole": "planner",
+      "approvedByRole": "planner",
+      "approvedAt": "2026-04-15T00:00:00.000Z",
+      "lastReviewedAt": "2026-04-15T00:00:00.000Z",
+      "reasonCode": "governance-ledger-maintenance",
+      "reviewCadence": "per-session",
+      "sunsetAt": "2099-12-31T00:00:00.000Z",
+      "surfaceBindings": {
+        "coreFunction": "recordOperatorFollowThrough",
+        "mcpTool": "record_operator_follow_through",
+        "commandIds": [
+          "paper.follow-through"
+        ]
+      }
+    },
+    {
+      "id": "query-meta-optimize",
+      "action": "Refreshing proposal-only optimizer surfaces remains exempt because it is part of debt detection, not debt execution.",
+      "artifactPath": ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+      "ownerRole": "planner",
+      "approvedByRole": "planner",
+      "approvedAt": "2026-04-15T00:00:00.000Z",
+      "lastReviewedAt": "2026-04-15T00:00:00.000Z",
+      "reasonCode": "proposal-frontier-refresh",
+      "reviewCadence": "per-session",
+      "sunsetAt": "2099-12-31T00:00:00.000Z",
+      "surfaceBindings": {
+        "coreFunction": "queryMetaOptimize",
+        "mcpTool": "query_meta_optimize",
+        "commandIds": [
+          "paper.meta-optimize"
+        ]
+      }
+    },
+    {
+      "id": "init-project",
+      "action": "Project initialization bootstraps the workspace and is explicitly exempt from follow-through gating.",
+      "artifactPath": ".paper/state.json",
+      "ownerRole": "planner",
+      "approvedByRole": "planner",
+      "approvedAt": "2026-04-15T00:00:00.000Z",
+      "lastReviewedAt": "2026-04-15T00:00:00.000Z",
+      "reasonCode": "workspace-bootstrap",
+      "reviewCadence": "per-project",
+      "sunsetAt": "2099-12-31T00:00:00.000Z",
+      "surfaceBindings": {
+        "coreFunction": "initProject",
+        "mcpTool": "init_project",
+        "commandIds": [
+          "paper.init"
+        ]
+      }
+    },
+    {
+      "id": "sync-checklist",
+      "action": "Checklist syncing remains exempt because it summarizes debt instead of executing it.",
+      "artifactPath": ".paper/checklists/paper.md",
+      "ownerRole": "planner",
+      "approvedByRole": "planner",
+      "approvedAt": "2026-04-15T00:00:00.000Z",
+      "lastReviewedAt": "2026-04-15T00:00:00.000Z",
+      "reasonCode": "summary-sync",
+      "reviewCadence": "per-session",
+      "sunsetAt": "2099-12-31T00:00:00.000Z",
+      "surfaceBindings": {
+        "coreFunction": "syncChecklist",
+        "mcpTool": "sync_checklist",
+        "commandIds": [
+          "paper.checklist"
+        ]
+      }
+    },
+    {
+      "id": "validate-figure-pipeline",
+      "action": "Figure validation is an inspection path and remains exempt from follow-through execution gating.",
+      "artifactPath": ".paper/figures/qa.json",
+      "ownerRole": "researcher",
+      "approvedByRole": "researcher",
+      "approvedAt": "2026-04-15T00:00:00.000Z",
+      "lastReviewedAt": "2026-04-15T00:00:00.000Z",
+      "reasonCode": "inspection-only",
+      "reviewCadence": "per-change",
+      "sunsetAt": "2099-12-31T00:00:00.000Z",
+      "surfaceBindings": {
+        "coreFunction": "validateFigurePipeline",
+        "mcpTool": "validate_figure_pipeline",
+        "commandIds": [
+          "paper.figure"
+        ]
+      }
+    },
+    {
+      "id": "classify-workflow-intent",
+      "action": "Workflow intent classification is analytical and remains exempt.",
+      "artifactPath": ".paper/meta/recommendations.json",
+      "ownerRole": "planner",
+      "approvedByRole": "planner",
+      "approvedAt": "2026-04-15T00:00:00.000Z",
+      "lastReviewedAt": "2026-04-15T00:00:00.000Z",
+      "reasonCode": "analysis-only",
+      "reviewCadence": "per-session",
+      "sunsetAt": "2099-12-31T00:00:00.000Z",
+      "surfaceBindings": {
+        "coreFunction": "classifyWorkflowIntent",
+        "mcpTool": "query_meta_optimize",
+        "commandIds": [
+          "paper.meta-optimize"
+        ]
+      }
+    },
+    {
+      "id": "load-board",
+      "action": "Board loading is a read helper and is explicitly exempt.",
+      "artifactPath": ".paper/orchestration/board.json",
+      "ownerRole": "planner",
+      "approvedByRole": "planner",
+      "approvedAt": "2026-04-15T00:00:00.000Z",
+      "lastReviewedAt": "2026-04-15T00:00:00.000Z",
+      "reasonCode": "read-helper",
+      "reviewCadence": "per-release",
+      "sunsetAt": "2099-12-31T00:00:00.000Z",
+      "surfaceBindings": {
+        "coreFunction": "loadBoard",
+        "mcpTool": "query_workspace_index",
+        "commandIds": [
+          "paper.orchestrate"
+        ]
+      }
+    },
+    {
+      "id": "save-board",
+      "action": "Board persistence is an internal helper already covered by guarded orchestration updates and is explicitly exempt as a standalone mutation entrypoint.",
+      "artifactPath": ".paper/orchestration/board.json",
+      "ownerRole": "planner",
+      "approvedByRole": "planner",
+      "approvedAt": "2026-04-15T00:00:00.000Z",
+      "lastReviewedAt": "2026-04-15T00:00:00.000Z",
+      "reasonCode": "internal-helper",
+      "reviewCadence": "per-release",
+      "sunsetAt": "2099-12-31T00:00:00.000Z",
+      "surfaceBindings": {
+        "coreFunction": "saveBoard",
+        "mcpTool": "upsert_orchestration_board",
+        "commandIds": [
+          "paper.orchestrate"
+        ]
+      }
+    },
+    {
+      "id": "refresh-durable-surfaces",
+      "action": "Durable surface refresh is a proposal-only summarization step and remains exempt.",
+      "artifactPath": ".paper/workspace/index.json",
+      "ownerRole": "planner",
+      "approvedByRole": "planner",
+      "approvedAt": "2026-04-15T00:00:00.000Z",
+      "lastReviewedAt": "2026-04-15T00:00:00.000Z",
+      "reasonCode": "summary-refresh",
+      "reviewCadence": "per-session",
+      "sunsetAt": "2099-12-31T00:00:00.000Z",
+      "surfaceBindings": {
+        "coreFunction": "refreshDurableSurfaces",
+        "mcpTool": "query_workspace_index",
+        "commandIds": [
+          "paper.meta-optimize",
+          "paper.task-graph",
+          "paper.open-questions",
+          "paper.decisions",
+          "paper.lineage"
+        ]
+      }
+    },
+    {
+      "id": "summarize-session-journal",
+      "action": "Session summarization is reflective and remains exempt from execution gating.",
+      "artifactPath": ".paper/sessions/LATEST_SUMMARY.md",
+      "ownerRole": "planner",
+      "approvedByRole": "planner",
+      "approvedAt": "2026-04-15T00:00:00.000Z",
+      "lastReviewedAt": "2026-04-15T00:00:00.000Z",
+      "reasonCode": "reflective-summary",
+      "reviewCadence": "per-session",
+      "sunsetAt": "2099-12-31T00:00:00.000Z",
+      "surfaceBindings": {
+        "coreFunction": "summarizeSessionJournal",
+        "mcpTool": "query_meta_optimize",
+        "commandIds": [
+          "paper.meta-optimize"
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "guardedCount": 25,
+    "exemptCount": 10,
+    "overview": "25 write paths currently require clear operator follow-through; 10 paths remain explicitly exempt.",
+    "coveragePath": ".paper/meta/governance-coverage.json"
+  },
+  "updatedAt": "2026-04-15T06:50:06.480Z"
+}

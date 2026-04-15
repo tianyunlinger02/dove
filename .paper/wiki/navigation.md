@@ -27,6 +27,14 @@
 - Remediation pack focus: 1 proposal-only remediation packs summarize the current repair frontier and optimizer clusters into grouped, evidence-backed operator bundles.
 - Remediation pack readiness: 0 actionable, 1 partially actionable, 0 advisory-only remediation packs.
 - Remediation packs path: .paper/meta/remediation-packs.json
+- Operator follow-through: 0 records (none)
+- Operator follow-through overview: No operator follow-through decisions have been recorded yet.
+- Operator follow-through debt: overdue=0, deferred-due=0, stale=0, invalid=0, action-required=0
+- Operator follow-through execution window: due-soon=0, due-review=0, critical-overdue=0
+- Operator follow-through path: .paper/meta/operator-follow-through.json
+- Governance coverage: 25 guarded / 10 exempt
+- Governance coverage overview: 25 write paths currently require clear operator follow-through; 10 paths remain explicitly exempt.
+- Governance coverage path: .paper/meta/governance-coverage.json
 - Execution bridge candidates: 1 proposal-only candidates (candidate-remediation-pack-queue-discipline-create-new-packet-task-queue-discipline)
 - Execution bridge focus: 1 proposal-only execution bridge candidates translate remediation packs and playbooks into likely manual work-item shapes without creating anything automatically.
 - Execution bridge path: .paper/meta/execution-bridge-candidates.json

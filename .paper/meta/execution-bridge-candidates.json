@@ -82,7 +82,7 @@
       ],
       "taxonomyFamilyIds": [],
       "taxonomyGroupIds": [],
-      "generatedAt": "2026-04-13T21:29:22.440Z",
+      "generatedAt": "2026-04-15T06:50:06.481Z",
       "globalRank": 1
     }
   ],
@@ -103,5 +103,5 @@
     ".paper/workspace/index.json",
     ".paper/meta/LATEST_OPTIMIZER_REPORT.md"
   ],
-  "updatedAt": "2026-04-13T21:29:22.440Z"
+  "updatedAt": "2026-04-15T06:50:06.481Z"
 }

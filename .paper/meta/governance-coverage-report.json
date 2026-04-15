@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "status": "ok",
+  "guardedIds": [
+    "upsert-orchestration-board",
+    "append-handoff",
+    "register-source",
+    "upsert-note",
+    "upsert-claims",
+    "upsert-plan",
+    "upsert-outline",
+    "upsert-draft",
+    "set-section-status",
+    "upsert-figure-plan",
+    "sync-citations",
+    "refresh-wiki",
+    "build-rebuttal",
+    "append-review-log",
+    "upsert-revision-plan",
+    "run-review-loop",
+    "update-research-brief",
+    "upsert-experiment-plan",
+    "upsert-experiment-result",
+    "run-experiment-audit",
+    "bridge-experiment-result-to-claim",
+    "normalize-rebuttal-issues",
+    "build-rebuttal-strategy",
+    "create-version-snapshot",
+    "compare-versions"
+  ],
+  "exemptIds": [
+    "record-operator-follow-through",
+    "query-meta-optimize",
+    "init-project",
+    "sync-checklist",
+    "validate-figure-pipeline",
+    "classify-workflow-intent",
+    "load-board",
+    "save-board",
+    "refresh-durable-surfaces",
+    "summarize-session-journal"
+  ],
+  "surfaceBindingAudit": {
+    "uncoveredTools": [],
+    "uncoveredCommands": [],
+    "uncoveredCoreFunctions": [],
+    "uncoveredNegativeCoverage": []
+  },
+  "summary": {
+    "guardedCount": 25,
+    "exemptCount": 10,
+    "overview": "25 write paths currently require clear operator follow-through; 10 paths remain explicitly exempt.",
+    "reportPath": ".paper/meta/governance-coverage-report.json",
+    "markdownPath": ".paper/meta/LATEST_GOVERNANCE_COVERAGE_REPORT.md"
+  },
+  "updatedAt": "2026-04-15T06:50:06.480Z",
+  "markdown": "# Governance coverage report\n\n- Generated: 2026-04-15T06:50:06.480Z\n- Status: ok\n- Guarded mutations: 25\n- Exempt mutations: 10\n- Overview: 25 write paths currently require clear operator follow-through; 10 paths remain explicitly exempt.\n\n## Guarded surfaces\n\n- upsert-orchestration-board: upsertOrchestrationBoard / upsert_orchestration_board / paper.orchestrate\n- append-handoff: appendHandoff / append_handoff / paper.orchestrate\n- register-source: registerSource / register_source / paper.source\n- upsert-note: upsertNote / upsert_note / paper.note\n- upsert-claims: upsertClaims / upsert_claims / paper.claim-gate\n- upsert-plan: upsertPlan / upsert_plan / paper.plan\n- upsert-outline: upsertOutline / upsert_outline / paper.outline\n- upsert-draft: upsertDraft / upsert_draft / paper.draft\n- set-section-status: setSectionStatus / set_section_status / paper.draft, paper.revise\n- upsert-figure-plan: upsertFigurePlan / upsert_figure_plan / paper.figure\n- sync-citations: syncCitations / sync_citations / paper.citations\n- refresh-wiki: refreshWiki / refresh_wiki / paper.wiki\n- build-rebuttal: buildRebuttal / build_rebuttal / paper.rebuttal\n- append-review-log: appendReviewLog / append_review_log / paper.review\n- upsert-revision-plan: upsertRevisionPlan / upsert_revision_plan / paper.revise\n- run-review-loop: runReviewLoop / run_review_loop / paper.review-loop\n- update-research-brief: updateResearchBrief / update_research_brief / paper.research\n- upsert-experiment-plan: upsertExperimentPlan / upsert_experiment_plan / paper.experiment-plan\n- upsert-experiment-result: upsertExperimentResult / upsert_experiment_result / paper.experiment-plan\n- run-experiment-audit: runExperimentAudit / run_experiment_audit / paper.experiment-audit\n- bridge-experiment-result-to-claim: bridgeExperimentResultToClaim / bridge_result_to_claim / paper.result-bridge\n- normalize-rebuttal-issues: normalizeRebuttalIssues / normalize_rebuttal_issues / paper.rebuttal-strategy\n- build-rebuttal-strategy: buildRebuttalStrategy / build_rebuttal_strategy / paper.rebuttal-strategy\n- create-version-snapshot: createVersionSnapshot / create_version_snapshot / paper.version-snapshot\n- compare-versions: compareVersions / compare_versions / paper.version-compare\n\n## Exempt surfaces\n\n- record-operator-follow-through: recordOperatorFollowThrough / record_operator_follow_through / paper.follow-through | owner=planner | approvedBy=planner | cadence=per-session | sunset=2099-12-31T00:00:00.000Z\n- query-meta-optimize: queryMetaOptimize / query_meta_optimize / paper.meta-optimize | owner=planner | approvedBy=planner | cadence=per-session | sunset=2099-12-31T00:00:00.000Z\n- init-project: initProject / init_project / paper.init | owner=planner | approvedBy=planner | cadence=per-project | sunset=2099-12-31T00:00:00.000Z\n- sync-checklist: syncChecklist / sync_checklist / paper.checklist | owner=planner | approvedBy=planner | cadence=per-session | sunset=2099-12-31T00:00:00.000Z\n- validate-figure-pipeline: validateFigurePipeline / validate_figure_pipeline / paper.figure | owner=researcher | approvedBy=researcher | cadence=per-change | sunset=2099-12-31T00:00:00.000Z\n- classify-workflow-intent: classifyWorkflowIntent / query_meta_optimize / paper.meta-optimize | owner=planner | approvedBy=planner | cadence=per-session | sunset=2099-12-31T00:00:00.000Z\n- load-board: loadBoard / query_workspace_index / paper.orchestrate | owner=planner | approvedBy=planner | cadence=per-release | sunset=2099-12-31T00:00:00.000Z\n- save-board: saveBoard / upsert_orchestration_board / paper.orchestrate | owner=planner | approvedBy=planner | cadence=per-release | sunset=2099-12-31T00:00:00.000Z\n- refresh-durable-surfaces: refreshDurableSurfaces / query_workspace_index / paper.meta-optimize, paper.task-graph, paper.open-questions, paper.decisions, paper.lineage | owner=planner | approvedBy=planner | cadence=per-session | sunset=2099-12-31T00:00:00.000Z\n- summarize-session-journal: summarizeSessionJournal / query_meta_optimize / paper.meta-optimize | owner=planner | approvedBy=planner | cadence=per-session | sunset=2099-12-31T00:00:00.000Z\n\n## Exempt review metadata\n\n- record-operator-follow-through: approvedAt=2026-04-15T00:00:00.000Z | lastReviewedAt=2026-04-15T00:00:00.000Z | reviewCadence=per-session\n- query-meta-optimize: approvedAt=2026-04-15T00:00:00.000Z | lastReviewedAt=2026-04-15T00:00:00.000Z | reviewCadence=per-session\n- init-project: approvedAt=2026-04-15T00:00:00.000Z | lastReviewedAt=2026-04-15T00:00:00.000Z | reviewCadence=per-project\n- sync-checklist: approvedAt=2026-04-15T00:00:00.000Z | lastReviewedAt=2026-04-15T00:00:00.000Z | reviewCadence=per-session\n- validate-figure-pipeline: approvedAt=2026-04-15T00:00:00.000Z | lastReviewedAt=2026-04-15T00:00:00.000Z | reviewCadence=per-change\n- classify-workflow-intent: approvedAt=2026-04-15T00:00:00.000Z | lastReviewedAt=2026-04-15T00:00:00.000Z | reviewCadence=per-session\n- load-board: approvedAt=2026-04-15T00:00:00.000Z | lastReviewedAt=2026-04-15T00:00:00.000Z | reviewCadence=per-release\n- save-board: approvedAt=2026-04-15T00:00:00.000Z | lastReviewedAt=2026-04-15T00:00:00.000Z | reviewCadence=per-release\n- refresh-durable-surfaces: approvedAt=2026-04-15T00:00:00.000Z | lastReviewedAt=2026-04-15T00:00:00.000Z | reviewCadence=per-session\n- summarize-session-journal: approvedAt=2026-04-15T00:00:00.000Z | lastReviewedAt=2026-04-15T00:00:00.000Z | reviewCadence=per-session\n\n## Uncovered bindings\n\n- Tools: none\n- Commands: none\n- Core functions: none\n- Negative coverage gaps: none"
+}

@@ -30,7 +30,7 @@
     "mode": "deterministic-noop-drift-guard-v1",
     "lastAction": "unchanged",
     "reason": "Canonical frontier and long-horizon state were unchanged, so no new snapshot was added.",
-    "comparedAt": "2026-04-13T21:29:22.439Z",
+    "comparedAt": "2026-04-15T06:50:06.480Z",
     "lastMeaningfulChangeAt": "2026-04-13T12:46:29.151Z"
   },
   "history": [
@@ -340,5 +340,5 @@
       "lastObservedAt": "2026-04-13T12:46:29.151Z"
     }
   ],
-  "updatedAt": "2026-04-13T21:29:22.439Z"
+  "updatedAt": "2026-04-15T06:50:06.480Z"
 }

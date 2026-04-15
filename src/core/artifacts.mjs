@@ -13,6 +13,8 @@ import {
   upsertOrchestrationBoard
 } from "./orchestration.mjs";
 import {
+  assertGovernanceMutationRegistered,
+  assertFollowThroughReady,
   ensureWorkspace,
   extractCitationKeysFromText,
   listArtifacts,
@@ -1636,6 +1638,8 @@ export function readState(root) {
 }
 
 export function registerSource(root, args = {}) {
+  assertGovernanceMutationRegistered("register-source", "guarded");
+  assertFollowThroughReady(root, "Registering a source", args);
   ensureWorkspace(root);
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const baseId = normalizeIdentifier(args.sourceId, `${slugify(args.citationKey ?? args.title ?? `source-${sources.items.length + 1}`)}${args.year ? `-${args.year}` : ""}`);
@@ -1675,6 +1679,8 @@ export function registerSource(root, args = {}) {
 }
 
 export function upsertNote(root, args = {}) {
+  assertGovernanceMutationRegistered("upsert-note", "guarded");
+  assertFollowThroughReady(root, "Recording a structured note", args);
   ensureWorkspace(root);
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
@@ -1719,6 +1725,8 @@ export function upsertNote(root, args = {}) {
 }
 
 export function upsertPlan(root, args = {}) {
+  assertGovernanceMutationRegistered("upsert-plan", "guarded");
+  assertFollowThroughReady(root, "Updating the paper plan", args);
   const state = loadState(root);
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
@@ -1749,6 +1757,8 @@ export function upsertPlan(root, args = {}) {
 }
 
 export function upsertOutline(root, args = {}) {
+  assertGovernanceMutationRegistered("upsert-outline", "guarded");
+  assertFollowThroughReady(root, "Updating the paper outline", args);
   let state = loadState(root);
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   if (isStrictMode(state, args)) {
@@ -1784,6 +1794,8 @@ export function upsertOutline(root, args = {}) {
 }
 
 export function upsertDraft(root, args = {}) {
+  assertGovernanceMutationRegistered("upsert-draft", "guarded");
+  assertFollowThroughReady(root, "Updating a draft section", args);
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
@@ -1821,6 +1833,8 @@ export function upsertDraft(root, args = {}) {
 }
 
 export function setSectionStatus(root, args = {}) {
+  assertGovernanceMutationRegistered("set-section-status", "guarded");
+  assertFollowThroughReady(root, "Updating a section status", args);
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
   state.sections[sectionId] = {
@@ -1849,6 +1863,7 @@ export function setSectionStatus(root, args = {}) {
 }
 
 export function syncChecklist(root) {
+  assertGovernanceMutationRegistered("sync-checklist", "exempt");
   const state = loadState(root);
   const board = loadBoard(root);
   const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 2, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
@@ -1867,6 +1882,8 @@ export function syncChecklist(root) {
 }
 
 export function upsertFigurePlan(root, args = {}) {
+  assertGovernanceMutationRegistered("upsert-figure-plan", "guarded");
+  assertFollowThroughReady(root, "Updating the figure plan", args);
   const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: null });
   const normalizedItems = (Array.isArray(args.items) ? args.items : []).map(normalizeFigureItem);
   const timestamp = nowIso();
@@ -1963,6 +1980,8 @@ export function upsertFigurePlan(root, args = {}) {
 }
 
 export function syncCitations(root, args = {}) {
+  assertGovernanceMutationRegistered("sync-citations", "guarded");
+  assertFollowThroughReady(root, "Updating citation artifacts", args);
   ensureWorkspace(root);
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const citedKeys = new Set();
@@ -2004,6 +2023,8 @@ export function syncCitations(root, args = {}) {
 }
 
 export function refreshWiki(root) {
+  assertGovernanceMutationRegistered("refresh-wiki", "guarded");
+  assertFollowThroughReady(root, "Refreshing the wiki", {});
   ensureWorkspace(root);
   const state = loadState(root);
   const board = loadBoard(root);
@@ -2045,6 +2066,8 @@ export function refreshWiki(root) {
 }
 
 export function buildRebuttal(root) {
+  assertGovernanceMutationRegistered("build-rebuttal", "guarded");
+  assertFollowThroughReady(root, "Building the rebuttal draft", {});
   ensureWorkspace(root);
   const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 2, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
   const claims = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
