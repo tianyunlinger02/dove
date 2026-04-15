@@ -1,6 +1,13 @@
 const policyProps = {
   actorRole: { type: "string" },
-  policyOverrideReason: { type: "string" }
+  policyOverrideReason: { type: "string" },
+  policyOverrideReasonCode: { type: "string" },
+  policyOverrideEvidencePaths: { type: "array", items: { type: "string" } },
+  policyOverrideTargetArtifact: { type: "string" },
+  policyOverrideTargetId: { type: "string" },
+  policyOverrideSourceId: { type: "string" },
+  policyOverridePhase: { type: "string" },
+  policyOverrideExpiresAt: { type: "string" }
 };
 
 function withPolicy(properties = {}) {
@@ -21,6 +28,8 @@ export const toolDefinitions = [
   { name: "query_lineage", description: "Refresh and read version lineage plus comparison targets.", inputSchema: { type: "object", properties: {} } },
   { name: "query_workspace_index", description: "Refresh and read the top-level workspace index for resumable state.", inputSchema: { type: "object", properties: {} } },
   { name: "query_meta_optimize", description: "Refresh and read the proposal-only meta-optimize frontier, taxonomy-aware grouped clusters, family-level operator playbooks, ranked recommendations, durable remediation packs, longer-horizon memory summaries, and report paths.", inputSchema: { type: "object", properties: {} } },
+  { name: "query_governance_coverage_report", description: "Refresh and read the durable governance coverage proof report for guarded and exempt mutation paths.", inputSchema: { type: "object", properties: {} } },
+  { name: "query_operator_follow_through", description: "Refresh and read the proposal-only operator follow-through ledger for remediation, playbook, and execution-bridge decisions.", inputSchema: { type: "object", properties: {} } },
   { name: "query_boundary_report", description: "Read the workflow-pack boundary report for managed versus user-owned state.", inputSchema: { type: "object", properties: {} } },
   { name: "read_role_context_manifest", description: "Refresh and read a narrower per-role context manifest.", inputSchema: { type: "object", properties: { roleId: { type: "string" } } } },
   { name: "read_phase_context_manifest", description: "Refresh and read a phase-scoped context manifest.", inputSchema: { type: "object", properties: { phaseId: { type: "string" } } } },
@@ -120,4 +129,5 @@ export const toolDefinitions = [
   { name: "list_artifacts", description: "List the expected paper_factory artifacts and whether they exist.", inputSchema: { type: "object", properties: {} } },
   { name: "upsert_figure_plan", description: "Write the staged figure backlog, linkage metadata, and artifact contracts.", inputSchema: { type: "object", properties: { items: { type: "array", items: { type: "object" } } } } },
   { name: "validate_figure_pipeline", description: "Regenerate durable figure QA and stage-validation outputs.", inputSchema: { type: "object", properties: {} } }
+  ,{ name: "record_operator_follow_through", description: "Record a proposal-only operator decision for a remediation pack, family playbook, or execution-bridge candidate.", inputSchema: { type: "object", properties: withPolicy({ sourceType: { type: "string" }, sourceId: { type: "string" }, status: { type: "string" }, actorRole: { type: "string" }, decisionSummary: { type: "string" }, rationale: { type: "string" }, selectedConversionPathKey: { type: "string" }, linkedTargetArtifact: { type: "string" }, linkedTargetId: { type: "string" }, deferUntil: { type: "string" }, executeBy: { type: "string" }, reviewAfter: { type: "string" }, closureReason: { type: "string" }, closureArtifactPaths: { type: "array", items: { type: "string" } } }) } }
 ];

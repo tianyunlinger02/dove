@@ -89,6 +89,8 @@ The workflow is no longer lifecycle-only. Use these file-backed inspection comma
 - `project:paper.decisions` for durable operational and comparison decisions
 - `project:paper.lineage` for version/comparison lineage
 - `project:paper.meta-optimize` for the proposal-only optimization frontier and recommendations
+- `project:paper.follow-through` for explicit operator handling of proposal-only remediation guidance
+- `project:paper.governance-audit` for the durable governance coverage proof report
 
 These commands refresh `.paper/wiki/navigation.md`, `.paper/task-packets/index.json`, `.paper/context/roles/*.json`, `.paper/context/phases/*.json`, `.paper/context/packets/*.json`, `.paper/workspace/index.json`, and `.paper/sessions/LATEST_SUMMARY.md` without introducing unsupported host hooks.
 
@@ -118,6 +120,8 @@ The optional MCP layer exposes deterministic helpers:
 - `query_lineage`
 - `query_workspace_index`
 - `query_meta_optimize`
+- `query_governance_coverage_report`
+- `query_operator_follow_through`
 - `read_role_context_manifest`
 - `read_phase_context_manifest`
 - `read_packet_context_manifest`
@@ -151,6 +155,8 @@ The optional MCP layer exposes deterministic helpers:
 - `compare_versions`
 - `list_artifacts`
 - `upsert_figure_plan`
+- `validate_figure_pipeline`
+- `record_operator_follow_through`
 
 ## Skills
 

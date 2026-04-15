@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_COMMANDS } from "../src/core/schema.mjs";
 
 const ROOT = process.cwd();
 
@@ -28,6 +29,8 @@ const requiredCommands = [
   "paper.decisions.md",
   "paper.lineage.md",
   "paper.meta-optimize.md",
+  "paper.follow-through.md",
+  "paper.governance-audit.md",
   "paper.wiki.md",
   "paper.checklist.md",
   "paper.citations.md",
@@ -52,6 +55,16 @@ const requiredSkills = [
 
 for (const fileName of requiredCommands) {
   assert.ok(fs.existsSync(path.join(ROOT, ".opencode", "commands", fileName)), `Missing command: ${fileName}`);
+}
+
+const classifiedCommandIds = new Set([
+  ...GOVERNANCE_GUARDED_MUTATIONS.flatMap((entry) => entry.surfaceBindings?.commandIds ?? []),
+  ...GOVERNANCE_EXEMPT_MUTATIONS.flatMap((entry) => entry.surfaceBindings?.commandIds ?? []),
+  ...GOVERNANCE_READONLY_COMMANDS
+]);
+for (const fileName of requiredCommands) {
+  const commandId = fileName.replace(/\.md$/, "");
+  assert.equal(classifiedCommandIds.has(commandId), true, `Unclassified command surface: ${commandId}`);
 }
 
 for (const relativePath of requiredSkills) {

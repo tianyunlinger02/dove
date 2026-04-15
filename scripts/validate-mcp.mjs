@@ -107,9 +107,11 @@ async function main() {
     "normalize_rebuttal_issues",
     "query_boundary_report",
     "query_decisions",
+    "query_governance_coverage_report",
     "query_lineage",
     "query_meta_optimize",
     "query_open_questions",
+    "query_operator_follow_through",
     "query_task_graph",
     "query_workspace_index",
     "read_action_context_bundle",
@@ -118,6 +120,7 @@ async function main() {
     "read_phase_context_manifest",
     "read_role_context_manifest",
     "read_state",
+    "record_operator_follow_through",
     "refresh_wiki",
     "register_source",
     "run_experiment_audit",
@@ -518,6 +521,9 @@ async function main() {
   const boundaryReport = extractJson(await call("tools/call", { name: "query_boundary_report", arguments: {} }));
   assert.equal(Array.isArray(boundaryReport.missingBootstrapArtifacts), true);
 
+  const initialFollowThrough = extractJson(await call("tools/call", { name: "query_operator_follow_through", arguments: {} }));
+  assert.equal(initialFollowThrough.summary.itemCount, 0);
+
   const questions = extractJson(await call("tools/call", { name: "query_open_questions", arguments: {} }));
   assert.equal(Array.isArray(questions.items), true);
 
@@ -541,6 +547,56 @@ async function main() {
     arguments: { roleId: "reviewer" }
   }));
   assert.equal(reviewerManifest.roleId, "reviewer");
+
+  extractJson(await call("tools/call", {
+    name: "upsert_orchestration_board",
+    arguments: {
+      phase: "research",
+      assignedRole: "researcher",
+      intentType: "advance-paper",
+      currentFocus: "Resolve queue-discipline debt in a durable way.",
+      nextAction: "Inspect the remediation frontier before creating new work.",
+      tasks: [{
+        id: "validator-stale-task",
+        title: "Validator stale task",
+        assignedRole: "researcher",
+        status: "in-progress",
+        lifecycleStatus: "stale",
+        nextAction: "Move this stale task into explicit remediation handling.",
+        evidenceLinks: [],
+        outputPaths: []
+      }]
+    }
+  }));
+
+  const refreshedMetaOptimize = extractJson(await call("tools/call", {
+    name: "query_meta_optimize",
+    arguments: {}
+  }));
+  const governanceCoverage = extractJson(await call("tools/call", {
+    name: "query_governance_coverage_report",
+    arguments: {}
+  }));
+  assert.equal(governanceCoverage.status, "ok");
+  assert.equal(Array.isArray(governanceCoverage.guardedIds), true);
+  const topPack = refreshedMetaOptimize.remediationPacks.packs[0];
+  const followThroughActorRole = topPack.packetPointers?.[0]?.assignedRole ?? topPack.conversionHints?.[0]?.assignedRole ?? "planner";
+  const recordedFollowThrough = extractJson(await call("tools/call", {
+    name: "record_operator_follow_through",
+    arguments: {
+      sourceType: "remediation-pack",
+      sourceId: topPack.id,
+      status: "accepted-for-execution",
+      actorRole: followThroughActorRole,
+      decisionSummary: "Take the top remediation pack into manual execution.",
+      selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
+      linkedTargetArtifact: ".paper/task-packets/index.json",
+      linkedTargetId: topPack.rankedConversionPaths?.[0]?.targetId ?? "task-validator-follow-through",
+      executeBy: "2099-01-01T00:00:00.000Z",
+      reviewAfter: "2099-01-01T12:00:00.000Z"
+    }
+  }));
+  assert.equal(recordedFollowThrough.summary.acceptedForExecutionCount, 1);
 
   const artifactManifest = extractJson(await call("tools/call", {
     name: "read_artifact_context_manifest",

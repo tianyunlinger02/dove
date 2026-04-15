@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS } from "../../src/core/index.mjs";
 import { toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
 
 test("MCP tool definitions include the mature workflow tools", () => {
@@ -15,6 +16,8 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "query_lineage",
     "query_workspace_index",
     "query_meta_optimize",
+    "query_governance_coverage_report",
+    "query_operator_follow_through",
     "query_boundary_report",
     "read_role_context_manifest",
     "read_phase_context_manifest",
@@ -49,8 +52,20 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "compare_versions",
     "list_artifacts",
     "upsert_figure_plan",
-    "validate_figure_pipeline"
+    "validate_figure_pipeline",
+    "record_operator_follow_through"
   ]);
+});
+
+test("every MCP tool surface is classified as guarded, exempt, or read-only", () => {
+  const classifiedToolNames = new Set([
+    ...GOVERNANCE_GUARDED_MUTATIONS.map((entry) => entry.surfaceBindings?.mcpTool).filter(Boolean),
+    ...GOVERNANCE_EXEMPT_MUTATIONS.map((entry) => entry.surfaceBindings?.mcpTool).filter(Boolean),
+    ...GOVERNANCE_READONLY_TOOLS
+  ]);
+  for (const tool of toolDefinitions) {
+    assert.equal(classifiedToolNames.has(tool.name), true, `Unclassified MCP tool: ${tool.name}`);
+  }
 });
 
 test("role-bound MCP tools expose explicit override fields", () => {
@@ -68,7 +83,8 @@ test("role-bound MCP tools expose explicit override fields", () => {
     "normalize_rebuttal_issues",
     "build_rebuttal_strategy",
     "create_version_snapshot",
-    "compare_versions"
+    "compare_versions",
+    "record_operator_follow_through"
   ];
 
   for (const name of roleBoundTools) {
