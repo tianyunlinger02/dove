@@ -1,6 +1,0 @@
-{"file": ".trellis/workflow.md", "reason": "Project workflow and debugging context"}
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend spec index"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality and validation rules"}
-{"file": "package.json", "reason": "Validation scripts"}
-{"file": "scripts/validate-commands.mjs", "reason": "Command validation examples"}
-{"file": "tests/integration/mcp-tools.test.mjs", "reason": "MCP quality tests"}

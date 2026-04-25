@@ -1,6 +1,0 @@
-{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
-{"file": "package.json", "reason": "Package scripts and project type"}
-{"file": "README.md", "reason": "Project surface and artifact model overview"}
-{"file": "src/core/schema.mjs", "reason": "Schema constants and governance conventions"}
-{"file": "tests/integration/mcp-tools.test.mjs", "reason": "MCP surface quality examples"}
