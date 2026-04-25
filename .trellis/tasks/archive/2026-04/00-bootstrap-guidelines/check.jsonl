@@ -1,0 +1,16 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and completion checklist"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend spec index for bootstrap guideline files"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Guideline content to verify"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Guideline content to verify"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Guideline content to verify"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Guideline content to verify"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Guideline content to verify"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Guideline content to verify"}
+{"file": "package.json", "reason": "Package scripts and project type"}
+{"file": "README.md", "reason": "Project surface and artifact model overview"}
+{"file": "src/core/schema.mjs", "reason": "Schema constants and governance conventions"}
+{"file": "src/core/workspace.mjs", "reason": "Workspace state management examples"}
+{"file": "src/mcp/tool-definitions.mjs", "reason": "MCP schema surface examples"}
+{"file": "src/mcp/handlers.mjs", "reason": "MCP dispatch examples"}
+{"file": "scripts/validate-commands.mjs", "reason": "Command and skill validation examples"}
+{"file": "tests/integration/mcp-tools.test.mjs", "reason": "MCP surface quality examples"}
