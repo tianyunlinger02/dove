@@ -25,6 +25,7 @@ This file turns the phrase â€œabsorb the advantages of oh-my-openagent and ARISâ
 | Durable workspace index | Implemented | `.paper/workspace/index.json` | Top-level resumable overview of active packets, work queues, dependency health, ownership, sessions, and version state |
 | Managed-vs-user-owned update boundary | Implemented | `bin/paper-factory.mjs`, `.paper/workflow-pack/boundaries.json` | Install/sync bootstrap `.paper` safely instead of overwriting user state |
 | Query/navigation workflow UX | Implemented | `paper.task-graph`, `paper.open-questions`, `paper.decisions`, `paper.lineage`, MCP query tools | Users can inspect graph/questions/decisions/lineage directly |
+| Explicit proposal-to-work bridge | Implemented | `paper.materialize`, `materialize_guidance_packet`, `.paper/task-packets/*`, `.paper/meta/operator-follow-through.json` | Accepted remediation guidance can be materialized into one real durable task packet through an explicit governed path |
 | Composable workflow packaging | Implemented | command/skill split + `.paper` artifacts | Lifecycle phases are exposed as honest commands |
 | Host-specific deep hook system | Deferred | N/A | OpenCode-native pack avoids pretending unsupported host hooks exist |
 | Hook-heavy subagent interception | Deferred | N/A | Trellis-style host interception is intentionally out of scope |

@@ -9,6 +9,9 @@ import {
   ensureWorkspace,
   initProject,
   listWorkspaceArtifacts,
+  materializeGuidancePacket,
+  issueProgramApproval,
+  planCampaign,
   normalizeRebuttalIssues,
   readBoundaryReport,
   queryDecisions,
@@ -17,6 +20,8 @@ import {
   queryMetaOptimize,
   queryOpenQuestions,
   queryOperatorFollowThrough,
+  queryProgramApprovals,
+  queryCampaigns,
   queryTaskGraph,
   queryWorkspaceIndex,
   readActionContextBundle,
@@ -28,6 +33,9 @@ import {
   recordOperatorFollowThrough,
   refreshWiki,
   registerSource,
+  revokeProgramApproval,
+  runAutonomyControlPlaneOnce,
+  runAutonomyForeground,
   runExperimentAudit,
   runReviewLoop,
   setSectionStatus,
@@ -86,6 +94,10 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(queryGovernanceCoverageReport(root));
       case "query_operator_follow_through":
         return makeTextResult(queryOperatorFollowThrough(root));
+      case "query_program_approvals":
+        return makeTextResult(queryProgramApprovals(root, args));
+      case "query_campaigns":
+        return makeTextResult(queryCampaigns(root, args));
       case "query_boundary_report":
         return makeTextResult(readBoundaryReport(root));
       case "read_role_context_manifest":
@@ -158,6 +170,18 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(validateFigurePipeline(root));
       case "record_operator_follow_through":
         return makeTextResult(recordOperatorFollowThrough(root, args));
+      case "issue_program_approval":
+        return makeTextResult(issueProgramApproval(root, args));
+      case "plan_campaign":
+        return makeTextResult(planCampaign(root, args));
+      case "revoke_program_approval":
+        return makeTextResult(revokeProgramApproval(root, args));
+      case "materialize_guidance_packet":
+        return makeTextResult(materializeGuidancePacket(root, args));
+      case "run_autonomy_once":
+        return makeTextResult(runAutonomyControlPlaneOnce(root, args));
+      case "run_autonomy_foreground":
+        return makeTextResult(runAutonomyForeground(root, args));
       default:
         return makeErrorResult(`Unknown tool: ${name}`);
     }

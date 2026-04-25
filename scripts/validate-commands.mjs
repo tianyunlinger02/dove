@@ -30,6 +30,7 @@ const requiredCommands = [
   "paper.lineage.md",
   "paper.meta-optimize.md",
   "paper.follow-through.md",
+  "paper.materialize.md",
   "paper.governance-audit.md",
   "paper.wiki.md",
   "paper.checklist.md",

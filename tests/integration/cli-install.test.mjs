@@ -82,6 +82,35 @@ test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy w
   assert.match(result.stdout, /long-horizon summary:/);
 });
 
+test("CLI autonomy-once and doctor expose runtime status visibility", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-autonomy-runtime-"));
+  const install = spawnSync("node", [CLI, "install", target, "--force"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(install.status, 0, install.stderr || install.stdout);
+
+  const autonomy = spawnSync("node", [CLI, "autonomy-once", target], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(autonomy.status, 0, autonomy.stderr || autonomy.stdout);
+  assert.match(autonomy.stdout, /"status": "noop"/);
+  assert.match(autonomy.stdout, /"outcome": "no-eligible-packet"/);
+
+  const doctor = spawnSync("node", [CLI, "doctor", target], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(doctor.status, 0, doctor.stderr || doctor.stdout);
+  assert.match(doctor.stdout, /autonomy-runtime/);
+  assert.match(doctor.stdout, /program-surfaces/);
+  assert.match(doctor.stdout, /runtime=noop\/no-eligible-packet/i);
+  assert.match(doctor.stdout, /worker=none requests=0 checkpoints=0 escalations=0/);
+  assert.match(doctor.stdout, /continuation=0\/none\/none\/none\/none/);
+  assert.match(doctor.stdout, /programs=0 approved-runs=0 review-checkpoints=0 consumed-approvals=0 current=none\/none checkpoint=none/);
+});
+
 test("CLI doctor fails when key JSON artifacts are malformed", () => {
   const target = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-doctor-bad-json-"));
   spawnSync("node", [CLI, "install", target, "--force"], {

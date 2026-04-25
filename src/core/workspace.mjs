@@ -31,11 +31,20 @@ import {
   createMetaRemediationPacksIndex,
   createMetaOptimizerState,
   createMetaRecommendationsIndex,
-    createNotesIndex,
+  createCampaignsIndex,
+  createProgramApprovalsIndex,
+  createProgramsIndex,
+  createProgramRunsIndex,
+  createNotesIndex,
   createResearchAgenda,
   createReviewConcernsIndex,
   createReviewState,
   createRebuttalIssuesIndex,
+  createRuntimeControllerState,
+  createRuntimeContinuationIndex,
+  createRuntimeEventsIndex,
+  createRuntimeLeasesIndex,
+  createRuntimeResultsIndex,
   createSessionJournal,
   createSourcesIndex,
   createTaskPacketsIndex,
@@ -55,6 +64,15 @@ import {
   normalizeMetaRemediationPacksIndex,
   normalizeMetaOptimizerState,
   normalizeMetaRecommendationsIndex,
+  normalizeCampaignsIndex,
+  normalizeProgramApprovalsIndex,
+  normalizeProgramsIndex,
+  normalizeProgramRunsIndex,
+  normalizeRuntimeControllerState,
+  normalizeRuntimeContinuationIndex,
+  normalizeRuntimeEventsIndex,
+  normalizeRuntimeLeasesIndex,
+  normalizeRuntimeResultsIndex,
   normalizeWorkflowBoundaries,
   normalizeWorkspaceIndex,
   normalizeState
@@ -217,6 +235,7 @@ export function ensureWorkspace(root) {
      ARTIFACT_PATHS.actionContextsDir,
       ".paper/sessions",
     ARTIFACT_PATHS.workspaceDir,
+    ARTIFACT_PATHS.programsDir,
     ARTIFACT_PATHS.workflowPackDir,
     ".paper/research",
     ".paper/plans",
@@ -235,6 +254,7 @@ export function ensureWorkspace(root) {
     ".paper/figures",
     ".paper/rebuttal",
     ".paper/versions",
+    ARTIFACT_PATHS.runtimeDir,
     ARTIFACT_PATHS.metaDir,
     ARTIFACT_PATHS.versionSnapshotsDir
   ]) {
@@ -290,6 +310,15 @@ export function ensureWorkspace(root) {
     [ARTIFACT_PATHS.wikiEntities, createWikiEntitiesIndex],
     [ARTIFACT_PATHS.wikiRelations, createWikiRelationsIndex],
     [ARTIFACT_PATHS.sessionJournal, createSessionJournal],
+    [ARTIFACT_PATHS.runtimeControllerState, createRuntimeControllerState],
+    [ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex],
+    [ARTIFACT_PATHS.runtimeLeases, createRuntimeLeasesIndex],
+    [ARTIFACT_PATHS.runtimeEvents, createRuntimeEventsIndex],
+    [ARTIFACT_PATHS.runtimeResults, createRuntimeResultsIndex],
+    [ARTIFACT_PATHS.programsIndex, createProgramsIndex],
+    [ARTIFACT_PATHS.programRuns, createProgramRunsIndex],
+    [ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex],
+    [ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex],
     [ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex],
     [ARTIFACT_PATHS.workflowBoundaries, createWorkflowBoundaries]
   ]) {
@@ -310,6 +339,15 @@ export function ensureWorkspace(root) {
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex, normalizeMetaRemediationPacksIndex);
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex, normalizeMetaRecommendationsIndex);
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState, normalizeMetaOptimizerState);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.runtimeControllerState, createRuntimeControllerState, normalizeRuntimeControllerState);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex, normalizeRuntimeContinuationIndex);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.runtimeLeases, createRuntimeLeasesIndex, normalizeRuntimeLeasesIndex);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.runtimeEvents, createRuntimeEventsIndex, normalizeRuntimeEventsIndex);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.runtimeResults, createRuntimeResultsIndex, normalizeRuntimeResultsIndex);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex, normalizeProgramsIndex);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex, normalizeProgramRunsIndex);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex, normalizeProgramApprovalsIndex);
+  reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex, normalizeCampaignsIndex);
   reconcileManagedJsonArtifact(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex, normalizeWorkspaceIndex);
 
   return { root, created };
@@ -473,12 +511,12 @@ export function assertFollowThroughReady(root, actionLabel, args = {}) {
   const currentPhase = currentState.pipeline?.currentStage ?? currentState.orchestrationBoard?.currentPhase ?? "init";
   const actionRequiredItems = (ledger.items ?? []).filter((item) => {
     const status = item.status;
-    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "deferred", "accepted-risk", "closed", "superseded"].includes(status);
+    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status);
     const dueDeferred = status === "deferred" && item.deferUntil && String(item.deferUntil) <= nowIso();
-    const targetBound = !["accepted-for-execution", "closed"].includes(status)
+    const targetBound = !["accepted-for-execution", "executing", "closed"].includes(status)
       ? true
       : targetArtifactContainsId(root, item.linkedTargetArtifact, item.linkedTargetId);
-    const acceptedExecutionOpen = status === "accepted-for-execution";
+    const acceptedExecutionOpen = status === "accepted-for-execution" || status === "executing";
     return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen;
   }).map((item) => item.id);
 

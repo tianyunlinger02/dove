@@ -13,3 +13,4 @@ Produce a durable review entry plus a fresh revision plan from the current paper
 3. Treat unsupported claims, audit integrity flags, blocked bridge events, and broken result-to-claim bridges as high severity; citation TODOs as medium severity; outline drift as actionable process debt; and unresolved blockers as board-level work.
 4. Update persistent concerns, reviewer-vs-author response ownership, adversarial state, revision items, and rebuttal issues so the next review round can resume from files only.
 5. Return the verdict, top action items, and the next best command.
+6. When the review loop should run through bounded autonomy, carry `allowedStepType: run-review-loop` plus explicit `reviewScope` and optional `reviewStage` through materialization/approval rather than invoking a free-form reviewer pass.

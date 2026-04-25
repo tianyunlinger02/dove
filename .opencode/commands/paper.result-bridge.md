@@ -12,3 +12,4 @@ Persist a result-to-claim bridge event in `.paper/claims/bridge-log.json` so con
 2. If `paper-factory` MCP is available, call `bridge_result_to_claim`.
 3. Record whether the result supports, refutes, remains inconclusive, or is held for review because audit integrity is still incomplete.
 4. If the bridge outcome weakens the claim or is held for review, convert that change into a board blocker, review concern, or revision task before finalization.
+5. When this step is run through bounded autonomy, carry `allowedStepType: bridge-result-to-claim` plus an explicit `resultId` payload and optional `auditIds` through materialization/approval rather than invoking a free-form bridge.

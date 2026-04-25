@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-import { createDefaultState, normalizeState, SCHEMA_VERSION } from "../../src/core/schema.mjs";
+import { ensureWorkspace, readJson } from "../../src/core/workspace.mjs";
+import { ARTIFACT_PATHS, createDefaultState, createWorkspaceIndex, normalizeCampaignsIndex, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
 
 test("normalizeState migrates v1 state into v2", () => {
   const migrated = normalizeState({
@@ -31,9 +35,130 @@ test("createDefaultState exposes durable artifact paths", () => {
   assert.equal(state.artifacts.actionContextsDir, ".paper/context/actions");
   assert.equal(state.artifacts.sessionSummary, ".paper/sessions/LATEST_SUMMARY.md");
   assert.equal(state.artifacts.workflowBoundaries, ".paper/workflow-pack/boundaries.json");
+  assert.equal(state.artifacts.programsIndex, ".paper/programs/index.json");
+  assert.equal(state.artifacts.programRuns, ".paper/programs/runs.json");
+  assert.equal(state.artifacts.programApprovals, ".paper/programs/approvals.json");
+  assert.equal(state.artifacts.campaignsIndex, ".paper/programs/campaigns.json");
   assert.equal(state.artifacts.researchBrief, ".paper/research/brief.md");
   assert.equal(state.artifacts.rebuttalIssues, ".paper/rebuttal/issues.json");
   assert.equal(state.artifacts.metaLongHorizonMemory, ".paper/meta/long-horizon-memory.json");
   assert.equal(state.artifacts.versionsIndex, ".paper/versions/index.json");
   assert.equal(state.reviews.lastVerdict, "not-reviewed");
+});
+
+test("campaign indexes and workspace mirrors are normalized", () => {
+  const index = createWorkspaceIndex();
+  assert.equal(ARTIFACT_PATHS.campaignsIndex, ".paper/programs/campaigns.json");
+  assert.equal(index.campaigns.campaignCount, 0);
+  assert.equal(index.campaigns.plannedCount, 0);
+  assert.equal(index.campaigns.activeCount, 0);
+  assert.equal(index.campaigns.reviewNeededCount, 0);
+  assert.equal(index.campaigns.completedCount, 0);
+  assert.equal(index.campaigns.blockedCount, 0);
+  assert.deepEqual(index.campaigns.topCampaignIds, []);
+  assert.equal(index.campaigns.currentCampaignId, null);
+  assert.equal(index.campaigns.currentCampaignNextStepId, null);
+  assert.equal(index.campaigns.campaignsPath, ".paper/programs/campaigns.json");
+
+  const normalizedIndex = normalizeWorkspaceIndex({
+    campaigns: {
+      campaignCount: "bad-shape",
+      plannedCount: 2,
+      activeCount: 1,
+      reviewNeededCount: "bad-shape",
+      completedCount: 3,
+      blockedCount: "bad-shape",
+      topCampaignIds: "bad-shape",
+      currentCampaignId: "campaign-alpha",
+      currentCampaignStepCount: "bad-shape",
+      currentCampaignCompletedStepCount: 1,
+      currentCampaignReviewNeededStepCount: "bad-shape",
+      currentCampaignNextAction: "Issue fresh approval for the next bounded cycle."
+    }
+  });
+  assert.equal(normalizedIndex.campaigns.campaignCount, 0);
+  assert.equal(normalizedIndex.campaigns.plannedCount, 2);
+  assert.equal(normalizedIndex.campaigns.activeCount, 1);
+  assert.equal(normalizedIndex.campaigns.reviewNeededCount, 0);
+  assert.equal(normalizedIndex.campaigns.completedCount, 3);
+  assert.equal(normalizedIndex.campaigns.blockedCount, 0);
+  assert.deepEqual(normalizedIndex.campaigns.topCampaignIds, []);
+  assert.equal(normalizedIndex.campaigns.currentCampaignId, "campaign-alpha");
+  assert.equal(normalizedIndex.campaigns.currentCampaignStepCount, 0);
+  assert.equal(normalizedIndex.campaigns.currentCampaignCompletedStepCount, 1);
+  assert.equal(normalizedIndex.campaigns.currentCampaignReviewNeededStepCount, 0);
+  assert.equal(normalizedIndex.campaigns.currentCampaignNextAction, "Issue fresh approval for the next bounded cycle.");
+
+  const normalizedCampaigns = normalizeCampaignsIndex({
+    version: 99,
+    items: [{ id: "campaign-alpha" }, null, "bad-shape"],
+    summary: {
+      campaignCount: "bad-shape",
+      activeCount: 1,
+      topCampaignIds: ["campaign-alpha", ""],
+      campaignsPath: "custom-path.json"
+    },
+    updatedAt: "2026-04-24T00:00:00.000Z"
+  });
+  assert.equal(normalizedCampaigns.version, 1);
+  assert.deepEqual(normalizedCampaigns.items, [{ id: "campaign-alpha" }]);
+  assert.equal(normalizedCampaigns.summary.campaignCount, 0);
+  assert.equal(normalizedCampaigns.summary.activeCount, 1);
+  assert.deepEqual(normalizedCampaigns.summary.topCampaignIds, ["campaign-alpha"]);
+  assert.equal(normalizedCampaigns.summary.campaignsPath, "custom-path.json");
+  assert.equal(normalizedCampaigns.updatedAt, "2026-04-24T00:00:00.000Z");
+});
+
+test("ensureWorkspace creates and repairs the campaigns artifact", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-schema-campaigns-"));
+  ensureWorkspace(root);
+
+  const campaigns = readJson(root, ARTIFACT_PATHS.campaignsIndex, {});
+  assert.equal(campaigns.version, 1);
+  assert.deepEqual(campaigns.items, []);
+  assert.equal(campaigns.summary.campaignCount, 0);
+  assert.equal(campaigns.summary.campaignsPath, ".paper/programs/campaigns.json");
+
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.campaignsIndex), JSON.stringify({ version: 99, items: "bad-shape", summary: { activeCount: 2 } }), "utf8");
+  ensureWorkspace(root);
+
+  const repaired = readJson(root, ARTIFACT_PATHS.campaignsIndex, {});
+  assert.equal(repaired.version, 1);
+  assert.deepEqual(repaired.items, []);
+  assert.equal(repaired.summary.campaignCount, 0);
+  assert.equal(repaired.summary.activeCount, 2);
+});
+
+test("workspace index exposes normalized unified autonomy loop skeleton", () => {
+  const index = createWorkspaceIndex();
+  assert.equal(index.autonomyLoops.contractVersion, "unified-autonomy-loop-v1");
+  assert.equal(index.autonomyLoops.activeLifecycleState, "board-ready");
+  assert.equal(index.autonomyLoops.loopCount, 4);
+  assert.equal(index.autonomyLoops.explicitOnly, true);
+  assert.equal(index.autonomyLoops.noHiddenRuntime, true);
+  assert.equal(index.autonomyLoops.currentLoopId, "board-role-artifact-handoff");
+  assert.equal(index.autonomyLoops.runtimePointers.includes(".paper/runtime/controller-state.json"), true);
+  assert.equal(index.autonomyLoops.followThroughPointers.includes(".paper/meta/operator-follow-through.json"), true);
+  assert.match(index.autonomyLoops.safeExecutionPath, /autonomy-foreground/);
+
+  const normalized = normalizeWorkspaceIndex({
+    autonomyLoops: {
+      contractVersion: "custom-contract",
+      activeLifecycleState: "runtime-result-awaiting-follow-through",
+      loopCount: "bad-shape",
+      explicitOnly: "bad-shape",
+      loops: "bad-shape",
+      approvalPointers: "bad-shape",
+      lifecycleStates: "bad-shape",
+      nextSafeAction: "Use explicit follow-through."
+    }
+  });
+  assert.equal(normalized.autonomyLoops.contractVersion, "custom-contract");
+  assert.equal(normalized.autonomyLoops.activeLifecycleState, "runtime-result-awaiting-follow-through");
+  assert.equal(normalized.autonomyLoops.loopCount, 4);
+  assert.equal(normalized.autonomyLoops.explicitOnly, true);
+  assert.deepEqual(normalized.autonomyLoops.loops, []);
+  assert.deepEqual(normalized.autonomyLoops.approvalPointers, []);
+  assert.deepEqual(normalized.autonomyLoops.lifecycleStates, []);
+  assert.equal(normalized.autonomyLoops.nextSafeAction, "Use explicit follow-through.");
 });

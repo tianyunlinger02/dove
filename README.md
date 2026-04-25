@@ -48,6 +48,14 @@ node ./bin/paper-factory.mjs install . --force
 node ./bin/paper-factory.mjs doctor .
 ```
 
+### Run one explicit foreground autonomy pass
+
+```bash
+node ./bin/paper-factory.mjs autonomy-foreground . --max-steps 5
+```
+
+Multi-step program envelopes can now stop with durable closure states such as `achieved`, `accepted-risk`, `blocked`, or `completed` while still remaining explicit, foreground-only, and non-daemonized.
+
 ### Dry-run the package boundary
 
 ```bash
@@ -140,7 +148,7 @@ npm pack --dry-run
 
 ## Portable Trellis-inspired additions
 
-This release absorbs the strongest portable Trellis-style ideas plus the highest-value phase-2 integrity upgrades without pretending OpenCode has Trellis-native hooks or a hidden scheduler:
+This release absorbs the strongest portable Trellis-style ideas plus the highest-value phase-2 integrity upgrades without pretending OpenCode has Trellis-native hooks or a hidden scheduler. The new `autonomy-foreground` surface is still an explicitly invoked, foreground-only runner: it may chain the already-approved same-lineage continuation once, but it is not a background runtime or daemon.
 
 - **Durable task packets**: work objects live under `.paper/task-packets/` and link tasks to experiments, rebuttal issues, and versions.
 - **Packet-scoped context manifests**: `.paper/context/packets/*.json` couples each packet to its dependency health, linked artifacts, and resume bundle.

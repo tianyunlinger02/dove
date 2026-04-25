@@ -16,5 +16,5 @@ Read the file-first meta-optimize surfaces that summarize recurring workflow wea
 6. Use family-level operator playbooks when multiple taxonomy families are active and you need the most specific family-scoped guidance rather than a broad fallback pack; pay attention to readiness coverage, missing ingredients, and the artifact update map before treating a playbook as highly actionable.
 7. Use the longer-horizon memory slice to spot persistent clusters, rising recurrence families, or repeated regressions that outlast a single frontier refresh.
 8. Use `project:paper.follow-through` or the operator follow-through ledger when you want to record that a pack, playbook, or execution bridge candidate has been acknowledged, deferred, accepted for execution, accepted as risk, or closed.
-9. Treat the output as proposal-only guidance: convert strong recommendations, ranked conversion paths, remediation packs, playbooks, or execution bridge candidates into explicit board tasks, revision items, checklist steps, or artifact repairs only when an operator decides to act.
-10. Do not auto-patch prompts, configs, code, or workflow files from this surface alone.
+9. When a ranked packet path is accepted and you want one explicit durable work item instead of another proposal layer, use `project:paper.materialize` / `materialize_guidance_packet` to create a real task packet through the governed bridge.
+10. Treat the output as proposal-only guidance until you deliberately cross that bridge: do not auto-patch prompts, configs, code, or workflow files from this surface alone.

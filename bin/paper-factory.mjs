@@ -6,7 +6,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { ensureWorkspace } from "../src/core/index.mjs";
+import { ensureWorkspace, runAutonomyControlPlaneOnce, runAutonomyForeground } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE } from "../src/core/schema.mjs";
 import {
@@ -33,7 +33,17 @@ Usage:
   paper-factory install [target] [--force]
   paper-factory sync [target] [--force]
   paper-factory doctor [target]
+  paper-factory autonomy-once [target] [--actor-role <role>]
+  paper-factory autonomy-foreground [target] [--actor-role <role>] [--max-steps <n>] [--packet-id <id>] [--program-run-id <id>] [--approval-id <id>]
 `);
+}
+
+function readFlagValue(args, flag) {
+  const index = args.indexOf(flag);
+  if (index === -1 || index + 1 >= args.length) {
+    return null;
+  }
+  return args[index + 1];
 }
 
 function resolveTarget(rawTarget) {
@@ -445,6 +455,74 @@ function inspectOperatorFollowThrough(target) {
     invalidStatusIds,
     missingTargetIds,
     unresolvedTargetIds
+  };
+}
+
+function inspectAutonomyRuntime(target) {
+  const workspace = readJsonFile(target, ".paper/workspace/index.json");
+  if (workspace.status !== "ok") {
+    return {
+      status: workspace.status === "missing" ? "ok" : "degraded",
+      lastStatus: "never-run",
+      lastOutcome: "not-started",
+      requestCount: 0,
+      checkpointCount: 0,
+      escalationCount: 0,
+      continuationCount: 0,
+      currentContinuationKind: null,
+      currentContinuationPacketId: null,
+      currentContinuationProgramRunId: null,
+      currentContinuationCommand: null,
+      reasons: workspace.status === "missing" ? [] : [workspace.message]
+    };
+  }
+  const runtime = workspace.value?.runtime ?? {};
+  const reasons = [
+    ...(runtime.lastStatus === "error" ? [`runtime last status is error (${runtime.lastOutcome ?? "unknown"})`] : []),
+    ...((runtime.activeLeaseCount ?? 0) > 0 ? [`runtime still has ${runtime.activeLeaseCount} active lease(s)`] : []),
+    ...((runtime.escalationCount ?? 0) > 0 ? [`runtime escalations recorded: ${runtime.escalationCount}`] : [])
+  ];
+  return {
+    status: reasons.length === 0 ? "ok" : "degraded",
+    lastStatus: runtime.lastStatus ?? "never-run",
+    lastOutcome: runtime.lastOutcome ?? "not-started",
+    lastEnvelopeWorkerRole: runtime.lastEnvelopeWorkerRole ?? null,
+    requestCount: Number.isFinite(runtime.requestCount) ? runtime.requestCount : 0,
+    checkpointCount: Number.isFinite(runtime.checkpointCount) ? runtime.checkpointCount : 0,
+    escalationCount: Number.isFinite(runtime.escalationCount) ? runtime.escalationCount : 0,
+    continuationCount: Number.isFinite(runtime.continuationCount) ? runtime.continuationCount : 0,
+    currentContinuationKind: runtime.currentContinuationKind ?? null,
+    currentContinuationPacketId: runtime.currentContinuationPacketId ?? null,
+    currentContinuationProgramRunId: runtime.currentContinuationProgramRunId ?? null,
+    currentContinuationCommand: runtime.currentContinuationCommand ?? null,
+    lastCheckpointPacketId: runtime.lastCheckpointPacketId ?? null,
+    lastEscalationPacketId: runtime.lastEscalationPacketId ?? null,
+    reasons
+  };
+}
+
+function inspectProgramsSurface(target) {
+  const workspace = readJsonFile(target, ".paper/workspace/index.json");
+  if (workspace.status !== "ok") {
+    return {
+      status: workspace.status === "missing" ? "ok" : "degraded",
+      programCount: 0,
+      approvedRunCount: 0,
+      reasons: workspace.status === "missing" ? [] : [workspace.message]
+    };
+  }
+  const programs = workspace.value?.programs ?? {};
+  return {
+    status: "ok",
+    programCount: Number.isFinite(programs.programCount) ? programs.programCount : 0,
+    approvedRunCount: Number.isFinite(programs.approvedRunCount) ? programs.approvedRunCount : 0,
+    reviewCheckpointRunCount: Number.isFinite(programs.reviewCheckpointRunCount) ? programs.reviewCheckpointRunCount : 0,
+    consumedApprovalCount: Number.isFinite(programs.consumedApprovalCount) ? programs.consumedApprovalCount : 0,
+    currentProgramId: programs.currentProgramId ?? null,
+    currentProgramRunId: programs.currentProgramRunId ?? null,
+    currentApprovalId: programs.currentApprovalId ?? null,
+    currentReviewCheckpointRunId: programs.currentReviewCheckpointRunId ?? null,
+    reasons: []
   };
 }
 
@@ -1093,6 +1171,8 @@ function doctor(target) {
     workspaceRepairFrontier: inspectWorkspaceRepairFrontier(target),
     metaOptimize: inspectMetaOptimize(target),
     operatorFollowThrough: inspectOperatorFollowThrough(target),
+    autonomyRuntime: inspectAutonomyRuntime(target),
+    programsSurface: inspectProgramsSurface(target),
     governanceCoverageBindings: inspectGovernanceCoverageSurfaceBindings(target)
   };
   result.managedArtifacts = managedArtifacts;
@@ -1137,6 +1217,20 @@ function doctor(target) {
       ? "operator follow-through is healthy"
       : managedArtifacts.operatorFollowThrough.reasons.join(" | ")
   });
+  result.checks.push({
+    check: "autonomy-runtime",
+    ok: managedArtifacts.autonomyRuntime.status === "ok",
+    message: managedArtifacts.autonomyRuntime.status === "ok"
+      ? `runtime=${managedArtifacts.autonomyRuntime.lastStatus}/${managedArtifacts.autonomyRuntime.lastOutcome} worker=${managedArtifacts.autonomyRuntime.lastEnvelopeWorkerRole ?? "none"} requests=${managedArtifacts.autonomyRuntime.requestCount} checkpoints=${managedArtifacts.autonomyRuntime.checkpointCount} escalations=${managedArtifacts.autonomyRuntime.escalationCount} continuation=${managedArtifacts.autonomyRuntime.continuationCount}/${managedArtifacts.autonomyRuntime.currentContinuationKind ?? "none"}/${managedArtifacts.autonomyRuntime.currentContinuationPacketId ?? "none"}/${managedArtifacts.autonomyRuntime.currentContinuationProgramRunId ?? "none"}/${managedArtifacts.autonomyRuntime.currentContinuationCommand ?? "none"}`
+      : managedArtifacts.autonomyRuntime.reasons.join(" | ")
+  });
+  result.checks.push({
+    check: "program-surfaces",
+    ok: managedArtifacts.programsSurface.status === "ok",
+    message: managedArtifacts.programsSurface.status === "ok"
+      ? `programs=${managedArtifacts.programsSurface.programCount} approved-runs=${managedArtifacts.programsSurface.approvedRunCount} review-checkpoints=${managedArtifacts.programsSurface.reviewCheckpointRunCount} consumed-approvals=${managedArtifacts.programsSurface.consumedApprovalCount} current=${managedArtifacts.programsSurface.currentProgramId ?? "none"}/${managedArtifacts.programsSurface.currentProgramRunId ?? "none"} checkpoint=${managedArtifacts.programsSurface.currentReviewCheckpointRunId ?? "none"}`
+      : managedArtifacts.programsSurface.reasons.join(" | ")
+  });
 
   result.healthy = result.healthy && result.checks.every((check) => check.ok);
 
@@ -1162,6 +1256,32 @@ if (command === "install" || command === "sync") {
 if (command === "doctor") {
   doctor(resolveTarget(maybeTarget));
   process.exit(process.exitCode ?? 0);
+}
+
+if (command === "autonomy-once") {
+  const target = resolveTarget(maybeTarget);
+  const actorRole = readFlagValue(rest, "--actor-role") ?? "planner";
+  const result = runAutonomyControlPlaneOnce(target, { actorRole });
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
+}
+
+if (command === "autonomy-foreground") {
+  const target = resolveTarget(maybeTarget);
+  const actorRole = readFlagValue(rest, "--actor-role") ?? "planner";
+  const maxSteps = readFlagValue(rest, "--max-steps");
+  const packetId = readFlagValue(rest, "--packet-id");
+  const programRunId = readFlagValue(rest, "--program-run-id");
+  const approvalId = readFlagValue(rest, "--approval-id");
+  const result = runAutonomyForeground(target, {
+    actorRole,
+    maxSteps: maxSteps ? Number(maxSteps) : undefined,
+    packetId,
+    programRunId,
+    approvalId
+  });
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
 }
 
 usage();

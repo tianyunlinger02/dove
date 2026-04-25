@@ -55,20 +55,30 @@ export const GOVERNANCE_GUARDED_MUTATIONS = [
   { id: "normalize-rebuttal-issues", action: "Normalizing rebuttal issues", artifactPath: ".paper/rebuttal/issues.json", surfaceBindings: { coreFunction: "normalizeRebuttalIssues", mcpTool: "normalize_rebuttal_issues", commandIds: ["paper.rebuttal-strategy"] } },
   { id: "build-rebuttal-strategy", action: "Building the rebuttal strategy", artifactPath: ".paper/rebuttal/strategy.md", surfaceBindings: { coreFunction: "buildRebuttalStrategy", mcpTool: "build_rebuttal_strategy", commandIds: ["paper.rebuttal-strategy"] } },
   { id: "create-version-snapshot", action: "Creating a version snapshot", artifactPath: ".paper/versions/index.json", surfaceBindings: { coreFunction: "createVersionSnapshot", mcpTool: "create_version_snapshot", commandIds: ["paper.version-snapshot"] } },
-  { id: "compare-versions", action: "Comparing versions", artifactPath: ".paper/versions/comparisons.json", surfaceBindings: { coreFunction: "compareVersions", mcpTool: "compare_versions", commandIds: ["paper.version-compare"] } }
+  { id: "compare-versions", action: "Comparing versions", artifactPath: ".paper/versions/comparisons.json", surfaceBindings: { coreFunction: "compareVersions", mcpTool: "compare_versions", commandIds: ["paper.version-compare"] } },
+  { id: "materialize-guidance-packet", action: "Materializing accepted guidance into a durable task packet", artifactPath: ".paper/task-packets", surfaceBindings: { coreFunction: "materializeGuidancePacket", mcpTool: "materialize_guidance_packet", commandIds: ["paper.materialize"] } }
 ];
 
 export const GOVERNANCE_EXEMPT_MUTATIONS = [
-  { id: "record-operator-follow-through", action: "Recording follow-through decisions remains explicitly exempt so the governance system can be updated while debt exists.", artifactPath: ".paper/meta/operator-follow-through.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "governance-ledger-maintenance", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorFollowThrough", mcpTool: "record_operator_follow_through", commandIds: ["paper.follow-through"] } },
-  { id: "query-meta-optimize", action: "Refreshing proposal-only optimizer surfaces remains exempt because it is part of debt detection, not debt execution.", artifactPath: ".paper/meta/LATEST_OPTIMIZER_REPORT.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "proposal-frontier-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "queryMetaOptimize", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } },
-  { id: "init-project", action: "Project initialization bootstraps the workspace and is explicitly exempt from follow-through gating.", artifactPath: ".paper/state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "workspace-bootstrap", reviewCadence: "per-project", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "initProject", mcpTool: "init_project", commandIds: ["paper.init"] } },
-  { id: "sync-checklist", action: "Checklist syncing remains exempt because it summarizes debt instead of executing it.", artifactPath: ".paper/checklists/paper.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "summary-sync", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "syncChecklist", mcpTool: "sync_checklist", commandIds: ["paper.checklist"] } },
-  { id: "validate-figure-pipeline", action: "Figure validation is an inspection path and remains exempt from follow-through execution gating.", artifactPath: ".paper/figures/qa.json", ownerRole: "researcher", approvedByRole: "researcher", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "inspection-only", reviewCadence: "per-change", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "validateFigurePipeline", mcpTool: "validate_figure_pipeline", commandIds: ["paper.figure"] } },
-  { id: "classify-workflow-intent", action: "Workflow intent classification is analytical and remains exempt.", artifactPath: ".paper/meta/recommendations.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "analysis-only", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "classifyWorkflowIntent", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } },
-  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: "query_workspace_index", commandIds: ["paper.orchestrate"] } },
-  { id: "save-board", action: "Board persistence is an internal helper already covered by guarded orchestration updates and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "saveBoard", mcpTool: "upsert_orchestration_board", commandIds: ["paper.orchestrate"] } },
-  { id: "refresh-durable-surfaces", action: "Durable surface refresh is a proposal-only summarization step and remains exempt.", artifactPath: ".paper/workspace/index.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "summary-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "refreshDurableSurfaces", mcpTool: "query_workspace_index", commandIds: ["paper.meta-optimize", "paper.task-graph", "paper.open-questions", "paper.decisions", "paper.lineage"] } },
-  { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".paper/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-15T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } }
+  { id: "record-operator-follow-through", action: "Recording follow-through decisions remains explicitly exempt so the governance system can be updated while debt exists.", artifactPath: ".paper/meta/operator-follow-through.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "governance-ledger-maintenance", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorFollowThrough", mcpTool: "record_operator_follow_through", commandIds: ["paper.follow-through"] } },
+  { id: "issue-program-approval", action: "Issuing a fresh program approval remains exempt because it is explicit governance bookkeeping that authorizes later bounded execution but does not itself execute work.", artifactPath: ".paper/programs/approvals.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "approval-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "issueProgramApproval", mcpTool: "issue_program_approval", commandIds: ["paper.approvals"] } },
+  { id: "plan-campaign", action: "Recording a multi-cycle campaign plan remains exempt because it only records planner-supervised campaign intent and does not approve or execute bounded program work.", artifactPath: ".paper/programs/campaigns.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-25T00:00:00.000Z", lastReviewedAt: "2026-04-25T00:00:00.000Z", reasonCode: "campaign-planning-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "planCampaign", mcpTool: "plan_campaign", commandIds: [] } },
+  { id: "revoke-program-approval", action: "Revoking a program approval remains exempt because it withdraws authority rather than executing new work.", artifactPath: ".paper/programs/approvals.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "approval-withdrawal", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "revokeProgramApproval", mcpTool: "revoke_program_approval", commandIds: ["paper.approvals"] } },
+  { id: "run-autonomy-control-plane-once", action: "A manually invoked autonomous control-plane pass may advance one explicitly accepted planner-supervised packet or materialize one governed planned target through one bounded execution delta with durable runtime audit artifacts.", artifactPath: ".paper/runtime/controller-state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "single-turn-control-plane-execution", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runAutonomyControlPlaneOnce", mcpTool: "run_autonomy_once", commandIds: [] } },
+  { id: "run-autonomy-foreground", action: "A manually invoked explicit foreground autonomy run may continue one program-scoped bounded authority envelope or the same-lineage execute-materialized-packet continuation until a declared stop condition is reached.", artifactPath: ".paper/runtime/controller-state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "foreground-bounded-runner", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runAutonomyForeground", mcpTool: "run_autonomy_foreground", commandIds: [] } },
+  { id: "query-meta-optimize", action: "Refreshing proposal-only optimizer surfaces remains exempt because it is part of debt detection, not debt execution.", artifactPath: ".paper/meta/LATEST_OPTIMIZER_REPORT.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "proposal-frontier-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "queryMetaOptimize", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } },
+  { id: "init-project", action: "Project initialization bootstraps the workspace and is explicitly exempt from follow-through gating.", artifactPath: ".paper/state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "workspace-bootstrap", reviewCadence: "per-project", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "initProject", mcpTool: "init_project", commandIds: ["paper.init"] } },
+  { id: "sync-checklist", action: "Checklist syncing remains exempt because it summarizes debt instead of executing it.", artifactPath: ".paper/checklists/paper.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "summary-sync", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "syncChecklist", mcpTool: "sync_checklist", commandIds: ["paper.checklist"] } },
+  { id: "validate-figure-pipeline", action: "Figure validation is an inspection path and remains exempt from follow-through execution gating.", artifactPath: ".paper/figures/qa.json", ownerRole: "researcher", approvedByRole: "researcher", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "inspection-only", reviewCadence: "per-change", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "validateFigurePipeline", mcpTool: "validate_figure_pipeline", commandIds: ["paper.figure"] } },
+  { id: "classify-workflow-intent", action: "Workflow intent classification is analytical and remains exempt.", artifactPath: ".paper/meta/recommendations.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "analysis-only", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "classifyWorkflowIntent", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } },
+  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: "query_workspace_index", commandIds: ["paper.orchestrate"] } },
+  { id: "save-board", action: "Board persistence is an internal helper already covered by guarded orchestration updates and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "saveBoard", mcpTool: "upsert_orchestration_board", commandIds: ["paper.orchestrate"] } },
+  { id: "persist-experiment-audit", action: "Experiment audit persistence is an internal helper used by guarded experiment-audit flows and bounded runtime execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/experiments/audits.json", ownerRole: "experiment-planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistExperimentAudit", mcpTool: "run_experiment_audit", commandIds: ["paper.experiment-audit"] } },
+  { id: "persist-experiment-result-claim-bridge", action: "Result-to-claim bridge persistence is an internal helper used by guarded bridge flows and bounded runtime execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/claims/bridge-log.json", ownerRole: "experiment-planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistExperimentResultClaimBridge", mcpTool: "bridge_result_to_claim", commandIds: ["paper.result-bridge"] } },
+  { id: "persist-review-log", action: "Review log persistence is an internal helper used by guarded review flows and bounded runtime review execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/reviews/log.md", ownerRole: "reviewer", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistReviewLog", mcpTool: "run_review_loop", commandIds: ["paper.review-loop"] } },
+  { id: "persist-rebuttal-issues", action: "Rebuttal issue persistence is an internal helper used by guarded review/rebuttal flows and bounded runtime review execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/rebuttal/issues.json", ownerRole: "reviewer", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistRebuttalIssues", mcpTool: "normalize_rebuttal_issues", commandIds: ["paper.review-loop"] } },
+  { id: "refresh-durable-surfaces", action: "Durable surface refresh is a proposal-only summarization step and remains exempt.", artifactPath: ".paper/workspace/index.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "summary-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "refreshDurableSurfaces", mcpTool: "query_workspace_index", commandIds: ["paper.meta-optimize", "paper.task-graph", "paper.open-questions", "paper.decisions", "paper.lineage"] } },
+  { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".paper/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-24T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } }
 ];
 
 export const GOVERNANCE_READONLY_COMMANDS = [
@@ -91,6 +101,8 @@ export const GOVERNANCE_READONLY_TOOLS = [
   "query_meta_optimize",
   "query_governance_coverage_report",
   "query_operator_follow_through",
+  "query_program_approvals",
+  "query_campaigns",
   "query_boundary_report",
   "read_role_context_manifest",
   "read_phase_context_manifest",
@@ -126,7 +138,8 @@ export const GOVERNANCE_NEGATIVE_COVERAGE = [
   { id: "normalize-rebuttal-issues", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
   { id: "build-rebuttal-strategy", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
   { id: "create-version-snapshot", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
-  { id: "compare-versions", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] }
+  { id: "compare-versions", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
+  { id: "materialize-guidance-packet", level: "dynamic", tests: ["materializeGuidancePacket creates a durable packet from accepted remediation guidance and binds follow-through"] }
 ];
 
 export function resolveResumeCommandForPhase(phase) {
@@ -185,6 +198,11 @@ export const ARTIFACT_PATHS = {
   sessionSummary: ".paper/sessions/LATEST_SUMMARY.md",
   workspaceDir: ".paper/workspace",
   workspaceIndex: ".paper/workspace/index.json",
+  programsDir: ".paper/programs",
+  programsIndex: ".paper/programs/index.json",
+  programRuns: ".paper/programs/runs.json",
+  programApprovals: ".paper/programs/approvals.json",
+  campaignsIndex: ".paper/programs/campaigns.json",
   workflowPackDir: ".paper/workflow-pack",
   workflowBoundaries: ".paper/workflow-pack/boundaries.json",
   researchBrief: ".paper/research/brief.md",
@@ -231,6 +249,12 @@ export const ARTIFACT_PATHS = {
   versionComparisons: ".paper/versions/comparisons.json",
   versionComparisonReport: ".paper/versions/LATEST_COMPARISON.md",
   versionSnapshotsDir: ".paper/versions/snapshots",
+  runtimeDir: ".paper/runtime",
+  runtimeControllerState: ".paper/runtime/controller-state.json",
+  runtimeContinuation: ".paper/runtime/continuation.json",
+  runtimeLeases: ".paper/runtime/leases.json",
+  runtimeEvents: ".paper/runtime/events.json",
+  runtimeResults: ".paper/runtime/results.json",
   metaDir: ".paper/meta",
   metaEvents: ".paper/meta/events.json",
   metaExecutionBridgeCandidates: ".paper/meta/execution-bridge-candidates.json",
@@ -246,6 +270,23 @@ export const ARTIFACT_PATHS = {
   metaOptimizerState: ".paper/meta/optimizer-state.json",
   metaOptimizerReport: ".paper/meta/LATEST_OPTIMIZER_REPORT.md"
 };
+
+export const AUTONOMY_ALLOWED_STEP_TYPES = [
+  "refresh-research-brief",
+  "refresh-wiki",
+  "upsert-note",
+  "run-experiment-audit",
+  "bridge-result-to-claim",
+  "run-review-loop"
+];
+
+export function normalizeAutonomyAllowedStepType(value, fallback = "refresh-research-brief") {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase().replace(/_/g, "-") : "";
+  if (AUTONOMY_ALLOWED_STEP_TYPES.includes(normalized)) {
+    return normalized;
+  }
+  return fallback;
+}
 
 function digestText(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
@@ -613,6 +654,10 @@ export function normalizeWorkspaceIndex(raw = {}) {
   const dependencyHealth = normalizeObject(raw.dependencyHealth);
   const repairFrontier = normalizeObject(raw.repairFrontier);
   const metaOptimize = normalizeObject(raw.metaOptimize);
+  const runtime = normalizeObject(raw.runtime);
+  const programs = normalizeObject(raw.programs);
+  const campaigns = normalizeObject(raw.campaigns);
+  const autonomyLoops = normalizeObject(raw.autonomyLoops);
   const latestVersions = normalizeObject(raw.latestVersions);
 
   return {
@@ -688,6 +733,10 @@ export function normalizeWorkspaceIndex(raw = {}) {
       prioritizedItems: normalizeObjectArray(repairFrontier.prioritizedItems)
     },
     metaOptimize: normalizeWorkspaceMetaOptimize(metaOptimize, base.metaOptimize),
+    runtime: normalizeWorkspaceRuntime(runtime, base.runtime),
+    programs: normalizeWorkspacePrograms(programs, base.programs),
+    campaigns: normalizeWorkspaceCampaigns(campaigns, base.campaigns),
+    autonomyLoops: normalizeWorkspaceAutonomyLoops(autonomyLoops, base.autonomyLoops),
     activeRoles: normalizeStringArray(raw.activeRoles),
     unresolvedConcernIds: normalizeStringArray(raw.unresolvedConcernIds),
     mostRecentSessions: normalizeObjectArray(raw.mostRecentSessions),
@@ -697,6 +746,294 @@ export function normalizeWorkspaceIndex(raw = {}) {
       currentVersionId: latestVersions.currentVersionId ?? base.latestVersions.currentVersionId,
       activeTargets: normalizeStringArray(latestVersions.activeTargets),
       latestSnapshotIds: normalizeStringArray(latestVersions.latestSnapshotIds)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeRuntimeControllerState(raw = {}) {
+  const base = createRuntimeControllerState();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  const lastRun = normalizeObject(raw.lastRun);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    explicitInvocationOnly: normalizeBoolean(raw.explicitInvocationOnly, base.explicitInvocationOnly),
+    noDaemon: normalizeBoolean(raw.noDaemon, base.noDaemon),
+    selectionPolicy: normalizeString(raw.selectionPolicy, base.selectionPolicy),
+    boundedStepPolicy: normalizeString(raw.boundedStepPolicy, base.boundedStepPolicy),
+    lastRun: Object.keys(lastRun).length === 0 ? null : {
+      runId: normalizeString(lastRun.runId, null),
+      status: normalizeString(lastRun.status, null),
+      outcome: normalizeString(lastRun.outcome, null),
+      selectedPacketId: normalizeString(lastRun.selectedPacketId, null),
+      leaseId: normalizeString(lastRun.leaseId, null),
+      actorRole: normalizeString(lastRun.actorRole, null),
+      envelopeWorkerRole: normalizeString(lastRun.envelopeWorkerRole, null),
+      programId: normalizeString(lastRun.programId, null),
+      programRunId: normalizeString(lastRun.programRunId, null),
+      approvalId: normalizeString(lastRun.approvalId, null),
+      startedAt: lastRun.startedAt ?? null,
+      completedAt: lastRun.completedAt ?? null,
+      summary: normalizeString(lastRun.summary, "")
+    },
+    summary: {
+      ...base.summary,
+      ...summary,
+      lastRunId: normalizeString(summary.lastRunId, base.summary.lastRunId),
+      lastStatus: normalizeString(summary.lastStatus, base.summary.lastStatus),
+      lastOutcome: normalizeString(summary.lastOutcome, base.summary.lastOutcome),
+      lastSelectedPacketId: normalizeString(summary.lastSelectedPacketId, base.summary.lastSelectedPacketId),
+      lastEnvelopeWorkerRole: normalizeString(summary.lastEnvelopeWorkerRole, base.summary.lastEnvelopeWorkerRole),
+      lastProgramId: normalizeString(summary.lastProgramId, base.summary.lastProgramId),
+      lastProgramRunId: normalizeString(summary.lastProgramRunId, base.summary.lastProgramRunId),
+      lastApprovalId: normalizeString(summary.lastApprovalId, base.summary.lastApprovalId),
+      lastProgramOutcome: normalizeString(summary.lastProgramOutcome, base.summary.lastProgramOutcome),
+      requestCount: normalizeNumber(summary.requestCount, base.summary.requestCount),
+      acceptedRequestCount: normalizeNumber(summary.acceptedRequestCount, base.summary.acceptedRequestCount),
+      executingRequestCount: normalizeNumber(summary.executingRequestCount, base.summary.executingRequestCount),
+      staleRequestCount: normalizeNumber(summary.staleRequestCount, base.summary.staleRequestCount),
+      overdueExecutionCount: normalizeNumber(summary.overdueExecutionCount, base.summary.overdueExecutionCount),
+      dueReviewCount: normalizeNumber(summary.dueReviewCount, base.summary.dueReviewCount),
+      checkpointCount: normalizeNumber(summary.checkpointCount, base.summary.checkpointCount),
+      escalationCount: normalizeNumber(summary.escalationCount, base.summary.escalationCount),
+      lastCheckpointPacketId: normalizeString(summary.lastCheckpointPacketId, base.summary.lastCheckpointPacketId),
+      lastCheckpointSummary: normalizeString(summary.lastCheckpointSummary, base.summary.lastCheckpointSummary),
+      lastCheckpointAt: summary.lastCheckpointAt ?? base.summary.lastCheckpointAt,
+      lastEscalationPacketId: normalizeString(summary.lastEscalationPacketId, base.summary.lastEscalationPacketId),
+      lastEscalationFollowThroughId: normalizeString(summary.lastEscalationFollowThroughId, base.summary.lastEscalationFollowThroughId),
+      lastEscalationAt: summary.lastEscalationAt ?? base.summary.lastEscalationAt,
+      overview: normalizeString(summary.overview, base.summary.overview),
+      controllerStatePath: normalizeString(summary.controllerStatePath, base.summary.controllerStatePath),
+      leasesPath: normalizeString(summary.leasesPath, base.summary.leasesPath),
+      eventsPath: normalizeString(summary.eventsPath, base.summary.eventsPath),
+      resultsPath: normalizeString(summary.resultsPath, base.summary.resultsPath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeRuntimeLeasesIndex(raw = {}) {
+  const base = createRuntimeLeasesIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    explicitInvocationOnly: normalizeBoolean(raw.explicitInvocationOnly, base.explicitInvocationOnly),
+    items: normalizeObjectArray(raw.items),
+    summary: {
+      ...base.summary,
+      ...summary,
+      activeLeaseCount: normalizeNumber(summary.activeLeaseCount, base.summary.activeLeaseCount),
+      activePacketIds: normalizeStringArray(summary.activePacketIds),
+      activeLeaseIds: normalizeStringArray(summary.activeLeaseIds),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      leasesPath: normalizeString(summary.leasesPath, base.summary.leasesPath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeRuntimeContinuationIndex(raw = {}) {
+  const base = createRuntimeContinuationIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    explicitInvocationOnly: normalizeBoolean(raw.explicitInvocationOnly, base.explicitInvocationOnly),
+    noDaemon: normalizeBoolean(raw.noDaemon, base.noDaemon),
+    items: normalizeObjectArray(raw.items),
+    summary: {
+      ...base.summary,
+      ...summary,
+      continuationCount: normalizeNumber(summary.continuationCount, base.summary.continuationCount),
+      currentKind: normalizeString(summary.currentKind, base.summary.currentKind),
+      currentPacketId: normalizeString(summary.currentPacketId, base.summary.currentPacketId),
+      currentProgramRunId: normalizeString(summary.currentProgramRunId, base.summary.currentProgramRunId),
+      currentCommand: normalizeString(summary.currentCommand, base.summary.currentCommand),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      continuationPath: normalizeString(summary.continuationPath, base.summary.continuationPath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeRuntimeEventsIndex(raw = {}) {
+  const base = createRuntimeEventsIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    explicitInvocationOnly: normalizeBoolean(raw.explicitInvocationOnly, base.explicitInvocationOnly),
+    entries: normalizeObjectArray(raw.entries),
+    summary: {
+      ...base.summary,
+      ...summary,
+      eventCount: normalizeNumber(summary.eventCount, base.summary.eventCount),
+      lastEventType: normalizeString(summary.lastEventType, base.summary.lastEventType),
+      lastRunId: normalizeString(summary.lastRunId, base.summary.lastRunId),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      eventsPath: normalizeString(summary.eventsPath, base.summary.eventsPath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeRuntimeResultsIndex(raw = {}) {
+  const base = createRuntimeResultsIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    explicitInvocationOnly: normalizeBoolean(raw.explicitInvocationOnly, base.explicitInvocationOnly),
+    entries: normalizeObjectArray(raw.entries),
+    summary: {
+      ...base.summary,
+      ...summary,
+      runCount: normalizeNumber(summary.runCount, base.summary.runCount),
+      completedCount: normalizeNumber(summary.completedCount, base.summary.completedCount),
+      noopCount: normalizeNumber(summary.noopCount, base.summary.noopCount),
+      errorCount: normalizeNumber(summary.errorCount, base.summary.errorCount),
+      checkpointCount: normalizeNumber(summary.checkpointCount, base.summary.checkpointCount),
+      escalationCount: normalizeNumber(summary.escalationCount, base.summary.escalationCount),
+      lastRunId: normalizeString(summary.lastRunId, base.summary.lastRunId),
+      lastStatus: normalizeString(summary.lastStatus, base.summary.lastStatus),
+      lastOutcome: normalizeString(summary.lastOutcome, base.summary.lastOutcome),
+      lastCheckpointPacketId: normalizeString(summary.lastCheckpointPacketId, base.summary.lastCheckpointPacketId),
+      lastCheckpointSummary: normalizeString(summary.lastCheckpointSummary, base.summary.lastCheckpointSummary),
+      lastCheckpointAt: summary.lastCheckpointAt ?? base.summary.lastCheckpointAt,
+      lastEscalationPacketId: normalizeString(summary.lastEscalationPacketId, base.summary.lastEscalationPacketId),
+      lastEscalationFollowThroughId: normalizeString(summary.lastEscalationFollowThroughId, base.summary.lastEscalationFollowThroughId),
+      lastEscalationAt: summary.lastEscalationAt ?? base.summary.lastEscalationAt,
+      overview: normalizeString(summary.overview, base.summary.overview),
+      resultsPath: normalizeString(summary.resultsPath, base.summary.resultsPath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeProgramsIndex(raw = {}) {
+  const base = createProgramsIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    items: normalizeObjectArray(raw.items),
+    summary: {
+      ...base.summary,
+      ...summary,
+      programCount: normalizeNumber(summary.programCount, base.summary.programCount),
+      activeCount: normalizeNumber(summary.activeCount, base.summary.activeCount),
+      blockedCount: normalizeNumber(summary.blockedCount, base.summary.blockedCount),
+      topProgramIds: normalizeStringArray(summary.topProgramIds),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      programsPath: normalizeString(summary.programsPath, base.summary.programsPath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeCampaignsIndex(raw = {}) {
+  const base = createCampaignsIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    items: normalizeObjectArray(raw.items),
+    summary: {
+      ...base.summary,
+      ...summary,
+      campaignCount: normalizeNumber(summary.campaignCount, base.summary.campaignCount),
+      plannedCount: normalizeNumber(summary.plannedCount, base.summary.plannedCount),
+      activeCount: normalizeNumber(summary.activeCount, base.summary.activeCount),
+      reviewNeededCount: normalizeNumber(summary.reviewNeededCount, base.summary.reviewNeededCount),
+      completedCount: normalizeNumber(summary.completedCount, base.summary.completedCount),
+      blockedCount: normalizeNumber(summary.blockedCount, base.summary.blockedCount),
+      topCampaignIds: normalizeStringArray(summary.topCampaignIds),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      campaignsPath: normalizeString(summary.campaignsPath, base.summary.campaignsPath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeProgramRunsIndex(raw = {}) {
+  const base = createProgramRunsIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    items: normalizeObjectArray(raw.items),
+    summary: {
+      ...base.summary,
+      ...summary,
+      runCount: normalizeNumber(summary.runCount, base.summary.runCount),
+      approvedCount: normalizeNumber(summary.approvedCount, base.summary.approvedCount),
+      activeCount: normalizeNumber(summary.activeCount, base.summary.activeCount),
+      reviewNeededCount: normalizeNumber(summary.reviewNeededCount, base.summary.reviewNeededCount),
+      blockedCount: normalizeNumber(summary.blockedCount, base.summary.blockedCount),
+      reviewCheckpointRunCount: normalizeNumber(summary.reviewCheckpointRunCount, base.summary.reviewCheckpointRunCount),
+      topRunIds: normalizeStringArray(summary.topRunIds),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      runsPath: normalizeString(summary.runsPath, base.summary.runsPath)
+    },
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
+export function normalizeProgramApprovalsIndex(raw = {}) {
+  const base = createProgramApprovalsIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const summary = normalizeObject(raw.summary);
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    items: normalizeObjectArray(raw.items),
+    summary: {
+      ...base.summary,
+      ...summary,
+      approvalCount: normalizeNumber(summary.approvalCount, base.summary.approvalCount),
+      approvedCount: normalizeNumber(summary.approvedCount, base.summary.approvedCount),
+      revokedCount: normalizeNumber(summary.revokedCount, base.summary.revokedCount),
+      consumedCount: normalizeNumber(summary.consumedCount, base.summary.consumedCount),
+      topApprovalIds: normalizeStringArray(summary.topApprovalIds),
+      overview: normalizeString(summary.overview, base.summary.overview),
+      approvalsPath: normalizeString(summary.approvalsPath, base.summary.approvalsPath)
     },
     updatedAt: raw.updatedAt ?? base.updatedAt
   };
@@ -754,6 +1091,127 @@ export function createTaskPacketsIndex() {
       readyPacketIds: [],
       stalePacketIds: [],
       missingDependencyIds: []
+    },
+    updatedAt: null
+  };
+}
+
+export function createRuntimeControllerState() {
+  return {
+    version: 1,
+    explicitInvocationOnly: true,
+    noDaemon: true,
+    selectionPolicy: "planner-materialized-guidance-v2",
+    boundedStepPolicy: "planner-control-plane-worker-step-v1",
+    lastRun: null,
+    summary: {
+      lastRunId: null,
+      lastStatus: "never-run",
+      lastOutcome: "not-started",
+      lastSelectedPacketId: null,
+      lastEnvelopeWorkerRole: null,
+      lastProgramId: null,
+      lastProgramRunId: null,
+      lastApprovalId: null,
+      lastProgramOutcome: "not-started",
+      requestCount: 0,
+      acceptedRequestCount: 0,
+      executingRequestCount: 0,
+      staleRequestCount: 0,
+      overdueExecutionCount: 0,
+      dueReviewCount: 0,
+      checkpointCount: 0,
+      escalationCount: 0,
+      lastCheckpointPacketId: null,
+      lastCheckpointSummary: null,
+      lastCheckpointAt: null,
+      lastEscalationPacketId: null,
+      lastEscalationFollowThroughId: null,
+      lastEscalationAt: null,
+      overview: "No autonomous control-plane run has been executed yet.",
+      controllerStatePath: ARTIFACT_PATHS.runtimeControllerState,
+      leasesPath: ARTIFACT_PATHS.runtimeLeases,
+      eventsPath: ARTIFACT_PATHS.runtimeEvents,
+      resultsPath: ARTIFACT_PATHS.runtimeResults
+    },
+    updatedAt: null
+  };
+}
+
+export function createRuntimeContinuationIndex() {
+  return {
+    version: 1,
+    explicitInvocationOnly: true,
+    noDaemon: true,
+    items: [],
+    summary: {
+      continuationCount: 0,
+      currentKind: null,
+      currentPacketId: null,
+      currentProgramRunId: null,
+      currentCommand: null,
+      overview: "No explicit autonomy continuation is currently pending.",
+      continuationPath: ARTIFACT_PATHS.runtimeContinuation
+    },
+    updatedAt: null
+  };
+}
+
+export function createRuntimeLeasesIndex() {
+  return {
+    version: 1,
+    explicitInvocationOnly: true,
+    items: [],
+    summary: {
+      activeLeaseCount: 0,
+      activePacketIds: [],
+      activeLeaseIds: [],
+      overview: "No autonomous control-plane leases are currently active.",
+      leasesPath: ARTIFACT_PATHS.runtimeLeases
+    },
+    updatedAt: null
+  };
+}
+
+export function createRuntimeEventsIndex() {
+  return {
+    version: 1,
+    explicitInvocationOnly: true,
+    entries: [],
+    summary: {
+      eventCount: 0,
+      lastEventType: null,
+      lastRunId: null,
+      overview: "No autonomous control-plane events have been recorded yet.",
+      eventsPath: ARTIFACT_PATHS.runtimeEvents
+    },
+    updatedAt: null
+  };
+}
+
+export function createRuntimeResultsIndex() {
+  return {
+    version: 1,
+    explicitInvocationOnly: true,
+    entries: [],
+    summary: {
+      runCount: 0,
+      completedCount: 0,
+      noopCount: 0,
+      errorCount: 0,
+      checkpointCount: 0,
+      escalationCount: 0,
+      lastRunId: null,
+      lastStatus: "never-run",
+      lastOutcome: "not-started",
+      lastCheckpointPacketId: null,
+      lastCheckpointSummary: null,
+      lastCheckpointAt: null,
+      lastEscalationPacketId: null,
+      lastEscalationFollowThroughId: null,
+      lastEscalationAt: null,
+      overview: "No autonomous control-plane results have been recorded yet.",
+      resultsPath: ARTIFACT_PATHS.runtimeResults
     },
     updatedAt: null
   };
@@ -833,6 +1291,77 @@ export function createResearchAgenda() {
     objective: "Capture the paper's goal and contribution.",
     agenda: [],
     evidenceBacklog: [],
+    updatedAt: null
+  };
+}
+
+export function createProgramsIndex() {
+  return {
+    version: 1,
+    items: [],
+    summary: {
+      programCount: 0,
+      activeCount: 0,
+      blockedCount: 0,
+      topProgramIds: [],
+      overview: "No research programs have been recorded yet.",
+      programsPath: ARTIFACT_PATHS.programsIndex
+    },
+    updatedAt: null
+  };
+}
+
+export function createCampaignsIndex() {
+  return {
+    version: 1,
+    items: [],
+    summary: {
+      campaignCount: 0,
+      plannedCount: 0,
+      activeCount: 0,
+      reviewNeededCount: 0,
+      completedCount: 0,
+      blockedCount: 0,
+      topCampaignIds: [],
+      overview: "No multi-cycle research campaigns have been recorded yet.",
+      campaignsPath: ARTIFACT_PATHS.campaignsIndex
+    },
+    updatedAt: null
+  };
+}
+
+export function createProgramRunsIndex() {
+  return {
+    version: 1,
+    items: [],
+    summary: {
+      runCount: 0,
+      approvedCount: 0,
+      activeCount: 0,
+      reviewNeededCount: 0,
+      blockedCount: 0,
+      reviewCheckpointRunCount: 0,
+      topRunIds: [],
+      overview: "No approved program runs have been recorded yet.",
+      runsPath: ARTIFACT_PATHS.programRuns
+    },
+    updatedAt: null
+  };
+}
+
+export function createProgramApprovalsIndex() {
+  return {
+    version: 1,
+    items: [],
+    summary: {
+      approvalCount: 0,
+      approvedCount: 0,
+      revokedCount: 0,
+      consumedCount: 0,
+      topApprovalIds: [],
+      overview: "No program approvals have been recorded yet.",
+      approvalsPath: ARTIFACT_PATHS.programApprovals
+    },
     updatedAt: null
   };
 }
@@ -1518,12 +2047,6 @@ export function createMetaOptimizerState() {
         overview: "No proposal-only remediation packs have been generated yet.",
         packsPath: ARTIFACT_PATHS.metaRemediationPacks
       },
-      governanceCoverage: {
-        guardedCount: 0,
-        exemptCount: 0,
-        overview: "No governance coverage matrix has been summarized yet.",
-        coveragePath: ARTIFACT_PATHS.metaGovernanceCoverage
-      },
       followThrough: {
         itemCount: 0,
         acknowledgedCount: 0,
@@ -1541,12 +2064,6 @@ export function createMetaOptimizerState() {
         topSourceIds: [],
         overview: "No operator follow-through decisions have been recorded yet.",
         followThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough
-      },
-      governanceCoverage: {
-        guardedCount: 0,
-        exemptCount: 0,
-        overview: "No governance coverage matrix has been summarized yet.",
-        coveragePath: ARTIFACT_PATHS.metaGovernanceCoverage
       },
       executionBridgeCandidates: {
         candidateCount: 0,
@@ -1717,6 +2234,37 @@ export function normalizeMetaOptimizerState(raw = {}) {
   };
 }
 
+export function normalizeWorkspaceAutonomyLoops(raw = {}, fallback = null) {
+  const base = fallback ?? createWorkspaceIndex().autonomyLoops;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  return {
+    ...base,
+    ...raw,
+    contractVersion: normalizeString(raw.contractVersion, base.contractVersion),
+    activeLifecycleState: normalizeString(raw.activeLifecycleState, base.activeLifecycleState),
+    loopCount: normalizeNumber(raw.loopCount, base.loopCount),
+    blockedCount: normalizeNumber(raw.blockedCount, base.blockedCount),
+    readyCount: normalizeNumber(raw.readyCount, base.readyCount),
+    closedCount: normalizeNumber(raw.closedCount, base.closedCount),
+    currentLoopId: normalizeString(raw.currentLoopId, base.currentLoopId),
+    nextSafeAction: normalizeString(raw.nextSafeAction, base.nextSafeAction),
+    explicitOnly: normalizeBoolean(raw.explicitOnly, base.explicitOnly),
+    noHiddenRuntime: normalizeBoolean(raw.noHiddenRuntime, base.noHiddenRuntime),
+    families: normalizeStringArray(raw.families),
+    loops: normalizeObjectArray(raw.loops),
+    approvalPointers: normalizeStringArray(raw.approvalPointers),
+    runtimePointers: normalizeStringArray(raw.runtimePointers),
+    followThroughPointers: normalizeStringArray(raw.followThroughPointers),
+    blockerIds: normalizeStringArray(raw.blockerIds),
+    closureStates: normalizeStringArray(raw.closureStates),
+    lifecycleStates: normalizeStringArray(raw.lifecycleStates),
+    safeExecutionPath: normalizeString(raw.safeExecutionPath, base.safeExecutionPath),
+    overview: normalizeString(raw.overview, base.overview)
+  };
+}
+
 export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
   const base = fallback ?? createWorkspaceIndex().metaOptimize;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -1729,6 +2277,7 @@ export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
   const executionBridgeCandidates = normalizeObject(raw.executionBridgeCandidates);
   const governanceCoverage = normalizeObject(raw.governanceCoverage);
   const followThrough = normalizeObject(raw.followThrough);
+  const autonomyLoops = normalizeObject(raw.autonomyLoops);
   const baseGovernanceCoverage = normalizeObject(base.governanceCoverage, {
     guardedCount: 0,
     exemptCount: 0,
@@ -1817,6 +2366,7 @@ export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
         overview: normalizeString(operatorPlaybooks.overview, base.operatorPlaybooks.overview),
         playbooksPath: normalizeString(operatorPlaybooks.playbooksPath, base.operatorPlaybooks.playbooksPath)
       },
+      autonomyLoops: normalizeWorkspaceAutonomyLoops(autonomyLoops, base.autonomyLoops),
       longHorizon: {
       ...base.longHorizon,
       ...longHorizon,
@@ -1892,7 +2442,7 @@ export function createWikiRelationsIndex() {
 
 export function createWorkspaceIndex() {
   return {
-    version: 7,
+    version: 8,
     managed: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
     boardPhase: "init",
     boardAssignedRole: "planner",
@@ -2039,6 +2589,113 @@ export function createWorkspaceIndex() {
           memoryPath: ARTIFACT_PATHS.metaLongHorizonMemory
         }
     },
+    runtime: {
+      explicitInvocationOnly: true,
+      noDaemon: true,
+      selectionPolicy: "planner-materialized-guidance-v2",
+      boundedStepPolicy: "planner-control-plane-worker-step-v1",
+      controllerStatePath: ARTIFACT_PATHS.runtimeControllerState,
+      leasesPath: ARTIFACT_PATHS.runtimeLeases,
+      eventsPath: ARTIFACT_PATHS.runtimeEvents,
+      resultsPath: ARTIFACT_PATHS.runtimeResults,
+      lastRunId: null,
+      lastStatus: "never-run",
+      lastOutcome: "not-started",
+      lastSelectedPacketId: null,
+      lastEnvelopeWorkerRole: null,
+      lastProgramId: null,
+      lastProgramRunId: null,
+      lastApprovalId: null,
+      lastProgramOutcome: "not-started",
+      requestCount: 0,
+      acceptedRequestCount: 0,
+      executingRequestCount: 0,
+      staleRequestCount: 0,
+      overdueExecutionCount: 0,
+      dueReviewCount: 0,
+      checkpointCount: 0,
+      escalationCount: 0,
+      lastCheckpointPacketId: null,
+      lastCheckpointSummary: null,
+      lastCheckpointAt: null,
+      lastEscalationPacketId: null,
+      lastEscalationFollowThroughId: null,
+      lastEscalationAt: null,
+      continuationCount: 0,
+      currentContinuationKind: null,
+      currentContinuationPacketId: null,
+      currentContinuationProgramRunId: null,
+      currentContinuationCommand: null,
+      activeLeaseCount: 0,
+      activeLeasePacketIds: [],
+      eventCount: 0,
+      resultCount: 0,
+      lastEventType: null,
+      overview: "No autonomous control-plane run has been executed yet."
+    },
+    programs: {
+      programCount: 0,
+      activeCount: 0,
+      blockedCount: 0,
+      approvedRunCount: 0,
+      reviewNeededRunCount: 0,
+      reviewCheckpointRunCount: 0,
+      consumedApprovalCount: 0,
+      topProgramIds: [],
+      topRunIds: [],
+      topApprovalIds: [],
+      currentProgramId: null,
+      currentProgramRunId: null,
+      currentApprovalId: null,
+      currentReviewCheckpointRunId: null,
+      currentReviewCheckpointPacketId: null,
+      currentReviewCheckpointSummary: null,
+      lastProgramOutcome: "not-started",
+      overview: "No program-level research operating surfaces are active yet.",
+      programsPath: ARTIFACT_PATHS.programsIndex,
+      runsPath: ARTIFACT_PATHS.programRuns,
+      approvalsPath: ARTIFACT_PATHS.programApprovals
+    },
+    campaigns: {
+      campaignCount: 0,
+      plannedCount: 0,
+      activeCount: 0,
+      reviewNeededCount: 0,
+      completedCount: 0,
+      blockedCount: 0,
+      topCampaignIds: [],
+      currentCampaignId: null,
+      currentCampaignStatus: null,
+      currentCampaignStepCount: 0,
+      currentCampaignCompletedStepCount: 0,
+      currentCampaignReviewNeededStepCount: 0,
+      currentCampaignNextStepId: null,
+      currentCampaignNextAction: null,
+      overview: "No multi-cycle research campaigns have been recorded yet.",
+      campaignsPath: ARTIFACT_PATHS.campaignsIndex
+    },
+    autonomyLoops: {
+      contractVersion: "unified-autonomy-loop-v1",
+      activeLifecycleState: "board-ready",
+      loopCount: 4,
+      blockedCount: 0,
+      readyCount: 0,
+      closedCount: 0,
+      currentLoopId: "board-role-artifact-handoff",
+      nextSafeAction: "Refresh the board and choose the next explicit operator action.",
+      explicitOnly: true,
+      noHiddenRuntime: true,
+      families: [],
+      loops: [],
+      approvalPointers: [],
+      runtimePointers: [ARTIFACT_PATHS.runtimeControllerState],
+      followThroughPointers: [ARTIFACT_PATHS.metaOperatorFollowThrough],
+      blockerIds: [],
+      closureStates: [],
+      lifecycleStates: [],
+      safeExecutionPath: "project:paper.follow-through -> project:paper.materialize -> node ./bin/paper-factory.mjs autonomy-foreground . --max-steps 5",
+      overview: "Unified autonomy loop skeleton is explicit, file-first, and foreground-only."
+    },
     activeRoles: [],
     unresolvedConcernIds: [],
     mostRecentSessions: [],
@@ -2047,6 +2704,118 @@ export function createWorkspaceIndex() {
       activeTargets: []
     },
     updatedAt: null
+  };
+}
+
+export function normalizeWorkspaceRuntime(raw = {}, fallback = null) {
+  const base = fallback ?? createWorkspaceIndex().runtime;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  return {
+    ...base,
+    ...raw,
+    explicitInvocationOnly: normalizeBoolean(raw.explicitInvocationOnly, base.explicitInvocationOnly),
+    noDaemon: normalizeBoolean(raw.noDaemon, base.noDaemon),
+    selectionPolicy: normalizeString(raw.selectionPolicy, base.selectionPolicy),
+    boundedStepPolicy: normalizeString(raw.boundedStepPolicy, base.boundedStepPolicy),
+    controllerStatePath: normalizeString(raw.controllerStatePath, base.controllerStatePath),
+    leasesPath: normalizeString(raw.leasesPath, base.leasesPath),
+    eventsPath: normalizeString(raw.eventsPath, base.eventsPath),
+    resultsPath: normalizeString(raw.resultsPath, base.resultsPath),
+    lastRunId: normalizeString(raw.lastRunId, base.lastRunId),
+    lastStatus: normalizeString(raw.lastStatus, base.lastStatus),
+    lastOutcome: normalizeString(raw.lastOutcome, base.lastOutcome),
+    lastSelectedPacketId: normalizeString(raw.lastSelectedPacketId, base.lastSelectedPacketId),
+    lastEnvelopeWorkerRole: normalizeString(raw.lastEnvelopeWorkerRole, base.lastEnvelopeWorkerRole),
+    lastProgramId: normalizeString(raw.lastProgramId, base.lastProgramId),
+    lastProgramRunId: normalizeString(raw.lastProgramRunId, base.lastProgramRunId),
+    lastApprovalId: normalizeString(raw.lastApprovalId, base.lastApprovalId),
+    lastProgramOutcome: normalizeString(raw.lastProgramOutcome, base.lastProgramOutcome),
+    requestCount: normalizeNumber(raw.requestCount, base.requestCount),
+    acceptedRequestCount: normalizeNumber(raw.acceptedRequestCount, base.acceptedRequestCount),
+    executingRequestCount: normalizeNumber(raw.executingRequestCount, base.executingRequestCount),
+    staleRequestCount: normalizeNumber(raw.staleRequestCount, base.staleRequestCount),
+    overdueExecutionCount: normalizeNumber(raw.overdueExecutionCount, base.overdueExecutionCount),
+    dueReviewCount: normalizeNumber(raw.dueReviewCount, base.dueReviewCount),
+    checkpointCount: normalizeNumber(raw.checkpointCount, base.checkpointCount),
+    escalationCount: normalizeNumber(raw.escalationCount, base.escalationCount),
+    continuationCount: normalizeNumber(raw.continuationCount, base.continuationCount),
+    lastCheckpointPacketId: normalizeString(raw.lastCheckpointPacketId, base.lastCheckpointPacketId),
+    lastCheckpointSummary: normalizeString(raw.lastCheckpointSummary, base.lastCheckpointSummary),
+    lastCheckpointAt: raw.lastCheckpointAt ?? base.lastCheckpointAt,
+    lastEscalationPacketId: normalizeString(raw.lastEscalationPacketId, base.lastEscalationPacketId),
+    lastEscalationFollowThroughId: normalizeString(raw.lastEscalationFollowThroughId, base.lastEscalationFollowThroughId),
+    lastEscalationAt: raw.lastEscalationAt ?? base.lastEscalationAt,
+    currentContinuationKind: normalizeString(raw.currentContinuationKind, base.currentContinuationKind),
+    currentContinuationPacketId: normalizeString(raw.currentContinuationPacketId, base.currentContinuationPacketId),
+    currentContinuationProgramRunId: normalizeString(raw.currentContinuationProgramRunId, base.currentContinuationProgramRunId),
+    currentContinuationCommand: normalizeString(raw.currentContinuationCommand, base.currentContinuationCommand),
+    activeLeaseCount: normalizeNumber(raw.activeLeaseCount, base.activeLeaseCount),
+    activeLeasePacketIds: normalizeStringArray(raw.activeLeasePacketIds),
+    eventCount: normalizeNumber(raw.eventCount, base.eventCount),
+    resultCount: normalizeNumber(raw.resultCount, base.resultCount),
+    lastEventType: normalizeString(raw.lastEventType, base.lastEventType),
+    overview: normalizeString(raw.overview, base.overview)
+  };
+}
+
+export function normalizeWorkspacePrograms(raw = {}, fallback = null) {
+  const base = fallback ?? createWorkspaceIndex().programs;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  return {
+    ...base,
+    ...raw,
+    programCount: normalizeNumber(raw.programCount, base.programCount),
+    activeCount: normalizeNumber(raw.activeCount, base.activeCount),
+    blockedCount: normalizeNumber(raw.blockedCount, base.blockedCount),
+    approvedRunCount: normalizeNumber(raw.approvedRunCount, base.approvedRunCount),
+    reviewNeededRunCount: normalizeNumber(raw.reviewNeededRunCount, base.reviewNeededRunCount),
+    reviewCheckpointRunCount: normalizeNumber(raw.reviewCheckpointRunCount, base.reviewCheckpointRunCount),
+    consumedApprovalCount: normalizeNumber(raw.consumedApprovalCount, base.consumedApprovalCount),
+    topProgramIds: normalizeStringArray(raw.topProgramIds),
+    topRunIds: normalizeStringArray(raw.topRunIds),
+    topApprovalIds: normalizeStringArray(raw.topApprovalIds),
+    currentProgramId: normalizeString(raw.currentProgramId, base.currentProgramId),
+    currentProgramRunId: normalizeString(raw.currentProgramRunId, base.currentProgramRunId),
+    currentApprovalId: normalizeString(raw.currentApprovalId, base.currentApprovalId),
+    currentReviewCheckpointRunId: normalizeString(raw.currentReviewCheckpointRunId, base.currentReviewCheckpointRunId),
+    currentReviewCheckpointPacketId: normalizeString(raw.currentReviewCheckpointPacketId, base.currentReviewCheckpointPacketId),
+    currentReviewCheckpointSummary: normalizeString(raw.currentReviewCheckpointSummary, base.currentReviewCheckpointSummary),
+    lastProgramOutcome: normalizeString(raw.lastProgramOutcome, base.lastProgramOutcome),
+    overview: normalizeString(raw.overview, base.overview),
+    programsPath: normalizeString(raw.programsPath, base.programsPath),
+    runsPath: normalizeString(raw.runsPath, base.runsPath),
+    approvalsPath: normalizeString(raw.approvalsPath, base.approvalsPath)
+  };
+}
+
+export function normalizeWorkspaceCampaigns(raw = {}, fallback = null) {
+  const base = fallback ?? createWorkspaceIndex().campaigns;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  return {
+    ...base,
+    ...raw,
+    campaignCount: normalizeNumber(raw.campaignCount, base.campaignCount),
+    plannedCount: normalizeNumber(raw.plannedCount, base.plannedCount),
+    activeCount: normalizeNumber(raw.activeCount, base.activeCount),
+    reviewNeededCount: normalizeNumber(raw.reviewNeededCount, base.reviewNeededCount),
+    completedCount: normalizeNumber(raw.completedCount, base.completedCount),
+    blockedCount: normalizeNumber(raw.blockedCount, base.blockedCount),
+    topCampaignIds: normalizeStringArray(raw.topCampaignIds),
+    currentCampaignId: normalizeString(raw.currentCampaignId, base.currentCampaignId),
+    currentCampaignStatus: normalizeString(raw.currentCampaignStatus, base.currentCampaignStatus),
+    currentCampaignStepCount: normalizeNumber(raw.currentCampaignStepCount, base.currentCampaignStepCount),
+    currentCampaignCompletedStepCount: normalizeNumber(raw.currentCampaignCompletedStepCount, base.currentCampaignCompletedStepCount),
+    currentCampaignReviewNeededStepCount: normalizeNumber(raw.currentCampaignReviewNeededStepCount, base.currentCampaignReviewNeededStepCount),
+    currentCampaignNextStepId: normalizeString(raw.currentCampaignNextStepId, base.currentCampaignNextStepId),
+    currentCampaignNextAction: normalizeString(raw.currentCampaignNextAction, base.currentCampaignNextAction),
+    overview: normalizeString(raw.overview, base.overview),
+    campaignsPath: normalizeString(raw.campaignsPath, base.campaignsPath)
   };
 }
 
@@ -2107,6 +2876,13 @@ export function createWorkflowBoundaries() {
      ".paper/meta/recommendations.json",
     ".paper/meta/optimizer-state.json",
     ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
+    ".paper/runtime/controller-state.json",
+    ".paper/runtime/leases.json",
+    ".paper/runtime/events.json",
+    ".paper/runtime/results.json",
+    ".paper/programs/index.json",
+    ".paper/programs/runs.json",
+    ".paper/programs/approvals.json",
     ".paper/sessions/journal.json",
     ".paper/sessions/LATEST_SUMMARY.md",
     ".paper/workspace/index.json",
@@ -2145,7 +2921,10 @@ export function createWorkflowBoundaries() {
     managedArtifacts: {
       codePack: createManagedArtifactMeta("managed-replaceable", "src"),
       workflowBoundaries: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workflowBoundaries),
-      workspaceIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex)
+      workspaceIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
+      programsIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.programsIndex),
+      programRuns: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.programRuns),
+      programApprovals: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.programApprovals)
     },
     notes: [
       "Pack installs and syncs should bootstrap missing .paper artifacts but should not overwrite user-authored workspace state.",

@@ -1680,7 +1680,9 @@ export function registerSource(root, args = {}) {
 
 export function upsertNote(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-note", "guarded");
-  assertFollowThroughReady(root, "Recording a structured note", args);
+  if (!args.skipFollowThroughReady) {
+    assertFollowThroughReady(root, "Recording a structured note", args);
+  }
   ensureWorkspace(root);
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
@@ -1707,15 +1709,17 @@ export function upsertNote(root, args = {}) {
 
   const agenda = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: loadState(root).paper.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
   writeText(root, ARTIFACT_PATHS.queryPack, renderQueryPack(notes, sources, agenda, queryWorkspaceIndex(root)));
-  const state = loadState(root);
-  syncPhase(root, state, {
-    stage: "notes",
-    resumeCommand: "project:paper.claim-gate",
-    role: "researcher",
-    intentType: "research",
-    currentFocus: note.summary || note.title,
-    nextAction: "Promote any supported findings into durable claims."
-  });
+  if (!args.skipSyncPhase) {
+    const state = loadState(root);
+    syncPhase(root, state, {
+      stage: "notes",
+      resumeCommand: "project:paper.claim-gate",
+      role: "researcher",
+      intentType: "research",
+      currentFocus: note.summary || note.title,
+      nextAction: "Promote any supported findings into durable claims."
+    });
+  }
   refreshDurableSurfaces(root, {
     type: "upsert-note",
     summary: `Updated note ${note.id}.`,
@@ -2022,9 +2026,11 @@ export function syncCitations(root, args = {}) {
   return { sourceCount: sources.items.length, citedKeyCount: citedKeys.size, missingKeys };
 }
 
-export function refreshWiki(root) {
+export function refreshWiki(root, args = {}) {
   assertGovernanceMutationRegistered("refresh-wiki", "guarded");
-  assertFollowThroughReady(root, "Refreshing the wiki", {});
+  if (!args.skipFollowThroughReady) {
+    assertFollowThroughReady(root, "Refreshing the wiki", {});
+  }
   ensureWorkspace(root);
   const state = loadState(root);
   const board = loadBoard(root);

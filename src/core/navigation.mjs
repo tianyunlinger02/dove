@@ -4,6 +4,7 @@ import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
+  AUTONOMY_ALLOWED_STEP_TYPES,
   GOVERNANCE_EXEMPT_MUTATIONS,
   GOVERNANCE_GUARDED_MUTATIONS,
   ROLE_IDS,
@@ -18,7 +19,16 @@ import {
   createMetaOperatorPlaybooksIndex,
   createMetaRemediationPacksIndex,
   createMetaOptimizerState,
+  createCampaignsIndex,
+  createProgramApprovalsIndex,
+  createProgramsIndex,
+  createProgramRunsIndex,
   createMetaRecommendationsIndex,
+  createRuntimeControllerState,
+  createRuntimeContinuationIndex,
+  createRuntimeEventsIndex,
+  createRuntimeLeasesIndex,
+  createRuntimeResultsIndex,
   createSessionJournal,
   createTaskPacketsIndex,
   createVersionComparisonsIndex,
@@ -31,12 +41,23 @@ import {
   normalizeMetaGovernanceCoverageIndex,
   normalizeMetaGovernanceCoverageReport,
   normalizeMetaLongHorizonMemory,
+  normalizeAutonomyAllowedStepType,
   normalizeMetaOperatorFollowThroughIndex,
   normalizeMetaOperatorFollowThroughTransitionsIndex,
   normalizeMetaOperatorPlaybooksIndex,
   normalizeMetaRemediationPacksIndex,
   normalizeMetaOptimizerState,
+  normalizeCampaignsIndex,
+  normalizeProgramApprovalsIndex,
+  normalizeProgramsIndex,
+  normalizeProgramRunsIndex,
   normalizeMetaRecommendationsIndex,
+  normalizeRuntimeControllerState,
+  normalizeRuntimeContinuationIndex,
+  normalizeRuntimeEventsIndex,
+  normalizeRuntimeLeasesIndex,
+  normalizeRuntimeResultsIndex,
+  normalizeWorkspaceIndex,
   resolveResumeCommandForPhase
 } from "./schema.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
@@ -161,6 +182,9 @@ function buildPacketDependencyHealth(packet, packetById) {
 }
 
 function summarizePacket(packet) {
+  const materializedFrom = packet.materialization?.sourceType && packet.materialization?.sourceId
+    ? `${packet.materialization.sourceType}:${packet.materialization.sourceId}`
+    : null;
   return {
     id: packet.id,
     title: packet.title,
@@ -170,8 +194,21 @@ function summarizePacket(packet) {
     phase: packet.phase,
     nextAction: packet.nextAction,
     dependencyState: packet.dependencyHealth?.state ?? "clear",
-    packetContextPath: packet.packetContextPath ?? null
+    packetContextPath: packet.packetContextPath ?? null,
+    sourceType: packet.sourceType ?? null,
+    sourceId: packet.sourceId ?? null,
+    materializedFrom
   };
+}
+
+function describePacketProvenance(packet = {}) {
+  if (packet.materialization?.sourceType && packet.materialization?.sourceId) {
+    return `materialized-from=${packet.materialization.sourceType}:${packet.materialization.sourceId}`;
+  }
+  if (packet.sourceType && packet.sourceId && packet.sourceType !== "task") {
+    return `source=${packet.sourceType}:${packet.sourceId}`;
+  }
+  return null;
 }
 
 function slugify(value) {
@@ -249,6 +286,8 @@ function mergeDecisions(incoming, existing) {
 function normalizePacket(packet = {}) {
   const lifecycleStatus = derivePacketLifecycle(packet);
   const updatedAt = normalizeUpdatedAt(packet.updatedAt) ?? nowIso();
+  const workerRole = ROLE_IDS.includes(packet.autonomyEnvelope?.workerRole) ? packet.autonomyEnvelope.workerRole : null;
+  const controllerRole = ROLE_IDS.includes(packet.autonomyEnvelope?.controllerRole) ? packet.autonomyEnvelope.controllerRole : null;
   return {
     ...packet,
     id: slugify(packet.id),
@@ -278,6 +317,16 @@ function normalizePacket(packet = {}) {
     decisions: Array.isArray(packet.decisions) ? packet.decisions : [],
     lineage: packet.lineage ?? {},
     continuationState: packet.continuationState ?? { status: packet.active ? "in-progress" : "ready-to-resume", lastCheckpoint: packet.summary ?? packet.title ?? packet.id },
+    autonomyEnvelope: workerRole && controllerRole
+      ? {
+          controllerRole,
+          workerRole,
+          scopeType: packet.autonomyEnvelope?.scopeType ?? "packet-local",
+          explicitOnly: packet.autonomyEnvelope?.explicitOnly ?? true,
+          requiredReadPaths: normalizeStringArray(packet.autonomyEnvelope?.requiredReadPaths),
+          localRules: normalizeStringArray(packet.autonomyEnvelope?.localRules)
+        }
+      : null,
     updatedAt,
     packetPath: packet.packetPath ?? packetFilePath(packet.id),
     packetContextPath: packet.packetContextPath ?? path.join(ARTIFACT_PATHS.packetContextsDir, `${slugify(packet.id)}.json`)
@@ -508,6 +557,14 @@ function buildActionContextBundle({ scopeType, scopeId, summary, board, workspac
     roleId,
     phaseId,
     packetId: packet?.id ?? null,
+    autonomyEnvelope: packet?.autonomyEnvelope ?? null,
+    programLinkage: packet?.lineage?.programId || packet?.materialization?.programId
+      ? {
+          programId: packet.lineage?.programId ?? packet.materialization?.programId ?? null,
+          programRunId: packet.lineage?.programRunId ?? packet.materialization?.programRunId ?? null,
+          approvalId: packet.lineage?.approvalId ?? packet.materialization?.approvalId ?? null
+        }
+      : null,
     artifactPath,
     explicitOnly: true,
     noHiddenRuntime: true,
@@ -1083,6 +1140,10 @@ function buildPacketContextManifest(root, board, packet, packetById, workspaceIn
       ARTIFACT_PATHS.taskPacketsIndex,
       ARTIFACT_PATHS.sessionSummary,
       ARTIFACT_PATHS.navigationReport,
+      packet.lineage?.programId ? ARTIFACT_PATHS.programsIndex : null,
+      packet.lineage?.programRunId ? ARTIFACT_PATHS.programRuns : null,
+      packet.lineage?.approvalId ? ARTIFACT_PATHS.programApprovals : null,
+      packet.materialization?.sourceArtifactPath,
       ...(packet.outputPaths ?? []),
       ...(packet.evidenceLinks ?? [])
     ]),
@@ -1113,6 +1174,45 @@ function buildPacketContextManifest(root, board, packet, packetById, workspaceIn
       children: uniqueSorted(packet.childPacketIds),
       parentPacketId: packet.parentPacketId ?? null
     },
+    materialization: packet.materialization?.sourceType && packet.materialization?.sourceId
+      ? {
+          pathType: packet.materialization.pathType ?? "guidance-to-packet",
+          sourceType: packet.materialization.sourceType,
+          sourceId: packet.materialization.sourceId,
+          sourceArtifactPath: packet.materialization.sourceArtifactPath ?? null,
+          sourceTitle: packet.materialization.sourceTitle ?? null,
+          sourceSummary: packet.materialization.sourceSummary ?? null,
+          followThroughId: packet.materialization.followThroughId ?? null,
+          selectedConversionPathKey: packet.materialization.selectedConversionPathKey ?? null,
+          executionBridgeCandidateIds: uniqueSorted(packet.materialization.executionBridgeCandidateIds ?? []),
+          remediationPackIds: uniqueSorted(packet.materialization.remediationPackIds ?? []),
+          createdAt: packet.materialization.createdAt ?? null,
+          createdByRole: packet.materialization.createdByRole ?? null
+        }
+      : null,
+    autonomyEnvelope: packet.autonomyEnvelope
+      ? {
+          controllerRole: packet.autonomyEnvelope.controllerRole,
+          workerRole: packet.autonomyEnvelope.workerRole,
+          scopeType: packet.autonomyEnvelope.scopeType ?? "packet-local",
+          explicitOnly: packet.autonomyEnvelope.explicitOnly ?? true,
+          requiredReadPaths: uniqueSorted([
+            path.join(ARTIFACT_PATHS.roleContextsDir, `${packet.autonomyEnvelope.workerRole}.json`),
+            ...normalizeStringArray(packet.autonomyEnvelope.requiredReadPaths)
+          ]),
+          localRules: uniqueSorted(packet.autonomyEnvelope.localRules ?? [])
+        }
+      : null,
+    programLinkage: packet.lineage?.programId || packet.materialization?.programId
+      ? {
+          programId: packet.lineage?.programId ?? packet.materialization?.programId ?? null,
+          programRunId: packet.lineage?.programRunId ?? packet.materialization?.programRunId ?? null,
+          approvalId: packet.lineage?.approvalId ?? packet.materialization?.approvalId ?? null,
+          programsPath: ARTIFACT_PATHS.programsIndex,
+          runsPath: ARTIFACT_PATHS.programRuns,
+          approvalsPath: ARTIFACT_PATHS.programApprovals
+        }
+      : null,
     ownershipSummary: workspaceIndex.ownershipSummary?.find((entry) => entry.roleId === packet.assignedRole) ?? null,
     generatedAt: nowIso()
   };
@@ -1187,7 +1287,7 @@ function buildDecisions(board, versionsIndex, comparisons, packets, wikiEntities
   return decisions;
 }
 
-function buildTaskGraph(packets) {
+function buildTaskGraph(packets, autonomyLoops = null) {
   const nodeIds = new Set(packets.map((packet) => packet.id));
   const edges = [];
   for (const packet of packets) {
@@ -1223,7 +1323,194 @@ function buildTaskGraph(packets) {
       }
     }
   }
-  return { nodes: packets, edges };
+  return { nodes: packets, edges, autonomyLoops };
+}
+
+function buildAutonomyLoopSummary({ board, packets, openQuestions = [], metaOptimize = null, runtime = null, programs = null, repairFrontier = null }) {
+  const activePackets = packets.filter((packet) => packet.active);
+  const waitingPackets = packets.filter((packet) => ["waiting", "blocked"].includes(packet.lifecycleStatus));
+  const reviewPackets = packets.filter((packet) => packet.lifecycleStatus === "review-needed");
+  const closedPackets = packets.filter((packet) => GOVERNANCE_TERMINAL_LIFECYCLES.has(packet.lifecycleStatus));
+  const remediationSummary = metaOptimize?.remediationPacks ?? {};
+  const followThroughSummary = metaOptimize?.followThrough ?? {};
+  const executionBridgeSummary = metaOptimize?.executionBridgeCandidates ?? {};
+  const runtimePointerIds = uniqueSorted([
+    runtime?.lastRunId,
+    runtime?.lastSelectedPacketId,
+    runtime?.currentContinuationPacketId,
+    runtime?.currentContinuationProgramRunId
+  ]);
+  const approvalPointerIds = uniqueSorted([
+    programs?.currentApprovalId,
+    ...(programs?.topApprovalIds ?? [])
+  ]);
+  const followThroughPointerIds = uniqueSorted([
+    ...(followThroughSummary.topSourceIds ?? []),
+    ...(followThroughSummary.dueSoonExecutionIds ?? []),
+    ...(followThroughSummary.dueReviewIds ?? []),
+    ...(followThroughSummary.overdueExecutionIds ?? [])
+  ]);
+  const reviewCheckpointActive = (programs?.reviewCheckpointRunCount ?? 0) > 0 || (programs?.reviewNeededRunCount ?? 0) > 0;
+  const packetRunStage = reviewCheckpointActive
+    ? "review-checkpoint"
+    : runtime?.lastStatus === "completed"
+      ? "runtime-result"
+      : approvalPointerIds.length > 0
+        ? "approval"
+        : followThroughSummary.acceptedForExecutionCount > 0
+          ? "packet"
+          : remediationSummary.packCount > 0 || executionBridgeSummary.candidateCount > 0
+            ? "proposal"
+            : "scan";
+  const packetApprovalState = reviewCheckpointActive
+    ? "fresh-approval-required"
+    : approvalPointerIds.length > 0 ? "approval-available" : "approval-missing";
+  const packetRuntimeState = reviewCheckpointActive
+    ? "review-checkpoint-recorded"
+    : runtime?.lastStatus === "completed"
+      ? "runtime-result-recorded"
+      : runtime?.lastStatus && runtime.lastStatus !== "never-run"
+        ? runtime.lastStatus
+        : "runtime-not-started";
+  const packetFollowThroughState = followThroughSummary.closedCount > 0
+    ? "follow-through-closed"
+    : followThroughSummary.acceptedForExecutionCount > 0
+      ? "accepted-for-execution"
+      : "follow-through-open";
+  const packetLifecycleState = reviewCheckpointActive
+    ? "review-checkpoint-awaiting-fresh-approval"
+    : runtime?.lastStatus === "completed"
+      ? packetFollowThroughState === "follow-through-closed" ? "runtime-result-and-follow-through-closed" : "runtime-result-awaiting-follow-through"
+      : packetApprovalState === "approval-available"
+        ? "approval-ready"
+        : packetFollowThroughState === "accepted-for-execution"
+          ? "packet-accepted-awaiting-approval-or-run"
+          : packetRunStage;
+  const blockerIds = uniqueSorted([
+    ...waitingPackets.map((packet) => packet.id),
+    ...(reviewCheckpointActive ? [...reviewPackets.map((packet) => packet.id), programs?.currentReviewCheckpointRunId, programs?.currentReviewCheckpointPacketId] : []),
+    ...(repairFrontier?.prioritizedItems ?? []).slice(0, 5).map((item) => item.id)
+  ]);
+  const loops = [
+    {
+      id: "packet-approval-run-follow-through",
+      family: "Packet → Approval → Run → Runtime Result → Follow-through",
+      sourceArtifact: ARTIFACT_PATHS.taskPacketsIndex,
+      targetArtifact: ARTIFACT_PATHS.runtimeResults,
+      currentStage: packetRunStage,
+      lifecycleState: packetLifecycleState,
+      approvalState: packetApprovalState,
+      runtimeState: packetRuntimeState,
+      followThroughState: packetFollowThroughState,
+      nextSafeAction: reviewCheckpointActive
+        ? `Review checkpoint ${programs?.currentReviewCheckpointRunId ?? "current-run"} and issue a fresh approval through project:paper.approvals.`
+        : runtime?.currentContinuationCommand ?? "Use project:paper.follow-through or project:paper.materialize before any foreground autonomy run.",
+      approvalPointers: approvalPointerIds,
+      runtimePointers: runtimePointerIds,
+      followThroughPointers: followThroughPointerIds,
+      blockers: blockerIds,
+      closureState: packetLifecycleState
+    },
+    {
+      id: "question-evidence-claim",
+      family: "Question → Evidence → Claim",
+      sourceArtifact: ARTIFACT_PATHS.notes,
+      targetArtifact: ARTIFACT_PATHS.evidence,
+      currentStage: openQuestions.some((item) => item.status !== "answered") ? "question" : "evidence",
+      lifecycleState: openQuestions.some((item) => item.status !== "answered") ? "question-open" : "evidence-ready-for-claim",
+      nextSafeAction: openQuestions.find((item) => item.status !== "answered")?.summary ?? "Record evidence-backed claims through project:paper.claim-gate.",
+      approvalPointers: [],
+      runtimePointers: [],
+      followThroughPointers: [],
+      blockers: openQuestions.filter((item) => item.status !== "answered").map((item) => item.id),
+      closureState: openQuestions.some((item) => item.status !== "answered") ? "open" : "ready-for-claim"
+    },
+    {
+      id: "debt-pack-closure",
+      family: "Debt → Pack → Closure",
+      sourceArtifact: ARTIFACT_PATHS.metaRecommendations,
+      targetArtifact: ARTIFACT_PATHS.metaOperatorFollowThrough,
+      currentStage: remediationSummary.packCount > 0
+        ? executionBridgeSummary.candidateCount > 0
+          ? "pack"
+          : "debt"
+        : "scan",
+      lifecycleState: followThroughSummary.closedCount > 0
+        ? "closure-recorded"
+        : executionBridgeSummary.candidateCount > 0
+          ? "pack-ready-for-follow-through"
+          : remediationSummary.packCount > 0
+            ? "debt-packed"
+            : "scan-ready",
+      nextSafeAction: remediationSummary.topPackIds?.[0]
+        ? `Review remediation pack ${remediationSummary.topPackIds[0]} and record explicit follow-through.`
+        : "Run project:paper.meta-optimize to inspect proposal-only debt.",
+      approvalPointers: [],
+      runtimePointers: [],
+      followThroughPointers: followThroughPointerIds,
+      blockers: (repairFrontier?.prioritizedItems ?? []).slice(0, 5).map((item) => item.id),
+      closureState: followThroughSummary.closedCount > 0 ? "partially-closed" : "open"
+    },
+    {
+      id: "board-role-artifact-handoff",
+      family: "Board → Role → Artifact → Handoff",
+      sourceArtifact: ARTIFACT_PATHS.orchestrationBoard,
+      targetArtifact: ARTIFACT_PATHS.orchestrationHandoffs,
+      currentStage: activePackets.length > 0 ? "role" : "board",
+      lifecycleState: activePackets.length > 0
+        ? activePackets.some((packet) => packet.assignedRole !== board.assignedRole) ? "handoff-needed" : "role-artifact-active"
+        : "board-ready",
+      nextSafeAction: board.nextAction,
+      approvalPointers: [],
+      runtimePointers: [],
+      followThroughPointers: [],
+      blockers: activePackets.filter((packet) => packet.assignedRole !== board.assignedRole).map((packet) => packet.id),
+      closureState: activePackets.length > 0 ? "handoff-open" : "board-ready"
+    }
+  ];
+  const blockedCount = loops.filter((loop) => loop.blockers.length > 0).length;
+  const closedCount = loops.filter((loop) => ["runtime-result-and-follow-through-closed", "runtime-result-recorded", "ready-for-claim", "partially-closed", "board-ready"].includes(loop.closureState)).length;
+  const readyCount = loops.length - blockedCount;
+  const currentLoop = loops.find((loop) => loop.blockers.length > 0) ?? loops[0];
+  return {
+    contractVersion: "unified-autonomy-loop-v1",
+    activeLifecycleState: currentLoop.lifecycleState ?? currentLoop.closureState,
+    loopCount: loops.length,
+    blockedCount,
+    readyCount,
+    closedCount,
+    currentLoopId: currentLoop.id,
+    nextSafeAction: currentLoop.nextSafeAction,
+    explicitOnly: true,
+    noHiddenRuntime: true,
+    families: loops.map((loop) => loop.family),
+    loops,
+    approvalPointers: uniqueSorted(loops.flatMap((loop) => loop.approvalPointers)),
+    runtimePointers: uniqueSorted(loops.flatMap((loop) => loop.runtimePointers)),
+    followThroughPointers: uniqueSorted(loops.flatMap((loop) => loop.followThroughPointers)),
+    blockerIds: uniqueSorted(loops.flatMap((loop) => loop.blockers)),
+    closureStates: uniqueSorted(loops.map((loop) => loop.closureState)),
+    lifecycleStates: uniqueSorted(loops.map((loop) => loop.lifecycleState).filter(Boolean)),
+    safeExecutionPath: "project:paper.follow-through -> project:paper.materialize -> node ./bin/paper-factory.mjs autonomy-foreground . --max-steps 5",
+    overview: `${loops.length} unified autonomy loop families are visible; ${blockedCount} blocked, ${readyCount} ready, ${closedCount} carrying closure evidence. Execution remains explicit foreground-only.`
+  };
+}
+
+function renderAutonomyLoopOverviewLines(autonomyLoops = {}) {
+  const summary = autonomyLoops && typeof autonomyLoops === "object" && !Array.isArray(autonomyLoops) ? autonomyLoops : {};
+  return [
+    `- Unified autonomy loops: ${summary.loopCount ?? 0} families (${summary.readyCount ?? 0} ready, ${summary.blockedCount ?? 0} blocked, ${summary.closedCount ?? 0} with closure evidence)`,
+    `- Unified autonomy overview: ${summary.overview ?? "No unified autonomy loop summary has been generated yet."}`,
+    `- Unified autonomy current loop: ${summary.currentLoopId ?? "none"}`,
+    `- Unified autonomy lifecycle state: ${summary.activeLifecycleState ?? "unknown"}`,
+    `- Unified autonomy next safe action: ${summary.nextSafeAction ?? "Refresh the board and choose the next explicit operator action."}`,
+    `- Unified autonomy safe execution path: ${summary.safeExecutionPath ?? "project:paper.follow-through -> project:paper.materialize -> node ./bin/paper-factory.mjs autonomy-foreground . --max-steps 5"}`,
+    `- Unified autonomy blockers: ${(summary.blockerIds ?? []).join(", ") || "none"}`,
+    `- Unified autonomy approvals: ${(summary.approvalPointers ?? []).join(", ") || "none"}`,
+    `- Unified autonomy runtime pointers: ${(summary.runtimePointers ?? []).join(", ") || "none"}`,
+    `- Unified autonomy follow-through pointers: ${(summary.followThroughPointers ?? []).join(", ") || "none"}`,
+    ...((summary.loops ?? []).map((loop) => `  - ${loop.id}: ${loop.currentStage} -> ${loop.targetArtifact} | lifecycle=${loop.lifecycleState ?? "unknown"} | closure=${loop.closureState} | next=${loop.nextSafeAction}`))
+  ];
 }
 
 function renderSessionSummary(state, board, packets, openQuestions, decisions, roleRoster, workspaceIndex) {
@@ -1245,7 +1532,7 @@ function renderSessionSummary(state, board, packets, openQuestions, decisions, r
     "## Active task packets",
     "",
     ...(activePackets.length > 0
-      ? activePackets.map((packet) => `- ${packet.id}: ${packet.title} [${packet.status} | ${packet.lifecycleStatus}] (${packet.assignedRole}) → next: ${packet.nextAction}`)
+      ? activePackets.map((packet) => `- ${packet.id}: ${packet.title} [${packet.status} | ${packet.lifecycleStatus}] (${packet.assignedRole})${describePacketProvenance(packet) ? ` | ${describePacketProvenance(packet)}` : ""} → next: ${packet.nextAction}`)
       : ["- No active task packets."]),
     "",
     "## Work queues",
@@ -1279,6 +1566,10 @@ function renderSessionSummary(state, board, packets, openQuestions, decisions, r
     ...((workspaceIndex.repairFrontier?.relationFamilySummaries ?? []).slice(0, 3).map((family) => `  - family ${family.id}: ${family.overview}`)),
     ...((workspaceIndex.repairFrontier?.relationGroupSummaries ?? []).slice(0, 3).map((group) => `  - group ${group.id}: ${group.overview}`)),
     ...((workspaceIndex.repairFrontier?.prioritizedItems ?? []).slice(0, 4).map((item) => `  - ${item.frontierType}: ${item.summary}`)),
+    ...renderRuntimeOverviewLines(workspaceIndex.runtime),
+    ...renderProgramOverviewLines(workspaceIndex.programs),
+    ...renderCampaignOverviewLines(workspaceIndex.campaigns),
+    ...renderAutonomyLoopOverviewLines(workspaceIndex.autonomyLoops),
     ...renderMetaOptimizeOverviewLines(workspaceIndex.metaOptimize),
     "",
     "## Role context manifests",
@@ -1302,7 +1593,7 @@ function renderNavigationReport(board, taskGraph, openQuestions, decisions, vers
     "## Task graph",
     "",
     ...(taskGraph.nodes.length > 0
-      ? taskGraph.nodes.map((packet) => `- ${packet.id}: ${packet.title} [${packet.status} | ${packet.lifecycleStatus}] parent=${packet.parentPacketId || "none"} depends on ${packet.dependencies.join(", ") || "none"} dependency-health=${packet.dependencyHealth?.state ?? "clear"} → next ${packet.nextAction}`)
+      ? taskGraph.nodes.map((packet) => `- ${packet.id}: ${packet.title} [${packet.status} | ${packet.lifecycleStatus}] parent=${packet.parentPacketId || "none"} depends on ${packet.dependencies.join(", ") || "none"} dependency-health=${packet.dependencyHealth?.state ?? "clear"}${describePacketProvenance(packet) ? ` | ${describePacketProvenance(packet)}` : ""} → next ${packet.nextAction}`)
       : ["- No task packets generated yet."]),
     "",
     "## Operating queues",
@@ -1314,6 +1605,10 @@ function renderNavigationReport(board, taskGraph, openQuestions, decisions, vers
     ...((workspaceIndex.repairFrontier?.relationFamilySummaries ?? []).slice(0, 3).map((family) => `  - family ${family.id}: ${family.overview}`)),
     ...((workspaceIndex.repairFrontier?.relationGroupSummaries ?? []).slice(0, 3).map((group) => `  - group ${group.id}: ${group.overview}`)),
     ...((workspaceIndex.repairFrontier?.prioritizedItems ?? []).slice(0, 5).map((item) => `  - ${item.frontierType}: ${item.summary}`)),
+    ...renderRuntimeOverviewLines(workspaceIndex.runtime),
+    ...renderProgramOverviewLines(workspaceIndex.programs),
+    ...renderCampaignOverviewLines(workspaceIndex.campaigns),
+    ...renderAutonomyLoopOverviewLines(workspaceIndex.autonomyLoops),
     ...renderMetaOptimizeOverviewLines(workspaceIndex.metaOptimize),
     "",
     "## Open questions",
@@ -1338,6 +1633,7 @@ function renderNavigationReport(board, taskGraph, openQuestions, decisions, vers
 
 function buildRoleManifest(role, packets, openQuestions, decisions, workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidates = {}) {
   const rolePackets = packets.filter((packet) => packet.assignedRole === role.id && packet.active);
+  const roleEnvelopePackets = rolePackets.filter((packet) => packet.autonomyEnvelope?.workerRole === role.id);
   const roleQuestionIds = rolePackets.flatMap((packet) => (packet.questions ?? []).filter((item) => item.status !== "answered").map((item) => item.id));
   const roleDecisionIds = decisions.filter((item) => item.packetId ? rolePackets.some((packet) => packet.id === item.packetId) : ["board-current-role", "board-next-action"].includes(item.id)).map((item) => item.id);
   const localArtifactContextPaths = uniqueSorted(roleContextPaths(role.id).map(artifactContextPath));
@@ -1376,6 +1672,7 @@ function buildRoleManifest(role, packets, openQuestions, decisions, workspaceInd
     boardIntentType: workspaceIndex.boardIntentType,
     currentFocus: rolePackets[0]?.currentFocus ?? workspaceIndex.currentFocus ?? null,
     queueSummary: workspaceIndex.ownershipSummary?.find((entry) => entry.roleId === role.id) ?? null,
+    autonomyEnvelopePacketIds: roleEnvelopePackets.map((packet) => packet.id),
     handoffCandidateIds: (workspaceIndex.handoffObligations ?? []).filter((item) => item.toRole === role.id || item.fromRole === role.id).map((item) => item.packetId),
     operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, operatorPlaybooks, executionBridgeCandidates, { roleId: role.id }),
     generatedAt: nowIso()
@@ -2060,7 +2357,7 @@ function buildLongHorizonMemory(existingMemory, rankedRecommendations, clusters,
   };
 }
 
-function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, governanceCoverage) {
+function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, governanceCoverage, autonomyLoops = null) {
   return {
     proposalOnly: true,
     recommendationCount: metaRecommendations.items.length,
@@ -2087,6 +2384,7 @@ function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remedia
     governanceCoverage: governanceCoverage.summary,
     executionBridgeCandidates: executionBridgeCandidates.summary,
     operatorPlaybooks: operatorPlaybooks.summary,
+    autonomyLoops,
     longHorizon: {
       ...longHorizonMemory.summary,
       memoryPath: ARTIFACT_PATHS.metaLongHorizonMemory
@@ -2103,6 +2401,7 @@ function renderMetaOptimizeOverviewLines(metaOptimize = {}) {
     `- Meta-optimize top taxonomy families: ${(metaOptimize.topTaxonomyFamilyIds ?? []).join(", ") || "none"}`,
     `- Meta-optimize top taxonomy groups: ${(metaOptimize.topTaxonomyGroupIds ?? []).join(", ") || "none"}`,
     `- Meta-optimize pressure areas: ${(metaOptimize.pressureAreas ?? []).join(", ") || "none"}`,
+    ...renderAutonomyLoopOverviewLines(metaOptimize.autonomyLoops),
     `- Remediation packs: ${metaOptimize.remediationPacks?.packCount ?? 0} proposal-only packs (${(metaOptimize.remediationPacks?.topPackIds ?? []).join(", ") || "none"})`,
     `- Remediation pack focus: ${metaOptimize.remediationPacks?.overview ?? "No proposal-only remediation packs have been generated yet."}`,
     `- Remediation pack readiness: ${metaOptimize.remediationPacks?.readinessOverview ?? "No proposal-only remediation packs have been generated yet."}`,
@@ -2111,6 +2410,7 @@ function renderMetaOptimizeOverviewLines(metaOptimize = {}) {
     `- Operator follow-through overview: ${metaOptimize.followThrough?.overview ?? "No operator follow-through decisions have been recorded yet."}`,
     `- Operator follow-through debt: overdue=${metaOptimize.followThrough?.overdueExecutionCount ?? 0}, deferred-due=${metaOptimize.followThrough?.dueDeferredCount ?? 0}, stale=${metaOptimize.followThrough?.staleCount ?? 0}, invalid=${metaOptimize.followThrough?.invalidStatusCount ?? 0}, action-required=${metaOptimize.followThrough?.actionRequiredCount ?? 0}`,
     `- Operator follow-through execution window: due-soon=${metaOptimize.followThrough?.dueSoonExecutionCount ?? 0}, due-review=${metaOptimize.followThrough?.dueReviewCount ?? 0}, critical-overdue=${metaOptimize.followThrough?.criticalOverdueExecutionCount ?? 0}`,
+    `- Operator follow-through ids: due-soon=${(metaOptimize.followThrough?.dueSoonExecutionIds ?? []).join(", ") || "none"}, due-review=${(metaOptimize.followThrough?.dueReviewIds ?? []).join(", ") || "none"}, overdue=${(metaOptimize.followThrough?.overdueExecutionIds ?? []).join(", ") || "none"}, critical=${(metaOptimize.followThrough?.criticalOverdueExecutionIds ?? []).join(", ") || "none"}`,
     `- Operator follow-through path: ${metaOptimize.followThrough?.followThroughPath ?? ARTIFACT_PATHS.metaOperatorFollowThrough}`,
     `- Governance coverage: ${metaOptimize.governanceCoverage?.guardedCount ?? 0} guarded / ${metaOptimize.governanceCoverage?.exemptCount ?? 0} exempt`,
     `- Governance coverage overview: ${metaOptimize.governanceCoverage?.overview ?? "No governance coverage matrix has been summarized yet."}`,
@@ -2131,6 +2431,164 @@ function renderMetaOptimizeOverviewLines(metaOptimize = {}) {
     `- Long-horizon taxonomy groups: ${(metaOptimize.longHorizon?.topTaxonomyGroupIds ?? []).join(", ") || "none"}`,
     `- Meta-optimize report: ${metaOptimize.reportPath ?? ARTIFACT_PATHS.metaOptimizerReport}`,
     `- Long-horizon memory path: ${metaOptimize.longHorizonPath ?? ARTIFACT_PATHS.metaLongHorizonMemory}`
+  ];
+}
+
+function buildRuntimeWorkspaceMirror(controllerState, continuation, leases, events, results) {
+  const normalizedController = normalizeRuntimeControllerState(controllerState);
+  const normalizedContinuation = normalizeRuntimeContinuationIndex(continuation);
+  const normalizedLeases = normalizeRuntimeLeasesIndex(leases);
+  const normalizedEvents = normalizeRuntimeEventsIndex(events);
+  const normalizedResults = normalizeRuntimeResultsIndex(results);
+  return {
+    explicitInvocationOnly: normalizedController.explicitInvocationOnly,
+    noDaemon: normalizedController.noDaemon,
+    selectionPolicy: normalizedController.selectionPolicy,
+    boundedStepPolicy: normalizedController.boundedStepPolicy,
+    controllerStatePath: normalizedController.summary.controllerStatePath,
+    leasesPath: normalizedController.summary.leasesPath,
+    eventsPath: normalizedController.summary.eventsPath,
+    resultsPath: normalizedController.summary.resultsPath,
+    lastRunId: normalizedController.summary.lastRunId,
+    lastStatus: normalizedController.summary.lastStatus,
+    lastOutcome: normalizedController.summary.lastOutcome,
+    lastSelectedPacketId: normalizedController.summary.lastSelectedPacketId,
+    lastEnvelopeWorkerRole: normalizedController.summary.lastEnvelopeWorkerRole,
+    requestCount: normalizedController.summary.requestCount,
+    acceptedRequestCount: normalizedController.summary.acceptedRequestCount,
+    executingRequestCount: normalizedController.summary.executingRequestCount,
+    staleRequestCount: normalizedController.summary.staleRequestCount,
+    overdueExecutionCount: normalizedController.summary.overdueExecutionCount,
+    dueReviewCount: normalizedController.summary.dueReviewCount,
+    checkpointCount: normalizedResults.summary.checkpointCount,
+    escalationCount: normalizedResults.summary.escalationCount,
+    continuationCount: normalizedContinuation.summary.continuationCount,
+    currentContinuationKind: normalizedContinuation.summary.currentKind,
+    currentContinuationPacketId: normalizedContinuation.summary.currentPacketId,
+    currentContinuationProgramRunId: normalizedContinuation.summary.currentProgramRunId,
+    currentContinuationCommand: normalizedContinuation.summary.currentCommand,
+    lastCheckpointPacketId: normalizedResults.summary.lastCheckpointPacketId,
+    lastCheckpointSummary: normalizedResults.summary.lastCheckpointSummary,
+    lastCheckpointAt: normalizedResults.summary.lastCheckpointAt,
+    lastEscalationPacketId: normalizedResults.summary.lastEscalationPacketId,
+    lastEscalationFollowThroughId: normalizedResults.summary.lastEscalationFollowThroughId,
+    lastEscalationAt: normalizedResults.summary.lastEscalationAt,
+    activeLeaseCount: normalizedLeases.summary.activeLeaseCount,
+    activeLeasePacketIds: normalizedLeases.summary.activePacketIds,
+    eventCount: normalizedEvents.summary.eventCount,
+    resultCount: normalizedResults.summary.runCount,
+    lastEventType: normalizedEvents.summary.lastEventType,
+    overview: normalizedController.summary.overview
+  };
+}
+
+function buildCampaignsWorkspaceMirror(campaignsIndex, programsIndex, programRuns) {
+  const normalizedCampaigns = normalizeCampaignsIndex(campaignsIndex);
+  const normalizedPrograms = normalizeProgramsIndex(programsIndex);
+  const normalizedRuns = normalizeProgramRunsIndex(programRuns);
+  const currentCampaign = normalizedCampaigns.items.find((item) => ["active", "review-needed"].includes(item.status)) ?? normalizedCampaigns.items[0] ?? null;
+  const campaignProgramIds = normalizeStringArray(currentCampaign?.programIds);
+  const currentProgramIds = campaignProgramIds.length > 0
+    ? campaignProgramIds
+    : normalizeStringArray(currentCampaign?.steps?.map((step) => step.programId));
+  const linkedRuns = currentProgramIds.length > 0
+    ? normalizedRuns.items.filter((item) => currentProgramIds.includes(item.programId))
+    : [];
+  const currentSteps = Array.isArray(currentCampaign?.steps) ? currentCampaign.steps : [];
+  const completedStepCount = currentSteps.filter((step) => ["completed", "achieved"].includes(step.status)).length;
+  const reviewNeededStep = currentSteps.find((step) => step.status === "review-needed") ?? null;
+  const nextStep = currentSteps.find((step) => ["planned", "approved", "active", "review-needed", "blocked"].includes(step.status)) ?? null;
+  return {
+    campaignCount: normalizedCampaigns.summary.campaignCount,
+    plannedCount: normalizedCampaigns.summary.plannedCount,
+    activeCount: normalizedCampaigns.summary.activeCount,
+    reviewNeededCount: normalizedCampaigns.summary.reviewNeededCount,
+    completedCount: normalizedCampaigns.summary.completedCount,
+    blockedCount: normalizedCampaigns.summary.blockedCount,
+    topCampaignIds: normalizedCampaigns.summary.topCampaignIds,
+    currentCampaignId: currentCampaign?.id ?? null,
+    currentCampaignStatus: currentCampaign?.status ?? null,
+    currentCampaignStepCount: currentSteps.length,
+    currentCampaignCompletedStepCount: completedStepCount,
+    currentCampaignReviewNeededStepCount: currentSteps.filter((step) => step.status === "review-needed").length,
+    currentCampaignNextStepId: nextStep?.id ?? null,
+    currentCampaignNextAction: reviewNeededStep?.nextAction ?? nextStep?.nextAction ?? currentCampaign?.nextAction ?? null,
+    linkedProgramCount: normalizedPrograms.items.filter((item) => currentProgramIds.includes(item.id)).length,
+    linkedRunCount: linkedRuns.length,
+    overview: normalizedCampaigns.summary.campaignCount > 0
+      ? `${normalizedCampaigns.summary.campaignCount} multi-cycle research campaigns are tracked (${normalizedCampaigns.summary.activeCount} active, ${normalizedCampaigns.summary.reviewNeededCount} awaiting review).`
+      : "No multi-cycle research campaigns have been recorded yet.",
+    campaignsPath: ARTIFACT_PATHS.campaignsIndex
+  };
+}
+
+function buildProgramsWorkspaceMirror(programsIndex, programRuns, programApprovals, runtime = {}) {
+  const normalizedPrograms = normalizeProgramsIndex(programsIndex);
+  const normalizedRuns = normalizeProgramRunsIndex(programRuns);
+  const normalizedApprovals = normalizeProgramApprovalsIndex(programApprovals);
+  return {
+    programCount: normalizedPrograms.summary.programCount,
+    activeCount: normalizedPrograms.summary.activeCount,
+    blockedCount: normalizedPrograms.summary.blockedCount,
+    approvedRunCount: normalizedRuns.summary.approvedCount,
+    reviewNeededRunCount: normalizedRuns.summary.reviewNeededCount,
+    reviewCheckpointRunCount: normalizedRuns.summary.reviewCheckpointRunCount ?? 0,
+    consumedApprovalCount: normalizedApprovals.summary.consumedCount ?? 0,
+    topProgramIds: normalizedPrograms.summary.topProgramIds,
+    topRunIds: normalizedRuns.summary.topRunIds,
+    topApprovalIds: normalizedApprovals.summary.topApprovalIds,
+    currentProgramId: normalizedPrograms.items.find((item) => item.id === runtime.lastProgramId)?.id ?? null,
+    currentProgramRunId: normalizedRuns.items.find((item) => item.id === runtime.lastProgramRunId)?.id ?? null,
+    currentApprovalId: normalizedApprovals.items.find((item) => item.id === runtime.lastApprovalId)?.id ?? null,
+    currentReviewCheckpointRunId: normalizedRuns.items.find((item) => item.reviewCheckpointRequired)?.id ?? null,
+    currentReviewCheckpointPacketId: normalizedRuns.items.find((item) => item.reviewCheckpointRequired)?.reviewCheckpointPacketId ?? null,
+    currentReviewCheckpointSummary: normalizedRuns.items.find((item) => item.reviewCheckpointRequired)?.reviewCheckpointSummary ?? null,
+    currentProgramClosureState: normalizedRuns.items.find((item) => item.id === runtime.lastProgramRunId)?.closureState ?? null,
+    currentProgramClosureReason: normalizedRuns.items.find((item) => item.id === runtime.lastProgramRunId)?.closureReason ?? null,
+    lastProgramOutcome: runtime.lastProgramOutcome ?? "not-started",
+    overview: normalizedPrograms.summary.programCount > 0
+      ? `${normalizedPrograms.summary.programCount} research programs are tracked (${normalizedPrograms.summary.activeCount} active, ${normalizedRuns.summary.approvedCount} approved runs, ${normalizedRuns.summary.reviewCheckpointRunCount ?? 0} awaiting review checkpoints).`
+      : "No program-level research operating surfaces are active yet.",
+    programsPath: ARTIFACT_PATHS.programsIndex,
+    runsPath: ARTIFACT_PATHS.programRuns,
+    approvalsPath: ARTIFACT_PATHS.programApprovals
+  };
+}
+
+function renderRuntimeOverviewLines(runtime = {}) {
+  return [
+    `- Runtime controller: ${runtime.overview ?? "No autonomous control-plane run has been executed yet."}`,
+    `- Runtime status: ${runtime.lastStatus ?? "never-run"} / ${runtime.lastOutcome ?? "not-started"}`,
+    `- Runtime last run: ${runtime.lastRunId ?? "none"}`,
+    `- Runtime last packet: ${runtime.lastSelectedPacketId ?? "none"}`,
+    `- Runtime envelope worker: ${runtime.lastEnvelopeWorkerRole ?? "none"}`,
+    `- Runtime requests: total=${runtime.requestCount ?? 0} accepted=${runtime.acceptedRequestCount ?? 0} executing=${runtime.executingRequestCount ?? 0} stale=${runtime.staleRequestCount ?? 0} overdue=${runtime.overdueExecutionCount ?? 0} due-review=${runtime.dueReviewCount ?? 0}`,
+    `- Runtime checkpoints/escalations: checkpoints=${runtime.checkpointCount ?? 0} escalations=${runtime.escalationCount ?? 0} last-checkpoint=${runtime.lastCheckpointPacketId ?? "none"} last-escalation=${runtime.lastEscalationPacketId ?? "none"}`,
+    `- Runtime continuation: count=${runtime.continuationCount ?? 0} kind=${runtime.currentContinuationKind ?? "none"} packet=${runtime.currentContinuationPacketId ?? "none"} run=${runtime.currentContinuationProgramRunId ?? "none"} command=${runtime.currentContinuationCommand ?? "none"}`,
+    `- Runtime active leases: ${runtime.activeLeaseCount ?? 0} (${(runtime.activeLeasePacketIds ?? []).join(", ") || "none"})`,
+    `- Runtime events/results: events=${runtime.eventCount ?? 0} results=${runtime.resultCount ?? 0} last-event=${runtime.lastEventType ?? "none"}`,
+    `- Runtime paths: controller=${runtime.controllerStatePath ?? ARTIFACT_PATHS.runtimeControllerState}, leases=${runtime.leasesPath ?? ARTIFACT_PATHS.runtimeLeases}, events=${runtime.eventsPath ?? ARTIFACT_PATHS.runtimeEvents}, results=${runtime.resultsPath ?? ARTIFACT_PATHS.runtimeResults}`
+  ];
+}
+
+function renderCampaignOverviewLines(campaigns = {}) {
+  return [
+    `- Campaigns: ${campaigns.overview ?? "No multi-cycle research campaigns have been recorded yet."}`,
+    `- Campaign counts: campaigns=${campaigns.campaignCount ?? 0} planned=${campaigns.plannedCount ?? 0} active=${campaigns.activeCount ?? 0} review-needed=${campaigns.reviewNeededCount ?? 0} completed=${campaigns.completedCount ?? 0} blocked=${campaigns.blockedCount ?? 0}`,
+    `- Current campaign: ${campaigns.currentCampaignId ?? "none"} / status=${campaigns.currentCampaignStatus ?? "none"} / steps=${campaigns.currentCampaignCompletedStepCount ?? 0}/${campaigns.currentCampaignStepCount ?? 0} / review-needed-steps=${campaigns.currentCampaignReviewNeededStepCount ?? 0}`,
+    `- Current campaign next step: ${campaigns.currentCampaignNextStepId ?? "none"} / action=${campaigns.currentCampaignNextAction ?? "none"}`,
+    `- Campaign paths: campaigns=${campaigns.campaignsPath ?? ARTIFACT_PATHS.campaignsIndex}`
+  ];
+}
+
+function renderProgramOverviewLines(programs = {}) {
+  return [
+    `- Programs: ${programs.overview ?? "No program-level research operating surfaces are active yet."}`,
+    `- Program counts: programs=${programs.programCount ?? 0} active=${programs.activeCount ?? 0} blocked=${programs.blockedCount ?? 0} approved-runs=${programs.approvedRunCount ?? 0} review-needed-runs=${programs.reviewNeededRunCount ?? 0} review-checkpoints=${programs.reviewCheckpointRunCount ?? 0} consumed-approvals=${programs.consumedApprovalCount ?? 0}`,
+    `- Current program: ${programs.currentProgramId ?? "none"} / run=${programs.currentProgramRunId ?? "none"} / approval=${programs.currentApprovalId ?? "none"} / last-outcome=${programs.lastProgramOutcome ?? "not-started"}`,
+    `- Current program closure: ${programs.currentProgramClosureState ?? "none"} / reason=${programs.currentProgramClosureReason ?? "none"}`,
+    `- Current review checkpoint: run=${programs.currentReviewCheckpointRunId ?? "none"} / packet=${programs.currentReviewCheckpointPacketId ?? "none"} / summary=${programs.currentReviewCheckpointSummary ?? "none"}`,
+    `- Program paths: programs=${programs.programsPath ?? ARTIFACT_PATHS.programsIndex}, runs=${programs.runsPath ?? ARTIFACT_PATHS.programRuns}, approvals=${programs.approvalsPath ?? ARTIFACT_PATHS.programApprovals}`
   ];
 }
 
@@ -2246,6 +2704,19 @@ function normalizeFollowThroughStatus(status = "acknowledged") {
   return allowed.has(status) ? status : "acknowledged";
 }
 
+function normalizeFollowThroughRetryState(value = {}) {
+  const raw = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const attemptCount = Number.isFinite(Number(raw.attemptCount)) ? Number(raw.attemptCount) : 0;
+  const maxAttempts = Number.isFinite(Number(raw.maxAttempts)) ? Number(raw.maxAttempts) : 3;
+  return {
+    attemptCount: Math.max(0, attemptCount),
+    maxAttempts: Math.max(1, maxAttempts),
+    lastAttemptAt: raw.lastAttemptAt ?? null,
+    lastError: raw.lastError ?? null,
+    escalatedAt: raw.escalatedAt ?? null
+  };
+}
+
 function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestamp = nowIso()) {
   const items = (existingIndex.items ?? []).map((item, index) => {
     const sourceType = item.sourceType ?? "remediation-pack";
@@ -2269,7 +2740,8 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
         : dueSoonExecution
           ? "due-soon"
           : "on-track";
-    const targetBound = followThroughTargetStillBound(root, {
+    const plannedTarget = Boolean(item.plannedTarget);
+    const targetBound = plannedTarget ? false : followThroughTargetStillBound(root, {
       status,
       linkedTargetArtifact: item.linkedTargetArtifact ?? null,
       linkedTargetId: item.linkedTargetId ?? null
@@ -2279,7 +2751,7 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
       sourceType,
       sourceId,
       sourceArtifactPath: source?.sourceArtifactPath ?? item.sourceArtifactPath ?? null,
-      sourceFingerprint: source?.sourceFingerprint ?? item.sourceFingerprint ?? null,
+      sourceFingerprint: item.sourceFingerprint ?? source?.sourceFingerprint ?? null,
       sourceTitle: source?.title ?? item.sourceTitle ?? sourceId,
       sourceSummary: source?.summary ?? item.sourceSummary ?? "",
       status,
@@ -2288,6 +2760,10 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
       selectedConversionPathKey: item.selectedConversionPathKey ?? null,
       linkedTargetArtifact: item.linkedTargetArtifact ?? null,
       linkedTargetId: item.linkedTargetId ?? null,
+      programId: item.programId ?? null,
+      programRunId: item.programRunId ?? null,
+      approvalId: item.approvalId ?? null,
+      plannedTarget,
       deferUntil: item.deferUntil ?? null,
       executeBy: item.executeBy ?? null,
       executionStartedAt: item.executionStartedAt ?? null,
@@ -2296,6 +2772,8 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
       closureReason: item.closureReason ?? null,
       closureArtifactPaths: normalizeStringArray(item.closureArtifactPaths),
       actorRole: item.actorRole ?? null,
+      workerRole: ROLE_IDS.includes(item.workerRole) ? item.workerRole : null,
+      retryState: normalizeFollowThroughRetryState(item.retryState),
       recordedAt: item.recordedAt ?? item.updatedAt ?? timestamp,
       updatedAt: item.updatedAt ?? timestamp,
       invalidStatus,
@@ -2325,16 +2803,21 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
     staleCount: items.filter((item) => item.stale).length,
     dueDeferredCount: items.filter((item) => item.dueDeferred).length,
     dueReviewCount: items.filter((item) => item.dueReview).length,
-    unresolvedTargetCount: items.filter((item) => !item.targetBound).length,
+    unresolvedTargetCount: items.filter((item) => !item.targetBound && !item.plannedTarget).length,
+    plannedTargetCount: items.filter((item) => item.plannedTarget).length,
+    dueSoonExecutionIds: items.filter((item) => item.executionWindowState === "due-soon").map((item) => item.id),
+    dueReviewIds: items.filter((item) => item.dueReview).map((item) => item.id),
+    overdueExecutionIds: items.filter((item) => item.overdueExecution).map((item) => item.id),
+    criticalOverdueExecutionIds: items.filter((item) => item.overdueExecutionSeverity === "critical").map((item) => item.id),
     topSourceIds: items.filter((item) => !["closed", "superseded"].includes(item.status)).slice(0, 5).map((item) => item.sourceId),
     overview: items.length > 0
-      ? `${items.length} operator follow-through records: ${items.filter((item) => item.status === "accepted-for-execution").length} accepted for execution, ${items.filter((item) => item.executionWindowState === "due-soon").length} due-soon, ${items.filter((item) => item.overdueExecution).length} overdue-execution (${items.filter((item) => item.overdueExecutionSeverity === "critical").length} critical), ${items.filter((item) => item.dueReview).length} due-review, ${items.filter((item) => item.status === "deferred").length} deferred, ${items.filter((item) => item.status === "accepted-risk").length} accepted-risk, ${items.filter((item) => item.stale).length} stale, ${items.filter((item) => item.invalidStatus).length} invalid-status, ${items.filter((item) => !item.targetBound).length} target-drift.`
+      ? `${items.length} operator follow-through records: ${items.filter((item) => item.status === "accepted-for-execution").length} accepted for execution, ${items.filter((item) => item.executionWindowState === "due-soon").length} due-soon, ${items.filter((item) => item.overdueExecution).length} overdue-execution (${items.filter((item) => item.overdueExecutionSeverity === "critical").length} critical), ${items.filter((item) => item.dueReview).length} due-review, ${items.filter((item) => item.status === "deferred").length} deferred, ${items.filter((item) => item.status === "accepted-risk").length} accepted-risk, ${items.filter((item) => item.stale).length} stale, ${items.filter((item) => item.invalidStatus).length} invalid-status, ${items.filter((item) => item.plannedTarget).length} planned-target, ${items.filter((item) => !item.targetBound && !item.plannedTarget).length} target-drift.`
       : "No operator follow-through decisions have been recorded yet.",
     followThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough,
     transitionsPath: ARTIFACT_PATHS.metaOperatorFollowThroughTransitions
   };
 
-  const actionRequiredItems = items.filter((item) => item.invalidStatus || item.stale || item.dueDeferred || item.dueReview || item.overdueExecution || !item.targetBound || item.status === "accepted-for-execution" || item.status === "executing").map((item) => ({
+  const actionRequiredItems = items.filter((item) => item.invalidStatus || item.stale || item.dueDeferred || item.dueReview || item.overdueExecution || (!item.targetBound && !item.plannedTarget) || item.status === "accepted-for-execution" || item.status === "executing").map((item) => ({
     id: item.id,
     sourceType: item.sourceType,
     sourceId: item.sourceId,
@@ -2347,9 +2830,10 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
       overdueExecutionSeverity: item.overdueExecutionSeverity,
       executionWindowState: item.executionWindowState,
       linkedTargetArtifact: item.linkedTargetArtifact,
-    linkedTargetId: item.linkedTargetId,
-    nextAction: !item.targetBound
-      ? "Re-bind this follow-through record to a live target artifact/id before continuing."
+      linkedTargetId: item.linkedTargetId,
+      plannedTarget: item.plannedTarget,
+      nextAction: !item.targetBound
+      ? (item.plannedTarget ? "Materialize the planned target into a real packet before continuing." : "Re-bind this follow-through record to a live target artifact/id before continuing.")
       : item.overdueExecution
         ? `Escalate this ${item.overdueExecutionSeverity ?? "warning"} accepted-for-execution record or update/close it immediately.`
       : item.dueReview
@@ -2402,6 +2886,18 @@ function buildGovernanceCoverage(generatedAt = nowIso()) {
 }
 
 function buildGovernanceCoverageReport(governanceCoverage, generatedAt = nowIso()) {
+  const now = Date.now();
+  const cadenceWindowMs = (cadence) => {
+    switch (cadence) {
+      case "per-session": return 36 * 60 * 60 * 1000;
+      case "per-change": return 7 * 24 * 60 * 60 * 1000;
+      case "per-release": return 90 * 24 * 60 * 60 * 1000;
+      case "per-project": return 365 * 24 * 60 * 60 * 1000;
+      default: return 0;
+    }
+  };
+  const staleReviewIds = governanceCoverage.exemptMutations.filter((item) => item.lastReviewedAt && cadenceWindowMs(item.reviewCadence) > 0 && Date.parse(item.lastReviewedAt) < now - cadenceWindowMs(item.reviewCadence)).map((item) => item.id);
+  const expiringSoonIds = governanceCoverage.exemptMutations.filter((item) => item.sunsetAt && Date.parse(item.sunsetAt) <= now + 30 * 24 * 60 * 60 * 1000).map((item) => item.id);
   return {
     ...createMetaGovernanceCoverageReport(),
     status: "ok",
@@ -2416,6 +2912,10 @@ function buildGovernanceCoverageReport(governanceCoverage, generatedAt = nowIso(
     summary: {
       guardedCount: governanceCoverage.summary.guardedCount,
       exemptCount: governanceCoverage.summary.exemptCount,
+      staleReviewCount: staleReviewIds.length,
+      expiringSoonCount: expiringSoonIds.length,
+      staleReviewIds,
+      expiringSoonIds,
       overview: governanceCoverage.summary.overview,
       reportPath: ARTIFACT_PATHS.metaGovernanceCoverageReport,
       markdownPath: ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown
@@ -2424,7 +2924,7 @@ function buildGovernanceCoverageReport(governanceCoverage, generatedAt = nowIso(
   };
 }
 
-function validateFollowThroughPayload(record = {}) {
+function validateFollowThroughPayload(root, record = {}) {
   const status = record.status;
   const allowed = new Set(["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"]);
   if (!allowed.has(status)) {
@@ -2438,6 +2938,9 @@ function validateFollowThroughPayload(record = {}) {
   }
   if (status === "accepted-for-execution" && (!record.linkedTargetArtifact || !record.linkedTargetId)) {
     throw new Error("Accepted-for-execution follow-through records require linkedTargetArtifact and linkedTargetId.");
+  }
+  if (status === "accepted-for-execution" && !record.plannedTarget && !targetArtifactContainsId(root, record.linkedTargetArtifact, record.linkedTargetId)) {
+    throw new Error(`Accepted-for-execution follow-through target ${record.linkedTargetId} was not found in ${record.linkedTargetArtifact}. Use plannedTarget when the target will be materialized later.`);
   }
   if (status === "accepted-for-execution" && !record.executeBy) {
     throw new Error("Accepted-for-execution follow-through records require executeBy.");
@@ -2457,6 +2960,9 @@ function validateFollowThroughPayload(record = {}) {
   if (!record.actorRole) {
     throw new Error("Follow-through records require actorRole.");
   }
+  if (record.workerRole && !ROLE_IDS.includes(record.workerRole)) {
+    throw new Error(`Unknown workerRole: ${record.workerRole}`);
+  }
   return status;
 }
 
@@ -2466,6 +2972,9 @@ function validateFollowThroughActor(root, record, source) {
     return;
   }
   if (allowedActorRoles.includes(record.actorRole)) {
+    return;
+  }
+  if (record.actorRole === "planner" && record.workerRole && allowedActorRoles.includes(record.workerRole)) {
     return;
   }
   const evidencePaths = normalizeStringArray(record.policyOverrideEvidencePaths);
@@ -2517,6 +3026,1047 @@ function targetArtifactContainsId(root, artifactPath, targetId) {
   return text.includes(String(targetId));
 }
 
+function normalizeProgramItem(program = {}, index = 0) {
+  return {
+    id: slugify(program.id ?? `program-${index + 1}`),
+    title: program.title ?? program.id ?? `Program ${index + 1}`,
+    objective: program.objective ?? "",
+    agenda: normalizeStringArray(program.agenda),
+    evidenceBacklog: normalizeStringArray(program.evidenceBacklog),
+    status: ["planned", "active", "blocked", "achieved", "accepted-risk", "superseded"].includes(program.status) ? program.status : "active",
+    closureState: ["in-progress", "review-needed", "achieved", "blocked", "accepted-risk", "superseded", "completed", "objective-unsatisfied"].includes(program.closureState)
+      ? program.closureState
+      : "in-progress",
+    closureReason: program.closureReason ?? null,
+    closureRecordedAt: program.closureRecordedAt ?? null,
+    packetIds: normalizeStringArray(program.packetIds),
+    approvalIds: normalizeStringArray(program.approvalIds),
+    activeRunId: program.activeRunId ?? null,
+    lastOutcome: program.lastOutcome ?? "not-started",
+    createdAt: program.createdAt ?? program.updatedAt ?? nowIso(),
+    updatedAt: program.updatedAt ?? nowIso()
+  };
+}
+
+function normalizeProgramStepPayload(allowedStepType, payload = {}) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  if (allowedStepType === "upsert-note") {
+    return {
+      title: payload.title ?? "Untitled Note",
+      sectionId: payload.sectionId ?? "introduction",
+      sourceIds: normalizeStringArray(payload.sourceIds),
+      summary: payload.summary ?? "",
+      quotes: Array.isArray(payload.quotes) ? payload.quotes : [],
+      claims: Array.isArray(payload.claims) ? payload.claims : [],
+      openQuestions: Array.isArray(payload.openQuestions) ? payload.openQuestions : []
+    };
+  }
+  if (allowedStepType === "run-experiment-audit") {
+    return {
+      resultId: payload.resultId ?? "",
+      reviewedArtifactRefs: normalizeStringArray(payload.reviewedArtifactRefs)
+    };
+  }
+  if (allowedStepType === "bridge-result-to-claim") {
+    return {
+      resultId: payload.resultId ?? "",
+      auditIds: normalizeStringArray(payload.auditIds),
+      reason: payload.reason ?? ""
+    };
+  }
+  if (allowedStepType === "run-review-loop") {
+    return {
+      scope: payload.scope ?? "current paper pipeline",
+      stage: payload.stage ?? "review-loop"
+    };
+  }
+  return null;
+}
+
+function normalizeProgramAuthorityEnvelope(authorityEnvelope = {}, fallbackAllowedStepType = null, fallbackStepPayload = null) {
+  const raw = authorityEnvelope && typeof authorityEnvelope === "object" && !Array.isArray(authorityEnvelope)
+    ? authorityEnvelope
+    : {};
+  const rawSequence = Array.isArray(raw.stepSequence) ? raw.stepSequence : [];
+  const requestedMaxStepCount = Math.max(1, Number.isFinite(Number(raw.maxStepCount)) ? Math.trunc(Number(raw.maxStepCount)) : rawSequence.length || 1);
+  const normalizedSequence = rawSequence
+    .map((item) => {
+      const allowedStepType = normalizeAutonomyAllowedStepType(item?.allowedStepType, null);
+      if (!allowedStepType) {
+        return null;
+      }
+      return {
+        allowedStepType,
+        stepPayload: normalizeProgramStepPayload(allowedStepType, item?.stepPayload)
+      };
+    })
+    .filter(Boolean);
+  const fallbackStepType = normalizeAutonomyAllowedStepType(fallbackAllowedStepType, null);
+  const stepSequence = normalizedSequence.length > 0
+    ? normalizedSequence
+    : fallbackStepType
+      ? Array.from({ length: requestedMaxStepCount }, () => ({ allowedStepType: fallbackStepType, stepPayload: normalizeProgramStepPayload(fallbackStepType, fallbackStepPayload) }))
+      : [];
+  const maxStepCount = Math.max(1, requestedMaxStepCount || stepSequence.length || 1);
+  const consumedStepCount = Math.max(0, Math.min(maxStepCount, Number.isFinite(Number(raw.consumedStepCount)) ? Math.trunc(Number(raw.consumedStepCount)) : 0));
+  const remainingStepCount = Math.max(0, maxStepCount - consumedStepCount);
+  return {
+    mode: maxStepCount > 1 || stepSequence.length > 1 ? "multi-step" : "single-step",
+    maxStepCount,
+    consumedStepCount,
+    remainingStepCount,
+    stepSequence: stepSequence.slice(0, maxStepCount)
+  };
+}
+
+function buildProgramStepPayloadFromArgs(allowedStepType, args = {}) {
+  if (allowedStepType === "upsert-note") {
+    return normalizeProgramStepPayload(allowedStepType, {
+      title: args.noteTitle,
+      sectionId: args.noteSectionId,
+      sourceIds: args.noteSourceIds,
+      summary: args.noteSummary,
+      quotes: args.noteQuotes,
+      claims: args.noteClaims,
+      openQuestions: args.noteOpenQuestions
+    });
+  }
+  if (allowedStepType === "run-experiment-audit") {
+    return normalizeProgramStepPayload(allowedStepType, {
+      resultId: args.auditResultId,
+      reviewedArtifactRefs: args.auditReviewedArtifactRefs
+    });
+  }
+  if (allowedStepType === "bridge-result-to-claim") {
+    return normalizeProgramStepPayload(allowedStepType, {
+      resultId: args.bridgeResultId,
+      auditIds: args.bridgeAuditIds,
+      reason: args.bridgeReason
+    });
+  }
+  if (allowedStepType === "run-review-loop") {
+    return normalizeProgramStepPayload(allowedStepType, {
+      scope: args.reviewScope,
+      stage: args.reviewStage
+    });
+  }
+  return null;
+}
+
+function deriveObjectiveAwareProgramStepSequence(args = {}, fallbackAllowedStepType = null, fallbackStepPayload = null) {
+  const objective = String(args.programObjective ?? "").toLowerCase();
+  const currentPhase = String(args.currentPhase ?? "init").toLowerCase();
+  const addStep = (steps, allowedStepType, stepPayload = null) => {
+    if (!allowedStepType) {
+      return steps;
+    }
+    const last = steps.at(-1) ?? null;
+    const normalizedPayload = normalizeProgramStepPayload(allowedStepType, stepPayload);
+    if (last && last.allowedStepType === allowedStepType && JSON.stringify(last.stepPayload ?? null) === JSON.stringify(normalizedPayload)) {
+      return steps;
+    }
+    return [...steps, { allowedStepType, stepPayload: normalizedPayload }];
+  };
+
+  const inferFinalStep = () => {
+    if (/review|coherent|revision/.test(objective)) {
+      return { allowedStepType: "run-review-loop", stepPayload: buildProgramStepPayloadFromArgs("run-review-loop", args) ?? { scope: "current paper pipeline", stage: "review-loop" } };
+    }
+    if (/bridge|claim state|result-to-claim|promote claim/.test(objective)) {
+      return { allowedStepType: "bridge-result-to-claim", stepPayload: buildProgramStepPayloadFromArgs("bridge-result-to-claim", args) ?? fallbackStepPayload };
+    }
+    if (/audit|integrity|experiment result/.test(objective)) {
+      return { allowedStepType: "run-experiment-audit", stepPayload: buildProgramStepPayloadFromArgs("run-experiment-audit", args) ?? fallbackStepPayload };
+    }
+    if (/note|source-linked|capture evidence/.test(objective)) {
+      return { allowedStepType: "upsert-note", stepPayload: buildProgramStepPayloadFromArgs("upsert-note", args) ?? fallbackStepPayload };
+    }
+    if (/wiki|query pack|query-pack|navigation/.test(objective)) {
+      return { allowedStepType: "refresh-wiki", stepPayload: null };
+    }
+    return {
+      allowedStepType: normalizeAutonomyAllowedStepType(fallbackAllowedStepType, "refresh-research-brief"),
+      stepPayload: normalizeProgramStepPayload(normalizeAutonomyAllowedStepType(fallbackAllowedStepType, "refresh-research-brief"), fallbackStepPayload)
+    };
+  };
+
+  const finalStep = inferFinalStep();
+  let steps = [];
+  const latePhase = ["plan", "outline", "draft", "experiments", "citations", "review", "rebuttal", "versions", "checklist"].includes(currentPhase);
+  const reviewPhase = ["review", "rebuttal", "versions", "checklist"].includes(currentPhase);
+  const researchPhase = ["sources", "notes", "research"].includes(currentPhase);
+
+  if (finalStep.allowedStepType === "run-review-loop") {
+    if (!reviewPhase) {
+      if (!latePhase) {
+        steps = addStep(steps, "refresh-research-brief", null);
+      }
+      steps = addStep(steps, "refresh-wiki", null);
+    }
+  } else if (finalStep.allowedStepType === "upsert-note") {
+    if (!researchPhase) {
+      steps = addStep(steps, "refresh-research-brief", null);
+    }
+  } else if (finalStep.allowedStepType === "refresh-wiki") {
+    if (!latePhase && !researchPhase) {
+      steps = addStep(steps, "refresh-research-brief", null);
+    }
+  } else if (["run-experiment-audit", "bridge-result-to-claim"].includes(finalStep.allowedStepType)) {
+    if (!["experiments", "review", "rebuttal", "versions", "checklist"].includes(currentPhase)) {
+      steps = addStep(steps, "refresh-research-brief", null);
+    }
+  } else if (finalStep.allowedStepType !== "refresh-research-brief") {
+    steps = addStep(steps, "refresh-research-brief", null);
+  }
+  steps = addStep(steps, finalStep.allowedStepType, finalStep.stepPayload);
+  return steps;
+}
+
+function buildProgramAuthorityEnvelopeFromArgs(args = {}, fallbackAllowedStepType = null, fallbackStepPayload = null) {
+  const explicitStepSequence = Array.isArray(args.stepSequence)
+    ? args.stepSequence.map((item) => ({
+        allowedStepType: item?.allowedStepType,
+        stepPayload: item?.stepPayload
+      }))
+    : null;
+  const derivedStepSequence = !explicitStepSequence && args.autonomyPolicy === "objective-aware-default"
+    ? deriveObjectiveAwareProgramStepSequence(args, fallbackAllowedStepType, fallbackStepPayload)
+    : null;
+  const envelope = explicitStepSequence
+    ? { stepSequence: explicitStepSequence, maxStepCount: explicitStepSequence.length }
+    : derivedStepSequence
+      ? { stepSequence: derivedStepSequence, maxStepCount: derivedStepSequence.length }
+      : { stepSequence: [], maxStepCount: args.stepBudget };
+  return normalizeProgramAuthorityEnvelope(envelope, fallbackAllowedStepType, fallbackStepPayload);
+}
+
+function normalizeProgramRunItem(programRun = {}, index = 0) {
+  const allowedStepType = normalizeAutonomyAllowedStepType(programRun.allowedStepType, null);
+  const authorityEnvelope = normalizeProgramAuthorityEnvelope(programRun.authorityEnvelope, allowedStepType ?? "refresh-research-brief", programRun.stepPayload);
+  const currentStep = authorityEnvelope.stepSequence[authorityEnvelope.consumedStepCount] ?? authorityEnvelope.stepSequence.at(-1) ?? null;
+  return {
+    id: slugify(programRun.id ?? `program-run-${index + 1}`),
+    programId: slugify(programRun.programId ?? `program-${index + 1}`),
+    approvalId: programRun.approvalId ?? null,
+    controllerRole: ROLE_IDS.includes(programRun.controllerRole) ? programRun.controllerRole : "planner",
+    workerRole: ROLE_IDS.includes(programRun.workerRole) ? programRun.workerRole : "researcher",
+    allowedStepType: currentStep?.allowedStepType ?? allowedStepType ?? "refresh-research-brief",
+    stepPayload: currentStep?.stepPayload ?? normalizeProgramStepPayload(allowedStepType ?? "refresh-research-brief", programRun.stepPayload),
+    authorityEnvelope,
+    packetIds: normalizeStringArray(programRun.packetIds),
+    linkedFollowThroughIds: normalizeStringArray(programRun.linkedFollowThroughIds),
+    status: ["approved", "active", "review-needed", "blocked", "completed", "superseded"].includes(programRun.status) ? programRun.status : "approved",
+    closureState: ["in-progress", "review-needed", "achieved", "blocked", "accepted-risk", "superseded", "completed", "objective-unsatisfied"].includes(programRun.closureState)
+      ? programRun.closureState
+      : "in-progress",
+    closureReason: programRun.closureReason ?? null,
+    closureRecordedAt: programRun.closureRecordedAt ?? null,
+    lastRuntimeRunId: programRun.lastRuntimeRunId ?? null,
+    lastSelectedPacketId: programRun.lastSelectedPacketId ?? null,
+    lastOutcome: programRun.lastOutcome ?? "not-started",
+    lastExecutedAt: programRun.lastExecutedAt ?? null,
+    reviewCheckpointRequired: Boolean(programRun.reviewCheckpointRequired),
+    reviewCheckpointSummary: programRun.reviewCheckpointSummary ?? null,
+    reviewCheckpointAt: programRun.reviewCheckpointAt ?? null,
+    reviewCheckpointPacketId: programRun.reviewCheckpointPacketId ?? null,
+    reviewCheckpointRuntimeRunId: programRun.reviewCheckpointRuntimeRunId ?? null,
+    reviewCheckpointAllowedStepType: normalizeAutonomyAllowedStepType(programRun.reviewCheckpointAllowedStepType, null),
+    reviewRecommendedCommand: programRun.reviewRecommendedCommand ?? null,
+    nextApprovalIntent: programRun.nextApprovalIntent && typeof programRun.nextApprovalIntent === "object" && !Array.isArray(programRun.nextApprovalIntent)
+      ? {
+          continuationFromRunId: programRun.nextApprovalIntent.continuationFromRunId ?? null,
+          packetId: programRun.nextApprovalIntent.packetId ?? null,
+          workerRole: ROLE_IDS.includes(programRun.nextApprovalIntent.workerRole) ? programRun.nextApprovalIntent.workerRole : null,
+          allowedStepType: normalizeAutonomyAllowedStepType(programRun.nextApprovalIntent.allowedStepType, null),
+          suggestedProgramRunId: programRun.nextApprovalIntent.suggestedProgramRunId ?? null,
+          suggestedApprovalId: programRun.nextApprovalIntent.suggestedApprovalId ?? null,
+          summary: programRun.nextApprovalIntent.summary ?? null,
+          readyAt: programRun.nextApprovalIntent.readyAt ?? null,
+          stepPayload: normalizeProgramStepPayload(normalizeAutonomyAllowedStepType(programRun.nextApprovalIntent.allowedStepType, null), programRun.nextApprovalIntent.stepPayload),
+          authorityEnvelope: normalizeProgramAuthorityEnvelope(
+            programRun.nextApprovalIntent.authorityEnvelope,
+            normalizeAutonomyAllowedStepType(programRun.nextApprovalIntent.allowedStepType, null),
+            programRun.nextApprovalIntent.stepPayload
+          )
+        }
+      : null,
+    createdAt: programRun.createdAt ?? programRun.updatedAt ?? nowIso(),
+    updatedAt: programRun.updatedAt ?? nowIso()
+  };
+}
+
+function normalizeProgramApprovalItem(approval = {}, index = 0) {
+  const allowedStepType = normalizeAutonomyAllowedStepType(approval.allowedStepType, null);
+  const authorityEnvelope = normalizeProgramAuthorityEnvelope(approval.authorityEnvelope, allowedStepType ?? "refresh-research-brief", approval.stepPayload);
+  const currentStep = authorityEnvelope.stepSequence[authorityEnvelope.consumedStepCount] ?? authorityEnvelope.stepSequence.at(-1) ?? null;
+  return {
+    id: slugify(approval.id ?? `program-approval-${index + 1}`),
+    programId: slugify(approval.programId ?? `program-${index + 1}`),
+    programRunId: approval.programRunId ? slugify(approval.programRunId) : null,
+    status: ["approved", "revoked", "expired", "consumed"].includes(approval.status) ? approval.status : "approved",
+    approvedByRole: ROLE_IDS.includes(approval.approvedByRole) ? approval.approvedByRole : "planner",
+    summary: approval.summary ?? "",
+    allowedStepType: currentStep?.allowedStepType ?? allowedStepType ?? "refresh-research-brief",
+    stepPayload: currentStep?.stepPayload ?? normalizeProgramStepPayload(allowedStepType ?? "refresh-research-brief", approval.stepPayload),
+    authorityEnvelope,
+    approvedAt: approval.approvedAt ?? nowIso(),
+    expiresAt: approval.expiresAt ?? null,
+    consumedAt: approval.consumedAt ?? null,
+    consumedByRuntimeRunId: approval.consumedByRuntimeRunId ?? null,
+    consumedByPacketId: approval.consumedByPacketId ?? null,
+    updatedAt: approval.updatedAt ?? nowIso()
+  };
+}
+
+function summarizeProgramsIndex(items = []) {
+  return {
+    programCount: items.length,
+    activeCount: items.filter((item) => item.status === "active").length,
+    blockedCount: items.filter((item) => item.status === "blocked").length,
+    topProgramIds: items.slice(0, 8).map((item) => item.id),
+    overview: items.length > 0
+      ? `${items.length} research programs are tracked (${items.filter((item) => item.status === "active").length} active).`
+      : "No research programs have been recorded yet.",
+    programsPath: ARTIFACT_PATHS.programsIndex
+  };
+}
+
+function summarizeProgramRunsIndex(items = []) {
+  return {
+    runCount: items.length,
+    approvedCount: items.filter((item) => item.status === "approved").length,
+    activeCount: items.filter((item) => item.status === "active").length,
+    reviewNeededCount: items.filter((item) => item.status === "review-needed").length,
+    blockedCount: items.filter((item) => item.status === "blocked").length,
+    reviewCheckpointRunCount: items.filter((item) => item.reviewCheckpointRequired).length,
+    topRunIds: items.slice(0, 8).map((item) => item.id),
+    overview: items.length > 0
+      ? `${items.length} program runs are tracked (${items.filter((item) => item.status === "approved").length} approved).`
+      : "No approved program runs have been recorded yet.",
+    runsPath: ARTIFACT_PATHS.programRuns
+  };
+}
+
+function summarizeProgramApprovalsIndex(items = []) {
+  return {
+    approvalCount: items.length,
+    approvedCount: items.filter((item) => item.status === "approved").length,
+    revokedCount: items.filter((item) => item.status === "revoked").length,
+    consumedCount: items.filter((item) => item.status === "consumed").length,
+    topApprovalIds: items.slice(0, 8).map((item) => item.id),
+    overview: items.length > 0
+      ? `${items.length} program approvals are tracked (${items.filter((item) => item.status === "approved").length} approved).`
+      : "No program approvals have been recorded yet.",
+    approvalsPath: ARTIFACT_PATHS.programApprovals
+  };
+}
+
+function normalizeCampaignStep(step = {}, index = 0) {
+  const allowedStepType = normalizeAutonomyAllowedStepType(step.allowedStepType, null);
+  return {
+    id: slugify(step.id ?? `step-${index + 1}`),
+    title: step.title ?? `Campaign step ${index + 1}`,
+    status: ["planned", "approved", "active", "review-needed", "blocked", "completed", "achieved", "superseded"].includes(step.status) ? step.status : "planned",
+    programId: step.programId ? slugify(step.programId) : null,
+    programRunId: step.programRunId ? slugify(step.programRunId) : null,
+    approvalId: step.approvalId ? slugify(step.approvalId) : null,
+    packetId: step.packetId ? slugify(step.packetId) : null,
+    allowedStepType,
+    objective: step.objective ?? null,
+    nextAction: step.nextAction ?? null,
+    evidenceLinks: normalizeStringArray(step.evidenceLinks),
+    outputPaths: normalizeStringArray(step.outputPaths),
+    reviewAfter: step.reviewAfter ?? null,
+    executeBy: step.executeBy ?? null
+  };
+}
+
+function normalizeCampaignItem(campaign = {}, index = 0) {
+  const steps = Array.isArray(campaign.steps) ? campaign.steps.map(normalizeCampaignStep) : [];
+  const programIds = uniqueSorted([
+    ...normalizeStringArray(campaign.programIds).map(slugify),
+    ...steps.map((step) => step.programId).filter(Boolean)
+  ]);
+  const status = ["planned", "active", "review-needed", "blocked", "completed", "superseded"].includes(campaign.status) ? campaign.status : "planned";
+  return {
+    id: slugify(campaign.id ?? `campaign-${index + 1}`),
+    title: campaign.title ?? `Research campaign ${index + 1}`,
+    objective: campaign.objective ?? "",
+    status,
+    phase: campaign.phase ?? "research",
+    controllerRole: ROLE_IDS.includes(campaign.controllerRole) ? campaign.controllerRole : "planner",
+    programIds,
+    steps,
+    nextAction: campaign.nextAction ?? steps.find((step) => ["planned", "approved", "active", "review-needed", "blocked"].includes(step.status))?.nextAction ?? null,
+    reviewPolicy: campaign.reviewPolicy ?? "fresh-approval-after-review-checkpoint",
+    explicitApprovalRequired: campaign.explicitApprovalRequired !== false,
+    noHiddenRuntime: campaign.noHiddenRuntime !== false,
+    createdAt: campaign.createdAt ?? campaign.updatedAt ?? nowIso(),
+    updatedAt: campaign.updatedAt ?? nowIso()
+  };
+}
+
+function summarizeCampaignsIndex(items = []) {
+  return {
+    campaignCount: items.length,
+    plannedCount: items.filter((item) => item.status === "planned").length,
+    activeCount: items.filter((item) => item.status === "active").length,
+    reviewNeededCount: items.filter((item) => item.status === "review-needed" || item.steps.some((step) => step.status === "review-needed")).length,
+    completedCount: items.filter((item) => item.status === "completed").length,
+    blockedCount: items.filter((item) => item.status === "blocked").length,
+    topCampaignIds: items.slice(0, 8).map((item) => item.id),
+    overview: items.length > 0
+      ? `${items.length} multi-cycle research campaigns are tracked (${items.filter((item) => item.status === "active").length} active, ${items.filter((item) => item.status === "review-needed" || item.steps.some((step) => step.status === "review-needed")).length} awaiting review).`
+      : "No multi-cycle research campaigns have been recorded yet.",
+    campaignsPath: ARTIFACT_PATHS.campaignsIndex
+  };
+}
+
+function writeCampaignsIndex(root, items) {
+  writeJson(root, ARTIFACT_PATHS.campaignsIndex, {
+    ...createCampaignsIndex(),
+    items,
+    summary: summarizeCampaignsIndex(items),
+    updatedAt: nowIso()
+  });
+}
+
+function resolveCampaignStatusFromSteps(steps = [], currentStatus = "planned") {
+  if (steps.some((step) => step.status === "review-needed")) {
+    return "review-needed";
+  }
+  if (steps.some((step) => step.status === "blocked")) {
+    return "blocked";
+  }
+  if (steps.length > 0 && steps.every((step) => ["completed", "achieved", "superseded"].includes(step.status))) {
+    return "completed";
+  }
+  if (steps.some((step) => ["approved", "active", "completed", "achieved"].includes(step.status))) {
+    return "active";
+  }
+  return currentStatus;
+}
+
+function mapProgramRunToCampaignStepStatus(programRun = {}) {
+  if (programRun.status === "review-needed" || programRun.reviewCheckpointRequired) {
+    return "review-needed";
+  }
+  if (["blocked", "objective-unsatisfied"].includes(programRun.closureState) || programRun.status === "blocked") {
+    return "blocked";
+  }
+  if (["achieved", "completed"].includes(programRun.closureState)) {
+    return programRun.closureState;
+  }
+  if (programRun.status === "completed") {
+    return "completed";
+  }
+  if (programRun.lastRuntimeRunId) {
+    return "active";
+  }
+  return null;
+}
+
+function bindCampaignStepToProgramApproval(root, args = {}) {
+  const campaignId = args.campaignId ? slugify(args.campaignId) : null;
+  const campaignStepId = args.campaignStepId ? slugify(args.campaignStepId) : null;
+  if (!campaignId && !campaignStepId) {
+    return null;
+  }
+  if (!campaignId || !campaignStepId) {
+    throw new Error("Campaign approval binding requires campaignId and campaignStepId together.");
+  }
+  const campaignsState = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
+  const campaigns = (campaignsState.items ?? []).map(normalizeCampaignItem);
+  const campaign = campaigns.find((item) => item.id === campaignId) ?? null;
+  if (!campaign) {
+    throw new Error(`Campaign ${campaignId} was not found.`);
+  }
+  const step = campaign.steps.find((item) => item.id === campaignStepId) ?? null;
+  if (!step) {
+    throw new Error(`Campaign step ${campaignStepId} was not found in ${campaignId}.`);
+  }
+  const timestamp = nowIso();
+  const nextSteps = campaign.steps.map((item) => item.id === campaignStepId
+    ? normalizeCampaignStep({
+        ...item,
+        status: args.status ?? "approved",
+        programId: args.programId ?? item.programId,
+        programRunId: args.programRunId ?? item.programRunId,
+        approvalId: args.approvalId ?? item.approvalId,
+        packetId: args.packetId ?? item.packetId,
+        allowedStepType: args.allowedStepType ?? item.allowedStepType,
+        nextAction: args.nextAction ?? item.nextAction ?? "Run explicit foreground autonomy after approval.",
+        updatedAt: timestamp
+      })
+    : item);
+  const nextCampaign = normalizeCampaignItem({
+    ...campaign,
+    status: resolveCampaignStatusFromSteps(nextSteps, campaign.status),
+    programIds: uniqueSorted([...campaign.programIds, args.programId].filter(Boolean)),
+    steps: nextSteps,
+    nextAction: nextSteps.find((item) => ["planned", "approved", "active", "review-needed", "blocked"].includes(item.status))?.nextAction ?? campaign.nextAction,
+    updatedAt: timestamp
+  });
+  const nextCampaigns = [...campaigns.filter((item) => item.id !== campaignId), nextCampaign].sort((left, right) => left.id.localeCompare(right.id));
+  writeCampaignsIndex(root, nextCampaigns);
+  return { campaignId, campaignStepId };
+}
+
+function reflectCampaignStepOutcome(root, args = {}) {
+  const programRunId = args.programRunId ? slugify(args.programRunId) : null;
+  const programId = args.programId ? slugify(args.programId) : null;
+  if (!programRunId && !programId) {
+    return null;
+  }
+  const campaignsState = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
+  const campaigns = (campaignsState.items ?? []).map(normalizeCampaignItem);
+  const programRunsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
+  const programRun = (programRunsState.items ?? []).find((item) => (!programRunId || item.id === programRunId) && (!programId || item.programId === programId)) ?? null;
+  if (!programRun) {
+    return null;
+  }
+  const nextStatus = mapProgramRunToCampaignStepStatus(programRun);
+  if (!nextStatus) {
+    return null;
+  }
+  const timestamp = nowIso();
+  let reflectedStepCount = 0;
+  const nextCampaigns = campaigns.map((campaign) => {
+    let campaignReflected = false;
+    const nextSteps = campaign.steps.map((step) => {
+      if (step.programRunId !== programRun.id || (programId && step.programId !== programId)) {
+        return step;
+      }
+      reflectedStepCount += 1;
+      campaignReflected = true;
+      return normalizeCampaignStep({
+        ...step,
+        status: nextStatus,
+        programId: programRun.programId ?? step.programId,
+        programRunId: programRun.id,
+        approvalId: programRun.approvalId ?? step.approvalId,
+        packetId: programRun.lastSelectedPacketId ?? step.packetId,
+        allowedStepType: programRun.allowedStepType ?? step.allowedStepType,
+        nextAction: programRun.reviewCheckpointRequired
+          ? programRun.reviewCheckpointSummary ?? "Review this campaign step before issuing fresh approval."
+          : step.nextAction,
+        outputPaths: uniqueSorted([...(step.outputPaths ?? []), ...(args.outputPaths ?? [])]),
+        updatedAt: timestamp
+      });
+    });
+    return campaignReflected
+      ? normalizeCampaignItem({
+          ...campaign,
+          status: resolveCampaignStatusFromSteps(nextSteps, campaign.status),
+          steps: nextSteps,
+          nextAction: nextSteps.find((step) => ["planned", "approved", "active", "review-needed", "blocked"].includes(step.status))?.nextAction ?? campaign.nextAction,
+          updatedAt: timestamp
+        })
+      : campaign;
+  });
+  if (reflectedStepCount === 0) {
+    return null;
+  }
+  writeCampaignsIndex(root, nextCampaigns.sort((left, right) => left.id.localeCompare(right.id)));
+  return {
+    status: "reflected",
+    programId: programRun.programId ?? programId,
+    programRunId: programRun.id,
+    stepStatus: nextStatus,
+    reflectedStepCount,
+    campaignsPath: ARTIFACT_PATHS.campaignsIndex
+  };
+}
+
+function writeProgramOperatingState(root, { programsIndex, programRuns, programApprovals }) {
+  writeJson(root, ARTIFACT_PATHS.programsIndex, {
+    ...createProgramsIndex(),
+    items: programsIndex,
+    summary: summarizeProgramsIndex(programsIndex),
+    updatedAt: nowIso()
+  });
+  writeJson(root, ARTIFACT_PATHS.programRuns, {
+    ...createProgramRunsIndex(),
+    items: programRuns,
+    summary: summarizeProgramRunsIndex(programRuns),
+    updatedAt: nowIso()
+  });
+  writeJson(root, ARTIFACT_PATHS.programApprovals, {
+    ...createProgramApprovalsIndex(),
+    items: programApprovals,
+    summary: summarizeProgramApprovalsIndex(programApprovals),
+    updatedAt: nowIso()
+  });
+}
+
+function upsertProgramOperatingState(root, args = {}) {
+  const programId = args.programId ? slugify(args.programId) : null;
+  const programRunId = args.programRunId ? slugify(args.programRunId) : null;
+  const approvalId = args.approvalId ? slugify(args.approvalId) : null;
+  if (!programId && !programRunId && !approvalId) {
+    return null;
+  }
+  if (!programId || !programRunId || !approvalId) {
+    throw new Error("Program-linked materialization requires programId, programRunId, and approvalId together.");
+  }
+  const timestamp = nowIso();
+  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard);
+  const programsState = normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex));
+  const programRunsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
+  const approvalsState = normalizeProgramApprovalsIndex(readJson(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex));
+  const existingRun = (programRunsState.items ?? []).find((item) => item.id === programRunId) ?? null;
+  const existingApproval = (approvalsState.items ?? []).find((item) => item.id === approvalId) ?? null;
+  if (existingRun && existingRun.reviewCheckpointRequired && existingRun.status === "review-needed" && (args.programRunStatus ?? "approved") === "approved") {
+    throw new Error(`Program run ${programRunId} already has a pending review checkpoint and cannot be silently reused. Create a fresh programRunId and approvalId for the next bounded step.`);
+  }
+  if (existingApproval && existingApproval.status !== "approved" && (args.approvalStatus ?? "approved") === "approved") {
+    throw new Error(`Program approval ${approvalId} is already ${existingApproval.status} and cannot be silently reused.`);
+  }
+
+  const packetId = args.packetId ? slugify(args.packetId) : null;
+  const followThroughId = args.followThroughId ?? null;
+  const workerRole = ROLE_IDS.includes(args.workerRole) ? args.workerRole : "researcher";
+  const allowedStepType = normalizeAutonomyAllowedStepType(args.allowedStepType, null);
+  if (args.allowedStepType && !allowedStepType) {
+    throw new Error(`Unsupported allowedStepType: ${args.allowedStepType}. Supported values: ${AUTONOMY_ALLOWED_STEP_TYPES.join(", ")}.`);
+  }
+  const stepPayload = buildProgramStepPayloadFromArgs(allowedStepType, args) ?? (existingRun?.stepPayload ?? existingApproval?.stepPayload ?? null);
+  const authorityEnvelope = Array.isArray(args.stepSequence) || args.stepBudget != null || args.autonomyPolicy === "objective-aware-default"
+    ? buildProgramAuthorityEnvelopeFromArgs({ ...args, currentPhase: args.currentPhase ?? board.currentPhase ?? "init" }, allowedStepType, stepPayload)
+    : normalizeProgramAuthorityEnvelope(
+        existingRun?.authorityEnvelope ?? existingApproval?.authorityEnvelope,
+        allowedStepType ?? existingRun?.allowedStepType ?? existingApproval?.allowedStepType,
+        stepPayload ?? existingRun?.stepPayload ?? existingApproval?.stepPayload
+      );
+  const firstAuthorityStep = authorityEnvelope.stepSequence[authorityEnvelope.consumedStepCount] ?? null;
+  const effectiveAllowedStepType = firstAuthorityStep?.allowedStepType ?? allowedStepType ?? existingRun?.allowedStepType ?? existingApproval?.allowedStepType ?? "refresh-research-brief";
+  const effectiveStepPayload = firstAuthorityStep?.stepPayload ?? stepPayload;
+  if (effectiveAllowedStepType === "upsert-note" && (!effectiveStepPayload || effectiveStepPayload.sourceIds.length === 0 || !effectiveStepPayload.summary)) {
+    throw new Error("Program-linked upsert-note requires noteSourceIds and noteSummary.");
+  }
+  if (effectiveAllowedStepType === "run-experiment-audit" && (!effectiveStepPayload || !String(effectiveStepPayload.resultId ?? "").trim())) {
+    throw new Error("Program-linked run-experiment-audit requires auditResultId.");
+  }
+  if (effectiveAllowedStepType === "run-review-loop" && !String(effectiveStepPayload?.scope ?? "").trim()) {
+    throw new Error("Program-linked run-review-loop requires reviewScope.");
+  }
+  if (effectiveAllowedStepType === "bridge-result-to-claim" && (!effectiveStepPayload || !String(effectiveStepPayload.resultId ?? "").trim())) {
+    throw new Error("Program-linked bridge-result-to-claim requires bridgeResultId.");
+  }
+
+  const nextPrograms = [...(programsState.items ?? []).filter((item) => item.id !== programId), normalizeProgramItem({
+    ...(programsState.items ?? []).find((item) => item.id === programId),
+    id: programId,
+    title: args.programTitle ?? (programsState.items ?? []).find((item) => item.id === programId)?.title ?? programId,
+    objective: args.programObjective ?? (programsState.items ?? []).find((item) => item.id === programId)?.objective ?? "",
+    agenda: args.programAgenda ?? (programsState.items ?? []).find((item) => item.id === programId)?.agenda ?? [],
+    evidenceBacklog: args.programEvidenceBacklog ?? (programsState.items ?? []).find((item) => item.id === programId)?.evidenceBacklog ?? [],
+    status: args.programStatus ?? (programsState.items ?? []).find((item) => item.id === programId)?.status ?? "active",
+    packetIds: uniqueSorted([...(programsState.items ?? []).find((item) => item.id === programId)?.packetIds ?? [], ...[packetId].filter(Boolean)]),
+    approvalIds: uniqueSorted([...(programsState.items ?? []).find((item) => item.id === programId)?.approvalIds ?? [], approvalId]),
+    activeRunId: programRunId,
+    lastOutcome: args.lastProgramOutcome ?? (programsState.items ?? []).find((item) => item.id === programId)?.lastOutcome ?? "not-started",
+    createdAt: (programsState.items ?? []).find((item) => item.id === programId)?.createdAt ?? timestamp,
+    updatedAt: timestamp
+  })].sort((left, right) => left.id.localeCompare(right.id));
+
+  const nextRuns = [...(programRunsState.items ?? []).filter((item) => item.id !== programRunId), normalizeProgramRunItem({
+    ...(programRunsState.items ?? []).find((item) => item.id === programRunId),
+    id: programRunId,
+    programId,
+    approvalId,
+    controllerRole: args.controllerRole ?? "planner",
+    workerRole,
+    allowedStepType: effectiveAllowedStepType,
+    stepPayload: effectiveStepPayload,
+    authorityEnvelope,
+    packetIds: uniqueSorted([...(programRunsState.items ?? []).find((item) => item.id === programRunId)?.packetIds ?? [], ...[packetId].filter(Boolean)]),
+    status: args.programRunStatus ?? (programRunsState.items ?? []).find((item) => item.id === programRunId)?.status ?? "approved",
+    lastRuntimeRunId: args.lastRuntimeRunId ?? (programRunsState.items ?? []).find((item) => item.id === programRunId)?.lastRuntimeRunId ?? null,
+    lastSelectedPacketId: packetId ?? (programRunsState.items ?? []).find((item) => item.id === programRunId)?.lastSelectedPacketId ?? null,
+    lastOutcome: args.lastProgramOutcome ?? (programRunsState.items ?? []).find((item) => item.id === programRunId)?.lastOutcome ?? "not-started",
+    lastExecutedAt: args.lastExecutedAt ?? (programRunsState.items ?? []).find((item) => item.id === programRunId)?.lastExecutedAt ?? null,
+    createdAt: (programRunsState.items ?? []).find((item) => item.id === programRunId)?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+    linkedFollowThroughIds: uniqueSorted([...(programRunsState.items ?? []).find((item) => item.id === programRunId)?.linkedFollowThroughIds ?? [], ...[followThroughId].filter(Boolean)])
+  })].sort((left, right) => left.id.localeCompare(right.id));
+
+  const nextApprovals = [...(approvalsState.items ?? []).filter((item) => item.id !== approvalId), normalizeProgramApprovalItem({
+    ...(approvalsState.items ?? []).find((item) => item.id === approvalId),
+    id: approvalId,
+    programId,
+    programRunId,
+    status: args.approvalStatus ?? (approvalsState.items ?? []).find((item) => item.id === approvalId)?.status ?? "approved",
+    approvedByRole: args.approvedByRole ?? "planner",
+    summary: args.programApprovalSummary ?? (approvalsState.items ?? []).find((item) => item.id === approvalId)?.summary ?? `Approved ${programRunId} for ${authorityEnvelope.maxStepCount} bounded ${authorityEnvelope.maxStepCount === 1 ? effectiveAllowedStepType : "program-scoped"} step${authorityEnvelope.maxStepCount === 1 ? "" : "s"}.`,
+    allowedStepType: effectiveAllowedStepType,
+    stepPayload: effectiveStepPayload,
+    authorityEnvelope,
+    approvedAt: (approvalsState.items ?? []).find((item) => item.id === approvalId)?.approvedAt ?? timestamp,
+    expiresAt: args.approvalExpiresAt ?? (approvalsState.items ?? []).find((item) => item.id === approvalId)?.expiresAt ?? null,
+    updatedAt: timestamp
+  })].sort((left, right) => left.id.localeCompare(right.id));
+
+  writeProgramOperatingState(root, {
+    programsIndex: nextPrograms,
+    programRuns: nextRuns,
+    programApprovals: nextApprovals
+  });
+  const campaignBinding = bindCampaignStepToProgramApproval(root, {
+    campaignId: args.campaignId,
+    campaignStepId: args.campaignStepId,
+    programId,
+    programRunId,
+    approvalId,
+    packetId,
+    allowedStepType: effectiveAllowedStepType,
+    nextAction: args.campaignStepNextAction
+  });
+
+  return { programId, programRunId, approvalId, campaignBinding };
+}
+
+function persistPacket(root, packet) {
+  writeJson(root, packet.packetPath, packet);
+  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex);
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
+    ...packetIndex,
+    items: [...(packetIndex.items ?? []).filter((item) => item.id !== packet.id), packet],
+    updatedAt: nowIso()
+  });
+}
+
+function buildApprovalPacket(root, packet, { actorRole, workerRole, programId, programRunId, approvalId, followThroughId, summary }) {
+  const timestamp = nowIso();
+  return normalizePacket({
+    ...packet,
+    active: true,
+    status: "pending",
+    lifecycleStatus: "waiting",
+    assignedRole: workerRole,
+    continuationState: {
+      ...(packet.continuationState ?? {}),
+      status: "ready-to-resume",
+      lastCheckpoint: summary ?? `Program approval ${approvalId} re-armed packet ${packet.id}.`,
+      updatedAt: timestamp
+    },
+    autonomyEnvelope: workerRole !== actorRole
+      ? {
+          controllerRole: actorRole,
+          workerRole,
+          scopeType: "packet-local",
+          explicitOnly: true,
+          requiredReadPaths: packet.autonomyEnvelope?.requiredReadPaths ?? [],
+          localRules: packet.autonomyEnvelope?.localRules ?? [
+            "Planner remains the supervising controller for this bounded autonomous packet step.",
+            "The runtime may advance only this packet and its matched follow-through/runtime audit surfaces in one invocation."
+          ]
+        }
+      : packet.autonomyEnvelope ?? null,
+    lineage: {
+      ...(packet.lineage ?? {}),
+      programId,
+      programRunId,
+      approvalId
+    },
+    materialization: packet.materialization
+      ? {
+          ...packet.materialization,
+          followThroughId,
+          programId,
+          programRunId,
+          approvalId
+        }
+      : null,
+    updatedAt: timestamp
+  });
+}
+
+export { reflectCampaignStepOutcome };
+
+export function queryCampaigns(root, args = {}) {
+  ensureWorkspace(root);
+  const campaignId = args.campaignId ? slugify(args.campaignId) : null;
+  const status = args.status ? String(args.status).trim().toLowerCase() : null;
+  const campaignsState = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
+  const programsState = normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex));
+  const runsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
+  const items = (campaignsState.items ?? [])
+    .map(normalizeCampaignItem)
+    .filter((item) => !campaignId || item.id === campaignId)
+    .filter((item) => !status || item.status === status)
+    .map((item) => ({
+      ...item,
+      programs: (programsState.items ?? []).filter((program) => item.programIds.includes(program.id)),
+      runs: (runsState.items ?? []).filter((run) => item.programIds.includes(run.programId))
+    }));
+  return {
+    status: "ok",
+    items,
+    summary: {
+      ...campaignsState.summary,
+      filteredCount: items.length
+    }
+  };
+}
+
+export function planCampaign(root, args = {}) {
+  assertGovernanceMutationRegistered("plan-campaign", "exempt");
+  ensureWorkspace(root);
+  const actorRole = args.actorRole ?? "planner";
+  if (actorRole !== "planner") {
+    throw new Error("planCampaign currently requires actorRole 'planner'.");
+  }
+  const campaignId = slugify(args.campaignId ?? args.id ?? "");
+  if (!campaignId) {
+    throw new Error("planCampaign requires campaignId.");
+  }
+  const campaignsState = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
+  const existing = (campaignsState.items ?? []).map(normalizeCampaignItem).find((item) => item.id === campaignId) ?? null;
+  const timestamp = nowIso();
+  const nextCampaign = normalizeCampaignItem({
+    ...existing,
+    id: campaignId,
+    title: args.title ?? existing?.title,
+    objective: args.objective ?? existing?.objective,
+    status: args.status ?? existing?.status ?? "planned",
+    phase: args.phase ?? existing?.phase ?? "research",
+    controllerRole: actorRole,
+    programIds: args.programIds ?? existing?.programIds ?? [],
+    steps: args.steps ?? existing?.steps ?? [],
+    nextAction: args.nextAction ?? existing?.nextAction ?? null,
+    reviewPolicy: args.reviewPolicy ?? existing?.reviewPolicy ?? "fresh-approval-after-review-checkpoint",
+    explicitApprovalRequired: args.explicitApprovalRequired ?? existing?.explicitApprovalRequired ?? true,
+    noHiddenRuntime: args.noHiddenRuntime ?? existing?.noHiddenRuntime ?? true,
+    createdAt: existing?.createdAt ?? timestamp,
+    updatedAt: timestamp
+  });
+  const nextItems = [
+    ...(campaignsState.items ?? []).map(normalizeCampaignItem).filter((item) => item.id !== campaignId),
+    nextCampaign
+  ].sort((left, right) => left.id.localeCompare(right.id));
+  writeCampaignsIndex(root, nextItems);
+  refreshDurableSurfaces(root, {
+    type: "plan-campaign",
+    summary: `Recorded campaign plan ${campaignId} without executing work.`,
+    artifactPaths: [ARTIFACT_PATHS.campaignsIndex, ARTIFACT_PATHS.workspaceIndex]
+  });
+  return {
+    status: existing ? "updated" : "planned",
+    campaignId: nextCampaign.id,
+    stepCount: nextCampaign.steps.length,
+    explicitApprovalRequired: nextCampaign.explicitApprovalRequired,
+    noHiddenRuntime: nextCampaign.noHiddenRuntime,
+    campaignsPath: ARTIFACT_PATHS.campaignsIndex
+  };
+}
+
+export function queryProgramApprovals(root, args = {}) {
+  ensureWorkspace(root);
+  const programId = args.programId ? slugify(args.programId) : null;
+  const programRunId = args.programRunId ? slugify(args.programRunId) : null;
+  const status = args.status ? String(args.status).trim().toLowerCase() : null;
+  const approvalsState = normalizeProgramApprovalsIndex(readJson(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex));
+  const programRunsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
+  const programsState = normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex));
+  const items = (approvalsState.items ?? [])
+    .filter((item) => !programId || item.programId === programId)
+    .filter((item) => !programRunId || item.programRunId === programRunId)
+    .filter((item) => !status || item.status === status)
+    .map((item) => ({
+      ...item,
+      program: (programsState.items ?? []).find((entry) => entry.id === item.programId) ?? null,
+      run: (programRunsState.items ?? []).find((entry) => entry.id === item.programRunId) ?? null
+    }));
+  const continuationIntents = (programRunsState.items ?? [])
+    .filter((item) => item.reviewCheckpointRequired && item.nextApprovalIntent)
+    .filter((item) => !programId || item.programId === programId)
+    .filter((item) => !programRunId || item.id === programRunId)
+    .map((item) => ({
+      ...item.nextApprovalIntent,
+      programId: item.programId,
+      programRunId: item.id,
+      approvalId: item.approvalId,
+      reviewCheckpointSummary: item.reviewCheckpointSummary,
+      reviewCheckpointAt: item.reviewCheckpointAt
+    }));
+  return {
+    status: "ok",
+    items,
+    continuationIntents,
+    summary: {
+      ...approvalsState.summary,
+      reviewCheckpointRunCount: programRunsState.summary.reviewCheckpointRunCount ?? 0,
+      continuationIntentCount: continuationIntents.length,
+      filteredCount: items.length
+    }
+  };
+}
+
+export function issueProgramApproval(root, args = {}) {
+  assertGovernanceMutationRegistered("issue-program-approval", "exempt");
+  ensureWorkspace(root);
+  const actorRole = args.actorRole ?? "planner";
+  if (actorRole !== "planner") {
+    throw new Error("issueProgramApproval currently requires actorRole 'planner'.");
+  }
+  const continuationFromRunId = args.continuationFromRunId ? slugify(args.continuationFromRunId) : null;
+  const runsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
+  const priorRun = continuationFromRunId ? (runsState.items ?? []).find((item) => item.id === continuationFromRunId) ?? null : null;
+  if (continuationFromRunId && (!priorRun || !priorRun.reviewCheckpointRequired || !priorRun.nextApprovalIntent)) {
+    throw new Error(`Program run ${continuationFromRunId} does not expose a continuation approval intent.`);
+  }
+  const packetId = slugify(args.packetId ?? priorRun?.nextApprovalIntent?.packetId ?? "");
+  const programId = slugify(args.programId ?? priorRun?.programId ?? "");
+  const programRunId = slugify(args.programRunId ?? priorRun?.nextApprovalIntent?.suggestedProgramRunId ?? "");
+  const approvalId = slugify(args.approvalId ?? priorRun?.nextApprovalIntent?.suggestedApprovalId ?? "");
+  const executeBy = args.executeBy ?? null;
+  const reviewAfter = args.reviewAfter ?? null;
+  if (!packetId || !programId || !programRunId || !approvalId || !executeBy || !reviewAfter) {
+    throw new Error("issueProgramApproval requires packetId, programId, programRunId, approvalId, executeBy, and reviewAfter.");
+  }
+  const packetPath = packetFilePath(packetId);
+  const existingPacket = readJson(root, packetPath, null);
+  if (!existingPacket) {
+    throw new Error(`Packet ${packetId} was not found.`);
+  }
+  const packet = normalizePacket(existingPacket);
+  const workerRole = ROLE_IDS.includes(args.workerRole) ? args.workerRole : priorRun?.nextApprovalIntent?.workerRole ?? packet.autonomyEnvelope?.workerRole ?? packet.assignedRole;
+  const sourceType = args.sourceType ?? packet.materialization?.sourceType;
+  const sourceId = args.sourceId ?? packet.materialization?.sourceId;
+  if (!sourceType || !sourceId) {
+    throw new Error(`issueProgramApproval requires sourceType and sourceId, or a packet with durable materialization provenance.`);
+  }
+  const followThroughId = String(args.followThroughId ?? `follow-through-${slugify(`${programRunId}-${packetId}`)}`).trim();
+  const linkage = upsertProgramOperatingState(root, {
+    programId,
+    programRunId,
+    approvalId,
+    programTitle: args.programTitle,
+    programObjective: args.programObjective,
+    programAgenda: args.programAgenda,
+    programEvidenceBacklog: args.programEvidenceBacklog,
+    noteTitle: args.noteTitle ?? priorRun?.nextApprovalIntent?.stepPayload?.title,
+    noteSectionId: args.noteSectionId ?? priorRun?.nextApprovalIntent?.stepPayload?.sectionId,
+    noteSourceIds: args.noteSourceIds ?? priorRun?.nextApprovalIntent?.stepPayload?.sourceIds,
+    noteSummary: args.noteSummary ?? priorRun?.nextApprovalIntent?.stepPayload?.summary,
+    noteQuotes: args.noteQuotes ?? priorRun?.nextApprovalIntent?.stepPayload?.quotes,
+    noteClaims: args.noteClaims ?? priorRun?.nextApprovalIntent?.stepPayload?.claims,
+    noteOpenQuestions: args.noteOpenQuestions ?? priorRun?.nextApprovalIntent?.stepPayload?.openQuestions,
+    auditResultId: args.auditResultId ?? priorRun?.nextApprovalIntent?.stepPayload?.resultId,
+    auditReviewedArtifactRefs: args.auditReviewedArtifactRefs ?? priorRun?.nextApprovalIntent?.stepPayload?.reviewedArtifactRefs,
+    bridgeResultId: args.bridgeResultId ?? priorRun?.nextApprovalIntent?.stepPayload?.resultId,
+    bridgeAuditIds: args.bridgeAuditIds ?? priorRun?.nextApprovalIntent?.stepPayload?.auditIds,
+    bridgeReason: args.bridgeReason ?? priorRun?.nextApprovalIntent?.stepPayload?.reason,
+    reviewScope: args.reviewScope ?? priorRun?.nextApprovalIntent?.stepPayload?.scope,
+    reviewStage: args.reviewStage ?? priorRun?.nextApprovalIntent?.stepPayload?.stage,
+    autonomyPolicy: args.autonomyPolicy,
+    stepSequence: args.stepSequence ?? priorRun?.nextApprovalIntent?.authorityEnvelope?.stepSequence,
+    stepBudget: args.stepBudget ?? priorRun?.nextApprovalIntent?.authorityEnvelope?.maxStepCount,
+    programApprovalSummary: args.summary,
+    controllerRole: actorRole,
+    workerRole,
+    packetId,
+    followThroughId,
+    approvedByRole: actorRole,
+    approvalStatus: "approved",
+    approvalExpiresAt: args.expiresAt ?? null,
+    campaignId: args.campaignId,
+    campaignStepId: args.campaignStepId,
+    campaignStepNextAction: args.campaignStepNextAction,
+    allowedStepType: args.allowedStepType ?? priorRun?.nextApprovalIntent?.allowedStepType ?? packet.lineage?.allowedStepType ?? packet.materialization?.allowedStepType ?? "refresh-research-brief"
+  });
+  const nextPacket = buildApprovalPacket(root, packet, {
+    actorRole,
+    workerRole,
+    programId: linkage.programId,
+    programRunId: linkage.programRunId,
+    approvalId: linkage.approvalId,
+    followThroughId,
+    summary: args.summary ?? priorRun?.nextApprovalIntent?.summary
+  });
+  persistPacket(root, nextPacket);
+  const followThrough = recordOperatorFollowThrough(root, {
+    id: followThroughId,
+    sourceType,
+    sourceId,
+    status: "accepted-for-execution",
+    actorRole,
+    workerRole,
+    programId: linkage.programId,
+    programRunId: linkage.programRunId,
+    approvalId: linkage.approvalId,
+    decisionSummary: args.summary ?? priorRun?.nextApprovalIntent?.summary ?? `Issued program approval ${approvalId} for packet ${packetId}.`,
+    linkedTargetArtifact: nextPacket.packetPath,
+    linkedTargetId: nextPacket.id,
+    executeBy,
+    reviewAfter,
+    rationale: args.rationale ?? ""
+  });
+  refreshDurableSurfaces(root, {
+    type: "issue-program-approval",
+    summary: args.summary ?? priorRun?.nextApprovalIntent?.summary ?? `Issued program approval ${approvalId} for packet ${packetId}.`,
+    artifactPaths: [nextPacket.packetPath, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.programsIndex, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals, ARTIFACT_PATHS.campaignsIndex, ARTIFACT_PATHS.metaOperatorFollowThrough]
+  });
+  return {
+    status: "issued",
+    approvalId: linkage.approvalId,
+    programId: linkage.programId,
+    programRunId: linkage.programRunId,
+    packetId: nextPacket.id,
+    followThroughId: (followThrough.items ?? []).find((item) => item.id === followThroughId)?.id ?? followThroughId,
+    campaignBinding: linkage.campaignBinding
+  };
+}
+
+export function revokeProgramApproval(root, args = {}) {
+  assertGovernanceMutationRegistered("revoke-program-approval", "exempt");
+  ensureWorkspace(root);
+  const actorRole = args.actorRole ?? "planner";
+  if (actorRole !== "planner") {
+    throw new Error("revokeProgramApproval currently requires actorRole 'planner'.");
+  }
+  const approvalId = slugify(args.approvalId ?? "");
+  if (!approvalId) {
+    throw new Error("revokeProgramApproval requires approvalId.");
+  }
+  const approvalsState = normalizeProgramApprovalsIndex(readJson(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex));
+  const approval = (approvalsState.items ?? []).find((item) => item.id === approvalId) ?? null;
+  if (!approval) {
+    throw new Error(`Program approval ${approvalId} was not found.`);
+  }
+  const timestamp = nowIso();
+  const nextApprovals = (approvalsState.items ?? []).map((item) => item.id === approvalId
+    ? { ...item, status: "revoked", summary: args.summary ?? item.summary, revokedAt: timestamp, revokedByRole: actorRole, revokeReason: args.revokeReason ?? null, updatedAt: timestamp }
+    : item);
+  const runsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
+  const nextRuns = (runsState.items ?? []).map((item) => item.approvalId === approvalId && item.status === "approved"
+    ? { ...item, status: "blocked", lastOutcome: "approval-revoked", updatedAt: timestamp }
+    : item);
+  const programsState = normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex));
+  const nextPrograms = (programsState.items ?? []).map((item) => item.id === approval.programId && item.activeRunId === approval.programRunId
+    ? { ...item, status: item.status === "active" ? "blocked" : item.status, lastOutcome: "approval-revoked", updatedAt: timestamp }
+    : item);
+  writeProgramOperatingState(root, {
+    programsIndex: nextPrograms,
+    programRuns: nextRuns,
+    programApprovals: nextApprovals
+  });
+  refreshDurableSurfaces(root, {
+    type: "revoke-program-approval",
+    summary: `Revoked program approval ${approvalId}.`,
+    artifactPaths: [ARTIFACT_PATHS.programsIndex, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals]
+  });
+  return {
+    status: "revoked",
+    approvalId,
+    programId: approval.programId,
+    programRunId: approval.programRunId
+  };
+}
+
 function followThroughTargetStillBound(root, item) {
   if (!["accepted-for-execution", "closed"].includes(item.status)) {
     return true;
@@ -2533,6 +4083,9 @@ function validateFollowThroughTargetBinding(root, record) {
   }
   if (!record.linkedTargetArtifact || !record.linkedTargetId) {
     throw new Error(`${record.status} follow-through records require linkedTargetArtifact and linkedTargetId.`);
+  }
+  if (record.status === "accepted-for-execution" && record.plannedTarget) {
+    return;
   }
   if (!targetArtifactContainsId(root, record.linkedTargetArtifact, record.linkedTargetId)) {
     throw new Error(`Follow-through target ${record.linkedTargetId} was not found in ${record.linkedTargetArtifact}.`);
@@ -3356,6 +4909,7 @@ function buildExecutionBridgeCandidates({ remediationPacks, operatorPlaybooks })
         sourceConversionPath: {
           targetType: path.targetType,
           targetId: path.targetId,
+          assignedRole: path.assignedRole ?? "planner",
           rank: path.rank ?? 1,
           pathScore: path.pathScore ?? 0,
           rankingBasis: normalizeStringArray(path.rankingBasis ?? [])
@@ -4143,7 +5697,7 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
   const sourceCatalog = buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, executionBridgeCandidates);
   const existingFollowThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
   const operatorFollowThrough = buildOperatorFollowThrough(root, existingFollowThrough, sourceCatalog, generatedAt);
-  const finalMetaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, governanceCoverage);
+  const finalMetaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, governanceCoverage, workspaceIndex.autonomyLoops);
   const metaOptimizerState = {
     ...createMetaOptimizerState(),
     frontier: {
@@ -4369,6 +5923,7 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
         `- Status: ${governanceCoverageReport.status}`,
         `- Guarded mutations: ${governanceCoverageReport.summary.guardedCount}`,
         `- Exempt mutations: ${governanceCoverageReport.summary.exemptCount}`,
+        `- Exempt review freshness: stale-review=${governanceCoverageReport.summary.staleReviewCount}, expiring-soon=${governanceCoverageReport.summary.expiringSoonCount}`,
         `- Overview: ${governanceCoverageReport.summary.overview}`,
         "",
         "## Guarded surfaces",
@@ -4394,7 +5949,7 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
   };
 }
 
-function buildWorkspaceIndex(state, board, packets, reviewState, journal, versionsIndex, comparisons, wikiRelations, figureQa, metaOptimize = null) {
+function buildWorkspaceIndex(state, board, packets, reviewState, journal, versionsIndex, comparisons, wikiRelations, figureQa, metaOptimize = null, runtime = null, programs = null, campaigns = null, openQuestions = []) {
   const base = createWorkspaceIndex();
   const packetById = new Map(packets.map((packet) => [packet.id, packet]));
   const enrichedPackets = sortPacketsForQueue(packets.map((packet) => ({
@@ -4451,6 +6006,15 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
     ...repairFrontier.prioritizedItems.flatMap((item) => [item.artifactPath, ...(item.relatedArtifactPaths ?? [])].filter(Boolean).map(artifactContextPath)),
     ...prioritizedPackets.flatMap((packet) => [packet.packetPath, ...(packet.outputPaths ?? []), ...(packet.evidenceLinks ?? [])].filter(Boolean).map(artifactContextPath))
   ]);
+  const autonomyLoops = buildAutonomyLoopSummary({
+    board,
+    packets: enrichedPackets,
+    openQuestions,
+    metaOptimize: metaOptimize ?? base.metaOptimize,
+    runtime: runtime ?? base.runtime,
+    programs: programs ?? base.programs,
+    repairFrontier
+  });
   return {
     ...base,
     currentFocus: board.currentFocus,
@@ -4500,6 +6064,10 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
     dependencyHealth,
     repairFrontier,
     metaOptimize: metaOptimize ?? base.metaOptimize,
+    runtime: runtime ?? base.runtime,
+    programs: programs ?? base.programs,
+    campaigns: campaigns ?? base.campaigns,
+    autonomyLoops,
     activeRoles: Array.from(new Set([board.assignedRole, ...enrichedPackets.filter((packet) => packet.active).map((packet) => packet.assignedRole)])),
     unresolvedConcernIds: reviewState.unresolvedConcernIds ?? [],
     mostRecentSessions: [...(journal.entries ?? [])].slice(-10).reverse().map((entry) => ({
@@ -4538,6 +6106,18 @@ export function refreshDurableSurfaces(root, event = {}) {
   const wikiEntities = readJson(root, ARTIFACT_PATHS.wikiEntities, createWikiEntitiesIndex);
   const wikiRelations = readJson(root, ARTIFACT_PATHS.wikiRelations, createWikiRelationsIndex);
   const figureQa = readJson(root, ARTIFACT_PATHS.figureQa, { version: 1, items: [], issues: [], updatedAt: null });
+  const campaignsIndex = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
+  const programsIndex = normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex));
+  const programRuns = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
+  const programApprovals = normalizeProgramApprovalsIndex(readJson(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex));
+  const runtimeControllerState = normalizeRuntimeControllerState(readJson(root, ARTIFACT_PATHS.runtimeControllerState, createRuntimeControllerState));
+  const runtimeLeases = normalizeRuntimeLeasesIndex(readJson(root, ARTIFACT_PATHS.runtimeLeases, createRuntimeLeasesIndex));
+  const runtimeEvents = normalizeRuntimeEventsIndex(readJson(root, ARTIFACT_PATHS.runtimeEvents, createRuntimeEventsIndex));
+  const runtimeResults = normalizeRuntimeResultsIndex(readJson(root, ARTIFACT_PATHS.runtimeResults, createRuntimeResultsIndex));
+  const runtimeContinuation = normalizeRuntimeContinuationIndex(readJson(root, ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex));
+  const runtimeMirror = buildRuntimeWorkspaceMirror(runtimeControllerState, runtimeContinuation, runtimeLeases, runtimeEvents, runtimeResults);
+  const programsMirror = buildProgramsWorkspaceMirror(programsIndex, programRuns, programApprovals, runtimeControllerState.summary ?? {});
+  const campaignsMirror = buildCampaignsWorkspaceMirror(campaignsIndex, programsIndex, programRuns);
 
   const existingById = loadExistingPacketMap(root, taskPacketIndex.items ?? []);
   const refreshed = [
@@ -4600,7 +6180,7 @@ export function refreshDurableSurfaces(root, event = {}) {
   const entries = [...(journal.entries ?? []).slice(-199), entry];
   writeJson(root, ARTIFACT_PATHS.sessionJournal, { version: 1, entries, updatedAt: nowIso() });
 
-  const preliminaryWorkspaceIndex = buildWorkspaceIndex(state, board, packetsWithHealth, reviewState, { entries }, versionsIndex, comparisons, wikiRelations, figureQa);
+  const preliminaryWorkspaceIndex = buildWorkspaceIndex(state, board, packetsWithHealth, reviewState, { entries }, versionsIndex, comparisons, wikiRelations, figureQa, null, runtimeMirror, programsMirror, campaignsMirror, openQuestions);
   const metaOptimize = buildMetaOptimizeSurface({
     root,
     board,
@@ -4625,8 +6205,13 @@ export function refreshDurableSurfaces(root, event = {}) {
     comparisons,
     wikiRelations,
     figureQa,
-    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.governanceCoverage)
+    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.governanceCoverage),
+    runtimeMirror,
+    programsMirror,
+    campaignsMirror,
+    openQuestions
   );
+  const taskGraphWithLoops = buildTaskGraph(packetsWithHealth, workspaceIndex.autonomyLoops);
   writeJson(root, ARTIFACT_PATHS.workspaceIndex, workspaceIndex);
   writeJson(root, ARTIFACT_PATHS.metaEvents, metaOptimize.metaEvents);
     writeJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, metaOptimize.executionBridgeCandidates);
@@ -4637,6 +6222,10 @@ export function refreshDurableSurfaces(root, event = {}) {
   writeJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, metaOptimize.operatorPlaybooks);
   writeJson(root, ARTIFACT_PATHS.metaRemediationPacks, metaOptimize.remediationPacks);
   writeJson(root, ARTIFACT_PATHS.metaRecommendations, metaOptimize.metaRecommendations);
+    writeJson(root, ARTIFACT_PATHS.campaignsIndex, campaignsIndex);
+    writeJson(root, ARTIFACT_PATHS.programsIndex, programsIndex);
+    writeJson(root, ARTIFACT_PATHS.programRuns, programRuns);
+    writeJson(root, ARTIFACT_PATHS.programApprovals, programApprovals);
     writeJson(root, ARTIFACT_PATHS.metaOptimizerState, metaOptimize.metaOptimizerState);
     writeText(root, ARTIFACT_PATHS.metaOptimizerReport, metaOptimize.metaOptimizerReport);
     writeText(root, ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown, metaOptimize.metaGovernanceCoverageReport.markdown);
@@ -4658,7 +6247,15 @@ export function refreshDurableSurfaces(root, event = {}) {
     ARTIFACT_PATHS.metaRecommendations,
     ARTIFACT_PATHS.metaOptimizerState,
     ARTIFACT_PATHS.metaOptimizerReport,
-    ARTIFACT_PATHS.sessionSummary,
+      ARTIFACT_PATHS.runtimeControllerState,
+      ARTIFACT_PATHS.runtimeLeases,
+      ARTIFACT_PATHS.runtimeEvents,
+      ARTIFACT_PATHS.runtimeResults,
+      ARTIFACT_PATHS.programsIndex,
+      ARTIFACT_PATHS.programRuns,
+      ARTIFACT_PATHS.programApprovals,
+      ARTIFACT_PATHS.campaignsIndex,
+      ARTIFACT_PATHS.sessionSummary,
     ARTIFACT_PATHS.navigationReport,
     ...packetsWithHealth.flatMap((packet) => [packet.packetPath, ...(packet.outputPaths ?? []), ...(packet.evidenceLinks ?? [])].filter(Boolean))
   ]);
@@ -4681,9 +6278,11 @@ export function refreshDurableSurfaces(root, event = {}) {
         packet.packetContextPath,
         path.join(ARTIFACT_PATHS.roleContextsDir, `${packet.assignedRole}.json`),
         path.join(ARTIFACT_PATHS.phaseContextsDir, `${packet.phase}.json`),
+        ...(manifest.programLinkage ? [ARTIFACT_PATHS.programsIndex, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals] : []),
+        ...(manifest.autonomyEnvelope?.requiredReadPaths ?? []),
         ...manifest.artifactContextPaths
       ],
-      localRules: manifest.behaviorDiscipline.localRules,
+      localRules: uniqueSorted([...(manifest.behaviorDiscipline.localRules ?? []), ...(manifest.autonomyEnvelope?.localRules ?? [])]),
       operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, { roleId: packet.assignedRole, packetId: packet.id, packet })
     }));
   }
@@ -4737,9 +6336,9 @@ export function refreshDurableSurfaces(root, event = {}) {
   }));
 
   writeText(root, ARTIFACT_PATHS.sessionSummary, renderSessionSummary(state, board, packetsWithHealth, openQuestions, decisions, roleRoster, workspaceIndex));
-  writeText(root, ARTIFACT_PATHS.navigationReport, renderNavigationReport(board, taskGraph, openQuestions, decisions, versionsIndex, comparisons, workspaceIndex));
+  writeText(root, ARTIFACT_PATHS.navigationReport, renderNavigationReport(board, taskGraphWithLoops, openQuestions, decisions, versionsIndex, comparisons, workspaceIndex));
 
-  return { packetIndex, openQuestions, decisions, taskGraph, workspaceIndex, metaOptimize: metaOptimize.metaOptimizerState };
+  return { packetIndex, openQuestions, decisions, taskGraph: taskGraphWithLoops, workspaceIndex, metaOptimize: metaOptimize.metaOptimizerState };
 }
 
 export function queryTaskGraph(root) {
@@ -4811,6 +6410,7 @@ export function queryMetaOptimize(root) {
   const remediationPacks = normalizeMetaRemediationPacksIndex(readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex));
   const recommendations = normalizeMetaRecommendationsIndex(readJson(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex));
   const state = normalizeMetaOptimizerState(readJson(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState));
+  const workspaceIndex = normalizeWorkspaceIndex(readJson(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex));
   return {
     proposalOnly: true,
     events: events.items ?? [],
@@ -4831,6 +6431,7 @@ export function queryMetaOptimize(root) {
     },
     frontier: recommendations.frontier ?? state.frontier,
     summary: recommendations.summary ?? state.frontier,
+    autonomyLoops: workspaceIndex.autonomyLoops,
     state,
     reportPath: ARTIFACT_PATHS.metaOptimizerReport,
     recommendationsPath: ARTIFACT_PATHS.metaRecommendations,
@@ -4851,6 +6452,16 @@ export function queryOperatorFollowThrough(root) {
   const meta = queryMetaOptimize(root);
   return {
     ...meta.operatorFollowThrough,
+    executionWindowSummary: {
+      dueSoonCount: meta.operatorFollowThrough.summary?.dueSoonExecutionCount ?? 0,
+      dueSoonIds: meta.operatorFollowThrough.summary?.dueSoonExecutionIds ?? [],
+      dueReviewCount: meta.operatorFollowThrough.summary?.dueReviewCount ?? 0,
+      dueReviewIds: meta.operatorFollowThrough.summary?.dueReviewIds ?? [],
+      overdueCount: meta.operatorFollowThrough.summary?.overdueExecutionCount ?? 0,
+      overdueIds: meta.operatorFollowThrough.summary?.overdueExecutionIds ?? [],
+      criticalOverdueCount: meta.operatorFollowThrough.summary?.criticalOverdueExecutionCount ?? 0,
+      criticalOverdueIds: meta.operatorFollowThrough.summary?.criticalOverdueExecutionIds ?? []
+    },
     reportPath: ARTIFACT_PATHS.metaOptimizerReport
   };
 }
@@ -4864,22 +6475,381 @@ export function queryGovernanceCoverageReport(root) {
   };
 }
 
+function resolveMaterializationIntent(meta, { sourceType, sourceId, selectedConversionPathKey = null } = {}) {
+  if (sourceType === "remediation-pack") {
+    const pack = (meta.remediationPacks.packs ?? []).find((item) => item.id === sourceId);
+    if (!pack) {
+      throw new Error(`Unknown remediation pack: ${sourceId}`);
+    }
+    const selected = selectedConversionPathKey
+      ? (pack.rankedConversionPaths ?? []).find((item) => item.deterministicKey === selectedConversionPathKey)
+      : null;
+    const packetPath = selected ?? (pack.rankedConversionPaths ?? []).find((item) => item.targetType === "create-new-packet") ?? null;
+    if (!packetPath) {
+      const existingPacketPath = (pack.rankedConversionPaths ?? []).find((item) => item.targetType === "update-existing-packet") ?? null;
+      if (existingPacketPath) {
+        throw new Error(`Remediation pack ${sourceId} already points at existing packet ${existingPacketPath.targetId}; refuse to create duplicate work. Update the live packet instead.`);
+      }
+      throw new Error(`Remediation pack ${sourceId} does not offer a create-new-packet conversion path.`);
+    }
+    if (packetPath.targetType !== "create-new-packet") {
+      throw new Error(`Materialization currently supports only create-new-packet remediation paths; got ${packetPath.targetType} for ${sourceId}.`);
+    }
+    return {
+      sourceTitle: pack.title,
+      sourceSummary: pack.summary,
+      sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
+      selectedConversionPathKey: packetPath.deterministicKey ?? selectedConversionPathKey ?? null,
+      assignedRole: packetPath.assignedRole ?? "planner",
+      title: packetPath.suggestedTitle ?? pack.title,
+      summary: pack.summary,
+      nextAction: packetPath.nextStep ?? pack.manualNextActions?.[0] ?? `Review ${ARTIFACT_PATHS.metaRemediationPacks} and advance ${pack.id}.`,
+      packetId: packetPath.targetId,
+      evidenceLinks: uniqueSorted([ARTIFACT_PATHS.metaRemediationPacks, ...(pack.evidence?.artifactPaths ?? [])]),
+      remediationPackIds: [pack.id],
+      executionBridgeCandidateIds: [],
+      acceptanceCriteria: uniqueSorted(pack.acceptanceCriteria ?? []),
+      workspacePointers: uniqueSorted(pack.workspacePointers ?? [])
+    };
+  }
+  if (sourceType === "execution-bridge") {
+    const candidate = (meta.executionBridgeCandidates.candidates ?? []).find((item) => item.id === sourceId);
+    if (!candidate) {
+      throw new Error(`Unknown execution bridge candidate: ${sourceId}`);
+    }
+    const targetType = candidate.sourceConversionPath?.targetType ?? null;
+    if (candidate.candidateType !== "packet-candidate" || targetType !== "create-new-packet") {
+      throw new Error(`Execution bridge candidate ${sourceId} is ${candidate.candidateType}/${targetType ?? "unknown"}; materialization currently supports only packet-candidate create-new-packet paths.`);
+    }
+    return {
+      sourceTitle: candidate.suggestedTitle,
+      sourceSummary: candidate.suggestedSummary,
+      sourceArtifactPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+      selectedConversionPathKey: selectedConversionPathKey ?? null,
+      assignedRole: candidate.sourceConversionPath?.assignedRole ?? "planner",
+      title: candidate.suggestedTitle,
+      summary: candidate.suggestedSummary,
+      nextAction: candidate.suggestedNextStep ?? `Review ${ARTIFACT_PATHS.metaExecutionBridgeCandidates} and advance ${candidate.id}.`,
+      packetId: candidate.targetId,
+      evidenceLinks: uniqueSorted([ARTIFACT_PATHS.metaExecutionBridgeCandidates, ...(candidate.linkedEvidenceArtifactPaths ?? [])]),
+      remediationPackIds: uniqueSorted(candidate.sourceRemediationPackIds ?? []),
+      executionBridgeCandidateIds: [candidate.id],
+      acceptanceCriteria: uniqueSorted(candidate.suggestedAcceptanceCriteria ?? []),
+      workspacePointers: uniqueSorted(candidate.context?.linkedWorkspacePointers ?? [])
+    };
+  }
+  throw new Error(`Unsupported materialization sourceType: ${sourceType}`);
+}
+
+function assertMaterializationAllowed(meta, packetIndex, { sourceType, sourceId, packetId }) {
+  const unrelatedActionRequired = (meta.operatorFollowThrough.actionRequiredItems ?? []).filter((item) => !(item.sourceType === sourceType && item.sourceId === sourceId));
+  if (unrelatedActionRequired.length > 0) {
+    throw new Error(`Materialization is blocked while unrelated operator follow-through still requires action: ${unrelatedActionRequired.map((item) => item.id).join(", ")}.`);
+  }
+  const existingBySource = (meta.operatorFollowThrough.items ?? []).filter((item) => item.sourceType === sourceType && item.sourceId === sourceId);
+  if (existingBySource.some((item) => item.status === "superseded")) {
+    throw new Error(`Cannot materialize superseded guidance ${sourceType}:${sourceId}.`);
+  }
+  const existingTarget = existingBySource.find((item) => ["accepted-for-execution", "executing", "closed"].includes(item.status) && item.targetBound);
+  if (existingTarget) {
+    throw new Error(`Guidance ${sourceType}:${sourceId} is already bound to ${existingTarget.linkedTargetArtifact}:${existingTarget.linkedTargetId}; refuse to create duplicate work.`);
+  }
+  const duplicatePacket = (packetIndex.items ?? []).find((packet) => packet.id === packetId || (packet.materialization?.sourceType === sourceType && packet.materialization?.sourceId === sourceId));
+  if (duplicatePacket) {
+    throw new Error(`A durable packet already exists for ${sourceType}:${sourceId} (${duplicatePacket.id}); refuse to materialize duplicate work.`);
+  }
+}
+
+function assertSelectedFollowThroughMatchesMaterialization(root, followThroughIndex, args, { sourceType, sourceId, packetId, actorRole }) {
+  const followThroughId = String(args.followThroughId ?? "").trim();
+  if (!followThroughId) {
+    return null;
+  }
+  const selected = (followThroughIndex.items ?? []).find((item) => item.id === followThroughId) ?? null;
+  if (!selected) {
+    throw new Error(`Materialization follow-through ${followThroughId} was not found.`);
+  }
+  if (selected.sourceType !== sourceType || selected.sourceId !== sourceId) {
+    throw new Error(`Materialization follow-through ${followThroughId} does not match ${sourceType}:${sourceId}.`);
+  }
+  if (selected.status !== "accepted-for-execution") {
+    throw new Error(`Materialization follow-through ${followThroughId} is not accepted for execution.`);
+  }
+  if (selected.actorRole && selected.actorRole !== actorRole) {
+    throw new Error(`Materialization follow-through ${followThroughId} belongs to actorRole ${selected.actorRole}, not ${actorRole}.`);
+  }
+  if (args.workerRole && selected.workerRole && selected.workerRole !== args.workerRole) {
+    throw new Error(`Materialization follow-through ${followThroughId} belongs to workerRole ${selected.workerRole}, not ${args.workerRole}.`);
+  }
+  if (!selected.plannedTarget) {
+    throw new Error(`Materialization follow-through ${followThroughId} is not a planned target.`);
+  }
+  if (selected.targetBound) {
+    throw new Error(`Materialization follow-through ${followThroughId} is already target-bound.`);
+  }
+  if (selected.invalidStatus) {
+    throw new Error(`Materialization follow-through ${followThroughId} is invalid for autonomous rebinding.`);
+  }
+  const expectedArtifact = `${ARTIFACT_PATHS.taskPacketsPacketsDir}/${packetId}.json`;
+  if (selected.linkedTargetId !== packetId || selected.linkedTargetArtifact !== expectedArtifact) {
+    throw new Error(`Materialization follow-through ${followThroughId} does not match intended packet target ${expectedArtifact}:${packetId}.`);
+  }
+  if (args.selectedConversionPathKey && selected.selectedConversionPathKey && args.selectedConversionPathKey !== selected.selectedConversionPathKey) {
+    throw new Error(`Materialization follow-through ${followThroughId} does not match selected conversion path ${args.selectedConversionPathKey}.`);
+  }
+  return selected;
+}
+
+export function materializeGuidancePacket(root, args = {}) {
+  assertGovernanceMutationRegistered("materialize-guidance-packet", "guarded");
+  ensureWorkspace(root);
+  const sourceType = String(args.sourceType ?? "").trim();
+  const sourceId = String(args.sourceId ?? "").trim();
+  const actorRole = String(args.actorRole ?? "").trim();
+  if (!sourceType || !sourceId) {
+    throw new Error("materializeGuidancePacket requires sourceType and sourceId.");
+  }
+  if (!actorRole) {
+    throw new Error("materializeGuidancePacket requires actorRole.");
+  }
+  if (!args.executeBy || !args.reviewAfter) {
+    throw new Error("materializeGuidancePacket requires executeBy and reviewAfter so accepted guidance has an explicit execution window.");
+  }
+
+  const meta = queryMetaOptimize(root);
+  const sourceCatalog = buildFollowThroughSourceCatalog(meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates);
+  const source = sourceCatalog.get(`${sourceType}:${sourceId}`);
+  if (!source) {
+    throw new Error(`Unknown materialization source: ${sourceType}:${sourceId}`);
+  }
+  if ((source.allowedActorRoles ?? []).length > 0 && !(source.allowedActorRoles ?? []).includes(actorRole) && !(actorRole === "planner" && args.workerRole && (source.allowedActorRoles ?? []).includes(args.workerRole))) {
+    throw new Error(`Actor role ${actorRole} is not allowed to materialize ${sourceType}:${sourceId}. Allowed roles: ${(source.allowedActorRoles ?? []).join(", ")}.`);
+  }
+  if (args.workerRole && (source.allowedActorRoles ?? []).length > 0 && !(source.allowedActorRoles ?? []).includes(args.workerRole)) {
+    throw new Error(`Worker role ${args.workerRole} is not allowed for ${sourceType}:${sourceId}. Allowed roles: ${(source.allowedActorRoles ?? []).join(", ")}.`);
+  }
+
+  const intent = resolveMaterializationIntent(meta, {
+    sourceType,
+    sourceId,
+    selectedConversionPathKey: args.selectedConversionPathKey ?? null
+  });
+  const packetId = slugify(args.packetId ?? intent.packetId ?? `task-${sourceId}`);
+  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex);
+  const followThroughIndex = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const selectedFollowThrough = assertSelectedFollowThroughMatchesMaterialization(root, followThroughIndex, args, { sourceType, sourceId, packetId, actorRole });
+  const sameSourcePlannedFollowThrough = (meta.operatorFollowThrough.items ?? []).filter((item) => item.sourceType === sourceType && item.sourceId === sourceId && item.status === "accepted-for-execution" && item.plannedTarget && !item.targetBound);
+  if (!selectedFollowThrough && sameSourcePlannedFollowThrough.length > 0) {
+    const stalePlannedIds = sameSourcePlannedFollowThrough.filter((item) => item.stale).map((item) => item.id);
+    if (stalePlannedIds.length > 0) {
+      throw new Error(`Materialization for ${sourceType}:${sourceId} is blocked because planned follow-through is stale: ${stalePlannedIds.join(", ")}.`);
+    }
+    throw new Error(`Materialization for ${sourceType}:${sourceId} requires followThroughId because planned follow-through already exists: ${sameSourcePlannedFollowThrough.map((item) => item.id).join(", ")}.`);
+  }
+  if (selectedFollowThrough) {
+    const computedFollowThrough = (meta.operatorFollowThrough.items ?? []).find((item) => item.id === selectedFollowThrough.id) ?? null;
+    if (computedFollowThrough?.stale) {
+      throw new Error(`Materialization follow-through ${selectedFollowThrough.id} is stale and must be reassessed before materialization.`);
+    }
+  }
+  assertMaterializationAllowed(meta, packetIndex, { sourceType, sourceId, packetId });
+
+  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard);
+  const timestamp = nowIso();
+  const followThroughId = String(args.followThroughId ?? `follow-through-${slugify(`${sourceType}-${sourceId}`)}`).trim() || `follow-through-${slugify(`${sourceType}-${sourceId}`)}`;
+  const programLinkage = upsertProgramOperatingState(root, {
+    programId: args.programId,
+    programRunId: args.programRunId,
+    approvalId: args.approvalId,
+    allowedStepType: args.allowedStepType,
+    noteTitle: args.noteTitle,
+    noteSectionId: args.noteSectionId,
+    noteSourceIds: args.noteSourceIds,
+    noteSummary: args.noteSummary,
+    noteQuotes: args.noteQuotes,
+    noteClaims: args.noteClaims,
+    noteOpenQuestions: args.noteOpenQuestions,
+    auditResultId: args.auditResultId,
+    auditReviewedArtifactRefs: args.auditReviewedArtifactRefs,
+    bridgeResultId: args.bridgeResultId,
+    bridgeAuditIds: args.bridgeAuditIds,
+    bridgeReason: args.bridgeReason,
+    reviewScope: args.reviewScope,
+    reviewStage: args.reviewStage,
+    autonomyPolicy: args.autonomyPolicy,
+    programTitle: args.programTitle,
+    programObjective: args.programObjective,
+    programAgenda: args.programAgenda,
+    programEvidenceBacklog: args.programEvidenceBacklog,
+    programApprovalSummary: args.programApprovalSummary,
+    controllerRole: actorRole,
+    workerRole: args.workerRole,
+    packetId,
+    followThroughId,
+    approvedByRole: actorRole,
+    allowedStepType: args.allowedStepType ?? "refresh-research-brief"
+  });
+  const workerRole = ROLE_IDS.includes(args.workerRole) ? args.workerRole : null;
+  if (workerRole && args.assignedRole && args.assignedRole !== workerRole) {
+    throw new Error(`materializeGuidancePacket requires assignedRole to match workerRole ${workerRole} when a role envelope is provided.`);
+  }
+  const packet = normalizePacket({
+    id: packetId,
+    sourceType: "materialized-guidance",
+    sourceId,
+    title: args.title ?? intent.title ?? source.title,
+    summary: args.summary ?? intent.summary ?? source.summary ?? "",
+    phase: args.phase ?? board.currentPhase,
+    phaseContextId: `phase-${args.phase ?? board.currentPhase}`,
+    status: args.status ?? "pending",
+    lifecycleStatus: args.lifecycleStatus ?? "waiting",
+    active: true,
+    assignedRole: workerRole ?? (ROLE_IDS.includes(args.assignedRole) ? args.assignedRole : intent.assignedRole),
+    currentFocus: args.currentFocus ?? args.title ?? intent.title ?? source.title,
+    nextAction: args.nextAction ?? intent.nextAction,
+    dependencies: normalizeStringArray(args.dependencies),
+    evidenceLinks: uniqueSorted([
+      source.sourceArtifactPath,
+      ...(intent.evidenceLinks ?? []),
+      ...normalizeStringArray(args.evidenceLinks)
+    ]),
+    outputPaths: uniqueSorted([
+      ARTIFACT_PATHS.taskPacketsIndex,
+      ...normalizeStringArray(args.outputPaths)
+    ]),
+    questions: [],
+    decisions: [{
+      id: `materialized-${packetId}`,
+      summary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packetId}.`,
+      rationale: args.rationale ?? source.summary ?? "",
+      origin: source.sourceArtifactPath,
+      recordedAt: timestamp
+    }],
+    lineage: {
+      boardPhase: board.currentPhase,
+      intentType: board.intentType,
+      currentVersionId: board.versionLineage?.currentVersionId ?? null,
+      activeComparisonTargets: normalizeStringArray(board.activeComparisonTargets),
+      materializedFrom: {
+        sourceType,
+        sourceId,
+        sourceArtifactPath: source.sourceArtifactPath,
+        sourceTitle: source.title,
+        selectedConversionPathKey: intent.selectedConversionPathKey
+      }
+      ,
+      programId: programLinkage?.programId ?? null,
+      programRunId: programLinkage?.programRunId ?? null,
+      approvalId: programLinkage?.approvalId ?? null
+    },
+    continuationState: {
+      status: "ready-to-resume",
+      lastCheckpoint: args.decisionSummary ?? `Materialized from ${sourceType}:${sourceId}.`,
+      updatedAt: timestamp
+    },
+    autonomyEnvelope: workerRole
+      ? {
+          controllerRole: actorRole,
+          workerRole,
+          scopeType: "packet-local",
+          explicitOnly: true,
+          requiredReadPaths: [],
+          localRules: [
+            "Planner remains the supervising controller for this bounded autonomous packet step.",
+            "The runtime may advance only this packet and its matched follow-through/runtime audit surfaces in one invocation."
+          ]
+        }
+      : null,
+    updatedAt: timestamp,
+    materialization: {
+      pathType: "guidance-to-packet",
+      sourceType,
+      sourceId,
+      sourceArtifactPath: source.sourceArtifactPath,
+      sourceFingerprint: source.sourceFingerprint,
+      sourceTitle: intent.sourceTitle ?? source.title,
+      sourceSummary: intent.sourceSummary ?? source.summary,
+      remediationPackIds: uniqueSorted(intent.remediationPackIds ?? []),
+      executionBridgeCandidateIds: uniqueSorted(intent.executionBridgeCandidateIds ?? []),
+      followThroughId,
+      selectedConversionPathKey: intent.selectedConversionPathKey,
+      acceptanceCriteria: uniqueSorted(intent.acceptanceCriteria ?? []),
+      workspacePointers: uniqueSorted(intent.workspacePointers ?? []),
+      programId: programLinkage?.programId ?? null,
+      programRunId: programLinkage?.programRunId ?? null,
+      approvalId: programLinkage?.approvalId ?? null,
+      createdAt: timestamp,
+      createdByRole: actorRole,
+      decisionSummary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packetId}.`
+    }
+  });
+
+  const nextPacketIndex = {
+    ...packetIndex,
+    items: [...(packetIndex.items ?? []).filter((item) => item.id !== packet.id), packet],
+    updatedAt: timestamp
+  };
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, nextPacketIndex);
+  writeJson(root, packet.packetPath, packet);
+
+  const followThrough = recordOperatorFollowThrough(root, {
+    id: followThroughId,
+    sourceType,
+    sourceId,
+    actorRole,
+    workerRole,
+    status: "accepted-for-execution",
+    decisionSummary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packet.id}.`,
+    rationale: args.rationale ?? "",
+    selectedConversionPathKey: intent.selectedConversionPathKey,
+    linkedTargetArtifact: packet.packetPath,
+    linkedTargetId: packet.id,
+    programId: programLinkage?.programId ?? null,
+    programRunId: programLinkage?.programRunId ?? null,
+    approvalId: programLinkage?.approvalId ?? null,
+    executeBy: args.executeBy,
+    reviewAfter: args.reviewAfter
+  });
+
+  const materializedPacket = readJson(root, packet.packetPath, null);
+  return {
+    status: "materialized",
+    packetId: packet.id,
+    packetPath: packet.packetPath,
+    packetContextPath: packet.packetContextPath,
+    summary: materializedPacket?.summary ?? packet.summary,
+    sourceType,
+    sourceId,
+    followThroughId,
+    artifactPaths: [packet.packetPath, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.metaOperatorFollowThrough, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.navigationReport],
+    packet: materializedPacket
+  };
+}
+
 export function recordOperatorFollowThrough(root, args = {}) {
   assertGovernanceMutationRegistered("record-operator-follow-through", "exempt");
   const meta = queryMetaOptimize(root);
   const sourceType = args.sourceType;
   const sourceId = args.sourceId;
+  const existing = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const recordId = args.id ?? `follow-through-${slugify(`${sourceType}-${sourceId}`)}`;
+  const previousRecord = existing.items.find((item) => item.id === recordId) ?? null;
   const sourceCatalog = buildFollowThroughSourceCatalog(meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates);
-  const source = sourceCatalog.get(`${sourceType}:${sourceId}`);
+  const source = sourceCatalog.get(`${sourceType}:${sourceId}`) ?? (previousRecord && previousRecord.sourceType === sourceType && previousRecord.sourceId === sourceId
+    ? {
+        sourceArtifactPath: previousRecord.sourceArtifactPath,
+      sourceFingerprint: previousRecord.sourceFingerprint,
+      title: previousRecord.sourceTitle,
+      summary: previousRecord.sourceSummary,
+      allowedActorRoles: uniqueSorted([previousRecord.actorRole, previousRecord.workerRole, args.actorRole, args.workerRole].filter(Boolean))
+      }
+    : null);
   if (!source) {
     throw new Error(`Unknown follow-through source: ${sourceType}:${sourceId}`);
   }
-  const status = validateFollowThroughPayload(args);
+  const status = validateFollowThroughPayload(root, args);
   validateFollowThroughActor(root, args, source);
-  const existing = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
   const existingTransitions = normalizeMetaOperatorFollowThroughTransitionsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions, createMetaOperatorFollowThroughTransitionsIndex));
-  const recordId = args.id ?? `follow-through-${slugify(`${sourceType}-${sourceId}`)}`;
-  const previousRecord = existing.items.find((item) => item.id === recordId) ?? null;
   const items = existing.items.filter((item) => item.id !== recordId);
   const nextRecord = {
     id: recordId,
@@ -4895,6 +6865,10 @@ export function recordOperatorFollowThrough(root, args = {}) {
     selectedConversionPathKey: args.selectedConversionPathKey ?? null,
     linkedTargetArtifact: args.linkedTargetArtifact ?? null,
     linkedTargetId: args.linkedTargetId ?? null,
+    programId: args.programId ?? previousRecord?.programId ?? null,
+    programRunId: args.programRunId ?? previousRecord?.programRunId ?? null,
+    approvalId: args.approvalId ?? previousRecord?.approvalId ?? null,
+    plannedTarget: Boolean(args.plannedTarget),
     deferUntil: args.deferUntil ?? null,
     executeBy: args.executeBy ?? null,
     executionStartedAt: args.executionStartedAt ?? null,
@@ -4903,6 +6877,8 @@ export function recordOperatorFollowThrough(root, args = {}) {
     closureReason: args.closureReason ?? null,
     closureArtifactPaths: normalizeStringArray(args.closureArtifactPaths),
     actorRole: args.actorRole,
+    workerRole: ROLE_IDS.includes(args.workerRole) ? args.workerRole : previousRecord?.workerRole ?? null,
+    retryState: normalizeFollowThroughRetryState(args.retryState ?? previousRecord?.retryState),
     policyOverrideReason: args.policyOverrideReason ?? "",
     policyOverrideEvidencePaths: normalizeStringArray(args.policyOverrideEvidencePaths),
     recordedAt: args.recordedAt ?? nowIso(),

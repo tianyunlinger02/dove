@@ -218,12 +218,12 @@ function assertNoBlockingFollowThrough(root, currentPhase, nextPhase, currentAss
   const items = Array.isArray(followThrough.items) ? followThrough.items : [];
   const actionRequired = items.filter((item) => {
     const status = item.status;
-    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "deferred", "accepted-risk", "closed", "superseded"].includes(status);
+    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status);
     const dueDeferred = status === "deferred" && item.deferUntil && String(item.deferUntil) <= nowIso();
-    const targetBound = !["accepted-for-execution", "closed"].includes(status)
+    const targetBound = !["accepted-for-execution", "executing", "closed"].includes(status)
       ? true
       : targetArtifactContainsId(root, item.linkedTargetArtifact, item.linkedTargetId);
-    const acceptedExecutionOpen = status === "accepted-for-execution";
+    const acceptedExecutionOpen = status === "accepted-for-execution" || status === "executing";
     return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen;
   }).map((item) => ({
     id: item.id,
@@ -1005,6 +1005,10 @@ export function runExperimentAudit(root, args = {}) {
     actionLabel: "Running an experiment audit",
     expectedRole: "experiment-planner"
   });
+  return persistExperimentAudit(root, args);
+}
+
+export function persistExperimentAudit(root, args = {}) {
   const resultsIndex = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
@@ -1120,6 +1124,10 @@ export function bridgeExperimentResultToClaim(root, args = {}) {
     actionLabel: "Bridging an experiment result to a claim",
     expectedRole: "experiment-planner"
   });
+  return persistExperimentResultClaimBridge(root, args);
+}
+
+export function persistExperimentResultClaimBridge(root, args = {}) {
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const resultsIndex = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
   const auditsIndex = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
@@ -1401,6 +1409,10 @@ export function normalizeRebuttalIssues(root, args = {}) {
     actionLabel: "Normalizing rebuttal issues",
     expectedRole: "reviewer"
   });
+  return persistRebuttalIssues(root, args);
+}
+
+export function persistRebuttalIssues(root, args = {}) {
   const issuesIndex = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   const provided = Array.isArray(args.issues) ? args.issues.map(normalizeIssue) : [];
   const merged = new Map((issuesIndex.items ?? []).map((issue, index) => {
@@ -1413,26 +1425,30 @@ export function normalizeRebuttalIssues(root, args = {}) {
   const items = Array.from(merged.values()).sort((left, right) => left.id.localeCompare(right.id));
   const next = { version: 1, items, updatedAt: nowIso() };
   writeJson(root, ARTIFACT_PATHS.rebuttalIssues, next);
-  upsertOrchestrationBoard(root, {
-    phase: "rebuttal",
-    assignedRole: "rebuttal-lead",
-    intentType: "respond",
-    currentFocus: items.length > 0 ? items[0].summary : "Prepare the rebuttal strategy.",
-    nextAction: "Turn issues into strategy and response drafts without over-claiming.",
-    rebuttalIssueIds: items.map((issue) => issue.id),
-    evidenceLinks: Array.from(new Set(items.flatMap((issue) => issue.evidenceLinks))),
-    continuationState: {
-      status: items.some((issue) => issue.status !== "resolved") ? "in-progress" : "ready-to-resume",
-      lastCheckpoint: `Normalized ${items.length} rebuttal issues.`,
-      checkpointHistory: [{ summary: `Normalized ${items.length} rebuttal issues.`, recordedAt: nowIso() }]
-    },
-    reviewRequiredBeforeFinalize: true
-  });
-  refreshDurableSurfaces(root, {
-    type: "normalize-rebuttal-issues",
-    summary: `Normalized ${items.length} rebuttal issues.`,
-    artifactPaths: [ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.navigationReport]
-  });
+  if (!args.skipBoardUpdate) {
+    upsertOrchestrationBoard(root, {
+      phase: "rebuttal",
+      assignedRole: "rebuttal-lead",
+      intentType: "respond",
+      currentFocus: items.length > 0 ? items[0].summary : "Prepare the rebuttal strategy.",
+      nextAction: "Turn issues into strategy and response drafts without over-claiming.",
+      rebuttalIssueIds: items.map((issue) => issue.id),
+      evidenceLinks: Array.from(new Set(items.flatMap((issue) => issue.evidenceLinks))),
+      continuationState: {
+        status: items.some((issue) => issue.status !== "resolved") ? "in-progress" : "ready-to-resume",
+        lastCheckpoint: `Normalized ${items.length} rebuttal issues.`,
+        checkpointHistory: [{ summary: `Normalized ${items.length} rebuttal issues.`, recordedAt: nowIso() }]
+      },
+      reviewRequiredBeforeFinalize: true
+    });
+  }
+  if (!args.skipRefreshDurableSurfaces) {
+    refreshDurableSurfaces(root, {
+      type: "normalize-rebuttal-issues",
+      summary: `Normalized ${items.length} rebuttal issues.`,
+      artifactPaths: [ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.navigationReport]
+    });
+  }
   return next;
 }
 

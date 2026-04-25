@@ -2,7 +2,7 @@ import { ARTIFACT_PATHS } from "./schema.mjs";
 import { evaluateFigurePipeline } from "./artifacts.mjs";
 import { evaluateEvidence } from "./evidence.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
-import { assertRoleBoundMutation, loadBoard, normalizeRebuttalIssues, upsertOrchestrationBoard } from "./orchestration.mjs";
+import { assertRoleBoundMutation, loadBoard, normalizeRebuttalIssues, persistRebuttalIssues, upsertOrchestrationBoard } from "./orchestration.mjs";
 import { appendText, assertGovernanceMutationRegistered, assertFollowThroughReady, listDraftFiles, loadState, nowIso, readJson, saveState, writeJson, writeText } from "./workspace.mjs";
 
 const UNRESOLVED_CONCERN_STATUSES = new Set(["open", "awaiting-author-response", "author-response-submitted", "escalated", "contested"]);
@@ -251,6 +251,10 @@ export function appendReviewLog(root, args = {}) {
     actionLabel: "Appending a review log entry",
     expectedRole: "reviewer"
   });
+  return persistReviewLog(root, args);
+}
+
+export function persistReviewLog(root, args = {}) {
   const timestamp = args.timestamp ?? nowIso();
   const entry = {
     timestamp,
@@ -365,34 +369,38 @@ export function appendReviewLog(root, args = {}) {
       unresolvedConcernIds: concernLedger.unresolvedConcernIds
     }
   });
-  upsertOrchestrationBoard(root, {
-    phase: "review",
-    assignedRole: "reviewer",
-    intentType: entry.verdict === "coherent" ? "review" : "repair",
-    currentFocus: entry.summary,
-    nextAction: entry.verdict === "coherent"
-      ? "Refresh downstream artifacts before finalization claims."
-      : "Turn the highest-severity review findings into concrete revision work.",
-    reviewRequiredBeforeFinalize: entry.reviewRequiredBeforeFinalize,
-    blockers: entry.actionItems.map((item, index) => ({
-      id: `review-blocker-${index + 1}`,
-      summary: item,
-      status: entry.verdict === "coherent" ? "resolved" : "open",
+  if (!args.skipBoardUpdate) {
+    upsertOrchestrationBoard(root, {
+      phase: "review",
       assignedRole: "reviewer",
-      currentFocus: item,
-      nextAction: "Resolve the review blocker and re-run review."
-    })),
-    continuationState: {
-      status: entry.verdict === "coherent" ? "ready-to-resume" : "blocked",
-      lastCheckpoint: `Review verdict recorded: ${entry.verdict}.`,
-      checkpointHistory: [{ summary: `Review verdict recorded: ${entry.verdict}.`, recordedAt: timestamp }]
-    }
-  });
-  refreshDurableSurfaces(root, {
-    type: "append-review-log",
-    summary: `Recorded review verdict ${entry.verdict}.`,
-    artifactPaths: [ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.revisionPlan]
-  });
+      intentType: entry.verdict === "coherent" ? "review" : "repair",
+      currentFocus: entry.summary,
+      nextAction: entry.verdict === "coherent"
+        ? "Refresh downstream artifacts before finalization claims."
+        : "Turn the highest-severity review findings into concrete revision work.",
+      reviewRequiredBeforeFinalize: entry.reviewRequiredBeforeFinalize,
+      blockers: entry.actionItems.map((item, index) => ({
+        id: `review-blocker-${index + 1}`,
+        summary: item,
+        status: entry.verdict === "coherent" ? "resolved" : "open",
+        assignedRole: "reviewer",
+        currentFocus: item,
+        nextAction: "Resolve the review blocker and re-run review."
+      })),
+      continuationState: {
+        status: entry.verdict === "coherent" ? "ready-to-resume" : "blocked",
+        lastCheckpoint: `Review verdict recorded: ${entry.verdict}.`,
+        checkpointHistory: [{ summary: `Review verdict recorded: ${entry.verdict}.`, recordedAt: timestamp }]
+      }
+    });
+  }
+  if (!args.skipRefreshDurableSurfaces) {
+    refreshDurableSurfaces(root, {
+      type: "append-review-log",
+      summary: `Recorded review verdict ${entry.verdict}.`,
+      artifactPaths: [ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.revisionPlan]
+    });
+  }
   return entry;
 }
 
@@ -456,6 +464,10 @@ export function runReviewLoop(root, args = {}) {
     actionLabel: "Running the review loop",
     expectedRole: "reviewer"
   });
+  return persistReviewLoop(root, args);
+}
+
+export function persistReviewLoop(root, args = {}) {
   const state = loadState(root);
   const board = loadBoard(root);
   const evidence = evaluateEvidence(root);
@@ -540,7 +552,7 @@ export function runReviewLoop(root, args = {}) {
       ? "needs-revision"
       : "coherent";
 
-  const entry = appendReviewLog(root, {
+  const entry = persistReviewLog(root, {
     stage: args.stage ?? "review-loop",
     scope: args.scope ?? "current paper pipeline",
     verdict,
@@ -549,10 +561,12 @@ export function runReviewLoop(root, args = {}) {
       : "The current paper artifacts need another revision pass.",
     findings,
     actionItems,
-    reviewRequiredBeforeFinalize: true
+    reviewRequiredBeforeFinalize: true,
+    skipBoardUpdate: Boolean(args.skipBoardUpdate),
+    skipRefreshDurableSurfaces: Boolean(args.skipRefreshDurableSurfaces)
   });
 
-  normalizeRebuttalIssues(root, {
+  persistRebuttalIssues(root, {
     issues: findings.map((finding, index) => ({
       id: `review-issue-${index + 1}`,
       reviewer: args.reviewer ?? "review-loop",
@@ -563,7 +577,9 @@ export function runReviewLoop(root, args = {}) {
       claimIds: finding.claimIds,
       experimentIds: finding.experimentIds,
       responseDirection: finding.severity === "high" ? "fix" : "clarify"
-    }))
+    })),
+    skipBoardUpdate: Boolean(args.skipRebuttalBoardUpdate),
+    skipRefreshDurableSurfaces: Boolean(args.skipRefreshDurableSurfaces)
   });
 
   const latestAuditIds = (auditIndex.items ?? []).slice(-5).map((item) => item.id);

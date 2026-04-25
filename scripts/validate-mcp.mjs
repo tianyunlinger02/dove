@@ -103,15 +103,20 @@ async function main() {
     "create_version_snapshot",
     "ensure_workspace",
     "init_project",
+    "issue_program_approval",
     "list_artifacts",
+    "materialize_guidance_packet",
     "normalize_rebuttal_issues",
+    "plan_campaign",
     "query_boundary_report",
+    "query_campaigns",
     "query_decisions",
     "query_governance_coverage_report",
     "query_lineage",
     "query_meta_optimize",
     "query_open_questions",
     "query_operator_follow_through",
+    "query_program_approvals",
     "query_task_graph",
     "query_workspace_index",
     "read_action_context_bundle",
@@ -123,6 +128,9 @@ async function main() {
     "record_operator_follow_through",
     "refresh_wiki",
     "register_source",
+    "revoke_program_approval",
+    "run_autonomy_foreground",
+    "run_autonomy_once",
     "run_experiment_audit",
     "run_review_loop",
     "set_section_status",
@@ -172,6 +180,19 @@ async function main() {
   assert.equal(metaOptimize.longHorizon.proposalOnly, true);
   assert.equal(metaOptimize.reportPath, ".paper/meta/LATEST_OPTIMIZER_REPORT.md");
   assert.equal(metaOptimize.longHorizonPath, ".paper/meta/long-horizon-memory.json");
+
+  const approvals = extractJson(await call("tools/call", {
+    name: "query_program_approvals",
+    arguments: {}
+  }));
+  assert.equal(approvals.status, "ok");
+  assert.equal(approvals.summary.approvalCount, 0);
+
+  const foreground = extractJson(await call("tools/call", {
+    name: "run_autonomy_foreground",
+    arguments: {}
+  }));
+  assert.equal(foreground.stepCount >= 1, true);
 
   extractJson(await call("tools/call", {
     name: "append_handoff",
@@ -548,26 +569,33 @@ async function main() {
   }));
   assert.equal(reviewerManifest.roleId, "reviewer");
 
-  extractJson(await call("tools/call", {
-    name: "upsert_orchestration_board",
-    arguments: {
-      phase: "research",
-      assignedRole: "researcher",
-      intentType: "advance-paper",
-      currentFocus: "Resolve queue-discipline debt in a durable way.",
-      nextAction: "Inspect the remediation frontier before creating new work.",
-      tasks: [{
-        id: "validator-stale-task",
-        title: "Validator stale task",
-        assignedRole: "researcher",
-        status: "in-progress",
-        lifecycleStatus: "stale",
-        nextAction: "Move this stale task into explicit remediation handling.",
-        evidenceLinks: [],
-        outputPaths: []
-      }]
-    }
-  }));
+  fs.writeFileSync(path.join(tempWorkspace, ".paper", "reviews", "concerns.json"), `${JSON.stringify({
+    version: 2,
+    items: [{
+      id: "validator-materialize-gap",
+      summary: "Need a governed proposal-to-packet bridge.",
+      severity: "high",
+      status: "open",
+      responseOwnerRole: "planner",
+      recurrenceCount: 2,
+      linkedArtifactPaths: [".paper/reviews/log.md"],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  }, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(tempWorkspace, ".paper", "reviews", "REVIEW_STATE.json"), `${JSON.stringify({
+    version: 3,
+    lastVerdict: "needs-work",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close the validator materialization gap."],
+    unresolvedConcernIds: ["validator-materialize-gap"],
+    escalatedConcernIds: [],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 1,
+    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
+  }, null, 2)}\n`, "utf8");
 
   const refreshedMetaOptimize = extractJson(await call("tools/call", {
     name: "query_meta_optimize",
@@ -580,23 +608,30 @@ async function main() {
   assert.equal(governanceCoverage.status, "ok");
   assert.equal(Array.isArray(governanceCoverage.guardedIds), true);
   const topPack = refreshedMetaOptimize.remediationPacks.packs[0];
-  const followThroughActorRole = topPack.packetPointers?.[0]?.assignedRole ?? topPack.conversionHints?.[0]?.assignedRole ?? "planner";
-  const recordedFollowThrough = extractJson(await call("tools/call", {
-    name: "record_operator_follow_through",
+  const packetMaterializationPath = topPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet") ?? null;
+  const followThroughActorRole = packetMaterializationPath?.assignedRole ?? topPack.packetPointers?.[0]?.assignedRole ?? topPack.conversionHints?.[0]?.assignedRole ?? "planner";
+  const materializedPacket = extractJson(await call("tools/call", {
+    name: "materialize_guidance_packet",
     arguments: {
       sourceType: "remediation-pack",
       sourceId: topPack.id,
-      status: "accepted-for-execution",
       actorRole: followThroughActorRole,
-      decisionSummary: "Take the top remediation pack into manual execution.",
-      selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-      linkedTargetArtifact: ".paper/task-packets/index.json",
-      linkedTargetId: topPack.rankedConversionPaths?.[0]?.targetId ?? "task-validator-follow-through",
+      decisionSummary: "Materialize the top remediation pack into a real task packet.",
+      selectedConversionPathKey: packetMaterializationPath?.deterministicKey ?? null,
+      packetId: packetMaterializationPath?.targetId ?? "task-validator-follow-through",
       executeBy: "2099-01-01T00:00:00.000Z",
       reviewAfter: "2099-01-01T12:00:00.000Z"
     }
   }));
-  assert.equal(recordedFollowThrough.summary.acceptedForExecutionCount, 1);
+  assert.equal(materializedPacket.status, "materialized");
+  assert.equal(typeof materializedPacket.packetId, "string");
+
+  const autonomyRun = extractJson(await call("tools/call", {
+    name: "run_autonomy_once",
+    arguments: { actorRole: "planner" }
+  }));
+  assert.equal(autonomyRun.status, "completed");
+  assert.equal(autonomyRun.packetId, materializedPacket.packetId);
 
   const artifactManifest = extractJson(await call("tools/call", {
     name: "read_artifact_context_manifest",
@@ -606,6 +641,10 @@ async function main() {
 
   const journalSummary = extractJson(await call("tools/call", { name: "summarize_session_journal", arguments: {} }));
   assert.equal(journalSummary.summaryPath, ".paper/sessions/LATEST_SUMMARY.md");
+
+  const finalWorkspaceIndex = extractJson(await call("tools/call", { name: "query_workspace_index", arguments: {} }));
+  assert.equal(finalWorkspaceIndex.runtime.lastStatus, "completed");
+  assert.equal(finalWorkspaceIndex.runtime.lastSelectedPacketId, materializedPacket.packetId);
 
   extractJson(await call("tools/call", { name: "sync_checklist", arguments: {} }));
 
