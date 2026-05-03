@@ -2,29 +2,27 @@
 
 ## Mature delivery model
 
-`paper_factory` is meant to be packaged honestly as an OpenCode workflow pack.
+`paper_factory` is meant to be packaged honestly as a host-neutral academic workflow pack with optional host adapters.
 
 That means the durable product surface is:
 
-- `.opencode/commands/`
-- `.opencode/skills/`
-- `.opencode.json`
-- `.paper/` starter artifacts
-- `bin/paper-factory.mjs`
+- neutral CLI/MCP/core files: `bin/`, `docs/`, `mcp/`, `scripts/`, `src/`, and `README.md`
+- default OpenCode adapter files: `.opencode/` and `.opencode.json`
+- optional adapter files for Claude Code, Codex, Cursor, and shared agent-skill hosts
+- `.paper/` workspace artifacts bootstrapped at install time, not shipped as a package snapshot
 
 ## Managed vs user-owned boundary
 
 The packaged code surface is managed:
 
-- `.opencode/`
-- `.opencode.json`
-- `bin/`, `docs/`, `mcp/`, `scripts/`, `src/`, `README.md`
+- neutral core: `bin/`, `docs/`, `mcp/`, `scripts/`, `src/`, `README.md`
+- host adapters: `.opencode/`, `.opencode.json`, `.claude/commands`, `.claude/agents`, `.codex/agents`, `.codex/skills`, `.codex/config.toml`, `.cursor/commands`, `.agents/skills`, `AGENTS.md`
 
 The project-local `.paper/` workspace is user-owned state. The installer may create missing starter artifacts, but pack updates should not overwrite evolving sources, notes, drafts, experiments, rebuttal issues, task packets, role manifests, or snapshots.
 
 ## Why this is not pretending to be more than it is
 
-OpenCode can support richer features, but the heart of `paper_factory` is intentionally file-first and portable. The package should not claim hidden runtime powers that only a host-specific harness can provide.
+Host adapters can expose richer native ergonomics, but the heart of `paper_factory` is intentionally file-first and portable. The package should not claim hidden runtime powers that only a host-specific harness can provide.
 
 ## Dry-run packaging
 
@@ -32,4 +30,4 @@ OpenCode can support richer features, but the heart of `paper_factory` is intent
 npm pack --dry-run
 ```
 
-This should include the command pack, skill pack, `.paper/` starter artifacts, the MCP entrypoint, and the CLI installer.
+This should include the neutral core, safe adapter surfaces, the MCP entrypoint, and the CLI installer. It should not include `.paper/` runtime snapshots, local reference repos, `node_modules`, `.env*`, `*.local.json`, or host-local settings.

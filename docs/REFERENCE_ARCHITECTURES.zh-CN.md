@@ -26,10 +26,10 @@
 
 ### 1.1 `paper_factory` 不是一个单体插件，而是四层 workflow pack
 
-当前 `paper_factory` 是一个 **OpenCode-native、file-first、board-first** 的学术论文工作流包。它的系统结构可以分成四层：
+当前 `paper_factory` 是一个 **host-neutral、file-first、board-first** 的学术论文工作流包，OpenCode 是默认宿主 adapter，而不是唯一底座。它的系统结构可以分成四层：
 
-1. **命令层**：`.opencode/commands/*`
-2. **技能层**：`.opencode/skills/*`
+1. **宿主 adapter 层**：`.opencode/*`、`.claude/*`、`.codex/*`、`.cursor/*`、`.agents/*`
+2. **中立 CLI/MCP/core 层**：`bin/`、`mcp/`、`scripts/`、`src/`
 3. **确定性工具层**：`src/mcp/*`
 4. **持久化工件层**：`.paper/*`
 
@@ -464,7 +464,7 @@ AutoFigure-Edit 是一个**完整的图形生成与编辑系统**，它的系统
 - **ARIS**：学术研究方法学系统
 - **Trellis**：长期工作台 / task operating system 思维
 - **AutoFigure-Edit**：图形流水线与中间工件系统
-- **paper_factory**：把上面这些可迁移优点压缩进一个 OpenCode-native、file-first 的学术论文 workflow pack
+- **paper_factory**：把上面这些可迁移优点压缩进一个 host-neutral、file-first、带可选多宿主 adapter 的学术论文 workflow pack
 
 ---
 

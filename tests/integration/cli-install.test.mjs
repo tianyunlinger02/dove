@@ -29,6 +29,45 @@ test("CLI install copies the workflow pack into a target workspace", () => {
   assert.equal(Object.hasOwn(config, "$schema"), false);
 });
 
+test("CLI install can install optional host adapters without local unsafe files", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-install-hosts-"));
+  const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude,cursor", "--host", "agents"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.deepEqual(payload.hosts, ["claude", "cursor", "agents"]);
+  assert.ok(fs.existsSync(path.join(target, ".claude", "commands")));
+  assert.ok(fs.existsSync(path.join(target, ".claude", "agents")));
+  assert.ok(fs.existsSync(path.join(target, ".cursor", "commands")));
+  assert.ok(fs.existsSync(path.join(target, ".agents", "skills")));
+  assert.ok(fs.existsSync(path.join(target, "AGENTS.md")));
+  assert.equal(fs.existsSync(path.join(target, ".claude", "settings.local.json")), false);
+  assert.equal(fs.existsSync(path.join(target, ".opencode", "node_modules")), false);
+});
+
+test("CLI install all host adapters skips unsafe local artifacts", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-install-all-hosts-"));
+  const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "all"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.deepEqual(payload.hosts, ["opencode", "claude", "codex", "cursor", "agents"]);
+  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "paper.pipeline.md")));
+  assert.ok(fs.existsSync(path.join(target, ".claude", "commands")));
+  assert.ok(fs.existsSync(path.join(target, ".codex", "agents")));
+  assert.ok(fs.existsSync(path.join(target, ".codex", "config.toml")));
+  assert.ok(fs.existsSync(path.join(target, ".cursor", "commands")));
+  assert.ok(fs.existsSync(path.join(target, ".agents", "skills")));
+  assert.equal(fs.existsSync(path.join(target, ".opencode", "node_modules")), false);
+  assert.equal(fs.existsSync(path.join(target, ".claude", "settings.local.json")), false);
+});
+
 test("CLI sync preserves user-owned .paper workspace state", () => {
   const target = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-sync-"));
   spawnSync("node", [CLI, "install", target, "--force"], {
@@ -57,6 +96,25 @@ test("CLI doctor returns non-zero for unhealthy workspaces", () => {
   });
 
   assert.equal(result.status, 1, result.stdout);
+});
+
+test("CLI doctor reports installed host adapters for multi-host workspaces", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-doctor-hosts-"));
+  spawnSync("node", [CLI, "install", target, "--force", "--host", "claude,cursor"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  const result = spawnSync("node", [CLI, "doctor", target], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.deepEqual(payload.hostAdapters, ["claude", "cursor"]);
+  assert.ok(payload.checks.some((check) => check.check === "host-adapter:claude" && check.ok));
+  assert.ok(payload.checks.some((check) => check.check === "host-adapter:cursor" && check.ok));
 });
 
 test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy workspaces", () => {

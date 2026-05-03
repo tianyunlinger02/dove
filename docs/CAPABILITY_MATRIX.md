@@ -12,7 +12,7 @@ This file turns the phrase â€œabsorb the advantages of oh-my-openagent and ARISâ
 
 | Advantage | Status | Where it lives | Notes |
 |---|---|---|---|
-| Packaged workflow surface | Implemented | `.opencode/commands`, `.opencode/skills` | OpenCode-native command + skill pack |
+| Packaged workflow surface | Implemented | neutral core + optional host adapters | OpenCode remains the default adapter; Claude Code, Codex, Cursor, and shared agent-skill adapter surfaces are installable |
 | Installation ergonomics | Implemented | `bin/paper-factory.mjs` | `install`, `sync`, `doctor` |
 | Health checks / guardrails | Implemented | `bin/paper-factory.mjs`, `scripts/doctor-mcp-probe.mjs` | Includes JSON parsing and MCP probe |
 | Deterministic helper layer | Implemented | `src/mcp/*` | MCP provides state mutation tools |
@@ -26,8 +26,8 @@ This file turns the phrase â€œabsorb the advantages of oh-my-openagent and ARISâ
 | Managed-vs-user-owned update boundary | Implemented | `bin/paper-factory.mjs`, `.paper/workflow-pack/boundaries.json` | Install/sync bootstrap `.paper` safely instead of overwriting user state |
 | Query/navigation workflow UX | Implemented | `paper.task-graph`, `paper.open-questions`, `paper.decisions`, `paper.lineage`, MCP query tools | Users can inspect graph/questions/decisions/lineage directly |
 | Explicit proposal-to-work bridge | Implemented | `paper.materialize`, `materialize_guidance_packet`, `.paper/task-packets/*`, `.paper/meta/operator-follow-through.json` | Accepted remediation guidance can be materialized into one real durable task packet through an explicit governed path |
-| Composable workflow packaging | Implemented | command/skill split + `.paper` artifacts | Lifecycle phases are exposed as honest commands |
-| Host-specific deep hook system | Deferred | N/A | OpenCode-native pack avoids pretending unsupported host hooks exist |
+| Composable workflow packaging | Implemented | command/skill/adapter split + `.paper` artifacts | Lifecycle phases are exposed through host adapters over the same file-backed core |
+| Host-specific deep hook system | Deferred | N/A | Adapter surfaces avoid pretending unsupported host hooks exist |
 | Hook-heavy subagent interception | Deferred | N/A | Trellis-style host interception is intentionally out of scope |
 
 ## ARIS-style academic workflow strengths
@@ -55,6 +55,6 @@ This file turns the phrase â€œabsorb the advantages of oh-my-openagent and ARISâ
 
 The current `paper_factory` release is intended to be described as:
 
-> an OpenCode-native, board-first, evidence-aware academic writing workflow pack that absorbs the strongest packaging/orchestration ideas from oh-my-openagent, the strongest durable research/experiment/rebuttal/version ideas from ARIS, and the strongest portable Trellis-style ideas around task packets, role manifests, persistence, safe workflow-pack boundaries, queryable navigation, typed workspace state, experiment audits, and result-to-claim traceability.
+> a host-neutral, board-first, evidence-aware academic writing workflow pack with optional multi-host adapters that absorbs the strongest packaging/orchestration ideas from oh-my-openagent, the strongest durable research/experiment/rebuttal/version ideas from ARIS, and the strongest portable Trellis-style ideas around task packets, role manifests, persistence, safe workflow-pack boundaries, queryable navigation, typed workspace state, experiment audits, and result-to-claim traceability.
 
-It should **not** be described as a full host-level clone of oh-my-openagent, a full system-level clone of ARIS, or a Trellis runtime clone with hidden hooks/schedulers.
+It should **not** be described as a full host-level clone of oh-my-openagent, a full system-level clone of ARIS, an OpenCode-only package, or a Trellis runtime clone with hidden hooks/schedulers.

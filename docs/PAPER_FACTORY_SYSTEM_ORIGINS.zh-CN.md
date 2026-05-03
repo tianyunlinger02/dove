@@ -12,7 +12,7 @@
 本文档坚持两个原则：
 
 1. **只写证据支持的内容**。凡是说“已实现”的地方，都能在当前仓库或参考仓库里找到对应的文件、命令、工件或测试。
-2. **不把“借鉴”写成“等价复刻”**。`paper_factory` 是一个 OpenCode-native、file-first 的学术论文工作流包，不是任何单一参考项目的完整克隆。
+2. **不把“借鉴”写成“等价复刻”**。`paper_factory` 是一个 host-neutral、file-first、带可选多宿主 adapter 的学术论文工作流包，不是任何单一参考项目的完整克隆。
 
 ---
 
@@ -20,10 +20,10 @@
 
 在谈迁移来源之前，先明确当前 `paper_factory` 的系统定位。
 
-从当前仓库看，`paper_factory` 已经被实现为一个 **OpenCode-native 的学术写作工作流包**，核心由四层组成：
+从当前仓库看，`paper_factory` 已经被实现为一个 **host-neutral 的学术写作工作流包**，OpenCode 是默认 adapter，核心由四层组成：
 
-1. **命令层**：`.opencode/commands/*`
-2. **技能层**：`.opencode/skills/*`
+1. **宿主 adapter 层**：`.opencode/*`、`.claude/*`、`.codex/*`、`.cursor/*`、`.agents/*`
+2. **中立 CLI/MCP/core 层**：`bin/`、`mcp/`、`scripts/`、`src/`
 3. **确定性工具层**：`src/mcp/*`
 4. **持久化工件层**：`.paper/*`
 
@@ -94,7 +94,7 @@ OpenCode 对 `paper_factory` 最大的价值，不是某一个具体学术功能
 - `src/mcp/tool-definitions.mjs`
 - `src/mcp/handlers.mjs`
 
-这部分让 `paper_factory` 从一开始就是 **OpenCode-native** 的，而不是“先做一个外部系统，再勉强挂到 OpenCode 上”。
+这部分让 `paper_factory` 一开始就尊重 OpenCode 的真实宿主边界；在多宿主安装改造后，OpenCode 变成默认 adapter，而中立核心继续由 CLI/MCP/core 和 `.paper` 承载。
 
 ---
 
@@ -400,9 +400,9 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 
 ### 7.1 工程侧优势
 
-- OpenCode-native
+- host-neutral core + optional host adapters
 - file-first
-- command / skill / MCP / `.paper` 四层结构清晰
+- adapter / CLI-MCP-core / `.paper` 四层结构清晰
 - install / sync / doctor / dry-run 验证链完整
 
 ### 7.2 学术侧优势
@@ -441,7 +441,7 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 
 当前最准确的描述不是“它像哪个项目”，而是：
 
-> `paper_factory` 是一个以 OpenCode 为宿主、吸收了 oh-my-openagent 的工程化编排优势、ARIS 的学术工作流优势、Trellis 的任务包与上下文管理优势，并参考 AutoFigure-Edit 的图形工件规划思路所构建的 OpenCode-native 学术论文工作流包。
+> `paper_factory` 是一个以中立核心为底座、以 OpenCode 作为默认 adapter、同时支持可选多宿主 adapter 的学术论文工作流包；它吸收了 oh-my-openagent 的工程化编排优势、ARIS 的学术工作流优势、Trellis 的任务包与上下文管理优势，并参考 AutoFigure-Edit 的图形工件规划思路。
 
 ---
 
