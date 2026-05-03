@@ -6,7 +6,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { ensureWorkspace, runAutonomyControlPlaneOnce, runAutonomyForeground } from "../src/core/index.mjs";
+import { ensureWorkspace, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE } from "../src/core/schema.mjs";
 import {
@@ -79,6 +79,7 @@ Usage:
   paper-factory doctor [target]
   paper-factory autonomy-once [target] [--actor-role <role>]
   paper-factory autonomy-foreground [target] [--actor-role <role>] [--max-steps <n>] [--packet-id <id>] [--program-run-id <id>] [--approval-id <id>]
+  paper-factory autonomy-operate [target] [--objective <text> | --source-type <type> --source-id <id>] [--actor-role <role>] [--worker-role <role>] [--max-steps <n>]
 `);
 }
 
@@ -1415,6 +1416,32 @@ if (command === "autonomy-foreground") {
     packetId,
     programRunId,
     approvalId
+  });
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
+}
+
+if (command === "autonomy-operate") {
+  const target = resolveTarget(maybeTarget);
+  const actorRole = readFlagValue(rest, "--actor-role") ?? "planner";
+  const workerRole = readFlagValue(rest, "--worker-role") ?? "researcher";
+  const maxSteps = readFlagValue(rest, "--max-steps");
+  const result = runAutonomyOperate(target, {
+    actorRole,
+    workerRole,
+    maxSteps: maxSteps ? Number(maxSteps) : undefined,
+    objective: readFlagValue(rest, "--objective"),
+    sourceType: readFlagValue(rest, "--source-type"),
+    sourceId: readFlagValue(rest, "--source-id"),
+    packetId: readFlagValue(rest, "--packet-id"),
+    programId: readFlagValue(rest, "--program-id"),
+    programRunId: readFlagValue(rest, "--program-run-id"),
+    approvalId: readFlagValue(rest, "--approval-id"),
+    campaignId: readFlagValue(rest, "--campaign-id"),
+    campaignStepId: readFlagValue(rest, "--campaign-step-id"),
+    executeBy: readFlagValue(rest, "--execute-by"),
+    reviewAfter: readFlagValue(rest, "--review-after"),
+    expiresAt: readFlagValue(rest, "--expires-at")
   });
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
