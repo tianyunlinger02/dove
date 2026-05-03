@@ -412,6 +412,11 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.equal(boundaries.managedArtifacts.workflowBoundaries.revisionId, "schema-v5:bootstrap-only");
   assert.equal(boundaries.managedArtifacts.workspaceIndex.path, ".paper/workspace/index.json");
   assert.deepEqual(boundaries.managedPaths, [".opencode", ".opencode.json", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
+  assert.deepEqual(boundaries.neutralCorePaths, ["README.md", "bin", "docs", "mcp", "scripts", "src"]);
+  assert.deepEqual(boundaries.defaultHostAdapters, ["opencode"]);
+  assert.deepEqual(boundaries.availableHostAdapters, ["opencode", "claude", "codex", "cursor", "agents"]);
+  assert.deepEqual(boundaries.managedHostAdapterPaths.claude, [".claude/commands", ".claude/agents"]);
+  assert.deepEqual(boundaries.managedHostAdapterPaths.agents, [".agents/skills", "AGENTS.md"]);
   assert.deepEqual(boundaries.notes, ["legacy note"]);
 
   assert.equal(workspaceIndex.version, 8);
@@ -4750,7 +4755,7 @@ test("guarded core mutation implementations explicitly call assertFollowThroughR
   }
 });
 
-test("every governance registry entry binds to real command, MCP, and core surfaces", () => {
+test("every governance registry entry binds to real command or MCP surfaces plus core surfaces", () => {
   const registry = [...GOVERNANCE_GUARDED_MUTATIONS, ...GOVERNANCE_EXEMPT_MUTATIONS];
   const toolNames = new Set(toolDefinitions.map((tool) => tool.name));
   const commandDir = path.join(process.cwd(), ".opencode", "commands");
@@ -4758,6 +4763,7 @@ test("every governance registry entry binds to real command, MCP, and core surfa
     fs.readFileSync(path.join(process.cwd(), "src/core/artifacts.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/evidence.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/reviews.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/isolated-review.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/orchestration.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/navigation.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/runtime.mjs"), "utf8")
@@ -4766,9 +4772,13 @@ test("every governance registry entry binds to real command, MCP, and core surfa
   for (const entry of registry) {
     const bindings = entry.surfaceBindings ?? {};
     assert.equal(typeof bindings.coreFunction, "string");
-    assert.equal(typeof bindings.mcpTool, "string");
     assert.equal(Array.isArray(bindings.commandIds), true);
-    assert.equal(toolNames.has(bindings.mcpTool), true, `${entry.id} missing bound MCP tool ${bindings.mcpTool}`);
+    if (bindings.mcpTool) {
+      assert.equal(typeof bindings.mcpTool, "string");
+      assert.equal(toolNames.has(bindings.mcpTool), true, `${entry.id} missing bound MCP tool ${bindings.mcpTool}`);
+    } else {
+      assert.equal(bindings.commandIds.length > 0, true, `${entry.id} without MCP tool must bind at least one command surface`);
+    }
     for (const commandId of bindings.commandIds) {
       assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), true, `${entry.id} missing command surface ${commandId}`);
     }

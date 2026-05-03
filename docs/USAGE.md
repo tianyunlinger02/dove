@@ -72,6 +72,8 @@ Use `project:paper.experiment-plan`, `project:paper.experiment-audit`, and `proj
 
 Use `project:paper.review-loop` to generate a durable review entry and revision plan. The review loop checks unsupported claims, weakly supported claims, citation TODOs, state/draft mismatches, experiment audit flags, and result-to-claim bridge problems.
 
+Use `project:paper.isolated-review` when you want a parallel reviewer session that cannot see the writer/main session's private transcript. The slash command prepares `.paper/reviews/isolated/<run-id>/input.json`, invokes the configured external reviewer command, imports only `handoff.json` and `report.md`, and returns the verdict plus top concerns to the current session.
+
 ### 10. Rebuttal strategy and versioning
 
 Use `project:paper.rebuttal-strategy` to normalize reviewer issues before `project:paper.rebuttal`. Use `project:paper.version-snapshot` and `project:paper.version-compare` to preserve paper evolution honestly.

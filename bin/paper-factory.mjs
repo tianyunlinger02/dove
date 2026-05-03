@@ -6,7 +6,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { ensureWorkspace, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate } from "../src/core/index.mjs";
+import { ensureWorkspace, importIsolatedReview, prepareIsolatedReview, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runIsolatedReview } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE } from "../src/core/schema.mjs";
 import {
@@ -35,6 +35,7 @@ const HOST_ADAPTERS = {
       ".opencode/commands/paper.orchestrate.md",
       ".opencode/commands/paper.pipeline.md",
       ".opencode/commands/paper.experiment-audit.md",
+      ".opencode/commands/paper.isolated-review.md",
       ".opencode/commands/paper.result-bridge.md",
       ".opencode/skills/paper-factory-pipeline/SKILL.md",
       ".opencode/skills/paper-factory-planner/SKILL.md",
@@ -77,6 +78,9 @@ Usage:
   paper-factory install [target] [--force] [--host <opencode|claude|codex|cursor|agents|all>]
   paper-factory sync [target] [--force] [--host <opencode|claude|codex|cursor|agents|all>]
   paper-factory doctor [target]
+  paper-factory isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>]
+  paper-factory isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>]
+  paper-factory isolated-review-import [target] --run-id <id>
   paper-factory autonomy-once [target] [--actor-role <role>]
   paper-factory autonomy-foreground [target] [--actor-role <role>] [--max-steps <n>] [--packet-id <id>] [--program-run-id <id>] [--approval-id <id>]
   paper-factory autonomy-operate [target] [--objective <text> | --source-type <type> --source-id <id>] [--actor-role <role>] [--worker-role <role>] [--max-steps <n>]
@@ -100,6 +104,58 @@ function readFlagValues(args, flags) {
     }
   }
   return values;
+}
+
+function parseCommandArgs(command) {
+  const input = String(command ?? "").trim();
+  if (!input) {
+    return [];
+  }
+  const args = [];
+  let current = "";
+  let quote = null;
+  let escaping = false;
+  for (const char of input) {
+    if (escaping) {
+      current += char;
+      escaping = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (current) {
+        args.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += char;
+  }
+  if (quote) {
+    throw new Error("Reviewer command has an unterminated quote");
+  }
+  if (escaping) {
+    current += "\\";
+  }
+  if (current) {
+    args.push(current);
+  }
+  return args;
 }
 
 function resolveHostAdapters(args = []) {
@@ -170,6 +226,65 @@ function buildInstallPaths(hosts) {
     corePaths: CORE_INSTALL_PATHS,
     hostPaths,
     allPaths: [...CORE_INSTALL_PATHS, ...hostPaths.map((item) => item.relativePath)]
+  };
+}
+
+function collectRepeatedFlagValues(args, flag) {
+  const values = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === flag && index + 1 < args.length) {
+      values.push(args[index + 1]);
+      index += 1;
+    }
+  }
+  return values;
+}
+
+function buildIsolatedReviewArgs(rest = []) {
+  return {
+    runId: readFlagValue(rest, "--run-id"),
+    scope: readFlagValue(rest, "--scope"),
+    instructions: readFlagValue(rest, "--instructions"),
+    mediatorRole: readFlagValue(rest, "--mediator-role"),
+    reviewerRole: readFlagValue(rest, "--reviewer-role"),
+    reviewedArtifactPaths: collectRepeatedFlagValues(rest, "--artifact")
+  };
+}
+
+function invokeIsolatedReviewer(reviewerCommand, prepared, target) {
+  const commandArgs = parseCommandArgs(reviewerCommand);
+  if (commandArgs.length === 0) {
+    throw new Error("isolated-review requires --reviewer-command or PAPER_FACTORY_ISOLATED_REVIEWER_COMMAND");
+  }
+  const [executable, ...baseArgs] = commandArgs;
+  const reviewer = spawnSync(executable, [
+    ...baseArgs,
+    "--input", prepared.inputPath,
+    "--handoff", prepared.handoffPath,
+    "--report", prepared.reportPath,
+    "--run-id", prepared.runId
+  ], {
+    cwd: target,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PAPER_FACTORY_ISOLATED_REVIEW_INPUT: prepared.inputPath,
+      PAPER_FACTORY_ISOLATED_REVIEW_HANDOFF: prepared.handoffPath,
+      PAPER_FACTORY_ISOLATED_REVIEW_REPORT: prepared.reportPath,
+      PAPER_FACTORY_ISOLATED_REVIEW_RUN_ID: prepared.runId,
+      PAPER_FACTORY_ISOLATED_REVIEW_INPUT_SHA256: prepared.inputSha256
+    }
+  });
+  if (reviewer.error) {
+    throw reviewer.error;
+  }
+  if (reviewer.status !== 0) {
+    throw new Error(`isolated reviewer command failed with exit ${reviewer.status}: ${reviewer.stderr || reviewer.stdout || "no output"}`);
+  }
+  return {
+    status: reviewer.status,
+    stdout: reviewer.stdout,
+    stderr: reviewer.stderr
   };
 }
 
@@ -1393,6 +1508,41 @@ if (command === "install" || command === "sync") {
 if (command === "doctor") {
   doctor(resolveTarget(maybeTarget));
   process.exit(process.exitCode ?? 0);
+}
+
+if (command === "isolated-review-prepare") {
+  const target = resolveTarget(maybeTarget);
+  const result = prepareIsolatedReview(target, buildIsolatedReviewArgs(rest));
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
+}
+
+if (command === "isolated-review-import") {
+  const target = resolveTarget(maybeTarget);
+  const runId = readFlagValue(rest, "--run-id");
+  const result = importIsolatedReview(target, {
+    runId,
+    handoffPath: readFlagValue(rest, "--handoff"),
+    reportPath: readFlagValue(rest, "--report")
+  });
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
+}
+
+if (command === "isolated-review") {
+  const target = resolveTarget(maybeTarget);
+  const reviewerCommand = readFlagValue(rest, "--reviewer-command") ?? process.env.PAPER_FACTORY_ISOLATED_REVIEWER_COMMAND;
+  const prepared = runIsolatedReview(target, buildIsolatedReviewArgs(rest));
+  const reviewer = invokeIsolatedReviewer(reviewerCommand, prepared, target);
+  const imported = importIsolatedReview(target, prepared.importArgs);
+  console.log(JSON.stringify({
+    ...imported,
+    status: "completed",
+    runId: prepared.runId,
+    reviewerCommandConfigured: Boolean(reviewerCommand),
+    reviewerExitStatus: reviewer.status
+  }, null, 2));
+  process.exit(0);
 }
 
 if (command === "autonomy-once") {

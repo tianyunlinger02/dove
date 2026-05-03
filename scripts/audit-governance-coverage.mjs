@@ -10,6 +10,7 @@ const coreFiles = [
   "src/core/artifacts.mjs",
   "src/core/evidence.mjs",
   "src/core/reviews.mjs",
+  "src/core/isolated-review.mjs",
   "src/core/orchestration.mjs",
   "src/core/navigation.mjs",
   "src/core/runtime.mjs"

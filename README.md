@@ -19,7 +19,7 @@ The result is not a fake clone of either project. It is an honest host-neutral p
 - a **skill pack** for planner, researcher, reviewer, rebuttal, experiment planning, version analysis, and core workflow discipline
 - an optional **`paper-factory` stdio MCP server** for deterministic state mutations
 - a **CLI installer/doctor** at `bin/paper-factory.mjs`
-- a durable **`.paper/` artifact model** for orchestration, handoffs, research briefs, experiment audits, result-to-claim bridge logs, typed wiki/workspace indexes, rebuttal issues/strategy, version lineage/comparisons, figure artifact contracts, plus the classic paper-writing artifacts
+- a durable **`.paper/` artifact model** for orchestration, handoffs, research briefs, isolated reviewer handoff runs, experiment audits, result-to-claim bridge logs, typed wiki/workspace indexes, rebuttal issues/strategy, version lineage/comparisons, figure artifact contracts, plus the classic paper-writing artifacts
 - durable **task packets, packet/role context manifests, session summaries, and navigation reports** that narrow context without inventing a hidden runtime
 - a proposal-only **meta-optimize / outer-loop layer** that turns repeated repair and review patterns into grouped, ranked, evidence-backed recommendations plus longer-horizon workflow memory under `.paper/meta/`
 - stronger **artifact-local and action-local context bundles** under `.paper/context/artifacts/` and `.paper/context/actions/` so commands can read the nearest guidance before mutating workflow state
@@ -75,16 +75,17 @@ npm pack --dry-run
 7. `project:paper.draft`
 8. `project:paper.experiment-plan`
 9. `project:paper.review-loop`
-10. `project:paper.rebuttal-strategy`
-11. `project:paper.rebuttal`
-12. `project:paper.version-snapshot`
-13. `project:paper.version-compare`
-14. `project:paper.task-graph`
-15. `project:paper.open-questions`
-16. `project:paper.decisions`
-17. `project:paper.lineage`
-18. `project:paper.meta-optimize`
-19. `project:paper.checklist`
+10. `project:paper.isolated-review`
+11. `project:paper.rebuttal-strategy`
+12. `project:paper.rebuttal`
+13. `project:paper.version-snapshot`
+14. `project:paper.version-compare`
+15. `project:paper.task-graph`
+16. `project:paper.open-questions`
+17. `project:paper.decisions`
+18. `project:paper.lineage`
+19. `project:paper.meta-optimize`
+20. `project:paper.checklist`
 
 ## Why `.paper/` matters
 
@@ -130,6 +131,7 @@ npm pack --dry-run
 - `.paper/reviews/log.md`
 - `.paper/reviews/concerns.json`
 - `.paper/reviews/adversarial-state.json`
+- `.paper/reviews/isolated/*/{input.json,manifest.json,handoff.json,report.md}`
 - `.paper/rebuttal/issues.json`
 - `.paper/rebuttal/strategy.md`
 - `.paper/versions/index.json`

@@ -69,6 +69,67 @@ case "upsert_orchestration_board":
 
 ---
 
+## Scenario: Isolated reviewer command handoff
+
+### 1. Scope / Trigger
+
+- Trigger: `paper.isolated-review` spans command markdown, CLI, core file mutations, external process invocation, governance coverage, and review-state import.
+- Purpose: keep writer/main-session private context isolated from reviewer private context while still allowing an operator to mediate through explicit artifacts.
+
+### 2. Signatures
+
+- Slash command: `paper.isolated-review`.
+- CLI runner: `paper-factory isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>] [--artifact <path>]...`.
+- CLI prepare-only: `paper-factory isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>] [--artifact <path>]...`.
+- CLI import-only: `paper-factory isolated-review-import [target] --run-id <id> [--handoff <path>] [--report <path>]`.
+- Core functions: `prepareIsolatedReview(root, args)`, `runIsolatedReview(root, args)`, and `importIsolatedReview(root, args)`.
+
+### 3. Contracts
+
+- Prepared input path: `.paper/reviews/isolated/<run-id>/input.json`.
+- Manifest path: `.paper/reviews/isolated/<run-id>/manifest.json`.
+- Reviewer output paths: `.paper/reviews/isolated/<run-id>/handoff.json` and optional `.paper/reviews/isolated/<run-id>/report.md`.
+- Reviewer command receives argv: `--input <inputPath> --handoff <handoffPath> --report <reportPath> --run-id <runId>`.
+- Reviewer command receives env: `PAPER_FACTORY_ISOLATED_REVIEW_INPUT`, `PAPER_FACTORY_ISOLATED_REVIEW_HANDOFF`, `PAPER_FACTORY_ISOLATED_REVIEW_REPORT`, `PAPER_FACTORY_ISOLATED_REVIEW_RUN_ID`, and `PAPER_FACTORY_ISOLATED_REVIEW_INPUT_SHA256`.
+- Imported handoff must include matching `runId`, `inputPath`, `inputSha256`, `verdict`, `summary`, and reviewer findings/action items. Private reviewer transcripts are not imported.
+
+### 4. Validation & Error Matrix
+
+- Missing reviewer command -> reject the all-in-one runner before spawning.
+- Unterminated command quote -> reject during CLI argv parsing.
+- Handoff `runId` mismatch -> reject import.
+- Handoff `inputPath` mismatch -> reject import.
+- Handoff `inputSha256` mismatch -> reject import.
+- Reviewer non-zero exit -> reject runner and surface stdout/stderr.
+- Findings with missing IDs -> normalize to stable run-scoped IDs before writing concerns.
+
+### 5. Good/Base/Bad Cases
+
+- Good: slash command invokes the CLI runner; reviewer sees only `input.json`; main session imports only `handoff.json` and `report.md`; private reviewer notes remain outside review logs.
+- Base: operator prepares a run, manually coordinates clarification artifacts, then imports a valid handoff later.
+- Bad: pasting writer-session hidden reasoning into reviewer input, importing reviewer private transcript, or accepting a handoff whose input hash does not match the frozen bundle.
+
+### 6. Tests Required
+
+- Integration test: fake external reviewer writes handoff/report/private transcript; runner imports verdict and concerns but not private transcript.
+- Integration test: import rejects mismatched `inputSha256`.
+- Command validation: `paper.isolated-review.md` is registered.
+- Governance audit/hardening: isolated-review mutations bind to command/core surfaces; MCP binding may be absent for this CLI-only external-process surface.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```bash
+paper-factory isolated-review . --reviewer-command "node reviewer.js --private-session-log writer-transcript.md"
+```
+
+#### Correct
+
+```bash
+paper-factory isolated-review . --reviewer-command "node reviewer.js" --scope "current draft"
+```
+
 ## Composition Patterns
 
 - Compose public surfaces around core functions exported from `src/core/index.mjs`; do not duplicate workflow logic in CLI or MCP layers.

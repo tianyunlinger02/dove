@@ -19,6 +19,7 @@ const requiredCommands = [
   "paper.experiment-audit.md",
   "paper.review.md",
   "paper.review-loop.md",
+  "paper.isolated-review.md",
   "paper.result-bridge.md",
   "paper.revise.md",
   "paper.rebuttal-strategy.md",
