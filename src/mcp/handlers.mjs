@@ -36,6 +36,7 @@ import {
   revokeProgramApproval,
   runAutonomyControlPlaneOnce,
   runAutonomyForeground,
+  runAutonomyOperate,
   runExperimentAudit,
   runReviewLoop,
   setSectionStatus,
@@ -182,6 +183,8 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(runAutonomyControlPlaneOnce(root, args));
       case "run_autonomy_foreground":
         return makeTextResult(runAutonomyForeground(root, args));
+      case "run_autonomy_operate":
+        return makeTextResult(runAutonomyOperate(root, args));
       default:
         return makeErrorResult(`Unknown tool: ${name}`);
     }

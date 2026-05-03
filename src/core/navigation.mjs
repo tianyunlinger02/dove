@@ -4867,10 +4867,19 @@ function summarizeCandidateContext(pack = {}, operatorPlaybooks = {}, sourcePlay
   };
 }
 
-function buildExecutionBridgeCandidates({ remediationPacks, operatorPlaybooks }) {
+function buildExecutionBridgeCandidates({ remediationPacks, operatorPlaybooks, existingExecutionBridgeCandidates = null }) {
   const generatedAt = nowIso();
   const playbooksById = new Map((operatorPlaybooks.playbooks ?? []).map((playbook) => [playbook.id, playbook]));
   const playbookIdsByFamily = new Map((operatorPlaybooks.playbooks ?? []).map((playbook) => [playbook.taxonomyFamilyId, playbook.id]));
+  const preservedObjectiveCandidates = (existingExecutionBridgeCandidates?.candidates ?? [])
+    .filter((candidate) => candidate?.candidateOrigin === "operator-objective" || candidate?.objectiveDerived === true)
+    .map((candidate) => ({
+      ...candidate,
+      proposalOnly: true,
+      noAutoApply: true,
+      candidateOrigin: "operator-objective",
+      objectiveDerived: true
+    }));
   const candidates = [];
 
   for (const pack of remediationPacks.packs ?? []) {
@@ -4956,7 +4965,13 @@ function buildExecutionBridgeCandidates({ remediationPacks, operatorPlaybooks })
     }
   }
 
-  const sortedCandidates = candidates
+  const generatedCandidateIds = new Set(candidates.map((candidate) => candidate.id));
+  const mergedCandidates = [
+    ...candidates,
+    ...preservedObjectiveCandidates.filter((candidate) => !generatedCandidateIds.has(candidate.id))
+  ];
+
+  const sortedCandidates = mergedCandidates
     .sort((left, right) => {
       const scoreDelta = (right.score ?? 0) - (left.score ?? 0);
       if (scoreDelta !== 0) {
@@ -5693,7 +5708,8 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
     remediationPacks,
     longHorizonMemory
   });
-  const executionBridgeCandidates = buildExecutionBridgeCandidates({ remediationPacks, operatorPlaybooks });
+  const existingExecutionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex));
+  const executionBridgeCandidates = buildExecutionBridgeCandidates({ remediationPacks, operatorPlaybooks, existingExecutionBridgeCandidates });
   const sourceCatalog = buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, executionBridgeCandidates);
   const existingFollowThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
   const operatorFollowThrough = buildOperatorFollowThrough(root, existingFollowThrough, sourceCatalog, generatedAt);
@@ -6798,6 +6814,11 @@ export function materializeGuidancePacket(root, args = {}) {
     sourceId,
     actorRole,
     workerRole,
+    sourceArtifactPath: source.sourceArtifactPath,
+    sourceFingerprint: source.sourceFingerprint,
+    sourceTitle: source.title,
+    sourceSummary: source.summary,
+    sourceAllowedActorRoles: source.allowedActorRoles,
     status: "accepted-for-execution",
     decisionSummary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packet.id}.`,
     rationale: args.rationale ?? "",
@@ -6835,7 +6856,7 @@ export function recordOperatorFollowThrough(root, args = {}) {
   const recordId = args.id ?? `follow-through-${slugify(`${sourceType}-${sourceId}`)}`;
   const previousRecord = existing.items.find((item) => item.id === recordId) ?? null;
   const sourceCatalog = buildFollowThroughSourceCatalog(meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates);
-  const source = sourceCatalog.get(`${sourceType}:${sourceId}`) ?? (previousRecord && previousRecord.sourceType === sourceType && previousRecord.sourceId === sourceId
+  let source = sourceCatalog.get(`${sourceType}:${sourceId}`) ?? (previousRecord && previousRecord.sourceType === sourceType && previousRecord.sourceId === sourceId
     ? {
         sourceArtifactPath: previousRecord.sourceArtifactPath,
       sourceFingerprint: previousRecord.sourceFingerprint,
@@ -6844,6 +6865,15 @@ export function recordOperatorFollowThrough(root, args = {}) {
       allowedActorRoles: uniqueSorted([previousRecord.actorRole, previousRecord.workerRole, args.actorRole, args.workerRole].filter(Boolean))
       }
     : null);
+  if (!source && args.sourceArtifactPath && args.sourceFingerprint) {
+    source = {
+      sourceArtifactPath: args.sourceArtifactPath,
+      sourceFingerprint: args.sourceFingerprint,
+      title: args.sourceTitle ?? sourceId,
+      summary: args.sourceSummary ?? "",
+      allowedActorRoles: uniqueSorted(args.sourceAllowedActorRoles ?? [args.actorRole, args.workerRole].filter(Boolean))
+    };
+  }
   if (!source) {
     throw new Error(`Unknown follow-through source: ${sourceType}:${sourceId}`);
   }

@@ -131,6 +131,7 @@ async function main() {
     "revoke_program_approval",
     "run_autonomy_foreground",
     "run_autonomy_once",
+    "run_autonomy_operate",
     "run_experiment_audit",
     "run_review_loop",
     "set_section_status",

@@ -2,33 +2,37 @@ import crypto from "node:crypto";
 
 import {
   ARTIFACT_PATHS,
-  createRuntimeControllerState,
-  createRuntimeEventsIndex,
-  createRuntimeLeasesIndex,
-  createRuntimeResultsIndex,
+  createMetaExecutionBridgeCandidatesIndex,
   createProgramApprovalsIndex,
-  createResearchAgenda,
   createProgramsIndex,
   createProgramRunsIndex,
-  createRuntimeContinuationIndex,
+  createResearchAgenda,
   normalizeAutonomyAllowedStepType,
-  normalizeMetaOperatorFollowThroughIndex,
+  normalizeMetaExecutionBridgeCandidatesIndex,
   normalizeProgramApprovalsIndex,
   normalizeProgramsIndex,
-  normalizeProgramRunsIndex,
-  normalizeRuntimeControllerState,
-  normalizeRuntimeContinuationIndex,
-  normalizeRuntimeEventsIndex,
-  normalizeRuntimeLeasesIndex,
-  normalizeRuntimeResultsIndex
+  normalizeProgramRunsIndex
 } from "./schema.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
-import { materializeGuidancePacket, queryMetaOptimize, recordOperatorFollowThrough, reflectCampaignStepOutcome, refreshDurableSurfaces } from "./navigation.mjs";
+import { materializeGuidancePacket, planCampaign, queryMetaOptimize, recordOperatorFollowThrough, reflectCampaignStepOutcome, refreshDurableSurfaces } from "./navigation.mjs";
 import { refreshWiki, upsertNote } from "./artifacts.mjs";
 import { persistExperimentAudit, persistExperimentResultClaimBridge } from "./orchestration.mjs";
 import { persistReviewLoop } from "./reviews.mjs";
+import {
+  acquireLease,
+  activeLeaseForPacket,
+  appendEvent,
+  appendResult,
+  buildAutonomyRequestSnapshot,
+  expireStaleLeases,
+  loadRuntimeArtifacts,
+  readCurrentContinuation,
+  releaseLease,
+  saveRuntimeArtifacts,
+  updateContinuationState,
+  updateControllerState
+} from "./runtime-state.mjs";
 
-const LEASE_TTL_MS = 10 * 60 * 1000;
 const ELIGIBLE_LIFECYCLES = new Set(["waiting", "queued", "stale"]);
 const RUN_ONCE_SELECTION_POLICY = "planner-materialized-guidance-v2";
 const WORKER_STEP_POLICY = "planner-control-plane-worker-step-v1";
@@ -36,6 +40,11 @@ const DEFAULT_WORKER_STEP_MAX_ATTEMPTS = 3;
 
 const ELIGIBLE_PACKET_TIE_BREAK_POLICY = ["resume-priority", "execute-by", "review-after", "packet-id", "follow-through-id"];
 const MATERIALIZATION_TIE_BREAK_POLICY = ["execute-by", "review-after", "packet-id", "source-id", "follow-through-id"];
+const OPERATE_SAFE_STEP_SEQUENCE = [
+  { allowedStepType: "refresh-research-brief", stepPayload: null },
+  { allowedStepType: "refresh-wiki", stepPayload: null },
+  { allowedStepType: "run-review-loop", stepPayload: { scope: "current paper pipeline", stage: "autonomy-operate" } }
+];
 
 function uniqueStrings(items = []) {
   return Array.from(new Set(items.filter(Boolean)));
@@ -45,251 +54,20 @@ function buildRunId() {
   return `autonomy-run-${crypto.randomUUID()}`;
 }
 
-function buildLeaseId() {
-  return `autonomy-lease-${crypto.randomUUID()}`;
+function normalizeOperateIdSeed(seed) {
+  return String(seed ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
-function addMs(timestamp, durationMs) {
-  return new Date(Date.parse(timestamp) + durationMs).toISOString();
+function buildOperateId(prefix, seed) {
+  return `${prefix}-${normalizeOperateIdSeed(seed) || crypto.randomUUID()}`;
 }
 
-function summarizeLeases(items = []) {
-  const active = items.filter((item) => item.status === "active");
-  return {
-    activeLeaseCount: active.length,
-    activePacketIds: uniqueStrings(active.map((item) => item.packetId)),
-    activeLeaseIds: uniqueStrings(active.map((item) => item.id)),
-    overview: active.length > 0
-      ? `${active.length} active autonomous control-plane lease(s): ${active.map((item) => item.packetId).join(", ")}.`
-      : "No autonomous control-plane leases are currently active.",
-    leasesPath: ARTIFACT_PATHS.runtimeLeases
-  };
-}
-
-function summarizeEvents(entries = []) {
-  const last = entries.at(-1) ?? null;
-  return {
-    eventCount: entries.length,
-    lastEventType: last?.eventType ?? null,
-    lastRunId: last?.runId ?? null,
-    overview: entries.length > 0
-      ? `${entries.length} autonomous control-plane event(s) recorded. Latest event: ${last.eventType}.`
-      : "No autonomous control-plane events have been recorded yet.",
-    eventsPath: ARTIFACT_PATHS.runtimeEvents
-  };
-}
-
-function summarizeResults(entries = []) {
-  const last = entries.at(-1) ?? null;
-  const lastCheckpointEntry = [...entries].reverse().find((entry) => entry?.checkpointSnapshot) ?? null;
-  const lastEscalationEntry = [...entries].reverse().find((entry) => entry?.escalationSnapshot) ?? null;
-  return {
-    runCount: entries.length,
-    completedCount: entries.filter((entry) => entry.status === "completed").length,
-    noopCount: entries.filter((entry) => entry.status === "noop").length,
-    errorCount: entries.filter((entry) => entry.status === "error").length,
-    checkpointCount: entries.filter((entry) => entry?.checkpointSnapshot).length,
-    escalationCount: entries.filter((entry) => entry?.escalationSnapshot).length,
-    lastRunId: last?.runId ?? null,
-    lastStatus: last?.status ?? "never-run",
-    lastOutcome: last?.outcome ?? "not-started",
-    lastCheckpointPacketId: lastCheckpointEntry?.checkpointSnapshot?.packetId ?? null,
-    lastCheckpointSummary: lastCheckpointEntry?.checkpointSnapshot?.summary ?? null,
-    lastCheckpointAt: lastCheckpointEntry?.checkpointSnapshot?.recordedAt ?? null,
-    lastEscalationPacketId: lastEscalationEntry?.escalationSnapshot?.packetId ?? null,
-    lastEscalationFollowThroughId: lastEscalationEntry?.escalationSnapshot?.followThroughId ?? null,
-    lastEscalationAt: lastEscalationEntry?.escalationSnapshot?.recordedAt ?? null,
-    overview: entries.length > 0
-      ? `Autonomous control-plane runs: ${entries.length} total, ${entries.filter((entry) => entry.status === "completed").length} completed, ${entries.filter((entry) => entry.status === "noop").length} no-op, ${entries.filter((entry) => entry.status === "error").length} error.`
-      : "No autonomous control-plane results have been recorded yet.",
-    resultsPath: ARTIFACT_PATHS.runtimeResults
-  };
-}
-
-function buildAutonomyRequestSnapshot(root) {
-  const followThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, { items: [], summary: {} }));
-  const items = followThrough.items ?? [];
-  const actionable = items.filter((item) => ["accepted-for-execution", "executing"].includes(item.status));
-  const dueReviewCount = items.filter((item) => item?.dueReview).length;
-  return {
-    requestCount: actionable.length,
-    acceptedRequestCount: followThrough.summary.acceptedForExecutionCount ?? 0,
-    executingRequestCount: followThrough.summary.executingCount ?? 0,
-    staleRequestCount: followThrough.summary.staleCount ?? 0,
-    overdueExecutionCount: followThrough.summary.overdueExecutionCount ?? 0,
-    dueReviewCount,
-    requestIds: actionable.map((item) => item.id),
-    topSourceIds: followThrough.summary.topSourceIds ?? [],
-    overview: followThrough.summary.overview,
-    followThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough
-  };
-}
-
-function loadRuntimeArtifacts(root) {
-  return {
-    controllerState: normalizeRuntimeControllerState(readJson(root, ARTIFACT_PATHS.runtimeControllerState, createRuntimeControllerState)),
-    continuation: normalizeRuntimeContinuationIndex(readJson(root, ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex)),
-    leases: normalizeRuntimeLeasesIndex(readJson(root, ARTIFACT_PATHS.runtimeLeases, createRuntimeLeasesIndex)),
-    events: normalizeRuntimeEventsIndex(readJson(root, ARTIFACT_PATHS.runtimeEvents, createRuntimeEventsIndex)),
-    results: normalizeRuntimeResultsIndex(readJson(root, ARTIFACT_PATHS.runtimeResults, createRuntimeResultsIndex))
-  };
-}
-
-function saveRuntimeArtifacts(root, artifacts) {
-  writeJson(root, ARTIFACT_PATHS.runtimeControllerState, artifacts.controllerState);
-  writeJson(root, ARTIFACT_PATHS.runtimeContinuation, artifacts.continuation);
-  writeJson(root, ARTIFACT_PATHS.runtimeLeases, artifacts.leases);
-  writeJson(root, ARTIFACT_PATHS.runtimeEvents, artifacts.events);
-  writeJson(root, ARTIFACT_PATHS.runtimeResults, artifacts.results);
-}
-
-function appendEvent(artifacts, entry) {
-  const entries = [...(artifacts.events.entries ?? []), entry].slice(-200);
-  artifacts.events = {
-    ...artifacts.events,
-    entries,
-    summary: summarizeEvents(entries),
-    updatedAt: entry.recordedAt
-  };
-}
-
-function appendResult(artifacts, entry) {
-  const entries = [...(artifacts.results.entries ?? []), entry].slice(-200);
-  artifacts.results = {
-    ...artifacts.results,
-    entries,
-    summary: summarizeResults(entries),
-    updatedAt: entry.recordedAt
-  };
-}
-
-function updateControllerState(artifacts, entry, recordedAt) {
-  const requestSnapshot = entry.requestSnapshot ?? {
-    requestCount: 0,
-    acceptedRequestCount: 0,
-    executingRequestCount: 0,
-    staleRequestCount: 0,
-    overdueExecutionCount: 0,
-    dueReviewCount: 0
-  };
-  artifacts.controllerState = {
-    ...artifacts.controllerState,
-    lastRun: {
-      runId: entry.runId,
-      status: entry.status,
-      outcome: entry.outcome,
-      selectedPacketId: entry.packetId ?? null,
-      leaseId: entry.leaseId ?? null,
-      actorRole: entry.actorRole,
-      envelopeWorkerRole: entry.envelopeSnapshot?.workerRole ?? null,
-      programId: entry.programSnapshot?.programId ?? null,
-      programRunId: entry.programSnapshot?.programRunId ?? null,
-      approvalId: entry.programSnapshot?.approvalId ?? null,
-      startedAt: entry.startedAt ?? recordedAt,
-      completedAt: entry.recordedAt,
-      summary: entry.summary
-    },
-    summary: {
-      ...artifacts.controllerState.summary,
-      lastRunId: entry.runId,
-      lastStatus: entry.status,
-      lastOutcome: entry.outcome,
-      lastSelectedPacketId: entry.packetId ?? null,
-      requestCount: requestSnapshot.requestCount ?? 0,
-      acceptedRequestCount: requestSnapshot.acceptedRequestCount ?? 0,
-      executingRequestCount: requestSnapshot.executingRequestCount ?? 0,
-      staleRequestCount: requestSnapshot.staleRequestCount ?? 0,
-      overdueExecutionCount: requestSnapshot.overdueExecutionCount ?? 0,
-      dueReviewCount: requestSnapshot.dueReviewCount ?? 0,
-      lastEnvelopeWorkerRole: entry.envelopeSnapshot?.workerRole ?? null,
-      lastProgramId: entry.programSnapshot?.programId ?? null,
-      lastProgramRunId: entry.programSnapshot?.programRunId ?? null,
-      lastApprovalId: entry.programSnapshot?.approvalId ?? null,
-      lastProgramOutcome: entry.programSnapshot?.outcome ?? "not-started",
-      continuationCount: artifacts.continuation.summary.continuationCount ?? 0,
-      currentContinuationKind: artifacts.continuation.summary.currentKind ?? null,
-      currentContinuationPacketId: artifacts.continuation.summary.currentPacketId ?? null,
-      currentContinuationProgramRunId: artifacts.continuation.summary.currentProgramRunId ?? null,
-      currentContinuationCommand: artifacts.continuation.summary.currentCommand ?? null,
-      checkpointCount: artifacts.results.summary.checkpointCount ?? 0,
-      escalationCount: artifacts.results.summary.escalationCount ?? 0,
-      lastCheckpointPacketId: artifacts.results.summary.lastCheckpointPacketId ?? null,
-      lastCheckpointSummary: artifacts.results.summary.lastCheckpointSummary ?? null,
-      lastCheckpointAt: artifacts.results.summary.lastCheckpointAt ?? null,
-      lastEscalationPacketId: artifacts.results.summary.lastEscalationPacketId ?? null,
-      lastEscalationFollowThroughId: artifacts.results.summary.lastEscalationFollowThroughId ?? null,
-      lastEscalationAt: artifacts.results.summary.lastEscalationAt ?? null,
-      continuationCount: artifacts.continuation.summary.continuationCount ?? 0,
-      currentContinuationKind: artifacts.continuation.summary.currentKind ?? null,
-      currentContinuationPacketId: artifacts.continuation.summary.currentPacketId ?? null,
-      currentContinuationProgramRunId: artifacts.continuation.summary.currentProgramRunId ?? null,
-      currentContinuationCommand: artifacts.continuation.summary.currentCommand ?? null,
-      overview: entry.summary,
-      controllerStatePath: ARTIFACT_PATHS.runtimeControllerState,
-      leasesPath: ARTIFACT_PATHS.runtimeLeases,
-      eventsPath: ARTIFACT_PATHS.runtimeEvents,
-      resultsPath: ARTIFACT_PATHS.runtimeResults
-    },
-    updatedAt: recordedAt
-  };
-}
-
-function expireStaleLeases(artifacts, timestamp) {
-  const nextItems = (artifacts.leases.items ?? []).map((item) => {
-    if (item.status === "active" && item.expiresAt && String(item.expiresAt) <= timestamp) {
-      return {
-        ...item,
-        status: "expired",
-        releasedAt: timestamp,
-        releaseReason: "lease-ttl-expired"
-      };
-    }
-    return item;
-  });
-  artifacts.leases = {
-    ...artifacts.leases,
-    items: nextItems,
-    summary: summarizeLeases(nextItems),
-    updatedAt: timestamp
-  };
-}
-
-function acquireLease(artifacts, { runId, packetId, actorRole, acquiredAt }) {
-  const lease = {
-    id: buildLeaseId(),
-    runId,
-    packetId,
-    actorRole,
-    status: "active",
-    acquiredAt,
-    expiresAt: addMs(acquiredAt, LEASE_TTL_MS),
-    releasedAt: null,
-    releaseReason: null
-  };
-  const items = [...(artifacts.leases.items ?? []), lease];
-  artifacts.leases = {
-    ...artifacts.leases,
-    items,
-    summary: summarizeLeases(items),
-    updatedAt: acquiredAt
-  };
-  return lease;
-}
-
-function releaseLease(artifacts, leaseId, timestamp, reason) {
-  const items = (artifacts.leases.items ?? []).map((item) => item.id === leaseId
-    ? { ...item, status: "released", releasedAt: timestamp, releaseReason: reason }
-    : item);
-  artifacts.leases = {
-    ...artifacts.leases,
-    items,
-    summary: summarizeLeases(items),
-    updatedAt: timestamp
-  };
-}
-
-function activeLeaseForPacket(artifacts, packetId) {
-  return (artifacts.leases.items ?? []).find((item) => item.packetId === packetId && item.status === "active") ?? null;
+function resolveOperateId(prefix, explicitId, seed) {
+  return normalizeOperateIdSeed(explicitId) || buildOperateId(prefix, seed);
 }
 
 function buildReadPaths(workspaceIndex, packet) {
@@ -446,106 +224,114 @@ function snapshotEnvelope(envelope = null) {
     : null;
 }
 
-function summarizeContinuationItems(items = []) {
-  const first = items[0] ?? null;
-  return {
-    continuationCount: items.length,
-    currentKind: first?.kind ?? null,
-    currentPacketId: first?.packetId ?? null,
-    currentProgramRunId: first?.programRunId ?? null,
-    currentCommand: first?.command ?? null,
-    overview: first
-      ? `Next explicit autonomy continuation: ${first.command} for ${first.packetId ?? first.programRunId ?? first.kind}.`
-      : "No explicit autonomy continuation is currently pending.",
-    continuationPath: ARTIFACT_PATHS.runtimeContinuation
-  };
-}
-
-function buildContinuationItems(root, entry) {
-  if (!entry?.packetId) {
-    return [];
-  }
-  const packet = readJson(root, `${ARTIFACT_PATHS.taskPacketsPacketsDir}/${entry.packetId}.json`, null);
-  const programRun = entry.programSnapshot?.programRunId
-    ? (normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex)).items ?? []).find((item) => item.id === entry.programSnapshot.programRunId) ?? null
-    : null;
-  const commonReadPaths = [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.runtimeResults, ARTIFACT_PATHS.metaOperatorFollowThrough, packet?.packetPath].filter(Boolean);
-
-  if (entry.outcome === "materialized-one-packet") {
-    return [{
-      kind: "execute-materialized-packet",
-      command: "paper-factory autonomy-once",
-      packetId: entry.packetId,
-      programRunId: entry.programSnapshot?.programRunId ?? null,
-      followThroughId: entry.followThroughId ?? null,
-      summary: `A packet was materialized and is ready for the next explicit autonomy pass.`,
-      requiredReadPaths: commonReadPaths,
-      readyAt: entry.recordedAt ?? nowIso()
-    }];
-  }
-
-  if (programRun?.reviewCheckpointRequired) {
-    return [{
-      kind: "issue-fresh-approval",
-      command: "project:paper.approvals",
-      packetId: entry.packetId,
-      programRunId: programRun.id,
-      followThroughId: entry.followThroughId ?? null,
-      summary: programRun.reviewCheckpointSummary ?? `Issue a fresh approval before the next bounded step.`,
-      requiredReadPaths: [...commonReadPaths, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals],
-      readyAt: programRun.reviewCheckpointAt ?? entry.recordedAt ?? nowIso()
-    }];
-  }
-
-  if (entry.outcome === "executed-program-step" && (programRun?.authorityEnvelope?.remainingStepCount ?? 0) > 0) {
-    return [{
-      kind: "continue-program-envelope",
-      command: "paper-factory autonomy-foreground",
-      packetId: entry.packetId,
-      programRunId: programRun.id,
-      approvalId: entry.programSnapshot?.approvalId ?? null,
-      followThroughId: entry.followThroughId ?? null,
-      summary: `Program-scoped authority envelope still has ${(programRun.authorityEnvelope?.remainingStepCount ?? 0)} bounded approved step(s) available for packet ${entry.packetId}.`,
-      requiredReadPaths: [...commonReadPaths, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals],
-      readyAt: entry.recordedAt ?? nowIso()
-    }];
-  }
-
-  if (["worker-step-retry-pending", "worker-step-escalated", "executed-one-packet-step"].includes(entry.outcome)) {
-    return [{
-      kind: entry.outcome === "worker-step-escalated" ? "manual-escalation" : "review-follow-through",
-      command: "project:paper.follow-through",
-      packetId: entry.packetId,
-      programRunId: null,
-      followThroughId: entry.followThroughId ?? null,
-      summary: entry.nextManualCheckpoint ?? entry.summary,
-      requiredReadPaths: commonReadPaths,
-      readyAt: entry.recordedAt ?? nowIso()
-    }];
-  }
-
-  return [];
-}
-
-function updateContinuationState(root, artifacts, entry) {
-  const items = buildContinuationItems(root, entry);
-  artifacts.continuation = {
-    ...artifacts.continuation,
-    items,
-    summary: summarizeContinuationItems(items),
-    updatedAt: entry.recordedAt ?? nowIso()
-  };
-}
-
-function readCurrentContinuation(root) {
-  return normalizeRuntimeContinuationIndex(readJson(root, ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex));
-}
-
 function normalizeForegroundScopeFilter(args = {}) {
   const packetId = typeof args.packetId === "string" && args.packetId.trim() ? args.packetId.trim() : null;
   const programRunId = typeof args.programRunId === "string" && args.programRunId.trim() ? args.programRunId.trim() : null;
   const approvalId = typeof args.approvalId === "string" && args.approvalId.trim() ? args.approvalId.trim() : null;
   return { packetId, programRunId, approvalId };
+}
+
+function summarizeExecutionBridgeCandidates(items = []) {
+  const candidateTypeCounts = items.reduce((accumulator, candidate) => {
+    const type = candidate.candidateType ?? "unknown";
+    accumulator[type] = (accumulator[type] ?? 0) + 1;
+    return accumulator;
+  }, {});
+  return {
+    candidateCount: items.length,
+    topCandidateIds: items.slice(0, 5).map((candidate) => candidate.id),
+    candidateTypeCounts,
+    overview: items.length > 0
+      ? `${items.length} proposal-only execution bridge candidates are available; objective-derived candidates remain explicit and no-auto-apply.`
+      : "No proposal-only execution bridge candidates have been generated yet.",
+    candidatesPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates
+  };
+}
+
+function normalizeOperateStepSequence(args = {}) {
+  if (Array.isArray(args.stepSequence) && args.stepSequence.length > 0) {
+    return args.stepSequence.map((step) => ({
+      allowedStepType: normalizeAutonomyAllowedStepType(step?.allowedStepType, "refresh-research-brief"),
+      stepPayload: step?.stepPayload ?? null
+    }));
+  }
+  return OPERATE_SAFE_STEP_SEQUENCE.map((step) => ({ ...step, stepPayload: step.stepPayload ? { ...step.stepPayload } : null }));
+}
+
+function resolveOperateWindows(args = {}, timestamp = nowIso()) {
+  return {
+    executeBy: args.executeBy ?? new Date(Date.parse(timestamp) + 24 * 60 * 60 * 1000).toISOString(),
+    reviewAfter: args.reviewAfter ?? new Date(Date.parse(timestamp) + 2 * 60 * 60 * 1000).toISOString(),
+    expiresAt: args.expiresAt ?? new Date(Date.parse(timestamp) + 24 * 60 * 60 * 1000).toISOString()
+  };
+}
+
+function upsertObjectiveExecutionBridgeCandidate(root, args, { packetId, timestamp }) {
+  const objective = String(args.objective ?? "").trim();
+  if (!objective) {
+    throw new Error("runAutonomyOperate requires objective when sourceType/sourceId are not provided.");
+  }
+  const workerRole = args.workerRole ?? "researcher";
+  const candidateId = resolveOperateId("objective-bridge", args.sourceId, objective);
+  const existing = normalizeMetaExecutionBridgeCandidatesIndex(readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex));
+  const candidate = {
+    id: candidateId,
+    proposalOnly: true,
+    noAutoApply: true,
+    candidateOrigin: "operator-objective",
+    objectiveDerived: true,
+    candidateType: "packet-candidate",
+    priority: "primary",
+    rank: 0,
+    globalRank: 0,
+    score: 1000,
+    targetArtifact: `${ARTIFACT_PATHS.taskPacketsPacketsDir}/${packetId}.json`,
+    targetId: packetId,
+    suggestedTitle: args.title ?? `Operate objective: ${objective}`,
+    suggestedSummary: args.summary ?? `Objective-derived proposal-only execution bridge for: ${objective}`,
+    rationale: args.rationale ?? "Created by an explicit autonomy-operate foreground invocation; remains proposal-only until governed materialization binds it to a packet.",
+    suggestedNextStep: args.nextAction ?? "Materialize this objective-derived candidate, issue bounded approval, then run explicit foreground autonomy.",
+    suggestedAcceptanceCriteria: [
+      "Refresh the durable research brief for the objective.",
+      "Refresh the wiki/query navigation surfaces.",
+      "Run a review-loop checkpoint without inventing note, audit, bridge, or claim payloads."
+    ],
+    linkedEvidenceArtifactPaths: [ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.workspaceIndex],
+    linkedEvidenceIds: [packetId],
+    linkedRepairItemIds: [],
+    taxonomyFamilyIds: [],
+    taxonomyGroupIds: [],
+    sourceRemediationPackIds: [],
+    sourcePlaybookIds: [],
+    context: {
+      operatorObjective: objective,
+      linkedWorkspacePointers: [ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.wiki, ARTIFACT_PATHS.reviewLog],
+      linkedPacketPointers: [{ id: packetId, assignedRole: workerRole }],
+      safeDefaultStepSequence: OPERATE_SAFE_STEP_SEQUENCE.map((step) => step.allowedStepType)
+    },
+    sourceConversionPath: {
+      targetType: "create-new-packet",
+      targetId: packetId,
+      assignedRole: workerRole,
+      rank: 0,
+      pathScore: 1000,
+      rankingBasis: ["explicit-operator-objective", "safe-default-step-sequence", "no-placeholder-payloads"]
+    },
+    generatedAt: timestamp,
+    updatedAt: timestamp
+  };
+  const items = [candidate, ...(existing.candidates ?? []).filter((item) => item.id !== candidate.id)];
+  const next = {
+    ...existing,
+    proposalOnly: true,
+    noAutoApply: true,
+    candidates: items,
+    summary: summarizeExecutionBridgeCandidates(items),
+    sourceArtifacts: uniqueStrings([...(existing.sourceArtifacts ?? []), ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.workspaceIndex]),
+    updatedAt: timestamp
+  };
+  writeJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, next);
+  return candidate;
 }
 
 function nextForegroundScopeFilter(step, continuation, priorFilter = {}) {
@@ -567,6 +353,164 @@ function nextForegroundScopeFilter(step, continuation, priorFilter = {}) {
     };
   }
   return null;
+}
+
+export function runAutonomyOperate(root, args = {}) {
+  assertGovernanceMutationRegistered("run-autonomy-operate", "exempt");
+  ensureWorkspace(root);
+  const actorRole = args.actorRole ?? "planner";
+  if (actorRole !== "planner") {
+    throw new Error(`runAutonomyOperate currently supports only actorRole 'planner'. Received ${actorRole}.`);
+  }
+  const timestamp = nowIso();
+  const objective = String(args.objective ?? args.programObjective ?? "").trim();
+  const sourceFirst = Boolean(String(args.sourceType ?? "").trim() && String(args.sourceId ?? "").trim());
+  if (!sourceFirst && !objective) {
+    throw new Error("runAutonomyOperate requires either sourceType/sourceId or objective.");
+  }
+  const workerRole = args.workerRole ?? "researcher";
+  const stepSequence = normalizeOperateStepSequence(args);
+  const firstStep = stepSequence[0]?.allowedStepType ?? "refresh-research-brief";
+  const packetId = resolveOperateId("task-operate", args.packetId, args.sourceId ?? objective);
+  const programId = resolveOperateId("program-operate", args.programId, args.sourceId ?? objective);
+  const programRunId = resolveOperateId("program-run-operate", args.programRunId, args.sourceId ?? `${objective}-${timestamp}`);
+  const approvalId = resolveOperateId("approval-operate", args.approvalId, args.sourceId ?? `${objective}-${timestamp}`);
+  const campaignId = resolveOperateId("campaign-operate", args.campaignId, args.sourceId ?? objective);
+  const campaignStepId = resolveOperateId("step-operate", args.campaignStepId, firstStep);
+  const windows = resolveOperateWindows(args, timestamp);
+  const source = sourceFirst
+    ? { sourceType: String(args.sourceType).trim(), sourceId: String(args.sourceId).trim(), candidate: null }
+    : {
+        sourceType: "execution-bridge",
+        sourceId: upsertObjectiveExecutionBridgeCandidate(root, args, { packetId, timestamp }).id
+      };
+
+  const plannedCampaign = planCampaign(root, {
+    campaignId,
+    title: args.campaignTitle ?? `Autonomy operate: ${objective || source.sourceId}`,
+    objective: objective || args.programObjective || `Operate on ${source.sourceType}:${source.sourceId}`,
+    status: "planned",
+    phase: args.phase ?? "research",
+    actorRole,
+    programIds: [programId],
+    steps: [{
+      id: campaignStepId,
+      title: args.campaignStepTitle ?? `Execute bounded autonomy for ${packetId}`,
+      status: "planned",
+      programId,
+      programRunId,
+      approvalId,
+      packetId,
+      allowedStepType: firstStep,
+      objective: objective || args.programObjective || null,
+      nextAction: "Run explicit foreground autonomy for the materialized objective packet.",
+      evidenceLinks: [ARTIFACT_PATHS.metaExecutionBridgeCandidates, ARTIFACT_PATHS.researchBrief],
+      outputPaths: [ARTIFACT_PATHS.runtimeResults, ARTIFACT_PATHS.programRuns],
+      executeBy: windows.executeBy,
+      reviewAfter: windows.reviewAfter
+    }],
+    nextAction: "Materialize, approve, run foreground autonomy, and stop at a durable review boundary.",
+    reviewPolicy: "fresh-approval-after-review-checkpoint",
+    explicitApprovalRequired: true,
+    noHiddenRuntime: true
+  });
+
+  const materialized = materializeGuidancePacket(root, {
+    ...args,
+    sourceType: source.sourceType,
+    sourceId: source.sourceId,
+    actorRole,
+    workerRole,
+    programId,
+    programRunId,
+    approvalId,
+    campaignId,
+    campaignStepId,
+    packetId,
+    title: args.title ?? `Autonomy operate packet: ${objective || source.sourceId}`,
+    summary: args.summary ?? `Explicit foreground autonomy packet for ${objective || `${source.sourceType}:${source.sourceId}`}.`,
+    phase: args.phase ?? "research",
+    assignedRole: workerRole,
+    nextAction: args.nextAction ?? "Execute the safe bounded research/review sequence and stop at the durable review checkpoint.",
+    outputPaths: uniqueStrings([ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.wiki, ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.runtimeResults]),
+    executeBy: windows.executeBy,
+    reviewAfter: windows.reviewAfter,
+    autonomyPolicy: "objective-aware-default",
+    stepSequence,
+    allowedStepType: firstStep,
+    reviewScope: args.reviewScope ?? "current paper pipeline",
+    reviewStage: args.reviewStage ?? "autonomy-operate",
+    programTitle: args.programTitle ?? `Autonomy operate program: ${objective || source.sourceId}`,
+    programObjective: args.programObjective ?? (objective || `Operate on ${source.sourceType}:${source.sourceId}`),
+    programAgenda: args.programAgenda ?? [objective || `Materialize and execute ${source.sourceType}:${source.sourceId}`],
+    programEvidenceBacklog: args.programEvidenceBacklog ?? [],
+    programApprovalSummary: args.programApprovalSummary ?? `Approved explicit foreground autonomy for ${packetId} with ${stepSequence.length} bounded safe default step(s).`,
+    decisionSummary: args.decisionSummary ?? `Materialized autonomy-operate source ${source.sourceType}:${source.sourceId} into ${packetId}.`,
+    rationale: args.rationale ?? "autonomy-operate composes proposal, planning, materialization, bounded approval, and foreground execution without hidden runtime."
+  });
+
+  const requestedSteps = Number.isInteger(args.maxSteps) ? args.maxSteps : Number(args.maxSteps);
+  const maxSteps = Number.isFinite(requestedSteps) ? Math.max(1, Math.min(25, Math.trunc(requestedSteps))) : stepSequence.length + 1;
+  const foreground = runAutonomyForeground(root, {
+    actorRole,
+    maxSteps,
+    packetId: materialized.packetId,
+    programRunId,
+    approvalId
+  });
+  refreshDurableSurfaces(root, {
+    type: "autonomy-operate",
+    summary: `autonomy-operate stopped at ${foreground.stopReason} after ${foreground.stepCount} bounded foreground step(s).`,
+    artifactPaths: [
+      ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+      ARTIFACT_PATHS.metaOperatorFollowThrough,
+      ARTIFACT_PATHS.campaignsIndex,
+      ARTIFACT_PATHS.programsIndex,
+      ARTIFACT_PATHS.programRuns,
+      ARTIFACT_PATHS.programApprovals,
+      ARTIFACT_PATHS.runtimeControllerState,
+      ARTIFACT_PATHS.runtimeResults,
+      ARTIFACT_PATHS.workspaceIndex
+    ]
+  });
+  const continuation = readCurrentContinuation(root).items?.[0] ?? null;
+  return {
+    status: foreground.status,
+    actorRole,
+    workerRole,
+    inputMode: sourceFirst ? "source" : "objective",
+    objective: objective || null,
+    sourceType: source.sourceType,
+    sourceId: source.sourceId,
+    campaignId,
+    campaignStepId,
+    programId,
+    programRunId,
+    approvalId,
+    packetId: materialized.packetId,
+    followThroughId: materialized.followThroughId,
+    safeDefaultStepSequence: stepSequence.map((step) => step.allowedStepType),
+    plannedCampaign,
+    materialized,
+    foreground,
+    stopReason: foreground.stopReason,
+    nextContinuation: continuation,
+    artifactPaths: uniqueStrings([
+      ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+      ARTIFACT_PATHS.metaOperatorFollowThrough,
+      ARTIFACT_PATHS.campaignsIndex,
+      ARTIFACT_PATHS.programsIndex,
+      ARTIFACT_PATHS.programRuns,
+      ARTIFACT_PATHS.programApprovals,
+      ARTIFACT_PATHS.runtimeControllerState,
+      ARTIFACT_PATHS.runtimeContinuation,
+      ARTIFACT_PATHS.runtimeEvents,
+      ARTIFACT_PATHS.runtimeResults,
+      ARTIFACT_PATHS.workspaceIndex,
+      materialized.packetPath
+    ]),
+    summary: `autonomy-operate used ${sourceFirst ? "existing proposal source" : "objective-derived proposal source"} ${source.sourceType}:${source.sourceId}, ran ${foreground.stepCount} bounded foreground step(s), and stopped at ${foreground.stopReason}.`
+  };
 }
 
 export function runAutonomyForeground(root, args = {}) {

@@ -61,7 +61,8 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "revoke_program_approval",
     "materialize_guidance_packet",
     "run_autonomy_once",
-    "run_autonomy_foreground"
+    "run_autonomy_foreground",
+    "run_autonomy_operate"
   ]);
 });
 
@@ -109,6 +110,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const revokeApprovalTool = toolDefinitions.find((item) => item.name === "revoke_program_approval");
   const materializeTool = toolDefinitions.find((item) => item.name === "materialize_guidance_packet");
   const foregroundTool = toolDefinitions.find((item) => item.name === "run_autonomy_foreground");
+  const operateTool = toolDefinitions.find((item) => item.name === "run_autonomy_operate");
   assert.ok(approvalsQueryTool, "query_program_approvals should exist");
   assert.ok(issueApprovalTool.inputSchema.properties.continuationFromRunId, "issue_program_approval should expose continuationFromRunId for review-to-reapproval bridging");
   assert.ok(issueApprovalTool.inputSchema.properties.noteTitle, "issue_program_approval should expose noteTitle for approved note steps");
@@ -137,4 +139,10 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(foregroundTool.inputSchema.properties.packetId, "run_autonomy_foreground should expose packetId");
   assert.ok(foregroundTool.inputSchema.properties.programRunId, "run_autonomy_foreground should expose programRunId");
   assert.ok(foregroundTool.inputSchema.properties.approvalId, "run_autonomy_foreground should expose approvalId");
+  assert.ok(operateTool, "run_autonomy_operate should exist");
+  assert.ok(operateTool.inputSchema.properties.objective, "run_autonomy_operate should expose objective");
+  assert.ok(operateTool.inputSchema.properties.sourceType, "run_autonomy_operate should expose sourceType");
+  assert.ok(operateTool.inputSchema.properties.sourceId, "run_autonomy_operate should expose sourceId");
+  assert.ok(operateTool.inputSchema.properties.stepSequence, "run_autonomy_operate should expose stepSequence");
+  assert.ok(operateTool.inputSchema.properties.campaignId, "run_autonomy_operate should expose campaignId");
 });
