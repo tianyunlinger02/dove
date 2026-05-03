@@ -5,3 +5,9 @@ reference_repos/
 
 # Local paper workflow state; real paper projects may choose to track their own .paper/
 .paper/
+
+# Trellis local/generated files
+.trellis/.template-hashes.json
+.trellis/.version
+.trellis/workspace/*
+!.trellis/workspace/index.md
