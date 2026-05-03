@@ -1,17 +1,16 @@
 # paper_factory
 
-`paper_factory` is an OpenCode-native, file-first, board-first academic workflow pack.
+`paper_factory` is a host-neutral, file-first, board-first academic workflow pack with optional multi-host adapters.
 
 It deliberately borrows two different kinds of strength:
 
 - from **oh-my-openagent / oh-my-opencode**: packaging discipline, explicit role inventory, board-first orchestration, install/doctor ergonomics, and composable command surfaces
 - from **ARIS**: staged research-to-writing flow, persistent research memory, claim-driven experiment planning, rebuttal issue handling, and paper version evolution/comparison
 
-The result is not a fake clone of either project. It is an honest OpenCode-native package built around the surfaces OpenCode can really host well today:
+The result is not a fake clone of either project. It is an honest host-neutral package with OpenCode as the default adapter and optional Claude Code, Codex, Cursor, and shared agent-skill adapters:
 
-- `.opencode/commands/`
-- `.opencode/skills/`
-- `.opencode.json` for optional MCP registration
+- host-neutral CLI/MCP/core runtime under `bin/`, `mcp/`, `scripts/`, and `src/`
+- optional adapter surfaces such as `.opencode/`, `.claude/`, `.codex/`, `.cursor/`, and `.agents/skills/`
 - durable project artifacts in `.paper/`
 
 ## What is included
@@ -40,6 +39,9 @@ npm test
 
 ```bash
 node ./bin/paper-factory.mjs install . --force
+# Optional multi-host adapters:
+node ./bin/paper-factory.mjs install . --force --host claude,cursor
+node ./bin/paper-factory.mjs install . --force --host all
 ```
 
 ### Check the workspace health

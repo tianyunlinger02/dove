@@ -2890,6 +2890,16 @@ export function createWorkflowBoundaries() {
   ];
   return {
     version: 3,
+    neutralCorePaths: ["README.md", "bin", "docs", "mcp", "scripts", "src"],
+    defaultHostAdapters: ["opencode"],
+    availableHostAdapters: ["opencode", "claude", "codex", "cursor", "agents"],
+    managedHostAdapterPaths: {
+      opencode: [".opencode", ".opencode.json"],
+      claude: [".claude/commands", ".claude/agents"],
+      codex: [".codex/agents", ".codex/skills", ".codex/config.toml"],
+      cursor: [".cursor/commands"],
+      agents: [".agents/skills", "AGENTS.md"]
+    },
     managedPaths: [
       ".opencode",
       ".opencode.json",

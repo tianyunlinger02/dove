@@ -24,14 +24,58 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
-const COPY_PATHS = [".opencode", ".opencode.json", "bin", "docs", "mcp", "scripts", "src", "README.md"];
+const CORE_INSTALL_PATHS = ["bin", "docs", "mcp", "scripts", "src", "README.md"];
+const DEFAULT_HOST_ADAPTERS = ["opencode"];
+const HOST_ADAPTERS = {
+  opencode: {
+    label: "OpenCode",
+    paths: [".opencode", ".opencode.json"],
+    requiredPaths: [
+      ".opencode/commands/paper.init.md",
+      ".opencode/commands/paper.orchestrate.md",
+      ".opencode/commands/paper.pipeline.md",
+      ".opencode/commands/paper.experiment-audit.md",
+      ".opencode/commands/paper.result-bridge.md",
+      ".opencode/skills/paper-factory-pipeline/SKILL.md",
+      ".opencode/skills/paper-factory-planner/SKILL.md",
+      ".opencode.json"
+    ],
+    jsonChecks: [".opencode.json"]
+  },
+  claude: {
+    label: "Claude Code",
+    paths: [".claude/commands", ".claude/agents"],
+    requiredPaths: [".claude/commands/trellis/start.md", ".claude/agents/implement.md"],
+    jsonChecks: []
+  },
+  codex: {
+    label: "Codex",
+    paths: [".codex/agents", ".codex/skills", ".codex/config.toml"],
+    requiredPaths: [".codex/agents/implement.toml", ".codex/config.toml"],
+    jsonChecks: []
+  },
+  cursor: {
+    label: "Cursor",
+    paths: [".cursor/commands"],
+    requiredPaths: [".cursor/commands/trellis-start.md"],
+    jsonChecks: []
+  },
+  agents: {
+    label: "Shared agent skills",
+    paths: [".agents/skills", "AGENTS.md"],
+    requiredPaths: [".agents/skills/start/SKILL.md", "AGENTS.md"],
+    jsonChecks: []
+  }
+};
+const GLOBAL_COPY_EXCLUDE_NAMES = new Set([".git", "node_modules"]);
+const GLOBAL_COPY_EXCLUDE_SUFFIXES = [".log", ".tmp", ".cache"];
 
 function usage() {
   console.log(`paper-factory
 
 Usage:
-  paper-factory install [target] [--force]
-  paper-factory sync [target] [--force]
+  paper-factory install [target] [--force] [--host <opencode|claude|codex|cursor|agents|all>]
+  paper-factory sync [target] [--force] [--host <opencode|claude|codex|cursor|agents|all>]
   paper-factory doctor [target]
   paper-factory autonomy-once [target] [--actor-role <role>]
   paper-factory autonomy-foreground [target] [--actor-role <role>] [--max-steps <n>] [--packet-id <id>] [--program-run-id <id>] [--approval-id <id>]
@@ -46,6 +90,33 @@ function readFlagValue(args, flag) {
   return args[index + 1];
 }
 
+function readFlagValues(args, flags) {
+  const values = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (flags.includes(args[index]) && index + 1 < args.length) {
+      values.push(args[index + 1]);
+      index += 1;
+    }
+  }
+  return values;
+}
+
+function resolveHostAdapters(args = []) {
+  const rawValues = readFlagValues(args, ["--host", "--platform"]);
+  if (rawValues.length === 0) {
+    return DEFAULT_HOST_ADAPTERS;
+  }
+  const requested = rawValues.flatMap((value) => String(value).split(",").map((item) => item.trim()).filter(Boolean));
+  if (requested.includes("all")) {
+    return Object.keys(HOST_ADAPTERS);
+  }
+  const invalid = requested.filter((host) => !Object.hasOwn(HOST_ADAPTERS, host));
+  if (invalid.length > 0) {
+    throw new Error(`Unknown host adapter(s): ${invalid.join(", ")}. Available adapters: ${Object.keys(HOST_ADAPTERS).join(", ")}, all.`);
+  }
+  return Array.from(new Set(requested));
+}
+
 function resolveTarget(rawTarget) {
   return path.resolve(process.cwd(), rawTarget || ".");
 }
@@ -54,12 +125,33 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function copyRecursive(source, destination, force) {
+function shouldSkipCopy(relativePath) {
+  const basename = path.basename(relativePath);
+  if (GLOBAL_COPY_EXCLUDE_NAMES.has(basename)) {
+    return true;
+  }
+  if (basename === "settings.local.json" || basename.endsWith(".local.json")) {
+    return true;
+  }
+  if (basename === ".env" || basename.startsWith(".env.")) {
+    return true;
+  }
+  return GLOBAL_COPY_EXCLUDE_SUFFIXES.some((suffix) => basename.endsWith(suffix));
+}
+
+function copyRecursive(source, destination, force, sourceRoot = source, skipped = []) {
+  const relativePath = path.relative(sourceRoot, source).split(path.sep).join("/");
+  const comparablePath = relativePath || path.basename(source);
+  if (shouldSkipCopy(comparablePath)) {
+    skipped.push(comparablePath);
+    return;
+  }
+
   const stat = fs.statSync(source);
   if (stat.isDirectory()) {
     ensureDir(destination);
     for (const entry of fs.readdirSync(source)) {
-      copyRecursive(path.join(source, entry), path.join(destination, entry), force);
+      copyRecursive(path.join(source, entry), path.join(destination, entry), force, sourceRoot, skipped);
     }
     return;
   }
@@ -71,30 +163,60 @@ function copyRecursive(source, destination, force) {
   fs.copyFileSync(source, destination);
 }
 
-function installOrSync(target, force) {
+function buildInstallPaths(hosts) {
+  const hostPaths = hosts.flatMap((host) => HOST_ADAPTERS[host].paths.map((relativePath) => ({ host, relativePath })));
+  return {
+    corePaths: CORE_INSTALL_PATHS,
+    hostPaths,
+    allPaths: [...CORE_INSTALL_PATHS, ...hostPaths.map((item) => item.relativePath)]
+  };
+}
+
+function installOrSync(target, force, args = []) {
+  const hosts = resolveHostAdapters(args);
   const boundaries = createWorkflowBoundaries();
-  const disallowedCopies = COPY_PATHS.filter((relativePath) => boundaries.userOwnedPaths.some((prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`)));
+  const installPaths = buildInstallPaths(hosts);
+  const disallowedCopies = installPaths.allPaths.filter((relativePath) => boundaries.userOwnedPaths.some((prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`)));
   if (disallowedCopies.length > 0) {
     throw new Error(`Refusing to manage user-owned paths: ${disallowedCopies.join(", ")}`);
   }
-  const copied = [];
-  for (const relativePath of COPY_PATHS) {
+  const skippedUnsafePaths = [];
+  const copiedCorePaths = [];
+  const copiedHostPaths = [];
+
+  for (const relativePath of installPaths.corePaths) {
     const source = path.join(PACKAGE_ROOT, relativePath);
     if (!fs.existsSync(source)) {
       continue;
     }
-    const destination = path.join(target, relativePath);
-    copyRecursive(source, destination, force);
-    copied.push(relativePath);
+    copyRecursive(source, path.join(target, relativePath), force, source, skippedUnsafePaths);
+    copiedCorePaths.push(relativePath);
   }
+
+  for (const { host, relativePath } of installPaths.hostPaths) {
+    const source = path.join(PACKAGE_ROOT, relativePath);
+    if (!fs.existsSync(source)) {
+      continue;
+    }
+    copyRecursive(source, path.join(target, relativePath), force, source, skippedUnsafePaths);
+    copiedHostPaths.push({ host, path: relativePath });
+  }
+
   ensureWorkspace(target);
-  copied.push(".paper/* (bootstrap only, user-owned state preserved)");
+  const copied = [...copiedCorePaths, ...copiedHostPaths.map((item) => item.path), ".paper/* (bootstrap only, user-owned state preserved)"];
   return {
     target,
     copied,
+    copiedCorePaths,
+    copiedHostPaths,
+    skippedUnsafePaths: Array.from(new Set(skippedUnsafePaths)).sort(),
+    hosts,
     force,
     boundaryPolicy: {
       managedPaths: boundaries.managedPaths,
+      neutralCorePaths: boundaries.neutralCorePaths ?? CORE_INSTALL_PATHS,
+      defaultHostAdapters: boundaries.defaultHostAdapters ?? DEFAULT_HOST_ADAPTERS,
+      availableHostAdapters: boundaries.availableHostAdapters ?? Object.keys(HOST_ADAPTERS),
       paperBootstrapOnlyPaths: boundaries.paperBootstrapOnlyPaths.length,
       userOwnedPaths: boundaries.userOwnedPaths
     }
@@ -965,7 +1087,8 @@ function inspectMetaOptimize(target) {
   };
 }
 
-function inspectGovernanceCoverageSurfaceBindings(target) {
+function inspectGovernanceCoverageSurfaceBindings(target, options = {}) {
+  const requireCommandSurfaces = options.requireCommandSurfaces !== false;
   const coverage = readJsonFile(target, ".paper/meta/governance-coverage.json");
   if (coverage.status !== "ok") {
     return {
@@ -997,9 +1120,11 @@ function inspectGovernanceCoverageSurfaceBindings(target) {
     }
     for (const commandId of bindings.commandIds ?? []) {
       boundCommandIds.add(commandId);
-      const commandPath = path.join(target, ".opencode", "commands", `${commandId}.md`);
-      if (!fs.existsSync(commandPath)) {
-        reasons.push(`governance coverage missing command surface ${commandId} for ${entry.id}`);
+      if (requireCommandSurfaces) {
+        const commandPath = path.join(target, ".opencode", "commands", `${commandId}.md`);
+        if (!fs.existsSync(commandPath)) {
+          reasons.push(`governance coverage missing command surface ${commandId} for ${entry.id}`);
+        }
       }
     }
     if (bindings.mcpTool) {
@@ -1054,27 +1179,28 @@ function inspectGovernanceCoverageSurfaceBindings(target) {
   };
 }
 
+function detectInstalledHosts(target) {
+  const detected = Object.entries(HOST_ADAPTERS)
+    .filter(([, adapter]) => adapter.paths.some((relativePath) => fs.existsSync(path.join(target, relativePath))))
+    .map(([host]) => host);
+  return detected.length > 0 ? detected : DEFAULT_HOST_ADAPTERS;
+}
+
 function doctor(target) {
   const boundariesPath = path.join(target, ".paper", "workflow-pack", "boundaries.json");
+  const installedHosts = detectInstalledHosts(target);
+  const hostRequiredPaths = installedHosts.flatMap((host) => HOST_ADAPTERS[host].requiredPaths ?? []);
   const required = [
-    ".opencode/commands/paper.init.md",
-    ".opencode/commands/paper.orchestrate.md",
-    ".opencode/commands/paper.pipeline.md",
-    ".opencode/commands/paper.experiment-audit.md",
-    ".opencode/commands/paper.result-bridge.md",
-    ".opencode/skills/paper-factory-pipeline/SKILL.md",
-    ".opencode/skills/paper-factory-planner/SKILL.md",
-    ".opencode.json",
+    ...hostRequiredPaths,
     ".paper/state.json",
     ".paper/wiki/entities.json",
     ".paper/wiki/relations.json",
     ".paper/figures/qa.json",
     ".paper/meta/long-horizon-memory.json",
     ".paper/workspace/index.json",
-     ".paper/meta/long-horizon-memory.json",
-      ".paper/meta/operator-playbooks.json",
-     "mcp/paper-state-server.mjs",
-     "src/mcp/server.mjs"
+    ".paper/meta/operator-playbooks.json",
+    "mcp/paper-state-server.mjs",
+    "src/mcp/server.mjs"
    ];
 
   const missing = required.filter((relativePath) => !fs.existsSync(path.join(target, relativePath)));
@@ -1084,12 +1210,13 @@ function doctor(target) {
     healthy: missing.length === 0,
     missing,
     checks: [],
+    hostAdapters: installedHosts,
     boundaryPolicy: null,
     managedArtifacts: null
   };
 
   const jsonChecks = [
-    ".opencode.json",
+    ...installedHosts.flatMap((host) => HOST_ADAPTERS[host].jsonChecks ?? []),
     ".paper/state.json"
   ];
 
@@ -1101,6 +1228,15 @@ function doctor(target) {
     } catch (error) {
       result.checks.push({ check: `json:${relativePath}`, ok: false, message: error instanceof Error ? error.message : String(error) });
     }
+  }
+
+  for (const host of installedHosts) {
+    const requiredPaths = HOST_ADAPTERS[host].requiredPaths ?? [];
+    result.checks.push({
+      check: `host-adapter:${host}`,
+      ok: requiredPaths.every((relativePath) => fs.existsSync(path.join(target, relativePath))),
+      requiredPaths
+    });
   }
 
   const rawJsonChecksPassed = result.checks.every((check) => check.ok);
@@ -1173,7 +1309,7 @@ function doctor(target) {
     operatorFollowThrough: inspectOperatorFollowThrough(target),
     autonomyRuntime: inspectAutonomyRuntime(target),
     programsSurface: inspectProgramsSurface(target),
-    governanceCoverageBindings: inspectGovernanceCoverageSurfaceBindings(target)
+    governanceCoverageBindings: inspectGovernanceCoverageSurfaceBindings(target, { requireCommandSurfaces: installedHosts.includes("opencode") })
   };
   result.managedArtifacts = managedArtifacts;
   result.proposalFrontier = buildDoctorProposalFrontier(managedArtifacts, rawMetaOptimizeConsistency);
@@ -1248,7 +1384,7 @@ if (!command || command === "help" || command === "--help") {
 
 if (command === "install" || command === "sync") {
   const target = resolveTarget(maybeTarget);
-  const result = installOrSync(target, force);
+  const result = installOrSync(target, force, rest);
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
