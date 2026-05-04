@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 import { refreshDurableSurfaces } from "./navigation.mjs";
-import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, createMetaOperatorFollowThroughIndex, normalizeMetaOperatorFollowThroughIndex, resolveResumeCommandForPhase } from "./schema.mjs";
+import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, createMetaOperatorFollowThroughIndex, normalizeMetaOperatorFollowThroughIndex, resolveResumeCommandForPhase, roleCanActAs } from "./schema.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
 
 const ALLOWED_TRANSITIONS = {
@@ -24,17 +24,17 @@ const ALLOWED_TRANSITIONS = {
 
 const PHASE_ROLE_OWNERS = {
   init: "planner",
-  sources: "researcher",
-  notes: "researcher",
-  research: "researcher",
+  sources: "author",
+  notes: "author",
+  research: "author",
   plan: "planner",
   outline: "planner",
-  draft: "researcher",
-  experiments: "experiment-planner",
-  citations: "researcher",
+  draft: "author",
+  experiments: "author",
+  citations: "author",
   review: "reviewer",
-  rebuttal: "rebuttal-lead",
-  versions: "version-analyst",
+  rebuttal: "author",
+  versions: "planner",
   checklist: "planner"
 };
 
@@ -267,7 +267,7 @@ function assertPhaseRoleOwnership(phase, role, actionLabel, policyOverride) {
     return;
   }
   const expectedRole = expectedRoleForPhase(phase);
-  if (role !== expectedRole) {
+  if (!roleCanActAs(role, expectedRole)) {
     throw new Error(formatExpectedRoleMessage(actionLabel, phase, expectedRole));
   }
 }
@@ -293,12 +293,12 @@ export function assertRoleBoundMutation(root, args = {}, { actionLabel, expected
     return { board, policyOverride };
   }
   const currentPhaseOwner = expectedRoleForPhase(board.currentPhase);
-  if (board.assignedRole !== currentPhaseOwner) {
+  if (!roleCanActAs(board.assignedRole, currentPhaseOwner)) {
     throw new Error(
       `${actionLabel} requires the board owner to match the current phase contract (${currentPhaseOwner} for phase ${board.currentPhase}). Current board owner is ${board.assignedRole}. Repair the board with appendHandoff or upsertOrchestrationBoard first, or provide policyOverrideReason for traceable manual maintenance.`
     );
   }
-  if (board.assignedRole !== expectedRole) {
+  if (!roleCanActAs(board.assignedRole, expectedRole)) {
     throw new Error(
       `${actionLabel} requires board role ${expectedRole}, but the current owner is ${board.assignedRole} in phase ${board.currentPhase}. Transfer ownership explicitly with appendHandoff or upsertOrchestrationBoard, or provide policyOverrideReason for traceable manual maintenance.`
     );
@@ -815,7 +815,7 @@ export function appendHandoff(root, args = {}) {
   const toRole = args.toRole ?? board.assignedRole;
   const phase = args.phase ?? board.currentPhase;
   validateBoardMutation(board, phase, toRole, policyOverride, state.settings?.strictMode, "Appending a handoff");
-  if (!policyOverride.active && fromRole !== board.assignedRole) {
+  if (!policyOverride.active && !roleCanActAs(fromRole, board.assignedRole)) {
     throw new Error(`Appending a handoff requires fromRole ${board.assignedRole}, but received ${fromRole}. Use policyOverrideReason for traceable manual maintenance if you need to repair the handoff log.`);
   }
   const intentType = args.intentType ?? board.intentType ?? classifyWorkflowIntent({ phase, tasks: board.tasks, blockers: board.blockers });
@@ -882,7 +882,7 @@ export function updateResearchBrief(root, args = {}) {
   upsertOrchestrationBoard(root, {
     objective: next.objective,
     phase: args.phase ?? "research",
-    assignedRole: args.assignedRole ?? "researcher",
+    assignedRole: args.assignedRole ?? "author",
     intentType: "research",
     currentFocus: args.currentFocus ?? "Tighten the research agenda and evidence backlog.",
     nextAction: args.nextAction ?? "Turn backlog items into sources, notes, or experiments.",
@@ -910,7 +910,7 @@ function normalizeExperimentPlan(plan = {}, index = 0) {
     successMetric: plan.successMetric ?? "",
     comparisonTargets: normalizeStringArray(plan.comparisonTargets),
     status: plan.status ?? "planned",
-    owner: ROLE_IDS.includes(plan.owner) ? plan.owner : "experiment-planner",
+    owner: ROLE_IDS.includes(plan.owner) ? plan.owner : "author",
     updatedAt: nowIso()
   };
 }
@@ -1260,7 +1260,7 @@ export function upsertExperimentPlan(root, args = {}) {
   const board = loadBoard(root);
   upsertOrchestrationBoard(root, {
     phase: "experiments",
-    assignedRole: "experiment-planner",
+    assignedRole: "author",
     intentType: "experiment",
     currentFocus: `Advance experiment ${nextPlan.id}.`,
     nextAction: `Record results for ${nextPlan.id}, then audit the outcome.`,
@@ -1357,7 +1357,7 @@ export function upsertExperimentResult(root, args = {}) {
     : board.blockers;
   upsertOrchestrationBoard(root, {
     phase: "experiments",
-    assignedRole: "experiment-planner",
+    assignedRole: "author",
     intentType: bridgeEvent.mapping === "supports" ? "experiment" : "repair",
     currentFocus: bridgeEvent.mapping === "supports"
       ? `Experiment ${result.experimentId} now supports ${result.claimId}.`
@@ -1428,7 +1428,7 @@ export function persistRebuttalIssues(root, args = {}) {
   if (!args.skipBoardUpdate) {
     upsertOrchestrationBoard(root, {
       phase: "rebuttal",
-      assignedRole: "rebuttal-lead",
+      assignedRole: "author",
       intentType: "respond",
       currentFocus: items.length > 0 ? items[0].summary : "Prepare the rebuttal strategy.",
       nextAction: "Turn issues into strategy and response drafts without over-claiming.",
@@ -1479,7 +1479,7 @@ export function buildRebuttalStrategy(root, args = {}) {
       `- Evidence links: ${issue.evidenceLinks.join(", ") || "none"}`,
       `- Claim IDs: ${issue.claimIds.join(", ") || "none"}`,
       `- Experiment IDs: ${issue.experimentIds.join(", ") || "none"}`,
-      `- Recommended owner: ${issue.responseDirection === "fix" ? "planner + researcher" : "rebuttal-lead"}`,
+      `- Recommended owner: ${issue.responseDirection === "fix" ? "planner + author/researcher" : "author/revision-lead"}`,
       `- Required action: ${issue.responseDirection === "fix" ? "Update evidence or experiment coverage before final response." : "Clarify scope and cite the strongest existing evidence."}`,
       ""
     ]) : ["No rebuttal issues recorded."])
@@ -1502,7 +1502,7 @@ export function buildRebuttalStrategy(root, args = {}) {
   writeText(root, ARTIFACT_PATHS.rebuttalResponseDraft, responseDraft);
   upsertOrchestrationBoard(root, {
     phase: "rebuttal",
-    assignedRole: "rebuttal-lead",
+    assignedRole: "author",
     intentType: "respond",
     currentFocus: issues.items.length > 0 ? issues.items[0].summary : "Prepare the rebuttal.",
     nextAction: "Draft concise evidence-backed responses.",
@@ -1538,7 +1538,7 @@ function readSnapshot(root, snapshotId) {
     },
     board: {
       currentPhase: raw.board?.currentPhase ?? "versions",
-      assignedRole: raw.board?.assignedRole ?? "version-analyst",
+      assignedRole: raw.board?.assignedRole ?? "planner",
       intentType: raw.board?.intentType ?? "version",
       currentFocus: raw.board?.currentFocus ?? "",
       nextAction: raw.board?.nextAction ?? "",
@@ -1633,7 +1633,7 @@ export function createVersionSnapshot(root, args = {}) {
   const snapshotIds = Array.from(new Set([...(board.versionLineage?.snapshotIds ?? []), versionId]));
   upsertOrchestrationBoard(root, {
     phase: "versions",
-    assignedRole: "version-analyst",
+    assignedRole: "planner",
     intentType: "version",
     currentFocus: `Snapshot ${versionId} recorded.`,
     nextAction: "Compare it to the previous version if the paper changed materially.",
@@ -1764,7 +1764,7 @@ export function compareVersions(root, args = {}) {
 
   upsertOrchestrationBoard(root, {
     phase: "versions",
-    assignedRole: "version-analyst",
+    assignedRole: "planner",
     intentType: "version",
     currentFocus: `Compare ${fromId} to ${toId}.`,
     nextAction: "Use the comparison report to explain what changed and why.",

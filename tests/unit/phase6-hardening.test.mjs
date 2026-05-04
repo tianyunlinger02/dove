@@ -9,6 +9,7 @@ import {
   GOVERNANCE_EXEMPT_MUTATIONS,
   GOVERNANCE_GUARDED_MUTATIONS,
   GOVERNANCE_NEGATIVE_COVERAGE,
+  GOVERNANCE_READONLY_COMMANDS,
   ensureWorkspace,
   initProject,
   materializeGuidancePacket,
@@ -1719,7 +1720,6 @@ test("governance registry completely binds the expected mutating command and MCP
   }
 
   const expectedMutatingCommands = [
-    "paper.orchestrate",
     "paper.research",
     "paper.source",
     "paper.note",
@@ -1747,6 +1747,9 @@ test("governance registry completely binds the expected mutating command and MCP
     assert.equal(boundCommands.has(commandId), true);
     assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), true);
   }
+  assert.equal(boundCommands.has("paper.orchestrate"), false);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("paper.orchestrate"), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "paper.orchestrate.md")), true);
 });
 
 test("a broader set of guarded write paths all reject unresolved follow-through debt", () => {

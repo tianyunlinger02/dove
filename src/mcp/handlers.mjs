@@ -20,6 +20,7 @@ import {
   queryMetaOptimize,
   queryOpenQuestions,
   queryOperatorFollowThrough,
+  queryPaperAudit,
   queryProgramApprovals,
   queryCampaigns,
   queryTaskGraph,
@@ -95,6 +96,8 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(queryGovernanceCoverageReport(root));
       case "query_operator_follow_through":
         return makeTextResult(queryOperatorFollowThrough(root));
+      case "query_paper_audit":
+        return makeTextResult(queryPaperAudit(root, args));
       case "query_program_approvals":
         return makeTextResult(queryProgramApprovals(root, args));
       case "query_campaigns":

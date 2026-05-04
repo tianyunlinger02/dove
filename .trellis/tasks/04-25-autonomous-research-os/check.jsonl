@@ -1,0 +1,17 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Verify package surface organization"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Verify durable state and runtime constraints"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify runtime schema and MCP conventions"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify validation and public surface alignment"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Verify operator surface contract patterns"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Verify file-backed helper patterns"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verify cross-layer durable state mirrors"}
+{"file": "src/core/runtime.mjs", "reason": "Review autonomy runtime changes"}
+{"file": "src/core/navigation.mjs", "reason": "Review objective-derived source and approval composition"}
+{"file": "src/core/schema.mjs", "reason": "Review governance and schema changes"}
+{"file": "src/mcp/tool-definitions.mjs", "reason": "Review MCP schema alignment"}
+{"file": "src/mcp/handlers.mjs", "reason": "Review MCP dispatch alignment"}
+{"file": "bin/paper-factory.mjs", "reason": "Review CLI alignment"}
+{"file": "tests/unit/phase6-hardening.test.mjs", "reason": "Review autonomy behavior tests"}
+{"file": "tests/integration/mcp-tools.test.mjs", "reason": "Review MCP contract tests"}

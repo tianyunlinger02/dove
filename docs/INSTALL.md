@@ -31,6 +31,21 @@ node ./bin/paper-factory.mjs install . --force --host all
 
 `sync` accepts the same `--host` and `--platform` flags.
 
+## Existing paper onboarding
+
+```bash
+# Proposal-only scan; writes nothing
+node ./bin/paper-factory.mjs onboard .
+
+# Alias with the same behavior
+node ./bin/paper-factory.mjs migrate .
+
+# Persist only the proposed reference map
+node ./bin/paper-factory.mjs onboard . --write-map
+```
+
+The artifact map lives at `.paper/workspace/artifact-map.json` and records source path, paper lifecycle family, suggested `.paper` target, confidence, conflicts, unmapped assets, and recommended next actions. The onboarding flow never moves, deletes, imports, rewrites, or overwrites manuscript assets.
+
 ## Health check
 
 ```bash
@@ -38,7 +53,7 @@ node ./bin/paper-factory.mjs doctor .
 ```
 
 The doctor command checks the neutral core, `.paper/state.json`, the MCP entrypoint, and the required files for each installed host adapter.
-It also parses key JSON artifacts, reports degraded typed-wiki or figure-managed internals explicitly, exposes installed host adapters, and probes the local MCP server so a workspace cannot look healthy purely because files exist.
+It also parses key JSON artifacts, reports degraded typed-wiki or figure-managed internals explicitly, exposes installed host adapters, reports proposal-first artifact-map status for legacy paper assets, and probes the local MCP server so a workspace cannot look healthy purely because files exist.
 
 ## Update boundary safety
 

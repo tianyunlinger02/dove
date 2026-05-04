@@ -18,6 +18,7 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "query_meta_optimize",
     "query_governance_coverage_report",
     "query_operator_follow_through",
+    "query_paper_audit",
     "query_program_approvals",
     "query_campaigns",
     "query_boundary_report",

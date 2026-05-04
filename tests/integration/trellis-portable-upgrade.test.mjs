@@ -124,6 +124,7 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(reviewerManifest.preActionReadPaths.includes(".paper/context/actions/role-reviewer.json"));
   assert.equal(packetManifest.packetId, "task-packet-review-task");
   assert.equal(packetManifest.lifecycleStatus, "ready-for-handoff");
+  assert.equal(packetManifest.lifecycleFamily, "concern");
   assert.equal(packetManifest.taskWorkspaceCoupling.workspaceIndexPath, ".paper/workspace/index.json");
   assert.ok(packetManifest.linkedIds.claims.includes("claim-packets"));
   assert.ok(packetManifest.linkedArtifacts.includes(".paper/context/packets/task-packet-review-task.json"));
@@ -134,6 +135,8 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(phaseManifest.preActionReadPaths.includes(".paper/context/actions/phase-research.json"));
   assert.equal(artifactManifest.artifactPath, ".paper/orchestration/board.json");
   assert.equal(artifactManifest.category, "orchestration");
+  assert.equal(artifactManifest.lifecycleFamily, "work-unit");
+  assert.equal(artifactManifest.paperLifecycle.familyId, "work-unit");
   assert.ok(artifactManifest.readBeforeMutating.includes(".paper/workspace/index.json"));
   assert.equal(currentActionBundle.scopeType, "current");
   assert.ok(currentActionBundle.requiredReadPaths.includes(".paper/context/actions/current.json"));
@@ -142,6 +145,9 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(workspaceIndex.handoffObligations.some((item) => item.packetId === "task-packet-review-task"));
   assert.ok(workspaceIndex.resumeGuidance.prioritizedPacketIds.includes("task-packet-review-task"));
   assert.ok(workspaceIndex.resumeGuidance.packetContextPaths.includes(".paper/context/packets/task-packet-review-task.json"));
+  assert.equal(workspaceIndex.lifecycle.boardFamily, "objective");
+  assert.equal(workspaceIndex.lifecycle.packetCounts.concern >= 1, true);
+  assert.equal(workspaceIndex.lifecycle.topFamilies.includes("concern"), true);
   assert.equal(workspaceIndex.repairFrontier.count, 1);
   assert.equal(workspaceIndex.repairFrontier.governanceIssueCount, 1);
   assert.ok(workspaceIndex.repairFrontier.prioritizedItems.some((item) => item.frontierType === "workflow-governance"));

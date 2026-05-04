@@ -30,9 +30,80 @@ export const PIPELINE_STAGE_ORDER = [
   "checklist"
 ];
 
+export const PAPER_LIFECYCLE_TAXONOMY_VERSION = "paper-lifecycle-v1";
+
+export const PAPER_LIFECYCLE_FAMILIES = [
+  {
+    id: "objective",
+    label: "Objective",
+    summary: "Research goal, thesis, venue strategy, and acceptance target.",
+    roleHints: ["planner"],
+    artifactPathKeys: ["state", "project", "researchContract", "researchBrief", "researchAgenda"]
+  },
+  {
+    id: "structure",
+    label: "Structure",
+    summary: "Paper organization, sections, drafts, figures, checklists, and versions.",
+    roleHints: ["planner", "author"],
+    artifactPathKeys: ["plan", "outline", "draftsDir", "checklist", "figuresIndex", "figureQa", "versionsIndex", "versionComparisons"]
+  },
+  {
+    id: "campaign",
+    label: "Campaign",
+    summary: "Multi-cycle research programs, approvals, and explicit foreground runtime state.",
+    roleHints: ["planner"],
+    artifactPathKeys: ["programsIndex", "campaignsIndex", "programRuns", "programApprovals", "runtimeControllerState", "runtimeResults"]
+  },
+  {
+    id: "work-unit",
+    label: "Work Unit",
+    summary: "Board, handoff, task-packet, and context/action surfaces that make work resumable.",
+    roleHints: ["planner", "author", "reviewer"],
+    artifactPathKeys: ["orchestrationBoard", "orchestrationHandoffs", "taskPacketsIndex", "workspaceIndex", "workspaceArtifactMap", "actionContextsDir", "packetContextsDir"]
+  },
+  {
+    id: "concern",
+    label: "Concern",
+    summary: "Reviewer concerns, revision pressure, rebuttal issues, and isolated review handoffs.",
+    roleHints: ["reviewer", "author"],
+    artifactPathKeys: ["reviewState", "reviewConcerns", "reviewDebateLog", "adversarialReviewState", "revisionPlan", "rebuttalIssues", "rebuttalStrategy", "isolatedReviewsDir"]
+  },
+  {
+    id: "audit",
+    label: "Audit",
+    summary: "Inspection, validation, governance proof, figure QA, version comparison, and meta reports.",
+    roleHints: ["reviewer", "planner"],
+    artifactPathKeys: ["experimentAudits", "reviewLog", "figureQa", "versionComparisons", "metaGovernanceCoverage", "metaRecommendations", "metaOptimizerReport"]
+  },
+  {
+    id: "knowledge",
+    label: "Knowledge",
+    summary: "Sources, notes, evidence, claims, bibliography, wiki, and long-horizon memory.",
+    roleHints: ["author"],
+    artifactPathKeys: ["sources", "notes", "evidence", "claims", "bibliography", "citationLog", "wiki", "wikiEntities", "wikiRelations", "metaLongHorizonMemory"]
+  }
+];
+
+export const PAPER_LIFECYCLE_FAMILY_IDS = PAPER_LIFECYCLE_FAMILIES.map((family) => family.id);
+
+export const PAPER_LIFECYCLE_FAMILY_BY_ID = Object.fromEntries(PAPER_LIFECYCLE_FAMILIES.map((family) => [family.id, family]));
+
+export const PAPER_MAJOR_CHANGE_PROTOCOL_STAGES = ["design", "checklist", "implementation", "acceptance"];
+
+export const PAPER_MAJOR_CHANGE_SIGNALS = [
+  "objective-or-thesis-change",
+  "structure-or-section-change",
+  "core-claim-change",
+  "experiment-interpretation-change",
+  "reviewer-concern-or-rebuttal-change",
+  "figure-set-change",
+  "version-or-finalization-change",
+  "campaign-or-program-change"
+];
+
 export const GOVERNANCE_GUARDED_MUTATIONS = [
-  { id: "upsert-orchestration-board", action: "Updating the orchestration board", artifactPath: ".paper/orchestration/board.json", surfaceBindings: { coreFunction: "upsertOrchestrationBoard", mcpTool: "upsert_orchestration_board", commandIds: ["paper.orchestrate"] } },
-  { id: "append-handoff", action: "Appending a durable handoff", artifactPath: ".paper/orchestration/handoffs.md", surfaceBindings: { coreFunction: "appendHandoff", mcpTool: "append_handoff", commandIds: ["paper.orchestrate"] } },
+  { id: "upsert-orchestration-board", action: "Updating the orchestration board", artifactPath: ".paper/orchestration/board.json", surfaceBindings: { coreFunction: "upsertOrchestrationBoard", mcpTool: "upsert_orchestration_board", commandIds: [] } },
+  { id: "append-handoff", action: "Appending a durable handoff", artifactPath: ".paper/orchestration/handoffs.md", surfaceBindings: { coreFunction: "appendHandoff", mcpTool: "append_handoff", commandIds: [] } },
   { id: "register-source", action: "Registering a source", artifactPath: ".paper/sources/index.json", surfaceBindings: { coreFunction: "registerSource", mcpTool: "register_source", commandIds: ["paper.source"] } },
   { id: "upsert-note", action: "Recording a structured note", artifactPath: ".paper/notes/index.json", surfaceBindings: { coreFunction: "upsertNote", mcpTool: "upsert_note", commandIds: ["paper.note"] } },
   { id: "upsert-claims", action: "Updating evidence-backed claims", artifactPath: ".paper/evidence/index.json", surfaceBindings: { coreFunction: "upsertClaims", mcpTool: "upsert_claims", commandIds: ["paper.claim-gate"] } },
@@ -75,8 +146,8 @@ export const GOVERNANCE_EXEMPT_MUTATIONS = [
   { id: "sync-checklist", action: "Checklist syncing remains exempt because it summarizes debt instead of executing it.", artifactPath: ".paper/checklists/paper.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-03T00:00:00.000Z", reasonCode: "summary-sync", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "syncChecklist", mcpTool: "sync_checklist", commandIds: ["paper.checklist"] } },
   { id: "validate-figure-pipeline", action: "Figure validation is an inspection path and remains exempt from follow-through execution gating.", artifactPath: ".paper/figures/qa.json", ownerRole: "researcher", approvedByRole: "researcher", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-03T00:00:00.000Z", reasonCode: "inspection-only", reviewCadence: "per-change", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "validateFigurePipeline", mcpTool: "validate_figure_pipeline", commandIds: ["paper.figure"] } },
   { id: "classify-workflow-intent", action: "Workflow intent classification is analytical and remains exempt.", artifactPath: ".paper/meta/recommendations.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-03T00:00:00.000Z", reasonCode: "analysis-only", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "classifyWorkflowIntent", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } },
-  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: "query_workspace_index", commandIds: ["paper.orchestrate"] } },
-  { id: "save-board", action: "Board persistence is an internal helper already covered by guarded orchestration updates and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "saveBoard", mcpTool: "upsert_orchestration_board", commandIds: ["paper.orchestrate"] } },
+  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: "query_workspace_index", commandIds: [] } },
+  { id: "save-board", action: "Board persistence is an internal helper already covered by guarded orchestration updates and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "saveBoard", mcpTool: "upsert_orchestration_board", commandIds: [] } },
   { id: "persist-experiment-audit", action: "Experiment audit persistence is an internal helper used by guarded experiment-audit flows and bounded runtime execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/experiments/audits.json", ownerRole: "experiment-planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistExperimentAudit", mcpTool: "run_experiment_audit", commandIds: ["paper.experiment-audit"] } },
   { id: "persist-experiment-result-claim-bridge", action: "Result-to-claim bridge persistence is an internal helper used by guarded bridge flows and bounded runtime execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/claims/bridge-log.json", ownerRole: "experiment-planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistExperimentResultClaimBridge", mcpTool: "bridge_result_to_claim", commandIds: ["paper.result-bridge"] } },
   { id: "persist-review-log", action: "Review log persistence is an internal helper used by guarded review flows and bounded runtime review execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/reviews/log.md", ownerRole: "reviewer", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistReviewLog", mcpTool: "run_review_loop", commandIds: ["paper.review-loop"] } },
@@ -86,7 +157,10 @@ export const GOVERNANCE_EXEMPT_MUTATIONS = [
 ];
 
 export const GOVERNANCE_READONLY_COMMANDS = [
+  "paper.orchestrate",
   "paper.pipeline",
+  "paper.audit",
+  "paper.onboard",
   "paper.task-graph",
   "paper.open-questions",
   "paper.decisions",
@@ -105,6 +179,7 @@ export const GOVERNANCE_READONLY_TOOLS = [
   "query_meta_optimize",
   "query_governance_coverage_report",
   "query_operator_follow_through",
+  "query_paper_audit",
   "query_program_approvals",
   "query_campaigns",
   "query_boundary_report",
@@ -176,14 +251,101 @@ export function resolveResumeCommandForPhase(phase) {
   }
 }
 
-export const ROLE_IDS = [
-  "planner",
+export const PRIMARY_ROLE_IDS = ["planner", "author", "reviewer"];
+
+export const SUBAGENT_ROLE_IDS = [
   "researcher",
-  "reviewer",
-  "rebuttal-lead",
   "experiment-planner",
+  "revision-lead",
+  "rebuttal-lead",
   "version-analyst"
 ];
+
+export const ROLE_HIERARCHY = {
+  planner: {
+    id: "planner",
+    label: "Planner",
+    kind: "primary",
+    manuallySwitchable: true,
+    parentRole: null,
+    charter: "Acts as mentor, PI, and editor: sets direction, prioritizes work, coordinates handoffs, and supervises governance.",
+    subagents: ["task-planner", "orchestration-manager", "governance-checker", "priority-ranker", "version-analyst"]
+  },
+  author: {
+    id: "author",
+    label: "Author",
+    kind: "primary",
+    manuallySwitchable: true,
+    parentRole: null,
+    charter: "Acts as the paper builder: writes, revises, gathers evidence, plans experiments, interprets results, and prepares responses.",
+    subagents: ["researcher", "experiment-planner", "result-analyst", "paper-writer", "revision-lead"]
+  },
+  reviewer: {
+    id: "reviewer",
+    label: "Reviewer",
+    kind: "primary",
+    manuallySwitchable: true,
+    parentRole: null,
+    charter: "Acts as the independent critic: attacks claims, checks evidence and methods, records concerns, and issues verdicts.",
+    subagents: ["claim-critic", "evidence-auditor", "experiment-auditor", "methodology-critic", "novelty-critic"]
+  },
+  researcher: {
+    id: "researcher",
+    label: "Researcher",
+    kind: "subagent",
+    manuallySwitchable: false,
+    parentRole: "author",
+    charter: "Author-side specialist for sources, notes, claims, evidence maps, and durable research briefs."
+  },
+  "experiment-planner": {
+    id: "experiment-planner",
+    label: "Experiment Planner",
+    kind: "subagent",
+    manuallySwitchable: false,
+    parentRole: "author",
+    charter: "Author-side specialist for claim-driven experiment plans, baselines, metrics, ablations, and result-to-claim closure."
+  },
+  "revision-lead": {
+    id: "revision-lead",
+    label: "Revision Lead",
+    kind: "subagent",
+    manuallySwitchable: false,
+    parentRole: "author",
+    aliasOf: "rebuttal-lead",
+    charter: "Author-side specialist for turning reviewer concerns into revision plans, response matrices, and rebuttal drafts."
+  },
+  "rebuttal-lead": {
+    id: "rebuttal-lead",
+    label: "Rebuttal Lead",
+    kind: "legacy-subagent",
+    manuallySwitchable: false,
+    parentRole: "author",
+    canonicalRole: "revision-lead",
+    charter: "Compatibility alias for author-side revision and rebuttal response work."
+  },
+  "version-analyst": {
+    id: "version-analyst",
+    label: "Version Analyst",
+    kind: "subagent",
+    manuallySwitchable: false,
+    parentRole: "planner",
+    charter: "Planner-side audit specialist for version diffs, regression checks, and concern-resolution evidence."
+  }
+};
+
+export const ROLE_IDS = [
+  ...PRIMARY_ROLE_IDS,
+  ...SUBAGENT_ROLE_IDS
+];
+
+export function roleCanActAs(actorRole, expectedRole) {
+  if (actorRole === expectedRole) {
+    return true;
+  }
+  const actor = ROLE_HIERARCHY[actorRole];
+  const expected = ROLE_HIERARCHY[expectedRole];
+  return expected?.parentRole === actorRole || actor?.parentRole === expectedRole;
+}
 
 export const ARTIFACT_PATHS = {
   paperRoot: ".paper",
@@ -205,6 +367,7 @@ export const ARTIFACT_PATHS = {
   sessionSummary: ".paper/sessions/LATEST_SUMMARY.md",
   workspaceDir: ".paper/workspace",
   workspaceIndex: ".paper/workspace/index.json",
+  workspaceArtifactMap: ".paper/workspace/artifact-map.json",
   programsDir: ".paper/programs",
   programsIndex: ".paper/programs/index.json",
   programRuns: ".paper/programs/runs.json",
@@ -339,38 +502,18 @@ function defaultSections() {
 }
 
 function defaultRoleRoster() {
-  return [
-    {
-      id: "planner",
-      label: "Planner",
-      charter: "Keeps the board current, sequences work, and maintains plan/review gates."
-    },
-    {
-      id: "researcher",
-      label: "Researcher",
-      charter: "Expands sources, notes, claims, and durable research briefs."
-    },
-    {
-      id: "reviewer",
-      label: "Reviewer",
-      charter: "Runs evidence-aware review and records blockers or revision items."
-    },
-    {
-      id: "rebuttal-lead",
-      label: "Rebuttal Lead",
-      charter: "Normalizes reviewer issues, writes strategy, and keeps responses factual."
-    },
-    {
-      id: "experiment-planner",
-      label: "Experiment Planner",
-      charter: "Defines claim-driven experiments and tracks results-to-claim closure."
-    },
-    {
-      id: "version-analyst",
-      label: "Version Analyst",
-      charter: "Snapshots versions, tracks lineage, and compares changes honestly."
-    }
-  ];
+  return PRIMARY_ROLE_IDS.map((roleId) => {
+    const role = ROLE_HIERARCHY[roleId];
+    return {
+      id: role.id,
+      label: role.label,
+      kind: role.kind,
+      manuallySwitchable: role.manuallySwitchable,
+      parentRole: role.parentRole,
+      charter: role.charter,
+      subagents: role.subagents ?? []
+    };
+  });
 }
 
 export function createDefaultBoard(stateOverrides = {}) {
@@ -547,6 +690,76 @@ function normalizeStringArrayRecord(value) {
   );
 }
 
+function createLifecycleFamilySummary(overrides = {}) {
+  return PAPER_LIFECYCLE_FAMILIES.map((family) => {
+    const incoming = overrides[family.id] && typeof overrides[family.id] === "object" && !Array.isArray(overrides[family.id])
+      ? overrides[family.id]
+      : {};
+    return {
+      id: family.id,
+      label: family.label,
+      summary: family.summary,
+      roleHints: normalizeStringArray(incoming.roleHints, family.roleHints),
+      artifactPathKeys: normalizeStringArray(incoming.artifactPathKeys, family.artifactPathKeys),
+      artifactCount: normalizeNumber(incoming.artifactCount, 0),
+      activePacketCount: normalizeNumber(incoming.activePacketCount, 0),
+      packetCount: normalizeNumber(incoming.packetCount, 0)
+    };
+  });
+}
+
+export function normalizeLifecycleFamilyId(value, fallback = null) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return PAPER_LIFECYCLE_FAMILY_IDS.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeWorkspaceLifecycle(raw = {}, fallback = null) {
+  const base = fallback ?? {
+    taxonomyVersion: PAPER_LIFECYCLE_TAXONOMY_VERSION,
+    familyIds: PAPER_LIFECYCLE_FAMILY_IDS,
+    families: createLifecycleFamilySummary(),
+    artifactCounts: Object.fromEntries(PAPER_LIFECYCLE_FAMILY_IDS.map((familyId) => [familyId, 0])),
+    activePacketCounts: Object.fromEntries(PAPER_LIFECYCLE_FAMILY_IDS.map((familyId) => [familyId, 0])),
+    packetCounts: Object.fromEntries(PAPER_LIFECYCLE_FAMILY_IDS.map((familyId) => [familyId, 0])),
+    boardFamily: null,
+    boardPhaseFamily: null,
+    topFamilies: [],
+    protocol: {
+      stages: PAPER_MAJOR_CHANGE_PROTOCOL_STAGES,
+      majorChangeSignals: PAPER_MAJOR_CHANGE_SIGNALS,
+      overview: "Major paper changes should close through design, checklist, implementation, and acceptance."
+    }
+  };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const familyOverrides = Object.fromEntries(normalizeObjectArray(raw.families).map((family) => [family.id, family]));
+  const artifactCounts = normalizeObject(raw.artifactCounts);
+  const activePacketCounts = normalizeObject(raw.activePacketCounts);
+  const packetCounts = normalizeObject(raw.packetCounts);
+  const protocol = normalizeObject(raw.protocol);
+  return {
+    ...base,
+    ...raw,
+    taxonomyVersion: normalizeString(raw.taxonomyVersion, PAPER_LIFECYCLE_TAXONOMY_VERSION),
+    familyIds: PAPER_LIFECYCLE_FAMILY_IDS,
+    families: createLifecycleFamilySummary(familyOverrides),
+    artifactCounts: Object.fromEntries(PAPER_LIFECYCLE_FAMILY_IDS.map((familyId) => [familyId, normalizeNumber(artifactCounts[familyId], 0)])),
+    activePacketCounts: Object.fromEntries(PAPER_LIFECYCLE_FAMILY_IDS.map((familyId) => [familyId, normalizeNumber(activePacketCounts[familyId], 0)])),
+    packetCounts: Object.fromEntries(PAPER_LIFECYCLE_FAMILY_IDS.map((familyId) => [familyId, normalizeNumber(packetCounts[familyId], 0)])),
+    boardFamily: normalizeLifecycleFamilyId(raw.boardFamily, base.boardFamily),
+    boardPhaseFamily: normalizeLifecycleFamilyId(raw.boardPhaseFamily, base.boardPhaseFamily),
+    topFamilies: normalizeStringArray(raw.topFamilies).filter((familyId) => PAPER_LIFECYCLE_FAMILY_IDS.includes(familyId)),
+    protocol: {
+      ...base.protocol,
+      ...protocol,
+      stages: normalizeStringArray(protocol.stages, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES).filter((stage) => PAPER_MAJOR_CHANGE_PROTOCOL_STAGES.includes(stage)),
+      majorChangeSignals: normalizeStringArray(protocol.majorChangeSignals, PAPER_MAJOR_CHANGE_SIGNALS).filter((signal) => PAPER_MAJOR_CHANGE_SIGNALS.includes(signal)),
+      overview: normalizeString(protocol.overview, base.protocol.overview)
+    }
+  };
+}
+
 function normalizeContinuation(value) {
   if (!value || typeof value !== "object") {
     return createContinuationState();
@@ -666,6 +879,7 @@ export function normalizeWorkspaceIndex(raw = {}) {
   const programs = normalizeObject(raw.programs);
   const campaigns = normalizeObject(raw.campaigns);
   const autonomyLoops = normalizeObject(raw.autonomyLoops);
+  const lifecycle = normalizeObject(raw.lifecycle);
   const latestVersions = normalizeObject(raw.latestVersions);
 
   return {
@@ -745,6 +959,7 @@ export function normalizeWorkspaceIndex(raw = {}) {
     programs: normalizeWorkspacePrograms(programs, base.programs),
     campaigns: normalizeWorkspaceCampaigns(campaigns, base.campaigns),
     autonomyLoops: normalizeWorkspaceAutonomyLoops(autonomyLoops, base.autonomyLoops),
+    lifecycle: normalizeWorkspaceLifecycle(lifecycle, base.lifecycle),
     activeRoles: normalizeStringArray(raw.activeRoles),
     unresolvedConcernIds: normalizeStringArray(raw.unresolvedConcernIds),
     mostRecentSessions: normalizeObjectArray(raw.mostRecentSessions),
@@ -1094,6 +1309,7 @@ export function createTaskPacketsIndex() {
     version: 3,
     items: [],
     lifecycleCounts: {},
+    lifecycleFamilyCounts: Object.fromEntries(PAPER_LIFECYCLE_FAMILY_IDS.map((familyId) => [familyId, 0])),
     dependencyHealth: {
       blockedPacketIds: [],
       readyPacketIds: [],
@@ -2704,6 +2920,7 @@ export function createWorkspaceIndex() {
       safeExecutionPath: "project:paper.follow-through -> project:paper.materialize -> node ./bin/paper-factory.mjs autonomy-foreground . --max-steps 5",
       overview: "Unified autonomy loop skeleton is explicit, file-first, and foreground-only."
     },
+    lifecycle: normalizeWorkspaceLifecycle(),
     activeRoles: [],
     unresolvedConcernIds: [],
     mostRecentSessions: [],
@@ -2898,6 +3115,9 @@ export function createWorkflowBoundaries() {
   ];
   return {
     version: 3,
+    primaryRoleIds: PRIMARY_ROLE_IDS,
+    subagentRoleIds: SUBAGENT_ROLE_IDS,
+    roleHierarchy: ROLE_HIERARCHY,
     neutralCorePaths: ["README.md", "bin", "docs", "mcp", "scripts", "src"],
     defaultHostAdapters: ["opencode"],
     availableHostAdapters: ["opencode", "claude", "codex", "cursor", "agents"],
@@ -2934,7 +3154,8 @@ export function createWorkflowBoundaries() {
     ".paper/context/packets",
       ".paper/context/artifacts",
       ".paper/context/actions",
-      ".paper/sessions"
+      ".paper/sessions",
+      ARTIFACT_PATHS.workspaceArtifactMap
     ],
     managedArtifacts: {
       codePack: createManagedArtifactMeta("managed-replaceable", "src"),

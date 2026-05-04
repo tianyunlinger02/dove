@@ -4,7 +4,7 @@ Run the end-to-end paper_factory workflow for the current paper.
 
 ## Goal
 
-Advance the project through the durable writing spine without skipping the evidence and review gates.
+Advance the project through the durable writing spine without skipping lifecycle routing, evidence gates, review gates, or major-change closure.
 
 ## Recommended order
 
@@ -28,6 +28,19 @@ Advance the project through the durable writing spine without skipping the evide
 18. `project:paper.lineage`
 19. `project:paper.revise`
 20. `project:paper.checklist`
+
+## Lifecycle taxonomy
+
+Use `.paper/workspace/index.json.lifecycle` and artifact context manifests to classify work as `objective`, `structure`, `campaign`, `work-unit`, `concern`, `audit`, or `knowledge` before choosing a command.
+
+## Major-change rule
+
+Major paper changes must close through `design → checklist → implementation → acceptance`:
+
+1. `project:paper.plan` records design scope, non-goals, risks, target artifacts, and acceptance evidence.
+2. `project:paper.checklist` turns that design into concrete implementation steps and checks.
+3. `project:paper.draft`, `project:paper.revise`, experiment, figure, citation, rebuttal, or bridge commands implement only the scoped checklist work.
+4. `project:paper.review-loop`, `project:paper.checklist`, `project:paper.version-snapshot`, and `project:paper.version-compare` provide acceptance proof.
 
 ## Rule
 

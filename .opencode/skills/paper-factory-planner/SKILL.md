@@ -6,6 +6,6 @@ description: Maintain the durable orchestration board, handoffs, and plan/review
 # paper-factory-planner
 
 - Treat `.paper/orchestration/board.json` as the canonical coordinator state.
-- Keep phase, assigned role, tasks, blockers, experiment IDs, rebuttal issue IDs, version lineage, and packet-linked questions/decisions explicit.
+- Keep phase, assigned primary role, tasks, blockers, experiment IDs, rebuttal issue IDs, version lineage, and packet-linked questions/decisions explicit.
 - Use `.paper/task-packets/` plus `.paper/context/roles/planner.json` to narrow context before planning the next move.
 - Use handoffs when ownership changes instead of assuming hidden runtime memory.

@@ -1,0 +1,18 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Package surface organization and durable artifact layout"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Durable .paper state and runtime/governance rules"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Runtime schema and MCP input conventions"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Validation and public surface alignment requirements"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "CLI/MCP/OpenCode surface contract patterns"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "File-backed context/action helper patterns"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer durable state and mirror checklist"}
+{"file": "src/core/runtime.mjs", "reason": "Existing foreground autonomy and new runAutonomyOperate home"}
+{"file": "src/core/navigation.mjs", "reason": "Campaign, materialization, approval, and execution bridge helpers"}
+{"file": "src/core/schema.mjs", "reason": "Governance registries, artifact paths, allowed step types"}
+{"file": "src/core/index.mjs", "reason": "Core exports"}
+{"file": "bin/paper-factory.mjs", "reason": "CLI surface"}
+{"file": "src/mcp/tool-definitions.mjs", "reason": "MCP tool schema"}
+{"file": "src/mcp/handlers.mjs", "reason": "MCP dispatch"}
+{"file": "scripts/validate-commands.mjs", "reason": "Command surface validator"}
+{"file": "scripts/validate-mcp.mjs", "reason": "MCP surface validator"}

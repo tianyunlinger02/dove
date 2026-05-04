@@ -8,6 +8,8 @@ const ROOT = process.cwd();
 const requiredCommands = [
   "paper.init.md",
   "paper.orchestrate.md",
+  "paper.audit.md",
+  "paper.onboard.md",
   "paper.research.md",
   "paper.source.md",
   "paper.note.md",
@@ -68,6 +70,11 @@ const classifiedCommandIds = new Set([
 for (const fileName of requiredCommands) {
   const commandId = fileName.replace(/\.md$/, "");
   assert.equal(classifiedCommandIds.has(commandId), true, `Unclassified command surface: ${commandId}`);
+}
+
+const orchestrateText = fs.readFileSync(path.join(ROOT, ".opencode", "commands", "paper.orchestrate.md"), "utf8");
+for (const forbiddenTool of ["upsert_orchestration_board", "append_handoff"]) {
+  assert.equal(orchestrateText.includes(forbiddenTool), false, `paper.orchestrate must stay a pure router and not mention ${forbiddenTool}`);
 }
 
 for (const relativePath of requiredSkills) {

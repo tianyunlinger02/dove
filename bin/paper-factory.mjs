@@ -6,9 +6,9 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { ensureWorkspace, importIsolatedReview, prepareIsolatedReview, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runIsolatedReview } from "../src/core/index.mjs";
+import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, prepareIsolatedReview, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runIsolatedReview } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
-import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE } from "../src/core/schema.mjs";
+import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE } from "../src/core/schema.mjs";
 import {
   createWorkflowBoundaries,
   normalizeMetaExecutionBridgeCandidatesIndex,
@@ -78,6 +78,8 @@ Usage:
   paper-factory install [target] [--force] [--host <opencode|claude|codex|cursor|agents|all>]
   paper-factory sync [target] [--force] [--host <opencode|claude|codex|cursor|agents|all>]
   paper-factory doctor [target]
+  paper-factory onboard [target] [--write-map] [--max-depth <n>] [--max-files <n>]
+  paper-factory migrate [target] [--write-map] [--max-depth <n>] [--max-files <n>]
   paper-factory isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>]
   paper-factory isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>]
   paper-factory isolated-review-import [target] --run-id <id>
@@ -248,6 +250,15 @@ function buildIsolatedReviewArgs(rest = []) {
     mediatorRole: readFlagValue(rest, "--mediator-role"),
     reviewerRole: readFlagValue(rest, "--reviewer-role"),
     reviewedArtifactPaths: collectRepeatedFlagValues(rest, "--artifact")
+  };
+}
+
+function buildOnboardingArgs(rest = []) {
+  return {
+    writeMap: rest.includes("--write-map"),
+    maxDepth: readFlagValue(rest, "--max-depth"),
+    maxFiles: readFlagValue(rest, "--max-files"),
+    excludeDirs: collectRepeatedFlagValues(rest, "--exclude-dir")
   };
 }
 
@@ -735,6 +746,31 @@ function inspectAutonomyRuntime(target) {
     currentContinuationCommand: runtime.currentContinuationCommand ?? null,
     lastCheckpointPacketId: runtime.lastCheckpointPacketId ?? null,
     lastEscalationPacketId: runtime.lastEscalationPacketId ?? null,
+    reasons
+  };
+}
+
+function inspectOnboardingArtifactMap(target) {
+  const proposal = discoverPaperArtifacts(target, { maxFiles: 1000 });
+  const mapPath = ARTIFACT_PATHS.workspaceArtifactMap;
+  const mapExists = fs.existsSync(path.join(target, mapPath));
+  const likelyPaperAssets = proposal.summary.mappingCount;
+  const reasons = [
+    !mapExists && likelyPaperAssets > 0 ? `likely paper assets detected without artifact map: ${likelyPaperAssets}` : null,
+    ...proposal.conflicts.map((conflict) => `${conflict.type}: ${conflict.sourcePaths.join(", ")}`),
+    ...proposal.warnings
+  ].filter(Boolean);
+  return {
+    status: reasons.length === 0 ? "ok" : "needs-mapping",
+    mapPath,
+    mapExists,
+    mappingCount: proposal.summary.mappingCount,
+    unmappedCount: proposal.summary.unmappedCount,
+    conflictCount: proposal.summary.conflictCount,
+    manuscriptCount: proposal.summary.manuscriptCount,
+    bibliographyCount: proposal.summary.bibliographyCount,
+    proposalOnly: true,
+    noAutoApply: true,
     reasons
   };
 }
@@ -1423,6 +1459,7 @@ function doctor(target) {
     workspaceRepairFrontier: inspectWorkspaceRepairFrontier(target),
     metaOptimize: inspectMetaOptimize(target),
     operatorFollowThrough: inspectOperatorFollowThrough(target),
+    onboardingArtifactMap: inspectOnboardingArtifactMap(target),
     autonomyRuntime: inspectAutonomyRuntime(target),
     programsSurface: inspectProgramsSurface(target),
     governanceCoverageBindings: inspectGovernanceCoverageSurfaceBindings(target, { requireCommandSurfaces: installedHosts.includes("opencode") })
@@ -1470,6 +1507,13 @@ function doctor(target) {
       : managedArtifacts.operatorFollowThrough.reasons.join(" | ")
   });
   result.checks.push({
+    check: "onboarding-artifact-map",
+    ok: true,
+    message: managedArtifacts.onboardingArtifactMap.mapExists
+      ? `artifact map present: ${managedArtifacts.onboardingArtifactMap.mappingCount} mappings / ${managedArtifacts.onboardingArtifactMap.conflictCount} conflicts`
+      : `proposal-only scan: ${managedArtifacts.onboardingArtifactMap.mappingCount} mappings / ${managedArtifacts.onboardingArtifactMap.unmappedCount} unmapped; run paper-factory onboard . --write-map to persist`
+  });
+  result.checks.push({
     check: "autonomy-runtime",
     ok: managedArtifacts.autonomyRuntime.status === "ok",
     message: managedArtifacts.autonomyRuntime.status === "ok"
@@ -1508,6 +1552,13 @@ if (command === "install" || command === "sync") {
 if (command === "doctor") {
   doctor(resolveTarget(maybeTarget));
   process.exit(process.exitCode ?? 0);
+}
+
+if (command === "onboard" || command === "migrate") {
+  const target = resolveTarget(maybeTarget);
+  const result = discoverPaperArtifacts(target, buildOnboardingArgs(rest));
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
 }
 
 if (command === "isolated-review-prepare") {

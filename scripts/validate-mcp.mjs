@@ -116,6 +116,7 @@ async function main() {
     "query_meta_optimize",
     "query_open_questions",
     "query_operator_follow_through",
+    "query_paper_audit",
     "query_program_approvals",
     "query_task_graph",
     "query_workspace_index",
@@ -199,7 +200,7 @@ async function main() {
     name: "append_handoff",
     arguments: {
       fromRole: "planner",
-      toRole: "researcher",
+      toRole: "author",
       phase: "research",
       summary: "Proceed with evidence collection.",
       nextActions: ["Update research brief"]
@@ -265,7 +266,7 @@ async function main() {
     name: "append_handoff",
     arguments: {
       fromRole: "planner",
-      toRole: "experiment-planner",
+      toRole: "author",
       phase: "experiments",
       summary: "Proceed with the experiment plan.",
       nextActions: ["Record the experiment result"]
@@ -373,7 +374,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "append_handoff",
     arguments: {
-      fromRole: "researcher",
+      fromRole: "author",
       toRole: "reviewer",
       phase: "review",
       summary: "Proceed with review.",
@@ -392,7 +393,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "append_handoff",
     arguments: {
-      fromRole: "rebuttal-lead",
+      fromRole: "author",
       toRole: "reviewer",
       phase: "review",
       summary: "Return to reviewer for validation signoff.",
@@ -422,7 +423,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "append_handoff",
     arguments: {
-      fromRole: "researcher",
+      fromRole: "author",
       toRole: "reviewer",
       phase: "review",
       summary: "Return to reviewer to finalize the rebuttal issue board.",
@@ -449,7 +450,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "append_handoff",
     arguments: {
-      fromRole: "rebuttal-lead",
+      fromRole: "author",
       toRole: "reviewer",
       phase: "review",
       summary: "Return to reviewer for post-rebuttal signoff.",
@@ -474,7 +475,7 @@ async function main() {
     name: "upsert_orchestration_board",
     arguments: {
       phase: "versions",
-      assignedRole: "version-analyst",
+      assignedRole: "planner",
       reviewRequiredBeforeFinalize: false,
       currentFocus: "Validator signoff cleared finalize gate.",
       nextAction: "Create and compare version snapshots."
@@ -504,7 +505,7 @@ async function main() {
     name: "upsert_orchestration_board",
     arguments: {
       phase: "versions",
-      assignedRole: "version-analyst",
+      assignedRole: "planner",
       reviewRequiredBeforeFinalize: false,
       currentFocus: "Second validator snapshot is ready.",
       nextAction: "Create the follow-up snapshot and compare lineage."
@@ -554,6 +555,12 @@ async function main() {
 
   const lineage = extractJson(await call("tools/call", { name: "query_lineage", arguments: {} }));
   assert.equal(Array.isArray(lineage.lineage), true);
+
+  const paperAudit = extractJson(await call("tools/call", { name: "query_paper_audit", arguments: { scope: "validator" } }));
+  assert.equal(paperAudit.mode, "audit-only");
+  assert.equal(paperAudit.proposalOnly, true);
+  assert.equal(paperAudit.noAutoApply, true);
+  assert.deepEqual(paperAudit.writes, []);
 
   const workspaceIndex = extractJson(await call("tools/call", { name: "query_workspace_index", arguments: {} }));
   assert.equal(Array.isArray(workspaceIndex.activePackets), true);

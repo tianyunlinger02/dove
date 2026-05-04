@@ -143,8 +143,9 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   const versionManifest = readRoleContextManifest(root, "version-analyst");
   assert.equal(state.orchestrationBoard.versionLineage.currentVersionId, v2.id);
   assert.deepEqual(state.orchestrationBoard.activeComparisonTargets, [v1.id, v2.id]);
-  assert.equal(state.workspaceIndex.boardAssignedRole, "version-analyst");
-  assert.ok(state.workspaceIndex.activeRoles.includes("version-analyst"));
+  assert.equal(state.workspaceIndex.boardAssignedRole, "planner");
+  assert.ok(state.workspaceIndex.activeRoles.includes("planner"));
+  assert.equal(versionManifest.boardAssignedRole, "planner");
   assert.equal(versionManifest.isCurrentBoardOwner, true);
   assert.equal(comparison.toVersionId, v2.id);
   assert.ok(Array.isArray(comparison.addedEvidenceLinks));

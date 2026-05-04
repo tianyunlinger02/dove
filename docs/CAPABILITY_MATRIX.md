@@ -40,6 +40,8 @@ This file turns the phrase â€œabsorb the advantages of oh-my-openagent and ARISâ
 | Experiment audit ledger | Implemented | `.paper/experiments/audits.json`, `paper.experiment-audit` | Audit findings are persisted separately from raw results |
 | Result-to-claim bridge | Implemented | `.paper/claims/bridge-log.json`, `paper.result-bridge` | Claim confidence/state changes are traceable to explicit bridge events |
 | Review + revision loop | Implemented | `src/core/reviews.mjs`, `paper.review-loop`, `.paper/revision-plans` | Produces durable findings and action items |
+| Strict no-fix paper audit | Implemented | `src/core/paper-audit.mjs`, `paper.audit`, `query_paper_audit` | Reports proposal-only findings without writing, repairing, refreshing, or auto-applying fixes |
+| Proposal-first project onboarding | Implemented | `src/core/onboarding.mjs`, `paper.onboard`, `paper-factory onboard` / `migrate`, `.paper/workspace/artifact-map.json` | Existing manuscripts, bibliographies, figures, tables, results, reviews, notes, and submission files are mapped without moving or overwriting source assets |
 | Persistent adversarial concern memory | Implemented | `.paper/reviews/concerns.json`, `.paper/reviews/adversarial-state.json` | Reviewer concerns persist across rounds instead of living only in the latest log |
 | Citation hygiene | Implemented | `sync_citations`, `.paper/bibliography/*` | Writes BibTeX + citation log |
 | Rebuttal issue board + strategy | Implemented | `.paper/rebuttal/*`, `paper.rebuttal-strategy` | Issues are normalized before response drafting |

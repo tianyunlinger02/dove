@@ -30,6 +30,7 @@ export const toolDefinitions = [
   { name: "query_meta_optimize", description: "Refresh and read the proposal-only meta-optimize frontier, taxonomy-aware grouped clusters, family-level operator playbooks, ranked recommendations, durable remediation packs, longer-horizon memory summaries, and report paths.", inputSchema: { type: "object", properties: {} } },
   { name: "query_governance_coverage_report", description: "Refresh and read the durable governance coverage proof report for guarded and exempt mutation paths.", inputSchema: { type: "object", properties: {} } },
   { name: "query_operator_follow_through", description: "Refresh and read the proposal-only operator follow-through ledger for remediation, playbook, and execution-bridge decisions.", inputSchema: { type: "object", properties: {} } },
+  { name: "query_paper_audit", description: "Run a strict audit-only paper inspection that reports findings without writing or repairing .paper artifacts.", inputSchema: { type: "object", properties: { scope: { type: "string" } } } },
   { name: "query_program_approvals", description: "Read durable program approvals, runs, and review checkpoints.", inputSchema: { type: "object", properties: { programId: { type: "string" }, programRunId: { type: "string" }, status: { type: "string" } } } },
   { name: "query_campaigns", description: "Read durable multi-cycle campaign plans and their linked program/run state without executing work.", inputSchema: { type: "object", properties: { campaignId: { type: "string" }, status: { type: "string" } } } },
   { name: "query_boundary_report", description: "Read the workflow-pack boundary report for managed versus user-owned state.", inputSchema: { type: "object", properties: {} } },
@@ -66,7 +67,7 @@ export const toolDefinitions = [
   },
   {
     name: "upsert_claims",
-    description: "Write claims derived from results into the evidence store; requires the researcher role unless a traceable override is provided.",
+    description: "Write claims derived from results into the evidence store; requires the author role, or its researcher subagent compatibility role unless a traceable override is provided.",
     inputSchema: { type: "object", properties: withPolicy({ claims: { type: "array", items: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, sectionId: { type: "string" }, sourceIds: { type: "array", items: { type: "string" } }, noteIds: { type: "array", items: { type: "string" } }, experimentIds: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, status: { type: "string" }, confidence: { type: "string" }, gap: { type: "string" } } } } }) }
   },
   {
@@ -86,22 +87,22 @@ export const toolDefinitions = [
   },
   {
     name: "upsert_experiment_plan",
-    description: "Create or update a claim-driven experiment plan; requires the experiment-planner role unless a traceable override is provided.",
+    description: "Create or update a claim-driven experiment plan; requires the author role, or its experiment-planner subagent compatibility role unless a traceable override is provided.",
     inputSchema: { type: "object", properties: withPolicy({ id: { type: "string" }, title: { type: "string" }, claimId: { type: "string" }, hypothesis: { type: "string" }, methodology: { type: "string" }, successMetric: { type: "string" }, comparisonTargets: { type: "array", items: { type: "string" } }, status: { type: "string" }, owner: { type: "string" } }) }
   },
   {
     name: "upsert_experiment_result",
-    description: "Create or update a durable experiment result entry; requires the experiment-planner role unless a traceable override is provided.",
+    description: "Create or update a durable experiment result entry; requires the author role, or its experiment-planner subagent compatibility role unless a traceable override is provided.",
     inputSchema: { type: "object", properties: withPolicy({ id: { type: "string" }, experimentId: { type: "string" }, claimId: { type: "string" }, outcome: { type: "string" }, summary: { type: "string" }, evidenceLinks: { type: "array", items: { type: "string" } }, comparisonTargets: { type: "array", items: { type: "string" } } }) }
   },
   {
     name: "run_experiment_audit",
-    description: "Create or update a durable experiment audit record distinct from raw results; requires the experiment-planner role unless a traceable override is provided.",
+    description: "Create or update a durable experiment audit record distinct from raw results; requires the author role, or its experiment-planner subagent compatibility role unless a traceable override is provided.",
     inputSchema: { type: "object", properties: withPolicy({ resultId: { type: "string" }, experimentId: { type: "string" }, reviewedArtifactRefs: { type: "array", items: { type: "string" } }, auditFindings: { type: "array", items: { type: "string" } }, integrityFlags: { type: "array", items: { type: "string" } }, confidence: { type: "string" }, outcomeMapping: { type: "string" } }) }
   },
   {
     name: "bridge_result_to_claim",
-    description: "Persist an explicit result-to-claim bridge event and update claim state; requires the experiment-planner role unless a traceable override is provided.",
+    description: "Persist an explicit result-to-claim bridge event and update claim state; requires the author role, or its experiment-planner subagent compatibility role unless a traceable override is provided.",
     inputSchema: { type: "object", properties: withPolicy({ resultId: { type: "string" }, experimentId: { type: "string" }, auditIds: { type: "array", items: { type: "string" } }, reason: { type: "string" } }) }
   },
   {
@@ -124,10 +125,10 @@ export const toolDefinitions = [
   { name: "sync_citations", description: "Audit citations and regenerate references.bib plus the citation log.", inputSchema: { type: "object", properties: { citedOnly: { type: "boolean" } } } },
   { name: "refresh_wiki", description: "Regenerate the durable research wiki and typed wiki indexes from current sources, notes, claims, and review state.", inputSchema: { type: "object", properties: {} } },
   { name: "normalize_rebuttal_issues", description: "Normalize reviewer issues into a durable rebuttal issue board; requires the reviewer role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({ issues: { type: "array", items: { type: "object" } } }) } },
-  { name: "build_rebuttal_strategy", description: "Generate the rebuttal strategy and response draft from normalized issues; requires the rebuttal-lead role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({}) } },
+  { name: "build_rebuttal_strategy", description: "Generate the rebuttal strategy and response draft from normalized issues; requires the author role, or its revision/rebuttal subagent compatibility role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({}) } },
   { name: "build_rebuttal", description: "Generate an artifact-backed rebuttal draft from review and evidence state.", inputSchema: { type: "object", properties: {} } },
-  { name: "create_version_snapshot", description: "Snapshot the current paper state and update version lineage; requires the version-analyst role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({ versionId: { type: "string" }, label: { type: "string" }, parentVersionId: { type: "string" }, summary: { type: "string" } }) } },
-  { name: "compare_versions", description: "Compare two durable paper snapshots and record the comparison; requires the version-analyst role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({ fromVersionId: { type: "string" }, toVersionId: { type: "string" } }) } },
+  { name: "create_version_snapshot", description: "Snapshot the current paper state and update version lineage; requires the planner role, or its version-analyst audit subagent compatibility role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({ versionId: { type: "string" }, label: { type: "string" }, parentVersionId: { type: "string" }, summary: { type: "string" } }) } },
+  { name: "compare_versions", description: "Compare two durable paper snapshots and record the comparison; requires the planner role, or its version-analyst audit subagent compatibility role unless a traceable override is provided.", inputSchema: { type: "object", properties: withPolicy({ fromVersionId: { type: "string" }, toVersionId: { type: "string" } }) } },
   { name: "list_artifacts", description: "List the expected paper_factory artifacts and whether they exist.", inputSchema: { type: "object", properties: {} } },
   { name: "upsert_figure_plan", description: "Write the staged figure backlog, linkage metadata, and artifact contracts.", inputSchema: { type: "object", properties: { items: { type: "array", items: { type: "object" } } } } },
   { name: "validate_figure_pipeline", description: "Regenerate durable figure QA and stage-validation outputs.", inputSchema: { type: "object", properties: {} } }

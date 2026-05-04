@@ -1479,6 +1479,43 @@ function rankMaterializationCandidates(materializationCandidates) {
   });
 }
 
+function selectStableSameSourceCandidates(candidates = []) {
+  const bestBySource = new Map();
+  const sourceKeyFor = (candidate) => candidate.packet?.materialization?.sourceType && candidate.packet?.materialization?.sourceId
+    ? `${candidate.packet.materialization.sourceType}:${candidate.packet.materialization.sourceId}`
+    : null;
+  for (const candidate of candidates) {
+    const sourceKey = sourceKeyFor(candidate);
+    if (!sourceKey || !candidate.eligible) {
+      continue;
+    }
+    const existing = bestBySource.get(sourceKey);
+    if (!existing) {
+      bestBySource.set(sourceKey, candidate);
+      continue;
+    }
+    const createdComparison = compareNullableIso(
+      existing.followThroughItem?.createdAt ?? existing.followThroughItem?.recordedAt ?? existing.packet?.updatedAt ?? null,
+      candidate.followThroughItem?.createdAt ?? candidate.followThroughItem?.recordedAt ?? candidate.packet?.updatedAt ?? null
+    );
+    if (createdComparison < 0 || (createdComparison === 0 && compareStrings(existing.followThroughItem?.id, candidate.followThroughItem?.id) < 0)) {
+      bestBySource.set(sourceKey, candidate);
+    }
+  }
+  const selectedBySource = new Set(Array.from(bestBySource.values()).map((candidate) => candidate.packet.id));
+  return candidates.map((candidate) => {
+    const sourceKey = sourceKeyFor(candidate);
+    if (!sourceKey || !candidate.eligible || selectedBySource.has(candidate.packet.id)) {
+      return candidate;
+    }
+    return {
+      ...candidate,
+      reasons: [...candidate.reasons, "same-source-candidate-superseded"],
+      eligible: false
+    };
+  });
+}
+
 function buildSelectionSet(root, actorRole, filters = {}) {
   const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, null);
   const taskPacketIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, { items: [] });
@@ -1490,7 +1527,7 @@ function buildSelectionSet(root, actorRole, filters = {}) {
     ...(taskPacketIndex.items ?? []).map((packet) => packet.id)
   ]);
 
-  const candidates = prioritizedIds.map((packetId) => {
+  const candidates = selectStableSameSourceCandidates(prioritizedIds.map((packetId) => {
     const packet = packetsById.get(packetId);
     const followThroughId = packet?.materialization?.followThroughId ?? null;
     const followThroughItem = followThroughId ? followThroughById.get(followThroughId) ?? null : null;
@@ -1565,7 +1602,7 @@ function buildSelectionSet(root, actorRole, filters = {}) {
       reasons,
       eligible: reasons.length === 0
     };
-  }).filter((candidate) => candidate.packet)
+  })).filter((candidate) => candidate.packet)
     .filter((candidate) => !filters.packetId || candidate.packet.id === filters.packetId)
     .filter((candidate) => !filters.programRunId || candidate.programAuthorization?.programRunId === filters.programRunId || candidate.packet.lineage?.programRunId === filters.programRunId)
     .filter((candidate) => !filters.approvalId || candidate.programAuthorization?.approvalId === filters.approvalId || candidate.packet.lineage?.approvalId === filters.approvalId);

@@ -1,6 +1,8 @@
-export { ARTIFACT_PATHS, AUTONOMY_ALLOWED_STEP_TYPES, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, GOVERNANCE_READONLY_COMMANDS, GOVERNANCE_READONLY_TOOLS, PIPELINE_STAGE_ORDER, SCHEMA_VERSION, createDefaultState, normalizeAutonomyAllowedStepType, normalizeState } from "./schema.mjs";
+export { ARTIFACT_PATHS, AUTONOMY_ALLOWED_STEP_TYPES, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, GOVERNANCE_READONLY_COMMANDS, GOVERNANCE_READONLY_TOOLS, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_BY_ID, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, PAPER_MAJOR_CHANGE_SIGNALS, PIPELINE_STAGE_ORDER, SCHEMA_VERSION, createDefaultState, normalizeAutonomyAllowedStepType, normalizeState } from "./schema.mjs";
 export { ensureWorkspace, extractCitationKeysFromText, listArtifacts, listDraftFiles, loadState, nowIso, readJson, readText, resolvePath, saveState, writeJson, writeText } from "./workspace.mjs";
 export { evaluateEvidence, upsertClaims } from "./evidence.mjs";
+export { discoverPaperArtifacts } from "./onboarding.mjs";
+export { queryPaperAudit } from "./paper-audit.mjs";
 export { appendHandoff, bridgeExperimentResultToClaim, buildRebuttalStrategy, classifyWorkflowIntent, compareVersions, createVersionSnapshot, loadBoard, runExperimentAudit, saveBoard, updateResearchBrief, upsertExperimentPlan, upsertExperimentResult, upsertOrchestrationBoard, normalizeRebuttalIssues } from "./orchestration.mjs";
 export { appendReviewLog, runReviewLoop, upsertRevisionPlan } from "./reviews.mjs";
 export { importIsolatedReview, prepareIsolatedReview, runIsolatedReview } from "./isolated-review.mjs";

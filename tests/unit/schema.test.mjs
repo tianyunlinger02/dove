@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ensureWorkspace, readJson } from "../../src/core/workspace.mjs";
-import { ARTIFACT_PATHS, createDefaultState, createWorkspaceIndex, normalizeCampaignsIndex, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
+import { ARTIFACT_PATHS, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, createDefaultState, createWorkspaceIndex, normalizeCampaignsIndex, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
 
 test("normalizeState migrates v1 state into v2", () => {
   const migrated = normalizeState({
@@ -35,6 +35,7 @@ test("createDefaultState exposes durable artifact paths", () => {
   assert.equal(state.artifacts.actionContextsDir, ".paper/context/actions");
   assert.equal(state.artifacts.sessionSummary, ".paper/sessions/LATEST_SUMMARY.md");
   assert.equal(state.artifacts.workflowBoundaries, ".paper/workflow-pack/boundaries.json");
+  assert.equal(state.artifacts.workspaceArtifactMap, ".paper/workspace/artifact-map.json");
   assert.equal(state.artifacts.programsIndex, ".paper/programs/index.json");
   assert.equal(state.artifacts.programRuns, ".paper/programs/runs.json");
   assert.equal(state.artifacts.programApprovals, ".paper/programs/approvals.json");
@@ -112,6 +113,7 @@ test("campaign indexes and workspace mirrors are normalized", () => {
 test("ensureWorkspace creates and repairs the campaigns artifact", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-schema-campaigns-"));
   ensureWorkspace(root);
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), false);
 
   const campaigns = readJson(root, ARTIFACT_PATHS.campaignsIndex, {});
   assert.equal(campaigns.version, 1);
@@ -127,6 +129,46 @@ test("ensureWorkspace creates and repairs the campaigns artifact", () => {
   assert.deepEqual(repaired.items, []);
   assert.equal(repaired.summary.campaignCount, 0);
   assert.equal(repaired.summary.activeCount, 2);
+});
+
+test("workspace index exposes normalized paper lifecycle taxonomy", () => {
+  const index = createWorkspaceIndex();
+  assert.equal(index.lifecycle.taxonomyVersion, PAPER_LIFECYCLE_TAXONOMY_VERSION);
+  assert.deepEqual(PAPER_LIFECYCLE_FAMILY_IDS, ["objective", "structure", "campaign", "work-unit", "concern", "audit", "knowledge"]);
+  assert.deepEqual(index.lifecycle.familyIds, PAPER_LIFECYCLE_FAMILY_IDS);
+  assert.equal(index.lifecycle.families.length, PAPER_LIFECYCLE_FAMILIES.length);
+  assert.equal(index.lifecycle.families.find((family) => family.id === "concern").label, "Concern");
+  assert.equal(index.lifecycle.artifactCounts.audit, 0);
+  assert.equal(index.lifecycle.activePacketCounts["work-unit"], 0);
+  assert.deepEqual(index.lifecycle.protocol.stages, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES);
+
+  const normalized = normalizeWorkspaceIndex({
+    lifecycle: {
+      taxonomyVersion: "custom-taxonomy",
+      families: [{ id: "audit", artifactCount: 7, activePacketCount: 2, packetCount: 3 }],
+      artifactCounts: { audit: 7, bogus: 99 },
+      activePacketCounts: { audit: 2 },
+      packetCounts: { audit: 3 },
+      boardFamily: "audit",
+      boardPhaseFamily: "bad-family",
+      topFamilies: ["audit", "bad-family"],
+      protocol: {
+        stages: ["design", "bogus"],
+        majorChangeSignals: ["core-claim-change", "bogus"],
+        overview: "Custom protocol guidance."
+      }
+    }
+  });
+  assert.equal(normalized.lifecycle.taxonomyVersion, "custom-taxonomy");
+  assert.equal(normalized.lifecycle.families.find((family) => family.id === "audit").artifactCount, 7);
+  assert.equal(normalized.lifecycle.artifactCounts.audit, 7);
+  assert.equal(normalized.lifecycle.artifactCounts.bogus, undefined);
+  assert.equal(normalized.lifecycle.boardFamily, "audit");
+  assert.equal(normalized.lifecycle.boardPhaseFamily, null);
+  assert.deepEqual(normalized.lifecycle.topFamilies, ["audit"]);
+  assert.deepEqual(normalized.lifecycle.protocol.stages, ["design"]);
+  assert.deepEqual(normalized.lifecycle.protocol.majorChangeSignals, ["core-claim-change"]);
+  assert.equal(normalized.lifecycle.protocol.overview, "Custom protocol guidance.");
 });
 
 test("workspace index exposes normalized unified autonomy loop skeleton", () => {

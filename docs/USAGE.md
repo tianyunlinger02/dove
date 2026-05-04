@@ -11,6 +11,8 @@
 
 ## Board-first orchestration
 
+`project:paper.orchestrate` is the pure routing entrypoint. It reads the current `.paper` context, classifies the request by paper lifecycle family, and recommends one next command; it does not update the board, append handoffs, refresh packets, or apply downstream mutations.
+
 `paper_factory` now uses a durable board-first orchestration model:
 
 - `.paper/orchestration/board.json` is the canonical, machine-checkable workflow board.
@@ -23,7 +25,9 @@
 - `.paper/context/actions/*.json` adds explicit pre-action bundles that tell commands which local context files to read first.
 - `.paper/sessions/` keeps portable workspace summaries and journal entries.
 - `.paper/workspace/index.json` gives a resumable top-level workspace overview, work queues, dependency health, ownership summaries, and handoff obligations.
+- `.paper/workspace/artifact-map.json` is an optional onboarding map for existing paper assets; it is written only by explicit `paper-factory onboard . --write-map` or `migrate . --write-map`.
 - `.paper/workspace/index.json` now also carries a compact `repairFrontier` so degraded typed-wiki relations and related managed artifact issues stay visible in the same outer-loop surface, including relation-family taxonomy rollups when the wiki degrades.
+- `.paper/workspace/index.json.lifecycle` classifies work into `objective`, `structure`, `campaign`, `work-unit`, `concern`, `audit`, and `knowledge`, while artifact manifests expose each artifact's lifecycle family.
 - `.paper/meta/` adds a proposal-only meta-optimize layer that records derived signal observations, grouped optimization clusters, evidence-backed ranked workflow recommendations, durable remediation packs, and longer-horizon workflow memory without auto-applying changes.
 - Commands and skills provide role behavior, but there is **no hidden scheduler or swarm runtime**.
 - Optional MCP helpers mutate those files deterministically; they do not replace them as the source of truth.
@@ -39,6 +43,8 @@ Strict mode is stage-based, not template-based. Starter files in `.paper/` do no
 ### 1. Initialize
 
 Run `project:paper.init` to establish title, venue, thesis, audience, and the research contract.
+
+For an existing paper repository, run `paper-factory onboard .` or `paper-factory migrate .` before importing or rewriting artifacts. The default scan is proposal-only and writes nothing; `--write-map` persists only `.paper/workspace/artifact-map.json` as a reference map.
 
 ### 2. Orchestrate the next role-owned phase
 
@@ -60,6 +66,8 @@ Run `project:paper.claim-gate` to move findings into `.paper/evidence/index.json
 
 Use `project:paper.plan` and `project:paper.outline` to convert the evidence base into a writing plan and section structure.
 
+For major paper changes, `project:paper.plan` is the `design` stage: it must state scope, non-goals, risks, target artifacts, required evidence, and acceptance checks before implementation starts.
+
 ### 7. Draft
 
 Use `project:paper.draft` for section-level drafting. If evidence is missing, leave `TODO[citation]` markers instead of fabricating support.
@@ -69,6 +77,8 @@ Use `project:paper.draft` for section-level drafting. If evidence is missing, le
 Use `project:paper.experiment-plan`, `project:paper.experiment-audit`, and `project:paper.result-bridge` to keep `.paper/experiments/plans.json`, `.paper/experiments/results.json`, `.paper/experiments/audits.json`, `.paper/claims/bridge-log.json`, and `.paper/experiments/EXPERIMENT_LOG.md` claim-driven and durable.
 
 ### 9. Review loop
+
+Use `project:paper.audit` when you want strict no-fix inspection. It reports evidence, citation, experiment, claim-bridge, review, version, figure, checklist, and artifact integrity findings with proposal-only next commands; it does not write, repair, refresh, materialize, update the board, append handoffs, generate revision plans, or run review loops.
 
 Use `project:paper.review-loop` to generate a durable review entry and revision plan. The review loop checks unsupported claims, weakly supported claims, citation TODOs, state/draft mismatches, experiment audit flags, and result-to-claim bridge problems.
 
@@ -82,6 +92,13 @@ Use `project:paper.rebuttal-strategy` to normalize reviewer issues before `proje
 
 Use `project:paper.revise`, `project:paper.checklist`, `project:paper.citations`, and `project:paper.rebuttal` as needed.
 
+Major paper changes close through `design → checklist → implementation → acceptance`:
+
+1. `project:paper.plan` records the design contract.
+2. `project:paper.checklist` turns it into executable steps and acceptance checks.
+3. `project:paper.draft`, `project:paper.revise`, experiment, result-bridge, figure, citation, or rebuttal commands implement only scoped checklist work.
+4. `project:paper.review-loop`, `project:paper.checklist`, `project:paper.version-snapshot`, and `project:paper.version-compare` provide acceptance evidence.
+
 ## Query and navigation surfaces
 
 The workflow is no longer lifecycle-only. Use these file-backed inspection commands when you need to understand the workspace before taking action:
@@ -91,6 +108,8 @@ The workflow is no longer lifecycle-only. Use these file-backed inspection comma
 - `project:paper.decisions` for durable operational and comparison decisions
 - `project:paper.lineage` for version/comparison lineage
 - `project:paper.meta-optimize` for the proposal-only optimization frontier and recommendations
+- `project:paper.audit` for strict no-fix paper inspection with proposal-only findings
+- `project:paper.onboard` plus `paper-factory onboard` / `migrate` for proposal-first artifact mapping of existing paper projects
 - `project:paper.follow-through` for explicit operator handling of proposal-only remediation guidance
 - `project:paper.materialize` for explicit proposal-to-task-packet materialization once guidance is accepted
 - `paper-factory autonomy-once` / `run_autonomy_once` for one explicit planner-owned autonomous control-plane pass after requests and materialization are in place
@@ -160,6 +179,7 @@ The optional MCP layer exposes deterministic helpers:
 - `query_meta_optimize`
 - `query_governance_coverage_report`
 - `query_operator_follow_through`
+- `query_paper_audit`
 - `read_role_context_manifest`
 - `read_phase_context_manifest`
 - `read_packet_context_manifest`
@@ -198,17 +218,27 @@ The optional MCP layer exposes deterministic helpers:
 - `materialize_guidance_packet`
 - `run_autonomy_once`
 
+## Role model
+
+The user-facing role model has three primary manual agents:
+
+- `planner` acts like the mentor/PI/editor and owns direction, priority, orchestration, governance, and autonomy boundaries.
+- `author` acts like the actual paper worker and owns writing, research, experiments, results, revision, and rebuttal drafting.
+- `reviewer` acts like an independent critic and owns concerns, weaknesses, evidence/method attacks, and verdicts.
+
+Specialists such as `researcher`, `experiment-planner`, `revision-lead`/`rebuttal-lead`, and `version-analyst` are automatic subagents or compatibility manifests under those primary agents. They are useful for scoped context, but they should not be treated as peer manual identities.
+
 ## Skills
 
 The bundled skills are intentionally small and portable:
 
 - `paper-factory-pipeline`
 - `paper-factory-planner`
-- `paper-factory-researcher`
+- `paper-factory-researcher` (author-side subagent)
 - `paper-factory-reviewer`
-- `paper-factory-rebuttal-strategist`
-- `paper-factory-experiment-planning`
-- `paper-factory-version-analyst`
+- `paper-factory-rebuttal-strategist` (author-side revision/rebuttal subagent)
+- `paper-factory-experiment-planning` (author-side subagent)
+- `paper-factory-version-analyst` (planner-side audit subagent)
 - `paper-factory-claim-gate`
 - `paper-factory-review-loop`
 - `paper-factory-citation-discipline`
