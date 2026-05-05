@@ -5,6 +5,10 @@ import path from "node:path";
 import {
   ARTIFACT_PATHS,
   AUTONOMY_ALLOWED_STEP_TYPES,
+  DOVE_DOMAIN_IDS,
+  DOVE_MISSION_LIFECYCLE_STAGES,
+  DOVE_PRIMARY_ROLE_IDS,
+  DOVE_WORKFLOW_KERNEL_VERSION,
   GOVERNANCE_EXEMPT_MUTATIONS,
   GOVERNANCE_GUARDED_MUTATIONS,
   PAPER_LIFECYCLE_FAMILIES,
@@ -16,6 +20,7 @@ import {
   ROLE_HIERARCHY,
   ROLE_IDS,
   createDefaultBoard,
+  createDoveWorkspaceKernel,
   createMetaEventsIndex,
   createMetaExecutionBridgeCandidatesIndex,
   createMetaGovernanceCoverageIndex,
@@ -65,6 +70,8 @@ import {
   normalizeRuntimeLeasesIndex,
   normalizeRuntimeResultsIndex,
   normalizeWorkspaceIndex,
+  normalizeDoveDomainId,
+  normalizeDoveMissionLifecycleStage,
   resolveResumeCommandForPhase,
   roleCanActAs
 } from "./schema.mjs";
@@ -199,6 +206,7 @@ function summarizePacket(packet) {
     status: packet.status,
     lifecycleStatus: packet.lifecycleStatus,
     lifecycleFamily: packet.lifecycleFamily ?? lifecycleFamilyForPacket(packet),
+    doveDomain: doveDomainForPacket(packet),
     assignedRole: packet.assignedRole,
     phase: packet.phase,
     nextAction: packet.nextAction,
@@ -305,6 +313,7 @@ function normalizePacket(packet = {}) {
   const updatedAt = normalizeUpdatedAt(packet.updatedAt) ?? nowIso();
   const workerRole = ROLE_IDS.includes(packet.autonomyEnvelope?.workerRole) ? packet.autonomyEnvelope.workerRole : null;
   const controllerRole = ROLE_IDS.includes(packet.autonomyEnvelope?.controllerRole) ? packet.autonomyEnvelope.controllerRole : null;
+  const doveDomain = normalizeDoveDomainId(packet.doveDomain ?? packet.missionDomain ?? packet.domain, null);
   return {
     ...packet,
     id: slugify(packet.id),
@@ -317,6 +326,7 @@ function normalizePacket(packet = {}) {
     status: packet.status ?? "pending",
     lifecycleStatus,
     lifecycleFamily: lifecycleFamilyForPacket(packet),
+    doveDomain,
     active: packet.active ?? !GOVERNANCE_TERMINAL_LIFECYCLES.has(lifecycleStatus),
     assignedRole: ROLE_IDS.includes(packet.assignedRole) ? packet.assignedRole : "planner",
     parentPacketId: packet.parentPacketId ? slugify(packet.parentPacketId) : null,
@@ -572,6 +582,70 @@ function lifecycleFamilyForPacket(packet = {}) {
     return "knowledge";
   }
   return lifecycleFamilyForPhase(packet.phase);
+}
+
+function doveMissionStageForPhase(phase) {
+  const normalized = typeof phase === "string" ? phase.trim() : "";
+  const map = {
+    init: "goal",
+    sources: "goal",
+    notes: "goal",
+    research: "goal",
+    plan: "design",
+    outline: "design",
+    checklist: "checklist",
+    draft: "execution",
+    experiments: "execution",
+    citations: "execution",
+    rebuttal: "execution",
+    review: "audit",
+    versions: "return"
+  };
+  return DOVE_MISSION_LIFECYCLE_STAGES.includes(map[normalized]) ? map[normalized] : "goal";
+}
+
+function doveDomainForPacket(packet = {}) {
+  const explicitDomain = normalizeDoveDomainId(packet.doveDomain ?? packet.missionDomain ?? packet.domain, null);
+  if (explicitDomain) {
+    return explicitDomain;
+  }
+  const lifecycleFamily = packet.lifecycleFamily ?? lifecycleFamilyForPacket(packet);
+  if ((packet.experimentIds ?? []).length > 0 || lifecycleFamily === "audit") {
+    return "experiment";
+  }
+  if (packet.assignedRole === "reviewer" || lifecycleFamily === "concern") {
+    return "review";
+  }
+  if (lifecycleFamily === "work-unit" || lifecycleFamily === "campaign") {
+    return "general";
+  }
+  return "paper";
+}
+
+function buildDoveWorkspaceSummary(board, packets, lifecycle) {
+  const base = createDoveWorkspaceKernel();
+  const domainCounts = Object.fromEntries(DOVE_DOMAIN_IDS.map((domainId) => [domainId, 0]));
+  for (const packet of packets) {
+    const domainId = doveDomainForPacket(packet);
+    domainCounts[domainId] = (domainCounts[domainId] ?? 0) + 1;
+  }
+  const activePackets = packets.filter((packet) => packet.active);
+  const currentDomain = activePackets.length > 0
+    ? doveDomainForPacket(activePackets[0])
+    : "paper";
+  return {
+    ...base,
+    currentDomain,
+    missionLifecycle: {
+      ...base.missionLifecycle,
+      currentStage: doveMissionStageForPhase(board.currentPhase)
+    },
+    missionCount: packets.length,
+    activeMissionCount: activePackets.length,
+    reviewNeededMissionCount: packets.filter((packet) => packet.lifecycleStatus === "review-needed").length,
+    domainCounts,
+    currentMissionFamily: lifecycle.boardFamily ?? lifecycleFamilyForPhase(board.currentPhase)
+  };
 }
 
 function buildLifecycleWorkspaceSummary(board, packets) {
@@ -846,6 +920,15 @@ function buildActionContextBundle({ scopeType, scopeId, summary, board, workspac
       : null,
     artifactPath,
     lifecycle: lifecycleContextForScope({ workspaceIndex, board, packet, phaseId, artifactPath }),
+    dove: {
+      kernelVersion: workspaceIndex.dove?.kernelVersion ?? DOVE_WORKFLOW_KERNEL_VERSION,
+      currentDomain: workspaceIndex.dove?.currentDomain ?? "paper",
+      missionStage: workspaceIndex.dove?.missionLifecycle?.currentStage ?? doveMissionStageForPhase(board.currentPhase),
+      primaryRoleIds: workspaceIndex.dove?.primaryRoleIds ?? DOVE_PRIMARY_ROLE_IDS,
+      domainGuidance: workspaceIndex.dove?.domainGuidance ?? createDoveWorkspaceKernel().domainGuidance,
+      durableRootMigration: workspaceIndex.dove?.durableRootMigration ?? createDoveWorkspaceKernel().durableRootMigration,
+      compatibilityMode: workspaceIndex.dove?.compatibility?.migrationMode ?? "compatibility-manifest"
+    },
     majorChangeProtocol: majorChangeProtocolForWorkspace(workspaceIndex),
     explicitOnly: true,
     noHiddenRuntime: true,
@@ -6422,6 +6505,7 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
     programs: programs ?? base.programs,
     repairFrontier
   });
+  const dove = buildDoveWorkspaceSummary(board, enrichedPackets, lifecycle);
   return {
     ...base,
     currentFocus: board.currentFocus,
@@ -6476,6 +6560,7 @@ function buildWorkspaceIndex(state, board, packets, reviewState, journal, versio
     campaigns: campaigns ?? base.campaigns,
     autonomyLoops,
     lifecycle,
+    dove,
     activeRoles: Array.from(new Set([board.assignedRole, ...enrichedPackets.filter((packet) => packet.active).map((packet) => packet.assignedRole)])),
     unresolvedConcernIds: reviewState.unresolvedConcernIds ?? [],
     mostRecentSessions: [...(journal.entries ?? [])].slice(-10).reverse().map((entry) => ({
@@ -7114,6 +7199,18 @@ export function materializeGuidancePacket(root, args = {}) {
   if (workerRole && args.assignedRole && args.assignedRole !== workerRole) {
     throw new Error(`materializeGuidancePacket requires assignedRole to match workerRole ${workerRole} when a role envelope is provided.`);
   }
+  const doveDomain = normalizeDoveDomainId(args.doveDomain ?? args.missionDomain ?? args.domain, null);
+  const missionStage = normalizeDoveMissionLifecycleStage(args.missionStage ?? args.stage, null);
+  const targetArtifacts = uniqueSorted([
+    ...normalizeStringArray(args.targetArtifacts),
+    ...normalizeStringArray(args.artifacts),
+    ...normalizeStringArray(args.artifactPaths)
+  ]);
+  const acceptanceCriteria = uniqueSorted([
+    ...(intent.acceptanceCriteria ?? []),
+    ...normalizeStringArray(args.acceptanceCriteria),
+    ...normalizeStringArray(args.acceptanceChecks)
+  ]);
   const packet = normalizePacket({
     id: packetId,
     sourceType: "materialized-guidance",
@@ -7122,6 +7219,11 @@ export function materializeGuidancePacket(root, args = {}) {
     summary: args.summary ?? intent.summary ?? source.summary ?? "",
     phase: args.phase ?? board.currentPhase,
     phaseContextId: `phase-${args.phase ?? board.currentPhase}`,
+    doveDomain,
+    missionStage: missionStage ?? undefined,
+    missionGoal: args.goal ?? args.missionGoal ?? args.objective ?? undefined,
+    returnProtocol: args.returnProtocol ?? undefined,
+    acceptanceCriteria,
     status: args.status ?? "pending",
     lifecycleStatus: args.lifecycleStatus ?? "waiting",
     active: true,
@@ -7136,6 +7238,7 @@ export function materializeGuidancePacket(root, args = {}) {
     ]),
     outputPaths: uniqueSorted([
       ARTIFACT_PATHS.taskPacketsIndex,
+      ...targetArtifacts,
       ...normalizeStringArray(args.outputPaths)
     ]),
     questions: [],
@@ -7194,7 +7297,7 @@ export function materializeGuidancePacket(root, args = {}) {
       executionBridgeCandidateIds: uniqueSorted(intent.executionBridgeCandidateIds ?? []),
       followThroughId,
       selectedConversionPathKey: intent.selectedConversionPathKey,
-      acceptanceCriteria: uniqueSorted(intent.acceptanceCriteria ?? []),
+      acceptanceCriteria,
       workspacePointers: uniqueSorted(intent.workspacePointers ?? []),
       programId: programLinkage?.programId ?? null,
       programRunId: programLinkage?.programRunId ?? null,

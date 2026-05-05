@@ -7,6 +7,21 @@ import { spawnSync } from "node:child_process";
 
 const ROOT = process.cwd();
 const CLI = path.join(ROOT, "bin", "paper-factory.mjs");
+const DOVE_SURFACES = ["orchestrate", "mission", "board", "audit", "return", "launch"];
+const DOVE_HOST_PATHS = {
+  claude: DOVE_SURFACES.map((surface) => path.join(".claude", "commands", "dove", `${surface}.md`)),
+  cursor: DOVE_SURFACES.map((surface) => path.join(".cursor", "commands", `dove-${surface}.md`)),
+  codex: DOVE_SURFACES.map((surface) => path.join(".codex", "skills", `dove-${surface}`, "SKILL.md")),
+  agents: DOVE_SURFACES.map((surface) => path.join(".agents", "skills", `dove-${surface}`, "SKILL.md"))
+};
+
+function assertDoveHostPaths(target, hostIds) {
+  for (const hostId of hostIds) {
+    for (const relativePath of DOVE_HOST_PATHS[hostId]) {
+      assert.ok(fs.existsSync(path.join(target, relativePath)), `missing ${relativePath}`);
+    }
+  }
+}
 
 test("CLI install copies the workflow pack into a target workspace", () => {
   const target = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-install-"));
@@ -21,7 +36,10 @@ test("CLI install copies the workflow pack into a target workspace", () => {
   assert.ok(fs.existsSync(path.join(target, ".paper", "state.json")));
    assert.ok(fs.existsSync(path.join(target, ".paper", "workflow-pack", "boundaries.json")));
    assert.ok(fs.existsSync(path.join(target, ".paper", "task-packets", "index.json")));
+  assert.ok(fs.existsSync(path.join(target, ".paper", "workspace", "dove-root-manifest.json")));
+  assert.equal(fs.existsSync(path.join(target, ".dove")), false);
   assert.ok(fs.existsSync(path.join(target, "bin", "paper-factory.mjs")));
+  assert.ok(fs.existsSync(path.join(target, "bin", "dove.mjs")));
   assert.ok(fs.existsSync(path.join(target, "mcp", "paper-state-server.mjs")));
   assert.ok(fs.existsSync(path.join(target, "scripts", "validate-mcp.mjs")));
   assert.ok(fs.existsSync(path.join(target, "src", "mcp", "server.mjs")));
@@ -44,6 +62,7 @@ test("CLI install can install optional host adapters without local unsafe files"
   assert.ok(fs.existsSync(path.join(target, ".cursor", "commands")));
   assert.ok(fs.existsSync(path.join(target, ".agents", "skills")));
   assert.ok(fs.existsSync(path.join(target, "AGENTS.md")));
+  assertDoveHostPaths(target, ["claude", "cursor", "agents"]);
   assert.equal(fs.existsSync(path.join(target, ".claude", "settings.local.json")), false);
   assert.equal(fs.existsSync(path.join(target, ".opencode", "node_modules")), false);
 });
@@ -64,6 +83,7 @@ test("CLI install all host adapters skips unsafe local artifacts", () => {
   assert.ok(fs.existsSync(path.join(target, ".codex", "config.toml")));
   assert.ok(fs.existsSync(path.join(target, ".cursor", "commands")));
   assert.ok(fs.existsSync(path.join(target, ".agents", "skills")));
+  assertDoveHostPaths(target, ["claude", "cursor", "codex", "agents"]);
   assert.equal(fs.existsSync(path.join(target, ".opencode", "node_modules")), false);
   assert.equal(fs.existsSync(path.join(target, ".claude", "settings.local.json")), false);
 });
@@ -115,6 +135,9 @@ test("CLI doctor reports installed host adapters for multi-host workspaces", () 
   assert.deepEqual(payload.hostAdapters, ["claude", "cursor"]);
   assert.ok(payload.checks.some((check) => check.check === "host-adapter:claude" && check.ok));
   assert.ok(payload.checks.some((check) => check.check === "host-adapter:cursor" && check.ok));
+  assert.ok(payload.checks.some((check) => check.check === "dove-root-migration" && check.ok));
+  assert.equal(payload.managedArtifacts.doveRootMigration.authoritativeRoot, ".paper");
+  assert.equal(payload.managedArtifacts.doveRootMigration.plannedDurableRoot, ".dove");
 });
 
 test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy workspaces", () => {
@@ -138,6 +161,8 @@ test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy w
   assert.match(result.stdout, /frontier summary:/);
   assert.match(result.stdout, /taxonomy pressure:/);
   assert.match(result.stdout, /long-horizon summary:/);
+  assert.match(result.stdout, /dove-root-migration/);
+  assert.match(result.stdout, /manifest-only migration: \.paper authoritative, \.dove planned/);
 });
 
 test("CLI autonomy-once and doctor expose runtime status visibility", () => {
@@ -184,6 +209,28 @@ test("CLI doctor fails when key JSON artifacts are malformed", () => {
 
   assert.equal(result.status, 1, result.stdout);
   assert.match(result.stdout, /json:.paper\/state.json/);
+});
+
+test("CLI doctor rejects a possible dual-authoritative Dove root", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-doctor-dove-root-"));
+  spawnSync("node", [CLI, "install", target, "--force"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  const doveWorkspacePath = path.join(target, ".dove", "workspace");
+  fs.mkdirSync(doveWorkspacePath, { recursive: true });
+  fs.writeFileSync(path.join(doveWorkspacePath, "index.json"), "{}\n", "utf8");
+
+  const result = spawnSync("node", [CLI, "doctor", target], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 1, result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.ok(payload.checks.some((check) => check.check === "dove-root-migration" && !check.ok));
+  assert.deepEqual(payload.managedArtifacts.doveRootMigration.prohibitedAuthoritativeArtifacts, [".dove/workspace/index.json"]);
+  assert.match(result.stdout, /possible dual authoritative \.dove artifacts detected/);
 });
 
 test("CLI doctor reports degraded typed wiki relations explicitly", () => {

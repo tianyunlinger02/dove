@@ -6,9 +6,9 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, prepareIsolatedReview, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runIsolatedReview } from "../src/core/index.mjs";
+import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, queryDoveAudit, queryDoveMission, queryDoveMissionBoard, queryDoveOrchestrate, queryDoveReturn, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runIsolatedReview } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
-import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE } from "../src/core/schema.mjs";
+import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveRootMigrationManifest, normalizeDoveRootMigrationManifest } from "../src/core/schema.mjs";
 import {
   createWorkflowBoundaries,
   normalizeMetaExecutionBridgeCandidatesIndex,
@@ -24,6 +24,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
+const DOVE_INVOCATION = ["dove", "dove.mjs"].includes(path.basename(process.argv[1] ?? ""));
 const CORE_INSTALL_PATHS = ["bin", "docs", "mcp", "scripts", "src", "README.md"];
 const DEFAULT_HOST_ADAPTERS = ["opencode"];
 const HOST_ADAPTERS = {
@@ -46,25 +47,60 @@ const HOST_ADAPTERS = {
   claude: {
     label: "Claude Code",
     paths: [".claude/commands", ".claude/agents"],
-    requiredPaths: [".claude/commands/trellis/start.md", ".claude/agents/implement.md"],
+    requiredPaths: [
+      ".claude/commands/trellis/start.md",
+      ".claude/commands/dove/orchestrate.md",
+      ".claude/commands/dove/mission.md",
+      ".claude/commands/dove/board.md",
+      ".claude/commands/dove/audit.md",
+      ".claude/commands/dove/return.md",
+      ".claude/commands/dove/launch.md",
+      ".claude/agents/implement.md"
+    ],
     jsonChecks: []
   },
   codex: {
     label: "Codex",
     paths: [".codex/agents", ".codex/skills", ".codex/config.toml"],
-    requiredPaths: [".codex/agents/implement.toml", ".codex/config.toml"],
+    requiredPaths: [
+      ".codex/agents/implement.toml",
+      ".codex/skills/dove-orchestrate/SKILL.md",
+      ".codex/skills/dove-mission/SKILL.md",
+      ".codex/skills/dove-board/SKILL.md",
+      ".codex/skills/dove-audit/SKILL.md",
+      ".codex/skills/dove-return/SKILL.md",
+      ".codex/skills/dove-launch/SKILL.md",
+      ".codex/config.toml"
+    ],
     jsonChecks: []
   },
   cursor: {
     label: "Cursor",
     paths: [".cursor/commands"],
-    requiredPaths: [".cursor/commands/trellis-start.md"],
+    requiredPaths: [
+      ".cursor/commands/trellis-start.md",
+      ".cursor/commands/dove-orchestrate.md",
+      ".cursor/commands/dove-mission.md",
+      ".cursor/commands/dove-board.md",
+      ".cursor/commands/dove-audit.md",
+      ".cursor/commands/dove-return.md",
+      ".cursor/commands/dove-launch.md"
+    ],
     jsonChecks: []
   },
   agents: {
     label: "Shared agent skills",
     paths: [".agents/skills", "AGENTS.md"],
-    requiredPaths: [".agents/skills/start/SKILL.md", "AGENTS.md"],
+    requiredPaths: [
+      ".agents/skills/start/SKILL.md",
+      ".agents/skills/dove-orchestrate/SKILL.md",
+      ".agents/skills/dove-mission/SKILL.md",
+      ".agents/skills/dove-board/SKILL.md",
+      ".agents/skills/dove-audit/SKILL.md",
+      ".agents/skills/dove-return/SKILL.md",
+      ".agents/skills/dove-launch/SKILL.md",
+      "AGENTS.md"
+    ],
     jsonChecks: []
   }
 };
@@ -72,6 +108,19 @@ const GLOBAL_COPY_EXCLUDE_NAMES = new Set([".git", "node_modules"]);
 const GLOBAL_COPY_EXCLUDE_SUFFIXES = [".log", ".tmp", ".cache"];
 
 function usage() {
+  if (DOVE_INVOCATION) {
+    console.log(`dove
+
+Usage:
+  dove orchestrate [target] [--request <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--allow-autonomy]
+  dove mission [target] [--goal <text>] [--domain <id>] [--stage <id>] [--artifact <path>] [--acceptance-check <text>]
+  dove board [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived]
+  dove audit [target] [--scope <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
+  dove return [target] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
+  dove launch [target] --source-type <type> --source-id <id> --execute-by <iso> --review-after <iso> [--mission-packet-id <id>] [--goal <text>] [--domain <id>] [--stage <id>]
+`);
+    return;
+  }
   console.log(`paper-factory
 
 Usage:
@@ -80,6 +129,18 @@ Usage:
   paper-factory doctor [target]
   paper-factory onboard [target] [--write-map] [--max-depth <n>] [--max-files <n>]
   paper-factory migrate [target] [--write-map] [--max-depth <n>] [--max-files <n>]
+  paper-factory dove-orchestrate [target] [--request <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--allow-autonomy]
+  paper-factory dove-mission [target] [--goal <text>] [--domain <id>] [--stage <id>] [--artifact <path>] [--acceptance-check <text>]
+  paper-factory dove-board [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived]
+  paper-factory dove-audit [target] [--scope <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
+  paper-factory dove-return [target] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
+  paper-factory dove-launch [target] --source-type <type> --source-id <id> --execute-by <iso> --review-after <iso> [--mission-packet-id <id>] [--goal <text>] [--domain <id>] [--stage <id>]
+  paper-factory dove orchestrate [target] [--request <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--allow-autonomy]
+  paper-factory dove mission [target] [--goal <text>] [--domain <id>] [--stage <id>]
+  paper-factory dove board [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived]
+  paper-factory dove audit [target] [--scope <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
+  paper-factory dove return [target] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
+  paper-factory dove launch [target] --source-type <type> --source-id <id> --execute-by <iso> --review-after <iso> [--mission-packet-id <id>] [--goal <text>] [--domain <id>] [--stage <id>]
   paper-factory isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>]
   paper-factory isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>]
   paper-factory isolated-review-import [target] --run-id <id>
@@ -180,6 +241,19 @@ function resolveTarget(rawTarget) {
   return path.resolve(process.cwd(), rawTarget || ".");
 }
 
+function resolveOptionalTargetAndRest(rawTarget, rest = []) {
+  if (!rawTarget || String(rawTarget).startsWith("--")) {
+    return {
+      target: resolveTarget("."),
+      rest: rawTarget ? [rawTarget, ...rest] : rest
+    };
+  }
+  return {
+    target: resolveTarget(rawTarget),
+    rest
+  };
+}
+
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
@@ -240,6 +314,95 @@ function collectRepeatedFlagValues(args, flag) {
     }
   }
   return values;
+}
+
+function readFirstFlagValue(args, flags) {
+  for (const flag of flags) {
+    const value = readFlagValue(args, flag);
+    if (value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function buildDoveMissionArgs(rest = []) {
+  return {
+    goal: readFlagValue(rest, "--goal"),
+    domain: readFirstFlagValue(rest, ["--domain", "--dove-domain", "--mission-domain"]),
+    stage: readFirstFlagValue(rest, ["--stage", "--mission-stage"]),
+    targetArtifacts: readFlagValues(rest, ["--artifact", "--target-artifact", "--artifact-path", "--target"]),
+    acceptanceChecks: readFlagValues(rest, ["--acceptance-check", "--check"]),
+    nextCommand: readFlagValue(rest, "--next-command")
+  };
+}
+
+function buildDoveOrchestrateArgs(rest = []) {
+  return {
+    ...buildDoveMissionArgs(rest),
+    request: readFlagValue(rest, "--request"),
+    userRequest: readFlagValue(rest, "--user-request"),
+    allowAutonomy: rest.includes("--allow-autonomy")
+  };
+}
+
+function buildDoveReturnArgs(rest = []) {
+  return {
+    ...buildDoveMissionArgs(rest),
+    scope: readFlagValue(rest, "--scope"),
+    validationEvidencePaths: readFlagValues(rest, ["--validation-evidence", "--validation-evidence-path", "--evidence", "--evidence-path"]),
+    changedFilePaths: readFlagValues(rest, ["--changed-file", "--changed-file-path", "--changed-path"]),
+    testEvidencePaths: readFlagValues(rest, ["--test-evidence", "--test-evidence-path", "--test-path"]),
+    validationOutputPaths: readFlagValues(rest, ["--validation-output", "--validation-output-path", "--validation-log", "--test-output"]),
+    validationOutputs: readFlagValues(rest, ["--validation-output-text", "--test-output-text"]),
+    reviewEvidencePaths: readFlagValues(rest, ["--review-evidence", "--review-evidence-path"])
+  };
+}
+
+function buildDoveBoardArgs(rest = []) {
+  return {
+    domain: readFirstFlagValue(rest, ["--domain", "--dove-domain", "--mission-domain"]),
+    stage: readFirstFlagValue(rest, ["--stage", "--mission-stage"]),
+    packetIds: readFlagValues(rest, ["--packet-id", "--packet", "--mission-packet-id", "--mission-packet"]),
+    statuses: readFlagValues(rest, ["--status", "--lifecycle-status"]),
+    includeArchived: rest.includes("--include-archived")
+  };
+}
+
+function buildDoveAuditArgs(rest = []) {
+  return buildDoveReturnArgs(rest);
+}
+
+function buildDoveLaunchArgs(rest = []) {
+  return {
+    ...buildDoveMissionArgs(rest),
+    sourceType: readFlagValue(rest, "--source-type"),
+    sourceId: readFlagValue(rest, "--source-id"),
+    actorRole: readFlagValue(rest, "--actor-role"),
+    workerRole: readFlagValue(rest, "--worker-role"),
+    doveWorkerRole: readFlagValue(rest, "--dove-worker-role"),
+    packetId: readFirstFlagValue(rest, ["--packet-id", "--mission-packet-id"]),
+    missionPacketId: readFlagValue(rest, "--mission-packet-id"),
+    followThroughId: readFlagValue(rest, "--follow-through-id"),
+    selectedConversionPathKey: readFlagValue(rest, "--conversion-path"),
+    title: readFlagValue(rest, "--title"),
+    summary: readFlagValue(rest, "--summary"),
+    assignedRole: readFlagValue(rest, "--assigned-role"),
+    lifecycleStatus: readFlagValue(rest, "--lifecycle-status"),
+    currentFocus: readFlagValue(rest, "--current-focus"),
+    nextAction: readFlagValue(rest, "--next-action"),
+    dependencies: readFlagValues(rest, ["--dependency"]),
+    evidenceLinks: readFlagValues(rest, ["--evidence", "--evidence-link"]),
+    outputPaths: readFlagValues(rest, ["--output", "--output-path"]),
+    programId: readFlagValue(rest, "--program-id"),
+    programRunId: readFlagValue(rest, "--program-run-id"),
+    approvalId: readFlagValue(rest, "--approval-id"),
+    allowedStepType: readFlagValue(rest, "--allowed-step-type"),
+    decisionSummary: readFlagValue(rest, "--decision-summary"),
+    rationale: readFlagValue(rest, "--rationale"),
+    executeBy: readFlagValue(rest, "--execute-by"),
+    reviewAfter: readFlagValue(rest, "--review-after")
+  };
 }
 
 function buildIsolatedReviewArgs(rest = []) {
@@ -449,6 +612,11 @@ function validateWorkspaceRepairFrontierShape(value) {
     maybeArray(repairFrontier, "relationGroupSummaries", ".paper/workspace/index.json.repairFrontier.relationGroupSummaries", issues);
     maybeArray(repairFrontier, "topDegradedGroupIds", ".paper/workspace/index.json.repairFrontier.topDegradedGroupIds", issues);
   }
+  const dove = maybeObject(root, "dove", ".paper/workspace/index.json.dove", issues);
+  if (dove) {
+    maybeObject(dove, "identity", ".paper/workspace/index.json.dove.identity", issues);
+    maybeObject(dove, "durableRootMigration", ".paper/workspace/index.json.dove.durableRootMigration", issues);
+  }
   const metaOptimize = maybeObject(root, "metaOptimize", ".paper/workspace/index.json.metaOptimize", issues);
   if (metaOptimize) {
     maybeArray(metaOptimize, "topClusterIds", ".paper/workspace/index.json.metaOptimize.topClusterIds", issues);
@@ -470,6 +638,19 @@ function validateWorkspaceRepairFrontierShape(value) {
       maybeArray(longHorizon, "pressureAreas", ".paper/workspace/index.json.metaOptimize.longHorizon.pressureAreas", issues);
     }
   }
+  return issues;
+}
+
+function validateDoveRootMigrationManifestShape(value) {
+  const issues = [];
+  const root = requireObject(value, ARTIFACT_PATHS.doveRootManifest, issues);
+  if (!root) {
+    return issues;
+  }
+  maybeObject(root, "dualRootInvariant", `${ARTIFACT_PATHS.doveRootManifest}.dualRootInvariant`, issues);
+  maybeArray(root, "phases", `${ARTIFACT_PATHS.doveRootManifest}.phases`, issues);
+  maybeArray(root, "prohibitedAuthoritativeArtifacts", `${ARTIFACT_PATHS.doveRootManifest}.prohibitedAuthoritativeArtifacts`, issues);
+  maybeArray(root, "allowedDoveRootArtifacts", `${ARTIFACT_PATHS.doveRootManifest}.allowedDoveRootArtifacts`, issues);
   return issues;
 }
 
@@ -800,11 +981,62 @@ function inspectProgramsSurface(target) {
   };
 }
 
+function inspectDoveRootMigration(target) {
+  const manifest = readJsonFile(target, ARTIFACT_PATHS.doveRootManifest);
+  if (manifest.status !== "ok") {
+    return {
+      status: "degraded",
+      activeDurableRoot: ARTIFACT_PATHS.paperRoot,
+      plannedDurableRoot: ".dove",
+      authoritativeRoot: ARTIFACT_PATHS.paperRoot,
+      prohibitedAuthoritativeArtifacts: [],
+      reasons: [manifest.message]
+    };
+  }
+
+  const normalized = normalizeDoveRootMigrationManifest(manifest.value, createDoveRootMigrationManifest());
+  const reasons = [];
+  if (normalized.activeDurableRoot !== ARTIFACT_PATHS.paperRoot) {
+    reasons.push(`active durable root must remain ${ARTIFACT_PATHS.paperRoot}`);
+  }
+  if (normalized.authoritativeRoot !== ARTIFACT_PATHS.paperRoot) {
+    reasons.push(`authoritative root must remain ${ARTIFACT_PATHS.paperRoot}`);
+  }
+  if (normalized.plannedDurableRoot !== ".dove") {
+    reasons.push("planned durable root must remain .dove");
+  }
+  if (normalized.createsAuthoritativeDoveRoot !== false) {
+    reasons.push("manifest-only migration must not create an authoritative .dove root");
+  }
+  if (normalized.dualRootInvariant.allowed !== false || normalized.dualRootInvariant.doveRootAuthoritative !== false) {
+    reasons.push("dual-root invariant must keep .dove non-authoritative");
+  }
+
+  const prohibitedAuthoritativeArtifacts = normalized.prohibitedAuthoritativeArtifacts
+    .filter((relativePath) => fs.existsSync(path.join(target, relativePath)));
+  if (prohibitedAuthoritativeArtifacts.length > 0) {
+    reasons.push(`possible dual authoritative .dove artifacts detected: ${prohibitedAuthoritativeArtifacts.join(", ")}`);
+  }
+
+  return {
+    status: reasons.length === 0 ? "ok" : "degraded",
+    activeDurableRoot: normalized.activeDurableRoot,
+    plannedDurableRoot: normalized.plannedDurableRoot,
+    authoritativeRoot: normalized.authoritativeRoot,
+    currentWriteAuthority: normalized.currentWriteAuthority,
+    doveRootWriteAuthority: normalized.doveRootWriteAuthority,
+    manifestPath: normalized.manifestPath,
+    prohibitedAuthoritativeArtifacts,
+    reasons
+  };
+}
+
 function collectRawManagedArtifactChecks(target) {
   const specs = [
     ["raw-typed-wiki-relations-shape", ".paper/wiki/relations.json", validateWikiRelationsShape],
     ["raw-figure-qa-shape", ".paper/figures/qa.json", validateFigureQaShape],
     ["raw-workspace-index-shape", ".paper/workspace/index.json", validateWorkspaceRepairFrontierShape],
+    ["raw-dove-root-migration-shape", ARTIFACT_PATHS.doveRootManifest, validateDoveRootMigrationManifestShape],
     ["raw-meta-recommendations-shape", ".paper/meta/recommendations.json", validateMetaRecommendationsShape],
     ["raw-meta-optimizer-state-shape", ".paper/meta/optimizer-state.json", validateMetaOptimizerStateShape],
     ["raw-meta-operator-playbooks-shape", ".paper/meta/operator-playbooks.json", validateMetaOperatorPlaybooksShape],
@@ -1350,6 +1582,7 @@ function doctor(target) {
     ".paper/figures/qa.json",
     ".paper/meta/long-horizon-memory.json",
     ".paper/workspace/index.json",
+    ".paper/workspace/dove-root-manifest.json",
     ".paper/meta/operator-playbooks.json",
     "mcp/paper-state-server.mjs",
     "src/mcp/server.mjs"
@@ -1420,7 +1653,8 @@ function doctor(target) {
     const missingBootstrapPaths = (boundaries.paperBootstrapOnlyPaths ?? []).filter((relativePath) => !fs.existsSync(path.join(target, relativePath)));
     const boundaryHasMetadata = Boolean(boundaries.managedArtifacts?.workflowBoundaries?.revisionId)
       && Boolean(boundaries.managedArtifacts?.workflowBoundaries?.templateHash)
-      && Boolean(boundaries.managedArtifacts?.workspaceIndex?.revisionId);
+      && Boolean(boundaries.managedArtifacts?.workspaceIndex?.revisionId)
+      && Boolean(boundaries.managedArtifacts?.doveRootManifest?.revisionId);
     const userOwnedExistingPaths = (boundaries.userOwnedPaths ?? []).filter((relativePath) => fs.existsSync(path.join(target, relativePath)));
     result.boundaryPolicy = {
       boundaryFile: ".paper/workflow-pack/boundaries.json",
@@ -1460,6 +1694,7 @@ function doctor(target) {
     metaOptimize: inspectMetaOptimize(target),
     operatorFollowThrough: inspectOperatorFollowThrough(target),
     onboardingArtifactMap: inspectOnboardingArtifactMap(target),
+    doveRootMigration: inspectDoveRootMigration(target),
     autonomyRuntime: inspectAutonomyRuntime(target),
     programsSurface: inspectProgramsSurface(target),
     governanceCoverageBindings: inspectGovernanceCoverageSurfaceBindings(target, { requireCommandSurfaces: installedHosts.includes("opencode") })
@@ -1514,6 +1749,13 @@ function doctor(target) {
       : `proposal-only scan: ${managedArtifacts.onboardingArtifactMap.mappingCount} mappings / ${managedArtifacts.onboardingArtifactMap.unmappedCount} unmapped; run paper-factory onboard . --write-map to persist`
   });
   result.checks.push({
+    check: "dove-root-migration",
+    ok: managedArtifacts.doveRootMigration.status === "ok",
+    message: managedArtifacts.doveRootMigration.status === "ok"
+      ? `manifest-only migration: ${managedArtifacts.doveRootMigration.authoritativeRoot} authoritative, ${managedArtifacts.doveRootMigration.plannedDurableRoot} planned`
+      : managedArtifacts.doveRootMigration.reasons.join(" | ")
+  });
+  result.checks.push({
     check: "autonomy-runtime",
     ok: managedArtifacts.autonomyRuntime.status === "ok",
     message: managedArtifacts.autonomyRuntime.status === "ok"
@@ -1537,9 +1779,39 @@ function doctor(target) {
 const [, , command, maybeTarget, ...rest] = process.argv;
 const force = rest.includes("--force");
 
+function runDoveSurface(surface, rawTarget, rawRest = []) {
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(rawTarget, rawRest);
+  if (surface === "orchestrate") {
+    return queryDoveOrchestrate(target, buildDoveOrchestrateArgs(commandRest));
+  }
+  if (surface === "mission") {
+    return queryDoveMission(target, buildDoveMissionArgs(commandRest));
+  }
+  if (surface === "board") {
+    return queryDoveMissionBoard(target, buildDoveBoardArgs(commandRest));
+  }
+  if (surface === "audit") {
+    return queryDoveAudit(target, buildDoveAuditArgs(commandRest));
+  }
+  if (surface === "return") {
+    return queryDoveReturn(target, buildDoveReturnArgs(commandRest));
+  }
+  return launchDoveMission(target, buildDoveLaunchArgs(commandRest));
+}
+
 if (!command || command === "help" || command === "--help") {
   usage();
   process.exit(0);
+}
+
+if (DOVE_INVOCATION) {
+  if (["orchestrate", "mission", "board", "audit", "return", "launch"].includes(command)) {
+    console.log(JSON.stringify(runDoveSurface(command, maybeTarget, rest), null, 2));
+    process.exit(0);
+  }
+  console.error(`Unknown dove command: ${command}`);
+  usage();
+  process.exit(1);
 }
 
 if (command === "install" || command === "sync") {
@@ -1558,6 +1830,41 @@ if (command === "onboard" || command === "migrate") {
   const target = resolveTarget(maybeTarget);
   const result = discoverPaperArtifacts(target, buildOnboardingArgs(rest));
   console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
+}
+
+if (command === "dove-orchestrate") {
+  console.log(JSON.stringify(runDoveSurface("orchestrate", maybeTarget, rest), null, 2));
+  process.exit(0);
+}
+
+if (command === "dove-mission") {
+  console.log(JSON.stringify(runDoveSurface("mission", maybeTarget, rest), null, 2));
+  process.exit(0);
+}
+
+if (command === "dove-board") {
+  console.log(JSON.stringify(runDoveSurface("board", maybeTarget, rest), null, 2));
+  process.exit(0);
+}
+
+if (command === "dove-audit") {
+  console.log(JSON.stringify(runDoveSurface("audit", maybeTarget, rest), null, 2));
+  process.exit(0);
+}
+
+if (command === "dove-return") {
+  console.log(JSON.stringify(runDoveSurface("return", maybeTarget, rest), null, 2));
+  process.exit(0);
+}
+
+if (command === "dove-launch") {
+  console.log(JSON.stringify(runDoveSurface("launch", maybeTarget, rest), null, 2));
+  process.exit(0);
+}
+
+if (command === "dove" && ["orchestrate", "mission", "board", "audit", "return", "launch"].includes(maybeTarget)) {
+  console.log(JSON.stringify(runDoveSurface(maybeTarget, rest[0], rest.slice(1)), null, 2));
   process.exit(0);
 }
 

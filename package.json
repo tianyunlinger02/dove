@@ -1,10 +1,11 @@
 {
   "name": "paper-factory",
   "version": "0.2.0",
-  "description": "Mature academic writing workflow pack with a host-neutral core, optional multi-host adapters, and an MCP server.",
+  "description": "Dove-compatible local-first mission workflow pack for papers, engineering work, research, and review, with paper-factory compatibility.",
   "type": "module",
   "bin": {
-    "paper-factory": "./bin/paper-factory.mjs"
+    "paper-factory": "./bin/paper-factory.mjs",
+    "dove": "./bin/dove.mjs"
   },
   "files": [
     ".agents/skills",

@@ -1,6 +1,8 @@
 # paper_factory
 
-`paper_factory` is a host-neutral, file-first, board-first academic workflow pack with optional multi-host adapters.
+`paper_factory` is now the compatibility package for **Dove**: a host-neutral, file-first mission workflow pack with optional multi-host adapters.
+
+Dove is the primary product model: one unified mission workflow where planner, builder, and reviewer agents can fly toward a goal and return with auditable results. The current transition uses a staged dual-name strategy: `paper-factory`, `paper.*`, and `.paper/` remain compatibility-authoritative until an explicit breaking rename or durable-root migration is approved. The migration stance is recorded in `.paper/workspace/dove-root-manifest.json`: `.paper/` is the only authoritative root, while `.dove/` is a planned future target, not a second source of truth.
 
 It deliberately borrows two different kinds of strength:
 
@@ -18,8 +20,8 @@ The result is not a fake clone of either project. It is an honest host-neutral p
 - a **command pack** for orchestration, research, notes, claim gating, planning, outlining, drafting, experiment planning, review, rebuttal strategy, citations, version snapshots/comparisons, figures, and pipeline execution
 - a **role model** with three manually switchable primary agents (`planner`, `author`, `reviewer`) plus automatic specialist subagents for research, experiments, revision/rebuttal, and version audit
 - a **skill pack** for planner, author-side specialists, reviewer, and core workflow discipline
-- an optional **`paper-factory` stdio MCP server** for deterministic state mutations
-- a **CLI installer/doctor** at `bin/paper-factory.mjs`
+- an optional **`paper-factory` stdio MCP server** for deterministic state mutations, read-only Dove compatibility queries, and governed Dove mission launch
+- a **CLI installer/doctor** at `bin/paper-factory.mjs`, plus a limited Dove-facing alias at `bin/dove.mjs`
 - a durable **`.paper/` artifact model** for orchestration, handoffs, research briefs, isolated reviewer handoff runs, experiment audits, result-to-claim bridge logs, typed wiki/workspace indexes, rebuttal issues/strategy, version lineage/comparisons, figure artifact contracts, plus the classic paper-writing artifacts
 - durable **task packets, packet/role context manifests, session summaries, and navigation reports** that narrow context without inventing a hidden runtime
 - a proposal-only **meta-optimize / outer-loop layer** that turns repeated repair and review patterns into grouped, ranked, evidence-backed recommendations plus longer-horizon workflow memory under `.paper/meta/`
@@ -63,6 +65,27 @@ node ./bin/paper-factory.mjs onboard . --write-map
 
 `migrate` is an alias for the same proposal-first artifact mapping flow. It never moves, deletes, rewrites, or imports manuscript files.
 
+### Query Dove compatibility surfaces from the CLI
+
+```bash
+# Proposal-only routing; writes nothing, runs nothing, and inspects no git
+node ./bin/paper-factory.mjs dove-orchestrate . --request "Ship cache safely" --domain engineering --stage execution
+
+# Proposal-only mission framing; writes nothing
+node ./bin/paper-factory.mjs dove-mission . --domain engineering --stage execution --artifact src/cache.mjs --acceptance-check "tests or validation output"
+
+# Read the as-is compatibility-backed mission board; writes nothing and refreshes nothing
+node ./bin/paper-factory.mjs dove-board . --domain engineering
+node ./bin/dove.mjs board . --domain engineering
+
+# Proposal-only audit and return-readiness inspection; writes nothing and runs no tests/git
+node ./bin/paper-factory.mjs dove-audit . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
+node ./bin/paper-factory.mjs dove-return . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
+
+# Governed mission launch after accepted guidance exists; writes only through the .paper materialization bridge
+node ./bin/paper-factory.mjs dove-launch . --source-type remediation-pack --source-id <pack-id> --execute-by 2099-01-01T00:00:00.000Z --review-after 2099-01-01T12:00:00.000Z --domain engineering --stage execution
+```
+
 ### Run one explicit foreground autonomy pass
 
 ```bash
@@ -91,7 +114,7 @@ Specialized identities such as `researcher`, `experiment-planner`, `revision-lea
 
 `project:paper.orchestrate` is now a pure router: it reads `.paper/`, classifies the request by paper lifecycle family, and recommends one next command without updating the board or handoff log.
 
-The lifecycle taxonomy is exposed through `.paper/workspace/index.json.lifecycle` and artifact context manifests:
+The lifecycle taxonomy is exposed through `.paper/workspace/index.json.lifecycle` and artifact context manifests. The new `.paper/workspace/index.json.dove` mirror keeps the unified Dove mission view alongside the paper-specific taxonomy: one mission lifecycle (`goal → design → checklist → execution → audit → return`), one primary role split (`planner` / `builder` / `reviewer`), domain guidance for `paper`, `engineering`, `experiment`, `review`, and `general` missions, and compatibility mapping from Dove `builder` back to the existing paper `author` role.
 
 - `objective`: research goal, thesis, venue strategy, and acceptance target
 - `structure`: plan, outline, drafts, figures, checklists, and versions
@@ -102,6 +125,8 @@ The lifecycle taxonomy is exposed through `.paper/workspace/index.json.lifecycle
 - `knowledge`: sources, notes, evidence, claims, bibliography, wiki, and long-horizon memory
 
 Major paper changes should close through `design → checklist → implementation → acceptance`: use `project:paper.plan` for design, `project:paper.checklist` for executable steps and checks, scoped implementation commands for edits, and review/checklist/version commands for acceptance proof.
+
+You can also use five read-only Dove compatibility surfaces while still routing execution into the existing paper command surfaces: `project:dove.orchestrate` for deterministic routing, `project:dove.mission` for no-write mission-contract framing, `project:dove.board` for as-read mission-board inspection, `project:dove.audit` for proposal-only audit plus return-readiness inspection, and `project:dove.return` for no-write return readiness. The MCP layer exposes the same proposal-only shape through `query_dove_orchestrate`, `query_dove_mission`, `query_dove_mission_board`, `query_dove_audit`, and `query_dove_return`. The first governed Dove write surface is `project:dove.launch` / `launch_dove_mission` / `paper-factory dove-launch`: it materializes accepted guidance into Dove mission packets backed by `.paper/task-packets` through the existing guarded bridge, requires `sourceType`, `sourceId`, `executeBy`, and `reviewAfter`, does not execute autonomy, and refuses possible authoritative `.dove` state. The limited `dove` binary is a Dove-facing alias for `orchestrate`, `mission`, `board`, `audit`, `return`, and governed `launch`; it is not a package rename. `.paper/` remains the active authoritative durable root, `.paper/workspace/dove-root-manifest.json` records the manifest-only migration strategy, and `.dove/` must not contain authoritative workspace state until an explicit breaking migration is approved. Normal engineering work should use domain `engineering`, target source/test/docs artifacts, and return declared changed-file paths plus declared test/validation evidence and validation output through the same mission protocol; Dove return and audit do not run tests or inspect git.
 
 1. `project:paper.init`
 2. `project:paper.orchestrate`
@@ -181,6 +206,7 @@ Major paper changes should close through `design → checklist → implementatio
 - `.paper/wiki/navigation.md`
 - `.paper/workspace/index.json`
 - `.paper/workspace/artifact-map.json`
+- `.paper/workspace/dove-root-manifest.json`
 - `.paper/meta/events.json`
 - `.paper/meta/long-horizon-memory.json`
 - `.paper/meta/operator-playbooks.json`

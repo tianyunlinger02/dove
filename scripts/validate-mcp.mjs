@@ -104,6 +104,7 @@ async function main() {
     "ensure_workspace",
     "init_project",
     "issue_program_approval",
+    "launch_dove_mission",
     "list_artifacts",
     "materialize_guidance_packet",
     "normalize_rebuttal_issues",
@@ -111,6 +112,11 @@ async function main() {
     "query_boundary_report",
     "query_campaigns",
     "query_decisions",
+    "query_dove_audit",
+    "query_dove_mission",
+    "query_dove_mission_board",
+    "query_dove_orchestrate",
+    "query_dove_return",
     "query_governance_coverage_report",
     "query_lineage",
     "query_meta_optimize",
@@ -562,6 +568,108 @@ async function main() {
   assert.equal(paperAudit.noAutoApply, true);
   assert.deepEqual(paperAudit.writes, []);
 
+  const doveOrchestrate = extractJson(await call("tools/call", {
+    name: "query_dove_orchestrate",
+    arguments: {
+      request: "Validate the Dove orchestrate query surface.",
+      domain: "engineering",
+      stage: "execution",
+      targetArtifacts: ["src/core/dove.mjs"],
+      acceptanceChecks: ["tests or validation output"]
+    }
+  }));
+  assert.equal(doveOrchestrate.mode, "dove-orchestrate-query");
+  assert.equal(doveOrchestrate.proposalOnly, true);
+  assert.equal(doveOrchestrate.noAutoApply, true);
+  assert.deepEqual(doveOrchestrate.writes, []);
+  assert.equal(doveOrchestrate.route.recommendedCommand, "project:paper.materialize");
+  assert.equal(doveOrchestrate.diagnostics.noRefresh, true);
+  assert.equal(doveOrchestrate.diagnostics.noCommandExecution, true);
+  assert.equal(doveOrchestrate.diagnostics.noGitInspection, true);
+
+  const doveMission = extractJson(await call("tools/call", {
+    name: "query_dove_mission",
+    arguments: {
+      goal: "Validate the Dove mission query surface.",
+      domain: "engineering",
+      stage: "execution",
+      targetArtifacts: ["src/core/dove.mjs"],
+      acceptanceChecks: ["tests or validation output"]
+    }
+  }));
+  assert.equal(doveMission.mode, "dove-mission-query");
+  assert.equal(doveMission.proposalOnly, true);
+  assert.equal(doveMission.noAutoApply, true);
+  assert.deepEqual(doveMission.writes, []);
+  assert.equal(doveMission.mission.domain, "engineering");
+  assert.equal(doveMission.mission.primaryRole, "builder");
+
+  const doveBoard = extractJson(await call("tools/call", {
+    name: "query_dove_mission_board",
+    arguments: {
+      domain: "engineering",
+      stage: "execution"
+    }
+  }));
+  assert.equal(doveBoard.mode, "dove-mission-board-query");
+  assert.equal(doveBoard.proposalOnly, true);
+  assert.equal(doveBoard.noAutoApply, true);
+  assert.deepEqual(doveBoard.writes, []);
+  assert.equal(doveBoard.workspace.durableRoot, ".paper");
+  assert.equal(doveBoard.workspace.plannedDurableRoot, ".dove");
+  assert.equal(doveBoard.workspace.durableRootMigration.status, "manifest-only");
+  assert.equal(doveBoard.workspace.durableRootMigration.authoritativeRoot, ".paper");
+  assert.equal(doveBoard.workspace.durableRootMigration.createsAuthoritativeDoveRoot, false);
+  assert.equal(doveBoard.diagnostics.noRefresh, true);
+
+  fs.mkdirSync(path.join(tempWorkspace, "src", "core"), { recursive: true });
+  fs.mkdirSync(path.join(tempWorkspace, "scripts"), { recursive: true });
+  fs.mkdirSync(path.join(tempWorkspace, "tmp"), { recursive: true });
+  fs.writeFileSync(path.join(tempWorkspace, "src", "core", "dove.mjs"), "export const validator = true;\n", "utf8");
+  fs.writeFileSync(path.join(tempWorkspace, "scripts", "validate-mcp.mjs"), "console.log('validator');\n", "utf8");
+  fs.writeFileSync(path.join(tempWorkspace, "tmp", "mcp-validation.log"), "ok 1 mcp validation passed\nexit 0\n", "utf8");
+
+  const doveAudit = extractJson(await call("tools/call", {
+    name: "query_dove_audit",
+    arguments: {
+      goal: "Validate the Dove audit query surface.",
+      domain: "engineering",
+      changedFilePaths: ["src/core/dove.mjs"],
+      testEvidencePaths: ["scripts/validate-mcp.mjs"],
+      validationOutputPaths: ["tmp/mcp-validation.log"]
+    }
+  }));
+  assert.equal(doveAudit.mode, "dove-audit-query");
+  assert.equal(doveAudit.proposalOnly, true);
+  assert.equal(doveAudit.noAutoApply, true);
+  assert.deepEqual(doveAudit.writes, []);
+  assert.equal(doveAudit.diagnostics.noRefresh, true);
+  assert.equal(doveAudit.diagnostics.noCommandExecution, true);
+  assert.equal(doveAudit.diagnostics.noGitInspection, true);
+
+  const doveReturn = extractJson(await call("tools/call", {
+    name: "query_dove_return",
+    arguments: {
+      goal: "Validate the Dove return query surface.",
+      domain: "engineering",
+      changedFilePaths: ["src/core/dove.mjs"],
+      testEvidencePaths: ["scripts/validate-mcp.mjs"],
+      validationOutputPaths: ["tmp/mcp-validation.log"]
+    }
+  }));
+  assert.equal(doveReturn.mode, "dove-return-query");
+  assert.equal(doveReturn.proposalOnly, true);
+  assert.equal(doveReturn.noAutoApply, true);
+  assert.deepEqual(doveReturn.writes, []);
+  assert.equal(doveReturn.mission.domain, "engineering");
+  assert.equal(["ready", "needs-audit", "needs-review", "needs-execution", "blocked"].includes(doveReturn.returnStatus), true);
+  assert.equal(doveReturn.engineeringEvidence.declaredInputsOnly, true);
+  assert.equal(doveReturn.engineeringEvidence.noCommandExecution, true);
+  assert.equal(doveReturn.engineeringEvidence.noGitInspection, true);
+  assert.equal(doveReturn.engineeringEvidence.changedFiles.existingPaths.includes("src/core/dove.mjs"), true);
+  assert.equal(doveReturn.engineeringEvidence.validationEvidence.existingPaths.includes("scripts/validate-mcp.mjs"), true);
+  assert.equal(doveReturn.engineeringEvidence.validationOutput.status, "passed");
+
   const workspaceIndex = extractJson(await call("tools/call", { name: "query_workspace_index", arguments: {} }));
   assert.equal(Array.isArray(workspaceIndex.activePackets), true);
 
@@ -619,27 +727,38 @@ async function main() {
   const packetMaterializationPath = topPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet") ?? null;
   const followThroughActorRole = packetMaterializationPath?.assignedRole ?? topPack.packetPointers?.[0]?.assignedRole ?? topPack.conversionHints?.[0]?.assignedRole ?? "planner";
   const materializedPacket = extractJson(await call("tools/call", {
-    name: "materialize_guidance_packet",
+    name: "launch_dove_mission",
     arguments: {
       sourceType: "remediation-pack",
       sourceId: topPack.id,
       actorRole: followThroughActorRole,
-      decisionSummary: "Materialize the top remediation pack into a real task packet.",
+      goal: "Launch the validator remediation mission through Dove.",
+      domain: "engineering",
+      stage: "execution",
+      targetArtifacts: ["src/core/dove.mjs"],
+      acceptanceChecks: ["changed files", "tests or validation output"],
+      decisionSummary: "Launch the top remediation pack into a real Dove mission packet.",
       selectedConversionPathKey: packetMaterializationPath?.deterministicKey ?? null,
       packetId: packetMaterializationPath?.targetId ?? "task-validator-follow-through",
       executeBy: "2099-01-01T00:00:00.000Z",
       reviewAfter: "2099-01-01T12:00:00.000Z"
     }
   }));
+  assert.equal(materializedPacket.mode, "dove-launch-mission");
   assert.equal(materializedPacket.status, "materialized");
-  assert.equal(typeof materializedPacket.packetId, "string");
+  assert.equal(materializedPacket.governance.noDoveRootWrites, true);
+  assert.equal(materializedPacket.governance.noAutonomyExecution, true);
+  assert.equal(typeof materializedPacket.materialization.packetId, "string");
+  assert.equal(materializedPacket.materialization.missionPacketId, materializedPacket.materialization.packetId);
+  assert.equal(materializedPacket.missionPacket.id, materializedPacket.materialization.packetId);
+  assert.equal(materializedPacket.missionPacket.storePath, ".paper/task-packets/index.json");
 
   const autonomyRun = extractJson(await call("tools/call", {
     name: "run_autonomy_once",
     arguments: { actorRole: "planner" }
   }));
   assert.equal(autonomyRun.status, "completed");
-  assert.equal(autonomyRun.packetId, materializedPacket.packetId);
+  assert.equal(autonomyRun.packetId, materializedPacket.materialization.packetId);
 
   const artifactManifest = extractJson(await call("tools/call", {
     name: "read_artifact_context_manifest",
@@ -652,7 +771,7 @@ async function main() {
 
   const finalWorkspaceIndex = extractJson(await call("tools/call", { name: "query_workspace_index", arguments: {} }));
   assert.equal(finalWorkspaceIndex.runtime.lastStatus, "completed");
-  assert.equal(finalWorkspaceIndex.runtime.lastSelectedPacketId, materializedPacket.packetId);
+  assert.equal(finalWorkspaceIndex.runtime.lastSelectedPacketId, materializedPacket.materialization.packetId);
 
   extractJson(await call("tools/call", { name: "sync_checklist", arguments: {} }));
 

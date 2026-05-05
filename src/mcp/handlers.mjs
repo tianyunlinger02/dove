@@ -15,6 +15,12 @@ import {
   normalizeRebuttalIssues,
   readBoundaryReport,
   queryDecisions,
+  launchDoveMission,
+  queryDoveAudit,
+  queryDoveMission,
+  queryDoveMissionBoard,
+  queryDoveOrchestrate,
+  queryDoveReturn,
   queryGovernanceCoverageReport,
   queryLineage,
   queryMetaOptimize,
@@ -98,6 +104,18 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(queryOperatorFollowThrough(root));
       case "query_paper_audit":
         return makeTextResult(queryPaperAudit(root, args));
+      case "query_dove_orchestrate":
+        return makeTextResult(queryDoveOrchestrate(root, args));
+      case "query_dove_mission":
+        return makeTextResult(queryDoveMission(root, args));
+      case "query_dove_mission_board":
+        return makeTextResult(queryDoveMissionBoard(root, args));
+      case "query_dove_audit":
+        return makeTextResult(queryDoveAudit(root, args));
+      case "query_dove_return":
+        return makeTextResult(queryDoveReturn(root, args));
+      case "launch_dove_mission":
+        return makeTextResult(launchDoveMission(root, args));
       case "query_program_approvals":
         return makeTextResult(queryProgramApprovals(root, args));
       case "query_campaigns":

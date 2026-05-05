@@ -6,6 +6,7 @@ import {
   createCampaignsIndex,
   createClaimBridgeLog,
   createDefaultBoard,
+  createDoveRootMigrationManifest,
   createEvidenceIndex,
   createExperimentAuditsIndex,
   createExperimentPlansIndex,
@@ -51,6 +52,7 @@ import {
   createWorkflowBoundaries,
   createWorkspaceIndex,
   normalizeCampaignsIndex,
+  normalizeDoveRootMigrationManifest,
   normalizeMetaExecutionBridgeCandidatesIndex,
   normalizeMetaGovernanceCoverageIndex,
   normalizeMetaGovernanceCoverageReport,
@@ -192,6 +194,7 @@ export function createWorkspaceBootstrapJsonArtifacts(state) {
     [ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex],
     [ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex],
     [ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex],
+    [ARTIFACT_PATHS.doveRootManifest, createDoveRootMigrationManifest],
     [ARTIFACT_PATHS.workflowBoundaries, createWorkflowBoundaries]
   ];
 }
@@ -218,6 +221,7 @@ export function createManagedWorkspaceJsonArtifacts() {
     [ARTIFACT_PATHS.programRuns, createProgramRunsIndex, normalizeProgramRunsIndex],
     [ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex, normalizeProgramApprovalsIndex],
     [ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex, normalizeCampaignsIndex],
-    [ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex, normalizeWorkspaceIndex]
+    [ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex, normalizeWorkspaceIndex],
+    [ARTIFACT_PATHS.doveRootManifest, createDoveRootMigrationManifest, normalizeDoveRootMigrationManifest]
   ];
 }

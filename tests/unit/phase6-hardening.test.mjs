@@ -10,8 +10,10 @@ import {
   GOVERNANCE_GUARDED_MUTATIONS,
   GOVERNANCE_NEGATIVE_COVERAGE,
   GOVERNANCE_READONLY_COMMANDS,
+  GOVERNANCE_READONLY_TOOLS,
   ensureWorkspace,
   initProject,
+  launchDoveMission,
   materializeGuidancePacket,
   issueProgramApproval,
   planCampaign,
@@ -332,6 +334,40 @@ test("queryWorkspaceIndex projects campaign summary from durable campaign state"
   assert.equal(workspaceIndex.campaigns.linkedRunCount, 1);
 });
 
+test("queryWorkspaceIndex treats explicit Dove engineering packets as engineering missions", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
+    version: 3,
+    items: [{
+      id: "implement-api-cache",
+      title: "Implement API cache",
+      summary: "Engineering mission packet for a normal implementation task.",
+      sourceType: "engineering-mission",
+      doveDomain: "engineering",
+      phase: "draft",
+      status: "pending",
+      lifecycleStatus: "active",
+      active: true,
+      assignedRole: "author",
+      nextAction: "Implement the cache and return tests plus review evidence.",
+      outputPaths: ["src/cache.mjs"],
+      evidenceLinks: ["tests/cache.test.mjs"]
+    }],
+    lifecycleCounts: {},
+    dependencyHealth: {},
+    updatedAt: null
+  });
+
+  const workspaceIndex = queryWorkspaceIndex(root);
+  assert.equal(workspaceIndex.dove.currentDomain, "engineering");
+  assert.equal(workspaceIndex.dove.domainCounts.engineering, 1);
+  assert.equal(workspaceIndex.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:paper.materialize or project:paper.autonomy-operate");
+  assert.equal(workspaceIndex.activePackets[0].doveDomain, "engineering");
+  assert.equal(workspaceIndex.activePackets[0].lifecycleFamily, "structure");
+});
+
 test("ensureWorkspace reconciles managed artifact metadata and structure for boundaries and workspace index", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -412,6 +448,7 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.equal(boundaries.version, 3);
   assert.equal(boundaries.managedArtifacts.workflowBoundaries.revisionId, "schema-v5:bootstrap-only");
   assert.equal(boundaries.managedArtifacts.workspaceIndex.path, ".paper/workspace/index.json");
+  assert.equal(boundaries.managedArtifacts.doveRootManifest.path, ".paper/workspace/dove-root-manifest.json");
   assert.deepEqual(boundaries.managedPaths, [".opencode", ".opencode.json", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.neutralCorePaths, ["README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.defaultHostAdapters, ["opencode"]);
@@ -420,7 +457,7 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.deepEqual(boundaries.managedHostAdapterPaths.agents, [".agents/skills", "AGENTS.md"]);
   assert.deepEqual(boundaries.notes, ["legacy note"]);
 
-  assert.equal(workspaceIndex.version, 8);
+  assert.equal(workspaceIndex.version, 9);
   assert.equal(workspaceIndex.managed.revisionId, "schema-v5:bootstrap-only");
   assert.equal(workspaceIndex.currentFocus, "Legacy focus");
   assert.deepEqual(workspaceIndex.workQueues.ready, []);
@@ -606,7 +643,7 @@ test("queryMetaOptimize carries forward legacy long-horizon history while rewrit
 
   const result = queryMetaOptimize(root);
   const longHorizonMemory = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory);
-  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 8 });
+  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 9 });
 
   assert.equal(result.proposalOnly, true);
   assert.equal(longHorizonMemory.history.length >= 2, true);
@@ -665,7 +702,7 @@ test("queryMetaOptimize avoids long-horizon history drift on repeated no-op refr
 
   const second = queryMetaOptimize(root);
   const secondMemory = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory);
-  const secondWorkspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 8 });
+  const secondWorkspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 9 });
   const secondOptimizerState = readJson(root, ARTIFACT_PATHS.metaOptimizerState, { version: 4, frontier: {}, longHorizon: {} });
 
   assert.equal(firstMemory.history.length >= 1, true);
@@ -808,7 +845,7 @@ test("queryMetaOptimize builds proposal-only recommendations from durable review
   const optimizerState = readJson(root, ARTIFACT_PATHS.metaOptimizerState, { version: 1, frontier: {}, updatedAt: null });
   const remediationPacks = readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex);
   const report = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerReport), "utf8");
-  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 8 });
+  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 9 });
   const sessionSummary = fs.readFileSync(path.join(root, ARTIFACT_PATHS.sessionSummary), "utf8");
 
   assert.equal(result.proposalOnly, true);
@@ -1712,7 +1749,8 @@ test("governance registry completely binds the expected mutating command and MCP
       "record_operator_follow_through",
       "query_meta_optimize",
       "plan_campaign",
-      "materialize_guidance_packet"
+      "materialize_guidance_packet",
+      "launch_dove_mission"
   ];
   for (const toolName of expectedMutatingTools) {
     assert.equal(boundTools.has(toolName), true);
@@ -1741,15 +1779,34 @@ test("governance registry completely binds the expected mutating command and MCP
       "paper.rebuttal",
       "paper.follow-through",
       "paper.meta-optimize",
-      "paper.materialize"
+      "paper.materialize",
+      "dove.launch"
   ];
   for (const commandId of expectedMutatingCommands) {
     assert.equal(boundCommands.has(commandId), true);
     assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), true);
   }
   assert.equal(boundCommands.has("paper.orchestrate"), false);
+  assert.equal(boundCommands.has("dove.launch"), true);
+  assert.equal(boundCommands.has("dove.orchestrate"), false);
+  assert.equal(boundCommands.has("dove.mission"), false);
+  assert.equal(boundCommands.has("dove.board"), false);
+  assert.equal(boundCommands.has("dove.audit"), false);
+  assert.equal(boundCommands.has("dove.return"), false);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("paper.orchestrate"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.orchestrate"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.mission"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.board"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.audit"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.return"), true);
+  assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_orchestrate"), true);
+  assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_audit"), true);
   assert.equal(fs.existsSync(path.join(commandDir, "paper.orchestrate.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.orchestrate.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.mission.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.board.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.audit.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.return.md")), true);
 });
 
 test("a broader set of guarded write paths all reject unresolved follow-through debt", () => {
@@ -4769,6 +4826,7 @@ test("every governance registry entry binds to real command or MCP surfaces plus
     fs.readFileSync(path.join(process.cwd(), "src/core/isolated-review.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/orchestration.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/navigation.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/dove.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/runtime.mjs"), "utf8")
   ];
 

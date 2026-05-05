@@ -1,0 +1,151 @@
+{
+  "id": "complete-dove-refactor",
+  "name": "complete-dove-refactor",
+  "title": "Complete Dove refactor after compatibility parity",
+  "description": "Finish the remaining long-horizon Dove transition after the five-surface read-only compatibility layer is stable.",
+  "status": "done",
+  "dev_type": "frontend",
+  "scope": "multi-surface product refactor",
+  "package": null,
+  "priority": "P1",
+  "creator": "tianyunlinger02",
+  "assignee": "tianyunlinger02",
+  "createdAt": "2026-05-05",
+  "startedAt": "2026-05-05",
+  "completedAt": "2026-05-05",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "current_phase": 6,
+  "next_action": [],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [
+    {
+      "id": "dove-compatibility-baseline",
+      "title": "Freeze the completed five-surface Dove compatibility baseline",
+      "status": "done",
+      "notes": "Core/MCP/CLI/adapters/docs/tests now cover read-only orchestrate, mission, board, audit, and return surfaces. npm run check, pack dry-run, and CLI smoke passed."
+    },
+    {
+      "id": "dove-rename-decision",
+      "title": "Decide package and command rename strategy",
+      "status": "done",
+      "notes": "Selected and implemented the safe staged dual-name strategy: Dove is the primary product model, while paper-factory, paper.* commands, and .paper remain compatibility-authoritative until an explicit breaking rename is approved. Workspace kernel identity, Dove query output, package description, docs, and tests now reflect this."
+    },
+    {
+      "id": "dove-durable-root-migration",
+      "title": "Design and implement .paper to .dove durable-root migration",
+      "status": "done",
+      "notes": "Implemented the safe manifest-only durable-root migration strategy. .paper remains the only authoritative root; .paper/workspace/dove-root-manifest.json records .dove as the planned future target, the no-dual-root invariant, and blocked authoritative .dove artifacts. Workspace bootstrap creates and normalizes the manifest without creating .dove; Dove read-only queries expose the manifest without repairing malformed input; doctor rejects possible dual-authoritative .dove workspace state. Targeted tests, npm run commands:validate, npm run mcp:validate, npm run check, and npm run pack:dry-run passed."
+    },
+    {
+      "id": "dove-mutating-lifecycle-surfaces",
+      "title": "Add governed mutating Dove lifecycle surfaces",
+      "status": "done",
+      "notes": "Implemented the minimal governed Dove write surface: dove.launch / launchDoveMission / launch_dove_mission / paper-factory dove-launch / dove launch. It materializes accepted guidance into the authoritative Dove mission-packet store backed by .paper/task-packets through the existing guarded bridge, requires sourceType/sourceId/executeBy/reviewAfter, carries Dove mission metadata, refuses possible authoritative .dove state, does not execute autonomy, and is exposed across OpenCode, Claude Code, Cursor, Codex, and shared agent adapters. commands:validate, mcp:validate, targeted integration/governance tests, npm run check, and npm run pack:dry-run passed."
+    },
+    {
+      "id": "dove-internal-language-unification",
+      "title": "Unify internal mission terminology without weakening paper-specific workflows",
+      "status": "done",
+      "notes": "Completed a safe additive terminology slice: Dove-facing outputs expose missionPacketId, missionPacketPath, missionPacketContextPath, missionPacketStorePath, and mission-packet source/compatibility metadata while preserving legacy packetId, packetPath, and .paper/task-packets backing compatibility. MCP and CLI accept missionPacketId aliases for board/launch flows; Dove adapters and docs now describe mission packets backed by .paper/task-packets. Paper-specific task-packet/materialize terminology remains intact on paper-compatible surfaces."
+    },
+    {
+      "id": "dove-final-release-validation",
+      "title": "Validate final Dove release boundary",
+      "status": "done",
+      "notes": "Final validation passed on 2026-05-05: npm run commands:validate, npm run mcp:validate, targeted Dove/MCP/governance tests, npm run check with 161 passing tests, and npm run pack:dry-run with a 198-file package dry run. The completed refactor preserves staged dual-name compatibility: paper-factory/.paper remain authoritative, Dove is the product model, and breaking npm rename or authoritative .dove migration still require explicit future approval."
+    }
+  ],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "docs/DOVE_REFACTOR_PLAN_2026-05-04.md",
+    "src/core/schema.mjs",
+    "src/core/workspace-bootstrap.mjs",
+    "src/core/dove.mjs",
+    "src/core/navigation.mjs",
+    "bin/paper-factory.mjs",
+    "bin/dove.mjs",
+    "src/mcp/tool-definitions.mjs",
+    "src/mcp/handlers.mjs",
+    "scripts/validate-commands.mjs",
+    "scripts/validate-mcp.mjs"
+  ],
+  "notes": "Final Dove refactor is complete under the approved staged dual-name and manifest-only durable-root strategy. Dove is the primary product model; paper-factory, paper.* commands, and .paper remain compatibility-authoritative. The compatibility baseline, staged identity, manifest-only durable-root migration, governed launch write surface, mission-packet terminology aliases, and final validation are complete. Breaking npm rename and authoritative .dove migration remain explicit future non-goals until approved.",
+  "meta": {
+    "doveCompatibilityParityCompletedAt": "2026-05-05",
+    "doveNamingStrategyCompletedAt": "2026-05-05",
+    "doveDurableRootManifestCompletedAt": "2026-05-05",
+    "doveMutatingLifecycleSurfaceCompletedAt": "2026-05-05",
+    "doveInternalLanguageUnificationCompletedAt": "2026-05-05",
+    "doveFinalReleaseValidationCompletedAt": "2026-05-05",
+    "activeDurableRoot": ".paper",
+    "plannedDurableRoot": ".dove",
+    "doveRootManifest": ".paper/workspace/dove-root-manifest.json",
+    "durableRootMigrationStatus": "manifest-only",
+    "authoritativeRoot": ".paper",
+    "createsAuthoritativeDoveRoot": false,
+    "doctorDualRootConflictCheck": true,
+    "compatibilitySurfaces": [
+      "orchestrate",
+      "mission",
+      "board",
+      "audit",
+      "return"
+    ],
+    "selectedNamingStrategy": "staged-dual-name",
+    "breakingRenameRequiresExplicitApproval": true,
+    "lastValidation": {
+      "commandsValidate": "passed",
+      "mcpValidate": "passed",
+      "governanceAudit": "passed",
+      "npmCheck": "passed",
+      "packDryRun": "passed",
+      "testCount": 161,
+      "packDryRunFileCount": 198
+    },
+    "nonGoalsUntilApproved": [
+      "npm package rename",
+      ".dove authoritative migration",
+      "removing paper.* compatibility",
+      "ungoverned mutating dove lifecycle wrappers"
+    ],
+    "mutatingLifecycleStatus": "minimal-governed-launch",
+    "governedDoveWriteSurfaces": [
+      "launch"
+    ],
+    "governedDoveMcpTools": [
+      "launch_dove_mission"
+    ],
+    "governedDoveCliSurfaces": [
+      "paper-factory dove-launch",
+      "paper-factory dove launch",
+      "dove launch"
+    ],
+    "governedDoveAdapters": [
+      "opencode",
+      "claude",
+      "cursor",
+      "codex",
+      "agents"
+    ],
+    "launchWritesAuthoritativeRoot": ".paper",
+    "launchCreatesAuthoritativeDoveRoot": false,
+    "launchExecutesAutonomy": false,
+    "launchRequiresExecutionWindow": true,
+    "missionPacketTerminologyStatus": "additive-aliases",
+    "missionPacketBackingStore": ".paper/task-packets",
+    "legacyPacketFieldsPreserved": true,
+    "missionPacketPublicAliases": [
+      "missionPacketId",
+      "missionPacketPath",
+      "missionPacketContextPath",
+      "missionPacketStorePath",
+      "missionPacketStoreRoot"
+    ],
+    "mcpMissionPacketIdAlias": true,
+    "cliMissionPacketIdAlias": true
+  }
+}

@@ -2,16 +2,22 @@
 
 ## Product model
 
-`paper_factory` is a local-first academic writing system for OpenCode.
+`paper_factory` is the compatibility package for Dove: a local-first mission workflow for paper, engineering, experiment, review, and general research work. Dove is the primary product model, while `paper-factory`, `paper.*`, and `.paper/` remain compatibility-authoritative during the staged dual-name transition.
 
 - **Commands** drive the workflow.
 - **Skills** encode durable role behavior.
 - **MCP** provides deterministic state mutations.
 - **`.paper/`** keeps the workflow resumable and auditable.
+- **Dove mission metadata** under `.paper/workspace/index.json.dove` keeps one shared mission lifecycle without splitting paper and engineering into separate products.
+- **Dove durable-root manifest metadata** under `.paper/workspace/dove-root-manifest.json` records that `.paper/` is authoritative and `.dove/` is planned only.
 
 ## Board-first orchestration
 
 `project:paper.orchestrate` is the pure routing entrypoint. It reads the current `.paper` context, classifies the request by paper lifecycle family, and recommends one next command; it does not update the board, append handoffs, refresh packets, or apply downstream mutations.
+
+`project:dove.orchestrate` is the new read-only Dove compatibility router. It frames the same durable state as one mission with a domain (`paper`, `engineering`, `experiment`, `review`, or `general`) and lifecycle stage (`goal`, `design`, `checklist`, `execution`, `audit`, or `return`), then routes back into the existing paper command surface instead of forking a second workflow.
+
+`project:dove.mission` frames one proposal-only mission contract with goal, domain, stage, role owner, acceptance checks, and return protocol. `project:dove.board` inspects the as-read compatibility mission board from `.paper` without refreshing derived surfaces. `project:dove.audit` reports proposal-only mission audit findings plus return readiness. `project:dove.return` inspects whether the mission has enough durable evidence to return safely. These five compatibility surfaces are read-only; execution still belongs to existing `project:paper.*` commands or explicit `paper-factory` CLI passes. `project:dove.launch` is the first governed Dove write surface: it launches one accepted mission by materializing proposal guidance into the authoritative Dove mission-packet store backed by `.paper/task-packets` through `launch_dove_mission`, requires `sourceType`, `sourceId`, `executeBy`, and `reviewAfter`, and does not create `.dove` state or execute autonomy. The CLI exposes the no-write query shape through `paper-factory dove-orchestrate .`, `paper-factory dove-mission .`, `paper-factory dove-board .`, `paper-factory dove-audit .`, `paper-factory dove-return .`, plus the governed launch surface through `paper-factory dove-launch .` and nested `paper-factory dove <surface> .` equivalents; `bin/dove.mjs` is a limited alias for `dove orchestrate`, `dove mission`, `dove board`, `dove audit`, `dove return`, and `dove launch`, not a package rename. Normal engineering work uses the same domain field rather than a separate product branch: mark it as `engineering`, list source/test/docs targets, and return declared changed-file paths plus declared test/validation evidence and validation output. Dove audit and return inspect only those declared project-local paths and durable packet links; they do not run tests or inspect git.
 
 `paper_factory` now uses a durable board-first orchestration model:
 
@@ -28,6 +34,8 @@
 - `.paper/workspace/artifact-map.json` is an optional onboarding map for existing paper assets; it is written only by explicit `paper-factory onboard . --write-map` or `migrate . --write-map`.
 - `.paper/workspace/index.json` now also carries a compact `repairFrontier` so degraded typed-wiki relations and related managed artifact issues stay visible in the same outer-loop surface, including relation-family taxonomy rollups when the wiki degrades.
 - `.paper/workspace/index.json.lifecycle` classifies work into `objective`, `structure`, `campaign`, `work-unit`, `concern`, `audit`, and `knowledge`, while artifact manifests expose each artifact's lifecycle family.
+- `.paper/workspace/index.json.dove` mirrors the same workspace as a unified Dove mission kernel with `planner` / `builder` / `reviewer`, `goal → design → checklist → execution → audit → return`, domain guidance for paper/engineering/experiment/review/general missions, compatibility mapping from Dove `builder` to paper `author`, and the manifest-only durable-root migration stance.
+- `.paper/workspace/dove-root-manifest.json` is the explicit no-dual-root migration manifest: `.paper/` is the only authoritative durable root, `.dove/` is planned, and possible authoritative `.dove` state is a doctor-detected conflict until a breaking migration is approved.
 - `.paper/meta/` adds a proposal-only meta-optimize layer that records derived signal observations, grouped optimization clusters, evidence-backed ranked workflow recommendations, durable remediation packs, and longer-horizon workflow memory without auto-applying changes.
 - Commands and skills provide role behavior, but there is **no hidden scheduler or swarm runtime**.
 - Optional MCP helpers mutate those files deterministically; they do not replace them as the source of truth.
@@ -48,7 +56,7 @@ For an existing paper repository, run `paper-factory onboard .` or `paper-factor
 
 ### 2. Orchestrate the next role-owned phase
 
-Run `project:paper.orchestrate` to set the current phase, intent type, assigned role, current focus, next action, continuation state, tasks, blockers, evidence links, experiment IDs, rebuttal issue IDs, version lineage, and active comparison targets.
+Run `project:paper.orchestrate` or `project:dove.orchestrate` to route to exactly one next command from the current durable context. Use `project:dove.mission` or `paper-factory dove-mission .` when you want a no-write mission contract first, `project:dove.board` or `paper-factory dove-board .` when you want an as-read mission-board view, `project:dove.audit` or `paper-factory dove-audit .` when you want proposal-only audit plus return-readiness inspection, and `project:dove.return` or `paper-factory dove-return .` when you want no-write return-readiness inspection before closure. Use `project:dove.launch` or `paper-factory dove-launch .` only after accepting a proposal source and setting an execution/review window; it creates a governed `.paper` mission packet but does not execute the work. The read-only Dove surfaces do not set phase, role, board fields, tasks, blockers, evidence links, version lineage, durable-root authority, or workspace refreshes themselves; they point to the command that owns the needed mutation.
 
 ### 3. Register sources and deepen research
 
@@ -109,13 +117,15 @@ The workflow is no longer lifecycle-only. Use these file-backed inspection comma
 - `project:paper.lineage` for version/comparison lineage
 - `project:paper.meta-optimize` for the proposal-only optimization frontier and recommendations
 - `project:paper.audit` for strict no-fix paper inspection with proposal-only findings
+- `project:dove.orchestrate` / `paper-factory dove-orchestrate`, `project:dove.mission` / `paper-factory dove-mission`, `project:dove.board` / `paper-factory dove-board`, `project:dove.audit` / `paper-factory dove-audit`, and `project:dove.return` / `paper-factory dove-return` for proposal-only Dove routing, mission, board, audit, and return JSON queries
+- `project:dove.launch` / `paper-factory dove-launch` / `launch_dove_mission` for governed launch of one accepted Dove mission into mission packets backed by `.paper/task-packets` without executing autonomy or creating `.dove` state
 - `project:paper.onboard` plus `paper-factory onboard` / `migrate` for proposal-first artifact mapping of existing paper projects
 - `project:paper.follow-through` for explicit operator handling of proposal-only remediation guidance
 - `project:paper.materialize` for explicit proposal-to-task-packet materialization once guidance is accepted
 - `paper-factory autonomy-once` / `run_autonomy_once` for one explicit planner-owned autonomous control-plane pass after requests and materialization are in place
 - `project:paper.governance-audit` for the durable governance coverage proof report
 
-These commands refresh `.paper/wiki/navigation.md`, `.paper/task-packets/index.json`, `.paper/context/roles/*.json`, `.paper/context/phases/*.json`, `.paper/context/packets/*.json`, `.paper/workspace/index.json`, and `.paper/sessions/LATEST_SUMMARY.md` without introducing unsupported host hooks.
+The paper navigation commands refresh `.paper/wiki/navigation.md`, `.paper/task-packets/index.json`, `.paper/context/roles/*.json`, `.paper/context/phases/*.json`, `.paper/context/packets/*.json`, `.paper/workspace/index.json`, and `.paper/sessions/LATEST_SUMMARY.md` without introducing unsupported host hooks; Dove compatibility queries stay no-refresh and proposal-only.
 
 The meta-optimize command also refreshes `.paper/meta/events.json`, `.paper/meta/long-horizon-memory.json`, `.paper/meta/operator-playbooks.json`, `.paper/meta/remediation-packs.json`, `.paper/meta/execution-bridge-candidates.json`, `.paper/meta/recommendations.json`, `.paper/meta/optimizer-state.json`, and `.paper/meta/LATEST_OPTIMIZER_REPORT.md` from existing durable signals such as the session journal, review concerns, experiment audits, claim bridges, figure QA, version comparisons, board state, and workspace state. The resulting frontier is grouped into operator-meaningful clusters and ranked deterministically so related debt stays visible together, with a persisted frontier summary, top-cluster rollup, taxonomy-aware pressure summaries (for example evidence-grounding, validation-loop, or review-pressure), durable remediation packs that bundle linked evidence plus ranked multi-path conversion guidance, family-level operator playbooks derived from those packs plus longer-horizon memory, proposal-only execution bridge candidate scaffolds that suggest manual work-item shapes, readiness/coverage diagnostics that show how actionable each bundle is, explicit artifact update maps and target orders for the playbook layer, ranking method, and stable tie-break order.
 
@@ -180,6 +190,12 @@ The optional MCP layer exposes deterministic helpers:
 - `query_governance_coverage_report`
 - `query_operator_follow_through`
 - `query_paper_audit`
+- `query_dove_orchestrate`
+- `query_dove_mission`
+- `query_dove_mission_board`
+- `query_dove_audit`
+- `query_dove_return`
+- `launch_dove_mission`
 - `read_role_context_manifest`
 - `read_phase_context_manifest`
 - `read_packet_context_manifest`
