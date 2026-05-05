@@ -5,8 +5,8 @@ import os from "node:os";
 import path from "node:path";
 
 const ROOT = process.cwd();
-const serverScriptPath = path.join(ROOT, "mcp", "paper-state-server.mjs");
-const tempWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-validate-"));
+const serverScriptPath = path.join(ROOT, "mcp", "dove-state-server.mjs");
+const tempWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "dove-validate-"));
 
 const server = spawn("node", [serverScriptPath], {
   cwd: tempWorkspace,
@@ -75,6 +75,7 @@ server.on("exit", (code) => {
 
 function extractJson(result) {
   assert.ok(result.content?.[0]?.text, "Expected text content in MCP tool result");
+  assert.notEqual(result.isError, true, result.content[0].text);
   return JSON.parse(result.content[0].text);
 }
 
@@ -83,11 +84,11 @@ async function main() {
     protocolVersion: "2024-11-05",
     capabilities: {},
     clientInfo: {
-      name: "paper-factory-validator",
+      name: "dove-validator",
       version: "0.2.0"
     }
   });
-  assert.equal(init.serverInfo.name, "paper-factory");
+  assert.equal(init.serverInfo.name, "dove");
 
   sendMessage({ jsonrpc: "2.0", method: "notifications/initialized", params: {} });
 
@@ -166,13 +167,13 @@ async function main() {
     arguments: {
       title: "Deterministic Paper Factory",
       venue: "ICLR",
-      objective: "Verify the mature paper_factory workflow.",
+      objective: "Verify the mature Dove workflow.",
       deadline: "2026-05-01",
       thesis: "A durable workflow pack can make paper writing more trustworthy.",
       audience: "ML conference reviewers"
     }
   }));
-  assert.equal(state.paper.title, "Deterministic Paper Factory");
+  assert.equal(state.dove.title, "Deterministic Paper Factory");
 
   const metaOptimize = extractJson(await call("tools/call", {
     name: "query_meta_optimize",
@@ -186,8 +187,8 @@ async function main() {
   assert.ok(Array.isArray(metaOptimize.groupedFrontier.topClusters));
   assert.ok(metaOptimize.longHorizon && typeof metaOptimize.longHorizon === "object");
   assert.equal(metaOptimize.longHorizon.proposalOnly, true);
-  assert.equal(metaOptimize.reportPath, ".paper/meta/LATEST_OPTIMIZER_REPORT.md");
-  assert.equal(metaOptimize.longHorizonPath, ".paper/meta/long-horizon-memory.json");
+  assert.equal(metaOptimize.reportPath, ".dove/meta/LATEST_OPTIMIZER_REPORT.md");
+  assert.equal(metaOptimize.longHorizonPath, ".dove/meta/long-horizon-memory.json");
 
   const approvals = extractJson(await call("tools/call", {
     name: "query_program_approvals",
@@ -206,7 +207,7 @@ async function main() {
     name: "append_handoff",
     arguments: {
       fromRole: "planner",
-      toRole: "author",
+      toRole: "builder",
       phase: "research",
       summary: "Proceed with evidence collection.",
       nextActions: ["Update research brief"]
@@ -216,7 +217,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "update_research_brief",
     arguments: {
-      objective: "Verify the mature paper_factory workflow.",
+      objective: "Verify the mature Dove workflow.",
       agenda: ["Collect sources", "Plan experiments"],
       evidenceBacklog: ["Add comparison evidence"]
     }
@@ -225,15 +226,15 @@ async function main() {
   const source = extractJson(await call("tools/call", {
     name: "register_source",
     arguments: {
-      citationKey: "smith2026paperfactory",
-      title: "Paper Factory: Trustworthy Paper Workflows",
+      citationKey: "smith2026dove",
+      title: "Dove: Trustworthy Mission Workflows",
       authors: ["Smith", "Lee"],
       year: 2026,
       sourceType: "paper",
       origin: "validator"
     }
   }));
-  assert.equal(source.citationKey, "smith2026paperfactory");
+  assert.equal(source.citationKey, "smith2026dove");
 
   const note = extractJson(await call("tools/call", {
     name: "upsert_note",
@@ -259,7 +260,7 @@ async function main() {
           sourceIds: [source.id],
           noteIds: [note.id],
           experimentIds: [],
-          evidenceLinks: [".paper/notes/index.json"],
+          evidenceLinks: [".dove/notes/index.json"],
           status: "weak",
           confidence: "medium",
           gap: "Needs a confirming source."
@@ -272,7 +273,7 @@ async function main() {
     name: "append_handoff",
     arguments: {
       fromRole: "planner",
-      toRole: "author",
+      toRole: "builder",
       phase: "experiments",
       summary: "Proceed with the experiment plan.",
       nextActions: ["Record the experiment result"]
@@ -299,7 +300,7 @@ async function main() {
       claimId: "claim-1",
       outcome: "supports",
       summary: "Durable workflow had fewer evidence gaps.",
-      evidenceLinks: [".paper/experiments/EXPERIMENT_LOG.md"],
+      evidenceLinks: [".dove/experiments/EXPERIMENT_LOG.md"],
       comparisonTargets: ["baseline"]
     }
   }));
@@ -368,11 +369,11 @@ async function main() {
       }]
     }
   }));
-  assert.equal(figurePlan.qaPath, ".paper/figures/qa.json");
+  assert.equal(figurePlan.qaPath, ".dove/figures/qa.json");
 
-  fs.writeFileSync(path.join(tempWorkspace, ".paper", "figures", "workflow-figure.template.svg"), "<svg />\n", "utf8");
-  fs.writeFileSync(path.join(tempWorkspace, ".paper", "figures", "workflow-figure.editable.svg"), "<svg />\n", "utf8");
-  fs.writeFileSync(path.join(tempWorkspace, ".paper", "figures", "workflow-figure.final.svg"), "<svg />\n", "utf8");
+  fs.writeFileSync(path.join(tempWorkspace, ".dove", "figures", "workflow-figure.template.svg"), "<svg />\n", "utf8");
+  fs.writeFileSync(path.join(tempWorkspace, ".dove", "figures", "workflow-figure.editable.svg"), "<svg />\n", "utf8");
+  fs.writeFileSync(path.join(tempWorkspace, ".dove", "figures", "workflow-figure.final.svg"), "<svg />\n", "utf8");
 
   const figureQa = extractJson(await call("tools/call", { name: "validate_figure_pipeline", arguments: {} }));
   assert.equal(figureQa.issueCount, 0);
@@ -380,7 +381,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "append_handoff",
     arguments: {
-      fromRole: "author",
+      fromRole: "builder",
       toRole: "reviewer",
       phase: "review",
       summary: "Proceed with review.",
@@ -399,7 +400,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "append_handoff",
     arguments: {
-      fromRole: "author",
+      fromRole: "builder",
       toRole: "reviewer",
       phase: "review",
       summary: "Return to reviewer for validation signoff.",
@@ -424,12 +425,12 @@ async function main() {
   assert.equal(Array.isArray(citations.missingKeys), true);
 
   const wiki = extractJson(await call("tools/call", { name: "refresh_wiki", arguments: {} }));
-  assert.equal(wiki.wikiPath, ".paper/wiki/index.md");
+  assert.equal(wiki.wikiPath, ".dove/wiki/index.md");
 
   extractJson(await call("tools/call", {
     name: "append_handoff",
     arguments: {
-      fromRole: "author",
+      fromRole: "builder",
       toRole: "reviewer",
       phase: "review",
       summary: "Return to reviewer to finalize the rebuttal issue board.",
@@ -441,22 +442,22 @@ async function main() {
     name: "normalize_rebuttal_issues",
     arguments: {
       issues: [
-        { summary: "Clarify comparison protocol.", severity: "medium", evidenceLinks: [".paper/experiments/EXPERIMENT_LOG.md"] }
+        { summary: "Clarify comparison protocol.", severity: "medium", evidenceLinks: [".dove/experiments/EXPERIMENT_LOG.md"] }
       ]
     }
   }));
   assert.equal(issues.items.length >= 1, true);
 
   const strategy = extractJson(await call("tools/call", { name: "build_rebuttal_strategy", arguments: {} }));
-  assert.equal(strategy.strategyPath, ".paper/rebuttal/strategy.md");
+  assert.equal(strategy.strategyPath, ".dove/rebuttal/strategy.md");
 
   const rebuttal = extractJson(await call("tools/call", { name: "build_rebuttal", arguments: {} }));
-  assert.equal(rebuttal.draftPath, ".paper/drafts/rebuttal.md");
+  assert.equal(rebuttal.draftPath, ".dove/drafts/rebuttal.md");
 
   extractJson(await call("tools/call", {
     name: "append_handoff",
     arguments: {
-      fromRole: "author",
+      fromRole: "builder",
       toRole: "reviewer",
       phase: "review",
       summary: "Return to reviewer for post-rebuttal signoff.",
@@ -582,7 +583,7 @@ async function main() {
   assert.equal(doveOrchestrate.proposalOnly, true);
   assert.equal(doveOrchestrate.noAutoApply, true);
   assert.deepEqual(doveOrchestrate.writes, []);
-  assert.equal(doveOrchestrate.route.recommendedCommand, "project:paper.materialize");
+  assert.equal(doveOrchestrate.route.recommendedCommand, "project:dove.paper.materialize");
   assert.equal(doveOrchestrate.diagnostics.noRefresh, true);
   assert.equal(doveOrchestrate.diagnostics.noCommandExecution, true);
   assert.equal(doveOrchestrate.diagnostics.noGitInspection, true);
@@ -615,11 +616,11 @@ async function main() {
   assert.equal(doveBoard.proposalOnly, true);
   assert.equal(doveBoard.noAutoApply, true);
   assert.deepEqual(doveBoard.writes, []);
-  assert.equal(doveBoard.workspace.durableRoot, ".paper");
-  assert.equal(doveBoard.workspace.plannedDurableRoot, ".dove");
-  assert.equal(doveBoard.workspace.durableRootMigration.status, "manifest-only");
-  assert.equal(doveBoard.workspace.durableRootMigration.authoritativeRoot, ".paper");
-  assert.equal(doveBoard.workspace.durableRootMigration.createsAuthoritativeDoveRoot, false);
+  assert.equal(doveBoard.workspace.durableRoot, ".dove");
+  assert.equal(doveBoard.workspace.authoritativeRoot, ".dove");
+  assert.equal(doveBoard.workspace.authorityManifest.status, "authoritative");
+  assert.equal(doveBoard.workspace.authorityManifest.authoritativeRoot, ".dove");
+  assert.equal(doveBoard.workspace.authorityManifest.currentWriteAuthority, ".dove");
   assert.equal(doveBoard.diagnostics.noRefresh, true);
 
   fs.mkdirSync(path.join(tempWorkspace, "src", "core"), { recursive: true });
@@ -685,7 +686,7 @@ async function main() {
   }));
   assert.equal(reviewerManifest.roleId, "reviewer");
 
-  fs.writeFileSync(path.join(tempWorkspace, ".paper", "reviews", "concerns.json"), `${JSON.stringify({
+  fs.writeFileSync(path.join(tempWorkspace, ".dove", "reviews", "concerns.json"), `${JSON.stringify({
     version: 2,
     items: [{
       id: "validator-materialize-gap",
@@ -694,12 +695,12 @@ async function main() {
       status: "open",
       responseOwnerRole: "planner",
       recurrenceCount: 2,
-      linkedArtifactPaths: [".paper/reviews/log.md"],
+      linkedArtifactPaths: [".dove/reviews/log.md"],
       updatedAt: new Date(0).toISOString()
     }],
     updatedAt: null
   }, null, 2)}\n`, "utf8");
-  fs.writeFileSync(path.join(tempWorkspace, ".paper", "reviews", "REVIEW_STATE.json"), `${JSON.stringify({
+  fs.writeFileSync(path.join(tempWorkspace, ".dove", "reviews", "REVIEW_STATE.json"), `${JSON.stringify({
     version: 3,
     lastVerdict: "needs-work",
     lastReviewedAt: new Date(0).toISOString(),
@@ -746,12 +747,12 @@ async function main() {
   }));
   assert.equal(materializedPacket.mode, "dove-launch-mission");
   assert.equal(materializedPacket.status, "materialized");
-  assert.equal(materializedPacket.governance.noDoveRootWrites, true);
+  assert.equal(materializedPacket.governance.currentWriteAuthority, ".dove");
   assert.equal(materializedPacket.governance.noAutonomyExecution, true);
   assert.equal(typeof materializedPacket.materialization.packetId, "string");
   assert.equal(materializedPacket.materialization.missionPacketId, materializedPacket.materialization.packetId);
   assert.equal(materializedPacket.missionPacket.id, materializedPacket.materialization.packetId);
-  assert.equal(materializedPacket.missionPacket.storePath, ".paper/task-packets/index.json");
+  assert.equal(materializedPacket.missionPacket.storePath, ".dove/task-packets/index.json");
 
   const autonomyRun = extractJson(await call("tools/call", {
     name: "run_autonomy_once",
@@ -762,12 +763,12 @@ async function main() {
 
   const artifactManifest = extractJson(await call("tools/call", {
     name: "read_artifact_context_manifest",
-    arguments: { artifactPath: ".paper/orchestration/board.json" }
+    arguments: { artifactPath: ".dove/orchestration/board.json" }
   }));
-  assert.equal(artifactManifest.artifactPath, ".paper/orchestration/board.json");
+  assert.equal(artifactManifest.artifactPath, ".dove/orchestration/board.json");
 
   const journalSummary = extractJson(await call("tools/call", { name: "summarize_session_journal", arguments: {} }));
-  assert.equal(journalSummary.summaryPath, ".paper/sessions/LATEST_SUMMARY.md");
+  assert.equal(journalSummary.summaryPath, ".dove/sessions/LATEST_SUMMARY.md");
 
   const finalWorkspaceIndex = extractJson(await call("tools/call", { name: "query_workspace_index", arguments: {} }));
   assert.equal(finalWorkspaceIndex.runtime.lastStatus, "completed");
@@ -787,7 +788,7 @@ try {
   server.kill();
 } catch (error) {
   server.kill();
-  console.error(error instanceof Error ? error.message : error);
+  console.error(error instanceof Error ? (error.stack ?? error.message) : error);
   process.exitCode = 1;
 } finally {
   fs.rmSync(tempWorkspace, { recursive: true, force: true });

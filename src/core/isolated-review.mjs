@@ -209,11 +209,11 @@ export function prepareIsolatedReview(root, args = {}) {
     scope: args.scope ?? "current paper pipeline",
     instructions: args.instructions ?? "Review the submitted artifact bundle independently. Do not assume access to writer-session private context.",
     paper: {
-      title: state.paper.title,
-      venue: state.paper.venue,
-      objective: state.paper.objective,
-      thesis: state.paper.thesis,
-      audience: state.paper.audience
+      title: state.dove.title,
+      venue: state.dove.venue,
+      objective: state.dove.objective,
+      thesis: state.dove.thesis,
+      audience: state.dove.audience
     },
     board: {
       currentPhase: board.currentPhase,

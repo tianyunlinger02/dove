@@ -55,7 +55,7 @@ function figurePathLooksPortable(relativePath) {
   if (typeof relativePath !== "string") {
     return false;
   }
-  return relativePath.startsWith(".paper/figures/");
+  return relativePath.startsWith(".dove/figures/");
 }
 
 function placeholderSegmentsForFigure(item) {
@@ -780,11 +780,11 @@ function renderPlan(args, state, board) {
   return [
     "# Current paper plan",
     "",
-    `## Thesis\n\n${args.thesis ?? state.paper.thesis}`,
+    `## Thesis\n\n${args.thesis ?? state.dove.thesis}`,
     "",
-    `## Audience\n\n${args.audience ?? state.paper.audience}`,
+    `## Audience\n\n${args.audience ?? state.dove.audience}`,
     "",
-    `## Paper objective\n\n${board.paperObjective}`,
+    `## Paper objective\n\n${board.doveObjective}`,
     "",
     `## Current focus\n\n${board.currentFocus}`,
     "",
@@ -845,14 +845,14 @@ function renderChecklist(state, reviewState, board, plans, results, issues, vers
     "",
     "## Research memory",
     "",
-    "- [ ] Register core sources in `.paper/sources/index.json`",
-    "- [ ] Capture structured notes in `.paper/notes/index.json`",
-    "- [ ] Maintain `.paper/research/brief.md` and `.paper/research/agenda.json`",
+    "- [ ] Register core sources in `.dove/sources/index.json`",
+    "- [ ] Capture structured notes in `.dove/notes/index.json`",
+    "- [ ] Maintain `.dove/research/brief.md` and `.dove/research/agenda.json`",
     "",
     "## Writing spine",
     "",
     `- [ ] Draft ${Object.keys(state.sections).length} sections (currently active: ${draftedSections})`,
-    "- [ ] Keep `.paper/outline/current-outline.md` aligned with the plan",
+    "- [ ] Keep `.dove/outline/current-outline.md` aligned with the plan",
     "",
     "## Experiments",
     "",
@@ -863,7 +863,7 @@ function renderChecklist(state, reviewState, board, plans, results, issues, vers
     "",
     "## Review + rebuttal",
     "",
-    ...(openItems.length > 0 ? openItems.map((item) => `- [ ] ${item}`) : ["- [ ] Run `project:paper.review-loop` and convert findings into actions."]),
+    ...(openItems.length > 0 ? openItems.map((item) => `- [ ] ${item}`) : ["- [ ] Run `project:dove.paper.review-loop` and convert findings into actions."]),
     `- [ ] Keep ${(reviewState.unresolvedConcernIds ?? []).length} unresolved concerns visible across review rounds`,
     `- [ ] Keep ${issues.items.length} rebuttal issues normalized and triaged`,
     "",
@@ -900,11 +900,11 @@ function renderWiki(state, board, sourcesIndex, notesIndex, evidenceIndex, conce
   return [
     "# Paper wiki",
     "",
-    `## Thesis\n\n${state.paper.thesis}`,
+    `## Thesis\n\n${state.dove.thesis}`,
     "",
     "## Orchestration board",
     "",
-    `- Objective: ${board.paperObjective}`,
+    `- Objective: ${board.doveObjective}`,
     `- Phase: ${board.currentPhase}`,
     `- Intent: ${board.intentType}`,
     `- Assigned role: ${board.assignedRole}`,
@@ -1382,7 +1382,7 @@ function buildRelationRepairItem(relation) {
     reasonCodes,
     artifactPath: ARTIFACT_PATHS.wikiRelations,
     relatedArtifactPaths: uniqueStringArray([ARTIFACT_PATHS.wikiEntities, ...relation.sourceArtifactPaths]),
-    nextAction: `Repair the local artifacts for ${relation.id}, then rerun project:paper.wiki or refresh_wiki.`
+    nextAction: `Repair the local artifacts for ${relation.id}, then rerun project:dove.paper.wiki or refresh_wiki.`
   };
 }
 
@@ -1399,7 +1399,7 @@ function buildRelationFamilyRepairItem(familySummary) {
     reasonCodes: topReasonCodes,
     artifactPath: ARTIFACT_PATHS.wikiRelations,
     relatedArtifactPaths: uniqueStringArray([ARTIFACT_PATHS.wikiEntities, ...familySummary.sourceArtifactPaths]),
-    nextAction: `Repair ${familySummary.degradedCount} degraded ${familySummary.label.toLowerCase()} relations, then rerun project:paper.wiki or refresh_wiki.`
+    nextAction: `Repair ${familySummary.degradedCount} degraded ${familySummary.label.toLowerCase()} relations, then rerun project:dove.paper.wiki or refresh_wiki.`
   };
 }
 
@@ -1500,7 +1500,7 @@ function summarizeWikiRelations(relations) {
 function createWikiArtifacts(root, state, board, sourcesIndex, notesIndex, evidenceIndex, concernsIndex, decisions, questions, plans, results, issues) {
   const entities = [];
   const relations = [];
-  entities.push({ id: "paper-current", entityType: "paper", label: state.paper.title, summary: state.paper.objective, status: board.currentPhase, updatedAt: nowIso() });
+  entities.push({ id: "paper-current", entityType: "paper", label: state.dove.title, summary: state.dove.objective, status: board.currentPhase, updatedAt: nowIso() });
   for (const note of notesIndex.items ?? []) {
     entities.push({ id: `idea-${note.id}`, entityType: "idea", label: note.title, summary: note.summary ?? "", sectionId: note.sectionId ?? null, updatedAt: note.updatedAt ?? nowIso() });
     for (const sourceId of note.sourceIds ?? []) {
@@ -1566,9 +1566,9 @@ function normalizeFigureItem(item = {}, index = 0) {
     templateId,
     editableArtifactId: `${id}-editable`,
     finalArtifactId: `${id}-final`,
-    templateSvgPath: normalizeRelativePath(item.templateSvgPath, `.paper/figures/${id}.template.svg`),
-    editableSvgPath: normalizeRelativePath(item.editableSvgPath, `.paper/figures/${id}.editable.svg`),
-    finalSvgPath: normalizeRelativePath(item.finalSvgPath, `.paper/figures/${id}.final.svg`),
+    templateSvgPath: normalizeRelativePath(item.templateSvgPath, `.dove/figures/${id}.template.svg`),
+    editableSvgPath: normalizeRelativePath(item.editableSvgPath, `.dove/figures/${id}.editable.svg`),
+    finalSvgPath: normalizeRelativePath(item.finalSvgPath, `.dove/figures/${id}.final.svg`),
     reviewNotes: Array.isArray(item.reviewNotes) ? item.reviewNotes : [],
     segmentPlaceholders: placeholderSegmentsForFigure({
       ...item,
@@ -1586,14 +1586,14 @@ export function initProject(root, args = {}) {
   let state = loadState(root);
   state = {
     ...state,
-    paper: {
-      ...state.paper,
-      title: args.title ?? state.paper.title,
-      venue: args.venue ?? state.paper.venue,
-      objective: args.objective ?? state.paper.objective,
-      deadline: args.deadline ?? state.paper.deadline,
-      thesis: args.thesis ?? state.paper.thesis,
-      audience: args.audience ?? state.paper.audience
+    dove: {
+      ...state.dove,
+      title: args.title ?? state.dove.title,
+      venue: args.venue ?? state.dove.venue,
+      objective: args.objective ?? state.dove.objective,
+      deadline: args.deadline ?? state.dove.deadline,
+      thesis: args.thesis ?? state.dove.thesis,
+      audience: args.audience ?? state.dove.audience
     },
     settings: {
       ...state.settings,
@@ -1604,18 +1604,18 @@ export function initProject(root, args = {}) {
 
   state = syncPhase(root, state, {
     stage: "init",
-    resumeCommand: "project:paper.orchestrate",
+    resumeCommand: "project:dove.paper.orchestrate",
     role: "planner",
-    objective: state.paper.objective,
+    objective: state.dove.objective,
     intentType: "plan",
     currentFocus: "Align the project goal and workflow contract.",
     nextAction: "Refresh the board, then register sources and research questions."
   });
 
-  writeText(root, ARTIFACT_PATHS.project, `# Project brief\n\n- Working title: ${state.paper.title}\n- Venue: ${state.paper.venue}\n- Objective: ${state.paper.objective}\n- Deadline: ${state.paper.deadline || "TBD"}\n\n## Thesis\n\n${state.paper.thesis}\n\n## Audience\n\n${state.paper.audience}\n`);
-  writeText(root, ARTIFACT_PATHS.researchContract, `# Research contract\n\n## Project\n\n- Title: ${state.paper.title}\n- Venue: ${state.paper.venue}\n- Objective: ${state.paper.objective}\n\n## Working rules\n\n- No unsupported claims.\n- No citation from memory.\n- Preserve durable artifacts after every stage.\n- Keep the orchestration board and handoffs current.\n- Require review-before-finalize for high-risk changes.\n`);
+  writeText(root, ARTIFACT_PATHS.project, `# Project brief\n\n- Working title: ${state.dove.title}\n- Venue: ${state.dove.venue}\n- Objective: ${state.dove.objective}\n- Deadline: ${state.dove.deadline || "TBD"}\n\n## Thesis\n\n${state.dove.thesis}\n\n## Audience\n\n${state.dove.audience}\n`);
+  writeText(root, ARTIFACT_PATHS.researchContract, `# Research contract\n\n## Project\n\n- Title: ${state.dove.title}\n- Venue: ${state.dove.venue}\n- Objective: ${state.dove.objective}\n\n## Working rules\n\n- No unsupported claims.\n- No citation from memory.\n- Preserve durable artifacts after every stage.\n- Keep the orchestration board and handoffs current.\n- Require review-before-finalize for high-risk changes.\n`);
   updateResearchBrief(root, {
-    objective: state.paper.objective,
+    objective: state.dove.objective,
     agenda: [
       "Clarify the paper objective and contribution.",
       "Build an evidence base before drafting stronger claims."
@@ -1626,7 +1626,7 @@ export function initProject(root, args = {}) {
   });
   refreshDurableSurfaces(root, {
     type: "init-project",
-    summary: `Initialized project ${state.paper.title}.`,
+    summary: `Initialized project ${state.dove.title}.`,
     artifactPaths: [ARTIFACT_PATHS.project, ARTIFACT_PATHS.researchContract, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.workspaceIndex]
   });
   return state;
@@ -1664,10 +1664,10 @@ export function registerSource(root, args = {}) {
   const state = loadState(root);
   syncPhase(root, state, {
     stage: "sources",
-    resumeCommand: "project:paper.research",
+    resumeCommand: "project:dove.paper.research",
     role: "researcher",
     intentType: "research",
-    currentFocus: `Register and curate sources for ${state.paper.title}.`,
+    currentFocus: `Register and curate sources for ${state.dove.title}.`,
     nextAction: "Capture notes from the strongest source next."
   });
   refreshDurableSurfaces(root, {
@@ -1707,13 +1707,13 @@ export function upsertNote(root, args = {}) {
   notes.updatedAt = nowIso();
   writeJson(root, ARTIFACT_PATHS.notes, notes);
 
-  const agenda = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: loadState(root).paper.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
+  const agenda = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: loadState(root).dove.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
   writeText(root, ARTIFACT_PATHS.queryPack, renderQueryPack(notes, sources, agenda, queryWorkspaceIndex(root)));
   if (!args.skipSyncPhase) {
     const state = loadState(root);
     syncPhase(root, state, {
       stage: "notes",
-      resumeCommand: "project:paper.claim-gate",
+      resumeCommand: "project:dove.paper.claim-gate",
       role: "researcher",
       intentType: "research",
       currentFocus: note.summary || note.title,
@@ -1741,10 +1741,10 @@ export function upsertPlan(root, args = {}) {
   }
   const nextState = syncPhase(root, {
     ...state,
-    paper: { ...state.paper, thesis: args.thesis ?? state.paper.thesis, audience: args.audience ?? state.paper.audience }
+    paper: { ...state.dove, thesis: args.thesis ?? state.dove.thesis, audience: args.audience ?? state.dove.audience }
   }, {
     stage: "plan",
-    resumeCommand: "project:paper.outline",
+    resumeCommand: "project:dove.paper.outline",
     role: "planner",
     intentType: "plan",
     currentFocus: "Convert supported claims into a sectioned writing plan.",
@@ -1757,7 +1757,7 @@ export function upsertPlan(root, args = {}) {
     summary: "Updated current paper plan.",
     artifactPaths: [ARTIFACT_PATHS.plan, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary]
   });
-  return { planPath: ARTIFACT_PATHS.plan, thesis: nextState.paper.thesis };
+  return { planPath: ARTIFACT_PATHS.plan, thesis: nextState.dove.thesis };
 }
 
 export function upsertOutline(root, args = {}) {
@@ -1773,7 +1773,7 @@ export function upsertOutline(root, args = {}) {
   for (const section of providedSections) {
     const sectionId = normalizeIdentifier(section.id, section.title ?? "section");
     state.sections[sectionId] = {
-      ...(state.sections[sectionId] ?? { id: sectionId, draftPath: `.paper/drafts/${sectionId}.md`, claimIds: [] }),
+      ...(state.sections[sectionId] ?? { id: sectionId, draftPath: `.dove/drafts/${sectionId}.md`, claimIds: [] }),
       title: section.title ?? state.sections[sectionId]?.title ?? sectionId,
       status: section.status ?? state.sections[sectionId]?.status ?? "planned",
       summary: section.goal ?? state.sections[sectionId]?.summary ?? ""
@@ -1781,7 +1781,7 @@ export function upsertOutline(root, args = {}) {
   }
   state = syncPhase(root, state, {
     stage: "outline",
-    resumeCommand: "project:paper.draft",
+    resumeCommand: "project:dove.paper.draft",
     role: "planner",
     intentType: "plan",
     currentFocus: "Translate the plan into a section-by-section outline.",
@@ -1821,7 +1821,7 @@ export function upsertDraft(root, args = {}) {
   };
   syncPhase(root, state, {
     stage: "draft",
-    resumeCommand: "project:paper.review-loop",
+    resumeCommand: "project:dove.paper.review-loop",
     role: "researcher",
     intentType: "write",
     currentFocus: `Draft ${title}.`,
@@ -1842,7 +1842,7 @@ export function setSectionStatus(root, args = {}) {
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
   state.sections[sectionId] = {
-    ...(state.sections[sectionId] ?? { id: sectionId, title: sectionId, draftPath: `.paper/drafts/${sectionId}.md`, claimIds: [] }),
+    ...(state.sections[sectionId] ?? { id: sectionId, title: sectionId, draftPath: `.dove/drafts/${sectionId}.md`, claimIds: [] }),
     status: args.status ?? "planned",
     summary: args.summary ?? state.sections[sectionId]?.summary ?? ""
   };
@@ -2011,7 +2011,7 @@ export function syncCitations(root, args = {}) {
     nextAction: loadBoard(root).nextAction
   } : {
     stage: "citations",
-    resumeCommand: "project:paper.review-loop",
+    resumeCommand: "project:dove.paper.review-loop",
     role: "researcher",
     intentType: "review",
     currentFocus: "Reconcile bibliography coverage with cited drafts.",
@@ -2038,7 +2038,7 @@ export function refreshWiki(root, args = {}) {
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const concerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 1, items: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
-  const agenda = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: state.paper.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
+  const agenda = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: state.dove.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
   const plans = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   const results = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
   const issues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
@@ -2089,7 +2089,7 @@ export function buildRebuttal(root) {
   };
   syncPhase(root, state, {
     stage: "rebuttal",
-    resumeCommand: "project:paper.version-snapshot",
+    resumeCommand: "project:dove.paper.version-snapshot",
     role: "rebuttal-lead",
     intentType: "respond",
     currentFocus: "Convert normalized concerns into an evidence-backed rebuttal.",

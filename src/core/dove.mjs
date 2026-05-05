@@ -7,7 +7,7 @@ import {
   ROLE_IDS,
   createDefaultBoard,
   createDefaultState,
-  createDoveRootMigrationManifest,
+  createDoveAuthorityManifest,
   createDoveWorkspaceKernel,
   createReviewState,
   createTaskPacketsIndex,
@@ -16,7 +16,7 @@ import {
   createWorkspaceIndex,
   normalizeDoveDomainId,
   normalizeDoveMissionLifecycleStage,
-  normalizeDoveRootMigrationManifest,
+  normalizeDoveAuthorityManifest,
   normalizeState,
   normalizeWorkspaceIndex
 } from "./schema.mjs";
@@ -575,8 +575,7 @@ function missionPacketAliases(packet) {
     missionPacketContextPath: packetContextPath,
     missionPacketStorePath: ARTIFACT_PATHS.taskPacketsIndex,
     missionPacketStoreRoot: ARTIFACT_PATHS.taskPacketsDir,
-    source: "mission-packet",
-    compatibilitySource: "task-packet"
+    source: "mission-packet"
   };
 }
 
@@ -602,14 +601,14 @@ function readDoveInputs(root) {
   const state = normalizeState(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.state, createDefaultState, readErrors), createDefaultState));
   const board = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.orchestrationBoard, () => createDefaultBoard(state), readErrors), () => createDefaultBoard(state));
   const workspaceIndex = normalizeWorkspaceIndex(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex, readErrors), createWorkspaceIndex));
-  const doveRootMigration = normalizeDoveRootMigrationManifest(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.doveRootManifest, createDoveRootMigrationManifest, readErrors), createDoveRootMigrationManifest));
+  const doveAuthorityManifest = normalizeDoveAuthorityManifest(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.doveRootManifest, createDoveAuthorityManifest, readErrors), createDoveAuthorityManifest));
   const taskPackets = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex, readErrors), createTaskPacketsIndex);
   const reviewState = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.reviewState, createReviewState, readErrors), createReviewState);
   const versions = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.versionsIndex, createVersionsIndex, readErrors), createVersionsIndex);
   const comparisons = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.versionComparisons, createVersionComparisonsIndex, readErrors), createVersionComparisonsIndex);
   const checklist = safeReadText(root, ARTIFACT_PATHS.checklist, readErrors);
   const packets = Array.isArray(taskPackets.items) ? taskPackets.items.map(summarizePacket) : [];
-  return { state, board, workspaceIndex, doveRootMigration, taskPackets, packets, reviewState, versions, comparisons, checklist, readErrors };
+  return { state, board, workspaceIndex, doveAuthorityManifest, taskPackets, packets, reviewState, versions, comparisons, checklist, readErrors };
 }
 
 function inferDomain(args, inputs) {
@@ -636,9 +635,9 @@ function inferGoal(args, inputs) {
   }
   return inputs.board.currentFocus
     ?? inputs.board.objective
-    ?? inputs.state.paper?.thesis
-    ?? inputs.state.paper?.objective
-    ?? inputs.state.paper?.title
+    ?? inputs.state.dove?.thesis
+    ?? inputs.state.dove?.objective
+    ?? inputs.state.dove?.title
     ?? "Frame one bounded Dove mission from the current workspace.";
 }
 
@@ -660,7 +659,7 @@ function buildMissionContract(root, args = {}) {
   const acceptanceChecks = normalizeStringArray(args.acceptanceChecks).length > 0
     ? normalizeStringArray(args.acceptanceChecks)
     : domainGuidance.returnEvidence;
-  const compatibleNextCommand = args.nextCommand ?? domainGuidance.stageRoutes?.[stage] ?? "project:dove.orchestrate";
+  const nextCommand = args.nextCommand ?? domainGuidance.stageRoutes?.[stage] ?? "project:dove.orchestrate";
   return {
     inputs,
     mission: {
@@ -668,8 +667,7 @@ function buildMissionContract(root, args = {}) {
       domain,
       stage,
       primaryRole: primaryRole.id,
-      compatiblePaperRole: primaryRole.compatiblePaperRole,
-      compatibleNextCommand,
+      nextCommand,
       targetArtifacts,
       acceptanceChecks,
       returnProtocol: `Return with ${acceptanceChecks.join(", ")}.`,
@@ -707,19 +705,9 @@ function booleanArg(value) {
   return false;
 }
 
-function compatibleRoleForDoveRole(role, fallback = null) {
+function normalizeDoveRole(role, fallback = null) {
   const normalized = String(role ?? "").trim();
-  if (!normalized) {
-    return fallback;
-  }
-  if (normalized === "builder") {
-    return "author";
-  }
-  if (ROLE_IDS.includes(normalized)) {
-    return normalized;
-  }
-  const doveRole = DOVE_PRIMARY_ROLES.find((item) => item.id === normalized);
-  return doveRole?.compatiblePaperRole ?? fallback;
+  return ROLE_IDS.includes(normalized) ? normalized : fallback;
 }
 
 function phaseForDoveStage(stage) {
@@ -740,17 +728,13 @@ function phaseForDoveStage(stage) {
   }
 }
 
-function blockedDoveAuthorityArtifacts(root) {
-  const manifest = createDoveRootMigrationManifest();
-  return manifest.prohibitedAuthoritativeArtifacts.filter((relativePath) => fs.existsSync(path.join(root, relativePath)));
-}
-
-function assertNoDoveAuthorityConflict(root) {
-  const conflicts = blockedDoveAuthorityArtifacts(root);
-  if (conflicts.length > 0) {
-    throw new Error(`launchDoveMission refused to write while possible authoritative .dove artifacts exist: ${conflicts.join(", ")}. Run doctor and resolve the dual-root conflict before launching a Dove mission.`);
-  }
-  return conflicts;
+function staleLegacyAuthorityArtifacts(root) {
+  return [
+    ".paper/state.json",
+    ".paper/workspace/index.json",
+    ".paper/orchestration/board.json",
+    ".paper/task-packets/index.json"
+  ].filter((relativePath) => fs.existsSync(path.join(root, relativePath)));
 }
 
 function buildMissionBoardMission(packet) {
@@ -761,7 +745,6 @@ function buildMissionBoardMission(packet) {
     ...missionPacketAliases(packet),
     missionStage,
     primaryRole: primaryRole.id,
-    compatiblePaperRole: primaryRole.compatiblePaperRole,
     archived: ARCHIVED_PACKET_STATUSES.has(packet.lifecycleStatus)
   };
 }
@@ -894,18 +877,18 @@ function classifyReturnStatus({ mission, inputs, paperAudit, engineeringEvidence
 
 function nextCommandForReturnStatus(status, domain) {
   if (status === "needs-review") {
-    return "project:paper.review-loop";
+    return "project:dove.paper.review-loop";
   }
   if (status === "needs-execution") {
-    return "project:paper.checklist";
+    return "project:dove.paper.checklist";
   }
   if (status === "needs-audit") {
-    return domain === "engineering" ? "project:dove.return" : "project:paper.audit";
+    return domain === "engineering" ? "project:dove.return" : "project:dove.paper.audit";
   }
   if (status === "blocked") {
     return "project:dove.mission";
   }
-  return "project:paper.version-snapshot";
+  return "project:dove.paper.version-snapshot";
 }
 
 function routeRequestText(args, mission) {
@@ -913,7 +896,7 @@ function routeRequestText(args, mission) {
 }
 
 function selectRouteCommand(mission, args = {}) {
-  const route = mission.domainGuidance.stageRoutes?.[mission.stage] ?? mission.compatibleNextCommand;
+  const route = mission.domainGuidance.stageRoutes?.[mission.stage] ?? mission.nextCommand;
   const candidates = String(route ?? "project:dove.orchestrate").split(/\s+or\s+/).map((item) => item.trim()).filter(Boolean);
   if (candidates.length <= 1) {
     return candidates[0] ?? "project:dove.orchestrate";
@@ -935,8 +918,8 @@ function selectRouteCommand(mission, args = {}) {
 }
 
 function routeReason(mission, selectedCommand, args = {}) {
-  if (selectedCommand !== mission.compatibleNextCommand && String(mission.compatibleNextCommand).includes(" or ")) {
-    return `Selected ${selectedCommand} from domain route ${mission.compatibleNextCommand} for a deterministic no-write Dove routing result.`;
+  if (selectedCommand !== mission.nextCommand && String(mission.nextCommand).includes(" or ")) {
+    return `Selected ${selectedCommand} from domain route ${mission.nextCommand} for a deterministic no-write Dove routing result.`;
   }
   if (booleanArg(args.allowAutonomy) && selectedCommand.includes("autonomy")) {
     return "Autonomy was explicitly allowed for this Dove routing query.";
@@ -946,16 +929,16 @@ function routeReason(mission, selectedCommand, args = {}) {
 
 function buildWorkspaceSummary(inputs) {
   const kernel = createDoveWorkspaceKernel();
+  const authorityManifest = inputs.doveAuthorityManifest ?? inputs.workspaceIndex.dove?.authorityManifest ?? kernel.authorityManifest;
   return {
     kernelVersion: inputs.workspaceIndex.dove?.kernelVersion ?? kernel.kernelVersion,
     unified: true,
     explicitOnly: true,
     noHiddenRuntime: true,
     identity: inputs.workspaceIndex.dove?.identity ?? kernel.identity,
-    durableRootMigration: inputs.doveRootMigration ?? inputs.workspaceIndex.dove?.durableRootMigration ?? kernel.durableRootMigration,
-    durableRoot: ARTIFACT_PATHS.paperRoot,
-    plannedDurableRoot: inputs.doveRootMigration?.plannedDurableRoot ?? inputs.workspaceIndex.dove?.missionModel?.plannedDurableRoot ?? kernel.missionModel.plannedDurableRoot,
-    compatibilityMode: inputs.doveRootMigration?.compatibilityMode ?? inputs.workspaceIndex.dove?.compatibility?.migrationMode ?? kernel.compatibility.migrationMode
+    authorityManifest,
+    durableRoot: ARTIFACT_PATHS.doveRoot,
+    authoritativeRoot: authorityManifest?.authoritativeRoot ?? ARTIFACT_PATHS.doveRoot
   };
 }
 
@@ -965,7 +948,6 @@ function normalizePaperAuditFinding(finding, mission) {
     missionDomain: mission.domain,
     missionStage: mission.stage,
     primaryRole: mission.primaryRole,
-    compatiblePaperRole: mission.compatiblePaperRole,
     blocking: ["critical", "high"].includes(finding.severity)
   };
 }
@@ -991,11 +973,10 @@ export function queryDoveOrchestrate(root, args = {}) {
     mission,
     route: {
       recommendedCommand,
-      compatiblePaperCommand: recommendedCommand.startsWith("project:paper.") ? recommendedCommand : mission.compatibleNextCommand,
+      nextCommand: recommendedCommand,
       reason: routeReason(mission, recommendedCommand, args),
       roleBoundary: {
         primaryRole: mission.primaryRole,
-        compatiblePaperRole: mission.compatiblePaperRole,
         reviewerIsolationRequired: mission.primaryRole === "reviewer" || mission.stage === "audit"
       },
       domainStageRoutes: mission.domainGuidance.stageRoutes
@@ -1033,7 +1014,7 @@ export function queryDoveAudit(root, args = {}) {
     findings: paperAudit.findings.map((finding) => normalizePaperAuditFinding(finding, mission)),
     returnReadiness: {
       returnStatus: returnReadiness.returnStatus,
-      compatibleNextCommand: returnReadiness.compatibleNextCommand,
+      nextCommand: returnReadiness.nextCommand,
       missingReturnEvidence: returnReadiness.missingReturnEvidence,
       engineeringEvidence: returnReadiness.engineeringEvidence,
       checklist: returnReadiness.checklist,
@@ -1077,8 +1058,7 @@ export function queryDoveMissionBoard(root, args = {}) {
       boardPhase: inputs.board.currentPhase ?? null,
       boardAssignedRole: inputs.board.assignedRole ?? null,
       primaryRole: boardRole.id,
-      compatiblePaperRole: boardRole.compatiblePaperRole,
-      compatibleNextCommand: mission.compatibleNextCommand,
+      nextCommand: mission.nextCommand,
       currentFocus: inputs.board.currentFocus ?? inputs.workspaceIndex.currentFocus ?? null,
       objective: inputs.board.objective ?? null,
       intentType: inputs.board.intentType ?? null,
@@ -1127,7 +1107,6 @@ export function queryDoveMission(root, args = {}) {
 
 export function launchDoveMission(root, args = {}) {
   assertGovernanceMutationRegistered("launch-dove-mission", "guarded");
-  assertNoDoveAuthorityConflict(root);
   const sourceType = String(args.sourceType ?? "").trim();
   const sourceId = String(args.sourceId ?? "").trim();
   if (!sourceType || !sourceId) {
@@ -1138,8 +1117,8 @@ export function launchDoveMission(root, args = {}) {
   }
 
   const { mission } = buildMissionContract(root, args);
-  const actorRole = compatibleRoleForDoveRole(args.actorRole, "planner");
-  const workerRole = compatibleRoleForDoveRole(args.workerRole ?? args.doveWorkerRole, null);
+  const actorRole = normalizeDoveRole(args.actorRole, "planner");
+  const workerRole = normalizeDoveRole(args.workerRole ?? args.doveWorkerRole, null);
   const materialized = materializeGuidancePacket(root, {
     ...args,
     packetId: args.packetId ?? args.missionPacketId,
@@ -1160,7 +1139,7 @@ export function launchDoveMission(root, args = {}) {
     title: args.title ?? mission.goal,
     summary: args.summary ?? `Dove ${mission.domain} mission: ${mission.goal}`,
     phase: args.phase ?? phaseForDoveStage(mission.stage),
-    nextAction: args.nextAction ?? mission.compatibleNextCommand,
+    nextAction: args.nextAction ?? mission.nextCommand,
     decisionSummary: args.decisionSummary ?? `Launched Dove ${mission.domain} mission from ${sourceType}:${sourceId}.`
   });
   const missionPacket = missionPacketAliases(materialized.packet ?? {
@@ -1189,7 +1168,7 @@ export function launchDoveMission(root, args = {}) {
       path: missionPacket.missionPacketPath,
       contextPath: missionPacket.missionPacketContextPath,
       storePath: missionPacket.missionPacketStorePath,
-      compatibilitySource: missionPacket.compatibilitySource
+      source: missionPacket.source
     },
     materialization: {
       packetId: materialized.packetId,
@@ -1221,7 +1200,6 @@ export function launchDoveMission(root, args = {}) {
       workerRole,
       roleBoundary: {
         primaryRole: mission.primaryRole,
-        compatiblePaperRole: mission.compatiblePaperRole,
         actorRole,
         workerRole
       },
@@ -1229,15 +1207,12 @@ export function launchDoveMission(root, args = {}) {
         executeBy: args.executeBy,
         reviewAfter: args.reviewAfter
       },
-      currentWriteAuthority: ARTIFACT_PATHS.paperRoot,
-      plannedDurableRoot: ".dove",
-      noDoveRootWrites: true,
+      currentWriteAuthority: ARTIFACT_PATHS.doveRoot,
       noHiddenRuntime: true,
       noAutonomyExecution: true
     },
     diagnostics: {
-      blockedDoveAuthorityArtifacts: blockedDoveAuthorityArtifacts(root),
-      noDoveRootWrites: true,
+      staleLegacyAuthorityArtifacts: staleLegacyAuthorityArtifacts(root),
       noAutonomyExecution: true,
       noGitInspection: true,
       delegatedWrites: materialized.artifactPaths
@@ -1295,8 +1270,8 @@ export function queryDoveReturn(root, args = {}) {
     noAutoApply: true,
     writes: [],
     returnStatus: status,
-    acceptanceVerdict: status === "ready" ? "Return is ready from the current durable evidence." : "Return is not ready; follow the compatible next command before closure.",
-    compatibleNextCommand: nextCommandForReturnStatus(status, mission.domain),
+    acceptanceVerdict: status === "ready" ? "Return is ready from the current durable evidence." : "Return is not ready; follow the next Dove command before closure.",
+    nextCommand: nextCommandForReturnStatus(status, mission.domain),
     mission,
     evidenceRead,
     missingReturnEvidence,

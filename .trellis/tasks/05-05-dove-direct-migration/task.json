@@ -1,0 +1,111 @@
+{
+  "id": "dove-direct-migration",
+  "name": "dove-direct-migration",
+  "title": "Break compatibility and make Dove authoritative",
+  "description": "Replace the staged paper-factory/.paper compatibility strategy with a Dove-direct product, CLI, MCP identity, and .dove durable root while preserving paper, engineering, experiment, review, rebuttal, autonomy, and multi-host capabilities.",
+  "status": "done",
+  "dev_type": "frontend",
+  "scope": "breaking multi-surface product migration",
+  "package": null,
+  "priority": "P1",
+  "creator": "tianyunlinger02",
+  "assignee": "tianyunlinger02",
+  "createdAt": "2026-05-05",
+  "startedAt": "2026-05-05",
+  "completedAt": "2026-05-05",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "current_phase": 5,
+  "next_action": [
+    "Dove direct migration validation passed; ready for commit or release review."
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [
+    {
+      "id": "dove-direct-task-record",
+      "title": "Record breaking Dove direct migration task",
+      "status": "done",
+      "notes": "Created a new task for the user-approved breaking migration. The completed compatibility refactor remains historical."
+    },
+    {
+      "id": "dove-identity-cutover",
+      "title": "Cut package, CLI, MCP, command, and documentation identity to Dove",
+      "status": "done",
+      "notes": "Make dove the only supported package/binary/server/operator identity; remove public paper-factory compatibility surfaces."
+    },
+    {
+      "id": "dove-durable-root-cutover",
+      "title": "Move authoritative durable root from .paper to .dove",
+      "status": "done",
+      "notes": "Update schema paths, workspace bootstrap, doctor/install, runtime state, mission packets, and all durable artifacts to .dove."
+    },
+    {
+      "id": "dove-capability-preservation",
+      "title": "Preserve paper and engineering workflow capabilities under Dove",
+      "status": "done",
+      "notes": "Keep paper writing, experiments, claims, citations, reviews, rebuttal, autonomy, isolated reviewer, and planner/builder/reviewer separation as Dove-native capabilities."
+    },
+    {
+      "id": "dove-adapters-validation-docs",
+      "title": "Update adapters, validators, tests, and docs for Dove direct behavior",
+      "status": "done",
+      "notes": "Replace compatibility text and assertions with Dove/.dove authority while retaining multi-host adapter inventory and quality gates."
+    },
+    {
+      "id": "dove-direct-final-validation",
+      "title": "Validate Dove direct release boundary",
+      "status": "done",
+      "notes": "Run command validation, MCP validation, governance audit, targeted tests, npm run check, pack dry-run, and Dove CLI smokes."
+    }
+  ],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "package.json",
+    "bin/dove.mjs",
+    "bin/paper-factory.mjs",
+    "src/core/schema.mjs",
+    "src/core/workspace-bootstrap.mjs",
+    "src/core/workspace.mjs",
+    "src/core/dove.mjs",
+    "src/core/navigation.mjs",
+    "src/mcp/server.mjs",
+    "src/mcp/tool-definitions.mjs",
+    "src/mcp/handlers.mjs",
+    "scripts/validate-commands.mjs",
+    "scripts/validate-mcp.mjs",
+    "tests/integration/dove-query.test.mjs",
+    "tests/integration/cli-install.test.mjs",
+    "tests/unit/schema.test.mjs"
+  ],
+  "notes": "User explicitly requested a direct breaking migration: do not preserve old project compatibility; preserve project capabilities. Dove is now the authoritative product identity and .dove is the single durable root. Validation passed: commands, MCP, governance, full tests, pack dry-run, and seeded CLI smoke.",
+  "meta": {
+    "breakingCompatibilityMigration": true,
+    "authoritativeProduct": "dove",
+    "authoritativeRoot": ".dove",
+    "legacyProduct": "paper-factory",
+    "legacyRoot": ".paper",
+    "preserveCapabilities": [
+      "paper workflow",
+      "engineering missions",
+      "experiments",
+      "reviews",
+      "rebuttal and revision",
+      "claims and citations",
+      "autonomy",
+      "isolated reviewer",
+      "planner builder reviewer roles",
+      "multi-host adapters",
+      "MCP CLI governance tests packaging"
+    ],
+    "noCompatibilityGoals": [
+      "paper-factory public binary",
+      ".paper authoritative root",
+      "project:paper command namespace",
+      "manifest-only .dove migration",
+      "dual-root fallback"
+    ]
+  }
+}

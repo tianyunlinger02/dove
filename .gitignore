@@ -3,7 +3,10 @@ node_modules/
 *.tgz
 reference_repos/
 
-# Local paper workflow state; real paper projects may choose to track their own .paper/
+# Local Dove workspace state; downstream projects may choose to track their own .dove/
+.dove/
+
+# Legacy local workspace state; Dove treats .paper/ as stale, not authoritative.
 .paper/
 
 # Trellis local/generated files

@@ -1,36 +1,25 @@
-# paper_factory
+# Dove
 
-`paper_factory` is now the compatibility package for **Dove**: a host-neutral, file-first mission workflow pack with optional multi-host adapters.
+Dove is a host-neutral, file-first mission workflow system for papers, engineering work, experiments, review, and governed autonomy.
 
-Dove is the primary product model: one unified mission workflow where planner, builder, and reviewer agents can fly toward a goal and return with auditable results. The current transition uses a staged dual-name strategy: `paper-factory`, `paper.*`, and `.paper/` remain compatibility-authoritative until an explicit breaking rename or durable-root migration is approved. The migration stance is recorded in `.paper/workspace/dove-root-manifest.json`: `.paper/` is the only authoritative root, while `.dove/` is a planned future target, not a second source of truth.
+Dove is now the product, package, CLI, MCP identity, command language, and durable workspace authority. A project-local `.dove/` directory is the single source of truth for workflow state. Paper writing remains a first-class Dove domain; it is no longer the package identity.
 
-It deliberately borrows two different kinds of strength:
-
-- from **oh-my-openagent / oh-my-opencode**: packaging discipline, explicit role inventory, board-first orchestration, install/doctor ergonomics, and composable command surfaces
-- from **ARIS**: staged research-to-writing flow, persistent research memory, claim-driven experiment planning, rebuttal issue handling, and paper version evolution/comparison
-
-The result is not a fake clone of either project. It is an honest host-neutral package with OpenCode as the default adapter and optional Claude Code, Codex, Cursor, and shared agent-skill adapters:
-
-- host-neutral CLI/MCP/core runtime under `bin/`, `mcp/`, `scripts/`, and `src/`
-- optional adapter surfaces such as `.opencode/`, `.claude/`, `.codex/`, `.cursor/`, and `.agents/skills/`
-- durable project artifacts in `.paper/`
+Old `.paper/` state, if present in a workspace, is treated as stale legacy state. Dove reports those files during health checks, but runtime operations do not import or trust them automatically.
 
 ## What is included
 
-- a **command pack** for orchestration, research, notes, claim gating, planning, outlining, drafting, experiment planning, review, rebuttal strategy, citations, version snapshots/comparisons, figures, and pipeline execution
-- a **role model** with three manually switchable primary agents (`planner`, `author`, `reviewer`) plus automatic specialist subagents for research, experiments, revision/rebuttal, and version audit
-- a **skill pack** for planner, author-side specialists, reviewer, and core workflow discipline
-- an optional **`paper-factory` stdio MCP server** for deterministic state mutations, read-only Dove compatibility queries, and governed Dove mission launch
-- a **CLI installer/doctor** at `bin/paper-factory.mjs`, plus a limited Dove-facing alias at `bin/dove.mjs`
-- a durable **`.paper/` artifact model** for orchestration, handoffs, research briefs, isolated reviewer handoff runs, experiment audits, result-to-claim bridge logs, typed wiki/workspace indexes, rebuttal issues/strategy, version lineage/comparisons, figure artifact contracts, plus the classic paper-writing artifacts
-- durable **task packets, packet/role context manifests, session summaries, and navigation reports** that narrow context without inventing a hidden runtime
-- a proposal-only **meta-optimize / outer-loop layer** that turns repeated repair and review patterns into grouped, ranked, evidence-backed recommendations plus longer-horizon workflow memory under `.paper/meta/`
-- stronger **artifact-local and action-local context bundles** under `.paper/context/artifacts/` and `.paper/context/actions/` so commands can read the nearest guidance before mutating workflow state
-- an optional **strict mode** that prevents out-of-order drafting when evidence gates have not been satisfied
+- A neutral CLI/MCP/core runtime under `bin/`, `mcp/`, `scripts/`, and `src/`.
+- Optional host adapters for OpenCode, Claude Code, Codex, Cursor, and shared agent-skill hosts.
+- A `dove` CLI with install, sync, doctor, onboarding, mission queries, governed launch, isolated review, and bounded autonomy commands.
+- A stdio MCP server named `dove` exposed through `mcp/dove-state-server.mjs`.
+- A durable `.dove/` artifact model for orchestration, handoffs, research, claims, citations, drafts, experiments, reviews, rebuttals, versions, figures, task packets, runtime state, programs, governance, and long-horizon workflow memory.
+- A three-primary-role model: `planner`, `builder`, and `reviewer`, with specialist subagents grouped under those roles.
+- A mission lifecycle shared by paper and engineering work: `goal → design → checklist → execution → audit → return`.
+- Explicit, foreground-only autonomy surfaces; Dove does not claim a hidden daemon, scheduler, swarm, or unbounded background queue.
 
 ## Quick start
 
-### Local development
+### Validate the repository
 
 ```bash
 npm run commands:validate
@@ -38,211 +27,134 @@ npm run mcp:validate
 npm test
 ```
 
-### Install the pack into the current project
+### Install Dove into the current project
 
 ```bash
-node ./bin/paper-factory.mjs install . --force
-# Optional multi-host adapters:
-node ./bin/paper-factory.mjs install . --force --host claude,cursor
-node ./bin/paper-factory.mjs install . --force --host all
+node ./bin/dove.mjs install . --force
+
+# Optional multi-host adapters
+node ./bin/dove.mjs install . --force --host claude,cursor
+node ./bin/dove.mjs install . --force --host all
 ```
 
-### Check the workspace health
+### Check workspace health
 
 ```bash
-node ./bin/paper-factory.mjs doctor .
+node ./bin/dove.mjs doctor .
 ```
+
+The doctor verifies the Dove core, adapter inventory, JSON artifacts, MCP probe, `.dove/manifest.json` authority, and stale legacy `.paper/` conflicts.
 
 ### Onboard an existing paper project
 
 ```bash
 # Proposal-only scan; writes nothing
-node ./bin/paper-factory.mjs onboard .
+node ./bin/dove.mjs onboard .
 
-# Persist only the reference map under .paper/workspace/artifact-map.json
-node ./bin/paper-factory.mjs onboard . --write-map
+# Persist only the reference map
+node ./bin/dove.mjs onboard . --write-map
 ```
 
-`migrate` is an alias for the same proposal-first artifact mapping flow. It never moves, deletes, rewrites, or imports manuscript files.
+`migrate` is an alias for the same proposal-first artifact mapping flow. It writes only `.dove/workspace/artifact-map.json` when explicitly requested; it never moves, deletes, rewrites, or imports manuscript files.
 
-### Query Dove compatibility surfaces from the CLI
+## Direct CLI surfaces
 
 ```bash
 # Proposal-only routing; writes nothing, runs nothing, and inspects no git
-node ./bin/paper-factory.mjs dove-orchestrate . --request "Ship cache safely" --domain engineering --stage execution
+node ./bin/dove.mjs orchestrate . --request "Ship cache safely" --domain engineering --stage execution
 
-# Proposal-only mission framing; writes nothing
-node ./bin/paper-factory.mjs dove-mission . --domain engineering --stage execution --artifact src/cache.mjs --acceptance-check "tests or validation output"
+# Proposal-only mission framing
+node ./bin/dove.mjs mission . --domain engineering --stage execution --artifact src/cache.mjs --acceptance-check "tests or validation output"
 
-# Read the as-is compatibility-backed mission board; writes nothing and refreshes nothing
-node ./bin/paper-factory.mjs dove-board . --domain engineering
+# As-read mission board inspection
 node ./bin/dove.mjs board . --domain engineering
 
-# Proposal-only audit and return-readiness inspection; writes nothing and runs no tests/git
-node ./bin/paper-factory.mjs dove-audit . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
-node ./bin/paper-factory.mjs dove-return . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
+# Proposal-only audit and return-readiness checks
+node ./bin/dove.mjs audit . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
+node ./bin/dove.mjs return . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
 
-# Governed mission launch after accepted guidance exists; writes only through the .paper materialization bridge
-node ./bin/paper-factory.mjs dove-launch . --source-type remediation-pack --source-id <pack-id> --execute-by 2099-01-01T00:00:00.000Z --review-after 2099-01-01T12:00:00.000Z --domain engineering --stage execution
+# Governed launch after accepted guidance exists
+node ./bin/dove.mjs launch . --source-type remediation-pack --source-id <pack-id> --execute-by 2099-01-01T00:00:00.000Z --review-after 2099-01-01T12:00:00.000Z --domain engineering --stage execution
+
+# Explicit foreground autonomy
+node ./bin/dove.mjs autonomy-foreground . --max-steps 5
 ```
 
-### Run one explicit foreground autonomy pass
-
-```bash
-node ./bin/paper-factory.mjs autonomy-foreground . --max-steps 5
-```
-
-Multi-step program envelopes can now stop with durable closure states such as `achieved`, `accepted-risk`, `blocked`, or `completed` while still remaining explicit, foreground-only, and non-daemonized.
-
-### Dry-run the package boundary
-
-```bash
-npm pack --dry-run
-```
+Query commands are proposal-only: they do not create mission packets, update boards, append handoffs, refresh derived state, run tests, inspect git, or execute autonomy. `launch` is different: it is a governed mutation surface that materializes accepted guidance into `.dove/task-packets` without executing the work.
 
 ## Role model
 
-`paper_factory` exposes three primary manual agents:
+Dove exposes three primary manual roles:
 
-- `planner`: mentor/PI/editor role for direction, priority, handoff, governance, and autonomy boundaries.
-- `author`: paper builder role for writing, revision, evidence work, experiments, result interpretation, and rebuttal drafting.
-- `reviewer`: independent critic role for adversarial review, evidence/method attacks, concerns, and verdicts.
+- `planner`: mentor, PI, editor, tech lead, or architect role for direction, priority, scope, governance, and autonomy boundaries.
+- `builder`: worker role for writing, coding, research, experiments, result interpretation, revision, implementation, and rebuttal drafting.
+- `reviewer`: independent critic role for adversarial review, evidence attacks, code review, QA, methodology critique, and verdicts.
 
-Specialized identities such as `researcher`, `experiment-planner`, `revision-lead`/`rebuttal-lead`, and `version-analyst` are automatic subagent capabilities under those primary agents rather than peer top-level manual roles. The reviewer remains independent; rebuttal/revision work stays author-side.
+Specialists such as `researcher`, `experiment-planner`, `revision-lead` / `rebuttal-lead`, and `version-analyst` are subagent capabilities under those primary roles. The reviewer remains independent; revision and rebuttal work stays builder-side.
 
 ## Recommended workflow
 
-`project:paper.orchestrate` is now a pure router: it reads `.paper/`, classifies the request by paper lifecycle family, and recommends one next command without updating the board or handoff log.
+`project:dove.paper.orchestrate` is the paper-domain router. It reads `.dove/`, classifies the request by lifecycle family, and recommends one next command without mutating state.
 
-The lifecycle taxonomy is exposed through `.paper/workspace/index.json.lifecycle` and artifact context manifests. The new `.paper/workspace/index.json.dove` mirror keeps the unified Dove mission view alongside the paper-specific taxonomy: one mission lifecycle (`goal → design → checklist → execution → audit → return`), one primary role split (`planner` / `builder` / `reviewer`), domain guidance for `paper`, `engineering`, `experiment`, `review`, and `general` missions, and compatibility mapping from Dove `builder` back to the existing paper `author` role.
+Dove also exposes general mission surfaces:
+
+- `project:dove.orchestrate` / `dove orchestrate`
+- `project:dove.mission` / `dove mission`
+- `project:dove.board` / `dove board`
+- `project:dove.audit` / `dove audit`
+- `project:dove.return` / `dove return`
+- `project:dove.launch` / `dove launch`
+
+Paper-domain workflow commands remain under `project:dove.paper.*`, including init, research, notes, claim gating, planning, outlining, drafting, experiment planning, no-fix audit, review loop, isolated review, rebuttal, citations, version snapshots/comparisons, figures, checklist, governance audit, follow-through, materialization, and navigation queries.
+
+The paper lifecycle taxonomy remains useful inside the unified Dove model:
 
 - `objective`: research goal, thesis, venue strategy, and acceptance target
 - `structure`: plan, outline, drafts, figures, checklists, and versions
 - `campaign`: explicit foreground programs, campaigns, approvals, and runtime state
-- `work-unit`: board, handoffs, task packets, workspace index, and context/action bundles
+- `work-unit`: board, handoffs, mission packets, workspace index, and context/action bundles
 - `concern`: reviewer concerns, revision pressure, rebuttal items, and isolated review handoffs
 - `audit`: inspections, experiment audits, figure QA, governance proof, and version comparisons
 - `knowledge`: sources, notes, evidence, claims, bibliography, wiki, and long-horizon memory
 
-Major paper changes should close through `design → checklist → implementation → acceptance`: use `project:paper.plan` for design, `project:paper.checklist` for executable steps and checks, scoped implementation commands for edits, and review/checklist/version commands for acceptance proof.
+Major work should close through `design → checklist → implementation → acceptance`: plan the change, turn it into executable checks, do scoped work, then return with evidence and review/audit status.
 
-You can also use five read-only Dove compatibility surfaces while still routing execution into the existing paper command surfaces: `project:dove.orchestrate` for deterministic routing, `project:dove.mission` for no-write mission-contract framing, `project:dove.board` for as-read mission-board inspection, `project:dove.audit` for proposal-only audit plus return-readiness inspection, and `project:dove.return` for no-write return readiness. The MCP layer exposes the same proposal-only shape through `query_dove_orchestrate`, `query_dove_mission`, `query_dove_mission_board`, `query_dove_audit`, and `query_dove_return`. The first governed Dove write surface is `project:dove.launch` / `launch_dove_mission` / `paper-factory dove-launch`: it materializes accepted guidance into Dove mission packets backed by `.paper/task-packets` through the existing guarded bridge, requires `sourceType`, `sourceId`, `executeBy`, and `reviewAfter`, does not execute autonomy, and refuses possible authoritative `.dove` state. The limited `dove` binary is a Dove-facing alias for `orchestrate`, `mission`, `board`, `audit`, `return`, and governed `launch`; it is not a package rename. `.paper/` remains the active authoritative durable root, `.paper/workspace/dove-root-manifest.json` records the manifest-only migration strategy, and `.dove/` must not contain authoritative workspace state until an explicit breaking migration is approved. Normal engineering work should use domain `engineering`, target source/test/docs artifacts, and return declared changed-file paths plus declared test/validation evidence and validation output through the same mission protocol; Dove return and audit do not run tests or inspect git.
+## Why `.dove/` matters
 
-1. `project:paper.init`
-2. `project:paper.orchestrate`
-3. `project:paper.research`
-4. `project:paper.claim-gate`
-5. `project:paper.plan`
-6. `project:paper.outline`
-7. `project:paper.draft`
-8. `project:paper.experiment-plan`
-9. `project:paper.audit`
-10. `project:paper.review-loop`
-11. `project:paper.isolated-review`
-12. `project:paper.rebuttal-strategy`
-13. `project:paper.rebuttal`
-14. `project:paper.version-snapshot`
-15. `project:paper.version-compare`
-16. `project:paper.task-graph`
-17. `project:paper.open-questions`
-18. `project:paper.decisions`
-19. `project:paper.lineage`
-20. `project:paper.meta-optimize`
-21. `project:paper.checklist`
+`.dove/` is the durable source of truth. It makes the system resumable and auditable even when chat context is lost:
 
-## Why `.paper/` matters
-
-`paper_factory` treats `.paper/` as the durable source of truth. That means:
-
-- you can resume a paper after session loss
-- the orchestration board and handoffs make role transitions resumable
-- review loops can be evidence-aware instead of memory-based
+- role transitions live in board and handoff files
 - claims can be audited against sources and notes
-- experiment plans and results can be tied back to claims
-- rebuttal issues and version comparisons stay durable instead of living only in prompt history
-- task packets and role manifests make work decomposition resumable without widening everyone’s context window
-- session journals and summaries preserve the workspace state in a portable, file-backed way
-- the optional MCP server and the prompt/skill layer stay consistent because they touch the same files
+- experiments and results can be tied back to claims
+- reviewer concerns and rebuttal issues persist across rounds
+- mission packets narrow context without hidden runtime memory
+- isolated reviewer handoffs cross session boundaries only through explicit artifacts
+- MCP, CLI, and prompt/skill surfaces converge on the same files
 
 ## Core artifacts
 
-- `.paper/state.json`
-- `.paper/orchestration/board.json`
-- `.paper/orchestration/handoffs.md`
-- `.paper/task-packets/index.json`
-- `.paper/task-packets/packets/*.json`
-- `.paper/context/packets/*.json`
-- `.paper/context/roles/*.json`
-- `.paper/context/phases/*.json`
-- `.paper/context/artifacts/*.json`
-- `.paper/context/actions/*.json`
-- `.paper/sessions/journal.json`
-- `.paper/sessions/LATEST_SUMMARY.md`
-- `.paper/research/brief.md`
-- `.paper/research/agenda.json`
-- `.paper/sources/index.json`
-- `.paper/notes/index.json`
-- `.paper/evidence/index.json`
-- `.paper/experiments/plans.json`
-- `.paper/experiments/results.json`
-- `.paper/experiments/audits.json`
-- `.paper/claims/CLAIMS_FROM_RESULTS.md`
-- `.paper/claims/bridge-log.json`
-- `.paper/plans/current-plan.md`
-- `.paper/outline/current-outline.md`
-- `.paper/drafts/*.md`
-- `.paper/reviews/log.md`
-- `.paper/reviews/concerns.json`
-- `.paper/reviews/adversarial-state.json`
-- `.paper/reviews/isolated/*/{input.json,manifest.json,handoff.json,report.md}`
-- `.paper/rebuttal/issues.json`
-- `.paper/rebuttal/strategy.md`
-- `.paper/versions/index.json`
-- `.paper/versions/comparisons.json`
-- `.paper/revision-plans/current-plan.md`
-- `.paper/wiki/index.md`
-- `.paper/wiki/entities.json`
-- `.paper/wiki/relations.json`
-- `.paper/wiki/navigation.md`
-- `.paper/workspace/index.json`
-- `.paper/workspace/artifact-map.json`
-- `.paper/workspace/dove-root-manifest.json`
-- `.paper/meta/events.json`
-- `.paper/meta/long-horizon-memory.json`
-- `.paper/meta/operator-playbooks.json`
-- `.paper/meta/recommendations.json`
-- `.paper/meta/optimizer-state.json`
-- `.paper/meta/LATEST_OPTIMIZER_REPORT.md`
-- `.paper/bibliography/citation-log.md`
+- `.dove/manifest.json`
+- `.dove/state.json`
+- `.dove/orchestration/board.json`
+- `.dove/orchestration/handoffs.md`
+- `.dove/task-packets/index.json`
+- `.dove/task-packets/packets/*.json`
+- `.dove/context/roles/*.json`
+- `.dove/context/phases/*.json`
+- `.dove/context/packets/*.json`
+- `.dove/context/artifacts/*.json`
+- `.dove/context/actions/*.json`
+- `.dove/sessions/journal.json`
+- `.dove/sessions/LATEST_SUMMARY.md`
+- `.dove/workspace/index.json`
+- `.dove/workspace/artifact-map.json`
+- `.dove/research/`, `.dove/sources/`, `.dove/notes/`, `.dove/evidence/`, `.dove/claims/`, `.dove/drafts/`
+- `.dove/experiments/`, `.dove/reviews/`, `.dove/rebuttal/`, `.dove/revision-plans/`, `.dove/versions/`, `.dove/figures/`
+- `.dove/runtime/`, `.dove/programs/`, `.dove/meta/`
 
-## Portable Trellis-inspired additions
+## Package boundary
 
-This release absorbs the strongest portable Trellis-style ideas plus the highest-value phase-2 integrity upgrades without pretending OpenCode has Trellis-native hooks or a hidden scheduler. The new `autonomy-foreground` surface is still an explicitly invoked, foreground-only runner: it may chain the already-approved same-lineage continuation once, but it is not a background runtime or daemon.
-
-- **Durable task packets**: work objects live under `.paper/task-packets/` and link tasks to experiments, rebuttal issues, and versions.
-- **Packet-scoped context manifests**: `.paper/context/packets/*.json` couples each packet to its dependency health, linked artifacts, and resume bundle.
-- **Per-role context manifests**: `.paper/context/roles/*.json` narrows the durable context surface for the primary planner/author/reviewer agents and compatibility specialist subagents.
-- **Artifact-local guidance**: `.paper/context/artifacts/*.json` ties local rules and read-before-mutate guidance to real durable artifact paths.
-- **Pre-action context bundles**: `.paper/context/actions/*.json` surfaces the exact files a command or operator should read before acting, without pretending OpenCode auto-loads them.
-- **Session/workspace persistence**: `.paper/sessions/journal.json` and `.paper/sessions/LATEST_SUMMARY.md` preserve resumable workspace context.
-- **Proposal-first onboarding**: `paper-factory onboard` / `migrate` scans existing manuscripts, bibliographies, figures, tables, results, notes, reviews, and submission files into a reference-only lifecycle map, and writes only `.paper/workspace/artifact-map.json` when `--write-map` is explicit.
-- **Query/navigation surfaces**: `project:paper.task-graph`, `project:paper.open-questions`, `project:paper.decisions`, and `project:paper.lineage` expose file-backed navigation instead of lifecycle-only commands.
-- **Safer pack updates**: install/sync now bootstrap `.paper/` without overwriting user-owned workspace data.
-
-Additional phase-2 upgrades:
-
-- **Intent + continuation discipline**: the board now persists `intentType`, `currentFocus`, `nextAction`, continuation checkpoints, and review-before-finalize status.
-- **Board-enforced role-chain contract**: primary role ownership is enforced on board mutations and critical evidence/experiment/review/version writes, while specialist subagents inherit from their parent primary agent; manual repairs must use explicit handoffs or a traceable override reason.
-- **Adversarial review + experiment integrity**: `.paper/reviews/concerns.json`, `.paper/reviews/adversarial-state.json`, `.paper/experiments/audits.json`, and `.paper/claims/bridge-log.json` keep review memory, experiment audits, and result-to-claim transitions durable.
-- **Typed wiki + workspace index**: `.paper/wiki/entities.json`, `.paper/wiki/relations.json`, and `.paper/workspace/index.json` make top-level state more queryable and resumable, including stronger relation taxonomy/family summaries, stronger queues, dependency health, ownership summaries, and handoff obligations.
-- **Figure artifact contracts**: `.paper/figures/briefs.json`, `segments.json`, `templates.json`, `editable-index.json`, `final-index.json`, and `qa.json` provide staged figure artifacts plus durable QA/linkage outputs without pretending the package ships a render/editor backend.
-- **Proposal-only meta-optimize layer**: `.paper/meta/events.json`, `long-horizon-memory.json`, `operator-playbooks.json`, `recommendations.json`, `optimizer-state.json`, and `LATEST_OPTIMIZER_REPORT.md` summarize repeated workflow weaknesses into grouped optimization clusters, explicit ranked recommendations, family-level operator playbooks, persisted frontier summaries, stable tie-break semantics, and longer-horizon recurrence trends without auto-applying any change.
-
-Intentionally out of scope:
-
-- host-level hook interception
-- hidden schedulers or background runtimes
-- fake subagent interception semantics unsupported by OpenCode
+Install/sync may bootstrap missing `.dove/` starter artifacts, but `.dove/` is user-owned workspace state, not a packaged snapshot to overwrite. Pack updates manage code, scripts, MCP files, docs, and adapter surfaces; they must not overwrite evolving project state.
 
 ## Docs
 
@@ -250,5 +162,6 @@ Intentionally out of scope:
 - `docs/USAGE.md`
 - `docs/PACKAGING.md`
 - `docs/CAPABILITY_MATRIX.md`
+- `docs/DOVE_REFACTOR_PLAN_2026-05-04.md`
 - `docs/PAPER_FACTORY_SYSTEM_ORIGINS.zh-CN.md`
 - `docs/REFERENCE_ARCHITECTURES.zh-CN.md`

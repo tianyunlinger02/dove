@@ -4,7 +4,7 @@ import path from "node:path";
 import process from "node:process";
 
 const target = path.resolve(process.argv[2] ?? process.cwd());
-const serverScriptPath = path.join(target, "mcp", "paper-state-server.mjs");
+const serverScriptPath = path.join(target, "mcp", "dove-state-server.mjs");
 
 const server = spawn("node", [serverScriptPath], {
   cwd: target,
@@ -76,11 +76,11 @@ async function main() {
     protocolVersion: "2024-11-05",
     capabilities: {},
     clientInfo: {
-      name: "paper-factory-doctor",
+      name: "dove-doctor",
       version: "0.2.0"
     }
   });
-  assert.equal(init.serverInfo.name, "paper-factory");
+  assert.equal(init.serverInfo.name, "dove");
   sendMessage({ jsonrpc: "2.0", method: "notifications/initialized", params: {} });
 
   const listed = await call("tools/list");

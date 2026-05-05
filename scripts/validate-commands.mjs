@@ -15,58 +15,58 @@ const doveSurfaceQueries = {
 };
 
 const requiredCommands = [
-  "paper.init.md",
-  "paper.orchestrate.md",
+  "dove.paper.init.md",
+  "dove.paper.orchestrate.md",
   ...doveSurfaces.map((surface) => `dove.${surface}.md`),
   "dove.launch.md",
-  "paper.audit.md",
-  "paper.onboard.md",
-  "paper.research.md",
-  "paper.source.md",
-  "paper.note.md",
-  "paper.claim-gate.md",
-  "paper.outline.md",
-  "paper.plan.md",
-  "paper.draft.md",
-  "paper.experiment-plan.md",
-  "paper.experiment-audit.md",
-  "paper.review.md",
-  "paper.review-loop.md",
-  "paper.isolated-review.md",
-  "paper.result-bridge.md",
-  "paper.revise.md",
-  "paper.rebuttal-strategy.md",
-  "paper.version-snapshot.md",
-  "paper.version-compare.md",
-  "paper.task-graph.md",
-  "paper.open-questions.md",
-  "paper.decisions.md",
-  "paper.lineage.md",
-  "paper.meta-optimize.md",
-  "paper.follow-through.md",
-  "paper.materialize.md",
-  "paper.autonomy-operate.md",
-  "paper.governance-audit.md",
-  "paper.wiki.md",
-  "paper.checklist.md",
-  "paper.citations.md",
-  "paper.figure.md",
-  "paper.pipeline.md",
-  "paper.rebuttal.md"
+  "dove.paper.audit.md",
+  "dove.paper.onboard.md",
+  "dove.paper.research.md",
+  "dove.paper.source.md",
+  "dove.paper.note.md",
+  "dove.paper.claim-gate.md",
+  "dove.paper.outline.md",
+  "dove.paper.plan.md",
+  "dove.paper.draft.md",
+  "dove.paper.experiment-plan.md",
+  "dove.paper.experiment-audit.md",
+  "dove.paper.review.md",
+  "dove.paper.review-loop.md",
+  "dove.paper.isolated-review.md",
+  "dove.paper.result-bridge.md",
+  "dove.paper.revise.md",
+  "dove.paper.rebuttal-strategy.md",
+  "dove.paper.version-snapshot.md",
+  "dove.paper.version-compare.md",
+  "dove.paper.task-graph.md",
+  "dove.paper.open-questions.md",
+  "dove.paper.decisions.md",
+  "dove.paper.lineage.md",
+  "dove.paper.meta-optimize.md",
+  "dove.paper.follow-through.md",
+  "dove.paper.materialize.md",
+  "dove.paper.autonomy-operate.md",
+  "dove.paper.governance-audit.md",
+  "dove.paper.wiki.md",
+  "dove.paper.checklist.md",
+  "dove.paper.citations.md",
+  "dove.paper.figure.md",
+  "dove.paper.pipeline.md",
+  "dove.paper.rebuttal.md"
 ];
 
 const requiredSkills = [
-  "paper-factory-pipeline/SKILL.md",
-  "paper-factory-planner/SKILL.md",
-  "paper-factory-researcher/SKILL.md",
-  "paper-factory-reviewer/SKILL.md",
-  "paper-factory-rebuttal-strategist/SKILL.md",
-  "paper-factory-experiment-planning/SKILL.md",
-  "paper-factory-version-analyst/SKILL.md",
-  "paper-factory-claim-gate/SKILL.md",
-  "paper-factory-review-loop/SKILL.md",
-  "paper-factory-citation-discipline/SKILL.md",
-  "paper-factory-rebuttal/SKILL.md"
+  "dove-pipeline/SKILL.md",
+  "dove-planner/SKILL.md",
+  "dove-researcher/SKILL.md",
+  "dove-reviewer/SKILL.md",
+  "dove-rebuttal-strategist/SKILL.md",
+  "dove-experiment-planning/SKILL.md",
+  "dove-version-analyst/SKILL.md",
+  "dove-claim-gate/SKILL.md",
+  "dove-review-loop/SKILL.md",
+  "dove-citation-discipline/SKILL.md",
+  "dove-rebuttal/SKILL.md"
 ];
 
 const doveAdapterFiles = [
@@ -98,7 +98,7 @@ for (const fileName of requiredCommands) {
   assert.equal(classifiedCommandIds.has(commandId), true, `Unclassified command surface: ${commandId}`);
 }
 
-for (const routerFileName of ["paper.orchestrate.md", "dove.orchestrate.md"]) {
+for (const routerFileName of ["dove.paper.orchestrate.md", "dove.orchestrate.md"]) {
   const orchestrateText = fs.readFileSync(path.join(ROOT, ".opencode", "commands", routerFileName), "utf8");
   for (const forbiddenTool of ["upsert_orchestration_board", "append_handoff"]) {
     assert.equal(orchestrateText.includes(forbiddenTool), false, `${routerFileName} must stay a pure router and not mention ${forbiddenTool}`);
@@ -140,6 +140,6 @@ for (const relativePath of requiredSkills) {
 }
 
 const opencodeConfig = JSON.parse(fs.readFileSync(path.join(ROOT, ".opencode.json"), "utf8"));
-assert.equal(opencodeConfig.mcpServers["paper-factory"].command, "node");
+assert.equal(opencodeConfig.mcpServers["dove"].command, "node");
 assert.equal(Object.hasOwn(opencodeConfig, "$schema"), false);
 console.log("Command and skill validation passed.");

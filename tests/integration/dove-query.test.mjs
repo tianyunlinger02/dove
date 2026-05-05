@@ -18,11 +18,11 @@ import {
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
 
 const ROOT = process.cwd();
-const CLI = path.join(ROOT, "bin", "paper-factory.mjs");
+const CLI = path.join(ROOT, "bin", "dove.mjs");
 const DOVE_CLI = path.join(ROOT, "bin", "dove.mjs");
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-dove-query-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-dove-query-"));
 }
 
 function writeJson(root, relativePath, value) {
@@ -97,7 +97,7 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
     currentPhase: "draft",
     currentFocus: "Ship the cache mission board slice.",
     objective: "Make Dove visible as one mission board.",
-    assignedRole: "author",
+    assignedRole: "builder",
     intentType: "implementation",
     nextAction: "Inspect mission queues before returning.",
     continuationState: { status: "idle" },
@@ -113,7 +113,7 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
         lifecycleStatus: "active",
         lifecycleFamily: "work-unit",
         doveDomain: "engineering",
-        assignedRole: "author",
+        assignedRole: "builder",
         phase: "draft",
         nextAction: "Return changed files and tests.",
         outputPaths: ["src/cache.mjs"],
@@ -128,7 +128,7 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
         assignedRole: "planner",
         phase: "plan",
         nextAction: "Review outline acceptance.",
-        outputPaths: [".paper/outline/current-outline.md"],
+        outputPaths: [".dove/outline/current-outline.md"],
         evidenceLinks: []
       },
       {
@@ -141,7 +141,7 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
         phase: "review",
         nextAction: "Run independent review.",
         outputPaths: [],
-        evidenceLinks: [".paper/reviews/log.md"]
+        evidenceLinks: [".dove/reviews/log.md"]
       },
       {
         id: "old-cache",
@@ -150,7 +150,7 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
         lifecycleStatus: "archived",
         lifecycleFamily: "work-unit",
         doveDomain: "engineering",
-        assignedRole: "author",
+        assignedRole: "builder",
         phase: "draft",
         outputPaths: ["src/old-cache.mjs"],
         evidenceLinks: []
@@ -170,28 +170,25 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
   assert.equal(result.proposalOnly, true);
   assert.equal(result.noAutoApply, true);
   assert.deepEqual(result.writes, []);
-  assert.equal(result.workspace.durableRoot, ".paper");
-  assert.equal(result.workspace.plannedDurableRoot, ".dove");
+  assert.equal(result.workspace.durableRoot, ".dove");
+  assert.equal(result.workspace.authoritativeRoot, ".dove");
   assert.equal(result.workspace.identity.productName, "Dove");
-  assert.equal(result.workspace.identity.namingStrategy, "staged-dual-name");
-  assert.equal(result.workspace.durableRootMigration.status, "manifest-only");
-  assert.equal(result.workspace.durableRootMigration.authoritativeRoot, ".paper");
-  assert.equal(result.workspace.durableRootMigration.createsAuthoritativeDoveRoot, false);
+  assert.equal(result.workspace.identity.durableRootStatus, "authoritative");
+  assert.equal(result.workspace.authorityManifest.status, "authoritative");
+  assert.equal(result.workspace.authorityManifest.authoritativeRoot, ".dove");
+  assert.equal(result.workspace.authorityManifest.currentWriteAuthority, ".dove");
   assert.equal(result.workspace.asReadSnapshot, true);
   assert.equal(result.board.goal, "Ship the cache mission board slice.");
   assert.equal(result.board.domain, "engineering");
   assert.equal(result.board.stage, "execution");
   assert.equal(result.board.primaryRole, "builder");
-  assert.equal(result.board.compatiblePaperRole, "author");
   assert.deepEqual(result.missions.map((mission) => mission.id), ["engineering-cache"]);
   assert.equal(result.missions[0].missionStage, "execution");
   assert.equal(result.missions[0].source, "mission-packet");
-  assert.equal(result.missions[0].compatibilitySource, "task-packet");
   assert.equal(result.missions[0].packetId, "engineering-cache");
   assert.equal(result.missions[0].missionPacketId, "engineering-cache");
   assert.equal(result.missions[0].missionPacketStorePath, ARTIFACT_PATHS.taskPacketsIndex);
   assert.equal(result.missions[0].primaryRole, "builder");
-  assert.equal(result.missions[0].compatiblePaperRole, "author");
   assert.deepEqual(result.queues.active.map((mission) => mission.id), ["engineering-cache"]);
   assert.equal(result.counts.missionCount, 4);
   assert.equal(result.counts.activeMissionCount, 3);
@@ -226,7 +223,7 @@ test("queryDoveMission frames an engineering mission without writing artifacts",
     currentPhase: "draft",
     currentFocus: "Ship the API cache without regressing callers.",
     objective: "Improve API latency.",
-    assignedRole: "author",
+    assignedRole: "builder",
     nextAction: "Implement cache and return validation evidence."
   });
   writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
@@ -238,7 +235,7 @@ test("queryDoveMission frames an engineering mission without writing artifacts",
       lifecycleStatus: "active",
       lifecycleFamily: "work-unit",
       doveDomain: "engineering",
-      assignedRole: "author",
+      assignedRole: "builder",
       phase: "draft",
       nextAction: "Return changed files and tests.",
       outputPaths: ["src/cache.mjs"],
@@ -266,17 +263,15 @@ test("queryDoveMission frames an engineering mission without writing artifacts",
   assert.equal(result.mission.domain, "engineering");
   assert.equal(result.mission.stage, "execution");
   assert.equal(result.mission.primaryRole, "builder");
-  assert.equal(result.mission.compatiblePaperRole, "author");
-  assert.equal(result.mission.compatibleNextCommand, "project:paper.materialize or project:paper.autonomy-operate");
+  assert.equal(result.mission.nextCommand, "project:dove.paper.materialize or project:dove.paper.autonomy-operate");
   assert.deepEqual(result.mission.targetArtifacts, ["src/cache.mjs"]);
   assert.deepEqual(result.mission.acceptanceChecks, ["changed files", "tests or validation output"]);
-  assert.equal(result.workspace.durableRoot, ".paper");
+  assert.equal(result.workspace.durableRoot, ".dove");
   assert.equal(result.workspace.identity.productName, "Dove");
-  assert.equal(result.workspace.identity.compatibilityCli, "paper-factory");
-  assert.equal(result.workspace.compatibilityMode, "compatibility-manifest");
+  assert.equal(result.workspace.identity.publicCli, "dove");
+  assert.equal(result.workspace.authorityManifest.status, "authoritative");
   assert.equal(result.packets[0].doveDomain, "engineering");
   assert.equal(result.packets[0].source, "mission-packet");
-  assert.equal(result.packets[0].compatibilitySource, "task-packet");
   assert.equal(result.packets[0].missionPacketId, "engineering-cache");
   assert.equal(result.packets[0].missionPacketStorePath, ARTIFACT_PATHS.taskPacketsIndex);
   assert.deepEqual(after, before);
@@ -303,14 +298,13 @@ test("queryDoveOrchestrate routes an engineering mission without writing artifac
   assert.deepEqual(result.writes, []);
   assert.equal(result.mission.domain, "engineering");
   assert.equal(result.mission.stage, "execution");
-  assert.equal(result.route.recommendedCommand, "project:paper.materialize");
-  assert.equal(result.route.compatiblePaperCommand, "project:paper.materialize");
+  assert.equal(result.route.recommendedCommand, "project:dove.paper.materialize");
+  assert.equal(result.route.nextCommand, "project:dove.paper.materialize");
   assert.equal(result.route.roleBoundary.primaryRole, "builder");
-  assert.equal(result.route.roleBoundary.compatiblePaperRole, "author");
-  assert.equal(result.workspace.durableRoot, ".paper");
-  assert.equal(result.workspace.plannedDurableRoot, ".dove");
-  assert.equal(result.workspace.identity.packageRenameStatus, "deferred");
-  assert.equal(result.workspace.durableRootMigration.currentWriteAuthority, ".paper");
+  assert.equal(result.workspace.durableRoot, ".dove");
+  assert.equal(result.workspace.authoritativeRoot, ".dove");
+  assert.equal(result.workspace.identity.packageName, "dove");
+  assert.equal(result.workspace.authorityManifest.currentWriteAuthority, ".dove");
   assert.equal(result.diagnostics.noRefresh, true);
   assert.equal(result.diagnostics.noCommandExecution, true);
   assert.equal(result.diagnostics.noGitInspection, true);
@@ -347,11 +341,11 @@ test("queryDoveAudit reports audit and return readiness without writing artifact
   assert.equal(result.audit.findingCount, result.findings.length);
   assert.equal(result.returnReadiness.engineeringEvidence.validationOutput.status, "passed");
   assert.equal(result.returnReadiness.engineeringEvidence.changedFiles.satisfied, true);
-  assert.equal(result.workspace.durableRoot, ".paper");
-  assert.equal(result.workspace.plannedDurableRoot, ".dove");
-  assert.equal(result.workspace.identity.durableRootMigrationStatus, "manifest-only");
-  assert.equal(result.workspace.durableRootMigration.status, "manifest-only");
-  assert.equal(result.workspace.durableRootMigration.dualRootInvariant.allowed, false);
+  assert.equal(result.workspace.durableRoot, ".dove");
+  assert.equal(result.workspace.authoritativeRoot, ".dove");
+  assert.equal(result.workspace.identity.durableRootStatus, "authoritative");
+  assert.equal(result.workspace.authorityManifest.status, "authoritative");
+  assert.equal(result.workspace.authorityManifest.dualRootInvariant.allowed, false);
   assert.equal(result.diagnostics.noRefresh, true);
   assert.equal(result.diagnostics.noCommandExecution, true);
   assert.equal(result.diagnostics.noGitInspection, true);
@@ -376,10 +370,10 @@ test("queryDoveReturn reports missing engineering evidence without writing artif
   assert.equal(result.noAutoApply, true);
   assert.deepEqual(result.writes, []);
   assert.equal(result.returnStatus, "needs-audit");
-  assert.equal(result.compatibleNextCommand, "project:dove.return");
+  assert.equal(result.nextCommand, "project:dove.return");
   assert.equal(result.workspace.identity.productName, "Dove");
-  assert.equal(result.workspace.identity.breakingRenameRequiresExplicitApproval, true);
-  assert.equal(result.workspace.durableRootMigration.doveRootWriteAuthority, "none");
+  assert.equal(result.workspace.identity.durableRootStatus, "authoritative");
+  assert.equal(result.workspace.authorityManifest.currentWriteAuthority, ".dove");
   assert.equal(result.engineeringEvidence.declaredInputsOnly, true);
   assert.equal(result.engineeringEvidence.noCommandExecution, true);
   assert.equal(result.engineeringEvidence.noGitInspection, true);
@@ -442,7 +436,7 @@ test("queryDoveReturn reports failing validation output as needs-execution", () 
   });
 
   assert.equal(result.returnStatus, "needs-execution");
-  assert.equal(result.compatibleNextCommand, "project:paper.checklist");
+  assert.equal(result.nextCommand, "project:dove.paper.checklist");
   assert.equal(result.engineeringEvidence.validationOutput.status, "failed");
   assert.equal(result.engineeringEvidence.readiness.hasFailedValidationOutput, true);
   assert.equal(result.engineeringEvidence.missingEvidence.some((item) => item.category === "validation-output"), true);
@@ -485,7 +479,7 @@ test("queryDoveReturn uses packet output and evidence links as declared engineer
       lifecycleStatus: "completed",
       lifecycleFamily: "work-unit",
       doveDomain: "engineering",
-      assignedRole: "author",
+      assignedRole: "builder",
       phase: "review",
       outputPaths: ["src/cache.mjs"],
       evidenceLinks: ["tests/cache.test.mjs"]
@@ -539,13 +533,13 @@ test("queryDoveReturn treats a malformed Dove root manifest as read-only input",
   const after = fs.readFileSync(malformedPath, "utf8");
 
   assert.equal(result.returnStatus, "blocked");
-  assert.equal(result.workspace.durableRootMigration.status, "manifest-only");
+  assert.equal(result.workspace.authorityManifest.status, "authoritative");
   assert.equal(after, before);
   assert.ok(result.diagnostics.readErrors.some((item) => item.path === ARTIFACT_PATHS.doveRootManifest));
   assert.equal(fs.readdirSync(path.dirname(malformedPath)).some((fileName) => fileName.includes(".broken-")), false);
 });
 
-test("launchDoveMission materializes accepted guidance through the .paper mission packet store", () => {
+test("launchDoveMission materializes accepted guidance through the .dove mission packet store", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   const { pack, packetPath } = seedDoveLaunchGuidance(root);
@@ -579,35 +573,33 @@ test("launchDoveMission materializes accepted guidance through the .paper missio
   assert.equal(result.materialization.missionPacketContextPath, result.materialization.packetContextPath);
   assert.equal(result.governance.registeredMutation, "launch-dove-mission");
   assert.equal(result.governance.delegatedGuardedMutation, "materialize-guidance-packet");
-  assert.equal(result.governance.currentWriteAuthority, ".paper");
-  assert.equal(result.governance.noDoveRootWrites, true);
+  assert.equal(result.governance.currentWriteAuthority, ".dove");
   assert.equal(result.governance.noAutonomyExecution, true);
-  assert.equal(result.workspace.durableRoot, ".paper");
-  assert.equal(result.workspace.plannedDurableRoot, ".dove");
+  assert.equal(result.workspace.durableRoot, ".dove");
+  assert.equal(result.workspace.authoritativeRoot, ".dove");
   assert.equal(result.packet.doveDomain, "engineering");
   assert.equal(result.packet.missionStage, "execution");
   assert.equal(result.packet.source, "mission-packet");
-  assert.equal(result.packet.compatibilitySource, "task-packet");
   assert.equal(result.packet.missionPacketId, result.materialization.packetId);
   assert.equal(result.packet.outputPaths.includes("src/cache.mjs"), true);
   assert.equal(result.packet.materialization.acceptanceCriteria.includes("tests or validation output"), true);
-  assert.equal(result.writes.some((artifactPath) => artifactPath.startsWith(".paper/task-packets/")), true);
-  assert.equal(result.writes.some((artifactPath) => artifactPath.startsWith(".dove/")), false);
-  assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+  assert.equal(result.writes.some((artifactPath) => artifactPath.startsWith(".dove/task-packets/")), true);
+  assert.equal(result.writes.some((artifactPath) => artifactPath.startsWith(".dove/")), true);
+  assert.equal(fs.existsSync(path.join(root, ".dove")), true);
 
   const board = queryDoveMissionBoard(root, { domain: "engineering", missionPacketId: result.materialization.packetId, includeArchived: true });
   assert.deepEqual(board.missions.map((mission) => mission.id), [result.materialization.packetId]);
   assert.deepEqual(result.board.missionPacketIds, [result.materialization.packetId]);
 });
 
-test("launchDoveMission refuses writes when possible authoritative .dove artifacts exist", () => {
+test("launchDoveMission reports stale legacy .paper artifacts without importing them", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   const { pack, packetPath } = seedDoveLaunchGuidance(root);
-  fs.mkdirSync(path.join(root, ".dove", "workspace"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".dove", "workspace", "index.json"), "{}\n", "utf8");
+  fs.mkdirSync(path.join(root, ".paper", "workspace"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".paper", "workspace", "index.json"), "{}\n", "utf8");
 
-  assert.throws(() => launchDoveMission(root, {
+  const result = launchDoveMission(root, {
     sourceType: "remediation-pack",
     sourceId: pack.id,
     actorRole: "planner",
@@ -617,24 +609,26 @@ test("launchDoveMission refuses writes when possible authoritative .dove artifac
     packetId: packetPath?.targetId ?? "task-dove-launch",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /possible authoritative \.dove artifacts exist/);
+  });
 
-  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetPath?.targetId ?? "task-dove-launch"}.json`)), false);
+  assert.equal(result.status, "materialized");
+  assert.deepEqual(result.diagnostics.staleLegacyAuthorityArtifacts, [".paper/workspace/index.json"]);
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetPath?.targetId ?? "task-dove-launch"}.json`)), true);
 });
 
-test("CLI Dove orchestrate, mission, board, audit, and return aliases expose proposal-only JSON", () => {
+test("CLI Dove orchestrate, mission, board, audit, and return commands expose proposal-only JSON", () => {
   const root = tempRoot();
   ensureWorkspace(root);
 
   const orchestrate = spawnSync("node", [
     CLI,
-    "dove-orchestrate",
+    "orchestrate",
     root,
     "--request", "Ship a CLI-visible Dove mission.",
     "--goal", "Ship a CLI-visible Dove mission.",
     "--domain", "engineering",
     "--stage", "execution",
-    "--artifact", "bin/paper-factory.mjs",
+    "--artifact", "bin/dove.mjs",
     "--acceptance-check", "tests or validation output"
   ], {
     cwd: ROOT,
@@ -645,43 +639,16 @@ test("CLI Dove orchestrate, mission, board, audit, and return aliases expose pro
   assert.equal(orchestratePayload.mode, "dove-orchestrate-query");
   assert.equal(orchestratePayload.proposalOnly, true);
   assert.deepEqual(orchestratePayload.writes, []);
-  assert.equal(orchestratePayload.route.recommendedCommand, "project:paper.materialize");
-
-  const nestedOrchestrate = spawnSync("node", [
-    CLI,
-    "dove",
-    "orchestrate",
-    root,
-    "--domain", "engineering",
-    "--stage", "execution"
-  ], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-  assert.equal(nestedOrchestrate.status, 0, nestedOrchestrate.stderr || nestedOrchestrate.stdout);
-  assert.equal(JSON.parse(nestedOrchestrate.stdout).mode, "dove-orchestrate-query");
-
-  const doveOrchestrate = spawnSync("node", [
-    DOVE_CLI,
-    "orchestrate",
-    root,
-    "--domain", "engineering",
-    "--stage", "execution"
-  ], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-  assert.equal(doveOrchestrate.status, 0, doveOrchestrate.stderr || doveOrchestrate.stdout);
-  assert.equal(JSON.parse(doveOrchestrate.stdout).mode, "dove-orchestrate-query");
+  assert.equal(orchestratePayload.route.recommendedCommand, "project:dove.paper.materialize");
 
   const mission = spawnSync("node", [
     CLI,
-    "dove-mission",
+    "mission",
     root,
     "--goal", "Ship a CLI-visible Dove mission.",
     "--domain", "engineering",
     "--stage", "execution",
-    "--artifact", "bin/paper-factory.mjs",
+    "--artifact", "bin/dove.mjs",
     "--acceptance-check", "tests or validation output"
   ], {
     cwd: ROOT,
@@ -694,11 +661,11 @@ test("CLI Dove orchestrate, mission, board, audit, and return aliases expose pro
   assert.deepEqual(missionPayload.writes, []);
   assert.equal(missionPayload.mission.domain, "engineering");
   assert.equal(missionPayload.mission.stage, "execution");
-  assert.deepEqual(missionPayload.mission.targetArtifacts, ["bin/paper-factory.mjs"]);
+  assert.deepEqual(missionPayload.mission.targetArtifacts, ["bin/dove.mjs"]);
 
   const board = spawnSync("node", [
     CLI,
-    "dove-board",
+    "board",
     root,
     "--domain", "engineering"
   ], {
@@ -711,45 +678,20 @@ test("CLI Dove orchestrate, mission, board, audit, and return aliases expose pro
   assert.equal(boardPayload.proposalOnly, true);
   assert.deepEqual(boardPayload.writes, []);
   assert.equal(boardPayload.board.domain, "engineering");
-  assert.equal(boardPayload.workspace.plannedDurableRoot, ".dove");
+  assert.equal(boardPayload.workspace.authoritativeRoot, ".dove");
 
-  const nestedBoard = spawnSync("node", [
-    CLI,
-    "dove",
-    "board",
-    root,
-    "--domain", "engineering"
-  ], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-  assert.equal(nestedBoard.status, 0, nestedBoard.stderr || nestedBoard.stdout);
-  assert.equal(JSON.parse(nestedBoard.stdout).mode, "dove-mission-board-query");
-
-  const doveBoard = spawnSync("node", [
-    DOVE_CLI,
-    "board",
-    root,
-    "--domain", "engineering"
-  ], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-  assert.equal(doveBoard.status, 0, doveBoard.stderr || doveBoard.stdout);
-  assert.equal(JSON.parse(doveBoard.stdout).mode, "dove-mission-board-query");
-
-  writeText(root, "bin/paper-factory.mjs", "#!/usr/bin/env node\n");
+  writeText(root, "bin/dove.mjs", "#!/usr/bin/env node\n");
   writeText(root, "tests/integration/dove-query.test.mjs", "import test from 'node:test';\n");
   writeText(root, "tmp/dove-query.log", "ok 1 dove return validation passed\nexit 0\n");
 
   const audit = spawnSync("node", [
     CLI,
-    "dove-audit",
+    "audit",
     root,
     "--scope", "CLI Dove audit.",
     "--goal", "Close a CLI-visible Dove mission.",
     "--domain", "engineering",
-    "--changed-file", "bin/paper-factory.mjs",
+    "--changed-file", "bin/dove.mjs",
     "--test-evidence", "tests/integration/dove-query.test.mjs",
     "--validation-output", "tmp/dove-query.log"
   ], {
@@ -763,41 +705,13 @@ test("CLI Dove orchestrate, mission, board, audit, and return aliases expose pro
   assert.deepEqual(auditPayload.writes, []);
   assert.equal(auditPayload.mission.domain, "engineering");
 
-  const nestedAudit = spawnSync("node", [
-    CLI,
-    "dove",
-    "audit",
-    root,
-    "--scope", "Nested CLI Dove audit.",
-    "--domain", "engineering"
-  ], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-  assert.equal(nestedAudit.status, 0, nestedAudit.stderr || nestedAudit.stdout);
-  assert.equal(JSON.parse(nestedAudit.stdout).mode, "dove-audit-query");
-
-  const doveAudit = spawnSync("node", [
-    DOVE_CLI,
-    "audit",
-    root,
-    "--scope", "Dove CLI audit.",
-    "--domain", "engineering"
-  ], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-  assert.equal(doveAudit.status, 0, doveAudit.stderr || doveAudit.stdout);
-  assert.equal(JSON.parse(doveAudit.stdout).mode, "dove-audit-query");
-
   const returned = spawnSync("node", [
     CLI,
-    "dove",
     "return",
     root,
     "--goal", "Close a CLI-visible Dove mission.",
     "--domain", "engineering",
-    "--changed-file", "bin/paper-factory.mjs",
+    "--changed-file", "bin/dove.mjs",
     "--test-evidence", "tests/integration/dove-query.test.mjs",
     "--validation-output", "tmp/dove-query.log"
   ], {
@@ -810,7 +724,7 @@ test("CLI Dove orchestrate, mission, board, audit, and return aliases expose pro
   assert.equal(returnPayload.proposalOnly, true);
   assert.deepEqual(returnPayload.writes, []);
   assert.equal(returnPayload.mission.domain, "engineering");
-  assert.equal(returnPayload.engineeringEvidence.changedFiles.existingPaths.includes("bin/paper-factory.mjs"), true);
+  assert.equal(returnPayload.engineeringEvidence.changedFiles.existingPaths.includes("bin/dove.mjs"), true);
   assert.equal(returnPayload.engineeringEvidence.validationEvidence.existingPaths.includes("tests/integration/dove-query.test.mjs"), true);
   assert.equal(returnPayload.engineeringEvidence.validationOutput.status, "passed");
   assert.equal(returnPayload.evidenceRead.includes("tests/integration/dove-query.test.mjs"), true);

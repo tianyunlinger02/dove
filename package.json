@@ -1,10 +1,9 @@
 {
-  "name": "paper-factory",
+  "name": "dove",
   "version": "0.2.0",
-  "description": "Dove-compatible local-first mission workflow pack for papers, engineering work, research, and review, with paper-factory compatibility.",
+  "description": "Local-first Dove mission workflow pack for papers, engineering work, research, review, and governed autonomy.",
   "type": "module",
   "bin": {
-    "paper-factory": "./bin/paper-factory.mjs",
     "dove": "./bin/dove.mjs"
   },
   "files": [
@@ -26,10 +25,10 @@
     "README.md"
   ],
   "scripts": {
-    "paper-factory": "node ./bin/paper-factory.mjs",
-    "doctor": "node ./bin/paper-factory.mjs doctor .",
-    "install:local": "node ./bin/paper-factory.mjs install . --force",
-    "mcp:serve": "node ./mcp/paper-state-server.mjs",
+    "dove": "node ./bin/dove.mjs",
+    "doctor": "node ./bin/dove.mjs doctor .",
+    "install:local": "node ./bin/dove.mjs install . --force",
+    "mcp:serve": "node ./mcp/dove-state-server.mjs",
     "mcp:validate": "node ./scripts/validate-mcp.mjs",
     "commands:validate": "node ./scripts/validate-commands.mjs",
     "governance:audit": "node ./scripts/audit-governance-coverage.mjs",

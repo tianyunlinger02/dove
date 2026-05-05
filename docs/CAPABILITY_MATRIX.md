@@ -1,63 +1,60 @@
 # Capability matrix
 
-This file turns the phrase “absorb the advantages of oh-my-openagent and ARIS” into an auditable checklist.
+This file turns the phrase “absorb the advantages of workflow-pack systems and academic research operating systems” into an auditable checklist for Dove.
 
 ## Legend
 
-- **Implemented**: shipped in the current `paper_factory` package
+- **Implemented**: shipped in the current Dove package
 - **Partial**: the idea is present, but not at the full depth of the source inspiration
 - **Deferred**: intentionally not claimed as part of the current release
 
-## oh-my-openagent / workflow-pack strengths
+## Workflow-pack strengths
 
 | Advantage | Status | Where it lives | Notes |
 |---|---|---|---|
-| Packaged workflow surface | Implemented | neutral core + optional host adapters | OpenCode remains the default adapter; Claude Code, Codex, Cursor, and shared agent-skill adapter surfaces are installable |
-| Unified Dove mission kernel | Partial | `.paper/workspace/index.json.dove`, Dove identity metadata, `.paper/workspace/dove-root-manifest.json`, `dove.orchestrate`, `dove.mission`, `dove.board`, `dove.audit`, `dove.return`, `dove.launch`, `query_dove_orchestrate`, `query_dove_mission`, `query_dove_mission_board`, `query_dove_audit`, `query_dove_return`, `launch_dove_mission`, `paper-factory dove-orchestrate`, `paper-factory dove-mission`, `paper-factory dove-board`, `paper-factory dove-audit`, `paper-factory dove-return`, `paper-factory dove-launch`, `bin/dove.mjs` | Introduces one mission lifecycle, staged dual-name product identity, manifest-only no-dual-root migration metadata, deterministic no-write routing, mission framing, as-read mission-board inspection, proposal-only audit, return-readiness inspection with declared engineering changed-file/test/validation-output evidence, governed launch into mission packets backed by `.paper/task-packets`, domain guidance including engineering missions, and planner/builder/reviewer mapping without replacing paper-specific commands or `.paper/` compatibility |
-| Installation ergonomics | Implemented | `bin/paper-factory.mjs` | `install`, `sync`, `doctor` |
-| Health checks / guardrails | Implemented | `bin/paper-factory.mjs`, `scripts/doctor-mcp-probe.mjs` | Includes JSON parsing and MCP probe |
-| Deterministic helper layer | Implemented | `src/mcp/*` | MCP provides state mutation tools |
-| Explicit role inventory | Implemented | `.paper/orchestration/board.json`, role skills | Planner/researcher/reviewer/rebuttal/experiment/version roles are durable and explicit |
-| Board-first orchestration | Implemented | `.paper/orchestration/*`, `paper.orchestrate` | File-first contract rather than hidden runtime state |
-| Durable task packets | Implemented | `.paper/task-packets/*`, `paper.task-graph` | Portable work objects linked to task, experiment, rebuttal, and version state |
-| Per-role context manifests | Implemented | `.paper/context/roles/*.json` | Narrows context by role without hidden context routing |
-| Packet-scoped context manifests | Implemented | `.paper/context/packets/*.json`, MCP packet-context reader | Adds packet-local dependency, artifact, and resume bundles without host hooks |
-| Session/workspace persistence surfaces | Implemented | `.paper/sessions/*`, `.paper/wiki/navigation.md` | File-backed summary/journal surfaces preserve resumability |
-| Durable workspace index | Implemented | `.paper/workspace/index.json` | Top-level resumable overview of active packets, work queues, dependency health, ownership, sessions, and version state |
-| Managed-vs-user-owned update boundary | Implemented | `bin/paper-factory.mjs`, `.paper/workflow-pack/boundaries.json` | Install/sync bootstrap `.paper` safely instead of overwriting user state |
-| Query/navigation workflow UX | Implemented | `paper.task-graph`, `paper.open-questions`, `paper.decisions`, `paper.lineage`, MCP query tools | Users can inspect graph/questions/decisions/lineage directly |
-| Explicit proposal-to-work bridge | Implemented | `paper.materialize`, `materialize_guidance_packet`, `.paper/task-packets/*`, `.paper/meta/operator-follow-through.json` | Accepted remediation guidance can be materialized into one real durable task packet through an explicit governed path |
-| Composable workflow packaging | Implemented | command/skill/adapter split + `.paper` artifacts | Lifecycle phases are exposed through host adapters over the same file-backed core |
-| Host-specific deep hook system | Deferred | N/A | Adapter surfaces avoid pretending unsupported host hooks exist |
-| Hook-heavy subagent interception | Deferred | N/A | Trellis-style host interception is intentionally out of scope |
+| Packaged workflow surface | Implemented | neutral core + optional host adapters | OpenCode is the default adapter; Claude Code, Codex, Cursor, and shared agent-skill adapter surfaces are installable. |
+| Unified Dove mission kernel | Implemented | `.dove/workspace/index.json.dove`, `.dove/manifest.json`, `dove orchestrate`, `dove mission`, `dove board`, `dove audit`, `dove return`, `dove launch`, `query_dove_orchestrate`, `query_dove_mission`, `query_dove_mission_board`, `query_dove_audit`, `query_dove_return`, `launch_dove_mission` | Provides one mission lifecycle, direct Dove product identity, authoritative `.dove/` state, deterministic no-write routing, mission framing, board inspection, proposal-only audit, return-readiness inspection, engineering evidence checks, governed launch into `.dove/task-packets`, and planner/builder/reviewer role boundaries. |
+| Installation ergonomics | Implemented | `bin/dove.mjs` | `install`, `sync`, and `doctor` manage the neutral core plus adapter inventory. |
+| Health checks / guardrails | Implemented | `bin/dove.mjs`, `scripts/doctor-mcp-probe.mjs` | Includes JSON parsing, authority checks, stale legacy state reporting, and MCP probe. |
+| Deterministic helper layer | Implemented | `src/mcp/*` | MCP provides deterministic state mutation and query tools over `.dove/`. |
+| Explicit role inventory | Implemented | `.dove/orchestration/board.json`, role skills | Planner, builder, and reviewer are the primary durable roles; specialists are scoped subagents. |
+| Board-first orchestration | Implemented | `.dove/orchestration/*`, `dove.paper.orchestrate` | File-first contract rather than hidden runtime state. |
+| Durable mission packets | Implemented | `.dove/task-packets/*`, `dove.paper.task-graph` | Portable work objects linked to tasks, experiments, rebuttal issues, versions, and mission state. |
+| Per-role context manifests | Implemented | `.dove/context/roles/*.json` | Narrows context by role without hidden context routing. |
+| Packet-scoped context manifests | Implemented | `.dove/context/packets/*.json`, MCP packet-context reader | Adds packet-local dependency, artifact, and resume bundles without host hooks. |
+| Session/workspace persistence surfaces | Implemented | `.dove/sessions/*`, `.dove/wiki/navigation.md` | File-backed summary and journal surfaces preserve resumability. |
+| Durable workspace index | Implemented | `.dove/workspace/index.json` | Top-level overview of active packets, work queues, dependency health, ownership, sessions, lifecycle state, and version state. |
+| Managed-vs-user-owned update boundary | Implemented | `bin/dove.mjs`, `.dove/workflow-pack/boundaries.json` | Install/sync bootstrap `.dove` safely instead of overwriting user state. |
+| Query/navigation workflow UX | Implemented | `dove.paper.task-graph`, `dove.paper.open-questions`, `dove.paper.decisions`, `dove.paper.lineage`, MCP query tools | Users can inspect graph/questions/decisions/lineage directly. |
+| Explicit proposal-to-work bridge | Implemented | `dove.paper.materialize`, `materialize_guidance_packet`, `.dove/task-packets/*`, `.dove/meta/operator-follow-through.json` | Accepted remediation guidance can be materialized into one durable packet through an explicit governed path. |
+| Host-specific deep hook system | Deferred | N/A | Adapter surfaces avoid pretending unsupported host hooks exist. |
+| Hidden subagent interception | Deferred | N/A | Dove preserves role/subagent boundaries through files and prompts, not unsupported host interception. |
 
-## ARIS-style academic workflow strengths
+## Academic workflow strengths
 
 | Advantage | Status | Where it lives | Notes |
 |---|---|---|---|
-| Durable research memory | Implemented | `.paper/sources`, `.paper/notes`, `.paper/wiki` | File-first persistent artifacts |
-| Claim-evidence discipline | Implemented | `src/core/evidence.mjs`, `paper.claim-gate` | Claims validate source/note references |
-| Claim-driven experiment planning | Implemented | `.paper/experiments/*`, `paper.experiment-plan` | Plans and results stay tied to claims and comparisons |
-| Experiment audit ledger | Implemented | `.paper/experiments/audits.json`, `paper.experiment-audit` | Audit findings are persisted separately from raw results |
-| Result-to-claim bridge | Implemented | `.paper/claims/bridge-log.json`, `paper.result-bridge` | Claim confidence/state changes are traceable to explicit bridge events |
-| Review + revision loop | Implemented | `src/core/reviews.mjs`, `paper.review-loop`, `.paper/revision-plans` | Produces durable findings and action items |
-| Strict no-fix paper audit | Implemented | `src/core/paper-audit.mjs`, `paper.audit`, `query_paper_audit` | Reports proposal-only findings without writing, repairing, refreshing, or auto-applying fixes |
-| Proposal-first project onboarding | Implemented | `src/core/onboarding.mjs`, `paper.onboard`, `paper-factory onboard` / `migrate`, `.paper/workspace/artifact-map.json` | Existing manuscripts, bibliographies, figures, tables, results, reviews, notes, and submission files are mapped without moving or overwriting source assets |
-| Persistent adversarial concern memory | Implemented | `.paper/reviews/concerns.json`, `.paper/reviews/adversarial-state.json` | Reviewer concerns persist across rounds instead of living only in the latest log |
-| Citation hygiene | Implemented | `sync_citations`, `.paper/bibliography/*` | Writes BibTeX + citation log |
-| Rebuttal issue board + strategy | Implemented | `.paper/rebuttal/*`, `paper.rebuttal-strategy` | Issues are normalized before response drafting |
-| Version evolution/comparison | Implemented | `.paper/versions/*`, `paper.version-*` | Snapshot lineage and comparison targets are durable |
-| Stronger explanatory comparisons | Implemented | `.paper/versions/LATEST_COMPARISON.md` | Comparison reports now include review delta context in addition to evidence/citation drift |
-| Typed wiki + relations | Implemented | `.paper/wiki/entities.json`, `.paper/wiki/relations.json` | Query surfaces can rely on typed records instead of markdown alone |
-| Figure artifact contracts | Partial | `.paper/figures/*.json`, `paper.figure`, `validate_figure_pipeline` | Durable brief → segment → template → editable → final-contract records and figure QA exist, but no render/editor backend is claimed |
-| Stage discipline | Implemented | strict mode + orchestration board gates | Optional strict mode, durable board phases, and review blockers |
-| Autonomous experiment orchestration | Deferred | N/A | No fake scheduler or daemon is claimed |
-| Full ARIS research/reviewer subsystem parity | Deferred | N/A | Current package is inspired by ARIS, not a clone |
+| Durable research memory | Implemented | `.dove/sources`, `.dove/notes`, `.dove/wiki` | File-first persistent artifacts. |
+| Claim-evidence discipline | Implemented | `src/core/evidence.mjs`, `dove.paper.claim-gate` | Claims validate source/note references. |
+| Claim-driven experiment planning | Implemented | `.dove/experiments/*`, `dove.paper.experiment-plan` | Plans and results stay tied to claims and comparisons. |
+| Experiment audit ledger | Implemented | `.dove/experiments/audits.json`, `dove.paper.experiment-audit` | Audit findings are persisted separately from raw results. |
+| Result-to-claim bridge | Implemented | `.dove/claims/bridge-log.json`, `dove.paper.result-bridge` | Claim confidence/state changes are traceable to explicit bridge events. |
+| Review + revision loop | Implemented | `src/core/reviews.mjs`, `dove.paper.review-loop`, `.dove/revision-plans` | Produces durable findings and action items. |
+| Strict no-fix paper audit | Implemented | `src/core/paper-audit.mjs`, `dove.paper.audit`, `query_paper_audit` | Reports proposal-only findings without writing, repairing, refreshing, or auto-applying fixes. |
+| Isolated reviewer handoff | Implemented | `.dove/reviews/isolated/*`, `dove.paper.isolated-review`, `dove isolated-review` | Reviewer receives only explicit input artifacts and returns only handoff/report artifacts. |
+| Proposal-first project onboarding | Implemented | `src/core/onboarding.mjs`, `dove.paper.onboard`, `dove onboard`, `.dove/workspace/artifact-map.json` | Existing manuscripts, bibliographies, figures, tables, results, reviews, notes, and submission files are mapped without moving or overwriting source assets. |
+| Persistent adversarial concern memory | Implemented | `.dove/reviews/concerns.json`, `.dove/reviews/adversarial-state.json` | Reviewer concerns persist across rounds instead of living only in the latest log. |
+| Citation hygiene | Implemented | `sync_citations`, `.dove/bibliography/*` | Writes BibTeX plus citation log. |
+| Rebuttal issue board + strategy | Implemented | `.dove/rebuttal/*`, `dove.paper.rebuttal-strategy` | Issues are normalized before response drafting. |
+| Version evolution/comparison | Implemented | `.dove/versions/*`, `dove.paper.version-*` | Snapshot lineage and comparison targets are durable. |
+| Typed wiki + relations | Implemented | `.dove/wiki/entities.json`, `.dove/wiki/relations.json` | Query surfaces can rely on typed records instead of markdown alone. |
+| Figure artifact contracts | Partial | `.dove/figures/*.json`, `dove.paper.figure`, `validate_figure_pipeline` | Durable brief → segment → template → editable → final-contract records and figure QA exist, but no render/editor backend is claimed. |
+| Autonomous experiment orchestration | Deferred | N/A | No fake scheduler or daemon is claimed. |
 
 ## Current release claim
 
-The current `paper_factory` release is intended to be described as:
+The current Dove release is intended to be described as:
 
-> a host-neutral, board-first, evidence-aware academic writing workflow pack with optional multi-host adapters that absorbs the strongest packaging/orchestration ideas from oh-my-openagent, the strongest durable research/experiment/rebuttal/version ideas from ARIS, and the strongest portable Trellis-style ideas around task packets, role manifests, persistence, safe workflow-pack boundaries, queryable navigation, typed workspace state, experiment audits, and result-to-claim traceability.
+> a host-neutral, board-first, evidence-aware mission workflow system with optional multi-host adapters, first-class paper and engineering domains, authoritative `.dove/` state, planner/builder/reviewer separation, durable review/rebuttal/experiment/version workflows, and explicit governed autonomy.
 
-It should **not** be described as a full host-level clone of oh-my-openagent, a full system-level clone of ARIS, an OpenCode-only package, or a Trellis runtime clone with hidden hooks/schedulers.
+It should not be described as a host-level clone, a hidden scheduler, an OpenCode-only package, or a generic task manager that replaces paper-specific research and writing capabilities.

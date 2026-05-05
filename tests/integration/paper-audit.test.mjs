@@ -11,7 +11,7 @@ import {
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-audit-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-audit-"));
 }
 
 function snapshotArtifacts(root, relativePaths) {

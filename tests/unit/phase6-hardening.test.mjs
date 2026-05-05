@@ -61,7 +61,7 @@ import { toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
 import { createMetaExecutionBridgeCandidatesIndex, createMetaLongHorizonMemory, createMetaOperatorPlaybooksIndex, createMetaOptimizerState, createMetaRemediationPacksIndex } from "../../src/core/schema.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-phase6-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-phase6-"));
 }
 
 function seedAutonomyGuidance(root) {
@@ -143,8 +143,8 @@ function seedAcceptedAutonomyPacket(root, {
   followThroughId = `follow-through-${packetId}`
 }) {
   const timestamp = new Date(0).toISOString();
-  const packetPath = `.paper/task-packets/packets/${packetId}.json`;
-  const packetContextPath = `.paper/context/packets/${packetId}.json`;
+  const packetPath = `.dove/task-packets/packets/${packetId}.json`;
+  const packetContextPath = `.dove/context/packets/${packetId}.json`;
   const packet = {
     id: packetId,
     sourceType: "materialized-guidance",
@@ -217,7 +217,7 @@ function seedPlannedAutonomyMaterialization(root, {
   actorRole = "planner",
   followThroughId,
   linkedTargetId,
-  linkedTargetArtifact = `.paper/task-packets/packets/${linkedTargetId}.json`,
+  linkedTargetArtifact = `.dove/task-packets/packets/${linkedTargetId}.json`,
   decisionSummary = `Autonomy may materialize ${sourceType}:${sourceId} into ${linkedTargetId}.`,
   selectedConversionPathKey = null,
   executeBy = "2099-01-01T00:00:00.000Z",
@@ -350,7 +350,7 @@ test("queryWorkspaceIndex treats explicit Dove engineering packets as engineerin
       status: "pending",
       lifecycleStatus: "active",
       active: true,
-      assignedRole: "author",
+      assignedRole: "builder",
       nextAction: "Implement the cache and return tests plus review evidence.",
       outputPaths: ["src/cache.mjs"],
       evidenceLinks: ["tests/cache.test.mjs"]
@@ -363,7 +363,7 @@ test("queryWorkspaceIndex treats explicit Dove engineering packets as engineerin
   const workspaceIndex = queryWorkspaceIndex(root);
   assert.equal(workspaceIndex.dove.currentDomain, "engineering");
   assert.equal(workspaceIndex.dove.domainCounts.engineering, 1);
-  assert.equal(workspaceIndex.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:paper.materialize or project:paper.autonomy-operate");
+  assert.equal(workspaceIndex.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.paper.materialize or project:dove.paper.autonomy-operate");
   assert.equal(workspaceIndex.activePackets[0].doveDomain, "engineering");
   assert.equal(workspaceIndex.activePackets[0].lifecycleFamily, "structure");
 });
@@ -375,7 +375,7 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   fs.writeFileSync(path.join(root, ARTIFACT_PATHS.workflowBoundaries), JSON.stringify({
     version: 1,
     managedPaths: "bad-shape",
-    userOwnedPaths: [".paper/drafts"],
+    userOwnedPaths: [".dove/drafts"],
     managedArtifacts: {
       workflowBoundaries: { revisionId: "legacy" }
     },
@@ -447,8 +447,8 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
 
   assert.equal(boundaries.version, 3);
   assert.equal(boundaries.managedArtifacts.workflowBoundaries.revisionId, "schema-v5:bootstrap-only");
-  assert.equal(boundaries.managedArtifacts.workspaceIndex.path, ".paper/workspace/index.json");
-  assert.equal(boundaries.managedArtifacts.doveRootManifest.path, ".paper/workspace/dove-root-manifest.json");
+  assert.equal(boundaries.managedArtifacts.workspaceIndex.path, ".dove/workspace/index.json");
+  assert.equal(boundaries.managedArtifacts.doveRootManifest.path, ".dove/manifest.json");
   assert.deepEqual(boundaries.managedPaths, [".opencode", ".opencode.json", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.neutralCorePaths, ["README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.defaultHostAdapters, ["opencode"]);
@@ -466,14 +466,14 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.equal(workspaceIndex.repairFrontier.count, 0);
   assert.deepEqual(workspaceIndex.repairFrontier.topDegradedGroupIds, []);
   assert.equal(workspaceIndex.metaOptimize.proposalOnly, true);
-  assert.equal(workspaceIndex.metaOptimize.reportPath, ".paper/meta/LATEST_OPTIMIZER_REPORT.md");
+  assert.equal(workspaceIndex.metaOptimize.reportPath, ".dove/meta/LATEST_OPTIMIZER_REPORT.md");
   assert.equal(workspaceIndex.metaOptimize.rankingMethod, "durable-signal-frontier-v1");
   assert.deepEqual(workspaceIndex.metaOptimize.tieBreakOrder, ["score-desc", "priority-rank", "cluster-rank", "cluster-id", "category", "id"]);
-  assert.equal(workspaceIndex.metaOptimize.longHorizonPath, ".paper/meta/long-horizon-memory.json");
+  assert.equal(workspaceIndex.metaOptimize.longHorizonPath, ".dove/meta/long-horizon-memory.json");
   assert.deepEqual(workspaceIndex.metaOptimize.topTaxonomyFamilyIds, []);
   assert.deepEqual(workspaceIndex.metaOptimize.topTaxonomyGroupIds, []);
   assert.deepEqual(workspaceIndex.metaOptimize.pressureAreas, []);
-  assert.equal(workspaceIndex.metaOptimize.longHorizon.memoryPath, ".paper/meta/long-horizon-memory.json");
+  assert.equal(workspaceIndex.metaOptimize.longHorizon.memoryPath, ".dove/meta/long-horizon-memory.json");
   assert.equal(workspaceIndex.metaOptimize.remediationPacks.packCount, 0);
   assert.deepEqual(workspaceIndex.metaOptimize.remediationPacks.topPackIds, []);
   assert.equal(workspaceIndex.metaOptimize.remediationPacks.readinessOverview, "No proposal-only remediation packs have been generated yet.");
@@ -1380,8 +1380,8 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
       assignedRole: "planner",
       phase: "research",
       nextAction: "Take the top remediation pack into execution.",
-      packetPath: ".paper/task-packets/packets/task-follow-through.json",
-      packetContextPath: ".paper/context/packets/task-follow-through.json"
+      packetPath: ".dove/task-packets/packets/task-follow-through.json",
+      packetContextPath: ".dove/context/packets/task-follow-through.json"
     }],
     clusterMembership: {},
     dependencyMap: {},
@@ -1395,7 +1395,7 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
     },
     updatedAt: null
   });
-  writeJson(root, ".paper/task-packets/packets/task-follow-through.json", {
+  writeJson(root, ".dove/task-packets/packets/task-follow-through.json", {
     id: "task-follow-through",
     title: "Follow-through execution task",
     status: "pending"
@@ -1408,7 +1408,7 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
     actorRole: "planner",
     decisionSummary: "Promote top remediation pack into manual execution.",
     selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-    linkedTargetArtifact: ".paper/task-packets/packets/task-follow-through.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through.json",
     linkedTargetId: "task-follow-through",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
@@ -1418,7 +1418,7 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
   assert.equal(followThrough.summary.acceptedForExecutionCount, 1);
   assert.equal(followThrough.summary.staleCount, 0);
   assert.equal(followThrough.items[0].sourceType, "remediation-pack");
-  assert.equal(followThrough.items[0].linkedTargetArtifact, ".paper/task-packets/packets/task-follow-through.json");
+  assert.equal(followThrough.items[0].linkedTargetArtifact, ".dove/task-packets/packets/task-follow-through.json");
 
   writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
     version: 2,
@@ -1464,7 +1464,7 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
       sourceId: topPack.id,
       status: "accepted-for-execution",
       actorRole: "reviewer",
-      linkedTargetArtifact: ".paper/task-packets/packets/task-follow-through.json",
+      linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through.json",
       linkedTargetId: "task-follow-through",
       executeBy: "2099-01-01T00:00:00.000Z",
       reviewAfter: "2099-01-01T12:00:00.000Z"
@@ -1477,7 +1477,7 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
       sourceId: topPack.id,
       status: "accepted-for-execution",
       actorRole: "planner",
-      linkedTargetArtifact: ".paper/task-packets/packets/task-follow-through.json",
+      linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through.json",
       linkedTargetId: "missing-target",
       executeBy: "2099-01-01T00:00:00.000Z",
       reviewAfter: "2099-01-01T12:00:00.000Z"
@@ -1490,12 +1490,12 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
       sourceId: topPack.id,
       status: "executing",
       actorRole: allowedActorRole,
-      linkedTargetArtifact: ".paper/task-packets/packets/task-follow-through.json",
+      linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through.json",
       linkedTargetId: "task-follow-through"
     });
   }, /executionStartedAt/);
 
-  fs.rmSync(path.join(root, ".paper/task-packets/packets/task-follow-through.json"), { force: true });
+  fs.rmSync(path.join(root, ".dove/task-packets/packets/task-follow-through.json"), { force: true });
   followThrough = queryOperatorFollowThrough(root);
   assert.equal(followThrough.summary.itemCount > 0, true);
 });
@@ -1546,7 +1546,7 @@ test("queryOperatorFollowThrough summarizes combined deferred, stale, and invali
         sourceSummary: "C",
         status: "accepted-for-execution",
         actorRole: "planner",
-        linkedTargetArtifact: ".paper/task-packets/packets/task-overdue.json",
+        linkedTargetArtifact: ".dove/task-packets/packets/task-overdue.json",
         linkedTargetId: "task-overdue",
         executeBy: "2000-01-01T00:00:00.000Z",
         reviewAfter: "2000-01-01T12:00:00.000Z",
@@ -1574,7 +1574,7 @@ test("executing follow-through remains a valid governed state across query and w
   ensureWorkspace(root);
   initProject(root, { title: "Executing State", objective: "Keep executing state consistent across governance surfaces." });
 
-  writeJson(root, ".paper/task-packets/packets/task-executing.json", {
+  writeJson(root, ".dove/task-packets/packets/task-executing.json", {
     id: "task-executing",
     title: "Executing task",
     status: "in-progress"
@@ -1594,7 +1594,7 @@ test("executing follow-through remains a valid governed state across query and w
       sourceSummary: "Executing pack summary",
       status: "executing",
       actorRole: "planner",
-      linkedTargetArtifact: ".paper/task-packets/packets/task-executing.json",
+      linkedTargetArtifact: ".dove/task-packets/packets/task-executing.json",
       linkedTargetId: "task-executing",
       executeBy: "2099-01-01T00:00:00.000Z",
       reviewAfter: "2099-01-01T12:00:00.000Z",
@@ -1664,10 +1664,10 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
   const claimBridgeCoverage = meta.governanceCoverage.guardedMutations.find((item) => item.id === "bridge-experiment-result-to-claim");
   assert.equal(claimBridgeCoverage.surfaceBindings.coreFunction, "bridgeExperimentResultToClaim");
   assert.equal(claimBridgeCoverage.surfaceBindings.mcpTool, "bridge_result_to_claim");
-  assert.equal(claimBridgeCoverage.surfaceBindings.commandIds.includes("paper.result-bridge"), true);
+  assert.equal(claimBridgeCoverage.surfaceBindings.commandIds.includes("dove.paper.result-bridge"), true);
   const followThroughExempt = meta.governanceCoverage.exemptMutations.find((item) => item.id === "record-operator-follow-through");
   assert.equal(followThroughExempt.surfaceBindings.mcpTool, "record_operator_follow_through");
-  assert.equal(followThroughExempt.surfaceBindings.commandIds.includes("paper.follow-through"), true);
+  assert.equal(followThroughExempt.surfaceBindings.commandIds.includes("dove.paper.follow-through"), true);
   assert.equal(typeof followThroughExempt.ownerRole, "string");
   assert.equal(typeof followThroughExempt.approvedByRole, "string");
   assert.equal(typeof followThroughExempt.approvedAt, "string");
@@ -1684,7 +1684,7 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
   assert.equal(exemptCoreFunctions.has("queryMetaOptimize"), true);
 
   const topPack = meta.remediationPacks.packs[0];
-  writeJson(root, ".paper/task-packets/packets/task-coverage.json", { id: "task-coverage", title: "Coverage task", status: "pending" });
+  writeJson(root, ".dove/task-packets/packets/task-coverage.json", { id: "task-coverage", title: "Coverage task", status: "pending" });
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
@@ -1692,7 +1692,7 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
     actorRole: "planner",
     decisionSummary: "Take coverage pack into execution.",
     selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-    linkedTargetArtifact: ".paper/task-packets/packets/task-coverage.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-coverage.json",
     linkedTargetId: "task-coverage",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
@@ -1758,42 +1758,42 @@ test("governance registry completely binds the expected mutating command and MCP
   }
 
   const expectedMutatingCommands = [
-    "paper.research",
-    "paper.source",
-    "paper.note",
-    "paper.claim-gate",
-    "paper.plan",
-    "paper.outline",
-    "paper.draft",
-    "paper.experiment-plan",
-    "paper.experiment-audit",
-    "paper.review",
-    "paper.review-loop",
-    "paper.result-bridge",
-    "paper.revise",
-    "paper.rebuttal-strategy",
-    "paper.version-snapshot",
-    "paper.version-compare",
-    "paper.citations",
-    "paper.figure",
-      "paper.rebuttal",
-      "paper.follow-through",
-      "paper.meta-optimize",
-      "paper.materialize",
+    "dove.paper.research",
+    "dove.paper.source",
+    "dove.paper.note",
+    "dove.paper.claim-gate",
+    "dove.paper.plan",
+    "dove.paper.outline",
+    "dove.paper.draft",
+    "dove.paper.experiment-plan",
+    "dove.paper.experiment-audit",
+    "dove.paper.review",
+    "dove.paper.review-loop",
+    "dove.paper.result-bridge",
+    "dove.paper.revise",
+    "dove.paper.rebuttal-strategy",
+    "dove.paper.version-snapshot",
+    "dove.paper.version-compare",
+    "dove.paper.citations",
+    "dove.paper.figure",
+      "dove.paper.rebuttal",
+      "dove.paper.follow-through",
+      "dove.paper.meta-optimize",
+      "dove.paper.materialize",
       "dove.launch"
   ];
   for (const commandId of expectedMutatingCommands) {
     assert.equal(boundCommands.has(commandId), true);
     assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), true);
   }
-  assert.equal(boundCommands.has("paper.orchestrate"), false);
+  assert.equal(boundCommands.has("dove.paper.orchestrate"), false);
   assert.equal(boundCommands.has("dove.launch"), true);
   assert.equal(boundCommands.has("dove.orchestrate"), false);
   assert.equal(boundCommands.has("dove.mission"), false);
   assert.equal(boundCommands.has("dove.board"), false);
   assert.equal(boundCommands.has("dove.audit"), false);
   assert.equal(boundCommands.has("dove.return"), false);
-  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("paper.orchestrate"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.paper.orchestrate"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.orchestrate"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.mission"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.board"), true);
@@ -1801,7 +1801,7 @@ test("governance registry completely binds the expected mutating command and MCP
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.return"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_orchestrate"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_audit"), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "paper.orchestrate.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.paper.orchestrate.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.orchestrate.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.mission.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.board.md")), true);
@@ -1843,7 +1843,7 @@ test("a broader set of guarded write paths all reject unresolved follow-through 
   });
 
   const topPack = queryMetaOptimize(root).remediationPacks.packs[0];
-  writeJson(root, ".paper/task-packets/packets/task-guard-matrix.json", { id: "task-guard-matrix", title: "Guard matrix task", status: "pending" });
+  writeJson(root, ".dove/task-packets/packets/task-guard-matrix.json", { id: "task-guard-matrix", title: "Guard matrix task", status: "pending" });
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
@@ -1851,7 +1851,7 @@ test("a broader set of guarded write paths all reject unresolved follow-through 
     actorRole: "planner",
     decisionSummary: "Take this remediation pack into execution.",
     selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-    linkedTargetArtifact: ".paper/task-packets/packets/task-guard-matrix.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-guard-matrix.json",
     linkedTargetId: "task-guard-matrix",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
@@ -1934,7 +1934,7 @@ test("follow-through overrides require expiry and exact target binding", () => {
   const currentBoard = currentState.orchestrationBoard;
   const allowedActorRole = currentBoard?.assignedRole ?? "planner";
   const currentPhase = currentState.pipeline?.currentStage ?? currentBoard?.currentPhase ?? "init";
-  writeJson(root, ".paper/task-packets/packets/task-override.json", { id: "task-override", title: "Override task", status: "pending" });
+  writeJson(root, ".dove/task-packets/packets/task-override.json", { id: "task-override", title: "Override task", status: "pending" });
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
@@ -1942,7 +1942,7 @@ test("follow-through overrides require expiry and exact target binding", () => {
     actorRole: allowedActorRole,
     decisionSummary: "Take this remediation pack into execution.",
     selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-    linkedTargetArtifact: ".paper/task-packets/packets/task-override.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-override.json",
     linkedTargetId: "task-override",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
@@ -1953,7 +1953,7 @@ test("follow-through overrides require expiry and exact target binding", () => {
     actorRole: allowedActorRole,
     policyOverrideReason: "manual",
     policyOverrideReasonCode: "manual-reconciliation",
-    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".paper/task-packets/packets/task-override.json"],
+    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".dove/task-packets/packets/task-override.json"],
     policyOverrideSourceId: topPack.id
   }), /future policyOverrideExpiresAt/);
 
@@ -1962,9 +1962,9 @@ test("follow-through overrides require expiry and exact target binding", () => {
     actorRole: allowedActorRole,
     policyOverrideReason: "manual",
     policyOverrideReasonCode: "not-allowed",
-    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".paper/task-packets/packets/task-override.json"],
+    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".dove/task-packets/packets/task-override.json"],
     policyOverrideSourceId: topPack.id,
-    policyOverrideTargetArtifact: ".paper/task-packets/packets/task-override.json",
+    policyOverrideTargetArtifact: ".dove/task-packets/packets/task-override.json",
     policyOverrideTargetId: "task-override",
     policyOverridePhase: currentPhase,
     policyOverrideExpiresAt: "2099-01-02T00:00:00.000Z"
@@ -1975,9 +1975,9 @@ test("follow-through overrides require expiry and exact target binding", () => {
     actorRole: allowedActorRole,
     policyOverrideReason: "manual",
     policyOverrideReasonCode: "manual-reconciliation",
-    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".paper/task-packets/packets/task-override.json"],
+    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".dove/task-packets/packets/task-override.json"],
     policyOverrideSourceId: topPack.id,
-    policyOverrideTargetArtifact: ".paper/task-packets/packets/task-override.json",
+    policyOverrideTargetArtifact: ".dove/task-packets/packets/task-override.json",
     policyOverrideTargetId: "task-override",
     policyOverridePhase: currentPhase,
     policyOverrideExpiresAt: "2099-12-31T00:00:00.000Z"
@@ -1988,9 +1988,9 @@ test("follow-through overrides require expiry and exact target binding", () => {
     actorRole: allowedActorRole,
     policyOverrideReason: "manual",
     policyOverrideReasonCode: "manual-reconciliation",
-    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".paper/task-packets/packets/task-override.json"],
+    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".dove/task-packets/packets/task-override.json"],
     policyOverrideSourceId: "wrong-source",
-    policyOverrideTargetArtifact: ".paper/task-packets/packets/task-override.json",
+    policyOverrideTargetArtifact: ".dove/task-packets/packets/task-override.json",
     policyOverrideTargetId: "task-override",
     policyOverridePhase: currentPhase,
     policyOverrideExpiresAt: "2099-01-02T00:00:00.000Z"
@@ -2098,7 +2098,7 @@ test("materializeGuidancePacket seeds durable program surfaces when program link
     reviewAfter: "2099-01-01T12:00:00.000Z"
   });
 
-  const packet = readJson(root, ".paper/task-packets/packets/task-program-packet.json", null);
+  const packet = readJson(root, ".dove/task-packets/packets/task-program-packet.json", null);
   const programs = readJson(root, ARTIFACT_PATHS.programsIndex, null);
   const runs = readJson(root, ARTIFACT_PATHS.programRuns, null);
   const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
@@ -2290,7 +2290,7 @@ test("issueProgramApproval re-arms an existing packet and surfaces the approval 
     summary: "Issued a fresh approval for the next bounded step."
   });
 
-  const packet = readJson(root, ".paper/task-packets/packets/task-issue-approval.json", null);
+  const packet = readJson(root, ".dove/task-packets/packets/task-issue-approval.json", null);
   const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
   const approvalsView = queryProgramApprovals(root, { programId: "program-issue-alpha" });
 
@@ -2531,14 +2531,14 @@ test("materializeGuidancePacket blocks unrelated follow-through debt and superse
   const blockedPack = blockedMeta.remediationPacks.packs[0];
   const blockedCandidate = blockedMeta.executionBridgeCandidates.candidates.find((item) => item.candidateType === "packet-candidate");
   const candidateActorRole = blockedCandidate.sourceConversionPath?.assignedRole ?? "planner";
-  writeJson(blockedRoot, ".paper/task-packets/packets/task-blocking-guidance.json", { id: "task-blocking-guidance", title: "Blocking task", status: "pending" });
+  writeJson(blockedRoot, ".dove/task-packets/packets/task-blocking-guidance.json", { id: "task-blocking-guidance", title: "Blocking task", status: "pending" });
   recordOperatorFollowThrough(blockedRoot, {
     sourceType: "execution-bridge",
     sourceId: blockedCandidate.id,
     status: "accepted-for-execution",
     actorRole: candidateActorRole,
     decisionSummary: "Keep this candidate open as unrelated follow-through debt.",
-    linkedTargetArtifact: ".paper/task-packets/packets/task-blocking-guidance.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-blocking-guidance.json",
     linkedTargetId: "task-blocking-guidance",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
@@ -2637,7 +2637,7 @@ test("runAutonomyForeground materializes then executes the same packet in one ex
     status: "accepted-for-execution",
     actorRole,
     decisionSummary: "Allow one planned packet to materialize and then execute in the same foreground invocation.",
-    linkedTargetArtifact: ".paper/task-packets/packets/task-queue-discipline.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-queue-discipline.json",
     linkedTargetId: "task-queue-discipline",
     plannedTarget: true,
     executeBy: "2099-01-01T00:00:00.000Z",
@@ -3119,7 +3119,7 @@ test("runAutonomyControlPlaneOnce executes one bounded packet step and writes du
   assert.equal(result.outcome, "executed-one-packet-step");
   assert.equal(result.packetId, seeded.packetId);
   assert.equal(result.followThroughId, seeded.followThroughId);
-  assert.equal(result.nextRecommendedCommand, "project:paper.follow-through");
+  assert.equal(result.nextRecommendedCommand, "project:dove.paper.follow-through");
 
   const runtimeResults = readJson(root, ARTIFACT_PATHS.runtimeResults, null);
   const runtimeEvents = readJson(root, ARTIFACT_PATHS.runtimeEvents, null);
@@ -3144,7 +3144,7 @@ test("runAutonomyControlPlaneOnce executes one bounded packet step and writes du
   assert.equal(runtimeControllerState.summary.continuationCount, 1);
   assert.equal(runtimeControllerState.summary.currentContinuationKind, "review-follow-through");
   assert.equal(runtimeControllerState.summary.currentContinuationPacketId, seeded.packetId);
-  assert.equal(runtimeControllerState.summary.currentContinuationCommand, "project:paper.follow-through");
+  assert.equal(runtimeControllerState.summary.currentContinuationCommand, "project:dove.paper.follow-through");
   assert.equal(packet.lifecycleStatus, "review-needed");
   assert.equal(packet.continuationState.status, "review-needed");
   assert.equal(packet.decisions.some((item) => item.id === `autonomy-step-${result.runId}`), true);
@@ -3188,9 +3188,9 @@ test("runAutonomyControlPlaneOnce executes one bounded researcher envelope under
   assert.equal(result.packetId, materialized.packetId);
   assert.equal(result.envelopeSnapshot.workerRole, "researcher");
 
-  const packet = readJson(root, ".paper/task-packets/packets/task-research-envelope.json", null);
-  const packetContext = readJson(root, ".paper/context/packets/task-research-envelope.json", null);
-  const packetActionBundle = readJson(root, ".paper/context/actions/packet-task-research-envelope.json", null);
+  const packet = readJson(root, ".dove/task-packets/packets/task-research-envelope.json", null);
+  const packetContext = readJson(root, ".dove/context/packets/task-research-envelope.json", null);
+  const packetActionBundle = readJson(root, ".dove/context/actions/packet-task-research-envelope.json", null);
   const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
   const followThroughItem = (followThrough.items ?? []).find((item) => item.id === materialized.followThroughId);
   const workspaceIndex = queryWorkspaceIndex(root);
@@ -3201,7 +3201,7 @@ test("runAutonomyControlPlaneOnce executes one bounded researcher envelope under
   assert.equal(packet.lifecycleStatus, "review-needed");
   assert.equal(packetContext.autonomyEnvelope.workerRole, "researcher");
   assert.equal(packetActionBundle.autonomyEnvelope.workerRole, "researcher");
-  assert.equal(packetActionBundle.requiredReadPaths.includes(".paper/context/roles/researcher.json"), true);
+  assert.equal(packetActionBundle.requiredReadPaths.includes(".dove/context/roles/researcher.json"), true);
   assert.equal(followThroughItem.actorRole, "planner");
   assert.equal(followThroughItem.workerRole, "researcher");
   assert.equal(workspaceIndex.runtime.lastEnvelopeWorkerRole, "researcher");
@@ -3294,8 +3294,8 @@ test("runAutonomyControlPlaneOnce executes one approved program-level research b
   const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
   const programApprovals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
   const approvalsView = queryProgramApprovals(root, { programId: "program-step-alpha" });
-  const packetActionBundle = readJson(root, ".paper/context/actions/packet-task-program-step.json", null);
-  const packetContext = readJson(root, ".paper/context/packets/task-program-step.json", null);
+  const packetActionBundle = readJson(root, ".dove/context/actions/packet-task-program-step.json", null);
+  const packetContext = readJson(root, ".dove/context/packets/task-program-step.json", null);
   const workspaceIndex = queryWorkspaceIndex(root);
   const boardAfter = readJson(root, ARTIFACT_PATHS.orchestrationBoard, null);
 
@@ -3323,11 +3323,11 @@ test("runAutonomyControlPlaneOnce executes one approved program-level research b
   assert.equal(packetLoop.runtimeState, "review-checkpoint-recorded");
   assert.equal(packetLoop.blockers.includes("program-step-alpha-run-1"), true);
   assert.equal(workspaceIndex.autonomyLoops.activeLifecycleState, "review-checkpoint-awaiting-fresh-approval");
-  assert.match(workspaceIndex.autonomyLoops.nextSafeAction, /project:paper\.approvals/);
+  assert.match(workspaceIndex.autonomyLoops.nextSafeAction, /project:dove\.paper\.approvals/);
   assert.equal(workspaceIndex.runtime.continuationCount, 1);
   assert.equal(workspaceIndex.runtime.currentContinuationKind, "issue-fresh-approval");
   assert.equal(workspaceIndex.runtime.currentContinuationProgramRunId, "program-step-alpha-run-1");
-  assert.equal(workspaceIndex.runtime.currentContinuationCommand, "project:paper.approvals");
+  assert.equal(workspaceIndex.runtime.currentContinuationCommand, "project:dove.paper.approvals");
   assert.equal(approvalsView.continuationIntents[0].suggestedProgramRunId, "program-step-alpha-run-1-next");
   assert.equal(boardAfter.assignedRole, boardBefore.assignedRole);
   assert.equal(boardAfter.currentPhase, boardBefore.currentPhase);
@@ -3885,7 +3885,7 @@ test("runAutonomyControlPlaneOnce does not reuse a consumed approval after revie
   const first = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
   assert.equal(first.outcome, "executed-program-step");
 
-  const packetPath = ".paper/task-packets/packets/task-program-replay.json";
+  const packetPath = ".dove/task-packets/packets/task-program-replay.json";
   const packet = readJson(root, packetPath, null);
   writeJson(root, packetPath, {
     ...packet,
@@ -4081,7 +4081,7 @@ test("runAutonomyControlPlaneOnce rejects envelope packets whose worker role doe
   assert.equal(result.outcome, "no-eligible-packet");
   assert.equal(result.inspectedPacketIds.includes("task-envelope-mismatch"), true);
 
-  const packet = readJson(root, ".paper/task-packets/packets/task-envelope-mismatch.json", null);
+  const packet = readJson(root, ".dove/task-packets/packets/task-envelope-mismatch.json", null);
   const workspaceIndex = queryWorkspaceIndex(root);
   assert.equal(packet.lifecycleStatus, "waiting");
   assert.equal(workspaceIndex.runtime.lastOutcome, "no-eligible-packet");
@@ -4105,7 +4105,7 @@ test("runAutonomyControlPlaneOnce requires an explicit envelope before planner c
     reviewAfter: "2099-01-01T12:00:00.000Z"
   });
 
-  const packetPath = ".paper/task-packets/packets/task-missing-envelope.json";
+  const packetPath = ".dove/task-packets/packets/task-missing-envelope.json";
   const packet = readJson(root, packetPath, null);
   writeJson(root, packetPath, {
     ...packet,
@@ -4344,7 +4344,7 @@ test("runAutonomyControlPlaneOnce still prioritizes eligible packet assessment o
     status: "accepted-for-execution",
     actorRole,
     decisionSummary: "Autonomy may materialize this pack into one future packet if no eligible packet exists.",
-    linkedTargetArtifact: ".paper/task-packets/packets/task-queue-discipline.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-queue-discipline.json",
     linkedTargetId: "task-queue-discipline",
     plannedTarget: true,
     executeBy: "2099-01-01T00:00:00.000Z",
@@ -4356,7 +4356,7 @@ test("runAutonomyControlPlaneOnce still prioritizes eligible packet assessment o
   assert.equal(result.status, "completed");
   assert.equal(result.outcome, "executed-one-packet-step");
   assert.equal(result.packetId, seeded.packetId);
-  assert.equal(fs.existsSync(path.join(root, ".paper/task-packets/packets/task-queue-discipline.json")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove/task-packets/packets/task-queue-discipline.json")), false);
 });
 
 test("runAutonomyControlPlaneOnce materializes one accepted remediation path when no packet exists yet", () => {
@@ -4374,7 +4374,7 @@ test("runAutonomyControlPlaneOnce materializes one accepted remediation path whe
     actorRole,
     decisionSummary: "Autonomy may materialize this pack into one packet.",
     selectedConversionPathKey: remediationPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-    linkedTargetArtifact: ".paper/task-packets/packets/task-queue-discipline.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-queue-discipline.json",
     linkedTargetId: "task-queue-discipline",
     plannedTarget: true,
     executeBy: "2099-01-01T00:00:00.000Z",
@@ -4386,7 +4386,7 @@ test("runAutonomyControlPlaneOnce materializes one accepted remediation path whe
   assert.equal(result.outcome, "materialized-one-packet");
   assert.equal(result.packetId, "task-queue-discipline");
   assert.equal(result.requestSnapshot.requestCount, 1);
-  const packet = readJson(root, ".paper/task-packets/packets/task-queue-discipline.json", null);
+  const packet = readJson(root, ".dove/task-packets/packets/task-queue-discipline.json", null);
   const runtimeControllerState = readJson(root, ARTIFACT_PATHS.runtimeControllerState, null);
   const workspaceIndex = queryWorkspaceIndex(root);
   assert.equal(packet.id, "task-queue-discipline");
@@ -4412,7 +4412,7 @@ test("runAutonomyControlPlaneOnce preserves the selected planned follow-through 
     status: "accepted-for-execution",
     actorRole,
     decisionSummary: "Autonomy may materialize this pack into one packet using the existing planned follow-through record.",
-    linkedTargetArtifact: ".paper/task-packets/packets/task-custom-materialization.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-custom-materialization.json",
     linkedTargetId: "task-custom-materialization",
     plannedTarget: true,
     executeBy: "2099-01-01T00:00:00.000Z",
@@ -4424,7 +4424,7 @@ test("runAutonomyControlPlaneOnce preserves the selected planned follow-through 
   assert.equal(result.outcome, "materialized-one-packet");
   assert.equal(result.followThroughId, "follow-through-custom-materialization");
 
-  const packet = readJson(root, ".paper/task-packets/packets/task-custom-materialization.json", null);
+  const packet = readJson(root, ".dove/task-packets/packets/task-custom-materialization.json", null);
   const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
   const matchingItems = (followThrough.items ?? []).filter((item) => item.sourceType === "remediation-pack" && item.sourceId === remediationPack.id);
 
@@ -4534,7 +4534,7 @@ test("runAutonomyControlPlaneOnce excludes planned materialization guidance with
   assert.equal(result.status, "noop");
   assert.equal(result.outcome, "no-eligible-packet");
   assert.equal(result.materializationCandidateCount, 0);
-  assert.equal(fs.existsSync(path.join(root, ".paper/task-packets/packets/task-planned-invalid-path.json")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove/task-packets/packets/task-planned-invalid-path.json")), false);
 });
 
 test("runAutonomyControlPlaneOnce excludes stale planned remediation guidance after source drift", () => {
@@ -4600,7 +4600,7 @@ test("materializeGuidancePacket rejects stale planned remediation guidance befor
     reviewAfter: "2099-01-01T12:00:00.000Z"
   }), /planned follow-through is stale/);
 
-  assert.equal(fs.existsSync(path.join(root, ".paper/task-packets/packets/task-remediation-stale-direct.json")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove/task-packets/packets/task-remediation-stale-direct.json")), false);
 });
 
 test("runAutonomyControlPlaneOnce materializes one accepted execution-bridge packet candidate when no eligible packet exists", () => {
@@ -4626,7 +4626,7 @@ test("runAutonomyControlPlaneOnce materializes one accepted execution-bridge pac
   assert.equal(result.packetId, executionBridgeCandidate.targetId);
   assert.equal(result.followThroughId, "follow-through-execution-bridge");
 
-  const packet = readJson(root, `.paper/task-packets/packets/${executionBridgeCandidate.targetId}.json`, null);
+  const packet = readJson(root, `.dove/task-packets/packets/${executionBridgeCandidate.targetId}.json`, null);
   const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
   const matchingItems = (followThrough.items ?? []).filter((item) => item.sourceType === "execution-bridge" && item.sourceId === executionBridgeCandidate.id);
   assert.equal(packet.materialization.sourceType, "execution-bridge");
@@ -4666,7 +4666,7 @@ test("materializeGuidancePacket rejects an execution-bridge follow-through id th
     reviewAfter: "2099-01-01T12:00:00.000Z"
   }), /does not match intended packet target/);
 
-  assert.equal(fs.existsSync(path.join(root, `.paper/task-packets/packets/${executionBridgeCandidate.targetId}.json`)), false);
+  assert.equal(fs.existsSync(path.join(root, `.dove/task-packets/packets/${executionBridgeCandidate.targetId}.json`)), false);
 });
 
 test("materializeGuidancePacket rejects stale planned execution-bridge guidance before writing a packet", () => {
@@ -4701,7 +4701,7 @@ test("materializeGuidancePacket rejects stale planned execution-bridge guidance 
     reviewAfter: "2099-01-01T12:00:00.000Z"
   }), /planned follow-through is stale/);
 
-  assert.equal(fs.existsSync(path.join(root, `.paper/task-packets/packets/${executionBridgeCandidate.targetId}.json`)), false);
+  assert.equal(fs.existsSync(path.join(root, `.dove/task-packets/packets/${executionBridgeCandidate.targetId}.json`)), false);
 });
 
 test("runAutonomyControlPlaneOnce ignores planned execution-bridge guidance for non-packet candidates", () => {
@@ -4718,14 +4718,14 @@ test("runAutonomyControlPlaneOnce ignores planned execution-bridge guidance for 
     actorRole: "planner",
     followThroughId: "follow-through-execution-bridge-non-packet",
     linkedTargetId: nonPacketCandidate.targetId,
-    linkedTargetArtifact: `.paper/task-packets/packets/${nonPacketCandidate.targetId}.json`
+    linkedTargetArtifact: `.dove/task-packets/packets/${nonPacketCandidate.targetId}.json`
   });
 
   const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
   assert.equal(result.status, "noop");
   assert.equal(result.outcome, "no-eligible-packet");
   assert.equal(result.materializationCandidateCount, 0);
-  assert.equal(fs.existsSync(path.join(root, `.paper/task-packets/packets/${nonPacketCandidate.targetId}.json`)), false);
+  assert.equal(fs.existsSync(path.join(root, `.dove/task-packets/packets/${nonPacketCandidate.targetId}.json`)), false);
 });
 
 test("runAutonomyControlPlaneOnce records a durable runtime error when planned materialization fails", () => {
@@ -4735,14 +4735,14 @@ test("runAutonomyControlPlaneOnce records a durable runtime error when planned m
   const { remediationPack, executionBridgeCandidate } = seedAutonomyGuidance(root);
   const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
 
-  writeJson(root, ".paper/task-packets/packets/task-blocking-guidance.json", { id: "task-blocking-guidance", title: "Blocking task", status: "pending" });
+  writeJson(root, ".dove/task-packets/packets/task-blocking-guidance.json", { id: "task-blocking-guidance", title: "Blocking task", status: "pending" });
   recordOperatorFollowThrough(root, {
     sourceType: "execution-bridge",
     sourceId: executionBridgeCandidate.id,
     status: "accepted-for-execution",
     actorRole: executionBridgeCandidate.sourceConversionPath?.assignedRole ?? "planner",
     decisionSummary: "Keep this unrelated guidance open so materialization must fail with a durable runtime error.",
-    linkedTargetArtifact: ".paper/task-packets/packets/task-blocking-guidance.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-blocking-guidance.json",
     linkedTargetId: "task-blocking-guidance",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
@@ -4754,7 +4754,7 @@ test("runAutonomyControlPlaneOnce records a durable runtime error when planned m
     status: "accepted-for-execution",
     actorRole,
     decisionSummary: "Autonomy may materialize this pack into one packet.",
-    linkedTargetArtifact: ".paper/task-packets/packets/task-queue-discipline.json",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-queue-discipline.json",
     linkedTargetId: "task-queue-discipline",
     plannedTarget: true,
     executeBy: "2099-01-01T00:00:00.000Z",
@@ -4949,17 +4949,17 @@ test("figure QA records missing staged files and source artifacts in qa.json", (
     updatedAt: null
   });
 
-  fs.writeFileSync(path.join(root, ".paper", "figures", "main-figure.template.svg"), "<svg />\n", "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "figures", "main-figure.template.svg"), "<svg />\n", "utf8");
 
   upsertFigurePlan(root, {
     items: [{
       id: "main-figure",
       sourceSections: ["introduction"],
-      sourceArtifactPaths: [ARTIFACT_PATHS.findings, ".paper/research/missing-source.md"],
+      sourceArtifactPaths: [ARTIFACT_PATHS.findings, ".dove/research/missing-source.md"],
       targetClaimIds: ["claim-main"],
-      templateSvgPath: ".paper/figures/main-figure.template.svg",
-      editableSvgPath: ".paper/figures/main-figure.editable.svg",
-      finalSvgPath: ".paper/figures/main-figure.final.svg"
+      templateSvgPath: ".dove/figures/main-figure.template.svg",
+      editableSvgPath: ".dove/figures/main-figure.editable.svg",
+      finalSvgPath: ".dove/figures/main-figure.final.svg"
     }]
   });
 
@@ -4984,16 +4984,16 @@ test("validateFigurePipeline catches colliding stage paths and malformed stage c
     updatedAt: null
   });
 
-  fs.writeFileSync(path.join(root, ".paper", "figures", "shared.svg"), "<svg />\n", "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "figures", "shared.svg"), "<svg />\n", "utf8");
 
   upsertFigurePlan(root, {
     items: [{
       id: "figure-a",
       sourceSections: ["introduction"],
       targetClaimIds: ["claim-shared"],
-      templateSvgPath: ".paper/figures/shared.svg",
-      editableSvgPath: ".paper/figures/shared.svg",
-      finalSvgPath: ".paper/figures/shared.svg"
+      templateSvgPath: ".dove/figures/shared.svg",
+      editableSvgPath: ".dove/figures/shared.svg",
+      finalSvgPath: ".dove/figures/shared.svg"
     }]
   });
 
@@ -5001,7 +5001,7 @@ test("validateFigurePipeline catches colliding stage paths and malformed stage c
     version: 1,
     items: [{
       ...readJson(root, ARTIFACT_PATHS.figureTemplates, { version: 1, items: [], updatedAt: null }).items[0],
-      finalSvgPath: ".paper/figures/drifted.final.svg"
+      finalSvgPath: ".dove/figures/drifted.final.svg"
     }],
     updatedAt: null
   });
@@ -5029,9 +5029,9 @@ test("validateFigurePipeline records malformed stage paths instead of throwing o
       id: "figure-malformed",
       sourceSections: ["introduction"],
       targetClaimIds: ["claim-malformed"],
-      templateSvgPath: ".paper/figures/figure-malformed.template.svg",
-      editableSvgPath: ".paper/figures/figure-malformed.editable.svg",
-      finalSvgPath: ".paper/figures/figure-malformed.final.svg"
+      templateSvgPath: ".dove/figures/figure-malformed.template.svg",
+      editableSvgPath: ".dove/figures/figure-malformed.editable.svg",
+      finalSvgPath: ".dove/figures/figure-malformed.final.svg"
     }]
   });
 
@@ -5060,9 +5060,9 @@ test("validateFigurePipeline records malformed non-array figure linkage fields i
       id: "figure-array-malformed",
       sourceSections: ["introduction"],
       targetClaimIds: ["claim-array"],
-      templateSvgPath: ".paper/figures/figure-array-malformed.template.svg",
-      editableSvgPath: ".paper/figures/figure-array-malformed.editable.svg",
-      finalSvgPath: ".paper/figures/figure-array-malformed.final.svg"
+      templateSvgPath: ".dove/figures/figure-array-malformed.template.svg",
+      editableSvgPath: ".dove/figures/figure-array-malformed.editable.svg",
+      finalSvgPath: ".dove/figures/figure-array-malformed.final.svg"
     }]
   });
 

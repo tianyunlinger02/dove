@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "paper-factory": {
+    "dove": {
       "type": "stdio",
       "command": "node",
       "args": [
-        "./mcp/paper-state-server.mjs"
+        "./mcp/dove-state-server.mjs"
       ]
     }
   }

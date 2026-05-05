@@ -11,7 +11,7 @@ The project uses Node.js ESM JavaScript (`.mjs`), not TypeScript. Type safety is
 Important examples:
 
 - `src/core/schema.mjs` defines versions, role IDs, artifact paths, governance registries, default object factories, and normalizers.
-- `bin/paper-factory.mjs` validates JSON artifact shapes in doctor/audit-style code with helpers such as `requireObject`, `requireArray`, and `describeShape`.
+- `bin/dove.mjs` validates JSON artifact shapes in doctor/audit-style code with helpers such as `requireObject`, `requireArray`, and `describeShape`.
 - `src/mcp/tool-definitions.mjs` declares JSON-schema-like `inputSchema` objects for MCP tools.
 - Tests in `tests/unit/schema.test.mjs` and `tests/integration/mcp-tools.test.mjs` assert schema migrations, exposed paths, tool lists, and governance classification.
 

@@ -24,7 +24,7 @@ import {
 } from "../../src/core/index.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-phase2-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-phase2-"));
 }
 
 test("continuation focus and next action remain durable across refresh", () => {
@@ -55,7 +55,7 @@ test("continuation focus and next action remain durable across refresh", () => {
   const graph = queryTaskGraph(root);
   const workspaceIndex = queryWorkspaceIndex(root);
   const state = readState(root);
-  const board = JSON.parse(fs.readFileSync(path.join(root, ".paper", "orchestration", "board.json"), "utf8"));
+  const board = JSON.parse(fs.readFileSync(path.join(root, ".dove", "orchestration", "board.json"), "utf8"));
 
   assert.equal(board.currentFocus, "Resolve the evaluation plan.");
   assert.equal(board.nextAction, "Add the comparison milestone to the plan.");
@@ -65,9 +65,9 @@ test("continuation focus and next action remain durable across refresh", () => {
   assert.equal(workspaceIndex.resumeGuidance.command, state.pipeline.resumeCommand);
   assert.ok(workspaceIndex.workQueues.waiting.some((packet) => packet.id === "task-plan-eval"));
   assert.ok(workspaceIndex.resumeGuidance.prioritizedPacketIds.includes("task-plan-eval"));
-  assert.ok(workspaceIndex.resumeGuidance.packetContextPaths.includes(".paper/context/packets/task-plan-eval.json"));
-  assert.equal(graph.nodes.find((node) => node.id === "task-plan-eval").packetContextPath, ".paper/context/packets/task-plan-eval.json");
-  assert.ok(fs.existsSync(path.join(root, ".paper", "context", "packets", "task-plan-eval.json")));
+  assert.ok(workspaceIndex.resumeGuidance.packetContextPaths.includes(".dove/context/packets/task-plan-eval.json"));
+  assert.equal(graph.nodes.find((node) => node.id === "task-plan-eval").packetContextPath, ".dove/context/packets/task-plan-eval.json");
+  assert.ok(fs.existsSync(path.join(root, ".dove", "context", "packets", "task-plan-eval.json")));
 });
 
 test("experiment audits and claim bridge records persist separately from raw results", () => {
@@ -100,14 +100,14 @@ test("experiment audits and claim bridge records persist separately from raw res
     claimId: "claim-audit",
     outcome: "supports",
     summary: "Audit trail is durable.",
-    evidenceLinks: [".paper/experiments/EXPERIMENT_LOG.md"],
+    evidenceLinks: [".dove/experiments/EXPERIMENT_LOG.md"],
     comparisonTargets: ["baseline-audit"]
   });
   const audit = runExperimentAudit(root, { resultId: result.id });
 
-  const audits = JSON.parse(fs.readFileSync(path.join(root, ".paper", "experiments", "audits.json"), "utf8"));
-  const bridgeLog = JSON.parse(fs.readFileSync(path.join(root, ".paper", "claims", "bridge-log.json"), "utf8"));
-  const evidence = JSON.parse(fs.readFileSync(path.join(root, ".paper", "evidence", "index.json"), "utf8"));
+  const audits = JSON.parse(fs.readFileSync(path.join(root, ".dove", "experiments", "audits.json"), "utf8"));
+  const bridgeLog = JSON.parse(fs.readFileSync(path.join(root, ".dove", "claims", "bridge-log.json"), "utf8"));
+  const evidence = JSON.parse(fs.readFileSync(path.join(root, ".dove", "evidence", "index.json"), "utf8"));
 
   assert.ok(audits.items.some((item) => item.id === audit.id));
   assert.ok(bridgeLog.items.some((item) => item.claimId === "claim-audit" && item.resultId === result.id));
@@ -134,11 +134,11 @@ test("refreshWiki writes typed wiki indexes and workspace summary surfaces", () 
   runReviewLoop(root, { scope: "typed wiki" });
   const wiki = refreshWiki(root);
 
-  const entities = JSON.parse(fs.readFileSync(path.join(root, ".paper", "wiki", "entities.json"), "utf8"));
-  const relations = JSON.parse(fs.readFileSync(path.join(root, ".paper", "wiki", "relations.json"), "utf8"));
-  const workspaceIndex = JSON.parse(fs.readFileSync(path.join(root, ".paper", "workspace", "index.json"), "utf8"));
+  const entities = JSON.parse(fs.readFileSync(path.join(root, ".dove", "wiki", "entities.json"), "utf8"));
+  const relations = JSON.parse(fs.readFileSync(path.join(root, ".dove", "wiki", "relations.json"), "utf8"));
+  const workspaceIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "workspace", "index.json"), "utf8"));
 
-  assert.equal(wiki.wikiPath, ".paper/wiki/index.md");
+  assert.equal(wiki.wikiPath, ".dove/wiki/index.md");
   assert.ok(entities.items.some((item) => item.entityType === "claim" && item.id === "claim-wiki"));
   assert.ok(relations.items.some((item) => item.fromId === "claim-wiki"));
   assert.equal(relations.version, 3);
@@ -182,9 +182,9 @@ test("figure artifact planning writes staged contract files without claiming ren
     }]
   });
 
-  fs.writeFileSync(path.join(root, ".paper", "figures", "main-figure.template.svg"), "<svg />\n", "utf8");
-  fs.writeFileSync(path.join(root, ".paper", "figures", "main-figure.editable.svg"), "<svg />\n", "utf8");
-  fs.writeFileSync(path.join(root, ".paper", "figures", "main-figure.final.svg"), "<svg />\n", "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "figures", "main-figure.template.svg"), "<svg />\n", "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "figures", "main-figure.editable.svg"), "<svg />\n", "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "figures", "main-figure.final.svg"), "<svg />\n", "utf8");
 
   const figurePlan = upsertFigurePlan(root, {
     items: [{
@@ -194,26 +194,26 @@ test("figure artifact planning writes staged contract files without claiming ren
       targetClaimIds: ["claim-main"],
       narrativeIntent: "Explain the method-to-result flow.",
       requiredVisualElements: ["pipeline boxes", "comparison chart"],
-      templateSvgPath: ".paper/figures/main-figure.template.svg",
-      finalSvgPath: ".paper/figures/main-figure.final.svg",
+      templateSvgPath: ".dove/figures/main-figure.template.svg",
+      finalSvgPath: ".dove/figures/main-figure.final.svg",
       reviewNotes: ["Keep labels editable."]
     }]
   });
 
-  const briefs = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "briefs.json"), "utf8"));
-  const segments = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "segments.json"), "utf8"));
-  const templates = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "templates.json"), "utf8"));
-  const editable = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "editable-index.json"), "utf8"));
-  const finalIndex = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "final-index.json"), "utf8"));
-  const qa = JSON.parse(fs.readFileSync(path.join(root, ".paper", "figures", "qa.json"), "utf8"));
-  const readme = fs.readFileSync(path.join(root, ".paper", "figures", "README.md"), "utf8");
+  const briefs = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "briefs.json"), "utf8"));
+  const segments = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "segments.json"), "utf8"));
+  const templates = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "templates.json"), "utf8"));
+  const editable = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "editable-index.json"), "utf8"));
+  const finalIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "final-index.json"), "utf8"));
+  const qa = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "qa.json"), "utf8"));
+  const readme = fs.readFileSync(path.join(root, ".dove", "figures", "README.md"), "utf8");
 
   assert.equal(figurePlan.figureCount, 1);
-  assert.equal(figurePlan.qaPath, ".paper/figures/qa.json");
+  assert.equal(figurePlan.qaPath, ".dove/figures/qa.json");
   assert.equal(briefs.items[0].figureId, "main-figure");
   assert.ok(Array.isArray(segments.items[0].placeholderSegments));
-  assert.equal(templates.items[0].templateSvgPath, ".paper/figures/main-figure.template.svg");
-  assert.equal(editable.items[0].finalSvgPath, ".paper/figures/main-figure.final.svg");
+  assert.equal(templates.items[0].templateSvgPath, ".dove/figures/main-figure.template.svg");
+  assert.equal(editable.items[0].finalSvgPath, ".dove/figures/main-figure.final.svg");
   assert.equal(finalIndex.items[0].figureId, "main-figure");
   assert.equal(qa.items[0].qaStatus, "ready");
   assert.match(readme, /does not claim to ship a render backend/i);

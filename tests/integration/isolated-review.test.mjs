@@ -8,15 +8,15 @@ import { spawnSync } from "node:child_process";
 import { ensureWorkspace, initProject, upsertDraft, upsertOrchestrationBoard } from "../../src/core/index.mjs";
 
 const ROOT = process.cwd();
-const CLI = path.join(ROOT, "bin", "paper-factory.mjs");
+const CLI = path.join(ROOT, "bin", "dove.mjs");
 
-function tempRoot(prefix = "paper-factory-isolated-review-") {
+function tempRoot(prefix = "dove-isolated-review-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
 function writeFakeReviewer(dir) {
   const scriptPath = path.join(dir, "fake-reviewer.mjs");
-  fs.writeFileSync(scriptPath, `import fs from "node:fs";\nimport path from "node:path";\nconst args = process.argv.slice(2);\nconst flag = (name) => args[args.indexOf(name) + 1];\nconst inputPath = flag("--input");\nconst handoffPath = flag("--handoff");\nconst reportPath = flag("--report");\nconst runId = flag("--run-id");\nconst input = JSON.parse(fs.readFileSync(inputPath, "utf8"));\nfs.mkdirSync(path.dirname(handoffPath), { recursive: true });\nfs.writeFileSync(path.join(path.dirname(handoffPath), "private-transcript.md"), "PRIVATE REVIEWER CHAIN SHOULD NOT BE IMPORTED\\n", "utf8");\nfs.writeFileSync(reportPath, "# Isolated report\\n\\nThe method claim needs direct source support.\\n", "utf8");\nfs.writeFileSync(handoffPath, JSON.stringify({\n  version: 1,\n  runId,\n  status: "completed",\n  verdict: "needs-revision",\n  reviewerId: "fake-isolated-reviewer",\n  reviewerSessionId: "parallel-session-1",\n  timestamp: "2026-05-03T00:00:00.000Z",\n  summary: "The draft needs direct source support before finalization.",\n  inputPath,\n  inputSha256: input.inputSha256 ?? process.env.PAPER_FACTORY_ISOLATED_REVIEW_INPUT_SHA256,\n  reportPath,\n  reviewedArtifactPaths: input.reviewedArtifactPaths,\n  findings: [{\n    id: "method-needs-source",\n    severity: "high",\n    summary: "The method claim needs direct source support.",\n    responseOwnerRole: "researcher",\n    linkedArtifactPaths: [".paper/drafts/method.md"]\n  }],\n  actionItems: ["Add direct source support for the method claim."]\n}, null, 2) + "\\n", "utf8");\n`, "utf8");
+  fs.writeFileSync(scriptPath, `import fs from "node:fs";\nimport path from "node:path";\nconst args = process.argv.slice(2);\nconst flag = (name) => args[args.indexOf(name) + 1];\nconst inputPath = flag("--input");\nconst handoffPath = flag("--handoff");\nconst reportPath = flag("--report");\nconst runId = flag("--run-id");\nconst input = JSON.parse(fs.readFileSync(inputPath, "utf8"));\nfs.mkdirSync(path.dirname(handoffPath), { recursive: true });\nfs.writeFileSync(path.join(path.dirname(handoffPath), "private-transcript.md"), "PRIVATE REVIEWER CHAIN SHOULD NOT BE IMPORTED\\n", "utf8");\nfs.writeFileSync(reportPath, "# Isolated report\\n\\nThe method claim needs direct source support.\\n", "utf8");\nfs.writeFileSync(handoffPath, JSON.stringify({\n  version: 1,\n  runId,\n  status: "completed",\n  verdict: "needs-revision",\n  reviewerId: "fake-isolated-reviewer",\n  reviewerSessionId: "parallel-session-1",\n  timestamp: "2026-05-03T00:00:00.000Z",\n  summary: "The draft needs direct source support before finalization.",\n  inputPath,\n  inputSha256: input.inputSha256 ?? process.env.DOVE_ISOLATED_REVIEW_INPUT_SHA256,\n  reportPath,\n  reviewedArtifactPaths: input.reviewedArtifactPaths,\n  findings: [{\n    id: "method-needs-source",\n    severity: "high",\n    summary: "The method claim needs direct source support.",\n    responseOwnerRole: "researcher",\n    linkedArtifactPaths: [".dove/drafts/method.md"]\n  }],\n  actionItems: ["Add direct source support for the method claim."]\n}, null, 2) + "\\n", "utf8");\n`, "utf8");
   return scriptPath;
 }
 
@@ -64,10 +64,10 @@ test("isolated-review CLI imports only handoff and report from external reviewer
   assert.equal(payload.status, "completed");
   assert.equal(payload.verdict, "needs-revision");
   assert.equal(payload.privateTranscriptImported, false);
-  assert.match(payload.handoffPath, /\.paper\/reviews\/isolated\/test-review-1\/handoff\.json/);
-  assert.match(payload.reportPath, /\.paper\/reviews\/isolated\/test-review-1\/report\.md/);
+  assert.match(payload.handoffPath, /\.dove\/reviews\/isolated\/test-review-1\/handoff\.json/);
+  assert.match(payload.reportPath, /\.dove\/reviews\/isolated\/test-review-1\/report\.md/);
 
-  const runDir = path.join(root, ".paper", "reviews", "isolated", "test-review-1");
+  const runDir = path.join(root, ".dove", "reviews", "isolated", "test-review-1");
   assert.ok(fs.existsSync(path.join(runDir, "input.json")));
   assert.ok(fs.existsSync(path.join(runDir, "handoff.json")));
   assert.ok(fs.existsSync(path.join(runDir, "report.md")));
@@ -76,17 +76,17 @@ test("isolated-review CLI imports only handoff and report from external reviewer
   const input = JSON.parse(fs.readFileSync(path.join(runDir, "input.json"), "utf8"));
   assert.equal(input.privacyBoundary.writerPrivateTranscriptShared, false);
   assert.equal(input.privacyBoundary.reviewerPrivateTranscriptShouldReturn, false);
-  assert.ok(input.reviewedArtifactPaths.includes(".paper/drafts/method.md"));
+  assert.ok(input.reviewedArtifactPaths.includes(".dove/drafts/method.md"));
 
-  const reviewLog = fs.readFileSync(path.join(root, ".paper", "reviews", "log.md"), "utf8");
+  const reviewLog = fs.readFileSync(path.join(root, ".dove", "reviews", "log.md"), "utf8");
   assert.match(reviewLog, /isolated-review/);
   assert.match(reviewLog, /The method claim needs direct source support/);
   assert.doesNotMatch(reviewLog, /PRIVATE REVIEWER CHAIN/);
 
-  const concerns = JSON.parse(fs.readFileSync(path.join(root, ".paper", "reviews", "concerns.json"), "utf8"));
+  const concerns = JSON.parse(fs.readFileSync(path.join(root, ".dove", "reviews", "concerns.json"), "utf8"));
   assert.ok(concerns.items.some((item) => item.id === "isolated-test-review-1-method-needs-source"));
 
-  const handoffs = fs.readFileSync(path.join(root, ".paper", "orchestration", "handoffs.md"), "utf8");
+  const handoffs = fs.readFileSync(path.join(root, ".dove", "orchestration", "handoffs.md"), "utf8");
   assert.match(handoffs, /Isolated reviewer fake-isolated-reviewer returned needs-revision/);
 });
 
@@ -99,7 +99,7 @@ test("isolated-review-import rejects mismatched input hashes", () => {
   });
   assert.equal(prepare.status, 0, prepare.stderr || prepare.stdout);
   const prepared = JSON.parse(prepare.stdout);
-  fs.writeFileSync(path.join(root, ".paper", "reviews", "isolated", "bad-hash-review", "handoff.json"), JSON.stringify({
+  fs.writeFileSync(path.join(root, ".dove", "reviews", "isolated", "bad-hash-review", "handoff.json"), JSON.stringify({
     runId: "bad-hash-review",
     status: "completed",
     verdict: "coherent",

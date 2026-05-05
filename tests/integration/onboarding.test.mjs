@@ -8,9 +8,9 @@ import { spawnSync } from "node:child_process";
 import { ARTIFACT_PATHS, discoverPaperArtifacts, ensureWorkspace } from "../../src/core/index.mjs";
 
 const ROOT = process.cwd();
-const CLI = path.join(ROOT, "bin", "paper-factory.mjs");
+const CLI = path.join(ROOT, "bin", "dove.mjs");
 
-function tempRoot(prefix = "paper-factory-onboarding-") {
+function tempRoot(prefix = "dove-onboarding-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
@@ -123,7 +123,7 @@ test("CLI doctor reports artifact-map onboarding status without failing", () => 
   const beforePayload = JSON.parse(beforeMapDoctor.stdout);
   const beforeCheck = beforePayload.checks.find((check) => check.check === "onboarding-artifact-map");
   assert.ok(beforeCheck);
-  assert.match(beforeCheck.message, /run paper-factory onboard \. --write-map/);
+  assert.match(beforeCheck.message, /run dove onboard \. --write-map/);
   assert.equal(beforePayload.managedArtifacts.onboardingArtifactMap.mapExists, false);
 
   const onboard = spawnSync("node", [CLI, "onboard", root, "--write-map"], {

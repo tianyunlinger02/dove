@@ -1,40 +1,40 @@
-# paper_factory 体系来源、优点迁移与实现说明
+# Dove 体系来源、优点迁移与实现说明
 
-本文档用于说明以下几个项目各自的优势、它们大致采用了什么实现方式、`paper_factory` 迁移了哪些优点，以及这些优点在当前仓库里是如何实现的：
+本文档用于说明以下几个项目各自的优势、它们大致采用了什么实现方式、`Dove` 迁移了哪些优点，以及这些优点在当前仓库里是如何实现的：
 
 - OpenCode
 - oh-my-openagent / oh-my-opencode
 - ARIS（`Auto-claude-code-research-in-sleep`）
 - AutoFigure-Edit
 - Trellis
-- 当前 `paper_factory`
+- 当前 `Dove`
 
 本文档坚持两个原则：
 
 1. **只写证据支持的内容**。凡是说“已实现”的地方，都能在当前仓库或参考仓库里找到对应的文件、命令、工件或测试。
-2. **不把“借鉴”写成“等价复刻”**。`paper_factory` 是一个 host-neutral、file-first、带可选多宿主 adapter 的学术论文工作流包，不是任何单一参考项目的完整克隆。
+2. **不把“借鉴”写成“等价复刻”**。`Dove` 是一个 host-neutral、file-first、带可选多宿主 adapter 的学术论文工作流包，不是任何单一参考项目的完整克隆。
 
 ---
 
-## 1. 先说明 `paper_factory` 现在是什么
+## 1. 先说明 `Dove` 现在是什么
 
-在谈迁移来源之前，先明确当前 `paper_factory` 的系统定位。
+在谈迁移来源之前，先明确当前 `Dove` 的系统定位。
 
-从当前仓库看，`paper_factory` 已经被实现为一个 **host-neutral 的学术写作工作流包**，OpenCode 是默认 adapter，核心由四层组成：
+从当前仓库看，`Dove` 已经被实现为一个 **host-neutral 的学术写作工作流包**，OpenCode 是默认 adapter，核心由四层组成：
 
 1. **宿主 adapter 层**：`.opencode/*`、`.claude/*`、`.codex/*`、`.cursor/*`、`.agents/*`
 2. **中立 CLI/MCP/core 层**：`bin/`、`mcp/`、`scripts/`、`src/`
 3. **确定性工具层**：`src/mcp/*`
-4. **持久化工件层**：`.paper/*`
+4. **持久化工件层**：`.dove/*`
 
 它当前的核心设计点包括：
 
-- `.paper/orchestration/board.json` 作为板式编排真值源
-- `.paper/orchestration/handoffs.md` 作为角色交接日志
-- `.paper/task-packets/*` 作为持久化任务包
-- `.paper/context/roles/*.json` 作为按角色裁剪后的上下文清单
-- `.paper/sessions/*` 作为持久化会话/工作区摘要
-- `paper.task-graph`、`paper.open-questions`、`paper.decisions`、`paper.lineage` 作为查询与导航表面
+- `.dove/orchestration/board.json` 作为板式编排真值源
+- `.dove/orchestration/handoffs.md` 作为角色交接日志
+- `.dove/task-packets/*` 作为持久化任务包
+- `.dove/context/roles/*.json` 作为按角色裁剪后的上下文清单
+- `.dove/sessions/*` 作为持久化会话/工作区摘要
+- `dove.paper.task-graph`、`dove.paper.open-questions`、`dove.paper.decisions`、`dove.paper.lineage` 作为查询与导航表面
 
 这些能力可在以下文件中直接看到：
 
@@ -55,7 +55,7 @@
 
 ### 2.1 OpenCode 的优点
 
-OpenCode 对 `paper_factory` 最大的价值，不是某一个具体学术功能，而是它提供了一个**真实可承载的宿主边界**。也就是：
+OpenCode 对 `Dove` 最大的价值，不是某一个具体学术功能，而是它提供了一个**真实可承载的宿主边界**。也就是：
 
 - 有稳定的命令入口
 - 有技能系统
@@ -65,7 +65,7 @@ OpenCode 对 `paper_factory` 最大的价值，不是某一个具体学术功能
 
 ### 2.2 OpenCode 的实现方式
 
-从我们之前针对 OpenCode 的研究，以及当前 `paper_factory` 的目标适配面来看，OpenCode 的可用扩展面主要体现在：
+从我们之前针对 OpenCode 的研究，以及当前 `Dove` 的目标适配面来看，OpenCode 的可用扩展面主要体现在：
 
 - `.opencode/commands/`
 - `.opencode/skills/`
@@ -76,12 +76,12 @@ OpenCode 对 `paper_factory` 最大的价值，不是某一个具体学术功能
 
 ### 2.3 我们迁移了什么优点
 
-我们不是“迁移 OpenCode 的能力”，而是**接受 OpenCode 的真实边界**，然后围绕它设计 `paper_factory`：
+我们不是“迁移 OpenCode 的能力”，而是**接受 OpenCode 的真实边界**，然后围绕它设计 `Dove`：
 
 - 把论文工作流做成 `.opencode/commands` 命令包
 - 把角色行为做成 `.opencode/skills` 技能包
 - 把确定性状态变更放进 MCP 工具
-- 把长生命周期状态放进 `.paper/*`
+- 把长生命周期状态放进 `.dove/*`
 
 ### 2.4 我们是怎么实现的
 
@@ -90,11 +90,11 @@ OpenCode 对 `paper_factory` 最大的价值，不是某一个具体学术功能
 - `.opencode/commands/*.md`
 - `.opencode/skills/*/SKILL.md`
 - `.opencode.json`
-- `mcp/paper-state-server.mjs`
+- `mcp/dove-state-server.mjs`
 - `src/mcp/tool-definitions.mjs`
 - `src/mcp/handlers.mjs`
 
-这部分让 `paper_factory` 一开始就尊重 OpenCode 的真实宿主边界；在多宿主安装改造后，OpenCode 变成默认 adapter，而中立核心继续由 CLI/MCP/core 和 `.paper` 承载。
+这部分让 `Dove` 一开始就尊重 OpenCode 的真实宿主边界；在多宿主安装改造后，OpenCode 变成默认 adapter，而中立核心继续由 CLI/MCP/core 和 `.dove` 承载。
 
 ---
 
@@ -148,20 +148,20 @@ oh-my-openagent / oh-my-opencode 最强的地方，不是单一功能，而是**
 
 ### 3.4 我们是怎么实现的
 
-在 `paper_factory` 中，这些迁移主要落在：
+在 `Dove` 中，这些迁移主要落在：
 
 - 角色与板式编排：
   - `src/core/schema.mjs`
   - `src/core/orchestration.mjs`
-  - `.paper/orchestration/board.json`
-  - `.paper/orchestration/handoffs.md`
+  - `.dove/orchestration/board.json`
+  - `.dove/orchestration/handoffs.md`
 - command / skill / MCP 分层：
   - `.opencode/commands/*`
   - `.opencode/skills/*`
   - `src/mcp/tool-definitions.mjs`
   - `src/mcp/handlers.mjs`
 - install / doctor：
-  - `bin/paper-factory.mjs`
+  - `bin/dove.mjs`
   - `scripts/doctor-mcp-probe.mjs`
 
 我们**没有**迁移的部分也要明确：
@@ -204,7 +204,7 @@ ARIS 的核心优点不是“有很多技能”，而是它把**学术研究到�
 
 ### 4.3 我们迁移了什么优点
 
-`paper_factory` 迁移的 ARIS 优点主要是学术侧：
+`Dove` 迁移的 ARIS 优点主要是学术侧：
 
 - 持久化 research memory
 - claim-evidence discipline
@@ -219,27 +219,27 @@ ARIS 的核心优点不是“有很多技能”，而是它把**学术研究到�
 
 - 证据与 claim：
   - `src/core/evidence.mjs`
-  - `.paper/evidence/index.json`
-  - `.paper/claims/CLAIMS_FROM_RESULTS.md`
+  - `.dove/evidence/index.json`
+  - `.dove/claims/CLAIMS_FROM_RESULTS.md`
 - 实验：
   - `src/core/orchestration.mjs`
-  - `.paper/experiments/plans.json`
-  - `.paper/experiments/results.json`
-  - `.paper/experiments/EXPERIMENT_LOG.md`
+  - `.dove/experiments/plans.json`
+  - `.dove/experiments/results.json`
+  - `.dove/experiments/EXPERIMENT_LOG.md`
 - 评审与修订：
   - `src/core/reviews.mjs`
-  - `.paper/reviews/log.md`
-  - `.paper/revision-plans/current-plan.md`
+  - `.dove/reviews/log.md`
+  - `.dove/revision-plans/current-plan.md`
 - rebuttal：
-  - `.paper/rebuttal/issues.json`
-  - `.paper/rebuttal/strategy.md`
-  - `.paper/rebuttal/response-draft.md`
+  - `.dove/rebuttal/issues.json`
+  - `.dove/rebuttal/strategy.md`
+  - `.dove/rebuttal/response-draft.md`
 - 版本演化：
-  - `.paper/versions/index.json`
-  - `.paper/versions/comparisons.json`
-  - `.paper/versions/LATEST_COMPARISON.md`
+  - `.dove/versions/index.json`
+  - `.dove/versions/comparisons.json`
+  - `.dove/versions/LATEST_COMPARISON.md`
 
-这里需要特别说明：当前实现支持把实验计划和实验结果与 claim 关联起来，但并不是“所有实验都必须强制绑定 claim 才能存在”。因此，更准确的说法是：`paper_factory` 吸收了 ARIS 的 **claim-aware / claim-linked experiment discipline**，而不是把所有实验都做成绝对强约束的 claim-only runtime。
+这里需要特别说明：当前实现支持把实验计划和实验结果与 claim 关联起来，但并不是“所有实验都必须强制绑定 claim 才能存在”。因此，更准确的说法是：`Dove` 吸收了 ARIS 的 **claim-aware / claim-linked experiment discipline**，而不是把所有实验都做成绝对强约束的 claim-only runtime。
 
 我们迁移的是 **ARIS 的学术工作流结构和方法学优势**，而不是声称已经达到 ARIS 全部系统深度。`docs/CAPABILITY_MATRIX.md` 里也明确保留了“不是 full parity”的边界。
 
@@ -278,7 +278,7 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 
 ### 5.3 我们迁移了什么优点
 
-目前 `paper_factory` 迁移的是 **figure planning discipline**，而不是 AutoFigure-Edit 的完整生成能力。
+目前 `Dove` 迁移的是 **figure planning discipline**，而不是 AutoFigure-Edit 的完整生成能力。
 
 也就是说，我们吸收了：
 
@@ -289,17 +289,17 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 
 当前落地点包括：
 
-- figure command：`.opencode/commands/paper.figure.md`
+- figure command：`.opencode/commands/dove.paper.figure.md`
 - figure artifact：
-  - `.paper/figures/README.md`
-  - `.paper/figures/index.json`
+  - `.dove/figures/README.md`
+  - `.dove/figures/index.json`
 - figure state mutation：
   - `src/core/artifacts.mjs`
   - `src/mcp/handlers.mjs`
 
 必须明确的是：
 
-- `paper_factory` 当前 **没有**实现 AutoFigure-Edit 那种从 method text 到 editable SVG 的完整生成管线
+- `Dove` 当前 **没有**实现 AutoFigure-Edit 那种从 method text 到 editable SVG 的完整生成管线
 - 它现在做的是 **figure planning / durable tracking**，而不是完整图形生成系统
 - 因而它与 AutoFigure-Edit 的关系更准确地说是：**吸收了 figure 规划与工件化管理思路，而不是集成了其图像生成运行时**
 
@@ -335,7 +335,7 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 4. 用 **template hash / safe update** 保护用户自定义内容
 5. 用更强的 query / navigation surface 让用户理解“当前工作为什么在这里”
 
-但同样也有些部分不适合直接迁移到 `paper_factory`：
+但同样也有些部分不适合直接迁移到 `Dove`：
 
 - hook-heavy runtime
 - 隐式 subagent interception
@@ -356,31 +356,31 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 新增或强化的关键文件包括：
 
 - task packets：
-  - `.paper/task-packets/index.json`
-  - `.paper/task-packets/packets/*.json`
+  - `.dove/task-packets/index.json`
+  - `.dove/task-packets/packets/*.json`
   - `src/core/navigation.mjs`
 - role manifests：
-  - `.paper/context/roles/*.json`
+  - `.dove/context/roles/*.json`
   - `src/core/navigation.mjs`
 - session persistence：
-  - `.paper/sessions/journal.json`
-  - `.paper/sessions/LATEST_SUMMARY.md`
+  - `.dove/sessions/journal.json`
+  - `.dove/sessions/LATEST_SUMMARY.md`
   - `src/core/navigation.mjs`
 - query/navigation surfaces：
-  - `.opencode/commands/paper.task-graph.md`
-  - `.opencode/commands/paper.open-questions.md`
-  - `.opencode/commands/paper.decisions.md`
-  - `.opencode/commands/paper.lineage.md`
+  - `.opencode/commands/dove.paper.task-graph.md`
+  - `.opencode/commands/dove.paper.open-questions.md`
+  - `.opencode/commands/dove.paper.decisions.md`
+  - `.opencode/commands/dove.paper.lineage.md`
   - `src/mcp/tool-definitions.mjs`
   - `src/mcp/handlers.mjs`
 - boundary safety：
-  - `.paper/workflow-pack/boundaries.json`
+  - `.dove/workflow-pack/boundaries.json`
   - `src/core/workspace.mjs`
-  - `bin/paper-factory.mjs`
+  - `bin/dove.mjs`
 
 并且，这次我们不是只加了文档，而是真正做了行为级保证：
 
-- install / sync 不再把 `.paper` 当作普通托管代码目录覆盖掉
+- install / sync 不再把 `.dove` 当作普通托管代码目录覆盖掉
 - packet refresh 会保留用户自定义 packet 字段
 - 非法 role manifest 查询会 fail fast
 
@@ -394,15 +394,15 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 
 ---
 
-## 7. 当前 `paper_factory` 自己的优点是什么
+## 7. 当前 `Dove` 自己的优点是什么
 
-在吸收了这些项目之后，当前 `paper_factory` 的优势已经不是单点功能，而是一个更平衡的系统：
+在吸收了这些项目之后，当前 `Dove` 的优势已经不是单点功能，而是一个更平衡的系统：
 
 ### 7.1 工程侧优势
 
 - host-neutral core + optional host adapters
 - file-first
-- adapter / CLI-MCP-core / `.paper` 四层结构清晰
+- adapter / CLI-MCP-core / `.dove` 四层结构清晰
 - install / sync / doctor / dry-run 验证链完整
 
 ### 7.2 学术侧优势
@@ -423,7 +423,7 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 
 ### 7.4 strict mode 的真实边界
 
-`paper_factory` 当前确实实现了 strict mode，但它的作用边界应被准确理解。
+`Dove` 当前确实实现了 strict mode，但它的作用边界应被准确理解。
 
 当前 strict mode 主要覆盖的是：
 
@@ -435,13 +435,13 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 
 它**不是**一个“所有命令、所有状态跃迁都统一强拦截”的全局 runtime 守卫系统。因此，文档中凡是提到 strict mode，都应理解为：
 
-> `paper_factory` 已实现关键写作阶段的严格门控，而不是全系统无例外的统一调度式强约束。
+> `Dove` 已实现关键写作阶段的严格门控，而不是全系统无例外的统一调度式强约束。
 
 ### 7.5 与参考项目的关系
 
 当前最准确的描述不是“它像哪个项目”，而是：
 
-> `paper_factory` 是一个以中立核心为底座、以 OpenCode 作为默认 adapter、同时支持可选多宿主 adapter 的学术论文工作流包；它吸收了 oh-my-openagent 的工程化编排优势、ARIS 的学术工作流优势、Trellis 的任务包与上下文管理优势，并参考 AutoFigure-Edit 的图形工件规划思路。
+> `Dove` 是一个以中立核心为底座、以 OpenCode 作为默认 adapter、同时支持可选多宿主 adapter 的学术论文工作流包；它吸收了 oh-my-openagent 的工程化编排优势、ARIS 的学术工作流优势、Trellis 的任务包与上下文管理优势，并参考 AutoFigure-Edit 的图形工件规划思路。
 
 ---
 
@@ -450,10 +450,10 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 | 来源项目 | 主要优点 | 原项目实现方式 | 我们迁移了什么 | 我们如何实现 |
 |---|---|---|---|---|
 | OpenCode | 真实可承载的宿主边界 | commands / skills / MCP / project-local config | 接受真实宿主约束并围绕它设计 | `.opencode/commands`、`.opencode/skills`、`.opencode.json`、`src/mcp/*` |
-| oh-my-openagent / oh-my-opencode | 多角色编排、工程化 install/doctor、command/skill/MCP 体系 | 更重型插件/hook/tool/agent runtime | role inventory、board-first orchestration、workflow pack discipline | `src/core/orchestration.mjs`、`bin/paper-factory.mjs`、`.paper/orchestration/*` |
-| ARIS | 学术研究到写作的完整方法链 | skill-based workflow、plain markdown、persistent research memory | evidence discipline、experiments、review/rebuttal/version 流程 | `src/core/evidence.mjs`、`src/core/reviews.mjs`、`.paper/research/*`、`.paper/rebuttal/*`、`.paper/versions/*` |
-| AutoFigure-Edit | publication-ready scientific figure pipeline | text → segmentation → template → editable SVG assembly | figure planning discipline | `.opencode/commands/paper.figure.md`、`.paper/figures/*` |
-| Trellis | task packets、role manifests、session persistence、safe boundaries、navigation UX | packetized workflow + role contexts + session summaries + safe update logic | durable task packets、role manifests、sessions、query/navigation、boundary safety | `src/core/navigation.mjs`、`.paper/task-packets/*`、`.paper/context/roles/*`、`.paper/sessions/*`、`.paper/workflow-pack/boundaries.json` |
+| oh-my-openagent / oh-my-opencode | 多角色编排、工程化 install/doctor、command/skill/MCP 体系 | 更重型插件/hook/tool/agent runtime | role inventory、board-first orchestration、workflow pack discipline | `src/core/orchestration.mjs`、`bin/dove.mjs`、`.dove/orchestration/*` |
+| ARIS | 学术研究到写作的完整方法链 | skill-based workflow、plain markdown、persistent research memory | evidence discipline、experiments、review/rebuttal/version 流程 | `src/core/evidence.mjs`、`src/core/reviews.mjs`、`.dove/research/*`、`.dove/rebuttal/*`、`.dove/versions/*` |
+| AutoFigure-Edit | publication-ready scientific figure pipeline | text → segmentation → template → editable SVG assembly | figure planning discipline | `.opencode/commands/dove.paper.figure.md`、`.dove/figures/*` |
+| Trellis | task packets、role manifests、session persistence、safe boundaries、navigation UX | packetized workflow + role contexts + session summaries + safe update logic | durable task packets、role manifests、sessions、query/navigation、boundary safety | `src/core/navigation.mjs`、`.dove/task-packets/*`、`.dove/context/roles/*`、`.dove/sessions/*`、`.dove/workflow-pack/boundaries.json` |
 
 ---
 
@@ -461,10 +461,10 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 
 为了防止误解，这里明确列出当前 **不应**声称的内容：
 
-1. `paper_factory` **不是** oh-my-openagent / oh-my-opencode 的完整宿主级克隆。
-2. `paper_factory` **不是** ARIS 的完整系统级等价实现。
-3. `paper_factory` **不是** Trellis runtime 的完整复刻，不包含隐藏 scheduler、host hook interception 或 Trellis-native subagent 魔法。
-4. `paper_factory` **不是** AutoFigure-Edit 那种完整 figure generation / editable SVG system。
+1. `Dove` **不是** oh-my-openagent / oh-my-opencode 的完整宿主级克隆。
+2. `Dove` **不是** ARIS 的完整系统级等价实现。
+3. `Dove` **不是** Trellis runtime 的完整复刻，不包含隐藏 scheduler、host hook interception 或 Trellis-native subagent 魔法。
+4. `Dove` **不是** AutoFigure-Edit 那种完整 figure generation / editable SVG system。
 
 我们迁移的是这些项目中**可迁移、可验证、与 OpenCode 边界相容的优点**，而不是把所有系统硬拼在一起。
 
@@ -472,14 +472,14 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 
 ## 10. 读者应如何使用本文档
 
-如果你想快速判断 `paper_factory` 的设计来源，建议按这个顺序读：
+如果你想快速判断 `Dove` 的设计来源，建议按这个顺序读：
 
 1. 先看 `README.md`
 2. 再看 `docs/USAGE.md`
 3. 再看 `docs/CAPABILITY_MATRIX.md`
 4. 最后回来看本文档，理解“这些能力分别来自哪里、是怎么落地的”
 
-如果你想继续扩展 `paper_factory`，建议优先查看：
+如果你想继续扩展 `Dove`，建议优先查看：
 
 - `src/core/orchestration.mjs`
 - `src/core/navigation.mjs`

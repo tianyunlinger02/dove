@@ -24,16 +24,16 @@ const ALLOWED_TRANSITIONS = {
 
 const PHASE_ROLE_OWNERS = {
   init: "planner",
-  sources: "author",
-  notes: "author",
-  research: "author",
+  sources: "builder",
+  notes: "builder",
+  research: "builder",
   plan: "planner",
   outline: "planner",
-  draft: "author",
-  experiments: "author",
-  citations: "author",
+  draft: "builder",
+  experiments: "builder",
+  citations: "builder",
   review: "reviewer",
-  rebuttal: "author",
+  rebuttal: "builder",
   versions: "planner",
   checklist: "planner"
 };
@@ -782,7 +782,7 @@ export function upsertOrchestrationBoard(root, args = {}) {
 
   return saveBoard(root, {
     ...current,
-    paperObjective: args.paperObjective ?? args.objective ?? current.paperObjective ?? state.paper.objective,
+    paperObjective: args.doveObjective ?? args.objective ?? current.doveObjective ?? state.dove.objective,
     currentPhase: nextPhase,
     assignedRole: nextAssignedRole,
     intentType,
@@ -869,10 +869,10 @@ export function updateResearchBrief(root, args = {}) {
   assertGovernanceMutationRegistered("update-research-brief", "guarded");
   assertFollowThroughReady(root, "Updating the research brief", args);
   const state = loadState(root);
-  const current = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: state.paper.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
+  const current = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: state.dove.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
   const next = {
     version: 1,
-    objective: args.objective ?? current.objective ?? state.paper.objective,
+    objective: args.objective ?? current.objective ?? state.dove.objective,
     agenda: args.agenda ? normalizeStringArray(args.agenda) : current.agenda,
     evidenceBacklog: args.evidenceBacklog ? normalizeStringArray(args.evidenceBacklog) : current.evidenceBacklog,
     updatedAt: nowIso()
@@ -882,7 +882,7 @@ export function updateResearchBrief(root, args = {}) {
   upsertOrchestrationBoard(root, {
     objective: next.objective,
     phase: args.phase ?? "research",
-    assignedRole: args.assignedRole ?? "author",
+    assignedRole: args.assignedRole ?? "builder",
     intentType: "research",
     currentFocus: args.currentFocus ?? "Tighten the research agenda and evidence backlog.",
     nextAction: args.nextAction ?? "Turn backlog items into sources, notes, or experiments.",
@@ -910,7 +910,7 @@ function normalizeExperimentPlan(plan = {}, index = 0) {
     successMetric: plan.successMetric ?? "",
     comparisonTargets: normalizeStringArray(plan.comparisonTargets),
     status: plan.status ?? "planned",
-    owner: ROLE_IDS.includes(plan.owner) ? plan.owner : "author",
+    owner: ROLE_IDS.includes(plan.owner) ? plan.owner : "builder",
     updatedAt: nowIso()
   };
 }
@@ -1260,7 +1260,7 @@ export function upsertExperimentPlan(root, args = {}) {
   const board = loadBoard(root);
   upsertOrchestrationBoard(root, {
     phase: "experiments",
-    assignedRole: "author",
+    assignedRole: "builder",
     intentType: "experiment",
     currentFocus: `Advance experiment ${nextPlan.id}.`,
     nextAction: `Record results for ${nextPlan.id}, then audit the outcome.`,
@@ -1357,7 +1357,7 @@ export function upsertExperimentResult(root, args = {}) {
     : board.blockers;
   upsertOrchestrationBoard(root, {
     phase: "experiments",
-    assignedRole: "author",
+    assignedRole: "builder",
     intentType: bridgeEvent.mapping === "supports" ? "experiment" : "repair",
     currentFocus: bridgeEvent.mapping === "supports"
       ? `Experiment ${result.experimentId} now supports ${result.claimId}.`
@@ -1428,7 +1428,7 @@ export function persistRebuttalIssues(root, args = {}) {
   if (!args.skipBoardUpdate) {
     upsertOrchestrationBoard(root, {
       phase: "rebuttal",
-      assignedRole: "author",
+      assignedRole: "builder",
       intentType: "respond",
       currentFocus: items.length > 0 ? items[0].summary : "Prepare the rebuttal strategy.",
       nextAction: "Turn issues into strategy and response drafts without over-claiming.",
@@ -1479,7 +1479,7 @@ export function buildRebuttalStrategy(root, args = {}) {
       `- Evidence links: ${issue.evidenceLinks.join(", ") || "none"}`,
       `- Claim IDs: ${issue.claimIds.join(", ") || "none"}`,
       `- Experiment IDs: ${issue.experimentIds.join(", ") || "none"}`,
-      `- Recommended owner: ${issue.responseDirection === "fix" ? "planner + author/researcher" : "author/revision-lead"}`,
+      `- Recommended owner: ${issue.responseDirection === "fix" ? "planner + builder/researcher" : "builder/revision-lead"}`,
       `- Required action: ${issue.responseDirection === "fix" ? "Update evidence or experiment coverage before final response." : "Clarify scope and cite the strongest existing evidence."}`,
       ""
     ]) : ["No rebuttal issues recorded."])
@@ -1502,7 +1502,7 @@ export function buildRebuttalStrategy(root, args = {}) {
   writeText(root, ARTIFACT_PATHS.rebuttalResponseDraft, responseDraft);
   upsertOrchestrationBoard(root, {
     phase: "rebuttal",
-    assignedRole: "author",
+    assignedRole: "builder",
     intentType: "respond",
     currentFocus: issues.items.length > 0 ? issues.items[0].summary : "Prepare the rebuttal.",
     nextAction: "Draft concise evidence-backed responses.",
@@ -1529,12 +1529,12 @@ function readSnapshot(root, snapshotId) {
     parentVersionId: raw.parentVersionId ?? null,
     summary: raw.summary ?? "",
     createdAt: raw.createdAt ?? null,
-    paper: {
-      title: raw.paper?.title ?? "",
-      venue: raw.paper?.venue ?? "",
-      objective: raw.paper?.objective ?? "",
-      thesis: raw.paper?.thesis ?? "",
-      audience: raw.paper?.audience ?? ""
+    dove: {
+      title: raw.dove?.title ?? raw.paper?.title ?? "",
+      venue: raw.dove?.venue ?? raw.paper?.venue ?? "",
+      objective: raw.dove?.objective ?? raw.paper?.objective ?? "",
+      thesis: raw.dove?.thesis ?? raw.paper?.thesis ?? "",
+      audience: raw.dove?.audience ?? raw.paper?.audience ?? ""
     },
     board: {
       currentPhase: raw.board?.currentPhase ?? "versions",
@@ -1579,14 +1579,14 @@ export function createVersionSnapshot(root, args = {}) {
   const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
   const versions = readJson(root, ARTIFACT_PATHS.versionsIndex, { version: 1, currentVersionId: null, items: [], lineage: [], updatedAt: null });
 
-  const versionId = slugify(args.versionId ?? args.label ?? `${state.paper.title}-${versions.items.length + 1}`);
+  const versionId = slugify(args.versionId ?? args.label ?? `${state.dove.title}-${versions.items.length + 1}`);
   const snapshot = {
     id: versionId,
     label: args.label ?? versionId,
     parentVersionId: args.parentVersionId ?? versions.currentVersionId ?? null,
     summary: args.summary ?? "Manual paper snapshot.",
     createdAt: nowIso(),
-    paper: state.paper,
+    dove: state.dove,
     board: {
       currentPhase: board.currentPhase,
       assignedRole: board.assignedRole,
@@ -1677,8 +1677,8 @@ export function compareVersions(root, args = {}) {
     fromVersionId: fromId,
     toVersionId: toId,
     createdAt: nowIso(),
-    objectiveChanged: fromSnapshot.paper.objective !== toSnapshot.paper.objective,
-    thesisChanged: fromSnapshot.paper.thesis !== toSnapshot.paper.thesis,
+    objectiveChanged: fromSnapshot.dove.objective !== toSnapshot.dove.objective,
+    thesisChanged: fromSnapshot.dove.thesis !== toSnapshot.dove.thesis,
     addedClaimIds: toSnapshot.claimIds.filter((id) => !fromSnapshot.claimIds.includes(id)),
     removedClaimIds: fromSnapshot.claimIds.filter((id) => !toSnapshot.claimIds.includes(id)),
     addedExperimentResultIds: toSnapshot.experimentResultIds.filter((id) => !fromSnapshot.experimentResultIds.includes(id)),

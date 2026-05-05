@@ -10,10 +10,10 @@ There are no React components in this repository. Treat each public surface as a
 
 - OpenCode commands in `.opencode/commands/` are prompt components.
 - Skills in `.opencode/skills/` are reusable role/discipline components.
-- CLI subcommands in `bin/paper-factory.mjs` are terminal components.
+- CLI subcommands in `bin/dove.mjs` are terminal components.
 - MCP tools in `src/mcp/tool-definitions.mjs` and `src/mcp/handlers.mjs` are API components.
 
-All surfaces should converge on the same file-backed `.paper/` state and should prefer deterministic core functions over prompt-only behavior.
+All surfaces should converge on the same file-backed `.dove/` state and should prefer deterministic core functions over prompt-only behavior.
 
 ---
 
@@ -23,26 +23,26 @@ All surfaces should converge on the same file-backed `.paper/` state and should 
 
 Use a short title, a goal, and an ordered workflow. The first workflow step should say exactly which durable context/artifacts to read.
 
-Example: `.opencode/commands/paper.orchestrate.md`:
+Example: `.opencode/commands/dove.paper.orchestrate.md`:
 
 ```md
-# paper.orchestrate
+# dove.paper.orchestrate
 
 Align the durable orchestration board and decide the next role-owned step.
 
 ## Goal
 
-Treat `.paper/orchestration/board.json` as the canonical workflow board...
+Treat `.dove/orchestration/board.json` as the canonical workflow board...
 
 ## Workflow
 
-1. Read `.paper/context/actions/current.json`, then `.paper/orchestration/board.json`...
-2. If `paper-factory` MCP is available, prefer `upsert_orchestration_board`...
+1. Read `.dove/context/actions/current.json`, then `.dove/orchestration/board.json`...
+2. If `dove` MCP is available, prefer `upsert_orchestration_board`...
 ```
 
 ### Skills
 
-Use YAML frontmatter with `name` and `description`, then concise bullet rules. Example: `.opencode/skills/paper-factory-planner/SKILL.md` tells the planner to treat `.paper/orchestration/board.json` as canonical and use handoffs instead of hidden runtime memory.
+Use YAML frontmatter with `name` and `description`, then concise bullet rules. Example: `.opencode/skills/dove-planner/SKILL.md` tells the planner to treat `.dove/orchestration/board.json` as canonical and use handoffs instead of hidden runtime memory.
 
 ### MCP tools
 
@@ -62,7 +62,7 @@ case "upsert_orchestration_board":
 ## Contract Conventions
 
 - Every user-facing mutation surface should name its target artifact and, when relevant, its role/policy requirements.
-- MCP tool names are snake_case; command IDs are `paper.kebab-case`; core functions are camelCase.
+- MCP tool names are snake_case; command IDs are `dove.<surface>` or `dove.paper.<action>`; core functions are camelCase.
 - Role-bound mutation tools should expose policy/override fields through `withPolicy(...)` in `src/mcp/tool-definitions.mjs`.
 - Prompt surfaces should say when MCP is preferred, but must remain useful when MCP is unavailable by naming the file-backed artifacts to read.
 - Read-only/query surfaces should be clearly separate from mutation surfaces.
@@ -73,24 +73,24 @@ case "upsert_orchestration_board":
 
 ### 1. Scope / Trigger
 
-- Trigger: `paper.isolated-review` spans command markdown, CLI, core file mutations, external process invocation, governance coverage, and review-state import.
+- Trigger: `dove.paper.isolated-review` spans command markdown, CLI, core file mutations, external process invocation, governance coverage, and review-state import.
 - Purpose: keep writer/main-session private context isolated from reviewer private context while still allowing an operator to mediate through explicit artifacts.
 
 ### 2. Signatures
 
-- Slash command: `paper.isolated-review`.
-- CLI runner: `paper-factory isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>] [--artifact <path>]...`.
-- CLI prepare-only: `paper-factory isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>] [--artifact <path>]...`.
-- CLI import-only: `paper-factory isolated-review-import [target] --run-id <id> [--handoff <path>] [--report <path>]`.
+- Slash command: `dove.paper.isolated-review`.
+- CLI runner: `dove isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>] [--artifact <path>]...`.
+- CLI prepare-only: `dove isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>] [--artifact <path>]...`.
+- CLI import-only: `dove isolated-review-import [target] --run-id <id> [--handoff <path>] [--report <path>]`.
 - Core functions: `prepareIsolatedReview(root, args)`, `runIsolatedReview(root, args)`, and `importIsolatedReview(root, args)`.
 
 ### 3. Contracts
 
-- Prepared input path: `.paper/reviews/isolated/<run-id>/input.json`.
-- Manifest path: `.paper/reviews/isolated/<run-id>/manifest.json`.
-- Reviewer output paths: `.paper/reviews/isolated/<run-id>/handoff.json` and optional `.paper/reviews/isolated/<run-id>/report.md`.
+- Prepared input path: `.dove/reviews/isolated/<run-id>/input.json`.
+- Manifest path: `.dove/reviews/isolated/<run-id>/manifest.json`.
+- Reviewer output paths: `.dove/reviews/isolated/<run-id>/handoff.json` and optional `.dove/reviews/isolated/<run-id>/report.md`.
 - Reviewer command receives argv: `--input <inputPath> --handoff <handoffPath> --report <reportPath> --run-id <runId>`.
-- Reviewer command receives env: `PAPER_FACTORY_ISOLATED_REVIEW_INPUT`, `PAPER_FACTORY_ISOLATED_REVIEW_HANDOFF`, `PAPER_FACTORY_ISOLATED_REVIEW_REPORT`, `PAPER_FACTORY_ISOLATED_REVIEW_RUN_ID`, and `PAPER_FACTORY_ISOLATED_REVIEW_INPUT_SHA256`.
+- Reviewer command receives env: `DOVE_ISOLATED_REVIEW_INPUT`, `DOVE_ISOLATED_REVIEW_HANDOFF`, `DOVE_ISOLATED_REVIEW_REPORT`, `DOVE_ISOLATED_REVIEW_RUN_ID`, and `DOVE_ISOLATED_REVIEW_INPUT_SHA256`.
 - Imported handoff must include matching `runId`, `inputPath`, `inputSha256`, `verdict`, `summary`, and reviewer findings/action items. Private reviewer transcripts are not imported.
 
 ### 4. Validation & Error Matrix
@@ -113,7 +113,7 @@ case "upsert_orchestration_board":
 
 - Integration test: fake external reviewer writes handoff/report/private transcript; runner imports verdict and concerns but not private transcript.
 - Integration test: import rejects mismatched `inputSha256`.
-- Command validation: `paper.isolated-review.md` is registered.
+- Command validation: `dove.paper.isolated-review.md` is registered.
 - Governance audit/hardening: isolated-review mutations bind to command/core surfaces; MCP binding may be absent for this CLI-only external-process surface.
 
 ### 7. Wrong vs Correct
@@ -121,13 +121,13 @@ case "upsert_orchestration_board":
 #### Wrong
 
 ```bash
-paper-factory isolated-review . --reviewer-command "node reviewer.js --private-session-log writer-transcript.md"
+dove isolated-review . --reviewer-command "node reviewer.js --private-session-log writer-transcript.md"
 ```
 
 #### Correct
 
 ```bash
-paper-factory isolated-review . --reviewer-command "node reviewer.js" --scope "current draft"
+dove isolated-review . --reviewer-command "node reviewer.js" --scope "current draft"
 ```
 
 ## Composition Patterns
@@ -154,4 +154,4 @@ For this CLI/prompt package, accessibility means operators can recover state fro
 - Adding a command file but forgetting `requiredCommands` in `scripts/validate-commands.mjs` or governance classification in `src/core/schema.mjs`.
 - Adding an MCP tool definition without adding a matching dispatch case and classification tests in `tests/integration/mcp-tools.test.mjs`.
 - Letting prompt text mention an artifact path that is not in `ARTIFACT_PATHS` or not bootstrapped by `ensureWorkspace`.
-- Auto-applying `paper.meta-optimize` recommendations. `.opencode/commands/paper.meta-optimize.md` explicitly treats that surface as proposal-only until materialized through governed follow-through.
+- Auto-applying `dove.paper.meta-optimize` recommendations. `.opencode/commands/dove.paper.meta-optimize.md` explicitly treats that surface as proposal-only until materialized through governed follow-through.

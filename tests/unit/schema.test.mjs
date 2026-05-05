@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ensureWorkspace, readJson } from "../../src/core/workspace.mjs";
-import { ARTIFACT_PATHS, DOVE_DOMAIN_GUIDANCE, DOVE_DOMAIN_IDS, DOVE_MISSION_LIFECYCLE_STAGES, DOVE_PRIMARY_ROLE_IDS, DOVE_WORKFLOW_KERNEL_VERSION, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, createDefaultState, createDoveRootMigrationManifest, createWorkspaceIndex, normalizeCampaignsIndex, normalizeDoveRootMigrationManifest, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
+import { ARTIFACT_PATHS, DOVE_DOMAIN_GUIDANCE, DOVE_DOMAIN_IDS, DOVE_MISSION_LIFECYCLE_STAGES, DOVE_PRIMARY_ROLE_IDS, DOVE_WORKFLOW_KERNEL_VERSION, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, createDefaultState, createDoveAuthorityManifest, createWorkspaceIndex, normalizeCampaignsIndex, normalizeDoveAuthorityManifest, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
 
 test("normalizeState migrates v1 state into v2", () => {
   const migrated = normalizeState({
@@ -19,7 +19,7 @@ test("normalizeState migrates v1 state into v2", () => {
   });
 
   assert.equal(migrated.version, SCHEMA_VERSION);
-  assert.equal(migrated.paper.title, "Legacy Paper");
+  assert.equal(migrated.dove.title, "Legacy Paper");
   assert.equal(migrated.pipeline.currentStage, "draft");
   assert.equal(migrated.orchestration.phase, "draft");
   assert.ok(migrated.sections.introduction);
@@ -27,30 +27,30 @@ test("normalizeState migrates v1 state into v2", () => {
 
 test("createDefaultState exposes durable artifact paths", () => {
   const state = createDefaultState();
-  assert.equal(state.artifacts.plan, ".paper/plans/current-plan.md");
-  assert.equal(state.artifacts.orchestrationBoard, ".paper/orchestration/board.json");
-  assert.equal(state.artifacts.taskPacketsIndex, ".paper/task-packets/index.json");
-  assert.equal(state.artifacts.packetContextsDir, ".paper/context/packets");
-  assert.equal(state.artifacts.artifactContextsDir, ".paper/context/artifacts");
-  assert.equal(state.artifacts.actionContextsDir, ".paper/context/actions");
-  assert.equal(state.artifacts.sessionSummary, ".paper/sessions/LATEST_SUMMARY.md");
-  assert.equal(state.artifacts.workflowBoundaries, ".paper/workflow-pack/boundaries.json");
-  assert.equal(state.artifacts.workspaceArtifactMap, ".paper/workspace/artifact-map.json");
-  assert.equal(state.artifacts.doveRootManifest, ".paper/workspace/dove-root-manifest.json");
-  assert.equal(state.artifacts.programsIndex, ".paper/programs/index.json");
-  assert.equal(state.artifacts.programRuns, ".paper/programs/runs.json");
-  assert.equal(state.artifacts.programApprovals, ".paper/programs/approvals.json");
-  assert.equal(state.artifacts.campaignsIndex, ".paper/programs/campaigns.json");
-  assert.equal(state.artifacts.researchBrief, ".paper/research/brief.md");
-  assert.equal(state.artifacts.rebuttalIssues, ".paper/rebuttal/issues.json");
-  assert.equal(state.artifacts.metaLongHorizonMemory, ".paper/meta/long-horizon-memory.json");
-  assert.equal(state.artifacts.versionsIndex, ".paper/versions/index.json");
+  assert.equal(state.artifacts.plan, ".dove/plans/current-plan.md");
+  assert.equal(state.artifacts.orchestrationBoard, ".dove/orchestration/board.json");
+  assert.equal(state.artifacts.taskPacketsIndex, ".dove/task-packets/index.json");
+  assert.equal(state.artifacts.packetContextsDir, ".dove/context/packets");
+  assert.equal(state.artifacts.artifactContextsDir, ".dove/context/artifacts");
+  assert.equal(state.artifacts.actionContextsDir, ".dove/context/actions");
+  assert.equal(state.artifacts.sessionSummary, ".dove/sessions/LATEST_SUMMARY.md");
+  assert.equal(state.artifacts.workflowBoundaries, ".dove/workflow-pack/boundaries.json");
+  assert.equal(state.artifacts.workspaceArtifactMap, ".dove/workspace/artifact-map.json");
+  assert.equal(state.artifacts.doveRootManifest, ".dove/manifest.json");
+  assert.equal(state.artifacts.programsIndex, ".dove/programs/index.json");
+  assert.equal(state.artifacts.programRuns, ".dove/programs/runs.json");
+  assert.equal(state.artifacts.programApprovals, ".dove/programs/approvals.json");
+  assert.equal(state.artifacts.campaignsIndex, ".dove/programs/campaigns.json");
+  assert.equal(state.artifacts.researchBrief, ".dove/research/brief.md");
+  assert.equal(state.artifacts.rebuttalIssues, ".dove/rebuttal/issues.json");
+  assert.equal(state.artifacts.metaLongHorizonMemory, ".dove/meta/long-horizon-memory.json");
+  assert.equal(state.artifacts.versionsIndex, ".dove/versions/index.json");
   assert.equal(state.reviews.lastVerdict, "not-reviewed");
 });
 
 test("campaign indexes and workspace mirrors are normalized", () => {
   const index = createWorkspaceIndex();
-  assert.equal(ARTIFACT_PATHS.campaignsIndex, ".paper/programs/campaigns.json");
+  assert.equal(ARTIFACT_PATHS.campaignsIndex, ".dove/programs/campaigns.json");
   assert.equal(index.campaigns.campaignCount, 0);
   assert.equal(index.campaigns.plannedCount, 0);
   assert.equal(index.campaigns.activeCount, 0);
@@ -60,7 +60,7 @@ test("campaign indexes and workspace mirrors are normalized", () => {
   assert.deepEqual(index.campaigns.topCampaignIds, []);
   assert.equal(index.campaigns.currentCampaignId, null);
   assert.equal(index.campaigns.currentCampaignNextStepId, null);
-  assert.equal(index.campaigns.campaignsPath, ".paper/programs/campaigns.json");
+  assert.equal(index.campaigns.campaignsPath, ".dove/programs/campaigns.json");
 
   const normalizedIndex = normalizeWorkspaceIndex({
     campaigns: {
@@ -112,22 +112,22 @@ test("campaign indexes and workspace mirrors are normalized", () => {
 });
 
 test("ensureWorkspace creates and repairs the campaigns artifact", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-schema-campaigns-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-schema-campaigns-"));
   ensureWorkspace(root);
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), false);
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.doveRootManifest)), true);
-  assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove")), true);
 
   const manifest = readJson(root, ARTIFACT_PATHS.doveRootManifest, {});
-  assert.equal(manifest.status, "manifest-only");
-  assert.equal(manifest.authoritativeRoot, ".paper");
-  assert.equal(manifest.createsAuthoritativeDoveRoot, false);
+  assert.equal(manifest.status, "authoritative");
+  assert.equal(manifest.strategy, "dove-direct");
+  assert.equal(manifest.authoritativeRoot, ".dove");
 
   const campaigns = readJson(root, ARTIFACT_PATHS.campaignsIndex, {});
   assert.equal(campaigns.version, 1);
   assert.deepEqual(campaigns.items, []);
   assert.equal(campaigns.summary.campaignCount, 0);
-  assert.equal(campaigns.summary.campaignsPath, ".paper/programs/campaigns.json");
+  assert.equal(campaigns.summary.campaignsPath, ".dove/programs/campaigns.json");
 
   fs.writeFileSync(path.join(root, ARTIFACT_PATHS.campaignsIndex), JSON.stringify({ version: 99, items: "bad-shape", summary: { activeCount: 2 } }), "utf8");
   ensureWorkspace(root);
@@ -184,36 +184,31 @@ test("workspace index exposes normalized Dove mission kernel", () => {
   assert.equal(index.dove.kernelVersion, DOVE_WORKFLOW_KERNEL_VERSION);
   assert.equal(index.dove.unified, true);
   assert.equal(index.dove.identity.productName, "Dove");
-  assert.equal(index.dove.identity.packageName, "paper-factory");
+  assert.equal(index.dove.identity.packageName, "dove");
   assert.equal(index.dove.identity.publicCli, "dove");
-  assert.equal(index.dove.identity.compatibilityCli, "paper-factory");
-  assert.equal(index.dove.identity.activeDurableRoot, ".paper");
-  assert.equal(index.dove.identity.plannedDurableRoot, ".dove");
-  assert.equal(index.dove.identity.namingStrategy, "staged-dual-name");
-  assert.equal(index.dove.identity.packageRenameStatus, "deferred");
-  assert.equal(index.dove.identity.durableRootMigrationStatus, "manifest-only");
-  assert.equal(index.dove.identity.breakingRenameRequiresExplicitApproval, true);
-  assert.equal(index.dove.durableRootMigration.status, "manifest-only");
-  assert.equal(index.dove.durableRootMigration.activeDurableRoot, ".paper");
-  assert.equal(index.dove.durableRootMigration.authoritativeRoot, ".paper");
-  assert.equal(index.dove.durableRootMigration.plannedDurableRoot, ".dove");
-  assert.equal(index.dove.durableRootMigration.manifestPath, ".paper/workspace/dove-root-manifest.json");
-  assert.equal(index.dove.durableRootMigration.createsAuthoritativeDoveRoot, false);
-  assert.equal(index.dove.durableRootMigration.dualRootInvariant.allowed, false);
+  assert.equal(index.dove.identity.commandPrefix, "project:dove.");
+  assert.equal(index.dove.identity.activeDurableRoot, ".dove");
+  assert.equal(index.dove.identity.durableRootStatus, "authoritative");
+  assert.equal(index.dove.authorityManifest.status, "authoritative");
+  assert.equal(index.dove.authorityManifest.strategy, "dove-direct");
+  assert.equal(index.dove.authorityManifest.activeDurableRoot, ".dove");
+  assert.equal(index.dove.authorityManifest.authoritativeRoot, ".dove");
+  assert.equal(index.dove.authorityManifest.manifestPath, ".dove/manifest.json");
+  assert.equal(index.dove.authorityManifest.currentWriteAuthority, ".dove");
+  assert.equal(index.dove.authorityManifest.dualRootInvariant.allowed, false);
+  assert.equal(index.dove.authorityManifest.dualRootInvariant.doveRootAuthoritative, true);
+  assert.equal(index.dove.authorityManifest.dualRootInvariant.legacyRootAuthoritative, false);
   assert.equal(index.dove.currentDomain, "paper");
   assert.deepEqual(index.dove.domainIds, DOVE_DOMAIN_IDS);
   assert.equal(index.dove.domainGuidance.length, DOVE_DOMAIN_GUIDANCE.length);
-  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:paper.materialize or project:paper.autonomy-operate");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.paper.materialize or project:dove.paper.autonomy-operate");
   assert.deepEqual(index.dove.primaryRoleIds, DOVE_PRIMARY_ROLE_IDS);
-  assert.equal(index.dove.primaryRoles.find((role) => role.id === "builder").compatiblePaperRole, "author");
+  assert.deepEqual(index.dove.primaryRoles.map((role) => role.id), ["planner", "builder", "reviewer"]);
   assert.deepEqual(index.dove.missionLifecycle.stages, DOVE_MISSION_LIFECYCLE_STAGES);
   assert.equal(index.dove.missionLifecycle.currentStage, "goal");
   assert.deepEqual(index.dove.missionLifecycle.paperProtocolStages, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES);
   assert.equal(index.dove.missionModel.domainField, "doveDomain");
-  assert.equal(index.dove.compatibility.paperFactory, true);
-  assert.equal(index.dove.compatibility.paperRoot, ".paper");
-  assert.equal(index.dove.compatibility.plannedDoveRoot, ".dove");
-  assert.equal(index.dove.compatibility.migrationMode, "compatibility-manifest");
+  assert.equal(index.dove.missionModel.durableRoot, ".dove");
 
   const normalized = normalizeWorkspaceIndex({
     dove: {
@@ -222,18 +217,19 @@ test("workspace index exposes normalized Dove mission kernel", () => {
       currentDomain: "engineering",
       domainIds: ["bad-domain"],
       primaryRoleIds: ["bad-role"],
-      primaryRoles: [{ id: "builder", label: "Maker", compatiblePaperRole: "author" }],
+      primaryRoles: [{ id: "builder", label: "Maker" }],
       domainGuidance: [{ id: "engineering", label: "Build", stageRoutes: { execution: "custom-engineering-route" }, returnEvidence: ["tests"] }, { id: "bad-domain", label: "Bad" }],
       identity: {
         productName: "Custom Dove",
         packageName: "custom-package",
         publicCli: "custom-dove",
-        breakingRenameRequiresExplicitApproval: "bad-shape"
+        commandPrefix: "project:custom-dove."
       },
-      durableRootMigration: {
-        status: "custom-manifest",
-        activeDurableRoot: ".custom-paper",
-        createsAuthoritativeDoveRoot: "bad-shape",
+      authorityManifest: {
+        status: "custom-authority",
+        strategy: "custom-strategy",
+        activeDurableRoot: ".custom-dove",
+        currentWriteAuthority: ".custom-dove",
         dualRootInvariant: { allowed: "bad-shape" },
         phases: "bad-shape"
       },
@@ -260,12 +256,13 @@ test("workspace index exposes normalized Dove mission kernel", () => {
   assert.equal(normalized.dove.identity.productName, "Custom Dove");
   assert.equal(normalized.dove.identity.packageName, "custom-package");
   assert.equal(normalized.dove.identity.publicCli, "custom-dove");
-  assert.equal(normalized.dove.identity.breakingRenameRequiresExplicitApproval, true);
-  assert.equal(normalized.dove.durableRootMigration.status, "custom-manifest");
-  assert.equal(normalized.dove.durableRootMigration.activeDurableRoot, ".custom-paper");
-  assert.equal(normalized.dove.durableRootMigration.createsAuthoritativeDoveRoot, false);
-  assert.equal(normalized.dove.durableRootMigration.dualRootInvariant.allowed, false);
-  assert.equal(normalized.dove.durableRootMigration.phases.length, createDoveRootMigrationManifest().phases.length);
+  assert.equal(normalized.dove.identity.commandPrefix, "project:custom-dove.");
+  assert.equal(normalized.dove.authorityManifest.status, "custom-authority");
+  assert.equal(normalized.dove.authorityManifest.strategy, "custom-strategy");
+  assert.equal(normalized.dove.authorityManifest.activeDurableRoot, ".custom-dove");
+  assert.equal(normalized.dove.authorityManifest.currentWriteAuthority, ".custom-dove");
+  assert.equal(normalized.dove.authorityManifest.dualRootInvariant.allowed, false);
+  assert.equal(normalized.dove.authorityManifest.phases.length, createDoveAuthorityManifest().phases.length);
   assert.equal(normalized.dove.primaryRoles.find((role) => role.id === "builder").label, "Maker");
   assert.deepEqual(normalized.dove.missionLifecycle.stages, ["goal"]);
   assert.equal(normalized.dove.missionLifecycle.currentStage, "execution");
@@ -278,29 +275,31 @@ test("workspace index exposes normalized Dove mission kernel", () => {
   assert.equal(normalized.dove.currentMissionFamily, "structure");
 });
 
-test("Dove durable-root migration manifest stays manifest-only", () => {
-  const manifest = createDoveRootMigrationManifest();
-  assert.equal(manifest.status, "manifest-only");
-  assert.equal(manifest.activeDurableRoot, ".paper");
-  assert.equal(manifest.authoritativeRoot, ".paper");
-  assert.equal(manifest.plannedDurableRoot, ".dove");
+test("Dove authority manifest is authoritative", () => {
+  const manifest = createDoveAuthorityManifest();
+  assert.equal(manifest.status, "authoritative");
+  assert.equal(manifest.strategy, "dove-direct");
+  assert.equal(manifest.activeDurableRoot, ".dove");
+  assert.equal(manifest.authoritativeRoot, ".dove");
+  assert.equal(manifest.currentWriteAuthority, ".dove");
   assert.equal(manifest.manifestPath, ARTIFACT_PATHS.doveRootManifest);
-  assert.equal(manifest.createsAuthoritativeDoveRoot, false);
+  assert.equal(manifest.legacyRoot, ".paper");
   assert.equal(manifest.dualRootInvariant.allowed, false);
-  assert.deepEqual(manifest.prohibitedAuthoritativeArtifacts, [".dove/state.json", ".dove/workspace/index.json", ".dove/task-packets/index.json"]);
+  assert.equal(manifest.dualRootInvariant.doveRootAuthoritative, true);
+  assert.equal(manifest.dualRootInvariant.legacyRootAuthoritative, false);
 
-  const normalized = normalizeDoveRootMigrationManifest({
+  const normalized = normalizeDoveAuthorityManifest({
     status: "custom-status",
-    authoritativeRoot: ".custom-paper",
-    plannedDurableRoot: "custom-dove",
-    createsAuthoritativeDoveRoot: "bad-shape",
+    strategy: "custom-strategy",
+    authoritativeRoot: ".custom-dove",
+    currentWriteAuthority: ".custom-dove",
     dualRootInvariant: { allowed: "bad-shape", reason: "custom reason" },
     phases: [{ id: "custom", status: "active", summary: "Custom phase." }, "bad-shape"]
   });
   assert.equal(normalized.status, "custom-status");
-  assert.equal(normalized.authoritativeRoot, ".custom-paper");
-  assert.equal(normalized.plannedDurableRoot, "custom-dove");
-  assert.equal(normalized.createsAuthoritativeDoveRoot, false);
+  assert.equal(normalized.strategy, "custom-strategy");
+  assert.equal(normalized.authoritativeRoot, ".custom-dove");
+  assert.equal(normalized.currentWriteAuthority, ".custom-dove");
   assert.equal(normalized.dualRootInvariant.allowed, false);
   assert.equal(normalized.dualRootInvariant.reason, "custom reason");
   assert.deepEqual(normalized.phases, [{ id: "custom", status: "active", summary: "Custom phase." }]);
@@ -314,8 +313,8 @@ test("workspace index exposes normalized unified autonomy loop skeleton", () => 
   assert.equal(index.autonomyLoops.explicitOnly, true);
   assert.equal(index.autonomyLoops.noHiddenRuntime, true);
   assert.equal(index.autonomyLoops.currentLoopId, "board-role-artifact-handoff");
-  assert.equal(index.autonomyLoops.runtimePointers.includes(".paper/runtime/controller-state.json"), true);
-  assert.equal(index.autonomyLoops.followThroughPointers.includes(".paper/meta/operator-follow-through.json"), true);
+  assert.equal(index.autonomyLoops.runtimePointers.includes(".dove/runtime/controller-state.json"), true);
+  assert.equal(index.autonomyLoops.followThroughPointers.includes(".dove/meta/operator-follow-through.json"), true);
   assert.match(index.autonomyLoops.safeExecutionPath, /autonomy-foreground/);
 
   const normalized = normalizeWorkspaceIndex({

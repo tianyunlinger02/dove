@@ -27,11 +27,11 @@ import {
 } from "../../src/core/index.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-workflow-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-workflow-"));
 }
 
 function seedExecutionBridgeCandidate(root) {
-  fs.writeFileSync(path.join(root, ".paper", "reviews", "concerns.json"), JSON.stringify({
+  fs.writeFileSync(path.join(root, ".dove", "reviews", "concerns.json"), JSON.stringify({
     version: 2,
     items: [{
       id: "source-first-gap",
@@ -40,12 +40,12 @@ function seedExecutionBridgeCandidate(root) {
       status: "open",
       responseOwnerRole: "planner",
       recurrenceCount: 2,
-      linkedArtifactPaths: [".paper/reviews/log.md"],
+      linkedArtifactPaths: [".dove/reviews/log.md"],
       updatedAt: new Date(0).toISOString()
     }],
     updatedAt: null
   }, null, 2));
-  fs.writeFileSync(path.join(root, ".paper", "reviews", "REVIEW_STATE.json"), JSON.stringify({
+  fs.writeFileSync(path.join(root, ".dove", "reviews", "REVIEW_STATE.json"), JSON.stringify({
     version: 3,
     lastVerdict: "needs-work",
     lastReviewedAt: new Date(0).toISOString(),
@@ -160,7 +160,7 @@ test("single-paper workflow creates durable artifacts", () => {
     claimId: "claim-1",
     outcome: "supports",
     summary: "Durable workflow preserved more evidence links.",
-    evidenceLinks: [".paper/experiments/EXPERIMENT_LOG.md"],
+    evidenceLinks: [".dove/experiments/EXPERIMENT_LOG.md"],
     comparisonTargets: ["baseline-ad-hoc"]
   });
 
@@ -208,13 +208,13 @@ test("single-paper workflow creates durable artifacts", () => {
   const checklist = syncChecklist(root);
 
   assert.equal(review.verdict, "coherent");
-  assert.equal(checklist.checklistPath, ".paper/checklists/paper.md");
+  assert.equal(checklist.checklistPath, ".dove/checklists/paper.md");
   assert.equal(comparison.fromVersionId, snapshotA.id);
-  assert.ok(fs.existsSync(path.join(root, ".paper", "revision-plans", "current-plan.md")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "sources", "index.json")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "orchestration", "board.json")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "rebuttal", "issues.json")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "versions", "snapshots", `${snapshotA.id}.json`)));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "revision-plans", "current-plan.md")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "sources", "index.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "orchestration", "board.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "rebuttal", "issues.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "versions", "snapshots", `${snapshotA.id}.json`)));
 });
 
 test("autonomy operate composes objective bridge, planning, approval, foreground execution, and durable stop state", () => {
@@ -238,19 +238,19 @@ test("autonomy operate composes objective bridge, planning, approval, foreground
   assert.equal(result.foreground.stepCount >= 2, true);
   assert.equal(result.stopReason, "executed-program-step");
 
-  const candidates = JSON.parse(fs.readFileSync(path.join(root, ".paper", "meta", "execution-bridge-candidates.json"), "utf8"));
+  const candidates = JSON.parse(fs.readFileSync(path.join(root, ".dove", "meta", "execution-bridge-candidates.json"), "utf8"));
   const candidate = candidates.candidates.find((item) => item.id === result.sourceId);
   assert.ok(candidate, "objective-derived bridge candidate should be durable");
   assert.equal(candidate.proposalOnly, true);
   assert.equal(candidate.noAutoApply, true);
   assert.equal(candidate.objectiveDerived, true);
 
-  const run = JSON.parse(fs.readFileSync(path.join(root, ".paper", "programs", "runs.json"), "utf8")).items.find((item) => item.id === result.programRunId);
+  const run = JSON.parse(fs.readFileSync(path.join(root, ".dove", "programs", "runs.json"), "utf8")).items.find((item) => item.id === result.programRunId);
   assert.ok(run, "program run should be recorded");
   assert.deepEqual(run.authorityEnvelope.stepSequence.map((step) => step.allowedStepType), ["refresh-research-brief", "refresh-wiki", "run-review-loop"]);
   assert.equal(run.authorityEnvelope.stepSequence.some((step) => ["upsert-note", "run-experiment-audit", "bridge-result-to-claim"].includes(step.allowedStepType)), false);
 
-  const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".paper", "runtime", "results.json"), "utf8"));
+  const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
   assert.equal(runtimeResults.summary.lastStatus, "completed");
   assert.equal(runtimeResults.entries.at(-1).packetId, result.packetId);
 });
@@ -291,10 +291,10 @@ test("autonomy operate reuses an existing proposal source with exact caller-prov
   assert.equal(result.campaignId, "operate-source-campaign");
   assert.equal(result.campaignStepId, "operate-source-step");
 
-  const candidates = JSON.parse(fs.readFileSync(path.join(root, ".paper", "meta", "execution-bridge-candidates.json"), "utf8"));
+  const candidates = JSON.parse(fs.readFileSync(path.join(root, ".dove", "meta", "execution-bridge-candidates.json"), "utf8"));
   assert.equal(candidates.candidates.some((candidate) => candidate.candidateOrigin === "operator-objective" || candidate.objectiveDerived === true), false);
 
-  const packet = JSON.parse(fs.readFileSync(path.join(root, ".paper", "task-packets", "packets", "operate-source-packet.json"), "utf8"));
+  const packet = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "operate-source-packet.json"), "utf8"));
   assert.equal(packet.id, "operate-source-packet");
   assert.equal(packet.materialization.sourceType, "execution-bridge");
   assert.equal(packet.materialization.sourceId, source.id);

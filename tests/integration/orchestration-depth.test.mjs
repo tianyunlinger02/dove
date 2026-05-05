@@ -25,7 +25,7 @@ import {
 } from "../../src/core/index.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-depth-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-depth-"));
 }
 
 test("orchestration board, handoff, experiment, rebuttal, and version flows stay durable", () => {
@@ -41,7 +41,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     phase: "research",
     assignedRole: "researcher",
     tasks: [
-      { title: "Research baseline", assignedRole: "researcher", status: "pending", evidenceLinks: [".paper/research/brief.md"] }
+      { title: "Research baseline", assignedRole: "researcher", status: "pending", evidenceLinks: [".dove/research/brief.md"] }
     ],
     blockers: [
       { summary: "Need comparison target", assignedRole: "planner", status: "open" }
@@ -55,7 +55,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     evidenceBacklog: ["Need experiment result for baseline-a"]
   });
 
-  fs.writeFileSync(path.join(root, ".paper", "sources", "index.json"), JSON.stringify({
+  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
     updatedAt: null
@@ -91,7 +91,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     claimId: "claim-depth",
     outcome: "supports",
     summary: "Baseline A lacks durable lineage state.",
-    evidenceLinks: [".paper/versions/index.json"],
+    evidenceLinks: [".dove/versions/index.json"],
     comparisonTargets: ["baseline-a"]
   });
 
@@ -150,12 +150,12 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   assert.equal(comparison.toVersionId, v2.id);
   assert.ok(Array.isArray(comparison.addedEvidenceLinks));
   assert.ok(Array.isArray(comparison.changedDraftSections));
-  const handoffs = fs.readFileSync(path.join(root, ".paper", "orchestration", "handoffs.md"), "utf8");
+  const handoffs = fs.readFileSync(path.join(root, ".dove", "orchestration", "handoffs.md"), "utf8");
   assert.match(handoffs, /planner -> researcher/);
   assert.match(handoffs, /experiment-planner -> rebuttal-lead|reviewer -> version-analyst|planner -> experiment-planner/);
-  assert.ok(fs.existsSync(path.join(root, ".paper", "orchestration", "handoffs.md")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "rebuttal", "strategy.md")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "versions", "LATEST_COMPARISON.md")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "orchestration", "handoffs.md")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "rebuttal", "strategy.md")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "versions", "LATEST_COMPARISON.md")));
 });
 
 test("version actions are blocked until coherent review clears finalize gate", () => {
@@ -216,7 +216,7 @@ test("board role-phase contract rejects mismatches unless an override is explici
     policyOverrideReason: "manual board repair after importing an older workspace"
   });
 
-  const handoffs = fs.readFileSync(path.join(root, ".paper", "orchestration", "handoffs.md"), "utf8");
+  const handoffs = fs.readFileSync(path.join(root, ".dove", "orchestration", "handoffs.md"), "utf8");
   assert.equal(overridden.currentPhase, "review");
   assert.equal(overridden.assignedRole, "planner");
   assert.match(handoffs, /Policy override: manual board repair after importing an older workspace/);

@@ -6,15 +6,15 @@
 
 ## Overview
 
-`paper_factory` is file-first. State lives in durable `.paper/` artifacts, not in process memory, browser stores, or hidden agent context. Core functions load state from disk, normalize it, mutate explicit artifacts, and write deterministic JSON/Markdown outputs.
+`Dove` is file-first. State lives in durable `.dove/` artifacts, not in process memory, browser stores, or hidden agent context. Core functions load state from disk, normalize it, mutate explicit artifacts, and write deterministic JSON/Markdown outputs.
 
 Primary state locations:
 
-- `.paper/state.json` for normalized top-level paper/workflow state.
-- `.paper/orchestration/board.json` and `.paper/orchestration/handoffs.md` for coordination.
-- `.paper/task-packets/` and `.paper/context/` for resumable task/context narrowing.
-- `.paper/research`, `.paper/sources`, `.paper/notes`, `.paper/evidence`, `.paper/experiments`, `.paper/claims`, `.paper/drafts`, `.paper/reviews`, `.paper/rebuttal`, `.paper/versions`, and `.paper/figures` for paper artifacts.
-- `.paper/meta`, `.paper/programs`, and `.paper/runtime` for proposal, approval, and explicit foreground autonomy surfaces.
+- `.dove/state.json` for normalized top-level paper/workflow state.
+- `.dove/orchestration/board.json` and `.dove/orchestration/handoffs.md` for coordination.
+- `.dove/task-packets/` and `.dove/context/` for resumable task/context narrowing.
+- `.dove/research`, `.dove/sources`, `.dove/notes`, `.dove/evidence`, `.dove/experiments`, `.dove/claims`, `.dove/drafts`, `.dove/reviews`, `.dove/rebuttal`, `.dove/versions`, and `.dove/figures` for paper artifacts.
+- `.dove/meta`, `.dove/programs`, and `.dove/runtime` for proposal, approval, and explicit foreground autonomy surfaces.
 
 ---
 
@@ -26,15 +26,15 @@ Defaults and schema constants live in `src/core/schema.mjs`. `ARTIFACT_PATHS` is
 
 ### User-owned durable workspace
 
-`.paper/` contains the user's paper state. Install/sync code in `bin/paper-factory.mjs` calls `ensureWorkspace(target)` but must preserve user-owned data. The boundary policy returned from `createWorkflowBoundaries()` separates managed package paths from bootstrap-only/user-owned paths.
+`.dove/` contains the user's paper state. Install/sync code in `bin/dove.mjs` calls `ensureWorkspace(target)` but must preserve user-owned data. The boundary policy returned from `createWorkflowBoundaries()` separates managed package paths from bootstrap-only/user-owned paths.
 
 ### Orchestration state
 
-The board is canonical for active workflow coordination. `.opencode/commands/paper.orchestrate.md` requires phase, intent type, assigned role, focus, next action, continuation state, review gate status, tasks, blockers, evidence links, experiment IDs, rebuttal issue IDs, version lineage, and packet-linked questions/decisions to stay explicit.
+The board is canonical for active workflow coordination. `.opencode/commands/dove.paper.orchestrate.md` requires phase, intent type, assigned role, focus, next action, continuation state, review gate status, tasks, blockers, evidence links, experiment IDs, rebuttal issue IDs, version lineage, and packet-linked questions/decisions to stay explicit.
 
 ### Proposal and runtime state
 
-`paper.meta-optimize` is proposal-only. Accepted proposals must cross a governed bridge through follow-through/materialization before execution. Runtime/autonomy state under `.paper/runtime/` is explicit foreground state, not a daemon or hidden scheduler.
+`dove.paper.meta-optimize` is proposal-only. Accepted proposals must cross a governed bridge through follow-through/materialization before execution. Runtime/autonomy state under `.dove/runtime/` is explicit foreground state, not a daemon or hidden scheduler.
 
 ### Lifecycle mirror state
 
@@ -46,7 +46,7 @@ Campaign, workspace, task graph, navigation, and autonomy-loop summaries are mir
 
 Add durable state only when it is needed for session recovery, governance, tests, or user-facing package behavior. Before adding a field or artifact:
 
-1. Search for existing fields/constants in `src/core/schema.mjs`, `.paper/context/`, and tests.
+1. Search for existing fields/constants in `src/core/schema.mjs`, `.dove/context/`, and tests.
 2. Add the path or field to the relevant schema/default/normalizer.
 3. Ensure `ensureWorkspace` bootstraps or normalizes it when needed.
 4. Expose it through CLI/MCP/commands only if it is part of a public contract.
@@ -76,16 +76,16 @@ Derived state should not become the only source of truth for facts that belong i
 ## Examples
 
 - `src/core/schema.mjs` defines `ARTIFACT_PATHS`, `SCHEMA_VERSION`, `PIPELINE_STAGE_ORDER`, role IDs, governance registries, default object factories, and normalizers.
-- `src/core/workspace.mjs` shows the standard read/normalize/write flow used by `ensureWorkspace(root)` to create and reconcile durable `.paper/` artifacts.
-- `.opencode/commands/paper.orchestrate.md` documents the board-first operator flow and the required context files to read before mutating orchestration state.
-- `.opencode/commands/paper.meta-optimize.md` documents the proposal-only optimizer flow and the governed bridge to materialized work.
+- `src/core/workspace.mjs` shows the standard read/normalize/write flow used by `ensureWorkspace(root)` to create and reconcile durable `.dove/` artifacts.
+- `.opencode/commands/dove.paper.orchestrate.md` documents the board-first operator flow and the required context files to read before mutating orchestration state.
+- `.opencode/commands/dove.paper.meta-optimize.md` documents the proposal-only optimizer flow and the governed bridge to materialized work.
 - `tests/integration/workflow.test.mjs` exercises state transitions across workspace creation, sources, notes, claims, experiments, review, handoffs, snapshots, comparisons, and checklist sync.
 
 ---
 
 ## Common Mistakes
 
-- Treating `.paper/meta/*` optimizer recommendations as executable state. They are proposal-only until materialized.
-- Adding a new `.paper/` artifact path without updating `ARTIFACT_PATHS`, workspace bootstrapping, validators, and tests.
+- Treating `.dove/meta/*` optimizer recommendations as executable state. They are proposal-only until materialized.
+- Adding a new `.dove/` artifact path without updating `ARTIFACT_PATHS`, workspace bootstrapping, validators, and tests.
 - Mutating user-owned workspace data during install/sync beyond bootstrap-safe defaults.
 - Storing important workflow decisions only in chat or prompt text instead of durable artifacts.

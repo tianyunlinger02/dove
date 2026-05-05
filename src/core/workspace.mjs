@@ -27,8 +27,8 @@ function normalizeStringArrayLocal(value) {
 
 const WORKFLOW_BOUNDARIES = createWorkflowBoundaries();
 
-function isBootstrapManagedPaperPath(relativePath) {
-  return relativePath === ARTIFACT_PATHS.state || WORKFLOW_BOUNDARIES.paperBootstrapOnlyPaths.includes(relativePath);
+function isBootstrapManagedDovePath(relativePath) {
+  return relativePath === ARTIFACT_PATHS.state || WORKFLOW_BOUNDARIES.doveBootstrapOnlyPaths.includes(relativePath);
 }
 
 export function nowIso() {
@@ -139,13 +139,13 @@ export function ensureWorkspace(root) {
   }
 
   for (const [relativePath, content] of Object.entries(createStarterMarkdown(state))) {
-    if (isBootstrapManagedPaperPath(relativePath) && ensureFile(root, relativePath, content)) {
+    if (isBootstrapManagedDovePath(relativePath) && ensureFile(root, relativePath, content)) {
       created.push(relativePath);
     }
   }
 
   for (const [relativePath, factory] of createWorkspaceBootstrapJsonArtifacts(state)) {
-    if (isBootstrapManagedPaperPath(relativePath) && !fs.existsSync(resolvePath(root, relativePath))) {
+    if (isBootstrapManagedDovePath(relativePath) && !fs.existsSync(resolvePath(root, relativePath))) {
       writeJson(root, relativePath, factory());
       created.push(relativePath);
     }

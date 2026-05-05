@@ -7,13 +7,13 @@ import path from "node:path";
 import { compareVersions, ensureWorkspace, upsertOrchestrationBoard } from "../../src/core/index.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-legacy-snapshot-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-legacy-snapshot-"));
 }
 
 test("compareVersions tolerates legacy snapshot shapes with missing modern fields", () => {
   const root = tempRoot();
   ensureWorkspace(root);
-  const snapshotDir = path.join(root, ".paper", "versions", "snapshots");
+  const snapshotDir = path.join(root, ".dove", "versions", "snapshots");
   fs.mkdirSync(snapshotDir, { recursive: true });
 
   fs.writeFileSync(path.join(snapshotDir, "legacy-a.json"), JSON.stringify({

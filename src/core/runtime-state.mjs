@@ -294,7 +294,7 @@ function buildContinuationItems(root, entry) {
   if (entry.outcome === "materialized-one-packet") {
     return [{
       kind: "execute-materialized-packet",
-      command: "paper-factory autonomy-once",
+      command: "dove autonomy-once",
       packetId: entry.packetId,
       programRunId: entry.programSnapshot?.programRunId ?? null,
       followThroughId: entry.followThroughId ?? null,
@@ -307,7 +307,7 @@ function buildContinuationItems(root, entry) {
   if (programRun?.reviewCheckpointRequired) {
     return [{
       kind: "issue-fresh-approval",
-      command: "project:paper.approvals",
+      command: "project:dove.paper.approvals",
       packetId: entry.packetId,
       programRunId: programRun.id,
       followThroughId: entry.followThroughId ?? null,
@@ -320,7 +320,7 @@ function buildContinuationItems(root, entry) {
   if (entry.outcome === "executed-program-step" && (programRun?.authorityEnvelope?.remainingStepCount ?? 0) > 0) {
     return [{
       kind: "continue-program-envelope",
-      command: "paper-factory autonomy-foreground",
+      command: "dove autonomy-foreground",
       packetId: entry.packetId,
       programRunId: programRun.id,
       approvalId: entry.programSnapshot?.approvalId ?? null,
@@ -334,7 +334,7 @@ function buildContinuationItems(root, entry) {
   if (["worker-step-retry-pending", "worker-step-escalated", "executed-one-packet-step"].includes(entry.outcome)) {
     return [{
       kind: entry.outcome === "worker-step-escalated" ? "manual-escalation" : "review-follow-through",
-      command: "project:paper.follow-through",
+      command: "project:dove.paper.follow-through",
       packetId: entry.packetId,
       programRunId: null,
       followThroughId: entry.followThroughId ?? null,

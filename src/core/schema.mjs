@@ -44,7 +44,7 @@ export const PAPER_LIFECYCLE_FAMILIES = [
     id: "structure",
     label: "Structure",
     summary: "Paper organization, sections, drafts, figures, checklists, and versions.",
-    roleHints: ["planner", "author"],
+    roleHints: ["planner", "builder"],
     artifactPathKeys: ["plan", "outline", "draftsDir", "checklist", "figuresIndex", "figureQa", "versionsIndex", "versionComparisons"]
   },
   {
@@ -58,14 +58,14 @@ export const PAPER_LIFECYCLE_FAMILIES = [
     id: "work-unit",
     label: "Work Unit",
     summary: "Board, handoff, task-packet, and context/action surfaces that make work resumable.",
-    roleHints: ["planner", "author", "reviewer"],
+    roleHints: ["planner", "builder", "reviewer"],
     artifactPathKeys: ["orchestrationBoard", "orchestrationHandoffs", "taskPacketsIndex", "workspaceIndex", "workspaceArtifactMap", "actionContextsDir", "packetContextsDir"]
   },
   {
     id: "concern",
     label: "Concern",
     summary: "Reviewer concerns, revision pressure, rebuttal issues, and isolated review handoffs.",
-    roleHints: ["reviewer", "author"],
+    roleHints: ["reviewer", "builder"],
     artifactPathKeys: ["reviewState", "reviewConcerns", "reviewDebateLog", "adversarialReviewState", "revisionPlan", "rebuttalIssues", "rebuttalStrategy", "isolatedReviewsDir"]
   },
   {
@@ -79,7 +79,7 @@ export const PAPER_LIFECYCLE_FAMILIES = [
     id: "knowledge",
     label: "Knowledge",
     summary: "Sources, notes, evidence, claims, bibliography, wiki, and long-horizon memory.",
-    roleHints: ["author"],
+    roleHints: ["builder"],
     artifactPathKeys: ["sources", "notes", "evidence", "claims", "bibliography", "citationLog", "wiki", "wikiEntities", "wikiRelations", "metaLongHorizonMemory"]
   }
 ];
@@ -113,11 +113,11 @@ export const DOVE_DOMAIN_GUIDANCE = [
     label: "Paper",
     summary: "Paper writing, research, claims, citations, rebuttal, figures, and versioned manuscript work.",
     stageRoutes: {
-      goal: "project:paper.research",
-      design: "project:paper.plan",
-      checklist: "project:paper.checklist",
-      execution: "project:paper.draft or project:paper.revise",
-      audit: "project:paper.audit",
+      goal: "project:dove.paper.research",
+      design: "project:dove.paper.plan",
+      checklist: "project:dove.paper.checklist",
+      execution: "project:dove.paper.draft or project:dove.paper.revise",
+      audit: "project:dove.paper.audit",
       return: "project:dove.return"
     },
     returnEvidence: ["claim/evidence coverage", "checklist status", "review verdict", "version comparison"]
@@ -128,9 +128,9 @@ export const DOVE_DOMAIN_GUIDANCE = [
     summary: "Normal engineering requirements, implementation work, tests, regressions, and code review framed as the same Dove mission lifecycle.",
     stageRoutes: {
       goal: "project:dove.mission",
-      design: "project:paper.plan",
-      checklist: "project:paper.checklist",
-      execution: "project:paper.materialize or project:paper.autonomy-operate",
+      design: "project:dove.paper.plan",
+      checklist: "project:dove.paper.checklist",
+      execution: "project:dove.paper.materialize or project:dove.paper.autonomy-operate",
       audit: "project:dove.return",
       return: "project:dove.return"
     },
@@ -141,12 +141,12 @@ export const DOVE_DOMAIN_GUIDANCE = [
     label: "Experiment",
     summary: "Experiment plans, runs, result interpretation, audit findings, and result-to-claim traceability.",
     stageRoutes: {
-      goal: "project:paper.experiment-plan",
-      design: "project:paper.experiment-plan",
-      checklist: "project:paper.checklist",
-      execution: "project:paper.experiment-plan",
-      audit: "project:paper.experiment-audit",
-      return: "project:paper.result-bridge"
+      goal: "project:dove.paper.experiment-plan",
+      design: "project:dove.paper.experiment-plan",
+      checklist: "project:dove.paper.checklist",
+      execution: "project:dove.paper.experiment-plan",
+      audit: "project:dove.paper.experiment-audit",
+      return: "project:dove.paper.result-bridge"
     },
     returnEvidence: ["experiment audit", "result log", "claim bridge", "review verdict"]
   },
@@ -156,10 +156,10 @@ export const DOVE_DOMAIN_GUIDANCE = [
     summary: "Independent critique, reviewer concerns, isolated review handoffs, and acceptance pressure.",
     stageRoutes: {
       goal: "project:dove.mission",
-      design: "project:paper.review-loop",
-      checklist: "project:paper.checklist",
-      execution: "project:paper.isolated-review",
-      audit: "project:paper.audit",
+      design: "project:dove.paper.review-loop",
+      checklist: "project:dove.paper.checklist",
+      execution: "project:dove.paper.isolated-review",
+      audit: "project:dove.paper.audit",
       return: "project:dove.return"
     },
     returnEvidence: ["review report", "concern state", "revision plan", "acceptance verdict"]
@@ -170,9 +170,9 @@ export const DOVE_DOMAIN_GUIDANCE = [
     summary: "General bounded research or workflow work that still uses one mission, one board, and one return protocol.",
     stageRoutes: {
       goal: "project:dove.mission",
-      design: "project:paper.plan",
-      checklist: "project:paper.checklist",
-      execution: "project:paper.materialize",
+      design: "project:dove.paper.plan",
+      checklist: "project:dove.paper.checklist",
+      execution: "project:dove.paper.materialize",
       audit: "project:dove.return",
       return: "project:dove.return"
     },
@@ -184,19 +184,16 @@ export const DOVE_PRIMARY_ROLES = [
   {
     id: "planner",
     label: "Planner",
-    compatiblePaperRole: "planner",
     summary: "Sets destination, scope, constraints, priorities, and acceptance criteria."
   },
   {
     id: "builder",
     label: "Builder",
-    compatiblePaperRole: "author",
     summary: "Performs writing, coding, experiments, data work, implementation, and revision."
   },
   {
     id: "reviewer",
     label: "Reviewer",
-    compatiblePaperRole: "reviewer",
     summary: "Independently audits returned work, concerns, evidence, tests, and acceptance."
   }
 ];
@@ -204,76 +201,76 @@ export const DOVE_PRIMARY_ROLES = [
 export const DOVE_PRIMARY_ROLE_IDS = DOVE_PRIMARY_ROLES.map((role) => role.id);
 
 export const GOVERNANCE_GUARDED_MUTATIONS = [
-  { id: "upsert-orchestration-board", action: "Updating the orchestration board", artifactPath: ".paper/orchestration/board.json", surfaceBindings: { coreFunction: "upsertOrchestrationBoard", mcpTool: "upsert_orchestration_board", commandIds: [] } },
-  { id: "append-handoff", action: "Appending a durable handoff", artifactPath: ".paper/orchestration/handoffs.md", surfaceBindings: { coreFunction: "appendHandoff", mcpTool: "append_handoff", commandIds: [] } },
-  { id: "register-source", action: "Registering a source", artifactPath: ".paper/sources/index.json", surfaceBindings: { coreFunction: "registerSource", mcpTool: "register_source", commandIds: ["paper.source"] } },
-  { id: "upsert-note", action: "Recording a structured note", artifactPath: ".paper/notes/index.json", surfaceBindings: { coreFunction: "upsertNote", mcpTool: "upsert_note", commandIds: ["paper.note"] } },
-  { id: "upsert-claims", action: "Updating evidence-backed claims", artifactPath: ".paper/evidence/index.json", surfaceBindings: { coreFunction: "upsertClaims", mcpTool: "upsert_claims", commandIds: ["paper.claim-gate"] } },
-  { id: "upsert-plan", action: "Updating the paper plan", artifactPath: ".paper/plans/current-plan.md", surfaceBindings: { coreFunction: "upsertPlan", mcpTool: "upsert_plan", commandIds: ["paper.plan"] } },
-  { id: "upsert-outline", action: "Updating the paper outline", artifactPath: ".paper/outline/current-outline.md", surfaceBindings: { coreFunction: "upsertOutline", mcpTool: "upsert_outline", commandIds: ["paper.outline"] } },
-  { id: "upsert-draft", action: "Updating a draft section", artifactPath: ".paper/drafts", surfaceBindings: { coreFunction: "upsertDraft", mcpTool: "upsert_draft", commandIds: ["paper.draft"] } },
-  { id: "set-section-status", action: "Updating a section status", artifactPath: ".paper/state.json", surfaceBindings: { coreFunction: "setSectionStatus", mcpTool: "set_section_status", commandIds: ["paper.draft", "paper.revise"] } },
-  { id: "upsert-figure-plan", action: "Updating the figure plan", artifactPath: ".paper/figures/index.json", surfaceBindings: { coreFunction: "upsertFigurePlan", mcpTool: "upsert_figure_plan", commandIds: ["paper.figure"] } },
-  { id: "sync-citations", action: "Updating citation artifacts", artifactPath: ".paper/bibliography/citation-log.md", surfaceBindings: { coreFunction: "syncCitations", mcpTool: "sync_citations", commandIds: ["paper.citations"] } },
-  { id: "refresh-wiki", action: "Refreshing the wiki", artifactPath: ".paper/wiki/index.md", surfaceBindings: { coreFunction: "refreshWiki", mcpTool: "refresh_wiki", commandIds: ["paper.wiki"] } },
-  { id: "build-rebuttal", action: "Building the rebuttal draft", artifactPath: ".paper/drafts/rebuttal.md", surfaceBindings: { coreFunction: "buildRebuttal", mcpTool: "build_rebuttal", commandIds: ["paper.rebuttal"] } },
-  { id: "append-review-log", action: "Recording a review log", artifactPath: ".paper/reviews/log.md", surfaceBindings: { coreFunction: "appendReviewLog", mcpTool: "append_review_log", commandIds: ["paper.review"] } },
-  { id: "upsert-revision-plan", action: "Updating the revision plan", artifactPath: ".paper/revision-plans/current-plan.md", surfaceBindings: { coreFunction: "upsertRevisionPlan", mcpTool: "upsert_revision_plan", commandIds: ["paper.revise"] } },
-  { id: "run-review-loop", action: "Running the review loop", artifactPath: ".paper/reviews/log.md", surfaceBindings: { coreFunction: "runReviewLoop", mcpTool: "run_review_loop", commandIds: ["paper.review-loop"] } },
-  { id: "prepare-isolated-review", action: "Preparing an isolated reviewer input bundle", artifactPath: ".paper/reviews/isolated", surfaceBindings: { coreFunction: "prepareIsolatedReview", mcpTool: null, commandIds: ["paper.isolated-review"] } },
-  { id: "import-isolated-review", action: "Importing an isolated reviewer handoff", artifactPath: ".paper/reviews/isolated", surfaceBindings: { coreFunction: "importIsolatedReview", mcpTool: null, commandIds: ["paper.isolated-review"] } },
-  { id: "run-isolated-review", action: "Running an isolated parallel-session reviewer handoff", artifactPath: ".paper/reviews/isolated", surfaceBindings: { coreFunction: "runIsolatedReview", mcpTool: null, commandIds: ["paper.isolated-review"] } },
-  { id: "update-research-brief", action: "Updating the research brief", artifactPath: ".paper/research/brief.md", surfaceBindings: { coreFunction: "updateResearchBrief", mcpTool: "update_research_brief", commandIds: ["paper.research"] } },
-  { id: "upsert-experiment-plan", action: "Updating an experiment plan", artifactPath: ".paper/experiments/plans.json", surfaceBindings: { coreFunction: "upsertExperimentPlan", mcpTool: "upsert_experiment_plan", commandIds: ["paper.experiment-plan"] } },
-  { id: "upsert-experiment-result", action: "Updating an experiment result", artifactPath: ".paper/experiments/results.json", surfaceBindings: { coreFunction: "upsertExperimentResult", mcpTool: "upsert_experiment_result", commandIds: ["paper.experiment-plan"] } },
-  { id: "run-experiment-audit", action: "Running an experiment audit", artifactPath: ".paper/experiments/audits.json", surfaceBindings: { coreFunction: "runExperimentAudit", mcpTool: "run_experiment_audit", commandIds: ["paper.experiment-audit"] } },
-  { id: "bridge-experiment-result-to-claim", action: "Bridging an experiment result to a claim", artifactPath: ".paper/claims/bridge-log.json", surfaceBindings: { coreFunction: "bridgeExperimentResultToClaim", mcpTool: "bridge_result_to_claim", commandIds: ["paper.result-bridge"] } },
-  { id: "normalize-rebuttal-issues", action: "Normalizing rebuttal issues", artifactPath: ".paper/rebuttal/issues.json", surfaceBindings: { coreFunction: "normalizeRebuttalIssues", mcpTool: "normalize_rebuttal_issues", commandIds: ["paper.rebuttal-strategy"] } },
-  { id: "build-rebuttal-strategy", action: "Building the rebuttal strategy", artifactPath: ".paper/rebuttal/strategy.md", surfaceBindings: { coreFunction: "buildRebuttalStrategy", mcpTool: "build_rebuttal_strategy", commandIds: ["paper.rebuttal-strategy"] } },
-  { id: "create-version-snapshot", action: "Creating a version snapshot", artifactPath: ".paper/versions/index.json", surfaceBindings: { coreFunction: "createVersionSnapshot", mcpTool: "create_version_snapshot", commandIds: ["paper.version-snapshot"] } },
-  { id: "compare-versions", action: "Comparing versions", artifactPath: ".paper/versions/comparisons.json", surfaceBindings: { coreFunction: "compareVersions", mcpTool: "compare_versions", commandIds: ["paper.version-compare"] } },
-  { id: "materialize-guidance-packet", action: "Materializing accepted guidance into a durable task packet", artifactPath: ".paper/task-packets", surfaceBindings: { coreFunction: "materializeGuidancePacket", mcpTool: "materialize_guidance_packet", commandIds: ["paper.materialize"] } },
-  { id: "launch-dove-mission", action: "Launching a governed Dove mission by materializing accepted guidance into the authoritative .paper task-packet store", artifactPath: ".paper/task-packets", surfaceBindings: { coreFunction: "launchDoveMission", mcpTool: "launch_dove_mission", commandIds: ["dove.launch"] } }
+  { id: "upsert-orchestration-board", action: "Updating the orchestration board", artifactPath: ".dove/orchestration/board.json", surfaceBindings: { coreFunction: "upsertOrchestrationBoard", mcpTool: "upsert_orchestration_board", commandIds: [] } },
+  { id: "append-handoff", action: "Appending a durable handoff", artifactPath: ".dove/orchestration/handoffs.md", surfaceBindings: { coreFunction: "appendHandoff", mcpTool: "append_handoff", commandIds: [] } },
+  { id: "register-source", action: "Registering a source", artifactPath: ".dove/sources/index.json", surfaceBindings: { coreFunction: "registerSource", mcpTool: "register_source", commandIds: ["dove.paper.source"] } },
+  { id: "upsert-note", action: "Recording a structured note", artifactPath: ".dove/notes/index.json", surfaceBindings: { coreFunction: "upsertNote", mcpTool: "upsert_note", commandIds: ["dove.paper.note"] } },
+  { id: "upsert-claims", action: "Updating evidence-backed claims", artifactPath: ".dove/evidence/index.json", surfaceBindings: { coreFunction: "upsertClaims", mcpTool: "upsert_claims", commandIds: ["dove.paper.claim-gate"] } },
+  { id: "upsert-plan", action: "Updating the paper plan", artifactPath: ".dove/plans/current-plan.md", surfaceBindings: { coreFunction: "upsertPlan", mcpTool: "upsert_plan", commandIds: ["dove.paper.plan"] } },
+  { id: "upsert-outline", action: "Updating the paper outline", artifactPath: ".dove/outline/current-outline.md", surfaceBindings: { coreFunction: "upsertOutline", mcpTool: "upsert_outline", commandIds: ["dove.paper.outline"] } },
+  { id: "upsert-draft", action: "Updating a draft section", artifactPath: ".dove/drafts", surfaceBindings: { coreFunction: "upsertDraft", mcpTool: "upsert_draft", commandIds: ["dove.paper.draft"] } },
+  { id: "set-section-status", action: "Updating a section status", artifactPath: ".dove/state.json", surfaceBindings: { coreFunction: "setSectionStatus", mcpTool: "set_section_status", commandIds: ["dove.paper.draft", "dove.paper.revise"] } },
+  { id: "upsert-figure-plan", action: "Updating the figure plan", artifactPath: ".dove/figures/index.json", surfaceBindings: { coreFunction: "upsertFigurePlan", mcpTool: "upsert_figure_plan", commandIds: ["dove.paper.figure"] } },
+  { id: "sync-citations", action: "Updating citation artifacts", artifactPath: ".dove/bibliography/citation-log.md", surfaceBindings: { coreFunction: "syncCitations", mcpTool: "sync_citations", commandIds: ["dove.paper.citations"] } },
+  { id: "refresh-wiki", action: "Refreshing the wiki", artifactPath: ".dove/wiki/index.md", surfaceBindings: { coreFunction: "refreshWiki", mcpTool: "refresh_wiki", commandIds: ["dove.paper.wiki"] } },
+  { id: "build-rebuttal", action: "Building the rebuttal draft", artifactPath: ".dove/drafts/rebuttal.md", surfaceBindings: { coreFunction: "buildRebuttal", mcpTool: "build_rebuttal", commandIds: ["dove.paper.rebuttal"] } },
+  { id: "append-review-log", action: "Recording a review log", artifactPath: ".dove/reviews/log.md", surfaceBindings: { coreFunction: "appendReviewLog", mcpTool: "append_review_log", commandIds: ["dove.paper.review"] } },
+  { id: "upsert-revision-plan", action: "Updating the revision plan", artifactPath: ".dove/revision-plans/current-plan.md", surfaceBindings: { coreFunction: "upsertRevisionPlan", mcpTool: "upsert_revision_plan", commandIds: ["dove.paper.revise"] } },
+  { id: "run-review-loop", action: "Running the review loop", artifactPath: ".dove/reviews/log.md", surfaceBindings: { coreFunction: "runReviewLoop", mcpTool: "run_review_loop", commandIds: ["dove.paper.review-loop"] } },
+  { id: "prepare-isolated-review", action: "Preparing an isolated reviewer input bundle", artifactPath: ".dove/reviews/isolated", surfaceBindings: { coreFunction: "prepareIsolatedReview", mcpTool: null, commandIds: ["dove.paper.isolated-review"] } },
+  { id: "import-isolated-review", action: "Importing an isolated reviewer handoff", artifactPath: ".dove/reviews/isolated", surfaceBindings: { coreFunction: "importIsolatedReview", mcpTool: null, commandIds: ["dove.paper.isolated-review"] } },
+  { id: "run-isolated-review", action: "Running an isolated parallel-session reviewer handoff", artifactPath: ".dove/reviews/isolated", surfaceBindings: { coreFunction: "runIsolatedReview", mcpTool: null, commandIds: ["dove.paper.isolated-review"] } },
+  { id: "update-research-brief", action: "Updating the research brief", artifactPath: ".dove/research/brief.md", surfaceBindings: { coreFunction: "updateResearchBrief", mcpTool: "update_research_brief", commandIds: ["dove.paper.research"] } },
+  { id: "upsert-experiment-plan", action: "Updating an experiment plan", artifactPath: ".dove/experiments/plans.json", surfaceBindings: { coreFunction: "upsertExperimentPlan", mcpTool: "upsert_experiment_plan", commandIds: ["dove.paper.experiment-plan"] } },
+  { id: "upsert-experiment-result", action: "Updating an experiment result", artifactPath: ".dove/experiments/results.json", surfaceBindings: { coreFunction: "upsertExperimentResult", mcpTool: "upsert_experiment_result", commandIds: ["dove.paper.experiment-plan"] } },
+  { id: "run-experiment-audit", action: "Running an experiment audit", artifactPath: ".dove/experiments/audits.json", surfaceBindings: { coreFunction: "runExperimentAudit", mcpTool: "run_experiment_audit", commandIds: ["dove.paper.experiment-audit"] } },
+  { id: "bridge-experiment-result-to-claim", action: "Bridging an experiment result to a claim", artifactPath: ".dove/claims/bridge-log.json", surfaceBindings: { coreFunction: "bridgeExperimentResultToClaim", mcpTool: "bridge_result_to_claim", commandIds: ["dove.paper.result-bridge"] } },
+  { id: "normalize-rebuttal-issues", action: "Normalizing rebuttal issues", artifactPath: ".dove/rebuttal/issues.json", surfaceBindings: { coreFunction: "normalizeRebuttalIssues", mcpTool: "normalize_rebuttal_issues", commandIds: ["dove.paper.rebuttal-strategy"] } },
+  { id: "build-rebuttal-strategy", action: "Building the rebuttal strategy", artifactPath: ".dove/rebuttal/strategy.md", surfaceBindings: { coreFunction: "buildRebuttalStrategy", mcpTool: "build_rebuttal_strategy", commandIds: ["dove.paper.rebuttal-strategy"] } },
+  { id: "create-version-snapshot", action: "Creating a version snapshot", artifactPath: ".dove/versions/index.json", surfaceBindings: { coreFunction: "createVersionSnapshot", mcpTool: "create_version_snapshot", commandIds: ["dove.paper.version-snapshot"] } },
+  { id: "compare-versions", action: "Comparing versions", artifactPath: ".dove/versions/comparisons.json", surfaceBindings: { coreFunction: "compareVersions", mcpTool: "compare_versions", commandIds: ["dove.paper.version-compare"] } },
+  { id: "materialize-guidance-packet", action: "Materializing accepted guidance into a durable task packet", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "materializeGuidancePacket", mcpTool: "materialize_guidance_packet", commandIds: ["dove.paper.materialize"] } },
+  { id: "launch-dove-mission", action: "Launching a governed Dove mission by materializing accepted guidance into the authoritative .dove task-packet store", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "launchDoveMission", mcpTool: "launch_dove_mission", commandIds: ["dove.launch"] } }
 ];
 
 export const GOVERNANCE_EXEMPT_MUTATIONS = [
-  { id: "record-operator-follow-through", action: "Recording follow-through decisions remains explicitly exempt so the governance system can be updated while debt exists.", artifactPath: ".paper/meta/operator-follow-through.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "governance-ledger-maintenance", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorFollowThrough", mcpTool: "record_operator_follow_through", commandIds: ["paper.follow-through"] } },
-  { id: "issue-program-approval", action: "Issuing a fresh program approval remains exempt because it is explicit governance bookkeeping that authorizes later bounded execution but does not itself execute work.", artifactPath: ".paper/programs/approvals.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "approval-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "issueProgramApproval", mcpTool: "issue_program_approval", commandIds: ["paper.approvals"] } },
-  { id: "plan-campaign", action: "Recording a multi-cycle campaign plan remains exempt because it only records planner-supervised campaign intent and does not approve or execute bounded program work.", artifactPath: ".paper/programs/campaigns.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-25T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "campaign-planning-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "planCampaign", mcpTool: "plan_campaign", commandIds: [] } },
-  { id: "revoke-program-approval", action: "Revoking a program approval remains exempt because it withdraws authority rather than executing new work.", artifactPath: ".paper/programs/approvals.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "approval-withdrawal", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "revokeProgramApproval", mcpTool: "revoke_program_approval", commandIds: ["paper.approvals"] } },
-  { id: "run-autonomy-control-plane-once", action: "A manually invoked autonomous control-plane pass may advance one explicitly accepted planner-supervised packet or materialize one governed planned target through one bounded execution delta with durable runtime audit artifacts.", artifactPath: ".paper/runtime/controller-state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "single-turn-control-plane-execution", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runAutonomyControlPlaneOnce", mcpTool: "run_autonomy_once", commandIds: [] } },
-  { id: "run-autonomy-foreground", action: "A manually invoked explicit foreground autonomy run may continue one program-scoped bounded authority envelope or the same-lineage execute-materialized-packet continuation until a declared stop condition is reached.", artifactPath: ".paper/runtime/controller-state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "foreground-bounded-runner", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runAutonomyForeground", mcpTool: "run_autonomy_foreground", commandIds: [] } },
-  { id: "run-autonomy-operate", action: "A manually invoked explicit autonomy operating surface may compose objective/source proposal selection, campaign planning, materialization, bounded approval, foreground execution, and durable stop summaries without hidden scheduling.", artifactPath: ".paper/runtime/controller-state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-25T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "foreground-research-operating-surface", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runAutonomyOperate", mcpTool: "run_autonomy_operate", commandIds: ["paper.autonomy-operate"] } },
-  { id: "query-meta-optimize", action: "Refreshing proposal-only optimizer surfaces remains exempt because it is part of debt detection, not debt execution.", artifactPath: ".paper/meta/LATEST_OPTIMIZER_REPORT.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "proposal-frontier-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "queryMetaOptimize", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } },
-  { id: "init-project", action: "Project initialization bootstraps the workspace and is explicitly exempt from follow-through gating.", artifactPath: ".paper/state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "workspace-bootstrap", reviewCadence: "per-project", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "initProject", mcpTool: "init_project", commandIds: ["paper.init"] } },
-  { id: "sync-checklist", action: "Checklist syncing remains exempt because it summarizes debt instead of executing it.", artifactPath: ".paper/checklists/paper.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "summary-sync", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "syncChecklist", mcpTool: "sync_checklist", commandIds: ["paper.checklist"] } },
-  { id: "validate-figure-pipeline", action: "Figure validation is an inspection path and remains exempt from follow-through execution gating.", artifactPath: ".paper/figures/qa.json", ownerRole: "researcher", approvedByRole: "researcher", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "inspection-only", reviewCadence: "per-change", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "validateFigurePipeline", mcpTool: "validate_figure_pipeline", commandIds: ["paper.figure"] } },
-  { id: "classify-workflow-intent", action: "Workflow intent classification is analytical and remains exempt.", artifactPath: ".paper/meta/recommendations.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "analysis-only", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "classifyWorkflowIntent", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } },
-  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: "query_workspace_index", commandIds: [] } },
-  { id: "save-board", action: "Board persistence is an internal helper already covered by guarded orchestration updates and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "saveBoard", mcpTool: "upsert_orchestration_board", commandIds: [] } },
-  { id: "persist-experiment-audit", action: "Experiment audit persistence is an internal helper used by guarded experiment-audit flows and bounded runtime execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/experiments/audits.json", ownerRole: "experiment-planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistExperimentAudit", mcpTool: "run_experiment_audit", commandIds: ["paper.experiment-audit"] } },
-  { id: "persist-experiment-result-claim-bridge", action: "Result-to-claim bridge persistence is an internal helper used by guarded bridge flows and bounded runtime execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/claims/bridge-log.json", ownerRole: "experiment-planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistExperimentResultClaimBridge", mcpTool: "bridge_result_to_claim", commandIds: ["paper.result-bridge"] } },
-  { id: "persist-review-log", action: "Review log persistence is an internal helper used by guarded review flows and bounded runtime review execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/reviews/log.md", ownerRole: "reviewer", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistReviewLog", mcpTool: "run_review_loop", commandIds: ["paper.review-loop"] } },
-  { id: "persist-rebuttal-issues", action: "Rebuttal issue persistence is an internal helper used by guarded review/rebuttal flows and bounded runtime review execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".paper/rebuttal/issues.json", ownerRole: "reviewer", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistRebuttalIssues", mcpTool: "normalize_rebuttal_issues", commandIds: ["paper.review-loop"] } },
-  { id: "refresh-durable-surfaces", action: "Durable surface refresh is a proposal-only summarization step and remains exempt.", artifactPath: ".paper/workspace/index.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "summary-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "refreshDurableSurfaces", mcpTool: "query_workspace_index", commandIds: ["paper.meta-optimize", "paper.task-graph", "paper.open-questions", "paper.decisions", "paper.lineage"] } },
-  { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".paper/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-04T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "query_meta_optimize", commandIds: ["paper.meta-optimize"] } }
+  { id: "record-operator-follow-through", action: "Recording follow-through decisions remains explicitly exempt so the governance system can be updated while debt exists.", artifactPath: ".dove/meta/operator-follow-through.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "governance-ledger-maintenance", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorFollowThrough", mcpTool: "record_operator_follow_through", commandIds: ["dove.paper.follow-through"] } },
+  { id: "issue-program-approval", action: "Issuing a fresh program approval remains exempt because it is explicit governance bookkeeping that authorizes later bounded execution but does not itself execute work.", artifactPath: ".dove/programs/approvals.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "approval-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "issueProgramApproval", mcpTool: "issue_program_approval", commandIds: ["dove.paper.approvals"] } },
+  { id: "plan-campaign", action: "Recording a multi-cycle campaign plan remains exempt because it only records planner-supervised campaign intent and does not approve or execute bounded program work.", artifactPath: ".dove/programs/campaigns.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-25T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "campaign-planning-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "planCampaign", mcpTool: "plan_campaign", commandIds: [] } },
+  { id: "revoke-program-approval", action: "Revoking a program approval remains exempt because it withdraws authority rather than executing new work.", artifactPath: ".dove/programs/approvals.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "approval-withdrawal", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "revokeProgramApproval", mcpTool: "revoke_program_approval", commandIds: ["dove.paper.approvals"] } },
+  { id: "run-autonomy-control-plane-once", action: "A manually invoked autonomous control-plane pass may advance one explicitly accepted planner-supervised packet or materialize one governed planned target through one bounded execution delta with durable runtime audit artifacts.", artifactPath: ".dove/runtime/controller-state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "single-turn-control-plane-execution", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runAutonomyControlPlaneOnce", mcpTool: "run_autonomy_once", commandIds: [] } },
+  { id: "run-autonomy-foreground", action: "A manually invoked explicit foreground autonomy run may continue one program-scoped bounded authority envelope or the same-lineage execute-materialized-packet continuation until a declared stop condition is reached.", artifactPath: ".dove/runtime/controller-state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "foreground-bounded-runner", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runAutonomyForeground", mcpTool: "run_autonomy_foreground", commandIds: [] } },
+  { id: "run-autonomy-operate", action: "A manually invoked explicit autonomy operating surface may compose objective/source proposal selection, campaign planning, materialization, bounded approval, foreground execution, and durable stop summaries without hidden scheduling.", artifactPath: ".dove/runtime/controller-state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-25T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "foreground-research-operating-surface", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runAutonomyOperate", mcpTool: "run_autonomy_operate", commandIds: ["dove.paper.autonomy-operate"] } },
+  { id: "query-meta-optimize", action: "Refreshing proposal-only optimizer surfaces remains exempt because it is part of debt detection, not debt execution.", artifactPath: ".dove/meta/LATEST_OPTIMIZER_REPORT.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "proposal-frontier-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "queryMetaOptimize", mcpTool: "query_meta_optimize", commandIds: ["dove.paper.meta-optimize"] } },
+  { id: "init-project", action: "Project initialization bootstraps the workspace and is explicitly exempt from follow-through gating.", artifactPath: ".dove/state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "workspace-bootstrap", reviewCadence: "per-project", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "initProject", mcpTool: "init_project", commandIds: ["dove.paper.init"] } },
+  { id: "sync-checklist", action: "Checklist syncing remains exempt because it summarizes debt instead of executing it.", artifactPath: ".dove/checklists/paper.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "summary-sync", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "syncChecklist", mcpTool: "sync_checklist", commandIds: ["dove.paper.checklist"] } },
+  { id: "validate-figure-pipeline", action: "Figure validation is an inspection path and remains exempt from follow-through execution gating.", artifactPath: ".dove/figures/qa.json", ownerRole: "researcher", approvedByRole: "researcher", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "inspection-only", reviewCadence: "per-change", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "validateFigurePipeline", mcpTool: "validate_figure_pipeline", commandIds: ["dove.paper.figure"] } },
+  { id: "classify-workflow-intent", action: "Workflow intent classification is analytical and remains exempt.", artifactPath: ".dove/meta/recommendations.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "analysis-only", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "classifyWorkflowIntent", mcpTool: "query_meta_optimize", commandIds: ["dove.paper.meta-optimize"] } },
+  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".dove/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: "query_workspace_index", commandIds: [] } },
+  { id: "save-board", action: "Board persistence is an internal helper already covered by guarded orchestration updates and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".dove/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "saveBoard", mcpTool: "upsert_orchestration_board", commandIds: [] } },
+  { id: "persist-experiment-audit", action: "Experiment audit persistence is an internal helper used by guarded experiment-audit flows and bounded runtime execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".dove/experiments/audits.json", ownerRole: "experiment-planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistExperimentAudit", mcpTool: "run_experiment_audit", commandIds: ["dove.paper.experiment-audit"] } },
+  { id: "persist-experiment-result-claim-bridge", action: "Result-to-claim bridge persistence is an internal helper used by guarded bridge flows and bounded runtime execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".dove/claims/bridge-log.json", ownerRole: "experiment-planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistExperimentResultClaimBridge", mcpTool: "bridge_result_to_claim", commandIds: ["dove.paper.result-bridge"] } },
+  { id: "persist-review-log", action: "Review log persistence is an internal helper used by guarded review flows and bounded runtime review execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".dove/reviews/log.md", ownerRole: "reviewer", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistReviewLog", mcpTool: "run_review_loop", commandIds: ["dove.paper.review-loop"] } },
+  { id: "persist-rebuttal-issues", action: "Rebuttal issue persistence is an internal helper used by guarded review/rebuttal flows and bounded runtime review execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".dove/rebuttal/issues.json", ownerRole: "reviewer", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistRebuttalIssues", mcpTool: "normalize_rebuttal_issues", commandIds: ["dove.paper.review-loop"] } },
+  { id: "refresh-durable-surfaces", action: "Durable surface refresh is a proposal-only summarization step and remains exempt.", artifactPath: ".dove/workspace/index.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "summary-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "refreshDurableSurfaces", mcpTool: "query_workspace_index", commandIds: ["dove.paper.meta-optimize", "dove.paper.task-graph", "dove.paper.open-questions", "dove.paper.decisions", "dove.paper.lineage"] } },
+  { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".dove/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "query_meta_optimize", commandIds: ["dove.paper.meta-optimize"] } }
 ];
 
 export const GOVERNANCE_READONLY_COMMANDS = [
-  "paper.orchestrate",
+  "dove.paper.orchestrate",
   "dove.orchestrate",
   "dove.mission",
   "dove.board",
-  "paper.pipeline",
-  "paper.audit",
+  "dove.paper.pipeline",
+  "dove.paper.audit",
   "dove.audit",
   "dove.return",
-  "paper.onboard",
-  "paper.task-graph",
-  "paper.open-questions",
-  "paper.decisions",
-  "paper.lineage",
-  "paper.governance-audit"
+  "dove.paper.onboard",
+  "dove.paper.task-graph",
+  "dove.paper.open-questions",
+  "dove.paper.decisions",
+  "dove.paper.lineage",
+  "dove.paper.governance-audit"
 ];
 
 export const GOVERNANCE_READONLY_TOOLS = [
@@ -335,37 +332,37 @@ export const GOVERNANCE_NEGATIVE_COVERAGE = [
   { id: "create-version-snapshot", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
   { id: "compare-versions", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
   { id: "materialize-guidance-packet", level: "dynamic", tests: ["materializeGuidancePacket creates a durable packet from accepted remediation guidance and binds follow-through"] },
-  { id: "launch-dove-mission", level: "dynamic", tests: ["launchDoveMission materializes accepted guidance through the .paper mission packet store and refuses dual-root Dove authority"] }
+  { id: "launch-dove-mission", level: "dynamic", tests: ["launchDoveMission materializes accepted guidance through the .dove mission packet store and refuses dual-root Dove authority"] }
 ];
 
 export function resolveResumeCommandForPhase(phase) {
   switch (phase) {
     case "sources":
-      return "project:paper.research";
+      return "project:dove.paper.research";
     case "notes":
     case "research":
-      return "project:paper.claim-gate";
+      return "project:dove.paper.claim-gate";
     case "plan":
-      return "project:paper.outline";
+      return "project:dove.paper.outline";
     case "outline":
-      return "project:paper.draft";
+      return "project:dove.paper.draft";
     case "draft":
     case "experiments":
-      return "project:paper.review-loop";
+      return "project:dove.paper.review-loop";
     case "review":
-      return "project:paper.rebuttal-strategy";
+      return "project:dove.paper.rebuttal-strategy";
     case "rebuttal":
-      return "project:paper.version-snapshot";
+      return "project:dove.paper.version-snapshot";
     case "versions":
-      return "project:paper.version-compare";
+      return "project:dove.paper.version-compare";
     case "checklist":
-      return "project:paper.checklist";
+      return "project:dove.paper.checklist";
     default:
-      return "project:paper.orchestrate";
+      return "project:dove.paper.orchestrate";
   }
 }
 
-export const PRIMARY_ROLE_IDS = ["planner", "author", "reviewer"];
+export const PRIMARY_ROLE_IDS = ["planner", "builder", "reviewer"];
 
 export const SUBAGENT_ROLE_IDS = [
   "researcher",
@@ -385,13 +382,13 @@ export const ROLE_HIERARCHY = {
     charter: "Acts as mentor, PI, and editor: sets direction, prioritizes work, coordinates handoffs, and supervises governance.",
     subagents: ["task-planner", "orchestration-manager", "governance-checker", "priority-ranker", "version-analyst"]
   },
-  author: {
-    id: "author",
-    label: "Author",
+  builder: {
+    id: "builder",
+    label: "Builder",
     kind: "primary",
     manuallySwitchable: true,
     parentRole: null,
-    charter: "Acts as the paper builder: writes, revises, gathers evidence, plans experiments, interprets results, and prepares responses.",
+    charter: "Acts as the mission builder: writes, implements, revises, gathers evidence, plans experiments, interprets results, and prepares responses.",
     subagents: ["researcher", "experiment-planner", "result-analyst", "paper-writer", "revision-lead"]
   },
   reviewer: {
@@ -408,34 +405,34 @@ export const ROLE_HIERARCHY = {
     label: "Researcher",
     kind: "subagent",
     manuallySwitchable: false,
-    parentRole: "author",
-    charter: "Author-side specialist for sources, notes, claims, evidence maps, and durable research briefs."
+    parentRole: "builder",
+    charter: "Builder-side specialist for sources, notes, claims, evidence maps, and durable research briefs."
   },
   "experiment-planner": {
     id: "experiment-planner",
     label: "Experiment Planner",
     kind: "subagent",
     manuallySwitchable: false,
-    parentRole: "author",
-    charter: "Author-side specialist for claim-driven experiment plans, baselines, metrics, ablations, and result-to-claim closure."
+    parentRole: "builder",
+    charter: "Builder-side specialist for claim-driven experiment plans, baselines, metrics, ablations, and result-to-claim closure."
   },
   "revision-lead": {
     id: "revision-lead",
     label: "Revision Lead",
     kind: "subagent",
     manuallySwitchable: false,
-    parentRole: "author",
+    parentRole: "builder",
     aliasOf: "rebuttal-lead",
-    charter: "Author-side specialist for turning reviewer concerns into revision plans, response matrices, and rebuttal drafts."
+    charter: "Builder-side specialist for turning reviewer concerns into revision plans, response matrices, and rebuttal drafts."
   },
   "rebuttal-lead": {
     id: "rebuttal-lead",
     label: "Rebuttal Lead",
     kind: "legacy-subagent",
     manuallySwitchable: false,
-    parentRole: "author",
+    parentRole: "builder",
     canonicalRole: "revision-lead",
-    charter: "Compatibility alias for author-side revision and rebuttal response work."
+    charter: "Legacy name for builder-side revision and rebuttal response work."
   },
   "version-analyst": {
     id: "version-analyst",
@@ -462,99 +459,99 @@ export function roleCanActAs(actorRole, expectedRole) {
 }
 
 export const ARTIFACT_PATHS = {
-  paperRoot: ".paper",
-  state: ".paper/state.json",
-  readme: ".paper/README.md",
-  project: ".paper/project.md",
-  researchContract: ".paper/contracts/research-contract.md",
-  orchestrationBoard: ".paper/orchestration/board.json",
-  orchestrationHandoffs: ".paper/orchestration/handoffs.md",
-  taskPacketsDir: ".paper/task-packets",
-  taskPacketsPacketsDir: ".paper/task-packets/packets",
-  taskPacketsIndex: ".paper/task-packets/index.json",
-  roleContextsDir: ".paper/context/roles",
-  phaseContextsDir: ".paper/context/phases",
-  packetContextsDir: ".paper/context/packets",
-  artifactContextsDir: ".paper/context/artifacts",
-  actionContextsDir: ".paper/context/actions",
-  sessionJournal: ".paper/sessions/journal.json",
-  sessionSummary: ".paper/sessions/LATEST_SUMMARY.md",
-  workspaceDir: ".paper/workspace",
-  workspaceIndex: ".paper/workspace/index.json",
-  workspaceArtifactMap: ".paper/workspace/artifact-map.json",
-  doveRootManifest: ".paper/workspace/dove-root-manifest.json",
-  programsDir: ".paper/programs",
-  programsIndex: ".paper/programs/index.json",
-  programRuns: ".paper/programs/runs.json",
-  programApprovals: ".paper/programs/approvals.json",
-  campaignsIndex: ".paper/programs/campaigns.json",
-  workflowPackDir: ".paper/workflow-pack",
-  workflowBoundaries: ".paper/workflow-pack/boundaries.json",
-  researchBrief: ".paper/research/brief.md",
-  researchAgenda: ".paper/research/agenda.json",
-  plan: ".paper/plans/current-plan.md",
-  outline: ".paper/outline/current-outline.md",
-  findings: ".paper/findings.md",
-  experimentLog: ".paper/experiments/EXPERIMENT_LOG.md",
-  experimentPlans: ".paper/experiments/plans.json",
-  experimentResults: ".paper/experiments/results.json",
-  experimentAudits: ".paper/experiments/audits.json",
-  sources: ".paper/sources/index.json",
-  notes: ".paper/notes/index.json",
-  evidence: ".paper/evidence/index.json",
-  claims: ".paper/claims/CLAIMS_FROM_RESULTS.md",
-  claimBridgeLog: ".paper/claims/bridge-log.json",
-  draftsDir: ".paper/drafts",
-  reviewLog: ".paper/reviews/log.md",
-  reviewState: ".paper/reviews/REVIEW_STATE.json",
-  reviewConcerns: ".paper/reviews/concerns.json",
-  reviewDebateLog: ".paper/reviews/debate-log.md",
-  adversarialReviewState: ".paper/reviews/adversarial-state.json",
-  isolatedReviewsDir: ".paper/reviews/isolated",
-  revisionPlan: ".paper/revision-plans/current-plan.md",
-  wiki: ".paper/wiki/index.md",
-  queryPack: ".paper/wiki/query_pack.md",
-  navigationReport: ".paper/wiki/navigation.md",
-  wikiEntities: ".paper/wiki/entities.json",
-  wikiRelations: ".paper/wiki/relations.json",
-  checklist: ".paper/checklists/paper.md",
-  bibliography: ".paper/bibliography/references.bib",
-  citationLog: ".paper/bibliography/citation-log.md",
-  figuresReadme: ".paper/figures/README.md",
-  figuresIndex: ".paper/figures/index.json",
-  figureBriefs: ".paper/figures/briefs.json",
-  figureSegments: ".paper/figures/segments.json",
-  figureTemplates: ".paper/figures/templates.json",
-  figureEditableIndex: ".paper/figures/editable-index.json",
-  figureFinalIndex: ".paper/figures/final-index.json",
-  figureQa: ".paper/figures/qa.json",
-  rebuttalIssues: ".paper/rebuttal/issues.json",
-  rebuttalStrategy: ".paper/rebuttal/strategy.md",
-  rebuttalResponseDraft: ".paper/rebuttal/response-draft.md",
-  versionsIndex: ".paper/versions/index.json",
-  versionComparisons: ".paper/versions/comparisons.json",
-  versionComparisonReport: ".paper/versions/LATEST_COMPARISON.md",
-  versionSnapshotsDir: ".paper/versions/snapshots",
-  runtimeDir: ".paper/runtime",
-  runtimeControllerState: ".paper/runtime/controller-state.json",
-  runtimeContinuation: ".paper/runtime/continuation.json",
-  runtimeLeases: ".paper/runtime/leases.json",
-  runtimeEvents: ".paper/runtime/events.json",
-  runtimeResults: ".paper/runtime/results.json",
-  metaDir: ".paper/meta",
-  metaEvents: ".paper/meta/events.json",
-  metaExecutionBridgeCandidates: ".paper/meta/execution-bridge-candidates.json",
-  metaGovernanceCoverage: ".paper/meta/governance-coverage.json",
-  metaGovernanceCoverageReport: ".paper/meta/governance-coverage-report.json",
-  metaGovernanceCoverageReportMarkdown: ".paper/meta/LATEST_GOVERNANCE_COVERAGE_REPORT.md",
-  metaLongHorizonMemory: ".paper/meta/long-horizon-memory.json",
-  metaOperatorFollowThrough: ".paper/meta/operator-follow-through.json",
-  metaOperatorFollowThroughTransitions: ".paper/meta/operator-follow-through-transitions.json",
-  metaOperatorPlaybooks: ".paper/meta/operator-playbooks.json",
-  metaRemediationPacks: ".paper/meta/remediation-packs.json",
-  metaRecommendations: ".paper/meta/recommendations.json",
-  metaOptimizerState: ".paper/meta/optimizer-state.json",
-  metaOptimizerReport: ".paper/meta/LATEST_OPTIMIZER_REPORT.md"
+  doveRoot: ".dove",
+  state: ".dove/state.json",
+  readme: ".dove/README.md",
+  project: ".dove/project.md",
+  researchContract: ".dove/contracts/research-contract.md",
+  orchestrationBoard: ".dove/orchestration/board.json",
+  orchestrationHandoffs: ".dove/orchestration/handoffs.md",
+  taskPacketsDir: ".dove/task-packets",
+  taskPacketsPacketsDir: ".dove/task-packets/packets",
+  taskPacketsIndex: ".dove/task-packets/index.json",
+  roleContextsDir: ".dove/context/roles",
+  phaseContextsDir: ".dove/context/phases",
+  packetContextsDir: ".dove/context/packets",
+  artifactContextsDir: ".dove/context/artifacts",
+  actionContextsDir: ".dove/context/actions",
+  sessionJournal: ".dove/sessions/journal.json",
+  sessionSummary: ".dove/sessions/LATEST_SUMMARY.md",
+  workspaceDir: ".dove/workspace",
+  workspaceIndex: ".dove/workspace/index.json",
+  workspaceArtifactMap: ".dove/workspace/artifact-map.json",
+  doveRootManifest: ".dove/manifest.json",
+  programsDir: ".dove/programs",
+  programsIndex: ".dove/programs/index.json",
+  programRuns: ".dove/programs/runs.json",
+  programApprovals: ".dove/programs/approvals.json",
+  campaignsIndex: ".dove/programs/campaigns.json",
+  workflowPackDir: ".dove/workflow-pack",
+  workflowBoundaries: ".dove/workflow-pack/boundaries.json",
+  researchBrief: ".dove/research/brief.md",
+  researchAgenda: ".dove/research/agenda.json",
+  plan: ".dove/plans/current-plan.md",
+  outline: ".dove/outline/current-outline.md",
+  findings: ".dove/findings.md",
+  experimentLog: ".dove/experiments/EXPERIMENT_LOG.md",
+  experimentPlans: ".dove/experiments/plans.json",
+  experimentResults: ".dove/experiments/results.json",
+  experimentAudits: ".dove/experiments/audits.json",
+  sources: ".dove/sources/index.json",
+  notes: ".dove/notes/index.json",
+  evidence: ".dove/evidence/index.json",
+  claims: ".dove/claims/CLAIMS_FROM_RESULTS.md",
+  claimBridgeLog: ".dove/claims/bridge-log.json",
+  draftsDir: ".dove/drafts",
+  reviewLog: ".dove/reviews/log.md",
+  reviewState: ".dove/reviews/REVIEW_STATE.json",
+  reviewConcerns: ".dove/reviews/concerns.json",
+  reviewDebateLog: ".dove/reviews/debate-log.md",
+  adversarialReviewState: ".dove/reviews/adversarial-state.json",
+  isolatedReviewsDir: ".dove/reviews/isolated",
+  revisionPlan: ".dove/revision-plans/current-plan.md",
+  wiki: ".dove/wiki/index.md",
+  queryPack: ".dove/wiki/query_pack.md",
+  navigationReport: ".dove/wiki/navigation.md",
+  wikiEntities: ".dove/wiki/entities.json",
+  wikiRelations: ".dove/wiki/relations.json",
+  checklist: ".dove/checklists/paper.md",
+  bibliography: ".dove/bibliography/references.bib",
+  citationLog: ".dove/bibliography/citation-log.md",
+  figuresReadme: ".dove/figures/README.md",
+  figuresIndex: ".dove/figures/index.json",
+  figureBriefs: ".dove/figures/briefs.json",
+  figureSegments: ".dove/figures/segments.json",
+  figureTemplates: ".dove/figures/templates.json",
+  figureEditableIndex: ".dove/figures/editable-index.json",
+  figureFinalIndex: ".dove/figures/final-index.json",
+  figureQa: ".dove/figures/qa.json",
+  rebuttalIssues: ".dove/rebuttal/issues.json",
+  rebuttalStrategy: ".dove/rebuttal/strategy.md",
+  rebuttalResponseDraft: ".dove/rebuttal/response-draft.md",
+  versionsIndex: ".dove/versions/index.json",
+  versionComparisons: ".dove/versions/comparisons.json",
+  versionComparisonReport: ".dove/versions/LATEST_COMPARISON.md",
+  versionSnapshotsDir: ".dove/versions/snapshots",
+  runtimeDir: ".dove/runtime",
+  runtimeControllerState: ".dove/runtime/controller-state.json",
+  runtimeContinuation: ".dove/runtime/continuation.json",
+  runtimeLeases: ".dove/runtime/leases.json",
+  runtimeEvents: ".dove/runtime/events.json",
+  runtimeResults: ".dove/runtime/results.json",
+  metaDir: ".dove/meta",
+  metaEvents: ".dove/meta/events.json",
+  metaExecutionBridgeCandidates: ".dove/meta/execution-bridge-candidates.json",
+  metaGovernanceCoverage: ".dove/meta/governance-coverage.json",
+  metaGovernanceCoverageReport: ".dove/meta/governance-coverage-report.json",
+  metaGovernanceCoverageReportMarkdown: ".dove/meta/LATEST_GOVERNANCE_COVERAGE_REPORT.md",
+  metaLongHorizonMemory: ".dove/meta/long-horizon-memory.json",
+  metaOperatorFollowThrough: ".dove/meta/operator-follow-through.json",
+  metaOperatorFollowThroughTransitions: ".dove/meta/operator-follow-through-transitions.json",
+  metaOperatorPlaybooks: ".dove/meta/operator-playbooks.json",
+  metaRemediationPacks: ".dove/meta/remediation-packs.json",
+  metaRecommendations: ".dove/meta/recommendations.json",
+  metaOptimizerState: ".dove/meta/optimizer-state.json",
+  metaOptimizerReport: ".dove/meta/LATEST_OPTIMIZER_REPORT.md"
 };
 
 export const AUTONOMY_ALLOWED_STEP_TYPES = [
@@ -609,7 +606,7 @@ function defaultSections() {
         title,
         status: "planned",
         summary: "",
-        draftPath: `.paper/drafts/${id}.md`,
+        draftPath: `.dove/drafts/${id}.md`,
         claimIds: []
       }
     ])
@@ -632,7 +629,7 @@ function defaultRoleRoster() {
 }
 
 export function createDefaultBoard(stateOverrides = {}) {
-  const objective = stateOverrides.paper?.objective ?? "Capture the paper's goal and contribution.";
+  const objective = stateOverrides.dove?.objective ?? "Capture the paper's goal and contribution.";
   const phase = stateOverrides.pipeline?.currentStage ?? "init";
   return {
     version: 2,
@@ -641,7 +638,7 @@ export function createDefaultBoard(stateOverrides = {}) {
     intentType: "plan",
     assignedRole: "planner",
     currentFocus: "Align the board and choose the next durable step.",
-    nextAction: "Run project:paper.orchestrate and record the next role-owned task.",
+    nextAction: "Run project:dove.paper.orchestrate and record the next role-owned task.",
     continuationState: createContinuationState(),
     reviewRequiredBeforeFinalize: false,
     tasks: [],
@@ -664,18 +661,18 @@ export function createDefaultBoard(stateOverrides = {}) {
 export function createDefaultState(overrides = {}) {
   const base = {
     version: SCHEMA_VERSION,
-    paper: {
-      title: "Untitled Paper",
+    dove: {
+      title: "Untitled Mission Workspace",
       venue: "Unspecified",
-      objective: "Capture the paper's goal and contribution.",
+      objective: "Capture the Dove mission goal and contribution.",
       deadline: "",
-      thesis: "Describe the paper's core claim in one sentence.",
+      thesis: "Describe the paper-domain claim or mission outcome in one sentence.",
       audience: "TBD"
     },
     pipeline: {
       currentStage: "init",
       lastCompletedStage: null,
-      resumeCommand: "project:paper.orchestrate",
+      resumeCommand: "project:dove.paper.orchestrate",
       updatedAt: new Date(0).toISOString()
     },
     orchestration: {
@@ -685,7 +682,7 @@ export function createDefaultState(overrides = {}) {
       intentType: "plan",
       assignedRole: "planner",
       currentFocus: "Align the board and choose the next durable step.",
-      nextAction: "Run project:paper.orchestrate and record the next role-owned task.",
+      nextAction: "Run project:dove.paper.orchestrate and record the next role-owned task.",
       continuationState: createContinuationState(),
       reviewRequiredBeforeFinalize: false,
       activeTaskIds: [],
@@ -711,12 +708,13 @@ export function createDefaultState(overrides = {}) {
     }
   };
 
+  const incomingDove = overrides.dove ?? overrides.paper ?? {};
   return {
     ...base,
     ...overrides,
-    paper: {
-      ...base.paper,
-      ...(overrides.paper ?? {})
+    dove: {
+      ...base.dove,
+      ...incomingDove
     },
     pipeline: {
       ...base.pipeline,
@@ -737,7 +735,8 @@ export function createDefaultState(overrides = {}) {
     settings: {
       ...base.settings,
       ...(overrides.settings ?? {})
-    }
+    },
+    paper: undefined
   };
 }
 
@@ -754,12 +753,12 @@ export function normalizeSections(rawSections) {
         title: id,
         status: "planned",
         summary: "",
-        draftPath: `.paper/drafts/${id}.md`,
+        draftPath: `.dove/drafts/${id}.md`,
         claimIds: []
       }),
       ...section,
       id,
-      draftPath: section?.draftPath ?? `.paper/drafts/${id}.md`,
+      draftPath: section?.draftPath ?? `.dove/drafts/${id}.md`,
       claimIds: Array.isArray(section?.claimIds) ? section.claimIds : []
     };
   }
@@ -845,7 +844,6 @@ function createDoveRoleSummary(overrides = {}) {
     ...normalizeObject(roleOverrides[role.id]),
     id: role.id,
     label: normalizeString(roleOverrides[role.id]?.label, role.label),
-    compatiblePaperRole: normalizeString(roleOverrides[role.id]?.compatiblePaperRole, role.compatiblePaperRole),
     summary: normalizeString(roleOverrides[role.id]?.summary, role.summary)
   }));
 }
@@ -867,58 +865,35 @@ function createDoveDomainGuidance(overrides = {}) {
   });
 }
 
-export function createDoveRootMigrationManifest() {
+export function createDoveAuthorityManifest() {
   return {
     version: 1,
-    status: "manifest-only",
-    strategy: "paper-authoritative-dove-planned",
-    activeDurableRoot: ARTIFACT_PATHS.paperRoot,
-    authoritativeRoot: ARTIFACT_PATHS.paperRoot,
-    plannedDurableRoot: ".dove",
+    status: "authoritative",
+    strategy: "dove-direct",
+    activeDurableRoot: ARTIFACT_PATHS.doveRoot,
+    authoritativeRoot: ARTIFACT_PATHS.doveRoot,
     manifestPath: ARTIFACT_PATHS.doveRootManifest,
-    plannedDoveManifestPath: ".dove/manifest.json",
-    packageRenameStatus: "deferred",
-    compatibilityMode: "compatibility-manifest",
-    requiresExplicitApproval: true,
-    createsAuthoritativeDoveRoot: false,
-    currentWriteAuthority: ARTIFACT_PATHS.paperRoot,
-    doveRootWriteAuthority: "none",
-    prohibitedAuthoritativeArtifacts: [".dove/state.json", ".dove/workspace/index.json", ".dove/task-packets/index.json"],
-    allowedDoveRootArtifacts: [".dove/manifest.json"],
+    currentWriteAuthority: ARTIFACT_PATHS.doveRoot,
+    legacyRoot: ".paper",
     dualRootInvariant: {
       allowed: false,
-      paperRootAuthoritative: true,
-      doveRootAuthoritative: false,
-      reason: ".paper remains the only authoritative durable root until an explicit breaking migration is approved."
+      doveRootAuthoritative: true,
+      legacyRootAuthoritative: false,
+      reason: ".dove is the only authoritative durable root for Dove."
     },
     phases: [
       {
-        id: "compatibility-baseline",
-        status: "complete",
-        summary: "Five read-only Dove surfaces are compatible with the existing paper workflow root."
-      },
-      {
-        id: "staged-dual-name",
-        status: "complete",
-        summary: "Dove is the product model while paper-factory and paper.* remain compatibility entrypoints."
-      },
-      {
-        id: "manifest-only",
+        id: "dove-direct-authority",
         status: "active",
-        summary: "The migration plan is recorded under .paper without creating an authoritative .dove root."
-      },
-      {
-        id: "authoritative-root-migration",
-        status: "blocked-pending-approval",
-        summary: "Moving authority to .dove requires explicit breaking-change approval and compatibility tests."
+        summary: "Dove owns the package identity, command language, MCP identity, and .dove durable root."
       }
     ],
-    nextDecision: "Approve a breaking durable-root migration before any .dove workspace state becomes authoritative."
+    nextDecision: "Use Dove surfaces directly; old .paper state is not read as runtime authority."
   };
 }
 
-export function normalizeDoveRootMigrationManifest(raw = {}, fallback = null) {
-  const base = fallback ?? createDoveRootMigrationManifest();
+export function normalizeDoveAuthorityManifest(raw = {}, fallback = null) {
+  const base = fallback ?? createDoveAuthorityManifest();
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return base;
   }
@@ -931,23 +906,15 @@ export function normalizeDoveRootMigrationManifest(raw = {}, fallback = null) {
     strategy: normalizeString(raw.strategy, base.strategy),
     activeDurableRoot: normalizeString(raw.activeDurableRoot, base.activeDurableRoot),
     authoritativeRoot: normalizeString(raw.authoritativeRoot, base.authoritativeRoot),
-    plannedDurableRoot: normalizeString(raw.plannedDurableRoot, base.plannedDurableRoot),
     manifestPath: normalizeString(raw.manifestPath, base.manifestPath),
-    plannedDoveManifestPath: normalizeString(raw.plannedDoveManifestPath, base.plannedDoveManifestPath),
-    packageRenameStatus: normalizeString(raw.packageRenameStatus, base.packageRenameStatus),
-    compatibilityMode: normalizeString(raw.compatibilityMode, base.compatibilityMode),
-    requiresExplicitApproval: normalizeBoolean(raw.requiresExplicitApproval, base.requiresExplicitApproval),
-    createsAuthoritativeDoveRoot: normalizeBoolean(raw.createsAuthoritativeDoveRoot, base.createsAuthoritativeDoveRoot),
     currentWriteAuthority: normalizeString(raw.currentWriteAuthority, base.currentWriteAuthority),
-    doveRootWriteAuthority: normalizeString(raw.doveRootWriteAuthority, base.doveRootWriteAuthority),
-    prohibitedAuthoritativeArtifacts: normalizeStringArray(raw.prohibitedAuthoritativeArtifacts, base.prohibitedAuthoritativeArtifacts),
-    allowedDoveRootArtifacts: normalizeStringArray(raw.allowedDoveRootArtifacts, base.allowedDoveRootArtifacts),
+    legacyRoot: normalizeString(raw.legacyRoot, base.legacyRoot),
     dualRootInvariant: {
       ...base.dualRootInvariant,
       ...dualRootInvariant,
       allowed: normalizeBoolean(dualRootInvariant.allowed, base.dualRootInvariant.allowed),
-      paperRootAuthoritative: normalizeBoolean(dualRootInvariant.paperRootAuthoritative, base.dualRootInvariant.paperRootAuthoritative),
       doveRootAuthoritative: normalizeBoolean(dualRootInvariant.doveRootAuthoritative, base.dualRootInvariant.doveRootAuthoritative),
+      legacyRootAuthoritative: normalizeBoolean(dualRootInvariant.legacyRootAuthoritative, base.dualRootInvariant.legacyRootAuthoritative),
       reason: normalizeString(dualRootInvariant.reason, base.dualRootInvariant.reason)
     },
     phases: normalizeObjectArray(raw.phases).length > 0 ? normalizeObjectArray(raw.phases).map((phase) => ({
@@ -967,20 +934,14 @@ export function createDoveWorkspaceKernel() {
     noHiddenRuntime: true,
     identity: {
       productName: "Dove",
-      packageName: "paper-factory",
+      packageName: "dove",
       publicCli: "dove",
-      compatibilityCli: "paper-factory",
       commandPrefix: "project:dove.",
-      compatibilityCommandPrefix: "project:paper.",
-      activeDurableRoot: ARTIFACT_PATHS.paperRoot,
-      plannedDurableRoot: ".dove",
-      namingStrategy: "staged-dual-name",
-      packageRenameStatus: "deferred",
-      durableRootMigrationStatus: "manifest-only",
-      breakingRenameRequiresExplicitApproval: true,
-      overview: "Dove is the primary product model while paper-factory and .paper remain compatibility-authoritative."
+      activeDurableRoot: ARTIFACT_PATHS.doveRoot,
+      durableRootStatus: "authoritative",
+      overview: "Dove is the product, CLI, MCP identity, command language, and durable workspace authority."
     },
-    durableRootMigration: createDoveRootMigrationManifest(),
+    authorityManifest: createDoveAuthorityManifest(),
     currentDomain: "paper",
     domainIds: DOVE_DOMAIN_IDS,
     primaryRoleIds: DOVE_PRIMARY_ROLE_IDS,
@@ -994,28 +955,19 @@ export function createDoveWorkspaceKernel() {
     },
     missionModel: {
       workUnitName: "mission",
-      sourcePacketName: "task-packet",
+      sourcePacketName: "mission-packet",
       domainField: "doveDomain",
       goalField: "goal",
       returnArtifactName: "handoff",
       acceptanceField: "acceptance",
-      durableRoot: ARTIFACT_PATHS.paperRoot,
-      plannedDurableRoot: ".dove"
-    },
-    compatibility: {
-      paperFactory: true,
-      paperCommandPrefix: "project:paper.",
-      paperCli: "paper-factory",
-      paperRoot: ARTIFACT_PATHS.paperRoot,
-      plannedDoveRoot: ".dove",
-      migrationMode: "compatibility-manifest"
+      durableRoot: ARTIFACT_PATHS.doveRoot
     },
     missionCount: 0,
     activeMissionCount: 0,
     reviewNeededMissionCount: 0,
     domainCounts: Object.fromEntries(DOVE_DOMAIN_IDS.map((domainId) => [domainId, 0])),
     currentMissionFamily: null,
-    overview: "Dove compatibility is active: paper workflows remain first-class while the shared mission kernel is introduced."
+    overview: "Dove is active: paper-domain workflows and engineering missions share one authoritative mission kernel."
   };
 }
 
@@ -1025,10 +977,9 @@ function normalizeWorkspaceDove(raw = {}, fallback = null) {
     return base;
   }
   const identity = normalizeObject(raw.identity);
-  const durableRootMigration = normalizeObject(raw.durableRootMigration);
+  const authorityManifest = normalizeObject(raw.authorityManifest);
   const missionLifecycle = normalizeObject(raw.missionLifecycle);
   const missionModel = normalizeObject(raw.missionModel);
-  const compatibility = normalizeObject(raw.compatibility);
   const domainCounts = normalizeObject(raw.domainCounts);
   return {
     ...base,
@@ -1043,18 +994,12 @@ function normalizeWorkspaceDove(raw = {}, fallback = null) {
       productName: normalizeString(identity.productName, base.identity.productName),
       packageName: normalizeString(identity.packageName, base.identity.packageName),
       publicCli: normalizeString(identity.publicCli, base.identity.publicCli),
-      compatibilityCli: normalizeString(identity.compatibilityCli, base.identity.compatibilityCli),
       commandPrefix: normalizeString(identity.commandPrefix, base.identity.commandPrefix),
-      compatibilityCommandPrefix: normalizeString(identity.compatibilityCommandPrefix, base.identity.compatibilityCommandPrefix),
       activeDurableRoot: normalizeString(identity.activeDurableRoot, base.identity.activeDurableRoot),
-      plannedDurableRoot: normalizeString(identity.plannedDurableRoot, base.identity.plannedDurableRoot),
-      namingStrategy: normalizeString(identity.namingStrategy, base.identity.namingStrategy),
-      packageRenameStatus: normalizeString(identity.packageRenameStatus, base.identity.packageRenameStatus),
-      durableRootMigrationStatus: normalizeString(identity.durableRootMigrationStatus, base.identity.durableRootMigrationStatus),
-      breakingRenameRequiresExplicitApproval: normalizeBoolean(identity.breakingRenameRequiresExplicitApproval, base.identity.breakingRenameRequiresExplicitApproval),
+      durableRootStatus: normalizeString(identity.durableRootStatus, base.identity.durableRootStatus),
       overview: normalizeString(identity.overview, base.identity.overview)
     },
-    durableRootMigration: normalizeDoveRootMigrationManifest(durableRootMigration, base.durableRootMigration),
+    authorityManifest: normalizeDoveAuthorityManifest(authorityManifest, base.authorityManifest),
     currentDomain: normalizeDoveDomainId(raw.currentDomain, base.currentDomain),
     domainIds: DOVE_DOMAIN_IDS,
     primaryRoleIds: DOVE_PRIMARY_ROLE_IDS,
@@ -1077,18 +1022,7 @@ function normalizeWorkspaceDove(raw = {}, fallback = null) {
       goalField: normalizeString(missionModel.goalField, base.missionModel.goalField),
       returnArtifactName: normalizeString(missionModel.returnArtifactName, base.missionModel.returnArtifactName),
       acceptanceField: normalizeString(missionModel.acceptanceField, base.missionModel.acceptanceField),
-      durableRoot: normalizeString(missionModel.durableRoot, base.missionModel.durableRoot),
-      plannedDurableRoot: normalizeString(missionModel.plannedDurableRoot, base.missionModel.plannedDurableRoot)
-    },
-    compatibility: {
-      ...base.compatibility,
-      ...compatibility,
-      paperFactory: normalizeBoolean(compatibility.paperFactory, base.compatibility.paperFactory),
-      paperCommandPrefix: normalizeString(compatibility.paperCommandPrefix, base.compatibility.paperCommandPrefix),
-      paperCli: normalizeString(compatibility.paperCli, base.compatibility.paperCli),
-      paperRoot: normalizeString(compatibility.paperRoot, base.compatibility.paperRoot),
-      plannedDoveRoot: normalizeString(compatibility.plannedDoveRoot, base.compatibility.plannedDoveRoot),
-      migrationMode: normalizeString(compatibility.migrationMode, base.compatibility.migrationMode)
+      durableRoot: normalizeString(missionModel.durableRoot, base.missionModel.durableRoot)
     },
     missionCount: normalizeNumber(raw.missionCount, base.missionCount),
     activeMissionCount: normalizeNumber(raw.activeMissionCount, base.activeMissionCount),
@@ -1174,18 +1108,18 @@ export function normalizeState(raw = {}) {
 
   if (raw.version === 1) {
     return createDefaultState({
-      paper: {
-        title: raw.projectTitle ?? "Untitled Paper",
+      dove: {
+        title: raw.projectTitle ?? "Untitled Mission Workspace",
         venue: raw.venue ?? "Unspecified",
-        objective: raw.objective ?? "Capture the paper's goal and contribution.",
+        objective: raw.objective ?? "Capture the Dove mission goal and contribution.",
         deadline: raw.deadline ?? "",
-        thesis: "Describe the paper's core claim in one sentence.",
+        thesis: "Describe the paper-domain claim or mission outcome in one sentence.",
         audience: "TBD"
       },
       pipeline: {
         currentStage: raw.currentPhase ?? "init",
         lastCompletedStage: null,
-        resumeCommand: "project:paper.orchestrate",
+        resumeCommand: "project:dove.paper.orchestrate",
         updatedAt: raw.updatedAt ?? new Date(0).toISOString()
       },
       orchestration: {
@@ -1211,7 +1145,7 @@ export function normalizeState(raw = {}) {
       },
       pipeline: {
         ...(raw.pipeline ?? {}),
-        resumeCommand: raw.pipeline?.resumeCommand ?? "project:paper.orchestrate"
+        resumeCommand: raw.pipeline?.resumeCommand ?? "project:dove.paper.orchestrate"
       }
     });
   }
@@ -1221,10 +1155,11 @@ export function normalizeState(raw = {}) {
     ...defaults,
     ...raw,
     version: SCHEMA_VERSION,
-    paper: {
-      ...defaults.paper,
-      ...(raw.paper ?? {})
+    dove: {
+      ...defaults.dove,
+      ...(raw.dove ?? raw.paper ?? {})
     },
+    paper: undefined,
     pipeline: {
       ...defaults.pipeline,
       ...(raw.pipeline ?? {})
@@ -1663,7 +1598,7 @@ export function normalizeWorkflowBoundaries(raw = {}) {
     ...raw,
     version: base.version,
     managedPaths: normalizeStringArray(raw.managedPaths, base.managedPaths),
-    paperBootstrapOnlyPaths: normalizeStringArray(raw.paperBootstrapOnlyPaths, base.paperBootstrapOnlyPaths),
+    doveBootstrapOnlyPaths: normalizeStringArray(raw.doveBootstrapOnlyPaths, base.doveBootstrapOnlyPaths),
     userOwnedPaths: normalizeStringArray(raw.userOwnedPaths, base.userOwnedPaths),
     managedArtifacts: {
       codePack: {
@@ -3076,7 +3011,7 @@ export function createWorkspaceIndex() {
     packetLifecycleCounts: {},
     handoffObligations: [],
     resumeGuidance: {
-      command: "project:paper.orchestrate",
+      command: "project:dove.paper.orchestrate",
       summary: "Refresh the board and choose the next role-owned step.",
       prioritizedPacketIds: [],
       packetContextPaths: [],
@@ -3306,7 +3241,7 @@ export function createWorkspaceIndex() {
       blockerIds: [],
       closureStates: [],
       lifecycleStates: [],
-      safeExecutionPath: "project:paper.follow-through -> project:paper.materialize -> node ./bin/paper-factory.mjs autonomy-foreground . --max-steps 5",
+      safeExecutionPath: "project:dove.paper.follow-through -> project:dove.paper.materialize -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5",
       overview: "Unified autonomy loop skeleton is explicit, file-first, and foreground-only."
     },
     lifecycle: normalizeWorkspaceLifecycle(),
@@ -3435,74 +3370,74 @@ export function normalizeWorkspaceCampaigns(raw = {}, fallback = null) {
 }
 
 export function createWorkflowBoundaries() {
-  const paperBootstrapOnlyPaths = [
-    ".paper/README.md",
-    ".paper/project.md",
-    ".paper/contracts/research-contract.md",
-    ".paper/orchestration/board.json",
-    ".paper/orchestration/handoffs.md",
-    ".paper/task-packets/index.json",
-    ".paper/research/brief.md",
-    ".paper/research/agenda.json",
-    ".paper/plans/current-plan.md",
-    ".paper/outline/current-outline.md",
-    ".paper/findings.md",
-    ".paper/experiments/EXPERIMENT_LOG.md",
-    ".paper/experiments/plans.json",
-    ".paper/experiments/results.json",
-    ".paper/experiments/audits.json",
-    ".paper/sources/index.json",
-    ".paper/notes/index.json",
-    ".paper/evidence/index.json",
-    ".paper/claims/CLAIMS_FROM_RESULTS.md",
-    ".paper/claims/bridge-log.json",
-    ".paper/reviews/log.md",
-    ".paper/reviews/REVIEW_STATE.json",
-    ".paper/reviews/concerns.json",
-    ".paper/reviews/debate-log.md",
-    ".paper/reviews/adversarial-state.json",
-    ".paper/revision-plans/current-plan.md",
-    ".paper/wiki/index.md",
-    ".paper/wiki/query_pack.md",
-    ".paper/wiki/navigation.md",
-    ".paper/wiki/entities.json",
-    ".paper/wiki/relations.json",
-    ".paper/checklists/paper.md",
-    ".paper/bibliography/references.bib",
-    ".paper/bibliography/citation-log.md",
-    ".paper/figures/README.md",
-    ".paper/figures/index.json",
-    ".paper/figures/briefs.json",
-    ".paper/figures/segments.json",
-    ".paper/figures/templates.json",
-    ".paper/figures/editable-index.json",
-    ".paper/figures/final-index.json",
-    ".paper/figures/qa.json",
-    ".paper/rebuttal/issues.json",
-    ".paper/rebuttal/strategy.md",
-    ".paper/rebuttal/response-draft.md",
-    ".paper/versions/index.json",
-    ".paper/versions/comparisons.json",
-    ".paper/versions/LATEST_COMPARISON.md",
-     ".paper/meta/events.json",
-     ".paper/meta/long-horizon-memory.json",
-      ".paper/meta/operator-playbooks.json",
-     ".paper/meta/remediation-packs.json",
-     ".paper/meta/recommendations.json",
-    ".paper/meta/optimizer-state.json",
-    ".paper/meta/LATEST_OPTIMIZER_REPORT.md",
-    ".paper/runtime/controller-state.json",
-    ".paper/runtime/leases.json",
-    ".paper/runtime/events.json",
-    ".paper/runtime/results.json",
-    ".paper/programs/index.json",
-    ".paper/programs/runs.json",
-    ".paper/programs/approvals.json",
-    ".paper/sessions/journal.json",
-    ".paper/sessions/LATEST_SUMMARY.md",
-    ".paper/workspace/index.json",
-    ".paper/workspace/dove-root-manifest.json",
-    ".paper/workflow-pack/boundaries.json"
+  const doveBootstrapOnlyPaths = [
+    ".dove/README.md",
+    ".dove/project.md",
+    ".dove/contracts/research-contract.md",
+    ".dove/orchestration/board.json",
+    ".dove/orchestration/handoffs.md",
+    ".dove/task-packets/index.json",
+    ".dove/research/brief.md",
+    ".dove/research/agenda.json",
+    ".dove/plans/current-plan.md",
+    ".dove/outline/current-outline.md",
+    ".dove/findings.md",
+    ".dove/experiments/EXPERIMENT_LOG.md",
+    ".dove/experiments/plans.json",
+    ".dove/experiments/results.json",
+    ".dove/experiments/audits.json",
+    ".dove/sources/index.json",
+    ".dove/notes/index.json",
+    ".dove/evidence/index.json",
+    ".dove/claims/CLAIMS_FROM_RESULTS.md",
+    ".dove/claims/bridge-log.json",
+    ".dove/reviews/log.md",
+    ".dove/reviews/REVIEW_STATE.json",
+    ".dove/reviews/concerns.json",
+    ".dove/reviews/debate-log.md",
+    ".dove/reviews/adversarial-state.json",
+    ".dove/revision-plans/current-plan.md",
+    ".dove/wiki/index.md",
+    ".dove/wiki/query_pack.md",
+    ".dove/wiki/navigation.md",
+    ".dove/wiki/entities.json",
+    ".dove/wiki/relations.json",
+    ".dove/checklists/paper.md",
+    ".dove/bibliography/references.bib",
+    ".dove/bibliography/citation-log.md",
+    ".dove/figures/README.md",
+    ".dove/figures/index.json",
+    ".dove/figures/briefs.json",
+    ".dove/figures/segments.json",
+    ".dove/figures/templates.json",
+    ".dove/figures/editable-index.json",
+    ".dove/figures/final-index.json",
+    ".dove/figures/qa.json",
+    ".dove/rebuttal/issues.json",
+    ".dove/rebuttal/strategy.md",
+    ".dove/rebuttal/response-draft.md",
+    ".dove/versions/index.json",
+    ".dove/versions/comparisons.json",
+    ".dove/versions/LATEST_COMPARISON.md",
+     ".dove/meta/events.json",
+     ".dove/meta/long-horizon-memory.json",
+      ".dove/meta/operator-playbooks.json",
+     ".dove/meta/remediation-packs.json",
+     ".dove/meta/recommendations.json",
+    ".dove/meta/optimizer-state.json",
+    ".dove/meta/LATEST_OPTIMIZER_REPORT.md",
+    ".dove/runtime/controller-state.json",
+    ".dove/runtime/leases.json",
+    ".dove/runtime/events.json",
+    ".dove/runtime/results.json",
+    ".dove/programs/index.json",
+    ".dove/programs/runs.json",
+    ".dove/programs/approvals.json",
+    ".dove/sessions/journal.json",
+    ".dove/sessions/LATEST_SUMMARY.md",
+    ".dove/workspace/index.json",
+    ".dove/manifest.json",
+    ".dove/workflow-pack/boundaries.json"
   ];
   return {
     version: 3,
@@ -3529,23 +3464,23 @@ export function createWorkflowBoundaries() {
       "scripts",
       "src"
     ],
-    paperBootstrapOnlyPaths,
+    doveBootstrapOnlyPaths,
     userOwnedPaths: [
-      ".paper/drafts",
-      ".paper/sources",
-      ".paper/notes",
-      ".paper/evidence",
-      ".paper/experiments",
-      ".paper/reviews",
-      ".paper/rebuttal",
-      ".paper/versions/snapshots",
-      ".paper/task-packets/packets",
-    ".paper/context/roles",
-    ".paper/context/phases",
-    ".paper/context/packets",
-      ".paper/context/artifacts",
-      ".paper/context/actions",
-      ".paper/sessions",
+      ".dove/drafts",
+      ".dove/sources",
+      ".dove/notes",
+      ".dove/evidence",
+      ".dove/experiments",
+      ".dove/reviews",
+      ".dove/rebuttal",
+      ".dove/versions/snapshots",
+      ".dove/task-packets/packets",
+    ".dove/context/roles",
+    ".dove/context/phases",
+    ".dove/context/packets",
+      ".dove/context/artifacts",
+      ".dove/context/actions",
+      ".dove/sessions",
       ARTIFACT_PATHS.workspaceArtifactMap
     ],
     managedArtifacts: {
@@ -3558,8 +3493,8 @@ export function createWorkflowBoundaries() {
       programApprovals: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.programApprovals)
     },
     notes: [
-      "Pack installs and syncs should bootstrap missing .paper artifacts but should not overwrite user-authored workspace state.",
-      ".paper remains the durable source of truth and is treated as workspace data, not a managed code payload.",
+      "Pack installs and syncs should bootstrap missing .dove artifacts but should not overwrite user-authored workspace state.",
+      ".dove remains the durable source of truth and is treated as workspace data, not a managed code payload.",
       "Managed replaceable code and bootstrap-only workspace artifacts now advertise revision/template metadata for clearer reconciliation."
     ],
     updatedAt: null

@@ -11,27 +11,27 @@
 
 为了保持诚实，本文件只讨论两类内容：
 
-1. 能从参考仓库和当前 `paper_factory` 仓库中直接找到证据支持的内容
-2. 与 `paper_factory` 设计决策直接相关的架构思想
+1. 能从参考仓库和当前 `Dove` 仓库中直接找到证据支持的内容
+2. 与 `Dove` 设计决策直接相关的架构思想
 
 本文档不把“受启发”写成“完全等价”。
 
-> 说明：文中提到的 `reference_repos/*` 路径，指的是开发过程中在本地工作区下载的参考仓库材料，用于做架构分析与迁移判断。它们不是 `paper_factory` 发布包的一部分；如果你在一个精简发布副本里阅读本文档，请以上游项目仓库和 README 为准。
+> 说明：文中提到的 `reference_repos/*` 路径，指的是开发过程中在本地工作区下载的参考仓库材料，用于做架构分析与迁移判断。它们不是 `Dove` 发布包的一部分；如果你在一个精简发布副本里阅读本文档，请以上游项目仓库和 README 为准。
 
 ---
 
-## 1. 先看 `paper_factory` 自己的架构定位
+## 1. 先看 `Dove` 自己的架构定位
 
-在看参考项目之前，先明确当前 `paper_factory` 本身已经是什么系统。
+在看参考项目之前，先明确当前 `Dove` 本身已经是什么系统。
 
-### 1.1 `paper_factory` 不是一个单体插件，而是四层 workflow pack
+### 1.1 `Dove` 不是一个单体插件，而是四层 workflow pack
 
-当前 `paper_factory` 是一个 **host-neutral、file-first、board-first** 的学术论文工作流包，OpenCode 是默认宿主 adapter，而不是唯一底座。它的系统结构可以分成四层：
+当前 `Dove` 是一个 **host-neutral、file-first、board-first** 的学术论文工作流包，OpenCode 是默认宿主 adapter，而不是唯一底座。它的系统结构可以分成四层：
 
 1. **宿主 adapter 层**：`.opencode/*`、`.claude/*`、`.codex/*`、`.cursor/*`、`.agents/*`
 2. **中立 CLI/MCP/core 层**：`bin/`、`mcp/`、`scripts/`、`src/`
 3. **确定性工具层**：`src/mcp/*`
-4. **持久化工件层**：`.paper/*`
+4. **持久化工件层**：`.dove/*`
 
 对应文件：
 
@@ -44,18 +44,18 @@
 
 ### 1.2 它的核心控制面是什么
 
-当前 `paper_factory` 的控制面并不是“聊天上下文”，而是 durable files：
+当前 `Dove` 的控制面并不是“聊天上下文”，而是 durable files：
 
-- `.paper/orchestration/board.json`
-- `.paper/orchestration/handoffs.md`
-- `.paper/task-packets/*`
-- `.paper/context/*`
-- `.paper/workspace/index.json`
-- `.paper/reviews/*`
-- `.paper/experiments/*`
-- `.paper/claims/*`
-- `.paper/versions/*`
-- `.paper/figures/*`
+- `.dove/orchestration/board.json`
+- `.dove/orchestration/handoffs.md`
+- `.dove/task-packets/*`
+- `.dove/context/*`
+- `.dove/workspace/index.json`
+- `.dove/reviews/*`
+- `.dove/experiments/*`
+- `.dove/claims/*`
+- `.dove/versions/*`
+- `.dove/figures/*`
 
 这意味着：
 
@@ -71,7 +71,7 @@
 
 ### 2.1 OpenCode 在这里扮演什么角色
 
-OpenCode 对 `paper_factory` 的价值，主要不是某个研究能力，而是它提供了一个**稳定、真实、有限**的宿主边界。
+OpenCode 对 `Dove` 的价值，主要不是某个研究能力，而是它提供了一个**稳定、真实、有限**的宿主边界。
 
 它适合承载：
 
@@ -88,7 +88,7 @@ OpenCode 对 `paper_factory` 的价值，主要不是某个研究能力，而是
 
 ### 2.2 这对架构意味着什么
 
-所以 `paper_factory` 的设计原则一直是：
+所以 `Dove` 的设计原则一直是：
 
 > 先接受 OpenCode 的真实边界，再在边界内做最强的工作流系统。
 
@@ -98,7 +98,7 @@ OpenCode 对 `paper_factory` 的价值，主要不是某个研究能力，而是
 - `.opencode/skills`
 - `.opencode.json`
 - 本地 stdio MCP
-- `.paper/*` 作为真值源
+- `.dove/*` 作为真值源
 
 而不是去构造一个依赖宿主私有 hook 的“伪完整版 runtime”。
 
@@ -144,7 +144,7 @@ OpenCode 对 `paper_factory` 的价值，主要不是某个研究能力，而是
 4. **强工作驱动**：`ultrawork`、background agents、todo enforcer、continuation 类机制都强调“做到完成”为止
 5. **工程化配套完整**：install、doctor、兼容层、配置迁移、build/publish 全部纳入系统
 
-### 3.3 为什么它对 `paper_factory` 很重要
+### 3.3 为什么它对 `Dove` 很重要
 
 因为它给我们的不是学术方法论，而是：
 
@@ -152,7 +152,7 @@ OpenCode 对 `paper_factory` 的价值，主要不是某个研究能力，而是
 - **如何把 command / skill / tool / state 分层**
 - **如何让角色不是装饰，而是编排结构的一部分**
 
-### 3.4 `paper_factory` 吸收了哪些架构思想
+### 3.4 `Dove` 吸收了哪些架构思想
 
 吸收的部分：
 
@@ -171,7 +171,7 @@ OpenCode 对 `paper_factory` 的价值，主要不是某个研究能力，而是
 
 一句话概括：
 
-> OMO 给 `paper_factory` 的不是“学术能力”，而是“如何把复杂 agent 工作流工程化地组织起来”。
+> OMO 给 `Dove` 的不是“学术能力”，而是“如何把复杂 agent 工作流工程化地组织起来”。
 
 ---
 
@@ -217,9 +217,9 @@ ARIS 最重要的核心思路有几条：
 5. **outer-loop improvement**
    - 比如 `meta-optimize`，意味着系统不只优化论文，也优化 workflow 自己
 
-### 4.3 它为什么对 `paper_factory` 很重要
+### 4.3 它为什么对 `Dove` 很重要
 
-因为 `paper_factory` 的学术核心不是来自 OMO，而主要来自 ARIS：
+因为 `Dove` 的学术核心不是来自 OMO，而主要来自 ARIS：
 
 - claim-evidence discipline
 - experiment planning / result tracking / audit / bridge
@@ -227,16 +227,16 @@ ARIS 最重要的核心思路有几条：
 - typed wiki 与持久化研究记忆
 - 不把研究过程压缩成一次性 prompt
 
-### 4.4 `paper_factory` 吸收了哪些架构思想
+### 4.4 `Dove` 吸收了哪些架构思想
 
 当前已经吸收的包括：
 
-- `.paper/evidence/*`
-- `.paper/experiments/*`
-- `.paper/reviews/*`
-- `.paper/rebuttal/*`
-- `.paper/versions/*`
-- `.paper/wiki/*`
+- `.dove/evidence/*`
+- `.dove/experiments/*`
+- `.dove/reviews/*`
+- `.dove/rebuttal/*`
+- `.dove/versions/*`
+- `.dove/wiki/*`
 
 并且在最近一轮实现中进一步加强了：
 
@@ -254,7 +254,7 @@ ARIS 最重要的核心思路有几条：
 
 一句话概括：
 
-> ARIS 给 `paper_factory` 的，是“如何把研究方法论做成 durable workflow system”。
+> ARIS 给 `Dove` 的，是“如何把研究方法论做成 durable workflow system”。
 
 ---
 
@@ -290,28 +290,28 @@ ARIS 最重要的核心思路有几条：
 5. **safe update discipline**
    - 对 managed 与 user-owned 内容的边界比较敏感
 
-### 5.3 为什么它对 `paper_factory` 很重要
+### 5.3 为什么它对 `Dove` 很重要
 
-因为 `paper_factory` 从 phase2 开始已经进入了“不是几个命令，而是一个工作台”的阶段。Trellis 给我们的启发主要是：
+因为 `Dove` 从 phase2 开始已经进入了“不是几个命令，而是一个工作台”的阶段。Trellis 给我们的启发主要是：
 
 - packet graph
 - role/phase/packet/action/artifact contexts
 - workspace index / work queues / resume guidance
 - handoff obligations
-- 更像长期 operating surface 的 `.paper/workspace/index.json`
+- 更像长期 operating surface 的 `.dove/workspace/index.json`
 
-### 5.4 `paper_factory` 吸收了哪些架构思想
+### 5.4 `Dove` 吸收了哪些架构思想
 
 现在可以在这些地方看到明显的 Trellis-style 结构：
 
-- `.paper/task-packets/*`
-- `.paper/context/roles/*`
-- `.paper/context/phases/*`
-- `.paper/context/packets/*`
-- `.paper/context/artifacts/*`
-- `.paper/context/actions/*`
-- `.paper/workspace/index.json`
-- `.paper/sessions/*`
+- `.dove/task-packets/*`
+- `.dove/context/roles/*`
+- `.dove/context/phases/*`
+- `.dove/context/packets/*`
+- `.dove/context/artifacts/*`
+- `.dove/context/actions/*`
+- `.dove/workspace/index.json`
+- `.dove/sessions/*`
 - `src/core/navigation.mjs`
 
 其中最近一轮实现进一步补上了：
@@ -332,7 +332,7 @@ ARIS 最重要的核心思路有几条：
 
 一句话概括：
 
-> Trellis 给 `paper_factory` 的，是“如何把工作流变成一个长期可操作的工作台”。
+> Trellis 给 `Dove` 的，是“如何把工作流变成一个长期可操作的工作台”。
 
 ---
 
@@ -344,7 +344,7 @@ ARIS 最重要的核心思路有几条：
 
 ### 6.1 它的架构长什么样
 
-AutoFigure-Edit 是一个**完整的图形生成与编辑系统**，它的系统形态和 `paper_factory` 差别非常大。
+AutoFigure-Edit 是一个**完整的图形生成与编辑系统**，它的系统形态和 `Dove` 差别非常大。
 
 它包含：
 
@@ -380,22 +380,22 @@ AutoFigure-Edit 是一个**完整的图形生成与编辑系统**，它的系统
 
 这是一种非常强的 artifact-contract 思维。
 
-### 6.3 为什么它对 `paper_factory` 很重要
+### 6.3 为什么它对 `Dove` 很重要
 
 因为论文系统里，figure 往往最容易退化成一句“TODO: 画图”。AutoFigure-Edit 给我们的启发是：
 
 > 即使不做完整生成系统，也应该把图的生命周期工件化。
 
-### 6.4 `paper_factory` 吸收了哪些架构思想
+### 6.4 `Dove` 吸收了哪些架构思想
 
-现在 `paper_factory` 的 figure 层已经从简单 backlog 变成 staged artifact contract：
+现在 `Dove` 的 figure 层已经从简单 backlog 变成 staged artifact contract：
 
-- `.paper/figures/briefs.json`
-- `.paper/figures/segments.json`
-- `.paper/figures/templates.json`
-- `.paper/figures/editable-index.json`
-- `.paper/figures/final-index.json`
-- `.paper/figures/qa.json`
+- `.dove/figures/briefs.json`
+- `.dove/figures/segments.json`
+- `.dove/figures/templates.json`
+- `.dove/figures/editable-index.json`
+- `.dove/figures/final-index.json`
+- `.dove/figures/qa.json`
 
 并且：
 
@@ -411,13 +411,13 @@ AutoFigure-Edit 是一个**完整的图形生成与编辑系统**，它的系统
 
 一句话概括：
 
-> AutoFigure-Edit 给 `paper_factory` 的，不是“自动画图能力本身”，而是“把图变成可审计的阶段性工件”。
+> AutoFigure-Edit 给 `Dove` 的，不是“自动画图能力本身”，而是“把图变成可审计的阶段性工件”。
 
 ---
 
-## 7. 当前 `paper_factory` 的系统思路，可以怎么理解
+## 7. 当前 `Dove` 的系统思路，可以怎么理解
 
-如果把上面几个项目压缩成一句架构归纳，那么现在的 `paper_factory` 可以理解成：
+如果把上面几个项目压缩成一句架构归纳，那么现在的 `Dove` 可以理解成：
 
 ### 7.1 它的宿主策略来自 OpenCode
 
@@ -464,7 +464,7 @@ AutoFigure-Edit 是一个**完整的图形生成与编辑系统**，它的系统
 - **ARIS**：学术研究方法学系统
 - **Trellis**：长期工作台 / task operating system 思维
 - **AutoFigure-Edit**：图形流水线与中间工件系统
-- **paper_factory**：把上面这些可迁移优点压缩进一个 host-neutral、file-first、带可选多宿主 adapter 的学术论文 workflow pack
+- **Dove**：把上面这些可迁移优点压缩进一个 host-neutral、file-first、带可选多宿主 adapter 的学术论文 workflow pack
 
 ---
 
@@ -472,10 +472,10 @@ AutoFigure-Edit 是一个**完整的图形生成与编辑系统**，它的系统
 
 即便我们已经吸收了很多优点，也仍然要明确：
 
-1. `paper_factory` 不是 OMO 的完整 runtime clone
-2. `paper_factory` 不是 ARIS 的 full parity
-3. `paper_factory` 不是 Trellis runtime clone
-4. `paper_factory` 不是 AutoFigure-Edit 的图形生成平台
+1. `Dove` 不是 OMO 的完整 runtime clone
+2. `Dove` 不是 ARIS 的 full parity
+3. `Dove` 不是 Trellis runtime clone
+4. `Dove` 不是 AutoFigure-Edit 的图形生成平台
 
 它真正的价值在于：
 
@@ -485,7 +485,7 @@ AutoFigure-Edit 是一个**完整的图形生成与编辑系统**，它的系统
 
 ## 10. 建议的阅读顺序
 
-如果你想系统理解现在的 `paper_factory`，建议按这个顺序看：
+如果你想系统理解现在的 `Dove`，建议按这个顺序看：
 
 1. `README.md`
 2. `docs/USAGE.md`
@@ -502,7 +502,7 @@ AutoFigure-Edit 是一个**完整的图形生成与编辑系统**，它的系统
 - `src/core/artifacts.mjs`
 - `src/mcp/tool-definitions.mjs`
 
-这些文件基本就是当前 `paper_factory` 架构主干。
+这些文件基本就是当前 `Dove` 架构主干。
 
 ---
 

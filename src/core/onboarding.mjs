@@ -6,7 +6,7 @@ import { writeJson } from "./workspace.mjs";
 
 const DEFAULT_EXCLUDED_DIRS = new Set([
   ".git",
-  ".paper",
+  ".dove",
   ".agents",
   ".cache",
   ".claude",
@@ -202,19 +202,19 @@ function buildConflicts(mappings) {
 function buildRecommendedNextActions(mappings, conflicts, writeMap) {
   const actions = [];
   if (!writeMap) {
-    actions.push("Run `paper-factory onboard . --write-map` to persist this proposal under .paper/workspace/artifact-map.json.");
+    actions.push("Run `dove onboard . --write-map` to persist this proposal under .dove/workspace/artifact-map.json.");
   }
   if (conflicts.length > 0) {
     actions.push("Resolve mapping conflicts before importing or rewriting paper artifacts.");
   }
   if (mappings.some((item) => item.artifactType === "manuscript")) {
-    actions.push("Use `project:paper.plan` before converting a legacy manuscript into the design/checklist/implementation/acceptance flow.");
+    actions.push("Use `project:dove.paper.plan` before converting a legacy manuscript into the design/checklist/implementation/acceptance flow.");
   }
   if (mappings.some((item) => item.artifactType === "bibliography")) {
-    actions.push("Use `project:paper.citations` after selecting the canonical bibliography.");
+    actions.push("Use `project:dove.paper.citations` after selecting the canonical bibliography.");
   }
   if (mappings.some((item) => item.artifactType === "review")) {
-    actions.push("Use `project:paper.review-loop` or `project:paper.rebuttal-strategy` after mapping reviewer feedback artifacts.");
+    actions.push("Use `project:dove.paper.review-loop` or `project:dove.paper.rebuttal-strategy` after mapping reviewer feedback artifacts.");
   }
   return actions;
 }

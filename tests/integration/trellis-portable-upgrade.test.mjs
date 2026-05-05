@@ -32,7 +32,7 @@ import {
 } from "../../src/core/index.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "paper-factory-trellis-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-trellis-"));
 }
 
 test("portable Trellis-inspired surfaces stay file-first and durable", () => {
@@ -105,7 +105,7 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   const reviewerManifest = readRoleContextManifest(root, "reviewer");
   const phaseManifest = readPhaseContextManifest(root, "research");
   const packetManifest = readPacketContextManifest(root, "task-packet-review-task");
-  const artifactManifest = readArtifactContextManifest(root, ".paper/orchestration/board.json");
+  const artifactManifest = readArtifactContextManifest(root, ".dove/orchestration/board.json");
   const currentActionBundle = readActionContextBundle(root);
   const packetActionBundle = readActionContextBundle(root, { scopeType: "packet", packetId: "task-packet-review-task" });
   const sessionSummary = summarizeSessionJournal(root);
@@ -117,56 +117,56 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(Array.isArray(lineage.lineage));
   assert.ok(Array.isArray(boundaryReport.missingBootstrapArtifacts));
   assert.ok(Array.isArray(boundaryReport.userOwnedExistingPaths));
-  assert.ok(reviewerManifest.contextPaths.includes(".paper/task-packets/index.json"));
+  assert.ok(reviewerManifest.contextPaths.includes(".dove/task-packets/index.json"));
   assert.ok(reviewerManifest.activeTaskPacketIds.includes("task-packet-review-task"));
-  assert.ok(reviewerManifest.packetContextPaths.includes(".paper/context/packets/task-packet-review-task.json"));
+  assert.ok(reviewerManifest.packetContextPaths.includes(".dove/context/packets/task-packet-review-task.json"));
   assert.ok(reviewerManifest.handoffCandidateIds.includes("task-packet-review-task"));
-  assert.ok(reviewerManifest.preActionReadPaths.includes(".paper/context/actions/role-reviewer.json"));
+  assert.ok(reviewerManifest.preActionReadPaths.includes(".dove/context/actions/role-reviewer.json"));
   assert.equal(packetManifest.packetId, "task-packet-review-task");
   assert.equal(packetManifest.lifecycleStatus, "ready-for-handoff");
   assert.equal(packetManifest.lifecycleFamily, "concern");
-  assert.equal(packetManifest.taskWorkspaceCoupling.workspaceIndexPath, ".paper/workspace/index.json");
+  assert.equal(packetManifest.taskWorkspaceCoupling.workspaceIndexPath, ".dove/workspace/index.json");
   assert.ok(packetManifest.linkedIds.claims.includes("claim-packets"));
-  assert.ok(packetManifest.linkedArtifacts.includes(".paper/context/packets/task-packet-review-task.json"));
-  assert.ok(packetManifest.linkedArtifacts.includes(".paper/task-packets/packets/task-packet-review-task.json"));
-  assert.ok(packetManifest.preActionReadPaths.includes(".paper/context/actions/packet-task-packet-review-task.json"));
+  assert.ok(packetManifest.linkedArtifacts.includes(".dove/context/packets/task-packet-review-task.json"));
+  assert.ok(packetManifest.linkedArtifacts.includes(".dove/task-packets/packets/task-packet-review-task.json"));
+  assert.ok(packetManifest.preActionReadPaths.includes(".dove/context/actions/packet-task-packet-review-task.json"));
   assert.equal(packetManifest.dependencyHealth.state, "clear");
   assert.equal(phaseManifest.phaseId, "research");
-  assert.ok(phaseManifest.preActionReadPaths.includes(".paper/context/actions/phase-research.json"));
-  assert.equal(artifactManifest.artifactPath, ".paper/orchestration/board.json");
+  assert.ok(phaseManifest.preActionReadPaths.includes(".dove/context/actions/phase-research.json"));
+  assert.equal(artifactManifest.artifactPath, ".dove/orchestration/board.json");
   assert.equal(artifactManifest.category, "orchestration");
   assert.equal(artifactManifest.lifecycleFamily, "work-unit");
-  assert.equal(artifactManifest.paperLifecycle.familyId, "work-unit");
-  assert.ok(artifactManifest.readBeforeMutating.includes(".paper/workspace/index.json"));
+  assert.equal(artifactManifest.doveLifecycle.familyId, "work-unit");
+  assert.ok(artifactManifest.readBeforeMutating.includes(".dove/workspace/index.json"));
   assert.equal(currentActionBundle.scopeType, "current");
-  assert.ok(currentActionBundle.requiredReadPaths.includes(".paper/context/actions/current.json"));
+  assert.ok(currentActionBundle.requiredReadPaths.includes(".dove/context/actions/current.json"));
   assert.equal(packetActionBundle.scopeType, "packet");
   assert.equal(packetActionBundle.packetId, "task-packet-review-task");
   assert.ok(workspaceIndex.handoffObligations.some((item) => item.packetId === "task-packet-review-task"));
   assert.ok(workspaceIndex.resumeGuidance.prioritizedPacketIds.includes("task-packet-review-task"));
-  assert.ok(workspaceIndex.resumeGuidance.packetContextPaths.includes(".paper/context/packets/task-packet-review-task.json"));
+  assert.ok(workspaceIndex.resumeGuidance.packetContextPaths.includes(".dove/context/packets/task-packet-review-task.json"));
   assert.equal(workspaceIndex.lifecycle.boardFamily, "objective");
   assert.equal(workspaceIndex.lifecycle.packetCounts.concern >= 1, true);
   assert.equal(workspaceIndex.lifecycle.topFamilies.includes("concern"), true);
   assert.equal(workspaceIndex.repairFrontier.count, 1);
   assert.equal(workspaceIndex.repairFrontier.governanceIssueCount, 1);
   assert.ok(workspaceIndex.repairFrontier.prioritizedItems.some((item) => item.frontierType === "workflow-governance"));
-  assert.equal(workspaceIndex.contextSurfaces.currentActionContextPath, ".paper/context/actions/current.json");
+  assert.equal(workspaceIndex.contextSurfaces.currentActionContextPath, ".dove/context/actions/current.json");
   assert.ok(workspaceIndex.contextSurfaces.prioritizedArtifactContextPaths.some((item) => item.endsWith("orchestration-board-json.json")));
-  assert.ok(workspaceIndex.behaviorDiscipline.requiredReadOrder.includes(".paper/context/actions/current.json"));
+  assert.ok(workspaceIndex.behaviorDiscipline.requiredReadOrder.includes(".dove/context/actions/current.json"));
   assert.ok(phaseManifest.queueSummary.handoff.includes("task-packet-review-task"));
-  assert.ok(phaseManifest.contextPaths.includes(".paper/context/packets/task-packet-review-task.json"));
+  assert.ok(phaseManifest.contextPaths.includes(".dove/context/packets/task-packet-review-task.json"));
   assert.equal(reviewerManifest.operatorGuidance.repairFrontier.governanceIssueCount, 1);
   assert.equal(currentActionBundle.operatorGuidance.repairFrontier.governanceIssueCount, 1);
-  assert.equal(sessionSummary.summaryPath, ".paper/sessions/LATEST_SUMMARY.md");
-  assert.ok(fs.existsSync(path.join(root, ".paper", "wiki", "navigation.md")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "task-packets", "packets", "task-packet-review-task.json")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "context", "packets", "task-packet-review-task.json")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "context", "artifacts", "paper-orchestration-board-json.json")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "context", "actions", "current.json")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "context", "roles", "reviewer.json")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "sessions", "journal.json")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "workflow-pack", "boundaries.json")));
+  assert.equal(sessionSummary.summaryPath, ".dove/sessions/LATEST_SUMMARY.md");
+  assert.ok(fs.existsSync(path.join(root, ".dove", "wiki", "navigation.md")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "task-packets", "packets", "task-packet-review-task.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "context", "packets", "task-packet-review-task.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "context", "artifacts", "dove-orchestration-board-json.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "context", "actions", "current.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "context", "roles", "reviewer.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "sessions", "journal.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "workflow-pack", "boundaries.json")));
 });
 
 test("remediation packs stay durable and visible through operator-facing surfaces", () => {
@@ -266,8 +266,8 @@ test("remediation packs stay durable and visible through operator-facing surface
   assert.match(sessionSummaryText, /Family playbook readiness:/);
   assert.match(sessionSummaryText, /Remediation packs path:/);
   assert.match(sessionSummaryText, /Family playbooks path:/);
-  assert.ok(fs.existsSync(path.join(root, ".paper", "meta", "remediation-packs.json")));
-  assert.ok(fs.existsSync(path.join(root, ".paper", "meta", "operator-playbooks.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "meta", "remediation-packs.json")));
+  assert.ok(fs.existsSync(path.join(root, ".dove", "meta", "operator-playbooks.json")));
 });
 
 test("playbook artifact update maps stay durable and visible through operator-facing surfaces", () => {
@@ -339,7 +339,7 @@ test("task packet refresh preserves user-added fields and invalid role manifests
     tasks: [{ id: "preserve-task", title: "Preserve metadata", assignedRole: "researcher", status: "pending" }]
   });
 
-  const packetPath = path.join(root, ".paper", "task-packets", "packets", "task-preserve-task.json");
+  const packetPath = path.join(root, ".dove", "task-packets", "packets", "task-preserve-task.json");
   const packet = JSON.parse(fs.readFileSync(packetPath, "utf8"));
   packet.userMetadata = { owner: "human", tags: ["custom"] };
   fs.writeFileSync(packetPath, `${JSON.stringify(packet, null, 2)}\n`, "utf8");
@@ -354,7 +354,7 @@ test("task packet refresh preserves user-added fields and invalid role manifests
 test("boundary report exposes malformed boundary metadata instead of silently healing it", () => {
   const root = tempRoot();
   ensureWorkspace(root);
-  const boundaryPath = path.join(root, ".paper", "workflow-pack", "boundaries.json");
+  const boundaryPath = path.join(root, ".dove", "workflow-pack", "boundaries.json");
   fs.writeFileSync(boundaryPath, "{bad json", "utf8");
 
   const report = queryBoundaryReport(root);
