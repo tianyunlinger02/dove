@@ -583,7 +583,7 @@ async function main() {
   assert.equal(doveOrchestrate.proposalOnly, true);
   assert.equal(doveOrchestrate.noAutoApply, true);
   assert.deepEqual(doveOrchestrate.writes, []);
-  assert.equal(doveOrchestrate.route.recommendedCommand, "project:dove.paper.materialize");
+  assert.equal(doveOrchestrate.route.recommendedCommand, "project:dove.materialize");
   assert.equal(doveOrchestrate.diagnostics.noRefresh, true);
   assert.equal(doveOrchestrate.diagnostics.noCommandExecution, true);
   assert.equal(doveOrchestrate.diagnostics.noGitInspection, true);

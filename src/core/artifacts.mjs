@@ -778,13 +778,13 @@ function renderPlan(args, state, board) {
     : "- No open blockers recorded.";
 
   return [
-    "# Current paper plan",
+    "# Current Dove mission plan",
     "",
     `## Thesis\n\n${args.thesis ?? state.dove.thesis}`,
     "",
     `## Audience\n\n${args.audience ?? state.dove.audience}`,
     "",
-    `## Paper objective\n\n${board.doveObjective}`,
+    `## Mission objective\n\n${board.doveObjective}`,
     "",
     `## Current focus\n\n${board.currentFocus}`,
     "",
@@ -834,7 +834,7 @@ function renderChecklist(state, reviewState, board, plans, results, issues, vers
   const openItems = Array.isArray(reviewState.openItems) ? reviewState.openItems : [];
   const draftedSections = Object.values(state.sections).filter((section) => section.status !== "planned").length;
   return [
-    "# Paper checklist",
+    "# Dove mission checklist",
     "",
     "## Orchestration",
     "",
@@ -1730,7 +1730,7 @@ export function upsertNote(root, args = {}) {
 
 export function upsertPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-plan", "guarded");
-  assertFollowThroughReady(root, "Updating the paper plan", args);
+  assertFollowThroughReady(root, "Updating the Dove mission plan", args);
   const state = loadState(root);
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
@@ -1741,20 +1741,20 @@ export function upsertPlan(root, args = {}) {
   }
   const nextState = syncPhase(root, {
     ...state,
-    paper: { ...state.dove, thesis: args.thesis ?? state.dove.thesis, audience: args.audience ?? state.dove.audience }
+    dove: { ...state.dove, thesis: args.thesis ?? state.dove.thesis, audience: args.audience ?? state.dove.audience }
   }, {
     stage: "plan",
-    resumeCommand: "project:dove.paper.outline",
+    resumeCommand: "project:dove.checklist",
     role: "planner",
     intentType: "plan",
-    currentFocus: "Convert supported claims into a sectioned writing plan.",
-    nextAction: "Refresh the outline before drafting.",
+    currentFocus: "Convert the mission goal into a scoped design plan.",
+    nextAction: "Sync the checklist before execution.",
     reviewRequiredBeforeFinalize: true
   });
   writeText(root, ARTIFACT_PATHS.plan, renderPlan(args, nextState, loadBoard(root)));
   refreshDurableSurfaces(root, {
     type: "upsert-plan",
-    summary: "Updated current paper plan.",
+    summary: "Updated current Dove mission plan.",
     artifactPaths: [ARTIFACT_PATHS.plan, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary]
   });
   return { planPath: ARTIFACT_PATHS.plan, thesis: nextState.dove.thesis };

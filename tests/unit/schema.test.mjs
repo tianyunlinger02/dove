@@ -28,6 +28,7 @@ test("normalizeState migrates v1 state into v2", () => {
 test("createDefaultState exposes durable artifact paths", () => {
   const state = createDefaultState();
   assert.equal(state.artifacts.plan, ".dove/plans/current-plan.md");
+  assert.equal(state.artifacts.checklist, ".dove/checklists/current.md");
   assert.equal(state.artifacts.orchestrationBoard, ".dove/orchestration/board.json");
   assert.equal(state.artifacts.taskPacketsIndex, ".dove/task-packets/index.json");
   assert.equal(state.artifacts.packetContextsDir, ".dove/context/packets");
@@ -201,7 +202,9 @@ test("workspace index exposes normalized Dove mission kernel", () => {
   assert.equal(index.dove.currentDomain, "paper");
   assert.deepEqual(index.dove.domainIds, DOVE_DOMAIN_IDS);
   assert.equal(index.dove.domainGuidance.length, DOVE_DOMAIN_GUIDANCE.length);
-  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.paper.materialize or project:dove.paper.autonomy-operate");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.design, "project:dove.plan");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.materialize or project:dove.autonomy-operate");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "general").stageRoutes.design, "project:dove.plan");
   assert.deepEqual(index.dove.primaryRoleIds, DOVE_PRIMARY_ROLE_IDS);
   assert.deepEqual(index.dove.primaryRoles.map((role) => role.id), ["planner", "builder", "reviewer"]);
   assert.deepEqual(index.dove.missionLifecycle.stages, DOVE_MISSION_LIFECYCLE_STAGES);

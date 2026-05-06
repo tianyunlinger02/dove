@@ -8,7 +8,7 @@ Read authoritative `.dove/` state and declared evidence paths to summarize wheth
 
 ## Workflow
 
-1. Read `.dove/context/actions/current.json` when present, then `.dove/workspace/index.json`, `.dove/orchestration/board.json`, `.dove/task-packets/index.json`, `.dove/checklists/paper.md`, `.dove/reviews/REVIEW_STATE.json`, `.dove/versions/index.json`, `.dove/versions/comparisons.json`, and linked mission-packet or artifact manifests.
+1. Read `.dove/context/actions/current.json` when present, then `.dove/workspace/index.json`, `.dove/orchestration/board.json`, `.dove/task-packets/index.json`, `.dove/checklists/current.md`, `.dove/reviews/REVIEW_STATE.json`, `.dove/versions/index.json`, `.dove/versions/comparisons.json`, and linked mission-packet or artifact manifests.
 2. If the `dove` MCP server is available, call `query_dove_return` with the mission domain/stage, target artifacts, acceptance checks, declared changed-file paths, test/validation evidence paths, validation output paths or text, and review evidence paths.
 3. For engineering missions, require declared changed source/test/docs files plus declared test or validation evidence and passing validation output before calling the return ready; use packet `outputPaths` and `evidenceLinks` only as durable declared evidence.
 4. Classify return status as `ready`, `needs-audit`, `needs-review`, `needs-execution`, or `blocked`.

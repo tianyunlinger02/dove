@@ -12,21 +12,21 @@ This file turns the phrase “absorb the advantages of workflow-pack systems and
 
 | Advantage | Status | Where it lives | Notes |
 |---|---|---|---|
-| Packaged workflow surface | Implemented | neutral core + optional host adapters | OpenCode is the default adapter; Claude Code, Codex, Cursor, and shared agent-skill adapter surfaces are installable. |
+| Packaged workflow surface | Implemented | neutral core + optional host adapters | OpenCode is the default adapter; Claude Code, Codex, Cursor, and shared agent-skill adapter surfaces are installable as Dove-only adapter files, not Trellis development surfaces. |
 | Unified Dove mission kernel | Implemented | `.dove/workspace/index.json.dove`, `.dove/manifest.json`, `dove orchestrate`, `dove mission`, `dove board`, `dove audit`, `dove return`, `dove launch`, `query_dove_orchestrate`, `query_dove_mission`, `query_dove_mission_board`, `query_dove_audit`, `query_dove_return`, `launch_dove_mission` | Provides one mission lifecycle, direct Dove product identity, authoritative `.dove/` state, deterministic no-write routing, mission framing, board inspection, proposal-only audit, return-readiness inspection, engineering evidence checks, governed launch into `.dove/task-packets`, and planner/builder/reviewer role boundaries. |
 | Installation ergonomics | Implemented | `bin/dove.mjs` | `install`, `sync`, and `doctor` manage the neutral core plus adapter inventory. |
 | Health checks / guardrails | Implemented | `bin/dove.mjs`, `scripts/doctor-mcp-probe.mjs` | Includes JSON parsing, authority checks, stale legacy state reporting, and MCP probe. |
 | Deterministic helper layer | Implemented | `src/mcp/*` | MCP provides deterministic state mutation and query tools over `.dove/`. |
 | Explicit role inventory | Implemented | `.dove/orchestration/board.json`, role skills | Planner, builder, and reviewer are the primary durable roles; specialists are scoped subagents. |
 | Board-first orchestration | Implemented | `.dove/orchestration/*`, `dove.paper.orchestrate` | File-first contract rather than hidden runtime state. |
-| Durable mission packets | Implemented | `.dove/task-packets/*`, `dove.paper.task-graph` | Portable work objects linked to tasks, experiments, rebuttal issues, versions, and mission state. |
+| Durable mission packets | Implemented | `.dove/task-packets/*`, `dove.task-graph` | Portable work objects linked to tasks, experiments, rebuttal issues, versions, and mission state. |
 | Per-role context manifests | Implemented | `.dove/context/roles/*.json` | Narrows context by role without hidden context routing. |
 | Packet-scoped context manifests | Implemented | `.dove/context/packets/*.json`, MCP packet-context reader | Adds packet-local dependency, artifact, and resume bundles without host hooks. |
 | Session/workspace persistence surfaces | Implemented | `.dove/sessions/*`, `.dove/wiki/navigation.md` | File-backed summary and journal surfaces preserve resumability. |
 | Durable workspace index | Implemented | `.dove/workspace/index.json` | Top-level overview of active packets, work queues, dependency health, ownership, sessions, lifecycle state, and version state. |
 | Managed-vs-user-owned update boundary | Implemented | `bin/dove.mjs`, `.dove/workflow-pack/boundaries.json` | Install/sync bootstrap `.dove` safely instead of overwriting user state. |
-| Query/navigation workflow UX | Implemented | `dove.paper.task-graph`, `dove.paper.open-questions`, `dove.paper.decisions`, `dove.paper.lineage`, MCP query tools | Users can inspect graph/questions/decisions/lineage directly. |
-| Explicit proposal-to-work bridge | Implemented | `dove.paper.materialize`, `materialize_guidance_packet`, `.dove/task-packets/*`, `.dove/meta/operator-follow-through.json` | Accepted remediation guidance can be materialized into one durable packet through an explicit governed path. |
+| Query/navigation workflow UX | Implemented | `dove.plan`, `dove.task-graph`, `dove.checklist`, `dove.approvals`, `dove.governance-audit`, `dove.paper.open-questions`, `dove.paper.decisions`, `dove.paper.lineage`, MCP query tools | Users can design shared missions, inspect graph/questions/decisions/lineage, sync `.dove/checklists/current.md`, manage bounded approvals, and verify governance proof directly. |
+| Explicit proposal-to-work bridge | Implemented | `dove.materialize`, `dove.approvals`, `dove.autonomy-operate`, `materialize_guidance_packet`, `query_program_approvals`, `issue_program_approval`, `revoke_program_approval`, `run_autonomy_operate`, `.dove/task-packets/*`, `.dove/programs/approvals.json`, `.dove/meta/operator-follow-through.json` | Accepted remediation guidance can be materialized into one durable packet, explicitly approved for bounded continuation, and optionally advanced through explicit bounded foreground autonomy. |
 | Host-specific deep hook system | Deferred | N/A | Adapter surfaces avoid pretending unsupported host hooks exist. |
 | Hidden subagent interception | Deferred | N/A | Dove preserves role/subagent boundaries through files and prompts, not unsupported host interception. |
 

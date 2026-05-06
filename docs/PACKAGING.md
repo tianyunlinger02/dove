@@ -9,8 +9,8 @@ The packaged surface is:
 - neutral CLI/MCP/core files: `bin/`, `docs/`, `mcp/`, `scripts/`, `src/`, and `README.md`
 - the `dove` binary at `bin/dove.mjs`
 - the stdio MCP wrapper at `mcp/dove-state-server.mjs`
-- default OpenCode adapter files: `.opencode/` and `.opencode.json`
-- optional adapter files for Claude Code, Codex, Cursor, and shared agent-skill hosts
+- default OpenCode adapter files: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, and `.opencode.json`
+- optional Dove-only adapter files for Claude Code, Codex, Cursor, and shared agent-skill hosts
 
 The project-local `.dove/` directory is created or repaired at install time. It is not shipped as a package snapshot.
 
@@ -19,7 +19,7 @@ The project-local `.dove/` directory is created or repaired at install time. It 
 The packaged code surface is managed:
 
 - neutral core: `bin/`, `docs/`, `mcp/`, `scripts/`, `src/`, `README.md`
-- host adapters: `.opencode/`, `.opencode.json`, `.claude/commands`, `.claude/agents`, `.codex/agents`, `.codex/skills`, `.codex/config.toml`, `.cursor/commands`, `.agents/skills`, `AGENTS.md`
+- host adapters: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.opencode.json`, `.claude/commands/dove`, `.codex/skills/dove-*`, `.cursor/commands/dove-*.md`, `.agents/skills/dove-*`, `AGENTS.md`
 
 The project-local `.dove/` workspace is user-owned state. The installer may create missing starter artifacts and `.dove/manifest.json`, but pack updates should not overwrite evolving sources, notes, drafts, experiments, review logs, rebuttal issues, task packets, runtime state, program approvals, role manifests, or snapshots.
 
@@ -35,4 +35,4 @@ Dove should not claim hidden runtime powers that only a host-specific harness co
 npm pack --dry-run
 ```
 
-This should include the neutral core, safe adapter surfaces, the MCP entrypoint, and the CLI installer. It should not include `.dove/` runtime snapshots, local reference repos, `node_modules`, `.env*`, `*.local.json`, or host-local settings.
+This should include the neutral core, Dove-only adapter surfaces, the MCP entrypoint, and the CLI installer. It should not include `.dove/` runtime snapshots, Trellis development commands/skills/plugins/agents, local reference repos, `node_modules`, `.env*`, `*.local.json`, or host-local settings.

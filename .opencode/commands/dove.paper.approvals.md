@@ -1,22 +1,20 @@
 # dove.paper.approvals
 
-Inspect, issue, or revoke explicit program approvals for bounded autonomous packet steps.
+Paper-domain view of `project:dove.approvals` for bounded autonomous paper packet steps.
 
 ## Goal
 
-Use `.dove/programs/approvals.json`, `.dove/programs/runs.json`, and `.dove/programs/index.json` to keep program approvals explicit, durable, and single-use without changing the one-step runtime model.
+Use the generic Dove approval surface while keeping paper-specific packet, claim, experiment, review, and rebuttal context visible to the operator.
 
 ## Workflow
 
-1. Read `.dove/programs/approvals.json`, `.dove/programs/runs.json`, `.dove/programs/index.json`, `.dove/task-packets/index.json`, and `.dove/workspace/index.json`.
-2. If `dove` MCP is available, call `query_program_approvals` to inspect the current approval state.
-3. Issue a fresh approval only for an existing packet/program linkage that is ready to be re-armed for one bounded step.
-4. When a prior run is already in `review-needed`, prefer issuing the next approval from its durable continuation intent instead of restitching packet/program/run metadata by hand.
-5. Revoke an approval when execution authority should be withdrawn before the next explicit `autonomy-once` pass.
-6. Treat approvals as governance bookkeeping, not execution: issuing or revoking approvals must never create packets, materialize work, or run autonomy by itself.
-7. After a bounded step lands in `review-needed`, mint a fresh `programRunId` and `approvalId` before the next bounded continuation step.
-8. The current bounded allowlist also includes `bridge-result-to-claim`; use it only when an approved audit and explicit bridge rationale are already durable.
+1. Read `.dove/context/actions/current.json` when present, then `.dove/programs/approvals.json`, `.dove/programs/runs.json`, `.dove/programs/index.json`, `.dove/task-packets/index.json`, `.dove/workspace/index.json`, and relevant paper artifacts.
+2. Prefer `project:dove.approvals` for the canonical approval workflow.
+3. If `dove` MCP is available, call `query_program_approvals` to inspect active approvals and review checkpoints.
+4. To authorize one paper-domain bounded continuation, call `issue_program_approval` with explicit packet, program run, worker role, allowed step bounds, `executeBy`, and `reviewAfter` fields.
+5. To withdraw authority, call `revoke_program_approval` with `approvalId`, `actorRole`, and a concrete reason.
+6. Keep paper-specific approval context tied to durable claim, experiment, review, rebuttal, or draft artifacts; do not create a parallel paper-only approval system.
 
 ## Rule
 
-One approval authorizes one bounded step. Consumed or revoked approvals must not be silently reused.
+One approval authorizes one bounded step. This paper view must not execute autonomy, materialize packets, or silently reuse consumed or revoked approvals.

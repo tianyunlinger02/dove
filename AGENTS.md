@@ -1,22 +1,10 @@
-<!-- TRELLIS:START -->
-# Trellis Instructions
+# Dove Agent Instructions
 
-These instructions are for AI assistants working in this project.
+These instructions are for AI assistants working in a Dove workspace.
 
-Use the `/trellis:start` command when starting a new session to:
-- Initialize your developer identity
-- Understand current project context
-- Read relevant guidelines
-
-Use `@/.trellis/` to learn:
-- Development workflow (`workflow.md`)
-- Project structure guidelines (`spec/`)
-- Developer workspace (`workspace/`)
-
-If you're using Codex, project-scoped helpers may also live in:
-- `.agents/skills/` for reusable Trellis skills
-- `.codex/agents/` for optional custom subagents
-
-Keep this managed block so 'trellis update' can refresh the instructions.
-
-<!-- TRELLIS:END -->
+- Treat `.dove/` as the authoritative durable source of truth.
+- Use public Dove surfaces for shared mission work: `dove.orchestrate`, `dove.mission`, `dove.board`, `dove.plan`, `dove.checklist`, `dove.task-graph`, `dove.materialize`, `dove.approvals`, `dove.autonomy-operate`, `dove.audit`, `dove.return`, `dove.launch`, and `dove.governance-audit`.
+- Use `dove.paper.*` only for paper-domain research, claims, citations, drafting, experiments, review, rebuttal, figures, and version workflows.
+- Preserve the planner, builder, and reviewer separation; use handoff files instead of hidden context sharing.
+- Keep autonomy explicit, foreground-only, bounded, approval-aware, and auditable.
+- Do not treat local Trellis development files as packaged Dove product surfaces.

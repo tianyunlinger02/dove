@@ -880,7 +880,7 @@ function nextCommandForReturnStatus(status, domain) {
     return "project:dove.paper.review-loop";
   }
   if (status === "needs-execution") {
-    return "project:dove.paper.checklist";
+    return domain === "paper" ? "project:dove.paper.checklist" : "project:dove.checklist";
   }
   if (status === "needs-audit") {
     return domain === "engineering" ? "project:dove.return" : "project:dove.paper.audit";

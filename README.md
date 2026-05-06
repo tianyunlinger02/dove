@@ -101,11 +101,18 @@ Dove also exposes general mission surfaces:
 - `project:dove.orchestrate` / `dove orchestrate`
 - `project:dove.mission` / `dove mission`
 - `project:dove.board` / `dove board`
+- `project:dove.plan`
+- `project:dove.checklist`
+- `project:dove.task-graph`
+- `project:dove.materialize`
+- `project:dove.approvals`
+- `project:dove.autonomy-operate`
 - `project:dove.audit` / `dove audit`
 - `project:dove.return` / `dove return`
 - `project:dove.launch` / `dove launch`
+- `project:dove.governance-audit`
 
-Paper-domain workflow commands remain under `project:dove.paper.*`, including init, research, notes, claim gating, planning, outlining, drafting, experiment planning, no-fix audit, review loop, isolated review, rebuttal, citations, version snapshots/comparisons, figures, checklist, governance audit, follow-through, materialization, and navigation queries.
+Paper-domain workflow commands remain under `project:dove.paper.*` for init, research, notes, claim gating, paper planning, outlining, drafting, experiment planning, no-fix audit, review loop, isolated review, rebuttal, citations, version snapshots/comparisons, and figures. Shared mission-system commands are public Dove surfaces: `project:dove.plan`, `project:dove.task-graph`, `project:dove.checklist`, `project:dove.materialize`, `project:dove.approvals`, `project:dove.autonomy-operate`, and `project:dove.governance-audit`. `project:dove.paper.plan` and `project:dove.paper.approvals` are paper-domain views of the same plan/approval system where useful.
 
 The paper lifecycle taxonomy remains useful inside the unified Dove model:
 
@@ -139,6 +146,7 @@ Major work should close through `design → checklist → implementation → acc
 - `.dove/orchestration/handoffs.md`
 - `.dove/task-packets/index.json`
 - `.dove/task-packets/packets/*.json`
+- `.dove/checklists/current.md`
 - `.dove/context/roles/*.json`
 - `.dove/context/phases/*.json`
 - `.dove/context/packets/*.json`
@@ -154,7 +162,7 @@ Major work should close through `design → checklist → implementation → acc
 
 ## Package boundary
 
-Install/sync may bootstrap missing `.dove/` starter artifacts, but `.dove/` is user-owned workspace state, not a packaged snapshot to overwrite. Pack updates manage code, scripts, MCP files, docs, and adapter surfaces; they must not overwrite evolving project state.
+Install/sync may bootstrap missing `.dove/` starter artifacts, but `.dove/` is user-owned workspace state, not a packaged snapshot to overwrite. Pack updates manage code, scripts, MCP files, docs, and Dove-only adapter surfaces; Trellis development commands, skills, plugins, agents, and local host settings are not part of the packaged Dove product boundary.
 
 ## Docs
 

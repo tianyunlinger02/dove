@@ -208,7 +208,7 @@ test("single-paper workflow creates durable artifacts", () => {
   const checklist = syncChecklist(root);
 
   assert.equal(review.verdict, "coherent");
-  assert.equal(checklist.checklistPath, ".dove/checklists/paper.md");
+  assert.equal(checklist.checklistPath, ".dove/checklists/current.md");
   assert.equal(comparison.fromVersionId, snapshotA.id);
   assert.ok(fs.existsSync(path.join(root, ".dove", "revision-plans", "current-plan.md")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "sources", "index.json")));

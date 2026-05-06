@@ -36,9 +36,9 @@ Use the current `.dove` context and the user's request to recommend exactly one 
 | Need isolated independent reviewer session | `project:dove.paper.isolated-review` |
 | Need author-side rebuttal/revision strategy | `project:dove.paper.rebuttal-strategy` |
 | Need version snapshot or comparison | `project:dove.paper.version-snapshot` or `project:dove.paper.version-compare` |
-| Need task queue/navigation | `project:dove.paper.task-graph` |
-| Need governance proof | `project:dove.paper.governance-audit` |
-| Need explicit foreground autonomy | `project:dove.paper.autonomy-operate` |
+| Need task queue/navigation | `project:dove.task-graph` |
+| Need governance proof | `project:dove.governance-audit` |
+| Need explicit foreground autonomy | `project:dove.autonomy-operate` |
 
 ## Output
 

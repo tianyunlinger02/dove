@@ -6,6 +6,7 @@ import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_R
 const ROOT = process.cwd();
 
 const doveSurfaces = ["orchestrate", "mission", "board", "audit", "return"];
+const genericDoveSurfaces = ["task-graph", "checklist", "materialize", "autonomy-operate", "governance-audit", "plan", "approvals"];
 const doveSurfaceQueries = {
   orchestrate: "query_dove_orchestrate",
   mission: "query_dove_mission",
@@ -18,6 +19,7 @@ const requiredCommands = [
   "dove.paper.init.md",
   "dove.paper.orchestrate.md",
   ...doveSurfaces.map((surface) => `dove.${surface}.md`),
+  ...genericDoveSurfaces.map((surface) => `dove.${surface}.md`),
   "dove.launch.md",
   "dove.paper.audit.md",
   "dove.paper.onboard.md",
@@ -76,6 +78,22 @@ const doveAdapterFiles = [
   ...doveSurfaces.map((surface) => ({ surface, relativePath: path.join(".codex", "skills", `dove-${surface}`, "SKILL.md") })),
   ...doveSurfaces.map((surface) => ({ surface, relativePath: path.join(".agents", "skills", `dove-${surface}`, "SKILL.md") }))
 ];
+const genericDoveSurfaceTools = {
+  "task-graph": ["query_task_graph"],
+  checklist: ["sync_checklist"],
+  materialize: ["materialize_guidance_packet"],
+  "autonomy-operate": ["run_autonomy_operate"],
+  "governance-audit": ["query_governance_coverage_report"],
+  plan: ["upsert_plan"],
+  approvals: ["query_program_approvals", "issue_program_approval", "revoke_program_approval"]
+};
+const genericDoveAdapterFiles = [
+  ...genericDoveSurfaces.map((surface) => ({ surface, relativePath: path.join(".opencode", "commands", `dove.${surface}.md`) })),
+  ...genericDoveSurfaces.map((surface) => ({ surface, relativePath: path.join(".claude", "commands", "dove", `${surface}.md`) })),
+  ...genericDoveSurfaces.map((surface) => ({ surface, relativePath: path.join(".cursor", "commands", `dove-${surface}.md`) })),
+  ...genericDoveSurfaces.map((surface) => ({ surface, relativePath: path.join(".codex", "skills", `dove-${surface}`, "SKILL.md") })),
+  ...genericDoveSurfaces.map((surface) => ({ surface, relativePath: path.join(".agents", "skills", `dove-${surface}`, "SKILL.md") }))
+];
 const doveLaunchAdapterFiles = [
   path.join(".opencode", "commands", "dove.launch.md"),
   path.join(".claude", "commands", "dove", "launch.md"),
@@ -121,6 +139,15 @@ for (const { surface, relativePath } of doveAdapterFiles) {
   }
   for (const forbiddenQuery of forbiddenRefreshingDoveQueries) {
     assert.equal(commandText.includes(forbiddenQuery), false, `${relativePath} must not recommend refreshing query helper ${forbiddenQuery}`);
+  }
+}
+
+for (const { surface, relativePath } of genericDoveAdapterFiles) {
+  const absolutePath = path.join(ROOT, relativePath);
+  assert.ok(fs.existsSync(absolutePath), `Missing generic Dove adapter surface: ${relativePath}`);
+  const commandText = fs.readFileSync(absolutePath, "utf8");
+  for (const requiredTool of genericDoveSurfaceTools[surface] ?? []) {
+    assert.equal(commandText.includes(requiredTool), true, `${relativePath} must mention ${requiredTool}`);
   }
 }
 

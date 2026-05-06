@@ -6,7 +6,7 @@
 
 ## Overview
 
-This project does not currently have a browser frontend. In this Trellis setup, the `frontend` spec layer documents the user-facing surfaces of `paper_factory`: OpenCode commands and skills, CLI commands, MCP tools, durable `.paper/` artifacts, and the package quality gates that keep those surfaces aligned.
+This project does not currently have a browser frontend. In this Trellis setup, the `frontend` spec layer documents the user-facing surfaces of `Dove`: OpenCode commands and skills, CLI commands, MCP tools, durable `.dove/` artifacts, and the package quality gates that keep those surfaces aligned.
 
 ---
 
@@ -17,7 +17,7 @@ This project does not currently have a browser frontend. In this Trellis setup, 
 | [Directory Structure](./directory-structure.md) | Package surface organization and file layout | Filled |
 | [Component Guidelines](./component-guidelines.md) | Command, skill, CLI, and MCP surface patterns | Filled |
 | [Hook Guidelines](./hook-guidelines.md) | File-backed context/action patterns and reusable helpers | Filled |
-| [State Management](./state-management.md) | Durable `.paper/` state, derived state, and governance state | Filled |
+| [State Management](./state-management.md) | Durable `.dove/` state, derived state, and governance state | Filled |
 | [Quality Guidelines](./quality-guidelines.md) | Validation scripts, tests, and forbidden patterns | Filled |
 | [Type Safety](./type-safety.md) | JavaScript runtime schema/normalization conventions | Filled |
 
@@ -38,11 +38,11 @@ Before changing package behavior, read the relevant documents below:
 ## Project Reality
 
 - Runtime: Node.js ESM (`.mjs`), not TypeScript.
-- Package entrypoint: `bin/paper-factory.mjs`.
+- Package entrypoint: `bin/dove.mjs`.
 - Core logic: `src/core/`.
-- MCP interface: `src/mcp/` and `mcp/paper-state-server.mjs`.
+- MCP interface: `src/mcp/` and `mcp/dove-state-server.mjs`.
 - Operator surfaces: `.opencode/commands/` and `.opencode/skills/`.
-- Durable state model: `.paper/`.
+- Durable state model: `.dove/`.
 - Validation: `npm run check` combines command validation, MCP validation, governance audit, and Node tests.
 
 ---

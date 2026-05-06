@@ -26,17 +26,58 @@ const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const CORE_INSTALL_PATHS = ["bin", "docs", "mcp", "scripts", "src", "README.md"];
 const DEFAULT_HOST_ADAPTERS = ["opencode"];
+const DOVE_DIRECT_SURFACES = ["orchestrate", "mission", "board", "audit", "return", "launch"];
+const DOVE_GENERIC_SURFACES = ["task-graph", "checklist", "materialize", "autonomy-operate", "governance-audit", "plan", "approvals"];
+const DOVE_PUBLIC_SURFACES = [...DOVE_DIRECT_SURFACES, ...DOVE_GENERIC_SURFACES];
+
+function packagePath(...segments) {
+  return path.join(...segments).split(path.sep).join("/");
+}
+
+function existingFilesIn(relativeDir, includeName) {
+  const absoluteDir = path.join(PACKAGE_ROOT, relativeDir);
+  if (!fs.existsSync(absoluteDir)) {
+    return [];
+  }
+  return fs.readdirSync(absoluteDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && includeName(entry.name))
+    .map((entry) => packagePath(relativeDir, entry.name))
+    .sort();
+}
+
+function existingDoveSkillPaths(relativeDir) {
+  const absoluteDir = path.join(PACKAGE_ROOT, relativeDir);
+  if (!fs.existsSync(absoluteDir)) {
+    return [];
+  }
+  return fs.readdirSync(absoluteDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith("dove-"))
+    .map((entry) => packagePath(relativeDir, entry.name, "SKILL.md"))
+    .filter((relativePath) => fs.existsSync(path.join(PACKAGE_ROOT, relativePath)))
+    .sort();
+}
+
+const OPENCODE_PUBLIC_SURFACE_PATHS = DOVE_PUBLIC_SURFACES.map((surface) => `.opencode/commands/dove.${surface}.md`);
+const CLAUDE_PUBLIC_SURFACE_PATHS = DOVE_PUBLIC_SURFACES.map((surface) => `.claude/commands/dove/${surface}.md`);
+const CURSOR_PUBLIC_SURFACE_PATHS = DOVE_PUBLIC_SURFACES.map((surface) => `.cursor/commands/dove-${surface}.md`);
+const CODEX_PUBLIC_SURFACE_PATHS = DOVE_PUBLIC_SURFACES.map((surface) => `.codex/skills/dove-${surface}/SKILL.md`);
+const AGENT_PUBLIC_SURFACE_PATHS = DOVE_PUBLIC_SURFACES.map((surface) => `.agents/skills/dove-${surface}/SKILL.md`);
+
 const HOST_ADAPTERS = {
   opencode: {
     label: "OpenCode",
-    paths: [".opencode", ".opencode.json"],
+    paths: [
+      ...existingFilesIn(".opencode/commands", (name) => name.startsWith("dove.") && name.endsWith(".md")),
+      ...existingDoveSkillPaths(".opencode/skills"),
+      ".opencode.json"
+    ],
     requiredPaths: [
+      ...OPENCODE_PUBLIC_SURFACE_PATHS,
       ".opencode/commands/dove.paper.init.md",
-      ".opencode/commands/dove.orchestrate.md",
+      ".opencode/commands/dove.paper.orchestrate.md",
       ".opencode/commands/dove.paper.pipeline.md",
-      ".opencode/commands/dove.paper.experiment-audit.md",
-      ".opencode/commands/dove.paper.isolated-review.md",
-      ".opencode/commands/dove.paper.result-bridge.md",
+      ".opencode/commands/dove.paper.plan.md",
+      ".opencode/commands/dove.paper.approvals.md",
       ".opencode/skills/dove-pipeline/SKILL.md",
       ".opencode/skills/dove-planner/SKILL.md",
       ".opencode.json"
@@ -45,61 +86,26 @@ const HOST_ADAPTERS = {
   },
   claude: {
     label: "Claude Code",
-    paths: [".claude/commands", ".claude/agents"],
-    requiredPaths: [
-      ".claude/commands/trellis/start.md",
-      ".claude/commands/dove/orchestrate.md",
-      ".claude/commands/dove/mission.md",
-      ".claude/commands/dove/board.md",
-      ".claude/commands/dove/audit.md",
-      ".claude/commands/dove/return.md",
-      ".claude/commands/dove/launch.md",
-      ".claude/agents/implement.md"
-    ],
+    paths: CLAUDE_PUBLIC_SURFACE_PATHS,
+    requiredPaths: CLAUDE_PUBLIC_SURFACE_PATHS,
     jsonChecks: []
   },
   codex: {
     label: "Codex",
-    paths: [".codex/agents", ".codex/skills", ".codex/config.toml"],
-    requiredPaths: [
-      ".codex/agents/implement.toml",
-      ".codex/skills/dove-orchestrate/SKILL.md",
-      ".codex/skills/dove-mission/SKILL.md",
-      ".codex/skills/dove-board/SKILL.md",
-      ".codex/skills/dove-audit/SKILL.md",
-      ".codex/skills/dove-return/SKILL.md",
-      ".codex/skills/dove-launch/SKILL.md",
-      ".codex/config.toml"
-    ],
+    paths: CODEX_PUBLIC_SURFACE_PATHS,
+    requiredPaths: CODEX_PUBLIC_SURFACE_PATHS,
     jsonChecks: []
   },
   cursor: {
     label: "Cursor",
-    paths: [".cursor/commands"],
-    requiredPaths: [
-      ".cursor/commands/trellis-start.md",
-      ".cursor/commands/dove-orchestrate.md",
-      ".cursor/commands/dove-mission.md",
-      ".cursor/commands/dove-board.md",
-      ".cursor/commands/dove-audit.md",
-      ".cursor/commands/dove-return.md",
-      ".cursor/commands/dove-launch.md"
-    ],
+    paths: CURSOR_PUBLIC_SURFACE_PATHS,
+    requiredPaths: CURSOR_PUBLIC_SURFACE_PATHS,
     jsonChecks: []
   },
   agents: {
     label: "Shared agent skills",
-    paths: [".agents/skills", "AGENTS.md"],
-    requiredPaths: [
-      ".agents/skills/start/SKILL.md",
-      ".agents/skills/dove-orchestrate/SKILL.md",
-      ".agents/skills/dove-mission/SKILL.md",
-      ".agents/skills/dove-board/SKILL.md",
-      ".agents/skills/dove-audit/SKILL.md",
-      ".agents/skills/dove-return/SKILL.md",
-      ".agents/skills/dove-launch/SKILL.md",
-      "AGENTS.md"
-    ],
+    paths: [...AGENT_PUBLIC_SURFACE_PATHS, "AGENTS.md"],
+    requiredPaths: [...AGENT_PUBLIC_SURFACE_PATHS, "AGENTS.md"],
     jsonChecks: []
   }
 };

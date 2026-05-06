@@ -8,7 +8,7 @@ Read the current `.dove` board, workspace index, and mission packets as one Dove
 
 ## Workflow
 
-1. Read `.dove/orchestration/board.json`, `.dove/workspace/index.json`, `.dove/task-packets/index.json`, `.dove/reviews/state.json`, `.dove/versions/index.json`, `.dove/versions/comparisons.json`, and `.dove/checklists/paper.md` as available.
+1. Read `.dove/orchestration/board.json`, `.dove/workspace/index.json`, `.dove/task-packets/index.json`, `.dove/reviews/state.json`, `.dove/versions/index.json`, `.dove/versions/comparisons.json`, and `.dove/checklists/current.md` as available.
 2. If the `dove` MCP server is available, call `query_dove_mission_board` with any requested domain, stage, mission packet, status, or archived filters.
 3. Treat `.dove/` as the authoritative durable root.
 4. Group visible missions by Dove domain, lifecycle stage, lifecycle status, and planner/builder/reviewer role boundary.

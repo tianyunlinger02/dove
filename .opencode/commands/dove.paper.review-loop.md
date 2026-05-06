@@ -8,7 +8,7 @@ Produce a durable review entry plus a fresh revision plan from the current paper
 
 ## Workflow
 
-1. Read `.dove/context/actions/current.json` when present, then `.dove/orchestration/board.json`, `.dove/evidence/index.json`, `.dove/drafts/`, `.dove/reviews/REVIEW_STATE.json`, `.dove/reviews/concerns.json`, `.dove/experiments/audits.json`, `.dove/claims/bridge-log.json`, `.dove/revision-plans/current-plan.md`, and `.dove/checklists/paper.md`.
+1. Read `.dove/context/actions/current.json` when present, then `.dove/orchestration/board.json`, `.dove/evidence/index.json`, `.dove/drafts/`, `.dove/reviews/REVIEW_STATE.json`, `.dove/reviews/concerns.json`, `.dove/experiments/audits.json`, `.dove/claims/bridge-log.json`, `.dove/revision-plans/current-plan.md`, and `.dove/checklists/current.md`.
 2. If `dove` MCP is available, call `run_review_loop`.
 3. Treat unsupported claims, audit integrity flags, blocked bridge events, and broken result-to-claim bridges as high severity; citation TODOs as medium severity; outline drift as actionable process debt; and unresolved blockers as board-level work.
 4. Update persistent concerns, reviewer-vs-author response ownership, adversarial state, revision items, and rebuttal issues so the next review round can resume from files only.

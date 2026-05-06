@@ -13,10 +13,11 @@ const coreFiles = [
   "src/core/isolated-review.mjs",
   "src/core/orchestration.mjs",
   "src/core/navigation.mjs",
-  "src/core/runtime.mjs"
+  "src/core/runtime.mjs",
+  "src/core/dove.mjs"
 ];
 
-const WRITE_SIGNAL_REGEX = /(writeJson|writeText|appendText|saveState|refreshDurableSurfaces)\(/;
+const WRITE_SIGNAL_REGEX = /(writeJson|writeText|appendText|saveState|refreshDurableSurfaces|materializeGuidancePacket)\(/;
 const EXEMPT_FUNCTIONS = new Set([
   "queryMetaOptimize",
   "recordOperatorFollowThrough"

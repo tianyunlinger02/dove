@@ -43,7 +43,7 @@ This repository does not contain a React/browser frontend. The Trellis `frontend
 - Put MCP exposure in `src/mcp/*.mjs`. `src/mcp/tool-definitions.mjs` defines schemas; `src/mcp/handlers.mjs` dispatches tool names to core functions.
 - Put install/doctor/autonomy CLI wiring in `bin/dove.mjs`; keep reusable behavior in `src/core/`.
 - Put validation scripts in `scripts/*.mjs` and wire them through `package.json` scripts.
-- Put user-facing OpenCode prompt surfaces in `.opencode/commands/dove.paper.*.md` and role skills in `.opencode/skills/dove-*/SKILL.md`.
+- Put user-facing OpenCode prompt surfaces in `.opencode/commands/dove.*.md` for general Dove surfaces, `.opencode/commands/dove.paper.*.md` for paper-domain surfaces, and role skills in `.opencode/skills/dove-*/SKILL.md`.
 - Treat `.dove/` as the durable artifact model, not as generated scratch. Bootstrap may create files there, but package update logic must preserve user-owned state.
 
 ---

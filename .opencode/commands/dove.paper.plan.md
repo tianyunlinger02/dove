@@ -13,4 +13,4 @@ Write `.dove/plans/current-plan.md` so it reflects the thesis, audience, section
 3. In major-change design, make scope, non-goals, target artifacts, risks, required evidence, acceptance checks, and next owner explicit before any implementation command runs.
 4. If `dove` MCP is available, call `upsert_plan` after preparing the plan/design content.
 5. Keep the plan evidence-aware: gaps, blockers, and role-owned board tasks stay explicit instead of being smoothed over.
-6. Point major changes to `project:dove.paper.checklist`; point ordinary planning work to the next drafting, experiment, or review command.
+6. Point major changes to `project:dove.checklist`; point ordinary planning work to the next drafting, experiment, or review command.

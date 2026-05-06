@@ -1809,8 +1809,8 @@ function buildAutonomyLoopSummary({ board, packets, openQuestions = [], metaOpti
       runtimeState: packetRuntimeState,
       followThroughState: packetFollowThroughState,
       nextSafeAction: reviewCheckpointActive
-        ? `Review checkpoint ${programs?.currentReviewCheckpointRunId ?? "current-run"} and issue a fresh approval through project:dove.paper.approvals.`
-        : runtime?.currentContinuationCommand ?? "Use project:dove.paper.follow-through or project:dove.paper.materialize before any foreground autonomy run.",
+        ? `Review checkpoint ${programs?.currentReviewCheckpointRunId ?? "current-run"} and issue a fresh approval through project:dove.approvals.`
+        : runtime?.currentContinuationCommand ?? "Use project:dove.paper.follow-through or project:dove.materialize before any foreground autonomy run.",
       approvalPointers: approvalPointerIds,
       runtimePointers: runtimePointerIds,
       followThroughPointers: followThroughPointerIds,
@@ -1897,7 +1897,7 @@ function buildAutonomyLoopSummary({ board, packets, openQuestions = [], metaOpti
     blockerIds: uniqueSorted(loops.flatMap((loop) => loop.blockers)),
     closureStates: uniqueSorted(loops.map((loop) => loop.closureState)),
     lifecycleStates: uniqueSorted(loops.map((loop) => loop.lifecycleState).filter(Boolean)),
-    safeExecutionPath: "project:dove.paper.follow-through -> project:dove.paper.materialize -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5",
+    safeExecutionPath: "project:dove.paper.follow-through -> project:dove.materialize -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5",
     overview: `${loops.length} unified autonomy loop families are visible; ${blockedCount} blocked, ${readyCount} ready, ${closedCount} carrying closure evidence. Execution remains explicit foreground-only.`
   };
 }
@@ -1910,7 +1910,7 @@ function renderAutonomyLoopOverviewLines(autonomyLoops = {}) {
     `- Unified autonomy current loop: ${summary.currentLoopId ?? "none"}`,
     `- Unified autonomy lifecycle state: ${summary.activeLifecycleState ?? "unknown"}`,
     `- Unified autonomy next safe action: ${summary.nextSafeAction ?? "Refresh the board and choose the next explicit operator action."}`,
-    `- Unified autonomy safe execution path: ${summary.safeExecutionPath ?? "project:dove.paper.follow-through -> project:dove.paper.materialize -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5"}`,
+    `- Unified autonomy safe execution path: ${summary.safeExecutionPath ?? "project:dove.paper.follow-through -> project:dove.materialize -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5"}`,
     `- Unified autonomy blockers: ${(summary.blockerIds ?? []).join(", ") || "none"}`,
     `- Unified autonomy approvals: ${(summary.approvalPointers ?? []).join(", ") || "none"}`,
     `- Unified autonomy runtime pointers: ${(summary.runtimePointers ?? []).join(", ") || "none"}`,

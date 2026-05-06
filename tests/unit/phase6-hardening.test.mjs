@@ -363,7 +363,7 @@ test("queryWorkspaceIndex treats explicit Dove engineering packets as engineerin
   const workspaceIndex = queryWorkspaceIndex(root);
   assert.equal(workspaceIndex.dove.currentDomain, "engineering");
   assert.equal(workspaceIndex.dove.domainCounts.engineering, 1);
-  assert.equal(workspaceIndex.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.paper.materialize or project:dove.paper.autonomy-operate");
+  assert.equal(workspaceIndex.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.materialize or project:dove.autonomy-operate");
   assert.equal(workspaceIndex.activePackets[0].doveDomain, "engineering");
   assert.equal(workspaceIndex.activePackets[0].lifecycleFamily, "structure");
 });
@@ -449,12 +449,14 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.equal(boundaries.managedArtifacts.workflowBoundaries.revisionId, "schema-v5:bootstrap-only");
   assert.equal(boundaries.managedArtifacts.workspaceIndex.path, ".dove/workspace/index.json");
   assert.equal(boundaries.managedArtifacts.doveRootManifest.path, ".dove/manifest.json");
-  assert.deepEqual(boundaries.managedPaths, [".opencode", ".opencode.json", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
+  assert.deepEqual(boundaries.managedPaths, [".opencode/commands/dove*.md", ".opencode/skills/dove-*", ".opencode.json", ".claude/commands/dove", ".codex/skills/dove-*", ".cursor/commands/dove-*.md", ".agents/skills/dove-*", "AGENTS.md", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.neutralCorePaths, ["README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.defaultHostAdapters, ["opencode"]);
   assert.deepEqual(boundaries.availableHostAdapters, ["opencode", "claude", "codex", "cursor", "agents"]);
-  assert.deepEqual(boundaries.managedHostAdapterPaths.claude, [".claude/commands", ".claude/agents"]);
-  assert.deepEqual(boundaries.managedHostAdapterPaths.agents, [".agents/skills", "AGENTS.md"]);
+  assert.deepEqual(boundaries.managedHostAdapterPaths.claude, [".claude/commands/dove"]);
+  assert.deepEqual(boundaries.managedHostAdapterPaths.codex, [".codex/skills/dove-*"]);
+  assert.deepEqual(boundaries.managedHostAdapterPaths.cursor, [".cursor/commands/dove-*.md"]);
+  assert.deepEqual(boundaries.managedHostAdapterPaths.agents, [".agents/skills/dove-*", "AGENTS.md"]);
   assert.deepEqual(boundaries.notes, ["legacy note"]);
 
   assert.equal(workspaceIndex.version, 9);
@@ -1762,6 +1764,7 @@ test("governance registry completely binds the expected mutating command and MCP
     "dove.paper.source",
     "dove.paper.note",
     "dove.paper.claim-gate",
+    "dove.plan",
     "dove.paper.plan",
     "dove.paper.outline",
     "dove.paper.draft",
@@ -1779,7 +1782,13 @@ test("governance registry completely binds the expected mutating command and MCP
       "dove.paper.rebuttal",
       "dove.paper.follow-through",
       "dove.paper.meta-optimize",
+      "dove.approvals",
+      "dove.checklist",
+      "dove.paper.checklist",
+      "dove.materialize",
       "dove.paper.materialize",
+      "dove.autonomy-operate",
+      "dove.paper.autonomy-operate",
       "dove.launch"
   ];
   for (const commandId of expectedMutatingCommands) {
@@ -1799,12 +1808,16 @@ test("governance registry completely binds the expected mutating command and MCP
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.board"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.audit"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.return"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.task-graph"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.governance-audit"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_orchestrate"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_audit"), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.paper.orchestrate.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.orchestrate.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.mission.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.board.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.task-graph.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.governance-audit.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.audit.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.return.md")), true);
 });
@@ -3323,11 +3336,11 @@ test("runAutonomyControlPlaneOnce executes one approved program-level research b
   assert.equal(packetLoop.runtimeState, "review-checkpoint-recorded");
   assert.equal(packetLoop.blockers.includes("program-step-alpha-run-1"), true);
   assert.equal(workspaceIndex.autonomyLoops.activeLifecycleState, "review-checkpoint-awaiting-fresh-approval");
-  assert.match(workspaceIndex.autonomyLoops.nextSafeAction, /project:dove\.paper\.approvals/);
+  assert.match(workspaceIndex.autonomyLoops.nextSafeAction, /project:dove\.approvals/);
   assert.equal(workspaceIndex.runtime.continuationCount, 1);
   assert.equal(workspaceIndex.runtime.currentContinuationKind, "issue-fresh-approval");
   assert.equal(workspaceIndex.runtime.currentContinuationProgramRunId, "program-step-alpha-run-1");
-  assert.equal(workspaceIndex.runtime.currentContinuationCommand, "project:dove.paper.approvals");
+  assert.equal(workspaceIndex.runtime.currentContinuationCommand, "project:dove.approvals");
   assert.equal(approvalsView.continuationIntents[0].suggestedProgramRunId, "program-step-alpha-run-1-next");
   assert.equal(boardAfter.assignedRole, boardBefore.assignedRole);
   assert.equal(boardAfter.currentPhase, boardBefore.currentPhase);

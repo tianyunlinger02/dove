@@ -727,7 +727,7 @@ export function queryPaperAudit(root, args = {}) {
       confidence: "high",
       summary: `${error.path} could not be parsed as JSON: ${error.message}`,
       artifactPaths: [error.path],
-      suggestedNextCommand: "project:dove.paper.checklist"
+      suggestedNextCommand: "project:dove.checklist"
     });
   }
 
@@ -899,7 +899,7 @@ export function queryPaperAudit(root, args = {}) {
       category: "process",
       summary: "The checklist still appears to contain open, TODO, blocked, or needs-review items.",
       artifactPaths: [ARTIFACT_PATHS.checklist],
-      suggestedNextCommand: "project:dove.paper.checklist"
+      suggestedNextCommand: "project:dove.checklist"
     });
   }
 
@@ -911,7 +911,7 @@ export function queryPaperAudit(root, args = {}) {
       category: "workspace",
       summary: `Workspace lifecycle board family ${workspaceIndex.lifecycle.boardFamily} is not part of the current taxonomy.`,
       artifactPaths: [ARTIFACT_PATHS.workspaceIndex],
-      suggestedNextCommand: "project:dove.paper.task-graph"
+      suggestedNextCommand: "project:dove.task-graph"
     });
   }
 

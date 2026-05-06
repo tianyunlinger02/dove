@@ -6,10 +6,10 @@
 
 ## Overview
 
-There are no React hooks. The hook-like abstractions in `paper_factory` are explicit file-backed actions and core helper pipelines:
+There are no React hooks. The hook-like abstractions in `Dove` are explicit file-backed actions and core helper pipelines:
 
-- Pre-action context bundles under `.paper/context/actions/`.
-- Role, phase, packet, and artifact manifests under `.paper/context/`.
+- Pre-action context bundles under `.dove/context/actions/`.
+- Role, phase, packet, and artifact manifests under `.dove/context/`.
 - Core read/normalize/write helpers in `src/core/workspace.mjs`.
 - Query and mutation functions exported through `src/core/index.mjs` and exposed through MCP.
 
@@ -40,7 +40,7 @@ Data is fetched from local files, not remote APIs:
 4. Persist normalized data with deterministic formatting.
 5. For public commands, read the nearest context first: action bundle, role/phase manifest, packet manifest, then artifact manifest.
 
-Example command pattern: `.opencode/commands/paper.orchestrate.md` reads `.paper/context/actions/current.json` before the board and handoff files. `.opencode/commands/paper.meta-optimize.md` reads optimizer report, recommendations, remediation packs, events, optimizer state, long-horizon memory, and workspace index before recommending next action.
+Example command pattern: `.opencode/commands/dove.paper.orchestrate.md` reads `.dove/context/actions/current.json` before the board and handoff files. `.opencode/commands/dove.paper.meta-optimize.md` reads optimizer report, recommendations, remediation packs, events, optimizer state, long-horizon memory, and workspace index before recommending next action.
 
 ---
 

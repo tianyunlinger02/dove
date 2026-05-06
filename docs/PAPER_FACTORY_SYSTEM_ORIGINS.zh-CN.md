@@ -34,7 +34,7 @@
 - `.dove/task-packets/*` 作为持久化任务包
 - `.dove/context/roles/*.json` 作为按角色裁剪后的上下文清单
 - `.dove/sessions/*` 作为持久化会话/工作区摘要
-- `dove.paper.task-graph`、`dove.paper.open-questions`、`dove.paper.decisions`、`dove.paper.lineage` 作为查询与导航表面
+- `dove.task-graph` 作为公共任务图表面，`dove.paper.open-questions`、`dove.paper.decisions`、`dove.paper.lineage` 作为 paper-domain 查询与导航表面
 
 这些能力可在以下文件中直接看到：
 
@@ -367,6 +367,7 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
   - `.dove/sessions/LATEST_SUMMARY.md`
   - `src/core/navigation.mjs`
 - query/navigation surfaces：
+  - `.opencode/commands/dove.task-graph.md`
   - `.opencode/commands/dove.paper.task-graph.md`
   - `.opencode/commands/dove.paper.open-questions.md`
   - `.opencode/commands/dove.paper.decisions.md`

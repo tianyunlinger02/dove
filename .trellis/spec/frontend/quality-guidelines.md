@@ -1,6 +1,6 @@
 # Quality Guidelines
 
-> Code and package quality standards for `paper_factory`.
+> Code and package quality standards for `Dove`.
 
 ---
 
@@ -28,15 +28,15 @@ npm pack --dry-run
 - Do not commit or report completed work with failing `npm run check` unless the failure is explicitly documented as unrelated and accepted by the user.
 - Do not bypass validators or tests when adding command/MCP/governance surfaces.
 - Do not add hidden daemons, hidden schedulers, or host-level hook interception. `README.md` lists those as intentionally out of scope.
-- Do not let package install/sync overwrite user-owned `.paper/` data.
-- Do not make `.paper/meta/*` optimizer output execute changes automatically; it is proposal-only until governed materialization/follow-through.
+- Do not let package install/sync overwrite user-owned `.dove/` data.
+- Do not make `.dove/meta/*` optimizer output execute changes automatically; it is proposal-only until governed materialization/follow-through.
 - Do not add command, skill, artifact, or MCP names in only one layer. Public surfaces must stay aligned across markdown, schema registries, handlers, validators, and tests.
 
 ---
 
 ## Required Patterns
 
-- Keep durable workflow state file-first and resumable from `.paper/`.
+- Keep durable workflow state file-first and resumable from `.dove/`.
 - Prefer shared core functions for behavior exposed by CLI and MCP.
 - Update governance registries when adding or changing mutation surfaces.
 - Keep role ownership and override policy fields explicit for guarded mutations.

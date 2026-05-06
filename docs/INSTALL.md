@@ -10,7 +10,7 @@ The supported install path is host-neutral at the core and adapter-based at the 
 
 1. copy or sync neutral package files into a target project (`bin/`, `docs/`, `mcp/`, `scripts/`, `src/`, and `README.md`)
 2. install requested host adapters
-3. let the selected host discover commands, agents, skills, or local MCP configuration from its adapter files
+3. let the selected host discover Dove command or skill adapter files plus the local MCP configuration when that host supports it
 4. bootstrap missing `.dove/` artifacts without overwriting user-owned workspace state
 5. write `.dove/manifest.json` as the Dove authority manifest
 
@@ -83,7 +83,7 @@ The doctor command checks the neutral core, `.dove/state.json`, `.dove/manifest.
 
 `install` and `sync` treat `.dove/` as user-owned workspace data. The CLI bootstraps missing `.dove` artifacts via the workspace initializer, but it does not copy a packaged `.dove/` tree over the target project as managed code.
 
-Adapter copying is allowlisted and skips unsafe local artifacts such as `node_modules`, `.git`, `.env*`, `*.local.json`, `settings.local.json`, logs, caches, and temp files. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
+Adapter copying is allowlisted to Dove surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.claude/commands/dove`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. Trellis development commands, skills, plugins, agents, and local host settings are not installed as Dove product surfaces. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
 
 ## Validation
 

@@ -22,12 +22,12 @@ Advance the project through the durable writing spine without skipping lifecycle
 12. `project:dove.paper.rebuttal-strategy`
 13. `project:dove.paper.version-snapshot`
 14. `project:dove.paper.version-compare`
-15. `project:dove.paper.task-graph`
+15. `project:dove.task-graph`
 16. `project:dove.paper.open-questions`
 17. `project:dove.paper.decisions`
 18. `project:dove.paper.lineage`
 19. `project:dove.paper.revise`
-20. `project:dove.paper.checklist`
+20. `project:dove.checklist`
 
 ## Lifecycle taxonomy
 
@@ -38,9 +38,9 @@ Use `.dove/workspace/index.json.lifecycle` and artifact context manifests to cla
 Major paper changes must close through `design → checklist → implementation → acceptance`:
 
 1. `project:dove.paper.plan` records design scope, non-goals, risks, target artifacts, and acceptance evidence.
-2. `project:dove.paper.checklist` turns that design into concrete implementation steps and checks.
+2. `project:dove.checklist` turns that design into concrete implementation steps and checks.
 3. `project:dove.paper.draft`, `project:dove.paper.revise`, experiment, figure, citation, rebuttal, or bridge commands implement only the scoped checklist work.
-4. `project:dove.paper.review-loop`, `project:dove.paper.checklist`, `project:dove.paper.version-snapshot`, and `project:dove.paper.version-compare` provide acceptance proof.
+4. `project:dove.paper.review-loop`, `project:dove.checklist`, `project:dove.paper.version-snapshot`, and `project:dove.paper.version-compare` provide acceptance proof.
 
 ## Rule
 

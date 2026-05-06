@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 
 import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS } from "../../src/core/index.mjs";
 import { toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
@@ -71,6 +73,16 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "run_autonomy_foreground",
     "run_autonomy_operate"
   ]);
+});
+
+test("doctor MCP probe requires current Dove tools without calling mutating tools", () => {
+  const probeText = fs.readFileSync(path.join(process.cwd(), "scripts", "doctor-mcp-probe.mjs"), "utf8");
+  for (const requiredTool of ["query_dove_orchestrate", "query_dove_mission", "query_dove_mission_board", "query_dove_audit", "query_dove_return", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_operate"]) {
+    assert.match(probeText, new RegExp(`"${requiredTool}"`));
+  }
+  for (const mutatingTool of ["launch_dove_mission", "materialize_guidance_packet", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
+    assert.equal(probeText.includes(`tools/call", { name: "${mutatingTool}"`), false, `doctor probe must not call mutating tool ${mutatingTool}`);
+  }
 });
 
 test("every MCP tool surface is classified as guarded, exempt, or read-only", () => {

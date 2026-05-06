@@ -307,7 +307,7 @@ function buildContinuationItems(root, entry) {
   if (programRun?.reviewCheckpointRequired) {
     return [{
       kind: "issue-fresh-approval",
-      command: "project:dove.paper.approvals",
+      command: "project:dove.approvals",
       packetId: entry.packetId,
       programRunId: programRun.id,
       followThroughId: entry.followThroughId ?? null,
