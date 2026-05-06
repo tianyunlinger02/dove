@@ -1,109 +1,40 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_COMMANDS, GOVERNANCE_READONLY_TOOLS } from "../src/core/schema.mjs";
+
+import {
+  GOVERNANCE_EXEMPT_MUTATIONS,
+  GOVERNANCE_GUARDED_MUTATIONS,
+  GOVERNANCE_READONLY_COMMANDS,
+  GOVERNANCE_READONLY_TOOLS
+} from "../src/core/schema.mjs";
+import {
+  COMMAND_SURFACES,
+  OPENCODE_ROLE_SKILL_PATHS,
+  TOOL_CONTEXT_PATHS,
+  commandContextPaths
+} from "../src/core/command-manifest.mjs";
+import { checkGeneratedAdapters, generatedAdapterEntries } from "./generate-command-adapters.mjs";
 
 const ROOT = process.cwd();
 
-const doveSurfaces = ["orchestrate", "mission", "board", "audit", "return"];
-const genericDoveSurfaces = ["task-graph", "checklist", "materialize", "autonomy-operate", "governance-audit", "plan", "approvals"];
-const doveSurfaceQueries = {
-  orchestrate: "query_dove_orchestrate",
-  mission: "query_dove_mission",
-  board: "query_dove_mission_board",
-  audit: "query_dove_audit",
-  return: "query_dove_return"
-};
+function readRelative(relativePath) {
+  const absolutePath = path.join(ROOT, relativePath);
+  assert.ok(fs.existsSync(absolutePath), `Missing generated Dove adapter surface: ${relativePath}`);
+  return fs.readFileSync(absolutePath, "utf8");
+}
 
-const requiredCommands = [
-  "dove.paper.init.md",
-  "dove.paper.orchestrate.md",
-  ...doveSurfaces.map((surface) => `dove.${surface}.md`),
-  ...genericDoveSurfaces.map((surface) => `dove.${surface}.md`),
-  "dove.launch.md",
-  "dove.paper.audit.md",
-  "dove.paper.onboard.md",
-  "dove.paper.research.md",
-  "dove.paper.source.md",
-  "dove.paper.note.md",
-  "dove.paper.claim-gate.md",
-  "dove.paper.outline.md",
-  "dove.paper.plan.md",
-  "dove.paper.draft.md",
-  "dove.paper.experiment-plan.md",
-  "dove.paper.experiment-audit.md",
-  "dove.paper.review.md",
-  "dove.paper.review-loop.md",
-  "dove.paper.isolated-review.md",
-  "dove.paper.result-bridge.md",
-  "dove.paper.revise.md",
-  "dove.paper.rebuttal-strategy.md",
-  "dove.paper.version-snapshot.md",
-  "dove.paper.version-compare.md",
-  "dove.paper.task-graph.md",
-  "dove.paper.open-questions.md",
-  "dove.paper.decisions.md",
-  "dove.paper.lineage.md",
-  "dove.paper.meta-optimize.md",
-  "dove.paper.follow-through.md",
-  "dove.paper.materialize.md",
-  "dove.paper.autonomy-operate.md",
-  "dove.paper.governance-audit.md",
-  "dove.paper.wiki.md",
-  "dove.paper.checklist.md",
-  "dove.paper.citations.md",
-  "dove.paper.figure.md",
-  "dove.paper.pipeline.md",
-  "dove.paper.rebuttal.md"
-];
+const drift = checkGeneratedAdapters(ROOT);
+assert.equal(drift.length, 0, `Generated command adapter drift: ${drift.map((item) => `${item.relativePath} (${item.reason})`).join(", ")}`);
 
-const requiredSkills = [
-  "dove-pipeline/SKILL.md",
-  "dove-planner/SKILL.md",
-  "dove-researcher/SKILL.md",
-  "dove-reviewer/SKILL.md",
-  "dove-rebuttal-strategist/SKILL.md",
-  "dove-experiment-planning/SKILL.md",
-  "dove-version-analyst/SKILL.md",
-  "dove-claim-gate/SKILL.md",
-  "dove-review-loop/SKILL.md",
-  "dove-citation-discipline/SKILL.md",
-  "dove-rebuttal/SKILL.md"
-];
+const generatorText = fs.readFileSync(path.join(ROOT, "scripts", "generate-command-adapters.mjs"), "utf8");
+assert.doesNotMatch(generatorText, /const\s+(?:BASE_CONTEXT_PATHS|TOOL_CONTEXT_PATHS|COMMAND_CONTEXT_PATHS|COMMAND_CONSTRAINTS)\b/, "Command context and constraint metadata belongs in src/core/command-manifest.mjs, not the adapter generator");
 
-const doveAdapterFiles = [
-  ...doveSurfaces.map((surface) => ({ surface, relativePath: path.join(".opencode", "commands", `dove.${surface}.md`) })),
-  ...doveSurfaces.map((surface) => ({ surface, relativePath: path.join(".claude", "commands", "dove", `${surface}.md`) })),
-  ...doveSurfaces.map((surface) => ({ surface, relativePath: path.join(".cursor", "commands", `dove-${surface}.md`) })),
-  ...doveSurfaces.map((surface) => ({ surface, relativePath: path.join(".codex", "skills", `dove-${surface}`, "SKILL.md") })),
-  ...doveSurfaces.map((surface) => ({ surface, relativePath: path.join(".agents", "skills", `dove-${surface}`, "SKILL.md") }))
-];
-const genericDoveSurfaceTools = {
-  "task-graph": ["query_task_graph"],
-  checklist: ["sync_checklist"],
-  materialize: ["materialize_guidance_packet"],
-  "autonomy-operate": ["run_autonomy_operate"],
-  "governance-audit": ["query_governance_coverage_report"],
-  plan: ["upsert_plan"],
-  approvals: ["query_program_approvals", "issue_program_approval", "revoke_program_approval"]
-};
-const genericDoveAdapterFiles = [
-  ...genericDoveSurfaces.map((surface) => ({ surface, relativePath: path.join(".opencode", "commands", `dove.${surface}.md`) })),
-  ...genericDoveSurfaces.map((surface) => ({ surface, relativePath: path.join(".claude", "commands", "dove", `${surface}.md`) })),
-  ...genericDoveSurfaces.map((surface) => ({ surface, relativePath: path.join(".cursor", "commands", `dove-${surface}.md`) })),
-  ...genericDoveSurfaces.map((surface) => ({ surface, relativePath: path.join(".codex", "skills", `dove-${surface}`, "SKILL.md") })),
-  ...genericDoveSurfaces.map((surface) => ({ surface, relativePath: path.join(".agents", "skills", `dove-${surface}`, "SKILL.md") }))
-];
-const doveLaunchAdapterFiles = [
-  path.join(".opencode", "commands", "dove.launch.md"),
-  path.join(".claude", "commands", "dove", "launch.md"),
-  path.join(".cursor", "commands", "dove-launch.md"),
-  path.join(".codex", "skills", "dove-launch", "SKILL.md"),
-  path.join(".agents", "skills", "dove-launch", "SKILL.md")
-];
-
-for (const fileName of requiredCommands) {
-  assert.ok(fs.existsSync(path.join(ROOT, ".opencode", "commands", fileName)), `Missing command: ${fileName}`);
+for (const command of COMMAND_SURFACES) {
+  assert.ok(commandContextPaths(command).includes(".dove/context/actions/current.json"), `${command.id} should inherit base action context`);
+  for (const toolName of command.requiredTools ?? []) {
+    assert.ok(TOOL_CONTEXT_PATHS[toolName], `${command.id} required tool ${toolName} should declare manifest context paths`);
+  }
 }
 
 const classifiedCommandIds = new Set([
@@ -111,16 +42,8 @@ const classifiedCommandIds = new Set([
   ...GOVERNANCE_EXEMPT_MUTATIONS.flatMap((entry) => entry.surfaceBindings?.commandIds ?? []),
   ...GOVERNANCE_READONLY_COMMANDS
 ]);
-for (const fileName of requiredCommands) {
-  const commandId = fileName.replace(/\.md$/, "");
-  assert.equal(classifiedCommandIds.has(commandId), true, `Unclassified command surface: ${commandId}`);
-}
-
-for (const routerFileName of ["dove.paper.orchestrate.md", "dove.orchestrate.md"]) {
-  const orchestrateText = fs.readFileSync(path.join(ROOT, ".opencode", "commands", routerFileName), "utf8");
-  for (const forbiddenTool of ["upsert_orchestration_board", "append_handoff"]) {
-    assert.equal(orchestrateText.includes(forbiddenTool), false, `${routerFileName} must stay a pure router and not mention ${forbiddenTool}`);
-  }
+for (const command of COMMAND_SURFACES) {
+  assert.equal(classifiedCommandIds.has(command.id), true, `Unclassified command surface: ${command.id}`);
 }
 
 const readOnlyToolNames = new Set(GOVERNANCE_READONLY_TOOLS);
@@ -129,41 +52,32 @@ const forbiddenReadOnlyDoveTools = new Set([
   ...GOVERNANCE_EXEMPT_MUTATIONS.map((entry) => entry.surfaceBindings?.mcpTool)
 ].filter((toolName) => toolName && !readOnlyToolNames.has(toolName)));
 const forbiddenRefreshingDoveQueries = ["query_task_graph", "query_workspace_index", "query_lineage", "query_meta_optimize"];
-for (const { surface, relativePath } of doveAdapterFiles) {
-  const absolutePath = path.join(ROOT, relativePath);
-  assert.ok(fs.existsSync(absolutePath), `Missing Dove adapter surface: ${relativePath}`);
-  const commandText = fs.readFileSync(absolutePath, "utf8");
-  assert.equal(commandText.includes(doveSurfaceQueries[surface]), true, `${relativePath} must mention ${doveSurfaceQueries[surface]}`);
-  for (const forbiddenTool of forbiddenReadOnlyDoveTools) {
-    assert.equal(commandText.includes(forbiddenTool), false, `${relativePath} must stay read-only and not mention mutating MCP tool ${forbiddenTool}`);
-  }
-  for (const forbiddenQuery of forbiddenRefreshingDoveQueries) {
-    assert.equal(commandText.includes(forbiddenQuery), false, `${relativePath} must not recommend refreshing query helper ${forbiddenQuery}`);
-  }
-}
+const proposalOnlyDoveQueryTools = new Set(["query_dove_orchestrate", "query_dove_mission", "query_dove_mission_board", "query_dove_audit", "query_dove_return"]);
 
-for (const { surface, relativePath } of genericDoveAdapterFiles) {
-  const absolutePath = path.join(ROOT, relativePath);
-  assert.ok(fs.existsSync(absolutePath), `Missing generic Dove adapter surface: ${relativePath}`);
-  const commandText = fs.readFileSync(absolutePath, "utf8");
-  for (const requiredTool of genericDoveSurfaceTools[surface] ?? []) {
+for (const { command, relativePath } of generatedAdapterEntries()) {
+  const commandText = readRelative(relativePath);
+  for (const requiredTool of command.requiredTools ?? []) {
     assert.equal(commandText.includes(requiredTool), true, `${relativePath} must mention ${requiredTool}`);
   }
-}
-
-for (const relativePath of doveLaunchAdapterFiles) {
-  const absolutePath = path.join(ROOT, relativePath);
-  assert.ok(fs.existsSync(absolutePath), `Missing Dove launch adapter surface: ${relativePath}`);
-  const commandText = fs.readFileSync(absolutePath, "utf8");
-  assert.equal(commandText.includes("launch_dove_mission"), true, `${relativePath} must mention launch_dove_mission`);
-  assert.equal(commandText.includes("materialize_guidance_packet"), false, `${relativePath} must use launch_dove_mission instead of direct materialize_guidance_packet`);
-  for (const forbiddenQuery of forbiddenRefreshingDoveQueries) {
-    assert.equal(commandText.includes(forbiddenQuery), false, `${relativePath} must not recommend refreshing query helper ${forbiddenQuery}`);
+  for (const forbiddenTool of command.forbiddenTools ?? []) {
+    assert.equal(commandText.includes(forbiddenTool), false, `${relativePath} must not mention forbidden tool ${forbiddenTool}`);
+  }
+  if ((command.requiredTools ?? []).some((tool) => proposalOnlyDoveQueryTools.has(tool))) {
+    for (const forbiddenTool of forbiddenReadOnlyDoveTools) {
+      assert.equal(commandText.includes(forbiddenTool), false, `${relativePath} must stay read-only and not mention mutating MCP tool ${forbiddenTool}`);
+    }
+    for (const forbiddenQuery of forbiddenRefreshingDoveQueries) {
+      assert.equal(commandText.includes(forbiddenQuery), false, `${relativePath} must not recommend refreshing query helper ${forbiddenQuery}`);
+    }
+  }
+  if (command.id === "dove.launch") {
+    assert.equal(commandText.includes("launch_dove_mission"), true, `${relativePath} must mention launch_dove_mission`);
+    assert.equal(commandText.includes("materialize_guidance_packet"), false, `${relativePath} must use launch_dove_mission instead of direct materialize_guidance_packet`);
   }
 }
 
-for (const relativePath of requiredSkills) {
-  assert.ok(fs.existsSync(path.join(ROOT, ".opencode", "skills", relativePath)), `Missing skill: ${relativePath}`);
+for (const relativePath of OPENCODE_ROLE_SKILL_PATHS) {
+  assert.ok(fs.existsSync(path.join(ROOT, relativePath)), `Missing skill: ${relativePath}`);
 }
 
 const opencodeConfig = JSON.parse(fs.readFileSync(path.join(ROOT, ".opencode.json"), "utf8"));

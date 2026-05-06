@@ -276,8 +276,12 @@ test("queryDoveMission frames an engineering mission without writing artifacts",
   assert.equal(result.packets[0].missionPacketStorePath, ARTIFACT_PATHS.taskPacketsIndex);
   const engineeringDesign = queryDoveMission(root, { domain: "engineering", stage: "design" });
   assert.equal(engineeringDesign.mission.nextCommand, "project:dove.plan");
+  const engineeringAudit = queryDoveMission(root, { domain: "engineering", stage: "audit" });
+  assert.equal(engineeringAudit.mission.nextCommand, "project:dove.audit");
   const generalDesign = queryDoveMission(root, { domain: "general", stage: "design" });
   assert.equal(generalDesign.mission.nextCommand, "project:dove.plan");
+  const generalAudit = queryDoveMission(root, { domain: "general", stage: "audit" });
+  assert.equal(generalAudit.mission.nextCommand, "project:dove.audit");
   assert.deepEqual(after, before);
 });
 

@@ -1,19 +1,20 @@
 # dove.checklist
 
-Sync the active Dove mission checklist with workspace state and acceptance evidence.
+Sync the active Dove mission checklist from the current plan and acceptance checks.
 
-## Goal
+## Contract
 
-Refresh the active checklist so it reflects what is done, what is blocked, which design/checklist/implementation/acceptance stage is active, and what return evidence is still missing across paper, engineering, experiment, review, or general Dove missions.
+- Command id: `dove.checklist`
+- Domain: `generic`
+- Category: `mutation`
+- Policy: `guarded-mutation`
 
 ## Workflow
 
-1. Read `.dove/context/actions/current.json` when present, then `.dove/state.json`, `.dove/plans/current-plan.md`, `.dove/orchestration/board.json`, `.dove/task-packets/index.json`, `.dove/reviews/REVIEW_STATE.json`, `.dove/revision-plans/current-plan.md`, `.dove/workspace/index.json`, and the relevant artifact paths named by the current mission.
-2. For major changes, turn the design into concrete implementation steps plus acceptance checks, preserving scope, non-goals, evidence requirements, and review/version proof obligations.
-3. If `dove` MCP is available, call `sync_checklist`.
-4. Never mark an item done unless durable files or explicit return evidence support it.
-5. When checklist items are ready for execution, route to the command that owns the target artifact: use generic Dove surfaces for mission/task work and `project:dove.paper.*` only for paper-specific drafting, citations, figures, rebuttal, experiment, or review-loop artifacts.
-
-## Rule
-
-Checklist sync summarizes and organizes work; it must not execute the checklist items itself.
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/checklists/current.md`, `.dove/task-packets/index.json`.
+3. Prefer the `sync_checklist` MCP tool when available.
+4. Only perform the governed mutation owned by this surface, scoped to the operator request.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

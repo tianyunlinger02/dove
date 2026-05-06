@@ -28,7 +28,7 @@ export const DOVE_DOMAIN_GUIDANCE = [
       design: "project:dove.plan",
       checklist: "project:dove.checklist",
       execution: "project:dove.materialize or project:dove.autonomy-operate",
-      audit: "project:dove.return",
+      audit: "project:dove.audit",
       return: "project:dove.return"
     },
     returnEvidence: ["changed files", "tests or validation output", "review notes", "acceptance checklist"]
@@ -70,7 +70,7 @@ export const DOVE_DOMAIN_GUIDANCE = [
       design: "project:dove.plan",
       checklist: "project:dove.checklist",
       execution: "project:dove.materialize",
-      audit: "project:dove.return",
+      audit: "project:dove.audit",
       return: "project:dove.return"
     },
     returnEvidence: ["task packet", "handoff", "audit summary", "acceptance checklist"]

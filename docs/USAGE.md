@@ -4,12 +4,12 @@
 
 Dove is a local-first mission workflow system for paper, engineering, experiment, review, and general research work.
 
-- **Commands** drive the workflow.
+- **Commands** drive the workflow and are generated for each supported host from `src/core/command-manifest.mjs`.
 - **Skills** encode durable role behavior.
 - **MCP** provides deterministic state queries and mutations.
 - **`.dove/`** keeps the workflow resumable and auditable.
 - **`.dove/manifest.json`** records Dove authority for the workspace.
-- **Dove mission metadata** under `.dove/workspace/index.json.dove` keeps one shared mission lifecycle without splitting paper and engineering into separate products.
+- **Dove mission metadata** under the `dove` field in `.dove/workspace/index.json` keeps one shared mission lifecycle without splitting paper and engineering into separate products.
 
 ## Board-first orchestration
 
@@ -17,7 +17,7 @@ Dove is a local-first mission workflow system for paper, engineering, experiment
 
 `project:dove.orchestrate` frames durable state as one Dove mission with a domain (`paper`, `engineering`, `experiment`, `review`, or `general`) and lifecycle stage (`goal`, `design`, `checklist`, `execution`, `audit`, or `return`).
 
-The general Dove surfaces are:
+The general Dove surfaces are generated for OpenCode, Claude Code, Codex, Cursor, and shared agent-skill hosts:
 
 - `project:dove.orchestrate` / `dove orchestrate`
 - `project:dove.mission` / `dove mission`
@@ -33,7 +33,7 @@ The general Dove surfaces are:
 - `project:dove.launch` / `dove launch`
 - `project:dove.governance-audit`
 
-The direct query surfaces are read-only and proposal-only. They do not set phases, update roles, refresh derived workspace state, run tests, inspect git, execute autonomy, or create packets. `dove launch` is the governed write surface: it materializes accepted proposal guidance into `.dove/task-packets`, requires `sourceType`, `sourceId`, `executeBy`, and `reviewAfter`, and does not execute the work.
+The direct query surfaces are read-only and proposal-only. They do not set phases, update roles, refresh derived workspace state, run tests, inspect git, execute autonomy, or create packets. `dove.paper.orchestrate` is also a no-write router, not a board mutation surface. `dove launch` is the governed write surface: it materializes accepted proposal guidance into `.dove/task-packets`, requires `sourceType`, `sourceId`, `executeBy`, and `reviewAfter`, and does not execute the work.
 
 Normal engineering work uses the same mission fields rather than a separate product branch: mark the domain as `engineering`, list source/test/docs targets, and return declared changed-file paths plus declared test/validation evidence and validation output. Dove audit and return inspect only those declared project-local paths and durable packet links.
 
@@ -53,7 +53,7 @@ Dove uses a durable board-first orchestration model:
 - `.dove/workspace/index.json` gives a resumable top-level overview, work queues, dependency health, ownership summaries, and handoff obligations.
 - `.dove/workspace/artifact-map.json` is an optional onboarding map for existing paper assets, written only by explicit `dove onboard . --write-map` or `dove migrate . --write-map`.
 - `.dove/workspace/index.json.lifecycle` classifies work into `objective`, `structure`, `campaign`, `work-unit`, `concern`, `audit`, and `knowledge`.
-- `.dove/workspace/index.json.dove` mirrors the same workspace as a unified Dove mission kernel.
+- The `dove` field in `.dove/workspace/index.json` mirrors the same workspace as a unified Dove mission kernel.
 - `.dove/checklists/current.md` is the active checklist for the current Dove mission.
 - `.dove/meta/` records proposal-only optimization signals, ranked workflow recommendations, remediation packs, and long-horizon workflow memory without auto-applying changes.
 

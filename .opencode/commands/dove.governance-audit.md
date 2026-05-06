@@ -1,17 +1,20 @@
 # dove.governance-audit
 
-Inspect the durable Dove governance coverage proof for guarded and exempt mutation paths.
+Inspect governance coverage and command/tool bindings without writing state.
 
-## Goal
+## Contract
 
-Use `.dove/meta/governance-coverage.json`, `.dove/meta/governance-coverage-report.json`, and `.dove/meta/LATEST_GOVERNANCE_COVERAGE_REPORT.md` to verify that mutation governance coverage is complete, explicit, and auditable across public Dove and paper-domain surfaces.
+- Command id: `dove.governance-audit`
+- Domain: `generic`
+- Category: `query`
+- Policy: `proposal-only`
 
 ## Workflow
 
-1. Read the governance coverage artifacts and the latest optimizer report.
-2. If `dove` MCP is available, use `query_governance_coverage_report` for the current durable proof snapshot.
-3. Confirm guarded vs exempt paths, bound commands/tools/functions, stale paper-domain aliases, and whether any uncovered bindings or negative-coverage gaps remain.
-
-## Rule
-
-Treat this command as audit/proof, not execution. It does not change governance policy by itself.
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/meta/governance-coverage.json`.
+3. Prefer the `query_governance_coverage_report` MCP tool when available.
+4. Keep this surface proposal-only: inspect and route, but do not mutate durable state.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

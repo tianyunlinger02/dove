@@ -64,6 +64,25 @@ function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "dove-phase6-"));
 }
 
+test("governance audit static detector covers async exports, const exports, and fs writes", () => {
+  const scriptText = fs.readFileSync(path.join(process.cwd(), "scripts", "audit-governance-coverage.mjs"), "utf8");
+  assert.ok(scriptText.includes("(?:async\\s+)?function"));
+  assert.ok(scriptText.includes("const\\s+(\\w+)\\s*="));
+  assert.ok(scriptText.includes("=>\\s*\\{"));
+  for (const writeSignal of ["writeFile", "appendFile", "rm", "cp", "copyFile", "mkdir", "rename", "writeFileSync", "appendFileSync", "rmSync", "cpSync", "copyFileSync", "mkdirSync", "renameSync"]) {
+    assert.ok(scriptText.includes(writeSignal), `missing write signal ${writeSignal}`);
+  }
+  assert.ok(scriptText.includes("fs(?:\\.promises)?"));
+  assert.ok(scriptText.includes("fsPromises"));
+});
+
+test("governance audit exempt metadata check is not a wall-clock freshness gate", () => {
+  const scriptText = fs.readFileSync(path.join(process.cwd(), "scripts", "audit-governance-coverage.mjs"), "utf8");
+  assert.match(scriptText, /VALID_REVIEW_CADENCES/);
+  assert.doesNotMatch(scriptText, /Date\.now\(\) - reviewWindowMs/);
+  assert.doesNotMatch(scriptText, /lastReviewedAt\) < Date\.now/);
+});
+
 function seedAutonomyGuidance(root) {
   writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
     version: 2,
@@ -1971,10 +1990,10 @@ test("follow-through overrides require expiry and exact target binding", () => {
   }), /future policyOverrideExpiresAt/);
 
   assert.throws(() => upsertPlan(root, {
-    thesis: "override with wrong code",
+    thesis: "override with removed compatibility code",
     actorRole: allowedActorRole,
     policyOverrideReason: "manual",
-    policyOverrideReasonCode: "not-allowed",
+    policyOverrideReasonCode: "migration-compatibility",
     policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".dove/task-packets/packets/task-override.json"],
     policyOverrideSourceId: topPack.id,
     policyOverrideTargetArtifact: ".dove/task-packets/packets/task-override.json",

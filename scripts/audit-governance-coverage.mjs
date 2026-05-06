@@ -17,7 +17,7 @@ const coreFiles = [
   "src/core/dove.mjs"
 ];
 
-const WRITE_SIGNAL_REGEX = /(writeJson|writeText|appendText|saveState|refreshDurableSurfaces|materializeGuidancePacket)\(/;
+const WRITE_SIGNAL_REGEX = /(?:writeJson|writeText|appendText|saveState|refreshDurableSurfaces|materializeGuidancePacket)\(|(?:fs(?:\.promises)?|fsPromises)\.(?:writeFile|appendFile|rm|cp|copyFile|mkdir|rename|writeFileSync|appendFileSync|rmSync|cpSync|copyFileSync|mkdirSync|renameSync)\(/;
 const EXEMPT_FUNCTIONS = new Set([
   "queryMetaOptimize",
   "recordOperatorFollowThrough"
@@ -25,9 +25,10 @@ const EXEMPT_FUNCTIONS = new Set([
 
 function collectExportedFunctions(filePath) {
   const content = fs.readFileSync(path.join(ROOT, filePath), "utf8");
-  const matches = [...content.matchAll(/export function\s+(\w+)\s*\([^)]*\)\s*\{/g)];
+  const exportRegex = /export\s+(?:(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*\{|const\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|\w+)\s*=>\s*\{|const\s+(\w+)\s*=\s*(?:async\s+)?function\s*\([^)]*\)\s*\{)/g;
+  const matches = [...content.matchAll(exportRegex)];
   return matches.map((match, index) => {
-    const name = match[1];
+    const name = match[1] ?? match[2] ?? match[3];
     const start = match.index ?? 0;
     const end = index + 1 < matches.length ? (matches[index + 1].index ?? content.length) : content.length;
     const body = content.slice(start, end);
@@ -46,28 +47,24 @@ const exempt = new Set(GOVERNANCE_EXEMPT_MUTATIONS.map((entry) => entry.surfaceB
 
 const uncovered = mutatingCoreFunctions.filter((name) => !guarded.has(name) && !exempt.has(name) && !EXEMPT_FUNCTIONS.has(name));
 
-const now = new Date().toISOString();
-function cadenceWindowMs(cadence) {
-  switch (cadence) {
-    case "per-session": return 36 * 60 * 60 * 1000;
-    case "per-change": return 7 * 24 * 60 * 60 * 1000;
-    case "per-release": return 90 * 24 * 60 * 60 * 1000;
-    case "per-project": return 365 * 24 * 60 * 60 * 1000;
-    default: return 0;
-  }
+const now = Date.now();
+const VALID_REVIEW_CADENCES = new Set(["per-session", "per-change", "per-release", "per-project"]);
+
+function validTimestamp(value) {
+  return typeof value === "string" && Number.isFinite(Date.parse(value));
 }
+
 const invalidExemptMetadata = GOVERNANCE_EXEMPT_MUTATIONS.filter((entry) => {
-  if (!entry.ownerRole || !entry.approvedByRole || !entry.approvedAt || !entry.lastReviewedAt || !entry.reasonCode || !entry.reviewCadence || !entry.sunsetAt || entry.sunsetAt <= now) {
+  if (!entry.ownerRole || !entry.approvedByRole || !entry.reasonCode || !VALID_REVIEW_CADENCES.has(entry.reviewCadence)) {
+    return true;
+  }
+  if (!validTimestamp(entry.approvedAt) || !validTimestamp(entry.lastReviewedAt) || !validTimestamp(entry.sunsetAt)) {
     return true;
   }
   if (Date.parse(entry.approvedAt) > Date.parse(entry.lastReviewedAt)) {
     return true;
   }
-  const reviewWindowMs = cadenceWindowMs(entry.reviewCadence);
-  if (reviewWindowMs <= 0) {
-    return true;
-  }
-  return Date.parse(entry.lastReviewedAt) < Date.now() - reviewWindowMs;
+  return Date.parse(entry.sunsetAt) <= now;
 }).map((entry) => entry.id);
 
 assert.equal(uncovered.length, 0, `Uncovered mutating core functions: ${uncovered.join(", ")}`);

@@ -1,14 +1,25 @@
 ---
 name: dove-approvals
-description: "Inspect, issue, or revoke explicit Dove program approvals without executing autonomy."
+description: "Inspect, issue, or revoke bounded program approvals."
 ---
 
-# dove.approvals
+# Dove Approvals
 
-Use this skill to manage bounded program-run authority.
+Inspect, issue, or revoke bounded program approvals.
 
-- Read program approvals, runs, runtime continuation state, controller state, and packet state first.
-- Prefer `query_program_approvals` for inspection.
-- Use `issue_program_approval` only for explicit bounded continuation authority.
-- Use `revoke_program_approval` to withdraw approval.
-- Do not run autonomy, materialize packets, or continue a run from this skill.
+## Contract
+
+- Command id: `dove.approvals`
+- Domain: `generic`
+- Category: `mutation`
+- Policy: `explicit-approval`
+
+## Workflow
+
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/programs/approvals.json`, `.dove/runtime/controller-state.json`.
+3. Use the `query_program_approvals`, `issue_program_approval`, `revoke_program_approval` MCP tools when available.
+4. Require explicit operator approval and bounded authority before creating, changing, or consuming program authority.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

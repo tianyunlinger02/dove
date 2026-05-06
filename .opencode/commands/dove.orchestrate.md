@@ -1,17 +1,20 @@
 # dove.orchestrate
 
-Route one Dove mission without mutating durable state.
+Route one Dove mission to the next command without writing state.
 
-## Goal
+## Contract
 
-Use authoritative `.dove/` context and the operator request to recommend exactly one next Dove command. This command is a router, not a board updater or executor.
+- Command id: `dove.orchestrate`
+- Domain: `generic`
+- Category: `query`
+- Policy: `proposal-only`
 
 ## Workflow
 
-1. Read `.dove/context/actions/current.json` when present, then `.dove/workspace/index.json`, `.dove/orchestration/board.json`, `.dove/state.json`, and `.dove/task-packets/index.json`.
-2. If the `dove` MCP server is available, call `query_dove_orchestrate` with the requested goal, domain, stage, artifacts, and acceptance checks.
-3. Classify the mission domain as `paper`, `engineering`, `experiment`, `review`, or `general`.
-4. Place the mission on the lifecycle: `goal`, `design`, `checklist`, `execution`, `audit`, or `return`.
-5. Preserve the planner / builder / reviewer role boundary.
-6. Return exactly one next command and the reason.
-7. Do not write, repair, refresh, run tests, inspect git, execute autonomy, update the board, append handoffs, or materialize mission packets.
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/orchestration/board.json`.
+3. Prefer the `query_dove_orchestrate` MCP tool when available.
+4. Keep this surface proposal-only: inspect and route, but do not mutate durable state.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

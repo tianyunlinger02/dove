@@ -204,7 +204,9 @@ test("workspace index exposes normalized Dove mission kernel", () => {
   assert.equal(index.dove.domainGuidance.length, DOVE_DOMAIN_GUIDANCE.length);
   assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.design, "project:dove.plan");
   assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.materialize or project:dove.autonomy-operate");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.audit, "project:dove.audit");
   assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "general").stageRoutes.design, "project:dove.plan");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "general").stageRoutes.audit, "project:dove.audit");
   assert.deepEqual(index.dove.primaryRoleIds, DOVE_PRIMARY_ROLE_IDS);
   assert.deepEqual(index.dove.primaryRoles.map((role) => role.id), ["planner", "builder", "reviewer"]);
   assert.deepEqual(index.dove.missionLifecycle.stages, DOVE_MISSION_LIFECYCLE_STAGES);

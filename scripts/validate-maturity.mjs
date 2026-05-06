@@ -5,7 +5,7 @@ const steps = [
   ["npm", ["run", "mcp:validate"]],
   ["npm", ["run", "governance:audit"]],
   ["npm", ["test"]],
-  ["node", ["./bin/dove.mjs", "doctor", "."]]
+  ["npm", ["run", "doctor:validate"]]
 ];
 
 for (const [command, args] of steps) {

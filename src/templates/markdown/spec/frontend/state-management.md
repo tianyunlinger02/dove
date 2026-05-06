@@ -30,7 +30,7 @@ Defaults and schema constants live in `src/core/schema.mjs`. `ARTIFACT_PATHS` is
 
 ### Orchestration state
 
-The board is canonical for active workflow coordination. `.opencode/commands/dove.paper.orchestrate.md` requires phase, intent type, assigned role, focus, next action, continuation state, review gate status, tasks, blockers, evidence links, experiment IDs, rebuttal issue IDs, version lineage, and packet-linked questions/decisions to stay explicit.
+The board is canonical for active workflow coordination. Query routers such as `dove.orchestrate` and `dove.paper.orchestrate` may read board state to recommend one next command, but they must not mutate board, handoff, packet, or derived workspace artifacts. Board mutations belong to explicit governed mutation surfaces.
 
 ### Proposal and runtime state
 
@@ -77,7 +77,7 @@ Derived state should not become the only source of truth for facts that belong i
 
 - `src/core/schema.mjs` defines `ARTIFACT_PATHS`, `SCHEMA_VERSION`, `PIPELINE_STAGE_ORDER`, role IDs, governance registries, default object factories, and normalizers.
 - `src/core/workspace.mjs` shows the standard read/normalize/write flow used by `ensureWorkspace(root)` to create and reconcile durable `.dove/` artifacts.
-- `.opencode/commands/dove.paper.orchestrate.md` documents the board-first operator flow and the required context files to read before mutating orchestration state.
+- Generated `dove.orchestrate` and `dove.paper.orchestrate` adapters document the proposal-only routing flow and the context files to read before recommending one next command.
 - `.opencode/commands/dove.paper.meta-optimize.md` documents the proposal-only optimizer flow and the governed bridge to materialized work.
 - `tests/integration/workflow.test.mjs` exercises state transitions across workspace creation, sources, notes, claims, experiments, review, handoffs, snapshots, comparisons, and checklist sync.
 

@@ -1,12 +1,25 @@
 ---
 name: dove-materialize
-description: "Materialize one accepted proposal-only guidance item into a durable Dove task packet with governed provenance."
+description: "Convert accepted proposal guidance into a durable task packet."
 ---
 
 # Dove Materialize
 
-- Treat `.dove/` as the authoritative durable root.
-- Read remediation packs, execution bridge candidates, operator follow-through, task packets, and workspace index first.
-- Prefer `materialize_guidance_packet` through MCP with explicit source and review bounds.
-- Create at most one packet from one accepted source; do not execute it.
-- Preserve provenance and avoid duplicates for guidance already bound to live work.
+Convert accepted proposal guidance into a durable task packet.
+
+## Contract
+
+- Command id: `dove.materialize`
+- Domain: `generic`
+- Category: `mutation`
+- Policy: `guarded-mutation`
+
+## Workflow
+
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/meta/operator-follow-through.json`, `.dove/meta/remediation-packs.json`, `.dove/task-packets/index.json`.
+3. Prefer the `materialize_guidance_packet` MCP tool when available.
+4. Only perform the governed mutation owned by this surface, scoped to the operator request.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

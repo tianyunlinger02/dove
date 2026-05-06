@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { CORE_INSTALL_PATHS, DEFAULT_HOST_ADAPTERS, HOST_IDS, MANAGED_HOST_ADAPTER_PATHS, MANAGED_PACKAGE_PATHS } from "./command-manifest.mjs";
 import {
   DOVE_DOMAIN_GUIDANCE,
   DOVE_DOMAIN_IDS,
@@ -3364,32 +3365,11 @@ export function createWorkflowBoundaries() {
     primaryRoleIds: PRIMARY_ROLE_IDS,
     subagentRoleIds: SUBAGENT_ROLE_IDS,
     roleHierarchy: ROLE_HIERARCHY,
-    neutralCorePaths: ["README.md", "bin", "docs", "mcp", "scripts", "src"],
-    defaultHostAdapters: ["opencode"],
-    availableHostAdapters: ["opencode", "claude", "codex", "cursor", "agents"],
-    managedHostAdapterPaths: {
-      opencode: [".opencode/commands/dove*.md", ".opencode/skills/dove-*", ".opencode.json"],
-      claude: [".claude/commands/dove"],
-      codex: [".codex/skills/dove-*"],
-      cursor: [".cursor/commands/dove-*.md"],
-      agents: [".agents/skills/dove-*", "AGENTS.md"]
-    },
-    managedPaths: [
-      ".opencode/commands/dove*.md",
-      ".opencode/skills/dove-*",
-      ".opencode.json",
-      ".claude/commands/dove",
-      ".codex/skills/dove-*",
-      ".cursor/commands/dove-*.md",
-      ".agents/skills/dove-*",
-      "AGENTS.md",
-      "README.md",
-      "bin",
-      "docs",
-      "mcp",
-      "scripts",
-      "src"
-    ],
+    neutralCorePaths: CORE_INSTALL_PATHS,
+    defaultHostAdapters: DEFAULT_HOST_ADAPTERS,
+    availableHostAdapters: HOST_IDS,
+    managedHostAdapterPaths: MANAGED_HOST_ADAPTER_PATHS,
+    managedPaths: MANAGED_PACKAGE_PATHS,
     doveBootstrapOnlyPaths,
     userOwnedPaths: [
       ".dove/drafts",

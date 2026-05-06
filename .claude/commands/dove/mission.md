@@ -1,11 +1,20 @@
 # dove.mission
 
-Frame one Dove mission contract without mutating durable state.
+Frame a Dove mission contract from the current workspace without writing state.
+
+## Contract
+
+- Command id: `dove.mission`
+- Domain: `generic`
+- Category: `query`
+- Policy: `proposal-only`
 
 ## Workflow
 
-1. Treat `.dove/` as the authoritative durable root.
-2. Prefer the `query_dove_mission` MCP tool when available, or run `dove mission .` for the same proposal-only mission frame.
-3. Report the goal, domain, stage, primary role, target artifacts, acceptance checks, and return protocol.
-4. Keep paper-domain work on `project:dove.paper.*` commands instead of creating a separate product branch.
-5. Do not write, repair, refresh, run tests, inspect git, execute autonomy, update the board, append handoffs, or materialize mission packets.
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`.
+3. Prefer the `query_dove_mission` MCP tool when available.
+4. Keep this surface proposal-only: inspect and route, but do not mutate durable state.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

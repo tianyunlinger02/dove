@@ -1,19 +1,20 @@
 # dove.plan
 
-Create or update the active Dove mission design plan.
+Create or update the shared Dove mission design plan.
 
-## Goal
+## Contract
 
-Use the shared Dove design surface to capture mission scope, non-goals, target artifacts, risks, required evidence, and acceptance checks before execution starts.
+- Command id: `dove.plan`
+- Domain: `generic`
+- Category: `mutation`
+- Policy: `guarded-mutation`
 
 ## Workflow
 
-1. Read `.dove/context/actions/current.json` when present, then `.dove/state.json`, `.dove/workspace/index.json`, `.dove/orchestration/board.json`, `.dove/task-packets/index.json`, and relevant artifact context files.
-2. Clarify the mission domain, lifecycle stage, target artifacts, evidence requirements, risks, and acceptance checks.
-3. If `dove` MCP is available, call `upsert_plan` with the planned sections and explicit acceptance checks.
-4. Route paper-specific structure, claims, citations, venue strategy, and manuscript work through `project:dove.paper.plan` when the mission domain is paper.
-5. After the plan is durable, route executable work through `project:dove.checklist` before implementation.
-
-## Rule
-
-Planning records the design contract; it must not execute the work, run autonomy, or mark checklist items complete by itself.
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/plans`, `.dove/checklists/current.md`.
+3. Prefer the `upsert_plan` MCP tool when available.
+4. Only perform the governed mutation owned by this surface, scoped to the operator request.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

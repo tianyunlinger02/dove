@@ -1,12 +1,21 @@
 # dove.autonomy-operate
 
-Run the explicit, bounded Dove autonomy operating surface.
+Run the explicit bounded foreground autonomy operating surface.
+
+## Contract
+
+- Command id: `dove.autonomy-operate`
+- Domain: `generic`
+- Category: `mutation`
+- Policy: `explicit-approval`
 
 ## Workflow
 
-1. Treat `.dove/` as the authoritative durable root.
-2. Read current action context, workspace index, execution bridge candidates, follow-through ledger, campaign/approval state, and runtime controller state first.
-3. Prefer `run_autonomy_operate` through MCP with explicit objective or source pair and planner-supervised bounds.
-4. If MCP is unavailable, run `dove autonomy-operate . --objective "..."` or `dove autonomy-operate . --source-type execution-bridge --source-id <id>`.
-5. Keep the run foreground-only and bounded; resume only from the returned stop summary and issue fresh approvals for later authority windows.
-6. Do not turn this into a daemon, scheduler, hook, hidden executor, or unbounded queue drain.
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/runtime/controller-state.json`, `.dove/programs/approvals.json`, `.dove/task-packets/index.json`.
+3. Prefer the `run_autonomy_operate` MCP tool when available.
+4. Require explicit operator approval and bounded authority before creating, changing, or consuming program authority.
+5. Run only explicit bounded foreground autonomy and stop at declared review or authority boundaries.
+6. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+7. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+8. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

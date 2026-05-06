@@ -336,7 +336,7 @@ export function assertFollowThroughReady(root, actionLabel, args = {}) {
     const notExpired = override.expiresAt && String(override.expiresAt) > nowIso();
     const withinWindow = notExpired && String(override.expiresAt) <= new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const actorMatches = override.actorRole && override.actorRole === currentOwner;
-    const reasonCodeAllowed = ["emergency-repair", "manual-reconciliation", "migration-compatibility", "operator-acknowledged-exception"].includes(override.reasonCode);
+    const reasonCodeAllowed = ["emergency-repair", "manual-reconciliation", "operator-acknowledged-exception"].includes(override.reasonCode);
     const phaseMatches = override.phase === currentPhase;
     if (relevance.ok && targetMatch && sourceMatch && phaseMatches && withinWindow && actorMatches && reasonCodeAllowed) {
       return;

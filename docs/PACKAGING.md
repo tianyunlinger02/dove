@@ -10,9 +10,9 @@ The packaged surface is:
 - the `dove` binary at `bin/dove.mjs`
 - the stdio MCP wrapper at `mcp/dove-state-server.mjs`
 - default OpenCode adapter files: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, and `.opencode.json`
-- optional Dove-only adapter files for Claude Code, Codex, Cursor, and shared agent-skill hosts
+- optional Dove-only adapter files for Claude Code, Codex, Cursor, and shared agent-skill hosts, generated from `src/core/command-manifest.mjs`
 
-The project-local `.dove/` directory is created or repaired at install time. It is not shipped as a package snapshot.
+The project-local `.dove/` directory is created or repaired at install time. It is not shipped as a package snapshot. OpenCode is the default adapter, but the canonical command manifest generates both generic and paper-domain Dove adapters for every supported host.
 
 ## Managed vs user-owned boundary
 
@@ -29,10 +29,20 @@ Dove is intentionally file-first and portable. Host adapters can expose richer e
 
 Dove should not claim hidden runtime powers that only a host-specific harness could provide. Autonomy surfaces are explicit and foreground-bound. Mission launch materializes accepted guidance into `.dove/task-packets`; it does not execute the mission or silently run a background worker.
 
+## Generated adapter and release checks
+
+```bash
+npm run commands:generate
+npm run commands:check
+npm run release:check
+```
+
+`commands:generate` rewrites checked-in host adapters from the canonical manifest. `commands:check` fails on adapter drift. `release:check` is the full package gate: generated adapter drift, command validation, MCP validation, governance audit, maturity audit, clean-install doctor validation, tests, and package dry-run.
+
 ## Dry-run packaging
 
 ```bash
 npm pack --dry-run
 ```
 
-This should include the neutral core, Dove-only adapter surfaces, the MCP entrypoint, and the CLI installer. It should not include `.dove/` runtime snapshots, Trellis development commands/skills/plugins/agents, local reference repos, `node_modules`, `.env*`, `*.local.json`, or host-local settings.
+This should include the neutral core, Dove-only adapter surfaces, the MCP entrypoint, and the CLI installer. It should not include `.dove/` runtime snapshots, repository-local development scaffolding, local reference repos, `node_modules`, `.env*`, `*.local.json`, or host-local settings.

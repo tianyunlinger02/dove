@@ -1,14 +1,25 @@
 ---
 name: dove-plan
-description: "Create or update the active Dove mission design plan with upsert_plan before execution starts."
+description: "Create or update the shared Dove mission design plan."
 ---
 
-# dove.plan
+# Dove Plan
 
-Use this skill to record the Dove mission design contract.
+Create or update the shared Dove mission design plan.
 
-- Read `.dove/` mission, board, packet, workspace, and context artifacts first.
-- Prefer `upsert_plan` when MCP is available.
-- Capture scope, non-goals, target artifacts, risks, evidence requirements, and acceptance checks.
-- Keep paper-specific manuscript, claim, citation, and venue planning under `project:dove.paper.plan`.
-- Do not execute work or mark checklist items complete.
+## Contract
+
+- Command id: `dove.plan`
+- Domain: `generic`
+- Category: `mutation`
+- Policy: `guarded-mutation`
+
+## Workflow
+
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/plans`, `.dove/checklists/current.md`.
+3. Prefer the `upsert_plan` MCP tool when available.
+4. Only perform the governed mutation owned by this surface, scoped to the operator request.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

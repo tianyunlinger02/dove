@@ -9,12 +9,12 @@ Old `.paper/` files are not imported automatically. If they exist, `dove doctor`
 The supported install path is host-neutral at the core and adapter-based at the operator surface:
 
 1. copy or sync neutral package files into a target project (`bin/`, `docs/`, `mcp/`, `scripts/`, `src/`, and `README.md`)
-2. install requested host adapters
+2. install requested host adapters generated from the canonical command manifest
 3. let the selected host discover Dove command or skill adapter files plus the local MCP configuration when that host supports it
 4. bootstrap missing `.dove/` artifacts without overwriting user-owned workspace state
 5. write `.dove/manifest.json` as the Dove authority manifest
 
-Supported adapter IDs are `opencode`, `claude`, `codex`, `cursor`, `agents`, and `all`.
+Supported adapter IDs are `opencode`, `claude`, `codex`, `cursor`, `agents`, and `all`. OpenCode remains the default install target, but both general `dove.*` and paper-domain `dove.paper.*` adapters are generated for every supported host.
 
 ## Project-local install
 
@@ -83,14 +83,19 @@ The doctor command checks the neutral core, `.dove/state.json`, `.dove/manifest.
 
 `install` and `sync` treat `.dove/` as user-owned workspace data. The CLI bootstraps missing `.dove` artifacts via the workspace initializer, but it does not copy a packaged `.dove/` tree over the target project as managed code.
 
-Adapter copying is allowlisted to Dove surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.claude/commands/dove`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. Trellis development commands, skills, plugins, agents, and local host settings are not installed as Dove product surfaces. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
+Adapter copying is allowlisted to Dove surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.claude/commands/dove`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. Those paths are derived from `src/core/command-manifest.mjs`; run `npm run commands:generate` to rewrite adapters and `npm run commands:check` to detect drift. Repository-local development scaffolding and host settings are not installed as Dove product surfaces. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
 
 ## Validation
 
 ```bash
+npm run commands:check
 npm run commands:validate
 npm run mcp:validate
 npm test
+npm run doctor:validate
+
+# Full pre-release/package gate
+npm run release:check
 ```
 
 ## Optional MCP surface

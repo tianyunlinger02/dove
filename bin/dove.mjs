@@ -20,95 +20,11 @@ import {
   normalizeWorkspaceIndex,
   normalizeWorkspaceMetaOptimize
 } from "../src/core/schema.mjs";
+import { CORE_INSTALL_PATHS, DEFAULT_HOST_ADAPTERS, HOST_ADAPTERS, HOST_IDS } from "../src/core/command-manifest.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
-const CORE_INSTALL_PATHS = ["bin", "docs", "mcp", "scripts", "src", "README.md"];
-const DEFAULT_HOST_ADAPTERS = ["opencode"];
-const DOVE_DIRECT_SURFACES = ["orchestrate", "mission", "board", "audit", "return", "launch"];
-const DOVE_GENERIC_SURFACES = ["task-graph", "checklist", "materialize", "autonomy-operate", "governance-audit", "plan", "approvals"];
-const DOVE_PUBLIC_SURFACES = [...DOVE_DIRECT_SURFACES, ...DOVE_GENERIC_SURFACES];
-
-function packagePath(...segments) {
-  return path.join(...segments).split(path.sep).join("/");
-}
-
-function existingFilesIn(relativeDir, includeName) {
-  const absoluteDir = path.join(PACKAGE_ROOT, relativeDir);
-  if (!fs.existsSync(absoluteDir)) {
-    return [];
-  }
-  return fs.readdirSync(absoluteDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && includeName(entry.name))
-    .map((entry) => packagePath(relativeDir, entry.name))
-    .sort();
-}
-
-function existingDoveSkillPaths(relativeDir) {
-  const absoluteDir = path.join(PACKAGE_ROOT, relativeDir);
-  if (!fs.existsSync(absoluteDir)) {
-    return [];
-  }
-  return fs.readdirSync(absoluteDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name.startsWith("dove-"))
-    .map((entry) => packagePath(relativeDir, entry.name, "SKILL.md"))
-    .filter((relativePath) => fs.existsSync(path.join(PACKAGE_ROOT, relativePath)))
-    .sort();
-}
-
-const OPENCODE_PUBLIC_SURFACE_PATHS = DOVE_PUBLIC_SURFACES.map((surface) => `.opencode/commands/dove.${surface}.md`);
-const CLAUDE_PUBLIC_SURFACE_PATHS = DOVE_PUBLIC_SURFACES.map((surface) => `.claude/commands/dove/${surface}.md`);
-const CURSOR_PUBLIC_SURFACE_PATHS = DOVE_PUBLIC_SURFACES.map((surface) => `.cursor/commands/dove-${surface}.md`);
-const CODEX_PUBLIC_SURFACE_PATHS = DOVE_PUBLIC_SURFACES.map((surface) => `.codex/skills/dove-${surface}/SKILL.md`);
-const AGENT_PUBLIC_SURFACE_PATHS = DOVE_PUBLIC_SURFACES.map((surface) => `.agents/skills/dove-${surface}/SKILL.md`);
-
-const HOST_ADAPTERS = {
-  opencode: {
-    label: "OpenCode",
-    paths: [
-      ...existingFilesIn(".opencode/commands", (name) => name.startsWith("dove.") && name.endsWith(".md")),
-      ...existingDoveSkillPaths(".opencode/skills"),
-      ".opencode.json"
-    ],
-    requiredPaths: [
-      ...OPENCODE_PUBLIC_SURFACE_PATHS,
-      ".opencode/commands/dove.paper.init.md",
-      ".opencode/commands/dove.paper.orchestrate.md",
-      ".opencode/commands/dove.paper.pipeline.md",
-      ".opencode/commands/dove.paper.plan.md",
-      ".opencode/commands/dove.paper.approvals.md",
-      ".opencode/skills/dove-pipeline/SKILL.md",
-      ".opencode/skills/dove-planner/SKILL.md",
-      ".opencode.json"
-    ],
-    jsonChecks: [".opencode.json"]
-  },
-  claude: {
-    label: "Claude Code",
-    paths: CLAUDE_PUBLIC_SURFACE_PATHS,
-    requiredPaths: CLAUDE_PUBLIC_SURFACE_PATHS,
-    jsonChecks: []
-  },
-  codex: {
-    label: "Codex",
-    paths: CODEX_PUBLIC_SURFACE_PATHS,
-    requiredPaths: CODEX_PUBLIC_SURFACE_PATHS,
-    jsonChecks: []
-  },
-  cursor: {
-    label: "Cursor",
-    paths: CURSOR_PUBLIC_SURFACE_PATHS,
-    requiredPaths: CURSOR_PUBLIC_SURFACE_PATHS,
-    jsonChecks: []
-  },
-  agents: {
-    label: "Shared agent skills",
-    paths: [...AGENT_PUBLIC_SURFACE_PATHS, "AGENTS.md"],
-    requiredPaths: [...AGENT_PUBLIC_SURFACE_PATHS, "AGENTS.md"],
-    jsonChecks: []
-  }
-};
 const GLOBAL_COPY_EXCLUDE_NAMES = new Set([".git", "node_modules"]);
 const GLOBAL_COPY_EXCLUDE_SUFFIXES = [".log", ".tmp", ".cache"];
 
@@ -214,11 +130,11 @@ function resolveHostAdapters(args = []) {
   }
   const requested = rawValues.flatMap((value) => String(value).split(",").map((item) => item.trim()).filter(Boolean));
   if (requested.includes("all")) {
-    return Object.keys(HOST_ADAPTERS);
+    return HOST_IDS;
   }
   const invalid = requested.filter((host) => !Object.hasOwn(HOST_ADAPTERS, host));
   if (invalid.length > 0) {
-    throw new Error(`Unknown host adapter(s): ${invalid.join(", ")}. Available adapters: ${Object.keys(HOST_ADAPTERS).join(", ")}, all.`);
+    throw new Error(`Unknown host adapter(s): ${invalid.join(", ")}. Available adapters: ${HOST_IDS.join(", ")}, all.`);
   }
   return Array.from(new Set(requested));
 }
@@ -492,7 +408,7 @@ function installOrSync(target, force, args = []) {
       managedPaths: boundaries.managedPaths,
       neutralCorePaths: boundaries.neutralCorePaths ?? CORE_INSTALL_PATHS,
       defaultHostAdapters: boundaries.defaultHostAdapters ?? DEFAULT_HOST_ADAPTERS,
-      availableHostAdapters: boundaries.availableHostAdapters ?? Object.keys(HOST_ADAPTERS),
+      availableHostAdapters: boundaries.availableHostAdapters ?? HOST_IDS,
       doveBootstrapOnlyPaths: boundaries.doveBootstrapOnlyPaths.length,
       userOwnedPaths: boundaries.userOwnedPaths
     }

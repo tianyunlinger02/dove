@@ -1,19 +1,20 @@
 # dove.task-graph
 
-Inspect the durable Dove task graph across mission domains.
+Inspect task packets, dependencies, blockers, and review-needed work.
 
-## Goal
+## Contract
 
-Read `.dove/task-packets/index.json` and `.dove/wiki/navigation.md` to understand active packets, hierarchy, dependencies, priority pressure, current focus, next action, and cross-links to experiments, reviews, rebuttal issues, versions, and engineering evidence.
+- Command id: `dove.task-graph`
+- Domain: `generic`
+- Category: `query`
+- Policy: `query`
 
 ## Workflow
 
-1. Read `.dove/context/actions/current.json`, then `.dove/orchestration/board.json`, `.dove/task-packets/index.json`, `.dove/workspace/index.json`, and `.dove/wiki/navigation.md`.
-2. If `dove` MCP is available, call `query_task_graph`.
-3. Group packets by Dove domain, lifecycle stage, lifecycle status, role owner, dependency health, blocker state, and handoff readiness.
-4. When a specific packet needs action, read its `.dove/context/packets/*.json`, the matching `.dove/context/actions/packet-*.json`, and any linked `.dove/context/artifacts/*.json` files before mutating local state.
-5. Use the task graph to identify blocked work, stale packets, review-needed packets, governed autonomy packets, explicit autonomy envelopes, approved program-run links, missing parent/child linkage, and missing durable evidence links.
-
-## Rule
-
-This command is inspection/navigation only. Do not create packets, refresh indexes, run autonomy, run tests, inspect git, or mutate `.dove/` from this command.
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/task-packets/index.json`, `.dove/context/packets`.
+3. Prefer the `query_task_graph` MCP tool when available.
+4. Keep this surface read-only unless the named MCP tool explicitly performs a governed refresh.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

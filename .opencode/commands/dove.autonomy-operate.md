@@ -1,21 +1,21 @@
 # dove.autonomy-operate
 
-Run the maximum-allowed explicit Dove autonomous operating surface.
+Run the explicit bounded foreground autonomy operating surface.
 
-## Goal
+## Contract
 
-Use `autonomy-operate` to compose objective/source proposal selection, campaign planning, materialization, bounded approval, foreground autonomy execution, and a durable stop summary in one explicit operator invocation.
+- Command id: `dove.autonomy-operate`
+- Domain: `generic`
+- Category: `mutation`
+- Policy: `explicit-approval`
 
 ## Workflow
 
-1. Read `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/meta/execution-bridge-candidates.json`, `.dove/meta/operator-follow-through.json`, `.dove/programs/campaigns.json`, `.dove/programs/approvals.json`, and `.dove/runtime/controller-state.json` first.
-2. Choose the input mode explicitly: provide `sourceType`/`sourceId` to reuse an existing proposal source, or provide an operator `objective` so the surface creates/selects an objective-derived proposal-only execution bridge candidate under `.dove/meta/execution-bridge-candidates.json`.
-3. If `dove` MCP is available, prefer `run_autonomy_operate` with `actorRole: "planner"`, an explicit `objective` or source pair, and any needed `workerRole`, `maxSteps`, `executeBy`, or `reviewAfter` bounds.
-4. If MCP is unavailable, run `dove autonomy-operate . --objective "..."` or `dove autonomy-operate . --source-type execution-bridge --source-id <id>`.
-5. Treat the result as foreground-only and bounded: the command may plan a campaign, materialize one packet, stamp program approval, run explicit foreground autonomy, and stop at a durable continuation/review boundary.
-6. For objective-derived incomplete input, use the safe sequence `refresh-research-brief -> refresh-wiki -> run-review-loop`; do not invent note, audit, result-bridge, or claim payloads.
-7. Resume from the returned stop summary, `.dove/runtime/continuation.json`, `.dove/runtime/results.json`, and `.dove/programs/runs.json`. Issue fresh approvals explicitly before any next bounded authority window.
-
-## Rule
-
-Do not turn this surface into a hidden daemon, scheduler, host hook, or automatic executor for arbitrary `.dove/meta/*` proposals. It remains explicit, foreground-only, planner-supervised, bounded, durable, and governance-auditable.
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/runtime/controller-state.json`, `.dove/programs/approvals.json`, `.dove/task-packets/index.json`.
+3. Prefer the `run_autonomy_operate` MCP tool when available.
+4. Require explicit operator approval and bounded authority before creating, changing, or consuming program authority.
+5. Run only explicit bounded foreground autonomy and stop at declared review or authority boundaries.
+6. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+7. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+8. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

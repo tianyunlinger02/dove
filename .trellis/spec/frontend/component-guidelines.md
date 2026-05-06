@@ -8,41 +8,42 @@
 
 There are no React components in this repository. Treat each public surface as a component with a small, explicit contract:
 
-- OpenCode commands in `.opencode/commands/` are prompt components.
-- Skills in `.opencode/skills/` are reusable role/discipline components.
+- Generated command adapters in `.opencode/commands/`, `.claude/commands/dove/`, `.cursor/commands/`, `.codex/skills/`, and `.agents/skills/` are host-specific prompt or skill adapter components.
+- OpenCode role skills in `.opencode/skills/dove-*/` are reusable role/discipline components.
 - CLI subcommands in `bin/dove.mjs` are terminal components.
 - MCP tools in `src/mcp/tool-definitions.mjs` and `src/mcp/handlers.mjs` are API components.
 
-All surfaces should converge on the same file-backed `.dove/` state and should prefer deterministic core functions over prompt-only behavior.
+Command adapters should be generated from `src/core/command-manifest.mjs` via `scripts/generate-command-adapters.mjs`. All surfaces should converge on the same file-backed `.dove/` state and should prefer deterministic core functions over prompt-only behavior.
 
 ---
 
 ## Surface Structure
 
-### OpenCode commands
+### Generated command adapters
 
-Use a short title, a goal, and an ordered workflow. The first workflow step should say exactly which durable context/artifacts to read.
+Define command metadata in `src/core/command-manifest.mjs`, then run `npm run commands:generate` to rewrite host adapters. Use a short title, a goal, and an ordered workflow. The first workflow step should say exactly which durable context/artifacts to read.
 
-Example: `.opencode/commands/dove.paper.orchestrate.md`:
+Example generated contract for `dove.paper.orchestrate`:
 
 ```md
 # dove.paper.orchestrate
 
-Align the durable orchestration board and decide the next role-owned step.
+Route the current paper request to one next Dove surface without writing durable state.
 
 ## Goal
 
-Treat `.dove/orchestration/board.json` as the canonical workflow board...
+Inspect existing `.dove/` context and return a proposal-only next command.
 
 ## Workflow
 
-1. Read `.dove/context/actions/current.json`, then `.dove/orchestration/board.json`...
-2. If `dove` MCP is available, prefer `upsert_orchestration_board`...
+1. Read `.dove/context/actions/current.json`, `.dove/workspace/index.json`, and `.dove/orchestration/board.json` as available.
+2. Prefer `query_dove_orchestrate` or the CLI read-only route when available.
+3. Do not call mutation tools such as `upsert_orchestration_board`, `append_handoff`, or packet materialization tools.
 ```
 
 ### Skills
 
-Use YAML frontmatter with `name` and `description`, then concise bullet rules. Example: `.opencode/skills/dove-planner/SKILL.md` tells the planner to treat `.dove/orchestration/board.json` as canonical and use handoffs instead of hidden runtime memory.
+Use YAML frontmatter with `name` and `description`, then concise bullet rules. OpenCode role skills such as `.opencode/skills/dove-planner/SKILL.md` tell the planner to treat `.dove/orchestration/board.json` as canonical and use handoffs instead of hidden runtime memory.
 
 ### MCP tools
 
@@ -62,7 +63,7 @@ case "upsert_orchestration_board":
 ## Contract Conventions
 
 - Every user-facing mutation surface should name its target artifact and, when relevant, its role/policy requirements.
-- MCP tool names are snake_case; command IDs are `dove.<surface>` or `dove.paper.<action>`; core functions are camelCase.
+- Command IDs, host slugs, and adapter paths come from `src/core/command-manifest.mjs`; MCP tool names are snake_case; core functions are camelCase.
 - Role-bound mutation tools should expose policy/override fields through `withPolicy(...)` in `src/mcp/tool-definitions.mjs`.
 - Prompt surfaces should say when MCP is preferred, but must remain useful when MCP is unavailable by naming the file-backed artifacts to read.
 - Read-only/query surfaces should be clearly separate from mutation surfaces.
@@ -113,7 +114,7 @@ case "upsert_orchestration_board":
 
 - Integration test: fake external reviewer writes handoff/report/private transcript; runner imports verdict and concerns but not private transcript.
 - Integration test: import rejects mismatched `inputSha256`.
-- Command validation: `dove.paper.isolated-review.md` is registered.
+- Command validation: `dove.paper.isolated-review.md` is registered through the canonical command manifest and generated adapters.
 - Governance audit/hardening: isolated-review mutations bind to command/core surfaces; MCP binding may be absent for this CLI-only external-process surface.
 
 ### 7. Wrong vs Correct
@@ -134,7 +135,7 @@ dove isolated-review . --reviewer-command "node reviewer.js" --scope "current dr
 
 - Compose public surfaces around core functions exported from `src/core/index.mjs`; do not duplicate workflow logic in CLI or MCP layers.
 - Keep CLI operations thin: parse args, call core functions, print JSON or human-readable status.
-- Keep command markdown and skill markdown aligned with the same artifact paths and role names defined in code.
+- Keep command metadata in `src/core/command-manifest.mjs`, regenerate adapters, and keep OpenCode role skills aligned with the same artifact paths and role names defined in code.
 - Use action bundles, role manifests, phase manifests, packet manifests, and artifact manifests to narrow context before mutating durable state.
 
 ---
@@ -151,7 +152,8 @@ For this CLI/prompt package, accessibility means operators can recover state fro
 
 ## Common Mistakes
 
-- Adding a command file but forgetting `requiredCommands` in `scripts/validate-commands.mjs` or governance classification in `src/core/schema.mjs`.
+- Hand-editing generated command adapters instead of updating `src/core/command-manifest.mjs` and running `npm run commands:generate`.
+- Adding a command to the manifest but forgetting governance classification in `src/core/schema.mjs` or validation coverage in `scripts/validate-commands.mjs`.
 - Adding an MCP tool definition without adding a matching dispatch case and classification tests in `tests/integration/mcp-tools.test.mjs`.
 - Letting prompt text mention an artifact path that is not in `ARTIFACT_PATHS` or not bootstrapped by `ensureWorkspace`.
-- Auto-applying `dove.paper.meta-optimize` recommendations. `.opencode/commands/dove.paper.meta-optimize.md` explicitly treats that surface as proposal-only until materialized through governed follow-through.
+- Auto-applying `dove.paper.meta-optimize` recommendations. That surface is proposal-only until materialized through governed follow-through.

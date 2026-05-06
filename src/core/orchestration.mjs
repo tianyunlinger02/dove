@@ -241,7 +241,7 @@ function assertNoBlockingFollowThrough(root, currentPhase, nextPhase, currentAss
     const notExpired = policyOverride.expiresAt && String(policyOverride.expiresAt) > nowIso();
     const withinWindow = notExpired && String(policyOverride.expiresAt) <= new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const actorMatches = policyOverride.actorRole && policyOverride.actorRole === currentAssignedRole;
-    const reasonCodeAllowed = ["emergency-repair", "manual-reconciliation", "migration-compatibility", "operator-acknowledged-exception"].includes(policyOverride.reasonCode);
+    const reasonCodeAllowed = ["emergency-repair", "manual-reconciliation", "operator-acknowledged-exception"].includes(policyOverride.reasonCode);
     const phaseMatches = policyOverride.phase === currentPhase;
     if (relevance.ok && targetMatch && sourceMatch && phaseMatches && withinWindow && actorMatches && reasonCodeAllowed) {
       return;

@@ -1,9 +1,21 @@
 # dove-return
 
-Inspect whether a Dove mission can return without mutating durable state.
+Inspect return readiness from declared evidence and durable state.
 
-- Authoritative durable root: `.dove/`.
-- Prefer `query_dove_return` through MCP, or run `dove return .`.
-- For engineering missions, require declared changed files, declared test or validation evidence, and passing validation output before calling the return ready.
-- Return status, missing evidence, checklist/review state, engineering evidence, and one next command.
-- Do not write, repair, refresh, run tests, inspect git, execute autonomy, update the board, append handoffs, create snapshots, or materialize mission packets.
+## Contract
+
+- Command id: `dove.return`
+- Domain: `generic`
+- Category: `query`
+- Policy: `proposal-only`
+
+## Workflow
+
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/task-packets/index.json`, `.dove/runtime/controller-state.json`.
+3. Prefer the `query_dove_return` MCP tool when available.
+4. Keep this surface proposal-only: inspect and route, but do not mutate durable state.
+5. Use declared changed-file, test-evidence, and validation-output paths; do not run tests, inspect git, or repair state from this surface.
+6. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+7. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+8. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

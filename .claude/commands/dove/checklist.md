@@ -1,12 +1,20 @@
 # dove.checklist
 
-Sync the active Dove mission checklist with durable workspace state.
+Sync the active Dove mission checklist from the current plan and acceptance checks.
+
+## Contract
+
+- Command id: `dove.checklist`
+- Domain: `generic`
+- Category: `mutation`
+- Policy: `guarded-mutation`
 
 ## Workflow
 
-1. Treat `.dove/` as the authoritative durable root.
-2. Read the current action context, board, task packets, workspace index, plans, review state, and relevant mission artifacts.
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/checklists/current.md`, `.dove/task-packets/index.json`.
 3. Prefer the `sync_checklist` MCP tool when available.
-4. Turn design-stage work into concrete implementation steps and acceptance checks.
-5. Never mark an item done unless durable files or explicit return evidence support it.
-6. Do not execute checklist items; route ready work to the owning generic Dove or paper-domain command.
+4. Only perform the governed mutation owned by this surface, scoped to the operator request.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

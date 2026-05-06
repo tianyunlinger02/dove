@@ -11,15 +11,19 @@ Quality is enforced through package scripts, deterministic file-backed behavior,
 Primary commands:
 
 ```bash
+npm run commands:generate
+npm run commands:check
 npm run commands:validate
 npm run mcp:validate
 npm run governance:audit
 npm test
 npm run check
-npm pack --dry-run
+npm run doctor:validate
+npm run release:check
+npm run pack:dry-run
 ```
 
-`npm run check` currently runs command validation, MCP validation, governance coverage audit, and the Node test suite.
+`npm run check` runs generated adapter drift checks, command validation, MCP validation, governance coverage audit, and the Node test suite. `npm run doctor:validate` installs Dove into a clean temporary workspace and runs doctor there. `npm run release:check` adds maturity audit, clean doctor validation, and package dry-run for the full pre-release/package gate.
 
 ---
 
@@ -30,7 +34,7 @@ npm pack --dry-run
 - Do not add hidden daemons, hidden schedulers, or host-level hook interception. `README.md` lists those as intentionally out of scope.
 - Do not let package install/sync overwrite user-owned `.dove/` data.
 - Do not make `.dove/meta/*` optimizer output execute changes automatically; it is proposal-only until governed materialization/follow-through.
-- Do not add command, skill, artifact, or MCP names in only one layer. Public surfaces must stay aligned across markdown, schema registries, handlers, validators, and tests.
+- Do not add command, skill, artifact, or MCP names in only one layer. Public surfaces must stay aligned across manifest metadata, generated adapters, schema registries, handlers, validators, and tests.
 
 ---
 
@@ -41,7 +45,7 @@ npm pack --dry-run
 - Update governance registries when adding or changing mutation surfaces.
 - Keep role ownership and override policy fields explicit for guarded mutations.
 - Use deterministic JSON formatting (`JSON.stringify(value, null, 2)` plus newline) for written artifacts.
-- Include real tests for new state, normalization, command lists, MCP surfaces, and governance coverage.
+- Include real tests for new state, normalization, command lists, MCP surfaces, governance coverage, and generated adapter coverage.
 
 ---
 
@@ -49,17 +53,18 @@ npm pack --dry-run
 
 Choose checks based on what changed:
 
-- Command/skill prompt changes: `npm run commands:validate` and any relevant tests.
+- Command manifest or generated adapter changes: update `src/core/command-manifest.mjs`, run `npm run commands:generate`, `npm run commands:check`, and `npm run commands:validate`.
+- OpenCode role skill changes: `npm run commands:validate` and any relevant tests.
 - MCP tool definitions or handlers: `npm run mcp:validate` and `tests/integration/mcp-tools.test.mjs`.
 - Governance registries, guarded/exempt mutations, or follow-through logic: `npm run governance:audit` and relevant integration/unit tests.
 - Lifecycle mirror changes across programs, campaigns, workspace summaries, runtime results, or navigation reports: add a focused transition test and run that subset before `npm run check`.
 - Schema/default/normalizer changes: `tests/unit/schema.test.mjs` plus any affected integration tests.
-- CLI install/sync/doctor behavior: integration tests under `tests/integration/` and `npm pack --dry-run` when package boundaries change.
-- Broad changes: `npm run check`.
+- CLI install/sync/doctor behavior: integration tests under `tests/integration/` and `npm run pack:dry-run` when package boundaries change.
+- Broad changes: `npm run check`; release/package changes should also run `npm run release:check`.
 
 Examples of existing quality tests:
 
-- `scripts/validate-commands.mjs` asserts all required command files and skill files exist and that every command surface is classified.
+- `scripts/validate-commands.mjs` asserts generated adapter files match the canonical manifest, required tools are present, OpenCode role skills exist, and every command surface is classified.
 - `tests/integration/mcp-tools.test.mjs` asserts exact MCP tool names and role-bound policy fields.
 - `tests/integration/workflow.test.mjs` validates a full durable paper workflow from workspace creation through sources, notes, claims, experiments, review, handoffs, snapshots, and comparisons.
 - `tests/unit/schema.test.mjs` validates migration/default state behavior and exposed artifact paths.
@@ -69,7 +74,7 @@ Examples of existing quality tests:
 ## Code Review Checklist
 
 - Are all new durable paths listed in `ARTIFACT_PATHS` and bootstrapped/normalized correctly?
-- Are command IDs, MCP tool names, core function names, validators, and tests aligned?
+- Are command IDs, generated adapter paths, MCP tool names, core function names, validators, and tests aligned?
 - Are user-owned paths protected by workflow boundaries?
 - Are role and policy semantics explicit for guarded mutations?
 - Can the next operator resume from files without chat history?
@@ -80,7 +85,8 @@ Examples of existing quality tests:
 
 ## Common Mistakes
 
-- Updating `.opencode/commands/*.md` without updating validation lists or governance classification.
+- Hand-editing generated command adapters instead of updating `src/core/command-manifest.mjs` and rerunning `npm run commands:generate`.
+- Updating one host adapter surface while leaving other generated hosts, docs, or package install paths inconsistent.
 - Adding MCP input fields without checking tests that assert policy/approval/runtime fields.
 - Fixing one layer of the package while leaving README, command text, context artifacts, and tests inconsistent.
 - Using reference repos as implementation targets. `reference_repos/` is context only; project code lives in this package.

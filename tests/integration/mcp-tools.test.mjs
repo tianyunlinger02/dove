@@ -85,6 +85,22 @@ test("doctor MCP probe requires current Dove tools without calling mutating tool
   }
 });
 
+test("MCP validation scripts share bounded stdio client timeouts", () => {
+  const helperText = fs.readFileSync(path.join(process.cwd(), "scripts", "mcp-stdio-client.mjs"), "utf8");
+  assert.match(helperText, /CALL_TIMEOUT_MS\s*=\s*15000/);
+  assert.match(helperText, /setTimeout\(\(\) => \{/);
+  assert.match(helperText, /pending\.set\(id, \{ resolve, reject, timer, method, label: callLabel \}\)/);
+  assert.match(helperText, /clearTimeout\(waiter\.timer\)/);
+  assert.match(helperText, /server\.kill\(\)/);
+
+  for (const scriptPath of ["scripts/validate-mcp.mjs", "scripts/doctor-mcp-probe.mjs"]) {
+    const scriptText = fs.readFileSync(path.join(process.cwd(), scriptPath), "utf8");
+    assert.match(scriptText, /createMcpStdioClient/);
+    assert.match(scriptText, /notify\("notifications\/initialized"\)/);
+    assert.doesNotMatch(scriptText, /const pending = new Map\(\)/);
+  }
+});
+
 test("every MCP tool surface is classified as guarded, exempt, or read-only", () => {
   const classifiedToolNames = new Set([
     ...GOVERNANCE_GUARDED_MUTATIONS.map((entry) => entry.surfaceBindings?.mcpTool).filter(Boolean),

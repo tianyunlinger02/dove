@@ -1,9 +1,20 @@
 # dove-governance-audit
 
-Inspect Dove governance coverage without mutating policy.
+Inspect governance coverage and command/tool bindings without writing state.
 
-- Authoritative durable root: `.dove/`.
-- Read governance coverage artifacts under `.dove/meta/`.
-- Prefer `query_governance_coverage_report` through MCP.
-- Summarize guarded vs exempt paths, bound commands/tools/functions, uncovered bindings, and negative-coverage gaps.
-- Do not edit governance policy from this command.
+## Contract
+
+- Command id: `dove.governance-audit`
+- Domain: `generic`
+- Category: `query`
+- Policy: `proposal-only`
+
+## Workflow
+
+1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
+2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/meta/governance-coverage.json`.
+3. Prefer the `query_governance_coverage_report` MCP tool when available.
+4. Keep this surface proposal-only: inspect and route, but do not mutate durable state.
+5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
