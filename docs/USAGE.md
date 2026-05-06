@@ -209,7 +209,8 @@ The optional MCP layer exposes deterministic helpers, including:
 - `read_artifact_context_manifest`
 - `read_action_context_bundle`
 - `summarize_session_journal`
-- paper-domain mutation tools for research, notes, claims, experiments, drafts, review, rebuttal, versions, figures, citations, checklists, follow-through, materialization, and autonomy
+- paper-domain mutation tools for research, notes, claims, experiments, drafts, review, rebuttal, versions, figures, and citations
+- generic Dove mutation tools for checklist sync, materialization, launch, approvals, and bounded autonomy
 
 ## Role model
 

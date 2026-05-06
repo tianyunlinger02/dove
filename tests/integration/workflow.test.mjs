@@ -66,7 +66,7 @@ test("single-paper workflow creates durable artifacts", () => {
 
   ensureWorkspace(root);
   initProject(root, {
-    title: "Paper Factory Workflow",
+    title: "Dove Workflow",
     venue: "ICML",
     objective: "Validate the end-to-end writing pipeline.",
     thesis: "Durable workflows improve academic writing.",

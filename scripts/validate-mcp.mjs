@@ -165,7 +165,7 @@ async function main() {
   const state = extractJson(await call("tools/call", {
     name: "init_project",
     arguments: {
-      title: "Deterministic Paper Factory",
+      title: "Deterministic Dove Workspace",
       venue: "ICLR",
       objective: "Verify the mature Dove workflow.",
       deadline: "2026-05-01",
@@ -173,7 +173,7 @@ async function main() {
       audience: "ML conference reviewers"
     }
   }));
-  assert.equal(state.dove.title, "Deterministic Paper Factory");
+  assert.equal(state.dove.title, "Deterministic Dove Workspace");
 
   const metaOptimize = extractJson(await call("tools/call", {
     name: "query_meta_optimize",
