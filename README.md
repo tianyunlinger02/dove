@@ -171,10 +171,18 @@ Install/sync may bootstrap missing `.dove/` starter artifacts, but `.dove/` is u
 
 ## Docs
 
+Start with `docs/README.md` for the documentation map and governance rules.
+
+Current operator docs:
+
 - `docs/INSTALL.md`
 - `docs/USAGE.md`
 - `docs/PACKAGING.md`
 - `docs/CAPABILITY_MATRIX.md`
+
+Architecture and history notes:
+
 - `docs/DOVE_REFACTOR_PLAN_2026-05-04.md`
+- `docs/ROLE_HIERARCHY_REFACTOR_PLAN_2026-05-04.md`
 - `docs/PAPER_FACTORY_SYSTEM_ORIGINS.zh-CN.md`
 - `docs/REFERENCE_ARCHITECTURES.zh-CN.md`
