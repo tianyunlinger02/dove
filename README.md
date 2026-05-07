@@ -4,6 +4,20 @@ Dove is a local-first mission workflow system for research papers, engineering p
 
 It gives AI-assisted work a durable filesystem backbone: plans, handoffs, claims, evidence, review concerns, experiment records, task packets, distilled operator lessons, and operating state live in project-local `.dove/` files instead of disappearing into chat history.
 
+## Dove philosophy
+
+Dove is built around a simple operating metaphor: an agent should fly out with a clear mission, then return with evidence, results, and any reusable lesson. The important part is not just dispatching work; it is making the return explicit enough that another person or agent can inspect what changed, why it changed, how it was validated, and what should be remembered next time.
+
+That is why Dove treats the filesystem as the contract. It does not depend on hidden chat memory, a background swarm, or a host-specific automation loop. Plans, checklists, task packets, review findings, return evidence, and lessons are written into `.dove/` so the workflow remains portable across tools and auditable after the session ends.
+
+The intended rhythm is:
+
+```text
+goal → plan → checklist → execution → audit → return → lesson
+```
+
+Lessons stay manual and short. Dove can preserve reusable experience, but it does not auto-capture raw runtime traces or turn retrospectives into new work without an explicit governed action.
+
 ## Why Dove
 
 AI coding and writing sessions are powerful, but they often lose continuity across roles, tools, and long-running work. Dove keeps the work portable and auditable by combining:
