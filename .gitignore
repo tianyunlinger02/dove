@@ -9,8 +9,18 @@ reference_repos/
 # Legacy local workspace state; Dove treats .paper/ as stale, not authoritative.
 .paper/
 
+# Claude local state
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.json
+
 # Trellis local/generated files
 .trellis/.template-hashes.json
 .trellis/.version
 .trellis/workspace/*
 !.trellis/workspace/index.md
+.trellis/tasks/
+.trellis/worktree.yaml
+
+# Local planning scratch space
+.sisyphus/plans/

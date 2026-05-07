@@ -88,6 +88,23 @@ const watchedArtifacts = [
   ARTIFACT_PATHS.versionComparisons
 ];
 
+test("queryMetaOptimize exposes operator lessons summary and path", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+
+  const result = queryMetaOptimize(root);
+  assert.equal(result.operatorLessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
+  assert.equal(result.operatorLessons.explicitOnly, true);
+  assert.equal(result.operatorLessons.noAutoCapture, true);
+  assert.equal(result.operatorLessons.noAutoApply, true);
+  assert.equal(result.operatorLessons.summary.lessonCount, 0);
+  assert.equal(result.operatorLessons.summary.lessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
+
+  const workspaceIndex = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.workspaceIndex), "utf8"));
+  assert.equal(workspaceIndex.metaOptimize.operatorLessons.lessonCount, 0);
+  assert.equal(workspaceIndex.metaOptimize.operatorLessons.lessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
+});
+
 test("queryDoveMissionBoard exposes the as-read Dove mission board without writing artifacts", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -391,6 +408,12 @@ test("queryDoveReturn reports missing engineering evidence without writing artif
   assert.equal(result.missingReturnEvidence.includes("changed files"), true);
   assert.equal(result.missingReturnEvidence.includes("tests or validation evidence"), true);
   assert.equal(result.missingReturnEvidence.includes("validation output"), true);
+  assert.equal(result.lessonRitual.command, "project:dove.lessons");
+  assert.equal(result.lessonRitual.optional, true);
+  assert.deepEqual(result.lessonRitual.requiredFields, ["title", "problem", "decisions", "pitfalls", "validation", "nextTime"]);
+  assert.equal(result.lessonRitual.noAutoCapture, true);
+  assert.equal(result.lessonRitual.noAutoApply, true);
+  assert.equal(result.lessonRitual.noExecution, true);
   assert.deepEqual(after, before);
 });
 

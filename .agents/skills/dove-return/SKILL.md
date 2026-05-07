@@ -21,6 +21,7 @@ Inspect return readiness from declared evidence and durable state.
 3. Prefer the `query_dove_return` MCP tool when available.
 4. Keep this surface proposal-only: inspect and route, but do not mutate durable state.
 5. Use declared changed-file, test-evidence, and validation-output paths; do not run tests, inspect git, or repair state from this surface.
-6. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-7. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
-8. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+6. At closure, decide explicitly whether reusable experience is worth recording through Dove lessons; do not record automatically.
+7. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+8. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+9. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

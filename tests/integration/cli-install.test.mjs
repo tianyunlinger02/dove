@@ -20,7 +20,7 @@ function assertDoveHostPaths(target, hostIds) {
   }
 }
 
-test("npm package dry-run includes Dove-only multi-host adapters", () => {
+test("npm package dry-run includes Dove-only adapters and current public docs", () => {
   const result = spawnSync("npm", ["pack", "--dry-run", "--json"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -34,10 +34,31 @@ test("npm package dry-run includes Dove-only multi-host adapters", () => {
       assert.ok(packagedPaths.has(relativePath), `missing packaged adapter ${relativePath}`);
     }
   }
+  for (const publicDocPath of [
+    "docs/README.md",
+    "docs/INSTALL.md",
+    "docs/USAGE.md",
+    "docs/PACKAGING.md",
+    "docs/CAPABILITY_MATRIX.md"
+  ]) {
+    assert.ok(packagedPaths.has(publicDocPath), `missing public doc ${publicDocPath}`);
+  }
   assert.ok(packagedPaths.has(".opencode/commands/dove.paper.plan.md"));
   assert.ok(packagedPaths.has(".opencode/skills/dove-pipeline/SKILL.md"));
-  for (const forbiddenPath of [".codex/config.toml", ".codex/skills/parallel/SKILL.md", ".agents/skills/start/SKILL.md"]) {
-    assert.equal(packagedPaths.has(forbiddenPath), false, `packaged unsafe local artifact ${forbiddenPath}`);
+  assert.ok(packagedPaths.has(".agents/skills/dove-lessons/SKILL.md"));
+  for (const forbiddenPath of [
+    ".codex/config.toml",
+    ".codex/skills/parallel/SKILL.md",
+    ".agents/skills/start/SKILL.md",
+    ".opencode/commands/trellis/start.md",
+    ".claude/commands/trellis/start.md",
+    ".cursor/commands/trellis-start.md",
+    "docs/DOVE_REFACTOR_PLAN_2026-05-04.md",
+    "docs/ROLE_HIERARCHY_REFACTOR_PLAN_2026-05-04.md",
+    "docs/PAPER_FACTORY_SYSTEM_ORIGINS.zh-CN.md",
+    "docs/REFERENCE_ARCHITECTURES.zh-CN.md"
+  ]) {
+    assert.equal(packagedPaths.has(forbiddenPath), false, `packaged internal artifact ${forbiddenPath}`);
   }
 });
 
@@ -292,7 +313,7 @@ test("CLI doctor fails when key JSON artifacts are malformed", () => {
   assert.match(result.stdout, /json:.dove\/state.json/);
 });
 
-test("CLI doctor reports stale legacy .paper authority artifacts", () => {
+test("CLI doctor reports ignored stale workspace artifacts as warnings", () => {
   const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-legacy-root-"));
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
@@ -307,11 +328,13 @@ test("CLI doctor reports stale legacy .paper authority artifacts", () => {
     encoding: "utf8"
   });
 
-  assert.equal(result.status, 1, result.stdout);
+  assert.equal(result.status, 0, result.stdout);
   const payload = JSON.parse(result.stdout);
-  assert.ok(payload.checks.some((check) => check.check === "dove-authority" && !check.ok));
+  assert.equal(payload.healthy, true);
+  assert.ok(payload.checks.some((check) => check.check === "dove-authority" && check.ok));
   assert.deepEqual(payload.managedArtifacts.doveAuthorityManifest.staleLegacyArtifacts, [".paper/workspace/index.json"]);
-  assert.match(result.stdout, /stale legacy \.paper artifacts detected/);
+  assert.deepEqual(payload.managedArtifacts.doveAuthorityManifest.ignoredStaleWorkspaceArtifacts, [".paper/workspace/index.json"]);
+  assert.ok(payload.warnings.some((warning) => warning.code === "ignored-stale-workspace-artifacts" && warning.paths.includes(".paper/workspace/index.json")));
 });
 
 test("CLI doctor reports degraded typed wiki relations explicitly", () => {

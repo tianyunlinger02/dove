@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ensureWorkspace, readJson } from "../../src/core/workspace.mjs";
-import { ARTIFACT_PATHS, DOVE_DOMAIN_GUIDANCE, DOVE_DOMAIN_IDS, DOVE_MISSION_LIFECYCLE_STAGES, DOVE_PRIMARY_ROLE_IDS, DOVE_WORKFLOW_KERNEL_VERSION, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, createDefaultState, createDoveAuthorityManifest, createWorkspaceIndex, normalizeCampaignsIndex, normalizeDoveAuthorityManifest, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
+import { ARTIFACT_PATHS, DOVE_DOMAIN_GUIDANCE, DOVE_DOMAIN_IDS, DOVE_MISSION_LIFECYCLE_STAGES, DOVE_PRIMARY_ROLE_IDS, DOVE_WORKFLOW_KERNEL_VERSION, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, createDefaultState, createDoveAuthorityManifest, createMetaOperatorLessonsIndex, createWorkspaceIndex, normalizeCampaignsIndex, normalizeDoveAuthorityManifest, normalizeMetaOperatorLessonsIndex, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
 
 test("normalizeState migrates v1 state into v2", () => {
   const migrated = normalizeState({
@@ -45,8 +45,72 @@ test("createDefaultState exposes durable artifact paths", () => {
   assert.equal(state.artifacts.researchBrief, ".dove/research/brief.md");
   assert.equal(state.artifacts.rebuttalIssues, ".dove/rebuttal/issues.json");
   assert.equal(state.artifacts.metaLongHorizonMemory, ".dove/meta/long-horizon-memory.json");
+  assert.equal(state.artifacts.metaOperatorLessons, ".dove/meta/operator-lessons.json");
   assert.equal(state.artifacts.versionsIndex, ".dove/versions/index.json");
   assert.equal(state.reviews.lastVerdict, "not-reviewed");
+});
+
+test("operator lessons index is explicit-only and normalized", () => {
+  const index = createMetaOperatorLessonsIndex();
+  assert.equal(ARTIFACT_PATHS.metaOperatorLessons, ".dove/meta/operator-lessons.json");
+  assert.equal(index.referenceOnly, true);
+  assert.equal(index.explicitOnly, true);
+  assert.equal(index.noAutoCapture, true);
+  assert.equal(index.noAutoApply, true);
+  assert.deepEqual(index.lessons, []);
+  assert.equal(index.summary.lessonCount, 0);
+  assert.equal(index.summary.lessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
+
+  const normalized = normalizeMetaOperatorLessonsIndex({
+    version: 99,
+    referenceOnly: false,
+    explicitOnly: false,
+    noAutoCapture: false,
+    noAutoApply: false,
+    lessons: [{
+      id: "lesson-custom",
+      title: "  Distill trace lessons  ",
+      problem: "Operators need reusable task experience.",
+      decisions: ["Keep curated decisions.", "Keep curated decisions.", ""],
+      pitfalls: ["Avoid raw traces."],
+      validation: ["Query by tag."],
+      nextTime: ["Write a closure retrospective."],
+      domain: "engineering",
+      stage: "return",
+      actorRole: "planner",
+      tags: ["lessons", "lessons", "retrospective"],
+      sourceArtifacts: [".trellis/tasks/example/task.json", ".dove/sessions/LATEST_SUMMARY.md"],
+      status: "bad-status",
+      createdAt: "2026-05-07T00:00:00.000Z"
+    }, "bad-shape"],
+    sourceArtifacts: [".trellis/tasks/example/task.json", ".dove/workspace/index.json"]
+  });
+
+  assert.equal(normalized.version, 1);
+  assert.equal(normalized.referenceOnly, true);
+  assert.equal(normalized.explicitOnly, true);
+  assert.equal(normalized.noAutoCapture, true);
+  assert.equal(normalized.noAutoApply, true);
+  assert.equal(normalized.lessons.length, 1);
+  assert.equal(normalized.lessons[0].title, "Distill trace lessons");
+  assert.deepEqual(normalized.lessons[0].decisions, ["Keep curated decisions."]);
+  assert.deepEqual(normalized.lessons[0].tags, ["lessons", "retrospective"]);
+  assert.deepEqual(normalized.lessons[0].sourceArtifacts, [".dove/sessions/LATEST_SUMMARY.md"]);
+  assert.equal(normalized.lessons[0].status, "active");
+  assert.equal(normalized.summary.lessonCount, 1);
+  assert.equal(normalized.summary.activeLessonCount, 1);
+  assert.deepEqual(normalized.summary.topLessonIds, ["lesson-custom"]);
+  assert.deepEqual(normalized.summary.topTags, ["lessons", "retrospective"]);
+  assert.deepEqual(normalized.sourceArtifacts, [".dove/workspace/index.json"]);
+
+  const workspaceIndex = createWorkspaceIndex();
+  assert.equal(workspaceIndex.metaOptimize.operatorLessons.activeLessonCount, 0);
+  assert.equal(workspaceIndex.metaOptimize.operatorLessons.lessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
+  const normalizedWorkspace = normalizeWorkspaceIndex({ metaOptimize: { operatorLessons: { lessonCount: 2, activeLessonCount: 1, topLessonIds: ["lesson-custom"], lessonsPath: "custom.json" } } });
+  assert.equal(normalizedWorkspace.metaOptimize.operatorLessons.lessonCount, 2);
+  assert.equal(normalizedWorkspace.metaOptimize.operatorLessons.activeLessonCount, 1);
+  assert.deepEqual(normalizedWorkspace.metaOptimize.operatorLessons.topLessonIds, ["lesson-custom"]);
+  assert.equal(normalizedWorkspace.metaOptimize.operatorLessons.lessonsPath, "custom.json");
 });
 
 test("campaign indexes and workspace mirrors are normalized", () => {
@@ -138,6 +202,31 @@ test("ensureWorkspace creates and repairs the campaigns artifact", () => {
   assert.deepEqual(repaired.items, []);
   assert.equal(repaired.summary.campaignCount, 0);
   assert.equal(repaired.summary.activeCount, 2);
+});
+
+test("ensureWorkspace creates and repairs the operator lessons artifact", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-schema-lessons-"));
+  try {
+    ensureWorkspace(root);
+    const lessons = readJson(root, ARTIFACT_PATHS.metaOperatorLessons, {});
+    assert.equal(lessons.version, 1);
+    assert.equal(lessons.explicitOnly, true);
+    assert.equal(lessons.noAutoCapture, true);
+    assert.equal(lessons.noAutoApply, true);
+    assert.deepEqual(lessons.lessons, []);
+    assert.equal(lessons.summary.lessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
+
+    fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorLessons), JSON.stringify({ explicitOnly: false, noAutoApply: false, lessons: "bad-shape" }), "utf8");
+    ensureWorkspace(root);
+
+    const repaired = readJson(root, ARTIFACT_PATHS.metaOperatorLessons, {});
+    assert.equal(repaired.explicitOnly, true);
+    assert.equal(repaired.noAutoApply, true);
+    assert.deepEqual(repaired.lessons, []);
+    assert.equal(repaired.summary.lessonCount, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("workspace index exposes normalized paper lifecycle taxonomy", () => {

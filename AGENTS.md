@@ -7,4 +7,4 @@ These instructions are for AI assistants working in a Dove workspace.
 - Use `dove.paper.*` only for paper-domain research, claims, citations, drafting, experiments, review, rebuttal, figures, and version workflows.
 - Preserve the planner, builder, and reviewer separation; use handoff files instead of hidden context sharing.
 - Keep autonomy explicit, foreground-only, bounded, approval-aware, and auditable.
-- Do not treat local Trellis development files as packaged Dove product surfaces.
+- Do not treat local development scaffolding or raw runtime traces as packaged Dove product surfaces.

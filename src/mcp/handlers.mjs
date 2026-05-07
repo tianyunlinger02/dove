@@ -25,6 +25,7 @@ import {
   queryLineage,
   queryMetaOptimize,
   queryOpenQuestions,
+  queryOperatorLessons,
   queryOperatorFollowThrough,
   queryPaperAudit,
   queryProgramApprovals,
@@ -38,6 +39,7 @@ import {
   readState,
   readRoleContextManifest,
   recordOperatorFollowThrough,
+  recordOperatorLesson,
   refreshWiki,
   registerSource,
   revokeProgramApproval,
@@ -100,6 +102,8 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(queryMetaOptimize(root));
       case "query_governance_coverage_report":
         return makeTextResult(queryGovernanceCoverageReport(root));
+      case "query_operator_lessons":
+        return makeTextResult(queryOperatorLessons(root, args));
       case "query_operator_follow_through":
         return makeTextResult(queryOperatorFollowThrough(root));
       case "query_paper_audit":
@@ -192,6 +196,8 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(validateFigurePipeline(root));
       case "record_operator_follow_through":
         return makeTextResult(recordOperatorFollowThrough(root, args));
+      case "record_operator_lesson":
+        return makeTextResult(recordOperatorLesson(root, args));
       case "issue_program_approval":
         return makeTextResult(issueProgramApproval(root, args));
       case "plan_campaign":

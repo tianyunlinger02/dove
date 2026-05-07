@@ -1275,6 +1275,15 @@ export function queryDoveReturn(root, args = {}) {
     mission,
     evidenceRead,
     missingReturnEvidence,
+    lessonRitual: {
+      command: "project:dove.lessons",
+      optional: true,
+      when: "after return is ready and reusable experience is worth preserving",
+      requiredFields: ["title", "problem", "decisions", "pitfalls", "validation", "nextTime"],
+      noAutoCapture: true,
+      noAutoApply: true,
+      noExecution: true
+    },
     workspace: buildWorkspaceSummary(inputs),
     checklist: {
       completedCount: completedChecks,

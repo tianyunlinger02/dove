@@ -6,7 +6,7 @@ Dove is packaged as a host-neutral mission workflow system with optional host ad
 
 The packaged surface is:
 
-- neutral CLI/MCP/core files: `bin/`, `docs/`, `mcp/`, `scripts/`, `src/`, and `README.md`
+- neutral CLI/MCP/core files: `bin/`, current public `docs/`, `mcp/`, `scripts/`, `src/`, and `README.md`
 - the `dove` binary at `bin/dove.mjs`
 - the stdio MCP wrapper at `mcp/dove-state-server.mjs`
 - default OpenCode adapter files: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, and `.opencode.json`
@@ -18,7 +18,7 @@ The project-local `.dove/` directory is created or repaired at install time. It 
 
 The packaged code surface is managed:
 
-- neutral core: `bin/`, `docs/`, `mcp/`, `scripts/`, `src/`, `README.md`
+- neutral core: `bin/`, current public `docs/`, `mcp/`, `scripts/`, `src/`, `README.md`
 - host adapters: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.opencode.json`, `.claude/commands/dove`, `.codex/skills/dove-*`, `.cursor/commands/dove-*.md`, `.agents/skills/dove-*`, `AGENTS.md`
 
 The project-local `.dove/` workspace is user-owned state. The installer may create missing starter artifacts and `.dove/manifest.json`, but pack updates should not overwrite evolving sources, notes, drafts, experiments, review logs, rebuttal issues, task packets, runtime state, program approvals, role manifests, or snapshots.
@@ -45,4 +45,4 @@ npm run release:check
 npm pack --dry-run
 ```
 
-This should include the neutral core, Dove-only adapter surfaces, the MCP entrypoint, and the CLI installer. It should not include `.dove/` runtime snapshots, repository-local development scaffolding, local reference repos, `node_modules`, `.env*`, `*.local.json`, or host-local settings.
+This should include the neutral core, current public docs, Dove-only adapter surfaces, the MCP entrypoint, and the CLI installer. It should not include `.dove/` runtime snapshots, local development scaffolding, historical design notes, local reference repos, `node_modules`, `.env*`, `*.local.json`, or host-local settings.

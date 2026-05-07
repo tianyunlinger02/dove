@@ -11,6 +11,16 @@ Dove is a local-first mission workflow system for paper, engineering, experiment
 - **`.dove/manifest.json`** records Dove authority for the workspace.
 - **Dove mission metadata** under the `dove` field in `.dove/workspace/index.json` keeps one shared mission lifecycle without splitting paper and engineering into separate products.
 
+## First 10 minutes with Dove
+
+1. Install Dove into the target project and run `dove doctor` to confirm the core, adapters, MCP entrypoint, and workspace artifacts are healthy.
+2. Frame one mission with `dove orchestrate` or `dove mission`, setting the domain, lifecycle stage, target artifacts, and acceptance checks.
+3. Use `project:dove.plan` and `project:dove.checklist` to turn the mission into scoped work.
+4. Execute only the checklist scope, then use `dove audit` and `dove return` with declared changed-file, test-evidence, and validation-output paths.
+5. If the finished task produced reusable experience, record one short lesson through `project:dove.lessons` or `record_operator_lesson`.
+
+The lesson step is an explicit closure ritual, not automatic capture. Dove never imports raw runtime traces or turns lessons into work without a separate governed action.
+
 ## Board-first orchestration
 
 `project:dove.paper.orchestrate` is the paper-domain routing entrypoint. It reads the current `.dove` context, classifies the request by paper lifecycle family, and recommends one next command; it does not update the board, append handoffs, refresh packets, or apply downstream mutations.
@@ -27,6 +37,7 @@ The general Dove surfaces are generated for OpenCode, Claude Code, Codex, Cursor
 - `project:dove.task-graph`
 - `project:dove.materialize`
 - `project:dove.approvals`
+- `project:dove.lessons`
 - `project:dove.autonomy-operate`
 - `project:dove.audit` / `dove audit`
 - `project:dove.return` / `dove return`
@@ -51,11 +62,12 @@ Dove uses a durable board-first orchestration model:
 - `.dove/context/actions/*.json` adds explicit pre-action bundles.
 - `.dove/sessions/` keeps portable workspace summaries and journal entries.
 - `.dove/workspace/index.json` gives a resumable top-level overview, work queues, dependency health, ownership summaries, and handoff obligations.
-- `.dove/workspace/artifact-map.json` is an optional onboarding map for existing paper assets, written only by explicit `dove onboard . --write-map` or `dove migrate . --write-map`.
+- `.dove/workspace/artifact-map.json` is an optional onboarding map for existing paper assets, written only by explicit `dove onboard . --write-map`.
 - `.dove/workspace/index.json.lifecycle` classifies work into `objective`, `structure`, `campaign`, `work-unit`, `concern`, `audit`, and `knowledge`.
 - The `dove` field in `.dove/workspace/index.json` mirrors the same workspace as a unified Dove mission kernel.
 - `.dove/checklists/current.md` is the active checklist for the current Dove mission.
-- `.dove/meta/` records proposal-only optimization signals, ranked workflow recommendations, remediation packs, and long-horizon workflow memory without auto-applying changes.
+- `.dove/meta/` records proposal-only optimization signals, ranked workflow recommendations, remediation packs, distilled operator lessons, and long-horizon workflow memory without auto-applying changes.
+- `.dove/meta/operator-lessons.json` stores explicit, reference-only retrospectives: problem, decisions, pitfalls, validation, and next-time guidance.
 
 Commands and skills provide role behavior, but there is no hidden scheduler or swarm runtime. Optional MCP helpers mutate files deterministically; they do not replace `.dove/` as the source of truth.
 
@@ -71,7 +83,7 @@ Strict mode is stage-based, not template-based. Starter files in `.dove/` do not
 
 Run `project:dove.paper.init` to establish title, venue, thesis, audience, and the research contract.
 
-For an existing paper repository, run `dove onboard .` or `dove migrate .` before importing or rewriting artifacts. The default scan is proposal-only and writes nothing; `--write-map` persists only `.dove/workspace/artifact-map.json` as a reference map.
+For an existing paper repository, run `dove onboard .` before deciding what to adopt into the workflow. The default scan is proposal-only and writes nothing; `--write-map` persists only `.dove/workspace/artifact-map.json` as a reference map.
 
 ### 2. Orchestrate the next role-owned phase
 
@@ -140,8 +152,9 @@ Use these file-backed inspection commands when you need to understand the worksp
 - `project:dove.paper.audit` for strict no-fix paper inspection
 - `project:dove.orchestrate`, `project:dove.mission`, `project:dove.board`, `project:dove.audit`, and `project:dove.return` for proposal-only Dove routing, mission, board, audit, and return JSON queries
 - `project:dove.launch` / `launch_dove_mission` for governed launch of one accepted Dove mission into `.dove/task-packets`
-- `project:dove.paper.onboard` plus `dove onboard` / `dove migrate` for proposal-first artifact mapping
+- `project:dove.paper.onboard` plus `dove onboard` for proposal-first artifact mapping
 - `project:dove.paper.follow-through` for explicit operator handling of proposal-only remediation guidance
+- `project:dove.lessons` plus `query_operator_lessons` / `record_operator_lesson` for explicit distilled retrospectives
 - `project:dove.materialize` for explicit proposal-to-task-packet materialization once guidance is accepted
 - `project:dove.approvals` for inspecting, issuing, and revoking bounded program approvals; `project:dove.paper.approvals` is only a paper-domain view
 - `project:dove.autonomy-operate` / `run_autonomy_operate` for the explicit bounded foreground operating surface
@@ -149,6 +162,41 @@ Use these file-backed inspection commands when you need to understand the worksp
 - `project:dove.governance-audit` for the durable governance coverage proof report
 
 Paper navigation commands refresh `.dove/wiki/navigation.md`, `.dove/task-packets/index.json`, `.dove/context/roles/*.json`, `.dove/context/phases/*.json`, `.dove/context/packets/*.json`, `.dove/workspace/index.json`, and `.dove/sessions/LATEST_SUMMARY.md`. General Dove query surfaces stay no-refresh and proposal-only.
+
+## Lessons / retrospectives
+
+Use `project:dove.lessons` or the MCP tools when a task closes and the reusable experience is worth preserving. Lessons are manual and explicit: they are not generated from hidden chat history, imported from raw task traces, or applied automatically to future work.
+
+A lesson must include:
+
+- `title`
+- `problem`
+- at least one `decisions` entry
+- at least one `pitfalls` entry
+- at least one `validation` entry
+- at least one `nextTime` entry
+
+The durable artifact is `.dove/meta/operator-lessons.json`. It is `referenceOnly`, `explicitOnly`, `noAutoCapture`, and `noAutoApply`. Dove surfaces its summary in workspace, session, navigation, meta-optimize, and operator-guidance bundles, but recording a lesson does not create packets, approvals, launches, or autonomy work.
+
+Example MCP mutation payload:
+
+```json
+{
+  "title": "Close tasks with distilled lessons",
+  "problem": "Raw task traces are too noisy for future operators.",
+  "decisions": ["Capture only reusable decisions."],
+  "pitfalls": ["Do not cite ignored runtime trace folders."],
+  "validation": ["Query lessons after recording."],
+  "nextTime": ["Write the retrospective during return."],
+  "domain": "engineering",
+  "stage": "return",
+  "actorRole": "planner",
+  "tags": ["retrospective"],
+  "sourceArtifacts": [".dove/sessions/LATEST_SUMMARY.md"]
+}
+```
+
+`sourceArtifacts` must point at curated durable surfaces. Ignored raw runtime traces are rejected so local execution logs can stay disposable.
 
 ## Bounded autonomy
 
@@ -188,6 +236,7 @@ The optional MCP layer exposes deterministic helpers, including:
 - `query_meta_optimize`
 - `query_governance_coverage_report`
 - `query_operator_follow_through`
+- `query_operator_lessons`
 - `query_paper_audit`
 - `query_dove_orchestrate`
 - `query_dove_mission`
@@ -196,6 +245,7 @@ The optional MCP layer exposes deterministic helpers, including:
 - `query_dove_return`
 - `query_program_approvals`
 - `sync_checklist`
+- `record_operator_lesson`
 - `materialize_guidance_packet`
 - `launch_dove_mission`
 - `issue_program_approval`

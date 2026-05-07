@@ -26,6 +26,7 @@ import {
   createMetaGovernanceCoverageIndex,
   createMetaGovernanceCoverageReport,
   createMetaLongHorizonMemory,
+  createMetaOperatorLessonsIndex,
   createMetaOperatorFollowThroughIndex,
   createMetaOperatorFollowThroughTransitionsIndex,
   createMetaOperatorPlaybooksIndex,
@@ -54,6 +55,7 @@ import {
   normalizeMetaGovernanceCoverageReport,
   normalizeMetaLongHorizonMemory,
   normalizeAutonomyAllowedStepType,
+  normalizeMetaOperatorLessonsIndex,
   normalizeMetaOperatorFollowThroughIndex,
   normalizeMetaOperatorFollowThroughTransitionsIndex,
   normalizeMetaOperatorPlaybooksIndex,
@@ -241,6 +243,15 @@ function slugify(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "item";
+}
+
+function isTrellisTaskSourceArtifact(value) {
+  const normalized = String(value ?? "").trim().replace(/\\/g, "/").replace(/^\.\/+/, "");
+  return normalized === ".trellis/tasks" || normalized.startsWith(".trellis/tasks/") || normalized === "trellis/tasks" || normalized.startsWith("trellis/tasks/");
+}
+
+function normalizeOptionalString(value, fallback = null) {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
 function normalizeQuestion(question, fallbackPrefix, index) {
@@ -1110,7 +1121,33 @@ function selectTopOperatorPlaybook(operatorPlaybooks = {}, { roleId = null, pack
   return playbooks[0] ?? null;
 }
 
-function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidatesIndex = {}, operatorFollowThrough = {}, { roleId = null, packetId = null, packet = null } = {}) {
+function selectTopOperatorLessons(operatorLessons = {}, { roleId = null, packet = null } = {}) {
+  const packetTerms = [packet?.title, packet?.summary, packet?.currentFocus, packet?.nextAction, packet?.doveDomain, packet?.missionStage]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return (operatorLessons?.lessons ?? [])
+    .filter((lesson) => lesson.status === "active")
+    .map((lesson) => {
+      let score = 0;
+      if (roleId && (lesson.actorRole === roleId || roleCanActAs(roleId, lesson.actorRole))) {
+        score += 24;
+      }
+      if (packet?.doveDomain && lesson.domain === packet.doveDomain) {
+        score += 18;
+      }
+      if (packet?.missionStage && lesson.stage === packet.missionStage) {
+        score += 12;
+      }
+      const matchedTags = (lesson.tags ?? []).filter((tag) => packetTerms.includes(String(tag).toLowerCase()));
+      score += matchedTags.length * 8;
+      return { ...lesson, selectionScore: score, matchedTags };
+    })
+    .sort((left, right) => (right.selectionScore ?? 0) - (left.selectionScore ?? 0) || String(right.updatedAt ?? right.createdAt ?? "").localeCompare(String(left.updatedAt ?? left.createdAt ?? "")) || left.id.localeCompare(right.id))
+    .slice(0, 4);
+}
+
+function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidatesIndex = {}, operatorFollowThrough = {}, operatorLessons = {}, { roleId = null, packetId = null, packet = null } = {}) {
   const topRepairItems = (workspaceIndex.repairFrontier?.prioritizedItems ?? []).slice(0, 3).map((item) => ({
     id: item.id,
     frontierType: item.frontierType,
@@ -1194,6 +1231,20 @@ function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, operatorPl
     linkedTargetArtifact: record.linkedTargetArtifact,
     linkedTargetId: record.linkedTargetId
   }));
+  const topOperatorLessons = selectTopOperatorLessons(operatorLessons, { roleId, packet }).map((lesson) => ({
+    id: lesson.id,
+    title: lesson.title,
+    problem: lesson.problem,
+    domain: lesson.domain,
+    stage: lesson.stage,
+    actorRole: lesson.actorRole,
+    tags: lesson.tags,
+    nextTime: (lesson.nextTime ?? []).slice(0, 4),
+    pitfalls: (lesson.pitfalls ?? []).slice(0, 3),
+    validation: (lesson.validation ?? []).slice(0, 3),
+    selectionScore: lesson.selectionScore,
+    matchedTags: lesson.matchedTags
+  }));
   return {
     repairFrontier: {
       count: workspaceIndex.repairFrontier?.count ?? 0,
@@ -1230,6 +1281,11 @@ function buildOperatorGuidance(workspaceIndex, remediationPacks = {}, operatorPl
         overdueCount: operatorFollowThrough.summary?.overdueExecutionCount ?? 0,
         criticalOverdueCount: operatorFollowThrough.summary?.criticalOverdueExecutionCount ?? 0
       }
+    },
+    operatorLessons: {
+      summary: operatorLessons.summary ?? { lessonCount: 0, activeLessonCount: 0, overview: "No distilled operator lessons have been recorded yet." },
+      topLessons: topOperatorLessons,
+      lessonsPath: ARTIFACT_PATHS.metaOperatorLessons
     },
     familyPlaybook: topOperatorPlaybook ? {
       id: topOperatorPlaybook.id,
@@ -2040,7 +2096,7 @@ function renderNavigationReport(board, taskGraph, openQuestions, decisions, vers
   ].join("\n");
 }
 
-function buildRoleManifest(role, packets, openQuestions, decisions, workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidates = {}) {
+function buildRoleManifest(role, packets, openQuestions, decisions, workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidates = {}, operatorFollowThrough = {}, operatorLessons = {}) {
   const roleMetadata = ROLE_HIERARCHY[role.id] ?? role;
   const ownedRoleIds = [role.id, ...(roleMetadata.subagents ?? [])].filter((roleId) => ROLE_IDS.includes(roleId));
   const rolePackets = packets.filter((packet) => ownedRoleIds.includes(packet.assignedRole) && packet.active);
@@ -2095,12 +2151,12 @@ function buildRoleManifest(role, packets, openQuestions, decisions, workspaceInd
     queueSummary: workspaceIndex.ownershipSummary?.find((entry) => entry.roleId === role.id) ?? null,
     autonomyEnvelopePacketIds: roleEnvelopePackets.map((packet) => packet.id),
     handoffCandidateIds: (workspaceIndex.handoffObligations ?? []).filter((item) => item.toRole === role.id || item.fromRole === role.id).map((item) => item.packetId),
-    operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, operatorPlaybooks, executionBridgeCandidates, { roleId: role.id }),
+    operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, operatorLessons, { roleId: role.id }),
     generatedAt: nowIso()
   };
 }
 
-function buildPhaseManifest(board, packets, workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidates = {}) {
+function buildPhaseManifest(board, packets, workspaceIndex, remediationPacks = {}, operatorPlaybooks = {}, executionBridgeCandidates = {}, operatorFollowThrough = {}, operatorLessons = {}) {
   const phasePackets = sortPacketsForQueue(packets.filter((packet) => packet.phase === board.currentPhase && packet.active));
   const artifactContextPaths = uniqueSorted([
     artifactContextPath(ARTIFACT_PATHS.orchestrationBoard),
@@ -2152,7 +2208,7 @@ function buildPhaseManifest(board, packets, workspaceIndex, remediationPacks = {
         "Keep phase guidance explicit and file-backed."
       ]
     },
-    operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, operatorPlaybooks, executionBridgeCandidates, { roleId: board.assignedRole }),
+    operatorGuidance: buildOperatorGuidance(workspaceIndex, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, operatorLessons, { roleId: board.assignedRole }),
     resumeGuidance: workspaceIndex.resumeGuidance,
     generatedAt: nowIso()
   };
@@ -2779,7 +2835,7 @@ function buildLongHorizonMemory(existingMemory, rankedRecommendations, clusters,
   };
 }
 
-function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, governanceCoverage, autonomyLoops = null) {
+function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, governanceCoverage, autonomyLoops = null, operatorLessons = createMetaOperatorLessonsIndex()) {
   return {
     proposalOnly: true,
     recommendationCount: metaRecommendations.items.length,
@@ -2803,6 +2859,7 @@ function buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remedia
     longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory,
     remediationPacks: remediationPacks.summary,
     followThrough: operatorFollowThrough.summary,
+    operatorLessons: operatorLessons.summary,
     governanceCoverage: governanceCoverage.summary,
     executionBridgeCandidates: executionBridgeCandidates.summary,
     operatorPlaybooks: operatorPlaybooks.summary,
@@ -2834,6 +2891,11 @@ function renderMetaOptimizeOverviewLines(metaOptimize = {}) {
     `- Operator follow-through execution window: due-soon=${metaOptimize.followThrough?.dueSoonExecutionCount ?? 0}, due-review=${metaOptimize.followThrough?.dueReviewCount ?? 0}, critical-overdue=${metaOptimize.followThrough?.criticalOverdueExecutionCount ?? 0}`,
     `- Operator follow-through ids: due-soon=${(metaOptimize.followThrough?.dueSoonExecutionIds ?? []).join(", ") || "none"}, due-review=${(metaOptimize.followThrough?.dueReviewIds ?? []).join(", ") || "none"}, overdue=${(metaOptimize.followThrough?.overdueExecutionIds ?? []).join(", ") || "none"}, critical=${(metaOptimize.followThrough?.criticalOverdueExecutionIds ?? []).join(", ") || "none"}`,
     `- Operator follow-through path: ${metaOptimize.followThrough?.followThroughPath ?? ARTIFACT_PATHS.metaOperatorFollowThrough}`,
+    `- Operator lessons: ${metaOptimize.operatorLessons?.activeLessonCount ?? 0} active / ${metaOptimize.operatorLessons?.lessonCount ?? 0} total (${(metaOptimize.operatorLessons?.topLessonIds ?? []).join(", ") || "none"})`,
+    `- Operator lessons overview: ${metaOptimize.operatorLessons?.overview ?? "No distilled operator lessons have been recorded yet."}`,
+    `- Operator lessons tags: ${(metaOptimize.operatorLessons?.topTags ?? []).join(", ") || "none"}`,
+    `- Operator lessons domains: ${(metaOptimize.operatorLessons?.topDomains ?? []).join(", ") || "none"}`,
+    `- Operator lessons path: ${metaOptimize.operatorLessons?.lessonsPath ?? ARTIFACT_PATHS.metaOperatorLessons}`,
     `- Governance coverage: ${metaOptimize.governanceCoverage?.guardedCount ?? 0} guarded / ${metaOptimize.governanceCoverage?.exemptCount ?? 0} exempt`,
     `- Governance coverage overview: ${metaOptimize.governanceCoverage?.overview ?? "No governance coverage matrix has been summarized yet."}`,
     `- Governance coverage path: ${metaOptimize.governanceCoverage?.coveragePath ?? ARTIFACT_PATHS.metaGovernanceCoverage}`,
@@ -6185,7 +6247,8 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
   const sourceCatalog = buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, executionBridgeCandidates);
   const existingFollowThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
   const operatorFollowThrough = buildOperatorFollowThrough(root, existingFollowThrough, sourceCatalog, generatedAt);
-  const finalMetaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, governanceCoverage, workspaceIndex.autonomyLoops);
+  const operatorLessons = normalizeMetaOperatorLessonsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorLessons, createMetaOperatorLessonsIndex));
+  const finalMetaOptimizeMirror = buildMetaOptimizeMirror(metaRecommendations, longHorizonMemory, remediationPacks, operatorPlaybooks, executionBridgeCandidates, operatorFollowThrough, governanceCoverage, workspaceIndex.autonomyLoops, operatorLessons);
   const metaOptimizerState = {
     ...createMetaOptimizerState(),
     frontier: {
@@ -6213,6 +6276,7 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
     clusters: finalMetaOptimizeMirror.topClusters,
     executionBridgeCandidates: executionBridgeCandidates.summary,
     followThrough: operatorFollowThrough.summary,
+    operatorLessons: operatorLessons.summary,
     governanceCoverage: governanceCoverage.summary,
     operatorPlaybooks: operatorPlaybooks.summary,
     remediationPacks: remediationPacks.summary,
@@ -6328,6 +6392,22 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
           ""
         ])
       : ["- No family-level operator playbooks generated from the current durable signals."]),
+    "## Operator lessons",
+    "",
+    ...(operatorLessons.lessons.length > 0
+      ? operatorLessons.lessons.slice(0, 12).flatMap((lesson, index) => [
+          `### ${index + 1}. ${lesson.title}`,
+          `- Lesson id: ${lesson.id}`,
+          `- Domain/stage/role: ${lesson.domain} / ${lesson.stage} / ${lesson.actorRole}`,
+          `- Problem: ${lesson.problem}`,
+          `- Decisions: ${lesson.decisions.join(" | ") || "none"}`,
+          `- Pitfalls: ${lesson.pitfalls.join(" | ") || "none"}`,
+          `- Validation: ${lesson.validation.join(" | ") || "none"}`,
+          `- Next time: ${lesson.nextTime.join(" | ") || "none"}`,
+          `- Tags: ${lesson.tags.join(", ") || "none"}`,
+          ""
+        ])
+      : ["- No distilled operator lessons have been recorded yet."]),
     "## Execution bridge candidate scaffolds",
     "",
     ...(executionBridgeCandidates.candidates.length > 0
@@ -6396,6 +6476,7 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
     governanceCoverage,
     governanceCoverageReport,
     operatorFollowThrough,
+    operatorLessons,
     operatorPlaybooks,
     remediationPacks,
     longHorizonMemory,
@@ -6710,7 +6791,7 @@ export function refreshDurableSurfaces(root, event = {}) {
     comparisons,
     wikiRelations,
     figureQa,
-    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.governanceCoverage),
+    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.governanceCoverage, null, metaOptimize.operatorLessons),
     runtimeMirror,
     programsMirror,
     campaignsMirror,
@@ -6723,6 +6804,7 @@ export function refreshDurableSurfaces(root, event = {}) {
     writeJson(root, ARTIFACT_PATHS.metaGovernanceCoverage, metaOptimize.governanceCoverage);
     writeJson(root, ARTIFACT_PATHS.metaGovernanceCoverageReport, metaOptimize.metaGovernanceCoverageReport);
     writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, metaOptimize.operatorFollowThrough);
+  writeJson(root, ARTIFACT_PATHS.metaOperatorLessons, metaOptimize.operatorLessons);
   writeJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, metaOptimize.longHorizonMemory);
   writeJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, metaOptimize.operatorPlaybooks);
   writeJson(root, ARTIFACT_PATHS.metaRemediationPacks, metaOptimize.remediationPacks);
@@ -6746,6 +6828,7 @@ export function refreshDurableSurfaces(root, event = {}) {
       ARTIFACT_PATHS.metaGovernanceCoverageReport,
       ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown,
       ARTIFACT_PATHS.metaOperatorFollowThrough,
+      ARTIFACT_PATHS.metaOperatorLessons,
     ARTIFACT_PATHS.metaLongHorizonMemory,
     ARTIFACT_PATHS.metaOperatorPlaybooks,
     ARTIFACT_PATHS.metaRemediationPacks,
@@ -6788,11 +6871,11 @@ export function refreshDurableSurfaces(root, event = {}) {
         ...manifest.artifactContextPaths
       ],
       localRules: uniqueSorted([...(manifest.behaviorDiscipline.localRules ?? []), ...(manifest.autonomyEnvelope?.localRules ?? [])]),
-      operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, { roleId: packet.assignedRole, packetId: packet.id, packet })
+      operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.operatorLessons, { roleId: packet.assignedRole, packetId: packet.id, packet })
     }));
   }
   for (const role of manifestRoster) {
-    const manifest = buildRoleManifest(role, packetsWithHealth, openQuestions, decisions, workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates);
+    const manifest = buildRoleManifest(role, packetsWithHealth, openQuestions, decisions, workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.operatorLessons);
     writeJson(root, path.join(ARTIFACT_PATHS.roleContextsDir, `${role.id}.json`), manifest);
     writeJson(root, actionContextPath(`role-${role.id}`), buildActionContextBundle({
       scopeType: "role",
@@ -6808,7 +6891,7 @@ export function refreshDurableSurfaces(root, event = {}) {
     }));
   }
   const phaseManifestPath = path.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`);
-  const phaseManifest = buildPhaseManifest(board, packetsWithHealth, workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates);
+  const phaseManifest = buildPhaseManifest(board, packetsWithHealth, workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.operatorLessons);
   writeJson(root, phaseManifestPath, phaseManifest);
   writeJson(root, actionContextPath(`phase-${board.currentPhase}`), buildActionContextBundle({
     scopeType: "phase",
@@ -6837,7 +6920,7 @@ export function refreshDurableSurfaces(root, event = {}) {
       "Use packet and artifact-local guidance instead of broad top-level rules when available.",
       "Do not assume hidden rule loading; read the surfaced files explicitly before acting."
     ],
-    operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, { roleId: board.assignedRole })
+    operatorGuidance: buildOperatorGuidance(workspaceIndex, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.operatorLessons, { roleId: board.assignedRole })
   }));
 
   writeText(root, ARTIFACT_PATHS.sessionSummary, renderSessionSummary(state, board, packetsWithHealth, openQuestions, decisions, primaryRoleRoster, workspaceIndex));
@@ -6904,12 +6987,13 @@ export function queryMetaOptimize(root) {
   refreshDurableSurfaces(root, {
     type: "query-meta-optimize",
     summary: "Refreshed proposal-only meta-optimize surfaces.",
-    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaExecutionBridgeCandidates, ARTIFACT_PATHS.metaGovernanceCoverage, ARTIFACT_PATHS.metaOperatorPlaybooks, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
+    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaExecutionBridgeCandidates, ARTIFACT_PATHS.metaGovernanceCoverage, ARTIFACT_PATHS.metaOperatorLessons, ARTIFACT_PATHS.metaOperatorPlaybooks, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
   });
   const events = readJson(root, ARTIFACT_PATHS.metaEvents, createMetaEventsIndex);
   const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex));
   const governanceCoverage = normalizeMetaGovernanceCoverageIndex(readJson(root, ARTIFACT_PATHS.metaGovernanceCoverage, createMetaGovernanceCoverageIndex));
   const operatorFollowThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const operatorLessons = normalizeMetaOperatorLessonsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorLessons, createMetaOperatorLessonsIndex));
   const longHorizonMemory = normalizeMetaLongHorizonMemory(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory));
   const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex));
   const remediationPacks = normalizeMetaRemediationPacksIndex(readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex));
@@ -6923,6 +7007,7 @@ export function queryMetaOptimize(root) {
     governanceCoverage,
     governanceCoverageReport: normalizeMetaGovernanceCoverageReport(readJson(root, ARTIFACT_PATHS.metaGovernanceCoverageReport, createMetaGovernanceCoverageReport)),
     operatorFollowThrough,
+    operatorLessons,
     operatorPlaybooks,
     remediationPacks,
     longHorizon: longHorizonMemory,
@@ -6946,9 +7031,119 @@ export function queryMetaOptimize(root) {
     governanceCoverageReportPath: ARTIFACT_PATHS.metaGovernanceCoverageReport,
     governanceCoverageReportMarkdownPath: ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown,
     operatorFollowThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough,
+    operatorLessonsPath: ARTIFACT_PATHS.metaOperatorLessons,
     operatorPlaybooksPath: ARTIFACT_PATHS.metaOperatorPlaybooks,
     remediationPacksPath: ARTIFACT_PATHS.metaRemediationPacks,
     longHorizonPath: ARTIFACT_PATHS.metaLongHorizonMemory
+  };
+}
+
+export function queryOperatorLessons(root, args = {}) {
+  ensureWorkspace(root);
+  const index = normalizeMetaOperatorLessonsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorLessons, createMetaOperatorLessonsIndex));
+  const domain = normalizeOptionalString(args.domain, null);
+  const status = normalizeOptionalString(args.status, null);
+  const tag = normalizeOptionalString(args.tag, null);
+  const actorRole = normalizeOptionalString(args.actorRole, null);
+  const limit = Number.isFinite(args.limit) && args.limit > 0 ? Math.floor(args.limit) : null;
+  let lessons = index.lessons ?? [];
+  if (domain) {
+    lessons = lessons.filter((lesson) => lesson.domain === domain);
+  }
+  if (status) {
+    lessons = lessons.filter((lesson) => lesson.status === status);
+  }
+  if (tag) {
+    lessons = lessons.filter((lesson) => (lesson.tags ?? []).includes(tag));
+  }
+  if (actorRole) {
+    lessons = lessons.filter((lesson) => lesson.actorRole === actorRole);
+  }
+  lessons = lessons.sort((left, right) => String(right.updatedAt ?? right.createdAt ?? "").localeCompare(String(left.updatedAt ?? left.createdAt ?? "")) || left.id.localeCompare(right.id));
+  if (limit) {
+    lessons = lessons.slice(0, limit);
+  }
+  return {
+    ...index,
+    lessons,
+    filters: { domain, status, tag, actorRole, limit },
+    resultCount: lessons.length,
+    lessonsPath: ARTIFACT_PATHS.metaOperatorLessons
+  };
+}
+
+function requireLessonArrayField(args, fieldName) {
+  const values = normalizeStringArray(args[fieldName]);
+  if (values.length === 0) {
+    throw new Error(`recordOperatorLesson requires at least one ${fieldName} entry.`);
+  }
+  return values;
+}
+
+export function recordOperatorLesson(root, args = {}) {
+  assertGovernanceMutationRegistered("record-operator-lesson", "exempt");
+  ensureWorkspace(root);
+  const title = normalizeOptionalString(args.title, null);
+  const problem = normalizeOptionalString(args.problem, null);
+  if (!title) {
+    throw new Error("recordOperatorLesson requires title.");
+  }
+  if (!problem) {
+    throw new Error("recordOperatorLesson requires problem.");
+  }
+  const decisions = requireLessonArrayField(args, "decisions");
+  const pitfalls = requireLessonArrayField(args, "pitfalls");
+  const validation = requireLessonArrayField(args, "validation");
+  const nextTime = requireLessonArrayField(args, "nextTime");
+  const sourceArtifacts = uniqueSorted([
+    ...normalizeStringArray(args.sourceArtifacts),
+    ...normalizeStringArray(args.artifactPaths),
+    normalizeOptionalString(args.sourceArtifactPath, null)
+  ].filter(Boolean));
+  const rawTraceArtifacts = sourceArtifacts.filter(isTrellisTaskSourceArtifact);
+  if (rawTraceArtifacts.length > 0) {
+    throw new Error(`Operator lessons must be distilled manually and cannot cite raw .trellis/tasks runtime traces as source artifacts: ${rawTraceArtifacts.join(", ")}.`);
+  }
+  const timestamp = nowIso();
+  const existing = normalizeMetaOperatorLessonsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorLessons, createMetaOperatorLessonsIndex));
+  const recordId = normalizeOptionalString(args.id, null) ? slugify(args.id) : `lesson-${slugify(title)}-${slugify(timestamp)}`;
+  const previous = existing.lessons.find((lesson) => lesson.id === recordId) ?? null;
+  const nextRecord = {
+    ...(previous ?? {}),
+    id: recordId,
+    title,
+    problem,
+    decisions,
+    pitfalls,
+    validation,
+    nextTime,
+    domain: normalizeDoveDomainId(args.doveDomain ?? args.missionDomain ?? args.domain, "engineering"),
+    stage: normalizeDoveMissionLifecycleStage(args.missionStage ?? args.stage, "return"),
+    actorRole: ROLE_IDS.includes(args.actorRole) ? args.actorRole : previous?.actorRole ?? "planner",
+    tags: uniqueSorted(normalizeStringArray(args.tags)),
+    sourceType: normalizeOptionalString(args.sourceType, previous?.sourceType ?? "manual-retrospective"),
+    sourceId: normalizeOptionalString(args.sourceId, previous?.sourceId ?? null),
+    sourceArtifacts,
+    packetIds: uniqueSorted([...normalizeStringArray(args.packetIds), ...normalizeStringArray(args.relatedPacketIds)]),
+    recommendationIds: uniqueSorted([...normalizeStringArray(args.recommendationIds), ...normalizeStringArray(args.relatedRecommendationIds)]),
+    playbookIds: uniqueSorted([...normalizeStringArray(args.playbookIds), ...normalizeStringArray(args.relatedPlaybookIds)]),
+    remediationPackIds: uniqueSorted([...normalizeStringArray(args.remediationPackIds), ...normalizeStringArray(args.relatedRemediationPackIds)]),
+    status: normalizeOptionalString(args.status, previous?.status ?? "active"),
+    createdAt: normalizeOptionalString(args.createdAt, previous?.createdAt ?? timestamp),
+    updatedAt: timestamp
+  };
+  const lessons = [...existing.lessons.filter((lesson) => lesson.id !== recordId), nextRecord];
+  const next = normalizeMetaOperatorLessonsIndex({ ...existing, lessons, updatedAt: timestamp });
+  writeJson(root, ARTIFACT_PATHS.metaOperatorLessons, next);
+  refreshDurableSurfaces(root, {
+    type: "record-operator-lesson",
+    summary: `Recorded distilled operator lesson ${recordId}.`,
+    artifactPaths: [ARTIFACT_PATHS.metaOperatorLessons, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.metaOptimizerReport]
+  });
+  return {
+    ...next,
+    recordedLesson: next.lessons.find((lesson) => lesson.id === recordId) ?? nextRecord,
+    lessonsPath: ARTIFACT_PATHS.metaOperatorLessons
   };
 }
 

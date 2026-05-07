@@ -60,6 +60,7 @@ async function main() {
     "query_meta_optimize",
     "query_open_questions",
     "query_operator_follow_through",
+    "query_operator_lessons",
     "query_paper_audit",
     "query_program_approvals",
     "query_task_graph",
@@ -71,6 +72,7 @@ async function main() {
     "read_role_context_manifest",
     "read_state",
     "record_operator_follow_through",
+    "record_operator_lesson",
     "refresh_wiki",
     "register_source",
     "revoke_program_approval",
@@ -490,6 +492,51 @@ async function main() {
 
   const initialFollowThrough = extractJson(await call("tools/call", { name: "query_operator_follow_through", arguments: {} }));
   assert.equal(initialFollowThrough.summary.itemCount, 0);
+
+  const initialLessons = extractJson(await call("tools/call", { name: "query_operator_lessons", arguments: {} }));
+  assert.equal(initialLessons.explicitOnly, true);
+  assert.equal(initialLessons.noAutoCapture, true);
+  assert.equal(initialLessons.noAutoApply, true);
+  assert.equal(initialLessons.summary.activeLessonCount, 0);
+  assert.equal(initialLessons.lessonsPath, ".dove/meta/operator-lessons.json");
+
+  const recordedLesson = extractJson(await call("tools/call", {
+    name: "record_operator_lesson",
+    arguments: {
+      title: "Keep MCP validator retrospectives distilled",
+      problem: "Validator experience should be reusable without reading raw runtime traces.",
+      decisions: ["Record a concise lesson through the explicit MCP tool."],
+      pitfalls: ["Do not cite raw Trellis task logs as lesson sources."],
+      validation: ["Query lessons by tag after recording."],
+      nextTime: ["Close validation tasks with a short retrospective."],
+      domain: "engineering",
+      stage: "return",
+      actorRole: "planner",
+      tags: ["validator", "retrospective"],
+      sourceArtifacts: [".dove/sessions/LATEST_SUMMARY.md"]
+    }
+  }));
+  assert.equal(recordedLesson.summary.activeLessonCount, 1);
+  assert.equal(recordedLesson.recordedLesson.title, "Keep MCP validator retrospectives distilled");
+
+  const queriedLessons = extractJson(await call("tools/call", { name: "query_operator_lessons", arguments: { tag: "validator" } }));
+  assert.equal(queriedLessons.resultCount, 1);
+  assert.equal(queriedLessons.lessons[0].title, "Keep MCP validator retrospectives distilled");
+
+  const rejectedLesson = await call("tools/call", {
+    name: "record_operator_lesson",
+    arguments: {
+      title: "Reject raw task traces",
+      problem: "Lessons must not depend on ignored raw task traces.",
+      decisions: ["Reject Trellis task source artifacts."],
+      pitfalls: ["Raw runtime logs are not portable knowledge."],
+      validation: ["The MCP call returns an error."],
+      nextTime: ["Use durable Dove summaries as source context."],
+      sourceArtifacts: [".trellis/tasks/example/task.json"]
+    }
+  });
+  assert.equal(rejectedLesson.isError, true);
+  assert.match(rejectedLesson.content[0].text, /\.trellis\/tasks/);
 
   const questions = extractJson(await call("tools/call", { name: "query_open_questions", arguments: {} }));
   assert.equal(Array.isArray(questions.items), true);

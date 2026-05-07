@@ -2,7 +2,7 @@
 
 Dove ships as the `dove` package and `dove` CLI. Installing Dove adds a host-neutral workflow core plus optional host adapters, then bootstraps a project-local `.dove/` workspace as the authoritative durable state root.
 
-Old `.paper/` files are not imported automatically. If they exist, `dove doctor` reports them as stale legacy state so an operator can decide how to handle them explicitly.
+Ignored stale workspace artifacts are not imported automatically. If they exist, `dove doctor` reports them as warnings so an operator can decide how to handle them explicitly.
 
 ## Supported install model
 
@@ -40,9 +40,6 @@ node ./bin/dove.mjs install . --force --host all
 # Proposal-only scan; writes nothing
 node ./bin/dove.mjs onboard .
 
-# Alias with the same behavior
-node ./bin/dove.mjs migrate .
-
 # Persist only the proposed reference map
 node ./bin/dove.mjs onboard . --write-map
 ```
@@ -77,13 +74,13 @@ The query commands return proposal-only JSON and do not create mission packets, 
 node ./bin/dove.mjs doctor .
 ```
 
-The doctor command checks the neutral core, `.dove/state.json`, `.dove/manifest.json`, the MCP entrypoint, required adapter files, key JSON artifacts, typed-wiki and figure-managed internals, installed host adapters, artifact-map status, stale legacy `.paper/` conflicts, and the local MCP probe.
+The doctor command checks the neutral core, `.dove/state.json`, `.dove/manifest.json`, the MCP entrypoint, required adapter files, key JSON artifacts, typed-wiki and figure-managed internals, installed host adapters, artifact-map status, ignored stale workspace artifacts, and the local MCP probe.
 
 ## Update boundary safety
 
 `install` and `sync` treat `.dove/` as user-owned workspace data. The CLI bootstraps missing `.dove` artifacts via the workspace initializer, but it does not copy a packaged `.dove/` tree over the target project as managed code.
 
-Adapter copying is allowlisted to Dove surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.claude/commands/dove`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. Those paths are derived from `src/core/command-manifest.mjs`; run `npm run commands:generate` to rewrite adapters and `npm run commands:check` to detect drift. Repository-local development scaffolding and host settings are not installed as Dove product surfaces. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
+Adapter copying is allowlisted to Dove surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.claude/commands/dove`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. Those paths are derived from `src/core/command-manifest.mjs`; run `npm run commands:generate` to rewrite adapters and `npm run commands:check` to detect drift. Local development scaffolding and host settings are not installed as Dove product surfaces. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
 
 ## Validation
 

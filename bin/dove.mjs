@@ -14,6 +14,7 @@ import {
   normalizeMetaExecutionBridgeCandidatesIndex,
   normalizeMetaGovernanceCoverageIndex,
   normalizeMetaLongHorizonMemory,
+  normalizeMetaOperatorLessonsIndex,
   normalizeMetaOperatorPlaybooksIndex,
   normalizeMetaOptimizerState,
   normalizeMetaRecommendationsIndex,
@@ -657,6 +658,45 @@ function validateMetaOperatorPlaybooksShape(value) {
   return issues;
 }
 
+function validateMetaOperatorLessonsShape(value) {
+  const issues = [];
+  const root = requireObject(value, ".dove/meta/operator-lessons.json", issues);
+  if (!root) {
+    return issues;
+  }
+  if (root.referenceOnly !== true) {
+    issues.push(".dove/meta/operator-lessons.json.referenceOnly must be true");
+  }
+  if (root.explicitOnly !== true) {
+    issues.push(".dove/meta/operator-lessons.json.explicitOnly must be true");
+  }
+  if (root.noAutoCapture !== true) {
+    issues.push(".dove/meta/operator-lessons.json.noAutoCapture must be true");
+  }
+  if (root.noAutoApply !== true) {
+    issues.push(".dove/meta/operator-lessons.json.noAutoApply must be true");
+  }
+  maybeArray(root, "lessons", ".dove/meta/operator-lessons.json.lessons", issues);
+  maybeArray(root, "sourceArtifacts", ".dove/meta/operator-lessons.json.sourceArtifacts", issues);
+  const rawTraceArtifacts = [
+    ...(Array.isArray(root.sourceArtifacts) ? root.sourceArtifacts : []),
+    ...(Array.isArray(root.lessons) ? root.lessons.flatMap((lesson) => Array.isArray(lesson?.sourceArtifacts) ? lesson.sourceArtifacts : []) : [])
+  ].filter((artifactPath) => {
+    const normalized = String(artifactPath ?? "").trim().replace(/\\/g, "/").replace(/^\.\/+/, "");
+    return normalized === "trellis/tasks" || normalized.startsWith("trellis/tasks/") || normalized === ".trellis/tasks" || normalized.startsWith(".trellis/tasks/");
+  });
+  if (rawTraceArtifacts.length > 0) {
+    issues.push(`.dove/meta/operator-lessons.json cannot cite raw .trellis/tasks artifacts: ${rawTraceArtifacts.join(", ")}`);
+  }
+  const summary = maybeObject(root, "summary", ".dove/meta/operator-lessons.json.summary", issues);
+  if (summary) {
+    maybeArray(summary, "topLessonIds", ".dove/meta/operator-lessons.json.summary.topLessonIds", issues);
+    maybeArray(summary, "topTags", ".dove/meta/operator-lessons.json.summary.topTags", issues);
+    maybeArray(summary, "topDomains", ".dove/meta/operator-lessons.json.summary.topDomains", issues);
+  }
+  return issues;
+}
+
 function validateMetaExecutionBridgeCandidatesShape(value) {
   const issues = [];
   const root = requireObject(value, ".dove/meta/execution-bridge-candidates.json", issues);
@@ -788,6 +828,40 @@ function inspectOperatorFollowThrough(target) {
   };
 }
 
+function inspectOperatorLessons(target) {
+  const lessons = readJsonFile(target, ".dove/meta/operator-lessons.json");
+  if (lessons.status !== "ok") {
+    return {
+      status: lessons.status === "missing" ? "ok" : "degraded",
+      lessonCount: 0,
+      activeLessonCount: 0,
+      topLessonIds: [],
+      reasons: lessons.status === "missing" ? [] : [lessons.message]
+    };
+  }
+  const shapeIssues = validateMetaOperatorLessonsShape(lessons.value);
+  if (shapeIssues.length > 0) {
+    return {
+      status: "degraded",
+      lessonCount: 0,
+      activeLessonCount: 0,
+      topLessonIds: [],
+      reasons: shapeIssues
+    };
+  }
+  const normalized = normalizeMetaOperatorLessonsIndex(lessons.value);
+  return {
+    status: "ok",
+    lessonCount: normalized.summary.lessonCount,
+    activeLessonCount: normalized.summary.activeLessonCount,
+    topLessonIds: normalized.summary.topLessonIds,
+    topTags: normalized.summary.topTags,
+    topDomains: normalized.summary.topDomains,
+    lessonsPath: normalized.summary.lessonsPath,
+    reasons: []
+  };
+}
+
 function inspectAutonomyRuntime(target) {
   const workspace = readJsonFile(target, ".dove/workspace/index.json");
   if (workspace.status !== "ok") {
@@ -891,6 +965,7 @@ function inspectDoveAuthority(target) {
       currentWriteAuthority: ARTIFACT_PATHS.doveRoot,
       manifestPath: ARTIFACT_PATHS.doveRootManifest,
       staleLegacyArtifacts: [],
+      ignoredStaleWorkspaceArtifacts: [],
       reasons: [manifest.message]
     };
   }
@@ -925,9 +1000,7 @@ function inspectDoveAuthority(target) {
     ".paper/orchestration/board.json",
     ".paper/task-packets/index.json"
   ].filter((relativePath) => fs.existsSync(path.join(target, relativePath)));
-  if (staleLegacyArtifacts.length > 0) {
-    reasons.push(`stale legacy .paper artifacts detected: ${staleLegacyArtifacts.join(", ")}`);
-  }
+  const ignoredStaleWorkspaceArtifacts = staleLegacyArtifacts;
 
   return {
     status: reasons.length === 0 ? "ok" : "degraded",
@@ -938,6 +1011,7 @@ function inspectDoveAuthority(target) {
     manifestPath: normalized.manifestPath,
     legacyRoot: normalized.legacyRoot,
     staleLegacyArtifacts,
+    ignoredStaleWorkspaceArtifacts,
     reasons
   };
 }
@@ -951,6 +1025,7 @@ function collectRawManagedArtifactChecks(target) {
     ["raw-meta-recommendations-shape", ".dove/meta/recommendations.json", validateMetaRecommendationsShape],
     ["raw-meta-optimizer-state-shape", ".dove/meta/optimizer-state.json", validateMetaOptimizerStateShape],
     ["raw-meta-operator-playbooks-shape", ".dove/meta/operator-playbooks.json", validateMetaOperatorPlaybooksShape],
+    ["raw-meta-operator-lessons-shape", ".dove/meta/operator-lessons.json", validateMetaOperatorLessonsShape],
     ["raw-meta-execution-bridge-candidates-shape", ".dove/meta/execution-bridge-candidates.json", validateMetaExecutionBridgeCandidatesShape],
     ["raw-meta-governance-coverage-shape", ".dove/meta/governance-coverage.json", validateMetaGovernanceCoverageShape],
     ["raw-meta-operator-follow-through-shape", ".dove/meta/operator-follow-through.json", validateMetaOperatorFollowThroughShape],
@@ -981,10 +1056,11 @@ function collectRawMetaOptimizeConsistencyCheck(target) {
   const optimizerState = readJsonFile(target, ".dove/meta/optimizer-state.json");
   const executionBridgeCandidates = readJsonFile(target, ".dove/meta/execution-bridge-candidates.json");
   const operatorPlaybooks = readJsonFile(target, ".dove/meta/operator-playbooks.json");
+  const operatorLessons = readJsonFile(target, ".dove/meta/operator-lessons.json");
   const longHorizonMemory = readJsonFile(target, ".dove/meta/long-horizon-memory.json");
   const workspaceIndex = readJsonFile(target, ".dove/workspace/index.json");
 
-  if ([recommendations, optimizerState, operatorPlaybooks, longHorizonMemory, workspaceIndex].some((item) => item.status !== "ok")) {
+  if ([recommendations, optimizerState, operatorPlaybooks, operatorLessons, longHorizonMemory, workspaceIndex].some((item) => item.status !== "ok")) {
     return {
       check: "raw-meta-optimize-mirror-consistency",
       ok: true,
@@ -997,6 +1073,7 @@ function collectRawMetaOptimizeConsistencyCheck(target) {
     ...validateMetaRecommendationsShape(recommendations.value),
     ...validateMetaOptimizerStateShape(optimizerState.value),
     ...validateMetaOperatorPlaybooksShape(operatorPlaybooks.value),
+    ...validateMetaOperatorLessonsShape(operatorLessons.value),
     ...validateMetaLongHorizonShape(longHorizonMemory.value),
     ...validateWorkspaceRepairFrontierShape(workspaceIndex.value)
   ];
@@ -1012,6 +1089,7 @@ function collectRawMetaOptimizeConsistencyCheck(target) {
   const normalizedRecommendations = normalizeMetaRecommendationsIndex(recommendations.value);
   const normalizedOptimizerState = normalizeMetaOptimizerState(optimizerState.value);
   const normalizedOperatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(operatorPlaybooks.value);
+  const normalizedOperatorLessons = normalizeMetaOperatorLessonsIndex(operatorLessons.value);
   const normalizedWorkspaceIndex = normalizeWorkspaceIndex(workspaceIndex.value);
   const normalizedWorkspaceMetaOptimize = normalizeWorkspaceMetaOptimize(workspaceIndex.value.metaOptimize, normalizedWorkspaceIndex.metaOptimize);
   const normalizedLongHorizonMemory = normalizeMetaLongHorizonMemory(longHorizonMemory.value);
@@ -1080,6 +1158,18 @@ function collectRawMetaOptimizeConsistencyCheck(target) {
   }
   if (JSON.stringify(normalizedWorkspaceMetaOptimize.operatorPlaybooks.topPlaybookIds) !== JSON.stringify(normalizedOperatorPlaybooks.summary.topPlaybookIds)) {
     mismatches.push("workspace metaOptimize operatorPlaybooks topPlaybookIds drift");
+  }
+  if (normalizedOptimizerState.operatorLessons.lessonCount !== normalizedOperatorLessons.lessons.length) {
+    mismatches.push("optimizer state operatorLessons count drift");
+  }
+  if (normalizedWorkspaceMetaOptimize.operatorLessons.lessonCount !== normalizedOperatorLessons.lessons.length) {
+    mismatches.push("workspace metaOptimize operatorLessons count drift");
+  }
+  if (JSON.stringify(normalizedOptimizerState.operatorLessons.topLessonIds) !== JSON.stringify(normalizedOperatorLessons.summary.topLessonIds)) {
+    mismatches.push("optimizer state operatorLessons topLessonIds drift");
+  }
+  if (JSON.stringify(normalizedWorkspaceMetaOptimize.operatorLessons.topLessonIds) !== JSON.stringify(normalizedOperatorLessons.summary.topLessonIds)) {
+    mismatches.push("workspace metaOptimize operatorLessons topLessonIds drift");
   }
   if (JSON.stringify(normalizedRecommendations.frontier.pressureAreas) !== JSON.stringify(normalizedOptimizerState.frontier.pressureAreas)) {
     mismatches.push("optimizer frontier pressureAreas drift");
@@ -1244,7 +1334,7 @@ function buildDoctorProposalFrontier(managedArtifacts, rawMetaOptimizeConsistenc
       reasons: rawMetaOptimizeConsistency.mismatches.join(" | "),
       reasonCodes: rawMetaOptimizeConsistency.mismatches,
       artifactPath: ".dove/meta/recommendations.json",
-      relatedArtifactPaths: [".dove/meta/optimizer-state.json", ".dove/meta/long-horizon-memory.json", ".dove/workspace/index.json"],
+      relatedArtifactPaths: [".dove/meta/optimizer-state.json", ".dove/meta/long-horizon-memory.json", ".dove/meta/operator-lessons.json", ".dove/workspace/index.json"],
       nextAction: "Refresh the durable surfaces or repair the drifted meta artifacts explicitly, then rerun doctor until the proposal-only frontier is clear."
     }]
     : [];
@@ -1264,6 +1354,7 @@ function inspectMetaOptimize(target) {
   const executionBridgeCandidates = readJsonFile(target, ".dove/meta/execution-bridge-candidates.json");
   const governanceCoverage = readJsonFile(target, ".dove/meta/governance-coverage.json");
   const operatorPlaybooks = readJsonFile(target, ".dove/meta/operator-playbooks.json");
+  const operatorLessons = readJsonFile(target, ".dove/meta/operator-lessons.json");
   const longHorizonMemory = readJsonFile(target, ".dove/meta/long-horizon-memory.json");
   const workspaceIndex = readJsonFile(target, ".dove/workspace/index.json");
   if (recommendations.status !== "ok") {
@@ -1281,6 +1372,9 @@ function inspectMetaOptimize(target) {
   if (operatorPlaybooks.status !== "ok") {
     return { status: operatorPlaybooks.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [operatorPlaybooks.message] };
   }
+  if (operatorLessons.status !== "ok") {
+    return { status: operatorLessons.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [operatorLessons.message] };
+  }
   if (longHorizonMemory.status !== "ok") {
     return { status: longHorizonMemory.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [longHorizonMemory.message] };
   }
@@ -1293,6 +1387,7 @@ function inspectMetaOptimize(target) {
     ...validateMetaExecutionBridgeCandidatesShape(executionBridgeCandidates.value),
     ...validateMetaGovernanceCoverageShape(governanceCoverage.value),
     ...validateMetaOperatorPlaybooksShape(operatorPlaybooks.value),
+    ...validateMetaOperatorLessonsShape(operatorLessons.value),
     ...validateMetaLongHorizonShape(longHorizonMemory.value),
     ...validateWorkspaceRepairFrontierShape(workspaceIndex.value)
   ];
@@ -1304,6 +1399,7 @@ function inspectMetaOptimize(target) {
   const normalizedExecutionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(executionBridgeCandidates.value);
   const normalizedGovernanceCoverage = normalizeMetaGovernanceCoverageIndex(governanceCoverage.value);
   const normalizedOperatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(operatorPlaybooks.value);
+  const normalizedOperatorLessons = normalizeMetaOperatorLessonsIndex(operatorLessons.value);
   const normalizedLongHorizonMemory = normalizeMetaLongHorizonMemory(longHorizonMemory.value);
   const normalizedWorkspaceIndex = normalizeWorkspaceIndex(workspaceIndex.value);
   const normalizedWorkspaceMetaOptimize = normalizeWorkspaceMetaOptimize(workspaceIndex.value.metaOptimize, normalizedWorkspaceIndex.metaOptimize);
@@ -1341,6 +1437,8 @@ function inspectMetaOptimize(target) {
     && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topTaxonomyGroupIds) === JSON.stringify(longHorizonSummary.topTaxonomyGroupIds)
     && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.pressureAreas) === JSON.stringify(longHorizonSummary.pressureAreas)
     && normalizedWorkspaceMetaOptimize.longHorizon.overview === longHorizonSummary.overview
+    && normalizedWorkspaceMetaOptimize.operatorLessons.lessonCount === normalizedOperatorLessons.lessons.length
+    && JSON.stringify(normalizedWorkspaceMetaOptimize.operatorLessons.topLessonIds) === JSON.stringify(normalizedOperatorLessons.summary.topLessonIds)
     && normalizedWorkspaceMetaOptimize.longHorizon.snapshotCount === longHorizonSummary.snapshotCount
     && normalizedWorkspaceMetaOptimize.longHorizon.lastAction === longHorizonSummary.lastAction
     && normalizedWorkspaceMetaOptimize.governanceCoverage.guardedCount === normalizedGovernanceCoverage.summary.guardedCount
@@ -1357,6 +1455,8 @@ function inspectMetaOptimize(target) {
     topTaxonomyGroupIds: Array.isArray(frontier.topTaxonomyGroupIds) ? frontier.topTaxonomyGroupIds : [],
     governanceCoverage: normalizedGovernanceCoverage.summary,
     topPlaybookIds: Array.isArray(normalizedOperatorPlaybooks.summary.topPlaybookIds) ? normalizedOperatorPlaybooks.summary.topPlaybookIds : [],
+    operatorLessons: normalizedOperatorLessons.summary,
+    topLessonIds: Array.isArray(normalizedOperatorLessons.summary.topLessonIds) ? normalizedOperatorLessons.summary.topLessonIds : [],
     topCandidateIds: Array.isArray(normalizedExecutionBridgeCandidates.summary.topCandidateIds) ? normalizedExecutionBridgeCandidates.summary.topCandidateIds : [],
     taxonomyOverview: frontier.taxonomyOverview ?? null,
     frontierSummary: frontier.frontierSummary ?? null,
@@ -1373,6 +1473,7 @@ function inspectMetaOptimize(target) {
       `governance coverage: ${normalizedGovernanceCoverage.summary.guardedCount ?? 0} guarded / ${normalizedGovernanceCoverage.summary.exemptCount ?? 0} exempt`,
       `execution bridge candidates: ${normalizedExecutionBridgeCandidates.summary.candidateCount ?? 0} candidates (${normalizedExecutionBridgeCandidates.summary.topCandidateIds.join(", ") || "none"})`,
       `family playbooks: ${normalizedOperatorPlaybooks.summary.playbookCount ?? 0} playbooks (${normalizedOperatorPlaybooks.summary.topTaxonomyFamilyIds.join(", ") || "none"})`,
+      `operator lessons: ${normalizedOperatorLessons.summary.activeLessonCount ?? 0} active / ${normalizedOperatorLessons.summary.lessonCount ?? 0} total (${normalizedOperatorLessons.summary.topLessonIds.join(", ") || "none"})`,
       normalizedWorkspaceMetaOptimize.remediationPacks?.readinessOverview ? `remediation readiness: ${normalizedWorkspaceMetaOptimize.remediationPacks.readinessOverview}` : null,
       normalizedWorkspaceMetaOptimize.operatorPlaybooks?.readinessOverview ? `playbook readiness: ${normalizedWorkspaceMetaOptimize.operatorPlaybooks.readinessOverview}` : null,
       frontier.frontierSummary ? `frontier summary: ${frontier.frontierSummary}` : null,
@@ -1495,6 +1596,7 @@ function doctor(target) {
     ".dove/workspace/index.json",
     ARTIFACT_PATHS.doveRootManifest,
     ".dove/meta/operator-playbooks.json",
+    ".dove/meta/operator-lessons.json",
     "mcp/dove-state-server.mjs",
     "src/mcp/server.mjs"
    ];
@@ -1506,6 +1608,7 @@ function doctor(target) {
     healthy: missing.length === 0,
     missing,
     checks: [],
+    warnings: [],
     hostAdapters: installedHosts,
     boundaryPolicy: null,
     managedArtifacts: null
@@ -1558,6 +1661,8 @@ function doctor(target) {
   if (rawJsonChecksPassed && boundaryRawParseOk) {
     ensureWorkspace(target);
   }
+  result.missing = required.filter((relativePath) => !fs.existsSync(path.join(target, relativePath)));
+  result.healthy = result.missing.length === 0;
 
   try {
     const boundaries = JSON.parse(fs.readFileSync(boundariesPath, "utf8"));
@@ -1604,6 +1709,7 @@ function doctor(target) {
     workspaceRepairFrontier: inspectWorkspaceRepairFrontier(target),
     metaOptimize: inspectMetaOptimize(target),
     operatorFollowThrough: inspectOperatorFollowThrough(target),
+    operatorLessons: inspectOperatorLessons(target),
     onboardingArtifactMap: inspectOnboardingArtifactMap(target),
     doveAuthorityManifest: inspectDoveAuthority(target),
     autonomyRuntime: inspectAutonomyRuntime(target),
@@ -1611,6 +1717,15 @@ function doctor(target) {
     governanceCoverageBindings: inspectGovernanceCoverageSurfaceBindings(target, { requireCommandSurfaces: installedHosts.includes("opencode") })
   };
   result.managedArtifacts = managedArtifacts;
+  const ignoredStaleWorkspaceArtifacts = managedArtifacts.doveAuthorityManifest.ignoredStaleWorkspaceArtifacts ?? managedArtifacts.doveAuthorityManifest.staleLegacyArtifacts ?? [];
+  if (ignoredStaleWorkspaceArtifacts.length > 0) {
+    result.warnings.push({
+      code: "ignored-stale-workspace-artifacts",
+      severity: "warning",
+      paths: ignoredStaleWorkspaceArtifacts,
+      message: "Ignored stale workspace artifacts were found; they are not Dove authority and do not affect package health."
+    });
+  }
   result.proposalFrontier = buildDoctorProposalFrontier(managedArtifacts, rawMetaOptimizeConsistency);
   result.checks.push({
     check: "typed-wiki-relations-health",
@@ -1651,6 +1766,13 @@ function doctor(target) {
     message: managedArtifacts.operatorFollowThrough.status === "ok"
       ? "operator follow-through is healthy"
       : managedArtifacts.operatorFollowThrough.reasons.join(" | ")
+  });
+  result.checks.push({
+    check: "operator-lessons",
+    ok: managedArtifacts.operatorLessons.status === "ok",
+    message: managedArtifacts.operatorLessons.status === "ok"
+      ? `operator lessons: ${managedArtifacts.operatorLessons.activeLessonCount} active / ${managedArtifacts.operatorLessons.lessonCount} total`
+      : managedArtifacts.operatorLessons.reasons.join(" | ")
   });
   result.checks.push({
     check: "onboarding-artifact-map",

@@ -1,25 +1,97 @@
 # Dove
 
-Dove is a host-neutral, file-first mission workflow system for papers, engineering work, experiments, review, and governed autonomy.
+Dove is a local-first mission workflow system for research papers, engineering projects, experiments, review, and governed autonomy.
 
-Dove is now the product, package, CLI, MCP identity, command language, and durable workspace authority. A project-local `.dove/` directory is the single source of truth for workflow state. Paper writing remains a first-class Dove domain; it is no longer the package identity.
+It gives AI-assisted work a durable filesystem backbone: plans, handoffs, claims, evidence, review concerns, experiment records, task packets, distilled operator lessons, and operating state live in project-local `.dove/` files instead of disappearing into chat history.
 
-Old `.paper/` state, if present in a workspace, is treated as stale legacy state. Dove reports those files during health checks, but runtime operations do not import or trust them automatically.
+## Why Dove
 
-## What is included
+AI coding and writing sessions are powerful, but they often lose continuity across roles, tools, and long-running work. Dove keeps the work portable and auditable by combining:
 
-- A neutral CLI/MCP/core runtime under `bin/`, `mcp/`, `scripts/`, and `src/`.
-- Optional host adapters for OpenCode, Claude Code, Codex, Cursor, and shared agent-skill hosts, generated from `src/core/command-manifest.mjs`.
-- A `dove` CLI with install, sync, doctor, onboarding, mission queries, governed launch, isolated review, and bounded autonomy commands.
-- A stdio MCP server named `dove` exposed through `mcp/dove-state-server.mjs`.
-- A durable `.dove/` artifact model for orchestration, handoffs, research, claims, citations, drafts, experiments, reviews, rebuttals, versions, figures, task packets, runtime state, programs, governance, and long-horizon workflow memory.
-- A three-primary-role model: `planner`, `builder`, and `reviewer`, with specialist subagents grouped under those roles.
-- A mission lifecycle shared by paper and engineering work: `goal → design → checklist → execution → audit → return`.
-- Explicit, foreground-only autonomy surfaces; Dove does not claim a hidden daemon, scheduler, swarm, or unbounded background queue.
+- **Durable mission state** in `.dove/`
+- **Explicit lessons and retrospectives** for reusable task experience without raw runtime traces
+- **Board-first orchestration** for deciding the next role-owned step
+- **Planner / builder / reviewer separation** for direction, execution, and critique
+- **Evidence-aware paper workflows** for sources, notes, claims, citations, drafts, experiments, reviews, rebuttals, and versions
+- **Engineering mission workflows** for scoped implementation, declared evidence, audit, and return-readiness checks
+- **Generated host adapters** for OpenCode, Claude Code, Codex, Cursor, and shared agent-skill hosts
+- **Optional MCP tools** for deterministic reads and file-backed mutations
+- **Explicit governed autonomy** that is foreground, bounded, approval-aware, and inspectable
 
-## Quick start
+Dove does not rely on hidden chat memory, a daemon, a scheduler, or a host-specific swarm. Raw runtime traces can stay local and ignored; reusable experience is captured deliberately as short `.dove/meta/operator-lessons.json` retrospectives. The files are the contract.
 
-### Validate the repository
+## What ships in this repository
+
+- `bin/dove.mjs` — the Dove CLI
+- `mcp/dove-state-server.mjs` — the local stdio MCP server
+- `src/` — the core workflow, artifact, governance, and validation logic
+- `scripts/` — adapter generation, validation, doctor, audit, and packaging checks
+- `.opencode/`, `.claude/`, `.codex/`, `.cursor/`, `.agents/` — generated Dove adapter surfaces
+- `docs/` — installation, usage, packaging, and capability documentation
+- `tests/` — Node test coverage for the core package behavior
+
+The package installs managed code and generated adapter files. A target project's `.dove/` directory is user-owned workspace state: Dove may bootstrap missing starter artifacts, but package updates should not overwrite the user's evolving notes, drafts, claims, reviews, experiments, task packets, or runtime records.
+
+## Requirements
+
+- Node.js `>=22`
+- npm for validation and packaging scripts
+- A supported host if you want slash commands or skills exposed directly in an editor/agent environment
+
+The CLI and MCP layer remain file-based, so Dove can still be inspected and validated without a specific host integration.
+
+## First 10 minutes with Dove
+
+1. Install Dove into the project you want to run from:
+
+```bash
+node ./bin/dove.mjs install /path/to/project --force
+```
+
+2. Check the installed workspace:
+
+```bash
+node ./bin/dove.mjs doctor /path/to/project
+```
+
+3. Frame the first mission:
+
+```bash
+node ./bin/dove.mjs orchestrate /path/to/project \
+  --request "Ship cache safely" \
+  --domain engineering \
+  --stage design
+```
+
+4. Use the host commands to turn that mission into work:
+
+```text
+project:dove.plan
+project:dove.checklist
+```
+
+5. Return with declared evidence when the work is done:
+
+```bash
+node ./bin/dove.mjs return /path/to/project \
+  --domain engineering \
+  --changed-file src/cache.mjs \
+  --test-evidence tests/cache.test.mjs \
+  --validation-output tmp/cache-test.log
+```
+
+6. If the task produced reusable experience, record one short retrospective through `project:dove.lessons` or `record_operator_lesson`. This is explicit operator bookkeeping; Dove never captures raw runtime traces or turns lessons into work automatically.
+
+## Quick start from a checkout
+
+Install dependencies if needed, then validate the repository:
+
+```bash
+npm run check
+npm run release:check
+```
+
+For a faster local sanity check during development:
 
 ```bash
 npm run commands:check
@@ -27,162 +99,226 @@ npm run commands:validate
 npm run mcp:validate
 npm test
 npm run doctor:validate
-
-# Full release/package gate
-npm run release:check
 ```
 
-### Install Dove into the current project
-
-```bash
-node ./bin/dove.mjs install . --force
-
-# Optional multi-host adapters
-node ./bin/dove.mjs install . --force --host claude,cursor
-node ./bin/dove.mjs install . --force --host all
-```
-
-### Check workspace health
+Run the CLI directly from the repository:
 
 ```bash
 node ./bin/dove.mjs doctor .
+node ./bin/dove.mjs orchestrate . --request "Ship cache safely" --domain engineering --stage execution
 ```
 
-The doctor verifies the Dove core, adapter inventory, JSON artifacts, MCP probe, `.dove/manifest.json` authority, and stale legacy `.paper/` conflicts.
+## Install Dove into a project
 
-### Onboard an existing paper project
+Install the neutral core plus the default OpenCode adapter:
+
+```bash
+node ./bin/dove.mjs install /path/to/project --force
+```
+
+Install selected host adapters:
+
+```bash
+node ./bin/dove.mjs install /path/to/project --force --host claude,cursor
+node ./bin/dove.mjs install /path/to/project --force --host codex --host agents
+```
+
+Install every supported adapter surface:
+
+```bash
+node ./bin/dove.mjs install /path/to/project --force --host all
+```
+
+`sync` accepts the same `--host` flags when refreshing an existing installation.
+
+After install, check the target workspace:
+
+```bash
+node ./bin/dove.mjs doctor /path/to/project
+```
+
+## Onboard an existing project
+
+Dove can map existing paper or project artifacts before you decide what to adopt into the workflow:
 
 ```bash
 # Proposal-only scan; writes nothing
-node ./bin/dove.mjs onboard .
+node ./bin/dove.mjs onboard /path/to/project
 
-# Persist only the reference map
-node ./bin/dove.mjs onboard . --write-map
+# Persist only the proposed artifact map
+node ./bin/dove.mjs onboard /path/to/project --write-map
 ```
 
-`migrate` is an alias for the same proposal-first artifact mapping flow. It writes only `.dove/workspace/artifact-map.json` when explicitly requested; it never moves, deletes, rewrites, or imports manuscript files.
+The written map, when requested, lives at `.dove/workspace/artifact-map.json`. Onboarding does not move, delete, import, rewrite, or overwrite manuscript or project files.
 
-## Direct CLI surfaces
+## Core CLI surfaces
+
+Most direct query commands are proposal-only: they inspect declared `.dove/` state and return structured guidance without running tests, inspecting git, refreshing derived files, or mutating the board.
 
 ```bash
-# Proposal-only routing; writes nothing, runs nothing, and inspects no git
-node ./bin/dove.mjs orchestrate . --request "Ship cache safely" --domain engineering --stage execution
+# Route a mission request without writing state
+node ./bin/dove.mjs orchestrate . \
+  --request "Prepare camera-ready revision" \
+  --domain paper \
+  --stage design
 
-# Proposal-only mission framing
-node ./bin/dove.mjs mission . --domain engineering --stage execution --artifact src/cache.mjs --acceptance-check "tests or validation output"
+# Frame one mission contract without writing state
+node ./bin/dove.mjs mission . \
+  --domain engineering \
+  --stage execution \
+  --artifact src/cache.mjs \
+  --acceptance-check "tests or validation output"
 
-# As-read mission board inspection
+# Read the current board view
 node ./bin/dove.mjs board . --domain engineering
 
-# Proposal-only audit and return-readiness checks
-node ./bin/dove.mjs audit . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
-node ./bin/dove.mjs return . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
+# Inspect declared audit and return evidence
+node ./bin/dove.mjs audit . \
+  --domain engineering \
+  --changed-file src/cache.mjs \
+  --test-evidence tests/cache.test.mjs \
+  --validation-output tmp/cache-test.log
 
-# Governed launch after accepted guidance exists
-node ./bin/dove.mjs launch . --source-type remediation-pack --source-id <pack-id> --execute-by 2099-01-01T00:00:00.000Z --review-after 2099-01-01T12:00:00.000Z --domain engineering --stage execution
+node ./bin/dove.mjs return . \
+  --domain engineering \
+  --changed-file src/cache.mjs \
+  --test-evidence tests/cache.test.mjs \
+  --validation-output tmp/cache-test.log
+```
 
-# Explicit foreground autonomy
+`launch` is the guarded write surface. It materializes accepted guidance into `.dove/task-packets` and requires explicit execution and review windows; it does not execute the mission:
+
+```bash
+node ./bin/dove.mjs launch . \
+  --source-type remediation-pack \
+  --source-id <pack-id> \
+  --execute-by 2099-01-01T00:00:00.000Z \
+  --review-after 2099-01-01T12:00:00.000Z \
+  --domain engineering \
+  --stage execution
+```
+
+Bounded autonomy is also explicit and foreground-only:
+
+```bash
 node ./bin/dove.mjs autonomy-foreground . --max-steps 5
 ```
 
-Query commands are proposal-only: they do not create mission packets, update boards, append handoffs, refresh derived state, run tests, inspect git, or execute autonomy. `launch` is different: it is a governed mutation surface that materializes accepted guidance into `.dove/task-packets` without executing the work.
+## Workflow model
 
-## Role model
+Dove uses one mission lifecycle across paper and engineering work:
 
-Dove exposes three primary manual roles:
+```text
+goal → design → checklist → execution → audit → return
+```
 
-- `planner`: mentor, PI, editor, tech lead, or architect role for direction, priority, scope, governance, and autonomy boundaries.
-- `builder`: worker role for writing, coding, research, experiments, result interpretation, revision, implementation, and rebuttal drafting.
-- `reviewer`: independent critic role for adversarial review, evidence attacks, code review, QA, methodology critique, and verdicts.
+The primary manual roles are:
 
-Specialists such as `researcher`, `experiment-planner`, `revision-lead` / `rebuttal-lead`, and `version-analyst` are subagent capabilities under those primary roles. The reviewer remains independent; revision and rebuttal work stays builder-side.
+- **planner** — direction, scope, priorities, governance, and autonomy boundaries
+- **builder** — implementation, writing, research, experiments, revision, rebuttal drafting, and evidence work
+- **reviewer** — independent critique, evidence attacks, methodology review, QA, and verdicts
 
-## Recommended workflow
+Specialists such as researcher, experiment planner, rebuttal lead, revision lead, and version analyst are scoped subagent capabilities under those primary roles. The reviewer remains independent; revision and rebuttal work stay builder-side.
 
-`project:dove.paper.orchestrate` is the paper-domain router. It reads `.dove/`, classifies the request by lifecycle family, and recommends one next command without mutating state.
+## Paper workflow
 
-Dove also exposes general mission surfaces:
+Paper-domain commands use the `dove.paper.*` surface. They support:
 
-- `project:dove.orchestrate` / `dove orchestrate`
-- `project:dove.mission` / `dove mission`
-- `project:dove.board` / `dove board`
-- `project:dove.plan`
-- `project:dove.checklist`
-- `project:dove.task-graph`
-- `project:dove.materialize`
-- `project:dove.approvals`
-- `project:dove.autonomy-operate`
-- `project:dove.audit` / `dove audit`
-- `project:dove.return` / `dove return`
-- `project:dove.launch` / `dove launch`
-- `project:dove.governance-audit`
+- project initialization and research contracts
+- source registration and note capture
+- evidence-backed claim promotion
+- paper planning, outlining, and drafting
+- experiment planning, result logging, experiment audit, and result-to-claim bridging
+- strict no-fix paper audit
+- review loops and isolated reviewer handoffs
+- rebuttal strategy and rebuttal drafting
+- citation synchronization
+- figure planning and QA contracts
+- version snapshots, comparisons, lineage, and release readiness
 
-Paper-domain workflow commands remain under `project:dove.paper.*` for init, research, notes, claim gating, paper planning, outlining, drafting, experiment planning, no-fix audit, review loop, isolated review, rebuttal, citations, version snapshots/comparisons, and figures. The same paper-domain command surface is generated for supported hosts, not only OpenCode. Shared mission-system commands are public Dove surfaces: `project:dove.plan`, `project:dove.task-graph`, `project:dove.checklist`, `project:dove.materialize`, `project:dove.approvals`, `project:dove.autonomy-operate`, and `project:dove.governance-audit`. `project:dove.paper.plan` and `project:dove.paper.approvals` are paper-domain views of the same plan/approval system where useful.
+For paper work, the recommended loop is:
 
-The paper lifecycle taxonomy remains useful inside the unified Dove model:
+```text
+initialize → research → notes → claim gate → plan → checklist → draft/experiment/revise → review/audit → return
+```
 
-- `objective`: research goal, thesis, venue strategy, and acceptance target
-- `structure`: plan, outline, drafts, figures, checklists, and versions
-- `campaign`: explicit foreground programs, campaigns, approvals, and runtime state
-- `work-unit`: board, handoffs, mission packets, workspace index, and context/action bundles
-- `concern`: reviewer concerns, revision pressure, rebuttal items, and isolated review handoffs
-- `audit`: inspections, experiment audits, figure QA, governance proof, and version comparisons
-- `knowledge`: sources, notes, evidence, claims, bibliography, wiki, and long-horizon memory
+## Engineering workflow
 
-Major work should close through `design → checklist → implementation → acceptance`: plan the change, turn it into executable checks, do scoped work, then return with evidence and review/audit status.
+Engineering missions use the general `dove.*` surfaces. A normal implementation flow is:
 
-## Why `.dove/` matters
+1. Use `dove orchestrate` or `dove mission` to frame scope, domain, stage, target artifacts, and acceptance checks.
+2. Use `dove plan` and `dove checklist` to turn the mission into executable work.
+3. Implement only the scoped changes.
+4. Return declared changed files, test evidence, and validation output through `dove audit` and `dove return`.
+5. Materialize accepted follow-up work through `dove materialize` or guarded `dove launch` when needed.
 
-`.dove/` is the durable source of truth. It makes the system resumable and auditable even when chat context is lost:
+Dove does not infer correctness from hidden context. It asks for project-local file paths and explicit evidence so a reviewer can inspect what changed.
 
-- role transitions live in board and handoff files
-- claims can be audited against sources and notes
-- experiments and results can be tied back to claims
-- reviewer concerns and rebuttal issues persist across rounds
-- mission packets narrow context without hidden runtime memory
-- isolated reviewer handoffs cross session boundaries only through explicit artifacts
-- MCP, CLI, and prompt/skill surfaces converge on the same files
+## Host adapters
 
-## Core artifacts
+The canonical command inventory lives in `src/core/command-manifest.mjs`. Generated adapters expose the same Dove concepts across supported hosts:
 
-- `.dove/manifest.json`
-- `.dove/state.json`
-- `.dove/orchestration/board.json`
-- `.dove/orchestration/handoffs.md`
-- `.dove/task-packets/index.json`
-- `.dove/task-packets/packets/*.json`
-- `.dove/checklists/current.md`
-- `.dove/context/roles/*.json`
-- `.dove/context/phases/*.json`
-- `.dove/context/packets/*.json`
-- `.dove/context/artifacts/*.json`
-- `.dove/context/actions/*.json`
-- `.dove/sessions/journal.json`
-- `.dove/sessions/LATEST_SUMMARY.md`
-- `.dove/workspace/index.json`
-- `.dove/workspace/artifact-map.json`
-- `.dove/research/`, `.dove/sources/`, `.dove/notes/`, `.dove/evidence/`, `.dove/claims/`, `.dove/drafts/`
-- `.dove/experiments/`, `.dove/reviews/`, `.dove/rebuttal/`, `.dove/revision-plans/`, `.dove/versions/`, `.dove/figures/`
-- `.dove/runtime/`, `.dove/programs/`, `.dove/meta/`
+- OpenCode commands and skills
+- Claude Code commands
+- Codex skills and agent defaults
+- Cursor commands
+- shared `.agents/skills` surfaces
 
-## Package boundary
+Regenerate and check adapter drift with:
 
-Install/sync may bootstrap missing `.dove/` starter artifacts, but `.dove/` is user-owned workspace state, not a packaged snapshot to overwrite. Pack updates manage code, scripts, MCP files, docs, and Dove-only adapter surfaces; repository-local development scaffolding and host settings are not part of the packaged Dove product boundary. Command adapters are generated by `scripts/generate-command-adapters.mjs` from the canonical manifest, and `npm run release:check` is the full pre-release gate.
+```bash
+npm run commands:generate
+npm run commands:check
+```
 
-## Docs
+## MCP
 
-Start with `docs/README.md` for the documentation map and governance rules.
+Dove includes a local stdio MCP server named `dove`:
 
-Current operator docs:
+```json
+{
+  "mcpServers": {
+    "dove": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["./mcp/dove-state-server.mjs"]
+    }
+  }
+}
+```
 
-- `docs/INSTALL.md`
-- `docs/USAGE.md`
-- `docs/PACKAGING.md`
-- `docs/CAPABILITY_MATRIX.md`
+MCP tools provide deterministic access to workspace state, task graphs, open questions, decisions, lineage, operator lessons, audits, approvals, materialization, launch, bounded autonomy, role context, packet context, artifact context, and paper-domain workflow artifacts. MCP complements `.dove/`; it does not replace the file-backed source of truth.
 
-Architecture and history notes:
+## Development
 
-- `docs/DOVE_REFACTOR_PLAN_2026-05-04.md`
-- `docs/ROLE_HIERARCHY_REFACTOR_PLAN_2026-05-04.md`
-- `docs/PAPER_FACTORY_SYSTEM_ORIGINS.zh-CN.md`
-- `docs/REFERENCE_ARCHITECTURES.zh-CN.md`
+Useful scripts:
+
+```bash
+npm run commands:generate   # rewrite generated host adapters
+npm run commands:check      # fail on generated adapter drift
+npm run commands:validate   # validate command surfaces
+npm run mcp:validate        # validate MCP entrypoint behavior
+npm run governance:audit    # check governance coverage
+npm run maturity:audit      # check current release claims
+npm test                    # run Node tests
+npm run check               # standard development gate
+npm run release:check       # package/release gate
+npm run pack:dry-run        # inspect npm package contents
+```
+
+Before release-oriented changes, run:
+
+```bash
+npm run check
+npm run release:check
+npm run pack:dry-run
+```
+
+## Documentation
+
+Start here for deeper documentation:
+
+- [`docs/INSTALL.md`](docs/INSTALL.md) — install, sync, onboarding, doctor, validation, and MCP setup
+- [`docs/USAGE.md`](docs/USAGE.md) — workflow model, commands, paper pipeline, autonomy, MCP tools, and roles
+- [`docs/PACKAGING.md`](docs/PACKAGING.md) — package boundary, managed files, generated adapters, and release checks
+- [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md) — implemented, partial, and deferred capabilities

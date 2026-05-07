@@ -20,12 +20,14 @@ import {
   queryCampaigns,
   queryMetaOptimize,
   queryOperatorFollowThrough,
+  queryOperatorLessons,
   queryProgramApprovals,
   queryTaskGraph,
   runAutonomyForeground,
   readState,
   readJson,
   recordOperatorFollowThrough,
+  recordOperatorLesson,
   refreshWiki,
   registerSource,
   revokeProgramApproval,
@@ -58,7 +60,7 @@ import {
   writeJson
 } from "../../src/core/index.mjs";
 import { toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
-import { createMetaExecutionBridgeCandidatesIndex, createMetaLongHorizonMemory, createMetaOperatorPlaybooksIndex, createMetaOptimizerState, createMetaRemediationPacksIndex } from "../../src/core/schema.mjs";
+import { createMetaExecutionBridgeCandidatesIndex, createMetaLongHorizonMemory, createMetaOperatorLessonsIndex, createMetaOperatorPlaybooksIndex, createMetaOptimizerState, createMetaRemediationPacksIndex } from "../../src/core/schema.mjs";
 
 function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "dove-phase6-"));
@@ -446,6 +448,14 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
     playbooks: "bad-shape",
     summary: { topPlaybookIds: "bad-shape", topTaxonomyFamilyIds: "bad-shape" }
   }, null, 2));
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorLessons), JSON.stringify({
+    version: 1,
+    explicitOnly: false,
+    noAutoCapture: false,
+    noAutoApply: false,
+    lessons: "bad-shape",
+    sourceArtifacts: [".trellis/tasks/example/task.json"]
+  }, null, 2));
   fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates), JSON.stringify({
     version: 1,
     proposalOnly: true,
@@ -462,6 +472,7 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   const longHorizonMemory = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaLongHorizonMemory), "utf8"));
   const remediationPacks = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaRemediationPacks), "utf8"));
   const operatorPlaybooks = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorPlaybooks), "utf8"));
+  const operatorLessons = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorLessons), "utf8"));
   const executionBridgeCandidates = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates), "utf8"));
 
   assert.equal(boundaries.version, 3);
@@ -503,6 +514,9 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.deepEqual(workspaceIndex.metaOptimize.operatorPlaybooks.topPlaybookIds, []);
   assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.readinessOverview, "No proposal-only family-level operator playbooks have been generated yet.");
   assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.playbooksPath, ARTIFACT_PATHS.metaOperatorPlaybooks);
+  assert.equal(workspaceIndex.metaOptimize.operatorLessons.lessonCount, 0);
+  assert.equal(workspaceIndex.metaOptimize.operatorLessons.activeLessonCount, 0);
+  assert.equal(workspaceIndex.metaOptimize.operatorLessons.lessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
   assert.deepEqual(workspaceIndex.metaOptimize.topClusterIds, []);
   assert.deepEqual(workspaceIndex.metaOptimize.longHorizon.topFamilyIds, []);
   assert.deepEqual(workspaceIndex.metaOptimize.longHorizon.topTaxonomyFamilyIds, []);
@@ -551,6 +565,9 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.deepEqual(optimizerState.operatorPlaybooks.topPlaybookIds, []);
   assert.equal(optimizerState.operatorPlaybooks.readinessOverview, "No proposal-only family-level operator playbooks have been generated yet.");
   assert.equal(optimizerState.operatorPlaybooks.playbooksPath, ARTIFACT_PATHS.metaOperatorPlaybooks);
+  assert.equal(optimizerState.operatorLessons.lessonCount, 0);
+  assert.equal(optimizerState.operatorLessons.activeLessonCount, 0);
+  assert.equal(optimizerState.operatorLessons.lessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
 
   assert.equal(longHorizonMemory.version, 1);
   assert.equal(longHorizonMemory.historyWindowSize, 30);
@@ -578,6 +595,13 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.equal(operatorPlaybooks.summary.readinessOverview, "No proposal-only family-level operator playbooks have been generated yet.");
   assert.equal(operatorPlaybooks.summary.playbooksPath, ARTIFACT_PATHS.metaOperatorPlaybooks);
   assert.deepEqual(operatorPlaybooks.sourceArtifacts, createMetaOperatorPlaybooksIndex().sourceArtifacts);
+
+  assert.equal(operatorLessons.version, 1);
+  assert.equal(operatorLessons.explicitOnly, true);
+  assert.equal(operatorLessons.noAutoCapture, true);
+  assert.equal(operatorLessons.noAutoApply, true);
+  assert.deepEqual(operatorLessons.lessons, []);
+  assert.deepEqual(operatorLessons.sourceArtifacts, createMetaOperatorLessonsIndex().sourceArtifacts.filter((artifactPath) => !artifactPath.startsWith(".trellis/tasks")));
 
   assert.equal(executionBridgeCandidates.version, 1);
   assert.deepEqual(executionBridgeCandidates.candidates, []);
@@ -1689,6 +1713,11 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
   const followThroughExempt = meta.governanceCoverage.exemptMutations.find((item) => item.id === "record-operator-follow-through");
   assert.equal(followThroughExempt.surfaceBindings.mcpTool, "record_operator_follow_through");
   assert.equal(followThroughExempt.surfaceBindings.commandIds.includes("dove.paper.follow-through"), true);
+  const lessonExempt = meta.governanceCoverage.exemptMutations.find((item) => item.id === "record-operator-lesson");
+  assert.equal(lessonExempt.surfaceBindings.coreFunction, "recordOperatorLesson");
+  assert.equal(lessonExempt.surfaceBindings.mcpTool, "record_operator_lesson");
+  assert.equal(lessonExempt.surfaceBindings.commandIds.includes("dove.lessons"), true);
+  assert.equal(lessonExempt.reasonCode, "retrospective-bookkeeping");
   assert.equal(typeof followThroughExempt.ownerRole, "string");
   assert.equal(typeof followThroughExempt.approvedByRole, "string");
   assert.equal(typeof followThroughExempt.approvedAt, "string");
@@ -1702,6 +1731,7 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
   }
   const exemptCoreFunctions = new Set(meta.governanceCoverage.exemptMutations.map((item) => item.surfaceBindings.coreFunction));
   assert.equal(exemptCoreFunctions.has("recordOperatorFollowThrough"), true);
+  assert.equal(exemptCoreFunctions.has("recordOperatorLesson"), true);
   assert.equal(exemptCoreFunctions.has("queryMetaOptimize"), true);
 
   const topPack = meta.remediationPacks.packs[0];
@@ -1736,6 +1766,59 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
   assert.throws(() => bridgeExperimentResultToClaim(root, { resultId: "blocked-result" }), /blocked while operator follow-through still requires action/);
 });
 
+test("recordOperatorLesson stays explicit, advisory, and disconnected from work execution", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Lessons Hardening", objective: "Record a distilled lesson without launching work." });
+
+  const result = recordOperatorLesson(root, {
+    title: "Close tasks with distilled lessons",
+    problem: "Operators need reusable experience without raw runtime traces.",
+    decisions: ["Capture decisions manually."],
+    pitfalls: ["Do not cite .trellis/tasks traces."],
+    validation: ["Query lessons after recording."],
+    nextTime: ["Record the retrospective during return."],
+    domain: "engineering",
+    stage: "return",
+    actorRole: "planner",
+    tags: ["hardening", "retrospective"],
+    sourceArtifacts: [ARTIFACT_PATHS.sessionSummary]
+  });
+
+  assert.equal(result.explicitOnly, true);
+  assert.equal(result.noAutoCapture, true);
+  assert.equal(result.noAutoApply, true);
+  assert.equal(result.summary.activeLessonCount, 1);
+  assert.equal(result.recordedLesson.sourceArtifacts.includes(ARTIFACT_PATHS.sessionSummary), true);
+
+  const lessons = queryOperatorLessons(root, { tag: "hardening" });
+  assert.equal(lessons.resultCount, 1);
+  assert.equal(lessons.lessons[0].title, "Close tasks with distilled lessons");
+
+  assert.throws(() => recordOperatorLesson(root, {
+    title: "Bad source",
+    problem: "Raw traces must stay ignored.",
+    decisions: ["Reject trace source artifacts."],
+    pitfalls: ["Raw runtime logs are not reusable lessons."],
+    validation: ["Recording fails."],
+    nextTime: ["Use durable Dove summaries."],
+    sourceArtifacts: [".trellis/tasks/example/task.json"]
+  }), /\.trellis\/tasks/);
+
+  const packets = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, {});
+  const approvals = queryProgramApprovals(root);
+  const campaigns = queryCampaigns(root);
+  const executionBridgeCandidates = readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex);
+  const controllerState = readJson(root, ARTIFACT_PATHS.runtimeControllerState, {});
+  assert.deepEqual(packets.items, []);
+  assert.equal(approvals.summary.approvalCount, 0);
+  assert.equal(campaigns.summary.campaignCount, 0);
+  assert.deepEqual(executionBridgeCandidates.candidates, []);
+  assert.equal(controllerState.lastRun, null);
+  assert.equal(controllerState.summary.lastStatus, "never-run");
+  assert.equal(fs.existsSync(path.join(root, ".trellis", "tasks")), false);
+});
+
 test("governance registry completely binds the expected mutating command and MCP surfaces", () => {
   const toolNames = new Set(toolDefinitions.map((tool) => tool.name));
   const commandDir = path.join(process.cwd(), ".opencode", "commands");
@@ -1767,6 +1850,7 @@ test("governance registry completely binds the expected mutating command and MCP
       "create_version_snapshot",
       "compare_versions",
       "upsert_figure_plan",
+      "record_operator_lesson",
       "record_operator_follow_through",
       "query_meta_optimize",
       "plan_campaign",
@@ -1800,6 +1884,7 @@ test("governance registry completely binds the expected mutating command and MCP
     "dove.paper.figure",
       "dove.paper.rebuttal",
       "dove.paper.follow-through",
+      "dove.lessons",
       "dove.paper.meta-optimize",
       "dove.approvals",
       "dove.checklist",
@@ -1831,6 +1916,7 @@ test("governance registry completely binds the expected mutating command and MCP
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.governance-audit"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_orchestrate"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_audit"), true);
+  assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_operator_lessons"), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.paper.orchestrate.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.orchestrate.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.mission.md")), true);

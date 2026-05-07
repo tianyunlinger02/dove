@@ -14,6 +14,7 @@ import {
   queryLineage,
   queryMetaOptimize,
   queryOpenQuestions,
+  queryOperatorLessons,
   queryTaskGraph,
   queryWorkspaceIndex,
   refreshWiki,
@@ -22,6 +23,7 @@ import {
   readPacketContextManifest,
   readPhaseContextManifest,
   readRoleContextManifest,
+  recordOperatorLesson,
   registerSource,
   summarizeSessionJournal,
   upsertClaims,
@@ -167,6 +169,65 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(fs.existsSync(path.join(root, ".dove", "context", "roles", "reviewer.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "sessions", "journal.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "workflow-pack", "boundaries.json")));
+});
+
+test("operator lessons persist durable retrospectives without importing raw Trellis traces", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, {
+    title: "Portable Lessons",
+    objective: "Preserve reusable task experience without raw task traces.",
+    thesis: "Distilled lessons are more portable than raw runtime logs."
+  });
+  fs.mkdirSync(path.join(root, ".trellis", "tasks", "raw-example"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".trellis", "tasks", "raw-example", "task.json"), "{\"raw\":true}\n", "utf8");
+
+  const recorded = recordOperatorLesson(root, {
+    title: "Prefer durable Dove summaries over raw traces",
+    problem: "Raw Trellis task traces are too verbose and local to reuse directly.",
+    decisions: ["Store a concise retrospective in Dove."],
+    pitfalls: ["Do not cite ignored raw task traces."],
+    validation: ["Query the lessons index and inspect surfaced summaries."],
+    nextTime: ["Record lessons at task return before cleanup."],
+    domain: "engineering",
+    stage: "return",
+    actorRole: "planner",
+    tags: ["portable", "retrospective"],
+    sourceArtifacts: [ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.workspaceIndex]
+  });
+
+  assert.equal(recorded.summary.activeLessonCount, 1);
+  assert.throws(() => recordOperatorLesson(root, {
+    title: "Bad raw trace lesson",
+    problem: "Raw traces should not be lesson sources.",
+    decisions: ["Reject trace paths."],
+    pitfalls: ["Trace logs are not durable knowledge."],
+    validation: ["Recording fails."],
+    nextTime: ["Use curated Dove surfaces."],
+    sourceArtifacts: [".trellis/tasks/raw-example/task.json"]
+  }), /\.trellis\/tasks/);
+
+  const queried = queryOperatorLessons(root, { tag: "portable" });
+  const workspaceIndex = queryWorkspaceIndex(root);
+  const metaOptimize = queryMetaOptimize(root);
+  const currentActionBundle = readActionContextBundle(root);
+  const sessionSummary = summarizeSessionJournal(root);
+  const lessonsFileText = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorLessons), "utf8");
+  const navigation = fs.readFileSync(path.join(root, ARTIFACT_PATHS.navigationReport), "utf8");
+  const sessionSummaryText = fs.readFileSync(path.join(root, ARTIFACT_PATHS.sessionSummary), "utf8");
+
+  assert.equal(queried.resultCount, 1);
+  assert.equal(queried.lessons[0].title, "Prefer durable Dove summaries over raw traces");
+  assert.equal(workspaceIndex.metaOptimize.operatorLessons.activeLessonCount, 1);
+  assert.equal(workspaceIndex.metaOptimize.operatorLessons.lessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
+  assert.equal(metaOptimize.operatorLessons.summary.activeLessonCount, 1);
+  assert.equal(metaOptimize.operatorLessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
+  assert.equal(currentActionBundle.operatorGuidance.operatorLessons.summary.activeLessonCount, 1);
+  assert.equal(currentActionBundle.operatorGuidance.operatorLessons.topLessons.length >= 1, true);
+  assert.equal(sessionSummary.summaryPath, ARTIFACT_PATHS.sessionSummary);
+  assert.match(navigation, /Operator lessons:/);
+  assert.match(sessionSummaryText, /Operator lessons:/);
+  assert.doesNotMatch(lessonsFileText, /\.trellis\/tasks/);
 });
 
 test("remediation packs stay durable and visible through operator-facing surfaces", () => {

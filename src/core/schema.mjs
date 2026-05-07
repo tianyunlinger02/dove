@@ -98,7 +98,7 @@ export const PAPER_LIFECYCLE_FAMILIES = [
     label: "Knowledge",
     summary: "Sources, notes, evidence, claims, bibliography, wiki, and long-horizon memory.",
     roleHints: ["builder"],
-    artifactPathKeys: ["sources", "notes", "evidence", "claims", "bibliography", "citationLog", "wiki", "wikiEntities", "wikiRelations", "metaLongHorizonMemory"]
+    artifactPathKeys: ["sources", "notes", "evidence", "claims", "bibliography", "citationLog", "wiki", "wikiEntities", "wikiRelations", "metaLongHorizonMemory", "metaOperatorLessons"]
   }
 ];
 
@@ -153,6 +153,7 @@ export const GOVERNANCE_GUARDED_MUTATIONS = [
 ];
 
 export const GOVERNANCE_EXEMPT_MUTATIONS = [
+  { id: "record-operator-lesson", action: "Recording distilled operator lessons remains explicitly exempt because it is reflective bookkeeping and does not approve, materialize, or execute work.", artifactPath: ".dove/meta/operator-lessons.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-05-07T00:00:00.000Z", lastReviewedAt: "2026-05-07T00:00:00.000Z", reasonCode: "retrospective-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorLesson", mcpTool: "record_operator_lesson", commandIds: ["dove.lessons"] } },
   { id: "record-operator-follow-through", action: "Recording follow-through decisions remains explicitly exempt so the governance system can be updated while debt exists.", artifactPath: ".dove/meta/operator-follow-through.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "governance-ledger-maintenance", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorFollowThrough", mcpTool: "record_operator_follow_through", commandIds: ["dove.paper.follow-through"] } },
   { id: "issue-program-approval", action: "Issuing a fresh program approval remains exempt because it is explicit governance bookkeeping that authorizes later bounded execution but does not itself execute work.", artifactPath: ".dove/programs/approvals.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "approval-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "issueProgramApproval", mcpTool: "issue_program_approval", commandIds: ["dove.approvals", "dove.paper.approvals"] } },
   { id: "plan-campaign", action: "Recording a multi-cycle campaign plan remains exempt because it only records planner-supervised campaign intent and does not approve or execute bounded program work.", artifactPath: ".dove/programs/campaigns.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-25T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "campaign-planning-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "planCampaign", mcpTool: "plan_campaign", commandIds: [] } },
@@ -204,6 +205,7 @@ export const GOVERNANCE_READONLY_TOOLS = [
   "query_workspace_index",
   "query_meta_optimize",
   "query_governance_coverage_report",
+  "query_operator_lessons",
   "query_operator_follow_through",
   "query_paper_audit",
   "query_dove_orchestrate",
@@ -466,6 +468,7 @@ export const ARTIFACT_PATHS = {
   metaGovernanceCoverageReport: ".dove/meta/governance-coverage-report.json",
   metaGovernanceCoverageReportMarkdown: ".dove/meta/LATEST_GOVERNANCE_COVERAGE_REPORT.md",
   metaLongHorizonMemory: ".dove/meta/long-horizon-memory.json",
+  metaOperatorLessons: ".dove/meta/operator-lessons.json",
   metaOperatorFollowThrough: ".dove/meta/operator-follow-through.json",
   metaOperatorFollowThroughTransitions: ".dove/meta/operator-follow-through-transitions.json",
   metaOperatorPlaybooks: ".dove/meta/operator-playbooks.json",
@@ -1530,6 +1533,7 @@ export function normalizeWorkflowBoundaries(raw = {}) {
       workspaceIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
       doveRootManifest: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.doveRootManifest),
       executionBridgeCandidates: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaExecutionBridgeCandidates),
+      operatorLessons: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaOperatorLessons),
       remediationPacks: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaRemediationPacks)
     },
     notes: normalizeStringArray(raw.notes, base.notes),
@@ -2021,6 +2025,123 @@ export function normalizeMetaRemediationPacksIndex(raw = {}) {
   };
 }
 
+function cleanUniqueStrings(value, fallback = []) {
+  return Array.from(new Set(normalizeStringArray(value, fallback).map((item) => item.trim()).filter(Boolean)));
+}
+
+function cleanOptionalString(value, fallback = null) {
+  const normalized = normalizeString(value, fallback);
+  return typeof normalized === "string" ? normalized.trim() : normalized;
+}
+
+function isTrellisTaskSourceArtifact(value) {
+  const normalized = String(value ?? "").trim().replace(/\\/g, "/").replace(/^\.\/+/, "");
+  return normalized === ".trellis/tasks" || normalized.startsWith(".trellis/tasks/") || normalized === "trellis/tasks" || normalized.startsWith("trellis/tasks/");
+}
+
+function normalizeOperatorLessonStatus(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return ["active", "retired", "superseded", "archived"].includes(normalized) ? normalized : "active";
+}
+
+function summarizeOperatorLessons(lessons = []) {
+  const activeLessons = lessons.filter((lesson) => lesson.status === "active");
+  const countBy = (items) => items.reduce((accumulator, item) => {
+    accumulator[item] = (accumulator[item] ?? 0) + 1;
+    return accumulator;
+  }, {});
+  const topKeys = (items) => Object.entries(countBy(items))
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, 8)
+    .map(([key]) => key);
+  const sortedActive = [...activeLessons].sort((left, right) => String(right.updatedAt ?? right.createdAt ?? "").localeCompare(String(left.updatedAt ?? left.createdAt ?? "")) || left.id.localeCompare(right.id));
+  return {
+    lessonCount: lessons.length,
+    activeLessonCount: activeLessons.length,
+    topLessonIds: sortedActive.slice(0, 8).map((lesson) => lesson.id),
+    topTags: topKeys(activeLessons.flatMap((lesson) => lesson.tags ?? [])),
+    topDomains: topKeys(activeLessons.map((lesson) => lesson.domain).filter(Boolean)),
+    overview: activeLessons.length > 0
+      ? `${activeLessons.length} active distilled operator lessons are available for reuse.`
+      : "No distilled operator lessons have been recorded yet.",
+    lessonsPath: ARTIFACT_PATHS.metaOperatorLessons
+  };
+}
+
+function normalizeOperatorLesson(raw = {}, index = 0) {
+  const title = cleanOptionalString(raw.title, `Operator lesson ${index + 1}`);
+  const actorRole = cleanOptionalString(raw.actorRole, "planner");
+  const createdAt = cleanOptionalString(raw.createdAt, null);
+  const updatedAt = cleanOptionalString(raw.updatedAt, createdAt);
+  const sourceArtifacts = cleanUniqueStrings(raw.sourceArtifacts).filter((artifactPath) => !isTrellisTaskSourceArtifact(artifactPath));
+  return {
+    ...raw,
+    id: cleanOptionalString(raw.id, `lesson-${index + 1}`),
+    title,
+    problem: cleanOptionalString(raw.problem, "No problem statement recorded."),
+    decisions: cleanUniqueStrings(raw.decisions),
+    pitfalls: cleanUniqueStrings(raw.pitfalls),
+    validation: cleanUniqueStrings(raw.validation),
+    nextTime: cleanUniqueStrings(raw.nextTime),
+    domain: normalizeDoveDomainId(raw.domain, "engineering"),
+    stage: normalizeDoveMissionLifecycleStage(raw.stage, "return"),
+    actorRole: ROLE_IDS.includes(actorRole) ? actorRole : "planner",
+    tags: cleanUniqueStrings(raw.tags),
+    sourceType: cleanOptionalString(raw.sourceType, "manual-retrospective"),
+    sourceId: cleanOptionalString(raw.sourceId, null),
+    sourceArtifacts,
+    packetIds: cleanUniqueStrings(raw.packetIds),
+    recommendationIds: cleanUniqueStrings(raw.recommendationIds),
+    playbookIds: cleanUniqueStrings(raw.playbookIds),
+    remediationPackIds: cleanUniqueStrings(raw.remediationPackIds),
+    status: normalizeOperatorLessonStatus(raw.status),
+    createdAt,
+    updatedAt
+  };
+}
+
+export function createMetaOperatorLessonsIndex() {
+  return {
+    version: 1,
+    referenceOnly: true,
+    explicitOnly: true,
+    noAutoCapture: true,
+    noAutoApply: true,
+    lessons: [],
+    summary: summarizeOperatorLessons([]),
+    sourceArtifacts: [
+      ARTIFACT_PATHS.sessionSummary,
+      ARTIFACT_PATHS.workspaceIndex,
+      ARTIFACT_PATHS.metaOperatorPlaybooks,
+      ARTIFACT_PATHS.metaRemediationPacks,
+      ARTIFACT_PATHS.metaLongHorizonMemory
+    ],
+    updatedAt: null
+  };
+}
+
+export function normalizeMetaOperatorLessonsIndex(raw = {}) {
+  const base = createMetaOperatorLessonsIndex();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const lessons = normalizeObjectArray(raw.lessons).map(normalizeOperatorLesson);
+  const sourceArtifacts = cleanUniqueStrings(raw.sourceArtifacts, base.sourceArtifacts).filter((artifactPath) => !isTrellisTaskSourceArtifact(artifactPath));
+  return {
+    ...base,
+    ...raw,
+    version: base.version,
+    referenceOnly: base.referenceOnly,
+    explicitOnly: base.explicitOnly,
+    noAutoCapture: base.noAutoCapture,
+    noAutoApply: base.noAutoApply,
+    lessons,
+    summary: summarizeOperatorLessons(lessons),
+    sourceArtifacts: sourceArtifacts.length > 0 ? sourceArtifacts : base.sourceArtifacts,
+    updatedAt: raw.updatedAt ?? base.updatedAt
+  };
+}
+
 export function createMetaOperatorPlaybooksIndex() {
   return {
     version: 1,
@@ -2474,6 +2595,7 @@ export function createMetaOptimizerState() {
       ARTIFACT_PATHS.figureQa,
       ARTIFACT_PATHS.versionComparisons,
       ARTIFACT_PATHS.metaLongHorizonMemory,
+      ARTIFACT_PATHS.metaOperatorLessons,
       ARTIFACT_PATHS.metaExecutionBridgeCandidates,
       ARTIFACT_PATHS.metaOperatorFollowThrough,
       ARTIFACT_PATHS.metaOperatorFollowThroughTransitions,
@@ -2534,6 +2656,7 @@ export function createMetaOptimizerState() {
         overview: "No operator follow-through decisions have been recorded yet.",
         followThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough
       },
+      operatorLessons: summarizeOperatorLessons([]),
       executionBridgeCandidates: {
         candidateCount: 0,
         topCandidateIds: [],
@@ -2586,6 +2709,7 @@ export function normalizeMetaOptimizerState(raw = {}) {
 
   const frontier = normalizeObject(raw.frontier);
   const longHorizon = normalizeObject(raw.longHorizon);
+  const operatorLessons = normalizeObject(raw.operatorLessons);
 
   return {
     ...base,
@@ -2680,6 +2804,17 @@ export function normalizeMetaOptimizerState(raw = {}) {
         overview: normalizeString(raw.followThrough?.overview, base.followThrough.overview),
         followThroughPath: normalizeString(raw.followThrough?.followThroughPath, base.followThrough.followThroughPath)
       },
+      operatorLessons: {
+        ...base.operatorLessons,
+        ...operatorLessons,
+        lessonCount: normalizeNumber(operatorLessons.lessonCount, base.operatorLessons.lessonCount),
+        activeLessonCount: normalizeNumber(operatorLessons.activeLessonCount, base.operatorLessons.activeLessonCount),
+        topLessonIds: normalizeStringArray(operatorLessons.topLessonIds),
+        topTags: normalizeStringArray(operatorLessons.topTags),
+        topDomains: normalizeStringArray(operatorLessons.topDomains),
+        overview: normalizeString(operatorLessons.overview, base.operatorLessons.overview),
+        lessonsPath: normalizeString(operatorLessons.lessonsPath, base.operatorLessons.lessonsPath)
+      },
       longHorizon: {
       ...base.longHorizon,
       ...longHorizon,
@@ -2746,6 +2881,7 @@ export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
   const executionBridgeCandidates = normalizeObject(raw.executionBridgeCandidates);
   const governanceCoverage = normalizeObject(raw.governanceCoverage);
   const followThrough = normalizeObject(raw.followThrough);
+  const operatorLessons = normalizeObject(raw.operatorLessons);
   const autonomyLoops = normalizeObject(raw.autonomyLoops);
   const baseGovernanceCoverage = normalizeObject(base.governanceCoverage, {
     guardedCount: 0,
@@ -2821,6 +2957,17 @@ export function normalizeWorkspaceMetaOptimize(raw = {}, fallback = null) {
         topSourceIds: normalizeStringArray(followThrough.topSourceIds),
         overview: normalizeString(followThrough.overview, base.followThrough.overview),
         followThroughPath: normalizeString(followThrough.followThroughPath, base.followThrough.followThroughPath)
+      },
+      operatorLessons: {
+        ...base.operatorLessons,
+        ...operatorLessons,
+        lessonCount: normalizeNumber(operatorLessons.lessonCount, base.operatorLessons.lessonCount),
+        activeLessonCount: normalizeNumber(operatorLessons.activeLessonCount, base.operatorLessons.activeLessonCount),
+        topLessonIds: normalizeStringArray(operatorLessons.topLessonIds),
+        topTags: normalizeStringArray(operatorLessons.topTags),
+        topDomains: normalizeStringArray(operatorLessons.topDomains),
+        overview: normalizeString(operatorLessons.overview, base.operatorLessons.overview),
+        lessonsPath: normalizeString(operatorLessons.lessonsPath, base.operatorLessons.lessonsPath)
       },
       operatorPlaybooks: {
         ...base.operatorPlaybooks,
@@ -3024,6 +3171,7 @@ export function createWorkspaceIndex() {
         overview: "No operator follow-through decisions have been recorded yet.",
         followThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough
       },
+      operatorLessons: summarizeOperatorLessons([]),
       executionBridgeCandidates: {
           candidateCount: 0,
           topCandidateIds: [],
@@ -3342,6 +3490,7 @@ export function createWorkflowBoundaries() {
     ".dove/versions/LATEST_COMPARISON.md",
      ".dove/meta/events.json",
      ".dove/meta/long-horizon-memory.json",
+      ".dove/meta/operator-lessons.json",
       ".dove/meta/operator-playbooks.json",
      ".dove/meta/remediation-packs.json",
      ".dove/meta/recommendations.json",
@@ -3387,6 +3536,7 @@ export function createWorkflowBoundaries() {
       ".dove/context/artifacts",
       ".dove/context/actions",
       ".dove/sessions",
+      ARTIFACT_PATHS.metaOperatorLessons,
       ARTIFACT_PATHS.workspaceArtifactMap
     ],
     managedArtifacts: {
@@ -3394,6 +3544,7 @@ export function createWorkflowBoundaries() {
       workflowBoundaries: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workflowBoundaries),
       workspaceIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
       doveRootManifest: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.doveRootManifest),
+      operatorLessons: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaOperatorLessons),
       programsIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.programsIndex),
       programRuns: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.programRuns),
       programApprovals: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.programApprovals)

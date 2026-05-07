@@ -1,10 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS } from "../../src/core/index.mjs";
+import { dispatchTool } from "../../src/mcp/handlers.mjs";
 import { toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
+
+function extractToolJson(result) {
+  assert.ok(result.content?.[0]?.text, "Expected text content in MCP tool result");
+  assert.notEqual(result.isError, true, result.content[0].text);
+  return JSON.parse(result.content[0].text);
+}
 
 test("MCP tool definitions include the mature workflow tools", () => {
   const names = toolDefinitions.map((tool) => tool.name);
@@ -19,6 +27,7 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "query_workspace_index",
     "query_meta_optimize",
     "query_governance_coverage_report",
+    "query_operator_lessons",
     "query_operator_follow_through",
     "query_paper_audit",
     "query_dove_orchestrate",
@@ -64,6 +73,7 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "list_artifacts",
     "upsert_figure_plan",
     "validate_figure_pipeline",
+    "record_operator_lesson",
     "record_operator_follow_through",
     "issue_program_approval",
     "plan_campaign",
@@ -112,6 +122,52 @@ test("every MCP tool surface is classified as guarded, exempt, or read-only", ()
   }
 });
 
+test("operator lessons MCP tools query, record, and reject raw Trellis traces", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-lessons-"));
+  try {
+    const empty = extractToolJson(dispatchTool(root, "query_operator_lessons", {}));
+    assert.equal(empty.explicitOnly, true);
+    assert.equal(empty.noAutoCapture, true);
+    assert.equal(empty.noAutoApply, true);
+    assert.equal(empty.resultCount, 0);
+    assert.equal(empty.lessonsPath, ".dove/meta/operator-lessons.json");
+
+    const recorded = extractToolJson(dispatchTool(root, "record_operator_lesson", {
+      title: "Keep retrospectives distilled",
+      problem: "Raw traces are too noisy for future operators.",
+      decisions: ["Record only reusable decisions."],
+      pitfalls: ["Do not import raw runtime logs."],
+      validation: ["Query lessons after recording."],
+      nextTime: ["Write the lesson at task closure."],
+      domain: "engineering",
+      stage: "return",
+      actorRole: "planner",
+      tags: ["retrospective", "lessons"],
+      sourceArtifacts: [".dove/meta/long-horizon-memory.json"]
+    }));
+    assert.equal(recorded.summary.activeLessonCount, 1);
+    assert.equal(recorded.recordedLesson.title, "Keep retrospectives distilled");
+
+    const queried = extractToolJson(dispatchTool(root, "query_operator_lessons", { tag: "lessons" }));
+    assert.equal(queried.resultCount, 1);
+    assert.equal(queried.lessons[0].title, "Keep retrospectives distilled");
+
+    const rejected = dispatchTool(root, "record_operator_lesson", {
+      title: "Reject raw traces",
+      problem: "Raw Trellis task traces should stay ignored.",
+      decisions: ["Keep source artifacts curated."],
+      pitfalls: ["Do not point lessons at trace folders."],
+      validation: ["Attempting to cite raw traces fails."],
+      nextTime: ["Use durable Dove summaries instead."],
+      sourceArtifacts: [".trellis/tasks/example/task.json"]
+    });
+    assert.equal(rejected.isError, true);
+    assert.match(rejected.content[0].text, /\.trellis\/tasks/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("role-bound MCP tools expose explicit override fields", () => {
   const roleBoundTools = [
     "upsert_orchestration_board",
@@ -128,6 +184,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
     "build_rebuttal_strategy",
     "create_version_snapshot",
     "compare_versions",
+    "record_operator_lesson",
     "record_operator_follow_through",
     "materialize_guidance_packet",
     "launch_dove_mission"
