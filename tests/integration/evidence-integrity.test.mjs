@@ -30,14 +30,42 @@ function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "dove-evidence-"));
 }
 
+function seedTaskPacket(root, packetId = "evidence-main-packet") {
+  const timestamp = new Date(0).toISOString();
+  const packet = {
+    id: packetId,
+    title: "Evidence integrity packet",
+    summary: "Integration test packet for task-scoped writes.",
+    sourceType: "test-task",
+    sourceId: packetId,
+    status: "pending",
+    lifecycleStatus: "active",
+    active: true,
+    assignedRole: "builder",
+    currentFocus: "Run the evidence integrity flow.",
+    nextAction: "Continue the scoped evidence flow.",
+    evidenceLinks: [],
+    outputPaths: [],
+    packetPath: `.dove/task-packets/packets/${packetId}.json`,
+    packetContextPath: `.dove/context/packets/${packetId}.json`,
+    updatedAt: timestamp
+  };
+  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
+  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  return packetId;
+}
+
 test("upsertClaims rejects claims with unknown sources", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
   upsertNote(root, {
     title: "note",
     sectionId: "introduction",
     summary: "summary"
   });
+  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
 
   assert.throws(() => {
     upsertClaims(root, {
@@ -50,6 +78,7 @@ test("strict mode blocks drafting before evidence exists", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { strictMode: true });
+  seedTaskPacket(root);
 
   assert.throws(() => {
     upsertDraft(root, {
@@ -63,6 +92,7 @@ test("strict mode requires the real planning stage before outlining", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { strictMode: true });
+  seedTaskPacket(root);
 
   assert.throws(() => {
     upsertOutline(root, {
@@ -74,6 +104,7 @@ test("strict mode requires the real planning stage before outlining", () => {
 test("upsertNote rejects unknown source references", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
 
   assert.throws(() => {
     upsertNote(root, {
@@ -88,6 +119,7 @@ test("upsertNote rejects unknown source references", () => {
 test("upsertClaims merges claims instead of overwriting the full index", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
   fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
     version: 1,
     items: [
@@ -120,6 +152,7 @@ test("upsertClaims merges claims instead of overwriting the full index", () => {
 test("role-bound evidence writes require ownership unless an override reason is supplied", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
   fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "source-a", citationKey: "source-a", title: "A", authors: [], year: 2024 }],
@@ -144,6 +177,7 @@ test("role-bound evidence writes require ownership unless an override reason is 
 test("experiment results reject unknown outcomes and mismatched claim links", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
   fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
@@ -205,6 +239,7 @@ test("experiment results reject unknown outcomes and mismatched claim links", ()
 test("review loop flags unknown citations and draft-claim mismatches", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
   fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
@@ -244,6 +279,7 @@ test("review loop flags unknown citations and draft-claim mismatches", () => {
 test("repeated review findings escalate a persistent concern while preserving reviewer-author separation", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
   fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
@@ -299,6 +335,7 @@ test("repeated review findings escalate a persistent concern while preserving re
 test("figure QA issues surface through the review loop and durable rebuttal surfaces", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
   fs.writeFileSync(path.join(root, ".dove/sources/index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
@@ -351,6 +388,7 @@ test("figure QA issues surface through the review loop and durable rebuttal surf
 test("supporting results with blocked audits hold claim promotion for review", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
   fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
@@ -408,6 +446,7 @@ test("supporting results with blocked audits hold claim promotion for review", (
 test("finalization is blocked while claim bridges remain held for review", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
   fs.writeFileSync(path.join(root, ".dove/sources/index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
@@ -477,6 +516,7 @@ test("finalization is blocked while claim bridges remain held for review", () =>
 test("citation sync writes references and wiki/rebuttal helpers create artifacts", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  seedTaskPacket(root);
   fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: ["Doe"], year: 2026, sourceType: "paper" }],

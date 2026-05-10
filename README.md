@@ -167,7 +167,7 @@ The written map, when requested, lives at `.dove/workspace/artifact-map.json`. O
 
 ## Core CLI surfaces
 
-Most direct query commands are proposal-only: they inspect declared `.dove/` state and return structured guidance without running tests, inspecting git, refreshing derived files, or mutating the board.
+Most direct query commands are proposal-only: they inspect declared `.dove/` state and return structured guidance without running tests, inspecting git, repairing state, or mutating user source assets.
 
 ```bash
 # Route a mission request without writing state
@@ -183,8 +183,8 @@ node ./bin/dove.mjs mission . \
   --artifact src/cache.mjs \
   --acceptance-check "tests or validation output"
 
-# Read the current board view
-node ./bin/dove.mjs board . --domain engineering
+# Read current mission status, task packets, paper lifecycle, questions, decisions, and lineage
+node ./bin/dove.mjs status . --domain engineering
 
 # Inspect declared audit and return evidence
 node ./bin/dove.mjs audit . \
@@ -212,10 +212,10 @@ node ./bin/dove.mjs launch . \
   --stage execution
 ```
 
-Bounded autonomy is also explicit and foreground-only:
+Bounded autonomy is also explicit and foreground-only. Use `dove.autonomy-operate` as the normal user-facing surface; `autonomy-once` and `autonomy-foreground` are lower-level CLI/MCP controls for a single control-plane delta or an existing bounded run envelope.
 
 ```bash
-node ./bin/dove.mjs autonomy-foreground . --max-steps 5
+node ./bin/dove.mjs autonomy-operate . --objective "Close accepted remediation" --max-steps 5
 ```
 
 ## Workflow model
@@ -236,12 +236,12 @@ Specialists such as researcher, experiment planner, rebuttal lead, revision lead
 
 ## Paper workflow
 
-Paper-domain commands use the `dove.paper.*` surface. They support:
+Paper-specific commands use the `dove.paper.*` surface for artifact workflows. Shared mission controls such as routing, status, planning, checklists, launch, approvals, autonomy, governance audit, audit, and return stay on `dove.*`. Paper-specific commands support:
 
 - project initialization and research contracts
 - source registration and note capture
 - evidence-backed claim promotion
-- paper planning, outlining, and drafting
+- outlining and drafting
 - experiment planning, result logging, experiment audit, and result-to-claim bridging
 - strict no-fix paper audit
 - review loops and isolated reviewer handoffs

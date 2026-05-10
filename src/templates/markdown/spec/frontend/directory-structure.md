@@ -15,7 +15,7 @@ This repository does not contain a React/browser frontend. The Trellis `frontend
 ```text
 .
 ├── .opencode/
-│   ├── commands/          # Generated OpenCode command adapters, e.g. dove.paper.orchestrate.md
+│   ├── commands/          # Generated OpenCode command adapters, e.g. dove.orchestrate.md
 │   └── skills/            # OpenCode role/discipline skill packs, one SKILL.md per skill
 ├── .claude/commands/dove/ # Generated Claude Code command adapters
 ├── .cursor/commands/      # Generated Cursor command adapters
@@ -72,7 +72,7 @@ This repository does not contain a React/browser frontend. The Trellis `frontend
 - `scripts/generate-command-adapters.mjs` is the example for deterministic checked-in host adapter generation.
 - `src/core/schema.mjs` is the example for centralizing artifact paths, role IDs, governance registries, and schema defaults.
 - `src/core/workspace.mjs` is the example for file-first workspace creation and normalized JSON writes.
-- `.opencode/commands/dove.orchestrate.md` and `.opencode/commands/dove.paper.orchestrate.md` are generated read-only router examples; host-specific copies should match generator output.
+- `.opencode/commands/dove.orchestrate.md` is the generated read-only router example; paper-specific adapters cover artifact workflows rather than mirror shared mission controls.
 - `tests/integration/workflow.test.mjs` is the example for validating an end-to-end paper workflow through core functions.
 
 ---

@@ -43,7 +43,29 @@ test("npm package dry-run includes Dove-only adapters and current public docs", 
   ]) {
     assert.ok(packagedPaths.has(publicDocPath), `missing public doc ${publicDocPath}`);
   }
-  assert.ok(packagedPaths.has(".opencode/commands/dove.paper.plan.md"));
+  const opencodeCommandPath = (...segments) => `.opencode/commands/${["dove", ...segments].join(".")}.md`;
+  assert.ok(packagedPaths.has(opencodeCommandPath("status")));
+  assert.ok(packagedPaths.has(opencodeCommandPath("paper", "experiment")));
+  assert.ok(packagedPaths.has(opencodeCommandPath("paper", "version")));
+  assert.ok(packagedPaths.has(".opencode/commands/dove.plan.md"));
+  for (const removedPath of [
+    opencodeCommandPath("board"),
+    opencodeCommandPath("task-graph"),
+    opencodeCommandPath("materialize"),
+    opencodeCommandPath("paper", "pipeline"),
+    opencodeCommandPath("paper", "review-loop"),
+    opencodeCommandPath("paper", "experiment-plan"),
+    opencodeCommandPath("paper", "version-snapshot"),
+    opencodeCommandPath("paper", "wiki")
+  ]) {
+    assert.equal(packagedPaths.has(removedPath), false, `packaged removed adapter ${removedPath}`);
+  }
+  assert.equal(packagedPaths.has(`.opencode/commands/dove.paper.${"plan"}.md`), false);
+  assert.equal(packagedPaths.has(`.claude/commands/dove/paper-${"checklist"}.md`), false);
+  assert.equal(packagedPaths.has(`.codex/skills/dove-paper-${"approvals"}/SKILL.md`), false);
+  assert.equal(packagedPaths.has(`.agents/skills/dove-paper-${"orchestrate"}/SKILL.md`), false);
+  assert.equal(packagedPaths.has(`.opencode/commands/dove.paper.${"follow-through"}.md`), false);
+  assert.ok(packagedPaths.has(".opencode/commands/dove.follow-through.md"));
   assert.ok(packagedPaths.has(".opencode/skills/dove-pipeline/SKILL.md"));
   assert.ok(packagedPaths.has(".agents/skills/dove-lessons/SKILL.md"));
   for (const forbiddenPath of [
@@ -107,7 +129,9 @@ test("CLI install copies the workflow pack into a target workspace", () => {
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.pipeline.md")));
+  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.status.md")));
+  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.experiment.md")));
+  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.version.md")));
   assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.plan.md")));
   assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.approvals.md")));
   assert.ok(fs.existsSync(path.join(target, ".opencode", "skills", "dove-pipeline", "SKILL.md")));
@@ -122,6 +146,14 @@ test("CLI install copies the workflow pack into a target workspace", () => {
   assert.ok(fs.existsSync(path.join(target, "mcp", "dove-state-server.mjs")));
   assert.ok(fs.existsSync(path.join(target, "scripts", "validate-mcp.mjs")));
   assert.ok(fs.existsSync(path.join(target, "src", "mcp", "server.mjs")));
+  for (const internalDoc of [
+    "DOVE_REFACTOR_PLAN_2026-05-04.md",
+    "ROLE_HIERARCHY_REFACTOR_PLAN_2026-05-04.md",
+    "PAPER_FACTORY_SYSTEM_ORIGINS.zh-CN.md",
+    "REFERENCE_ARCHITECTURES.zh-CN.md"
+  ]) {
+    assert.equal(fs.existsSync(path.join(target, "docs", internalDoc)), false);
+  }
   const config = JSON.parse(fs.readFileSync(path.join(target, ".opencode.json"), "utf8"));
   assert.equal(Object.hasOwn(config, "$schema"), false);
 });
@@ -159,7 +191,7 @@ test("CLI install all host adapters skips unsafe local artifacts", () => {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
   assert.deepEqual(payload.hosts, ["opencode", "claude", "codex", "cursor", "agents"]);
-  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.pipeline.md")));
+  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.status.md")));
   assert.ok(fs.existsSync(path.join(target, ".claude", "commands")));
   assert.equal(fs.existsSync(path.join(target, ".codex", "agents")), false);
   assert.equal(fs.existsSync(path.join(target, ".codex", "config.toml")), false);
@@ -282,6 +314,14 @@ test("CLI autonomy-once and doctor expose runtime status visibility", () => {
   assert.equal(autonomy.status, 0, autonomy.stderr || autonomy.stdout);
   assert.match(autonomy.stdout, /"status": "noop"/);
   assert.match(autonomy.stdout, /"outcome": "no-eligible-packet"/);
+
+  const flagFirstAutonomy = spawnSync("node", [CLI, "autonomy-once", "--actor-role", "planner"], {
+    cwd: target,
+    encoding: "utf8"
+  });
+  assert.equal(flagFirstAutonomy.status, 0, flagFirstAutonomy.stderr || flagFirstAutonomy.stdout);
+  assert.match(flagFirstAutonomy.stdout, /"status": "noop"/);
+  assert.match(flagFirstAutonomy.stdout, /"outcome": "no-eligible-packet"/);
 
   const doctor = spawnSync("node", [CLI, "doctor", target], {
     cwd: ROOT,

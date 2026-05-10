@@ -23,28 +23,26 @@ The lesson step is an explicit closure ritual, not automatic capture. Dove never
 
 ## Board-first orchestration
 
-`project:dove.paper.orchestrate` is the paper-domain routing entrypoint. It reads the current `.dove` context, classifies the request by paper lifecycle family, and recommends one next command; it does not update the board, append handoffs, refresh packets, or apply downstream mutations.
-
-`project:dove.orchestrate` frames durable state as one Dove mission with a domain (`paper`, `engineering`, `experiment`, `review`, or `general`) and lifecycle stage (`goal`, `design`, `checklist`, `execution`, `audit`, or `return`).
+`project:dove.orchestrate` is the single Dove routing entrypoint. It frames durable state as one mission with a domain (`paper`, `engineering`, `experiment`, `review`, or `general`) and lifecycle stage (`goal`, `design`, `checklist`, `execution`, `audit`, or `return`), then recommends one next command without updating the board, appending handoffs, refreshing packets, or applying downstream mutations.
 
 The general Dove surfaces are generated for OpenCode, Claude Code, Codex, Cursor, and shared agent-skill hosts:
 
 - `project:dove.orchestrate` / `dove orchestrate`
 - `project:dove.mission` / `dove mission`
-- `project:dove.board` / `dove board`
+- `project:dove.status` / `dove status`
 - `project:dove.plan`
 - `project:dove.checklist`
-- `project:dove.task-graph`
-- `project:dove.materialize`
+- `project:dove.follow-through`
+- `project:dove.launch` / `dove launch`
 - `project:dove.approvals`
 - `project:dove.lessons`
+- `project:dove.onboard` / `dove onboard`
 - `project:dove.autonomy-operate`
 - `project:dove.audit` / `dove audit`
 - `project:dove.return` / `dove return`
-- `project:dove.launch` / `dove launch`
 - `project:dove.governance-audit`
 
-The direct query surfaces are read-only and proposal-only. They do not set phases, update roles, refresh derived workspace state, run tests, inspect git, execute autonomy, or create packets. `dove.paper.orchestrate` is also a no-write router, not a board mutation surface. `dove launch` is the governed write surface: it materializes accepted proposal guidance into `.dove/task-packets`, requires `sourceType`, `sourceId`, `executeBy`, and `reviewAfter`, and does not execute the work.
+The direct query surfaces are proposal-only. They do not set phases, update roles, run tests, inspect git, execute autonomy, or create packets. `dove status` is the one public place to see the current mission, packet dependencies, paper lifecycle, open questions, decisions, version lineage, and navigation health. It may refresh derived navigation/status views, but it does not mutate source assets. `dove launch` is the governed write surface: it turns accepted proposal guidance into `.dove/task-packets`, requires `sourceType`, `sourceId`, `executeBy`, and `reviewAfter`, and does not execute the work.
 
 Normal engineering work uses the same mission fields rather than a separate product branch: mark the domain as `engineering`, list source/test/docs targets, and return declared changed-file paths plus declared test/validation evidence and validation output. Dove audit and return inspect only those declared project-local paths and durable packet links.
 
@@ -71,6 +69,14 @@ Dove uses a durable board-first orchestration model:
 
 Commands and skills provide role behavior, but there is no hidden scheduler or swarm runtime. Optional MCP helpers mutate files deterministically; they do not replace `.dove/` as the source of truth.
 
+## Parallel task target resolution
+
+Task-scoped writes bind to an existing durable packet before they mutate `.dove/` assets. A command or MCP call can provide `packetId`, `taskPacketId`, `missionPacketId`, or a natural-language target such as `target`, `packetTarget`, or `taskName`; Dove resolves that input against `.dove/task-packets` and linked packet context before writing research, notes, claims, plans, drafts, experiments, reviews, rebuttals, versions, or isolated-review handoffs.
+
+Explicit conflicts are always rejected: if a packet id and linked artifact ids point at different durable packets, Dove refuses the write instead of guessing. If no durable packet exists, the write is rejected and the operator must launch or materialize a task packet first.
+
+Ambiguous natural-language targets follow `.dove/state.json.settings.taskTargetResolution.autoSelect`. The default is `true`, so Dove selects the strongest packet candidate and records resolution evidence. Set it to `false` when you want strict confirmation mode; ambiguous task-scoped writes then stop and ask the operator to provide or confirm `packetId`.
+
 ## Strict mode
 
 `init_project` supports `strictMode: true`. In strict mode, planning, outlining, and drafting enforce basic stage preconditions instead of only documenting the ideal workflow.
@@ -83,11 +89,11 @@ Strict mode is stage-based, not template-based. Starter files in `.dove/` do not
 
 Run `project:dove.paper.init` to establish title, venue, thesis, audience, and the research contract.
 
-For an existing paper repository, run `dove onboard .` before deciding what to adopt into the workflow. The default scan is proposal-only and writes nothing; `--write-map` persists only `.dove/workspace/artifact-map.json` as a reference map.
+For an existing paper repository, run `project:dove.onboard` or `dove onboard .` before deciding what to adopt into the workflow. The host/MCP surface is proposal-only through `query_dove_onboarding`; the CLI default scan also writes nothing, and `dove onboard . --write-map` persists only `.dove/workspace/artifact-map.json` as a reference map.
 
 ### 2. Orchestrate the next role-owned phase
 
-Run `project:dove.paper.orchestrate` or `project:dove.orchestrate` to route to exactly one next command from durable context. Use `project:dove.mission` or `dove mission .` when you want a no-write mission contract, `project:dove.board` or `dove board .` for an as-read mission-board view, `project:dove.audit` or `dove audit .` for proposal-only audit plus return-readiness inspection, and `project:dove.return` or `dove return .` before closure.
+Run `project:dove.orchestrate` to route to exactly one next command from durable context. Use `project:dove.mission` or `dove mission .` when you want a no-write mission contract, `project:dove.status` or `dove status .` when you need to see where the workspace is, what is blocked, and what should happen next, `project:dove.audit` or `dove audit .` for proposal-only audit plus return-readiness inspection, and `project:dove.return` or `dove return .` before closure.
 
 Use `project:dove.launch` or `dove launch .` only after accepting a proposal source and setting an execution/review window; it creates a governed mission packet but does not execute the work.
 
@@ -105,9 +111,9 @@ Run `project:dove.paper.claim-gate` to move findings into `.dove/evidence/index.
 
 ### 6. Plan and outline
 
-Use `project:dove.plan` for generic Dove mission design across engineering, general, and shared workflow work. Use `project:dove.paper.plan` plus `project:dove.paper.outline` when the design is specifically about manuscript structure, claims, citations, venue strategy, and section flow.
+Use `project:dove.plan` for Dove mission design across paper, engineering, experiment, review, general, and shared workflow work.
 
-For major paper changes, `project:dove.paper.plan` is the paper-domain `design` view: it must state scope, non-goals, risks, target artifacts, required evidence, and acceptance checks before implementation starts. For non-paper missions, the design route is `project:dove.plan`.
+For major paper changes, `project:dove.plan` must state manuscript structure, claims, citations, venue strategy, scope, non-goals, risks, target artifacts, required evidence, and acceptance checks before implementation starts. Use `project:dove.paper.outline` after the shared plan is clear enough to shape the manuscript.
 
 ### 7. Draft
 
@@ -115,19 +121,19 @@ Use `project:dove.paper.draft` for section-level drafting. If evidence is missin
 
 ### 8. Plan experiments, record results, audit them, and bridge results to claims
 
-Use `project:dove.paper.experiment-plan`, `project:dove.paper.experiment-audit`, and `project:dove.paper.result-bridge` to keep `.dove/experiments/plans.json`, `.dove/experiments/results.json`, `.dove/experiments/audits.json`, `.dove/claims/bridge-log.json`, and `.dove/experiments/EXPERIMENT_LOG.md` claim-driven and durable.
+Use `project:dove.paper.experiment` to plan experiments, record results, and audit whether the evidence supports the claim. Use `project:dove.paper.result-bridge` when a result is ready to change claim confidence or claim state. Together they keep `.dove/experiments/plans.json`, `.dove/experiments/results.json`, `.dove/experiments/audits.json`, `.dove/claims/bridge-log.json`, and `.dove/experiments/EXPERIMENT_LOG.md` claim-driven and durable.
 
 ### 9. Review loop
 
 Use `project:dove.paper.audit` when you want strict no-fix inspection. It reports evidence, citation, experiment, claim-bridge, review, version, figure, checklist, and artifact integrity findings with proposal-only next commands; it does not write, repair, refresh, materialize, update the board, append handoffs, generate revision plans, or run review loops.
 
-Use `project:dove.paper.review-loop` to generate a durable review entry and revision plan. The review loop checks unsupported claims, weakly supported claims, citation TODOs, state/draft mismatches, experiment audit flags, and result-to-claim bridge problems.
+Use `project:dove.paper.review` to generate a durable review entry and revision plan. The review loop checks unsupported claims, weakly supported claims, citation TODOs, state/draft mismatches, experiment audit flags, and result-to-claim bridge problems.
 
-Use `project:dove.paper.isolated-review` when you want a parallel reviewer session that cannot see the writer/main session's private transcript. The slash command prepares `.dove/reviews/isolated/<run-id>/input.json`, invokes the configured external reviewer command, imports only `handoff.json` and `report.md`, and returns the verdict plus top concerns.
+Use `project:dove.paper.isolated-review` when you want a parallel reviewer session that cannot see the writer/main session's private transcript. The host/MCP surface prepares `.dove/reviews/isolated/<run-id>/input.json` and imports only `handoff.json` plus `report.md`; arbitrary external reviewer process execution remains CLI-only through `dove isolated-review --reviewer-command ...`.
 
 ### 10. Rebuttal strategy and versioning
 
-Use `project:dove.paper.rebuttal-strategy` to normalize reviewer issues before `project:dove.paper.rebuttal`. Use `project:dove.paper.version-snapshot` and `project:dove.paper.version-compare` to preserve paper evolution honestly.
+Use `project:dove.paper.rebuttal` to normalize reviewer issues, choose a response strategy, and draft the rebuttal. Use `project:dove.paper.version` to snapshot manuscript state, compare versions, and inspect lineage so paper evolution stays honest.
 
 ### 11. Revise and close the loop
 
@@ -135,33 +141,31 @@ Use `project:dove.paper.revise`, `project:dove.checklist`, `project:dove.paper.c
 
 Major paper changes close through `design → checklist → implementation → acceptance`:
 
-1. `project:dove.plan` records the generic mission design contract, or `project:dove.paper.plan` records the paper-domain design view.
+1. `project:dove.plan` records the mission design contract, including paper-specific manuscript, evidence, venue, and acceptance constraints when the domain is `paper`.
 2. `project:dove.checklist` writes the active checklist at `.dove/checklists/current.md` and turns the design into executable steps and acceptance checks.
 3. Draft, revision, experiment, result-bridge, figure, citation, or rebuttal commands implement only scoped checklist work.
-4. Review, checklist, snapshot, and comparison commands provide acceptance evidence.
+4. Review, checklist, version, audit, and return commands provide acceptance evidence.
 
 ## Query and navigation surfaces
 
 Use these file-backed inspection commands when you need to understand the workspace before acting:
 
-- `project:dove.task-graph` for packet/dependency navigation
-- `project:dove.paper.open-questions` for unresolved research/review uncertainty
-- `project:dove.paper.decisions` for durable operational and comparison decisions
-- `project:dove.paper.lineage` for version/comparison lineage
-- `project:dove.paper.meta-optimize` for the proposal-only optimization frontier and recommendations
-- `project:dove.paper.audit` for strict no-fix paper inspection
-- `project:dove.orchestrate`, `project:dove.mission`, `project:dove.board`, `project:dove.audit`, and `project:dove.return` for proposal-only Dove routing, mission, board, audit, and return JSON queries
-- `project:dove.launch` / `launch_dove_mission` for governed launch of one accepted Dove mission into `.dove/task-packets`
-- `project:dove.paper.onboard` plus `dove onboard` for proposal-first artifact mapping
-- `project:dove.paper.follow-through` for explicit operator handling of proposal-only remediation guidance
-- `project:dove.lessons` plus `query_operator_lessons` / `record_operator_lesson` for explicit distilled retrospectives
-- `project:dove.materialize` for explicit proposal-to-task-packet materialization once guidance is accepted
-- `project:dove.approvals` for inspecting, issuing, and revoking bounded program approvals; `project:dove.paper.approvals` is only a paper-domain view
-- `project:dove.autonomy-operate` / `run_autonomy_operate` for the explicit bounded foreground operating surface
-- `dove autonomy-once` / `run_autonomy_once` for one explicit planner-owned autonomous control-plane pass
-- `project:dove.governance-audit` for the durable governance coverage proof report
+- `project:dove.status` / `dove status` tells you where the mission is, which packets or dependencies are blocking progress, what paper lifecycle stage is ready, which questions and decisions are open, how versions relate, and which command is likely next.
+- `project:dove.orchestrate` / `dove orchestrate` routes a new request to one next command without changing state.
+- `project:dove.mission` / `dove mission` frames one no-write mission contract with artifacts and acceptance checks.
+- `project:dove.paper.audit` runs strict no-fix paper inspection.
+- `project:dove.audit` and `project:dove.return` inspect declared engineering or mission evidence before closure.
+- `project:dove.paper.meta-optimize` reports proposal-only workflow optimization recommendations.
+- `project:dove.onboard` / `query_dove_onboarding` plus `dove onboard` maps existing artifacts without moving or overwriting them.
+- `project:dove.follow-through` records explicit operator handling of proposal-only remediation guidance.
+- `project:dove.lessons` plus `query_operator_lessons` / `record_operator_lesson` preserves distilled retrospectives.
+- `project:dove.launch` / `launch_dove_mission` turns accepted guidance into one governed mission packet under `.dove/task-packets`.
+- `project:dove.approvals` inspects, issues, and revokes bounded program approvals.
+- `project:dove.autonomy-operate` / `run_autonomy_operate` is the primary explicit bounded foreground operating surface.
+- `dove autonomy-once` / `run_autonomy_once` runs one lower-level planner-owned control-plane pass when you need a single delta instead of the full operating surface.
+- `project:dove.governance-audit` produces the durable governance coverage proof report.
 
-Paper navigation commands refresh `.dove/wiki/navigation.md`, `.dove/task-packets/index.json`, `.dove/context/roles/*.json`, `.dove/context/phases/*.json`, `.dove/context/packets/*.json`, `.dove/workspace/index.json`, and `.dove/sessions/LATEST_SUMMARY.md`. General Dove query surfaces stay no-refresh and proposal-only.
+Status and paper navigation helpers may refresh derived files such as `.dove/wiki/navigation.md`, `.dove/task-packets/index.json`, `.dove/context/roles/*.json`, `.dove/context/phases/*.json`, `.dove/context/packets/*.json`, `.dove/workspace/index.json`, and `.dove/sessions/LATEST_SUMMARY.md`. Those refreshes keep navigation current; they do not mutate source assets, execute work, run tests, or create mission packets.
 
 ## Lessons / retrospectives
 
@@ -205,12 +209,12 @@ The autonomy loop is explicit and bounded:
 1. inspect proposals and request state through follow-through and workspace surfaces
 2. record or update explicit execution intent in `.dove/meta/operator-follow-through.json`
 3. inspect, issue, or revoke explicit approvals through `project:dove.approvals` and `.dove/programs/approvals.json` when a packet is program-linked
-4. materialize one accepted path explicitly, or let `dove autonomy-once` invoke the same governed materialization bridge once when eligible
-5. run `dove autonomy-once` to advance at most one bounded control-plane delta
-6. run `dove autonomy-foreground` for one explicit foreground pass that may continue a same-lineage approved packet/run envelope until it hits a stop condition
+4. use `project:dove.autonomy-operate` as the normal bounded autonomy entrypoint when you want Dove to compose planning, materialization, approval, execution, and stop summaries
+5. use `dove autonomy-once` only for one lower-level control-plane delta
+6. use `dove autonomy-foreground` only for an explicit lower-level foreground pass that continues an existing bounded packet/run envelope until it hits a stop condition
 7. inspect `.dove/workspace/index.json`, `.dove/runtime/*.json`, `.dove/programs/*.json`, and follow-through surfaces for checkpoints and review-needed handoff state
 
-This is not a hidden background runtime. Program state is durable and inspectable, but it is not a scheduler.
+This is not a hidden background runtime. Program state is durable and inspectable, but it is not a scheduler; `dove.autonomy-operate` is the ordinary user-facing surface, while `autonomy-once` and `autonomy-foreground` are lower-level CLI/MCP controls.
 
 For deeper local-context discipline, read the nearest generated surfaces before acting:
 
@@ -238,6 +242,8 @@ The optional MCP layer exposes deterministic helpers, including:
 - `query_operator_follow_through`
 - `query_operator_lessons`
 - `query_paper_audit`
+- `query_paper_pipeline`
+- `query_dove_onboarding`
 - `query_dove_orchestrate`
 - `query_dove_mission`
 - `query_dove_mission_board`
@@ -245,7 +251,10 @@ The optional MCP layer exposes deterministic helpers, including:
 - `query_dove_return`
 - `query_program_approvals`
 - `sync_checklist`
+- `prepare_isolated_review`
+- `import_isolated_review`
 - `record_operator_lesson`
+- `record_operator_follow_through`
 - `materialize_guidance_packet`
 - `launch_dove_mission`
 - `issue_program_approval`

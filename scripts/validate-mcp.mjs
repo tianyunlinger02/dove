@@ -16,6 +16,36 @@ function extractJson(result) {
   return JSON.parse(result.content[0].text);
 }
 
+function seedTaskPacket(root, packetId = "validator-main-packet") {
+  const timestamp = new Date(0).toISOString();
+  const packet = {
+    id: packetId,
+    title: "Validator main packet",
+    summary: "MCP validator packet for task-scoped writes.",
+    sourceType: "test-task",
+    sourceId: packetId,
+    status: "pending",
+    lifecycleStatus: "active",
+    active: true,
+    assignedRole: "builder",
+    currentFocus: "Run the MCP validator workflow.",
+    nextAction: "Continue the scoped validator workflow.",
+    evidenceLinks: [],
+    outputPaths: [],
+    packetPath: `.dove/task-packets/packets/${packetId}.json`,
+    packetContextPath: `.dove/context/packets/${packetId}.json`,
+    updatedAt: timestamp
+  };
+  const indexPath = path.join(root, ".dove", "task-packets", "index.json");
+  const existingIndex = fs.existsSync(indexPath)
+    ? JSON.parse(fs.readFileSync(indexPath, "utf8"))
+    : { version: 3, items: [], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: null };
+  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
+  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
+  fs.writeFileSync(indexPath, `${JSON.stringify({ ...existingIndex, items: [...(existingIndex.items ?? []).filter((item) => item.id !== packetId), packet], updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  return packetId;
+}
+
 async function main() {
   const init = await call("initialize", {
     protocolVersion: "2024-11-05",
@@ -40,6 +70,7 @@ async function main() {
     "compare_versions",
     "create_version_snapshot",
     "ensure_workspace",
+    "import_isolated_review",
     "init_project",
     "issue_program_approval",
     "launch_dove_mission",
@@ -47,14 +78,17 @@ async function main() {
     "materialize_guidance_packet",
     "normalize_rebuttal_issues",
     "plan_campaign",
+    "prepare_isolated_review",
     "query_boundary_report",
     "query_campaigns",
     "query_decisions",
     "query_dove_audit",
     "query_dove_mission",
     "query_dove_mission_board",
+    "query_dove_onboarding",
     "query_dove_orchestrate",
     "query_dove_return",
+    "query_dove_status",
     "query_governance_coverage_report",
     "query_lineage",
     "query_meta_optimize",
@@ -62,6 +96,7 @@ async function main() {
     "query_operator_follow_through",
     "query_operator_lessons",
     "query_paper_audit",
+    "query_paper_pipeline",
     "query_program_approvals",
     "query_task_graph",
     "query_workspace_index",
@@ -142,6 +177,8 @@ async function main() {
   }));
   assert.equal(foreground.stepCount >= 1, true);
 
+  const validationPacketId = seedTaskPacket(tempWorkspace);
+
   extractJson(await call("tools/call", {
     name: "append_handoff",
     arguments: {
@@ -156,6 +193,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "update_research_brief",
     arguments: {
+      packetId: validationPacketId,
       objective: "Verify the mature Dove workflow.",
       agenda: ["Collect sources", "Plan experiments"],
       evidenceBacklog: ["Add comparison evidence"]
@@ -165,6 +203,7 @@ async function main() {
   const source = extractJson(await call("tools/call", {
     name: "register_source",
     arguments: {
+      packetId: validationPacketId,
       citationKey: "smith2026dove",
       title: "Dove: Trustworthy Mission Workflows",
       authors: ["Smith", "Lee"],
@@ -178,6 +217,7 @@ async function main() {
   const note = extractJson(await call("tools/call", {
     name: "upsert_note",
     arguments: {
+      packetId: validationPacketId,
       title: "Core contribution note",
       sectionId: "introduction",
       sourceIds: [source.id],
@@ -191,6 +231,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "upsert_claims",
     arguments: {
+      packetId: validationPacketId,
       claims: [
         {
           id: "claim-1",
@@ -222,6 +263,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "upsert_experiment_plan",
     arguments: {
+      packetId: validationPacketId,
       id: "workflow-compare",
       title: "Workflow comparison",
       claimId: "claim-1",
@@ -231,10 +273,12 @@ async function main() {
       comparisonTargets: ["baseline"]
     }
   }));
+  const experimentPacketId = "experiment-workflow-compare";
 
-  extractJson(await call("tools/call", {
+  const experimentResult = extractJson(await call("tools/call", {
     name: "upsert_experiment_result",
     arguments: {
+      packetId: experimentPacketId,
       experimentId: "workflow-compare",
       claimId: "claim-1",
       outcome: "supports",
@@ -247,6 +291,8 @@ async function main() {
   const audit = extractJson(await call("tools/call", {
     name: "run_experiment_audit",
     arguments: {
+      packetId: experimentPacketId,
+      resultId: experimentResult.id,
       experimentId: "workflow-compare"
     }
   }));
@@ -255,6 +301,8 @@ async function main() {
   const bridge = extractJson(await call("tools/call", {
     name: "bridge_result_to_claim",
     arguments: {
+      packetId: experimentPacketId,
+      resultId: experimentResult.id,
       experimentId: "workflow-compare",
       auditIds: [audit.id],
       reason: "Validator explicitly checked the result-to-claim bridge."
@@ -265,6 +313,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "upsert_plan",
     arguments: {
+      packetId: validationPacketId,
       thesis: "A durable workflow pack can make paper writing more trustworthy.",
       audience: "ML conference reviewers",
       sections: ["Abstract", "Introduction", "Method", "Evaluation", "Conclusion"],
@@ -276,6 +325,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "upsert_outline",
     arguments: {
+      packetId: validationPacketId,
       sections: [
         { id: "introduction", title: "Introduction", status: "drafting", goal: "Frame the problem." },
         { id: "method", title: "Method", status: "planned", goal: "Explain the workflow." }
@@ -286,6 +336,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "upsert_draft",
     arguments: {
+      packetId: validationPacketId,
       sectionId: "introduction",
       title: "Introduction",
       body: "# Introduction\n\nThis workflow is promising. TODO[citation]: add stronger empirical support.\n",
@@ -296,6 +347,7 @@ async function main() {
   const figurePlan = extractJson(await call("tools/call", {
     name: "upsert_figure_plan",
     arguments: {
+      packetId: validationPacketId,
       items: [{
         id: "workflow-figure",
         name: "Workflow Figure",
@@ -331,6 +383,7 @@ async function main() {
   const review = extractJson(await call("tools/call", {
     name: "run_review_loop",
     arguments: {
+      packetId: validationPacketId,
       scope: "introduction draft"
     }
   }));
@@ -350,6 +403,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "append_review_log",
     arguments: {
+      packetId: validationPacketId,
       stage: "validator-signoff",
       scope: "validator",
       verdict: "coherent",
@@ -380,6 +434,7 @@ async function main() {
   const issues = extractJson(await call("tools/call", {
     name: "normalize_rebuttal_issues",
     arguments: {
+      packetId: validationPacketId,
       issues: [
         { summary: "Clarify comparison protocol.", severity: "medium", evidenceLinks: [".dove/experiments/EXPERIMENT_LOG.md"] }
       ]
@@ -387,10 +442,10 @@ async function main() {
   }));
   assert.equal(issues.items.length >= 1, true);
 
-  const strategy = extractJson(await call("tools/call", { name: "build_rebuttal_strategy", arguments: {} }));
+  const strategy = extractJson(await call("tools/call", { name: "build_rebuttal_strategy", arguments: { packetId: validationPacketId } }));
   assert.equal(strategy.strategyPath, ".dove/rebuttal/strategy.md");
 
-  const rebuttal = extractJson(await call("tools/call", { name: "build_rebuttal", arguments: {} }));
+  const rebuttal = extractJson(await call("tools/call", { name: "build_rebuttal", arguments: { packetId: validationPacketId } }));
   assert.equal(rebuttal.draftPath, ".dove/drafts/rebuttal.md");
 
   extractJson(await call("tools/call", {
@@ -407,6 +462,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "append_review_log",
     arguments: {
+      packetId: validationPacketId,
       stage: "validator-post-rebuttal-signoff",
       scope: "validator",
       verdict: "coherent",
@@ -431,6 +487,7 @@ async function main() {
   const snapshotA = extractJson(await call("tools/call", {
     name: "create_version_snapshot",
     arguments: {
+      packetId: validationPacketId,
       versionId: "validator-v1",
       summary: "Initial validator snapshot"
     }
@@ -440,6 +497,7 @@ async function main() {
   extractJson(await call("tools/call", {
     name: "upsert_draft",
     arguments: {
+      packetId: validationPacketId,
       sectionId: "method",
       title: "Method",
       body: "# Method\n\nWe keep a board-first workflow [cite:smith2026paperfactory].\n",
@@ -461,6 +519,7 @@ async function main() {
   const snapshotB = extractJson(await call("tools/call", {
     name: "create_version_snapshot",
     arguments: {
+      packetId: validationPacketId,
       versionId: "validator-v2",
       parentVersionId: "validator-v1",
       summary: "Second validator snapshot"
@@ -471,6 +530,7 @@ async function main() {
   const comparison = extractJson(await call("tools/call", {
     name: "compare_versions",
     arguments: {
+      packetId: validationPacketId,
       fromVersionId: "validator-v1",
       toVersionId: "validator-v2"
     }
@@ -547,6 +607,50 @@ async function main() {
   const lineage = extractJson(await call("tools/call", { name: "query_lineage", arguments: {} }));
   assert.equal(Array.isArray(lineage.lineage), true);
 
+  fs.writeFileSync(path.join(tempWorkspace, "main.tex"), "\\documentclass{article}\n\\begin{document}Validator\\end{document}\n", "utf8");
+  const onboarding = extractJson(await call("tools/call", { name: "query_dove_onboarding", arguments: { writeMap: true } }));
+  assert.equal(onboarding.mode, "dove-onboarding-query");
+  assert.equal(onboarding.proposalOnly, true);
+  assert.equal(onboarding.writeMap, false);
+  assert.deepEqual(onboarding.writes, []);
+  assert.equal(onboarding.diagnostics.writeMapForcedFalse, true);
+
+  const paperPipeline = extractJson(await call("tools/call", { name: "query_paper_pipeline", arguments: {} }));
+  assert.equal(paperPipeline.mode, "paper-pipeline-query");
+  assert.equal(paperPipeline.proposalOnly, true);
+  assert.deepEqual(paperPipeline.writes, []);
+  assert.equal(paperPipeline.diagnostics.noCommandExecution, true);
+  assert.equal(paperPipeline.diagnostics.noExternalProcess, true);
+  assert.equal(paperPipeline.diagnostics.noGitInspection, true);
+
+  const preparedIsolatedReview = extractJson(await call("tools/call", {
+    name: "prepare_isolated_review",
+    arguments: { packetId: validationPacketId, runId: "validator-isolated-review", scope: "validator MCP smoke" }
+  }));
+  assert.equal(preparedIsolatedReview.status, "prepared");
+  fs.writeFileSync(path.join(tempWorkspace, preparedIsolatedReview.reportPath), "# Validator isolated report\n\nNo private transcript.\n", "utf8");
+  fs.writeFileSync(path.join(tempWorkspace, preparedIsolatedReview.handoffPath), `${JSON.stringify({
+    version: 1,
+    runId: preparedIsolatedReview.runId,
+    status: "completed",
+    verdict: "coherent",
+    reviewerId: "validator-mcp-reviewer",
+    summary: "Validator MCP isolated handoff imported explicit artifacts only.",
+    inputPath: preparedIsolatedReview.inputPath,
+    inputSha256: preparedIsolatedReview.inputSha256,
+    reportPath: preparedIsolatedReview.reportPath,
+    reviewedArtifactPaths: preparedIsolatedReview.reviewedArtifactPaths,
+    findings: [],
+    actionItems: []
+  }, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(tempWorkspace, ".dove", "reviews", "isolated", "validator-isolated-review", "private-transcript.md"), "PRIVATE\n", "utf8");
+  const importedIsolatedReview = extractJson(await call("tools/call", {
+    name: "import_isolated_review",
+    arguments: { packetId: validationPacketId, runId: "validator-isolated-review" }
+  }));
+  assert.equal(importedIsolatedReview.status, "imported");
+  assert.equal(importedIsolatedReview.privateTranscriptImported, false);
+
   const paperAudit = extractJson(await call("tools/call", { name: "query_paper_audit", arguments: { scope: "validator" } }));
   assert.equal(paperAudit.mode, "audit-only");
   assert.equal(paperAudit.proposalOnly, true);
@@ -567,7 +671,7 @@ async function main() {
   assert.equal(doveOrchestrate.proposalOnly, true);
   assert.equal(doveOrchestrate.noAutoApply, true);
   assert.deepEqual(doveOrchestrate.writes, []);
-  assert.equal(doveOrchestrate.route.recommendedCommand, "project:dove.materialize");
+  assert.equal(doveOrchestrate.route.recommendedCommand, "project:dove.launch");
   assert.equal(doveOrchestrate.diagnostics.noRefresh, true);
   assert.equal(doveOrchestrate.diagnostics.noCommandExecution, true);
   assert.equal(doveOrchestrate.diagnostics.noGitInspection, true);
@@ -740,7 +844,7 @@ async function main() {
 
   const autonomyRun = extractJson(await call("tools/call", {
     name: "run_autonomy_once",
-    arguments: { actorRole: "planner" }
+    arguments: { packetId: materializedPacket.materialization.packetId, actorRole: "planner" }
   }));
   assert.equal(autonomyRun.status, "completed");
   assert.equal(autonomyRun.packetId, materializedPacket.materialization.packetId);

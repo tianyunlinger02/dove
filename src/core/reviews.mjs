@@ -2,6 +2,7 @@ import { ARTIFACT_PATHS } from "./schema.mjs";
 import { evaluateFigurePipeline } from "./artifacts.mjs";
 import { evaluateEvidence } from "./evidence.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
+import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { assertRoleBoundMutation, loadBoard, normalizeRebuttalIssues, persistRebuttalIssues, upsertOrchestrationBoard } from "./orchestration.mjs";
 import { appendText, assertGovernanceMutationRegistered, assertFollowThroughReady, listDraftFiles, loadState, nowIso, readJson, saveState, writeJson, writeText } from "./workspace.mjs";
 
@@ -246,6 +247,7 @@ function upsertConcernLedger(root, concerns = [], context = {}) {
 
 export function appendReviewLog(root, args = {}) {
   assertGovernanceMutationRegistered("append-review-log", "guarded");
+  assertTaskScopedMutationTarget(root, "append-review-log", args);
   assertFollowThroughReady(root, "Recording a review log", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Appending a review log entry",
@@ -406,6 +408,7 @@ export function persistReviewLog(root, args = {}) {
 
 export function upsertRevisionPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-revision-plan", "guarded");
+  assertTaskScopedMutationTarget(root, "upsert-revision-plan", args);
   assertFollowThroughReady(root, "Updating the revision plan", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Updating the revision plan",
@@ -459,6 +462,7 @@ export function upsertRevisionPlan(root, args = {}) {
 
 export function runReviewLoop(root, args = {}) {
   assertGovernanceMutationRegistered("run-review-loop", "guarded");
+  assertTaskScopedMutationTarget(root, "run-review-loop", args);
   assertFollowThroughReady(root, "Running the review loop", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Running the review loop",

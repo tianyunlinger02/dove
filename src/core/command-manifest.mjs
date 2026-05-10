@@ -60,6 +60,7 @@ export const TOOL_CONTEXT_PATHS = {
   query_dove_orchestrate: [".dove/workspace/index.json", ".dove/orchestration/board.json"],
   query_dove_mission: [".dove/workspace/index.json"],
   query_dove_mission_board: [".dove/orchestration/board.json", ".dove/task-packets/index.json"],
+  query_dove_status: [".dove/workspace/index.json", ".dove/orchestration/board.json", ".dove/task-packets/index.json", ".dove/state.json", ".dove/checklists/current.md", ".dove/reviews", ".dove/experiments", ".dove/versions", ".dove/wiki/navigation.md"],
   query_dove_audit: [".dove/task-packets/index.json", ".dove/runtime/controller-state.json"],
   query_dove_return: [".dove/task-packets/index.json", ".dove/runtime/controller-state.json"],
   launch_dove_mission: [".dove/meta/operator-follow-through.json", ".dove/task-packets/index.json", ".dove/programs/approvals.json"],
@@ -81,8 +82,12 @@ export const TOOL_CONTEXT_PATHS = {
   upsert_draft: [".dove/drafts", ".dove/evidence/index.json"],
   set_section_status: [".dove/state.json", ".dove/drafts"],
   query_paper_audit: [".dove/evidence/index.json", ".dove/drafts", ".dove/reviews", ".dove/experiments"],
+  query_dove_onboarding: ["project root", ".dove/workspace/artifact-map.json"],
+  query_paper_pipeline: [".dove/state.json", ".dove/workspace/index.json", ".dove/orchestration/board.json", ".dove/task-packets/index.json", ".dove/reviews", ".dove/experiments", ".dove/versions", ".dove/checklists/current.md"],
   append_review_log: [".dove/reviews/log.json", ".dove/reviews/concerns.json"],
   run_review_loop: [".dove/reviews", ".dove/revision-plans", ".dove/evidence/index.json"],
+  prepare_isolated_review: [".dove/reviews/isolated", ".dove/workspace/index.json", ".dove/orchestration/board.json"],
+  import_isolated_review: [".dove/reviews/isolated", ".dove/reviews/concerns.json", ".dove/reviews/log.md", ".dove/orchestration/handoffs.md"],
   upsert_revision_plan: [".dove/revision-plans", ".dove/reviews"],
   normalize_rebuttal_issues: [".dove/rebuttal/issues.json"],
   build_rebuttal_strategy: [".dove/rebuttal/issues.json", ".dove/rebuttal/strategy.md"],
@@ -107,59 +112,83 @@ export const TOOL_CONTEXT_PATHS = {
   refresh_wiki: [".dove/wiki", ".dove/sources/index.json", ".dove/notes/index.json"]
 };
 
-export const COMMAND_SURFACES = [
-  { id: "dove.orchestrate", title: "Dove orchestrate", domain: "generic", category: "query", policy: "proposal-only", summary: "Route one Dove mission to the next command without writing state.", requiredTools: ["query_dove_orchestrate"], forbiddenTools: ["upsert_orchestration_board", "append_handoff"] },
+const TASK_SCOPED_WRITE_TOOL_IDS = new Set([
+  "update_research_brief",
+  "register_source",
+  "upsert_note",
+  "upsert_claims",
+  "upsert_plan",
+  "upsert_outline",
+  "upsert_draft",
+  "set_section_status",
+  "upsert_figure_plan",
+  "build_rebuttal",
+  "append_review_log",
+  "run_review_loop",
+  "prepare_isolated_review",
+  "import_isolated_review",
+  "upsert_revision_plan",
+  "normalize_rebuttal_issues",
+  "build_rebuttal_strategy",
+  "upsert_experiment_plan",
+  "upsert_experiment_result",
+  "run_experiment_audit",
+  "bridge_result_to_claim",
+  "create_version_snapshot",
+  "compare_versions"
+]);
+
+const TASK_SCOPED_WRITE_CONSTRAINTS = [
+  "Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.",
+  "If target resolution is ambiguous, follow `.dove/state.json.settings.taskTargetResolution.autoSelect`: true auto-selects the best candidate; false stops and asks for packetId confirmation.",
+  "Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets."
+];
+
+const COMMAND_SURFACES_BASE = [
+  { id: "dove.orchestrate", title: "Dove orchestrate", domain: "generic", category: "query", policy: "proposal-only", summary: "Route one Dove mission across paper, engineering, experiment, review, and general domains without writing state.", requiredTools: ["query_dove_orchestrate"], forbiddenTools: ["upsert_orchestration_board", "append_handoff"], constraints: ["Use this as the single mission routing surface for every domain; do not mirror shared routing under paper-specific commands."] },
   { id: "dove.mission", title: "Dove mission", domain: "generic", category: "query", policy: "proposal-only", summary: "Frame a Dove mission contract from the current workspace without writing state.", requiredTools: ["query_dove_mission"] },
-  { id: "dove.board", title: "Dove board", domain: "generic", category: "query", policy: "proposal-only", summary: "Inspect the as-read Dove mission board without refreshing or mutating state.", requiredTools: ["query_dove_mission_board"] },
+  { id: "dove.status", title: "Dove status", domain: "generic", category: "query", policy: "query", summary: "Inspect the current Dove mission status, task graph, paper lifecycle, open questions, decisions, and version lineage.", requiredTools: ["query_dove_status"], constraints: ["Use this as the shared status surface across mission board, packet dependencies, paper lifecycle, and navigation state.", "Do not execute work, run tests, inspect git, repair state, or mutate source assets from this surface."] },
   { id: "dove.audit", title: "Dove audit", domain: "generic", category: "query", policy: "proposal-only", summary: "Inspect mission audit findings and readiness without writing or fixing anything.", requiredTools: ["query_dove_audit"], constraints: ["Inspect only declared evidence and durable packet links; do not fix, refresh, run tests, or inspect git."] },
   { id: "dove.return", title: "Dove return", domain: "generic", category: "query", policy: "proposal-only", summary: "Inspect return readiness from declared evidence and durable state.", requiredTools: ["query_dove_return"], constraints: ["Use declared changed-file, test-evidence, and validation-output paths; do not run tests, inspect git, or repair state from this surface.", "At closure, decide explicitly whether reusable experience is worth recording through Dove lessons; do not record automatically."] },
-  { id: "dove.launch", title: "Dove launch", domain: "generic", category: "mutation", policy: "guarded-mutation", summary: "Materialize accepted guidance into a governed Dove mission packet without executing it.", requiredTools: ["launch_dove_mission"], forbiddenTools: ["materialize_guidance_packet"], constraints: ["Require an accepted source plus explicit `executeBy` and `reviewAfter`; create the mission packet only and do not execute autonomy."] },
-  { id: "dove.task-graph", title: "Dove task graph", domain: "generic", category: "query", policy: "query", summary: "Inspect task packets, dependencies, blockers, and review-needed work.", requiredTools: ["query_task_graph"] },
-  { id: "dove.checklist", title: "Dove checklist", domain: "generic", category: "mutation", policy: "guarded-mutation", summary: "Sync the active Dove mission checklist from the current plan and acceptance checks.", requiredTools: ["sync_checklist"] },
-  { id: "dove.materialize", title: "Dove materialize", domain: "generic", category: "mutation", policy: "guarded-mutation", summary: "Convert accepted proposal guidance into a durable task packet.", requiredTools: ["materialize_guidance_packet"] },
-  { id: "dove.autonomy-operate", title: "Dove autonomy operate", domain: "generic", category: "mutation", policy: "explicit-approval", summary: "Run the explicit bounded foreground autonomy operating surface.", requiredTools: ["run_autonomy_operate"], constraints: ["Run only explicit bounded foreground autonomy and stop at declared review or authority boundaries."] },
+  { id: "dove.launch", title: "Dove launch", domain: "generic", category: "mutation", policy: "guarded-mutation", summary: "Turn accepted guidance into a governed Dove mission packet without executing it.", requiredTools: ["launch_dove_mission"], constraints: ["Use this as the only public slash surface for accepted guidance materialization.", "Require an accepted source plus explicit `executeBy` and `reviewAfter`; create the mission packet only and do not execute autonomy."] },
+  { id: "dove.checklist", title: "Dove checklist", domain: "generic", category: "mutation", policy: "guarded-mutation", summary: "Sync the active Dove mission checklist from the current plan and acceptance checks across all domains.", requiredTools: ["sync_checklist"], constraints: ["Use this shared checklist surface for paper and non-paper missions; do not create domain mirror checklist commands."] },
+  { id: "dove.autonomy-operate", title: "Dove autonomy operate", domain: "generic", category: "mutation", policy: "explicit-approval", summary: "Run the primary explicit bounded foreground autonomy operating surface.", requiredTools: ["run_autonomy_operate"], constraints: ["Use this as the normal user-facing autonomy entrypoint; `autonomy-once` and `autonomy-foreground` are lower-level CLI/MCP controls.", "Run only explicit bounded foreground autonomy and stop at declared review or authority boundaries."] },
   { id: "dove.governance-audit", title: "Dove governance audit", domain: "generic", category: "query", policy: "proposal-only", summary: "Inspect governance coverage and command/tool bindings without writing state.", requiredTools: ["query_governance_coverage_report"] },
-  { id: "dove.plan", title: "Dove plan", domain: "generic", category: "mutation", policy: "guarded-mutation", summary: "Create or update the shared Dove mission design plan.", requiredTools: ["upsert_plan"] },
+  { id: "dove.plan", title: "Dove plan", domain: "generic", category: "mutation", policy: "guarded-mutation", summary: "Create or update the shared Dove mission design plan for paper, engineering, experiment, review, and general work.", requiredTools: ["upsert_plan"], contextPaths: [".dove/state.json", ".dove/research/brief.md", ".dove/sources/index.json", ".dove/evidence/index.json"], constraints: ["Use this as the single planning surface for every domain; do not mirror shared planning under paper-specific commands.", "For paper missions, include manuscript structure, claims, citations, venue strategy, target artifacts, required evidence, risks, non-goals, and acceptance checks."] },
   { id: "dove.approvals", title: "Dove approvals", domain: "generic", category: "mutation", policy: "explicit-approval", summary: "Inspect, issue, or revoke bounded program approvals.", requiredTools: ["query_program_approvals", "issue_program_approval", "revoke_program_approval"] },
   { id: "dove.lessons", title: "Dove lessons", domain: "generic", category: "mutation", policy: "governed-bookkeeping", summary: "Record or inspect concise operator lessons and retrospectives without importing raw runtime traces.", requiredTools: ["query_operator_lessons", "record_operator_lesson"], constraints: ["Record only distilled lessons with problem, decisions, pitfalls, validation, and next-time guidance.", "Do not import or cite ignored raw runtime traces.", "Do not materialize, approve, launch, or execute work from lessons."] },
+  { id: "dove.onboard", title: "Dove onboard", domain: "generic", category: "query", policy: "proposal-only", summary: "Map existing project paper artifacts without moving, rewriting, or overwriting source assets.", requiredTools: ["query_dove_onboarding"], contextPaths: ["project root", ".dove/workspace/artifact-map.json"], constraints: ["Default to proposal-only mapping; persist only through the CLI `dove onboard --write-map` path.", "Never move, delete, import, rewrite, or overwrite source assets from this surface."] },
   { id: "dove.paper.init", title: "Dove paper init", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Initialize the paper-domain research contract and starter workspace.", requiredTools: ["init_project"] },
-  { id: "dove.paper.orchestrate", title: "Dove paper orchestrate", domain: "paper", category: "query", policy: "proposal-only", summary: "Route paper-domain work to one next command without mutating the board.", requiredTools: ["query_dove_orchestrate"], forbiddenTools: ["upsert_orchestration_board", "append_handoff"] },
-  { id: "dove.paper.pipeline", title: "Dove paper pipeline", domain: "paper", category: "paper-workflow", policy: "guidance", summary: "Show the paper-domain lifecycle from initialization through return.", requiredTools: [], contextPaths: [".dove/state.json", ".dove/wiki/navigation.md"] },
   { id: "dove.paper.research", title: "Dove paper research", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Update the research brief and agenda from source-first context.", requiredTools: ["update_research_brief"] },
   { id: "dove.paper.source", title: "Dove paper source", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Register sources into the durable paper source index.", requiredTools: ["register_source"] },
   { id: "dove.paper.note", title: "Dove paper note", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Record structured paper notes linked to sources, sections, and claims.", requiredTools: ["upsert_note"] },
   { id: "dove.paper.claim-gate", title: "Dove paper claim gate", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Promote supported findings into evidence-backed claims.", requiredTools: ["upsert_claims"], constraints: ["Promote claims only when linked source or note evidence exists."] },
-  { id: "dove.paper.plan", title: "Dove paper plan", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Plan paper structure, claims, citations, venue strategy, and acceptance checks.", requiredTools: ["upsert_plan"] },
   { id: "dove.paper.outline", title: "Dove paper outline", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Update the paper outline from the current plan and evidence state.", requiredTools: ["upsert_outline"] },
   { id: "dove.paper.draft", title: "Dove paper draft", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Draft or update paper sections without fabricating evidence.", requiredTools: ["upsert_draft", "set_section_status"], constraints: ["Leave `TODO[citation]` markers when support is missing instead of inventing evidence."] },
   { id: "dove.paper.audit", title: "Dove paper audit", domain: "paper", category: "query", policy: "proposal-only", summary: "Run strict no-fix paper audit inspection.", requiredTools: ["query_paper_audit"], constraints: ["Keep audit strict no-fix: report findings and proposal-only next commands without repairing paper artifacts."] },
-  { id: "dove.paper.review", title: "Dove paper review", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Record reviewer concerns and review log entries.", requiredTools: ["append_review_log"] },
-  { id: "dove.paper.review-loop", title: "Dove paper review loop", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Generate a durable review entry and revision plan.", requiredTools: ["run_review_loop"] },
-  { id: "dove.paper.isolated-review", title: "Dove paper isolated review", domain: "paper", category: "paper-workflow", policy: "isolated-handoff", summary: "Prepare and import isolated reviewer handoffs through explicit artifacts.", requiredTools: [], contextPaths: [".dove/reviews/isolated", ".dove/reviews/concerns.json"], constraints: ["Pass only explicit input artifacts to the reviewer and import only handoff/report artifacts back."] },
+  { id: "dove.paper.review", title: "Dove paper review", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Record reviewer concerns, run review passes, and produce revision pressure for the paper.", requiredTools: ["append_review_log", "run_review_loop"] },
+  { id: "dove.paper.isolated-review", title: "Dove paper isolated review", domain: "paper", category: "paper-workflow", policy: "isolated-handoff", summary: "Prepare and import isolated reviewer handoffs through explicit artifacts.", requiredTools: ["prepare_isolated_review", "import_isolated_review"], contextPaths: [".dove/reviews/isolated", ".dove/reviews/concerns.json"], constraints: ["Prepare and import explicit artifacts through MCP; external reviewer process execution remains CLI-only.", "Pass only explicit input artifacts to the reviewer and import only handoff/report artifacts back.", "Never import a private reviewer transcript."] },
   { id: "dove.paper.revise", title: "Dove paper revise", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Revise paper artifacts according to review pressure and checklist scope.", requiredTools: ["upsert_revision_plan", "set_section_status"] },
-  { id: "dove.paper.rebuttal-strategy", title: "Dove paper rebuttal strategy", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Normalize rebuttal issues and build a response strategy.", requiredTools: ["normalize_rebuttal_issues", "build_rebuttal_strategy"], constraints: ["Normalize reviewer issues before drafting responses."] },
-  { id: "dove.paper.rebuttal", title: "Dove paper rebuttal", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Build a rebuttal draft from normalized issues and strategy.", requiredTools: ["build_rebuttal"], constraints: ["Draft responses from normalized rebuttal issues and strategy; keep revision/rebuttal work builder-side."] },
+  { id: "dove.paper.rebuttal", title: "Dove paper rebuttal", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Normalize reviewer issues, build a rebuttal strategy, and draft the rebuttal response.", requiredTools: ["normalize_rebuttal_issues", "build_rebuttal_strategy", "build_rebuttal"], constraints: ["Normalize reviewer issues before drafting responses.", "Keep revision/rebuttal work builder-side."] },
   { id: "dove.paper.citations", title: "Dove paper citations", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Sync citation artifacts and bibliography state.", requiredTools: ["sync_citations"], constraints: ["Never fabricate citation data; sync only explicit source and bibliography records."] },
   { id: "dove.paper.figure", title: "Dove paper figure", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Manage figure artifact contracts and validation state.", requiredTools: ["upsert_figure_plan", "validate_figure_pipeline"], constraints: ["Keep figure records as artifact contracts and QA state; do not claim a render/editor backend."] },
-  { id: "dove.paper.experiment-plan", title: "Dove paper experiment plan", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Plan or record claim-driven experiments and results.", requiredTools: ["upsert_experiment_plan", "upsert_experiment_result"] },
-  { id: "dove.paper.experiment-audit", title: "Dove paper experiment audit", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Persist experiment audit findings separately from raw results.", requiredTools: ["run_experiment_audit"] },
+  { id: "dove.paper.experiment", title: "Dove paper experiment", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Plan, record, and audit claim-driven experiments.", requiredTools: ["upsert_experiment_plan", "upsert_experiment_result", "run_experiment_audit"] },
   { id: "dove.paper.result-bridge", title: "Dove paper result bridge", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Bridge experiment results into claim confidence/state changes.", requiredTools: ["bridge_result_to_claim"] },
-  { id: "dove.paper.version-snapshot", title: "Dove paper version snapshot", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Create an honest paper version snapshot.", requiredTools: ["create_version_snapshot"] },
-  { id: "dove.paper.version-compare", title: "Dove paper version compare", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Compare durable paper versions and preserve lineage.", requiredTools: ["compare_versions"] },
-  { id: "dove.paper.task-graph", title: "Dove paper task graph", domain: "paper", category: "query", policy: "query", summary: "Inspect paper-domain task packets and dependencies.", requiredTools: ["query_task_graph"] },
-  { id: "dove.paper.open-questions", title: "Dove paper open questions", domain: "paper", category: "query", policy: "query", summary: "Inspect unresolved research and review uncertainty.", requiredTools: ["query_open_questions"] },
-  { id: "dove.paper.decisions", title: "Dove paper decisions", domain: "paper", category: "query", policy: "query", summary: "Inspect durable operational and comparison decisions.", requiredTools: ["query_decisions"] },
-  { id: "dove.paper.lineage", title: "Dove paper lineage", domain: "paper", category: "query", policy: "query", summary: "Inspect version and comparison lineage.", requiredTools: ["query_lineage"] },
+  { id: "dove.paper.version", title: "Dove paper version", domain: "paper", category: "paper-workflow", policy: "guarded-mutation", summary: "Snapshot, compare, and inspect paper version lineage.", requiredTools: ["create_version_snapshot", "compare_versions", "query_lineage"] },
   { id: "dove.paper.meta-optimize", title: "Dove paper meta optimize", domain: "paper", category: "query", policy: "proposal-only", summary: "Inspect proposal-only optimization frontier and recommendations.", requiredTools: ["query_meta_optimize"] },
-  { id: "dove.paper.follow-through", title: "Dove paper follow through", domain: "paper", category: "mutation", policy: "governed-bookkeeping", summary: "Record explicit operator handling of remediation guidance.", requiredTools: ["record_operator_follow_through", "query_operator_follow_through"] },
-  { id: "dove.paper.materialize", title: "Dove paper materialize", domain: "paper", category: "mutation", policy: "guarded-mutation", summary: "Paper-domain view of materializing accepted guidance into task packets.", requiredTools: ["materialize_guidance_packet"] },
-  { id: "dove.paper.autonomy-operate", title: "Dove paper autonomy operate", domain: "paper", category: "mutation", policy: "explicit-approval", summary: "Paper-domain view of explicit bounded foreground autonomy.", requiredTools: ["run_autonomy_operate"], constraints: ["Run only explicit bounded foreground autonomy and stop at declared review or authority boundaries."] },
-  { id: "dove.paper.governance-audit", title: "Dove paper governance audit", domain: "paper", category: "query", policy: "proposal-only", summary: "Paper-domain view of governance coverage proof.", requiredTools: ["query_governance_coverage_report"] },
-  { id: "dove.paper.checklist", title: "Dove paper checklist", domain: "paper", category: "mutation", policy: "guarded-mutation", summary: "Paper-domain view of the active Dove mission checklist.", requiredTools: ["sync_checklist"] },
-  { id: "dove.paper.approvals", title: "Dove paper approvals", domain: "paper", category: "mutation", policy: "explicit-approval", summary: "Paper-domain view of bounded program approvals.", requiredTools: ["query_program_approvals", "issue_program_approval", "revoke_program_approval"] },
-  { id: "dove.paper.wiki", title: "Dove paper wiki", domain: "paper", category: "mutation", policy: "guarded-mutation", summary: "Refresh the paper wiki and typed relation surfaces.", requiredTools: ["refresh_wiki"] },
-  { id: "dove.paper.onboard", title: "Dove paper onboard", domain: "paper", category: "query", policy: "proposal-only", summary: "Map existing paper artifacts without moving or overwriting source assets.", requiredTools: [], contextPaths: ["project root", ".dove/workspace/artifact-map.json"], constraints: ["Default to proposal-only mapping; never move, delete, import, rewrite, or overwrite source assets."] }
+  { id: "dove.follow-through", title: "Dove follow through", domain: "generic", category: "mutation", policy: "governed-bookkeeping", summary: "Record explicit operator handling of proposal-only remediation guidance across all mission domains.", requiredTools: ["record_operator_follow_through", "query_operator_follow_through"], constraints: ["Use this shared follow-through surface before launching accepted guidance; do not mirror proposal handling under paper-specific commands."] }
 ];
+
+export const COMMAND_SURFACES = COMMAND_SURFACES_BASE.map((surface) => {
+  const hasTaskScopedWrite = (surface.requiredTools ?? []).some((toolId) => TASK_SCOPED_WRITE_TOOL_IDS.has(toolId));
+  if (!hasTaskScopedWrite) {
+    return surface;
+  }
+  return {
+    ...surface,
+    constraints: [...(surface.constraints ?? []), ...TASK_SCOPED_WRITE_CONSTRAINTS]
+  };
+});
 
 export const COMMAND_SURFACE_BY_ID = Object.fromEntries(COMMAND_SURFACES.map((surface) => [surface.id, surface]));
 

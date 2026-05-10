@@ -824,7 +824,7 @@ export function queryPaperAudit(root, args = {}) {
       artifactPaths: [ARTIFACT_PATHS.experimentAudits],
       claimIds: audit.claimId ? [audit.claimId] : [],
       experimentIds: audit.experimentId ? [audit.experimentId] : [],
-      suggestedNextCommand: "project:dove.paper.experiment-audit"
+      suggestedNextCommand: "project:dove.paper.experiment"
     });
   }
 
@@ -865,7 +865,7 @@ export function queryPaperAudit(root, args = {}) {
       summary: `Review concern ${concern.id} remains open: ${concern.summary ?? "No summary."}`,
       artifactPaths: [ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.reviewState],
       reviewConcernIds: [concern.id],
-      suggestedNextCommand: "project:dove.paper.review-loop"
+      suggestedNextCommand: "project:dove.paper.review"
     });
   }
 
@@ -876,7 +876,7 @@ export function queryPaperAudit(root, args = {}) {
       category: "review",
       summary: `Review state verdict is ${reviewState.lastVerdict}, but no open concern items were found.`,
       artifactPaths: [ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns],
-      suggestedNextCommand: "project:dove.paper.review-loop"
+      suggestedNextCommand: "project:dove.paper.review"
     });
   }
 
@@ -888,7 +888,7 @@ export function queryPaperAudit(root, args = {}) {
       category: "version",
       summary: `Version comparison has active targets (${activeComparisonTargets.join(", ")}) but no comparison records.`,
       artifactPaths: [ARTIFACT_PATHS.versionComparisons],
-      suggestedNextCommand: "project:dove.paper.version-compare"
+      suggestedNextCommand: "project:dove.paper.version"
     });
   }
 
@@ -911,7 +911,7 @@ export function queryPaperAudit(root, args = {}) {
       category: "workspace",
       summary: `Workspace lifecycle board family ${workspaceIndex.lifecycle.boardFamily} is not part of the current taxonomy.`,
       artifactPaths: [ARTIFACT_PATHS.workspaceIndex],
-      suggestedNextCommand: "project:dove.task-graph"
+      suggestedNextCommand: "project:dove.status"
     });
   }
 

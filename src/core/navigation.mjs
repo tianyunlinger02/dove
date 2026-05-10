@@ -1866,7 +1866,7 @@ function buildAutonomyLoopSummary({ board, packets, openQuestions = [], metaOpti
       followThroughState: packetFollowThroughState,
       nextSafeAction: reviewCheckpointActive
         ? `Review checkpoint ${programs?.currentReviewCheckpointRunId ?? "current-run"} and issue a fresh approval through project:dove.approvals.`
-        : runtime?.currentContinuationCommand ?? "Use project:dove.paper.follow-through or project:dove.materialize before any foreground autonomy run.",
+        : runtime?.currentContinuationCommand ?? "Use project:dove.follow-through or project:dove.launch before any foreground autonomy run.",
       approvalPointers: approvalPointerIds,
       runtimePointers: runtimePointerIds,
       followThroughPointers: followThroughPointerIds,
@@ -1953,7 +1953,7 @@ function buildAutonomyLoopSummary({ board, packets, openQuestions = [], metaOpti
     blockerIds: uniqueSorted(loops.flatMap((loop) => loop.blockers)),
     closureStates: uniqueSorted(loops.map((loop) => loop.closureState)),
     lifecycleStates: uniqueSorted(loops.map((loop) => loop.lifecycleState).filter(Boolean)),
-    safeExecutionPath: "project:dove.paper.follow-through -> project:dove.materialize -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5",
+    safeExecutionPath: "project:dove.follow-through -> project:dove.launch -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5",
     overview: `${loops.length} unified autonomy loop families are visible; ${blockedCount} blocked, ${readyCount} ready, ${closedCount} carrying closure evidence. Execution remains explicit foreground-only.`
   };
 }
@@ -1966,7 +1966,7 @@ function renderAutonomyLoopOverviewLines(autonomyLoops = {}) {
     `- Unified autonomy current loop: ${summary.currentLoopId ?? "none"}`,
     `- Unified autonomy lifecycle state: ${summary.activeLifecycleState ?? "unknown"}`,
     `- Unified autonomy next safe action: ${summary.nextSafeAction ?? "Refresh the board and choose the next explicit operator action."}`,
-    `- Unified autonomy safe execution path: ${summary.safeExecutionPath ?? "project:dove.paper.follow-through -> project:dove.materialize -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5"}`,
+    `- Unified autonomy safe execution path: ${summary.safeExecutionPath ?? "project:dove.follow-through -> project:dove.launch -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5"}`,
     `- Unified autonomy blockers: ${(summary.blockerIds ?? []).join(", ") || "none"}`,
     `- Unified autonomy approvals: ${(summary.approvalPointers ?? []).join(", ") || "none"}`,
     `- Unified autonomy runtime pointers: ${(summary.runtimePointers ?? []).join(", ") || "none"}`,
@@ -5625,7 +5625,7 @@ function buildRepairFrontier({ wikiRelations, figureQa, stalePackets = [], hando
       reasonCodes: uniqueSorted((relation.integrity?.reasons ?? []).map((reason) => reason.code)),
       artifactPath: ARTIFACT_PATHS.wikiRelations,
       relatedArtifactPaths: uniqueSorted([ARTIFACT_PATHS.wikiEntities, ...(relation.sourceArtifactPaths ?? [])]),
-      nextAction: `Repair the local artifacts for ${relation.id}, then rerun project:dove.paper.wiki or refresh_wiki.`
+      nextAction: `Repair the local artifacts for ${relation.id}, then rerun project:dove.status or refresh_wiki.`
     }));
   const figureItems = (figureQa.issues ?? []).map((issue) => ({
     id: `repair-${issue.id}`,
@@ -5737,7 +5737,7 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
       priority: concern.severity === "high" ? "critical" : "high",
       summary: `Escalate durable workflow attention to review concern ${concern.id}.`,
       rationale: `The concern is still ${concern.status} with recurrence count ${concern.recurrenceCount}, so the workflow is repeatedly revisiting the same review debt without closure.`,
-      nextAction: `Resolve concern ${concern.id}, update the linked artifacts, then rerun project:dove.paper.review-loop before finalization claims.`,
+      nextAction: `Resolve concern ${concern.id}, update the linked artifacts, then rerun project:dove.paper.review before finalization claims.`,
       scope: "review-artifact health",
       responseOwnerRole: concern.responseOwnerRole,
       evidenceArtifactPaths: summarizeLinkedEvidence([ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.reviewState], concern.linkedArtifactPaths),
@@ -5836,7 +5836,7 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
       priority: audit.auditVerdict === "blocked" ? "critical" : "high",
       summary: `Treat audit ${audit.id} as a workflow gate before more claim promotion.`,
       rationale: `This audit is not clean, so downstream claim updates or review closure would be relying on unstable experiment evidence.`,
-      nextAction: `Repair the experiment artifacts referenced by ${audit.id}, rerun project:dove.paper.experiment-audit, and only then bridge results into claims.`,
+      nextAction: `Repair the experiment artifacts referenced by ${audit.id}, rerun project:dove.paper.experiment, and only then bridge results into claims.`,
       scope: "experiment integrity",
       responseOwnerRole: "experiment-planner",
       evidenceArtifactPaths: [ARTIFACT_PATHS.experimentAudits, ...(audit.reviewedArtifactRefs ?? [])],

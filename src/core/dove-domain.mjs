@@ -11,8 +11,8 @@ export const DOVE_DOMAIN_GUIDANCE = [
     summary: "Paper writing, research, claims, citations, rebuttal, figures, and versioned manuscript work.",
     stageRoutes: {
       goal: "project:dove.paper.research",
-      design: "project:dove.paper.plan",
-      checklist: "project:dove.paper.checklist",
+      design: "project:dove.plan",
+      checklist: "project:dove.checklist",
       execution: "project:dove.paper.draft or project:dove.paper.revise",
       audit: "project:dove.paper.audit",
       return: "project:dove.return"
@@ -27,7 +27,7 @@ export const DOVE_DOMAIN_GUIDANCE = [
       goal: "project:dove.mission",
       design: "project:dove.plan",
       checklist: "project:dove.checklist",
-      execution: "project:dove.materialize or project:dove.autonomy-operate",
+      execution: "project:dove.launch or project:dove.autonomy-operate",
       audit: "project:dove.audit",
       return: "project:dove.return"
     },
@@ -38,11 +38,11 @@ export const DOVE_DOMAIN_GUIDANCE = [
     label: "Experiment",
     summary: "Experiment plans, runs, result interpretation, audit findings, and result-to-claim traceability.",
     stageRoutes: {
-      goal: "project:dove.paper.experiment-plan",
-      design: "project:dove.paper.experiment-plan",
+      goal: "project:dove.paper.experiment",
+      design: "project:dove.paper.experiment",
       checklist: "project:dove.checklist",
-      execution: "project:dove.paper.experiment-plan",
-      audit: "project:dove.paper.experiment-audit",
+      execution: "project:dove.paper.experiment",
+      audit: "project:dove.paper.experiment",
       return: "project:dove.paper.result-bridge"
     },
     returnEvidence: ["experiment audit", "result log", "claim bridge", "review verdict"]
@@ -53,7 +53,7 @@ export const DOVE_DOMAIN_GUIDANCE = [
     summary: "Independent critique, reviewer concerns, isolated review handoffs, and acceptance pressure.",
     stageRoutes: {
       goal: "project:dove.mission",
-      design: "project:dove.paper.review-loop",
+      design: "project:dove.paper.review",
       checklist: "project:dove.checklist",
       execution: "project:dove.paper.isolated-review",
       audit: "project:dove.paper.audit",
@@ -69,7 +69,7 @@ export const DOVE_DOMAIN_GUIDANCE = [
       goal: "project:dove.mission",
       design: "project:dove.plan",
       checklist: "project:dove.checklist",
-      execution: "project:dove.materialize",
+      execution: "project:dove.launch",
       audit: "project:dove.audit",
       return: "project:dove.return"
     },

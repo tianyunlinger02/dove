@@ -1,6 +1,6 @@
 # dove-orchestrate
 
-Route one Dove mission to the next command without writing state.
+Route one Dove mission across paper, engineering, experiment, review, and general domains without writing state.
 
 ## Contract
 
@@ -15,6 +15,7 @@ Route one Dove mission to the next command without writing state.
 2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/orchestration/board.json`.
 3. Prefer the `query_dove_orchestrate` MCP tool when available.
 4. Keep this surface proposal-only: inspect and route, but do not mutate durable state.
-5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
-7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+5. Use this as the single mission routing surface for every domain; do not mirror shared routing under paper-specific commands.
+6. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+7. Use this shared Dove control-plane surface across paper, engineering, experiment, review, and general missions; route to `dove.paper.*` only for paper-specific artifact workflows.
+8. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

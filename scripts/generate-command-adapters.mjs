@@ -73,7 +73,7 @@ function workflowBullets(command) {
   if (command.domain === "paper") {
     bullets.push("Use paper-domain artifacts for research, claims, citations, drafting, review, rebuttal, experiments, figures, and version lineage.");
   } else {
-    bullets.push("For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.");
+    bullets.push("Use this shared Dove control-plane surface across paper, engineering, experiment, review, and general missions; route to `dove.paper.*` only for paper-specific artifact workflows.");
   }
   bullets.push("Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.");
   return bullets;

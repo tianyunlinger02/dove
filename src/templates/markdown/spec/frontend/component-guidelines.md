@@ -23,16 +23,16 @@ Command adapters should be generated from `src/core/command-manifest.mjs` via `s
 
 Define command metadata in `src/core/command-manifest.mjs`, then run `npm run commands:generate` to rewrite host adapters. Use a short title, a goal, and an ordered workflow. The first workflow step should say exactly which durable context/artifacts to read.
 
-Example generated contract for `dove.paper.orchestrate`:
+Example generated contract for `dove.orchestrate`:
 
 ```md
-# dove.paper.orchestrate
+# dove.orchestrate
 
-Route the current paper request to one next Dove surface without writing durable state.
+Route the current Dove mission to one next surface without writing durable state.
 
 ## Goal
 
-Inspect existing `.dove/` context and return a proposal-only next command.
+Inspect existing `.dove/` context and return a proposal-only next command across paper, engineering, experiment, review, or general domains.
 
 ## Workflow
 

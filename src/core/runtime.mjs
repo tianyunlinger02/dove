@@ -13,6 +13,7 @@ import {
   normalizeProgramsIndex,
   normalizeProgramRunsIndex
 } from "./schema.mjs";
+import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
 import { materializeGuidancePacket, planCampaign, queryMetaOptimize, recordOperatorFollowThrough, reflectCampaignStepOutcome, refreshDurableSurfaces } from "./navigation.mjs";
 import { refreshWiki, upsertNote } from "./artifacts.mjs";
@@ -514,6 +515,7 @@ export function runAutonomyOperate(root, args = {}) {
 }
 
 export function runAutonomyForeground(root, args = {}) {
+  assertGovernanceMutationRegistered("run-autonomy-foreground", "exempt");
   ensureWorkspace(root);
   const actorRole = args.actorRole ?? "planner";
   if (actorRole !== "planner") {
@@ -836,7 +838,7 @@ function recordProgramRunOutcome(root, authorization, { runId, packetId, outcome
         reviewCheckpointPacketId: reviewCheckpointRequired ? packetId : null,
         reviewCheckpointRuntimeRunId: reviewCheckpointRequired ? runId : null,
         reviewCheckpointAllowedStepType: reviewCheckpointRequired ? authorization.allowedStepType : null,
-        reviewRecommendedCommand: reviewCheckpointRequired ? "project:dove.paper.follow-through" : null,
+        reviewRecommendedCommand: reviewCheckpointRequired ? "project:dove.follow-through" : null,
         nextApprovalIntent: reviewCheckpointRequired
           ? {
                continuationFromRunId: authorization.programRunId,
@@ -1060,6 +1062,7 @@ function applyApprovedProgramStep(root, selected, authorization) {
     return null;
   }
   if (authorization.allowedStepType === "refresh-research-brief") {
+    assertTaskScopedMutationTarget(root, "update-research-brief", { packetId: selected.packet.id });
     const timestamp = nowIso();
     const nextAgenda = {
       version: 1,
@@ -1110,6 +1113,7 @@ function applyApprovedProgramStep(root, selected, authorization) {
       return null;
     }
     const note = upsertNote(root, {
+      packetId: selected.packet.id,
       noteId: `${selected.packet.id}-program-note`,
       title: payload.title,
       sectionId: payload.sectionId,
@@ -1142,6 +1146,7 @@ function applyApprovedProgramStep(root, selected, authorization) {
     if (!payload) {
       return null;
     }
+    assertTaskScopedMutationTarget(root, "run-experiment-audit", { packetId: selected.packet.id });
     const audit = persistExperimentAudit(root, {
       resultId: payload.resultId,
       reviewedArtifactRefs: payload.reviewedArtifactRefs ?? []
@@ -1168,6 +1173,7 @@ function applyApprovedProgramStep(root, selected, authorization) {
     if (!payload) {
       return null;
     }
+    assertTaskScopedMutationTarget(root, "bridge-experiment-result-to-claim", { packetId: selected.packet.id });
     const bridgeEvent = persistExperimentResultClaimBridge(root, {
       resultId: payload.resultId,
       auditIds: payload.auditIds ?? [],
@@ -1196,6 +1202,7 @@ function applyApprovedProgramStep(root, selected, authorization) {
     if (!payload) {
       return null;
     }
+    assertTaskScopedMutationTarget(root, "run-review-loop", { packetId: selected.packet.id, scope: payload.scope, stage: payload.stage });
     const reviewEntry = persistReviewLoop(root, {
       scope: payload.scope,
       stage: payload.stage,
@@ -1767,6 +1774,7 @@ export function runAutonomyControlPlaneOnce(root, args = {}) {
       });
       try {
         const materialized = materializeGuidancePacket(root, candidate);
+        assertTaskScopedMutationTarget(root, "run-autonomy-control-plane-once", { packetId: materialized.packetId });
         const requestSnapshot = buildAutonomyRequestSnapshot(root);
         const recordedAt = nowIso();
         const resultEntry = {
@@ -1782,7 +1790,7 @@ export function runAutonomyControlPlaneOnce(root, args = {}) {
           artifactPaths: materialized.packet?.lineage?.programId
             ? [...materialized.artifactPaths, ARTIFACT_PATHS.programsIndex, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals, ARTIFACT_PATHS.campaignsIndex]
             : materialized.artifactPaths,
-          nextRecommendedCommand: "project:dove.paper.follow-through",
+          nextRecommendedCommand: "project:dove.follow-through",
           nextManualCheckpoint: materialized.summary,
           summary: `Materialized one accepted guidance path into packet ${materialized.packetId}.`,
           startedAt,
@@ -1913,6 +1921,7 @@ export function runAutonomyControlPlaneOnce(root, args = {}) {
   const rankedEligible = rankEligibleCandidates(workspaceIndex, eligible);
   const availableEligible = rankedEligible.filter((candidate) => !activeLeaseForPacket(artifacts, candidate.packet.id));
   const selected = availableEligible[0] ?? rankedEligible[0];
+  assertTaskScopedMutationTarget(root, "run-autonomy-control-plane-once", { packetId: selected.packet.id });
   const arbitration = buildArbitrationSnapshot({
     candidateFamily: "eligible-packets",
     tieBreakPolicy: ELIGIBLE_PACKET_TIE_BREAK_POLICY,
@@ -2018,7 +2027,7 @@ export function runAutonomyControlPlaneOnce(root, args = {}) {
         : workerStep.programSnapshot
           ? [ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.researchAgenda, ARTIFACT_PATHS.programsIndex, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals, ARTIFACT_PATHS.campaignsIndex]
           : []),
-      nextRecommendedCommand: "project:dove.paper.follow-through",
+      nextRecommendedCommand: "project:dove.follow-through",
       nextManualCheckpoint: workerStep.nextManualCheckpoint,
       summary: workerStep.summary,
       startedAt,

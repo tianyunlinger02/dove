@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
-import { appendText, ensureDir, ensureWorkspace, listDraftFiles, loadState, nowIso, readJson, readText, resolvePath, writeJson, writeText } from "./workspace.mjs";
+import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { appendText, assertFollowThroughReady, assertGovernanceMutationRegistered, ensureDir, ensureWorkspace, listDraftFiles, loadState, nowIso, readJson, readText, resolvePath, writeJson, writeText } from "./workspace.mjs";
 import { appendHandoff, loadBoard } from "./orchestration.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 
@@ -189,6 +190,9 @@ function upsertImportedConcerns(root, handoff) {
 }
 
 export function prepareIsolatedReview(root, args = {}) {
+  assertGovernanceMutationRegistered("prepare-isolated-review", "guarded");
+  assertTaskScopedMutationTarget(root, "prepare-isolated-review", args);
+  assertFollowThroughReady(root, "Preparing an isolated reviewer input bundle", args);
   ensureWorkspace(root);
   const runId = normalizeRunId(args.runId);
   const reviewedArtifactPaths = normalizeStringArray(args.reviewedArtifactPaths).length > 0
@@ -269,6 +273,9 @@ export function prepareIsolatedReview(root, args = {}) {
 }
 
 export function importIsolatedReview(root, args = {}) {
+  assertGovernanceMutationRegistered("import-isolated-review", "guarded");
+  assertTaskScopedMutationTarget(root, "import-isolated-review", args);
+  assertFollowThroughReady(root, "Importing an isolated reviewer handoff", args);
   const runId = normalizeRunId(args.runId);
   const manifestPath = relativeRunPath(runId, "manifest.json");
   const handoffPath = args.handoffPath ? safeArtifactPath(root, args.handoffPath) : relativeRunPath(runId, "handoff.json");
@@ -345,6 +352,9 @@ export function importIsolatedReview(root, args = {}) {
 }
 
 export function runIsolatedReview(root, args = {}) {
+  assertGovernanceMutationRegistered("run-isolated-review", "guarded");
+  assertTaskScopedMutationTarget(root, "run-isolated-review", args);
+  assertFollowThroughReady(root, "Running an isolated parallel-session reviewer handoff", args);
   const prepared = prepareIsolatedReview(root, args);
   return { ...prepared, importArgs: { runId: prepared.runId, handoffPath: prepared.handoffPath, reportPath: prepared.reportPath } };
 }

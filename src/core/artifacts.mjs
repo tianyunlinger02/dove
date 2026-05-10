@@ -9,7 +9,6 @@ import {
 import {
   buildRebuttalStrategy,
   loadBoard,
-  updateResearchBrief,
   upsertOrchestrationBoard
 } from "./orchestration.mjs";
 import {
@@ -29,6 +28,7 @@ import {
   writeText
 } from "./workspace.mjs";
 import { queryWorkspaceIndex, refreshDurableSurfaces } from "./navigation.mjs";
+import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 
 function slugify(value) {
   return String(value)
@@ -863,7 +863,7 @@ function renderChecklist(state, reviewState, board, plans, results, issues, vers
     "",
     "## Review + rebuttal",
     "",
-    ...(openItems.length > 0 ? openItems.map((item) => `- [ ] ${item}`) : ["- [ ] Run `project:dove.paper.review-loop` and convert findings into actions."]),
+    ...(openItems.length > 0 ? openItems.map((item) => `- [ ] ${item}`) : ["- [ ] Run `project:dove.paper.review` and convert findings into actions."]),
     `- [ ] Keep ${(reviewState.unresolvedConcernIds ?? []).length} unresolved concerns visible across review rounds`,
     `- [ ] Keep ${issues.items.length} rebuttal issues normalized and triaged`,
     "",
@@ -1382,7 +1382,7 @@ function buildRelationRepairItem(relation) {
     reasonCodes,
     artifactPath: ARTIFACT_PATHS.wikiRelations,
     relatedArtifactPaths: uniqueStringArray([ARTIFACT_PATHS.wikiEntities, ...relation.sourceArtifactPaths]),
-    nextAction: `Repair the local artifacts for ${relation.id}, then rerun project:dove.paper.wiki or refresh_wiki.`
+    nextAction: `Repair the local artifacts for ${relation.id}, then rerun project:dove.status or refresh_wiki.`
   };
 }
 
@@ -1399,7 +1399,7 @@ function buildRelationFamilyRepairItem(familySummary) {
     reasonCodes: topReasonCodes,
     artifactPath: ARTIFACT_PATHS.wikiRelations,
     relatedArtifactPaths: uniqueStringArray([ARTIFACT_PATHS.wikiEntities, ...familySummary.sourceArtifactPaths]),
-    nextAction: `Repair ${familySummary.degradedCount} degraded ${familySummary.label.toLowerCase()} relations, then rerun project:dove.paper.wiki or refresh_wiki.`
+    nextAction: `Repair ${familySummary.degradedCount} degraded ${familySummary.label.toLowerCase()} relations, then rerun project:dove.status or refresh_wiki.`
   };
 }
 
@@ -1604,7 +1604,7 @@ export function initProject(root, args = {}) {
 
   state = syncPhase(root, state, {
     stage: "init",
-    resumeCommand: "project:dove.paper.orchestrate",
+    resumeCommand: "project:dove.orchestrate",
     role: "planner",
     objective: state.dove.objective,
     intentType: "plan",
@@ -1614,16 +1614,18 @@ export function initProject(root, args = {}) {
 
   writeText(root, ARTIFACT_PATHS.project, `# Project brief\n\n- Working title: ${state.dove.title}\n- Venue: ${state.dove.venue}\n- Objective: ${state.dove.objective}\n- Deadline: ${state.dove.deadline || "TBD"}\n\n## Thesis\n\n${state.dove.thesis}\n\n## Audience\n\n${state.dove.audience}\n`);
   writeText(root, ARTIFACT_PATHS.researchContract, `# Research contract\n\n## Project\n\n- Title: ${state.dove.title}\n- Venue: ${state.dove.venue}\n- Objective: ${state.dove.objective}\n\n## Working rules\n\n- No unsupported claims.\n- No citation from memory.\n- Preserve durable artifacts after every stage.\n- Keep the orchestration board and handoffs current.\n- Require review-before-finalize for high-risk changes.\n`);
-  updateResearchBrief(root, {
+  const initialResearchAgenda = {
+    version: 1,
     objective: state.dove.objective,
     agenda: [
       "Clarify the paper objective and contribution.",
       "Build an evidence base before drafting stronger claims."
     ],
     evidenceBacklog: ["Register at least one durable source and note."],
-    phase: "init",
-    assignedRole: "planner"
-  });
+    updatedAt: nowIso()
+  };
+  writeJson(root, ARTIFACT_PATHS.researchAgenda, initialResearchAgenda);
+  writeText(root, ARTIFACT_PATHS.researchBrief, `# Research brief\n\n## Objective\n\n${initialResearchAgenda.objective}\n\n## Agenda\n\n${initialResearchAgenda.agenda.map((item) => `- ${item}`).join("\n")}\n\n## Evidence backlog\n\n${initialResearchAgenda.evidenceBacklog.map((item) => `- ${item}`).join("\n")}`);
   refreshDurableSurfaces(root, {
     type: "init-project",
     summary: `Initialized project ${state.dove.title}.`,
@@ -1639,6 +1641,7 @@ export function readState(root) {
 
 export function registerSource(root, args = {}) {
   assertGovernanceMutationRegistered("register-source", "guarded");
+  assertTaskScopedMutationTarget(root, "register-source", args);
   assertFollowThroughReady(root, "Registering a source", args);
   ensureWorkspace(root);
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
@@ -1680,6 +1683,7 @@ export function registerSource(root, args = {}) {
 
 export function upsertNote(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-note", "guarded");
+  assertTaskScopedMutationTarget(root, "upsert-note", args);
   if (!args.skipFollowThroughReady) {
     assertFollowThroughReady(root, "Recording a structured note", args);
   }
@@ -1730,6 +1734,7 @@ export function upsertNote(root, args = {}) {
 
 export function upsertPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-plan", "guarded");
+  assertTaskScopedMutationTarget(root, "upsert-plan", args);
   assertFollowThroughReady(root, "Updating the Dove mission plan", args);
   const state = loadState(root);
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
@@ -1762,6 +1767,7 @@ export function upsertPlan(root, args = {}) {
 
 export function upsertOutline(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-outline", "guarded");
+  assertTaskScopedMutationTarget(root, "upsert-outline", args);
   assertFollowThroughReady(root, "Updating the paper outline", args);
   let state = loadState(root);
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
@@ -1799,6 +1805,7 @@ export function upsertOutline(root, args = {}) {
 
 export function upsertDraft(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-draft", "guarded");
+  assertTaskScopedMutationTarget(root, "upsert-draft", args);
   assertFollowThroughReady(root, "Updating a draft section", args);
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
@@ -1821,7 +1828,7 @@ export function upsertDraft(root, args = {}) {
   };
   syncPhase(root, state, {
     stage: "draft",
-    resumeCommand: "project:dove.paper.review-loop",
+    resumeCommand: "project:dove.paper.review",
     role: "researcher",
     intentType: "write",
     currentFocus: `Draft ${title}.`,
@@ -1838,6 +1845,7 @@ export function upsertDraft(root, args = {}) {
 
 export function setSectionStatus(root, args = {}) {
   assertGovernanceMutationRegistered("set-section-status", "guarded");
+  assertTaskScopedMutationTarget(root, "set-section-status", args);
   assertFollowThroughReady(root, "Updating a section status", args);
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
@@ -1887,6 +1895,7 @@ export function syncChecklist(root) {
 
 export function upsertFigurePlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-figure-plan", "guarded");
+  assertTaskScopedMutationTarget(root, "upsert-figure-plan", args);
   assertFollowThroughReady(root, "Updating the figure plan", args);
   const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: null });
   const normalizedItems = (Array.isArray(args.items) ? args.items : []).map(normalizeFigureItem);
@@ -2011,7 +2020,7 @@ export function syncCitations(root, args = {}) {
     nextAction: loadBoard(root).nextAction
   } : {
     stage: "citations",
-    resumeCommand: "project:dove.paper.review-loop",
+    resumeCommand: "project:dove.paper.review",
     role: "researcher",
     intentType: "review",
     currentFocus: "Reconcile bibliography coverage with cited drafts.",
@@ -2071,13 +2080,14 @@ export function refreshWiki(root, args = {}) {
   return { wikiPath: ARTIFACT_PATHS.wiki, noteCount: notes.items.length, claimCount: evidence.claims.length };
 }
 
-export function buildRebuttal(root) {
+export function buildRebuttal(root, args = {}) {
   assertGovernanceMutationRegistered("build-rebuttal", "guarded");
-  assertFollowThroughReady(root, "Building the rebuttal draft", {});
+  assertTaskScopedMutationTarget(root, "build-rebuttal", args);
+  assertFollowThroughReady(root, "Building the rebuttal draft", args);
   ensureWorkspace(root);
   const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 2, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
   const claims = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
-  buildRebuttalStrategy(root);
+  buildRebuttalStrategy(root, args);
   const draftPath = `${ARTIFACT_PATHS.draftsDir}/rebuttal.md`;
   writeText(root, draftPath, renderRebuttalDraft(reviewState, claims, ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft));
   const state = loadState(root);
@@ -2089,7 +2099,7 @@ export function buildRebuttal(root) {
   };
   syncPhase(root, state, {
     stage: "rebuttal",
-    resumeCommand: "project:dove.paper.version-snapshot",
+    resumeCommand: "project:dove.paper.version",
     role: "rebuttal-lead",
     intentType: "respond",
     currentFocus: "Convert normalized concerns into an evidence-backed rebuttal.",

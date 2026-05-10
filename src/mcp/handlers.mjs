@@ -7,11 +7,13 @@ import {
   compareVersions,
   createVersionSnapshot,
   ensureWorkspace,
+  importIsolatedReview,
   initProject,
   listWorkspaceArtifacts,
   materializeGuidancePacket,
   issueProgramApproval,
   planCampaign,
+  prepareIsolatedReview,
   normalizeRebuttalIssues,
   readBoundaryReport,
   queryDecisions,
@@ -19,8 +21,10 @@ import {
   queryDoveAudit,
   queryDoveMission,
   queryDoveMissionBoard,
+  queryDoveOnboarding,
   queryDoveOrchestrate,
   queryDoveReturn,
+  queryDoveStatus,
   queryGovernanceCoverageReport,
   queryLineage,
   queryMetaOptimize,
@@ -28,6 +32,7 @@ import {
   queryOperatorLessons,
   queryOperatorFollowThrough,
   queryPaperAudit,
+  queryPaperPipeline,
   queryProgramApprovals,
   queryCampaigns,
   queryTaskGraph,
@@ -108,12 +113,18 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(queryOperatorFollowThrough(root));
       case "query_paper_audit":
         return makeTextResult(queryPaperAudit(root, args));
+      case "query_dove_onboarding":
+        return makeTextResult(queryDoveOnboarding(root, args));
+      case "query_paper_pipeline":
+        return makeTextResult(queryPaperPipeline(root, args));
       case "query_dove_orchestrate":
         return makeTextResult(queryDoveOrchestrate(root, args));
       case "query_dove_mission":
         return makeTextResult(queryDoveMission(root, args));
       case "query_dove_mission_board":
         return makeTextResult(queryDoveMissionBoard(root, args));
+      case "query_dove_status":
+        return makeTextResult(queryDoveStatus(root, args));
       case "query_dove_audit":
         return makeTextResult(queryDoveAudit(root, args));
       case "query_dove_return":
@@ -168,6 +179,10 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(runReviewLoop(root, args));
       case "append_review_log":
         return makeTextResult(appendReviewLog(root, args));
+      case "prepare_isolated_review":
+        return makeTextResult(prepareIsolatedReview(root, args));
+      case "import_isolated_review":
+        return makeTextResult(importIsolatedReview(root, args));
       case "upsert_revision_plan":
         return makeTextResult(upsertRevisionPlan(root, args));
       case "set_section_status":
@@ -183,7 +198,7 @@ export function dispatchTool(root, name, args = {}) {
       case "build_rebuttal_strategy":
         return makeTextResult(buildRebuttalStrategy(root, args));
       case "build_rebuttal":
-        return makeTextResult(buildRebuttal(root));
+        return makeTextResult(buildRebuttal(root, args));
       case "create_version_snapshot":
         return makeTextResult(createVersionSnapshot(root, args));
       case "compare_versions":

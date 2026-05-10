@@ -1,6 +1,7 @@
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { assertRoleBoundMutation, loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
+import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, extractCitationKeysFromText, nowIso, readJson, readText, writeJson, writeText, listDraftFiles } from "./workspace.mjs";
 
 function slugify(value) {
@@ -56,6 +57,7 @@ function renderClaimsMarkdown(claims) {
 
 export function upsertClaims(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-claims", "guarded");
+  assertTaskScopedMutationTarget(root, "upsert-claims", args);
   assertFollowThroughReady(root, "Updating evidence-backed claims", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Updating evidence-backed claims",

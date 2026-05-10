@@ -334,7 +334,7 @@ function buildContinuationItems(root, entry) {
   if (["worker-step-retry-pending", "worker-step-escalated", "executed-one-packet-step"].includes(entry.outcome)) {
     return [{
       kind: entry.outcome === "worker-step-escalated" ? "manual-escalation" : "review-follow-through",
-      command: "project:dove.paper.follow-through",
+      command: "project:dove.follow-through",
       packetId: entry.packetId,
       programRunId: null,
       followThroughId: entry.followThroughId ?? null,

@@ -55,8 +55,8 @@ node ./bin/dove.mjs orchestrate . --request "Ship cache safely" --domain enginee
 # Frame one mission contract without writing durable state
 node ./bin/dove.mjs mission . --domain engineering --stage execution --artifact src/cache.mjs --acceptance-check "tests or validation output"
 
-# Inspect the as-read mission board without writing or refreshing
-node ./bin/dove.mjs board . --domain engineering
+# Inspect mission status, packets, paper lifecycle, questions, decisions, and lineage
+node ./bin/dove.mjs status . --domain engineering
 
 # Inspect audit and return readiness without writing, fixing, running tests, or inspecting git
 node ./bin/dove.mjs audit . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
@@ -66,7 +66,7 @@ node ./bin/dove.mjs return . --domain engineering --changed-file src/cache.mjs -
 node ./bin/dove.mjs launch . --source-type remediation-pack --source-id <pack-id> --execute-by 2099-01-01T00:00:00.000Z --review-after 2099-01-01T12:00:00.000Z --domain engineering --stage execution
 ```
 
-The query commands return proposal-only JSON and do not create mission packets, update the board, append handoffs, refresh workspace indexes, run tests, inspect git, execute autonomy, or repair `.dove` artifacts. `dove launch` is a guarded write surface that requires an accepted source plus `executeBy` and `reviewAfter`, writes mission packets under `.dove/task-packets`, and does not execute autonomy.
+The query commands return proposal-only JSON and do not create mission packets, update the board, append handoffs, run tests, inspect git, execute autonomy, or repair `.dove` artifacts. `dove status` may refresh derived navigation views while keeping source assets untouched. `dove launch` is a guarded write surface that requires an accepted source plus `executeBy` and `reviewAfter`, writes mission packets under `.dove/task-packets`, and does not execute autonomy.
 
 ## Health check
 

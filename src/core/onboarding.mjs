@@ -208,13 +208,13 @@ function buildRecommendedNextActions(mappings, conflicts, writeMap) {
     actions.push("Resolve mapping conflicts before importing or rewriting paper artifacts.");
   }
   if (mappings.some((item) => item.artifactType === "manuscript")) {
-    actions.push("Use `project:dove.paper.plan` before converting a legacy manuscript into the design/checklist/implementation/acceptance flow.");
+    actions.push("Use `project:dove.plan` before converting a legacy manuscript into the design/checklist/implementation/acceptance flow.");
   }
   if (mappings.some((item) => item.artifactType === "bibliography")) {
     actions.push("Use `project:dove.paper.citations` after selecting the canonical bibliography.");
   }
   if (mappings.some((item) => item.artifactType === "review")) {
-    actions.push("Use `project:dove.paper.review-loop` or `project:dove.paper.rebuttal-strategy` after mapping reviewer feedback artifacts.");
+    actions.push("Use `project:dove.paper.review` or `project:dove.paper.rebuttal` after mapping reviewer feedback artifacts.");
   }
   return actions;
 }
@@ -287,5 +287,24 @@ export function discoverPaperArtifacts(root, args = {}) {
   return {
     ...proposal,
     written: []
+  };
+}
+
+export function queryDoveOnboarding(root, args = {}) {
+  const proposal = discoverPaperArtifacts(root, { ...args, writeMap: false });
+  return {
+    ...proposal,
+    mode: "dove-onboarding-query",
+    proposalOnly: true,
+    noAutoApply: true,
+    writeMap: false,
+    written: [],
+    writes: [],
+    diagnostics: {
+      noCommandExecution: true,
+      noGitInspection: true,
+      noSourceMutation: true,
+      writeMapForcedFalse: true
+    }
   };
 }

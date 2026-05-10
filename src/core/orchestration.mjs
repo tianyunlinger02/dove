@@ -3,6 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 import { refreshDurableSurfaces } from "./navigation.mjs";
+import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, createMetaOperatorFollowThroughIndex, normalizeMetaOperatorFollowThroughIndex, resolveResumeCommandForPhase, roleCanActAs } from "./schema.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
 
@@ -867,6 +868,7 @@ function renderResearchBrief(agenda) {
 
 export function updateResearchBrief(root, args = {}) {
   assertGovernanceMutationRegistered("update-research-brief", "guarded");
+  assertTaskScopedMutationTarget(root, "update-research-brief", args);
   assertFollowThroughReady(root, "Updating the research brief", args);
   const state = loadState(root);
   const current = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: state.dove.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
@@ -999,8 +1001,45 @@ function confidenceAfterSupport(current) {
   return "high";
 }
 
+function resolveDurableExperimentResult(resultsIndex, args = {}, actionLabel = "Experiment result lookup") {
+  if (args.result) {
+    const resultId = args.result.id ?? args.resultId;
+    if (!resultId) {
+      throw new Error(`${actionLabel} requires args.result to include a durable id.`);
+    }
+    const durable = resultsIndex.items.find((item) => item.id === resultId);
+    if (!durable) {
+      throw new Error(`${actionLabel} received non-durable result ${resultId}.`);
+    }
+    for (const field of ["experimentId", "claimId", "outcome"]) {
+      if (args.result[field] && durable[field] !== args.result[field]) {
+        throw new Error(`${actionLabel} result ${resultId} ${field} does not match durable state.`);
+      }
+    }
+    return durable;
+  }
+  if (args.resultId) {
+    const durable = resultsIndex.items.find((item) => item.id === args.resultId);
+    if (!durable) {
+      throw new Error(`${actionLabel} could not find result ${args.resultId}.`);
+    }
+    return durable;
+  }
+  if (args.experimentId) {
+    const matches = resultsIndex.items.filter((item) => item.experimentId === args.experimentId);
+    if (matches.length === 1) {
+      return matches[0];
+    }
+    if (matches.length > 1) {
+      throw new Error(`${actionLabel} found multiple results for experiment ${args.experimentId}; provide resultId.`);
+    }
+  }
+  throw new Error(`${actionLabel} requires an existing durable resultId.`);
+}
+
 export function runExperimentAudit(root, args = {}) {
   assertGovernanceMutationRegistered("run-experiment-audit", "guarded");
+  assertTaskScopedMutationTarget(root, "run-experiment-audit", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Running an experiment audit",
     expectedRole: "experiment-planner"
@@ -1013,12 +1052,7 @@ export function persistExperimentAudit(root, args = {}) {
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const auditsIndex = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
-  const rawResult = args.result
-    ?? (args.resultId ? resultsIndex.items.find((item) => item.id === args.resultId) : null)
-    ?? (args.experimentId ? [...resultsIndex.items].reverse().find((item) => item.experimentId === args.experimentId) : null);
-  if (!rawResult) {
-    throw new Error("Experiment audit requires an existing result or resultId.");
-  }
+  const rawResult = resolveDurableExperimentResult(resultsIndex, args, "Experiment audit");
   const linkedPlan = plansIndex.items.find((item) => item.id === rawResult.experimentId);
   const linkedClaim = rawResult.claimId ? evidence.claims.find((item) => item.id === rawResult.claimId) : null;
   const integrityFlags = [];
@@ -1119,6 +1153,7 @@ export function persistExperimentAudit(root, args = {}) {
 
 export function bridgeExperimentResultToClaim(root, args = {}) {
   assertGovernanceMutationRegistered("bridge-experiment-result-to-claim", "guarded");
+  assertTaskScopedMutationTarget(root, "bridge-experiment-result-to-claim", args);
   assertFollowThroughReady(root, "Bridging an experiment result to a claim", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Bridging an experiment result to a claim",
@@ -1132,12 +1167,7 @@ export function persistExperimentResultClaimBridge(root, args = {}) {
   const resultsIndex = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
   const auditsIndex = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
   const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
-  const result = args.result
-    ?? (args.resultId ? resultsIndex.items.find((item) => item.id === args.resultId) : null)
-    ?? (args.experimentId ? [...resultsIndex.items].reverse().find((item) => item.experimentId === args.experimentId) : null);
-  if (!result) {
-    throw new Error("Result bridge requires an existing result or resultId.");
-  }
+  const result = resolveDurableExperimentResult(resultsIndex, args, "Result bridge");
   const claimIndex = evidence.claims.findIndex((item) => item.id === result.claimId);
   if (claimIndex === -1) {
     throw new Error(`Claim bridge could not find claim ${result.claimId}`);
@@ -1226,6 +1256,7 @@ export function persistExperimentResultClaimBridge(root, args = {}) {
 
 export function upsertExperimentPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-experiment-plan", "guarded");
+  assertTaskScopedMutationTarget(root, "upsert-experiment-plan", args);
   assertFollowThroughReady(root, "Updating an experiment plan", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Updating an experiment plan",
@@ -1283,6 +1314,7 @@ export function upsertExperimentPlan(root, args = {}) {
 
 export function upsertExperimentResult(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-experiment-result", "guarded");
+  const taskTarget = assertTaskScopedMutationTarget(root, "upsert-experiment-result", args);
   assertFollowThroughReady(root, "Updating an experiment result", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Updating an experiment result",
@@ -1320,11 +1352,13 @@ export function upsertExperimentResult(root, args = {}) {
 
   const audit = runExperimentAudit(root, {
     resultId: result.id,
+    packetId: taskTarget.packetId ?? args.packetId,
     policyOverrideReason: args.policyOverrideReason,
     actorRole: args.actorRole
   });
   const bridgeEvent = bridgeExperimentResultToClaim(root, {
     resultId: result.id,
+    packetId: taskTarget.packetId ?? args.packetId,
     auditIds: [audit.id],
     policyOverrideReason: args.policyOverrideReason,
     actorRole: args.actorRole
@@ -1404,6 +1438,7 @@ function normalizeIssue(issue = {}, index = 0) {
 
 export function normalizeRebuttalIssues(root, args = {}) {
   assertGovernanceMutationRegistered("normalize-rebuttal-issues", "guarded");
+  assertTaskScopedMutationTarget(root, "normalize-rebuttal-issues", args);
   assertFollowThroughReady(root, "Normalizing rebuttal issues", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Normalizing rebuttal issues",
@@ -1454,6 +1489,7 @@ export function persistRebuttalIssues(root, args = {}) {
 
 export function buildRebuttalStrategy(root, args = {}) {
   assertGovernanceMutationRegistered("build-rebuttal-strategy", "guarded");
+  assertTaskScopedMutationTarget(root, "build-rebuttal-strategy", args);
   assertFollowThroughReady(root, "Building the rebuttal strategy", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Building the rebuttal strategy",
@@ -1563,6 +1599,7 @@ function readSnapshot(root, snapshotId) {
 
 export function createVersionSnapshot(root, args = {}) {
   assertGovernanceMutationRegistered("create-version-snapshot", "guarded");
+  assertTaskScopedMutationTarget(root, "create-version-snapshot", args);
   assertFollowThroughReady(root, "Creating a version snapshot", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Creating a version snapshot",
@@ -1658,6 +1695,7 @@ export function createVersionSnapshot(root, args = {}) {
 
 export function compareVersions(root, args = {}) {
   assertGovernanceMutationRegistered("compare-versions", "guarded");
+  assertTaskScopedMutationTarget(root, "compare-versions", args);
   assertFollowThroughReady(root, "Comparing versions", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Comparing versions",

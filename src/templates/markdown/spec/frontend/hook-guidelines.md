@@ -40,7 +40,7 @@ Data is fetched from local files, not remote APIs:
 4. Persist normalized data with deterministic formatting.
 5. For public commands, read the nearest context first: action bundle, role/phase manifest, packet manifest, then artifact manifest.
 
-Example command pattern: generated `dove.paper.orchestrate` adapters read `.dove/context/actions/current.json` and available board/workspace context before recommending one next command without writing. `.opencode/commands/dove.paper.meta-optimize.md` reads optimizer report, recommendations, remediation packs, events, optimizer state, long-horizon memory, and workspace index before recommending next action.
+Example command pattern: generated `dove.orchestrate` adapters read `.dove/context/actions/current.json` and available board/workspace context before recommending one next command without writing. `.opencode/commands/dove.paper.meta-optimize.md` reads optimizer report, recommendations, remediation packs, events, optimizer state, long-horizon memory, and workspace index before recommending next action.
 
 ---
 

@@ -21,5 +21,5 @@ Frame a Dove mission contract from the current workspace without writing state.
 3. Prefer the `query_dove_mission` MCP tool when available.
 4. Keep this surface proposal-only: inspect and route, but do not mutate durable state.
 5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+6. Use this shared Dove control-plane surface across paper, engineering, experiment, review, and general missions; route to `dove.paper.*` only for paper-specific artifact workflows.
 7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

@@ -26,6 +26,7 @@ import {
   runAutonomyForeground,
   readState,
   readJson,
+  resolveDurableTaskPacket,
   recordOperatorFollowThrough,
   recordOperatorLesson,
   refreshWiki,
@@ -83,6 +84,122 @@ test("governance audit exempt metadata check is not a wall-clock freshness gate"
   assert.match(scriptText, /VALID_REVIEW_CADENCES/);
   assert.doesNotMatch(scriptText, /Date\.now\(\) - reviewWindowMs/);
   assert.doesNotMatch(scriptText, /lastReviewedAt\) < Date\.now/);
+});
+
+function seedTaskPacket(root, packetId = "task-test-main", overrides = {}) {
+  const timestamp = new Date(0).toISOString();
+  const packetPath = `.dove/task-packets/packets/${packetId}.json`;
+  const packet = {
+    id: packetId,
+    title: overrides.title ?? "Test task packet",
+    summary: overrides.summary ?? "Test packet for scoped write validation.",
+    sourceType: overrides.sourceType ?? "test-task",
+    sourceId: overrides.sourceId ?? packetId,
+    status: overrides.status ?? "pending",
+    lifecycleStatus: overrides.lifecycleStatus ?? "active",
+    active: overrides.active ?? true,
+    assignedRole: overrides.assignedRole ?? "builder",
+    currentFocus: overrides.currentFocus ?? "Validate scoped writes against a durable packet.",
+    nextAction: overrides.nextAction ?? "Run the guarded write.",
+    dependencies: [],
+    evidenceLinks: [],
+    outputPaths: [],
+    updatedAt: timestamp,
+    packetPath,
+    packetContextPath: `.dove/context/packets/${packetId}.json`,
+    ...overrides
+  };
+  writeJson(root, packetPath, packet);
+  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, { version: 3, items: [], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: null });
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
+    ...packetIndex,
+    items: [...(packetIndex.items ?? []).filter((item) => item.id !== packetId), packet],
+    updatedAt: timestamp
+  });
+  return packet.id;
+}
+
+function writeTaskTargetSettings(root, overrides) {
+  const state = readState(root);
+  writeJson(root, ARTIFACT_PATHS.state, {
+    ...state,
+    settings: {
+      ...state.settings,
+      taskTargetResolution: {
+        ...state.settings.taskTargetResolution,
+        ...overrides
+      }
+    }
+  });
+}
+
+test("task packet resolver handles explicit ids, targets, ambiguity, and artifact conflicts", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  seedTaskPacket(root, "packet-alpha", {
+    title: "Alpha experiment",
+    summary: "Validate alpha packet resolution.",
+    claimIds: ["claim-alpha"],
+    experimentIds: ["exp-alpha"],
+    outputPaths: [".dove/drafts/alpha.md"]
+  });
+  seedTaskPacket(root, "packet-beta", {
+    title: "Beta experiment",
+    summary: "Validate beta packet resolution.",
+    claimIds: ["claim-beta"],
+    experimentIds: ["exp-beta"],
+    outputPaths: [".dove/drafts/beta.md"]
+  });
+
+  assert.equal(resolveDurableTaskPacket(root, { packetId: "packet-alpha" }).packetId, "packet-alpha");
+  assert.equal(resolveDurableTaskPacket(root, { target: "Beta experiment" }, { targetFields: ["target"] }).packetId, "packet-beta");
+
+  assert.throws(() => {
+    resolveDurableTaskPacket(root, { packetId: "packet-alpha", claimId: "claim-beta" }, { artifactFields: ["claimId"] });
+  }, /conflict/);
+
+  writeTaskTargetSettings(root, { autoSelect: false });
+  assert.throws(() => {
+    resolveDurableTaskPacket(root, { target: "experiment" }, { targetFields: ["target"] });
+  }, /ambiguous/);
+
+  writeTaskTargetSettings(root, { autoSelect: true });
+  const selected = resolveDurableTaskPacket(root, { target: "experiment" }, { targetFields: ["target"] });
+  assert.equal(selected.packetId, "packet-alpha");
+  assert.equal(selected.resolution.autoSelect, true);
+  assert.equal(selected.resolution.candidates.length, 2);
+});
+
+test("task-scoped resolver rejects writes when no durable packet exists", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+
+  assert.throws(() => {
+    resolveDurableTaskPacket(root, {});
+  }, /requires a durable task packet/);
+});
+
+test("governance registry marks task-scoped writes and packet execution with packet target metadata", () => {
+  const taskScoped = GOVERNANCE_GUARDED_MUTATIONS.filter((entry) => entry.mutationScope === "task-scoped-write");
+  assert.equal(taskScoped.length > 0, true);
+  for (const entry of taskScoped) {
+    assert.equal(entry.requiresPacketTarget, true, `${entry.id} should require a packet target`);
+    assert.equal(entry.targetFields.includes("packetId"), true, `${entry.id} should accept explicit packetId`);
+    assert.equal(entry.targetFields.includes("target"), true, `${entry.id} should accept natural task target`);
+    assert.equal(entry.targetFields.includes("scope"), false, `${entry.id} should not treat review scope as task target`);
+    assert.equal(Boolean(entry.surfaceBindings?.coreFunction), true, `${entry.id} should bind a core function`);
+  }
+
+  const packetExecution = GOVERNANCE_EXEMPT_MUTATIONS.filter((entry) => entry.mutationScope === "packet-execution");
+  assert.equal(packetExecution.length > 0, true);
+  for (const entry of packetExecution) {
+    assert.equal(entry.requiresPacketTarget, true, `${entry.id} should require a packet target`);
+    assert.equal(entry.targetFields.includes("packetId"), true, `${entry.id} should accept explicit packetId`);
+  }
+
+  for (const entry of [...GOVERNANCE_GUARDED_MUTATIONS, ...GOVERNANCE_EXEMPT_MUTATIONS].filter((item) => ["derived-refresh", "inspection-only", "bootstrap", "workspace-global", "task-materialization", "governance-bookkeeping"].includes(item.mutationScope))) {
+    assert.equal(entry.requiresPacketTarget, false, `${entry.id} should not require a packet target`);
+  }
 });
 
 function seedAutonomyGuidance(root) {
@@ -384,7 +501,7 @@ test("queryWorkspaceIndex treats explicit Dove engineering packets as engineerin
   const workspaceIndex = queryWorkspaceIndex(root);
   assert.equal(workspaceIndex.dove.currentDomain, "engineering");
   assert.equal(workspaceIndex.dove.domainCounts.engineering, 1);
-  assert.equal(workspaceIndex.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.materialize or project:dove.autonomy-operate");
+  assert.equal(workspaceIndex.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.launch or project:dove.autonomy-operate");
   assert.equal(workspaceIndex.activePackets[0].doveDomain, "engineering");
   assert.equal(workspaceIndex.activePackets[0].lifecycleFamily, "structure");
 });
@@ -1075,9 +1192,10 @@ test("refreshWiki records typed relation integrity failures and exposes them thr
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Relation Frontier", objective: "Track degraded typed wiki relations." });
+  const packetId = seedTaskPacket(root, "relation-frontier");
 
-  registerSource(root, { citationKey: "relation-source", title: "Relation Source", authors: ["Lee"], year: 2026 });
-  upsertNote(root, { noteId: "note-main", title: "Frontier note", sectionId: "introduction", sourceIds: ["relation-source"], summary: "Source-backed note." });
+  registerSource(root, { packetId, citationKey: "relation-source", title: "Relation Source", authors: ["Lee"], year: 2026 });
+  upsertNote(root, { packetId, noteId: "note-main", title: "Frontier note", sectionId: "introduction", sourceIds: ["relation-source"], summary: "Source-backed note." });
   writeJson(root, ARTIFACT_PATHS.sources, {
     version: 1,
     items: [{ id: "experiment-bad-exp", citationKey: "bad-exp-source", title: "Wrong endpoint type", authors: [], year: 2026, sourceType: "paper", abstract: "", origin: "manual", addedAt: new Date(0).toISOString() }],
@@ -1133,9 +1251,10 @@ test("queryMetaOptimize carries typed wiki taxonomy pressure through clusters, s
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Taxonomy-aware Meta", objective: "Make optimizer recommendations explicitly aware of typed wiki taxonomy pressure." });
+  const packetId = seedTaskPacket(root, "taxonomy-aware-meta");
 
-  registerSource(root, { citationKey: "taxonomy-source", title: "Taxonomy Source", authors: ["Chen"], year: 2026 });
-  upsertNote(root, { noteId: "taxonomy-note", title: "Taxonomy note", sectionId: "method", sourceIds: ["taxonomy-source"], summary: "Ground a note in a source." });
+  registerSource(root, { packetId, citationKey: "taxonomy-source", title: "Taxonomy Source", authors: ["Chen"], year: 2026 });
+  upsertNote(root, { packetId, noteId: "taxonomy-note", title: "Taxonomy note", sectionId: "method", sourceIds: ["taxonomy-source"], summary: "Ground a note in a source." });
   writeJson(root, ARTIFACT_PATHS.sources, {
     version: 1,
     items: [{ id: "experiment-wrong-exp", citationKey: "wrong-exp-source", title: "Wrong endpoint type", authors: [], year: 2026, sourceType: "paper", abstract: "", origin: "manual", addedAt: new Date(0).toISOString() }],
@@ -1213,9 +1332,10 @@ test("queryMetaOptimize derives family-level operator playbooks from taxonomy, r
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Family Playbooks", objective: "Surface family-level operator playbooks without auto-applying anything." });
+  const packetId = seedTaskPacket(root, "family-playbooks");
 
-  registerSource(root, { citationKey: "playbook-source", title: "Playbook Source", authors: ["Ng"], year: 2026 });
-  upsertNote(root, { noteId: "playbook-note", title: "Playbook note", sectionId: "method", sourceIds: ["playbook-source"], summary: "Family playbooks should stay file-first." });
+  registerSource(root, { packetId, citationKey: "playbook-source", title: "Playbook Source", authors: ["Ng"], year: 2026 });
+  upsertNote(root, { packetId, noteId: "playbook-note", title: "Playbook note", sectionId: "method", sourceIds: ["playbook-source"], summary: "Family playbooks should stay file-first." });
   writeJson(root, ARTIFACT_PATHS.sources, {
     version: 1,
     items: [{ id: "experiment-playbook-exp", citationKey: "playbook-exp-source", title: "Wrong endpoint type", authors: [], year: 2026, sourceType: "paper", abstract: "", origin: "manual", addedAt: new Date(0).toISOString() }],
@@ -1284,9 +1404,10 @@ test("workspace repair frontier and operator manifests surface governance repair
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Governance Repair", objective: "Surface governance repair in the same operator guidance loop." });
+  const packetId = seedTaskPacket(root, "governance-repair");
 
-  registerSource(root, { citationKey: "gov-source", title: "Governance Source", authors: ["Patel"], year: 2026 });
-  upsertNote(root, { noteId: "gov-note", title: "Governance note", sectionId: "method", sourceIds: ["gov-source"], summary: "Governance drift should stay proposal-only and explicit." });
+  registerSource(root, { packetId, citationKey: "gov-source", title: "Governance Source", authors: ["Patel"], year: 2026 });
+  upsertNote(root, { packetId, noteId: "gov-note", title: "Governance note", sectionId: "method", sourceIds: ["gov-source"], summary: "Governance drift should stay proposal-only and explicit." });
   writeJson(root, ARTIFACT_PATHS.sources, {
     version: 1,
     items: [{ id: "experiment-gov-exp", citationKey: "gov-exp-source", title: "Governance mismatch experiment", authors: [], year: 2026, sourceType: "paper", abstract: "", origin: "manual", addedAt: new Date(0).toISOString() }],
@@ -1619,10 +1740,10 @@ test("executing follow-through remains a valid governed state across query and w
   ensureWorkspace(root);
   initProject(root, { title: "Executing State", objective: "Keep executing state consistent across governance surfaces." });
 
-  writeJson(root, ".dove/task-packets/packets/task-executing.json", {
-    id: "task-executing",
+  seedTaskPacket(root, "task-executing", {
     title: "Executing task",
-    status: "in-progress"
+    status: "in-progress",
+    lifecycleStatus: "in-progress"
   });
 
   writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, {
@@ -1712,7 +1833,7 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
   assert.equal(claimBridgeCoverage.surfaceBindings.commandIds.includes("dove.paper.result-bridge"), true);
   const followThroughExempt = meta.governanceCoverage.exemptMutations.find((item) => item.id === "record-operator-follow-through");
   assert.equal(followThroughExempt.surfaceBindings.mcpTool, "record_operator_follow_through");
-  assert.equal(followThroughExempt.surfaceBindings.commandIds.includes("dove.paper.follow-through"), true);
+  assert.equal(followThroughExempt.surfaceBindings.commandIds.includes("dove.follow-through"), true);
   const lessonExempt = meta.governanceCoverage.exemptMutations.find((item) => item.id === "record-operator-lesson");
   assert.equal(lessonExempt.surfaceBindings.coreFunction, "recordOperatorLesson");
   assert.equal(lessonExempt.surfaceBindings.mcpTool, "record_operator_lesson");
@@ -1735,7 +1856,7 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
   assert.equal(exemptCoreFunctions.has("queryMetaOptimize"), true);
 
   const topPack = meta.remediationPacks.packs[0];
-  writeJson(root, ".dove/task-packets/packets/task-coverage.json", { id: "task-coverage", title: "Coverage task", status: "pending" });
+  seedTaskPacket(root, "task-coverage", { title: "Coverage task", status: "pending" });
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
@@ -1868,60 +1989,74 @@ test("governance registry completely binds the expected mutating command and MCP
     "dove.paper.note",
     "dove.paper.claim-gate",
     "dove.plan",
-    "dove.paper.plan",
     "dove.paper.outline",
     "dove.paper.draft",
-    "dove.paper.experiment-plan",
-    "dove.paper.experiment-audit",
+    "dove.paper.experiment",
     "dove.paper.review",
-    "dove.paper.review-loop",
     "dove.paper.result-bridge",
     "dove.paper.revise",
-    "dove.paper.rebuttal-strategy",
-    "dove.paper.version-snapshot",
-    "dove.paper.version-compare",
+    "dove.paper.rebuttal",
+    "dove.paper.version",
     "dove.paper.citations",
     "dove.paper.figure",
-      "dove.paper.rebuttal",
-      "dove.paper.follow-through",
-      "dove.lessons",
-      "dove.paper.meta-optimize",
-      "dove.approvals",
-      "dove.checklist",
-      "dove.paper.checklist",
-      "dove.materialize",
-      "dove.paper.materialize",
-      "dove.autonomy-operate",
-      "dove.paper.autonomy-operate",
-      "dove.launch"
+    "dove.follow-through",
+    "dove.lessons",
+    "dove.paper.meta-optimize",
+    "dove.approvals",
+    "dove.checklist",
+    "dove.launch",
+    "dove.autonomy-operate"
   ];
   for (const commandId of expectedMutatingCommands) {
     assert.equal(boundCommands.has(commandId), true);
     assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), true);
   }
-  assert.equal(boundCommands.has("dove.paper.orchestrate"), false);
+
+  const commandId = (...segments) => ["dove", ...segments].join(".");
+  const removedPaperMirrorCommandIds = ["orchestrate", "plan", "task-graph", "checklist", "materialize", "autonomy-operate", "governance-audit", "approvals", "follow-through"].map((suffix) => commandId("paper", suffix));
+  const removedConsolidatedCommandIds = [
+    commandId("board"),
+    commandId("task-graph"),
+    commandId("materialize"),
+    commandId("paper", "pipeline"),
+    commandId("paper", "review-loop"),
+    commandId("paper", "rebuttal-strategy"),
+    commandId("paper", "experiment-plan"),
+    commandId("paper", "experiment-audit"),
+    commandId("paper", "version-snapshot"),
+    commandId("paper", "version-compare"),
+    commandId("paper", "open-questions"),
+    commandId("paper", "decisions"),
+    commandId("paper", "lineage"),
+    commandId("paper", "wiki")
+  ];
+  for (const commandId of [...removedPaperMirrorCommandIds, ...removedConsolidatedCommandIds]) {
+    assert.equal(boundCommands.has(commandId), false);
+    assert.equal(GOVERNANCE_READONLY_COMMANDS.includes(commandId), false);
+    assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), false);
+  }
+
   assert.equal(boundCommands.has("dove.launch"), true);
   assert.equal(boundCommands.has("dove.orchestrate"), false);
   assert.equal(boundCommands.has("dove.mission"), false);
-  assert.equal(boundCommands.has("dove.board"), false);
+  assert.equal(boundCommands.has("dove.status"), true);
   assert.equal(boundCommands.has("dove.audit"), false);
   assert.equal(boundCommands.has("dove.return"), false);
-  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.paper.orchestrate"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.orchestrate"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.mission"), true);
-  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.board"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.status"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.audit"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.return"), true);
-  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.task-graph"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.governance-audit"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_orchestrate"), true);
+  assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_status"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_audit"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_operator_lessons"), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.paper.orchestrate.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.orchestrate.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.mission.md")), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.board.md")), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.task-graph.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.status.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.paper.experiment.md")), true);
+  assert.equal(fs.existsSync(path.join(commandDir, "dove.paper.version.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.governance-audit.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.audit.md")), true);
   assert.equal(fs.existsSync(path.join(commandDir, "dove.return.md")), true);
@@ -1961,7 +2096,7 @@ test("a broader set of guarded write paths all reject unresolved follow-through 
   });
 
   const topPack = queryMetaOptimize(root).remediationPacks.packs[0];
-  writeJson(root, ".dove/task-packets/packets/task-guard-matrix.json", { id: "task-guard-matrix", title: "Guard matrix task", status: "pending" });
+  seedTaskPacket(root, "task-guard-matrix", { title: "Guard matrix task", status: "pending" });
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
@@ -2052,7 +2187,7 @@ test("follow-through overrides require expiry and exact target binding", () => {
   const currentBoard = currentState.orchestrationBoard;
   const allowedActorRole = currentBoard?.assignedRole ?? "planner";
   const currentPhase = currentState.pipeline?.currentStage ?? currentBoard?.currentPhase ?? "init";
-  writeJson(root, ".dove/task-packets/packets/task-override.json", { id: "task-override", title: "Override task", status: "pending" });
+  seedTaskPacket(root, "task-override", { title: "Override task", status: "pending" });
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
@@ -2458,7 +2593,8 @@ test("materializeGuidancePacket persists approved upsert-note program steps and 
   ensureWorkspace(root);
   initProject(root, { title: "Program Note Materialize", objective: "Seed a note-writing program step." });
   const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const sourceId = registerSource(root, { title: "A source for notes", citationKey: "note-src" }).id;
+  const packetId = seedTaskPacket(root, "program-note-source");
+  const sourceId = registerSource(root, { packetId, title: "A source for notes", citationKey: "note-src" }).id;
 
   materializeGuidancePacket(root, {
     sourceType: "remediation-pack",
@@ -2834,8 +2970,10 @@ test("runAutonomyForeground can exhaust a bounded multi-step program authority e
   ensureWorkspace(root);
   initProject(root, { title: "Program Envelope Foreground", objective: "Drain one bounded program-scoped authority envelope in the foreground." });
   const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  registerSource(root, { title: "Foreground review source", citationKey: "foreground-envelope-src" });
+  const evidencePacketId = seedTaskPacket(root, "program-envelope-foreground-evidence");
+  registerSource(root, { packetId: evidencePacketId, title: "Foreground review source", citationKey: "foreground-envelope-src" });
   upsertNote(root, {
+    packetId: evidencePacketId,
     title: "Foreground review note",
     sectionId: "introduction",
     sourceIds: ["foreground-envelope-src"],
@@ -3237,7 +3375,7 @@ test("runAutonomyControlPlaneOnce executes one bounded packet step and writes du
   assert.equal(result.outcome, "executed-one-packet-step");
   assert.equal(result.packetId, seeded.packetId);
   assert.equal(result.followThroughId, seeded.followThroughId);
-  assert.equal(result.nextRecommendedCommand, "project:dove.paper.follow-through");
+  assert.equal(result.nextRecommendedCommand, "project:dove.follow-through");
 
   const runtimeResults = readJson(root, ARTIFACT_PATHS.runtimeResults, null);
   const runtimeEvents = readJson(root, ARTIFACT_PATHS.runtimeEvents, null);
@@ -3262,7 +3400,7 @@ test("runAutonomyControlPlaneOnce executes one bounded packet step and writes du
   assert.equal(runtimeControllerState.summary.continuationCount, 1);
   assert.equal(runtimeControllerState.summary.currentContinuationKind, "review-follow-through");
   assert.equal(runtimeControllerState.summary.currentContinuationPacketId, seeded.packetId);
-  assert.equal(runtimeControllerState.summary.currentContinuationCommand, "project:dove.paper.follow-through");
+  assert.equal(runtimeControllerState.summary.currentContinuationCommand, "project:dove.follow-through");
   assert.equal(packet.lifecycleStatus, "review-needed");
   assert.equal(packet.continuationState.status, "review-needed");
   assert.equal(packet.decisions.some((item) => item.id === `autonomy-step-${result.runId}`), true);
@@ -3456,7 +3594,8 @@ test("issueProgramApproval can consume a review-to-reapproval intent for note ca
   ensureWorkspace(root);
   initProject(root, { title: "Program Note Continuation", objective: "Continue a note-capture lineage from a review checkpoint." });
   const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const sourceId = registerSource(root, { title: "A continuation source", citationKey: "note-cont-src" }).id;
+  const evidencePacketId = seedTaskPacket(root, "program-note-continuation-source");
+  const sourceId = registerSource(root, { packetId: evidencePacketId, title: "A continuation source", citationKey: "note-cont-src" }).id;
 
   materializeGuidancePacket(root, {
     sourceType: "remediation-pack",
@@ -3541,7 +3680,8 @@ test("materializeGuidancePacket can persist an objective-aware bounded step sequ
   ensureWorkspace(root);
   initProject(root, { title: "Objective Aware Materialization", objective: "Persist inferred bounded program envelopes during materialization." });
   const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const sourceId = registerSource(root, { title: "Objective aware note source", citationKey: "objective-aware-note-src" }).id;
+  const evidencePacketId = seedTaskPacket(root, "objective-aware-note-source-packet");
+  const sourceId = registerSource(root, { packetId: evidencePacketId, title: "Objective aware note source", citationKey: "objective-aware-note-src" }).id;
 
   const materialized = materializeGuidancePacket(root, {
     sourceType: "remediation-pack",
@@ -3628,7 +3768,8 @@ test("materializeGuidancePacket derives a shorter note sequence when the board i
   ensureWorkspace(root);
   initProject(root, { title: "Phase Aware Note Materialization", objective: "Derive a shorter note sequence in research phase." });
   const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const sourceId = registerSource(root, { title: "Phase aware note source", citationKey: "phase-aware-note-src" }).id;
+  const evidencePacketId = seedTaskPacket(root, "phase-aware-note-source-packet");
+  const sourceId = registerSource(root, { packetId: evidencePacketId, title: "Phase aware note source", citationKey: "phase-aware-note-src" }).id;
 
   upsertOrchestrationBoard(root, {
     phase: "research",
@@ -3724,7 +3865,8 @@ test("runAutonomyControlPlaneOnce executes one approved program-level note captu
   ensureWorkspace(root);
   initProject(root, { title: "Program Note Step", objective: "Run one approved note-capture program step." });
   const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const sourceId = registerSource(root, { title: "A note source", citationKey: "note-step-src" }).id;
+  const evidencePacketId = seedTaskPacket(root, "program-note-step-source");
+  const sourceId = registerSource(root, { packetId: evidencePacketId, title: "A note source", citationKey: "note-step-src" }).id;
 
   materializeGuidancePacket(root, {
     sourceType: "remediation-pack",
@@ -3916,9 +4058,11 @@ test("runAutonomyControlPlaneOnce executes one approved program-level review loo
   ensureWorkspace(root);
   initProject(root, { title: "Program Review Step", objective: "Run one approved review-loop program step." });
   const { remediationPack } = seedAutonomyGuidance(root);
+  const evidencePacketId = seedTaskPacket(root, "program-review-step-evidence");
 
-  registerSource(root, { title: "Review source", citationKey: "review-src" });
+  registerSource(root, { packetId: evidencePacketId, title: "Review source", citationKey: "review-src" });
   upsertNote(root, {
+    packetId: evidencePacketId,
     title: "Review note",
     sectionId: "introduction",
     sourceIds: ["review-src"],
@@ -4977,9 +5121,10 @@ test("playbook selection prefers packet and taxonomy specific matches over broad
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Playbook Specificity", objective: "Prefer the most specific family playbook under mixed guidance signals." });
+  const packetId = seedTaskPacket(root, "playbook-specificity");
 
-  registerSource(root, { citationKey: "specificity-source", title: "Specificity Source", authors: ["Rao"], year: 2026 });
-  upsertNote(root, { noteId: "specificity-note", title: "Specificity note", sectionId: "method", sourceIds: ["specificity-source"], summary: "Specificity should remain deterministic." });
+  registerSource(root, { packetId, citationKey: "specificity-source", title: "Specificity Source", authors: ["Rao"], year: 2026 });
+  upsertNote(root, { packetId, noteId: "specificity-note", title: "Specificity note", sectionId: "method", sourceIds: ["specificity-source"], summary: "Specificity should remain deterministic." });
   writeJson(root, ARTIFACT_PATHS.sources, {
     version: 1,
     items: [{ id: "experiment-specificity-exp", citationKey: "specificity-exp-source", title: "Wrong endpoint type", authors: [], year: 2026, sourceType: "paper", abstract: "", origin: "manual", addedAt: new Date(0).toISOString() }],
@@ -5061,6 +5206,7 @@ test("playbook selection prefers packet and taxonomy specific matches over broad
 test("figure QA records missing staged files and source artifacts in qa.json", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  const packetId = seedTaskPacket(root, "figure-qa-main");
   writeJson(root, ARTIFACT_PATHS.evidence, {
     version: 3,
     claims: [{ id: "claim-main", text: "Main claim" }],
@@ -5070,6 +5216,7 @@ test("figure QA records missing staged files and source artifacts in qa.json", (
   fs.writeFileSync(path.join(root, ".dove", "figures", "main-figure.template.svg"), "<svg />\n", "utf8");
 
   upsertFigurePlan(root, {
+    packetId,
     items: [{
       id: "main-figure",
       sourceSections: ["introduction"],
@@ -5096,6 +5243,7 @@ test("figure QA records missing staged files and source artifacts in qa.json", (
 test("validateFigurePipeline catches colliding stage paths and malformed stage contract drift", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  const packetId = seedTaskPacket(root, "figure-qa-collision");
   writeJson(root, ARTIFACT_PATHS.evidence, {
     version: 3,
     claims: [{ id: "claim-shared", text: "Shared claim" }],
@@ -5105,6 +5253,7 @@ test("validateFigurePipeline catches colliding stage paths and malformed stage c
   fs.writeFileSync(path.join(root, ".dove", "figures", "shared.svg"), "<svg />\n", "utf8");
 
   upsertFigurePlan(root, {
+    packetId,
     items: [{
       id: "figure-a",
       sourceSections: ["introduction"],
@@ -5136,6 +5285,7 @@ test("validateFigurePipeline catches colliding stage paths and malformed stage c
 test("validateFigurePipeline records malformed stage paths instead of throwing on non-string values", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  const packetId = seedTaskPacket(root, "figure-qa-malformed-path");
   writeJson(root, ARTIFACT_PATHS.evidence, {
     version: 3,
     claims: [{ id: "claim-malformed", text: "Malformed path claim" }],
@@ -5143,6 +5293,7 @@ test("validateFigurePipeline records malformed stage paths instead of throwing o
   });
 
   upsertFigurePlan(root, {
+    packetId,
     items: [{
       id: "figure-malformed",
       sourceSections: ["introduction"],
@@ -5167,6 +5318,7 @@ test("validateFigurePipeline records malformed stage paths instead of throwing o
 test("validateFigurePipeline records malformed non-array figure linkage fields instead of throwing", () => {
   const root = tempRoot();
   ensureWorkspace(root);
+  const packetId = seedTaskPacket(root, "figure-qa-malformed-array");
   writeJson(root, ARTIFACT_PATHS.evidence, {
     version: 3,
     claims: [{ id: "claim-array", text: "Array claim" }],
@@ -5174,6 +5326,7 @@ test("validateFigurePipeline records malformed non-array figure linkage fields i
   });
 
   upsertFigurePlan(root, {
+    packetId,
     items: [{
       id: "figure-array-malformed",
       sourceSections: ["introduction"],

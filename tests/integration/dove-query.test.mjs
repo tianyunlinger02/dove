@@ -13,6 +13,7 @@ import {
   queryDoveMissionBoard,
   queryDoveOrchestrate,
   queryDoveReturn,
+  queryDoveStatus,
   queryMetaOptimize
 } from "../../src/core/index.mjs";
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
@@ -231,6 +232,61 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
   assert.deepEqual(archivedIncluded.missions.map((mission) => mission.id), ["engineering-cache", "old-cache"]);
 });
 
+test("queryDoveStatus consolidates board, task graph, paper lifecycle, and navigation state", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+
+  writeJson(root, ARTIFACT_PATHS.orchestrationBoard, {
+    version: 2,
+    currentPhase: "draft",
+    currentFocus: "Ship the consolidated status surface.",
+    objective: "Make Dove status one readable entrypoint.",
+    assignedRole: "builder",
+    nextAction: "Inspect status before continuing."
+  });
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
+    version: 3,
+    items: [{
+      id: "status-packet",
+      title: "Consolidate status",
+      status: "pending",
+      lifecycleStatus: "active",
+      lifecycleFamily: "work-unit",
+      doveDomain: "engineering",
+      assignedRole: "builder",
+      phase: "draft",
+      nextAction: "Return the status validation.",
+      outputPaths: ["src/core/dove.mjs"],
+      evidenceLinks: ["tests/integration/dove-query.test.mjs"]
+    }],
+    lifecycleCounts: {},
+    lifecycleFamilyCounts: {},
+    dependencyHealth: {},
+    updatedAt: null
+  });
+
+  const result = queryDoveStatus(root, { domain: "engineering" });
+
+  assert.equal(result.mode, "dove-status-query");
+  assert.equal(result.query, true);
+  assert.equal(result.proposalOnly, true);
+  assert.equal(result.noAutoApply, true);
+  assert.deepEqual(result.writes, []);
+  assert.equal(result.current.domain, "engineering");
+  assert.equal(result.board.domain, "engineering");
+  assert.ok(result.taskGraph && typeof result.taskGraph === "object");
+  assert.ok(result.paperLifecycle && typeof result.paperLifecycle === "object");
+  assert.ok(result.openQuestions && typeof result.openQuestions === "object");
+  assert.ok(result.decisions && typeof result.decisions === "object");
+  assert.ok(result.lineage && typeof result.lineage === "object");
+  assert.equal(result.navigation.reportPath, ARTIFACT_PATHS.navigationReport);
+  assert.equal(result.navigation.wikiPath, ARTIFACT_PATHS.wiki);
+  assert.equal(result.diagnostics.noCommandExecution, true);
+  assert.equal(result.diagnostics.noExternalProcess, true);
+  assert.equal(result.diagnostics.noGitInspection, true);
+  assert.equal(result.diagnostics.noSourceMutation, true);
+});
+
 test("queryDoveMission frames an engineering mission without writing artifacts", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -280,7 +336,7 @@ test("queryDoveMission frames an engineering mission without writing artifacts",
   assert.equal(result.mission.domain, "engineering");
   assert.equal(result.mission.stage, "execution");
   assert.equal(result.mission.primaryRole, "builder");
-  assert.equal(result.mission.nextCommand, "project:dove.materialize or project:dove.autonomy-operate");
+  assert.equal(result.mission.nextCommand, "project:dove.launch or project:dove.autonomy-operate");
   assert.deepEqual(result.mission.targetArtifacts, ["src/cache.mjs"]);
   assert.deepEqual(result.mission.acceptanceChecks, ["changed files", "tests or validation output"]);
   assert.equal(result.workspace.durableRoot, ".dove");
@@ -323,8 +379,8 @@ test("queryDoveOrchestrate routes an engineering mission without writing artifac
   assert.deepEqual(result.writes, []);
   assert.equal(result.mission.domain, "engineering");
   assert.equal(result.mission.stage, "execution");
-  assert.equal(result.route.recommendedCommand, "project:dove.materialize");
-  assert.equal(result.route.nextCommand, "project:dove.materialize");
+  assert.equal(result.route.recommendedCommand, "project:dove.launch");
+  assert.equal(result.route.nextCommand, "project:dove.launch");
   assert.equal(result.route.roleBoundary.primaryRole, "builder");
   assert.equal(result.workspace.durableRoot, ".dove");
   assert.equal(result.workspace.authoritativeRoot, ".dove");
@@ -647,7 +703,7 @@ test("launchDoveMission reports stale legacy .paper artifacts without importing 
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetPath?.targetId ?? "task-dove-launch"}.json`)), true);
 });
 
-test("CLI Dove orchestrate, mission, board, audit, and return commands expose proposal-only JSON", () => {
+test("CLI Dove orchestrate, mission, status, audit, and return commands expose proposal-only JSON", () => {
   const root = tempRoot();
   ensureWorkspace(root);
 
@@ -670,7 +726,7 @@ test("CLI Dove orchestrate, mission, board, audit, and return commands expose pr
   assert.equal(orchestratePayload.mode, "dove-orchestrate-query");
   assert.equal(orchestratePayload.proposalOnly, true);
   assert.deepEqual(orchestratePayload.writes, []);
-  assert.equal(orchestratePayload.route.recommendedCommand, "project:dove.materialize");
+  assert.equal(orchestratePayload.route.recommendedCommand, "project:dove.launch");
 
   const mission = spawnSync("node", [
     CLI,
@@ -694,22 +750,28 @@ test("CLI Dove orchestrate, mission, board, audit, and return commands expose pr
   assert.equal(missionPayload.mission.stage, "execution");
   assert.deepEqual(missionPayload.mission.targetArtifacts, ["bin/dove.mjs"]);
 
-  const board = spawnSync("node", [
+  const status = spawnSync("node", [
     CLI,
-    "board",
+    "status",
     root,
     "--domain", "engineering"
   ], {
     cwd: ROOT,
     encoding: "utf8"
   });
-  assert.equal(board.status, 0, board.stderr || board.stdout);
-  const boardPayload = JSON.parse(board.stdout);
-  assert.equal(boardPayload.mode, "dove-mission-board-query");
-  assert.equal(boardPayload.proposalOnly, true);
-  assert.deepEqual(boardPayload.writes, []);
-  assert.equal(boardPayload.board.domain, "engineering");
-  assert.equal(boardPayload.workspace.authoritativeRoot, ".dove");
+  assert.equal(status.status, 0, status.stderr || status.stdout);
+  const statusPayload = JSON.parse(status.stdout);
+  assert.equal(statusPayload.mode, "dove-status-query");
+  assert.equal(statusPayload.proposalOnly, true);
+  assert.deepEqual(statusPayload.writes, []);
+  assert.equal(statusPayload.board.domain, "engineering");
+  assert.equal(statusPayload.navigation.wikiPath, ARTIFACT_PATHS.wiki);
+
+  const removedBoard = spawnSync("node", [CLI, "board", root], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.notEqual(removedBoard.status, 0);
 
   writeText(root, "bin/dove.mjs", "#!/usr/bin/env node\n");
   writeText(root, "tests/integration/dove-query.test.mjs", "import test from 'node:test';\n");

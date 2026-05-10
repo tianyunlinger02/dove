@@ -27,6 +27,32 @@ function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "dove-phase2-"));
 }
 
+function seedTaskPacket(root, packetId = "phase2-main-packet") {
+  const timestamp = new Date(0).toISOString();
+  const packet = {
+    id: packetId,
+    title: "Phase 2 integration packet",
+    summary: "Integration test packet for task-scoped writes.",
+    sourceType: "test-task",
+    sourceId: packetId,
+    status: "pending",
+    lifecycleStatus: "active",
+    active: true,
+    assignedRole: "builder",
+    currentFocus: "Run the phase 2 integration flow.",
+    nextAction: "Continue the scoped phase 2 flow.",
+    evidenceLinks: [],
+    outputPaths: [],
+    packetPath: `.dove/task-packets/packets/${packetId}.json`,
+    packetContextPath: `.dove/context/packets/${packetId}.json`,
+    updatedAt: timestamp
+  };
+  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
+  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  return packetId;
+}
+
 test("continuation focus and next action remain durable across refresh", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -74,6 +100,7 @@ test("experiment audits and claim bridge records persist separately from raw res
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Audit Bridge Test", objective: "Exercise audit and bridge persistence." });
+  seedTaskPacket(root);
 
   const source = registerSource(root, { citationKey: "audit-source", title: "Audit Source", authors: ["Ng"], year: 2026 });
   const note = upsertNote(root, { title: "Audit note", sectionId: "method", sourceIds: [source.id], summary: "Method note." });
@@ -118,6 +145,7 @@ test("refreshWiki writes typed wiki indexes and workspace summary surfaces", () 
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Typed Wiki Test", objective: "Generate typed wiki artifacts." });
+  seedTaskPacket(root);
 
   const source = registerSource(root, { citationKey: "wiki-source", title: "Wiki Source", authors: ["Lee"], year: 2026 });
   const note = upsertNote(root, { title: "Wiki note", sectionId: "introduction", sourceIds: [source.id], summary: "Question-bearing note.", openQuestions: ["How should the bridge affect confidence?"] });
@@ -158,6 +186,7 @@ test("figure artifact planning writes staged contract files without claiming ren
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Figure Contract Test", objective: "Plan a durable figure contract." });
+  seedTaskPacket(root);
   registerSource(root, {
     citationKey: "figure-source",
     title: "Figure Source",

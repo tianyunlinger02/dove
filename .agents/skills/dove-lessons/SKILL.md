@@ -24,5 +24,5 @@ Record or inspect concise operator lessons and retrospectives without importing 
 6. Do not import or cite ignored raw runtime traces.
 7. Do not materialize, approve, launch, or execute work from lessons.
 8. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-9. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+9. Use this shared Dove control-plane surface across paper, engineering, experiment, review, and general missions; route to `dove.paper.*` only for paper-specific artifact workflows.
 10. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

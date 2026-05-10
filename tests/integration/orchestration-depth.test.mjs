@@ -28,6 +28,32 @@ function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "dove-depth-"));
 }
 
+function seedTaskPacket(root, packetId = "depth-main-packet") {
+  const timestamp = new Date(0).toISOString();
+  const packet = {
+    id: packetId,
+    title: "Depth main packet",
+    summary: "Integration test packet for task-scoped writes.",
+    sourceType: "test-task",
+    sourceId: packetId,
+    status: "pending",
+    lifecycleStatus: "active",
+    active: true,
+    assignedRole: "builder",
+    currentFocus: "Run the orchestration depth flow.",
+    nextAction: "Continue the scoped flow.",
+    evidenceLinks: [],
+    outputPaths: [],
+    packetPath: `.dove/task-packets/packets/${packetId}.json`,
+    packetContextPath: `.dove/context/packets/${packetId}.json`,
+    updatedAt: timestamp
+  };
+  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
+  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  return packetId;
+}
+
 test("orchestration board, handoff, experiment, rebuttal, and version flows stay durable", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -36,6 +62,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     objective: "Exercise the orchestration depth model.",
     thesis: "Board-first workflows improve resumability."
   });
+  seedTaskPacket(root);
 
   const board = upsertOrchestrationBoard(root, {
     phase: "research",
@@ -166,6 +193,7 @@ test("version actions are blocked until coherent review clears finalize gate", (
     objective: "Verify finalize review gate.",
     thesis: "Review gate should block premature version snapshots."
   });
+  seedTaskPacket(root, "finalize-gate-packet");
 
   upsertOrchestrationBoard(root, {
     phase: "review",

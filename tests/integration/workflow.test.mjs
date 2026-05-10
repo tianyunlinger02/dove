@@ -30,6 +30,32 @@ function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "dove-workflow-"));
 }
 
+function seedTaskPacket(root, packetId = "workflow-main-packet") {
+  const timestamp = new Date(0).toISOString();
+  const packet = {
+    id: packetId,
+    title: "Workflow main packet",
+    summary: "Integration test packet for task-scoped writes.",
+    sourceType: "test-task",
+    sourceId: packetId,
+    status: "pending",
+    lifecycleStatus: "active",
+    active: true,
+    assignedRole: "builder",
+    currentFocus: "Run the integration workflow.",
+    nextAction: "Continue the scoped workflow.",
+    evidenceLinks: [],
+    outputPaths: [],
+    packetPath: `.dove/task-packets/packets/${packetId}.json`,
+    packetContextPath: `.dove/context/packets/${packetId}.json`,
+    updatedAt: timestamp
+  };
+  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
+  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  return packetId;
+}
+
 function seedExecutionBridgeCandidate(root) {
   fs.writeFileSync(path.join(root, ".dove", "reviews", "concerns.json"), JSON.stringify({
     version: 2,
@@ -72,6 +98,7 @@ test("single-paper workflow creates durable artifacts", () => {
     thesis: "Durable workflows improve academic writing.",
     audience: "conference reviewers"
   });
+  seedTaskPacket(root);
 
   upsertOrchestrationBoard(root, {
     phase: "research",

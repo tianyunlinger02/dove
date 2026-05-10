@@ -37,6 +37,32 @@ function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "dove-trellis-"));
 }
 
+function seedTaskPacket(root, packetId = "trellis-main-packet") {
+  const timestamp = new Date(0).toISOString();
+  const packet = {
+    id: packetId,
+    title: "Portable Trellis integration packet",
+    summary: "Integration test packet for task-scoped writes.",
+    sourceType: "test-task",
+    sourceId: packetId,
+    status: "pending",
+    lifecycleStatus: "active",
+    active: true,
+    assignedRole: "builder",
+    currentFocus: "Run the portable Trellis integration flow.",
+    nextAction: "Continue the scoped Trellis flow.",
+    evidenceLinks: [],
+    outputPaths: [],
+    packetPath: `.dove/task-packets/packets/${packetId}.json`,
+    packetContextPath: `.dove/context/packets/${packetId}.json`,
+    updatedAt: timestamp
+  };
+  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
+  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  return packetId;
+}
+
 test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -45,6 +71,7 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
     objective: "Exercise durable task packets and context manifests.",
     thesis: "Portable packetized workflow improves resumability."
   });
+  seedTaskPacket(root);
 
   const source = registerSource(root, {
     citationKey: "packet-source",
@@ -335,6 +362,7 @@ test("playbook artifact update maps stay durable and visible through operator-fa
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Artifact Update Maps", objective: "Expose playbook-driven artifact target lists without auto-applying updates." });
+  seedTaskPacket(root);
 
   registerSource(root, { citationKey: "artifact-map-source", title: "Artifact Map Source", authors: ["Kim"], year: 2026 });
   upsertNote(root, { noteId: "artifact-map-note", title: "Artifact map note", sectionId: "method", sourceIds: ["artifact-map-source"], summary: "Artifact target maps should be explicit." });

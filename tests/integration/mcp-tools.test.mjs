@@ -14,6 +14,32 @@ function extractToolJson(result) {
   return JSON.parse(result.content[0].text);
 }
 
+function seedTaskPacket(root, packetId = "mcp-main-packet") {
+  const timestamp = new Date(0).toISOString();
+  const packet = {
+    id: packetId,
+    title: "MCP integration packet",
+    summary: "Integration test packet for task-scoped MCP writes.",
+    sourceType: "test-task",
+    sourceId: packetId,
+    status: "pending",
+    lifecycleStatus: "active",
+    active: true,
+    assignedRole: "builder",
+    currentFocus: "Run the MCP integration flow.",
+    nextAction: "Continue the scoped MCP flow.",
+    evidenceLinks: [],
+    outputPaths: [],
+    packetPath: `.dove/task-packets/packets/${packetId}.json`,
+    packetContextPath: `.dove/context/packets/${packetId}.json`,
+    updatedAt: timestamp
+  };
+  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
+  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  return packetId;
+}
+
 test("MCP tool definitions include the mature workflow tools", () => {
   const names = toolDefinitions.map((tool) => tool.name);
   assert.deepEqual(names, [
@@ -30,9 +56,12 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "query_operator_lessons",
     "query_operator_follow_through",
     "query_paper_audit",
+    "query_dove_onboarding",
+    "query_paper_pipeline",
     "query_dove_orchestrate",
     "query_dove_mission",
     "query_dove_mission_board",
+    "query_dove_status",
     "query_dove_audit",
     "query_dove_return",
     "launch_dove_mission",
@@ -60,6 +89,8 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "bridge_result_to_claim",
     "run_review_loop",
     "append_review_log",
+    "prepare_isolated_review",
+    "import_isolated_review",
     "upsert_revision_plan",
     "set_section_status",
     "sync_checklist",
@@ -168,6 +199,81 @@ test("operator lessons MCP tools query, record, and reject raw Trellis traces", 
   }
 });
 
+test("onboarding, status, and paper pipeline MCP queries stay proposal-only", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-query-surfaces-"));
+  try {
+    fs.writeFileSync(path.join(root, "main.tex"), "\\documentclass{article}\n\\begin{document}Hi\\end{document}\n", "utf8");
+    const onboarding = extractToolJson(dispatchTool(root, "query_dove_onboarding", { writeMap: true }));
+    assert.equal(onboarding.mode, "dove-onboarding-query");
+    assert.equal(onboarding.proposalOnly, true);
+    assert.equal(onboarding.writeMap, false);
+    assert.deepEqual(onboarding.writes, []);
+    assert.equal(onboarding.diagnostics.writeMapForcedFalse, true);
+    assert.equal(fs.existsSync(path.join(root, ".dove", "workspace", "artifact-map.json")), false);
+
+    const status = extractToolJson(dispatchTool(root, "query_dove_status", { domain: "paper" }));
+    assert.equal(status.mode, "dove-status-query");
+    assert.equal(status.proposalOnly, true);
+    assert.equal(status.query, true);
+    assert.deepEqual(status.writes, []);
+    assert.ok(status.taskGraph && typeof status.taskGraph === "object");
+    assert.ok(status.paperLifecycle && typeof status.paperLifecycle === "object");
+    assert.ok(status.openQuestions && typeof status.openQuestions === "object");
+    assert.ok(status.decisions && typeof status.decisions === "object");
+    assert.ok(status.lineage && typeof status.lineage === "object");
+
+    const pipeline = extractToolJson(dispatchTool(root, "query_paper_pipeline", {}));
+    assert.equal(pipeline.mode, "paper-pipeline-query");
+    assert.equal(pipeline.proposalOnly, true);
+    assert.equal(pipeline.noAutoApply, true);
+    assert.deepEqual(pipeline.writes, []);
+    assert.equal(pipeline.diagnostics.noCommandExecution, true);
+    assert.equal(pipeline.diagnostics.noExternalProcess, true);
+    assert.equal(pipeline.diagnostics.noGitInspection, true);
+    assert.ok(pipeline.stages.some((stage) => stage.id === "return" && stage.commandId === "project:dove.return"));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("isolated review MCP tools prepare and import explicit handoff artifacts", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-isolated-review-"));
+  try {
+    seedTaskPacket(root);
+    const prepared = extractToolJson(dispatchTool(root, "prepare_isolated_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-1", scope: "mcp validation" }));
+    assert.equal(prepared.status, "prepared");
+    assert.equal(prepared.runId, "mcp-isolated-1");
+    assert.match(prepared.inputPath, /\.dove\/reviews\/isolated\/mcp-isolated-1\/input\.json/);
+
+    const reportPath = path.join(root, prepared.reportPath);
+    fs.writeFileSync(reportPath, "# MCP isolated report\n\nExplicit report only.\n", "utf8");
+    fs.writeFileSync(path.join(root, prepared.handoffPath), `${JSON.stringify({
+      version: 1,
+      runId: prepared.runId,
+      status: "completed",
+      verdict: "coherent",
+      reviewerId: "mcp-reviewer",
+      summary: "MCP isolated review returned explicit artifacts only.",
+      inputPath: prepared.inputPath,
+      inputSha256: prepared.inputSha256,
+      reportPath: prepared.reportPath,
+      reviewedArtifactPaths: prepared.reviewedArtifactPaths,
+      findings: [],
+      actionItems: []
+    }, null, 2)}\n`, "utf8");
+    fs.writeFileSync(path.join(root, ".dove", "reviews", "isolated", "mcp-isolated-1", "private-transcript.md"), "PRIVATE\n", "utf8");
+
+    const imported = extractToolJson(dispatchTool(root, "import_isolated_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-1" }));
+    assert.equal(imported.status, "imported");
+    assert.equal(imported.privateTranscriptImported, false);
+    assert.equal(imported.verdict, "coherent");
+    const reviewLog = fs.readFileSync(path.join(root, ".dove", "reviews", "log.md"), "utf8");
+    assert.doesNotMatch(reviewLog, /PRIVATE/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("role-bound MCP tools expose explicit override fields", () => {
   const roleBoundTools = [
     "upsert_orchestration_board",
@@ -179,6 +285,8 @@ test("role-bound MCP tools expose explicit override fields", () => {
     "bridge_result_to_claim",
     "run_review_loop",
     "append_review_log",
+    "prepare_isolated_review",
+    "import_isolated_review",
     "upsert_revision_plan",
     "normalize_rebuttal_issues",
     "build_rebuttal_strategy",
@@ -197,13 +305,51 @@ test("role-bound MCP tools expose explicit override fields", () => {
     assert.ok(tool.inputSchema.properties.policyOverrideReason, `${name} should expose policyOverrideReason`);
   }
 
+  const taskScopedTools = [
+    "update_research_brief",
+    "register_source",
+    "upsert_note",
+    "upsert_claims",
+    "upsert_plan",
+    "upsert_outline",
+    "upsert_draft",
+    "set_section_status",
+    "upsert_figure_plan",
+    "build_rebuttal",
+    "append_review_log",
+    "run_review_loop",
+    "prepare_isolated_review",
+    "import_isolated_review",
+    "upsert_revision_plan",
+    "normalize_rebuttal_issues",
+    "build_rebuttal_strategy",
+    "upsert_experiment_plan",
+    "upsert_experiment_result",
+    "run_experiment_audit",
+    "bridge_result_to_claim",
+    "create_version_snapshot",
+    "compare_versions"
+  ];
+  for (const name of taskScopedTools) {
+    const tool = toolDefinitions.find((item) => item.name === name);
+    assert.ok(tool, `missing task-scoped tool definition for ${name}`);
+    for (const field of ["packetId", "taskPacketId", "missionPacketId", "target", "packetTarget", "taskName"]) {
+      assert.ok(tool.inputSchema.properties[field], `${name} should expose ${field}`);
+    }
+  }
+
   const followThroughTool = toolDefinitions.find((item) => item.name === "record_operator_follow_through");
   const approvalsQueryTool = toolDefinitions.find((item) => item.name === "query_program_approvals");
   const doveOrchestrateQueryTool = toolDefinitions.find((item) => item.name === "query_dove_orchestrate");
   const doveMissionQueryTool = toolDefinitions.find((item) => item.name === "query_dove_mission");
   const doveBoardQueryTool = toolDefinitions.find((item) => item.name === "query_dove_mission_board");
+  const doveStatusQueryTool = toolDefinitions.find((item) => item.name === "query_dove_status");
   const doveAuditQueryTool = toolDefinitions.find((item) => item.name === "query_dove_audit");
   const doveReturnQueryTool = toolDefinitions.find((item) => item.name === "query_dove_return");
+  const doveOnboardingQueryTool = toolDefinitions.find((item) => item.name === "query_dove_onboarding");
+  const paperPipelineQueryTool = toolDefinitions.find((item) => item.name === "query_paper_pipeline");
+  const prepareIsolatedReviewTool = toolDefinitions.find((item) => item.name === "prepare_isolated_review");
+  const importIsolatedReviewTool = toolDefinitions.find((item) => item.name === "import_isolated_review");
   const issueApprovalTool = toolDefinitions.find((item) => item.name === "issue_program_approval");
   const revokeApprovalTool = toolDefinitions.find((item) => item.name === "revoke_program_approval");
   const materializeTool = toolDefinitions.find((item) => item.name === "materialize_guidance_packet");
@@ -214,8 +360,16 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(doveOrchestrateQueryTool, "query_dove_orchestrate should exist");
   assert.ok(doveMissionQueryTool, "query_dove_mission should exist");
   assert.ok(doveBoardQueryTool, "query_dove_mission_board should exist");
+  assert.ok(doveStatusQueryTool, "query_dove_status should exist");
   assert.ok(doveAuditQueryTool, "query_dove_audit should exist");
   assert.ok(doveReturnQueryTool, "query_dove_return should exist");
+  assert.ok(doveOnboardingQueryTool, "query_dove_onboarding should exist");
+  assert.ok(paperPipelineQueryTool, "query_paper_pipeline should exist");
+  assert.ok(prepareIsolatedReviewTool, "prepare_isolated_review should exist");
+  assert.ok(importIsolatedReviewTool, "import_isolated_review should exist");
+  assert.ok(doveOnboardingQueryTool.inputSchema.properties.maxDepth, "query_dove_onboarding should expose maxDepth");
+  assert.ok(prepareIsolatedReviewTool.inputSchema.properties.reviewedArtifactPaths, "prepare_isolated_review should expose reviewedArtifactPaths");
+  assert.ok(importIsolatedReviewTool.inputSchema.properties.handoffPath, "import_isolated_review should expose handoffPath");
   assert.ok(doveOrchestrateQueryTool.inputSchema.properties.request, "query_dove_orchestrate should expose request");
   assert.ok(doveOrchestrateQueryTool.inputSchema.properties.domain, "query_dove_orchestrate should expose domain");
   assert.ok(doveOrchestrateQueryTool.inputSchema.properties.stage, "query_dove_orchestrate should expose stage");
@@ -228,6 +382,11 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(doveBoardQueryTool.inputSchema.properties.missionPacketId, "query_dove_mission_board should expose missionPacketId");
   assert.ok(doveBoardQueryTool.inputSchema.properties.status, "query_dove_mission_board should expose status");
   assert.ok(doveBoardQueryTool.inputSchema.properties.includeArchived, "query_dove_mission_board should expose includeArchived");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.domain, "query_dove_status should expose domain");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.stage, "query_dove_status should expose stage");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.packetId, "query_dove_status should expose packetId");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.status, "query_dove_status should expose status");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.includeArchived, "query_dove_status should expose includeArchived");
   assert.ok(doveAuditQueryTool.inputSchema.properties.scope, "query_dove_audit should expose scope");
   assert.ok(doveAuditQueryTool.inputSchema.properties.changedFilePaths, "query_dove_audit should expose changedFilePaths");
   assert.ok(doveAuditQueryTool.inputSchema.properties.validationOutputPaths, "query_dove_audit should expose validationOutputPaths");

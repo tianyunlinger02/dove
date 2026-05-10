@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   ARTIFACT_PATHS,
   DOVE_PRIMARY_ROLES,
+  PIPELINE_STAGE_ORDER,
   ROLE_IDS,
   createDefaultBoard,
   createDefaultState,
@@ -20,7 +21,13 @@ import {
   normalizeState,
   normalizeWorkspaceIndex
 } from "./schema.mjs";
-import { materializeGuidancePacket } from "./navigation.mjs";
+import {
+  materializeGuidancePacket,
+  queryDecisions,
+  queryLineage,
+  queryOpenQuestions,
+  queryTaskGraph
+} from "./navigation.mjs";
 import { queryPaperAudit } from "./paper-audit.mjs";
 import { assertGovernanceMutationRegistered } from "./workspace.mjs";
 
@@ -695,6 +702,51 @@ function artifactPathsReadForDove() {
   ];
 }
 
+const PAPER_PIPELINE_STAGE_METADATA = {
+  init: { commandId: "project:dove.paper.init", artifactPaths: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.project, ARTIFACT_PATHS.researchContract] },
+  sources: { commandId: "project:dove.paper.source", artifactPaths: [ARTIFACT_PATHS.sources, ARTIFACT_PATHS.bibliography] },
+  notes: { commandId: "project:dove.paper.note", artifactPaths: [ARTIFACT_PATHS.notes] },
+  research: { commandId: "project:dove.paper.research", artifactPaths: [ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.researchAgenda] },
+  plan: { commandId: "project:dove.plan", artifactPaths: [ARTIFACT_PATHS.plan] },
+  outline: { commandId: "project:dove.paper.outline", artifactPaths: [ARTIFACT_PATHS.outline] },
+  draft: { commandId: "project:dove.paper.draft", artifactPaths: [ARTIFACT_PATHS.draftsDir] },
+  experiments: { commandId: "project:dove.paper.experiment", artifactPaths: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits] },
+  citations: { commandId: "project:dove.paper.citations", artifactPaths: [ARTIFACT_PATHS.bibliography, ARTIFACT_PATHS.citationLog] },
+  review: { commandId: "project:dove.paper.review", artifactPaths: [ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewConcerns] },
+  rebuttal: { commandId: "project:dove.paper.rebuttal", artifactPaths: [ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft] },
+  versions: { commandId: "project:dove.paper.version", artifactPaths: [ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.versionComparisons] },
+  checklist: { commandId: "project:dove.checklist", artifactPaths: [ARTIFACT_PATHS.checklist] },
+  return: { commandId: "project:dove.return", artifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.checklist] }
+};
+
+function inspectPipelineArtifact(root, relativePath) {
+  return {
+    path: relativePath,
+    exists: fs.existsSync(path.join(root, relativePath))
+  };
+}
+
+function buildPaperPipelineStage(root, stageId, index) {
+  const metadata = PAPER_PIPELINE_STAGE_METADATA[stageId];
+  const artifacts = metadata.artifactPaths.map((artifactPath) => inspectPipelineArtifact(root, artifactPath));
+  const availableArtifacts = artifacts.filter((item) => item.exists).map((item) => item.path);
+  const missingArtifacts = artifacts.filter((item) => !item.exists).map((item) => item.path);
+  return {
+    id: stageId,
+    order: index + 1,
+    commandId: metadata.commandId,
+    keyArtifacts: artifacts,
+    availableArtifacts,
+    missingArtifacts,
+    status: missingArtifacts.length === 0 ? "ready" : availableArtifacts.length > 0 ? "partial" : "missing"
+  };
+}
+
+function selectPaperPipelineNextCommand(stages) {
+  const nextStage = stages.find((stage) => stage.status !== "ready");
+  return nextStage?.commandId ?? "project:dove.return";
+}
+
 function booleanArg(value) {
   if (value === true) {
     return true;
@@ -877,10 +929,10 @@ function classifyReturnStatus({ mission, inputs, paperAudit, engineeringEvidence
 
 function nextCommandForReturnStatus(status, domain) {
   if (status === "needs-review") {
-    return "project:dove.paper.review-loop";
+    return "project:dove.paper.review";
   }
   if (status === "needs-execution") {
-    return domain === "paper" ? "project:dove.paper.checklist" : "project:dove.checklist";
+    return domain === "paper" ? "project:dove.checklist" : "project:dove.checklist";
   }
   if (status === "needs-audit") {
     return domain === "engineering" ? "project:dove.return" : "project:dove.paper.audit";
@@ -888,7 +940,7 @@ function nextCommandForReturnStatus(status, domain) {
   if (status === "blocked") {
     return "project:dove.mission";
   }
-  return "project:dove.paper.version-snapshot";
+  return "project:dove.paper.version";
 }
 
 function routeRequestText(args, mission) {
@@ -960,6 +1012,101 @@ function auditVerdictFromSeverityCounts(severityCounts = {}) {
     return "findings";
   }
   return "clear";
+}
+
+export function queryPaperPipeline(root, args = {}) {
+  const inputs = readDoveInputs(root);
+  const currentStage = inferStage({ ...args, domain: "paper" }, inputs);
+  const stageIds = [...PIPELINE_STAGE_ORDER, "return"];
+  const stages = stageIds.map((stageId, index) => buildPaperPipelineStage(root, stageId, index));
+  const stageCounts = countBy(stages.map((stage) => stage.status), ["ready", "partial", "missing"]);
+  return {
+    mode: "paper-pipeline-query",
+    proposalOnly: true,
+    noAutoApply: true,
+    writes: [],
+    current: {
+      domain: "paper",
+      missionStage: currentStage,
+      boardPhase: inputs.board.currentPhase ?? null,
+      boardAssignedRole: inputs.board.assignedRole ?? null,
+      workspaceCurrentDomain: inputs.workspaceIndex.dove?.currentDomain ?? null,
+      workspaceMissionStage: inputs.workspaceIndex.dove?.missionLifecycle?.currentStage ?? null
+    },
+    stages,
+    summary: {
+      stageCount: stages.length,
+      readyStageCount: stageCounts.ready,
+      partialStageCount: stageCounts.partial,
+      missingStageCount: stageCounts.missing,
+      activePacketCount: activePackets(inputs.packets).filter((packet) => ["paper", "experiment", "review"].includes(packet.doveDomain)).length,
+      reviewVerdict: inputs.reviewState.lastVerdict ?? "not-reviewed",
+      checklistUncheckedCount: uncheckedChecklistCount(inputs.checklist)
+    },
+    suggestedNextCommand: selectPaperPipelineNextCommand(stages),
+    workspace: buildWorkspaceSummary(inputs),
+    diagnostics: {
+      readErrors: inputs.readErrors,
+      artifactPathsRead: Array.from(new Set([...artifactPathsReadForDove(), ...stages.flatMap((stage) => stage.keyArtifacts.map((item) => item.path))])),
+      noRefresh: true,
+      noCommandExecution: true,
+      noExternalProcess: true,
+      noGitInspection: true
+    }
+  };
+}
+
+export function queryDoveStatus(root, args = {}) {
+  const missionBoard = queryDoveMissionBoard(root, args);
+  const taskGraph = queryTaskGraph(root);
+  const paperLifecycle = queryPaperPipeline(root, args);
+  const openQuestions = queryOpenQuestions(root);
+  const decisions = queryDecisions(root);
+  const lineage = queryLineage(root);
+  const readErrors = [
+    ...(missionBoard.diagnostics?.readErrors ?? []),
+    ...(paperLifecycle.diagnostics?.readErrors ?? [])
+  ];
+  return {
+    mode: "dove-status-query",
+    query: true,
+    proposalOnly: true,
+    noAutoApply: true,
+    writes: [],
+    current: {
+      domain: missionBoard.board?.domain ?? paperLifecycle.current?.domain ?? null,
+      stage: missionBoard.board?.stage ?? paperLifecycle.current?.missionStage ?? null,
+      primaryRole: missionBoard.board?.primaryRole ?? null,
+      nextCommand: missionBoard.board?.nextCommand ?? paperLifecycle.suggestedNextCommand ?? "project:dove.orchestrate"
+    },
+    board: missionBoard.board,
+    queues: missionBoard.queues,
+    counts: missionBoard.counts,
+    taskGraph,
+    paperLifecycle,
+    openQuestions,
+    decisions,
+    lineage,
+    navigation: {
+      reportPath: ARTIFACT_PATHS.navigationReport,
+      wikiPath: ARTIFACT_PATHS.wiki
+    },
+    suggestedNextCommand: missionBoard.board?.nextCommand ?? paperLifecycle.suggestedNextCommand ?? "project:dove.orchestrate",
+    diagnostics: {
+      readErrors,
+      artifactPathsRead: Array.from(new Set([
+        ...artifactPathsReadForDove(),
+        ...(paperLifecycle.diagnostics?.artifactPathsRead ?? []),
+        ARTIFACT_PATHS.navigationReport,
+        ARTIFACT_PATHS.wiki
+      ])),
+      mayRefreshDerivedSurfaces: true,
+      noCommandExecution: true,
+      noExternalProcess: true,
+      noGitInspection: true,
+      noSourceMutation: true
+    }
+  };
 }
 
 export function queryDoveOrchestrate(root, args = {}) {

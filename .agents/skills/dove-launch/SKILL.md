@@ -1,11 +1,11 @@
 ---
 name: dove-launch
-description: "Materialize accepted guidance into a governed Dove mission packet without executing it."
+description: "Turn accepted guidance into a governed Dove mission packet without executing it."
 ---
 
 # Dove Launch
 
-Materialize accepted guidance into a governed Dove mission packet without executing it.
+Turn accepted guidance into a governed Dove mission packet without executing it.
 
 ## Contract
 
@@ -20,7 +20,8 @@ Materialize accepted guidance into a governed Dove mission packet without execut
 2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/meta/operator-follow-through.json`, `.dove/task-packets/index.json`, `.dove/programs/approvals.json`.
 3. Prefer the `launch_dove_mission` MCP tool when available.
 4. Only perform the governed mutation owned by this surface, scoped to the operator request.
-5. Require an accepted source plus explicit `executeBy` and `reviewAfter`; create the mission packet only and do not execute autonomy.
-6. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-7. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
-8. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+5. Use this as the only public slash surface for accepted guidance materialization.
+6. Require an accepted source plus explicit `executeBy` and `reviewAfter`; create the mission packet only and do not execute autonomy.
+7. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+8. Use this shared Dove control-plane surface across paper, engineering, experiment, review, and general missions; route to `dove.paper.*` only for paper-specific artifact workflows.
+9. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

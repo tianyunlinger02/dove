@@ -21,5 +21,5 @@ Inspect, issue, or revoke bounded program approvals.
 3. Use the `query_program_approvals`, `issue_program_approval`, `revoke_program_approval` MCP tools when available.
 4. Require explicit operator approval and bounded authority before creating, changing, or consuming program authority.
 5. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-6. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+6. Use this shared Dove control-plane surface across paper, engineering, experiment, review, and general missions; route to `dove.paper.*` only for paper-specific artifact workflows.
 7. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

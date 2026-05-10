@@ -18,5 +18,5 @@ Inspect return readiness from declared evidence and durable state.
 5. Use declared changed-file, test-evidence, and validation-output paths; do not run tests, inspect git, or repair state from this surface.
 6. At closure, decide explicitly whether reusable experience is worth recording through Dove lessons; do not record automatically.
 7. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-8. For paper-specific work, route to the matching `dove.paper.*` surface instead of adding a second workflow branch.
+8. Use this shared Dove control-plane surface across paper, engineering, experiment, review, and general missions; route to `dove.paper.*` only for paper-specific artifact workflows.
 9. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

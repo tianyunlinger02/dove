@@ -6,7 +6,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, queryDoveAudit, queryDoveMission, queryDoveMissionBoard, queryDoveOrchestrate, queryDoveReturn, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runIsolatedReview } from "../src/core/index.mjs";
+import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runIsolatedReview } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
 import {
@@ -27,6 +27,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 const GLOBAL_COPY_EXCLUDE_NAMES = new Set([".git", "node_modules"]);
+const INTERNAL_DOC_NAMES = new Set([
+  "DOVE_REFACTOR_PLAN_2026-05-04.md",
+  "ROLE_HIERARCHY_REFACTOR_PLAN_2026-05-04.md",
+  "PAPER_FACTORY_SYSTEM_ORIGINS.zh-CN.md",
+  "REFERENCE_ARCHITECTURES.zh-CN.md"
+]);
 const GLOBAL_COPY_EXCLUDE_SUFFIXES = [".log", ".tmp", ".cache"];
 
 function usage() {
@@ -37,10 +43,9 @@ Usage:
   dove sync [target] [--force] [--host <opencode|claude|codex|cursor|agents|all>]
   dove doctor [target]
   dove onboard [target] [--write-map] [--max-depth <n>] [--max-files <n>]
-  dove migrate [target] [--write-map] [--max-depth <n>] [--max-files <n>]
   dove orchestrate [target] [--request <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--allow-autonomy]
   dove mission [target] [--goal <text>] [--domain <id>] [--stage <id>] [--artifact <path>] [--acceptance-check <text>]
-  dove board [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived]
+  dove status [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived]
   dove audit [target] [--scope <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
   dove return [target] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
   dove launch [target] --source-type <type> --source-id <id> --execute-by <iso> --review-after <iso> [--mission-packet-id <id>] [--goal <text>] [--domain <id>] [--stage <id>]
@@ -169,6 +174,9 @@ function shouldSkipCopy(relativePath) {
   if (basename === "settings.local.json" || basename.endsWith(".local.json")) {
     return true;
   }
+  if (INTERNAL_DOC_NAMES.has(basename)) {
+    return true;
+  }
   if (basename === ".env" || basename.startsWith(".env.")) {
     return true;
   }
@@ -262,7 +270,7 @@ function buildDoveReturnArgs(rest = []) {
   };
 }
 
-function buildDoveBoardArgs(rest = []) {
+function buildDoveStatusArgs(rest = []) {
   return {
     domain: readFirstFlagValue(rest, ["--domain", "--dove-domain", "--mission-domain"]),
     stage: readFirstFlagValue(rest, ["--stage", "--mission-stage"]),
@@ -1810,7 +1818,6 @@ function doctor(target) {
 }
 
 const [, , command, maybeTarget, ...rest] = process.argv;
-const force = rest.includes("--force");
 
 function runDoveSurface(surface, rawTarget, rawRest = []) {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(rawTarget, rawRest);
@@ -1820,8 +1827,8 @@ function runDoveSurface(surface, rawTarget, rawRest = []) {
   if (surface === "mission") {
     return queryDoveMission(target, buildDoveMissionArgs(commandRest));
   }
-  if (surface === "board") {
-    return queryDoveMissionBoard(target, buildDoveBoardArgs(commandRest));
+  if (surface === "status") {
+    return queryDoveStatus(target, buildDoveStatusArgs(commandRest));
   }
   if (surface === "audit") {
     return queryDoveAudit(target, buildDoveAuditArgs(commandRest));
@@ -1838,52 +1845,53 @@ if (!command || command === "help" || command === "--help") {
 }
 
 if (command === "install" || command === "sync") {
-  const target = resolveTarget(maybeTarget);
-  const result = installOrSync(target, force, rest);
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  const result = installOrSync(target, commandRest.includes("--force"), commandRest);
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
 if (command === "doctor") {
-  doctor(resolveTarget(maybeTarget));
+  const { target } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  doctor(target);
   process.exit(process.exitCode ?? 0);
 }
 
-if (command === "onboard" || command === "migrate") {
-  const target = resolveTarget(maybeTarget);
-  const result = discoverPaperArtifacts(target, buildOnboardingArgs(rest));
+if (command === "onboard") {
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  const result = discoverPaperArtifacts(target, buildOnboardingArgs(commandRest));
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
-if (["orchestrate", "mission", "board", "audit", "return", "launch"].includes(command)) {
+if (["orchestrate", "mission", "status", "audit", "return", "launch"].includes(command)) {
   console.log(JSON.stringify(runDoveSurface(command, maybeTarget, rest), null, 2));
   process.exit(0);
 }
 
 if (command === "isolated-review-prepare") {
-  const target = resolveTarget(maybeTarget);
-  const result = prepareIsolatedReview(target, buildIsolatedReviewArgs(rest));
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  const result = prepareIsolatedReview(target, buildIsolatedReviewArgs(commandRest));
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
 if (command === "isolated-review-import") {
-  const target = resolveTarget(maybeTarget);
-  const runId = readFlagValue(rest, "--run-id");
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  const runId = readFlagValue(commandRest, "--run-id");
   const result = importIsolatedReview(target, {
     runId,
-    handoffPath: readFlagValue(rest, "--handoff"),
-    reportPath: readFlagValue(rest, "--report")
+    handoffPath: readFlagValue(commandRest, "--handoff"),
+    reportPath: readFlagValue(commandRest, "--report")
   });
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
 if (command === "isolated-review") {
-  const target = resolveTarget(maybeTarget);
-  const reviewerCommand = readFlagValue(rest, "--reviewer-command") ?? process.env.DOVE_ISOLATED_REVIEWER_COMMAND;
-  const prepared = runIsolatedReview(target, buildIsolatedReviewArgs(rest));
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  const reviewerCommand = readFlagValue(commandRest, "--reviewer-command") ?? process.env.DOVE_ISOLATED_REVIEWER_COMMAND;
+  const prepared = runIsolatedReview(target, buildIsolatedReviewArgs(commandRest));
   const reviewer = invokeIsolatedReviewer(reviewerCommand, prepared, target);
   const imported = importIsolatedReview(target, prepared.importArgs);
   console.log(JSON.stringify({
@@ -1897,20 +1905,20 @@ if (command === "isolated-review") {
 }
 
 if (command === "autonomy-once") {
-  const target = resolveTarget(maybeTarget);
-  const actorRole = readFlagValue(rest, "--actor-role") ?? "planner";
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  const actorRole = readFlagValue(commandRest, "--actor-role") ?? "planner";
   const result = runAutonomyControlPlaneOnce(target, { actorRole });
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
 if (command === "autonomy-foreground") {
-  const target = resolveTarget(maybeTarget);
-  const actorRole = readFlagValue(rest, "--actor-role") ?? "planner";
-  const maxSteps = readFlagValue(rest, "--max-steps");
-  const packetId = readFlagValue(rest, "--packet-id");
-  const programRunId = readFlagValue(rest, "--program-run-id");
-  const approvalId = readFlagValue(rest, "--approval-id");
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  const actorRole = readFlagValue(commandRest, "--actor-role") ?? "planner";
+  const maxSteps = readFlagValue(commandRest, "--max-steps");
+  const packetId = readFlagValue(commandRest, "--packet-id");
+  const programRunId = readFlagValue(commandRest, "--program-run-id");
+  const approvalId = readFlagValue(commandRest, "--approval-id");
   const result = runAutonomyForeground(target, {
     actorRole,
     maxSteps: maxSteps ? Number(maxSteps) : undefined,
@@ -1923,26 +1931,26 @@ if (command === "autonomy-foreground") {
 }
 
 if (command === "autonomy-operate") {
-  const target = resolveTarget(maybeTarget);
-  const actorRole = readFlagValue(rest, "--actor-role") ?? "planner";
-  const workerRole = readFlagValue(rest, "--worker-role") ?? "researcher";
-  const maxSteps = readFlagValue(rest, "--max-steps");
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  const actorRole = readFlagValue(commandRest, "--actor-role") ?? "planner";
+  const workerRole = readFlagValue(commandRest, "--worker-role") ?? "researcher";
+  const maxSteps = readFlagValue(commandRest, "--max-steps");
   const result = runAutonomyOperate(target, {
     actorRole,
     workerRole,
     maxSteps: maxSteps ? Number(maxSteps) : undefined,
-    objective: readFlagValue(rest, "--objective"),
-    sourceType: readFlagValue(rest, "--source-type"),
-    sourceId: readFlagValue(rest, "--source-id"),
-    packetId: readFlagValue(rest, "--packet-id"),
-    programId: readFlagValue(rest, "--program-id"),
-    programRunId: readFlagValue(rest, "--program-run-id"),
-    approvalId: readFlagValue(rest, "--approval-id"),
-    campaignId: readFlagValue(rest, "--campaign-id"),
-    campaignStepId: readFlagValue(rest, "--campaign-step-id"),
-    executeBy: readFlagValue(rest, "--execute-by"),
-    reviewAfter: readFlagValue(rest, "--review-after"),
-    expiresAt: readFlagValue(rest, "--expires-at")
+    objective: readFlagValue(commandRest, "--objective"),
+    sourceType: readFlagValue(commandRest, "--source-type"),
+    sourceId: readFlagValue(commandRest, "--source-id"),
+    packetId: readFlagValue(commandRest, "--packet-id"),
+    programId: readFlagValue(commandRest, "--program-id"),
+    programRunId: readFlagValue(commandRest, "--program-run-id"),
+    approvalId: readFlagValue(commandRest, "--approval-id"),
+    campaignId: readFlagValue(commandRest, "--campaign-id"),
+    campaignStepId: readFlagValue(commandRest, "--campaign-step-id"),
+    executeBy: readFlagValue(commandRest, "--execute-by"),
+    reviewAfter: readFlagValue(commandRest, "--review-after"),
+    expiresAt: readFlagValue(commandRest, "--expires-at")
   });
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);

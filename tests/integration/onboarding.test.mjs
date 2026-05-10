@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-import { ARTIFACT_PATHS, discoverPaperArtifacts, ensureWorkspace } from "../../src/core/index.mjs";
+import { ARTIFACT_PATHS, discoverPaperArtifacts, ensureWorkspace, queryDoveOnboarding } from "../../src/core/index.mjs";
 
 const ROOT = process.cwd();
 const CLI = path.join(ROOT, "bin", "dove.mjs");
@@ -75,7 +75,24 @@ test("discoverPaperArtifacts writeMap writes only the artifact map", () => {
   assert.equal(writtenMap.writeMap, true);
 });
 
-test("CLI onboard defaults to proposal-only and migrate can persist the map", () => {
+test("queryDoveOnboarding stays proposal-only even when writeMap is requested", () => {
+  const root = tempRoot();
+  const { manuscriptPath, manuscriptBefore } = writeFixturePaper(root);
+
+  const proposal = queryDoveOnboarding(root, { writeMap: true });
+
+  assert.equal(proposal.mode, "dove-onboarding-query");
+  assert.equal(proposal.proposalOnly, true);
+  assert.equal(proposal.noAutoApply, true);
+  assert.equal(proposal.writeMap, false);
+  assert.deepEqual(proposal.written, []);
+  assert.deepEqual(proposal.writes, []);
+  assert.equal(proposal.diagnostics.writeMapForcedFalse, true);
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), false);
+  assert.equal(fs.readFileSync(manuscriptPath, "utf8"), manuscriptBefore);
+});
+
+test("CLI onboard defaults to proposal-only and can persist the map", () => {
   const root = tempRoot();
   const { manuscriptPath, manuscriptBefore } = writeFixturePaper(root);
 
@@ -92,7 +109,7 @@ test("CLI onboard defaults to proposal-only and migrate can persist the map", ()
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), false);
   assert.equal(fs.readFileSync(manuscriptPath, "utf8"), manuscriptBefore);
 
-  const writeRun = spawnSync("node", [CLI, "migrate", root, "--write-map"], {
+  const writeRun = spawnSync("node", [CLI, "onboard", root, "--write-map"], {
     cwd: ROOT,
     encoding: "utf8"
   });
@@ -104,6 +121,36 @@ test("CLI onboard defaults to proposal-only and migrate can persist the map", ()
   assert.deepEqual(writePayload.written, [ARTIFACT_PATHS.workspaceArtifactMap]);
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), true);
   assert.equal(fs.readFileSync(manuscriptPath, "utf8"), manuscriptBefore);
+});
+
+test("CLI onboard supports flag-first optional target parsing", () => {
+  const root = tempRoot();
+  writeFixturePaper(root);
+
+  const result = spawnSync("node", [CLI, "onboard", "--write-map"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.writeMap, true);
+  assert.deepEqual(payload.written, [ARTIFACT_PATHS.workspaceArtifactMap]);
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), true);
+});
+
+test("legacy migration alias is rejected", () => {
+  const root = tempRoot();
+  writeFixturePaper(root);
+
+  const rejected = spawnSync("node", [CLI, "migrate", root, "--write-map"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.notEqual(rejected.status, 0);
+  assert.match(rejected.stdout, /Usage:/);
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), false);
 });
 
 test("CLI doctor reports artifact-map onboarding status without failing", () => {
