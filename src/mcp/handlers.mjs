@@ -7,12 +7,14 @@ import {
   compareVersions,
   createVersionSnapshot,
   ensureWorkspace,
+  importFigureGeneration,
   importIsolatedReview,
   initProject,
   listWorkspaceArtifacts,
   materializeGuidancePacket,
   issueProgramApproval,
   planCampaign,
+  prepareFigureGeneration,
   prepareIsolatedReview,
   normalizeRebuttalIssues,
   readBoundaryReport,
@@ -207,6 +209,10 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(listWorkspaceArtifacts(root));
       case "upsert_figure_plan":
         return makeTextResult(upsertFigurePlan(root, args));
+      case "prepare_figure_generation":
+        return makeTextResult(prepareFigureGeneration(root, args));
+      case "import_figure_generation":
+        return makeTextResult(importFigureGeneration(root, args));
       case "validate_figure_pipeline":
         return makeTextResult(validateFigurePipeline(root));
       case "record_operator_follow_through":

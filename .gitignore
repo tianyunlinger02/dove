@@ -3,8 +3,10 @@ node_modules/
 *.tgz
 reference_repos/
 
-# Local Dove workspace state; downstream projects may choose to track their own .dove/
-.dove/
+# Local Dove workspace state; downstream projects may choose to track non-secret .dove/config.json policy.
+.dove/*
+!.dove/config.json
+.dove/config.local.json
 
 # Legacy local workspace state; Dove treats .paper/ as stale, not authoritative.
 .paper/

@@ -13,6 +13,8 @@ import {
   queryWorkspaceIndex,
   refreshWiki,
   registerSource,
+  prepareFigureGeneration,
+  importFigureGeneration,
   runExperimentAudit,
   runReviewLoop,
   upsertClaims,
@@ -182,11 +184,11 @@ test("refreshWiki writes typed wiki indexes and workspace summary surfaces", () 
   assert.equal(workspaceIndex.repairFrontier.relationFamilyIssueCount, 0);
 });
 
-test("figure artifact planning writes staged contract files without claiming render backend", () => {
+test("figure workflow prepares materials, imports generated output, and writes caption QA", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Figure Contract Test", objective: "Plan a durable figure contract." });
-  seedTaskPacket(root);
+  const packetId = seedTaskPacket(root);
   registerSource(root, {
     citationKey: "figure-source",
     title: "Figure Source",
@@ -213,9 +215,9 @@ test("figure artifact planning writes staged contract files without claiming ren
 
   fs.writeFileSync(path.join(root, ".dove", "figures", "main-figure.template.svg"), "<svg />\n", "utf8");
   fs.writeFileSync(path.join(root, ".dove", "figures", "main-figure.editable.svg"), "<svg />\n", "utf8");
-  fs.writeFileSync(path.join(root, ".dove", "figures", "main-figure.final.svg"), "<svg />\n", "utf8");
 
   const figurePlan = upsertFigurePlan(root, {
+    packetId,
     items: [{
       id: "main-figure",
       name: "Main Figure",
@@ -228,6 +230,14 @@ test("figure artifact planning writes staged contract files without claiming ren
       reviewNotes: ["Keep labels editable."]
     }]
   });
+  const prepared = prepareFigureGeneration(root, { packetId, figureId: "main-figure", runId: "main-figure-run" });
+  const imported = importFigureGeneration(root, {
+    packetId,
+    figureId: "main-figure",
+    runId: "main-figure-run",
+    svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Main figure</text></svg>",
+    caption: "Main Figure explains the method-to-result flow for the linked claim."
+  });
 
   const briefs = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "briefs.json"), "utf8"));
   const segments = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "segments.json"), "utf8"));
@@ -235,16 +245,25 @@ test("figure artifact planning writes staged contract files without claiming ren
   const editable = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "editable-index.json"), "utf8"));
   const finalIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "final-index.json"), "utf8"));
   const qa = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "qa.json"), "utf8"));
+  const materials = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "materials.json"), "utf8"));
+  const generations = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "generations.json"), "utf8"));
+  const captions = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "captions.json"), "utf8"));
   const readme = fs.readFileSync(path.join(root, ".dove", "figures", "README.md"), "utf8");
 
   assert.equal(figurePlan.figureCount, 1);
   assert.equal(figurePlan.qaPath, ".dove/figures/qa.json");
+  assert.equal(prepared.materialStatus, "ready");
+  assert.equal(imported.finalSvgPath, ".dove/figures/main-figure.final.svg");
   assert.equal(briefs.items[0].figureId, "main-figure");
+  assert.equal(briefs.items[0].captionIntent, "Explain the method-to-result flow.");
   assert.ok(Array.isArray(segments.items[0].placeholderSegments));
   assert.equal(templates.items[0].templateSvgPath, ".dove/figures/main-figure.template.svg");
   assert.equal(editable.items[0].finalSvgPath, ".dove/figures/main-figure.final.svg");
   assert.equal(finalIndex.items[0].figureId, "main-figure");
+  assert.equal(materials.items[0].figureId, "main-figure");
+  assert.equal(generations.items[0].status, "imported");
+  assert.equal(captions.items[0].figureId, "main-figure");
   assert.equal(qa.items[0].qaStatus, "ready");
-  assert.match(readme, /does not claim to ship a render backend/i);
-  assert.match(readme, /Stage contract/i);
+  assert.match(readme, /Generation workflow/i);
+  assert.doesNotMatch(readme, /does not claim to ship a render backend/i);
 });

@@ -103,6 +103,8 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "compare_versions",
     "list_artifacts",
     "upsert_figure_plan",
+    "prepare_figure_generation",
+    "import_figure_generation",
     "validate_figure_pipeline",
     "record_operator_lesson",
     "record_operator_follow_through",
@@ -315,6 +317,8 @@ test("role-bound MCP tools expose explicit override fields", () => {
     "upsert_draft",
     "set_section_status",
     "upsert_figure_plan",
+    "prepare_figure_generation",
+    "import_figure_generation",
     "build_rebuttal",
     "append_review_log",
     "run_review_loop",
@@ -350,6 +354,8 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const paperPipelineQueryTool = toolDefinitions.find((item) => item.name === "query_paper_pipeline");
   const prepareIsolatedReviewTool = toolDefinitions.find((item) => item.name === "prepare_isolated_review");
   const importIsolatedReviewTool = toolDefinitions.find((item) => item.name === "import_isolated_review");
+  const prepareFigureTool = toolDefinitions.find((item) => item.name === "prepare_figure_generation");
+  const importFigureTool = toolDefinitions.find((item) => item.name === "import_figure_generation");
   const issueApprovalTool = toolDefinitions.find((item) => item.name === "issue_program_approval");
   const revokeApprovalTool = toolDefinitions.find((item) => item.name === "revoke_program_approval");
   const materializeTool = toolDefinitions.find((item) => item.name === "materialize_guidance_packet");
@@ -367,9 +373,16 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(paperPipelineQueryTool, "query_paper_pipeline should exist");
   assert.ok(prepareIsolatedReviewTool, "prepare_isolated_review should exist");
   assert.ok(importIsolatedReviewTool, "import_isolated_review should exist");
+  assert.ok(prepareFigureTool, "prepare_figure_generation should exist");
+  assert.ok(importFigureTool, "import_figure_generation should exist");
   assert.ok(doveOnboardingQueryTool.inputSchema.properties.maxDepth, "query_dove_onboarding should expose maxDepth");
   assert.ok(prepareIsolatedReviewTool.inputSchema.properties.reviewedArtifactPaths, "prepare_isolated_review should expose reviewedArtifactPaths");
   assert.ok(importIsolatedReviewTool.inputSchema.properties.handoffPath, "import_isolated_review should expose handoffPath");
+  assert.ok(prepareFigureTool.inputSchema.properties.figureId, "prepare_figure_generation should expose figureId");
+  assert.ok(prepareFigureTool.inputSchema.properties.materialHints, "prepare_figure_generation should expose materialHints");
+  assert.ok(prepareFigureTool.inputSchema.properties.executeProvider, "prepare_figure_generation should expose executeProvider");
+  assert.ok(importFigureTool.inputSchema.properties.outputManifestPath, "import_figure_generation should expose outputManifestPath");
+  assert.ok(importFigureTool.inputSchema.properties.caption, "import_figure_generation should expose caption");
   assert.ok(doveOrchestrateQueryTool.inputSchema.properties.request, "query_dove_orchestrate should expose request");
   assert.ok(doveOrchestrateQueryTool.inputSchema.properties.domain, "query_dove_orchestrate should expose domain");
   assert.ok(doveOrchestrateQueryTool.inputSchema.properties.stage, "query_dove_orchestrate should expose stage");

@@ -123,7 +123,13 @@ Use `project:dove.paper.draft` for section-level drafting. If evidence is missin
 
 Use `project:dove.paper.experiment` to plan experiments, record results, and audit whether the evidence supports the claim. Use `project:dove.paper.result-bridge` when a result is ready to change claim confidence or claim state. Together they keep `.dove/experiments/plans.json`, `.dove/experiments/results.json`, `.dove/experiments/audits.json`, `.dove/claims/bridge-log.json`, and `.dove/experiments/EXPERIMENT_LOG.md` claim-driven and durable.
 
-### 9. Review loop
+### 9. Plan, prepare, generate/import, and validate figures
+
+Use `project:dove.paper.figure` for the full figure loop: record the figure plan, resolve the durable task packet, prepare `.dove/figures/runs/<runId>/input.json` and `prompt.md`, run a local or external drawing provider only when explicitly requested, import only safe declared SVG output, write a provenance-bearing caption, and validate `.dove/figures/qa.json`.
+
+The default path is prepare/import handoff. Provider execution is explicit through `prepare_figure_generation` with `executeProvider: true`; provider config lives in non-secret Dove config (`.dove/config.json`, `.dove/config.local.json`, `DOVE_CONFIG_PATH`, or `DOVE_FIGURE_*` overrides). Use `apiKeyEnv` to reference secrets from the environment; inline `apiKey`, `token`, `secret`, `password`, authorization, or bearer values are rejected.
+
+### 10. Review loop
 
 Use `project:dove.paper.audit` when you want strict no-fix inspection. It reports evidence, citation, experiment, claim-bridge, review, version, figure, checklist, and artifact integrity findings with proposal-only next commands; it does not write, repair, refresh, materialize, update the board, append handoffs, generate revision plans, or run review loops.
 
@@ -131,11 +137,11 @@ Use `project:dove.paper.review` to generate a durable review entry and revision 
 
 Use `project:dove.paper.isolated-review` when you want a parallel reviewer session that cannot see the writer/main session's private transcript. The host/MCP surface prepares `.dove/reviews/isolated/<run-id>/input.json` and imports only `handoff.json` plus `report.md`; arbitrary external reviewer process execution remains CLI-only through `dove isolated-review --reviewer-command ...`.
 
-### 10. Rebuttal strategy and versioning
+### 11. Rebuttal strategy and versioning
 
 Use `project:dove.paper.rebuttal` to normalize reviewer issues, choose a response strategy, and draft the rebuttal. Use `project:dove.paper.version` to snapshot manuscript state, compare versions, and inspect lineage so paper evolution stays honest.
 
-### 11. Revise and close the loop
+### 12. Revise and close the loop
 
 Use `project:dove.paper.revise`, `project:dove.checklist`, `project:dove.paper.citations`, and `project:dove.paper.rebuttal` as needed.
 
@@ -251,6 +257,10 @@ The optional MCP layer exposes deterministic helpers, including:
 - `query_dove_return`
 - `query_program_approvals`
 - `sync_checklist`
+- `upsert_figure_plan`
+- `prepare_figure_generation`
+- `import_figure_generation`
+- `validate_figure_pipeline`
 - `prepare_isolated_review`
 - `import_isolated_review`
 - `record_operator_lesson`

@@ -8,7 +8,9 @@ export { appendHandoff, bridgeExperimentResultToClaim, buildRebuttalStrategy, cl
 export { appendReviewLog, runReviewLoop, upsertRevisionPlan } from "./reviews.mjs";
 export { importIsolatedReview, prepareIsolatedReview, runIsolatedReview } from "./isolated-review.mjs";
 export { buildRebuttal, evaluateFigurePipeline, initProject, listWorkspaceArtifacts, readState, refreshWiki, registerSource, setSectionStatus, syncChecklist, syncCitations, upsertDraft, upsertFigurePlan, upsertNote, upsertOutline, upsertPlan, validateFigurePipeline } from "./artifacts.mjs";
+export { importFigureGeneration, prepareFigureGeneration } from "./figure-generation.mjs";
 export { issueProgramApproval, materializeGuidancePacket, planCampaign, queryCampaigns, queryDecisions, queryGovernanceCoverageReport, queryLineage, queryMetaOptimize, queryOpenQuestions, queryOperatorLessons, queryOperatorFollowThrough, queryProgramApprovals, queryTaskGraph, queryWorkspaceIndex, readActionContextBundle, readArtifactContextManifest, readBoundaryReport as queryBoundaryReport, readBoundaryReport, readPacketContextManifest, readPhaseContextManifest, readRoleContextManifest, recordOperatorFollowThrough, recordOperatorLesson, refreshDurableSurfaces, revokeProgramApproval, summarizeSessionJournal } from "./navigation.mjs";
 export { runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate } from "./runtime.mjs";
 export { readTaskPacketCatalog, readTaskTargetResolutionSettings, resolveDurableTaskPacket, assertResolvedTaskPacket, normalizeTaskPacketId } from "./task-packets.mjs";
 export { assertTaskScopedMutationTarget, getGovernanceMutationEntry } from "./mutation-guard.mjs";
+export { assertNoInlineSecrets, loadDoveConfig, loadFigureGenerationConfig, redactDoveConfig } from "./config.mjs";

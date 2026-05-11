@@ -99,6 +99,9 @@ function buildFigureContractArtifacts(item, timestamp) {
     rebuttalIssueIds: item.rebuttalIssueIds,
     narrativeIntent: item.narrativeIntent,
     requiredVisualElements: item.requiredVisualElements,
+    materialRequirements: item.materialRequirements,
+    captionIntent: item.captionIntent,
+    outputFormat: item.outputFormat,
     downstreamArtifactIds: [item.segmentId, item.templateId, item.editableArtifactId, item.finalArtifactId],
     updatedAt: timestamp
   };
@@ -122,7 +125,10 @@ function buildFigureContractArtifacts(item, timestamp) {
     templateSvgPath: item.templateSvgPath,
     editableSvgPath: item.editableSvgPath,
     finalSvgPath: item.finalSvgPath,
-    templatePlan: `Use ${item.requiredVisualElements.join(", ") || "the planned visual elements"} to build an editable SVG template tied to ${item.targetClaimIds.join(", ") || "the planned claims"}.`,
+    generationMode: item.generationMode,
+    generationProviderId: item.generationProviderId,
+    outputFormat: item.outputFormat,
+    templatePlan: `Use ${item.requiredVisualElements.join(", ") || "the planned visual elements"} to build an editable ${item.outputFormat.toUpperCase()} template tied to ${item.targetClaimIds.join(", ") || "the planned claims"}.`,
     updatedAt: timestamp
   };
   const editable = {
@@ -134,6 +140,10 @@ function buildFigureContractArtifacts(item, timestamp) {
     editableSvgPath: item.editableSvgPath,
     templateSvgPath: item.templateSvgPath,
     finalSvgPath: item.finalSvgPath,
+    generationMode: item.generationMode,
+    generationProviderId: item.generationProviderId,
+    latestGenerationRunId: item.latestGenerationRunId ?? null,
+    captionId: item.captionId ?? null,
     reviewNotes: item.reviewNotes,
     linkedReviewConcernIds: item.reviewConcernIds,
     linkedRebuttalIssueIds: item.rebuttalIssueIds,
@@ -151,11 +161,17 @@ function buildFigureContractArtifacts(item, timestamp) {
     relatedExperimentIds: item.relatedExperimentIds,
     reviewConcernIds: item.reviewConcernIds,
     rebuttalIssueIds: item.rebuttalIssueIds,
-    readinessStatus: item.status === "final" || item.status === "approved" ? "ready-for-finalization" : "needs-review",
+    generationMode: item.generationMode,
+    generationProviderId: item.generationProviderId,
+    outputFormat: item.outputFormat,
+    captionIntent: item.captionIntent,
+    generationRunId: item.latestGenerationRunId ?? null,
+    captionId: item.captionId ?? null,
+    readinessStatus: item.status === "final" || item.status === "approved" || item.status === "generated" ? "ready-for-finalization" : "needs-review",
     deliveryChecklist: [
-      "Confirm claim linkage remains current.",
-      "Confirm staged artifact paths are portable.",
-      "Keep review notes durable before finalization claims."
+      "Confirm material requirements are resolved.",
+      "Confirm final SVG came from a validated generation import.",
+      "Keep caption and provenance durable before finalization claims."
     ],
     updatedAt: timestamp
   };
@@ -223,6 +239,9 @@ function buildFigureQa(root) {
   const templates = readJson(root, ARTIFACT_PATHS.figureTemplates, { version: 1, items: [], updatedAt: null });
   const editable = readJson(root, ARTIFACT_PATHS.figureEditableIndex, { version: 1, items: [], updatedAt: null });
   const finals = readJson(root, ARTIFACT_PATHS.figureFinalIndex, { version: 1, items: [], updatedAt: null });
+  const materials = readJson(root, ARTIFACT_PATHS.figureMaterials, { version: 1, items: [], updatedAt: null });
+  const generations = readJson(root, ARTIFACT_PATHS.figureGenerations, { version: 1, items: [], updatedAt: null });
+  const captions = readJson(root, ARTIFACT_PATHS.figureCaptions, { version: 1, items: [], updatedAt: null });
   const claimIds = new Set((evidence.claims ?? []).map((claim) => claim.id));
   const sectionIds = new Set(Object.keys(state.sections ?? {}));
   const experimentIds = new Set([
@@ -236,6 +255,14 @@ function buildFigureQa(root) {
   const templateByFigure = new Map((templates.items ?? []).map((item) => [item.figureId, item]));
   const editableByFigure = new Map((editable.items ?? []).map((item) => [item.figureId, item]));
   const finalByFigure = new Map((finals.items ?? []).map((item) => [item.figureId, item]));
+  const materialByFigure = new Map((materials.items ?? []).map((item) => [item.figureId, item]));
+  const generationsByFigure = new Map();
+  for (const generation of generations.items ?? []) {
+    const current = generationsByFigure.get(generation.figureId) ?? [];
+    current.push(generation);
+    generationsByFigure.set(generation.figureId, current);
+  }
+  const captionByFigure = new Map((captions.items ?? []).map((item) => [item.figureId, item]));
   const stagePathUsage = new Map();
   const timestamp = nowIso();
   const items = [];
@@ -298,6 +325,9 @@ function buildFigureQa(root) {
       ARTIFACT_PATHS.figureTemplates,
       ARTIFACT_PATHS.figureEditableIndex,
       ARTIFACT_PATHS.figureFinalIndex,
+      ARTIFACT_PATHS.figureMaterials,
+      ARTIFACT_PATHS.figureGenerations,
+      ARTIFACT_PATHS.figureCaptions,
       ARTIFACT_PATHS.figureQa
     ];
     const fileChecks = {
@@ -647,6 +677,89 @@ function buildFigureQa(root) {
       });
     }
 
+    const materialRecord = materialByFigure.get(figure.id);
+    const figureGenerations = generationsByFigure.get(figure.id) ?? [];
+    const importedGeneration = figureGenerations.find((item) => item.status === "imported" && item.finalSvgPath === figure.finalSvgPath) ?? figureGenerations.find((item) => item.status === "imported");
+    const caption = captionByFigure.get(figure.id);
+
+    if (!materialRecord) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "missing-material-record",
+        severity: "medium",
+        stage: "materials",
+        summary: `Figure ${figure.id} has no material-discovery record.`,
+        artifactPaths: [ARTIFACT_PATHS.figureMaterials, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    } else if ((materialRecord.missingRequirementIds ?? []).length > 0) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "missing-generation-materials",
+        severity: "medium",
+        stage: "materials",
+        summary: `Figure ${figure.id} has unresolved material requirements: ${materialRecord.missingRequirementIds.join(", ")}.`,
+        artifactPaths: [ARTIFACT_PATHS.figureMaterials, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    }
+
+    if (figureGenerations.length === 0) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "missing-generation-run",
+        severity: "medium",
+        stage: "generation",
+        summary: `Figure ${figure.id} has no prepared or imported generation run.`,
+        artifactPaths: [ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    } else if (!importedGeneration && figure.status === "generated") {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "missing-imported-generation",
+        severity: "high",
+        stage: "generation",
+        summary: `Figure ${figure.id} is marked generated but has no imported generation run.`,
+        artifactPaths: [ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    }
+
+    if (importedGeneration && importedGeneration.packetId && materialRecord?.packetId && importedGeneration.packetId !== materialRecord.packetId) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "generation-material-packet-mismatch",
+        severity: "high",
+        stage: "generation",
+        summary: `Figure ${figure.id} generation packet does not match its material packet.`,
+        artifactPaths: [ARTIFACT_PATHS.figureMaterials, ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    }
+
+    if (!caption) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "missing-caption",
+        severity: "medium",
+        stage: "caption",
+        summary: `Figure ${figure.id} has no durable caption explaining its purpose.`,
+        artifactPaths: [ARTIFACT_PATHS.figureCaptions, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    } else if (!caption.text || !String(caption.text).trim()) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "empty-caption",
+        severity: "high",
+        stage: "caption",
+        summary: `Figure ${figure.id} has an empty caption.`,
+        artifactPaths: [ARTIFACT_PATHS.figureCaptions, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    }
+
     if (((figure.reviewConcernIds ?? []).length > 0 || (figure.rebuttalIssueIds ?? []).length > 0) && (figure.reviewNotes ?? []).length === 0) {
       figureIssues.push({
         id: figureIssueId(figure.id, "missing-review-notes"),
@@ -679,6 +792,11 @@ function buildFigureQa(root) {
       reviewConcernIds: figure.reviewConcernIds,
       rebuttalIssueIds: figure.rebuttalIssueIds,
       fileChecks,
+      materialStatus: materialRecord?.status ?? "missing",
+      generationStatus: importedGeneration?.status ?? (figureGenerations[0]?.status ?? "missing"),
+      captionStatus: caption?.text ? "ready" : "missing",
+      latestGenerationRunId: importedGeneration?.id ?? figureGenerations[0]?.id ?? null,
+      captionId: caption?.id ?? null,
       updatedAt: timestamp
     });
   }
@@ -696,7 +814,7 @@ export function validateFigurePipeline(root) {
   refreshDurableSurfaces(root, {
     type: "validate-figure-pipeline",
     summary: `Validated figure pipeline for ${qa.items.length} figures with ${qa.issues.length} issues.`,
-    artifactPaths: [ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex]
+    artifactPaths: [ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureMaterials, ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureCaptions]
   });
   return { figureCount: qa.items.length, issueCount: qa.issues.length, qaPath: ARTIFACT_PATHS.figureQa };
 }
@@ -1542,6 +1660,36 @@ function createWikiArtifacts(root, state, board, sourcesIndex, notesIndex, evide
   };
 }
 
+function normalizeMaterialRequirements(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item, index) => {
+    if (typeof item === "string" && item.trim()) {
+      return {
+        id: slugify(item),
+        type: "operator-material",
+        label: item.trim(),
+        status: "needs-operator",
+        artifactPath: null,
+        summary: "Operator-declared material requirement."
+      };
+    }
+    if (!item || typeof item !== "object") {
+      return null;
+    }
+    const label = item.label ?? item.summary ?? item.id ?? `Material ${index + 1}`;
+    return {
+      id: slugify(item.id ?? label),
+      type: item.type ?? "operator-material",
+      label,
+      status: item.status ?? "needs-operator",
+      artifactPath: item.artifactPath || item.path ? normalizeRelativePath(item.artifactPath ?? item.path, null) : null,
+      summary: item.summary ?? label
+    };
+  }).filter(Boolean);
+}
+
 function normalizeFigureItem(item = {}, index = 0) {
   const id = slugify(item.id ?? item.name ?? `figure-${index + 1}`);
   const briefId = `${id}-brief`;
@@ -1558,6 +1706,14 @@ function normalizeFigureItem(item = {}, index = 0) {
     rebuttalIssueIds: normalizeStringArray(item.rebuttalIssueIds, item.rebuttalIssueId ? [item.rebuttalIssueId] : []),
     narrativeIntent: item.narrativeIntent ?? item.purpose ?? "Explain the linked method/result clearly.",
     requiredVisualElements: normalizeStringArray(item.requiredVisualElements, Array.isArray(item.inputs) ? item.inputs : []),
+    materialRequirements: normalizeMaterialRequirements(item.materialRequirements),
+    generationProviderId: typeof item.generationProviderId === "string" && item.generationProviderId.trim() ? item.generationProviderId.trim() : null,
+    generationMode: typeof item.generationMode === "string" && item.generationMode.trim() ? item.generationMode.trim() : "prepare-import",
+    captionIntent: item.captionIntent ?? item.narrativeIntent ?? item.purpose ?? "Explain what the figure shows and why it matters.",
+    outputFormat: typeof item.outputFormat === "string" && item.outputFormat.trim() ? item.outputFormat.trim().toLowerCase() : "svg",
+    generationConstraints: normalizeStringArray(item.generationConstraints),
+    latestGenerationRunId: typeof item.latestGenerationRunId === "string" && item.latestGenerationRunId.trim() ? item.latestGenerationRunId.trim() : null,
+    captionId: typeof item.captionId === "string" && item.captionId.trim() ? item.captionId.trim() : null,
     owner: item.owner ?? "manual",
     mode: item.mode ?? "manual",
     status: item.status ?? "planned",
@@ -1948,15 +2104,15 @@ export function upsertFigurePlan(root, args = {}) {
   const content = [
     "# Figures backlog",
     "",
-    "This staged figure contract does not claim to ship a render backend.",
+    "Dove tracks each figure from plan through material discovery, generation handoff/import, caption, and QA.",
     "",
-    "## Stage contract",
+    "## Generation workflow",
     "",
-    "1. Brief -> define source sections, target claims, experiments, and review/rebuttal linkage.",
-    "2. Segments -> break the figure into durable placeholders tied back to the brief.",
-    "3. Template -> record the portable SVG template/editable/final paths and the template plan.",
-    "4. Editable -> preserve durable review notes before claiming a figure is ready.",
-    "5. Final contract -> record the delivery checklist and readiness state without pretending a render backend exists.",
+    "1. Brief -> define source sections, target claims, experiments, review/rebuttal linkage, and caption intent.",
+    "2. Materials -> discover required data, source artifacts, notes, claims, and experiments before drawing.",
+    "3. Generation input -> prepare a durable run bundle and prompt for a local or external drawing provider.",
+    "4. Import -> accept only declared, safe generated assets and record provenance.",
+    "5. Caption and QA -> explain what the figure is for and validate the final artifact against linked evidence.",
     "",
     ...(normalizedItems.length > 0
       ? normalizedItems.flatMap((item) => [
@@ -1971,10 +2127,15 @@ export function upsertFigurePlan(root, args = {}) {
           `- Rebuttal issues: ${item.rebuttalIssueIds.join(", ") || "none"}`,
           `- Narrative intent: ${item.narrativeIntent}`,
           `- Required visual elements: ${item.requiredVisualElements.join(", ") || "none"}`,
+          `- Material requirements: ${item.materialRequirements.map((material) => material.label).join(", ") || "none"}`,
           `- Segment placeholders: ${item.segmentPlaceholders.map((segment) => segment.label).join(", ") || "none"}`,
           `- Template SVG path: ${item.templateSvgPath}`,
           `- Editable SVG path: ${item.editableSvgPath}`,
           `- Final SVG path: ${item.finalSvgPath}`,
+          `- Generation mode: ${item.generationMode}`,
+          `- Generation provider: ${item.generationProviderId ?? "none"}`,
+          `- Output format: ${item.outputFormat}`,
+          `- Caption intent: ${item.captionIntent}`,
           `- Owner: ${item.owner}`,
           `- Mode: ${item.mode}`,
           `- Status: ${item.status}`,
@@ -1987,7 +2148,7 @@ export function upsertFigurePlan(root, args = {}) {
   refreshDurableSurfaces(root, {
     type: "upsert-figure-plan",
     summary: `Updated figure backlog with ${normalizedItems.length} items.`,
-    artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.figuresReadme]
+    artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureMaterials, ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureCaptions, ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.figuresReadme]
   });
   return { figureCount: normalizedItems.length, qaIssueCount: qa.issues.length, qaPath: ARTIFACT_PATHS.figureQa };
 }

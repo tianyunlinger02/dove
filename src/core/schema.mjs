@@ -63,7 +63,7 @@ export const PAPER_LIFECYCLE_FAMILIES = [
     label: "Structure",
     summary: "Paper organization, sections, drafts, figures, checklists, and versions.",
     roleHints: ["planner", "builder"],
-    artifactPathKeys: ["plan", "outline", "draftsDir", "checklist", "figuresIndex", "figureQa", "versionsIndex", "versionComparisons"]
+    artifactPathKeys: ["plan", "outline", "draftsDir", "checklist", "figuresIndex", "figureMaterials", "figureGenerations", "figureCaptions", "figureQa", "versionsIndex", "versionComparisons"]
   },
   {
     id: "campaign",
@@ -157,6 +157,8 @@ const GOVERNANCE_GUARDED_MUTATION_SCOPE_METADATA = {
   "upsert-draft": taskScopedMutationMetadata(["sectionId"]),
   "set-section-status": taskScopedMutationMetadata(["sectionId"]),
   "upsert-figure-plan": taskScopedMutationMetadata(["id", "figureId", "claimIds", "sectionId"]),
+  "prepare-figure-generation": taskScopedMutationMetadata(["id", "figureId", "runId", "claimIds", "sectionId"]),
+  "import-figure-generation": taskScopedMutationMetadata(["id", "figureId", "runId", "captionId"]),
   "sync-citations": governanceScopeMetadata("derived-refresh"),
   "refresh-wiki": governanceScopeMetadata("derived-refresh"),
   "build-rebuttal": taskScopedMutationMetadata(["rebuttalIssueIds", "issueIds"]),
@@ -190,6 +192,8 @@ export const GOVERNANCE_GUARDED_MUTATIONS = [
   { id: "upsert-draft", action: "Updating a draft section", artifactPath: ".dove/drafts", surfaceBindings: { coreFunction: "upsertDraft", mcpTool: "upsert_draft", commandIds: ["dove.paper.draft"] } },
   { id: "set-section-status", action: "Updating a section status", artifactPath: ".dove/state.json", surfaceBindings: { coreFunction: "setSectionStatus", mcpTool: "set_section_status", commandIds: ["dove.paper.draft", "dove.paper.revise"] } },
   { id: "upsert-figure-plan", action: "Updating the figure plan", artifactPath: ".dove/figures/index.json", surfaceBindings: { coreFunction: "upsertFigurePlan", mcpTool: "upsert_figure_plan", commandIds: ["dove.paper.figure"] } },
+  { id: "prepare-figure-generation", action: "Preparing figure generation materials and input bundle", artifactPath: ".dove/figures/generations.json", surfaceBindings: { coreFunction: "prepareFigureGeneration", mcpTool: "prepare_figure_generation", commandIds: ["dove.paper.figure"] } },
+  { id: "import-figure-generation", action: "Importing generated figure output and caption", artifactPath: ".dove/figures/generations.json", surfaceBindings: { coreFunction: "importFigureGeneration", mcpTool: "import_figure_generation", commandIds: ["dove.paper.figure"] } },
   { id: "sync-citations", action: "Updating citation artifacts", artifactPath: ".dove/bibliography/citation-log.md", surfaceBindings: { coreFunction: "syncCitations", mcpTool: "sync_citations", commandIds: ["dove.paper.citations"] } },
   { id: "refresh-wiki", action: "Refreshing the wiki", artifactPath: ".dove/wiki/index.md", surfaceBindings: { coreFunction: "refreshWiki", mcpTool: "refresh_wiki", commandIds: [] } },
   { id: "build-rebuttal", action: "Building the rebuttal draft", artifactPath: ".dove/drafts/rebuttal.md", surfaceBindings: { coreFunction: "buildRebuttal", mcpTool: "build_rebuttal", commandIds: ["dove.paper.rebuttal"] } },
@@ -321,6 +325,8 @@ export const GOVERNANCE_NEGATIVE_COVERAGE = [
   { id: "upsert-draft", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
   { id: "set-section-status", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
   { id: "upsert-figure-plan", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "prepare-figure-generation", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
+  { id: "import-figure-generation", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
   { id: "sync-citations", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
   { id: "refresh-wiki", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
   { id: "build-rebuttal", level: "dynamic", tests: ["a broader set of guarded write paths all reject unresolved follow-through debt"] },
@@ -532,6 +538,9 @@ export const ARTIFACT_PATHS = {
   figureTemplates: ".dove/figures/templates.json",
   figureEditableIndex: ".dove/figures/editable-index.json",
   figureFinalIndex: ".dove/figures/final-index.json",
+  figureMaterials: ".dove/figures/materials.json",
+  figureGenerations: ".dove/figures/generations.json",
+  figureCaptions: ".dove/figures/captions.json",
   figureQa: ".dove/figures/qa.json",
   rebuttalIssues: ".dove/rebuttal/issues.json",
   rebuttalStrategy: ".dove/rebuttal/strategy.md",
@@ -1864,6 +1873,18 @@ export function createFigureFinalIndex() {
 
 export function createFigureQaIndex() {
   return { version: 1, items: [], issues: [], updatedAt: null };
+}
+
+export function createFigureMaterialsIndex() {
+  return { version: 1, items: [], updatedAt: null };
+}
+
+export function createFigureGenerationsIndex() {
+  return { version: 1, items: [], updatedAt: null };
+}
+
+export function createFigureCaptionsIndex() {
+  return { version: 1, items: [], updatedAt: null };
 }
 
 export function createResearchAgenda() {
@@ -3589,6 +3610,9 @@ export function createWorkflowBoundaries() {
     ".dove/figures/templates.json",
     ".dove/figures/editable-index.json",
     ".dove/figures/final-index.json",
+    ".dove/figures/materials.json",
+    ".dove/figures/generations.json",
+    ".dove/figures/captions.json",
     ".dove/figures/qa.json",
     ".dove/rebuttal/issues.json",
     ".dove/rebuttal/strategy.md",

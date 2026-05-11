@@ -51,7 +51,7 @@ This file turns the phrase “absorb the advantages of workflow-pack systems and
 | Rebuttal issue board + strategy | Implemented | `.dove/rebuttal/*`, `dove.paper.rebuttal` | Issues are normalized before response drafting. |
 | Version evolution/comparison | Implemented | `.dove/versions/*`, `dove.paper.version` | Snapshot lineage and comparison targets are durable. |
 | Typed wiki + relations | Implemented | `.dove/wiki/entities.json`, `.dove/wiki/relations.json` | Query surfaces can rely on typed records instead of markdown alone. |
-| Figure artifact contracts | Partial | `.dove/figures/*.json`, `dove.paper.figure`, `validate_figure_pipeline` | Durable brief → segment → template → editable → final-contract records and figure QA exist, but no render/editor backend is claimed. |
+| Figure generation workflow | Implemented | `.dove/figures/*.json`, `.dove/figures/runs/*`, `.dove/config.json`, `dove.paper.figure`, `prepare_figure_generation`, `import_figure_generation`, `validate_figure_pipeline` | Durable figure plans now flow through material discovery, generation input bundles, explicit local/external provider handoff, safe SVG import, caption provenance, final indexes, and QA. Provider config stores only non-secret settings and uses env-var references such as `apiKeyEnv` for secrets. |
 | Autonomous experiment orchestration | Deferred | N/A | No fake scheduler or daemon is claimed. |
 
 ## Current release claim

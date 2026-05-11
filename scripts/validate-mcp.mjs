@@ -70,6 +70,7 @@ async function main() {
     "compare_versions",
     "create_version_snapshot",
     "ensure_workspace",
+    "import_figure_generation",
     "import_isolated_review",
     "init_project",
     "issue_program_approval",
@@ -78,6 +79,7 @@ async function main() {
     "materialize_guidance_packet",
     "normalize_rebuttal_issues",
     "plan_campaign",
+    "prepare_figure_generation",
     "prepare_isolated_review",
     "query_boundary_report",
     "query_campaigns",
@@ -364,7 +366,28 @@ async function main() {
 
   fs.writeFileSync(path.join(tempWorkspace, ".dove", "figures", "workflow-figure.template.svg"), "<svg />\n", "utf8");
   fs.writeFileSync(path.join(tempWorkspace, ".dove", "figures", "workflow-figure.editable.svg"), "<svg />\n", "utf8");
-  fs.writeFileSync(path.join(tempWorkspace, ".dove", "figures", "workflow-figure.final.svg"), "<svg />\n", "utf8");
+
+  const preparedFigure = extractJson(await call("tools/call", {
+    name: "prepare_figure_generation",
+    arguments: {
+      packetId: validationPacketId,
+      figureId: "workflow-figure",
+      runId: "workflow-figure-run"
+    }
+  }));
+  assert.equal(preparedFigure.runId, "workflow-figure-run");
+
+  const importedFigure = extractJson(await call("tools/call", {
+    name: "import_figure_generation",
+    arguments: {
+      packetId: validationPacketId,
+      figureId: "workflow-figure",
+      runId: "workflow-figure-run",
+      svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Workflow</text></svg>",
+      caption: "Workflow figure shows how evidence, claims, and review gates connect."
+    }
+  }));
+  assert.equal(importedFigure.finalSvgPath, ".dove/figures/workflow-figure.final.svg");
 
   const figureQa = extractJson(await call("tools/call", { name: "validate_figure_pipeline", arguments: {} }));
   assert.equal(figureQa.issueCount, 0);

@@ -247,7 +247,7 @@ Paper-specific commands use the `dove.paper.*` surface for artifact workflows. S
 - review loops and isolated reviewer handoffs
 - rebuttal strategy and rebuttal drafting
 - citation synchronization
-- figure planning and QA contracts
+- figure planning, material discovery, generation handoff/import, caption provenance, and QA
 - version snapshots, comparisons, lineage, and release readiness
 
 For paper work, the recommended loop is:
