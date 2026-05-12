@@ -13,7 +13,7 @@ This file turns Dove's user-facing claims into an auditable checklist.
 | Advantage | Status | Where it lives | Notes |
 |---|---|---|---|
 | Packaged workflow surface | Implemented | neutral core + generated optional host adapters | `src/core/command-manifest.mjs` is the canonical command inventory; OpenCode, Claude Code, Codex, Cursor, and shared agent-skill hosts receive the same top-level Dove commands. |
-| Task-centered Dove kernel | Implemented | `.dove/state.json`, `.dove/task-packets/*`, `project:dove.init`, `project:dove.mission`, `project:dove.auto`, `project:dove.status` | One level-0 init goal anchors classified tasks for paper, experiment, and engineering work. |
+| Task-centered Dove kernel | Implemented | `.dove/state.json`, `.dove/task-packets/*`, `project:dove.init`, `project:dove.mission`, `project:dove.auto`, `project:dove.status` | One level-0 init goal anchors classified tasks for paper, experiment, and engineering work; mission materialization requires explicit confirmation. |
 | Installation ergonomics | Implemented | `bin/dove.mjs`, `scripts/generate-command-adapters.mjs` | `install`, `sync`, and `doctor` manage the neutral core plus manifest-derived adapter inventory; `release:check` verifies generated adapter drift before packaging. |
 | Health checks / guardrails | Implemented | `bin/dove.mjs`, `scripts/doctor-mcp-probe.mjs` | Includes JSON parsing, authority checks, ignored stale workspace artifact warnings, and MCP probe. |
 | Deterministic helper layer | Implemented | `src/mcp/*` | MCP provides deterministic state mutation and query tools over `.dove/`. |

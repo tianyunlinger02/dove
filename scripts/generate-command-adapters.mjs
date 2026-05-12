@@ -49,7 +49,7 @@ function policyLine(command) {
     case "guarded-mutation":
       return "Only perform the governed mutation owned by this surface, scoped to the operator request.";
     case "explicit-approval":
-      return "Require explicit operator approval and bounded authority before creating, changing, or consuming program authority.";
+      return "Require explicit operator approval before creating or changing durable workflow state or consuming bounded authority.";
     case "governed-bookkeeping":
       return "Record only explicit operator bookkeeping for the governed Dove workflow.";
     case "guidance":

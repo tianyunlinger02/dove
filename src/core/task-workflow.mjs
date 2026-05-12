@@ -36,6 +36,10 @@ function normalizeStatus(value, fallback = "pending") {
   return normalizeAllowed(value, DOVE_TASK_STATUSES, fallback);
 }
 
+function hasExplicitConfirmation(args = {}) {
+  return args.confirmed === true || args.confirm === true;
+}
+
 function taskPacketPath(packetId) {
   return path.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`);
 }
@@ -307,6 +311,42 @@ export function createDoveTask(root, args = {}) {
   }
   const classification = classifyTask(args);
   const packet = buildPacket(root, args, init, classification);
+  const blockers = [...packet.dependencies, ...packet.blockedBy];
+  const applicableLessons = activeLessons(root, packet.id);
+  if (!hasExplicitConfirmation(args)) {
+    return {
+      status: "needs-confirmation",
+      proposalOnly: true,
+      noAutoApply: true,
+      writes: [],
+      confirmationRequired: true,
+      proposedTask: packet,
+      classification,
+      blockers,
+      evidenceExpectations: packet.evidenceExpectations,
+      recommendedNextCommand: packet.nextAction,
+      applicableLessons,
+      confirmArgs: {
+        confirmed: true,
+        id: packet.id,
+        goal: packet.summary,
+        title: packet.title,
+        summary: packet.summary,
+        stage: packet.stage,
+        domain: packet.domain,
+        creatorKind: packet.creatorKind,
+        status: packet.status,
+        dependencies: packet.dependencies,
+        blockedBy: packet.blockedBy,
+        evidenceExpectations: packet.evidenceExpectations,
+        artifactRefs: packet.artifactRefs,
+        contextPolicy: packet.contextPolicy,
+        lessonIds: packet.lessonIds
+      },
+      taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex,
+      message: "Confirm before /dove:mission materializes this proposed task into a durable mission packet."
+    };
+  }
   writePacket(root, packet);
   const nextIndex = saveTaskIndex(root, upsertIndexItem(index, packet));
   const state = loadState(root);
@@ -321,12 +361,13 @@ export function createDoveTask(root, args = {}) {
   });
   return {
     status: "created",
+    confirmationRequired: false,
     createdTask: packet,
     classification,
-    blockers: [...packet.dependencies, ...packet.blockedBy],
+    blockers,
     evidenceExpectations: packet.evidenceExpectations,
     recommendedNextCommand: packet.nextAction,
-    applicableLessons: activeLessons(root, packet.id),
+    applicableLessons,
     taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex
   };
 }
@@ -458,7 +499,7 @@ export function resetDoveVersion(root, args = {}) {
 export function runDoveAuto(root, args = {}) {
   assertGovernanceMutationRegistered("run-dove-auto", "guarded");
   ensureWorkspace(root);
-  if (args.confirmed !== true && args.confirm !== true) {
+  if (!hasExplicitConfirmation(args)) {
     const classification = classifyTask(args);
     return {
       status: "needs-confirmation",

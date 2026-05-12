@@ -75,7 +75,7 @@ node ./bin/dove.mjs doctor /path/to/project
 project:dove.init
 ```
 
-4. Create the first concrete task, or let Dove continue after confirmation:
+4. Propose and confirm the first concrete task, or let Dove continue after confirmation:
 
 ```text
 project:dove.mission
@@ -111,7 +111,7 @@ Dove exposes one flat user-facing command set:
 | Command | Purpose |
 | --- | --- |
 | `project:dove.init` | Create/update the unique level-0 project goal. |
-| `project:dove.mission` | Create a task under init after classification and dependency analysis. |
+| `project:dove.mission` | Propose a classified task under init, then create it only after explicit confirmation. |
 | `project:dove.auto` | Confirm a task, then run bounded automatic work until completion or a boundary. |
 | `project:dove.status` | Show project, init, task tree, blockers, review, version, lessons, and readiness state. |
 | `project:dove.kill` | Kill a non-init task; returns indexed choices when the target is ambiguous. |
@@ -133,6 +133,7 @@ Older router, plan, checklist, audit, return, follow-through, onboarding, govern
 Dove uses one task tree across paper, experiment, and engineering work:
 
 - There is exactly one level-0 init task.
+- `/dove:mission` first returns a proposal-only task contract; explicit confirmation materializes it into `.dove/task-packets/`.
 - User-created mission tasks default to level 3.
 - System-created prerequisite/controller tasks may be level 1 or 2.
 - Dove computes task stage (`plan`, `execute`, `audit`) and domain (`paper`, `experiment`, `engineering`) from the request unless the caller supplies explicit values.

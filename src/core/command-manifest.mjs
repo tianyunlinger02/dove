@@ -180,10 +180,10 @@ const COMMAND_SURFACES_BASE = [
     title: "Dove mission",
     domain: "generic",
     category: "mutation",
-    policy: "guarded-mutation",
-    summary: "Create a task under the init goal after classifying stage, domain, level, dependencies, blockers, and evidence expectations.",
+    policy: "explicit-approval",
+    summary: "Propose a task under the init goal, then create it only after explicit operator confirmation.",
     requiredTools: ["create_dove_task"],
-    constraints: ["Require an existing init goal before creating mission tasks.", "Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.", "User-created tasks default to level 3; only system-created prerequisite/controller tasks may be level 1 or 2.", "Do not execute the task from this surface; return the created task, blockers, evidence expectations, and recommended next command."]
+    constraints: ["Require an existing init goal before proposing mission tasks.", "Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, evidence expectations, and recommended next command.", "Ask for explicit operator confirmation before passing `confirmed: true` to `create_dove_task` and writing a durable task packet.", "Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.", "User-created tasks default to level 3; only system-created prerequisite/controller tasks may be level 1 or 2.", "Do not execute the task from this surface; after confirmation, return the created task, blockers, evidence expectations, and recommended next command."]
   },
   {
     id: "dove.auto",

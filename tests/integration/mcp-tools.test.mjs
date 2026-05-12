@@ -253,6 +253,42 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
   }
 });
 
+test("create_dove_task requires confirmation before materializing a mission", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-mission-confirm-"));
+  try {
+    const init = extractToolJson(dispatchTool(root, "init_dove_goal", {
+      id: "mission-confirm-init",
+      goal: "Validate mission confirmation boundaries."
+    }));
+    const proposal = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "mission-confirm-task",
+      goal: "Create a confirmed mission only after the operator approves it.",
+      title: "Mission confirmation task"
+    }));
+    assert.equal(proposal.status, "needs-confirmation");
+    assert.equal(proposal.proposalOnly, true);
+    assert.equal(proposal.noAutoApply, true);
+    assert.deepEqual(proposal.writes, []);
+    assert.equal(proposal.confirmationRequired, true);
+    assert.equal(proposal.proposedTask.id, "mission-confirm-task");
+    assert.equal(proposal.proposedTask.rootId, init.init.id);
+    assert.equal(proposal.confirmArgs.confirmed, true);
+
+    const proposedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.deepEqual(proposedIndex.items.map((item) => item.id), ["mission-confirm-init"]);
+
+    const created = extractToolJson(dispatchTool(root, "create_dove_task", proposal.confirmArgs));
+    assert.equal(created.status, "created");
+    assert.equal(created.confirmationRequired, false);
+    assert.equal(created.createdTask.id, "mission-confirm-task");
+
+    const materializedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.deepEqual(materializedIndex.items.map((item) => item.id), ["mission-confirm-init", "mission-confirm-task"]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("isolated review MCP tools prepare and import explicit handoff artifacts", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-isolated-review-"));
   try {
@@ -363,6 +399,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
     }
   }
 
+  const createDoveTaskTool = toolDefinitions.find((item) => item.name === "create_dove_task");
   const followThroughTool = toolDefinitions.find((item) => item.name === "record_operator_follow_through");
   const approvalsQueryTool = toolDefinitions.find((item) => item.name === "query_program_approvals");
   const doveOrchestrateQueryTool = toolDefinitions.find((item) => item.name === "query_dove_orchestrate");
@@ -387,6 +424,9 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const launchDoveTool = toolDefinitions.find((item) => item.name === "launch_dove_mission");
   const foregroundTool = toolDefinitions.find((item) => item.name === "run_autonomy_foreground");
   const operateTool = toolDefinitions.find((item) => item.name === "run_autonomy_operate");
+  assert.ok(createDoveTaskTool, "create_dove_task should exist");
+  assert.ok(createDoveTaskTool.inputSchema.properties.confirmed, "create_dove_task should expose confirmed");
+  assert.ok(createDoveTaskTool.inputSchema.properties.confirm, "create_dove_task should expose confirm");
   assert.ok(approvalsQueryTool, "query_program_approvals should exist");
   assert.ok(doveOrchestrateQueryTool, "query_dove_orchestrate should exist");
   assert.ok(doveMissionQueryTool, "query_dove_mission should exist");

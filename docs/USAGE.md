@@ -17,7 +17,7 @@ Dove exposes one flat public command surface:
 | Command | Use it for |
 | --- | --- |
 | `project:dove.init` | Create or update the single project-level goal, represented as the unique level-0 task. |
-| `project:dove.mission` | Create a task under init after Dove classifies stage, domain, dependencies, level, blockers, and expected evidence. |
+| `project:dove.mission` | Propose a task under init after Dove classifies stage, domain, dependencies, level, blockers, and expected evidence; create it only after explicit confirmation. |
 | `project:dove.auto` | Start with mission-style intake, then after explicit confirmation run bounded automatic work until completion or a boundary. |
 | `project:dove.status` | Inspect project state, init, task tree, blockers, review state, version state, and completion readiness. |
 | `project:dove.kill` | Terminate a non-init task; when multiple tasks match, choose from the returned indexed list. |
@@ -38,7 +38,7 @@ Older router, checklist, plan, audit, return, follow-through, onboarding, govern
 
 1. Install Dove and run `dove doctor` to check the package, adapters, MCP entrypoint, and workspace artifacts.
 2. Run `project:dove.init` to establish the one global goal for the workspace.
-3. Run `project:dove.mission` for a concrete task, or `project:dove.auto` when you want Dove to continue after explicit confirmation.
+3. Run `project:dove.mission` to get a concrete task proposal and confirm it, or `project:dove.auto` when you want Dove to continue after explicit confirmation.
 4. Use preset commands as needed: `source`, `note`, `experience`, `figure`, `draft`, `review`, `review-loop`, and `rebuttal`.
 5. Use `project:dove.status` to inspect blockers, task state, and completion readiness.
 6. When a task yields reusable experience, record it with `project:dove.lessons`.
@@ -48,6 +48,7 @@ Older router, checklist, plan, audit, return, follow-through, onboarding, govern
 Dove treats work as a tree rooted at one init task:
 
 - There is exactly one level-0 init task.
+- `/dove:mission` first returns a proposal-only task contract; explicit confirmation materializes it into `.dove/task-packets/`.
 - User-created mission tasks default to level 3.
 - System-created prerequisite/controller tasks may be level 1 or 2.
 - Dove computes stage (`plan`, `execute`, `audit`) and domain (`paper`, `experiment`, `engineering`) from the request unless explicit values are supplied.
@@ -137,7 +138,7 @@ Lessons may be global or task-bound. When multiple tasks exist, Dove should pres
 
 ## Auto
 
-`project:dove.auto` starts like `project:dove.mission`: it creates or selects a task, classifies the request, reports applicable lessons, and requires explicit confirmation before autonomous execution.
+`project:dove.auto` starts like `project:dove.mission`: it proposes or selects a task, classifies the request, reports applicable lessons, and requires explicit confirmation before task creation/selection proceeds into autonomous execution.
 
 After confirmation, auto may internally call top-level Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status. It stops at completed, blocked, killed, review/authority boundary, missing provider credentials, conflicting task target, or step-budget exhaustion.
 

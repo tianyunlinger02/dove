@@ -158,7 +158,9 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
   }
 
   if (command.id === "dove.mission") {
-    assert.equal(commandText.includes("create_dove_task"), true, `${relativePath} must create classified tasks through create_dove_task`);
+    assert.equal(commandText.includes("create_dove_task"), true, `${relativePath} must route mission proposals through create_dove_task`);
+    assert.equal(commandText.includes("Return a proposal-only mission contract first"), true, `${relativePath} must require proposal-first mission intake`);
+    assert.equal(commandText.includes("Ask for explicit operator confirmation before passing `confirmed: true`"), true, `${relativePath} must require confirmation before task materialization`);
     assert.equal(commandText.includes("Classify each task as `plan`, `execute`, or `audit`"), true, `${relativePath} must expose task classification`);
     assert.equal(commandText.includes("User-created tasks default to level 3"), true, `${relativePath} must state the user task level default`);
   }

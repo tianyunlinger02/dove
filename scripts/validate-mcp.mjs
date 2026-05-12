@@ -68,14 +68,25 @@ async function main() {
   assert.equal(initGoal.init.level, 0);
   assert.equal(initGoal.nextAction, "project:dove.mission");
 
-  const mission = await callTool("create_dove_task", {
+  const missionProposal = await callTool("create_dove_task", {
     id: "validator-paper-task",
     goal: "Draft and review the validator paper section with one figure and one experiment.",
     title: "Validator paper task",
     evidenceExpectations: ["draft", "figure", "review"],
     artifactRefs: [".dove/drafts/introduction.md"]
   });
+  assert.equal(missionProposal.status, "needs-confirmation");
+  assert.equal(missionProposal.proposalOnly, true);
+  assert.deepEqual(missionProposal.writes, []);
+  assert.equal(missionProposal.confirmationRequired, true);
+  assert.equal(missionProposal.proposedTask.level, 3);
+  assert.equal(missionProposal.confirmArgs.confirmed, true);
+
+  const mission = await callTool("create_dove_task", {
+    ...missionProposal.confirmArgs
+  });
   assert.equal(mission.status, "created");
+  assert.equal(mission.confirmationRequired, false);
   assert.equal(mission.createdTask.level, 3);
   assert.equal(mission.createdTask.creatorKind, "user");
   assert.equal(mission.createdTask.rootId, initGoal.init.id);
@@ -189,7 +200,8 @@ async function main() {
   const secondMission = await callTool("create_dove_task", {
     id: "validator-kill-task",
     goal: "Temporary validator task to kill.",
-    title: "Validator kill task"
+    title: "Validator kill task",
+    confirmed: true
   });
   const killed = await callTool("kill_dove_task", {
     packetId: secondMission.createdTask.id,
