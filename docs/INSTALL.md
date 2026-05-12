@@ -14,7 +14,7 @@ The supported install path is host-neutral at the core and adapter-based at the 
 4. bootstrap missing `.dove/` artifacts without overwriting user-owned workspace state
 5. write `.dove/manifest.json` as the Dove authority manifest
 
-Supported adapter IDs are `opencode`, `claude`, `codex`, `cursor`, `agents`, and `all`. OpenCode remains the default install target, but both general `dove.*` and paper-domain `dove.paper.*` adapters are generated for every supported host.
+Supported adapter IDs are `opencode`, `claude`, `codex`, `cursor`, `agents`, and `all`. OpenCode remains the default install target, and every supported host receives the same flat top-level Dove command set generated from the manifest.
 
 ## Project-local install
 
@@ -46,27 +46,41 @@ node ./bin/dove.mjs onboard . --write-map
 
 The artifact map lives at `.dove/workspace/artifact-map.json` and records source path, lifecycle family, suggested `.dove` target, confidence, conflicts, unmapped assets, and recommended next actions. The onboarding flow never moves, deletes, imports, rewrites, or overwrites manuscript assets.
 
-## Dove queries and governed launch
+## Dove task workflow
 
-```bash
-# Route one mission without writing durable state
-node ./bin/dove.mjs orchestrate . --request "Ship cache safely" --domain engineering --stage execution
+Use the installed host adapters or MCP tools for task-centered workflow operations:
 
-# Frame one mission contract without writing durable state
-node ./bin/dove.mjs mission . --domain engineering --stage execution --artifact src/cache.mjs --acceptance-check "tests or validation output"
-
-# Inspect mission status, packets, paper lifecycle, questions, decisions, and lineage
-node ./bin/dove.mjs status . --domain engineering
-
-# Inspect audit and return readiness without writing, fixing, running tests, or inspecting git
-node ./bin/dove.mjs audit . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
-node ./bin/dove.mjs return . --domain engineering --changed-file src/cache.mjs --test-evidence tests/cache.test.mjs --validation-output tmp/cache-test.log
-
-# Governed launch after accepted guidance exists
-node ./bin/dove.mjs launch . --source-type remediation-pack --source-id <pack-id> --execute-by 2099-01-01T00:00:00.000Z --review-after 2099-01-01T12:00:00.000Z --domain engineering --stage execution
+```text
+project:dove.init
+project:dove.mission
+project:dove.auto
+project:dove.status
+project:dove.kill
+project:dove.lessons
+project:dove.version
+project:dove.source
+project:dove.note
+project:dove.figure
+project:dove.experience
+project:dove.draft
+project:dove.review
+project:dove.review-loop
+project:dove.rebuttal
 ```
 
-The query commands return proposal-only JSON and do not create mission packets, update the board, append handoffs, run tests, inspect git, execute autonomy, or repair `.dove` artifacts. `dove status` may refresh derived navigation views while keeping source assets untouched. `dove launch` is a guarded write surface that requires an accepted source plus `executeBy` and `reviewAfter`, writes mission packets under `.dove/task-packets`, and does not execute autonomy.
+The daily workflow is: create/update the unique init goal, create or auto-run concrete tasks under that goal, use preset commands for source/note/experience/figure/draft/review/rebuttal work, inspect state through status, and record reusable lessons explicitly. Lower-level CLI and MCP support tools may still exist for validation or import/export workflows, but they are not separate public slash commands.
+
+## Language configuration
+
+Dove defaults to Chinese responses. To switch a workspace to English, add this to `.dove/config.json` or `.dove/config.local.json`:
+
+```json
+{
+  "language": "en"
+}
+```
+
+Supported values are `zh` for Chinese and `en` for English. `DOVE_LANGUAGE` or `DOVE_RESPONSE_LANGUAGE` can override the file preference for a single process.
 
 ## Health check
 

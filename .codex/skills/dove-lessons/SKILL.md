@@ -1,11 +1,11 @@
 ---
 name: dove-lessons
-description: "Record or inspect concise operator lessons and retrospectives without importing raw runtime traces."
+description: "Inspect or record global and task-bound lessons that future Dove work must obey."
 ---
 
 # Dove Lessons
 
-Record or inspect concise operator lessons and retrospectives without importing raw runtime traces.
+Inspect or record global and task-bound lessons that future Dove work must obey.
 
 ## Contract
 
@@ -17,12 +17,15 @@ Record or inspect concise operator lessons and retrospectives without importing 
 ## Workflow
 
 1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
-2. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/meta/operator-lessons.json`.
-3. Use the `query_operator_lessons`, `record_operator_lesson` MCP tools when available.
-4. Record only explicit operator bookkeeping for the governed Dove workflow.
-5. Record only distilled lessons with problem, decisions, pitfalls, validation, and next-time guidance.
-6. Do not import or cite ignored raw runtime traces.
-7. Do not materialize, approve, launch, or execute work from lessons.
-8. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-9. Use this shared Dove control-plane surface across paper, engineering, experiment, review, and general missions; route to `dove.paper.*` only for paper-specific artifact workflows.
-10. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+2. Follow Dove's response language preference from `.dove/config.json`, `.dove/config.local.json`, or `.dove/state.json.settings.responseLanguage`; supported values are `zh` for Chinese and `en` for English, and the default is `zh`.
+3. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/config.json`, `.dove/config.local.json`, `.dove/state.json`, `.dove/meta/operator-lessons.json`.
+4. Use the `query_operator_lessons`, `record_operator_lesson` MCP tools when available.
+5. Record only explicit operator bookkeeping for the governed Dove workflow.
+6. Record only distilled lessons with problem, decision, pitfall, validation, and next-time guidance.
+7. When recording a task-specific lesson and multiple tasks exist, return an indexed task list and wait for the operator to choose.
+8. Allow manual global lessons when no task binding is intended.
+9. Surface applicable must-obey lessons before later task mutations.
+10. Do not import or cite ignored raw runtime traces.
+11. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+12. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+13. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

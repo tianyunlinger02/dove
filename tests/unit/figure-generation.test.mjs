@@ -11,6 +11,7 @@ import {
   importFigureGeneration,
   initProject,
   loadDoveConfig,
+  loadDoveLanguageConfig,
   prepareFigureGeneration,
   readJson,
   registerSource,
@@ -239,4 +240,20 @@ test("Dove figure config rejects inline secrets and accepts env secret reference
 
   fs.writeFileSync(configPath, JSON.stringify({ figureGeneration: { providers: [{ id: "bad", type: "http-json", endpoint: "https://drawing.invalid", apiKey: "secret" }] } }), "utf8");
   assert.throws(() => loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath }), /inline secret/);
+});
+
+test("Dove config supports response language with Chinese default and English override", () => {
+  const root = tempRoot();
+  const configPath = path.join(root, "dove-config.json");
+  fs.writeFileSync(configPath, JSON.stringify({}), "utf8");
+
+  assert.equal(loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath }).language, "zh");
+
+  fs.writeFileSync(configPath, JSON.stringify({ language: "English" }), "utf8");
+  assert.equal(loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath }).language, "en");
+  assert.equal(loadDoveLanguageConfig(root, { DOVE_CONFIG_PATH: configPath }), "en");
+  assert.equal(loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath, DOVE_LANGUAGE: "中文" }).language, "zh");
+
+  fs.writeFileSync(configPath, JSON.stringify({ language: "fr" }), "utf8");
+  assert.throws(() => loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath }), /Unsupported Dove response language/);
 });

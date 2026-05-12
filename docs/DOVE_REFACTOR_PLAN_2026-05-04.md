@@ -50,12 +50,12 @@ A Dove workflow behaves like a trained white dove:
 
 ```text
 Dove
-├── one router: dove.orchestrate
-├── one work unit: mission packet
-├── one board: mission board
-├── one lifecycle: goal → design → checklist → execution → audit → return
+├── one global goal: dove.init
+├── one work unit: durable task packet
+├── one task tree: init → mission/auto tasks
+├── one status surface: dove.status
 ├── one durable root: .dove/
-└── domain extensions: paper, engineering, experiment, review, general
+└── task domains: paper, engineering, experiment
 ```
 
 The domain is a property of a mission, not a separate product branch.

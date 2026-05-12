@@ -4,6 +4,10 @@ import path from "node:path";
 import {
   ARTIFACT_PATHS,
   DOVE_PRIMARY_ROLES,
+  DOVE_TASK_CREATOR_KINDS,
+  DOVE_TASK_DOMAINS,
+  DOVE_TASK_STAGES,
+  DOVE_TASK_STATUSES,
   PIPELINE_STAGE_ORDER,
   ROLE_IDS,
   createDefaultBoard,
@@ -21,13 +25,7 @@ import {
   normalizeState,
   normalizeWorkspaceIndex
 } from "./schema.mjs";
-import {
-  materializeGuidancePacket,
-  queryDecisions,
-  queryLineage,
-  queryOpenQuestions,
-  queryTaskGraph
-} from "./navigation.mjs";
+import { materializeGuidancePacket } from "./navigation.mjs";
 import { queryPaperAudit } from "./paper-audit.mjs";
 import { assertGovernanceMutationRegistered } from "./workspace.mjs";
 
@@ -611,11 +609,241 @@ function readDoveInputs(root) {
   const doveAuthorityManifest = normalizeDoveAuthorityManifest(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.doveRootManifest, createDoveAuthorityManifest, readErrors), createDoveAuthorityManifest));
   const taskPackets = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex, readErrors), createTaskPacketsIndex);
   const reviewState = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.reviewState, createReviewState, readErrors), createReviewState);
+  const reviewConcerns = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.reviewConcerns, () => ({ version: 2, items: [], updatedAt: null }), readErrors), () => ({ version: 2, items: [], updatedAt: null }));
   const versions = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.versionsIndex, createVersionsIndex, readErrors), createVersionsIndex);
   const comparisons = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.versionComparisons, createVersionComparisonsIndex, readErrors), createVersionComparisonsIndex);
+  const experimentPlans = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.experimentPlans, () => ({ version: 1, items: [], updatedAt: null }), readErrors), () => ({ version: 1, items: [], updatedAt: null }));
+  const experimentResults = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.experimentResults, () => ({ version: 1, items: [], updatedAt: null }), readErrors), () => ({ version: 1, items: [], updatedAt: null }));
+  const experimentAudits = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.experimentAudits, () => ({ version: 1, items: [], updatedAt: null }), readErrors), () => ({ version: 1, items: [], updatedAt: null }));
+  const operatorLessons = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.metaOperatorLessons, () => ({ version: 1, lessons: [], summary: { lessonCount: 0, activeLessonCount: 0, topLessonIds: [], lessonsPath: ARTIFACT_PATHS.metaOperatorLessons } }), readErrors), () => ({ version: 1, lessons: [], summary: { lessonCount: 0, activeLessonCount: 0, topLessonIds: [], lessonsPath: ARTIFACT_PATHS.metaOperatorLessons } }));
   const checklist = safeReadText(root, ARTIFACT_PATHS.checklist, readErrors);
   const packets = Array.isArray(taskPackets.items) ? taskPackets.items.map(summarizePacket) : [];
-  return { state, board, workspaceIndex, doveAuthorityManifest, taskPackets, packets, reviewState, versions, comparisons, checklist, readErrors };
+  return { state, board, workspaceIndex, doveAuthorityManifest, taskPackets, packets, reviewState, reviewConcerns, versions, comparisons, experimentPlans, experimentResults, experimentAudits, operatorLessons, checklist, readErrors };
+}
+
+function normalizeDoveStatusTaskStatus(packet) {
+  const raw = String(packet.status ?? packet.lifecycleStatus ?? "pending").trim().toLowerCase();
+  if (DOVE_TASK_STATUSES.includes(raw)) {
+    return raw;
+  }
+  if (raw === "active") {
+    return "in-progress";
+  }
+  if (raw === "done") {
+    return "completed";
+  }
+  return "pending";
+}
+
+function normalizeDoveStatusTaskStage(packet) {
+  const raw = String(packet.stage ?? packet.taskStage ?? "").trim().toLowerCase();
+  if (DOVE_TASK_STAGES.includes(raw)) {
+    return raw;
+  }
+  const legacyStage = String(packet.missionStage ?? missionStageForPhase(packet.phase)).trim();
+  if (["audit", "return"].includes(legacyStage)) {
+    return "audit";
+  }
+  if (legacyStage === "execution") {
+    return "execute";
+  }
+  return "plan";
+}
+
+function normalizeDoveStatusTaskDomain(packet) {
+  const raw = String(packet.domain ?? packet.doveDomain ?? packet.missionDomain ?? "").trim().toLowerCase();
+  if (DOVE_TASK_DOMAINS.includes(raw)) {
+    return raw;
+  }
+  const legacyDomain = domainForPacket(packet);
+  return DOVE_TASK_DOMAINS.includes(legacyDomain) ? legacyDomain : "engineering";
+}
+
+function normalizeDoveStatusCreatorKind(packet) {
+  const raw = String(packet.creatorKind ?? "user").trim().toLowerCase();
+  return DOVE_TASK_CREATOR_KINDS.includes(raw) ? raw : "user";
+}
+
+function normalizeDoveStatusLevel(packet) {
+  const level = Number(packet.level);
+  return Number.isFinite(level) ? level : 3;
+}
+
+function summarizeDoveStatusTask(packet) {
+  const id = String(packet.id ?? packet.packetId ?? packet.missionPacketId ?? "").trim();
+  const aliases = missionPacketAliases({ ...packet, id });
+  return {
+    id,
+    ...aliases,
+    title: packet.title ?? id,
+    summary: packet.summary ?? packet.currentFocus ?? null,
+    parentId: packet.parentId ?? null,
+    rootId: packet.rootId ?? null,
+    level: normalizeDoveStatusLevel(packet),
+    creatorKind: normalizeDoveStatusCreatorKind(packet),
+    stage: normalizeDoveStatusTaskStage(packet),
+    domain: normalizeDoveStatusTaskDomain(packet),
+    status: normalizeDoveStatusTaskStatus(packet),
+    lifecycleStatus: packet.lifecycleStatus ?? packet.status ?? null,
+    dependencies: normalizeStringArray(packet.dependencies ?? packet.dependencyIds),
+    blockedBy: normalizeStringArray(packet.blockedBy ?? packet.blockerIds),
+    lessonIds: normalizeStringArray(packet.lessonIds),
+    artifactRefs: mergeStringArrays(packet.artifactRefs, packet.outputPaths, packet.evidenceLinks),
+    outputPaths: normalizeStringArray(packet.outputPaths),
+    evidenceLinks: normalizeStringArray(packet.evidenceLinks),
+    contextPolicy: packet.contextPolicy ?? null,
+    currentFocus: packet.currentFocus ?? null,
+    nextAction: packet.nextAction ?? null,
+    createdAt: packet.createdAt ?? null,
+    updatedAt: packet.updatedAt ?? null,
+    completedAt: packet.completedAt ?? null,
+    killedAt: packet.killedAt ?? null,
+    killReason: packet.killReason ?? null
+  };
+}
+
+function sortStatusTasks(tasks) {
+  return [...tasks].sort((left, right) => left.level - right.level || String(left.createdAt ?? "").localeCompare(String(right.createdAt ?? "")) || left.id.localeCompare(right.id));
+}
+
+function sortRecentStatusTasks(tasks) {
+  return [...tasks].sort((left, right) => String(right.updatedAt ?? right.completedAt ?? right.killedAt ?? right.createdAt ?? "").localeCompare(String(left.updatedAt ?? left.completedAt ?? left.killedAt ?? left.createdAt ?? "")) || left.id.localeCompare(right.id));
+}
+
+function buildStatusTaskTree(tasks) {
+  const byId = new Map(tasks.map((task) => [task.id, { ...task, children: [] }]));
+  const roots = [];
+  for (const task of byId.values()) {
+    if (task.parentId && task.parentId !== task.id && byId.has(task.parentId)) {
+      byId.get(task.parentId).children.push(task);
+    } else {
+      roots.push(task);
+    }
+  }
+  const normalizeNode = (node) => ({ ...node, children: sortStatusTasks(node.children).map(normalizeNode) });
+  return sortStatusTasks(roots).map(normalizeNode);
+}
+
+function summarizeStatusBlocker(blocker, index) {
+  if (blocker && typeof blocker === "object" && !Array.isArray(blocker)) {
+    return {
+      id: blocker.id ?? blocker.blockerId ?? `board-blocker-${index + 1}`,
+      source: "board",
+      summary: blocker.summary ?? blocker.reason ?? blocker.title ?? blocker.id ?? `Board blocker ${index + 1}`,
+      severity: blocker.severity ?? null,
+      taskId: blocker.taskId ?? blocker.packetId ?? null
+    };
+  }
+  return {
+    id: `board-blocker-${index + 1}`,
+    source: "board",
+    summary: String(blocker ?? `Board blocker ${index + 1}`),
+    severity: null,
+    taskId: null
+  };
+}
+
+function buildStatusBlockers(inputs, blockedTasks) {
+  const boardBlockers = Array.isArray(inputs.board.blockers) ? inputs.board.blockers.map(summarizeStatusBlocker) : [];
+  const taskBlockers = blockedTasks.map((task) => ({
+    id: `task-blocker-${task.id}`,
+    source: "task",
+    summary: task.blockedBy.length > 0 ? `${task.id} is blocked by ${task.blockedBy.join(", ")}` : `${task.id} is marked blocked`,
+    severity: "blocking",
+    taskId: task.id,
+    blockedBy: task.blockedBy
+  }));
+  return [...boardBlockers, ...taskBlockers];
+}
+
+function selectStatusNextCommand({ initTask, activeTasks, blockedTasks, review }) {
+  if (!initTask) {
+    return "project:dove.init";
+  }
+  if (blockedTasks.length > 0) {
+    return "project:dove.status";
+  }
+  const nextActiveTask = activeTasks.find((task) => task.nextAction);
+  if (nextActiveTask) {
+    return nextActiveTask.nextAction;
+  }
+  if (activeTasks.length > 0) {
+    return "project:dove.auto";
+  }
+  if ((review.unresolvedConcernCount ?? 0) > 0) {
+    return "project:dove.review";
+  }
+  return initTask.nextAction ?? "project:dove.mission";
+}
+
+function summarizeStatusReview(inputs) {
+  const concerns = Array.isArray(inputs.reviewConcerns.items) ? inputs.reviewConcerns.items : [];
+  const openConcerns = concerns.filter((concern) => !["closed", "resolved", "accepted"].includes(String(concern.status ?? "open").trim().toLowerCase()));
+  const unresolvedConcernIds = normalizeStringArray(inputs.reviewState.unresolvedConcernIds);
+  return {
+    verdict: inputs.reviewState.lastVerdict ?? "not-reviewed",
+    reviewedAt: inputs.reviewState.lastReviewedAt ?? null,
+    reviewRound: inputs.reviewState.reviewRound ?? 0,
+    openItemCount: Array.isArray(inputs.reviewState.openItems) ? inputs.reviewState.openItems.length : 0,
+    concernCount: concerns.length,
+    openConcernCount: openConcerns.length,
+    unresolvedConcernCount: unresolvedConcernIds.length || openConcerns.length,
+    unresolvedConcernIds,
+    reviewerIndependence: inputs.reviewState.reviewerIndependence ?? null
+  };
+}
+
+function summarizeStatusLessons(inputs) {
+  const lessons = Array.isArray(inputs.operatorLessons.lessons) ? inputs.operatorLessons.lessons : [];
+  const activeLessons = lessons.filter((lesson) => String(lesson.status ?? "active").trim().toLowerCase() === "active");
+  const mustObeyLessons = activeLessons.filter((lesson) => lesson.mustObey !== false);
+  const summary = inputs.operatorLessons.summary && typeof inputs.operatorLessons.summary === "object" ? inputs.operatorLessons.summary : {};
+  return {
+    lessonCount: summary.lessonCount ?? lessons.length,
+    activeLessonCount: summary.activeLessonCount ?? activeLessons.length,
+    mustObeyLessonCount: mustObeyLessons.length,
+    topLessonIds: normalizeStringArray(summary.topLessonIds).slice(0, 10),
+    lessonsPath: summary.lessonsPath ?? ARTIFACT_PATHS.metaOperatorLessons
+  };
+}
+
+function summarizeStatusVersions(inputs) {
+  const versions = Array.isArray(inputs.versions.items) ? inputs.versions.items : [];
+  const lineage = Array.isArray(inputs.versions.lineage) ? inputs.versions.lineage : [];
+  const comparisons = Array.isArray(inputs.comparisons.items) ? inputs.comparisons.items : [];
+  return {
+    currentVersionId: inputs.versions.currentVersionId ?? null,
+    versionCount: versions.length,
+    lineageCount: lineage.length,
+    comparisonCount: comparisons.length,
+    activeComparisonTargets: normalizeStringArray(inputs.comparisons.activeTargets),
+    versionsPath: ARTIFACT_PATHS.versionsIndex
+  };
+}
+
+function summarizeStatusExperiments(inputs) {
+  return {
+    planCount: Array.isArray(inputs.experimentPlans.items) ? inputs.experimentPlans.items.length : 0,
+    resultCount: Array.isArray(inputs.experimentResults.items) ? inputs.experimentResults.items.length : 0,
+    auditCount: Array.isArray(inputs.experimentAudits.items) ? inputs.experimentAudits.items.length : 0
+  };
+}
+
+function normalizeStatusStageArg(value) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (DOVE_TASK_STAGES.includes(raw)) {
+    return raw;
+  }
+  if (["audit", "return"].includes(raw)) {
+    return "audit";
+  }
+  if (raw === "execution") {
+    return "execute";
+  }
+  if (["goal", "design", "checklist"].includes(raw)) {
+    return "plan";
+  }
+  return null;
 }
 
 function inferDomain(args, inputs) {
@@ -666,7 +894,7 @@ function buildMissionContract(root, args = {}) {
   const acceptanceChecks = normalizeStringArray(args.acceptanceChecks).length > 0
     ? normalizeStringArray(args.acceptanceChecks)
     : domainGuidance.returnEvidence;
-  const nextCommand = args.nextCommand ?? domainGuidance.stageRoutes?.[stage] ?? "project:dove.orchestrate";
+  const nextCommand = args.nextCommand ?? domainGuidance.stageRoutes?.[stage] ?? "project:dove.status";
   return {
     inputs,
     mission: {
@@ -696,27 +924,32 @@ function artifactPathsReadForDove() {
     ARTIFACT_PATHS.doveRootManifest,
     ARTIFACT_PATHS.taskPacketsIndex,
     ARTIFACT_PATHS.reviewState,
+    ARTIFACT_PATHS.reviewConcerns,
     ARTIFACT_PATHS.versionsIndex,
     ARTIFACT_PATHS.versionComparisons,
+    ARTIFACT_PATHS.experimentPlans,
+    ARTIFACT_PATHS.experimentResults,
+    ARTIFACT_PATHS.experimentAudits,
+    ARTIFACT_PATHS.metaOperatorLessons,
     ARTIFACT_PATHS.checklist
   ];
 }
 
 const PAPER_PIPELINE_STAGE_METADATA = {
-  init: { commandId: "project:dove.paper.init", artifactPaths: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.project, ARTIFACT_PATHS.researchContract] },
-  sources: { commandId: "project:dove.paper.source", artifactPaths: [ARTIFACT_PATHS.sources, ARTIFACT_PATHS.bibliography] },
-  notes: { commandId: "project:dove.paper.note", artifactPaths: [ARTIFACT_PATHS.notes] },
-  research: { commandId: "project:dove.paper.research", artifactPaths: [ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.researchAgenda] },
-  plan: { commandId: "project:dove.plan", artifactPaths: [ARTIFACT_PATHS.plan] },
-  outline: { commandId: "project:dove.paper.outline", artifactPaths: [ARTIFACT_PATHS.outline] },
-  draft: { commandId: "project:dove.paper.draft", artifactPaths: [ARTIFACT_PATHS.draftsDir] },
-  experiments: { commandId: "project:dove.paper.experiment", artifactPaths: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits] },
-  citations: { commandId: "project:dove.paper.citations", artifactPaths: [ARTIFACT_PATHS.bibliography, ARTIFACT_PATHS.citationLog] },
-  review: { commandId: "project:dove.paper.review", artifactPaths: [ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewConcerns] },
-  rebuttal: { commandId: "project:dove.paper.rebuttal", artifactPaths: [ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft] },
-  versions: { commandId: "project:dove.paper.version", artifactPaths: [ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.versionComparisons] },
-  checklist: { commandId: "project:dove.checklist", artifactPaths: [ARTIFACT_PATHS.checklist] },
-  return: { commandId: "project:dove.return", artifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.checklist] }
+  init: { commandId: "project:dove.init", artifactPaths: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.project, ARTIFACT_PATHS.researchContract] },
+  sources: { commandId: "project:dove.source", artifactPaths: [ARTIFACT_PATHS.sources, ARTIFACT_PATHS.bibliography] },
+  notes: { commandId: "project:dove.note", artifactPaths: [ARTIFACT_PATHS.notes] },
+  research: { commandId: "project:dove.source", artifactPaths: [ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.researchAgenda] },
+  plan: { commandId: "project:dove.mission", artifactPaths: [ARTIFACT_PATHS.plan] },
+  outline: { commandId: "project:dove.mission", artifactPaths: [ARTIFACT_PATHS.outline] },
+  draft: { commandId: "project:dove.draft", artifactPaths: [ARTIFACT_PATHS.draftsDir] },
+  experiments: { commandId: "project:dove.experience", artifactPaths: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits] },
+  citations: { commandId: "project:dove.source", artifactPaths: [ARTIFACT_PATHS.bibliography, ARTIFACT_PATHS.citationLog] },
+  review: { commandId: "project:dove.review", artifactPaths: [ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewConcerns] },
+  rebuttal: { commandId: "project:dove.rebuttal", artifactPaths: [ARTIFACT_PATHS.rebuttalIssues, ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft] },
+  versions: { commandId: "project:dove.version", artifactPaths: [ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.versionComparisons] },
+  checklist: { commandId: "project:dove.status", artifactPaths: [ARTIFACT_PATHS.checklist] },
+  return: { commandId: "project:dove.status", artifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.checklist] }
 };
 
 function inspectPipelineArtifact(root, relativePath) {
@@ -744,7 +977,7 @@ function buildPaperPipelineStage(root, stageId, index) {
 
 function selectPaperPipelineNextCommand(stages) {
   const nextStage = stages.find((stage) => stage.status !== "ready");
-  return nextStage?.commandId ?? "project:dove.return";
+  return nextStage?.commandId ?? "project:dove.status";
 }
 
 function booleanArg(value) {
@@ -929,18 +1162,18 @@ function classifyReturnStatus({ mission, inputs, paperAudit, engineeringEvidence
 
 function nextCommandForReturnStatus(status, domain) {
   if (status === "needs-review") {
-    return "project:dove.paper.review";
+    return "project:dove.review";
   }
   if (status === "needs-execution") {
-    return domain === "paper" ? "project:dove.checklist" : "project:dove.checklist";
+    return domain === "paper" ? "project:dove.status" : "project:dove.status";
   }
   if (status === "needs-audit") {
-    return domain === "engineering" ? "project:dove.return" : "project:dove.paper.audit";
+    return domain === "engineering" ? "project:dove.status" : "project:dove.review";
   }
   if (status === "blocked") {
     return "project:dove.mission";
   }
-  return "project:dove.paper.version";
+  return "project:dove.version";
 }
 
 function routeRequestText(args, mission) {
@@ -949,13 +1182,13 @@ function routeRequestText(args, mission) {
 
 function selectRouteCommand(mission, args = {}) {
   const route = mission.domainGuidance.stageRoutes?.[mission.stage] ?? mission.nextCommand;
-  const candidates = String(route ?? "project:dove.orchestrate").split(/\s+or\s+/).map((item) => item.trim()).filter(Boolean);
+  const candidates = String(route ?? "project:dove.status").split(/\s+or\s+/).map((item) => item.trim()).filter(Boolean);
   if (candidates.length <= 1) {
-    return candidates[0] ?? "project:dove.orchestrate";
+    return candidates[0] ?? "project:dove.status";
   }
   const requestText = routeRequestText(args, mission);
   if (booleanArg(args.allowAutonomy)) {
-    const autonomy = candidates.find((item) => item.includes("autonomy"));
+    const autonomy = candidates.find((item) => item.includes(".auto") || item.includes("autonomy"));
     if (autonomy) {
       return autonomy;
     }
@@ -973,8 +1206,8 @@ function routeReason(mission, selectedCommand, args = {}) {
   if (selectedCommand !== mission.nextCommand && String(mission.nextCommand).includes(" or ")) {
     return `Selected ${selectedCommand} from domain route ${mission.nextCommand} for a deterministic no-write Dove routing result.`;
   }
-  if (booleanArg(args.allowAutonomy) && selectedCommand.includes("autonomy")) {
-    return "Autonomy was explicitly allowed for this Dove routing query.";
+  if (booleanArg(args.allowAutonomy) && (selectedCommand.includes(".auto") || selectedCommand.includes("autonomy"))) {
+    return "Auto execution was explicitly allowed for this Dove routing query.";
   }
   return `Mission stage ${mission.stage} in domain ${mission.domain} maps to ${selectedCommand}.`;
 }
@@ -1057,16 +1290,55 @@ export function queryPaperPipeline(root, args = {}) {
 }
 
 export function queryDoveStatus(root, args = {}) {
-  const missionBoard = queryDoveMissionBoard(root, args);
-  const taskGraph = queryTaskGraph(root);
-  const paperLifecycle = queryPaperPipeline(root, args);
-  const openQuestions = queryOpenQuestions(root);
-  const decisions = queryDecisions(root);
-  const lineage = queryLineage(root);
-  const readErrors = [
-    ...(missionBoard.diagnostics?.readErrors ?? []),
-    ...(paperLifecycle.diagnostics?.readErrors ?? [])
-  ];
+  const inputs = readDoveInputs(root);
+  const tasks = sortStatusTasks((Array.isArray(inputs.taskPackets.items) ? inputs.taskPackets.items : []).map(summarizeDoveStatusTask).filter((task) => task.id));
+  const requestedDomain = normalizeDoveDomainId(args.domain ?? args.doveDomain ?? args.missionDomain, null);
+  const requestedStage = normalizeStatusStageArg(args.stage ?? args.missionStage);
+  const requestedStatuses = normalizeStringArray(args.status ?? args.statuses);
+  const requestedPacketIds = normalizeStringArray(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds);
+  const visibleTasks = tasks.filter((task) => {
+    if (requestedDomain && task.domain !== requestedDomain) {
+      return false;
+    }
+    if (requestedStage && task.stage !== requestedStage) {
+      return false;
+    }
+    if (requestedStatuses.length > 0 && !requestedStatuses.includes(task.status) && !requestedStatuses.includes(String(task.lifecycleStatus ?? ""))) {
+      return false;
+    }
+    if (requestedPacketIds.length > 0 && !requestedPacketIds.includes(task.id) && !requestedPacketIds.includes(task.packetId) && !requestedPacketIds.includes(task.missionPacketId)) {
+      return false;
+    }
+    return true;
+  });
+  const initTask = tasks.find((task) => task.level === 0 && task.status !== "killed") ?? null;
+  const activeStatusIds = new Set(["pending", "ready", "in-progress", "blocked"]);
+  const activeTasks = visibleTasks.filter((task) => task.level !== 0 && activeStatusIds.has(task.status));
+  const blockedTasks = activeTasks.filter((task) => task.status === "blocked" || task.blockedBy.length > 0);
+  const completedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "completed")).slice(0, 10);
+  const killedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "killed")).slice(0, 10);
+  const review = summarizeStatusReview(inputs);
+  const blockers = buildStatusBlockers(inputs, blockedTasks);
+  const lessons = summarizeStatusLessons(inputs);
+  const versions = summarizeStatusVersions(inputs);
+  const experiments = summarizeStatusExperiments(inputs);
+  const nextCommand = selectStatusNextCommand({ initTask, activeTasks, blockedTasks, review });
+  const currentStage = requestedStage ?? activeTasks[0]?.stage ?? initTask?.stage ?? null;
+  const currentDomain = requestedDomain ?? activeTasks[0]?.domain ?? initTask?.domain ?? normalizeDoveDomainId(inputs.workspaceIndex.dove?.currentDomain, null);
+  const primaryRole = currentStage === "audit" ? "reviewer" : currentStage === "execute" ? "builder" : "planner";
+  const returnStatus = inputs.readErrors.length > 0
+    ? "blocked"
+    : blockers.length > 0
+      ? "blocked"
+      : activeTasks.length > 0
+        ? "in-progress"
+        : review.unresolvedConcernCount > 0
+          ? "needs-review"
+          : "ready";
+  const levelCounts = countBy(tasks.map((task) => String(task.level)), ["0", "1", "2", "3"]);
+  const projectTitle = inputs.state.dove?.title ?? initTask?.title ?? "Dove project";
+  const projectObjective = inputs.state.dove?.objective ?? inputs.state.dove?.thesis ?? initTask?.summary ?? inputs.board.objective ?? null;
+  const projectFocus = activeTasks[0]?.currentFocus ?? (activeTasks.length === 0 ? projectObjective : inputs.state.orchestration?.currentFocus ?? inputs.board.currentFocus ?? projectObjective);
   return {
     mode: "dove-status-query",
     query: true,
@@ -1074,33 +1346,97 @@ export function queryDoveStatus(root, args = {}) {
     noAutoApply: true,
     writes: [],
     current: {
-      domain: missionBoard.board?.domain ?? paperLifecycle.current?.domain ?? null,
-      stage: missionBoard.board?.stage ?? paperLifecycle.current?.missionStage ?? null,
-      primaryRole: missionBoard.board?.primaryRole ?? null,
-      nextCommand: missionBoard.board?.nextCommand ?? paperLifecycle.suggestedNextCommand ?? "project:dove.orchestrate"
+      domain: currentDomain,
+      stage: currentStage,
+      primaryRole,
+      nextCommand
     },
-    board: missionBoard.board,
-    queues: missionBoard.queues,
-    counts: missionBoard.counts,
-    taskGraph,
-    paperLifecycle,
-    openQuestions,
-    decisions,
-    lineage,
-    navigation: {
-      reportPath: ARTIFACT_PATHS.navigationReport,
-      wikiPath: ARTIFACT_PATHS.wiki
+    dashboard: {
+      project: {
+        title: projectTitle,
+        objective: projectObjective,
+        responseLanguage: inputs.state.settings?.responseLanguage ?? "zh",
+        durableRoot: ARTIFACT_PATHS.doveRoot,
+        authoritativeRoot: inputs.doveAuthorityManifest.authoritativeRoot ?? ARTIFACT_PATHS.doveRoot,
+        currentFocus: projectFocus,
+        nextAction: nextCommand,
+        pipeline: {
+          currentStage: inputs.state.pipeline?.currentStage ?? inputs.board.currentPhase ?? null,
+          lastCompletedStage: inputs.state.pipeline?.lastCompletedStage ?? null,
+          resumeCommand: inputs.state.pipeline?.resumeCommand ?? "project:dove.status"
+        }
+      },
+      board: {
+        phase: inputs.board.currentPhase ?? null,
+        intentType: inputs.board.intentType ?? null,
+        assignedRole: inputs.board.assignedRole ?? null,
+        continuationStatus: inputs.board.continuationState?.status ?? null,
+        reviewRequiredBeforeFinalize: inputs.board.reviewRequiredBeforeFinalize ?? false
+      },
+      init: initTask,
+      tasks: {
+        tree: buildStatusTaskTree(visibleTasks),
+        active: activeTasks,
+        blocked: blockedTasks,
+        recentCompleted: completedTasks,
+        recentKilled: killedTasks,
+        activeTaskIds: activeTasks.map((task) => task.id),
+        counts: {
+          total: tasks.length,
+          visible: visibleTasks.length,
+          active: activeTasks.length,
+          blocked: blockedTasks.length,
+          completed: tasks.filter((task) => task.status === "completed").length,
+          killed: tasks.filter((task) => task.status === "killed").length,
+          byStatus: countBy(tasks.map((task) => task.status), DOVE_TASK_STATUSES),
+          byDomain: countBy(tasks.map((task) => task.domain), DOVE_TASK_DOMAINS),
+          byStage: countBy(tasks.map((task) => task.stage), DOVE_TASK_STAGES),
+          byLevel: levelCounts
+        },
+        index: {
+          path: ARTIFACT_PATHS.taskPacketsIndex,
+          version: inputs.taskPackets.version ?? null,
+          activeInitId: inputs.taskPackets.taskModel?.activeInitId ?? initTask?.id ?? null,
+          activeTaskIds: normalizeStringArray(inputs.taskPackets.taskModel?.activeTaskIds).length > 0 ? normalizeStringArray(inputs.taskPackets.taskModel?.activeTaskIds) : activeTasks.map((task) => task.id)
+        }
+      },
+      blockers,
+      review,
+      lessons,
+      versions,
+      experiments,
+      checklist: {
+        path: ARTIFACT_PATHS.checklist,
+        uncheckedCount: uncheckedChecklistCount(inputs.checklist),
+        completedCount: completedChecklistCount(inputs.checklist)
+      },
+      returnReadiness: {
+        status: returnStatus,
+        activeTaskCount: activeTasks.length,
+        blockerCount: blockers.length,
+        unresolvedConcernCount: review.unresolvedConcernCount,
+        readErrorCount: inputs.readErrors.length
+      },
+      nextAction: nextCommand
     },
-    suggestedNextCommand: missionBoard.board?.nextCommand ?? paperLifecycle.suggestedNextCommand ?? "project:dove.orchestrate",
+    board: {
+      domain: currentDomain,
+      stage: currentStage,
+      primaryRole,
+      nextCommand,
+      phase: inputs.board.currentPhase ?? null,
+      assignedRole: inputs.board.assignedRole ?? null
+    },
+    suggestedNextCommand: nextCommand,
     diagnostics: {
-      readErrors,
-      artifactPathsRead: Array.from(new Set([
-        ...artifactPathsReadForDove(),
-        ...(paperLifecycle.diagnostics?.artifactPathsRead ?? []),
-        ARTIFACT_PATHS.navigationReport,
-        ARTIFACT_PATHS.wiki
-      ])),
-      mayRefreshDerivedSurfaces: true,
+      readErrors: inputs.readErrors,
+      artifactPathsRead: artifactPathsReadForDove(),
+      derivedReports: {
+        navigationReportPath: ARTIFACT_PATHS.navigationReport,
+        wikiPath: ARTIFACT_PATHS.wiki
+      },
+      primaryStateSources: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.metaOperatorLessons],
+      mayRefreshDerivedSurfaces: false,
       noCommandExecution: true,
       noExternalProcess: true,
       noGitInspection: true,

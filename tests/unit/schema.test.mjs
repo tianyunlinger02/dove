@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ensureWorkspace, readJson } from "../../src/core/workspace.mjs";
-import { ARTIFACT_PATHS, DOVE_DOMAIN_GUIDANCE, DOVE_DOMAIN_IDS, DOVE_MISSION_LIFECYCLE_STAGES, DOVE_PRIMARY_ROLE_IDS, DOVE_WORKFLOW_KERNEL_VERSION, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, createDefaultState, createDoveAuthorityManifest, createMetaOperatorLessonsIndex, createWorkspaceIndex, normalizeCampaignsIndex, normalizeDoveAuthorityManifest, normalizeMetaOperatorLessonsIndex, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
+import { ARTIFACT_PATHS, DEFAULT_DOVE_RESPONSE_LANGUAGE, DOVE_AUDIO_CONTEXT_POLICY, DOVE_DOMAIN_GUIDANCE, DOVE_DOMAIN_IDS, DOVE_MISSION_LIFECYCLE_STAGES, DOVE_PRIMARY_ROLE_IDS, DOVE_RESPONSE_LANGUAGES, DOVE_TASK_CREATOR_KINDS, DOVE_TASK_DOMAINS, DOVE_TASK_STAGES, DOVE_TASK_STATUSES, DOVE_WORKFLOW_KERNEL_VERSION, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, createDefaultState, createDoveAuthorityManifest, createMetaOperatorLessonsIndex, createTaskPacketsIndex, createWorkspaceIndex, normalizeCampaignsIndex, normalizeDoveAuthorityManifest, normalizeDoveResponseLanguage, normalizeMetaOperatorLessonsIndex, normalizeSettings, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
 
 test("normalizeState migrates v1 state into v2", () => {
   const migrated = normalizeState({
@@ -47,7 +47,42 @@ test("createDefaultState exposes durable artifact paths", () => {
   assert.equal(state.artifacts.metaLongHorizonMemory, ".dove/meta/long-horizon-memory.json");
   assert.equal(state.artifacts.metaOperatorLessons, ".dove/meta/operator-lessons.json");
   assert.equal(state.artifacts.versionsIndex, ".dove/versions/index.json");
+  assert.equal(state.artifacts.audioReviewsDir, ".dove/audio/reviews");
+  assert.deepEqual(DOVE_RESPONSE_LANGUAGES, ["zh", "en"]);
+  assert.equal(DEFAULT_DOVE_RESPONSE_LANGUAGE, "zh");
+  assert.equal(state.settings.responseLanguage, "zh");
+  assert.equal(state.settings.taskModel.uniqueInitLevel, 0);
+  assert.equal(state.settings.taskModel.userDefaultLevel, 3);
+  assert.equal(state.settings.taskModel.autoClassifyMissionTasks, true);
+  assert.equal(state.settings.reviewLoop.maxIterations, 3);
+  assert.equal(state.settings.audioIsolation.defaultContextPolicy, DOVE_AUDIO_CONTEXT_POLICY);
   assert.equal(state.reviews.lastVerdict, "not-reviewed");
+});
+
+test("Dove response language settings normalize to supported Chinese and English values", () => {
+  assert.equal(normalizeDoveResponseLanguage("中文"), "zh");
+  assert.equal(normalizeDoveResponseLanguage("Chinese"), "zh");
+  assert.equal(normalizeDoveResponseLanguage("english"), "en");
+  assert.equal(normalizeDoveResponseLanguage("en-US"), "en");
+  assert.equal(normalizeDoveResponseLanguage("fr", "en"), "en");
+  assert.throws(() => normalizeDoveResponseLanguage("fr", "zh", { strict: true }), /Unsupported Dove response language/);
+  assert.equal(normalizeSettings({ responseLanguage: "English" }).responseLanguage, "en");
+  assert.equal(normalizeSettings({ language: "中文" }).responseLanguage, "zh");
+});
+
+test("task packet index exposes the task-centered model defaults", () => {
+  const index = createTaskPacketsIndex();
+  assert.equal(index.version, 4);
+  assert.deepEqual(DOVE_TASK_STAGES, ["plan", "execute", "audit"]);
+  assert.deepEqual(DOVE_TASK_DOMAINS, ["paper", "experiment", "engineering"]);
+  assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.deepEqual(DOVE_TASK_CREATOR_KINDS, ["user", "system"]);
+  assert.equal(index.taskModel.uniqueInitLevel, 0);
+  assert.equal(index.taskModel.userDefaultLevel, 3);
+  assert.equal(index.taskModel.activeInitId, null);
+  assert.deepEqual(index.taskModel.activeTaskIds, []);
+  assert.deepEqual(index.stageCounts, { plan: 0, execute: 0, audit: 0 });
+  assert.deepEqual(index.domainCounts, { paper: 0, experiment: 0, engineering: 0 });
 });
 
 test("operator lessons index is explicit-only and normalized", () => {
@@ -291,11 +326,11 @@ test("workspace index exposes normalized Dove mission kernel", () => {
   assert.equal(index.dove.currentDomain, "paper");
   assert.deepEqual(index.dove.domainIds, DOVE_DOMAIN_IDS);
   assert.equal(index.dove.domainGuidance.length, DOVE_DOMAIN_GUIDANCE.length);
-  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.design, "project:dove.plan");
-  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.launch or project:dove.autonomy-operate");
-  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.audit, "project:dove.audit");
-  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "general").stageRoutes.design, "project:dove.plan");
-  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "general").stageRoutes.audit, "project:dove.audit");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.design, "project:dove.mission");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.mission or project:dove.auto");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.audit, "project:dove.review");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "general").stageRoutes.design, "project:dove.mission");
+  assert.equal(index.dove.domainGuidance.find((domain) => domain.id === "general").stageRoutes.audit, "project:dove.review");
   assert.deepEqual(index.dove.primaryRoleIds, DOVE_PRIMARY_ROLE_IDS);
   assert.deepEqual(index.dove.primaryRoles.map((role) => role.id), ["planner", "builder", "reviewer"]);
   assert.deepEqual(index.dove.missionLifecycle.stages, DOVE_MISSION_LIFECYCLE_STAGES);
@@ -409,7 +444,7 @@ test("workspace index exposes normalized unified autonomy loop skeleton", () => 
   assert.equal(index.autonomyLoops.currentLoopId, "board-role-artifact-handoff");
   assert.equal(index.autonomyLoops.runtimePointers.includes(".dove/runtime/controller-state.json"), true);
   assert.equal(index.autonomyLoops.followThroughPointers.includes(".dove/meta/operator-follow-through.json"), true);
-  assert.match(index.autonomyLoops.safeExecutionPath, /autonomy-foreground/);
+  assert.match(index.autonomyLoops.safeExecutionPath, /dove\.mission -> project:dove\.auto/);
 
   const normalized = normalizeWorkspaceIndex({
     autonomyLoops: {

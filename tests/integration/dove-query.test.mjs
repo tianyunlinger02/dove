@@ -232,7 +232,7 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
   assert.deepEqual(archivedIncluded.missions.map((mission) => mission.id), ["engineering-cache", "old-cache"]);
 });
 
-test("queryDoveStatus consolidates board, task graph, paper lifecycle, and navigation state", () => {
+test("queryDoveStatus returns an authoritative task dashboard without surfacing stale navigation state", () => {
   const root = tempRoot();
   ensureWorkspace(root);
 
@@ -245,42 +245,81 @@ test("queryDoveStatus consolidates board, task graph, paper lifecycle, and navig
     nextAction: "Inspect status before continuing."
   });
   writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
-    version: 3,
-    items: [{
-      id: "status-packet",
-      title: "Consolidate status",
-      status: "pending",
-      lifecycleStatus: "active",
-      lifecycleFamily: "work-unit",
-      doveDomain: "engineering",
-      assignedRole: "builder",
-      phase: "draft",
-      nextAction: "Return the status validation.",
-      outputPaths: ["src/core/dove.mjs"],
-      evidenceLinks: ["tests/integration/dove-query.test.mjs"]
-    }],
-    lifecycleCounts: {},
+    version: 4,
+    items: [
+      {
+        id: "dove-global-init",
+        title: "Dove goal",
+        summary: "Make Dove status one readable entrypoint.",
+        parentId: null,
+        rootId: "dove-global-init",
+        level: 0,
+        creatorKind: "user",
+        stage: "plan",
+        domain: "engineering",
+        status: "ready",
+        lifecycleStatus: "ready",
+        dependencies: [],
+        blockedBy: [],
+        nextAction: "project:dove.mission"
+      },
+      {
+        id: "status-packet",
+        title: "Consolidate status",
+        summary: "Status should trust task state, not stale wiki navigation.",
+        parentId: "dove-global-init",
+        rootId: "dove-global-init",
+        level: 3,
+        creatorKind: "user",
+        stage: "execute",
+        domain: "engineering",
+        status: "ready",
+        lifecycleStatus: "ready",
+        dependencies: [],
+        blockedBy: [],
+        nextAction: "project:dove.auto",
+        outputPaths: ["src/core/dove.mjs"],
+        evidenceLinks: ["tests/integration/dove-query.test.mjs"]
+      }
+    ],
+    taskModel: {
+      activeInitId: "dove-global-init",
+      activeTaskIds: ["status-packet"]
+    },
+    lifecycleCounts: { ready: 2 },
     lifecycleFamilyCounts: {},
     dependencyHealth: {},
     updatedAt: null
   });
+  writeText(root, ARTIFACT_PATHS.navigationReport, "Next action: Run project:dove.auto for an already completed stale task.\n");
+  const before = snapshotArtifacts(root, [...watchedArtifacts, ARTIFACT_PATHS.navigationReport]);
 
   const result = queryDoveStatus(root, { domain: "engineering" });
+  const after = snapshotArtifacts(root, [...watchedArtifacts, ARTIFACT_PATHS.navigationReport]);
 
   assert.equal(result.mode, "dove-status-query");
   assert.equal(result.query, true);
   assert.equal(result.proposalOnly, true);
   assert.equal(result.noAutoApply, true);
   assert.deepEqual(result.writes, []);
+  assert.deepEqual(after, before);
   assert.equal(result.current.domain, "engineering");
+  assert.equal(result.current.stage, "execute");
+  assert.equal(result.current.primaryRole, "builder");
+  assert.equal(result.current.nextCommand, "project:dove.auto");
   assert.equal(result.board.domain, "engineering");
-  assert.ok(result.taskGraph && typeof result.taskGraph === "object");
-  assert.ok(result.paperLifecycle && typeof result.paperLifecycle === "object");
-  assert.ok(result.openQuestions && typeof result.openQuestions === "object");
-  assert.ok(result.decisions && typeof result.decisions === "object");
-  assert.ok(result.lineage && typeof result.lineage === "object");
-  assert.equal(result.navigation.reportPath, ARTIFACT_PATHS.navigationReport);
-  assert.equal(result.navigation.wikiPath, ARTIFACT_PATHS.wiki);
+  assert.equal(result.dashboard.init.id, "dove-global-init");
+  assert.deepEqual(result.dashboard.tasks.activeTaskIds, ["status-packet"]);
+  assert.equal(result.dashboard.tasks.counts.byStatus.ready, 2);
+  assert.equal(result.dashboard.tasks.tree[0].children[0].id, "status-packet");
+  assert.equal(result.dashboard.returnReadiness.status, "in-progress");
+  assert.equal("taskGraph" in result, false);
+  assert.equal("paperLifecycle" in result, false);
+  assert.equal("openQuestions" in result, false);
+  assert.equal("decisions" in result, false);
+  assert.equal("lineage" in result, false);
+  assert.equal(result.diagnostics.derivedReports.navigationReportPath, ARTIFACT_PATHS.navigationReport);
+  assert.equal(result.diagnostics.mayRefreshDerivedSurfaces, false);
   assert.equal(result.diagnostics.noCommandExecution, true);
   assert.equal(result.diagnostics.noExternalProcess, true);
   assert.equal(result.diagnostics.noGitInspection, true);
@@ -336,7 +375,7 @@ test("queryDoveMission frames an engineering mission without writing artifacts",
   assert.equal(result.mission.domain, "engineering");
   assert.equal(result.mission.stage, "execution");
   assert.equal(result.mission.primaryRole, "builder");
-  assert.equal(result.mission.nextCommand, "project:dove.launch or project:dove.autonomy-operate");
+  assert.equal(result.mission.nextCommand, "project:dove.mission or project:dove.auto");
   assert.deepEqual(result.mission.targetArtifacts, ["src/cache.mjs"]);
   assert.deepEqual(result.mission.acceptanceChecks, ["changed files", "tests or validation output"]);
   assert.equal(result.workspace.durableRoot, ".dove");
@@ -348,13 +387,13 @@ test("queryDoveMission frames an engineering mission without writing artifacts",
   assert.equal(result.packets[0].missionPacketId, "engineering-cache");
   assert.equal(result.packets[0].missionPacketStorePath, ARTIFACT_PATHS.taskPacketsIndex);
   const engineeringDesign = queryDoveMission(root, { domain: "engineering", stage: "design" });
-  assert.equal(engineeringDesign.mission.nextCommand, "project:dove.plan");
+  assert.equal(engineeringDesign.mission.nextCommand, "project:dove.mission");
   const engineeringAudit = queryDoveMission(root, { domain: "engineering", stage: "audit" });
-  assert.equal(engineeringAudit.mission.nextCommand, "project:dove.audit");
+  assert.equal(engineeringAudit.mission.nextCommand, "project:dove.review");
   const generalDesign = queryDoveMission(root, { domain: "general", stage: "design" });
-  assert.equal(generalDesign.mission.nextCommand, "project:dove.plan");
+  assert.equal(generalDesign.mission.nextCommand, "project:dove.mission");
   const generalAudit = queryDoveMission(root, { domain: "general", stage: "audit" });
-  assert.equal(generalAudit.mission.nextCommand, "project:dove.audit");
+  assert.equal(generalAudit.mission.nextCommand, "project:dove.review");
   assert.deepEqual(after, before);
 });
 
@@ -379,8 +418,8 @@ test("queryDoveOrchestrate routes an engineering mission without writing artifac
   assert.deepEqual(result.writes, []);
   assert.equal(result.mission.domain, "engineering");
   assert.equal(result.mission.stage, "execution");
-  assert.equal(result.route.recommendedCommand, "project:dove.launch");
-  assert.equal(result.route.nextCommand, "project:dove.launch");
+  assert.equal(result.route.recommendedCommand, "project:dove.mission");
+  assert.equal(result.route.nextCommand, "project:dove.mission");
   assert.equal(result.route.roleBoundary.primaryRole, "builder");
   assert.equal(result.workspace.durableRoot, ".dove");
   assert.equal(result.workspace.authoritativeRoot, ".dove");
@@ -451,7 +490,7 @@ test("queryDoveReturn reports missing engineering evidence without writing artif
   assert.equal(result.noAutoApply, true);
   assert.deepEqual(result.writes, []);
   assert.equal(result.returnStatus, "needs-audit");
-  assert.equal(result.nextCommand, "project:dove.return");
+  assert.equal(result.nextCommand, "project:dove.status");
   assert.equal(result.workspace.identity.productName, "Dove");
   assert.equal(result.workspace.identity.durableRootStatus, "authoritative");
   assert.equal(result.workspace.authorityManifest.currentWriteAuthority, ".dove");
@@ -523,7 +562,7 @@ test("queryDoveReturn reports failing validation output as needs-execution", () 
   });
 
   assert.equal(result.returnStatus, "needs-execution");
-  assert.equal(result.nextCommand, "project:dove.checklist");
+  assert.equal(result.nextCommand, "project:dove.status");
   assert.equal(result.engineeringEvidence.validationOutput.status, "failed");
   assert.equal(result.engineeringEvidence.readiness.hasFailedValidationOutput, true);
   assert.equal(result.engineeringEvidence.missingEvidence.some((item) => item.category === "validation-output"), true);
@@ -726,7 +765,7 @@ test("CLI Dove orchestrate, mission, status, audit, and return commands expose p
   assert.equal(orchestratePayload.mode, "dove-orchestrate-query");
   assert.equal(orchestratePayload.proposalOnly, true);
   assert.deepEqual(orchestratePayload.writes, []);
-  assert.equal(orchestratePayload.route.recommendedCommand, "project:dove.launch");
+  assert.equal(orchestratePayload.route.recommendedCommand, "project:dove.mission");
 
   const mission = spawnSync("node", [
     CLI,
@@ -765,7 +804,10 @@ test("CLI Dove orchestrate, mission, status, audit, and return commands expose p
   assert.equal(statusPayload.proposalOnly, true);
   assert.deepEqual(statusPayload.writes, []);
   assert.equal(statusPayload.board.domain, "engineering");
-  assert.equal(statusPayload.navigation.wikiPath, ARTIFACT_PATHS.wiki);
+  assert.ok(statusPayload.dashboard.tasks.counts.total >= 0);
+  assert.equal(statusPayload.navigation, undefined);
+  assert.equal(statusPayload.diagnostics.derivedReports.wikiPath, ARTIFACT_PATHS.wiki);
+  assert.equal(statusPayload.diagnostics.mayRefreshDerivedSurfaces, false);
 
   const removedBoard = spawnSync("node", [CLI, "board", root], {
     cwd: ROOT,

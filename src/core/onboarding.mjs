@@ -208,13 +208,13 @@ function buildRecommendedNextActions(mappings, conflicts, writeMap) {
     actions.push("Resolve mapping conflicts before importing or rewriting paper artifacts.");
   }
   if (mappings.some((item) => item.artifactType === "manuscript")) {
-    actions.push("Use `project:dove.plan` before converting a legacy manuscript into the design/checklist/implementation/acceptance flow.");
+    actions.push("Use `project:dove.mission` before converting a legacy manuscript into the design/checklist/implementation/acceptance flow.");
   }
   if (mappings.some((item) => item.artifactType === "bibliography")) {
-    actions.push("Use `project:dove.paper.citations` after selecting the canonical bibliography.");
+    actions.push("Use `project:dove.source` after selecting the canonical bibliography.");
   }
   if (mappings.some((item) => item.artifactType === "review")) {
-    actions.push("Use `project:dove.paper.review` or `project:dove.paper.rebuttal` after mapping reviewer feedback artifacts.");
+    actions.push("Use `project:dove.review` or `project:dove.rebuttal` after mapping reviewer feedback artifacts.");
   }
   return actions;
 }

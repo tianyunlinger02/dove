@@ -361,7 +361,7 @@ export function persistReviewLog(root, args = {}) {
       ...state.pipeline,
       currentStage: "review",
       lastCompletedStage: "review",
-      resumeCommand: "project:dove.paper.revise",
+      resumeCommand: "project:dove.draft",
       updatedAt: timestamp
     },
     reviews: {

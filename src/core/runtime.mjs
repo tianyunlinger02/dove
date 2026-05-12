@@ -838,7 +838,7 @@ function recordProgramRunOutcome(root, authorization, { runId, packetId, outcome
         reviewCheckpointPacketId: reviewCheckpointRequired ? packetId : null,
         reviewCheckpointRuntimeRunId: reviewCheckpointRequired ? runId : null,
         reviewCheckpointAllowedStepType: reviewCheckpointRequired ? authorization.allowedStepType : null,
-        reviewRecommendedCommand: reviewCheckpointRequired ? "project:dove.follow-through" : null,
+        reviewRecommendedCommand: reviewCheckpointRequired ? "project:dove.lessons" : null,
         nextApprovalIntent: reviewCheckpointRequired
           ? {
                continuationFromRunId: authorization.programRunId,
@@ -1790,7 +1790,7 @@ export function runAutonomyControlPlaneOnce(root, args = {}) {
           artifactPaths: materialized.packet?.lineage?.programId
             ? [...materialized.artifactPaths, ARTIFACT_PATHS.programsIndex, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals, ARTIFACT_PATHS.campaignsIndex]
             : materialized.artifactPaths,
-          nextRecommendedCommand: "project:dove.follow-through",
+          nextRecommendedCommand: "project:dove.lessons",
           nextManualCheckpoint: materialized.summary,
           summary: `Materialized one accepted guidance path into packet ${materialized.packetId}.`,
           startedAt,
@@ -2027,7 +2027,7 @@ export function runAutonomyControlPlaneOnce(root, args = {}) {
         : workerStep.programSnapshot
           ? [ARTIFACT_PATHS.researchBrief, ARTIFACT_PATHS.researchAgenda, ARTIFACT_PATHS.programsIndex, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals, ARTIFACT_PATHS.campaignsIndex]
           : []),
-      nextRecommendedCommand: "project:dove.follow-through",
+      nextRecommendedCommand: "project:dove.lessons",
       nextManualCheckpoint: workerStep.nextManualCheckpoint,
       summary: workerStep.summary,
       startedAt,

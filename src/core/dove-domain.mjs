@@ -10,12 +10,12 @@ export const DOVE_DOMAIN_GUIDANCE = [
     label: "Paper",
     summary: "Paper writing, research, claims, citations, rebuttal, figures, and versioned manuscript work.",
     stageRoutes: {
-      goal: "project:dove.paper.research",
-      design: "project:dove.plan",
-      checklist: "project:dove.checklist",
-      execution: "project:dove.paper.draft or project:dove.paper.revise",
-      audit: "project:dove.paper.audit",
-      return: "project:dove.return"
+      goal: "project:dove.source",
+      design: "project:dove.mission",
+      checklist: "project:dove.status",
+      execution: "project:dove.draft",
+      audit: "project:dove.review",
+      return: "project:dove.status"
     },
     returnEvidence: ["claim/evidence coverage", "checklist status", "review verdict", "version comparison"]
   },
@@ -25,11 +25,11 @@ export const DOVE_DOMAIN_GUIDANCE = [
     summary: "Normal engineering requirements, implementation work, tests, regressions, and code review framed as the same Dove mission lifecycle.",
     stageRoutes: {
       goal: "project:dove.mission",
-      design: "project:dove.plan",
-      checklist: "project:dove.checklist",
-      execution: "project:dove.launch or project:dove.autonomy-operate",
-      audit: "project:dove.audit",
-      return: "project:dove.return"
+      design: "project:dove.mission",
+      checklist: "project:dove.status",
+      execution: "project:dove.mission or project:dove.auto",
+      audit: "project:dove.review",
+      return: "project:dove.status"
     },
     returnEvidence: ["changed files", "tests or validation output", "review notes", "acceptance checklist"]
   },
@@ -38,12 +38,12 @@ export const DOVE_DOMAIN_GUIDANCE = [
     label: "Experiment",
     summary: "Experiment plans, runs, result interpretation, audit findings, and result-to-claim traceability.",
     stageRoutes: {
-      goal: "project:dove.paper.experiment",
-      design: "project:dove.paper.experiment",
-      checklist: "project:dove.checklist",
-      execution: "project:dove.paper.experiment",
-      audit: "project:dove.paper.experiment",
-      return: "project:dove.paper.result-bridge"
+      goal: "project:dove.experience",
+      design: "project:dove.experience",
+      checklist: "project:dove.status",
+      execution: "project:dove.experience",
+      audit: "project:dove.experience",
+      return: "project:dove.experience"
     },
     returnEvidence: ["experiment audit", "result log", "claim bridge", "review verdict"]
   },
@@ -53,11 +53,11 @@ export const DOVE_DOMAIN_GUIDANCE = [
     summary: "Independent critique, reviewer concerns, isolated review handoffs, and acceptance pressure.",
     stageRoutes: {
       goal: "project:dove.mission",
-      design: "project:dove.paper.review",
-      checklist: "project:dove.checklist",
-      execution: "project:dove.paper.isolated-review",
-      audit: "project:dove.paper.audit",
-      return: "project:dove.return"
+      design: "project:dove.review",
+      checklist: "project:dove.status",
+      execution: "project:dove.review",
+      audit: "project:dove.review",
+      return: "project:dove.status"
     },
     returnEvidence: ["review report", "concern state", "revision plan", "acceptance verdict"]
   },
@@ -67,11 +67,11 @@ export const DOVE_DOMAIN_GUIDANCE = [
     summary: "General bounded research or workflow work that still uses one mission, one board, and one return protocol.",
     stageRoutes: {
       goal: "project:dove.mission",
-      design: "project:dove.plan",
-      checklist: "project:dove.checklist",
-      execution: "project:dove.launch",
-      audit: "project:dove.audit",
-      return: "project:dove.return"
+      design: "project:dove.mission",
+      checklist: "project:dove.status",
+      execution: "project:dove.mission",
+      audit: "project:dove.review",
+      return: "project:dove.status"
     },
     returnEvidence: ["task packet", "handoff", "audit summary", "acceptance checklist"]
   }

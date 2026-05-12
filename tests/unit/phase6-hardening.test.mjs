@@ -503,7 +503,7 @@ test("queryWorkspaceIndex treats explicit Dove engineering packets as engineerin
   const workspaceIndex = queryWorkspaceIndex(root);
   assert.equal(workspaceIndex.dove.currentDomain, "engineering");
   assert.equal(workspaceIndex.dove.domainCounts.engineering, 1);
-  assert.equal(workspaceIndex.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.launch or project:dove.autonomy-operate");
+  assert.equal(workspaceIndex.dove.domainGuidance.find((domain) => domain.id === "engineering").stageRoutes.execution, "project:dove.mission or project:dove.auto");
   assert.equal(workspaceIndex.activePackets[0].doveDomain, "engineering");
   assert.equal(workspaceIndex.activePackets[0].lifecycleFamily, "structure");
 });
@@ -595,7 +595,7 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   const executionBridgeCandidates = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates), "utf8"));
 
   assert.equal(boundaries.version, 3);
-  assert.equal(boundaries.managedArtifacts.workflowBoundaries.revisionId, "schema-v5:bootstrap-only");
+  assert.equal(boundaries.managedArtifacts.workflowBoundaries.revisionId, "schema-v6:bootstrap-only");
   assert.equal(boundaries.managedArtifacts.workspaceIndex.path, ".dove/workspace/index.json");
   assert.equal(boundaries.managedArtifacts.doveRootManifest.path, ".dove/manifest.json");
   assert.deepEqual(boundaries.managedPaths, [".opencode/commands/dove*.md", ".opencode/skills/dove-*", ".opencode.json", ".claude/commands/dove", ".codex/skills/dove-*", ".cursor/commands/dove-*.md", ".agents/skills/dove-*", "AGENTS.md", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
@@ -609,7 +609,7 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.deepEqual(boundaries.notes, ["legacy note"]);
 
   assert.equal(workspaceIndex.version, 9);
-  assert.equal(workspaceIndex.managed.revisionId, "schema-v5:bootstrap-only");
+  assert.equal(workspaceIndex.managed.revisionId, "schema-v6:bootstrap-only");
   assert.equal(workspaceIndex.currentFocus, "Legacy focus");
   assert.deepEqual(workspaceIndex.workQueues.ready, []);
   assert.deepEqual(workspaceIndex.resumeGuidance.prioritizedPacketIds, []);
@@ -1832,10 +1832,10 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
   const claimBridgeCoverage = meta.governanceCoverage.guardedMutations.find((item) => item.id === "bridge-experiment-result-to-claim");
   assert.equal(claimBridgeCoverage.surfaceBindings.coreFunction, "bridgeExperimentResultToClaim");
   assert.equal(claimBridgeCoverage.surfaceBindings.mcpTool, "bridge_result_to_claim");
-  assert.equal(claimBridgeCoverage.surfaceBindings.commandIds.includes("dove.paper.result-bridge"), true);
+  assert.equal(claimBridgeCoverage.surfaceBindings.commandIds.includes("dove.experience"), true);
   const followThroughExempt = meta.governanceCoverage.exemptMutations.find((item) => item.id === "record-operator-follow-through");
   assert.equal(followThroughExempt.surfaceBindings.mcpTool, "record_operator_follow_through");
-  assert.equal(followThroughExempt.surfaceBindings.commandIds.includes("dove.follow-through"), true);
+  assert.deepEqual(followThroughExempt.surfaceBindings.commandIds ?? [], []);
   const lessonExempt = meta.governanceCoverage.exemptMutations.find((item) => item.id === "record-operator-lesson");
   assert.equal(lessonExempt.surfaceBindings.coreFunction, "recordOperatorLesson");
   assert.equal(lessonExempt.surfaceBindings.mcpTool, "record_operator_lesson");
@@ -1950,6 +1950,16 @@ test("governance registry completely binds the expected mutating command and MCP
   const boundCommands = new Set(registry.flatMap((entry) => entry.surfaceBindings?.commandIds ?? []));
 
   const expectedMutatingTools = [
+    "init_dove_goal",
+    "create_dove_task",
+    "run_dove_auto",
+    "kill_dove_task",
+    "reset_dove_version",
+    "run_experience_workflow",
+    "prepare_audio_review",
+    "import_audio_review",
+    "run_audio_review",
+    "run_dove_review_loop",
     "upsert_orchestration_board",
     "append_handoff",
     "update_research_brief",
@@ -1959,28 +1969,40 @@ test("governance registry completely binds the expected mutating command and MCP
     "upsert_plan",
     "upsert_outline",
     "upsert_draft",
+    "set_section_status",
     "upsert_experiment_plan",
     "upsert_experiment_result",
     "run_experiment_audit",
     "bridge_result_to_claim",
     "run_review_loop",
     "append_review_log",
+    "prepare_isolated_review",
+    "import_isolated_review",
     "upsert_revision_plan",
+    "sync_checklist",
     "sync_citations",
     "refresh_wiki",
     "normalize_rebuttal_issues",
-      "build_rebuttal_strategy",
-      "create_version_snapshot",
-      "compare_versions",
-      "upsert_figure_plan",
-      "prepare_figure_generation",
-      "import_figure_generation",
-      "record_operator_lesson",
-      "record_operator_follow_through",
-      "query_meta_optimize",
-      "plan_campaign",
-      "materialize_guidance_packet",
-      "launch_dove_mission"
+    "build_rebuttal_strategy",
+    "build_rebuttal",
+    "create_version_snapshot",
+    "compare_versions",
+    "upsert_figure_plan",
+    "run_figure_workflow",
+    "prepare_figure_generation",
+    "import_figure_generation",
+    "validate_figure_pipeline",
+    "record_operator_lesson",
+    "record_operator_follow_through",
+    "query_meta_optimize",
+    "plan_campaign",
+    "materialize_guidance_packet",
+    "launch_dove_mission",
+    "issue_program_approval",
+    "revoke_program_approval",
+    "run_autonomy_once",
+    "run_autonomy_foreground",
+    "run_autonomy_operate"
   ];
   for (const toolName of expectedMutatingTools) {
     assert.equal(boundTools.has(toolName), true);
@@ -1988,82 +2010,85 @@ test("governance registry completely binds the expected mutating command and MCP
   }
 
   const expectedMutatingCommands = [
-    "dove.paper.research",
-    "dove.paper.source",
-    "dove.paper.note",
-    "dove.paper.claim-gate",
-    "dove.plan",
-    "dove.paper.outline",
-    "dove.paper.draft",
-    "dove.paper.experiment",
-    "dove.paper.review",
-    "dove.paper.result-bridge",
-    "dove.paper.revise",
-    "dove.paper.rebuttal",
-    "dove.paper.version",
-    "dove.paper.citations",
-    "dove.paper.figure",
-    "dove.follow-through",
+    "dove.init",
+    "dove.mission",
+    "dove.auto",
+    "dove.kill",
     "dove.lessons",
-    "dove.paper.meta-optimize",
-    "dove.approvals",
-    "dove.checklist",
-    "dove.launch",
-    "dove.autonomy-operate"
+    "dove.version",
+    "dove.source",
+    "dove.note",
+    "dove.figure",
+    "dove.experience",
+    "dove.draft",
+    "dove.review",
+    "dove.review-loop",
+    "dove.rebuttal"
   ];
   for (const commandId of expectedMutatingCommands) {
     assert.equal(boundCommands.has(commandId), true);
     assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), true);
   }
 
-  const commandId = (...segments) => ["dove", ...segments].join(".");
-  const removedPaperMirrorCommandIds = ["orchestrate", "plan", "task-graph", "checklist", "materialize", "autonomy-operate", "governance-audit", "approvals", "follow-through"].map((suffix) => commandId("paper", suffix));
-  const removedConsolidatedCommandIds = [
-    commandId("board"),
-    commandId("task-graph"),
-    commandId("materialize"),
-    commandId("paper", "pipeline"),
-    commandId("paper", "review-loop"),
-    commandId("paper", "rebuttal-strategy"),
-    commandId("paper", "experiment-plan"),
-    commandId("paper", "experiment-audit"),
-    commandId("paper", "version-snapshot"),
-    commandId("paper", "version-compare"),
-    commandId("paper", "open-questions"),
-    commandId("paper", "decisions"),
-    commandId("paper", "lineage"),
-    commandId("paper", "wiki")
+  const removedCommandIds = [
+    "dove.orchestrate",
+    "dove.plan",
+    "dove.checklist",
+    "dove.audit",
+    "dove.autonomy-operate",
+    "dove.return",
+    "dove.follow-through",
+    "dove.governance-audit",
+    "dove.onboard",
+    "dove.launch",
+    "dove.approvals",
+    "dove.paper.init",
+    "dove.paper.source",
+    "dove.paper.note",
+    "dove.paper.research",
+    "dove.paper.outline",
+    "dove.paper.draft",
+    "dove.paper.experiment",
+    "dove.paper.claim-gate",
+    "dove.paper.result-bridge",
+    "dove.paper.figure",
+    "dove.paper.audit",
+    "dove.paper.review",
+    "dove.paper.isolated-review",
+    "dove.paper.revise",
+    "dove.paper.rebuttal",
+    "dove.paper.version",
+    "dove.paper.citations",
+    "dove.paper.meta-optimize",
+    "dove.paper.pipeline",
+    "dove.paper.review-loop",
+    "dove.paper.rebuttal-strategy",
+    "dove.paper.version-snapshot",
+    "dove.paper.version-compare",
+    "dove.paper.open-questions",
+    "dove.paper.decisions",
+    "dove.paper.lineage",
+    "dove.paper.wiki"
   ];
-  for (const commandId of [...removedPaperMirrorCommandIds, ...removedConsolidatedCommandIds]) {
-    assert.equal(boundCommands.has(commandId), false);
-    assert.equal(GOVERNANCE_READONLY_COMMANDS.includes(commandId), false);
-    assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), false);
+  for (const removedCommandId of removedCommandIds) {
+    assert.equal(boundCommands.has(removedCommandId), false);
+    assert.equal(GOVERNANCE_READONLY_COMMANDS.includes(removedCommandId), false);
+    assert.equal(fs.existsSync(path.join(commandDir, `${removedCommandId}.md`)), false);
   }
 
-  assert.equal(boundCommands.has("dove.launch"), true);
-  assert.equal(boundCommands.has("dove.orchestrate"), false);
-  assert.equal(boundCommands.has("dove.mission"), false);
+  assert.equal(boundCommands.has("dove.mission"), true);
+  assert.equal(boundCommands.has("dove.auto"), true);
   assert.equal(boundCommands.has("dove.status"), true);
-  assert.equal(boundCommands.has("dove.audit"), false);
-  assert.equal(boundCommands.has("dove.return"), false);
-  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.orchestrate"), true);
-  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.mission"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.mission"), false);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.auto"), false);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.status"), true);
-  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.audit"), true);
-  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.return"), true);
-  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.governance-audit"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_orchestrate"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_status"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_audit"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_operator_lessons"), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.orchestrate.md")), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.mission.md")), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.status.md")), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.paper.experiment.md")), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.paper.version.md")), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.governance-audit.md")), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.audit.md")), true);
-  assert.equal(fs.existsSync(path.join(commandDir, "dove.return.md")), true);
+  for (const publicCommandId of ["dove.init", "dove.mission", "dove.auto", "dove.status", "dove.kill", "dove.lessons", "dove.version", "dove.source", "dove.note", "dove.figure", "dove.experience", "dove.draft", "dove.review", "dove.review-loop", "dove.rebuttal"]) {
+    assert.equal(fs.existsSync(path.join(commandDir, `${publicCommandId}.md`)), true);
+  }
 });
 
 test("a broader set of guarded write paths all reject unresolved follow-through debt", () => {
@@ -3381,7 +3406,7 @@ test("runAutonomyControlPlaneOnce executes one bounded packet step and writes du
   assert.equal(result.outcome, "executed-one-packet-step");
   assert.equal(result.packetId, seeded.packetId);
   assert.equal(result.followThroughId, seeded.followThroughId);
-  assert.equal(result.nextRecommendedCommand, "project:dove.follow-through");
+  assert.equal(result.nextRecommendedCommand, "project:dove.lessons");
 
   const runtimeResults = readJson(root, ARTIFACT_PATHS.runtimeResults, null);
   const runtimeEvents = readJson(root, ARTIFACT_PATHS.runtimeEvents, null);
@@ -3406,7 +3431,7 @@ test("runAutonomyControlPlaneOnce executes one bounded packet step and writes du
   assert.equal(runtimeControllerState.summary.continuationCount, 1);
   assert.equal(runtimeControllerState.summary.currentContinuationKind, "review-follow-through");
   assert.equal(runtimeControllerState.summary.currentContinuationPacketId, seeded.packetId);
-  assert.equal(runtimeControllerState.summary.currentContinuationCommand, "project:dove.follow-through");
+  assert.equal(runtimeControllerState.summary.currentContinuationCommand, "project:dove.lessons");
   assert.equal(packet.lifecycleStatus, "review-needed");
   assert.equal(packet.continuationState.status, "review-needed");
   assert.equal(packet.decisions.some((item) => item.id === `autonomy-step-${result.runId}`), true);
@@ -3508,7 +3533,7 @@ test("unified autonomy loop skeleton is visible through workspace, task graph, n
   assert.equal(packetLoop.runtimePointers.includes("task-unified-loop"), true);
   assert.equal(workspaceIndex.autonomyLoops.lifecycleStates.includes("runtime-result-and-follow-through-closed"), true);
   assert.equal(workspaceIndex.autonomyLoops.runtimePointers.includes("task-unified-loop"), true);
-  assert.match(workspaceIndex.autonomyLoops.safeExecutionPath, /autonomy-foreground/);
+  assert.match(workspaceIndex.autonomyLoops.safeExecutionPath, /dove\.mission -> project:dove\.auto/);
   assert.deepEqual(taskGraph.autonomyLoops.loops.map((loop) => loop.id), workspaceIndex.autonomyLoops.loops.map((loop) => loop.id));
   assert.equal(metaOptimize.autonomyLoops.currentLoopId, "question-evidence-claim");
   assert.equal(metaOptimize.autonomyLoops.loops.find((loop) => loop.id === "packet-approval-run-follow-through").lifecycleState, "runtime-result-and-follow-through-closed");
@@ -3585,11 +3610,11 @@ test("runAutonomyControlPlaneOnce executes one approved program-level research b
   assert.equal(packetLoop.runtimeState, "review-checkpoint-recorded");
   assert.equal(packetLoop.blockers.includes("program-step-alpha-run-1"), true);
   assert.equal(workspaceIndex.autonomyLoops.activeLifecycleState, "review-checkpoint-awaiting-fresh-approval");
-  assert.match(workspaceIndex.autonomyLoops.nextSafeAction, /project:dove\.approvals/);
+  assert.match(workspaceIndex.autonomyLoops.nextSafeAction, /project:dove\.auto/);
   assert.equal(workspaceIndex.runtime.continuationCount, 1);
   assert.equal(workspaceIndex.runtime.currentContinuationKind, "issue-fresh-approval");
   assert.equal(workspaceIndex.runtime.currentContinuationProgramRunId, "program-step-alpha-run-1");
-  assert.equal(workspaceIndex.runtime.currentContinuationCommand, "project:dove.approvals");
+  assert.equal(workspaceIndex.runtime.currentContinuationCommand, "project:dove.auto");
   assert.equal(approvalsView.continuationIntents[0].suggestedProgramRunId, "program-step-alpha-run-1-next");
   assert.equal(boardAfter.assignedRole, boardBefore.assignedRole);
   assert.equal(boardAfter.currentPhase, boardBefore.currentPhase);
@@ -5049,6 +5074,7 @@ test("guarded core mutation implementations explicitly call assertFollowThroughR
     artifacts: fs.readFileSync(path.join(process.cwd(), "src/core/artifacts.mjs"), "utf8"),
     evidence: fs.readFileSync(path.join(process.cwd(), "src/core/evidence.mjs"), "utf8"),
     reviews: fs.readFileSync(path.join(process.cwd(), "src/core/reviews.mjs"), "utf8"),
+    figureWorkflow: fs.readFileSync(path.join(process.cwd(), "src/core/figure-workflow.mjs"), "utf8"),
     figureGeneration: fs.readFileSync(path.join(process.cwd(), "src/core/figure-generation.mjs"), "utf8"),
     orchestration: fs.readFileSync(path.join(process.cwd(), "src/core/orchestration.mjs"), "utf8")
   };
@@ -5061,6 +5087,7 @@ test("guarded core mutation implementations explicitly call assertFollowThroughR
     [files.artifacts, "upsertDraft"],
     [files.artifacts, "setSectionStatus"],
     [files.artifacts, "upsertFigurePlan"],
+    [files.figureWorkflow, "runFigureWorkflow"],
     [files.figureGeneration, "prepareFigureGeneration"],
     [files.figureGeneration, "importFigureGeneration"],
     [files.artifacts, "syncCitations"],
@@ -5095,11 +5122,16 @@ test("every governance registry entry binds to real command or MCP surfaces plus
     fs.readFileSync(path.join(process.cwd(), "src/core/evidence.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/reviews.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/isolated-review.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/figure-workflow.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/figure-generation.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/orchestration.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/navigation.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/dove.mjs"), "utf8"),
-    fs.readFileSync(path.join(process.cwd(), "src/core/runtime.mjs"), "utf8")
+    fs.readFileSync(path.join(process.cwd(), "src/core/runtime.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/task-workflow.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/experience-workflow.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/audio-review.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/dove-review-loop.mjs"), "utf8")
   ];
 
   for (const entry of registry) {

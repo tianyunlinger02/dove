@@ -307,7 +307,7 @@ function buildContinuationItems(root, entry) {
   if (programRun?.reviewCheckpointRequired) {
     return [{
       kind: "issue-fresh-approval",
-      command: "project:dove.approvals",
+      command: "project:dove.auto",
       packetId: entry.packetId,
       programRunId: programRun.id,
       followThroughId: entry.followThroughId ?? null,
@@ -334,7 +334,7 @@ function buildContinuationItems(root, entry) {
   if (["worker-step-retry-pending", "worker-step-escalated", "executed-one-packet-step"].includes(entry.outcome)) {
     return [{
       kind: entry.outcome === "worker-step-escalated" ? "manual-escalation" : "review-follow-through",
-      command: "project:dove.follow-through",
+      command: "project:dove.lessons",
       packetId: entry.packetId,
       programRunId: null,
       followThroughId: entry.followThroughId ?? null,

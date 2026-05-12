@@ -727,7 +727,7 @@ export function queryPaperAudit(root, args = {}) {
       confidence: "high",
       summary: `${error.path} could not be parsed as JSON: ${error.message}`,
       artifactPaths: [error.path],
-      suggestedNextCommand: "project:dove.checklist"
+      suggestedNextCommand: "project:dove.status"
     });
   }
 
@@ -739,7 +739,7 @@ export function queryPaperAudit(root, args = {}) {
       summary: `Claim ${claim.id} has no valid source support.`,
       artifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.sources],
       claimIds: [claim.id],
-      suggestedNextCommand: "project:dove.paper.claim-gate"
+      suggestedNextCommand: "project:dove.experience"
     });
   }
 
@@ -751,7 +751,7 @@ export function queryPaperAudit(root, args = {}) {
       summary: `Claim ${claim.id} is weakly supported and should be strengthened before acceptance.`,
       artifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.sources, ARTIFACT_PATHS.notes],
       claimIds: [claim.id],
-      suggestedNextCommand: "project:dove.paper.research"
+      suggestedNextCommand: "project:dove.source"
     });
   }
 
@@ -763,7 +763,7 @@ export function queryPaperAudit(root, args = {}) {
       summary: `Claim ${item.claim.id} references missing sources: ${item.missing.join(", ")}.`,
       artifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.sources],
       claimIds: [item.claim.id],
-      suggestedNextCommand: "project:dove.paper.source"
+      suggestedNextCommand: "project:dove.source"
     });
   }
 
@@ -775,7 +775,7 @@ export function queryPaperAudit(root, args = {}) {
       summary: `Claim ${item.claim.id} references missing notes: ${item.missing.join(", ")}.`,
       artifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.notes],
       claimIds: [item.claim.id],
-      suggestedNextCommand: "project:dove.paper.note"
+      suggestedNextCommand: "project:dove.note"
     });
   }
 
@@ -786,7 +786,7 @@ export function queryPaperAudit(root, args = {}) {
       category: "citation",
       summary: `${item.draftFile} cites unknown source key ${item.key}.`,
       artifactPaths: [ARTIFACT_PATHS.draftsDir, ARTIFACT_PATHS.sources, ARTIFACT_PATHS.bibliography],
-      suggestedNextCommand: "project:dove.paper.citations"
+      suggestedNextCommand: "project:dove.source"
     });
   }
 
@@ -797,7 +797,7 @@ export function queryPaperAudit(root, args = {}) {
       category: "citation",
       summary: `${todo.draftFile}:${todo.line} still has a citation TODO.`,
       artifactPaths: [ARTIFACT_PATHS.draftsDir, ARTIFACT_PATHS.bibliography],
-      suggestedNextCommand: "project:dove.paper.citations"
+      suggestedNextCommand: "project:dove.source"
     });
   }
 
@@ -811,7 +811,7 @@ export function queryPaperAudit(root, args = {}) {
         : `Draft for ${item.claim.sectionId} does not cite any expected source for claim ${item.claim.id}.`,
       artifactPaths: [ARTIFACT_PATHS.draftsDir, ARTIFACT_PATHS.evidence],
       claimIds: [item.claim.id],
-      suggestedNextCommand: "project:dove.paper.draft"
+      suggestedNextCommand: "project:dove.draft"
     });
   }
 
@@ -824,7 +824,7 @@ export function queryPaperAudit(root, args = {}) {
       artifactPaths: [ARTIFACT_PATHS.experimentAudits],
       claimIds: audit.claimId ? [audit.claimId] : [],
       experimentIds: audit.experimentId ? [audit.experimentId] : [],
-      suggestedNextCommand: "project:dove.paper.experiment"
+      suggestedNextCommand: "project:dove.experience"
     });
   }
 
@@ -837,7 +837,7 @@ export function queryPaperAudit(root, args = {}) {
       artifactPaths: [ARTIFACT_PATHS.claimBridgeLog, ARTIFACT_PATHS.evidence],
       claimIds: [bridgeProblem.claim.id],
       experimentIds: bridgeProblem.claim.experimentIds ?? [],
-      suggestedNextCommand: "project:dove.paper.result-bridge"
+      suggestedNextCommand: "project:dove.experience"
     });
   }
 
@@ -852,7 +852,7 @@ export function queryPaperAudit(root, args = {}) {
       experimentIds: issue.experimentIds ?? [],
       reviewConcernIds: issue.reviewConcernIds ?? [],
       rebuttalIssueIds: issue.rebuttalIssueIds ?? [],
-      suggestedNextCommand: "project:dove.paper.figure"
+      suggestedNextCommand: "project:dove.figure"
     });
   }
 
@@ -865,7 +865,7 @@ export function queryPaperAudit(root, args = {}) {
       summary: `Review concern ${concern.id} remains open: ${concern.summary ?? "No summary."}`,
       artifactPaths: [ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.reviewState],
       reviewConcernIds: [concern.id],
-      suggestedNextCommand: "project:dove.paper.review"
+      suggestedNextCommand: "project:dove.review"
     });
   }
 
@@ -876,7 +876,7 @@ export function queryPaperAudit(root, args = {}) {
       category: "review",
       summary: `Review state verdict is ${reviewState.lastVerdict}, but no open concern items were found.`,
       artifactPaths: [ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns],
-      suggestedNextCommand: "project:dove.paper.review"
+      suggestedNextCommand: "project:dove.review"
     });
   }
 
@@ -888,7 +888,7 @@ export function queryPaperAudit(root, args = {}) {
       category: "version",
       summary: `Version comparison has active targets (${activeComparisonTargets.join(", ")}) but no comparison records.`,
       artifactPaths: [ARTIFACT_PATHS.versionComparisons],
-      suggestedNextCommand: "project:dove.paper.version"
+      suggestedNextCommand: "project:dove.version"
     });
   }
 
@@ -899,7 +899,7 @@ export function queryPaperAudit(root, args = {}) {
       category: "process",
       summary: "The checklist still appears to contain open, TODO, blocked, or needs-review items.",
       artifactPaths: [ARTIFACT_PATHS.checklist],
-      suggestedNextCommand: "project:dove.checklist"
+      suggestedNextCommand: "project:dove.status"
     });
   }
 

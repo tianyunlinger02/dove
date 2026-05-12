@@ -23,10 +23,10 @@ Command adapters should be generated from `src/core/command-manifest.mjs` via `s
 
 Define command metadata in `src/core/command-manifest.mjs`, then run `npm run commands:generate` to rewrite host adapters. Use a short title, a goal, and an ordered workflow. The first workflow step should say exactly which durable context/artifacts to read.
 
-Example generated contract for `dove.orchestrate`:
+Example generated contract for `dove.status`:
 
 ```md
-# dove.orchestrate
+# dove.status
 
 Route the current Dove mission to one next surface without writing durable state.
 
@@ -74,12 +74,12 @@ case "upsert_orchestration_board":
 
 ### 1. Scope / Trigger
 
-- Trigger: `dove.paper.isolated-review` spans command markdown, CLI, core file mutations, external process invocation, governance coverage, and review-state import.
+- Trigger: `dove.review` spans command markdown, CLI, core file mutations, external process invocation, governance coverage, and review-state import.
 - Purpose: keep writer/main-session private context isolated from reviewer private context while still allowing an operator to mediate through explicit artifacts.
 
 ### 2. Signatures
 
-- Slash command: `dove.paper.isolated-review`.
+- Slash command: `dove.review`.
 - CLI runner: `dove isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>] [--artifact <path>]...`.
 - CLI prepare-only: `dove isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>] [--artifact <path>]...`.
 - CLI import-only: `dove isolated-review-import [target] --run-id <id> [--handoff <path>] [--report <path>]`.
@@ -114,7 +114,7 @@ case "upsert_orchestration_board":
 
 - Integration test: fake external reviewer writes handoff/report/private transcript; runner imports verdict and concerns but not private transcript.
 - Integration test: import rejects mismatched `inputSha256`.
-- Command validation: `dove.paper.isolated-review.md` is registered through the canonical command manifest and generated adapters.
+- Command validation: `dove.review.md` is registered through the canonical command manifest and generated adapters.
 - Governance audit/hardening: isolated-review mutations bind to command/core surfaces; MCP binding may be absent for this CLI-only external-process surface.
 
 ### 7. Wrong vs Correct
@@ -156,4 +156,4 @@ For this CLI/prompt package, accessibility means operators can recover state fro
 - Adding a command to the manifest but forgetting governance classification in `src/core/schema.mjs` or validation coverage in `scripts/validate-commands.mjs`.
 - Adding an MCP tool definition without adding a matching dispatch case and classification tests in `tests/integration/mcp-tools.test.mjs`.
 - Letting prompt text mention an artifact path that is not in `ARTIFACT_PATHS` or not bootstrapped by `ensureWorkspace`.
-- Auto-applying `dove.paper.meta-optimize` recommendations. That surface is proposal-only until materialized through governed follow-through.
+- Auto-applying `dove.status` recommendations. That surface is proposal-only until materialized through governed follow-through.

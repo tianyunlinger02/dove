@@ -64,6 +64,16 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "query_dove_status",
     "query_dove_audit",
     "query_dove_return",
+    "init_dove_goal",
+    "create_dove_task",
+    "run_dove_auto",
+    "kill_dove_task",
+    "reset_dove_version",
+    "run_experience_workflow",
+    "prepare_audio_review",
+    "import_audio_review",
+    "run_audio_review",
+    "run_dove_review_loop",
     "launch_dove_mission",
     "query_program_approvals",
     "query_campaigns",
@@ -103,6 +113,7 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "compare_versions",
     "list_artifacts",
     "upsert_figure_plan",
+    "run_figure_workflow",
     "prepare_figure_generation",
     "import_figure_generation",
     "validate_figure_pipeline",
@@ -120,10 +131,10 @@ test("MCP tool definitions include the mature workflow tools", () => {
 
 test("doctor MCP probe requires current Dove tools without calling mutating tools", () => {
   const probeText = fs.readFileSync(path.join(process.cwd(), "scripts", "doctor-mcp-probe.mjs"), "utf8");
-  for (const requiredTool of ["query_dove_orchestrate", "query_dove_mission", "query_dove_mission_board", "query_dove_audit", "query_dove_return", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_operate"]) {
+  for (const requiredTool of ["query_dove_status", "init_dove_goal", "create_dove_task", "run_dove_auto", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_operate"]) {
     assert.match(probeText, new RegExp(`"${requiredTool}"`));
   }
-  for (const mutatingTool of ["launch_dove_mission", "materialize_guidance_packet", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
+  for (const mutatingTool of ["init_dove_goal", "create_dove_task", "run_dove_auto", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
     assert.equal(probeText.includes(`tools/call", { name: "${mutatingTool}"`), false, `doctor probe must not call mutating tool ${mutatingTool}`);
   }
 });
@@ -218,11 +229,15 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(status.proposalOnly, true);
     assert.equal(status.query, true);
     assert.deepEqual(status.writes, []);
-    assert.ok(status.taskGraph && typeof status.taskGraph === "object");
-    assert.ok(status.paperLifecycle && typeof status.paperLifecycle === "object");
-    assert.ok(status.openQuestions && typeof status.openQuestions === "object");
-    assert.ok(status.decisions && typeof status.decisions === "object");
-    assert.ok(status.lineage && typeof status.lineage === "object");
+    assert.ok(status.dashboard && typeof status.dashboard === "object");
+    assert.ok(status.dashboard.tasks && typeof status.dashboard.tasks === "object");
+    assert.equal(status.taskGraph, undefined);
+    assert.equal(status.paperLifecycle, undefined);
+    assert.equal(status.openQuestions, undefined);
+    assert.equal(status.decisions, undefined);
+    assert.equal(status.lineage, undefined);
+    assert.equal(status.diagnostics.mayRefreshDerivedSurfaces, false);
+    assert.equal(status.diagnostics.noCommandExecution, true);
 
     const pipeline = extractToolJson(dispatchTool(root, "query_paper_pipeline", {}));
     assert.equal(pipeline.mode, "paper-pipeline-query");
@@ -232,7 +247,7 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(pipeline.diagnostics.noCommandExecution, true);
     assert.equal(pipeline.diagnostics.noExternalProcess, true);
     assert.equal(pipeline.diagnostics.noGitInspection, true);
-    assert.ok(pipeline.stages.some((stage) => stage.id === "return" && stage.commandId === "project:dove.return"));
+    assert.ok(pipeline.stages.some((stage) => stage.id === "return" && stage.commandId === "project:dove.status"));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -316,7 +331,13 @@ test("role-bound MCP tools expose explicit override fields", () => {
     "upsert_outline",
     "upsert_draft",
     "set_section_status",
+    "run_experience_workflow",
+    "prepare_audio_review",
+    "import_audio_review",
+    "run_audio_review",
+    "run_dove_review_loop",
     "upsert_figure_plan",
+    "run_figure_workflow",
     "prepare_figure_generation",
     "import_figure_generation",
     "build_rebuttal",
@@ -354,6 +375,10 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const paperPipelineQueryTool = toolDefinitions.find((item) => item.name === "query_paper_pipeline");
   const prepareIsolatedReviewTool = toolDefinitions.find((item) => item.name === "prepare_isolated_review");
   const importIsolatedReviewTool = toolDefinitions.find((item) => item.name === "import_isolated_review");
+  const runExperienceTool = toolDefinitions.find((item) => item.name === "run_experience_workflow");
+  const runAudioReviewTool = toolDefinitions.find((item) => item.name === "run_audio_review");
+  const runReviewLoopTool = toolDefinitions.find((item) => item.name === "run_dove_review_loop");
+  const runFigureTool = toolDefinitions.find((item) => item.name === "run_figure_workflow");
   const prepareFigureTool = toolDefinitions.find((item) => item.name === "prepare_figure_generation");
   const importFigureTool = toolDefinitions.find((item) => item.name === "import_figure_generation");
   const issueApprovalTool = toolDefinitions.find((item) => item.name === "issue_program_approval");
@@ -373,11 +398,24 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(paperPipelineQueryTool, "query_paper_pipeline should exist");
   assert.ok(prepareIsolatedReviewTool, "prepare_isolated_review should exist");
   assert.ok(importIsolatedReviewTool, "import_isolated_review should exist");
+  assert.ok(runExperienceTool, "run_experience_workflow should exist");
+  assert.ok(runAudioReviewTool, "run_audio_review should exist");
+  assert.ok(runReviewLoopTool, "run_dove_review_loop should exist");
+  assert.ok(runFigureTool, "run_figure_workflow should exist");
   assert.ok(prepareFigureTool, "prepare_figure_generation should exist");
   assert.ok(importFigureTool, "import_figure_generation should exist");
   assert.ok(doveOnboardingQueryTool.inputSchema.properties.maxDepth, "query_dove_onboarding should expose maxDepth");
   assert.ok(prepareIsolatedReviewTool.inputSchema.properties.reviewedArtifactPaths, "prepare_isolated_review should expose reviewedArtifactPaths");
   assert.ok(importIsolatedReviewTool.inputSchema.properties.handoffPath, "import_isolated_review should expose handoffPath");
+  assert.ok(runExperienceTool.inputSchema.properties.experimentId, "run_experience_workflow should expose experimentId");
+  assert.ok(runAudioReviewTool.inputSchema.properties.finalPlanPaths, "run_audio_review should expose finalPlanPaths");
+  assert.ok(runReviewLoopTool.inputSchema.properties.maxIterations, "run_dove_review_loop should expose maxIterations");
+  assert.ok(runFigureTool.inputSchema.properties.intent, "run_figure_workflow should expose intent");
+  assert.ok(runFigureTool.inputSchema.properties.description, "run_figure_workflow should expose description");
+  assert.ok(runFigureTool.inputSchema.properties.materialHints, "run_figure_workflow should expose materialHints");
+  assert.ok(runFigureTool.inputSchema.properties.executeProvider, "run_figure_workflow should expose executeProvider");
+  assert.ok(runFigureTool.inputSchema.properties.svgContent, "run_figure_workflow should expose svgContent");
+  assert.ok(runFigureTool.inputSchema.properties.caption, "run_figure_workflow should expose caption");
   assert.ok(prepareFigureTool.inputSchema.properties.figureId, "prepare_figure_generation should expose figureId");
   assert.ok(prepareFigureTool.inputSchema.properties.materialHints, "prepare_figure_generation should expose materialHints");
   assert.ok(prepareFigureTool.inputSchema.properties.executeProvider, "prepare_figure_generation should expose executeProvider");

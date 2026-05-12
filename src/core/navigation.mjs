@@ -86,7 +86,8 @@ function normalizeStringArray(value) {
 }
 
 const GOVERNANCE_TERMINAL_LIFECYCLES = new Set(["archived", "archived-with-lineage"]);
-const GOVERNANCE_ACTIVE_LIFECYCLES = new Set(["active", "ready-for-handoff", "review-needed", "stale"]);
+const GOVERNANCE_ACTIVE_LIFECYCLES = new Set(["active", "ready", "ready-for-handoff", "review-needed", "stale"]);
+const FIRST_CLASS_DOVE_CREATOR_KINDS = new Set(["user", "system"]);
 
 function isIsoTimestamp(value) {
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
@@ -317,6 +318,10 @@ function mergeDecisions(incoming, existing) {
     merged.set(decision.id, decision);
   }
   return Array.from(merged.values());
+}
+
+function isFirstClassDoveTaskPacket(packet = {}) {
+  return Number.isFinite(packet.level) && FIRST_CLASS_DOVE_CREATOR_KINDS.has(packet.creatorKind) && typeof packet.rootId === "string" && packet.rootId.length > 0;
 }
 
 function normalizePacket(packet = {}) {
@@ -1519,7 +1524,7 @@ function deriveVersionPackets(versionsIndex) {
 
 function markInactiveLegacyPackets(items, activeIds) {
   return items.map((packet) => {
-    if (!activeIds.has(packet.id) && ["task", "blocker"].includes(packet.sourceType)) {
+    if (!activeIds.has(packet.id) && ["task", "blocker"].includes(packet.sourceType) && !isFirstClassDoveTaskPacket(packet)) {
       const lifecycleStatus = GOVERNANCE_TERMINAL_LIFECYCLES.has(packet.lifecycleStatus) ? packet.lifecycleStatus : hasLineageLinks(packet) ? "archived-with-lineage" : "archived";
       return { ...packet, active: false, lifecycleStatus };
     }
@@ -1865,8 +1870,8 @@ function buildAutonomyLoopSummary({ board, packets, openQuestions = [], metaOpti
       runtimeState: packetRuntimeState,
       followThroughState: packetFollowThroughState,
       nextSafeAction: reviewCheckpointActive
-        ? `Review checkpoint ${programs?.currentReviewCheckpointRunId ?? "current-run"} and issue a fresh approval through project:dove.approvals.`
-        : runtime?.currentContinuationCommand ?? "Use project:dove.follow-through or project:dove.launch before any foreground autonomy run.",
+        ? `Review checkpoint ${programs?.currentReviewCheckpointRunId ?? "current-run"} and continue through project:dove.auto with explicit fresh approval.`
+        : runtime?.currentContinuationCommand ?? "Use project:dove.mission to confirm and materialize the mission before any foreground autonomy run.",
       approvalPointers: approvalPointerIds,
       runtimePointers: runtimePointerIds,
       followThroughPointers: followThroughPointerIds,
@@ -1880,7 +1885,7 @@ function buildAutonomyLoopSummary({ board, packets, openQuestions = [], metaOpti
       targetArtifact: ARTIFACT_PATHS.evidence,
       currentStage: openQuestions.some((item) => item.status !== "answered") ? "question" : "evidence",
       lifecycleState: openQuestions.some((item) => item.status !== "answered") ? "question-open" : "evidence-ready-for-claim",
-      nextSafeAction: openQuestions.find((item) => item.status !== "answered")?.summary ?? "Record evidence-backed claims through project:dove.paper.claim-gate.",
+      nextSafeAction: openQuestions.find((item) => item.status !== "answered")?.summary ?? "Record evidence-backed claims through project:dove.experience.",
       approvalPointers: [],
       runtimePointers: [],
       followThroughPointers: [],
@@ -1906,7 +1911,7 @@ function buildAutonomyLoopSummary({ board, packets, openQuestions = [], metaOpti
             : "scan-ready",
       nextSafeAction: remediationSummary.topPackIds?.[0]
         ? `Review remediation pack ${remediationSummary.topPackIds[0]} and record explicit follow-through.`
-        : "Run project:dove.paper.meta-optimize to inspect proposal-only debt.",
+        : "Run project:dove.status to inspect proposal-only debt.",
       approvalPointers: [],
       runtimePointers: [],
       followThroughPointers: followThroughPointerIds,
@@ -1953,7 +1958,7 @@ function buildAutonomyLoopSummary({ board, packets, openQuestions = [], metaOpti
     blockerIds: uniqueSorted(loops.flatMap((loop) => loop.blockers)),
     closureStates: uniqueSorted(loops.map((loop) => loop.closureState)),
     lifecycleStates: uniqueSorted(loops.map((loop) => loop.lifecycleState).filter(Boolean)),
-    safeExecutionPath: "project:dove.follow-through -> project:dove.launch -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5",
+    safeExecutionPath: "project:dove.mission -> project:dove.auto",
     overview: `${loops.length} unified autonomy loop families are visible; ${blockedCount} blocked, ${readyCount} ready, ${closedCount} carrying closure evidence. Execution remains explicit foreground-only.`
   };
 }
@@ -1966,7 +1971,7 @@ function renderAutonomyLoopOverviewLines(autonomyLoops = {}) {
     `- Unified autonomy current loop: ${summary.currentLoopId ?? "none"}`,
     `- Unified autonomy lifecycle state: ${summary.activeLifecycleState ?? "unknown"}`,
     `- Unified autonomy next safe action: ${summary.nextSafeAction ?? "Refresh the board and choose the next explicit operator action."}`,
-    `- Unified autonomy safe execution path: ${summary.safeExecutionPath ?? "project:dove.follow-through -> project:dove.launch -> node ./bin/dove.mjs autonomy-foreground . --max-steps 5"}`,
+    `- Unified autonomy safe execution path: ${summary.safeExecutionPath ?? "project:dove.mission -> project:dove.auto"}`,
     `- Unified autonomy blockers: ${(summary.blockerIds ?? []).join(", ") || "none"}`,
     `- Unified autonomy approvals: ${(summary.approvalPointers ?? []).join(", ") || "none"}`,
     `- Unified autonomy runtime pointers: ${(summary.runtimePointers ?? []).join(", ") || "none"}`,
@@ -5737,7 +5742,7 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
       priority: concern.severity === "high" ? "critical" : "high",
       summary: `Escalate durable workflow attention to review concern ${concern.id}.`,
       rationale: `The concern is still ${concern.status} with recurrence count ${concern.recurrenceCount}, so the workflow is repeatedly revisiting the same review debt without closure.`,
-      nextAction: `Resolve concern ${concern.id}, update the linked artifacts, then rerun project:dove.paper.review before finalization claims.`,
+      nextAction: `Resolve concern ${concern.id}, update the linked artifacts, then rerun project:dove.review before finalization claims.`,
       scope: "review-artifact health",
       responseOwnerRole: concern.responseOwnerRole,
       evidenceArtifactPaths: summarizeLinkedEvidence([ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.reviewState], concern.linkedArtifactPaths),
@@ -5836,7 +5841,7 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
       priority: audit.auditVerdict === "blocked" ? "critical" : "high",
       summary: `Treat audit ${audit.id} as a workflow gate before more claim promotion.`,
       rationale: `This audit is not clean, so downstream claim updates or review closure would be relying on unstable experiment evidence.`,
-      nextAction: `Repair the experiment artifacts referenced by ${audit.id}, rerun project:dove.paper.experiment, and only then bridge results into claims.`,
+      nextAction: `Repair the experiment artifacts referenced by ${audit.id}, rerun project:dove.experience, and only then bridge results into claims.`,
       scope: "experiment integrity",
       responseOwnerRole: "experiment-planner",
       evidenceArtifactPaths: [ARTIFACT_PATHS.experimentAudits, ...(audit.reviewedArtifactRefs ?? [])],
@@ -5863,7 +5868,7 @@ function buildMetaOptimizeSurface({ root, board, workspaceIndex, journal, review
       priority: bridge.auditVerdict === "blocked" ? "critical" : "high",
       summary: `Keep claim bridge ${bridge.id} in proposal-only review until its audit trail is clean.`,
       rationale: bridge.reason ?? `The bridge is not safely applied, which means the workflow still needs an explicit review step before stronger claim status changes.`,
-      nextAction: `Resolve the blocked or missing audits for ${bridge.id}, then rerun project:dove.paper.result-bridge with the repaired evidence trail.`,
+      nextAction: `Resolve the blocked or missing audits for ${bridge.id}, then rerun project:dove.experience with the repaired evidence trail.`,
       scope: "result-to-claim transition health",
       responseOwnerRole: "experiment-planner",
       evidenceArtifactPaths: [ARTIFACT_PATHS.claimBridgeLog, ARTIFACT_PATHS.experimentAudits],
@@ -6709,7 +6714,7 @@ export function refreshDurableSurfaces(root, event = {}) {
   }));
 
   const activeIds = new Set(refreshed.map((packet) => packet.id));
-  const preserved = (taskPacketIndex.items ?? []).filter((packet) => !activeIds.has(packet.id) && !["task", "blocker", "experiment", "rebuttal-issue", "version"].includes(packet.sourceType));
+  const preserved = (taskPacketIndex.items ?? []).filter((packet) => !activeIds.has(packet.id) && (isFirstClassDoveTaskPacket(packet) || !["task", "blocker", "experiment", "rebuttal-issue", "version"].includes(packet.sourceType)));
   const packets = markInactiveLegacyPackets([...refreshed, ...preserved].map(normalizePacket), activeIds).sort((left, right) => left.id.localeCompare(right.id));
   const packetById = new Map(packets.map((packet) => [packet.id, packet]));
   const packetsWithHealth = packets.map((packet) => ({ ...packet, dependencyHealth: buildPacketDependencyHealth(packet, packetById) }));

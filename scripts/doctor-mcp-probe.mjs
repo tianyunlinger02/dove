@@ -31,8 +31,19 @@ async function main() {
     "query_dove_orchestrate",
     "query_dove_mission",
     "query_dove_mission_board",
+    "query_dove_status",
     "query_dove_audit",
     "query_dove_return",
+    "init_dove_goal",
+    "create_dove_task",
+    "run_dove_auto",
+    "kill_dove_task",
+    "reset_dove_version",
+    "run_experience_workflow",
+    "prepare_audio_review",
+    "import_audio_review",
+    "run_audio_review",
+    "run_dove_review_loop",
     "query_program_approvals",
     "launch_dove_mission",
     "materialize_guidance_packet",
@@ -63,7 +74,7 @@ async function main() {
   assert.ok(parsed.longHorizon && typeof parsed.longHorizon === "object", "Expected long-horizon optimizer memory");
   assert.equal(parsed.longHorizon.proposalOnly, true);
 
-  for (const readOnlyDoveTool of ["query_dove_orchestrate", "query_dove_mission", "query_dove_mission_board", "query_dove_audit", "query_dove_return"]) {
+  for (const readOnlyDoveTool of ["query_dove_orchestrate", "query_dove_mission", "query_dove_mission_board", "query_dove_status", "query_dove_audit", "query_dove_return"]) {
     const result = await call("tools/call", { name: readOnlyDoveTool, arguments: {} });
     const payload = JSON.parse(result.content[0].text);
     assert.equal(payload.proposalOnly, true, `${readOnlyDoveTool} should stay proposal-only`);

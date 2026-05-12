@@ -43,29 +43,30 @@ test("npm package dry-run includes Dove-only adapters and current public docs", 
   ]) {
     assert.ok(packagedPaths.has(publicDocPath), `missing public doc ${publicDocPath}`);
   }
-  const opencodeCommandPath = (...segments) => `.opencode/commands/${["dove", ...segments].join(".")}.md`;
-  assert.ok(packagedPaths.has(opencodeCommandPath("status")));
-  assert.ok(packagedPaths.has(opencodeCommandPath("paper", "experiment")));
-  assert.ok(packagedPaths.has(opencodeCommandPath("paper", "version")));
-  assert.ok(packagedPaths.has(".opencode/commands/dove.plan.md"));
+  for (const publicCommand of ["init", "mission", "auto", "status", "kill", "lessons", "version", "source", "note", "figure", "experience", "draft", "review", "review-loop", "rebuttal"]) {
+    assert.ok(packagedPaths.has(`.opencode/commands/dove.${publicCommand}.md`), `missing public command ${publicCommand}`);
+  }
   for (const removedPath of [
-    opencodeCommandPath("board"),
-    opencodeCommandPath("task-graph"),
-    opencodeCommandPath("materialize"),
-    opencodeCommandPath("paper", "pipeline"),
-    opencodeCommandPath("paper", "review-loop"),
-    opencodeCommandPath("paper", "experiment-plan"),
-    opencodeCommandPath("paper", "version-snapshot"),
-    opencodeCommandPath("paper", "wiki")
+    ".opencode/commands/dove.orchestrate.md",
+    ".opencode/commands/dove.plan.md",
+    ".opencode/commands/dove.checklist.md",
+    ".opencode/commands/dove.audit.md",
+    ".opencode/commands/dove.autonomy-operate.md",
+    ".opencode/commands/dove.return.md",
+    ".opencode/commands/dove.follow-through.md",
+    ".opencode/commands/dove.governance-audit.md",
+    ".opencode/commands/dove.onboard.md",
+    ".opencode/commands/dove.launch.md",
+    ".opencode/commands/dove.approvals.md",
+    ".opencode/commands/dove.paper.experiment.md",
+    ".opencode/commands/dove.paper.version.md",
+    ".opencode/commands/dove.paper.figure.md",
+    ".claude/commands/dove/paper/draft.md",
+    ".codex/skills/dove-paper-approvals/SKILL.md",
+    ".agents/skills/dove-paper-orchestrate/SKILL.md"
   ]) {
     assert.equal(packagedPaths.has(removedPath), false, `packaged removed adapter ${removedPath}`);
   }
-  assert.equal(packagedPaths.has(`.opencode/commands/dove.paper.${"plan"}.md`), false);
-  assert.equal(packagedPaths.has(`.claude/commands/dove/paper-${"checklist"}.md`), false);
-  assert.equal(packagedPaths.has(`.codex/skills/dove-paper-${"approvals"}/SKILL.md`), false);
-  assert.equal(packagedPaths.has(`.agents/skills/dove-paper-${"orchestrate"}/SKILL.md`), false);
-  assert.equal(packagedPaths.has(`.opencode/commands/dove.paper.${"follow-through"}.md`), false);
-  assert.ok(packagedPaths.has(".opencode/commands/dove.follow-through.md"));
   assert.ok(packagedPaths.has(".opencode/skills/dove-pipeline/SKILL.md"));
   assert.ok(packagedPaths.has(".agents/skills/dove-lessons/SKILL.md"));
   for (const forbiddenPath of [
@@ -129,11 +130,14 @@ test("CLI install copies the workflow pack into a target workspace", () => {
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.status.md")));
-  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.experiment.md")));
-  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.version.md")));
-  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.plan.md")));
-  assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.approvals.md")));
+  for (const publicCommand of ["init", "mission", "auto", "status", "kill", "lessons", "version", "source", "note", "figure", "experience", "draft", "review", "review-loop", "rebuttal"]) {
+    assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", `dove.${publicCommand}.md`)), `missing installed public command ${publicCommand}`);
+  }
+  for (const removedCommand of ["approvals", "launch", "plan", "audit", "return", "autonomy-operate", "follow-through", "onboard"]) {
+    assert.equal(fs.existsSync(path.join(target, ".opencode", "commands", `dove.${removedCommand}.md`)), false);
+  }
+  assert.equal(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.experiment.md")), false);
+  assert.equal(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.version.md")), false);
   assert.ok(fs.existsSync(path.join(target, ".opencode", "skills", "dove-pipeline", "SKILL.md")));
   assert.equal(fs.existsSync(path.join(target, ".opencode", "agents")), false);
   assert.equal(fs.existsSync(path.join(target, ".opencode", "plugins")), false);
@@ -255,13 +259,14 @@ test("CLI doctor reports installed host adapters for multi-host workspaces", () 
   assert.equal(payload.managedArtifacts.doveAuthorityManifest.currentWriteAuthority, ".dove");
 });
 
-test("CLI doctor fails when a required paper-domain Dove adapter is missing", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-missing-paper-host-"));
+test("CLI doctor fails when a required Dove adapter is missing", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-missing-host-"));
   spawnSync("node", [CLI, "install", target, "--force", "--host", "claude"], {
     cwd: ROOT,
     encoding: "utf8"
   });
-  fs.rmSync(path.join(target, ".claude", "commands", "dove", "paper-draft.md"));
+  const missingAdapterPath = ".claude/commands/dove/draft.md";
+  fs.rmSync(path.join(target, missingAdapterPath));
 
   const result = spawnSync("node", [CLI, "doctor", target], {
     cwd: ROOT,
@@ -270,8 +275,8 @@ test("CLI doctor fails when a required paper-domain Dove adapter is missing", ()
 
   assert.equal(result.status, 1, result.stdout);
   const payload = JSON.parse(result.stdout);
-  assert.ok(payload.missing.includes(".claude/commands/dove/paper-draft.md"));
-  assert.ok(payload.checks.some((check) => check.check === "host-adapter:claude" && !check.ok && check.requiredPaths.includes(".claude/commands/dove/paper-draft.md")));
+  assert.ok(payload.missing.includes(missingAdapterPath));
+  assert.ok(payload.checks.some((check) => check.check === "host-adapter:claude" && !check.ok && check.requiredPaths.includes(missingAdapterPath)));
 });
 
 test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy workspaces", () => {

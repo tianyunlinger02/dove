@@ -289,7 +289,7 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 
 当前落地点包括：
 
-- figure command：`.opencode/commands/dove.paper.figure.md`
+- figure command：`.opencode/commands/dove.figure.md`
 - figure artifact：
   - `.dove/figures/README.md`
   - `.dove/figures/index.json`
@@ -452,7 +452,7 @@ README 的 “How It Works” 部分给出了很清楚的四阶段流程：
 | OpenCode | 真实可承载的宿主边界 | commands / skills / MCP / project-local config | 接受真实宿主约束并围绕它设计 | `.opencode/commands`、`.opencode/skills`、`.opencode.json`、`src/mcp/*` |
 | oh-my-openagent / oh-my-opencode | 多角色编排、工程化 install/doctor、command/skill/MCP 体系 | 更重型插件/hook/tool/agent runtime | role inventory、board-first orchestration、workflow pack discipline | `src/core/orchestration.mjs`、`bin/dove.mjs`、`.dove/orchestration/*` |
 | ARIS | 学术研究到写作的完整方法链 | skill-based workflow、plain markdown、persistent research memory | evidence discipline、experiments、review/rebuttal/version 流程 | `src/core/evidence.mjs`、`src/core/reviews.mjs`、`.dove/research/*`、`.dove/rebuttal/*`、`.dove/versions/*` |
-| AutoFigure-Edit | publication-ready scientific figure pipeline | text → segmentation → template → editable SVG assembly | figure planning discipline | `.opencode/commands/dove.paper.figure.md`、`.dove/figures/*` |
+| AutoFigure-Edit | publication-ready scientific figure pipeline | text → segmentation → template → editable SVG assembly | figure planning discipline | `.opencode/commands/dove.figure.md`、`.dove/figures/*` |
 | Trellis | task packets、role manifests、session persistence、safe boundaries、navigation UX | packetized workflow + role contexts + session summaries + safe update logic | durable task packets、role manifests、sessions、query/navigation、boundary safety | `src/core/navigation.mjs`、`.dove/task-packets/*`、`.dove/context/roles/*`、`.dove/sessions/*`、`.dove/workflow-pack/boundaries.json` |
 
 ---

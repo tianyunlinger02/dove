@@ -981,7 +981,7 @@ function renderChecklist(state, reviewState, board, plans, results, issues, vers
     "",
     "## Review + rebuttal",
     "",
-    ...(openItems.length > 0 ? openItems.map((item) => `- [ ] ${item}`) : ["- [ ] Run `project:dove.paper.review` and convert findings into actions."]),
+    ...(openItems.length > 0 ? openItems.map((item) => `- [ ] ${item}`) : ["- [ ] Run `project:dove.review` and convert findings into actions."]),
     `- [ ] Keep ${(reviewState.unresolvedConcernIds ?? []).length} unresolved concerns visible across review rounds`,
     `- [ ] Keep ${issues.items.length} rebuttal issues normalized and triaged`,
     "",
@@ -1760,7 +1760,7 @@ export function initProject(root, args = {}) {
 
   state = syncPhase(root, state, {
     stage: "init",
-    resumeCommand: "project:dove.orchestrate",
+    resumeCommand: "project:dove.status",
     role: "planner",
     objective: state.dove.objective,
     intentType: "plan",
@@ -1823,7 +1823,7 @@ export function registerSource(root, args = {}) {
   const state = loadState(root);
   syncPhase(root, state, {
     stage: "sources",
-    resumeCommand: "project:dove.paper.research",
+    resumeCommand: "project:dove.source",
     role: "researcher",
     intentType: "research",
     currentFocus: `Register and curate sources for ${state.dove.title}.`,
@@ -1873,7 +1873,7 @@ export function upsertNote(root, args = {}) {
     const state = loadState(root);
     syncPhase(root, state, {
       stage: "notes",
-      resumeCommand: "project:dove.paper.claim-gate",
+      resumeCommand: "project:dove.experience",
       role: "researcher",
       intentType: "research",
       currentFocus: note.summary || note.title,
@@ -1905,7 +1905,7 @@ export function upsertPlan(root, args = {}) {
     dove: { ...state.dove, thesis: args.thesis ?? state.dove.thesis, audience: args.audience ?? state.dove.audience }
   }, {
     stage: "plan",
-    resumeCommand: "project:dove.checklist",
+    resumeCommand: "project:dove.status",
     role: "planner",
     intentType: "plan",
     currentFocus: "Convert the mission goal into a scoped design plan.",
@@ -1943,7 +1943,7 @@ export function upsertOutline(root, args = {}) {
   }
   state = syncPhase(root, state, {
     stage: "outline",
-    resumeCommand: "project:dove.paper.draft",
+    resumeCommand: "project:dove.draft",
     role: "planner",
     intentType: "plan",
     currentFocus: "Translate the plan into a section-by-section outline.",
@@ -1984,7 +1984,7 @@ export function upsertDraft(root, args = {}) {
   };
   syncPhase(root, state, {
     stage: "draft",
-    resumeCommand: "project:dove.paper.review",
+    resumeCommand: "project:dove.review",
     role: "researcher",
     intentType: "write",
     currentFocus: `Draft ${title}.`,
@@ -2104,7 +2104,7 @@ export function upsertFigurePlan(root, args = {}) {
   const content = [
     "# Figures backlog",
     "",
-    "Dove tracks each figure from plan through material discovery, generation handoff/import, caption, and QA.",
+    "Dove tracks each figure from user intent through material discovery, safe generation/import, caption provenance, and QA.",
     "",
     "## Generation workflow",
     "",
@@ -2181,7 +2181,7 @@ export function syncCitations(root, args = {}) {
     nextAction: loadBoard(root).nextAction
   } : {
     stage: "citations",
-    resumeCommand: "project:dove.paper.review",
+    resumeCommand: "project:dove.review",
     role: "researcher",
     intentType: "review",
     currentFocus: "Reconcile bibliography coverage with cited drafts.",
@@ -2260,7 +2260,7 @@ export function buildRebuttal(root, args = {}) {
   };
   syncPhase(root, state, {
     stage: "rebuttal",
-    resumeCommand: "project:dove.paper.version",
+    resumeCommand: "project:dove.version",
     role: "rebuttal-lead",
     intentType: "respond",
     currentFocus: "Convert normalized concerns into an evidence-backed rebuttal.",

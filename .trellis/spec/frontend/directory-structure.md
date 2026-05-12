@@ -15,7 +15,7 @@ This repository does not contain a React/browser frontend. The Trellis `frontend
 ```text
 .
 ├── .opencode/
-│   ├── commands/          # Generated OpenCode command adapters, e.g. dove.orchestrate.md
+│   ├── commands/          # Generated OpenCode command adapters, e.g. dove.status.md
 │   └── skills/            # OpenCode role/discipline skill packs, one SKILL.md per skill
 ├── .claude/commands/dove/ # Generated Claude Code command adapters
 ├── .cursor/commands/      # Generated Cursor command adapters
@@ -57,8 +57,8 @@ This repository does not contain a React/browser frontend. The Trellis `frontend
 ## Naming Conventions
 
 - JavaScript modules use ESM `.mjs` and kebab-case filenames where they are executables/scripts (`validate-mcp.mjs`, `dove-state-server.mjs`). Core modules use descriptive lower-case names (`schema.mjs`, `orchestration.mjs`).
-- Command IDs live in `src/core/command-manifest.mjs` as `dove.<surface>` for general Dove surfaces and `dove.paper.<action>` for paper-domain surfaces.
-- Generated adapter slugs are derived from command IDs: Claude uses `.claude/commands/dove/<slug>.md`, Cursor uses `.cursor/commands/dove-<slug>.md`, and Codex/Agents use `dove-<slug>/SKILL.md`.
+- Command IDs live in `src/core/command-manifest.mjs` as flat top-level `dove.<surface>` entries for all public Dove surfaces.
+- Generated adapter slugs are derived from command IDs: Claude uses `.claude/commands/dove/<surface>.md`, Cursor uses `.cursor/commands/dove-<slug>.md`, and Codex/Agents use `dove-<slug>/SKILL.md`.
 - OpenCode role skills use `dove-<discipline>/SKILL.md` with YAML frontmatter.
 - Durable artifact paths are centralized in `ARTIFACT_PATHS` in `src/core/schema.mjs`; do not scatter new `.dove/...` string constants through command, MCP, or test surfaces.
 - Role IDs are explicit and lower-case hyphenated (`rebuttal-lead`, `experiment-planner`, `version-analyst`).
@@ -72,7 +72,7 @@ This repository does not contain a React/browser frontend. The Trellis `frontend
 - `scripts/generate-command-adapters.mjs` is the example for deterministic checked-in host adapter generation.
 - `src/core/schema.mjs` is the example for centralizing artifact paths, role IDs, governance registries, and schema defaults.
 - `src/core/workspace.mjs` is the example for file-first workspace creation and normalized JSON writes.
-- `.opencode/commands/dove.orchestrate.md` is the generated read-only router example; paper-specific adapters cover artifact workflows rather than mirror shared mission controls.
+- `.opencode/commands/dove.status.md` is the generated read-only router example; paper-specific adapters cover artifact workflows rather than mirror shared mission controls.
 - `tests/integration/workflow.test.mjs` is the example for validating an end-to-end paper workflow through core functions.
 
 ---

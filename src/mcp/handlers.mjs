@@ -5,15 +5,20 @@ import {
   buildRebuttal,
   buildRebuttalStrategy,
   compareVersions,
+  createDoveTask,
   createVersionSnapshot,
   ensureWorkspace,
+  importAudioReview,
   importFigureGeneration,
   importIsolatedReview,
+  initDoveGoal,
   initProject,
+  killDoveTask,
   listWorkspaceArtifacts,
   materializeGuidancePacket,
   issueProgramApproval,
   planCampaign,
+  prepareAudioReview,
   prepareFigureGeneration,
   prepareIsolatedReview,
   normalizeRebuttalIssues,
@@ -49,7 +54,13 @@ import {
   recordOperatorLesson,
   refreshWiki,
   registerSource,
+  resetDoveVersion,
   revokeProgramApproval,
+  runAudioReview,
+  runDoveAuto,
+  runDoveReviewLoop,
+  runExperienceWorkflow,
+  runFigureWorkflow,
   runAutonomyControlPlaneOnce,
   runAutonomyForeground,
   runAutonomyOperate,
@@ -131,6 +142,26 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(queryDoveAudit(root, args));
       case "query_dove_return":
         return makeTextResult(queryDoveReturn(root, args));
+      case "init_dove_goal":
+        return makeTextResult(initDoveGoal(root, args));
+      case "create_dove_task":
+        return makeTextResult(createDoveTask(root, args));
+      case "run_dove_auto":
+        return makeTextResult(runDoveAuto(root, args));
+      case "kill_dove_task":
+        return makeTextResult(killDoveTask(root, args));
+      case "reset_dove_version":
+        return makeTextResult(resetDoveVersion(root, args));
+      case "run_experience_workflow":
+        return makeTextResult(runExperienceWorkflow(root, args));
+      case "prepare_audio_review":
+        return makeTextResult(prepareAudioReview(root, args));
+      case "import_audio_review":
+        return makeTextResult(importAudioReview(root, args));
+      case "run_audio_review":
+        return makeTextResult(runAudioReview(root, args));
+      case "run_dove_review_loop":
+        return makeTextResult(runDoveReviewLoop(root, args));
       case "launch_dove_mission":
         return makeTextResult(launchDoveMission(root, args));
       case "query_program_approvals":
@@ -209,6 +240,8 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(listWorkspaceArtifacts(root));
       case "upsert_figure_plan":
         return makeTextResult(upsertFigurePlan(root, args));
+      case "run_figure_workflow":
+        return makeTextResult(runFigureWorkflow(root, args));
       case "prepare_figure_generation":
         return makeTextResult(prepareFigureGeneration(root, args));
       case "import_figure_generation":

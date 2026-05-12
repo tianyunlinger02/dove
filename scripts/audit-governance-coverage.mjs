@@ -11,6 +11,7 @@ const coreFiles = [
   "src/core/evidence.mjs",
   "src/core/reviews.mjs",
   "src/core/isolated-review.mjs",
+  "src/core/figure-workflow.mjs",
   "src/core/orchestration.mjs",
   "src/core/navigation.mjs",
   "src/core/runtime.mjs",

@@ -64,6 +64,7 @@ function policyLine(command) {
 function workflowBullets(command) {
   const bullets = [
     "Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.",
+    "Follow Dove's response language preference from `.dove/config.json`, `.dove/config.local.json`, or `.dove/state.json.settings.responseLanguage`; supported values are `zh` for Chinese and `en` for English, and the default is `zh`.",
     formatContextPaths(command),
     formatTools(command),
     policyLine(command),
@@ -71,9 +72,9 @@ function workflowBullets(command) {
     "Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence."
   ];
   if (command.domain === "paper") {
-    bullets.push("Use paper-domain artifacts for research, claims, citations, drafting, review, rebuttal, experiments, figures, and version lineage.");
+    bullets.push("Use paper-domain artifacts through top-level Dove presets for sources, notes, drafting, review, rebuttal, experiences, figures, and version lineage.");
   } else {
-    bullets.push("Use this shared Dove control-plane surface across paper, engineering, experiment, review, and general missions; route to `dove.paper.*` only for paper-specific artifact workflows.");
+    bullets.push("Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.");
   }
   bullets.push("Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.");
   return bullets;

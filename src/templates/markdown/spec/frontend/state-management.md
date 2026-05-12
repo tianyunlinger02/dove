@@ -30,11 +30,11 @@ Defaults and schema constants live in `src/core/schema.mjs`. `ARTIFACT_PATHS` is
 
 ### Orchestration state
 
-The board is canonical for active workflow coordination. `dove.orchestrate` may read board state to recommend one next command for any mission domain, but it must not mutate board, handoff, packet, or derived workspace artifacts. Board mutations belong to explicit governed mutation surfaces.
+The board is canonical for active workflow coordination. `dove.status` may read board state to recommend one next command for any mission domain, but it must not mutate board, handoff, packet, or derived workspace artifacts. Board mutations belong to explicit governed mutation surfaces.
 
 ### Proposal and runtime state
 
-`dove.paper.meta-optimize` is proposal-only. Accepted proposals must cross a governed bridge through follow-through/materialization before execution. Runtime/autonomy state under `.dove/runtime/` is explicit foreground state, not a daemon or hidden scheduler.
+`dove.status` is proposal-only. Accepted proposals must cross a governed bridge through follow-through/materialization before execution. Runtime/autonomy state under `.dove/runtime/` is explicit foreground state, not a daemon or hidden scheduler.
 
 ### Lifecycle mirror state
 
@@ -77,8 +77,8 @@ Derived state should not become the only source of truth for facts that belong i
 
 - `src/core/schema.mjs` defines `ARTIFACT_PATHS`, `SCHEMA_VERSION`, `PIPELINE_STAGE_ORDER`, role IDs, governance registries, default object factories, and normalizers.
 - `src/core/workspace.mjs` shows the standard read/normalize/write flow used by `ensureWorkspace(root)` to create and reconcile durable `.dove/` artifacts.
-- Generated `dove.orchestrate` adapters document the proposal-only routing flow and the context files to read before recommending one next command.
-- `.opencode/commands/dove.paper.meta-optimize.md` documents the proposal-only optimizer flow and the governed bridge to materialized work.
+- Generated `dove.status` adapters document the proposal-only routing flow and the context files to read before recommending one next command.
+- `.opencode/commands/dove.status.md` documents the proposal-only optimizer flow and the governed bridge to materialized work.
 - `tests/integration/workflow.test.mjs` exercises state transitions across workspace creation, sources, notes, claims, experiments, review, handoffs, snapshots, comparisons, and checklist sync.
 
 ---

@@ -2,6 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { DEFAULT_DOVE_RESPONSE_LANGUAGE, normalizeDoveResponseLanguage } from "./schema.mjs";
+
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_MAX_PROMPT_CHARS = 20000;
 const DEFAULT_MAX_SVG_BYTES = 1000000;
@@ -11,6 +13,7 @@ const ENV_REF_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
 
 const DEFAULT_DOVE_CONFIG = {
   version: 1,
+  language: DEFAULT_DOVE_RESPONSE_LANGUAGE,
   figureGeneration: {
     defaultProviderId: null,
     providers: [],
@@ -123,6 +126,7 @@ function configPaths(root, env) {
 }
 
 function envConfig(env) {
+  const language = normalizeString(env.DOVE_LANGUAGE ?? env.DOVE_RESPONSE_LANGUAGE);
   const providerId = normalizeString(env.DOVE_FIGURE_PROVIDER_ID ?? env.DOVE_FIGURE_PROVIDER);
   const providerType = normalizeString(env.DOVE_FIGURE_PROVIDER_TYPE);
   const endpoint = normalizeString(env.DOVE_FIGURE_ENDPOINT);
@@ -131,7 +135,11 @@ function envConfig(env) {
   const apiKeyEnv = normalizeString(env.DOVE_FIGURE_API_KEY_ENV);
   const hasProviderOverride = Boolean(providerId || providerType || endpoint || command || model || apiKeyEnv);
   const figureGeneration = {};
+  const next = {};
 
+  if (language) {
+    next.language = language;
+  }
   if (providerId) {
     figureGeneration.defaultProviderId = providerId;
   }
@@ -156,8 +164,11 @@ function envConfig(env) {
       maxSvgBytes: env.DOVE_FIGURE_MAX_SVG_BYTES
     }];
   }
+  if (Object.keys(figureGeneration).length > 0) {
+    next.figureGeneration = figureGeneration;
+  }
 
-  return Object.keys(figureGeneration).length > 0 ? { figureGeneration } : null;
+  return Object.keys(next).length > 0 ? next : null;
 }
 
 function normalizeProvider(rawProvider) {
@@ -226,6 +237,7 @@ function normalizeDoveConfig(rawConfig) {
   assertNoInlineSecrets(source, "doveConfig");
   return {
     version: 1,
+    language: normalizeDoveResponseLanguage(source.language ?? source.responseLanguage, DEFAULT_DOVE_RESPONSE_LANGUAGE, { strict: true }),
     figureGeneration: normalizeFigureGenerationConfig(source.figureGeneration)
   };
 }
@@ -248,6 +260,10 @@ export function loadDoveConfig(root, env = process.env) {
 
 export function loadFigureGenerationConfig(root, env = process.env) {
   return loadDoveConfig(root, env).figureGeneration;
+}
+
+export function loadDoveLanguageConfig(root, env = process.env) {
+  return loadDoveConfig(root, env).language;
 }
 
 export function redactDoveConfig(config) {

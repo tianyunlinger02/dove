@@ -1,0 +1,170 @@
+import {
+  ARTIFACT_PATHS
+} from "./schema.mjs";
+import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
+
+function slugify(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "experience";
+}
+
+function normalizeString(value, fallback = "") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeStringArray(value) {
+  return Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean))) : [];
+}
+
+function renderClaimsMarkdown(claims = []) {
+  return [
+    "# Claims From Results",
+    "",
+    ...claims.flatMap((claim) => [
+      `## ${claim.id}`,
+      "",
+      `- Status: ${claim.status ?? "unknown"}`,
+      `- Confidence: ${claim.confidence ?? "unknown"}`,
+      `- Summary: ${claim.summary ?? claim.statement ?? "No summary recorded."}`,
+      `- Experiments: ${(claim.experimentIds ?? []).join(", ") || "none"}`,
+      ""
+    ])
+  ].join("\n");
+}
+
+function normalizeOutcome(value) {
+  return ["supports", "refutes", "inconclusive", "failed", "pending"].includes(value) ? value : "pending";
+}
+
+function upsertById(items, item) {
+  const existing = items.findIndex((entry) => entry.id === item.id);
+  if (existing >= 0) {
+    items[existing] = { ...items[existing], ...item };
+  } else {
+    items.push(item);
+  }
+  return items;
+}
+
+export function runExperienceWorkflow(root, args = {}) {
+  assertGovernanceMutationRegistered("run-experience-workflow", "guarded");
+  const target = assertTaskScopedMutationTarget(root, "run-experience-workflow", args);
+  ensureWorkspace(root);
+  const timestamp = nowIso();
+  const rawPlan = args.plan && typeof args.plan === "object" ? args.plan : args;
+  const experimentId = slugify(rawPlan.experimentId ?? rawPlan.id ?? rawPlan.goal ?? rawPlan.title ?? `experience-${timestamp}`);
+  const claimId = normalizeString(rawPlan.claimId ?? args.claimId, null);
+  const plan = {
+    id: experimentId,
+    packetId: target.packetId,
+    title: normalizeString(rawPlan.title ?? rawPlan.goal, "Experience plan"),
+    goal: normalizeString(rawPlan.goal ?? rawPlan.idea ?? args.idea, "Define the experiment goal."),
+    methodology: normalizeString(rawPlan.methodology ?? rawPlan.method, "TODO[method]: define methodology before execution."),
+    successMetric: normalizeString(rawPlan.successMetric ?? rawPlan.metric, "TODO[metric]: define success metric before execution."),
+    comparisonTargets: normalizeStringArray(rawPlan.comparisonTargets ?? rawPlan.baselines),
+    claimId,
+    status: normalizeString(rawPlan.status, "planned"),
+    createdAt: rawPlan.createdAt ?? timestamp,
+    updatedAt: timestamp
+  };
+  const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
+  plansIndex.items = upsertById(Array.isArray(plansIndex.items) ? plansIndex.items : [], plan);
+  plansIndex.updatedAt = timestamp;
+  writeJson(root, ARTIFACT_PATHS.experimentPlans, plansIndex);
+
+  const resultInput = args.result && typeof args.result === "object" ? args.result : (args.outcome || args.resultSummary ? args : null);
+  let result = null;
+  let audit = null;
+  let bridge = null;
+  if (resultInput) {
+    const resultsIndex = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
+    result = {
+      id: slugify(resultInput.resultId ?? resultInput.id ?? `${experimentId}-result`),
+      packetId: target.packetId,
+      experimentId,
+      claimId: normalizeString(resultInput.claimId ?? claimId, null),
+      outcome: normalizeOutcome(resultInput.outcome),
+      summary: normalizeString(resultInput.summary ?? resultInput.resultSummary, "TODO[result]: record the observed result."),
+      evidenceLinks: normalizeStringArray(resultInput.evidenceLinks ?? resultInput.artifactPaths),
+      comparisonTargets: normalizeStringArray(resultInput.comparisonTargets),
+      createdAt: resultInput.createdAt ?? timestamp,
+      updatedAt: timestamp
+    };
+    resultsIndex.items = upsertById(Array.isArray(resultsIndex.items) ? resultsIndex.items : [], result);
+    resultsIndex.updatedAt = timestamp;
+    writeJson(root, ARTIFACT_PATHS.experimentResults, resultsIndex);
+
+    const integrityFlags = [];
+    if (!result.claimId) integrityFlags.push("missing-claim-link");
+    if (result.evidenceLinks.length === 0) integrityFlags.push("missing-evidence-links");
+    if (plan.methodology.startsWith("TODO[")) integrityFlags.push("missing-methodology");
+    if (plan.successMetric.startsWith("TODO[")) integrityFlags.push("missing-success-metric");
+    if (result.outcome === "pending") integrityFlags.push("pending-outcome");
+    audit = {
+      id: slugify(`${result.id}-audit`),
+      packetId: target.packetId,
+      experimentId,
+      resultId: result.id,
+      claimId: result.claimId,
+      auditVerdict: integrityFlags.length === 0 ? "clean" : "blocked",
+      integrityFlags,
+      auditFindings: integrityFlags.map((flag) => `Experience workflow flagged ${flag}.`),
+      bridgeReadiness: integrityFlags.length === 0 ? "ready" : "blocked",
+      updatedAt: timestamp
+    };
+    const auditsIndex = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
+    auditsIndex.items = upsertById(Array.isArray(auditsIndex.items) ? auditsIndex.items : [], audit);
+    auditsIndex.updatedAt = timestamp;
+    writeJson(root, ARTIFACT_PATHS.experimentAudits, auditsIndex);
+
+    if (result.claimId) {
+      const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
+      const claimIndex = (evidence.claims ?? []).findIndex((claim) => claim.id === result.claimId);
+      const claimExists = claimIndex >= 0;
+      const nextStatus = audit.auditVerdict === "clean" && result.outcome === "supports" ? "supported" : audit.auditVerdict === "clean" && ["refutes", "failed"].includes(result.outcome) ? "refuted" : "needs-review";
+      bridge = {
+        id: slugify(`${result.id}-bridge`),
+        packetId: target.packetId,
+        experimentId,
+        resultId: result.id,
+        claimId: result.claimId,
+        status: claimExists ? "applied" : "held-missing-claim",
+        mapping: result.outcome,
+        auditId: audit.id,
+        claimStateAfter: claimExists ? nextStatus : null,
+        reason: claimExists ? result.summary : `Claim ${result.claimId} does not exist yet.`,
+        updatedAt: timestamp
+      };
+      const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
+      bridgeLog.items = upsertById(Array.isArray(bridgeLog.items) ? bridgeLog.items : [], bridge);
+      bridgeLog.updatedAt = timestamp;
+      writeJson(root, ARTIFACT_PATHS.claimBridgeLog, bridgeLog);
+      if (claimExists) {
+        evidence.claims[claimIndex] = {
+          ...evidence.claims[claimIndex],
+          status: nextStatus,
+          confidence: nextStatus === "supported" ? "high" : "low",
+          experimentIds: Array.from(new Set([...(evidence.claims[claimIndex].experimentIds ?? []), experimentId])),
+          latestBridgeId: bridge.id,
+          latestAuditId: audit.id
+        };
+        evidence.updatedAt = timestamp;
+        writeJson(root, ARTIFACT_PATHS.evidence, evidence);
+        writeText(root, ARTIFACT_PATHS.claims, renderClaimsMarkdown(evidence.claims));
+      }
+    }
+  }
+
+  return {
+    status: result ? (bridge?.status === "applied" ? "bridged" : "recorded") : "planned",
+    packetId: target.packetId,
+    plan,
+    result,
+    audit,
+    bridge,
+    artifacts: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog]
+  };
+}

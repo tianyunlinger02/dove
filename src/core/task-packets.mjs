@@ -3,6 +3,11 @@ import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
+  DOVE_AUDIO_CONTEXT_POLICY,
+  DOVE_TASK_CREATOR_KINDS,
+  DOVE_TASK_DOMAINS,
+  DOVE_TASK_STAGES,
+  DOVE_TASK_STATUSES,
   createDefaultState,
   createTaskPacketsIndex,
   normalizeSettings
@@ -28,6 +33,19 @@ function normalizeObject(value) {
 
 function uniqueStrings(values = []) {
   return Array.from(new Set(values.filter((item) => typeof item === "string").map((item) => item.trim()).filter(Boolean)));
+}
+
+function normalizeAllowed(value, allowed, fallback) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return allowed.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeLevel(value, fallback = 3) {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : fallback;
+}
+
+function normalizeTaskStatus(value, fallback = "pending") {
+  return normalizeAllowed(value, DOVE_TASK_STATUSES, fallback);
 }
 
 function readJsonReadOnly(root, relativePath, fallback = null) {
@@ -69,13 +87,30 @@ function normalizePacketCandidate(root, packet = {}) {
   const context = readOptionalJson(root, packet.packetContextPath ?? packetContextPath(id));
   const merged = { ...packet, ...normalizeObject(filePacket) };
   const contextObject = normalizeObject(context);
+  const creatorKind = normalizeAllowed(merged.creatorKind ?? contextObject.creatorKind, DOVE_TASK_CREATOR_KINDS, "user");
+  const levelFallback = creatorKind === "system" ? 2 : 3;
+  const level = normalizeLevel(merged.level ?? contextObject.level, levelFallback);
+  const status = normalizeTaskStatus(merged.status ?? merged.lifecycleStatus ?? contextObject.status, "pending");
   return {
     ...merged,
     id,
     title: merged.title ?? id,
     summary: merged.summary ?? "",
-    status: merged.status ?? merged.lifecycleStatus ?? "pending",
-    lifecycleStatus: merged.lifecycleStatus ?? merged.status ?? "pending",
+    parentId: merged.parentId ?? contextObject.parentId ?? null,
+    rootId: merged.rootId ?? contextObject.rootId ?? (level === 0 ? id : null),
+    level,
+    creatorKind,
+    stage: normalizeAllowed(merged.stage ?? merged.missionStage ?? contextObject.stage, DOVE_TASK_STAGES, "plan"),
+    domain: normalizeAllowed(merged.domain ?? merged.doveDomain ?? contextObject.domain, DOVE_TASK_DOMAINS, "engineering"),
+    status,
+    lifecycleStatus: merged.lifecycleStatus ?? status,
+    dependencies: uniqueStrings([...normalizeStringArray(merged.dependencies), ...normalizeStringArray(contextObject.dependencies)]),
+    blockedBy: uniqueStrings([...normalizeStringArray(merged.blockedBy), ...normalizeStringArray(contextObject.blockedBy)]),
+    killedAt: merged.killedAt ?? contextObject.killedAt ?? null,
+    killReason: merged.killReason ?? contextObject.killReason ?? null,
+    lessonIds: uniqueStrings([...normalizeStringArray(merged.lessonIds), ...normalizeStringArray(contextObject.lessonIds)]),
+    artifactRefs: uniqueStrings([...normalizeStringArray(merged.artifactRefs), ...normalizeStringArray(contextObject.artifactRefs)]),
+    contextPolicy: merged.contextPolicy ?? contextObject.contextPolicy ?? DOVE_AUDIO_CONTEXT_POLICY,
     sourceType: merged.sourceType ?? contextObject.sourceType ?? null,
     sourceId: merged.sourceId ?? contextObject.sourceId ?? id,
     currentFocus: merged.currentFocus ?? contextObject.currentFocus ?? "",
@@ -172,6 +207,12 @@ function packetArtifactSet(packet) {
     packet.sourceId,
     packet.packetPath,
     packet.packetContextPath,
+    packet.parentId,
+    packet.rootId,
+    ...normalizeStringArray(packet.dependencies),
+    ...normalizeStringArray(packet.blockedBy),
+    ...normalizeStringArray(packet.lessonIds),
+    ...normalizeStringArray(packet.artifactRefs),
     ...normalizeStringArray(packet.claimIds),
     ...normalizeStringArray(packet.noteIds),
     ...normalizeStringArray(packet.experimentIds),
@@ -191,6 +232,9 @@ function packetTextValues(packet) {
     packet.summary,
     packet.currentFocus,
     packet.nextAction,
+    packet.stage,
+    packet.domain,
+    packet.creatorKind,
     packet.sourceId,
     packet.sourceType ? `${packet.sourceType}:${packet.sourceId}` : null
   ].filter(Boolean));
