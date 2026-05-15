@@ -1,6 +1,7 @@
 import {
   appendHandoff,
   appendReviewLog,
+  applyDoveStatusAdjustments,
   bridgeExperimentResultToClaim,
   buildRebuttal,
   buildRebuttalStrategy,
@@ -50,6 +51,7 @@ import {
   readPhaseContextManifest,
   readState,
   readRoleContextManifest,
+  recordDoveMissionPass,
   recordOperatorFollowThrough,
   recordOperatorLesson,
   refreshWiki,
@@ -58,6 +60,7 @@ import {
   revokeProgramApproval,
   runAudioReview,
   runDoveAuto,
+  runDoveOperator,
   runDoveReviewLoop,
   runExperienceWorkflow,
   runFigureWorkflow,
@@ -146,8 +149,14 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(initDoveGoal(root, args));
       case "create_dove_task":
         return makeTextResult(createDoveTask(root, args));
+      case "record_dove_mission_pass":
+        return makeTextResult(recordDoveMissionPass(root, args));
       case "run_dove_auto":
         return makeTextResult(runDoveAuto(root, args));
+      case "apply_dove_status_adjustments":
+        return makeTextResult(applyDoveStatusAdjustments(root, args));
+      case "run_dove_operator":
+        return makeTextResult(runDoveOperator(root, args));
       case "kill_dove_task":
         return makeTextResult(killDoveTask(root, args));
       case "reset_dove_version":

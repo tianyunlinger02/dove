@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ensureWorkspace, readJson } from "../../src/core/workspace.mjs";
-import { ARTIFACT_PATHS, DEFAULT_DOVE_RESPONSE_LANGUAGE, DOVE_AUDIO_CONTEXT_POLICY, DOVE_DOMAIN_GUIDANCE, DOVE_DOMAIN_IDS, DOVE_MISSION_LIFECYCLE_STAGES, DOVE_PRIMARY_ROLE_IDS, DOVE_RESPONSE_LANGUAGES, DOVE_TASK_CREATOR_KINDS, DOVE_TASK_DOMAINS, DOVE_TASK_STAGES, DOVE_TASK_STATUSES, DOVE_WORKFLOW_KERNEL_VERSION, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, createDefaultState, createDoveAuthorityManifest, createMetaOperatorLessonsIndex, createTaskPacketsIndex, createWorkspaceIndex, normalizeCampaignsIndex, normalizeDoveAuthorityManifest, normalizeDoveResponseLanguage, normalizeMetaOperatorLessonsIndex, normalizeSettings, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
+import { ARTIFACT_PATHS, DEFAULT_DOVE_RESPONSE_LANGUAGE, DOVE_AUDIO_CONTEXT_POLICY, DOVE_DOMAIN_GUIDANCE, DOVE_DOMAIN_IDS, DOVE_MISSION_LIFECYCLE_STAGES, DOVE_PRIMARY_ROLE_IDS, DOVE_RESPONSE_LANGUAGES, DOVE_TASK_CREATOR_KINDS, DOVE_TASK_DOMAINS, DOVE_TASK_STAGES, DOVE_TASK_STATUSES, DOVE_WORKFLOW_KERNEL_VERSION, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, createDefaultBoard, createDefaultState, createDoveAuthorityManifest, createMetaOperatorLessonsIndex, createTaskPacketsIndex, createWorkspaceIndex, normalizeCampaignsIndex, normalizeDoveAuthorityManifest, normalizeDoveResponseLanguage, normalizeMetaOperatorLessonsIndex, normalizeSettings, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
 
 test("normalizeState migrates v1 state into v2", () => {
   const migrated = normalizeState({
@@ -51,9 +51,12 @@ test("createDefaultState exposes durable artifact paths", () => {
   assert.deepEqual(DOVE_RESPONSE_LANGUAGES, ["zh", "en"]);
   assert.equal(DEFAULT_DOVE_RESPONSE_LANGUAGE, "zh");
   assert.equal(state.settings.responseLanguage, "zh");
+  assert.match(state.dove.title, /未命名/);
+  assert.match(state.orchestration.nextAction, /运行 project:dove\.mission/);
   assert.equal(state.settings.taskModel.uniqueInitLevel, 0);
   assert.equal(state.settings.taskModel.userDefaultLevel, 3);
   assert.equal(state.settings.taskModel.autoClassifyMissionTasks, true);
+  assert.equal(state.settings.auto.maxIterations, 3);
   assert.equal(state.settings.reviewLoop.maxIterations, 3);
   assert.equal(state.settings.audioIsolation.defaultContextPolicy, DOVE_AUDIO_CONTEXT_POLICY);
   assert.equal(state.reviews.lastVerdict, "not-reviewed");
@@ -68,6 +71,23 @@ test("Dove response language settings normalize to supported Chinese and English
   assert.throws(() => normalizeDoveResponseLanguage("fr", "zh", { strict: true }), /Unsupported Dove response language/);
   assert.equal(normalizeSettings({ responseLanguage: "English" }).responseLanguage, "en");
   assert.equal(normalizeSettings({ language: "中文" }).responseLanguage, "zh");
+  assert.equal(normalizeSettings({ auto: { maxIterations: 5 } }).auto.maxIterations, 5);
+  assert.equal(normalizeSettings({ auto: { maxIterations: 0 } }).auto.maxIterations, 1);
+
+  const englishState = createDefaultState({ settings: { responseLanguage: "en" } });
+  assert.equal(englishState.settings.responseLanguage, "en");
+  assert.equal(englishState.dove.title, "Untitled Mission Workspace");
+  assert.equal(englishState.orchestration.nextAction, "Run project:dove.mission to create the next task under the init goal.");
+  assert.equal(englishState.orchestration.continuationState.lastCheckpoint, "Workspace bootstrapped.");
+
+  const chineseState = createDefaultState();
+  const chineseBoard = createDefaultBoard(chineseState);
+  assert.match(chineseBoard.currentFocus, /对齐看板/);
+  assert.equal(chineseBoard.continuationState.lastCheckpoint, "工作区已初始化。");
+
+  const normalizedEnglishState = normalizeState({ version: SCHEMA_VERSION, settings: { responseLanguage: "en" } });
+  assert.equal(normalizedEnglishState.settings.responseLanguage, "en");
+  assert.equal(normalizedEnglishState.dove.title, "Untitled Mission Workspace");
 });
 
 test("task packet index exposes the task-centered model defaults", () => {
@@ -222,6 +242,11 @@ test("ensureWorkspace creates and repairs the campaigns artifact", () => {
   assert.equal(manifest.status, "authoritative");
   assert.equal(manifest.strategy, "dove-direct");
   assert.equal(manifest.authoritativeRoot, ".dove");
+
+  const planMarkdown = fs.readFileSync(path.join(root, ARTIFACT_PATHS.plan), "utf8");
+  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, {});
+  assert.match(planMarkdown, /当前 Dove 任务计划/);
+  assert.match(board.currentFocus, /对齐看板/);
 
   const campaigns = readJson(root, ARTIFACT_PATHS.campaignsIndex, {});
   assert.equal(campaigns.version, 1);

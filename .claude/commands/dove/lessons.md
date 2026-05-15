@@ -2,6 +2,14 @@
 
 Inspect or record global and task-bound lessons that future Dove work must obey.
 
+## Daily use
+
+- Use this when a closed task yields reusable guidance that future Dove work should obey.
+- Keep lessons short and explicit: problem, decision, pitfall, validation, and next-time guidance.
+- Targeting: Can record global lessons or bind a lesson to a resolved task packet.
+- Confirmation: When task binding is ambiguous, show task choices and wait for the operator.
+- Outcome: Applicable lessons are available to later mission, auto, operator, and status surfaces without importing raw traces.
+
 ## Contract
 
 - Command id: `dove.lessons`
@@ -9,7 +17,7 @@ Inspect or record global and task-bound lessons that future Dove work must obey.
 - Category: `mutation`
 - Policy: `governed-bookkeeping`
 
-## Workflow
+## Guardrails
 
 1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
 2. Follow Dove's response language preference from `.dove/config.json`, `.dove/config.local.json`, or `.dove/state.json.settings.responseLanguage`; supported values are `zh` for Chinese and `en` for English, and the default is `zh`.

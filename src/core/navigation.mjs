@@ -77,6 +77,7 @@ import {
   resolveResumeCommandForPhase,
   roleCanActAs
 } from "./schema.mjs";
+import { resolveDurableTaskPacket } from "./task-packets.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 
 function normalizeStringArray(value) {
@@ -7085,6 +7086,39 @@ function requireLessonArrayField(args, fieldName) {
   return values;
 }
 
+function lessonTaskTargetAliasArgs(args = {}) {
+  return {
+    packetId: args.packetId,
+    taskPacketId: args.taskPacketId,
+    missionPacketId: args.missionPacketId,
+    taskId: args.taskId,
+    target: args.target,
+    packetTarget: args.packetTarget,
+    taskName: args.taskName
+  };
+}
+
+function hasLessonTaskTargetAlias(args = {}) {
+  return Object.values(lessonTaskTargetAliasArgs(args)).some((value) => typeof value === "string" && value.trim());
+}
+
+function resolveOperatorLessonPacketIds(root, args = {}) {
+  const packetIds = uniqueSorted([
+    ...normalizeStringArray(args.packetIds),
+    ...normalizeStringArray(args.relatedPacketIds),
+    ...normalizeStringArray(args.taskPacketIds),
+    ...normalizeStringArray(args.missionPacketIds),
+    ...normalizeStringArray(args.taskIds)
+  ]);
+  if (!hasLessonTaskTargetAlias(args)) {
+    return packetIds;
+  }
+  const resolved = resolveDurableTaskPacket(root, lessonTaskTargetAliasArgs(args), {
+    targetFields: ["target", "packetTarget", "taskName"]
+  });
+  return uniqueSorted([...packetIds, resolved.packetId]);
+}
+
 export function recordOperatorLesson(root, args = {}) {
   assertGovernanceMutationRegistered("record-operator-lesson", "exempt");
   ensureWorkspace(root);
@@ -7109,6 +7143,7 @@ export function recordOperatorLesson(root, args = {}) {
   if (rawTraceArtifacts.length > 0) {
     throw new Error(`Operator lessons must be distilled manually and cannot cite raw .trellis/tasks runtime traces as source artifacts: ${rawTraceArtifacts.join(", ")}.`);
   }
+  const packetIds = resolveOperatorLessonPacketIds(root, args);
   const timestamp = nowIso();
   const existing = normalizeMetaOperatorLessonsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorLessons, createMetaOperatorLessonsIndex));
   const recordId = normalizeOptionalString(args.id, null) ? slugify(args.id) : `lesson-${slugify(title)}-${slugify(timestamp)}`;
@@ -7129,7 +7164,7 @@ export function recordOperatorLesson(root, args = {}) {
     sourceType: normalizeOptionalString(args.sourceType, previous?.sourceType ?? "manual-retrospective"),
     sourceId: normalizeOptionalString(args.sourceId, previous?.sourceId ?? null),
     sourceArtifacts,
-    packetIds: uniqueSorted([...normalizeStringArray(args.packetIds), ...normalizeStringArray(args.relatedPacketIds)]),
+    packetIds,
     recommendationIds: uniqueSorted([...normalizeStringArray(args.recommendationIds), ...normalizeStringArray(args.relatedRecommendationIds)]),
     playbookIds: uniqueSorted([...normalizeStringArray(args.playbookIds), ...normalizeStringArray(args.relatedPlaybookIds)]),
     remediationPackIds: uniqueSorted([...normalizeStringArray(args.remediationPackIds), ...normalizeStringArray(args.relatedRemediationPackIds)]),

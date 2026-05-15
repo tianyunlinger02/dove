@@ -876,24 +876,57 @@ function syncPhase(root, state, { stage, resumeCommand, role, objective, evidenc
 }
 
 function renderPlan(args, state, board) {
+  const zh = state.settings?.responseLanguage !== "en";
   const sections = Array.isArray(args.sections) && args.sections.length > 0
     ? args.sections.map((section) => `- [ ] ${section}`).join("\n")
     : Object.values(state.sections).map((section) => `- [ ] ${section.title}`).join("\n");
   const evidenceGaps = Array.isArray(args.evidenceGaps) && args.evidenceGaps.length > 0
     ? args.evidenceGaps.map((item) => `- ${item}`).join("\n")
-    : "- No evidence gaps recorded yet.";
+    : zh ? "- 尚未记录证据 gap。" : "- No evidence gaps recorded yet.";
   const milestones = Array.isArray(args.milestones) && args.milestones.length > 0
     ? args.milestones.map((item, index) => `${index + 1}. ${item}`).join("\n")
-    : "1. Refresh the orchestration board\n2. Expand research brief\n3. Plan experiments\n4. Draft sections\n5. Run review loop";
+    : zh
+      ? "1. 刷新编排看板\n2. 扩展研究简报\n3. 规划实验\n4. 起草章节\n5. 运行 review loop"
+      : "1. Refresh the orchestration board\n2. Expand research brief\n3. Plan experiments\n4. Draft sections\n5. Run review loop";
   const figures = Array.isArray(args.figures) && args.figures.length > 0
     ? args.figures.map((item) => `- ${item}`).join("\n")
-    : "- No figures planned yet.";
+    : zh ? "- 尚未规划 figures。" : "- No figures planned yet.";
   const boardTasks = board.tasks.length > 0
     ? board.tasks.map((task) => `- [${task.status === "done" ? "x" : " "}] ${task.title} (${task.assignedRole}) → ${task.nextAction}`).join("\n")
-    : "- No board tasks recorded yet.";
+    : zh ? "- 尚未记录看板任务。" : "- No board tasks recorded yet.";
   const blockers = board.blockers.length > 0
     ? board.blockers.map((item) => `- [${item.status}] ${item.summary}`).join("\n")
-    : "- No open blockers recorded.";
+    : zh ? "- 没有开放阻塞。" : "- No open blockers recorded.";
+
+  if (zh) {
+    return [
+      "# 当前 Dove 任务计划",
+      "",
+      `## Thesis\n\n${args.thesis ?? state.dove.thesis}`,
+      "",
+      `## Audience\n\n${args.audience ?? state.dove.audience}`,
+      "",
+      `## 任务目标\n\n${board.doveObjective}`,
+      "",
+      `## 当前焦点\n\n${board.currentFocus}`,
+      "",
+      `## 下一步\n\n${board.nextAction}`,
+      "",
+      `## 章节计划\n\n${sections}`,
+      "",
+      `## 证据 gaps\n\n${evidenceGaps}`,
+      "",
+      `## 看板任务\n\n${boardTasks}`,
+      "",
+      `## 活跃阻塞\n\n${blockers}`,
+      "",
+      `## Figures and tables\n\n${figures}`,
+      "",
+      `## Milestones\n\n${milestones}`,
+      "",
+      `## Notes\n\n${args.notes ?? "尚无额外计划 notes。"}`
+    ].join("\n");
+  }
 
   return [
     "# Current Dove mission plan",
@@ -925,9 +958,31 @@ function renderPlan(args, state, board) {
 }
 
 function renderOutline(args, state, board) {
+  const zh = state.settings?.responseLanguage !== "en";
+  const placeholder = zh ? "待定" : "TBD";
   const sections = Array.isArray(args.sections) && args.sections.length > 0
     ? args.sections
-    : Object.values(state.sections).map((section) => ({ id: section.id, title: section.title, goal: "TBD", status: section.status }));
+    : Object.values(state.sections).map((section) => ({ id: section.id, title: section.title, goal: placeholder, status: section.status }));
+  if (zh) {
+    return [
+      "# 当前 outline",
+      "",
+      `- 活跃阶段: ${board.currentPhase}`,
+      `- 分配角色: ${board.assignedRole}`,
+      `- 当前焦点: ${board.currentFocus}`,
+      `- 下一步: ${board.nextAction}`,
+      "",
+      ...sections.flatMap((section) => [
+        `## ${section.title ?? section.id}`,
+        "",
+        `- Section ID: ${section.id ?? slugify(section.title)}`,
+        `- 状态: ${section.status ?? "planned"}`,
+        `- 目标: ${section.goal ?? placeholder}`,
+        `- 证据焦点: ${section.evidenceFocus ?? placeholder}`,
+        ""
+      ])
+    ].join("\n");
+  }
   return [
     "# Current outline",
     "",
@@ -941,8 +996,8 @@ function renderOutline(args, state, board) {
       "",
       `- Section ID: ${section.id ?? slugify(section.title)}`,
       `- Status: ${section.status ?? "planned"}`,
-      `- Goal: ${section.goal ?? "TBD"}`,
-      `- Evidence focus: ${section.evidenceFocus ?? "TBD"}`,
+      `- Goal: ${section.goal ?? placeholder}`,
+      `- Evidence focus: ${section.evidenceFocus ?? placeholder}`,
       ""
     ])
   ].join("\n");
@@ -951,6 +1006,48 @@ function renderOutline(args, state, board) {
 function renderChecklist(state, reviewState, board, plans, results, issues, versions, workspaceIndex) {
   const openItems = Array.isArray(reviewState.openItems) ? reviewState.openItems : [];
   const draftedSections = Object.values(state.sections).filter((section) => section.status !== "planned").length;
+  if (state.settings?.responseLanguage !== "en") {
+    return [
+      "# Dove 任务检查清单",
+      "",
+      "## 编排",
+      "",
+      `- [ ] 保持阶段 \`${board.currentPhase}\` 的看板最新`,
+      `- [ ] 保持当前焦点明确：${board.currentFocus}`,
+      `- [ ] 解决 ${board.blockers.filter((item) => item.status !== "resolved").length} 个未关闭阻塞`,
+      "- [ ] 角色变化时追加 handoff",
+      "",
+      "## 研究记忆",
+      "",
+      "- [ ] 在 `.dove/sources/index.json` 注册核心来源",
+      "- [ ] 在 `.dove/notes/index.json` 捕获结构化笔记",
+      "- [ ] 维护 `.dove/research/brief.md` 和 `.dove/research/agenda.json`",
+      "",
+      "## 写作主线",
+      "",
+      `- [ ] 起草 ${Object.keys(state.sections).length} 个章节（当前活跃：${draftedSections}）`,
+      "- [ ] 保持 `.dove/outline/current-outline.md` 与计划对齐",
+      "",
+      "## 实验",
+      "",
+      `- [ ] 保持 ${plans.items.length} 个实验计划由 claim 驱动`,
+      `- [ ] 记录 ${results.items.length} 个带证据链接的实验结果`,
+      "- [ ] 将实验审计与原始结果分开持久化",
+      "- [ ] 为 claim 状态变化持久化 result-to-claim bridge 事件",
+      "",
+      "## 审查与 rebuttal",
+      "",
+      ...(openItems.length > 0 ? openItems.map((item) => `- [ ] ${item}`) : ["- [ ] 运行 `project:dove.review` 并把发现转为行动项。"]),
+      `- [ ] 保持 ${(reviewState.unresolvedConcernIds ?? []).length} 个未解决 concern 在审查轮次中可见`,
+      `- [ ] 保持 ${issues.items.length} 个 rebuttal issue 已规范化并分诊`,
+      "",
+      "## 版本与工作区",
+      "",
+      `- [ ] 快照论文版本（当前快照数：${versions.items.length}）`,
+      `- [ ] 比较活跃目标：${board.activeComparisonTargets.join(", ") || "无"}`,
+      `- [ ] 保持工作区索引可恢复（${workspaceIndex.activePackets?.length ?? 0} 个活跃 packet）`
+    ].join("\n");
+  }
   return [
     "# Dove mission checklist",
     "",
@@ -1758,33 +1855,37 @@ export function initProject(root, args = {}) {
     sections: state.sections ?? defaults.sections
   };
 
+  const zh = state.settings?.responseLanguage !== "en";
   state = syncPhase(root, state, {
     stage: "init",
     resumeCommand: "project:dove.status",
     role: "planner",
     objective: state.dove.objective,
     intentType: "plan",
-    currentFocus: "Align the project goal and workflow contract.",
-    nextAction: "Refresh the board, then register sources and research questions."
+    currentFocus: zh ? "对齐项目目标和工作流契约。" : "Align the project goal and workflow contract.",
+    nextAction: zh ? "刷新看板，然后注册 sources 和 research questions。" : "Refresh the board, then register sources and research questions."
   });
 
-  writeText(root, ARTIFACT_PATHS.project, `# Project brief\n\n- Working title: ${state.dove.title}\n- Venue: ${state.dove.venue}\n- Objective: ${state.dove.objective}\n- Deadline: ${state.dove.deadline || "TBD"}\n\n## Thesis\n\n${state.dove.thesis}\n\n## Audience\n\n${state.dove.audience}\n`);
-  writeText(root, ARTIFACT_PATHS.researchContract, `# Research contract\n\n## Project\n\n- Title: ${state.dove.title}\n- Venue: ${state.dove.venue}\n- Objective: ${state.dove.objective}\n\n## Working rules\n\n- No unsupported claims.\n- No citation from memory.\n- Preserve durable artifacts after every stage.\n- Keep the orchestration board and handoffs current.\n- Require review-before-finalize for high-risk changes.\n`);
+  writeText(root, ARTIFACT_PATHS.project, zh ? `# 项目简报\n\n- 工作标题: ${state.dove.title}\n- Venue: ${state.dove.venue}\n- 目标: ${state.dove.objective}\n- 截止时间: ${state.dove.deadline || "待定"}\n\n## Thesis\n\n${state.dove.thesis}\n\n## Audience\n\n${state.dove.audience}\n` : `# Project brief\n\n- Working title: ${state.dove.title}\n- Venue: ${state.dove.venue}\n- Objective: ${state.dove.objective}\n- Deadline: ${state.dove.deadline || "TBD"}\n\n## Thesis\n\n${state.dove.thesis}\n\n## Audience\n\n${state.dove.audience}\n`);
+  writeText(root, ARTIFACT_PATHS.researchContract, zh ? `# 研究契约\n\n## 项目\n\n- 标题: ${state.dove.title}\n- Venue: ${state.dove.venue}\n- 目标: ${state.dove.objective}\n\n## 工作规则\n\n- 不写无支撑 claims。\n- 不凭记忆引用。\n- 每个阶段后保留持久产物。\n- 保持 orchestration board 和 handoffs 最新。\n- 高风险变更 finalization 前必须 review。\n` : `# Research contract\n\n## Project\n\n- Title: ${state.dove.title}\n- Venue: ${state.dove.venue}\n- Objective: ${state.dove.objective}\n\n## Working rules\n\n- No unsupported claims.\n- No citation from memory.\n- Preserve durable artifacts after every stage.\n- Keep the orchestration board and handoffs current.\n- Require review-before-finalize for high-risk changes.\n`);
   const initialResearchAgenda = {
     version: 1,
     objective: state.dove.objective,
-    agenda: [
+    agenda: zh ? [
+      "澄清论文目标与贡献。",
+      "起草更强 claims 前先建立证据基础。"
+    ] : [
       "Clarify the paper objective and contribution.",
       "Build an evidence base before drafting stronger claims."
     ],
-    evidenceBacklog: ["Register at least one durable source and note."],
+    evidenceBacklog: zh ? ["至少注册一个持久 source 和 note。"] : ["Register at least one durable source and note."],
     updatedAt: nowIso()
   };
   writeJson(root, ARTIFACT_PATHS.researchAgenda, initialResearchAgenda);
-  writeText(root, ARTIFACT_PATHS.researchBrief, `# Research brief\n\n## Objective\n\n${initialResearchAgenda.objective}\n\n## Agenda\n\n${initialResearchAgenda.agenda.map((item) => `- ${item}`).join("\n")}\n\n## Evidence backlog\n\n${initialResearchAgenda.evidenceBacklog.map((item) => `- ${item}`).join("\n")}`);
+  writeText(root, ARTIFACT_PATHS.researchBrief, zh ? `# 研究简报\n\n## 目标\n\n${initialResearchAgenda.objective}\n\n## 议程\n\n${initialResearchAgenda.agenda.map((item) => `- ${item}`).join("\n")}\n\n## 证据 backlog\n\n${initialResearchAgenda.evidenceBacklog.map((item) => `- ${item}`).join("\n")}` : `# Research brief\n\n## Objective\n\n${initialResearchAgenda.objective}\n\n## Agenda\n\n${initialResearchAgenda.agenda.map((item) => `- ${item}`).join("\n")}\n\n## Evidence backlog\n\n${initialResearchAgenda.evidenceBacklog.map((item) => `- ${item}`).join("\n")}`);
   refreshDurableSurfaces(root, {
     type: "init-project",
-    summary: `Initialized project ${state.dove.title}.`,
+    summary: zh ? `已初始化项目 ${state.dove.title}。` : `Initialized project ${state.dove.title}.`,
     artifactPaths: [ARTIFACT_PATHS.project, ARTIFACT_PATHS.researchContract, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.workspaceIndex]
   });
   return state;
@@ -1900,6 +2001,7 @@ export function upsertPlan(root, args = {}) {
     assertStrictCondition(sources.items.length > 0, "Strict mode requires at least one registered source before planning.");
     assertStrictCondition(notes.items.length > 0, "Strict mode requires at least one structured note before planning.");
   }
+  const zh = state.settings?.responseLanguage !== "en";
   const nextState = syncPhase(root, {
     ...state,
     dove: { ...state.dove, thesis: args.thesis ?? state.dove.thesis, audience: args.audience ?? state.dove.audience }
@@ -1908,14 +2010,14 @@ export function upsertPlan(root, args = {}) {
     resumeCommand: "project:dove.status",
     role: "planner",
     intentType: "plan",
-    currentFocus: "Convert the mission goal into a scoped design plan.",
-    nextAction: "Sync the checklist before execution.",
+    currentFocus: zh ? "将任务目标转化为有边界的设计计划。" : "Convert the mission goal into a scoped design plan.",
+    nextAction: zh ? "执行前同步检查清单。" : "Sync the checklist before execution.",
     reviewRequiredBeforeFinalize: true
   });
   writeText(root, ARTIFACT_PATHS.plan, renderPlan(args, nextState, loadBoard(root)));
   refreshDurableSurfaces(root, {
     type: "upsert-plan",
-    summary: "Updated current Dove mission plan.",
+    summary: zh ? "已更新当前 Dove 任务计划。" : "Updated current Dove mission plan.",
     artifactPaths: [ARTIFACT_PATHS.plan, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary]
   });
   return { planPath: ARTIFACT_PATHS.plan, thesis: nextState.dove.thesis };
@@ -1926,6 +2028,7 @@ export function upsertOutline(root, args = {}) {
   assertTaskScopedMutationTarget(root, "upsert-outline", args);
   assertFollowThroughReady(root, "Updating the paper outline", args);
   let state = loadState(root);
+  const zh = state.settings?.responseLanguage !== "en";
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   if (isStrictMode(state, args)) {
     assertStageAtLeast(state, "plan", "Strict mode requires planning before outlining.");
@@ -1946,14 +2049,14 @@ export function upsertOutline(root, args = {}) {
     resumeCommand: "project:dove.draft",
     role: "planner",
     intentType: "plan",
-    currentFocus: "Translate the plan into a section-by-section outline.",
-    nextAction: "Draft the highest-leverage section next.",
+    currentFocus: zh ? "将计划转化为逐章节 outline。" : "Translate the plan into a section-by-section outline.",
+    nextAction: zh ? "下一步起草最高杠杆的章节。" : "Draft the highest-leverage section next.",
     reviewRequiredBeforeFinalize: true
   });
   writeText(root, ARTIFACT_PATHS.outline, renderOutline(args, state, loadBoard(root)));
   refreshDurableSurfaces(root, {
     type: "upsert-outline",
-    summary: "Updated current outline.",
+    summary: zh ? "已更新当前 outline。" : "Updated current outline.",
     artifactPaths: [ARTIFACT_PATHS.outline, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary]
   });
   return { outlinePath: ARTIFACT_PATHS.outline, sectionCount: Object.keys(state.sections).length };
@@ -2043,7 +2146,7 @@ export function syncChecklist(root) {
   writeText(root, ARTIFACT_PATHS.checklist, renderChecklist(state, reviewState, board, plans, results, issues, versions, workspaceIndex));
   refreshDurableSurfaces(root, {
     type: "sync-checklist",
-    summary: "Refreshed checklist from current workspace state.",
+    summary: state.settings?.responseLanguage === "en" ? "Refreshed checklist from current workspace state." : "已根据当前工作区状态刷新检查清单。",
     artifactPaths: [ARTIFACT_PATHS.checklist, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.workspaceIndex]
   });
   return { checklistPath: ARTIFACT_PATHS.checklist, openItemCount: reviewState.openItems.length };

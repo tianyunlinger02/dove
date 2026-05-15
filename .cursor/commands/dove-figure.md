@@ -2,6 +2,14 @@
 
 Turn one user-described figure intent into materials, optional generation/import, caption provenance, and QA status.
 
+## Daily use
+
+- Use this when the user describes the figure they want once, including where it should help the paper or task.
+- Dove should gather linked materials, prepare generation/import, write caption provenance, and validate QA without exposing low-level figure tools.
+- Targeting: Resolve the figure request to one durable task packet before any figure write.
+- Confirmation: Ask for packet confirmation when the figure target is unclear; provider calls require explicit safe configuration.
+- Outcome: A figure plan/run, safe import when available, caption provenance, and QA status are recorded.
+
 ## Contract
 
 - Command id: `dove.figure`
@@ -9,7 +17,7 @@ Turn one user-described figure intent into materials, optional generation/import
 - Category: `mutation`
 - Policy: `guarded-mutation`
 
-## Workflow
+## Guardrails
 
 1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
 2. Follow Dove's response language preference from `.dove/config.json`, `.dove/config.local.json`, or `.dove/state.json.settings.responseLanguage`; supported values are `zh` for Chinese and `en` for English, and the default is `zh`.
@@ -22,8 +30,9 @@ Turn one user-described figure intent into materials, optional generation/import
 9. Do not mark a final figure ready unless it comes from a validated generation import with durable provenance and caption.
 10. Captions must explain the figure purpose and linked evidence.
 11. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
-12. If target resolution is ambiguous, follow `.dove/state.json.settings.taskTargetResolution.autoSelect`: true auto-selects the best candidate; false stops and asks for packetId confirmation.
-13. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
-14. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-15. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-16. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+12. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
+13. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
+14. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
+15. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+16. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+17. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

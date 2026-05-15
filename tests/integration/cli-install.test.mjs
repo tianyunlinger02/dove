@@ -43,7 +43,7 @@ test("npm package dry-run includes Dove-only adapters and current public docs", 
   ]) {
     assert.ok(packagedPaths.has(publicDocPath), `missing public doc ${publicDocPath}`);
   }
-  for (const publicCommand of ["init", "mission", "auto", "status", "kill", "lessons", "version", "source", "note", "figure", "experience", "draft", "review", "review-loop", "rebuttal"]) {
+  for (const publicCommand of ["init", "mission", "auto", "status", "operator", "lessons", "version", "source", "note", "figure", "experience", "draft", "review", "review-loop", "rebuttal"]) {
     assert.ok(packagedPaths.has(`.opencode/commands/dove.${publicCommand}.md`), `missing public command ${publicCommand}`);
   }
   for (const removedPath of [
@@ -58,6 +58,7 @@ test("npm package dry-run includes Dove-only adapters and current public docs", 
     ".opencode/commands/dove.onboard.md",
     ".opencode/commands/dove.launch.md",
     ".opencode/commands/dove.approvals.md",
+    ".opencode/commands/dove.kill.md",
     ".opencode/commands/dove.paper.experiment.md",
     ".opencode/commands/dove.paper.version.md",
     ".opencode/commands/dove.paper.figure.md",
@@ -130,10 +131,10 @@ test("CLI install copies the workflow pack into a target workspace", () => {
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  for (const publicCommand of ["init", "mission", "auto", "status", "kill", "lessons", "version", "source", "note", "figure", "experience", "draft", "review", "review-loop", "rebuttal"]) {
+  for (const publicCommand of ["init", "mission", "auto", "status", "operator", "lessons", "version", "source", "note", "figure", "experience", "draft", "review", "review-loop", "rebuttal"]) {
     assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", `dove.${publicCommand}.md`)), `missing installed public command ${publicCommand}`);
   }
-  for (const removedCommand of ["approvals", "launch", "plan", "audit", "return", "autonomy-operate", "follow-through", "onboard"]) {
+  for (const removedCommand of ["approvals", "launch", "kill", "plan", "audit", "return", "autonomy-operate", "follow-through", "onboard"]) {
     assert.equal(fs.existsSync(path.join(target, ".opencode", "commands", `dove.${removedCommand}.md`)), false);
   }
   assert.equal(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.experiment.md")), false);

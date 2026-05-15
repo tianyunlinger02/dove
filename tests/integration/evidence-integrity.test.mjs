@@ -446,7 +446,7 @@ test("supporting results with blocked audits hold claim promotion for review", (
 test("finalization is blocked while claim bridges remain held for review", () => {
   const root = tempRoot();
   ensureWorkspace(root);
-  seedTaskPacket(root);
+  const packetId = seedTaskPacket(root);
   fs.writeFileSync(path.join(root, ".dove/sources/index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
@@ -460,6 +460,7 @@ test("finalization is blocked while claim bridges remain held for review", () =>
 
   upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
   upsertClaims(root, {
+    packetId,
     claims: [{ id: "claim-1", text: "Claim 1", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["intro-note"] }]
   });
 
@@ -492,6 +493,7 @@ test("finalization is blocked while claim bridges remain held for review", () =>
   });
 
   appendReviewLog(root, {
+    packetId,
     stage: "integrity-override",
     scope: "blocked bridge check",
     verdict: "coherent",
@@ -510,7 +512,7 @@ test("finalization is blocked while claim bridges remain held for review", () =>
   });
 
   assert.throws(() => {
-    createVersionSnapshot(root, { versionId: "blocked-version" });
+    createVersionSnapshot(root, { packetId, versionId: "blocked-version" });
   }, /held for review|bridge|integrity/);
 });
 test("citation sync writes references and wiki/rebuttal helpers create artifacts", () => {

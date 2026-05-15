@@ -98,7 +98,7 @@ test("single-paper workflow creates durable artifacts", () => {
     thesis: "Durable workflows improve academic writing.",
     audience: "conference reviewers"
   });
-  seedTaskPacket(root);
+  const packetId = seedTaskPacket(root);
 
   upsertOrchestrationBoard(root, {
     phase: "research",
@@ -109,12 +109,14 @@ test("single-paper workflow creates durable artifacts", () => {
     ]
   });
   updateResearchBrief(root, {
+    packetId,
     objective: "Validate the end-to-end writing pipeline.",
     agenda: ["Collect supporting sources", "Promote supported claims"],
     evidenceBacklog: ["Run a comparison experiment"]
   });
 
   const source = registerSource(root, {
+    packetId,
     citationKey: "lee2026durable",
     title: "Durable Writing Systems",
     authors: ["Lee"],
@@ -122,6 +124,7 @@ test("single-paper workflow creates durable artifacts", () => {
   });
 
   const source2 = registerSource(root, {
+    packetId,
     citationKey: "kim2026workflow",
     title: "Workflow Reliability in Academic Writing",
     authors: ["Kim"],
@@ -129,6 +132,7 @@ test("single-paper workflow creates durable artifacts", () => {
   });
 
   const note = upsertNote(root, {
+    packetId,
     title: "Motivation note",
     sectionId: "introduction",
     sourceIds: [source.id, source2.id],
@@ -136,6 +140,7 @@ test("single-paper workflow creates durable artifacts", () => {
   });
 
   upsertClaims(root, {
+    packetId,
     claims: [
       {
         id: "claim-1",
@@ -149,16 +154,19 @@ test("single-paper workflow creates durable artifacts", () => {
   });
 
   upsertPlan(root, {
+    packetId,
     thesis: "Durable workflows improve academic writing.",
     audience: "conference reviewers",
     sections: ["Abstract", "Introduction", "Method"]
   });
 
   upsertOutline(root, {
+    packetId,
     sections: [{ id: "introduction", title: "Introduction", status: "drafting", goal: "Frame the problem." }]
   });
 
   upsertDraft(root, {
+    packetId,
     sectionId: "introduction",
     title: "Introduction",
     body: "# Introduction\n\nDurable workflows reduce context loss [cite:lee2026durable].\n",
@@ -174,6 +182,7 @@ test("single-paper workflow creates durable artifacts", () => {
   });
 
   const experimentPlan = upsertExperimentPlan(root, {
+    packetId,
     id: "durable-comparison",
     title: "Durable vs ad-hoc workflow comparison",
     claimId: "claim-1",
@@ -199,7 +208,7 @@ test("single-paper workflow creates durable artifacts", () => {
     nextActions: ["Run the review loop", "Triage rebuttal issues"]
   });
 
-  const review = runReviewLoop(root, { scope: "introduction" });
+  const review = runReviewLoop(root, { packetId, scope: "introduction" });
   appendHandoff(root, {
     fromRole: "rebuttal-lead",
     toRole: "version-analyst",
@@ -208,11 +217,13 @@ test("single-paper workflow creates durable artifacts", () => {
     nextActions: ["Create the next snapshot", "Compare the new lineage step"]
   });
   const snapshotA = createVersionSnapshot(root, {
+    packetId,
     versionId: "v1-initial",
     label: "Initial draft",
     summary: "Before post-review edits."
   });
   upsertDraft(root, {
+    packetId,
     sectionId: "introduction",
     title: "Introduction",
     body: "# Introduction\n\nDurable workflows reduce context loss [cite:lee2026durable] and improve review traceability [cite:kim2026workflow].\n",
@@ -226,12 +237,13 @@ test("single-paper workflow creates durable artifacts", () => {
     nextActions: ["Create the revised snapshot"]
   });
   const snapshotB = createVersionSnapshot(root, {
+    packetId,
     versionId: "v2-revised",
     label: "Revised draft",
     parentVersionId: snapshotA.id,
     summary: "After review-driven revision."
   });
-  const comparison = compareVersions(root, { fromVersionId: snapshotA.id, toVersionId: snapshotB.id });
+  const comparison = compareVersions(root, { packetId, fromVersionId: snapshotA.id, toVersionId: snapshotB.id });
   const checklist = syncChecklist(root);
 
   assert.equal(review.verdict, "coherent");

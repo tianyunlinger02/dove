@@ -55,7 +55,7 @@ project:dove.init
 project:dove.mission
 project:dove.auto
 project:dove.status
-project:dove.kill
+project:dove.operator
 project:dove.lessons
 project:dove.version
 project:dove.source
@@ -68,7 +68,7 @@ project:dove.review-loop
 project:dove.rebuttal
 ```
 
-The daily workflow is: create/update the unique init goal, create or auto-run concrete tasks under that goal, use preset commands for source/note/experience/figure/draft/review/rebuttal work, inspect state through status, and record reusable lessons explicitly. Lower-level CLI and MCP support tools may still exist for validation or import/export workflows, but they are not separate public slash commands.
+The daily workflow is: create/update the unique init goal, create or auto-run concrete tasks under that goal, use preset commands for source/note/experience/figure/draft/review/rebuttal work, inspect and adjust state through status, run ready work through operator, and record reusable lessons explicitly. Lower-level CLI and MCP support tools may still exist for validation or import/export workflows, but they are not separate public slash commands.
 
 ## Language configuration
 

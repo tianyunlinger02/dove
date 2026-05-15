@@ -17,10 +17,10 @@ Dove exposes one flat public command surface:
 | Command | Use it for |
 | --- | --- |
 | `project:dove.init` | Create or update the single project-level goal, represented as the unique level-0 task. |
-| `project:dove.mission` | Propose a task under init after Dove classifies stage, domain, dependencies, level, blockers, and expected evidence; create it only after explicit confirmation. |
-| `project:dove.auto` | Start with mission-style intake, then after explicit confirmation run bounded automatic work until completion or a boundary. |
-| `project:dove.status` | Inspect project state, init, task tree, blockers, review state, version state, and completion readiness. |
-| `project:dove.kill` | Terminate a non-init task; when multiple tasks match, choose from the returned indexed list. |
+| `project:dove.mission` | Convert a natural-language demand into a task contract; after approval, materialize it and run one bounded foreground pass. |
+| `project:dove.auto` | Convert demand or select a task; after approval, run bounded multi-round foreground iterations until completion, a boundary, or the configured limit. |
+| `project:dove.status` | Inspect the live development situation, then show only actionable non-completed/non-killed mission status adjustments when present or requested. |
+| `project:dove.operator` | Run one confirmed foreground pass over ready/in-progress work, splitting safe internal steps from host-pass-required work, and create pending blocker-investigation plan missions for blocked work. |
 | `project:dove.lessons` | Query or record global/task-bound lessons that future Dove work must obey. |
 | `project:dove.version` | Snapshot a direction change and clear active non-init tasks while preserving init and required lessons. |
 | `project:dove.source` | Organize external information such as papers, web findings, citations, and provenance. |
@@ -37,26 +37,33 @@ Older router, checklist, plan, audit, return, follow-through, onboarding, govern
 ## First 10 minutes with Dove
 
 1. Install Dove and run `dove doctor` to check the package, adapters, MCP entrypoint, and workspace artifacts.
-2. Run `project:dove.init` to establish the one global goal for the workspace.
-3. Run `project:dove.mission` to get a concrete task proposal and confirm it, or `project:dove.auto` when you want Dove to continue after explicit confirmation.
-4. Use preset commands as needed: `source`, `note`, `experience`, `figure`, `draft`, `review`, `review-loop`, and `rebuttal`.
-5. Use `project:dove.status` to inspect blockers, task state, and completion readiness.
-6. When a task yields reusable experience, record it with `project:dove.lessons`.
+2. Pick the syntax for your host. The canonical command id is `dove.mission`; Claude Code users normally type `/dove:mission`, while OpenCode users commonly see `project:dove.mission`.
+3. Start with a real demand, not a command inventory. For engineering work, use `/dove:mission 修复 doctor 报错并运行相关验证`; Dove should propose a task contract, ask for confirmation, then record the foreground pass result or clearly request missing host evidence. If no init goal exists, the same confirmation should show the proposed init and task before writing either one.
+4. Use presets inside a selected or newly created task: `/dove:figure 画 pipeline overview`, `/dove:draft 修改 introduction`, or `/dove:experience 规划并记录 ablation 结果`. Presets should resolve one durable task packet or ask for confirmation instead of silently guessing.
+5. Use `/dove:status` as the default read-only dashboard. It first reports the live host-visible development situation, then shows only adjustable Dove missions when there is something actionable; it does not print mission counts or completed/killed recaps.
+6. Use `/dove:operator` when you want to preview and run one foreground pass over queued work; it must not claim host work happened without pass results or a safe internal workflow step.
+7. When a task yields reusable operating knowledge, record it with `/dove:lessons`.
 
 ## Task model
 
 Dove treats work as a tree rooted at one init task:
 
 - There is exactly one level-0 init task.
-- `/dove:mission` first returns a proposal-only task contract; explicit confirmation materializes it into `.dove/task-packets/`.
-- User-created mission tasks default to level 3.
-- System-created prerequisite/controller tasks may be level 1 or 2.
+- `/dove:mission` first converts the operator's natural-language demand into a proposal-only task contract; when the host supports interactive confirmation controls, the operator chooses approve conversion and run one pass, adjust conversion, or cancel before anything is materialized into `.dove/task-packets/`.
+- `/dove:init` is the only level-0 creation path; `/dove:mission` creates work under that root.
+- User-created mission tasks default to level 3 and may explicitly use level 1, 2, 3, or deeper when the operator supplies a level.
+- `/dove:mission` can autonomously propose checklist/subtask packets, but they are materialized only after the same conversion approval as the parent mission.
+- System-created checklist/subtask packets are children of their mission and must have `level > parent.level`, so they are always deeper than the user task they serve.
+- After approval, `/dove:mission` immediately performs one bounded foreground pass and records its task status, evidence, blockers, and next action with `record_dove_mission_pass`.
+- When a completed mission pass has stage `plan`, Dove converts supplied `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion` output into pending durable missions. The default follow-up mission is level 3; child missions can be level 4, 5, or deeper.
+- `/dove:status` first reports the live development situation from host-visible context, not from `.dove` internals, then only lists non-init missions that can be adjusted, excluding `completed` and `killed`; if there are no adjustable missions, it does not show a mission list or completed/killed recap. Hosts should ask at most one confirmation dialog for status changes, do nothing when the dialog does not provide clear `packetId -> status` adjustments, then call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
+- `/dove:operator` previews auto-runnable, host-pass-required, blocked, and pending queues before confirmation. Confirmed runs execute one safe internal step when available, otherwise require real foreground pass results, and create pending plan missions for blocked-task investigation.
 - Dove computes stage (`plan`, `execute`, `audit`) and domain (`paper`, `experiment`, `engineering`) from the request unless explicit values are supplied.
 - Active task state, dependencies, blockers, killed tasks, artifacts, and linked lessons live in `.dove/task-packets/`.
 
 Task-scoped writes must resolve to one durable packet before writing. A command or MCP call can provide `packetId`, `taskPacketId`, `missionPacketId`, or a natural-language target such as `target`, `packetTarget`, or `taskName`.
 
-Ambiguous natural-language targets follow `.dove/state.json.settings.taskTargetResolution.autoSelect`. The default is `true`, so Dove selects the strongest packet candidate and records resolution evidence. Set it to `false` when you want ambiguous writes to stop and ask for a task/packet confirmation.
+Ambiguous natural-language targets follow `.dove/state.json.settings.taskTargetResolution.autoSelect`, but automatic selection is allowed only for a unique high-confidence candidate. If no explicit packet/target/artifact is supplied, or if multiple candidates share the top confidence, Dove must stop and ask for task/packet confirmation through the host confirmation UX before writing.
 
 ## Durable workspace
 
@@ -75,7 +82,7 @@ Commands and skills provide behavior, but there is no hidden scheduler or swarm 
 
 ## Language configuration
 
-Dove supports two response-language values: `zh` for Chinese and `en` for English. The default is `zh`, so generated command adapters tell hosts to answer in Chinese unless the workspace or environment selects English.
+Dove supports two response-language values: `zh` for Chinese and `en` for English. The default is `zh`, so generated command adapters and runtime-generated user-facing task/checklist/status/operator/auto messages use Chinese unless args, workspace config, durable state, or environment selects English.
 
 Set the workspace preference in `.dove/config.json` or `.dove/config.local.json`:
 
@@ -85,7 +92,7 @@ Set the workspace preference in `.dove/config.json` or `.dove/config.local.json`
 }
 ```
 
-`DOVE_LANGUAGE=en` or `DOVE_RESPONSE_LANGUAGE=en` overrides file configuration for the current process. `.dove/state.json.settings.responseLanguage` is the normalized durable-state mirror for hosts that read state before command execution.
+`DOVE_LANGUAGE=en` or `DOVE_RESPONSE_LANGUAGE=en` overrides file configuration for the current process. `.dove/state.json.settings.responseLanguage` is the normalized durable-state mirror for hosts that read state before command execution. Dove does not translate machine tokens or public API fields: statuses, stages, domains, command IDs, MCP tool names, JSON keys, file paths, outcome tokens, and token-like `stopReason` values stay English. Changing the preference affects newly generated text only; old artifacts are not migrated.
 
 ## Preset workflows
 
@@ -138,11 +145,11 @@ Lessons may be global or task-bound. When multiple tasks exist, Dove should pres
 
 ## Auto
 
-`project:dove.auto` starts like `project:dove.mission`: it proposes or selects a task, classifies the request, reports applicable lessons, and requires explicit confirmation before task creation/selection proceeds into autonomous execution.
+`project:dove.auto` uses the same demand-to-task intake as `project:dove.mission`: it returns a proposal-only auto contract for either a converted `proposedTask` or a selected durable `selectedTask`, classifies the request, reports applicable lessons, and requires explicit confirmation before task creation/selection proceeds into autonomous execution. When task selection is missing or ambiguous, hosts should present indexed choices through confirmation UX instead of guessing.
 
-After confirmation, auto may internally call top-level Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status. It stops at completed, blocked, killed, review/authority boundary, missing provider credentials, conflicting task target, or step-budget exhaustion.
+After confirmation, auto may internally call top-level Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status. It runs only inside the current foreground call, records each iteration in `.dove/runtime/results.json`, and uses `.dove/state.json.settings.auto.maxIterations` as the default limit; the default is 3.
 
-This is still foreground, bounded, and durable. Dove writes runtime/task results under `.dove/runtime/` and task packets; it does not run as a daemon or hidden scheduler.
+It stops at completed, blocked, killed, review/authority boundary, missing provider credentials, conflicting task target, or step-budget exhaustion. If the response ends before the task is complete, Dove does not secretly continue in the background; the next operator action must invoke another foreground command.
 
 ## MCP tools
 
@@ -150,8 +157,10 @@ The optional MCP layer exposes deterministic helpers for hosts and integrations.
 
 - `init_dove_goal`
 - `create_dove_task`
+- `record_dove_mission_pass`
+- `apply_dove_status_adjustments`
 - `run_dove_auto`
-- `kill_dove_task`
+- `run_dove_operator`
 - `reset_dove_version`
 - `run_experience_workflow`
 - `run_figure_workflow`

@@ -190,6 +190,8 @@ const GOVERNANCE_GUARDED_MUTATION_SCOPE_METADATA = {
   "init-dove-goal": governanceScopeMetadata("task-root"),
   "create-dove-task": governanceScopeMetadata("task-materialization"),
   "run-dove-auto": governanceScopeMetadata("task-autonomy"),
+  "apply-dove-status-adjustments": governanceScopeMetadata("task-lifecycle"),
+  "run-dove-operator": governanceScopeMetadata("task-autonomy"),
   "kill-dove-task": governanceScopeMetadata("task-lifecycle"),
   "reset-dove-version": governanceScopeMetadata("task-version-reset"),
   "run-experience-workflow": taskScopedMutationMetadata(["id", "experimentId", "claimId", "resultId"]),
@@ -228,15 +230,19 @@ const GOVERNANCE_GUARDED_MUTATION_SCOPE_METADATA = {
   "create-version-snapshot": taskScopedMutationMetadata(["id", "versionId"]),
   "compare-versions": taskScopedMutationMetadata([]),
   "materialize-guidance-packet": governanceScopeMetadata("task-materialization"),
-  "launch-dove-mission": governanceScopeMetadata("task-materialization")
+  "launch-dove-mission": governanceScopeMetadata("task-materialization"),
+  "record-dove-mission-pass": taskScopedMutationMetadata(["runId", "evidenceLinks", "artifactRefs"])
 };
 
 export const GOVERNANCE_GUARDED_MUTATIONS = [
   { id: "upsert-orchestration-board", action: "Updating the orchestration board", artifactPath: ".dove/orchestration/board.json", surfaceBindings: { coreFunction: "upsertOrchestrationBoard", mcpTool: "upsert_orchestration_board", commandIds: [] } },
   { id: "init-dove-goal", action: "Creating or updating the unique Dove init goal", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "initDoveGoal", mcpTool: "init_dove_goal", commandIds: ["dove.init"] } },
-  { id: "create-dove-task", action: "Creating a classified Dove task under the init goal", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "createDoveTask", mcpTool: "create_dove_task", commandIds: ["dove.mission"] } },
-  { id: "run-dove-auto", action: "Running mission-style intake and bounded autonomous task completion", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "runDoveAuto", mcpTool: "run_dove_auto", commandIds: ["dove.auto"] } },
-  { id: "kill-dove-task", action: "Killing a non-init Dove task", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "killDoveTask", mcpTool: "kill_dove_task", commandIds: ["dove.kill"] } },
+  { id: "create-dove-task", action: "Converting a user demand into a classified Dove task under the init goal", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "createDoveTask", mcpTool: "create_dove_task", commandIds: ["dove.mission"] } },
+  { id: "record-dove-mission-pass", action: "Recording one foreground Dove mission execution pass", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "recordDoveMissionPass", mcpTool: "record_dove_mission_pass", commandIds: ["dove.mission"] } },
+  { id: "run-dove-auto", action: "Running demand-to-task intake and bounded autonomous task completion", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "runDoveAuto", mcpTool: "run_dove_auto", commandIds: ["dove.auto"] } },
+  { id: "apply-dove-status-adjustments", action: "Applying explicitly confirmed Dove task status adjustments", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "applyDoveStatusAdjustments", mcpTool: "apply_dove_status_adjustments", commandIds: ["dove.status"] } },
+  { id: "run-dove-operator", action: "Running one confirmed foreground operator pass across ready and in-progress Dove tasks", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "runDoveOperator", mcpTool: "run_dove_operator", commandIds: ["dove.operator"] } },
+  { id: "kill-dove-task", action: "Killing a non-init Dove task", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "killDoveTask", mcpTool: "kill_dove_task", commandIds: [] } },
   { id: "reset-dove-version", action: "Resetting active Dove tasks for a new version direction", artifactPath: ".dove/versions/index.json", surfaceBindings: { coreFunction: "resetDoveVersion", mcpTool: "reset_dove_version", commandIds: ["dove.version"] } },
   { id: "run-experience-workflow", action: "Planning, recording, auditing, and bridging experience evidence into claims", artifactPath: ".dove/experiments/results.json", surfaceBindings: { coreFunction: "runExperienceWorkflow", mcpTool: "run_experience_workflow", commandIds: ["dove.experience"] } },
   { id: "prepare-audio-review", action: "Preparing an isolated audio review input bundle", artifactPath: ".dove/audio/reviews", surfaceBindings: { coreFunction: "prepareAudioReview", mcpTool: "prepare_audio_review", commandIds: [] } },
@@ -331,9 +337,7 @@ export const GOVERNANCE_EXEMPT_MUTATIONS = [
   ...(GOVERNANCE_EXEMPT_MUTATION_SCOPE_METADATA[entry.id] ?? governanceScopeMetadata("governance-bookkeeping"))
 }));
 
-export const GOVERNANCE_READONLY_COMMANDS = [
-  "dove.status"
-];
+export const GOVERNANCE_READONLY_COMMANDS = [];
 
 export const GOVERNANCE_READONLY_TOOLS = [
   "ensure_workspace",
@@ -372,7 +376,10 @@ export const GOVERNANCE_NEGATIVE_COVERAGE = [
   { id: "upsert-orchestration-board", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
   { id: "init-dove-goal", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
   { id: "create-dove-task", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
+  { id: "record-dove-mission-pass", level: "dynamic", tests: ["create_dove_task converts demand before materializing a one-pass mission"] },
   { id: "run-dove-auto", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
+  { id: "apply-dove-status-adjustments", level: "dynamic", tests: ["create_dove_task converts demand before materializing a one-pass mission"] },
+  { id: "run-dove-operator", level: "dynamic", tests: ["create_dove_task converts demand before materializing a one-pass mission"] },
   { id: "kill-dove-task", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
   { id: "reset-dove-version", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
   { id: "run-experience-workflow", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
@@ -671,13 +678,16 @@ function createManagedArtifactMeta(kind, relativePath) {
 }
 
 export function createContinuationState(overrides = {}) {
+  const source = overrides && typeof overrides === "object" && !Array.isArray(overrides) ? overrides : {};
+  const responseLanguage = source.responseLanguage ?? source.language ?? DEFAULT_DOVE_RESPONSE_LANGUAGE;
+  const { responseLanguage: _responseLanguage, language: _language, ...stateOverrides } = source;
   return {
     status: "ready-to-resume",
-    lastCheckpoint: "Workspace bootstrapped.",
+    lastCheckpoint: defaultDisplayText(responseLanguage, "lastCheckpoint"),
     checkpointHistory: [],
     updatedAt: null,
-    ...overrides,
-    checkpointHistory: Array.isArray(overrides.checkpointHistory) ? overrides.checkpointHistory : []
+    ...stateOverrides,
+    checkpointHistory: Array.isArray(stateOverrides.checkpointHistory) ? stateOverrides.checkpointHistory : []
   };
 }
 
@@ -713,7 +723,8 @@ function defaultRoleRoster() {
 }
 
 export function createDefaultBoard(stateOverrides = {}) {
-  const objective = stateOverrides.dove?.objective ?? "Capture the paper's goal and contribution.";
+  const responseLanguage = stateOverrides.settings?.responseLanguage ?? stateOverrides.responseLanguage ?? DEFAULT_DOVE_RESPONSE_LANGUAGE;
+  const objective = stateOverrides.dove?.objective ?? defaultDisplayText(responseLanguage, "objective");
   const phase = stateOverrides.pipeline?.currentStage ?? "init";
   return {
     version: 2,
@@ -721,9 +732,9 @@ export function createDefaultBoard(stateOverrides = {}) {
     currentPhase: phase,
     intentType: "plan",
     assignedRole: "planner",
-    currentFocus: "Align the board and choose the next durable step.",
-    nextAction: "Run project:dove.mission to create the next task under the init goal.",
-    continuationState: createContinuationState(),
+    currentFocus: defaultDisplayText(responseLanguage, "currentFocus"),
+    nextAction: defaultDisplayText(responseLanguage, "nextAction"),
+    continuationState: createContinuationState({ responseLanguage }),
     reviewRequiredBeforeFinalize: false,
     tasks: [],
     blockers: [],
@@ -770,6 +781,12 @@ export function normalizeReviewLoopSettings(raw = {}, base = { maxIterations: 3 
   return { maxIterations };
 }
 
+export function normalizeAutoSettings(raw = {}, base = { maxIterations: 3 }) {
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const maxIterations = Number.isFinite(source.maxIterations) ? Math.max(1, Math.floor(source.maxIterations)) : base.maxIterations;
+  return { maxIterations };
+}
+
 export function normalizeAudioIsolationSettings(raw = {}, base = { defaultContextPolicy: DOVE_AUDIO_CONTEXT_POLICY }) {
   const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   return {
@@ -783,6 +800,7 @@ export function normalizeSettings(raw = {}, base = null) {
     responseLanguage: DEFAULT_DOVE_RESPONSE_LANGUAGE,
     taskTargetResolution: normalizeTaskTargetResolutionSettings(),
     taskModel: normalizeTaskModelSettings(),
+    auto: normalizeAutoSettings(),
     reviewLoop: normalizeReviewLoopSettings(),
     audioIsolation: normalizeAudioIsolationSettings()
   };
@@ -794,6 +812,7 @@ export function normalizeSettings(raw = {}, base = null) {
     responseLanguage: normalizeDoveResponseLanguage(source.responseLanguage ?? source.language, defaults.responseLanguage),
     taskTargetResolution: normalizeTaskTargetResolutionSettings(source.taskTargetResolution, defaults.taskTargetResolution),
     taskModel: normalizeTaskModelSettings(source.taskModel, defaults.taskModel),
+    auto: normalizeAutoSettings(source.auto, defaults.auto),
     reviewLoop: normalizeReviewLoopSettings(source.reviewLoop, defaults.reviewLoop),
     audioIsolation: normalizeAudioIsolationSettings(source.audioIsolation, defaults.audioIsolation)
   };
@@ -803,15 +822,48 @@ export function createDefaultSettings(overrides = {}) {
   return normalizeSettings(overrides);
 }
 
+function defaultDisplayText(language, key) {
+  const normalized = normalizeDoveResponseLanguage(language);
+  const values = {
+    title: {
+      zh: "未命名任务工作区",
+      en: "Untitled Mission Workspace"
+    },
+    objective: {
+      zh: "记录 Dove 任务目标与贡献。",
+      en: "Capture the Dove mission goal and contribution."
+    },
+    thesis: {
+      zh: "用一句话描述论文领域主张或任务结果。",
+      en: "Describe the paper-domain claim or mission outcome in one sentence."
+    },
+    currentFocus: {
+      zh: "对齐看板并选择下一个持久步骤。",
+      en: "Align the board and choose the next durable step."
+    },
+    nextAction: {
+      zh: "运行 project:dove.mission，在 init 目标下创建下一个任务。",
+      en: "Run project:dove.mission to create the next task under the init goal."
+    },
+    lastCheckpoint: {
+      zh: "工作区已初始化。",
+      en: "Workspace bootstrapped."
+    }
+  };
+  return values[key]?.[normalized] ?? values[key]?.en ?? "";
+}
+
 export function createDefaultState(overrides = {}) {
+  const baseSettings = createDefaultSettings(overrides.settings);
+  const responseLanguage = baseSettings.responseLanguage;
   const base = {
     version: SCHEMA_VERSION,
     dove: {
-      title: "Untitled Mission Workspace",
+      title: defaultDisplayText(responseLanguage, "title"),
       venue: "Unspecified",
-      objective: "Capture the Dove mission goal and contribution.",
+      objective: defaultDisplayText(responseLanguage, "objective"),
       deadline: "",
-      thesis: "Describe the paper-domain claim or mission outcome in one sentence.",
+      thesis: defaultDisplayText(responseLanguage, "thesis"),
       audience: "TBD"
     },
     pipeline: {
@@ -826,9 +878,9 @@ export function createDefaultState(overrides = {}) {
       phase: "init",
       intentType: "plan",
       assignedRole: "planner",
-      currentFocus: "Align the board and choose the next durable step.",
-      nextAction: "Run project:dove.mission to create the next task under the init goal.",
-      continuationState: createContinuationState(),
+      currentFocus: defaultDisplayText(responseLanguage, "currentFocus"),
+      nextAction: defaultDisplayText(responseLanguage, "nextAction"),
+      continuationState: createContinuationState({ responseLanguage }),
       reviewRequiredBeforeFinalize: false,
       activeTaskIds: [],
       blockerIds: [],
@@ -848,7 +900,7 @@ export function createDefaultState(overrides = {}) {
       openItems: [],
       unresolvedConcernIds: []
     },
-    settings: createDefaultSettings()
+    settings: baseSettings
   };
 
   const incomingDove = overrides.dove ?? overrides.paper ?? {};
@@ -1249,11 +1301,11 @@ export function normalizeState(raw = {}) {
   if (raw.version === 1) {
     return createDefaultState({
       dove: {
-        title: raw.projectTitle ?? "Untitled Mission Workspace",
+        title: raw.projectTitle ?? defaultDisplayText(DEFAULT_DOVE_RESPONSE_LANGUAGE, "title"),
         venue: raw.venue ?? "Unspecified",
-        objective: raw.objective ?? "Capture the Dove mission goal and contribution.",
+        objective: raw.objective ?? defaultDisplayText(DEFAULT_DOVE_RESPONSE_LANGUAGE, "objective"),
         deadline: raw.deadline ?? "",
-        thesis: "Describe the paper-domain claim or mission outcome in one sentence.",
+        thesis: defaultDisplayText(DEFAULT_DOVE_RESPONSE_LANGUAGE, "thesis"),
         audience: "TBD"
       },
       pipeline: {
@@ -1290,7 +1342,7 @@ export function normalizeState(raw = {}) {
     });
   }
 
-  const defaults = createDefaultState();
+  const defaults = createDefaultState({ settings: raw.settings });
   return {
     ...defaults,
     ...raw,
@@ -1995,7 +2047,7 @@ export function createFigureCaptionsIndex() {
 export function createResearchAgenda() {
   return {
     version: 1,
-    objective: "Capture the paper's goal and contribution.",
+    objective: "记录论文目标与贡献。",
     agenda: [],
     evidenceBacklog: [],
     updatedAt: null
@@ -3297,8 +3349,8 @@ export function createWorkspaceIndex() {
     boardPhase: "init",
     boardAssignedRole: "planner",
     boardIntentType: "plan",
-    currentFocus: "Align the durable workflow state.",
-    nextAction: "Refresh the board and choose the next role-owned step.",
+    currentFocus: "对齐持久工作流状态。",
+    nextAction: "刷新看板并选择下一个角色负责的步骤。",
     continuationState: createContinuationState(),
     activePackets: [],
     workQueues: {
@@ -3314,7 +3366,7 @@ export function createWorkspaceIndex() {
     handoffObligations: [],
     resumeGuidance: {
       command: "project:dove.status",
-      summary: "Refresh the board and choose the next role-owned step.",
+      summary: "刷新看板并选择下一个角色负责的步骤。",
       prioritizedPacketIds: [],
       packetContextPaths: [],
       handoffCandidateIds: []

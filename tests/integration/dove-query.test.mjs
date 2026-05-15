@@ -36,6 +36,34 @@ function writeText(root, relativePath, value) {
   fs.writeFileSync(fullPath, value, "utf8");
 }
 
+function writeTaskPacket(root, packet) {
+  const packetPath = packet.packetPath ?? path.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packet.id}.json`);
+  const packetContextPath = packet.packetContextPath ?? path.join(ARTIFACT_PATHS.packetContextsDir, `${packet.id}.json`);
+  for (const relativePath of [packetPath, packetContextPath]) {
+    fs.mkdirSync(path.dirname(path.join(root, relativePath)), { recursive: true });
+  }
+  writeJson(root, packetPath, { ...packet, packetPath, packetContextPath });
+  writeJson(root, packetContextPath, {
+    id: packet.id,
+    parentId: packet.parentId ?? null,
+    rootId: packet.rootId ?? null,
+    level: packet.level,
+    creatorKind: packet.creatorKind,
+    stage: packet.stage,
+    domain: packet.domain,
+    status: packet.status,
+    dependencies: packet.dependencies ?? [],
+    blockedBy: packet.blockedBy ?? [],
+    lessonIds: packet.lessonIds ?? [],
+    artifactRefs: packet.artifactRefs ?? [],
+    contextPolicy: packet.contextPolicy ?? null,
+    currentFocus: packet.currentFocus ?? null,
+    nextAction: packet.nextAction ?? null,
+    updatedAt: packet.updatedAt ?? null
+  });
+  return { packetPath, packetContextPath };
+}
+
 function seedDoveLaunchGuidance(root) {
   writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
     version: 2,
@@ -143,6 +171,7 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
         status: "done",
         lifecycleStatus: "completed",
         lifecycleFamily: "structure",
+        doveDomain: "paper",
         assignedRole: "planner",
         phase: "plan",
         nextAction: "Review outline acceptance.",
@@ -155,6 +184,7 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
         status: "pending",
         lifecycleStatus: "review-needed",
         lifecycleFamily: "concern",
+        doveDomain: "review",
         assignedRole: "reviewer",
         phase: "review",
         nextAction: "Run independent review.",
@@ -266,7 +296,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
       {
         id: "status-packet",
         title: "Consolidate status",
-        summary: "Status should trust task state, not stale wiki navigation.",
+        summary: "Index summary intentionally omits packet evidence details.",
         parentId: "dove-global-init",
         rootId: "dove-global-init",
         level: 3,
@@ -277,25 +307,273 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
         lifecycleStatus: "ready",
         dependencies: [],
         blockedBy: [],
-        nextAction: "project:dove.auto",
-        outputPaths: ["src/core/dove.mjs"],
-        evidenceLinks: ["tests/integration/dove-query.test.mjs"]
+        nextAction: "project:dove.auto"
+      },
+      {
+        id: "plain-pending",
+        title: "Plain pending mission",
+        summary: "Pending missions without blockers should be recommended ready.",
+        parentId: "dove-global-init",
+        rootId: "dove-global-init",
+        level: 3,
+        creatorKind: "user",
+        stage: "execute",
+        domain: "engineering",
+        status: "pending",
+        lifecycleStatus: "pending",
+        dependencies: [],
+        blockedBy: [],
+        nextAction: "project:dove.auto"
+      },
+      {
+        id: "blocked-dependency",
+        title: "Blocked by unresolved dependency",
+        summary: "Ready task with unresolved dependency should be recommended blocked.",
+        parentId: "dove-global-init",
+        rootId: "dove-global-init",
+        level: 3,
+        creatorKind: "user",
+        stage: "execute",
+        domain: "engineering",
+        status: "ready",
+        lifecycleStatus: "ready",
+        dependencies: ["missing-dependency"],
+        blockedBy: [],
+        nextAction: "project:dove.status"
+      },
+      {
+        id: "runtime-progress",
+        title: "Runtime progress mission",
+        summary: "Runtime continuation should recommend in-progress.",
+        parentId: "dove-global-init",
+        rootId: "dove-global-init",
+        level: 3,
+        creatorKind: "user",
+        stage: "execute",
+        domain: "engineering",
+        status: "ready",
+        lifecycleStatus: "ready",
+        dependencies: [],
+        blockedBy: [],
+        nextAction: "project:dove.auto"
+      },
+      {
+        id: "runtime-completed",
+        title: "Runtime completed mission",
+        summary: "Runtime completion should recommend completed even before manual status adjustment.",
+        parentId: "dove-global-init",
+        rootId: "dove-global-init",
+        level: 3,
+        creatorKind: "user",
+        stage: "execute",
+        domain: "engineering",
+        status: "pending",
+        lifecycleStatus: "pending",
+        dependencies: [],
+        blockedBy: [],
+        nextAction: "project:dove.status"
+      },
+      {
+        id: "zz-status-completed",
+        title: "Completed status mission",
+        summary: "Completed missions stay out of the one-dialog status contract.",
+        parentId: "dove-global-init",
+        rootId: "dove-global-init",
+        level: 3,
+        creatorKind: "user",
+        stage: "execute",
+        domain: "engineering",
+        status: "completed",
+        lifecycleStatus: "completed",
+        dependencies: [],
+        blockedBy: [],
+        nextAction: "project:dove.status",
+        outputPaths: [],
+        evidenceLinks: []
+      },
+      {
+        id: "zz-status-killed",
+        title: "Killed status mission",
+        summary: "Killed missions stay out of the one-dialog status contract.",
+        parentId: "dove-global-init",
+        rootId: "dove-global-init",
+        level: 3,
+        creatorKind: "user",
+        stage: "execute",
+        domain: "engineering",
+        status: "killed",
+        lifecycleStatus: "killed",
+        dependencies: [],
+        blockedBy: [],
+        nextAction: "project:dove.status",
+        outputPaths: [],
+        evidenceLinks: []
       }
     ],
     taskModel: {
       activeInitId: "dove-global-init",
       activeTaskIds: ["status-packet"]
     },
-    lifecycleCounts: { ready: 2 },
+    lifecycleCounts: { ready: 4, pending: 2, completed: 1, killed: 1 },
     lifecycleFamilyCounts: {},
     dependencyHealth: {},
     updatedAt: null
   });
+  writeTaskPacket(root, {
+    id: "status-packet",
+    title: "Consolidate status",
+    summary: "Status should trust the full packet file, not stale wiki navigation.",
+    parentId: "dove-global-init",
+    rootId: "dove-global-init",
+    level: 3,
+    creatorKind: "user",
+    stage: "execute",
+    domain: "engineering",
+    status: "ready",
+    lifecycleStatus: "ready",
+    dependencies: [],
+    blockedBy: [],
+    lessonIds: ["status-packet-lesson"],
+    evidenceExpectations: ["full packet evidence", "runtime summary"],
+    artifactRefs: ["docs/USAGE.md"],
+    outputPaths: ["src/core/dove.mjs"],
+    evidenceLinks: ["tests/integration/dove-query.test.mjs"],
+    currentFocus: "Use full packet catalog data in status.",
+    nextAction: "project:dove.auto"
+  });
+  writeJson(root, ARTIFACT_PATHS.runtimeContinuation, {
+    version: 1,
+    explicitInvocationOnly: true,
+    noDaemon: true,
+    items: [{
+      kind: "continue-in-progress",
+      command: "project:dove.auto",
+      packetId: "runtime-progress",
+      programRunId: "program-run-status",
+      followThroughId: "follow-status",
+      summary: "A foreground runtime pass is waiting for the next explicit call.",
+      requiredReadPaths: [ARTIFACT_PATHS.runtimeResults],
+      readyAt: "2026-05-15T00:00:00.000Z"
+    }],
+    summary: {
+      continuationCount: 1,
+      currentKind: "continue-in-progress",
+      currentPacketId: "runtime-progress",
+      currentProgramRunId: "program-run-status",
+      currentCommand: "project:dove.auto",
+      overview: "One explicit continuation is pending.",
+      continuationPath: ARTIFACT_PATHS.runtimeContinuation
+    },
+    updatedAt: "2026-05-15T00:00:00.000Z"
+  });
+  writeJson(root, ARTIFACT_PATHS.runtimeResults, {
+    version: 1,
+    explicitInvocationOnly: true,
+    entries: [
+      {
+        id: "runtime-progress-run",
+        surface: "dove.auto",
+        packetId: "runtime-progress",
+        status: "in-progress",
+        outcome: "continue-in-progress",
+        stopReason: "step-budget-exhausted",
+        startedAt: "2026-05-15T00:00:00.000Z",
+        updatedAt: "2026-05-15T00:01:00.000Z"
+      },
+      {
+        id: "runtime-completed-run",
+        surface: "dove.mission",
+        packetId: "runtime-completed",
+        status: "completed",
+        outcome: "task-completed",
+        stopReason: "completion-confirmed-by-mission-pass",
+        startedAt: "2026-05-15T00:02:00.000Z",
+        completedAt: "2026-05-15T00:03:00.000Z",
+        updatedAt: "2026-05-15T00:03:00.000Z"
+      }
+    ],
+    summary: {
+      runCount: 2,
+      completedCount: 1,
+      lastRunId: "runtime-completed-run",
+      lastStatus: "completed",
+      lastOutcome: "task-completed",
+      overview: "Two foreground runtime runs are recorded.",
+      resultsPath: ARTIFACT_PATHS.runtimeResults
+    },
+    updatedAt: "2026-05-15T00:03:00.000Z"
+  });
+  writeJson(root, ARTIFACT_PATHS.metaOperatorLessons, {
+    version: 1,
+    referenceOnly: true,
+    explicitOnly: true,
+    noAutoCapture: true,
+    noAutoApply: true,
+    lessons: [
+      {
+        id: "global-status-lesson",
+        title: "Explain live context first",
+        problem: "Operators need live context before durable state.",
+        decisions: ["Separate host-visible context from Dove durable state."],
+        pitfalls: ["Do not repeat only mission status."],
+        validation: ["Status output names the live context boundary."],
+        nextTime: ["Start with the current development situation."],
+        domain: "engineering",
+        stage: "return",
+        actorRole: "planner",
+        tags: ["status"],
+        sourceArtifacts: [ARTIFACT_PATHS.workspaceIndex],
+        packetIds: [],
+        status: "active"
+      },
+      {
+        id: "status-packet-lesson",
+        title: "Read full packet evidence",
+        problem: "Index-only status hides evidence expectations.",
+        decisions: ["Use full packet catalog data."],
+        pitfalls: ["Do not rely on stale derived navigation."],
+        validation: ["Status task includes packet evidence fields."],
+        nextTime: ["Inspect packetPath and packetContextPath."],
+        domain: "engineering",
+        stage: "return",
+        actorRole: "planner",
+        tags: ["status"],
+        sourceArtifacts: [ARTIFACT_PATHS.taskPacketsIndex],
+        packetIds: ["status-packet"],
+        status: "active"
+      },
+      {
+        id: "retired-status-lesson",
+        title: "Retired lesson",
+        problem: "Retired lessons should not apply.",
+        decisions: ["Ignore retired lessons."],
+        pitfalls: ["Do not show inactive lessons."],
+        validation: ["Only active lessons appear."],
+        nextTime: ["Keep inactive lessons hidden."],
+        domain: "engineering",
+        stage: "return",
+        actorRole: "planner",
+        sourceArtifacts: [ARTIFACT_PATHS.taskPacketsIndex],
+        packetIds: ["status-packet"],
+        status: "retired"
+      }
+    ],
+    updatedAt: "2026-05-15T00:04:00.000Z"
+  });
   writeText(root, ARTIFACT_PATHS.navigationReport, "Next action: Run project:dove.auto for an already completed stale task.\n");
-  const before = snapshotArtifacts(root, [...watchedArtifacts, ARTIFACT_PATHS.navigationReport]);
+  const statusWatchedArtifacts = [
+    ...watchedArtifacts,
+    ARTIFACT_PATHS.navigationReport,
+    ARTIFACT_PATHS.runtimeContinuation,
+    ARTIFACT_PATHS.runtimeResults,
+    ARTIFACT_PATHS.metaOperatorLessons,
+    path.join(ARTIFACT_PATHS.taskPacketsPacketsDir, "status-packet.json"),
+    path.join(ARTIFACT_PATHS.packetContextsDir, "status-packet.json")
+  ];
+  const before = snapshotArtifacts(root, statusWatchedArtifacts);
 
   const result = queryDoveStatus(root, { domain: "engineering" });
-  const after = snapshotArtifacts(root, [...watchedArtifacts, ARTIFACT_PATHS.navigationReport]);
+  const after = snapshotArtifacts(root, statusWatchedArtifacts);
 
   assert.equal(result.mode, "dove-status-query");
   assert.equal(result.query, true);
@@ -306,19 +584,61 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.current.domain, "engineering");
   assert.equal(result.current.stage, "execute");
   assert.equal(result.current.primaryRole, "builder");
-  assert.equal(result.current.nextCommand, "project:dove.auto");
+  assert.equal(result.current.nextCommand, "project:dove.status");
   assert.equal(result.board.domain, "engineering");
   assert.equal(result.dashboard.init.id, "dove-global-init");
-  assert.deepEqual(result.dashboard.tasks.activeTaskIds, ["status-packet"]);
-  assert.equal(result.dashboard.tasks.counts.byStatus.ready, 2);
-  assert.equal(result.dashboard.tasks.tree[0].children[0].id, "status-packet");
-  assert.equal(result.dashboard.returnReadiness.status, "in-progress");
+  assert.deepEqual(result.dashboard.tasks.activeTaskIds, ["blocked-dependency", "plain-pending", "runtime-completed", "runtime-progress", "status-packet"]);
+  assert.equal(result.dashboard.tasks.counts.byStatus.ready, 4);
+  assert.equal(result.dashboard.tasks.tree[0].children.some((task) => task.id === "status-packet"), true);
+  assert.equal(result.dashboard.runtime.continuation.currentPacketId, "runtime-progress");
+  assert.equal(result.dashboard.runtime.results.lastRunId, "runtime-completed-run");
+
+  const statusTask = result.dashboard.tasks.active.find((task) => task.id === "status-packet");
+  assert.ok(statusTask);
+  assert.deepEqual(statusTask.evidenceExpectations, ["full packet evidence", "runtime summary"]);
+  assert.equal(statusTask.outputPaths.includes("src/core/dove.mjs"), true);
+  assert.equal(statusTask.evidenceLinks.includes("tests/integration/dove-query.test.mjs"), true);
+  assert.equal(statusTask.artifactRefs.includes("docs/USAGE.md"), true);
+  assert.equal(statusTask.artifactRefs.includes("src/core/dove.mjs"), true);
+  assert.equal(statusTask.packetPath, path.join(ARTIFACT_PATHS.taskPacketsPacketsDir, "status-packet.json"));
+  assert.equal(statusTask.packetContextPath, path.join(ARTIFACT_PATHS.packetContextsDir, "status-packet.json"));
+  assert.deepEqual(statusTask.applicableLessons.map((lesson) => lesson.id), ["global-status-lesson", "status-packet-lesson"]);
+
+  const blockedTask = result.dashboard.tasks.active.find((task) => task.id === "blocked-dependency");
+  assert.equal(blockedTask.blockedReason, "unresolved-dependencies:missing-dependency");
+  assert.deepEqual(blockedTask.unresolvedDependencyIds, ["missing-dependency"]);
+  assert.equal(result.dashboard.blockers.some((blocker) => blocker.taskId === "blocked-dependency" && blocker.unresolvedDependencyIds.includes("missing-dependency")), true);
+
+  const runtimeTask = result.dashboard.tasks.active.find((task) => task.id === "runtime-progress");
+  assert.equal(runtimeTask.lastRun.id, "runtime-progress-run");
+  assert.equal(runtimeTask.lastStopReason, "step-budget-exhausted");
+  assert.equal(runtimeTask.continuationState.command, "project:dove.auto");
+
+  const statusAdjustmentItems = Object.fromEntries(result.statusAdjustmentContract.items.map((item) => [item.packetId, item]));
+  assert.deepEqual(result.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.equal(Boolean(statusAdjustmentItems["status-packet"]), true);
+  assert.equal(Boolean(statusAdjustmentItems["plain-pending"]), true);
+  assert.equal(Boolean(statusAdjustmentItems["blocked-dependency"]), true);
+  assert.equal(Boolean(statusAdjustmentItems["runtime-progress"]), true);
+  assert.equal(Boolean(statusAdjustmentItems["runtime-completed"]), true);
+  assert.equal(Boolean(statusAdjustmentItems["zz-status-completed"]), false);
+  assert.equal(Boolean(statusAdjustmentItems["zz-status-killed"]), false);
+  assert.equal(Boolean(statusAdjustmentItems["dove-global-init"]), false);
+  assert.equal(statusAdjustmentItems["plain-pending"].recommendedStatus, "ready");
+  assert.equal(statusAdjustmentItems["blocked-dependency"].recommendedStatus, "blocked");
+  assert.equal(statusAdjustmentItems["runtime-progress"].recommendedStatus, "in-progress");
+  assert.equal(statusAdjustmentItems["runtime-completed"].recommendedStatus, "completed");
+  assert.equal(statusAdjustmentItems["runtime-completed"].lastStopReason, "completion-confirmed-by-mission-pass");
+  assert.equal(result.dashboard.returnReadiness.status, "blocked");
   assert.equal("taskGraph" in result, false);
   assert.equal("paperLifecycle" in result, false);
   assert.equal("openQuestions" in result, false);
   assert.equal("decisions" in result, false);
   assert.equal("lineage" in result, false);
   assert.equal(result.diagnostics.derivedReports.navigationReportPath, ARTIFACT_PATHS.navigationReport);
+  assert.equal(result.diagnostics.primaryStateSources.includes(ARTIFACT_PATHS.taskPacketsPacketsDir), true);
+  assert.equal(result.diagnostics.primaryStateSources.includes(ARTIFACT_PATHS.runtimeContinuation), true);
+  assert.equal(result.diagnostics.primaryStateSources.includes(ARTIFACT_PATHS.runtimeResults), true);
   assert.equal(result.diagnostics.mayRefreshDerivedSurfaces, false);
   assert.equal(result.diagnostics.noCommandExecution, true);
   assert.equal(result.diagnostics.noExternalProcess, true);

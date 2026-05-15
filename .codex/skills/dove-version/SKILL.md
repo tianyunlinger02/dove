@@ -7,6 +7,14 @@ description: "Create a direction-change point, clear active non-init tasks, and 
 
 Create a direction-change point, clear active non-init tasks, and preserve the init goal plus necessary lessons.
 
+## Daily use
+
+- Use this when the project direction changes enough that active non-init work should be cleared.
+- Snapshot the old direction before starting a fresh set of missions.
+- Targeting: Operates on the workspace task set and preserves the init root.
+- Confirmation: Guarded reset; require a reason before clearing active non-init tasks.
+- Outcome: A version snapshot is stored, active non-init tasks are cleared, and the next command is mission.
+
 ## Contract
 
 - Command id: `dove.version`
@@ -14,7 +22,7 @@ Create a direction-change point, clear active non-init tasks, and preserve the i
 - Category: `mutation`
 - Policy: `guarded-mutation`
 
-## Workflow
+## Guardrails
 
 1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
 2. Follow Dove's response language preference from `.dove/config.json`, `.dove/config.local.json`, or `.dove/state.json.settings.responseLanguage`; supported values are `zh` for Chinese and `en` for English, and the default is `zh`.

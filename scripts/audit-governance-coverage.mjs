@@ -6,22 +6,35 @@ import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS } from "../sr
 
 const ROOT = process.cwd();
 
-const coreFiles = [
-  "src/core/artifacts.mjs",
-  "src/core/evidence.mjs",
-  "src/core/reviews.mjs",
-  "src/core/isolated-review.mjs",
-  "src/core/figure-workflow.mjs",
-  "src/core/orchestration.mjs",
-  "src/core/navigation.mjs",
-  "src/core/runtime.mjs",
-  "src/core/dove.mjs"
-];
+function discoverCoreFiles(directory = path.join(ROOT, "src/core")) {
+  return fs.readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const fullPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        return discoverCoreFiles(fullPath);
+      }
+      if (!entry.isFile() || !entry.name.endsWith(".mjs")) {
+        return [];
+      }
+      return [path.relative(ROOT, fullPath)];
+    })
+    .sort();
+}
 
-const WRITE_SIGNAL_REGEX = /(?:writeJson|writeText|appendText|saveState|refreshDurableSurfaces|materializeGuidancePacket)\(|(?:fs(?:\.promises)?|fsPromises)\.(?:writeFile|appendFile|rm|cp|copyFile|mkdir|rename|writeFileSync|appendFileSync|rmSync|cpSync|copyFileSync|mkdirSync|renameSync)\(/;
+const coreFiles = discoverCoreFiles();
+
+const WRITE_SIGNAL_REGEX = /(?:writeJson|writeText|appendText|saveState|refreshDurableSurfaces|materializeGuidancePacket|materializeDoveTask|updateTaskLifecycle|persistAutoResult)\(|(?:fs(?:\.promises)?|fsPromises)\.(?:writeFile|appendFile|rm|cp|copyFile|mkdir|rename|writeFileSync|appendFileSync|rmSync|cpSync|copyFileSync|mkdirSync|renameSync)\(/;
 const EXEMPT_FUNCTIONS = new Set([
+  "appendText",
+  "discoverPaperArtifacts",
+  "ensureDir",
+  "ensureWorkspace",
   "queryMetaOptimize",
-  "recordOperatorFollowThrough"
+  "recordOperatorFollowThrough",
+  "saveRuntimeArtifacts",
+  "saveState",
+  "writeJson",
+  "writeText"
 ]);
 
 function collectExportedFunctions(filePath) {

@@ -188,8 +188,8 @@ function requestObjects(args = {}) {
 }
 
 function explicitPacketIds(objects = []) {
-  const values = collectValuesFromObjects(objects, ["packetId", "taskPacketId", "missionPacketId"]);
-  const packetIds = collectValuesFromObjects(objects, ["packetIds", "taskPacketIds", "missionPacketIds"]);
+  const values = collectValuesFromObjects(objects, ["packetId", "taskPacketId", "missionPacketId", "taskId"]);
+  const packetIds = collectValuesFromObjects(objects, ["packetIds", "taskPacketIds", "missionPacketIds", "taskIds"]);
   return uniqueStrings([...values, ...packetIds].map((value) => normalizeTaskPacketId(value)));
 }
 
@@ -306,7 +306,26 @@ function resolutionError(reason, candidates = []) {
   const candidateText = candidates.length > 0
     ? ` Candidates: ${candidates.map((candidate) => `${candidate.packetId}(${candidate.packet.title ?? candidate.packetId}, score=${candidate.score.toFixed(2)})`).join(", ")}.`
     : "";
-  return new Error(`${reason}${candidateText} Provide packetId or set settings.taskTargetResolution.autoSelect to true for automatic selection.`);
+  const error = new Error(`${reason}${candidateText} Provide packetId or confirm one candidate explicitly before writing.`);
+  error.code = "TASK_PACKET_RESOLUTION_REQUIRED";
+  error.reason = reason;
+  error.candidates = candidates.map((candidate) => ({
+    packetId: candidate.packetId,
+    title: candidate.packet.title ?? candidate.packetId,
+    status: candidate.packet.status,
+    level: candidate.packet.level,
+    score: candidate.score,
+    matchedBy: candidate.matchedBy
+  }));
+  return error;
+}
+
+function hasResolutionSignal(targets = [], artifacts = []) {
+  return targets.length > 0 || artifacts.length > 0;
+}
+
+function hasTiedTopCandidate(candidates = []) {
+  return candidates.length > 1 && candidates[0].score === candidates[1].score;
 }
 
 function ensureArtifactConsistency(packet, packets, artifacts = []) {
@@ -360,8 +379,15 @@ export function resolveDurableTaskPacket(root, args = {}, options = {}) {
   }
 
   const top = candidates[0];
+  const explicitResolutionSignal = hasResolutionSignal(targets, artifacts);
+  if (!explicitResolutionSignal && candidates.length > 1) {
+    throw resolutionError("Task target requires confirmation because no packetId, natural-language target, or linked artifact was provided.", candidates);
+  }
   if (!settings.autoSelect && candidates.length > 1) {
     throw resolutionError("Task target is ambiguous and autoSelect is false.", candidates);
+  }
+  if (settings.autoSelect && hasTiedTopCandidate(candidates)) {
+    throw resolutionError("Task target requires confirmation because multiple durable packets have the same top confidence.", candidates);
   }
   if (settings.autoSelect && top.matchedBy.targetText > 0 && top.score < settings.autoSelectMinScore) {
     throw resolutionError(`Task target confidence ${top.score.toFixed(2)} is below autoSelectMinScore ${settings.autoSelectMinScore}.`, candidates);

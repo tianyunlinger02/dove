@@ -66,7 +66,10 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "query_dove_return",
     "init_dove_goal",
     "create_dove_task",
+    "record_dove_mission_pass",
+    "apply_dove_status_adjustments",
     "run_dove_auto",
+    "run_dove_operator",
     "kill_dove_task",
     "reset_dove_version",
     "run_experience_workflow",
@@ -131,10 +134,10 @@ test("MCP tool definitions include the mature workflow tools", () => {
 
 test("doctor MCP probe requires current Dove tools without calling mutating tools", () => {
   const probeText = fs.readFileSync(path.join(process.cwd(), "scripts", "doctor-mcp-probe.mjs"), "utf8");
-  for (const requiredTool of ["query_dove_status", "init_dove_goal", "create_dove_task", "run_dove_auto", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_operate"]) {
+  for (const requiredTool of ["query_dove_status", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_operate"]) {
     assert.match(probeText, new RegExp(`"${requiredTool}"`));
   }
-  for (const mutatingTool of ["init_dove_goal", "create_dove_task", "run_dove_auto", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
+  for (const mutatingTool of ["init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
     assert.equal(probeText.includes(`tools/call", { name: "${mutatingTool}"`), false, `doctor probe must not call mutating tool ${mutatingTool}`);
   }
 });
@@ -169,6 +172,7 @@ test("every MCP tool surface is classified as guarded, exempt, or read-only", ()
 test("operator lessons MCP tools query, record, and reject raw Trellis traces", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-lessons-"));
   try {
+    const packetId = seedTaskPacket(root, "lesson-target-packet");
     const empty = extractToolJson(dispatchTool(root, "query_operator_lessons", {}));
     assert.equal(empty.explicitOnly, true);
     assert.equal(empty.noAutoCapture, true);
@@ -191,6 +195,24 @@ test("operator lessons MCP tools query, record, and reject raw Trellis traces", 
     }));
     assert.equal(recorded.summary.activeLessonCount, 1);
     assert.equal(recorded.recordedLesson.title, "Keep retrospectives distilled");
+    assert.deepEqual(recorded.recordedLesson.packetIds, []);
+
+    const targeted = extractToolJson(dispatchTool(root, "record_operator_lesson", {
+      title: "Bind lessons through task aliases",
+      problem: "Task-scoped lessons should not require callers to remember packetId aliases.",
+      decisions: ["Resolve taskName through the durable packet resolver."],
+      pitfalls: ["Do not silently bind to the latest task."],
+      validation: ["Recorded lesson includes the resolved packet id."],
+      nextTime: ["Use taskName or packetTarget when the operator speaks naturally."],
+      taskName: "MCP integration packet",
+      domain: "engineering",
+      stage: "return",
+      actorRole: "planner",
+      tags: ["task-target"],
+      sourceArtifacts: [".dove/task-packets/index.json"]
+    }));
+    assert.equal(targeted.summary.activeLessonCount, 2);
+    assert.deepEqual(targeted.recordedLesson.packetIds, [packetId]);
 
     const queried = extractToolJson(dispatchTool(root, "query_operator_lessons", { tag: "lessons" }));
     assert.equal(queried.resultCount, 1);
@@ -226,11 +248,16 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
 
     const status = extractToolJson(dispatchTool(root, "query_dove_status", { domain: "paper" }));
     assert.equal(status.mode, "dove-status-query");
+    assert.equal(status.responseLanguage, "zh");
     assert.equal(status.proposalOnly, true);
     assert.equal(status.query, true);
     assert.deepEqual(status.writes, []);
     assert.ok(status.dashboard && typeof status.dashboard === "object");
     assert.ok(status.dashboard.tasks && typeof status.dashboard.tasks === "object");
+    assert.ok(status.projectSummary && typeof status.projectSummary === "object");
+    assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
+    assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+    assert.deepEqual(status.statusAdjustmentContract.writes, []);
     assert.equal(status.taskGraph, undefined);
     assert.equal(status.paperLifecycle, undefined);
     assert.equal(status.openQuestions, undefined);
@@ -253,7 +280,7 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
   }
 });
 
-test("create_dove_task requires confirmation before materializing a mission", () => {
+test("create_dove_task converts demand before materializing a one-pass mission", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-mission-confirm-"));
   try {
     const init = extractToolJson(dispatchTool(root, "init_dove_goal", {
@@ -262,28 +289,551 @@ test("create_dove_task requires confirmation before materializing a mission", ()
     }));
     const proposal = extractToolJson(dispatchTool(root, "create_dove_task", {
       id: "mission-confirm-task",
-      goal: "Create a confirmed mission only after the operator approves it.",
-      title: "Mission confirmation task"
+      goal: "Convert operator demand into a task contract before one mission pass.",
+      title: "Mission conversion task"
     }));
     assert.equal(proposal.status, "needs-confirmation");
+    assert.equal(proposal.responseLanguage, "zh");
+    assert.match(proposal.message, /批准/);
     assert.equal(proposal.proposalOnly, true);
     assert.equal(proposal.noAutoApply, true);
     assert.deepEqual(proposal.writes, []);
     assert.equal(proposal.confirmationRequired, true);
+    assert.equal(proposal.demandConversion, true);
+    assert.equal(proposal.executionMode, "single-foreground-pass");
     assert.equal(proposal.proposedTask.id, "mission-confirm-task");
     assert.equal(proposal.proposedTask.rootId, init.init.id);
     assert.equal(proposal.confirmArgs.confirmed, true);
+
+    const englishProposal = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "mission-confirm-task-en",
+      goal: "Keep generated task messages in English when requested.",
+      title: "English mission conversion task",
+      responseLanguage: "en"
+    }));
+    assert.equal(englishProposal.status, "needs-confirmation");
+    assert.equal(englishProposal.responseLanguage, "en");
+    assert.match(englishProposal.message, /Approve this demand-to-task mission contract/);
 
     const proposedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     assert.deepEqual(proposedIndex.items.map((item) => item.id), ["mission-confirm-init"]);
 
     const created = extractToolJson(dispatchTool(root, "create_dove_task", proposal.confirmArgs));
-    assert.equal(created.status, "created");
+    assert.equal(created.status, "created-awaiting-host-pass");
     assert.equal(created.confirmationRequired, false);
+    assert.equal(created.demandConversion, true);
+    assert.equal(created.executionMode, "single-foreground-pass");
+    assert.equal(created.missionPassRequired, true);
+    assert.equal(created.recordMissionPassTool, "record_dove_mission_pass");
     assert.equal(created.createdTask.id, "mission-confirm-task");
+
+    const pass = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+      packetId: created.createdTask.id,
+      runId: "mission-confirm-pass",
+      resultStatus: "completed",
+      resultSummary: "Confirmed demand was converted and one foreground pass completed.",
+      evidenceLinks: [".dove/task-packets/index.json"],
+      artifactRefs: [".dove/task-packets/index.json"]
+    }));
+    assert.equal(pass.status, "completed");
+    assert.equal(pass.result.surface, "dove.mission");
+    assert.equal(pass.result.maxIterations, 1);
+    assert.equal(pass.result.iterationCount, 1);
+    assert.equal(pass.result.packetId, "mission-confirm-task");
 
     const materializedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     assert.deepEqual(materializedIndex.items.map((item) => item.id), ["mission-confirm-init", "mission-confirm-task"]);
+    assert.equal(materializedIndex.items.find((item) => item.id === "mission-confirm-task").status, "completed");
+
+    const passRecorded = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "mission-pass-recorded-task",
+      goal: "Convert and record one pass in the approved mission call.",
+      title: "Mission pass recorded task",
+      confirmed: true,
+      resultStatus: "completed",
+      resultSummary: "The host pass already produced evidence.",
+      evidenceLinks: [".dove/runtime/results.json"],
+      artifactRefs: [".dove/runtime/results.json"]
+    }));
+    assert.equal(passRecorded.status, "pass-recorded");
+    assert.equal(passRecorded.missionPassRequired, false);
+    assert.equal(passRecorded.task.status, "completed");
+    assert.equal(passRecorded.result.packetId, "mission-pass-recorded-task");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("create_dove_task can propose first-run init and mission together", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-first-run-mission-"));
+  try {
+    const proposal = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "first-run-mission-task",
+      goal: "Start Dove from a real demand without a prior init command.",
+      title: "First-run mission task",
+      initTitle: "First-run Dove workspace",
+      initObjective: "Validate inline init creation before task materialization.",
+      checklist: false
+    }));
+    assert.equal(proposal.status, "needs-confirmation");
+    assert.equal(proposal.initMaterializationRequired, true);
+    assert.equal(proposal.proposedInit.id, "init");
+    assert.equal(proposal.proposedInit.level, 0);
+    assert.equal(proposal.proposedInit.title, "First-run Dove workspace");
+    assert.equal(proposal.proposedTask.parentId, proposal.proposedInit.id);
+    assert.equal(proposal.proposedTask.rootId, proposal.proposedInit.id);
+    assert.equal(proposal.confirmArgs.initTitle, "First-run Dove workspace");
+    assert.equal(proposal.confirmArgs.initObjective, "Validate inline init creation before task materialization.");
+
+    const previewIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.deepEqual(previewIndex.items, []);
+
+    const created = extractToolJson(dispatchTool(root, "create_dove_task", proposal.confirmArgs));
+    assert.equal(created.status, "created-awaiting-host-pass");
+    assert.equal(created.initMaterializationRequired, true);
+    assert.equal(created.createdInit.id, "init");
+    assert.equal(created.createdTask.id, "first-run-mission-task");
+    assert.equal(created.createdTask.parentId, "init");
+    assert.equal(created.createdTask.rootId, "init");
+
+    const materializedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.deepEqual(materializedIndex.items.map((item) => item.id), ["init", "first-run-mission-task"]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("completed plan mission pass materializes pending executable missions", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-plan-conversion-"));
+  try {
+    const init = extractToolJson(dispatchTool(root, "init_dove_goal", {
+      id: "plan-conversion-init",
+      goal: "Validate plan conversion."
+    }));
+    const created = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "plan-conversion-task",
+      goal: "Plan improvements for Dove status and operator workflows.",
+      title: "Plan Dove workflow improvements",
+      stage: "plan",
+      domain: "engineering",
+      checklist: false,
+      confirmed: true
+    }));
+    assert.equal(created.createdTask.stage, "plan");
+
+    const pass = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+      packetId: created.createdTask.id,
+      runId: "plan-conversion-pass",
+      resultStatus: "completed",
+      resultSummary: "The plan produced executable follow-up missions.",
+      plannedMissions: [{
+        id: "plan-converted-top",
+        title: "Optimize Dove workflow",
+        summary: "Implement the planned Dove workflow improvements.",
+        childMissions: [{
+          id: "plan-converted-child",
+          title: "Wire Dove status UX",
+          stage: "plan",
+          level: 4
+        }]
+      }]
+    }));
+    assert.equal(pass.status, "completed");
+    assert.equal(pass.createdPlanMissions.length, 2);
+    const top = pass.createdPlanMissions.find((mission) => mission.id === "plan-converted-top");
+    const child = pass.createdPlanMissions.find((mission) => mission.id === "plan-converted-child");
+    assert.equal(top.level, 3);
+    assert.equal(top.stage, "execute");
+    assert.equal(top.status, "pending");
+    assert.equal(top.parentId, init.init.id);
+    assert.equal(child.level, 4);
+    assert.equal(child.stage, "plan");
+    assert.equal(child.status, "pending");
+    assert.equal(child.parentId, top.id);
+
+    const repeated = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+      packetId: created.createdTask.id,
+      runId: "plan-conversion-pass-repeat",
+      resultStatus: "completed",
+      plannedMissions: [{
+        id: "plan-converted-top",
+        title: "Optimize Dove workflow",
+        childMissions: [{ id: "plan-converted-child", title: "Wire Dove status UX", stage: "plan", level: 4 }]
+      }]
+    }));
+    assert.deepEqual(repeated.createdPlanMissions, []);
+    assert.equal(repeated.reusedPlanMissions.length, 2);
+
+    const index = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.equal(index.items.find((item) => item.id === "plan-converted-top").status, "pending");
+    assert.equal(index.items.find((item) => item.id === "plan-converted-child").parentId, "plan-converted-top");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("status adjustment contract applies confirmed non-completed and non-killed mission status choices", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-status-adjust-"));
+  try {
+    const init = extractToolJson(dispatchTool(root, "init_dove_goal", {
+      id: "status-adjust-init",
+      goal: "Validate status adjustment UX."
+    }));
+    for (const task of [
+      { id: "status-ready-task", title: "Status ready task", status: "ready" },
+      { id: "status-progress-task", title: "Status progress task", status: "in-progress" },
+      { id: "status-blocked-task", title: "Status blocked task", status: "blocked" },
+      { id: "status-completed-task", title: "Status completed task", status: "completed" },
+      { id: "status-killed-task", title: "Status killed task", status: "killed" }
+    ]) {
+      extractToolJson(dispatchTool(root, "create_dove_task", {
+        ...task,
+        goal: task.title,
+        checklist: false,
+        confirmed: true
+      }));
+    }
+
+    const status = extractToolJson(dispatchTool(root, "query_dove_status", {}));
+    assert.ok(status.projectSummary);
+    assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
+    assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+    const itemIds = status.statusAdjustmentContract.items.map((candidate) => candidate.packetId);
+    assert.equal(itemIds.includes(init.init.id), false);
+    assert.equal(itemIds.includes("status-ready-task"), true);
+    assert.equal(itemIds.includes("status-progress-task"), true);
+    assert.equal(itemIds.includes("status-blocked-task"), true);
+    assert.equal(itemIds.includes("status-completed-task"), false);
+    assert.equal(itemIds.includes("status-killed-task"), false);
+    assert.equal(status.statusAdjustmentContract.items.some((candidate) => ["completed", "killed"].includes(candidate.currentStatus)), false);
+    const item = status.statusAdjustmentContract.items.find((candidate) => candidate.packetId === "status-ready-task");
+    assert.ok(item);
+    assert.deepEqual(item.choices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+
+    const preview = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
+      adjustments: [{ packetId: "status-ready-task", status: "blocked", reason: "Needs investigation." }]
+    }));
+    assert.equal(preview.status, "needs-confirmation");
+    assert.equal(preview.proposalOnly, true);
+    assert.deepEqual(preview.writes, []);
+    assert.equal(preview.confirmArgs.confirmed, true);
+    const previewIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.equal(previewIndex.items.find((candidate) => candidate.id === "status-ready-task").status, "ready");
+
+    const applied = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", preview.confirmArgs));
+    assert.equal(applied.status, "applied");
+    assert.deepEqual(applied.rejected, []);
+    assert.equal(applied.applied[0].fromStatus, "ready");
+    assert.equal(applied.applied[0].toStatus, "blocked");
+    const postApplyStatus = extractToolJson(dispatchTool(root, "query_dove_status", {}));
+    const blockedAdjustedItem = postApplyStatus.statusAdjustmentContract.items.find((candidate) => candidate.packetId === "status-ready-task");
+    assert.ok(blockedAdjustedItem);
+    assert.equal(blockedAdjustedItem.currentStatus, "blocked");
+
+    const rejected = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
+      confirmed: true,
+      adjustments: [{ packetId: init.init.id, status: "killed" }]
+    }));
+    assert.equal(rejected.status, "rejected");
+    assert.match(rejected.rejected[0].reason, /level-0 init (?:task|任务)/);
+
+    const noOp = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
+      confirmed: true,
+      adjustments: []
+    }));
+    assert.equal(noOp.status, "no-op");
+    assert.deepEqual(noOp.applied, []);
+    assert.deepEqual(noOp.skipped, []);
+    assert.deepEqual(noOp.rejected, []);
+    assert.deepEqual(noOp.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("run_dove_operator previews queues and creates blocker investigation missions", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-operator-"));
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "operator-init",
+      goal: "Validate operator queue semantics."
+    });
+    for (const task of [
+      { id: "operator-auto-ready", title: "Operator auto-ready task", status: "ready", nextAction: "project:dove.status" },
+      { id: "operator-host-progress", title: "Operator host progress task", status: "in-progress" },
+      { id: "operator-host-missing", title: "Operator host missing task", status: "ready" },
+      { id: "operator-unresolved", title: "Operator unresolved dependency task", status: "ready", dependencies: ["missing-dependency"] },
+      { id: "operator-blocked", title: "Operator blocked task", status: "blocked" },
+      { id: "operator-pending", title: "Operator pending task", status: "pending" }
+    ]) {
+      extractToolJson(dispatchTool(root, "create_dove_task", {
+        ...task,
+        goal: task.title,
+        domain: "engineering",
+        checklist: false,
+        confirmed: true
+      }));
+    }
+
+    const preview = extractToolJson(dispatchTool(root, "run_dove_operator", {}));
+    assert.equal(preview.status, "needs-confirmation");
+    assert.equal(preview.proposalOnly, true);
+    assert.deepEqual(preview.writes, []);
+    assert.deepEqual(preview.autoRunnableTasks.map((task) => task.id), ["operator-auto-ready"]);
+    assert.deepEqual(preview.hostPassRequiredTasks.map((task) => task.id).sort(), ["operator-host-missing", "operator-host-progress"].sort());
+    assert.deepEqual(preview.runnableTasks.map((task) => task.id).sort(), ["operator-auto-ready", "operator-host-missing", "operator-host-progress"].sort());
+    assert.deepEqual(preview.blockedTasks.map((task) => task.id).sort(), ["operator-blocked", "operator-unresolved"].sort());
+    assert.deepEqual(preview.pendingTasks.map((task) => task.id), ["operator-pending"]);
+    assert.equal(preview.blockedTasks.find((task) => task.id === "operator-unresolved").unresolvedDependencyIds[0], "missing-dependency");
+
+    const run = extractToolJson(dispatchTool(root, "run_dove_operator", {
+      confirmed: true,
+      runId: "operator-run",
+      taskResults: [
+        { packetId: "operator-host-progress", resultStatus: "completed", summary: "Host progress task completed." }
+      ]
+    }));
+    assert.equal(run.status, "awaiting-host-results");
+    assert.deepEqual(run.awaitingResultTaskIds, ["operator-host-missing"]);
+    assert.deepEqual(run.updatedTasks.map((task) => task.id).sort(), ["operator-auto-ready", "operator-host-progress"].sort());
+    assert.deepEqual(run.result.autoRunnableTaskIds, ["operator-auto-ready"]);
+    assert.deepEqual(run.result.hostPassRequiredTaskIds.sort(), ["operator-host-missing", "operator-host-progress"].sort());
+    assert.equal(run.blockerPlanConversion.createdMissions.length, 2);
+    const blockerPlan = run.blockerPlanConversion.createdMissions.find((mission) => mission.parentId === "operator-blocked");
+    assert.equal(blockerPlan.status, "pending");
+    assert.equal(blockerPlan.stage, "plan");
+    assert.equal(blockerPlan.level, 4);
+    const unresolvedPlan = run.blockerPlanConversion.createdMissions.find((mission) => mission.parentId === "operator-unresolved");
+    assert.equal(unresolvedPlan.status, "pending");
+    assert.equal(unresolvedPlan.stage, "plan");
+    assert.equal(unresolvedPlan.level, 4);
+
+    const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
+    const persisted = runtimeResults.items.find((item) => item.id === "operator-run");
+    assert.equal(persisted.surface, "dove.operator");
+    assert.equal(persisted.foreground, true);
+    assert.equal(persisted.status, "awaiting-host-results");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("create_dove_task materializes checklist children below explicit mission levels", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-mission-checklist-"));
+  try {
+    const init = extractToolJson(dispatchTool(root, "init_dove_goal", {
+      id: "mission-checklist-init",
+      goal: "Validate mission checklist hierarchy."
+    }));
+    const proposal = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "mission-checklist-parent",
+      goal: "Implement and validate a checklist-backed mission workflow.",
+      title: "Mission checklist parent",
+      level: 2,
+      autoChecklist: true,
+      evidenceExpectations: ["implementation", "validation"]
+    }));
+    assert.equal(proposal.status, "needs-confirmation");
+    assert.equal(proposal.proposedTask.level, 2);
+    assert.equal(proposal.checklistProposal.autoSelected, true);
+    assert.equal(proposal.checklistProposal.itemCount, 3);
+    assert.ok(proposal.checklistProposal.items.every((item) => item.parentId === "mission-checklist-parent"));
+    assert.ok(proposal.checklistProposal.items.every((item) => item.creatorKind === "system"));
+    assert.ok(proposal.checklistProposal.items.every((item) => item.level > proposal.proposedTask.level));
+
+    const proposedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.deepEqual(proposedIndex.items.map((item) => item.id), [init.init.id]);
+
+    const created = extractToolJson(dispatchTool(root, "create_dove_task", proposal.confirmArgs));
+    assert.equal(created.status, "created-awaiting-host-pass");
+    assert.equal(created.createdTask.level, 2);
+    assert.equal(created.createdChecklistTasks.length, 3);
+    for (const child of created.createdChecklistTasks) {
+      assert.equal(child.parentId, created.createdTask.id);
+      assert.equal(child.rootId, init.init.id);
+      assert.equal(child.creatorKind, "system");
+      assert.ok(child.level > created.createdTask.level);
+    }
+
+    const materializedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.deepEqual(materializedIndex.items.map((item) => item.id), [
+      "mission-checklist-init",
+      "mission-checklist-parent",
+      ...created.createdChecklistTasks.map((item) => item.id)
+    ]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("create_dove_task rejects checklist children that are not deeper than the parent mission", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-mission-checklist-reject-"));
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "mission-checklist-reject-init",
+      goal: "Validate checklist hierarchy rejection."
+    });
+    const rejected = dispatchTool(root, "create_dove_task", {
+      id: "mission-checklist-invalid",
+      goal: "Reject shallow checklist children.",
+      level: 3,
+      checklistItems: [{ title: "Invalid same-level system child", level: 3 }]
+    });
+    assert.equal(rejected.isError, true);
+    assert.match(rejected.content[0].text, /must be greater than parent mission level/);
+
+    const index = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.deepEqual(index.items.map((item) => item.id), ["mission-checklist-reject-init"]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("run_dove_auto records bounded foreground iterations", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-auto-foreground-"));
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "auto-foreground-init",
+      goal: "Validate foreground auto iterations."
+    });
+    dispatchTool(root, "create_dove_task", {
+      id: "auto-foreground-task",
+      goal: "Run two explicit foreground auto steps.",
+      title: "Auto foreground task",
+      confirmed: true
+    });
+
+    const needsConfirmation = extractToolJson(dispatchTool(root, "run_dove_auto", {
+      packetId: "auto-foreground-task",
+      goal: "Run only after confirmation."
+    }));
+    assert.equal(needsConfirmation.status, "needs-confirmation");
+    assert.equal(needsConfirmation.proposalOnly, true);
+    assert.equal(needsConfirmation.noAutoApply, true);
+    assert.deepEqual(needsConfirmation.writes, []);
+    assert.equal(needsConfirmation.confirmationRequired, true);
+    assert.equal(needsConfirmation.demandConversion, false);
+    assert.equal(needsConfirmation.executionMode, "multi-round-foreground-auto");
+    assert.equal(needsConfirmation.selectedTask.id, "auto-foreground-task");
+    assert.equal(needsConfirmation.confirmArgs.confirmed, true);
+    assert.equal(needsConfirmation.confirmArgs.packetId, "auto-foreground-task");
+    assert.equal(needsConfirmation.foreground, true);
+    assert.equal(needsConfirmation.background, false);
+    assert.equal(needsConfirmation.maxIterations, 3);
+
+    const missionAliasConfirmation = extractToolJson(dispatchTool(root, "run_dove_auto", {
+      missionPacketId: "auto-foreground-task"
+    }));
+    assert.equal(missionAliasConfirmation.status, "needs-confirmation");
+    assert.equal(missionAliasConfirmation.selectedTask.id, "auto-foreground-task");
+
+    const packetTargetConfirmation = extractToolJson(dispatchTool(root, "run_dove_auto", {
+      packetTarget: "Auto foreground task"
+    }));
+    assert.equal(packetTargetConfirmation.status, "needs-confirmation");
+    assert.equal(packetTargetConfirmation.selectedTask.id, "auto-foreground-task");
+
+    const demandConfirmation = extractToolJson(dispatchTool(root, "run_dove_auto", {
+      id: "auto-demand-task",
+      goal: "Convert a new demand into an auto task contract before execution.",
+      title: "Auto demand task",
+      evidenceExpectations: ["contract", "runtime"]
+    }));
+    assert.equal(demandConfirmation.status, "needs-confirmation");
+    assert.equal(demandConfirmation.proposalOnly, true);
+    assert.equal(demandConfirmation.demandConversion, true);
+    assert.equal(demandConfirmation.executionMode, "multi-round-foreground-auto");
+    assert.equal(demandConfirmation.proposedTask.id, "auto-demand-task");
+    assert.equal(demandConfirmation.checklistProposal.autoSelected, true);
+    assert.equal(demandConfirmation.confirmArgs.confirmed, true);
+    assert.equal(demandConfirmation.confirmArgs.checklistItems.length, 3);
+
+    extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "auto-host-boundary-task",
+      goal: "Require a real host pass instead of pretending generic engineering work ran.",
+      title: "Auto host boundary task",
+      confirmed: true,
+      checklist: false
+    }));
+    const hostBoundary = extractToolJson(dispatchTool(root, "run_dove_auto", {
+      packetId: "auto-host-boundary-task",
+      confirmed: true,
+      runId: "auto-host-boundary-run"
+    }));
+    assert.equal(hostBoundary.status, "awaiting-host-pass");
+    assert.equal(hostBoundary.requiresHostPass, true);
+    assert.deepEqual(hostBoundary.proposedSteps, []);
+    assert.equal(hostBoundary.result.taskStatusAfter, "ready");
+    assert.equal(hostBoundary.task.status, "ready");
+
+    const autoRun = extractToolJson(dispatchTool(root, "run_dove_auto", {
+      packetId: "auto-foreground-task",
+      confirmed: true,
+      runId: "auto-foreground-run",
+      maxIterations: 3,
+      steps: [
+        { command: "dove.note", args: { title: "Auto note", sectionId: "auto", summary: "Auto recorded a foreground note." } },
+        { command: "dove.status", completeTask: true }
+      ]
+    }));
+    assert.equal(autoRun.status, "completed");
+    assert.equal(autoRun.result.foreground, true);
+    assert.equal(autoRun.result.background, false);
+    assert.equal(autoRun.result.daemon, false);
+    assert.equal(autoRun.result.maxIterations, 3);
+    assert.equal(autoRun.result.iterationCount, 2);
+    assert.deepEqual(autoRun.result.iterations.map((iteration) => iteration.command), ["dove.note", "dove.status"]);
+    assert.equal(autoRun.result.stopReason, "completion-confirmed-by-auto-step");
+    assert.equal(autoRun.result.taskStatusAfter, "completed");
+
+    const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
+    const persisted = runtimeResults.items.find((item) => item.id === "auto-foreground-run");
+    assert.ok(persisted, "auto runtime result should be persisted");
+    assert.equal(persisted.iterationCount, 2);
+    assert.equal(persisted.background, false);
+
+    const taskIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    const task = taskIndex.items.find((item) => item.id === "auto-foreground-task");
+    assert.equal(task.status, "completed");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("run_dove_auto can propose first-run init and materialize after confirmation", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-first-run-auto-"));
+  try {
+    const proposal = extractToolJson(dispatchTool(root, "run_dove_auto", {
+      id: "first-run-auto-task",
+      goal: "Start auto from a real demand without a prior init command.",
+      title: "First-run auto task",
+      initTitle: "First-run auto workspace",
+      initObjective: "Validate inline init creation before auto execution.",
+      checklist: false,
+      maxIterations: 2
+    }));
+    assert.equal(proposal.status, "needs-confirmation");
+    assert.equal(proposal.initMaterializationRequired, true);
+    assert.equal(proposal.proposedInit.id, "init");
+    assert.equal(proposal.proposedInit.level, 0);
+    assert.equal(proposal.proposedTask.parentId, "init");
+    assert.equal(proposal.executionMode, "multi-round-foreground-auto");
+    assert.equal(proposal.confirmArgs.initTitle, "First-run auto workspace");
+    assert.equal(proposal.confirmArgs.maxIterations, 2);
+
+    const run = extractToolJson(dispatchTool(root, "run_dove_auto", {
+      ...proposal.confirmArgs,
+      runId: "first-run-auto-run",
+      steps: [{ command: "dove.status", completeTask: true }]
+    }));
+    assert.equal(run.status, "completed");
+    assert.equal(run.task.id, "first-run-auto-task");
+    assert.equal(run.result.packetId, "first-run-auto-task");
+    assert.equal(run.result.iterationCount, 1);
+
+    const taskIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.deepEqual(taskIndex.items.map((item) => item.id), ["init", "first-run-auto-task"]);
+    assert.equal(taskIndex.items.find((item) => item.id === "first-run-auto-task").status, "completed");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -367,6 +917,8 @@ test("role-bound MCP tools expose explicit override fields", () => {
     "upsert_outline",
     "upsert_draft",
     "set_section_status",
+    "record_dove_mission_pass",
+    "record_operator_lesson",
     "run_experience_workflow",
     "prepare_audio_review",
     "import_audio_review",
@@ -394,12 +946,16 @@ test("role-bound MCP tools expose explicit override fields", () => {
   for (const name of taskScopedTools) {
     const tool = toolDefinitions.find((item) => item.name === name);
     assert.ok(tool, `missing task-scoped tool definition for ${name}`);
-    for (const field of ["packetId", "taskPacketId", "missionPacketId", "target", "packetTarget", "taskName"]) {
+    for (const field of ["packetId", "taskPacketId", "missionPacketId", "taskId", "target", "packetTarget", "taskName"]) {
       assert.ok(tool.inputSchema.properties[field], `${name} should expose ${field}`);
     }
   }
 
   const createDoveTaskTool = toolDefinitions.find((item) => item.name === "create_dove_task");
+  const recordMissionPassTool = toolDefinitions.find((item) => item.name === "record_dove_mission_pass");
+  const applyStatusAdjustmentsTool = toolDefinitions.find((item) => item.name === "apply_dove_status_adjustments");
+  const runDoveAutoTool = toolDefinitions.find((item) => item.name === "run_dove_auto");
+  const runDoveOperatorTool = toolDefinitions.find((item) => item.name === "run_dove_operator");
   const followThroughTool = toolDefinitions.find((item) => item.name === "record_operator_follow_through");
   const approvalsQueryTool = toolDefinitions.find((item) => item.name === "query_program_approvals");
   const doveOrchestrateQueryTool = toolDefinitions.find((item) => item.name === "query_dove_orchestrate");
@@ -427,6 +983,51 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(createDoveTaskTool, "create_dove_task should exist");
   assert.ok(createDoveTaskTool.inputSchema.properties.confirmed, "create_dove_task should expose confirmed");
   assert.ok(createDoveTaskTool.inputSchema.properties.confirm, "create_dove_task should expose confirm");
+  assert.ok(createDoveTaskTool.inputSchema.properties.initTitle, "create_dove_task should expose first-run init title");
+  assert.ok(createDoveTaskTool.inputSchema.properties.initObjective, "create_dove_task should expose first-run init objective");
+  assert.ok(createDoveTaskTool.inputSchema.properties.initDomain, "create_dove_task should expose first-run init domain");
+  assert.ok(createDoveTaskTool.inputSchema.properties.level, "create_dove_task should expose explicit mission level");
+  assert.ok(createDoveTaskTool.inputSchema.properties.taskLevel, "create_dove_task should expose taskLevel");
+  assert.ok(createDoveTaskTool.inputSchema.properties.missionLevel, "create_dove_task should expose missionLevel");
+  assert.ok(createDoveTaskTool.inputSchema.properties.checklist, "create_dove_task should expose checklist controls");
+  assert.ok(createDoveTaskTool.inputSchema.properties.autoChecklist, "create_dove_task should expose autoChecklist");
+  assert.ok(createDoveTaskTool.inputSchema.properties.checklistItems, "create_dove_task should expose checklistItems");
+  assert.ok(createDoveTaskTool.inputSchema.properties.subtasks, "create_dove_task should expose subtasks");
+  assert.ok(createDoveTaskTool.inputSchema.properties.command, "create_dove_task should expose mission pass command hints");
+  assert.ok(createDoveTaskTool.inputSchema.properties.runId, "create_dove_task should expose mission pass runId");
+  assert.ok(createDoveTaskTool.inputSchema.properties.missionPass, "create_dove_task should expose missionPass envelope");
+  assert.ok(createDoveTaskTool.inputSchema.properties.resultStatus, "create_dove_task should expose mission pass resultStatus");
+  assert.ok(createDoveTaskTool.inputSchema.properties.resultSummary, "create_dove_task should expose mission pass resultSummary");
+  assert.ok(createDoveTaskTool.inputSchema.properties.evidencePaths, "create_dove_task should expose mission pass evidence paths");
+  assert.ok(recordMissionPassTool, "record_dove_mission_pass should exist");
+  assert.ok(recordMissionPassTool.inputSchema.properties.runId, "record_dove_mission_pass should expose runId");
+  assert.ok(recordMissionPassTool.inputSchema.properties.resultStatus, "record_dove_mission_pass should expose resultStatus");
+  assert.ok(recordMissionPassTool.inputSchema.properties.completeTask, "record_dove_mission_pass should expose completeTask");
+  assert.ok(recordMissionPassTool.inputSchema.properties.blocked, "record_dove_mission_pass should expose blocked");
+  assert.ok(recordMissionPassTool.inputSchema.properties.evidenceLinks, "record_dove_mission_pass should expose evidenceLinks");
+  assert.ok(recordMissionPassTool.inputSchema.properties.artifactRefs, "record_dove_mission_pass should expose artifactRefs");
+  assert.ok(recordMissionPassTool.inputSchema.properties.command, "record_dove_mission_pass should expose command");
+  assert.ok(recordMissionPassTool.inputSchema.properties.nextAction, "record_dove_mission_pass should expose nextAction");
+  assert.ok(recordMissionPassTool.inputSchema.properties.plannedMissions, "record_dove_mission_pass should expose plannedMissions");
+  assert.ok(recordMissionPassTool.inputSchema.properties.resultingMissions, "record_dove_mission_pass should expose resultingMissions");
+  assert.ok(recordMissionPassTool.inputSchema.properties.missions, "record_dove_mission_pass should expose missions");
+  assert.ok(recordMissionPassTool.inputSchema.properties.childMissions, "record_dove_mission_pass should expose childMissions");
+  assert.ok(recordMissionPassTool.inputSchema.properties.planConversion, "record_dove_mission_pass should expose planConversion");
+  assert.ok(applyStatusAdjustmentsTool, "apply_dove_status_adjustments should exist");
+  assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.confirmed, "apply_dove_status_adjustments should expose confirmed");
+  assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.adjustments, "apply_dove_status_adjustments should expose adjustments");
+  assert.ok(runDoveAutoTool, "run_dove_auto should exist");
+  assert.ok(runDoveAutoTool.inputSchema.properties.missionPacketId, "run_dove_auto should expose missionPacketId");
+  assert.ok(runDoveAutoTool.inputSchema.properties.taskId, "run_dove_auto should expose taskId");
+  assert.ok(runDoveAutoTool.inputSchema.properties.packetTarget, "run_dove_auto should expose packetTarget");
+  assert.ok(runDoveAutoTool.inputSchema.properties.initTitle, "run_dove_auto should expose first-run init title");
+  assert.ok(runDoveAutoTool.inputSchema.properties.initObjective, "run_dove_auto should expose first-run init objective");
+  assert.ok(runDoveAutoTool.inputSchema.properties.maxIterations, "run_dove_auto should expose maxIterations");
+  assert.ok(runDoveAutoTool.inputSchema.properties.steps, "run_dove_auto should expose foreground steps");
+  assert.ok(runDoveAutoTool.inputSchema.properties.completeTask, "run_dove_auto should expose explicit completion");
+  assert.ok(runDoveOperatorTool, "run_dove_operator should exist");
+  assert.ok(runDoveOperatorTool.inputSchema.properties.confirmed, "run_dove_operator should expose confirmed");
+  assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults, "run_dove_operator should expose taskResults");
   assert.ok(approvalsQueryTool, "query_program_approvals should exist");
   assert.ok(doveOrchestrateQueryTool, "query_dove_orchestrate should exist");
   assert.ok(doveMissionQueryTool, "query_dove_mission should exist");

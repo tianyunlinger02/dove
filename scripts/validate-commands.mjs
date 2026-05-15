@@ -24,7 +24,7 @@ const expectedCommandIds = [
   "dove.mission",
   "dove.auto",
   "dove.status",
-  "dove.kill",
+  "dove.operator",
   "dove.lessons",
   "dove.version",
   "dove.source",
@@ -39,10 +39,10 @@ const expectedCommandIds = [
 
 const expectedTools = {
   "dove.init": ["init_dove_goal"],
-  "dove.mission": ["create_dove_task"],
+  "dove.mission": ["create_dove_task", "record_dove_mission_pass"],
   "dove.auto": ["run_dove_auto"],
-  "dove.status": ["query_dove_status"],
-  "dove.kill": ["kill_dove_task"],
+  "dove.status": ["query_dove_status", "apply_dove_status_adjustments"],
+  "dove.operator": ["run_dove_operator"],
   "dove.lessons": ["query_operator_lessons", "record_operator_lesson"],
   "dove.version": ["reset_dove_version"],
   "dove.source": ["register_source"],
@@ -67,6 +67,7 @@ const removedCommandIds = [
   "dove.onboard",
   "dove.launch",
   "dove.approvals",
+  "dove.kill",
   "dove.paper.init",
   "dove.paper.source",
   "dove.paper.note",
@@ -148,6 +149,11 @@ for (const removedCommandId of removedCommandIds) {
 
 for (const { command, relativePath } of generatedAdapterEntries()) {
   const commandText = readRelative(relativePath);
+  assert.ok(command.ux, `${command.id} should declare daily UX metadata in the manifest`);
+  assert.ok(Array.isArray(command.ux.dailyFlow) && command.ux.dailyFlow.length > 0, `${command.id} should declare daily flow guidance`);
+  assert.equal(commandText.includes("## Daily use"), true, `${relativePath} must put daily use guidance before guardrails`);
+  assert.equal(commandText.includes("## Guardrails"), true, `${relativePath} must separate guardrails from daily flow`);
+  assert.equal(commandText.includes("## Workflow"), false, `${relativePath} must not bury daily use inside the old workflow checklist heading`);
   assert.equal(commandText.includes("response language preference"), true, `${relativePath} must instruct hosts to honor Dove language preference`);
   assert.equal(commandText.includes("default is `zh`"), true, `${relativePath} must document Chinese as the default response language`);
   for (const requiredTool of command.requiredTools ?? []) {
@@ -158,16 +164,38 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
   }
 
   if (command.id === "dove.mission") {
-    assert.equal(commandText.includes("create_dove_task"), true, `${relativePath} must route mission proposals through create_dove_task`);
+    assert.equal(commandText.includes("create_dove_task"), true, `${relativePath} must route demand conversion through create_dove_task`);
+    assert.equal(commandText.includes("record_dove_mission_pass"), true, `${relativePath} must record the one-pass mission result`);
+    assert.equal(commandText.includes("Treat the operator input as natural-language demand"), true, `${relativePath} must frame mission as demand-to-task conversion`);
     assert.equal(commandText.includes("Return a proposal-only mission contract first"), true, `${relativePath} must require proposal-first mission intake`);
-    assert.equal(commandText.includes("Ask for explicit operator confirmation before passing `confirmed: true`"), true, `${relativePath} must require confirmation before task materialization`);
+    assert.equal(commandText.includes("use interactive confirmation controls"), true, `${relativePath} must require interactive confirmation when supported`);
+    assert.equal(commandText.includes("AskUserQuestion"), true, `${relativePath} must name Claude Code interactive confirmation support`);
+    assert.equal(commandText.includes("approve conversion and run one pass, adjust conversion, or cancel"), true, `${relativePath} must expose concrete mission conversion choices`);
+    assert.equal(commandText.includes("only pass `confirmed: true` to `create_dove_task` after the operator approves the converted contract"), true, `${relativePath} must require approval before task materialization`);
     assert.equal(commandText.includes("Classify each task as `plan`, `execute`, or `audit`"), true, `${relativePath} must expose task classification`);
-    assert.equal(commandText.includes("User-created tasks default to level 3"), true, `${relativePath} must state the user task level default`);
+    assert.equal(commandText.includes("autonomous checklist proposal"), true, `${relativePath} must include checklist proposal in mission intake`);
+    assert.equal(commandText.includes("explicit operator-created levels 1, 2, 3, or deeper"), true, `${relativePath} must state explicit user mission levels`);
+    assert.equal(commandText.includes("Autonomously decide whether a checklist is needed"), true, `${relativePath} must document autonomous checklist selection`);
+    assert.equal(commandText.includes("must have level greater than the parent mission level"), true, `${relativePath} must enforce child checklist depth`);
+    assert.equal(commandText.includes("execute one bounded foreground pass"), true, `${relativePath} must require one-pass mission execution after materialization`);
+    assert.equal(commandText.includes("Do not tell the operator to run `/dove:auto` for the first execution pass"), true, `${relativePath} must distinguish mission from auto`);
+    assert.equal(commandText.includes("stage `plan`"), true, `${relativePath} must convert completed plan passes into missions`);
+    assert.equal(commandText.includes("level 3 and `pending`"), true, `${relativePath} must default converted plan missions to pending level 3`);
+    assert.equal(commandText.includes("level 4, 5, or deeper"), true, `${relativePath} must allow deeper child missions from plan outputs`);
   }
 
   if (command.id === "dove.auto") {
-    assert.equal(commandText.includes("same intake and classification model as `/dove:mission`"), true, `${relativePath} must start like mission`);
+    assert.equal(commandText.includes("same demand-to-task intake and classification model as `/dove:mission`"), true, `${relativePath} must start like mission demand conversion`);
+    assert.equal(commandText.includes("does not require running `/dove:mission` first"), true, `${relativePath} must allow direct auto demand intake`);
+    assert.equal(commandText.includes("Return a proposal-only auto contract first"), true, `${relativePath} must expose the auto confirmation contract`);
+    assert.equal(commandText.includes("`proposedTask`"), true, `${relativePath} must expose converted auto task proposals`);
+    assert.equal(commandText.includes("`selectedTask`"), true, `${relativePath} must expose selected durable task proposals`);
+    assert.equal(commandText.includes("AskUserQuestion"), true, `${relativePath} must name Claude Code interactive confirmation support`);
+    assert.equal(commandText.includes("present indexed packet choices through confirmation UX"), true, `${relativePath} must use confirmation UX for task selection`);
     assert.equal(commandText.includes("Require explicit operator confirmation"), true, `${relativePath} must require confirmation`);
+    assert.equal(commandText.includes("Run in the current foreground call only"), true, `${relativePath} must document foreground-only execution`);
+    assert.equal(commandText.includes("default is 3"), true, `${relativePath} must document the default auto iteration count`);
+    assert.equal(commandText.includes("Record each foreground iteration"), true, `${relativePath} must document runtime iteration records`);
     assert.equal(commandText.includes("source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status"), true, `${relativePath} must document internal top-level workflow calls`);
     assert.equal(commandText.includes("Stop at completed, blocked, killed"), true, `${relativePath} must document stop conditions`);
   }
@@ -193,9 +221,36 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("Preserve the level-0 init goal"), true, `${relativePath} must state init/lesson preservation`);
   }
 
-  if (command.id === "dove.kill") {
-    assert.equal(commandText.includes("Never kill the level-0 init task"), true, `${relativePath} must refuse init kills`);
-    assert.equal(commandText.includes("Return indexed task choices"), true, `${relativePath} must prompt with indexed choices when ambiguous`);
+  if (command.id === "dove.status") {
+    assert.equal(commandText.includes("query_dove_status"), true, `${relativePath} must query status before adjustment`);
+    assert.equal(commandText.includes("apply_dove_status_adjustments"), true, `${relativePath} must expose the guarded status adjustment bridge`);
+    assert.equal(commandText.includes("live development situation"), true, `${relativePath} must explain the live development situation`);
+    assert.equal(commandText.includes("do not treat `.dove/` context as the live development situation"), true, `${relativePath} must separate live context from Dove durable context`);
+    assert.equal(commandText.includes("host-visible context"), true, `${relativePath} must use host-visible context for live status`);
+    assert.equal(commandText.includes("Do not print internal mission summary dumps"), true, `${relativePath} must forbid noisy mission summary dumps`);
+    assert.equal(commandText.includes("mission counts, status counts, recent completed missions, or recent killed missions"), true, `${relativePath} must name the hidden status summary fields`);
+    assert.equal(commandText.includes("if there are no adjustable missions, do not print a mission list"), true, `${relativePath} must omit empty adjustable mission lists`);
+    assert.equal(commandText.includes("现在是什么情况"), false, `${relativePath} command prompt should keep canonical instructions in English`);
+    assert.equal(commandText.includes("[\"pending\", \"ready\", \"in-progress\", \"blocked\", \"completed\", \"killed\"]"), true, `${relativePath} must expose exact status choices`);
+    assert.equal(commandText.includes("excluding `completed` and `killed`"), true, `${relativePath} must exclude completed and killed tasks from displayed adjustment targets`);
+    assert.equal(commandText.includes("single confirmation dialog"), true, `${relativePath} must use one status confirmation dialog`);
+    assert.equal(commandText.includes("do not paginate by mission count"), true, `${relativePath} must forbid paginated status confirmation by mission count`);
+    assert.equal(commandText.includes("parseable `packetId -> status`"), true, `${relativePath} must require clear packet-to-status adjustments before mutation`);
+    assert.equal(commandText.includes("paginate the status UX based on mission count"), false, `${relativePath} must not keep the old paginated status UX`);
+    assert.equal(commandText.includes("Collect status choices across pages"), false, `${relativePath} must not collect status choices across pages`);
+    assert.equal(commandText.includes("one final confirmation summary"), false, `${relativePath} must not require the old extra final confirmation summary`);
+    assert.equal(commandText.includes("not a standalone public slash command"), true, `${relativePath} must route killing through status UX`);
+  }
+
+  if (command.id === "dove.operator") {
+    assert.equal(commandText.includes("run_dove_operator"), true, `${relativePath} must route through run_dove_operator`);
+    assert.equal(commandText.includes("`autoRunnableTasks`"), true, `${relativePath} must include auto-runnable mission queue`);
+    assert.equal(commandText.includes("`hostPassRequiredTasks`"), true, `${relativePath} must include host-pass-required mission queue`);
+    assert.equal(commandText.includes("blocked missions"), true, `${relativePath} must include blocked mission handling`);
+    assert.equal(commandText.includes("writes: []"), true, `${relativePath} must expose proposal-only operator preview`);
+    assert.equal(commandText.includes("foreground call only"), true, `${relativePath} must keep operator foreground-only`);
+    assert.equal(commandText.includes("awaiting host results"), true, `${relativePath} must not claim host work without results`);
+    assert.equal(commandText.includes("pending child plan missions"), true, `${relativePath} must create blocker investigation plan missions`);
   }
 }
 

@@ -79,6 +79,8 @@ test("governance audit static detector covers async exports, const exports, and 
   }
   assert.ok(scriptText.includes("fs(?:\\.promises)?"));
   assert.ok(scriptText.includes("fsPromises"));
+  assert.ok(scriptText.includes("discoverCoreFiles"));
+  assert.ok(scriptText.includes("src/core"));
 });
 
 test("governance audit exempt metadata check is not a wall-clock freshness gate", () => {
@@ -154,7 +156,9 @@ test("task packet resolver handles explicit ids, targets, ambiguity, and artifac
   });
 
   assert.equal(resolveDurableTaskPacket(root, { packetId: "packet-alpha" }).packetId, "packet-alpha");
+  assert.equal(resolveDurableTaskPacket(root, { taskId: "packet-alpha" }).packetId, "packet-alpha");
   assert.equal(resolveDurableTaskPacket(root, { target: "Beta experiment" }, { targetFields: ["target"] }).packetId, "packet-beta");
+  assert.equal(resolveDurableTaskPacket(root, { packetTarget: "Beta experiment" }, { targetFields: ["packetTarget"] }).packetId, "packet-beta");
 
   assert.throws(() => {
     resolveDurableTaskPacket(root, { packetId: "packet-alpha", claimId: "claim-beta" }, { artifactFields: ["claimId"] });
@@ -166,10 +170,24 @@ test("task packet resolver handles explicit ids, targets, ambiguity, and artifac
   }, /ambiguous/);
 
   writeTaskTargetSettings(root, { autoSelect: true });
-  const selected = resolveDurableTaskPacket(root, { target: "experiment" }, { targetFields: ["target"] });
-  assert.equal(selected.packetId, "packet-alpha");
+  let tiedError = null;
+  assert.throws(() => {
+    try {
+      resolveDurableTaskPacket(root, { target: "experiment" }, { targetFields: ["target"] });
+    } catch (error) {
+      tiedError = error;
+      throw error;
+    }
+  }, /requires confirmation/);
+  assert.equal(tiedError.code, "TASK_PACKET_RESOLUTION_REQUIRED");
+  assert.ok(tiedError.candidates.length >= 2);
+  assert.throws(() => {
+    resolveDurableTaskPacket(root, {});
+  }, /requires confirmation/);
+  const selected = resolveDurableTaskPacket(root, { target: "Beta experiment" }, { targetFields: ["target"] });
+  assert.equal(selected.packetId, "packet-beta");
   assert.equal(selected.resolution.autoSelect, true);
-  assert.equal(selected.resolution.candidates.length, 2);
+  assert.equal(selected.resolution.candidates.length, 1);
 });
 
 test("task-scoped resolver rejects writes when no durable packet exists", () => {
@@ -1954,6 +1972,8 @@ test("governance registry completely binds the expected mutating command and MCP
     "create_dove_task",
     "run_dove_auto",
     "kill_dove_task",
+    "apply_dove_status_adjustments",
+    "run_dove_operator",
     "reset_dove_version",
     "run_experience_workflow",
     "prepare_audio_review",
@@ -2013,7 +2033,8 @@ test("governance registry completely binds the expected mutating command and MCP
     "dove.init",
     "dove.mission",
     "dove.auto",
-    "dove.kill",
+    "dove.status",
+    "dove.operator",
     "dove.lessons",
     "dove.version",
     "dove.source",
@@ -2042,6 +2063,7 @@ test("governance registry completely binds the expected mutating command and MCP
     "dove.onboard",
     "dove.launch",
     "dove.approvals",
+    "dove.kill",
     "dove.paper.init",
     "dove.paper.source",
     "dove.paper.note",
@@ -2079,14 +2101,15 @@ test("governance registry completely binds the expected mutating command and MCP
   assert.equal(boundCommands.has("dove.mission"), true);
   assert.equal(boundCommands.has("dove.auto"), true);
   assert.equal(boundCommands.has("dove.status"), true);
+  assert.equal(boundCommands.has("dove.operator"), true);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.mission"), false);
   assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.auto"), false);
-  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.status"), true);
+  assert.equal(GOVERNANCE_READONLY_COMMANDS.includes("dove.status"), false);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_orchestrate"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_status"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_audit"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_operator_lessons"), true);
-  for (const publicCommandId of ["dove.init", "dove.mission", "dove.auto", "dove.status", "dove.kill", "dove.lessons", "dove.version", "dove.source", "dove.note", "dove.figure", "dove.experience", "dove.draft", "dove.review", "dove.review-loop", "dove.rebuttal"]) {
+  for (const publicCommandId of ["dove.init", "dove.mission", "dove.auto", "dove.status", "dove.operator", "dove.lessons", "dove.version", "dove.source", "dove.note", "dove.figure", "dove.experience", "dove.draft", "dove.review", "dove.review-loop", "dove.rebuttal"]) {
     assert.equal(fs.existsSync(path.join(commandDir, `${publicCommandId}.md`)), true);
   }
 });
@@ -2234,6 +2257,7 @@ test("follow-through overrides require expiry and exact target binding", () => {
 
   assert.throws(() => upsertPlan(root, {
     thesis: "override without full guard",
+    packetId: "task-override",
     actorRole: allowedActorRole,
     policyOverrideReason: "manual",
     policyOverrideReasonCode: "manual-reconciliation",
@@ -2243,6 +2267,7 @@ test("follow-through overrides require expiry and exact target binding", () => {
 
   assert.throws(() => upsertPlan(root, {
     thesis: "override with removed compatibility code",
+    packetId: "task-override",
     actorRole: allowedActorRole,
     policyOverrideReason: "manual",
     policyOverrideReasonCode: "migration-compatibility",
@@ -2256,6 +2281,7 @@ test("follow-through overrides require expiry and exact target binding", () => {
 
   assert.throws(() => upsertPlan(root, {
     thesis: "override with long window",
+    packetId: "task-override",
     actorRole: allowedActorRole,
     policyOverrideReason: "manual",
     policyOverrideReasonCode: "manual-reconciliation",
@@ -2269,6 +2295,7 @@ test("follow-through overrides require expiry and exact target binding", () => {
 
   assert.throws(() => upsertPlan(root, {
     thesis: "override with wrong source",
+    packetId: "task-override",
     actorRole: allowedActorRole,
     policyOverrideReason: "manual",
     policyOverrideReasonCode: "manual-reconciliation",

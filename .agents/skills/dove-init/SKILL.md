@@ -7,6 +7,14 @@ description: "Create or update the single project-level Dove goal as the unique 
 
 Create or update the single project-level Dove goal as the unique level-0 task.
 
+## Daily use
+
+- Use this when the workspace needs its one global Dove goal or the goal wording needs an explicit refresh.
+- Keep concrete work out of init; after init, route the actual request to mission or auto.
+- Targeting: No task target is needed because init owns the unique level-0 root.
+- Confirmation: Guarded mutation only; update the existing init instead of creating another root.
+- Outcome: The workspace has one level-0 init task and the next practical command is mission or auto.
+
 ## Contract
 
 - Command id: `dove.init`
@@ -14,7 +22,7 @@ Create or update the single project-level Dove goal as the unique level-0 task.
 - Category: `mutation`
 - Policy: `guarded-mutation`
 
-## Workflow
+## Guardrails
 
 1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
 2. Follow Dove's response language preference from `.dove/config.json`, `.dove/config.local.json`, or `.dove/state.json.settings.responseLanguage`; supported values are `zh` for Chinese and `en` for English, and the default is `zh`.

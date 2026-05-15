@@ -61,7 +61,17 @@ function policyLine(command) {
   }
 }
 
-function workflowBullets(command) {
+function dailyUseBullets(command) {
+  const ux = command.ux ?? {};
+  return [
+    ...(Array.isArray(ux.dailyFlow) ? ux.dailyFlow : []),
+    ux.targetingBehavior ? `Targeting: ${ux.targetingBehavior}` : null,
+    ux.confirmationBehavior ? `Confirmation: ${ux.confirmationBehavior}` : null,
+    ux.expectedOutcome ? `Outcome: ${ux.expectedOutcome}` : null
+  ].filter(Boolean);
+}
+
+function guardrailBullets(command) {
   const bullets = [
     "Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.",
     "Follow Dove's response language preference from `.dove/config.json`, `.dove/config.local.json`, or `.dove/state.json.settings.responseLanguage`; supported values are `zh` for Chinese and `en` for English, and the default is `zh`.",
@@ -80,11 +90,18 @@ function workflowBullets(command) {
   return bullets;
 }
 
+function renderBullets(bullets) {
+  return bullets.map((bullet) => `- ${bullet}`).join("\n");
+}
+
+function renderNumbered(bullets) {
+  return bullets.map((bullet, index) => `${index + 1}. ${bullet}`).join("\n");
+}
+
 function renderBody(command, heading) {
-  const bullets = workflowBullets(command)
-    .map((bullet, index) => `${index + 1}. ${bullet}`)
-    .join("\n");
-  return `# ${heading}\n\n${command.summary}\n\n## Contract\n\n- Command id: \`${command.id}\`\n- Domain: \`${command.domain}\`\n- Category: \`${command.category}\`\n- Policy: \`${command.policy}\`\n\n## Workflow\n\n${bullets}\n`;
+  const dailyUse = renderBullets(dailyUseBullets(command));
+  const guardrails = renderNumbered(guardrailBullets(command));
+  return `# ${heading}\n\n${command.summary}\n\n## Daily use\n\n${dailyUse}\n\n## Contract\n\n- Command id: \`${command.id}\`\n- Domain: \`${command.domain}\`\n- Category: \`${command.category}\`\n- Policy: \`${command.policy}\`\n\n## Guardrails\n\n${guardrails}\n`;
 }
 
 function renderSkill(command) {

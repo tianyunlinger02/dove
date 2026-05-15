@@ -62,7 +62,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     objective: "Exercise the orchestration depth model.",
     thesis: "Board-first workflows improve resumability."
   });
-  seedTaskPacket(root);
+  const packetId = seedTaskPacket(root);
 
   const board = upsertOrchestrationBoard(root, {
     phase: "research",
@@ -78,6 +78,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   assert.equal(board.currentPhase, "research");
 
   updateResearchBrief(root, {
+    packetId,
     agenda: ["Collect comparable workflow evidence"],
     evidenceBacklog: ["Need experiment result for baseline-a"]
   });
@@ -88,12 +89,14 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     updatedAt: null
   }, null, 2));
   upsertNote(root, {
+    packetId,
     title: "Depth note",
     sectionId: "introduction",
     sourceIds: ["known-source"],
     summary: "Supports orchestration depth claim."
   });
   upsertClaims(root, {
+    packetId,
     claims: [{ id: "claim-depth", text: "Board-first workflows improve resumability.", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["introduction-depth-note"] }]
   });
 
@@ -106,6 +109,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   });
 
   const experimentPlan = upsertExperimentPlan(root, {
+    packetId,
     id: "baseline-a-check",
     title: "Baseline A comparison",
     claimId: "claim-depth",
@@ -131,11 +135,12 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   });
 
   normalizeRebuttalIssues(root, {
+    packetId,
     issues: [
       { summary: "Need clearer comparison framing.", severity: "medium", responseDirection: "clarify" }
     ]
   });
-  const strategy = buildRebuttalStrategy(root);
+  const strategy = buildRebuttalStrategy(root, { packetId });
   assert.equal(strategy.issueCount, 1);
 
   appendHandoff(root, {
@@ -147,6 +152,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   });
 
   appendReviewLog(root, {
+    packetId,
     stage: "depth-flow-signoff",
     scope: "orchestration-depth",
     verdict: "coherent",
@@ -162,9 +168,9 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     summary: "Move into version analysis after signoff.",
     nextActions: ["Create the next version snapshot"]
   });
-  const v1 = createVersionSnapshot(root, { versionId: "depth-v1", summary: "First snapshot" });
-  const v2 = createVersionSnapshot(root, { versionId: "depth-v2", parentVersionId: v1.id, summary: "Second snapshot" });
-  const comparison = compareVersions(root, { fromVersionId: v1.id, toVersionId: v2.id });
+  const v1 = createVersionSnapshot(root, { packetId, versionId: "depth-v1", summary: "First snapshot" });
+  const v2 = createVersionSnapshot(root, { packetId, versionId: "depth-v2", parentVersionId: v1.id, summary: "Second snapshot" });
+  const comparison = compareVersions(root, { packetId, fromVersionId: v1.id, toVersionId: v2.id });
 
   const state = readState(root);
   const versionManifest = readRoleContextManifest(root, "version-analyst");

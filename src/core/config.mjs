@@ -262,6 +262,21 @@ export function loadFigureGenerationConfig(root, env = process.env) {
   return loadDoveConfig(root, env).figureGeneration;
 }
 
+export function loadExplicitDoveLanguageConfig(root, env = process.env) {
+  let language = null;
+  for (const configPath of configPaths(root, env)) {
+    const fileConfig = readOptionalJsonFile(configPath);
+    if (isPlainObject(fileConfig) && (fileConfig.language !== undefined || fileConfig.responseLanguage !== undefined)) {
+      language = fileConfig.language ?? fileConfig.responseLanguage;
+    }
+  }
+  const environmentLanguage = normalizeString(env.DOVE_LANGUAGE ?? env.DOVE_RESPONSE_LANGUAGE);
+  if (environmentLanguage) {
+    language = environmentLanguage;
+  }
+  return language ? normalizeDoveResponseLanguage(language, DEFAULT_DOVE_RESPONSE_LANGUAGE, { strict: true }) : null;
+}
+
 export function loadDoveLanguageConfig(root, env = process.env) {
   return loadDoveConfig(root, env).language;
 }

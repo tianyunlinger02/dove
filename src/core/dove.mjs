@@ -15,6 +15,8 @@ import {
   createDoveAuthorityManifest,
   createDoveWorkspaceKernel,
   createReviewState,
+  createRuntimeContinuationIndex,
+  createRuntimeResultsIndex,
   createTaskPacketsIndex,
   createVersionComparisonsIndex,
   createVersionsIndex,
@@ -22,12 +24,16 @@ import {
   normalizeDoveDomainId,
   normalizeDoveMissionLifecycleStage,
   normalizeDoveAuthorityManifest,
+  normalizeRuntimeContinuationIndex,
+  normalizeRuntimeResultsIndex,
   normalizeState,
   normalizeWorkspaceIndex
 } from "./schema.mjs";
 import { materializeGuidancePacket } from "./navigation.mjs";
 import { queryPaperAudit } from "./paper-audit.mjs";
+import { readTaskPacketCatalog } from "./task-packets.mjs";
 import { assertGovernanceMutationRegistered } from "./workspace.mjs";
+import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
 
 function cloneFallback(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
@@ -601,6 +607,23 @@ function summarizePacket(packet) {
   };
 }
 
+function safeReadTaskPacketCatalog(root, taskPackets, readErrors) {
+  try {
+    return readTaskPacketCatalog(root);
+  } catch (error) {
+    readErrors.push({
+      path: ARTIFACT_PATHS.taskPacketsDir,
+      message: error instanceof Error ? error.message : String(error)
+    });
+    const packets = Array.isArray(taskPackets.items) ? taskPackets.items : [];
+    return {
+      index: taskPackets,
+      packets,
+      byId: new Map(packets.map((packet) => [packet.id, packet]).filter(([id]) => id))
+    };
+  }
+}
+
 function readDoveInputs(root) {
   const readErrors = [];
   const state = normalizeState(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.state, createDefaultState, readErrors), createDefaultState));
@@ -608,6 +631,7 @@ function readDoveInputs(root) {
   const workspaceIndex = normalizeWorkspaceIndex(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex, readErrors), createWorkspaceIndex));
   const doveAuthorityManifest = normalizeDoveAuthorityManifest(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.doveRootManifest, createDoveAuthorityManifest, readErrors), createDoveAuthorityManifest));
   const taskPackets = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex, readErrors), createTaskPacketsIndex);
+  const taskCatalog = safeReadTaskPacketCatalog(root, taskPackets, readErrors);
   const reviewState = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.reviewState, createReviewState, readErrors), createReviewState);
   const reviewConcerns = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.reviewConcerns, () => ({ version: 2, items: [], updatedAt: null }), readErrors), () => ({ version: 2, items: [], updatedAt: null }));
   const versions = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.versionsIndex, createVersionsIndex, readErrors), createVersionsIndex);
@@ -616,9 +640,11 @@ function readDoveInputs(root) {
   const experimentResults = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.experimentResults, () => ({ version: 1, items: [], updatedAt: null }), readErrors), () => ({ version: 1, items: [], updatedAt: null }));
   const experimentAudits = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.experimentAudits, () => ({ version: 1, items: [], updatedAt: null }), readErrors), () => ({ version: 1, items: [], updatedAt: null }));
   const operatorLessons = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.metaOperatorLessons, () => ({ version: 1, lessons: [], summary: { lessonCount: 0, activeLessonCount: 0, topLessonIds: [], lessonsPath: ARTIFACT_PATHS.metaOperatorLessons } }), readErrors), () => ({ version: 1, lessons: [], summary: { lessonCount: 0, activeLessonCount: 0, topLessonIds: [], lessonsPath: ARTIFACT_PATHS.metaOperatorLessons } }));
+  const runtimeContinuation = normalizeRuntimeContinuationIndex(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex, readErrors), createRuntimeContinuationIndex));
+  const runtimeResults = normalizeRuntimeResultsIndex(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.runtimeResults, createRuntimeResultsIndex, readErrors), createRuntimeResultsIndex));
   const checklist = safeReadText(root, ARTIFACT_PATHS.checklist, readErrors);
-  const packets = Array.isArray(taskPackets.items) ? taskPackets.items.map(summarizePacket) : [];
-  return { state, board, workspaceIndex, doveAuthorityManifest, taskPackets, packets, reviewState, reviewConcerns, versions, comparisons, experimentPlans, experimentResults, experimentAudits, operatorLessons, checklist, readErrors };
+  const packets = taskCatalog.packets.map(summarizePacket);
+  return { state, board, workspaceIndex, doveAuthorityManifest, taskPackets, taskCatalog, packets, reviewState, reviewConcerns, versions, comparisons, experimentPlans, experimentResults, experimentAudits, operatorLessons, runtimeContinuation, runtimeResults, checklist, readErrors };
 }
 
 function normalizeDoveStatusTaskStatus(packet) {
@@ -687,8 +713,10 @@ function summarizeDoveStatusTask(packet) {
     lifecycleStatus: packet.lifecycleStatus ?? packet.status ?? null,
     dependencies: normalizeStringArray(packet.dependencies ?? packet.dependencyIds),
     blockedBy: normalizeStringArray(packet.blockedBy ?? packet.blockerIds),
+    blockedReason: packet.blockedReason ?? packet.blockerReason ?? packet.blockingReason ?? null,
     lessonIds: normalizeStringArray(packet.lessonIds),
-    artifactRefs: mergeStringArrays(packet.artifactRefs, packet.outputPaths, packet.evidenceLinks),
+    evidenceExpectations: normalizeStringArray(packet.evidenceExpectations ?? packet.acceptanceChecks),
+    artifactRefs: mergeStringArrays(packet.artifactRefs, packet.artifactPaths, packet.outputPaths, packet.evidenceLinks),
     outputPaths: normalizeStringArray(packet.outputPaths),
     evidenceLinks: normalizeStringArray(packet.evidenceLinks),
     contextPolicy: packet.contextPolicy ?? null,
@@ -710,6 +738,201 @@ function sortRecentStatusTasks(tasks) {
   return [...tasks].sort((left, right) => String(right.updatedAt ?? right.completedAt ?? right.killedAt ?? right.createdAt ?? "").localeCompare(String(left.updatedAt ?? left.completedAt ?? left.killedAt ?? left.createdAt ?? "")) || left.id.localeCompare(right.id));
 }
 
+function runtimeResultEntries(inputs) {
+  const entries = [
+    ...(Array.isArray(inputs.runtimeResults.items) ? inputs.runtimeResults.items : []),
+    ...(Array.isArray(inputs.runtimeResults.entries) ? inputs.runtimeResults.entries : [])
+  ].filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry));
+  const byKey = new Map();
+  for (const entry of entries) {
+    const key = entry.id ?? entry.runId ?? `${entry.surface ?? "runtime"}:${entry.packetId ?? "unknown"}:${entry.updatedAt ?? entry.recordedAt ?? entry.createdAt ?? byKey.size}`;
+    byKey.set(key, entry);
+  }
+  return Array.from(byKey.values());
+}
+
+function runtimeIterationForPacket(entry, packetId) {
+  const iterations = Array.isArray(entry.iterations) ? entry.iterations : [];
+  return [...iterations].reverse().find((iteration) => [iteration.packetId, iteration.taskId, iteration.missionPacketId].includes(packetId)) ?? null;
+}
+
+function runtimeEntryTouchesPacket(entry, packetId) {
+  if ([entry.packetId, entry.taskId, entry.missionPacketId, entry.selectedPacketId].includes(packetId)) {
+    return true;
+  }
+  if (runtimeIterationForPacket(entry, packetId)) {
+    return true;
+  }
+  return ["updatedTaskIds", "awaitingResultTaskIds", "autoRunnableTaskIds", "hostPassRequiredTaskIds", "runnableTaskIds", "blockedTaskIds", "pendingTaskIds"].some((field) => normalizeStringArray(entry[field]).includes(packetId));
+}
+
+function runtimeTimestamp(entry, iteration = null) {
+  return iteration?.completedAt ?? iteration?.startedAt ?? entry.updatedAt ?? entry.recordedAt ?? entry.completedAt ?? entry.createdAt ?? entry.startedAt ?? "";
+}
+
+function summarizeRuntimeRun(entry, packetId) {
+  const iteration = runtimeIterationForPacket(entry, packetId);
+  return {
+    id: entry.id ?? entry.runId ?? null,
+    surface: entry.surface ?? null,
+    packetId,
+    status: iteration?.status ?? entry.status ?? null,
+    outcome: iteration?.outcome ?? entry.outcome ?? null,
+    stopReason: iteration?.stopReason ?? entry.stopReason ?? null,
+    command: iteration?.command ?? entry.command ?? null,
+    startedAt: iteration?.startedAt ?? entry.startedAt ?? entry.createdAt ?? null,
+    completedAt: iteration?.completedAt ?? entry.completedAt ?? entry.updatedAt ?? entry.recordedAt ?? null,
+    updatedAt: entry.updatedAt ?? entry.recordedAt ?? null
+  };
+}
+
+function lastRuntimeRunForTask(inputs, packetId) {
+  return runtimeResultEntries(inputs)
+    .filter((entry) => runtimeEntryTouchesPacket(entry, packetId))
+    .sort((left, right) => String(runtimeTimestamp(right, runtimeIterationForPacket(right, packetId))).localeCompare(String(runtimeTimestamp(left, runtimeIterationForPacket(left, packetId)))))
+    .map((entry) => summarizeRuntimeRun(entry, packetId))[0] ?? null;
+}
+
+function continuationForTask(inputs, packetId) {
+  const item = (Array.isArray(inputs.runtimeContinuation.items) ? inputs.runtimeContinuation.items : []).find((candidate) => candidate?.packetId === packetId) ?? null;
+  if (!item) {
+    return null;
+  }
+  return {
+    kind: item.kind ?? null,
+    command: item.command ?? null,
+    packetId,
+    programRunId: item.programRunId ?? null,
+    followThroughId: item.followThroughId ?? null,
+    summary: item.summary ?? null,
+    requiredReadPaths: normalizeStringArray(item.requiredReadPaths),
+    readyAt: item.readyAt ?? null
+  };
+}
+
+function applicableLessonsForTask(inputs, task) {
+  const lessons = Array.isArray(inputs.operatorLessons.lessons) ? inputs.operatorLessons.lessons : [];
+  const linkedLessonIds = new Set(normalizeStringArray(task.lessonIds));
+  return lessons.filter((lesson) => {
+    const status = String(lesson.status ?? "active").trim().toLowerCase();
+    const packetIds = normalizeStringArray(lesson.packetIds);
+    return status === "active" && (packetIds.length === 0 || packetIds.includes(task.id) || linkedLessonIds.has(lesson.id));
+  }).slice(0, 10).map((lesson) => ({
+    id: lesson.id,
+    title: lesson.title,
+    mustObey: lesson.mustObey ?? true,
+    nextTime: normalizeStringArray(lesson.nextTime)
+  }));
+}
+
+function unresolvedDependencyIdsForTask(task, byId) {
+  return mergeStringArrays(task.dependencies, task.blockedBy).filter((dependencyId) => {
+    const dependency = byId.get(dependencyId);
+    return !dependency || dependency.status !== "completed";
+  });
+}
+
+function enrichStatusTasks(tasks, inputs) {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  return tasks.map((task) => {
+    const unresolvedDependencyIds = unresolvedDependencyIdsForTask(task, byId);
+    const lastRun = lastRuntimeRunForTask(inputs, task.id);
+    const continuationState = continuationForTask(inputs, task.id);
+    const blockedReason = task.blockedReason
+      ?? (task.blockedBy.length > 0 ? `blocked-by:${task.blockedBy.join(",")}` : null)
+      ?? (unresolvedDependencyIds.length > 0 ? `unresolved-dependencies:${unresolvedDependencyIds.join(",")}` : null);
+    return {
+      ...task,
+      blockedReason,
+      unresolvedDependencyIds,
+      lastRun,
+      lastStopReason: lastRun?.stopReason ?? null,
+      continuationState,
+      applicableLessons: applicableLessonsForTask(inputs, task)
+    };
+  });
+}
+
+function hasTaskBlockerSignal(task) {
+  return task.status === "blocked" || Boolean(task.blockedReason) || task.blockedBy.length > 0 || normalizeStringArray(task.unresolvedDependencyIds).length > 0;
+}
+
+function runtimeIndicatesInProgress(task) {
+  return [task.lastRun?.status, task.lastRun?.outcome, task.continuationState?.kind].some((value) => String(value ?? "").includes("in-progress") || String(value ?? "").includes("continue"));
+}
+
+function runtimeIndicatesCompleted(task) {
+  return Boolean(task.completedAt) || [task.lastRun?.status, task.lastRun?.outcome].some((value) => ["completed", "task-completed"].includes(String(value ?? "")));
+}
+
+function recommendedStatusForTask(task) {
+  if (runtimeIndicatesCompleted(task)) {
+    return "completed";
+  }
+  if (hasTaskBlockerSignal(task)) {
+    return "blocked";
+  }
+  if (runtimeIndicatesInProgress(task)) {
+    return "in-progress";
+  }
+  if (task.status === "pending") {
+    return "ready";
+  }
+  return task.status;
+}
+
+function buildStatusAdjustmentContract(tasks) {
+  const adjustableTasks = sortStatusTasks(tasks.filter((task) => task.level !== 0 && !["completed", "killed"].includes(task.status)));
+  return {
+    proposalOnly: true,
+    noAutoApply: true,
+    writes: [],
+    mutationTool: "apply_dove_status_adjustments",
+    statusChoices: DOVE_TASK_STATUSES,
+    itemCount: adjustableTasks.length,
+    items: adjustableTasks.map((task, index) => {
+      const recommendedStatus = recommendedStatusForTask(task);
+      return {
+        index: index + 1,
+        packetId: task.id,
+        title: task.title,
+        currentStatus: task.status,
+        recommendedStatus,
+        level: task.level,
+        stage: task.stage,
+        domain: task.domain,
+        blockedReason: task.blockedReason,
+        lastStopReason: task.lastStopReason,
+        choices: DOVE_TASK_STATUSES,
+        confirmArgs: {
+          adjustments: [{ packetId: task.id, status: recommendedStatus }],
+          confirmed: true
+        }
+      };
+    })
+  };
+}
+
+function buildProjectSummary({ title, objective, focus, initTask, tasks, activeTasks, blockedTasks, review, versions, experiments, blockers, nextCommand, returnStatus }) {
+  return {
+    title,
+    objective,
+    currentFocus: focus,
+    initTaskId: initTask?.id ?? null,
+    missionCount: tasks.filter((task) => task.level !== 0).length,
+    activeMissionCount: activeTasks.length,
+    blockedMissionCount: blockedTasks.length,
+    statusCounts: countBy(tasks.map((task) => task.status), DOVE_TASK_STATUSES),
+    reviewVerdict: review.verdict,
+    unresolvedConcernCount: review.unresolvedConcernCount,
+    versionCount: versions.versionCount,
+    experimentPlanCount: experiments.planCount,
+    blockerCount: blockers.length,
+    returnStatus,
+    nextCommand
+  };
+}
+
 function buildStatusTaskTree(tasks) {
   const byId = new Map(tasks.map((task) => [task.id, { ...task, children: [] }]));
   const roots = [];
@@ -724,12 +947,12 @@ function buildStatusTaskTree(tasks) {
   return sortStatusTasks(roots).map(normalizeNode);
 }
 
-function summarizeStatusBlocker(blocker, index) {
+function summarizeStatusBlocker(blocker, index, responseLanguage = "zh") {
   if (blocker && typeof blocker === "object" && !Array.isArray(blocker)) {
     return {
       id: blocker.id ?? blocker.blockerId ?? `board-blocker-${index + 1}`,
       source: "board",
-      summary: blocker.summary ?? blocker.reason ?? blocker.title ?? blocker.id ?? `Board blocker ${index + 1}`,
+      summary: blocker.summary ?? blocker.reason ?? blocker.title ?? blocker.id ?? doveText(responseLanguage, "boardBlockerFallback", { index: index + 1 }),
       severity: blocker.severity ?? null,
       taskId: blocker.taskId ?? blocker.packetId ?? null
     };
@@ -737,21 +960,22 @@ function summarizeStatusBlocker(blocker, index) {
   return {
     id: `board-blocker-${index + 1}`,
     source: "board",
-    summary: String(blocker ?? `Board blocker ${index + 1}`),
+    summary: String(blocker ?? doveText(responseLanguage, "boardBlockerFallback", { index: index + 1 })),
     severity: null,
     taskId: null
   };
 }
 
-function buildStatusBlockers(inputs, blockedTasks) {
-  const boardBlockers = Array.isArray(inputs.board.blockers) ? inputs.board.blockers.map(summarizeStatusBlocker) : [];
+function buildStatusBlockers(inputs, blockedTasks, responseLanguage = "zh") {
+  const boardBlockers = Array.isArray(inputs.board.blockers) ? inputs.board.blockers.map((blocker, index) => summarizeStatusBlocker(blocker, index, responseLanguage)) : [];
   const taskBlockers = blockedTasks.map((task) => ({
     id: `task-blocker-${task.id}`,
     source: "task",
-    summary: task.blockedBy.length > 0 ? `${task.id} is blocked by ${task.blockedBy.join(", ")}` : `${task.id} is marked blocked`,
+    summary: task.blockedReason ?? (task.blockedBy.length > 0 ? doveText(responseLanguage, "taskBlockedBySummary", { id: task.id, blockers: task.blockedBy.join(", ") }) : doveText(responseLanguage, "taskMarkedBlockedSummary", { id: task.id })),
     severity: "blocking",
     taskId: task.id,
-    blockedBy: task.blockedBy
+    blockedBy: task.blockedBy,
+    unresolvedDependencyIds: normalizeStringArray(task.unresolvedDependencyIds)
   }));
   return [...boardBlockers, ...taskBlockers];
 }
@@ -863,7 +1087,7 @@ function inferStage(args, inputs) {
   return normalizeDoveMissionLifecycleStage(inputs.workspaceIndex.dove?.missionLifecycle?.currentStage, missionStageForPhase(inputs.board.currentPhase));
 }
 
-function inferGoal(args, inputs) {
+function inferGoal(args, inputs, responseLanguage = "zh") {
   const explicit = typeof args.goal === "string" && args.goal.trim() ? args.goal.trim() : null;
   if (explicit) {
     return explicit;
@@ -873,7 +1097,7 @@ function inferGoal(args, inputs) {
     ?? inputs.state.dove?.thesis
     ?? inputs.state.dove?.objective
     ?? inputs.state.dove?.title
-    ?? "Frame one bounded Dove mission from the current workspace.";
+    ?? doveText(responseLanguage, "queryFallbackGoal");
 }
 
 function collectTargetArtifacts(args, packets) {
@@ -886,6 +1110,7 @@ function collectTargetArtifacts(args, packets) {
 
 function buildMissionContract(root, args = {}) {
   const inputs = readDoveInputs(root);
+  const responseLanguage = resolveDoveResponseLanguage(root, args, { state: inputs.state });
   const domain = inferDomain(args, inputs);
   const stage = inferStage(args, inputs);
   const domainGuidance = selectDomainGuidance(inputs.workspaceIndex, domain);
@@ -898,21 +1123,22 @@ function buildMissionContract(root, args = {}) {
   return {
     inputs,
     mission: {
-      goal: inferGoal(args, inputs),
+      goal: inferGoal(args, inputs, responseLanguage),
       domain,
       stage,
       primaryRole: primaryRole.id,
       nextCommand,
       targetArtifacts,
       acceptanceChecks,
-      returnProtocol: `Return with ${acceptanceChecks.join(", ")}.`,
+      returnProtocol: doveText(responseLanguage, "returnProtocol", { checks: acceptanceChecks.join(", ") }),
       domainGuidance: {
         label: domainGuidance.label,
         summary: domainGuidance.summary,
         stageRoutes: domainGuidance.stageRoutes,
         returnEvidence: domainGuidance.returnEvidence
       }
-    }
+    },
+    responseLanguage
   };
 }
 
@@ -923,6 +1149,9 @@ function artifactPathsReadForDove() {
     ARTIFACT_PATHS.workspaceIndex,
     ARTIFACT_PATHS.doveRootManifest,
     ARTIFACT_PATHS.taskPacketsIndex,
+    ARTIFACT_PATHS.taskPacketsPacketsDir,
+    ARTIFACT_PATHS.runtimeContinuation,
+    ARTIFACT_PATHS.runtimeResults,
     ARTIFACT_PATHS.reviewState,
     ARTIFACT_PATHS.reviewConcerns,
     ARTIFACT_PATHS.versionsIndex,
@@ -1202,14 +1431,14 @@ function selectRouteCommand(mission, args = {}) {
   return candidates[0];
 }
 
-function routeReason(mission, selectedCommand, args = {}) {
+function routeReason(mission, selectedCommand, args = {}, responseLanguage = "zh") {
   if (selectedCommand !== mission.nextCommand && String(mission.nextCommand).includes(" or ")) {
-    return `Selected ${selectedCommand} from domain route ${mission.nextCommand} for a deterministic no-write Dove routing result.`;
+    return doveText(responseLanguage, "routeSelectedReason", { selectedCommand, nextCommand: mission.nextCommand });
   }
   if (booleanArg(args.allowAutonomy) && (selectedCommand.includes(".auto") || selectedCommand.includes("autonomy"))) {
-    return "Auto execution was explicitly allowed for this Dove routing query.";
+    return doveText(responseLanguage, "routeAutoReason");
   }
-  return `Mission stage ${mission.stage} in domain ${mission.domain} maps to ${selectedCommand}.`;
+  return doveText(responseLanguage, "routeDefaultReason", { stage: mission.stage, domain: mission.domain, selectedCommand });
 }
 
 function buildWorkspaceSummary(inputs) {
@@ -1249,6 +1478,7 @@ function auditVerdictFromSeverityCounts(severityCounts = {}) {
 
 export function queryPaperPipeline(root, args = {}) {
   const inputs = readDoveInputs(root);
+  const responseLanguage = resolveDoveResponseLanguage(root, args, { state: inputs.state });
   const currentStage = inferStage({ ...args, domain: "paper" }, inputs);
   const stageIds = [...PIPELINE_STAGE_ORDER, "return"];
   const stages = stageIds.map((stageId, index) => buildPaperPipelineStage(root, stageId, index));
@@ -1258,6 +1488,7 @@ export function queryPaperPipeline(root, args = {}) {
     proposalOnly: true,
     noAutoApply: true,
     writes: [],
+    responseLanguage,
     current: {
       domain: "paper",
       missionStage: currentStage,
@@ -1291,7 +1522,8 @@ export function queryPaperPipeline(root, args = {}) {
 
 export function queryDoveStatus(root, args = {}) {
   const inputs = readDoveInputs(root);
-  const tasks = sortStatusTasks((Array.isArray(inputs.taskPackets.items) ? inputs.taskPackets.items : []).map(summarizeDoveStatusTask).filter((task) => task.id));
+  const responseLanguage = resolveDoveResponseLanguage(root, args, { state: inputs.state });
+  const tasks = sortStatusTasks(enrichStatusTasks((Array.isArray(inputs.taskCatalog.packets) ? inputs.taskCatalog.packets : []).map(summarizeDoveStatusTask).filter((task) => task.id), inputs));
   const requestedDomain = normalizeDoveDomainId(args.domain ?? args.doveDomain ?? args.missionDomain, null);
   const requestedStage = normalizeStatusStageArg(args.stage ?? args.missionStage);
   const requestedStatuses = normalizeStringArray(args.status ?? args.statuses);
@@ -1314,11 +1546,11 @@ export function queryDoveStatus(root, args = {}) {
   const initTask = tasks.find((task) => task.level === 0 && task.status !== "killed") ?? null;
   const activeStatusIds = new Set(["pending", "ready", "in-progress", "blocked"]);
   const activeTasks = visibleTasks.filter((task) => task.level !== 0 && activeStatusIds.has(task.status));
-  const blockedTasks = activeTasks.filter((task) => task.status === "blocked" || task.blockedBy.length > 0);
+  const blockedTasks = activeTasks.filter(hasTaskBlockerSignal);
   const completedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "completed")).slice(0, 10);
   const killedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "killed")).slice(0, 10);
   const review = summarizeStatusReview(inputs);
-  const blockers = buildStatusBlockers(inputs, blockedTasks);
+  const blockers = buildStatusBlockers(inputs, blockedTasks, responseLanguage);
   const lessons = summarizeStatusLessons(inputs);
   const versions = summarizeStatusVersions(inputs);
   const experiments = summarizeStatusExperiments(inputs);
@@ -1336,15 +1568,20 @@ export function queryDoveStatus(root, args = {}) {
           ? "needs-review"
           : "ready";
   const levelCounts = countBy(tasks.map((task) => String(task.level)), ["0", "1", "2", "3"]);
-  const projectTitle = inputs.state.dove?.title ?? initTask?.title ?? "Dove project";
+  const projectTitle = inputs.state.dove?.title ?? initTask?.title ?? doveText(responseLanguage, "projectTitleFallback");
   const projectObjective = inputs.state.dove?.objective ?? inputs.state.dove?.thesis ?? initTask?.summary ?? inputs.board.objective ?? null;
   const projectFocus = activeTasks[0]?.currentFocus ?? (activeTasks.length === 0 ? projectObjective : inputs.state.orchestration?.currentFocus ?? inputs.board.currentFocus ?? projectObjective);
+  const projectSummary = buildProjectSummary({ title: projectTitle, objective: projectObjective, focus: projectFocus, initTask, tasks, activeTasks, blockedTasks, review, versions, experiments, blockers, nextCommand, returnStatus });
+  const statusAdjustmentContract = buildStatusAdjustmentContract(visibleTasks);
   return {
     mode: "dove-status-query",
     query: true,
     proposalOnly: true,
     noAutoApply: true,
     writes: [],
+    responseLanguage,
+    projectSummary,
+    statusAdjustmentContract,
     current: {
       domain: currentDomain,
       stage: currentStage,
@@ -1352,10 +1589,12 @@ export function queryDoveStatus(root, args = {}) {
       nextCommand
     },
     dashboard: {
+      projectSummary,
+      statusAdjustmentContract,
       project: {
         title: projectTitle,
         objective: projectObjective,
-        responseLanguage: inputs.state.settings?.responseLanguage ?? "zh",
+        responseLanguage,
         durableRoot: ARTIFACT_PATHS.doveRoot,
         authoritativeRoot: inputs.doveAuthorityManifest.authoritativeRoot ?? ARTIFACT_PATHS.doveRoot,
         currentFocus: projectFocus,
@@ -1372,6 +1611,13 @@ export function queryDoveStatus(root, args = {}) {
         assignedRole: inputs.board.assignedRole ?? null,
         continuationStatus: inputs.board.continuationState?.status ?? null,
         reviewRequiredBeforeFinalize: inputs.board.reviewRequiredBeforeFinalize ?? false
+      },
+      runtime: {
+        continuation: {
+          ...inputs.runtimeContinuation.summary,
+          items: Array.isArray(inputs.runtimeContinuation.items) ? inputs.runtimeContinuation.items : []
+        },
+        results: inputs.runtimeResults.summary
       },
       init: initTask,
       tasks: {
@@ -1435,7 +1681,7 @@ export function queryDoveStatus(root, args = {}) {
         navigationReportPath: ARTIFACT_PATHS.navigationReport,
         wikiPath: ARTIFACT_PATHS.wiki
       },
-      primaryStateSources: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.metaOperatorLessons],
+      primaryStateSources: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.taskPacketsPacketsDir, ARTIFACT_PATHS.runtimeContinuation, ARTIFACT_PATHS.runtimeResults, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.metaOperatorLessons],
       mayRefreshDerivedSurfaces: false,
       noCommandExecution: true,
       noExternalProcess: true,
@@ -1446,18 +1692,19 @@ export function queryDoveStatus(root, args = {}) {
 }
 
 export function queryDoveOrchestrate(root, args = {}) {
-  const { inputs, mission } = buildMissionContract(root, args);
+  const { inputs, mission, responseLanguage } = buildMissionContract(root, args);
   const recommendedCommand = selectRouteCommand(mission, args);
   return {
     mode: "dove-orchestrate-query",
     proposalOnly: true,
     noAutoApply: true,
     writes: [],
+    responseLanguage,
     mission,
     route: {
       recommendedCommand,
       nextCommand: recommendedCommand,
-      reason: routeReason(mission, recommendedCommand, args),
+      reason: routeReason(mission, recommendedCommand, args, responseLanguage),
       roleBoundary: {
         primaryRole: mission.primaryRole,
         reviewerIsolationRequired: mission.primaryRole === "reviewer" || mission.stage === "audit"
@@ -1476,7 +1723,7 @@ export function queryDoveOrchestrate(root, args = {}) {
 }
 
 export function queryDoveAudit(root, args = {}) {
-  const { inputs, mission } = buildMissionContract(root, args);
+  const { inputs, mission, responseLanguage } = buildMissionContract(root, args);
   const paperAudit = queryPaperAudit(root, { scope: args.scope ?? mission.goal });
   const returnReadiness = queryDoveReturn(root, args);
   return {
@@ -1484,6 +1731,7 @@ export function queryDoveAudit(root, args = {}) {
     proposalOnly: true,
     noAutoApply: true,
     writes: [],
+    responseLanguage,
     mission,
     audit: {
       verdict: auditVerdictFromSeverityCounts(paperAudit.severityCounts),
@@ -1519,7 +1767,7 @@ export function queryDoveAudit(root, args = {}) {
 }
 
 export function queryDoveMissionBoard(root, args = {}) {
-  const { inputs, mission } = buildMissionContract(root, args);
+  const { inputs, mission, responseLanguage } = buildMissionContract(root, args);
   const boardStage = normalizeDoveMissionLifecycleStage(args.stage ?? args.missionStage, missionStageForPhase(inputs.board.currentPhase));
   const boardRole = primaryRoleForStage(boardStage);
   const allMissions = inputs.packets.map(buildMissionBoardMission);
@@ -1529,6 +1777,7 @@ export function queryDoveMissionBoard(root, args = {}) {
     proposalOnly: true,
     noAutoApply: true,
     writes: [],
+    responseLanguage,
     workspace: {
       ...buildWorkspaceSummary(inputs),
       asReadSnapshot: true,
@@ -1572,12 +1821,13 @@ export function queryDoveMissionBoard(root, args = {}) {
 }
 
 export function queryDoveMission(root, args = {}) {
-  const { inputs, mission } = buildMissionContract(root, args);
+  const { inputs, mission, responseLanguage } = buildMissionContract(root, args);
   return {
     mode: "dove-mission-query",
     proposalOnly: true,
     noAutoApply: true,
     writes: [],
+    responseLanguage,
     mission,
     workspace: buildWorkspaceSummary(inputs),
     packets: inputs.packets,
@@ -1599,7 +1849,7 @@ export function launchDoveMission(root, args = {}) {
     throw new Error("launchDoveMission requires executeBy and reviewAfter so the mission has an explicit execution window.");
   }
 
-  const { mission } = buildMissionContract(root, args);
+  const { mission, responseLanguage } = buildMissionContract(root, args);
   const actorRole = normalizeDoveRole(args.actorRole, "planner");
   const workerRole = normalizeDoveRole(args.workerRole ?? args.doveWorkerRole, null);
   const materialized = materializeGuidancePacket(root, {
@@ -1638,6 +1888,7 @@ export function launchDoveMission(root, args = {}) {
   return {
     mode: "dove-launch-mission",
     status: materialized.status,
+    responseLanguage,
     proposalOnly: false,
     noAutoApply: false,
     writes: materialized.artifactPaths,
@@ -1704,7 +1955,7 @@ export function launchDoveMission(root, args = {}) {
 }
 
 export function queryDoveReturn(root, args = {}) {
-  const { inputs, mission } = buildMissionContract(root, args);
+  const { inputs, mission, responseLanguage } = buildMissionContract(root, args);
   const validationEvidencePaths = mergeStringArrays(args.validationEvidencePaths, args.validationEvidence, args.evidencePaths);
   const paperAudit = ["paper", "experiment", "review"].includes(mission.domain) ? queryPaperAudit(root, { scope: args.scope ?? mission.goal }) : null;
   const completedChecks = completedChecklistCount(inputs.checklist);
@@ -1752,8 +2003,9 @@ export function queryDoveReturn(root, args = {}) {
     proposalOnly: true,
     noAutoApply: true,
     writes: [],
+    responseLanguage,
     returnStatus: status,
-    acceptanceVerdict: status === "ready" ? "Return is ready from the current durable evidence." : "Return is not ready; follow the next Dove command before closure.",
+    acceptanceVerdict: status === "ready" ? doveText(responseLanguage, "returnReadyVerdict") : doveText(responseLanguage, "returnNotReadyVerdict"),
     nextCommand: nextCommandForReturnStatus(status, mission.domain),
     mission,
     evidenceRead,
@@ -1761,7 +2013,7 @@ export function queryDoveReturn(root, args = {}) {
     lessonRitual: {
       command: "project:dove.lessons",
       optional: true,
-      when: "after return is ready and reusable experience is worth preserving",
+      when: doveText(responseLanguage, "lessonRitualWhen"),
       requiredFields: ["title", "problem", "decisions", "pitfalls", "validation", "nextTime"],
       noAutoCapture: true,
       noAutoApply: true,

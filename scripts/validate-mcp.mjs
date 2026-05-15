@@ -38,7 +38,10 @@ async function main() {
   for (const requiredTool of [
     "init_dove_goal",
     "create_dove_task",
+    "record_dove_mission_pass",
+    "apply_dove_status_adjustments",
     "run_dove_auto",
+    "run_dove_operator",
     "kill_dove_task",
     "reset_dove_version",
     "run_experience_workflow",
@@ -79,19 +82,49 @@ async function main() {
   assert.equal(missionProposal.proposalOnly, true);
   assert.deepEqual(missionProposal.writes, []);
   assert.equal(missionProposal.confirmationRequired, true);
+  assert.equal(missionProposal.demandConversion, true);
+  assert.equal(missionProposal.executionMode, "single-foreground-pass");
   assert.equal(missionProposal.proposedTask.level, 3);
   assert.equal(missionProposal.confirmArgs.confirmed, true);
+  assert.equal(missionProposal.checklistProposal.autoSelected, true);
+  assert.equal(missionProposal.checklistProposal.itemCount, 3);
+  assert.ok(missionProposal.checklistProposal.items.every((item) => item.creatorKind === "system"));
+  assert.ok(missionProposal.checklistProposal.items.every((item) => item.level > missionProposal.proposedTask.level));
 
   const mission = await callTool("create_dove_task", {
     ...missionProposal.confirmArgs
   });
-  assert.equal(mission.status, "created");
+  assert.equal(mission.status, "created-awaiting-host-pass");
   assert.equal(mission.confirmationRequired, false);
+  assert.equal(mission.demandConversion, true);
+  assert.equal(mission.executionMode, "single-foreground-pass");
+  assert.equal(mission.missionPassRequired, true);
+  assert.equal(mission.recordMissionPassTool, "record_dove_mission_pass");
+  assert.equal(mission.foreground, true);
+  assert.equal(mission.background, false);
   assert.equal(mission.createdTask.level, 3);
   assert.equal(mission.createdTask.creatorKind, "user");
   assert.equal(mission.createdTask.rootId, initGoal.init.id);
+  assert.equal(mission.createdChecklistTasks.length, 3);
+  assert.ok(mission.createdChecklistTasks.every((item) => item.parentId === mission.createdTask.id));
+  assert.ok(mission.createdChecklistTasks.every((item) => item.level > mission.createdTask.level));
   assert.ok(["paper", "experiment", "engineering"].includes(mission.classification.domain));
   const packetId = mission.createdTask.id;
+
+  const missionPass = await callTool("record_dove_mission_pass", {
+    packetId,
+    runId: "validator-mission-pass",
+    resultStatus: "in-progress",
+    resultSummary: "Validator mission converted demand into a task and completed one foreground pass.",
+    evidenceLinks: [".dove/task-packets/index.json"],
+    artifactRefs: [".dove/task-packets/index.json"],
+    nextAction: "project:dove.status"
+  });
+  assert.equal(missionPass.status, "in-progress");
+  assert.equal(missionPass.result.surface, "dove.mission");
+  assert.equal(missionPass.result.maxIterations, 1);
+  assert.equal(missionPass.result.iterationCount, 1);
+  assert.equal(missionPass.result.packetId, packetId);
 
   const source = await callTool("register_source", {
     packetId,
@@ -185,16 +218,56 @@ async function main() {
     goal: "Validate auto confirmation behavior."
   });
   assert.equal(needsConfirmation.status, "needs-confirmation");
+  assert.equal(needsConfirmation.proposalOnly, true);
+  assert.equal(needsConfirmation.noAutoApply, true);
+  assert.deepEqual(needsConfirmation.writes, []);
   assert.equal(needsConfirmation.confirmationRequired, true);
+  assert.equal(needsConfirmation.demandConversion, false);
+  assert.equal(needsConfirmation.executionMode, "multi-round-foreground-auto");
+  assert.equal(needsConfirmation.selectedTask.id, packetId);
+  assert.equal(needsConfirmation.confirmArgs.confirmed, true);
+  assert.equal(needsConfirmation.confirmArgs.packetId, packetId);
+
+  const autoProposal = await callTool("run_dove_auto", {
+    id: "validator-auto-demand",
+    goal: "Validate auto demand-to-task confirmation behavior.",
+    title: "Validator auto demand",
+    evidenceExpectations: ["contract", "runtime"]
+  });
+  assert.equal(autoProposal.status, "needs-confirmation");
+  assert.equal(autoProposal.proposalOnly, true);
+  assert.deepEqual(autoProposal.writes, []);
+  assert.equal(autoProposal.demandConversion, true);
+  assert.equal(autoProposal.executionMode, "multi-round-foreground-auto");
+  assert.equal(autoProposal.proposedTask.id, "validator-auto-demand");
+  assert.equal(autoProposal.checklistProposal.autoSelected, true);
+  assert.equal(autoProposal.confirmArgs.confirmed, true);
+  assert.equal(autoProposal.confirmArgs.checklistItems.length, 3);
 
   const autoRun = await callTool("run_dove_auto", {
     packetId,
     confirmed: true,
     runId: "validator-auto-run",
-    maxSteps: 2
+    maxSteps: 2,
+    steps: [{
+      command: "dove.review",
+      args: {
+        finalPlanPaths: [".dove/plans/current-plan.md"],
+        finalResultPaths: [".dove/drafts/introduction.md"],
+        artifactPaths: [".dove/figures/validator-figure.final.svg"],
+        instructions: "Auto validator should stop at the isolated audio review boundary."
+      }
+    }]
   });
   assert.equal(autoRun.status, "blocked-boundary");
   assert.equal(autoRun.result.packetId, packetId);
+  assert.equal(autoRun.result.foreground, true);
+  assert.equal(autoRun.result.background, false);
+  assert.equal(autoRun.result.maxIterations, 2);
+  assert.equal(autoRun.result.iterationCount, 1);
+  assert.equal(autoRun.result.iterations[0].command, "dove.review");
+  assert.equal(autoRun.result.iterations[0].outcome, "awaiting-review-output");
+  assert.equal(autoRun.result.stopReason, "awaiting-audio-review-output");
   assert.ok(autoRun.result.allowedInternalCommands.includes("dove.review-loop"));
 
   const secondMission = await callTool("create_dove_task", {
@@ -215,9 +288,34 @@ async function main() {
   assert.ok(status.dashboard.tasks.counts.total >= 1);
   assert.ok(status.dashboard.tasks.tree.length >= 1);
   assert.equal(status.dashboard.tasks.index.activeInitId, initGoal.init.id);
+  assert.ok(status.projectSummary && typeof status.projectSummary === "object");
+  assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
+  assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.equal(status.statusAdjustmentContract.items.some((item) => item.packetId === secondMission.createdTask.id), false);
+  assert.equal(status.statusAdjustmentContract.items.some((item) => ["completed", "killed"].includes(item.currentStatus)), false);
   assert.equal(status.taskGraph, undefined);
   assert.equal(status.paperLifecycle, undefined);
   assert.equal(status.diagnostics.mayRefreshDerivedSurfaces, false);
+
+  const statusAdjustmentPreview = await callTool("apply_dove_status_adjustments", {
+    adjustments: [{ packetId, status: "ready", reason: "Validator selects ready from status UX." }]
+  });
+  assert.equal(statusAdjustmentPreview.status, "needs-confirmation");
+  assert.equal(statusAdjustmentPreview.proposalOnly, true);
+  assert.deepEqual(statusAdjustmentPreview.writes, []);
+  assert.deepEqual(statusAdjustmentPreview.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+
+  const statusAdjustment = await callTool("apply_dove_status_adjustments", statusAdjustmentPreview.confirmArgs);
+  assert.ok(["applied", "skipped"].includes(statusAdjustment.status));
+  assert.equal(statusAdjustment.rejected.length, 0);
+
+  const operatorPreview = await callTool("run_dove_operator", {});
+  assert.equal(operatorPreview.status, "needs-confirmation");
+  assert.equal(operatorPreview.proposalOnly, true);
+  assert.deepEqual(operatorPreview.writes, []);
+  assert.equal(operatorPreview.executionMode, "operator-one-foreground-pass");
+  assert.equal(operatorPreview.foreground, true);
+  assert.equal(operatorPreview.background, false);
 
   const recordedLesson = await callTool("record_operator_lesson", {
     title: "Keep MCP validator retrospectives distilled",
