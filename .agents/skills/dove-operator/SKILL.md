@@ -13,7 +13,7 @@ Run all ready and in-progress Dove missions once, and create blocker-investigati
 - Do not claim real work happened unless the host supplies actual pass results or a safe internal step can run.
 - Targeting: Works over the active mission queue rather than one ad hoc target.
 - Confirmation: Preview the queue with writes: [] first; require approval before recording results or creating blocker investigation missions.
-- Outcome: Runnable work is recorded from real results, blocked work gets pending investigation missions, and unresolved host work remains awaiting evidence.
+- Outcome: Runnable work is recorded from real results, blocked work gets pending investigation missions, and unresolved host work remains awaiting evidence through explicit boundaries.
 
 ## Contract
 
@@ -34,7 +34,9 @@ Run all ready and in-progress Dove missions once, and create blocker-investigati
 8. Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.
 9. For ready and in-progress missions, run one safe internal workflow step when available or collect one real host pass result in order; pass per-task results to `run_dove_operator` so Dove records lifecycle and runtime state.
 10. Do not claim real engineering, paper, or experiment work happened when neither a safe internal step nor an actual host pass result exists; let `run_dove_operator` record awaiting host results instead.
-11. For blocked missions, create pending child plan missions that investigate the blocker reason and link back to the blocked mission.
-12. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-13. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-14. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+11. When no safe internal step or actual host pass result exists, persist an `awaiting-host-pass-result` boundary rather than marking work complete.
+12. Preserve durable role handoff metadata while running queue passes; do not expose planner/builder/reviewer as separate slash commands.
+13. For blocked missions, create pending child plan missions that investigate the blocker reason and link back to the blocked mission.
+14. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+15. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+16. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

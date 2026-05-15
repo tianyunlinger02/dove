@@ -24,6 +24,22 @@ export const PACKAGE_VERSION = "0.2.0";
 export const DOVE_TASK_STAGES = ["plan", "execute", "audit"];
 export const DOVE_TASK_DOMAINS = ["paper", "experiment", "engineering"];
 export const DOVE_TASK_STATUSES = ["pending", "ready", "in-progress", "blocked", "completed", "killed"];
+export const DOVE_BOUNDARY_TYPES = [
+  "needs-confirmation",
+  "needs-task-selection",
+  "awaiting-host-pass",
+  "awaiting-host-pass-result",
+  "awaiting-host-results",
+  "blocked-boundary",
+  "needs-review",
+  "awaiting-provider-output",
+  "awaiting-review-output",
+  "missing-required-materials",
+  "provider-failed",
+  "workflow-error-boundary"
+];
+export const DOVE_BOUNDARY_STATUSES = ["open", "resolved"];
+export const DOVE_HANDOFF_STATUSES = ["none", "pending", "accepted", "completed", "blocked"];
 export const DOVE_TASK_CREATOR_KINDS = ["user", "system"];
 export const DOVE_AUDIO_CONTEXT_POLICY = "final-plan-results-and-explicit-artifacts-only";
 export const DOVE_RESPONSE_LANGUAGES = ["zh", "en"];
@@ -1029,6 +1045,77 @@ export function normalizeDoveMissionLifecycleStage(value, fallback = "goal") {
   return DOVE_MISSION_LIFECYCLE_STAGES.includes(normalized) ? normalized : fallback;
 }
 
+export function normalizeDoveBoundaryType(value, fallback = "workflow-error-boundary") {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase().replace(/_/g, "-") : "";
+  return DOVE_BOUNDARY_TYPES.includes(normalized) ? normalized : fallback;
+}
+
+export function normalizeDoveBoundaryStatus(value, fallback = "open") {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase().replace(/_/g, "-") : "";
+  return DOVE_BOUNDARY_STATUSES.includes(normalized) ? normalized : fallback;
+}
+
+export function normalizeDoveHandoffStatus(value, fallback = "none") {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase().replace(/_/g, "-") : "";
+  return DOVE_HANDOFF_STATUSES.includes(normalized) ? normalized : fallback;
+}
+
+export function normalizeDovePrimaryRoleId(value, fallback = "builder") {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase().replace(/_/g, "-") : "";
+  return DOVE_PRIMARY_ROLE_IDS.includes(normalized) ? normalized : fallback;
+}
+
+export function normalizeDoveBoundary(value, fallback = null) {
+  const source = normalizeObject(value, fallback);
+  if (!source || Object.keys(source).length === 0) {
+    return fallback;
+  }
+  const type = normalizeDoveBoundaryType(source.type ?? source.boundaryType, fallback?.type ?? "workflow-error-boundary");
+  const status = normalizeDoveBoundaryStatus(source.status ?? source.boundaryStatus, fallback?.status ?? "open");
+  return {
+    ...source,
+    id: normalizeString(source.id ?? source.boundaryId, fallback?.id ?? `boundary-${type}`),
+    type,
+    status,
+    packetId: normalizeString(source.packetId ?? source.taskPacketId, fallback?.packetId ?? null),
+    runId: normalizeString(source.runId, fallback?.runId ?? null),
+    sourceSurface: normalizeString(source.sourceSurface ?? source.surface, fallback?.sourceSurface ?? null),
+    command: normalizeString(source.command, fallback?.command ?? null),
+    reason: normalizeString(source.reason ?? source.stopReason, fallback?.reason ?? ""),
+    summary: normalizeString(source.summary, fallback?.summary ?? ""),
+    requiredInputs: normalizeStringArray(source.requiredInputs, fallback?.requiredInputs ?? []),
+    requiredActions: normalizeStringArray(source.requiredActions, fallback?.requiredActions ?? []),
+    ownerRole: normalizeDovePrimaryRoleId(source.ownerRole, fallback?.ownerRole ?? "builder"),
+    nextRole: normalizeDovePrimaryRoleId(source.nextRole, fallback?.nextRole ?? source.ownerRole ?? "builder"),
+    createdAt: source.createdAt ?? fallback?.createdAt ?? null,
+    resolvedAt: source.resolvedAt ?? fallback?.resolvedAt ?? null,
+    resolution: normalizeString(source.resolution, fallback?.resolution ?? null)
+  };
+}
+
+export function normalizeDoveHandoff(value, fallback = null) {
+  const source = normalizeObject(value, fallback);
+  if (!source || Object.keys(source).length === 0) {
+    return fallback;
+  }
+  const status = normalizeDoveHandoffStatus(source.status, fallback?.status ?? "pending");
+  const toRole = normalizeDovePrimaryRoleId(source.toRole ?? source.nextRole, fallback?.toRole ?? "builder");
+  return {
+    ...source,
+    id: normalizeString(source.id ?? source.handoffId, fallback?.id ?? `handoff-${toRole}`),
+    status,
+    fromRole: normalizeDovePrimaryRoleId(source.fromRole ?? source.ownerRole, fallback?.fromRole ?? "planner"),
+    toRole,
+    reason: normalizeString(source.reason, fallback?.reason ?? ""),
+    summary: normalizeString(source.summary, fallback?.summary ?? ""),
+    boundaryId: normalizeString(source.boundaryId, fallback?.boundaryId ?? null),
+    sourceRunId: normalizeString(source.sourceRunId ?? source.runId, fallback?.sourceRunId ?? null),
+    requestedAt: source.requestedAt ?? fallback?.requestedAt ?? null,
+    acceptedAt: source.acceptedAt ?? fallback?.acceptedAt ?? null,
+    completedAt: source.completedAt ?? fallback?.completedAt ?? null
+  };
+}
+
 function createDoveRoleSummary(overrides = {}) {
   const roleOverrides = Object.fromEntries(normalizeObjectArray(overrides).map((role) => [role.id, role]));
   return DOVE_PRIMARY_ROLES.map((role) => ({
@@ -1486,6 +1573,21 @@ export function normalizeWorkspaceIndex(raw = {}) {
   };
 }
 
+function normalizeRuntimeLogEntries(raw = {}) {
+  const entries = [...normalizeObjectArray(raw.items), ...normalizeObjectArray(raw.entries)];
+  const keyed = new Map();
+  const unkeyed = [];
+  for (const entry of entries) {
+    const id = normalizeString(entry.id ?? entry.runId ?? entry.eventId, null);
+    if (id) {
+      keyed.set(id, entry);
+    } else {
+      unkeyed.push(entry);
+    }
+  }
+  return [...unkeyed, ...keyed.values()];
+}
+
 export function normalizeRuntimeControllerState(raw = {}) {
   const base = createRuntimeControllerState();
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -1616,7 +1718,7 @@ export function normalizeRuntimeEventsIndex(raw = {}) {
     ...raw,
     version: base.version,
     explicitInvocationOnly: normalizeBoolean(raw.explicitInvocationOnly, base.explicitInvocationOnly),
-    entries: normalizeObjectArray(raw.entries),
+    entries: normalizeRuntimeLogEntries(raw),
     summary: {
       ...base.summary,
       ...summary,
@@ -1641,7 +1743,7 @@ export function normalizeRuntimeResultsIndex(raw = {}) {
     ...raw,
     version: base.version,
     explicitInvocationOnly: normalizeBoolean(raw.explicitInvocationOnly, base.explicitInvocationOnly),
-    entries: normalizeObjectArray(raw.entries),
+    entries: normalizeRuntimeLogEntries(raw),
     summary: {
       ...base.summary,
       ...summary,

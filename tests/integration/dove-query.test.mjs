@@ -355,6 +355,24 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
         lifecycleStatus: "ready",
         dependencies: [],
         blockedBy: [],
+        ownerRole: "builder",
+        nextRole: "builder",
+        boundary: {
+          id: "boundary-runtime-progress",
+          type: "awaiting-host-pass",
+          status: "open",
+          packetId: "runtime-progress",
+          runId: "runtime-progress-run",
+          sourceSurface: "dove.auto",
+          command: "run_dove_auto",
+          reason: "Need host-visible implementation evidence.",
+          summary: "Runtime progress is waiting for host evidence.",
+          requiredInputs: ["implementation evidence"],
+          requiredActions: ["provide-host-pass-result"],
+          ownerRole: "builder",
+          nextRole: "builder",
+          createdAt: "2026-05-15T00:01:00.000Z"
+        },
         nextAction: "project:dove.auto"
       },
       {
@@ -503,6 +521,43 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
     },
     updatedAt: "2026-05-15T00:03:00.000Z"
   });
+  writeJson(root, ARTIFACT_PATHS.runtimeEvents, {
+    version: 1,
+    explicitInvocationOnly: true,
+    entries: [
+      {
+        id: "event-runtime-progress-transition",
+        type: "task.lifecycle.transitioned",
+        packetId: "runtime-progress",
+        runId: "runtime-progress-run",
+        surface: "dove.auto",
+        command: "run_dove_auto",
+        fromStatus: "ready",
+        toStatus: "ready",
+        summary: "Auto stopped at a host evidence boundary.",
+        timestamp: "2026-05-15T00:01:00.000Z"
+      },
+      {
+        id: "event-runtime-progress-boundary",
+        type: "task.boundary.opened",
+        packetId: "runtime-progress",
+        runId: "runtime-progress-run",
+        surface: "dove.auto",
+        command: "run_dove_auto",
+        boundaryId: "boundary-runtime-progress",
+        summary: "Need host-visible implementation evidence.",
+        timestamp: "2026-05-15T00:01:01.000Z"
+      }
+    ],
+    summary: {
+      eventCount: 2,
+      lastEventType: "task.boundary.opened",
+      lastRunId: "runtime-progress-run",
+      overview: "Two runtime events are recorded.",
+      eventsPath: ARTIFACT_PATHS.runtimeEvents
+    },
+    updatedAt: "2026-05-15T00:01:01.000Z"
+  });
   writeJson(root, ARTIFACT_PATHS.metaOperatorLessons, {
     version: 1,
     referenceOnly: true,
@@ -565,6 +620,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
     ...watchedArtifacts,
     ARTIFACT_PATHS.navigationReport,
     ARTIFACT_PATHS.runtimeContinuation,
+    ARTIFACT_PATHS.runtimeEvents,
     ARTIFACT_PATHS.runtimeResults,
     ARTIFACT_PATHS.metaOperatorLessons,
     path.join(ARTIFACT_PATHS.taskPacketsPacketsDir, "status-packet.json"),
@@ -592,6 +648,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.dashboard.tasks.tree[0].children.some((task) => task.id === "status-packet"), true);
   assert.equal(result.dashboard.runtime.continuation.currentPacketId, "runtime-progress");
   assert.equal(result.dashboard.runtime.results.lastRunId, "runtime-completed-run");
+  assert.equal(result.dashboard.runtime.events.lastEventType, "task.boundary.opened");
 
   const statusTask = result.dashboard.tasks.active.find((task) => task.id === "status-packet");
   assert.ok(statusTask);
@@ -611,8 +668,13 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
 
   const runtimeTask = result.dashboard.tasks.active.find((task) => task.id === "runtime-progress");
   assert.equal(runtimeTask.lastRun.id, "runtime-progress-run");
-  assert.equal(runtimeTask.lastStopReason, "step-budget-exhausted");
+  assert.equal(runtimeTask.lastEvent.type, "task.boundary.opened");
+  assert.equal(runtimeTask.currentBoundary.type, "awaiting-host-pass");
+  assert.equal(runtimeTask.actionableBoundary.type, "awaiting-host-pass");
+  assert.equal(runtimeTask.lastStopReason, "Need host-visible implementation evidence.");
   assert.equal(runtimeTask.continuationState.command, "project:dove.auto");
+  assert.equal(result.actionableBoundaries.some((boundary) => boundary.packetId === "runtime-progress" && boundary.type === "awaiting-host-pass"), true);
+  assert.equal(result.dashboard.tasks.actionableBoundaries.some((boundary) => boundary.packetId === "runtime-progress"), true);
 
   const statusAdjustmentItems = Object.fromEntries(result.statusAdjustmentContract.items.map((item) => [item.packetId, item]));
   assert.deepEqual(result.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
@@ -627,6 +689,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(statusAdjustmentItems["plain-pending"].recommendedStatus, "ready");
   assert.equal(statusAdjustmentItems["blocked-dependency"].recommendedStatus, "blocked");
   assert.equal(statusAdjustmentItems["runtime-progress"].recommendedStatus, "in-progress");
+  assert.equal(statusAdjustmentItems["runtime-progress"].currentBoundary.type, "awaiting-host-pass");
+  assert.equal(statusAdjustmentItems["runtime-progress"].actionableBoundary.type, "awaiting-host-pass");
+  assert.equal(statusAdjustmentItems["runtime-progress"].lastEvent.type, "task.boundary.opened");
   assert.equal(statusAdjustmentItems["runtime-completed"].recommendedStatus, "completed");
   assert.equal(statusAdjustmentItems["runtime-completed"].lastStopReason, "completion-confirmed-by-mission-pass");
   assert.equal(result.dashboard.returnReadiness.status, "blocked");
@@ -638,6 +703,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.diagnostics.derivedReports.navigationReportPath, ARTIFACT_PATHS.navigationReport);
   assert.equal(result.diagnostics.primaryStateSources.includes(ARTIFACT_PATHS.taskPacketsPacketsDir), true);
   assert.equal(result.diagnostics.primaryStateSources.includes(ARTIFACT_PATHS.runtimeContinuation), true);
+  assert.equal(result.diagnostics.primaryStateSources.includes(ARTIFACT_PATHS.runtimeEvents), true);
   assert.equal(result.diagnostics.primaryStateSources.includes(ARTIFACT_PATHS.runtimeResults), true);
   assert.equal(result.diagnostics.mayRefreshDerivedSurfaces, false);
   assert.equal(result.diagnostics.noCommandExecution, true);

@@ -47,12 +47,13 @@ function summarizeLeases(items = []) {
 
 function summarizeEvents(entries = []) {
   const last = entries.at(-1) ?? null;
+  const lastEventType = last?.eventType ?? last?.type ?? null;
   return {
     eventCount: entries.length,
-    lastEventType: last?.eventType ?? null,
+    lastEventType,
     lastRunId: last?.runId ?? null,
     overview: entries.length > 0
-      ? `${entries.length} autonomous control-plane event(s) recorded. Latest event: ${last.eventType}.`
+      ? `${entries.length} autonomous control-plane event(s) recorded. Latest event: ${lastEventType}.`
       : "No autonomous control-plane events have been recorded yet.",
     eventsPath: ARTIFACT_PATHS.runtimeEvents
   };
@@ -123,7 +124,7 @@ export function saveRuntimeArtifacts(root, artifacts) {
 }
 
 export function appendEvent(artifacts, entry) {
-  const entries = [...(artifacts.events.entries ?? []), entry].slice(-200);
+  const entries = [...(artifacts.events.entries ?? []), entry];
   artifacts.events = {
     ...artifacts.events,
     entries,
@@ -133,7 +134,7 @@ export function appendEvent(artifacts, entry) {
 }
 
 export function appendResult(artifacts, entry) {
-  const entries = [...(artifacts.results.entries ?? []), entry].slice(-200);
+  const entries = [...(artifacts.results.entries ?? []), entry];
   artifacts.results = {
     ...artifacts.results,
     entries,

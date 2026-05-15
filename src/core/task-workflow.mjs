@@ -7,7 +7,11 @@ import {
   DOVE_TASK_DOMAINS,
   DOVE_TASK_STAGES,
   DOVE_TASK_STATUSES,
-  createTaskPacketsIndex
+  createTaskPacketsIndex,
+  normalizeDoveBoundary,
+  normalizeDoveBoundaryType,
+  normalizeDoveHandoff,
+  normalizeDovePrimaryRoleId
 } from "./schema.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, loadState, nowIso, readJson, saveState, writeJson } from "./workspace.mjs";
 import { normalizeTaskPacketId, readTaskPacketCatalog, resolveDurableTaskPacket } from "./task-packets.mjs";
@@ -18,6 +22,7 @@ import { runAudioReview } from "./audio-review.mjs";
 import { runDoveReviewLoop } from "./dove-review-loop.mjs";
 import { normalizeRebuttalIssues, buildRebuttalStrategy } from "./orchestration.mjs";
 import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
+import { appendEvent, appendResult, loadRuntimeArtifacts, saveRuntimeArtifacts } from "./runtime-state.mjs";
 
 function slugify(value) {
   return String(value ?? "")
@@ -155,6 +160,16 @@ function writePacket(root, packet) {
     contextPolicy: packet.contextPolicy,
     currentFocus: packet.currentFocus,
     nextAction: packet.nextAction,
+    completedAt: packet.completedAt ?? null,
+    blockedReason: packet.blockedReason ?? null,
+    killedAt: packet.killedAt ?? null,
+    killReason: packet.killReason ?? null,
+    ownerRole: packet.ownerRole ?? null,
+    nextRole: packet.nextRole ?? null,
+    boundary: packet.boundary ?? null,
+    boundaryHistory: Array.isArray(packet.boundaryHistory) ? packet.boundaryHistory : [],
+    handoff: packet.handoff ?? null,
+    lastTransition: packet.lastTransition ?? null,
     updatedAt: packet.updatedAt
   });
 }
@@ -176,8 +191,16 @@ function upsertIndexItem(index, packet) {
     blockedBy: packet.blockedBy,
     createdAt: packet.createdAt,
     updatedAt: packet.updatedAt,
+    completedAt: packet.completedAt ?? null,
+    blockedReason: packet.blockedReason ?? null,
     killedAt: packet.killedAt ?? null,
     killReason: packet.killReason ?? null,
+    ownerRole: packet.ownerRole ?? null,
+    nextRole: packet.nextRole ?? null,
+    boundary: packet.boundary ?? null,
+    boundaryHistory: Array.isArray(packet.boundaryHistory) ? packet.boundaryHistory : [],
+    handoff: packet.handoff ?? null,
+    lastTransition: packet.lastTransition ?? null,
     lessonIds: packet.lessonIds,
     artifactRefs: packet.artifactRefs,
     contextPolicy: packet.contextPolicy,
@@ -230,6 +253,16 @@ function nextCommandFor(classification) {
   return "project:dove.auto";
 }
 
+function ownerRoleFor(classification = {}) {
+  if (classification.stage === "audit") {
+    return "reviewer";
+  }
+  if (classification.stage === "plan") {
+    return "planner";
+  }
+  return "builder";
+}
+
 function activeLessons(root, packetId = null) {
   const lessons = readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] });
   return (Array.isArray(lessons.lessons) ? lessons.lessons : []).filter((lesson) => {
@@ -266,8 +299,16 @@ function buildPacket(root, args, init, classification, overrides = {}) {
     blockedBy,
     createdAt: timestamp,
     updatedAt: timestamp,
+    completedAt: null,
+    blockedReason: null,
     killedAt: null,
     killReason: null,
+    ownerRole: normalizeDovePrimaryRoleId(overrides.ownerRole ?? args.ownerRole, ownerRoleFor(classification)),
+    nextRole: normalizeDovePrimaryRoleId(overrides.nextRole ?? args.nextRole, overrides.ownerRole ?? args.ownerRole ?? ownerRoleFor(classification)),
+    boundary: normalizeDoveBoundary(overrides.boundary ?? args.boundary, null),
+    boundaryHistory: [],
+    handoff: normalizeDoveHandoff(overrides.handoff ?? args.handoff, null),
+    lastTransition: null,
     lessonIds: normalizeStringArray(args.lessonIds),
     artifactRefs: normalizeStringArray(args.artifactRefs ?? args.artifactPaths),
     contextPolicy: normalizeString(args.contextPolicy, DOVE_AUDIO_CONTEXT_POLICY),
@@ -365,8 +406,16 @@ function buildChecklistTasks(root, args, parent, classification, responseLanguag
       blockedBy: normalized.blockedBy,
       createdAt: timestamp,
       updatedAt: timestamp,
+      completedAt: null,
+      blockedReason: null,
       killedAt: null,
       killReason: null,
+      ownerRole: normalizeDovePrimaryRoleId(parent.ownerRole, ownerRoleFor(parent)),
+      nextRole: normalizeDovePrimaryRoleId(parent.nextRole, parent.ownerRole ?? ownerRoleFor(parent)),
+      boundary: null,
+      boundaryHistory: [],
+      handoff: null,
+      lastTransition: null,
       lessonIds: [],
       artifactRefs: normalized.artifactRefs,
       contextPolicy: parent.contextPolicy,
@@ -431,8 +480,16 @@ export function initDoveGoal(root, args = {}) {
     blockedBy: [],
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
+    completedAt: null,
+    blockedReason: null,
     killedAt: null,
     killReason: null,
+    ownerRole: "planner",
+    nextRole: "planner",
+    boundary: null,
+    boundaryHistory: [],
+    handoff: null,
+    lastTransition: null,
     lessonIds: normalizeStringArray(existing?.lessonIds),
     artifactRefs: normalizeStringArray(args.artifactRefs ?? existing?.artifactRefs),
     contextPolicy: DOVE_AUDIO_CONTEXT_POLICY,
@@ -495,8 +552,16 @@ function buildProposedInitPacket(root, args = {}, classification = { domain: "en
     blockedBy: [],
     createdAt: timestamp,
     updatedAt: timestamp,
+    completedAt: null,
+    blockedReason: null,
     killedAt: null,
     killReason: null,
+    ownerRole: "planner",
+    nextRole: "planner",
+    boundary: null,
+    boundaryHistory: [],
+    handoff: null,
+    lastTransition: null,
     lessonIds: [],
     artifactRefs: normalizeStringArray(args.initArtifactRefs),
     contextPolicy: DOVE_AUDIO_CONTEXT_POLICY,
@@ -921,7 +986,19 @@ const MISSION_PASS_FIELDS = [
   "blocked",
   "resultSummary",
   "outcome",
+  "reason",
+  "summary",
   "stopReason",
+  "blockedReason",
+  "boundary",
+  "boundaryType",
+  "boundaryId",
+  "requiredInputs",
+  "requiredActions",
+  "ownerRole",
+  "nextRole",
+  "handoff",
+  "handoffId",
   "evidenceLinks",
   "evidencePaths",
   "validationEvidencePaths",
@@ -1000,11 +1077,22 @@ export function recordDoveMissionPass(root, args = {}) {
   }
   const taskBefore = loadFullTask(root, selected);
   const resultStatus = normalizeMissionPassStatus(args);
+  const timestamp = nowIso();
+  const runId = normalizeTaskPacketId(args.runId ?? `mission-${taskBefore.id}-${Date.now().toString(36)}`);
   const nextAction = normalizeString(args.nextAction, resultStatus === "completed" ? "project:dove.status" : taskBefore.nextAction ?? "project:dove.status");
   const artifactRefs = normalizeStringArray([...(Array.isArray(taskBefore.artifactRefs) ? taskBefore.artifactRefs : []), ...normalizeStringArray(args.artifactRefs ?? args.artifactPaths)]);
-  const task = updateTaskLifecycle(root, taskBefore, resultStatus, { nextAction, artifactRefs });
-  const timestamp = nowIso();
-  const runId = normalizeTaskPacketId(args.runId ?? `mission-${task.id}-${Date.now().toString(36)}`);
+  const lifecycleFields = lifecycleFieldsForStatus(resultStatus, args, timestamp, responseLanguage);
+  const task = updateTaskLifecycle(root, taskBefore, resultStatus, {
+    ...lifecycleFields,
+    runId,
+    surface: "dove.mission",
+    command: normalizeAutoCommandId(args.command ?? args.workflow ?? args.preset ?? args.nextCommand),
+    summary: normalizeString(args.resultSummary ?? args.summary, ""),
+    reason: normalizeString(args.reason ?? args.stopReason, ""),
+    nextAction,
+    artifactRefs,
+    evidenceLinks: normalizeStringArray(args.evidenceLinks ?? args.evidencePaths ?? args.validationEvidencePaths)
+  });
   const evidenceLinks = normalizeStringArray(args.evidenceLinks ?? args.evidencePaths ?? args.validationEvidencePaths);
   const summary = normalizeString(args.resultSummary ?? args.summary, resultStatus === "completed" ? doveText(responseLanguage, "missionPassCompletedSummary") : resultStatus === "blocked" ? doveText(responseLanguage, "missionPassBlockedSummary") : doveText(responseLanguage, "missionPassProgressSummary"));
   const command = normalizeAutoCommandId(args.command ?? args.workflow ?? args.preset ?? args.nextCommand);
@@ -1085,31 +1173,17 @@ export function killDoveTask(root, args = {}) {
   if (selected.level === 0) {
     throw new Error("The level-0 init task cannot be killed. Use /dove:version to change direction while preserving init.");
   }
-  const timestamp = nowIso();
-  const catalog = readTaskPacketCatalog(root);
-  const fullPacket = catalog.byId.get(selected.id) ?? selected;
-  const packet = {
-    ...fullPacket,
-    status: "killed",
-    lifecycleStatus: "killed",
-    killedAt: timestamp,
-    killReason: normalizeString(args.reason ?? args.killReason, doveText(responseLanguage, "killReason")),
-    updatedAt: timestamp
-  };
-  writePacket(root, packet);
-  const nextIndex = saveTaskIndex(root, upsertIndexItem(index, packet));
-  const state = loadState(root);
-  saveState(root, {
-    ...state,
-    orchestration: {
-      ...state.orchestration,
-      activeTaskIds: nextIndex.taskModel.activeTaskIds
-    }
-  });
+  const fullPacket = loadFullTask(root, selected);
+  const packet = updateTaskLifecycle(root, fullPacket, "killed", lifecycleFieldsForStatus("killed", {
+    ...args,
+    reason: normalizeString(args.reason ?? args.killReason, doveText(responseLanguage, "killReason")),
+    surface: "dove.status",
+    command: "kill_dove_task"
+  }, nowIso(), responseLanguage));
   return {
     status: "killed",
     killedTask: packet,
-    activeTaskIds: nextIndex.taskModel.activeTaskIds,
+    activeTaskIds: loadTaskIndex(root).taskModel.activeTaskIds,
     responseLanguage
   };
 }
@@ -1123,6 +1197,15 @@ function lifecycleFieldsForStatus(status, args = {}, timestamp = nowIso(), respo
   const artifactRefs = normalizeStringArray(args.artifactRefs ?? args.artifactPaths);
   if (artifactRefs.length > 0) {
     fields.artifactRefs = artifactRefs;
+  }
+  const evidenceLinks = normalizeStringArray(args.evidenceLinks ?? args.evidencePaths ?? args.validationEvidencePaths);
+  if (evidenceLinks.length > 0) {
+    fields.evidenceLinks = evidenceLinks;
+  }
+  for (const key of ["runId", "surface", "sourceSurface", "command", "boundary", "boundaryType", "boundaryId", "requiredInputs", "requiredActions", "ownerRole", "nextRole", "handoff", "handoffId", "reason", "summary", "stopReason"]) {
+    if (args[key] !== undefined) {
+      fields[key] = args[key];
+    }
   }
   if (status === "killed") {
     fields.killedAt = timestamp;
@@ -1210,7 +1293,7 @@ export function applyDoveStatusAdjustments(root, args = {}) {
       skipped.push({ packetId, status: adjustment.status, reason: doveText(responseLanguage, "statusAdjustSameReason") });
       continue;
     }
-    const updated = updateTaskLifecycle(root, packet, adjustment.status, lifecycleFieldsForStatus(adjustment.status, adjustment, nowIso(), responseLanguage));
+    const updated = updateTaskLifecycle(root, packet, adjustment.status, lifecycleFieldsForStatus(adjustment.status, { ...adjustment, surface: "dove.status", command: "apply_dove_status_adjustments" }, nowIso(), responseLanguage));
     catalog.byId.set(packetId, updated);
     applied.push({ packetId, fromStatus: packet.status, toStatus: updated.status, title: updated.title, level: updated.level });
   }
@@ -1304,10 +1387,10 @@ function operatorAwaitingHostIteration(task, timestamp, responseLanguage = "zh")
   };
 }
 
-function applyOperatorHostResult(root, taskItem, taskResult, timestamp, responseLanguage = "zh") {
+function applyOperatorHostResult(root, taskItem, taskResult, timestamp, responseLanguage = "zh", runId = null) {
   const task = loadFullTask(root, taskItem);
   const taskStatus = normalizeMissionPassStatus(taskResult);
-  const fields = lifecycleFieldsForStatus(taskStatus, taskResult, timestamp, responseLanguage);
+  const fields = lifecycleFieldsForStatus(taskStatus, { ...taskResult, runId, surface: "dove.operator", command: "host-pass-result" }, timestamp, responseLanguage);
   fields.artifactRefs = normalizeStringArray([...(Array.isArray(task.artifactRefs) ? task.artifactRefs : []), ...normalizeStringArray(taskResult.artifactRefs ?? taskResult.artifactPaths)]);
   const updatedTask = updateTaskLifecycle(root, task, taskStatus, fields);
   return {
@@ -1326,27 +1409,40 @@ function applyOperatorHostResult(root, taskItem, taskResult, timestamp, response
   };
 }
 
-function runOperatorInternalStep(root, taskItem, timestamp, responseLanguage = "zh") {
+function runOperatorInternalStep(root, taskItem, timestamp, responseLanguage = "zh", runId = null) {
   const task = loadFullTask(root, taskItem);
   const autoPlan = inferAutoStepsForTask(task, {});
   const step = autoPlan.steps[0] ?? null;
   if (!step) {
+    const iteration = operatorAwaitingHostIteration(task, timestamp, responseLanguage);
+    const updatedTask = updateTaskLifecycle(root, task, task.status, {
+      runId,
+      surface: "dove.operator",
+      command: "host-pass-result",
+      boundaryType: "awaiting-host-pass-result",
+      reason: iteration.stopReason,
+      stopReason: iteration.stopReason,
+      summary: iteration.outcome,
+      requiredActions: ["provide-host-pass-result"],
+      nextAction: "project:dove.status"
+    });
     return {
       awaitingTaskId: task.id,
-      iteration: operatorAwaitingHostIteration(task, timestamp, responseLanguage)
+      updatedTask,
+      iteration
     };
   }
   const startedAt = nowIso();
-  let workingTask = task.status === "ready" ? updateTaskLifecycle(root, task, "in-progress") : task;
+  let workingTask = task.status === "ready" ? updateTaskLifecycle(root, task, "in-progress", { runId, surface: "dove.operator", command: step.command }) : task;
   try {
     const output = executeAutoStep(root, step.command, stepArgsForTask(workingTask, step.args));
     const classified = classifyAutoStepResult(step.command, output);
     const completedAt = nowIso();
     let updatedTask = workingTask;
     if (step.completeTask === true) {
-      updatedTask = updateTaskLifecycle(root, workingTask, "completed", { nextAction: "project:dove.status" });
+      updatedTask = updateTaskLifecycle(root, workingTask, "completed", { runId, surface: "dove.operator", command: step.command, nextAction: "project:dove.status" });
     } else if (classified.terminal) {
-      updatedTask = updateTaskLifecycle(root, workingTask, "blocked", { nextAction: "project:dove.status" });
+      updatedTask = updateTaskLifecycle(root, workingTask, "blocked", { runId, surface: "dove.operator", command: step.command, boundaryType: classified.outcome, reason: classified.stopReason, stopReason: classified.stopReason, nextAction: "project:dove.status" });
     }
     return {
       updatedTask,
@@ -1365,7 +1461,7 @@ function runOperatorInternalStep(root, taskItem, timestamp, responseLanguage = "
     };
   } catch (error) {
     const completedAt = nowIso();
-    workingTask = updateTaskLifecycle(root, workingTask, "blocked", { nextAction: "project:dove.status" });
+    workingTask = updateTaskLifecycle(root, workingTask, "blocked", { runId, surface: "dove.operator", command: step.command, boundaryType: "workflow-error-boundary", reason: error.message, stopReason: error.message, nextAction: "project:dove.status" });
     return {
       updatedTask: workingTask,
       iteration: {
@@ -1470,7 +1566,7 @@ export function runDoveOperator(root, args = {}) {
   const updatedTasks = [];
   const awaitingResults = [];
   for (const taskItem of queue.autoRunnable) {
-    const stepResult = runOperatorInternalStep(root, taskItem, timestamp, responseLanguage);
+    const stepResult = runOperatorInternalStep(root, taskItem, timestamp, responseLanguage, runId);
     iterations.push(stepResult.iteration);
     if (stepResult.updatedTask) {
       updatedTasks.push(stepResult.updatedTask);
@@ -1483,11 +1579,24 @@ export function runDoveOperator(root, args = {}) {
     const task = loadFullTask(root, taskItem);
     const taskResult = resultMap.get(task.id);
     if (!taskResult) {
+      const iteration = operatorAwaitingHostIteration(task, timestamp, responseLanguage);
+      const updatedTask = updateTaskLifecycle(root, task, task.status, {
+        runId,
+        surface: "dove.operator",
+        command: "host-pass-result",
+        boundaryType: "awaiting-host-pass-result",
+        reason: iteration.stopReason,
+        stopReason: iteration.stopReason,
+        summary: iteration.outcome,
+        requiredActions: ["provide-host-pass-result"],
+        nextAction: "project:dove.status"
+      });
       awaitingResults.push(task.id);
-      iterations.push(operatorAwaitingHostIteration(task, timestamp, responseLanguage));
+      updatedTasks.push(updatedTask);
+      iterations.push(iteration);
       continue;
     }
-    const hostResult = applyOperatorHostResult(root, task, taskResult, timestamp, responseLanguage);
+    const hostResult = applyOperatorHostResult(root, task, taskResult, timestamp, responseLanguage, runId);
     updatedTasks.push(hostResult.updatedTask);
     iterations.push(hostResult.iteration);
   }
@@ -1839,13 +1948,226 @@ function loadFullTask(root, task) {
   return catalog.byId.get(task.id) ?? task;
 }
 
+function boundaryTypeFor(fields = {}, status = "blocked") {
+  const explicitType = normalizeString(fields.boundaryType, null);
+  if (explicitType) {
+    return explicitType;
+  }
+  return status === "blocked" ? "blocked-boundary" : null;
+}
+
+function transitionBoundaryFor(task, status, fields, timestamp) {
+  const explicit = normalizeDoveBoundary(fields.boundary, null);
+  if (explicit) {
+    return {
+      ...explicit,
+      packetId: explicit.packetId ?? task.id,
+      createdAt: explicit.createdAt ?? timestamp
+    };
+  }
+  const type = boundaryTypeFor(fields, status);
+  if (!type) {
+    return null;
+  }
+  return normalizeDoveBoundary({
+    id: normalizeTaskPacketId(fields.boundaryId ?? `boundary-${task.id}-${type}-${Date.now().toString(36)}`),
+    type,
+    status: "open",
+    packetId: task.id,
+    runId: fields.runId ?? null,
+    sourceSurface: fields.sourceSurface ?? fields.surface ?? null,
+    command: fields.command ?? null,
+    reason: fields.reason ?? fields.blockedReason ?? fields.stopReason ?? "",
+    summary: fields.summary ?? fields.blockedReason ?? fields.reason ?? fields.stopReason ?? "",
+    requiredInputs: fields.requiredInputs ?? [],
+    requiredActions: fields.requiredActions ?? [],
+    ownerRole: fields.ownerRole ?? task.ownerRole ?? ownerRoleFor(task),
+    nextRole: fields.nextRole ?? task.nextRole ?? task.ownerRole ?? ownerRoleFor(task),
+    createdAt: timestamp
+  }, null);
+}
+
+function transitionHandoffFor(task, fields, boundary, timestamp) {
+  const explicit = normalizeDoveHandoff(fields.handoff, null);
+  if (explicit) {
+    return {
+      ...explicit,
+      boundaryId: explicit.boundaryId ?? boundary?.id ?? null,
+      requestedAt: explicit.requestedAt ?? timestamp
+    };
+  }
+  const ownerRole = normalizeDovePrimaryRoleId(fields.ownerRole ?? task.ownerRole, ownerRoleFor(task));
+  const nextRole = normalizeDovePrimaryRoleId(fields.nextRole ?? boundary?.nextRole, ownerRole);
+  if (nextRole === ownerRole) {
+    return null;
+  }
+  return normalizeDoveHandoff({
+    id: normalizeTaskPacketId(fields.handoffId ?? `handoff-${task.id}-${ownerRole}-to-${nextRole}-${Date.now().toString(36)}`),
+    status: "pending",
+    fromRole: ownerRole,
+    toRole: nextRole,
+    reason: fields.reason ?? boundary?.reason ?? "",
+    summary: fields.summary ?? boundary?.summary ?? "",
+    boundaryId: boundary?.id ?? null,
+    sourceRunId: fields.runId ?? null,
+    requestedAt: timestamp
+  }, null);
+}
+
+function appendBoundaryHistory(task, boundary, resolvedBoundary) {
+  return [
+    ...(Array.isArray(task.boundaryHistory) ? task.boundaryHistory : []),
+    ...(resolvedBoundary ? [resolvedBoundary] : []),
+    ...(boundary ? [boundary] : [])
+  ].slice(-20);
+}
+
+function runtimeEventId(packetId, type, count) {
+  return normalizeTaskPacketId(`event-${packetId}-${type}-${Date.now().toString(36)}-${count}`);
+}
+
+function persistentLifecycleFields(fields = {}) {
+  const allowedKeys = [
+    "currentFocus",
+    "nextAction",
+    "lessonIds",
+    "artifactRefs",
+    "evidenceLinks",
+    "outputPaths",
+    "claimIds",
+    "noteIds",
+    "experimentIds",
+    "resultIds",
+    "auditIds",
+    "versionIds",
+    "rebuttalIssueIds"
+  ];
+  return Object.fromEntries(allowedKeys.filter((key) => fields[key] !== undefined).map((key) => [key, fields[key]]));
+}
+
+function recordLifecycleEvents(root, packet, transition, openedBoundary, resolvedBoundary, handoff) {
+  const artifacts = loadRuntimeArtifacts(root);
+  const baseCount = artifacts.events.entries?.length ?? 0;
+  const base = {
+    packetId: packet.id,
+    runId: transition.runId ?? null,
+    surface: transition.surface ?? transition.sourceSurface ?? null,
+    command: transition.command ?? null,
+    fromStatus: transition.fromStatus,
+    toStatus: transition.toStatus,
+    summary: transition.summary ?? "",
+    evidenceLinks: normalizeStringArray(transition.evidenceLinks),
+    artifactRefs: normalizeStringArray(transition.artifactRefs),
+    timestamp: transition.timestamp,
+    recordedAt: transition.timestamp
+  };
+  const events = [{
+    ...base,
+    id: runtimeEventId(packet.id, "task-lifecycle-transitioned", baseCount + 1),
+    type: "task.lifecycle.transitioned",
+    eventType: "task.lifecycle.transitioned",
+    boundaryId: openedBoundary?.id ?? resolvedBoundary?.id ?? null,
+    handoffId: handoff?.id ?? null
+  }];
+  if (resolvedBoundary) {
+    events.push({
+      ...base,
+      id: runtimeEventId(packet.id, "task-boundary-resolved", baseCount + events.length + 1),
+      type: "task.boundary.resolved",
+      eventType: "task.boundary.resolved",
+      boundaryId: resolvedBoundary.id,
+      boundary: resolvedBoundary,
+      handoffId: null
+    });
+  }
+  if (openedBoundary) {
+    events.push({
+      ...base,
+      id: runtimeEventId(packet.id, "task-boundary-opened", baseCount + events.length + 1),
+      type: "task.boundary.opened",
+      eventType: "task.boundary.opened",
+      boundaryId: openedBoundary.id,
+      boundary: openedBoundary,
+      handoffId: handoff?.id ?? null
+    });
+  }
+  if (handoff) {
+    events.push({
+      ...base,
+      id: runtimeEventId(packet.id, "task-handoff-requested", baseCount + events.length + 1),
+      type: "task.handoff.requested",
+      eventType: "task.handoff.requested",
+      boundaryId: openedBoundary?.id ?? resolvedBoundary?.id ?? null,
+      handoffId: handoff.id,
+      handoff
+    });
+  }
+  for (const event of events) {
+    appendEvent(artifacts, event);
+  }
+  saveRuntimeArtifacts(root, artifacts);
+}
+
 function updateTaskLifecycle(root, task, status, fields = {}) {
   const timestamp = nowIso();
+  const fullTask = loadFullTask(root, task);
+  const fromStatus = fullTask.status;
+  const artifactRefs = fields.artifactRefs !== undefined ? normalizeStringArray(fields.artifactRefs) : fullTask.artifactRefs;
+  const evidenceLinks = fields.evidenceLinks !== undefined ? normalizeStringArray(fields.evidenceLinks) : fullTask.evidenceLinks;
+  const persistedFields = persistentLifecycleFields(fields);
+  const statusFields = {};
+  if (status === "in-progress" && !fullTask.startedAt) {
+    statusFields.startedAt = fields.startedAt ?? timestamp;
+  }
+  if (status === "completed") {
+    statusFields.completedAt = fields.completedAt ?? timestamp;
+    statusFields.blockedReason = null;
+  }
+  if (status === "blocked") {
+    statusFields.blockedReason = normalizeString(fields.blockedReason ?? fields.reason ?? fields.stopReason, fullTask.blockedReason ?? "");
+  }
+  if (!["blocked"].includes(status) && fullTask.status === "blocked") {
+    statusFields.blockedReason = null;
+  }
+  if (status === "killed") {
+    statusFields.killedAt = fields.killedAt ?? timestamp;
+    statusFields.killReason = normalizeString(fields.killReason ?? fields.reason, fullTask.killReason ?? "");
+  }
+  const openedBoundary = status === "blocked" || fields.boundary || fields.boundaryType
+    ? transitionBoundaryFor(fullTask, status, { ...fields, artifactRefs }, timestamp)
+    : null;
+  const resolvedBoundary = fullTask.boundary?.status === "open" && !openedBoundary && status !== "blocked"
+    ? normalizeDoveBoundary({ ...fullTask.boundary, status: "resolved", resolvedAt: timestamp, resolution: fields.reason ?? `status:${status}` }, null)
+    : null;
+  const ownerRole = normalizeDovePrimaryRoleId(fields.ownerRole ?? fullTask.ownerRole, ownerRoleFor(fullTask));
+  const nextRole = normalizeDovePrimaryRoleId(fields.nextRole ?? openedBoundary?.nextRole ?? fullTask.nextRole, ownerRole);
+  const handoff = transitionHandoffFor(fullTask, { ...fields, ownerRole, nextRole }, openedBoundary, timestamp);
+  const lastTransition = {
+    fromStatus,
+    toStatus: status,
+    reason: normalizeString(fields.reason ?? fields.stopReason ?? fields.blockedReason, ""),
+    summary: normalizeString(fields.summary, ""),
+    surface: normalizeString(fields.surface ?? fields.sourceSurface, null),
+    command: normalizeString(fields.command, null),
+    runId: normalizeString(fields.runId, null),
+    boundaryId: openedBoundary?.id ?? resolvedBoundary?.id ?? null,
+    handoffId: handoff?.id ?? null,
+    transitionedAt: timestamp
+  };
   const packet = {
-    ...loadFullTask(root, task),
-    ...fields,
+    ...fullTask,
+    ...persistedFields,
+    ...statusFields,
+    artifactRefs,
+    evidenceLinks,
     status,
     lifecycleStatus: status,
+    ownerRole,
+    nextRole,
+    boundary: openedBoundary,
+    boundaryHistory: appendBoundaryHistory(fullTask, openedBoundary, resolvedBoundary),
+    handoff: handoff ?? (resolvedBoundary ? null : fullTask.handoff ?? null),
+    lastTransition,
     updatedAt: timestamp
   };
   writePacket(root, packet);
@@ -1860,16 +2182,24 @@ function updateTaskLifecycle(root, task, status, fields = {}) {
       nextAction: packet.nextAction ?? state.orchestration.nextAction
     }
   });
+  recordLifecycleEvents(root, packet, {
+    ...lastTransition,
+    timestamp,
+    evidenceLinks: fields.evidenceLinks,
+    artifactRefs
+  }, openedBoundary, resolvedBoundary, handoff);
   return packet;
 }
 
 function persistAutoResult(root, result) {
-  const runtimeResults = readJson(root, ARTIFACT_PATHS.runtimeResults, { version: 1, items: [], updatedAt: null });
-  writeJson(root, ARTIFACT_PATHS.runtimeResults, {
-    ...runtimeResults,
-    items: [...(Array.isArray(runtimeResults.items) ? runtimeResults.items.filter((item) => item.id !== result.id) : []), result],
-    updatedAt: result.updatedAt
-  });
+  const artifacts = loadRuntimeArtifacts(root);
+  const entry = {
+    ...result,
+    runId: result.runId ?? result.id,
+    recordedAt: result.recordedAt ?? result.updatedAt ?? nowIso()
+  };
+  appendResult(artifacts, entry);
+  saveRuntimeArtifacts(root, artifacts);
 }
 
 function terminalAutoTaskStatus(status) {
@@ -2107,6 +2437,18 @@ export function runDoveAuto(root, args = {}) {
     result.status = "awaiting-host-pass";
     result.outcome = "host-pass-required";
     result.stopReason = "requires-host-pass-or-explicit-workflow-step";
+    task = updateTaskLifecycle(root, task, task.status, {
+      runId: resultId,
+      surface: "dove.auto",
+      command: "run_dove_auto",
+      boundaryType: "awaiting-host-pass",
+      reason: result.stopReason,
+      stopReason: result.stopReason,
+      summary: result.outcome,
+      requiredActions: ["provide-host-pass-result", "provide-explicit-auto-step"],
+      nextAction: task.nextAction
+    });
+    result.boundary = task.boundary;
     result.iterationCount = result.iterations.length;
     result.taskStatusAfter = task.status;
     result.updatedAt = completedAt;
@@ -2115,6 +2457,7 @@ export function runDoveAuto(root, args = {}) {
       status: result.status,
       task,
       result,
+      boundary: task.boundary,
       applicableLessons: activeLessons(root, task.id),
       responseLanguage,
       proposedSteps: autoPlan.proposedSteps,
@@ -2130,7 +2473,7 @@ export function runDoveAuto(root, args = {}) {
     };
   }
 
-  task = updateTaskLifecycle(root, task, "in-progress");
+  task = updateTaskLifecycle(root, task, "in-progress", { runId: resultId, surface: "dove.auto", command: "run_dove_auto" });
   let finalTaskStatus = "in-progress";
 
   for (let index = 0; index < maxIterations; index += 1) {
@@ -2160,6 +2503,18 @@ export function runDoveAuto(root, args = {}) {
       result.status = "awaiting-host-pass";
       result.outcome = "host-pass-required";
       result.stopReason = doveText(responseLanguage, "autoNoStepStopReason");
+      task = updateTaskLifecycle(root, task, task.status, {
+        runId: resultId,
+        surface: "dove.auto",
+        command: "run_dove_auto",
+        boundaryType: "awaiting-host-pass",
+        reason: result.stopReason,
+        stopReason: result.stopReason,
+        summary: result.outcome,
+        requiredActions: ["provide-host-pass-result", "provide-explicit-auto-step"],
+        nextAction: task.nextAction
+      });
+      result.boundary = task.boundary;
       finalTaskStatus = task.status;
       break;
     }
@@ -2179,18 +2534,36 @@ export function runDoveAuto(root, args = {}) {
         completedAt
       });
       if (step.completeTask === true || args.completeTask === true || args.complete === true || args.completeOnSuccess === true) {
-        task = updateTaskLifecycle(root, task, "completed", { nextAction: "project:dove.status" });
+        task = updateTaskLifecycle(root, task, "completed", {
+          runId: resultId,
+          surface: "dove.auto",
+          command: step.command,
+          reason: "completion-confirmed-by-auto-step",
+          summary: classified.outcome,
+          nextAction: "project:dove.status"
+        });
         result.status = "completed";
         result.outcome = "task-completed";
         result.stopReason = "completion-confirmed-by-auto-step";
-        finalTaskStatus = "completed";
+        finalTaskStatus = task.status;
         break;
       }
       if (classified.terminal) {
+        task = updateTaskLifecycle(root, task, "blocked", {
+          runId: resultId,
+          surface: "dove.auto",
+          command: step.command,
+          boundaryType: normalizeDoveBoundaryType(classified.outcome, "blocked-boundary"),
+          reason: classified.stopReason,
+          stopReason: classified.stopReason,
+          summary: classified.outcome,
+          nextAction: "project:dove.status"
+        });
         result.status = classified.status;
         result.outcome = classified.outcome;
         result.stopReason = classified.stopReason;
-        finalTaskStatus = "blocked";
+        result.boundary = task.boundary;
+        finalTaskStatus = task.status;
         break;
       }
       if (iterationNumber === maxIterations) {
@@ -2213,13 +2586,35 @@ export function runDoveAuto(root, args = {}) {
       result.status = "blocked-boundary";
       result.outcome = "workflow-error-boundary";
       result.stopReason = error.message;
-      finalTaskStatus = "blocked";
+      task = updateTaskLifecycle(root, task, "blocked", {
+        runId: resultId,
+        surface: "dove.auto",
+        command: step.command,
+        boundaryType: "workflow-error-boundary",
+        reason: error.message,
+        stopReason: error.message,
+        summary: "workflow-error-boundary",
+        nextAction: "project:dove.status"
+      });
+      result.boundary = task.boundary;
+      finalTaskStatus = task.status;
       break;
     }
   }
 
   if (finalTaskStatus === "blocked" && task.status !== "blocked") {
-    task = updateTaskLifecycle(root, task, "blocked", { nextAction: "project:dove.status" });
+    task = updateTaskLifecycle(root, task, "blocked", {
+      runId: resultId,
+      surface: "dove.auto",
+      command: "run_dove_auto",
+      boundaryType: normalizeDoveBoundaryType(result.outcome, "blocked-boundary"),
+      reason: result.stopReason,
+      stopReason: result.stopReason,
+      summary: result.outcome,
+      nextAction: "project:dove.status"
+    });
+    result.boundary = task.boundary;
+    finalTaskStatus = task.status;
   }
   result.iterationCount = result.iterations.length;
   result.taskStatusAfter = finalTaskStatus;
@@ -2229,6 +2624,7 @@ export function runDoveAuto(root, args = {}) {
     status: result.status,
     task,
     result,
+    boundary: task.boundary ?? null,
     applicableLessons: activeLessons(root, task.id),
     responseLanguage,
     nextAction: task.nextAction

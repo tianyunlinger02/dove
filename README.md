@@ -2,7 +2,7 @@
 
 Dove is a local-first task workflow system for research papers, engineering projects, experiments, review, and bounded autonomous work.
 
-It gives AI-assisted work a durable filesystem backbone: goals, task packets, evidence, notes, sources, drafts, figures, experiment records, review concerns, rebuttal artifacts, versions, lessons, and runtime summaries live in project-local `.dove/` files instead of disappearing into chat history.
+It gives AI-assisted work a durable filesystem backbone: goals, task packets, evidence, notes, sources, drafts, figures, experiment records, review concerns, rebuttal artifacts, versions, lessons, runtime results, and runtime events live in project-local `.dove/` files instead of disappearing into chat history.
 
 ## Dove philosophy
 
@@ -29,6 +29,8 @@ AI coding and writing sessions are powerful, but they often lose continuity acro
 - **Evidence-aware paper workflows** for sources, notes, claims, drafts, experiments, figures, reviews, rebuttals, and versions
 - **Engineering workflows** for scoped implementation and declared evidence
 - **Explicit lessons and retrospectives** for reusable task experience without raw runtime traces
+- **First-class boundaries and role handoffs** for work that needs host input, review, provider output, or missing materials
+- **Append-only runtime events/results** for auditable foreground transitions and stop reasons
 - **Generated host adapters** for OpenCode, Claude Code, Codex, Cursor, and shared agent-skill hosts
 - **Optional MCP tools** for deterministic reads and file-backed mutations
 - **Bounded foreground auto work** that requires confirmation and stops at explicit boundaries
@@ -90,7 +92,7 @@ Preset workflows should resolve or ask for the durable task packet instead of si
 /dove:status
 ```
 
-Status is read-only by default: it first reports the live host-visible development situation, then shows only adjustable Dove missions when there is something actionable. It does not print mission counts or completed/killed recaps.
+Status is read-only by default: it first reports the live host-visible development situation, then shows only adjustable Dove missions and their actionable boundaries when there is something actionable. It does not print mission counts or completed/killed recaps.
 
 6. Close durable learning only when there is a reusable lesson:
 
@@ -139,8 +141,9 @@ Dove uses one task tree across paper, experiment, and engineering work:
 - After approval, `/dove:mission` immediately performs one bounded foreground pass and records the result with `record_dove_mission_pass`.
 - When a completed `/dove:mission` pass is a `plan` task, Dove converts supplied plan outputs into pending durable missions: the default follow-up mission is level 3, and optional child missions can be level 4, 5, or deeper.
 - `/dove:status` first explains the live development situation from host-visible context, not from `.dove` internals, then only lists non-init missions that can be adjusted, excluding `completed` and `killed`; if there are no adjustable missions, it does not show a mission list or completed/killed recap. Hosts should ask at most one confirmation dialog for status changes, do nothing when the dialog does not provide clear `packetId -> status` adjustments, and call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
-- `/dove:operator` previews auto-runnable, host-pass-required, blocked, and pending queues; after confirmation it runs one safe internal step when available, otherwise waits for real host pass results, and turns `blocked` missions into pending plan missions that investigate the blocker reason.
-- `/dove:auto` can start directly from a new demand or an existing task, runs only in the foreground call, records each iteration in `.dove/runtime/results.json`, and uses `.dove/state.json.settings.auto.maxIterations` with default 3.
+- Boundaries are first-class task/runtime metadata, not extra statuses. An open boundary records why work stopped, required inputs/actions, `ownerRole`, `nextRole`, and optional `handoff` so the next foreground command knows who should resume.
+- `/dove:operator` previews auto-runnable, host-pass-required, blocked, and pending queues; after confirmation it runs one safe internal step when available, otherwise waits for real host pass results, records an awaiting boundary, and turns `blocked` missions into pending plan missions that investigate the blocker reason.
+- `/dove:auto` can start directly from a new demand or an existing task, runs only in the foreground call, records each iteration in `.dove/runtime/results.json`, appends lifecycle/boundary events in `.dove/runtime/events.json`, and uses `.dove/state.json.settings.auto.maxIterations` with default 3.
 - Ambiguous natural-language task targeting follows `.dove/state.json.settings.taskTargetResolution.autoSelect`, but missing targets or tied top candidates must stop for explicit task confirmation instead of guessing.
 
 ## Language configuration
@@ -199,7 +202,7 @@ Dove includes a local stdio MCP server named `dove`:
 }
 ```
 
-MCP tools provide deterministic access to workspace state, task graphs, open questions, decisions, lineage, operator lessons, status, confirmed status adjustments, demand-to-task conversion, mission pass recording, operator passes, task reset, audio review, experience workflows, figures, drafts, rebuttal artifacts, role context, packet context, and artifact context. MCP complements `.dove/`; it does not replace the file-backed source of truth.
+MCP tools provide deterministic access to workspace state, task graphs, open questions, decisions, lineage, operator lessons, status, actionable boundaries, confirmed status adjustments, demand-to-task conversion, mission pass recording, operator passes, task reset, audio review, experience workflows, figures, drafts, rebuttal artifacts, role context, packet context, artifact context, and runtime event/result logs. MCP complements `.dove/`; it does not replace the file-backed source of truth.
 
 ## Development
 

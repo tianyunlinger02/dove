@@ -3,6 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
+  DOVE_BOUNDARY_TYPES,
+  DOVE_TASK_STATUSES,
   GOVERNANCE_EXEMPT_MUTATIONS,
   GOVERNANCE_GUARDED_MUTATIONS,
   GOVERNANCE_READONLY_COMMANDS
@@ -68,6 +70,9 @@ const removedCommandIds = [
   "dove.launch",
   "dove.approvals",
   "dove.kill",
+  "dove.planner",
+  "dove.builder",
+  "dove.reviewer",
   "dove.paper.init",
   "dove.paper.source",
   "dove.paper.note",
@@ -106,6 +111,11 @@ function readRelative(relativePath) {
 const drift = checkGeneratedAdapters(ROOT);
 assert.equal(drift.length, 0, `Generated command adapter drift: ${drift.map((item) => `${item.relativePath} (${item.reason})`).join(", ")}`);
 
+assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed"], "Boundary reasons must not be added to the public task status enum");
+for (const boundaryType of DOVE_BOUNDARY_TYPES) {
+  assert.equal(DOVE_TASK_STATUSES.includes(boundaryType), false, `${boundaryType} must remain boundary metadata, not a task status`);
+}
+
 const generatorText = fs.readFileSync(path.join(ROOT, "scripts", "generate-command-adapters.mjs"), "utf8");
 assert.doesNotMatch(generatorText, /const\s+(?:BASE_CONTEXT_PATHS|TOOL_CONTEXT_PATHS|COMMAND_CONTEXT_PATHS|COMMAND_CONSTRAINTS)\b/, "Command context and constraint metadata belongs in src/core/command-manifest.mjs, not the adapter generator");
 assert.doesNotMatch(generatorText, /dove\.paper\.\*/, "Generated adapters must not route users to removed paper-namespaced slash commands");
@@ -114,6 +124,9 @@ const commandIds = COMMAND_SURFACES.map((command) => command.id);
 assert.deepEqual(commandIds, expectedCommandIds, "Public command surface must stay task-centered and flat");
 
 const commandIdSet = new Set(commandIds);
+for (const requiredRuntimePath of [".dove/runtime/continuation.json", ".dove/runtime/events.json", ".dove/runtime/results.json"]) {
+  assert.equal(TOOL_CONTEXT_PATHS.query_dove_status.includes(requiredRuntimePath), true, `query_dove_status should read ${requiredRuntimePath}`);
+}
 for (const removedCommandId of removedCommandIds) {
   assert.equal(commandIdSet.has(removedCommandId), false, `${removedCommandId} must not remain as a public command surface`);
 }
@@ -182,6 +195,8 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("stage `plan`"), true, `${relativePath} must convert completed plan passes into missions`);
     assert.equal(commandText.includes("level 3 and `pending`"), true, `${relativePath} must default converted plan missions to pending level 3`);
     assert.equal(commandText.includes("level 4, 5, or deeper"), true, `${relativePath} must allow deeper child missions from plan outputs`);
+    assert.equal(commandText.includes("record a first-class boundary"), true, `${relativePath} must record explicit boundaries instead of fake completion`);
+    assert.equal(commandText.includes("ownerRole, nextRole, handoff"), true, `${relativePath} must expose role handoff metadata for incomplete mission passes`);
   }
 
   if (command.id === "dove.auto") {
@@ -198,6 +213,9 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("Record each foreground iteration"), true, `${relativePath} must document runtime iteration records`);
     assert.equal(commandText.includes("source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status"), true, `${relativePath} must document internal top-level workflow calls`);
     assert.equal(commandText.includes("Stop at completed, blocked, killed"), true, `${relativePath} must document stop conditions`);
+    assert.equal(commandText.includes("persist the first-class boundary"), true, `${relativePath} must persist boundary metadata when auto stops`);
+    assert.equal(commandText.includes("Do not claim host/code/provider/experiment work"), true, `${relativePath} must not claim external work without evidence`);
+    assert.equal(commandText.includes("hidden background work"), true, `${relativePath} must keep auto continuation explicit and foreground-only`);
   }
 
   if (command.id === "dove.figure") {
@@ -230,6 +248,9 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("Do not print internal mission summary dumps"), true, `${relativePath} must forbid noisy mission summary dumps`);
     assert.equal(commandText.includes("mission counts, status counts, recent completed missions, or recent killed missions"), true, `${relativePath} must name the hidden status summary fields`);
     assert.equal(commandText.includes("if there are no adjustable missions, do not print a mission list"), true, `${relativePath} must omit empty adjustable mission lists`);
+    assert.equal(commandText.includes("actionableBoundaries"), true, `${relativePath} must expose actionable boundary metadata`);
+    assert.equal(commandText.includes("current boundary metadata"), true, `${relativePath} must explain boundary state without treating it as live host context`);
+    assert.equal(commandText.includes("Boundary types are first-class metadata, not machine status choices"), true, `${relativePath} must keep boundaries separate from status enum`);
     assert.equal(commandText.includes("现在是什么情况"), false, `${relativePath} command prompt should keep canonical instructions in English`);
     assert.equal(commandText.includes("[\"pending\", \"ready\", \"in-progress\", \"blocked\", \"completed\", \"killed\"]"), true, `${relativePath} must expose exact status choices`);
     assert.equal(commandText.includes("excluding `completed` and `killed`"), true, `${relativePath} must exclude completed and killed tasks from displayed adjustment targets`);
@@ -250,6 +271,8 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("writes: []"), true, `${relativePath} must expose proposal-only operator preview`);
     assert.equal(commandText.includes("foreground call only"), true, `${relativePath} must keep operator foreground-only`);
     assert.equal(commandText.includes("awaiting host results"), true, `${relativePath} must not claim host work without results`);
+    assert.equal(commandText.includes("`awaiting-host-pass-result` boundary"), true, `${relativePath} must persist host-result boundaries instead of fake completion`);
+    assert.equal(commandText.includes("do not expose planner/builder/reviewer as separate slash commands"), true, `${relativePath} must not add role slash surfaces`);
     assert.equal(commandText.includes("pending child plan missions"), true, `${relativePath} must create blocker investigation plan missions`);
   }
 }

@@ -8,7 +8,7 @@ Convert demand like mission intake, then after confirmation run multi-round fore
 - Start from a new demand or an existing durable task; auto should propose concrete safe steps before consuming the iteration budget.
 - Targeting: Selects an existing packet when the target is clear, otherwise proposes a new task contract.
 - Confirmation: Require explicit approval of the selected/proposed task, max iteration budget, and concrete foreground steps.
-- Outcome: Each foreground iteration is recorded in runtime results and stops at completion, blocker, review/provider boundary, or budget exhaustion.
+- Outcome: Each foreground iteration is recorded in runtime results and stops at completion, blocker, review/provider boundary, or budget exhaustion with an explicit boundary.
 
 ## Contract
 
@@ -35,6 +35,8 @@ Convert demand like mission intake, then after confirmation run multi-round fore
 14. Record each foreground iteration and stop reason in `.dove/runtime/results.json`.
 15. May internally call public Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status as needed.
 16. Stop at completed, blocked, killed, authority/review boundary, missing provider credentials, conflicting packet target, or step-budget exhaustion.
-17. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-18. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-19. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+17. When a boundary is reached, persist the first-class boundary with required inputs/actions, role handoff, and next command; do not continue through hidden background work.
+18. Do not claim host/code/provider/experiment work was completed without real evidence; stop at an awaiting-host/provider boundary instead.
+19. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+20. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+21. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

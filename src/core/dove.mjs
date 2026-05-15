@@ -16,15 +16,19 @@ import {
   createDoveWorkspaceKernel,
   createReviewState,
   createRuntimeContinuationIndex,
+  createRuntimeEventsIndex,
   createRuntimeResultsIndex,
   createTaskPacketsIndex,
   createVersionComparisonsIndex,
   createVersionsIndex,
   createWorkspaceIndex,
+  normalizeDoveBoundary,
   normalizeDoveDomainId,
+  normalizeDoveHandoff,
   normalizeDoveMissionLifecycleStage,
   normalizeDoveAuthorityManifest,
   normalizeRuntimeContinuationIndex,
+  normalizeRuntimeEventsIndex,
   normalizeRuntimeResultsIndex,
   normalizeState,
   normalizeWorkspaceIndex
@@ -641,10 +645,11 @@ function readDoveInputs(root) {
   const experimentAudits = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.experimentAudits, () => ({ version: 1, items: [], updatedAt: null }), readErrors), () => ({ version: 1, items: [], updatedAt: null }));
   const operatorLessons = objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.metaOperatorLessons, () => ({ version: 1, lessons: [], summary: { lessonCount: 0, activeLessonCount: 0, topLessonIds: [], lessonsPath: ARTIFACT_PATHS.metaOperatorLessons } }), readErrors), () => ({ version: 1, lessons: [], summary: { lessonCount: 0, activeLessonCount: 0, topLessonIds: [], lessonsPath: ARTIFACT_PATHS.metaOperatorLessons } }));
   const runtimeContinuation = normalizeRuntimeContinuationIndex(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex, readErrors), createRuntimeContinuationIndex));
+  const runtimeEvents = normalizeRuntimeEventsIndex(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.runtimeEvents, createRuntimeEventsIndex, readErrors), createRuntimeEventsIndex));
   const runtimeResults = normalizeRuntimeResultsIndex(objectOrFallback(safeReadJson(root, ARTIFACT_PATHS.runtimeResults, createRuntimeResultsIndex, readErrors), createRuntimeResultsIndex));
   const checklist = safeReadText(root, ARTIFACT_PATHS.checklist, readErrors);
   const packets = taskCatalog.packets.map(summarizePacket);
-  return { state, board, workspaceIndex, doveAuthorityManifest, taskPackets, taskCatalog, packets, reviewState, reviewConcerns, versions, comparisons, experimentPlans, experimentResults, experimentAudits, operatorLessons, runtimeContinuation, runtimeResults, checklist, readErrors };
+  return { state, board, workspaceIndex, doveAuthorityManifest, taskPackets, taskCatalog, packets, reviewState, reviewConcerns, versions, comparisons, experimentPlans, experimentResults, experimentAudits, operatorLessons, runtimeContinuation, runtimeEvents, runtimeResults, checklist, readErrors };
 }
 
 function normalizeDoveStatusTaskStatus(packet) {
@@ -726,7 +731,13 @@ function summarizeDoveStatusTask(packet) {
     updatedAt: packet.updatedAt ?? null,
     completedAt: packet.completedAt ?? null,
     killedAt: packet.killedAt ?? null,
-    killReason: packet.killReason ?? null
+    killReason: packet.killReason ?? null,
+    ownerRole: packet.ownerRole ?? null,
+    nextRole: packet.nextRole ?? null,
+    boundary: normalizeDoveBoundary(packet.boundary, null),
+    boundaryHistory: Array.isArray(packet.boundaryHistory) ? packet.boundaryHistory.map((item) => normalizeDoveBoundary(item, null)).filter(Boolean) : [],
+    handoff: normalizeDoveHandoff(packet.handoff, null),
+    lastTransition: packet.lastTransition && typeof packet.lastTransition === "object" && !Array.isArray(packet.lastTransition) ? packet.lastTransition : null
   };
 }
 
@@ -793,6 +804,45 @@ function lastRuntimeRunForTask(inputs, packetId) {
     .map((entry) => summarizeRuntimeRun(entry, packetId))[0] ?? null;
 }
 
+function runtimeEventEntries(inputs) {
+  return [
+    ...(Array.isArray(inputs.runtimeEvents?.items) ? inputs.runtimeEvents.items : []),
+    ...(Array.isArray(inputs.runtimeEvents?.entries) ? inputs.runtimeEvents.entries : [])
+  ].filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry));
+}
+
+function runtimeEventTimestamp(entry) {
+  return entry.timestamp ?? entry.recordedAt ?? entry.completedAt ?? entry.createdAt ?? entry.startedAt ?? "";
+}
+
+function runtimeEventTouchesPacket(entry, packetId) {
+  return [entry.packetId, entry.taskId, entry.missionPacketId, entry.boundary?.packetId].includes(packetId);
+}
+
+function summarizeRuntimeEvent(entry) {
+  return {
+    id: entry.id ?? entry.eventId ?? null,
+    type: entry.type ?? entry.eventType ?? null,
+    packetId: entry.packetId ?? entry.taskId ?? entry.missionPacketId ?? null,
+    runId: entry.runId ?? null,
+    surface: entry.surface ?? entry.sourceSurface ?? null,
+    command: entry.command ?? null,
+    fromStatus: entry.fromStatus ?? null,
+    toStatus: entry.toStatus ?? null,
+    boundaryId: entry.boundaryId ?? entry.boundary?.id ?? null,
+    handoffId: entry.handoffId ?? entry.handoff?.id ?? null,
+    summary: entry.summary ?? null,
+    timestamp: runtimeEventTimestamp(entry)
+  };
+}
+
+function lastRuntimeEventForTask(inputs, packetId) {
+  return runtimeEventEntries(inputs)
+    .filter((entry) => runtimeEventTouchesPacket(entry, packetId))
+    .sort((left, right) => String(runtimeEventTimestamp(right)).localeCompare(String(runtimeEventTimestamp(left))))
+    .map(summarizeRuntimeEvent)[0] ?? null;
+}
+
 function continuationForTask(inputs, packetId) {
   const item = (Array.isArray(inputs.runtimeContinuation.items) ? inputs.runtimeContinuation.items : []).find((candidate) => candidate?.packetId === packetId) ?? null;
   if (!item) {
@@ -808,6 +858,41 @@ function continuationForTask(inputs, packetId) {
     requiredReadPaths: normalizeStringArray(item.requiredReadPaths),
     readyAt: item.readyAt ?? null
   };
+}
+
+function openBoundaryForTask(task) {
+  const boundary = normalizeDoveBoundary(task.boundary, null);
+  return boundary?.status === "open" ? boundary : null;
+}
+
+function summarizeActionableBoundary(task) {
+  const boundary = task.currentBoundary ?? openBoundaryForTask(task);
+  if (!boundary || task.level === 0 || ["completed", "killed"].includes(task.status)) {
+    return null;
+  }
+  return {
+    id: boundary.id,
+    type: boundary.type,
+    status: boundary.status,
+    packetId: task.id,
+    title: task.title,
+    taskStatus: task.status,
+    reason: boundary.reason,
+    summary: boundary.summary,
+    requiredInputs: normalizeStringArray(boundary.requiredInputs),
+    requiredActions: normalizeStringArray(boundary.requiredActions),
+    ownerRole: boundary.ownerRole ?? task.ownerRole ?? null,
+    nextRole: boundary.nextRole ?? task.nextRole ?? null,
+    createdAt: boundary.createdAt ?? null,
+    command: boundary.command ?? task.nextAction ?? null,
+    runId: boundary.runId ?? null,
+    handoff: normalizeDoveHandoff(task.handoff, null)
+  };
+}
+
+function boundaryRecommendsBlocked(task) {
+  const boundary = task.currentBoundary ?? openBoundaryForTask(task);
+  return ["blocked-boundary", "missing-required-materials", "provider-failed", "workflow-error-boundary", "needs-review", "awaiting-provider-output", "awaiting-review-output"].includes(boundary?.type);
 }
 
 function applicableLessonsForTask(inputs, task) {
@@ -837,16 +922,24 @@ function enrichStatusTasks(tasks, inputs) {
   return tasks.map((task) => {
     const unresolvedDependencyIds = unresolvedDependencyIdsForTask(task, byId);
     const lastRun = lastRuntimeRunForTask(inputs, task.id);
+    const lastEvent = lastRuntimeEventForTask(inputs, task.id);
     const continuationState = continuationForTask(inputs, task.id);
+    const currentBoundary = openBoundaryForTask(task);
+    const currentBoundaryBlocks = boundaryRecommendsBlocked({ ...task, currentBoundary });
     const blockedReason = task.blockedReason
+      ?? (currentBoundaryBlocks ? currentBoundary?.reason : null)
       ?? (task.blockedBy.length > 0 ? `blocked-by:${task.blockedBy.join(",")}` : null)
       ?? (unresolvedDependencyIds.length > 0 ? `unresolved-dependencies:${unresolvedDependencyIds.join(",")}` : null);
     return {
       ...task,
       blockedReason,
       unresolvedDependencyIds,
+      currentBoundary,
+      actionableBoundary: summarizeActionableBoundary({ ...task, currentBoundary, blockedReason }),
+      handoff: normalizeDoveHandoff(task.handoff, null),
       lastRun,
-      lastStopReason: lastRun?.stopReason ?? null,
+      lastEvent,
+      lastStopReason: currentBoundary?.reason ?? lastRun?.stopReason ?? lastEvent?.summary ?? null,
       continuationState,
       applicableLessons: applicableLessonsForTask(inputs, task)
     };
@@ -854,7 +947,7 @@ function enrichStatusTasks(tasks, inputs) {
 }
 
 function hasTaskBlockerSignal(task) {
-  return task.status === "blocked" || Boolean(task.blockedReason) || task.blockedBy.length > 0 || normalizeStringArray(task.unresolvedDependencyIds).length > 0;
+  return task.status === "blocked" || boundaryRecommendsBlocked(task) || Boolean(task.blockedReason) || task.blockedBy.length > 0 || normalizeStringArray(task.unresolvedDependencyIds).length > 0;
 }
 
 function runtimeIndicatesInProgress(task) {
@@ -869,7 +962,7 @@ function recommendedStatusForTask(task) {
   if (runtimeIndicatesCompleted(task)) {
     return "completed";
   }
-  if (hasTaskBlockerSignal(task)) {
+  if (boundaryRecommendsBlocked(task) || hasTaskBlockerSignal(task)) {
     return "blocked";
   }
   if (runtimeIndicatesInProgress(task)) {
@@ -903,6 +996,10 @@ function buildStatusAdjustmentContract(tasks) {
         domain: task.domain,
         blockedReason: task.blockedReason,
         lastStopReason: task.lastStopReason,
+        currentBoundary: task.currentBoundary ?? null,
+        actionableBoundary: task.actionableBoundary ?? null,
+        handoff: task.handoff ?? null,
+        lastEvent: task.lastEvent ?? null,
         choices: DOVE_TASK_STATUSES,
         confirmArgs: {
           adjustments: [{ packetId: task.id, status: recommendedStatus }],
@@ -1151,6 +1248,7 @@ function artifactPathsReadForDove() {
     ARTIFACT_PATHS.taskPacketsIndex,
     ARTIFACT_PATHS.taskPacketsPacketsDir,
     ARTIFACT_PATHS.runtimeContinuation,
+    ARTIFACT_PATHS.runtimeEvents,
     ARTIFACT_PATHS.runtimeResults,
     ARTIFACT_PATHS.reviewState,
     ARTIFACT_PATHS.reviewConcerns,
@@ -1546,6 +1644,7 @@ export function queryDoveStatus(root, args = {}) {
   const initTask = tasks.find((task) => task.level === 0 && task.status !== "killed") ?? null;
   const activeStatusIds = new Set(["pending", "ready", "in-progress", "blocked"]);
   const activeTasks = visibleTasks.filter((task) => task.level !== 0 && activeStatusIds.has(task.status));
+  const actionableBoundaries = activeTasks.map(summarizeActionableBoundary).filter(Boolean);
   const blockedTasks = activeTasks.filter(hasTaskBlockerSignal);
   const completedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "completed")).slice(0, 10);
   const killedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "killed")).slice(0, 10);
@@ -1582,6 +1681,7 @@ export function queryDoveStatus(root, args = {}) {
     responseLanguage,
     projectSummary,
     statusAdjustmentContract,
+    actionableBoundaries,
     current: {
       domain: currentDomain,
       stage: currentStage,
@@ -1617,13 +1717,15 @@ export function queryDoveStatus(root, args = {}) {
           ...inputs.runtimeContinuation.summary,
           items: Array.isArray(inputs.runtimeContinuation.items) ? inputs.runtimeContinuation.items : []
         },
-        results: inputs.runtimeResults.summary
+        results: inputs.runtimeResults.summary,
+        events: inputs.runtimeEvents.summary
       },
       init: initTask,
       tasks: {
         tree: buildStatusTaskTree(visibleTasks),
         active: activeTasks,
         blocked: blockedTasks,
+        actionableBoundaries,
         recentCompleted: completedTasks,
         recentKilled: killedTasks,
         activeTaskIds: activeTasks.map((task) => task.id),
@@ -1681,7 +1783,7 @@ export function queryDoveStatus(root, args = {}) {
         navigationReportPath: ARTIFACT_PATHS.navigationReport,
         wikiPath: ARTIFACT_PATHS.wiki
       },
-      primaryStateSources: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.taskPacketsPacketsDir, ARTIFACT_PATHS.runtimeContinuation, ARTIFACT_PATHS.runtimeResults, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.metaOperatorLessons],
+      primaryStateSources: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.taskPacketsPacketsDir, ARTIFACT_PATHS.runtimeContinuation, ARTIFACT_PATHS.runtimeEvents, ARTIFACT_PATHS.runtimeResults, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.metaOperatorLessons],
       mayRefreshDerivedSurfaces: false,
       noCommandExecution: true,
       noExternalProcess: true,

@@ -8,6 +8,8 @@ Dove is a local-first task workflow system for paper, experiment, engineering, r
 - **MCP tools** provide deterministic file-backed queries and mutations.
 - **`.dove/`** is the authoritative durable workspace root.
 - **Task packets** under `.dove/task-packets/` bind every task-scoped write to one durable task before mutation.
+- **Boundaries and handoffs** on task packets describe why work stopped, who owns it, who should resume, and what evidence is required.
+- **Runtime events/results** under `.dove/runtime/` append foreground transitions, stop reasons, and resumable continuation hints.
 - **Lessons** under `.dove/meta/operator-lessons.json` preserve explicit reusable experience without importing raw runtime traces.
 
 ## Public commands
@@ -38,9 +40,9 @@ Older router, checklist, plan, audit, return, follow-through, onboarding, govern
 
 1. Install Dove and run `dove doctor` to check the package, adapters, MCP entrypoint, and workspace artifacts.
 2. Pick the syntax for your host. The canonical command id is `dove.mission`; Claude Code users normally type `/dove:mission`, while OpenCode users commonly see `project:dove.mission`.
-3. Start with a real demand, not a command inventory. For engineering work, use `/dove:mission 修复 doctor 报错并运行相关验证`; Dove should propose a task contract, ask for confirmation, then record the foreground pass result or clearly request missing host evidence. If no init goal exists, the same confirmation should show the proposed init and task before writing either one.
+3. Start with a real demand, not a command inventory. For engineering work, use `/dove:mission 修复 doctor 报错并运行相关验证`; Dove should propose a task contract, ask for confirmation, then record the foreground pass result or persist a clear boundary for missing host evidence. If no init goal exists, the same confirmation should show the proposed init and task before writing either one.
 4. Use presets inside a selected or newly created task: `/dove:figure 画 pipeline overview`, `/dove:draft 修改 introduction`, or `/dove:experience 规划并记录 ablation 结果`. Presets should resolve one durable task packet or ask for confirmation instead of silently guessing.
-5. Use `/dove:status` as the default read-only dashboard. It first reports the live host-visible development situation, then shows only adjustable Dove missions when there is something actionable; it does not print mission counts or completed/killed recaps.
+5. Use `/dove:status` as the default read-only dashboard. It first reports the live host-visible development situation, then shows only adjustable Dove missions and actionable boundaries when there is something actionable; it does not print mission counts or completed/killed recaps.
 6. Use `/dove:operator` when you want to preview and run one foreground pass over queued work; it must not claim host work happened without pass results or a safe internal workflow step.
 7. When a task yields reusable operating knowledge, record it with `/dove:lessons`.
 
@@ -57,7 +59,8 @@ Dove treats work as a tree rooted at one init task:
 - After approval, `/dove:mission` immediately performs one bounded foreground pass and records its task status, evidence, blockers, and next action with `record_dove_mission_pass`.
 - When a completed mission pass has stage `plan`, Dove converts supplied `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion` output into pending durable missions. The default follow-up mission is level 3; child missions can be level 4, 5, or deeper.
 - `/dove:status` first reports the live development situation from host-visible context, not from `.dove` internals, then only lists non-init missions that can be adjusted, excluding `completed` and `killed`; if there are no adjustable missions, it does not show a mission list or completed/killed recap. Hosts should ask at most one confirmation dialog for status changes, do nothing when the dialog does not provide clear `packetId -> status` adjustments, then call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
-- `/dove:operator` previews auto-runnable, host-pass-required, blocked, and pending queues before confirmation. Confirmed runs execute one safe internal step when available, otherwise require real foreground pass results, and create pending plan missions for blocked-task investigation.
+- Boundary types such as `awaiting-host-pass`, `needs-review`, and `awaiting-provider-output` are first-class metadata, not task statuses. They keep the current machine status coarse while recording required inputs/actions, `ownerRole`, `nextRole`, and optional `handoff` metadata.
+- `/dove:operator` previews auto-runnable, host-pass-required, blocked, and pending queues before confirmation. Confirmed runs execute one safe internal step when available, otherwise require real foreground pass results, persist awaiting boundaries, and create pending plan missions for blocked-task investigation.
 - Dove computes stage (`plan`, `execute`, `audit`) and domain (`paper`, `experiment`, `engineering`) from the request unless explicit values are supplied.
 - Active task state, dependencies, blockers, killed tasks, artifacts, and linked lessons live in `.dove/task-packets/`.
 
@@ -76,6 +79,9 @@ Important durable surfaces include:
 - `.dove/context/` — optional role, phase, packet, artifact, and action context bundles.
 - `.dove/sources/`, `.dove/notes/`, `.dove/experiments/`, `.dove/claims/`, `.dove/drafts/`, `.dove/figures/`, `.dove/reviews/`, `.dove/audio/reviews/`, `.dove/rebuttal/`, `.dove/versions/` — workflow artifacts.
 - `.dove/meta/operator-lessons.json` — explicit lessons and retrospectives.
+- `.dove/runtime/results.json` — append-only foreground run and iteration results.
+- `.dove/runtime/events.json` — append-only lifecycle, boundary, handoff, and workflow events.
+- `.dove/runtime/continuation.json` — explicit next-command hints for later foreground invocations.
 - `.dove/config.json`, `.dove/config.local.json`, `DOVE_CONFIG_PATH`, `DOVE_LANGUAGE`, and `DOVE_FIGURE_*` overrides — non-secret response-language and provider configuration; secrets should be referenced through environment-variable names such as `apiKeyEnv`.
 
 Commands and skills provide behavior, but there is no hidden scheduler or swarm runtime. Optional MCP helpers mutate files deterministically; they do not replace `.dove/` as the source of truth.
@@ -149,7 +155,7 @@ Lessons may be global or task-bound. When multiple tasks exist, Dove should pres
 
 After confirmation, auto may internally call top-level Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status. It runs only inside the current foreground call, records each iteration in `.dove/runtime/results.json`, and uses `.dove/state.json.settings.auto.maxIterations` as the default limit; the default is 3.
 
-It stops at completed, blocked, killed, review/authority boundary, missing provider credentials, conflicting task target, or step-budget exhaustion. If the response ends before the task is complete, Dove does not secretly continue in the background; the next operator action must invoke another foreground command.
+It stops at completed, blocked, killed, review/authority boundary, missing provider credentials, conflicting task target, or step-budget exhaustion. When it stops because work cannot safely continue, it writes an explicit boundary instead of pretending host/code/provider work happened. If the response ends before the task is complete, Dove does not secretly continue in the background; the next operator action must invoke another foreground command.
 
 ## MCP tools
 
@@ -186,4 +192,4 @@ The user-facing role model has three primary manual agents:
 - `builder` owns writing, research, experiments, results, revision, rebuttal drafting, implementation, and evidence work.
 - `reviewer` owns independent concerns, weaknesses, evidence/method attacks, code review, QA, and verdicts.
 
-Specialists such as researcher, experiment planner, revision/rebuttal lead, and version analyst are automatic subagents under those primary agents. They are useful for scoped context, but they should not be treated as peer manual identities.
+Specialists such as researcher, experiment planner, revision/rebuttal lead, and version analyst are automatic subagents under those primary agents. They are useful for scoped context, but they should not be treated as peer manual identities. Durable role handoff is packet/runtime metadata; Dove does not expose separate planner, builder, or reviewer slash commands.

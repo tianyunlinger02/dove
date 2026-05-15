@@ -5,7 +5,49 @@ import os from "node:os";
 import path from "node:path";
 
 import { ensureWorkspace, readJson } from "../../src/core/workspace.mjs";
-import { ARTIFACT_PATHS, DEFAULT_DOVE_RESPONSE_LANGUAGE, DOVE_AUDIO_CONTEXT_POLICY, DOVE_DOMAIN_GUIDANCE, DOVE_DOMAIN_IDS, DOVE_MISSION_LIFECYCLE_STAGES, DOVE_PRIMARY_ROLE_IDS, DOVE_RESPONSE_LANGUAGES, DOVE_TASK_CREATOR_KINDS, DOVE_TASK_DOMAINS, DOVE_TASK_STAGES, DOVE_TASK_STATUSES, DOVE_WORKFLOW_KERNEL_VERSION, PAPER_LIFECYCLE_FAMILIES, PAPER_LIFECYCLE_FAMILY_IDS, PAPER_LIFECYCLE_TAXONOMY_VERSION, PAPER_MAJOR_CHANGE_PROTOCOL_STAGES, createDefaultBoard, createDefaultState, createDoveAuthorityManifest, createMetaOperatorLessonsIndex, createTaskPacketsIndex, createWorkspaceIndex, normalizeCampaignsIndex, normalizeDoveAuthorityManifest, normalizeDoveResponseLanguage, normalizeMetaOperatorLessonsIndex, normalizeSettings, normalizeState, normalizeWorkspaceIndex, SCHEMA_VERSION } from "../../src/core/schema.mjs";
+import {
+  ARTIFACT_PATHS,
+  DEFAULT_DOVE_RESPONSE_LANGUAGE,
+  DOVE_AUDIO_CONTEXT_POLICY,
+  DOVE_BOUNDARY_STATUSES,
+  DOVE_BOUNDARY_TYPES,
+  DOVE_DOMAIN_GUIDANCE,
+  DOVE_DOMAIN_IDS,
+  DOVE_HANDOFF_STATUSES,
+  DOVE_MISSION_LIFECYCLE_STAGES,
+  DOVE_PRIMARY_ROLE_IDS,
+  DOVE_RESPONSE_LANGUAGES,
+  DOVE_TASK_CREATOR_KINDS,
+  DOVE_TASK_DOMAINS,
+  DOVE_TASK_STAGES,
+  DOVE_TASK_STATUSES,
+  DOVE_WORKFLOW_KERNEL_VERSION,
+  PAPER_LIFECYCLE_FAMILIES,
+  PAPER_LIFECYCLE_FAMILY_IDS,
+  PAPER_LIFECYCLE_TAXONOMY_VERSION,
+  PAPER_MAJOR_CHANGE_PROTOCOL_STAGES,
+  SCHEMA_VERSION,
+  createDefaultBoard,
+  createDefaultState,
+  createDoveAuthorityManifest,
+  createMetaOperatorLessonsIndex,
+  createTaskPacketsIndex,
+  createWorkspaceIndex,
+  normalizeCampaignsIndex,
+  normalizeDoveAuthorityManifest,
+  normalizeDoveBoundary,
+  normalizeDoveBoundaryType,
+  normalizeDoveHandoff,
+  normalizeDoveHandoffStatus,
+  normalizeDovePrimaryRoleId,
+  normalizeDoveResponseLanguage,
+  normalizeMetaOperatorLessonsIndex,
+  normalizeRuntimeEventsIndex,
+  normalizeRuntimeResultsIndex,
+  normalizeSettings,
+  normalizeState,
+  normalizeWorkspaceIndex
+} from "../../src/core/schema.mjs";
 
 test("normalizeState migrates v1 state into v2", () => {
   const migrated = normalizeState({
@@ -103,6 +145,80 @@ test("task packet index exposes the task-centered model defaults", () => {
   assert.deepEqual(index.taskModel.activeTaskIds, []);
   assert.deepEqual(index.stageCounts, { plan: 0, execute: 0, audit: 0 });
   assert.deepEqual(index.domainCounts, { paper: 0, experiment: 0, engineering: 0 });
+});
+
+test("boundary and handoff metadata stay separate from task statuses", () => {
+  assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.ok(DOVE_BOUNDARY_TYPES.includes("awaiting-host-pass"));
+  assert.ok(DOVE_BOUNDARY_TYPES.includes("needs-review"));
+  assert.ok(DOVE_BOUNDARY_TYPES.includes("awaiting-provider-output"));
+  assert.deepEqual(DOVE_BOUNDARY_STATUSES, ["open", "resolved"]);
+  assert.deepEqual(DOVE_HANDOFF_STATUSES, ["none", "pending", "accepted", "completed", "blocked"]);
+  for (const boundaryType of DOVE_BOUNDARY_TYPES) {
+    assert.equal(DOVE_TASK_STATUSES.includes(boundaryType), false);
+  }
+
+  assert.equal(normalizeDoveBoundaryType("awaiting_host_pass"), "awaiting-host-pass");
+  assert.equal(normalizeDoveHandoffStatus("ACCEPTED"), "accepted");
+  assert.equal(normalizeDovePrimaryRoleId("Reviewer"), "reviewer");
+
+  const boundary = normalizeDoveBoundary({
+    boundaryId: "boundary-review",
+    boundaryType: "needs_review",
+    boundaryStatus: "OPEN",
+    taskPacketId: "packet-alpha",
+    surface: "dove.auto",
+    stopReason: "Reviewer must inspect evidence.",
+    requiredInputs: ["audit-report"],
+    requiredActions: ["run-review"],
+    ownerRole: "builder",
+    nextRole: "reviewer"
+  });
+  assert.equal(boundary.id, "boundary-review");
+  assert.equal(boundary.type, "needs-review");
+  assert.equal(boundary.status, "open");
+  assert.equal(boundary.packetId, "packet-alpha");
+  assert.equal(boundary.sourceSurface, "dove.auto");
+  assert.equal(boundary.reason, "Reviewer must inspect evidence.");
+  assert.deepEqual(boundary.requiredInputs, ["audit-report"]);
+  assert.deepEqual(boundary.requiredActions, ["run-review"]);
+  assert.equal(boundary.ownerRole, "builder");
+  assert.equal(boundary.nextRole, "reviewer");
+
+  const handoff = normalizeDoveHandoff({
+    handoffId: "handoff-review",
+    status: "pending",
+    ownerRole: "builder",
+    nextRole: "reviewer",
+    boundaryId: boundary.id,
+    runId: "run-alpha",
+    reason: "Independent review needed."
+  });
+  assert.equal(handoff.id, "handoff-review");
+  assert.equal(handoff.fromRole, "builder");
+  assert.equal(handoff.toRole, "reviewer");
+  assert.equal(handoff.boundaryId, "boundary-review");
+  assert.equal(handoff.sourceRunId, "run-alpha");
+});
+
+test("runtime event and result indexes normalize legacy items into canonical entries", () => {
+  const runtimeEvents = normalizeRuntimeEventsIndex({
+    items: [{ eventId: "event-legacy", eventType: "legacy-event" }],
+    entries: [{ id: "event-new", type: "task.lifecycle.transitioned" }, { eventId: "event-legacy", type: "task.boundary.opened" }],
+    summary: { eventCount: 3, lastEventType: "task.boundary.opened" }
+  });
+  assert.deepEqual(runtimeEvents.entries.map((entry) => entry.id ?? entry.eventId), ["event-legacy", "event-new"]);
+  assert.equal(runtimeEvents.entries[0].type, "task.boundary.opened");
+  assert.equal(runtimeEvents.summary.eventCount, 3);
+
+  const runtimeResults = normalizeRuntimeResultsIndex({
+    items: [{ id: "run-legacy", status: "completed" }],
+    entries: [{ runId: "run-new", status: "noop" }, { id: "run-legacy", status: "error" }],
+    summary: { runCount: 3, lastRunId: "run-new" }
+  });
+  assert.deepEqual(runtimeResults.entries.map((entry) => entry.id ?? entry.runId), ["run-legacy", "run-new"]);
+  assert.equal(runtimeResults.entries[0].status, "error");
+  assert.equal(runtimeResults.summary.runCount, 3);
 });
 
 test("operator lessons index is explicit-only and normalized", () => {

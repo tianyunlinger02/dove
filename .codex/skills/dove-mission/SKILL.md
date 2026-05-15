@@ -13,7 +13,7 @@ Convert a user demand into a Dove task contract, then after approval run one bou
 - Describe the desired outcome in normal language; Dove converts it into title, stage, domain, level, checklist, evidence expectations, and execution route.
 - Targeting: Creates a new mission under the init goal; first-run hosts may propose the init goal and mission together before writing.
 - Confirmation: Show the converted contract first, then ask whether to approve and run one pass, adjust, or cancel.
-- Outcome: After approval, the task packet exists and the host either records the pass result or explicitly reports that host pass evidence is still required.
+- Outcome: After approval, the task packet exists and the host either records the pass result or persists an explicit boundary with evidence requirements and role handoff.
 
 ## Contract
 
@@ -39,12 +39,13 @@ Convert a user demand into a Dove task contract, then after approval run one bou
 13. After materialization, immediately execute one bounded foreground pass in the same command invocation, using the appropriate host tools or top-level Dove workflow.
 14. Do not tell the operator to run `/dove:auto` for the first execution pass.
 15. After the pass, call `record_dove_mission_pass` to persist the mission result, task status, evidence, blockers, and next action.
-16. When a completed mission pass has stage `plan`, pass explicit plan outputs to `record_dove_mission_pass` through `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion` so Dove converts the plan into pending durable missions.
-17. Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`.
-18. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
-19. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
-20. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
-21. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
-22. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-23. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-24. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+16. If the bounded pass cannot be completed with real host/provider evidence, record a first-class boundary such as `awaiting-host-pass`, `missing-required-materials`, or `needs-review` with ownerRole, nextRole, handoff, and evidence requirements instead of claiming completion.
+17. When a completed mission pass has stage `plan`, pass explicit plan outputs to `record_dove_mission_pass` through `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion` so Dove converts the plan into pending durable missions.
+18. Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`.
+19. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
+20. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
+21. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
+22. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
+23. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+24. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+25. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

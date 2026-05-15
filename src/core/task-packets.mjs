@@ -8,8 +8,11 @@ import {
   DOVE_TASK_DOMAINS,
   DOVE_TASK_STAGES,
   DOVE_TASK_STATUSES,
+  DOVE_PRIMARY_ROLE_IDS,
   createDefaultState,
   createTaskPacketsIndex,
+  normalizeDoveBoundary,
+  normalizeDoveHandoff,
   normalizeSettings
 } from "./schema.mjs";
 
@@ -46,6 +49,10 @@ function normalizeLevel(value, fallback = 3) {
 
 function normalizeTaskStatus(value, fallback = "pending") {
   return normalizeAllowed(value, DOVE_TASK_STATUSES, fallback);
+}
+
+function normalizePrimaryRole(value, fallback = "builder") {
+  return normalizeAllowed(value, DOVE_PRIMARY_ROLE_IDS, fallback);
 }
 
 function readJsonReadOnly(root, relativePath, fallback = null) {
@@ -106,8 +113,16 @@ function normalizePacketCandidate(root, packet = {}) {
     lifecycleStatus: merged.lifecycleStatus ?? status,
     dependencies: uniqueStrings([...normalizeStringArray(merged.dependencies), ...normalizeStringArray(contextObject.dependencies)]),
     blockedBy: uniqueStrings([...normalizeStringArray(merged.blockedBy), ...normalizeStringArray(contextObject.blockedBy)]),
+    completedAt: merged.completedAt ?? contextObject.completedAt ?? null,
+    blockedReason: merged.blockedReason ?? merged.blockerReason ?? contextObject.blockedReason ?? contextObject.blockerReason ?? null,
     killedAt: merged.killedAt ?? contextObject.killedAt ?? null,
     killReason: merged.killReason ?? contextObject.killReason ?? null,
+    ownerRole: normalizePrimaryRole(merged.ownerRole ?? contextObject.ownerRole, "builder"),
+    nextRole: normalizePrimaryRole(merged.nextRole ?? contextObject.nextRole, merged.ownerRole ?? contextObject.ownerRole ?? "builder"),
+    boundary: normalizeDoveBoundary(merged.boundary ?? contextObject.boundary, null),
+    boundaryHistory: Array.isArray(merged.boundaryHistory ?? contextObject.boundaryHistory) ? (merged.boundaryHistory ?? contextObject.boundaryHistory).map((item) => normalizeDoveBoundary(item, null)).filter(Boolean) : [],
+    handoff: normalizeDoveHandoff(merged.handoff ?? contextObject.handoff, null),
+    lastTransition: normalizeObject(merged.lastTransition ?? contextObject.lastTransition),
     lessonIds: uniqueStrings([...normalizeStringArray(merged.lessonIds), ...normalizeStringArray(contextObject.lessonIds)]),
     artifactRefs: uniqueStrings([...normalizeStringArray(merged.artifactRefs), ...normalizeStringArray(contextObject.artifactRefs)]),
     contextPolicy: merged.contextPolicy ?? contextObject.contextPolicy ?? DOVE_AUDIO_CONTEXT_POLICY,

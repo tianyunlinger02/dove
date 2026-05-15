@@ -595,7 +595,7 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     }));
     assert.equal(run.status, "awaiting-host-results");
     assert.deepEqual(run.awaitingResultTaskIds, ["operator-host-missing"]);
-    assert.deepEqual(run.updatedTasks.map((task) => task.id).sort(), ["operator-auto-ready", "operator-host-progress"].sort());
+    assert.deepEqual(run.updatedTasks.map((task) => task.id).sort(), ["operator-auto-ready", "operator-host-missing", "operator-host-progress"].sort());
     assert.deepEqual(run.result.autoRunnableTaskIds, ["operator-auto-ready"]);
     assert.deepEqual(run.result.hostPassRequiredTaskIds.sort(), ["operator-host-missing", "operator-host-progress"].sort());
     assert.equal(run.blockerPlanConversion.createdMissions.length, 2);
@@ -609,10 +609,17 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.equal(unresolvedPlan.level, 4);
 
     const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
-    const persisted = runtimeResults.items.find((item) => item.id === "operator-run");
+    const persisted = runtimeResults.entries.find((item) => item.id === "operator-run");
     assert.equal(persisted.surface, "dove.operator");
     assert.equal(persisted.foreground, true);
     assert.equal(persisted.status, "awaiting-host-results");
+    const taskIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    const missingTask = taskIndex.items.find((item) => item.id === "operator-host-missing");
+    assert.equal(missingTask.boundary.type, "awaiting-host-pass-result");
+    assert.equal(missingTask.boundary.status, "open");
+    const runtimeEvents = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "events.json"), "utf8"));
+    assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.boundary.opened" && entry.packetId === "operator-host-missing"), true);
+    assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.lifecycle.transitioned" && entry.packetId === "operator-host-progress" && entry.toStatus === "completed"), true);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -765,6 +772,9 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.deepEqual(hostBoundary.proposedSteps, []);
     assert.equal(hostBoundary.result.taskStatusAfter, "ready");
     assert.equal(hostBoundary.task.status, "ready");
+    assert.equal(hostBoundary.boundary.type, "awaiting-host-pass");
+    assert.equal(hostBoundary.task.boundary.type, "awaiting-host-pass");
+    assert.deepEqual(hostBoundary.task.boundary.requiredActions, ["provide-host-pass-result", "provide-explicit-auto-step"]);
 
     const autoRun = extractToolJson(dispatchTool(root, "run_dove_auto", {
       packetId: "auto-foreground-task",
@@ -787,10 +797,13 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(autoRun.result.taskStatusAfter, "completed");
 
     const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
-    const persisted = runtimeResults.items.find((item) => item.id === "auto-foreground-run");
+    const persisted = runtimeResults.entries.find((item) => item.id === "auto-foreground-run");
     assert.ok(persisted, "auto runtime result should be persisted");
     assert.equal(persisted.iterationCount, 2);
     assert.equal(persisted.background, false);
+    const runtimeEvents = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "events.json"), "utf8"));
+    assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.boundary.opened" && entry.packetId === "auto-host-boundary-task"), true);
+    assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.lifecycle.transitioned" && entry.packetId === "auto-foreground-task" && entry.toStatus === "completed"), true);
 
     const taskIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     const task = taskIndex.items.find((item) => item.id === "auto-foreground-task");
