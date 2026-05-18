@@ -238,6 +238,102 @@ const TEXT = {
     zh: "本次 auto 迭代未提供具体且安全的工作流步骤。",
     en: "No concrete safe workflow step was supplied for this auto iteration."
   },
+  statusHomeInitTitle: {
+    zh: "先创建 Dove 项目目标",
+    en: "Create the Dove project goal first"
+  },
+  statusHomeInitWhy: {
+    zh: "当前工作区还没有 level-0 init 目标，后续任务需要先挂到这个根目标下。",
+    en: "The workspace has no level-0 init goal yet, and later work needs that root."
+  },
+  statusHomeCreateMissionTitle: {
+    zh: "创建下一个具体 mission",
+    en: "Create the next concrete mission"
+  },
+  statusHomeCreateMissionWhy: {
+    zh: "当前没有需要继续推进的活跃任务，下一步应从一个真实需求开始。",
+    en: "There is no active task to continue, so the next step should start from a real demand."
+  },
+  statusHomeBoundaryTitle: {
+    zh: ({ title }) => `处理 ${title} 的等待边界`,
+    en: ({ title }) => `Resolve waiting boundary for ${title}`
+  },
+  statusHomeBoundaryWhy: {
+    zh: ({ reason }) => reason || "任务停在一个需要补输入、证据或人工动作的边界。",
+    en: ({ reason }) => reason || "The task is stopped at a boundary that needs input, evidence, or operator action."
+  },
+  statusHomeContinuationTitle: {
+    zh: ({ title }) => `继续 ${title}`,
+    en: ({ title }) => `Continue ${title}`
+  },
+  statusHomeContinuationWhy: {
+    zh: "runtime 里有明确的前台续跑线索，可以从这里恢复。",
+    en: "Runtime state has an explicit foreground continuation hint for this task."
+  },
+  statusHomeBlockedTitle: {
+    zh: ({ title }) => `解除 ${title} 的阻塞`,
+    en: ({ title }) => `Unblock ${title}`
+  },
+  statusHomeBlockedWhy: {
+    zh: ({ reason }) => reason || "任务当前带有阻塞信号，需要先解释或解除阻塞。",
+    en: ({ reason }) => reason || "The task currently has a blocker signal that needs explanation or removal."
+  },
+  statusHomeReviewTitle: {
+    zh: "处理待审查问题",
+    en: "Handle pending review issues"
+  },
+  statusHomeReviewWhy: {
+    zh: "当前 review state 里还有未解决关注点。",
+    en: "The current review state still has unresolved concerns."
+  },
+  statusHomeContinueTitle: {
+    zh: ({ title }) => `推进 ${title}`,
+    en: ({ title }) => `Advance ${title}`
+  },
+  statusHomeContinueWhy: {
+    zh: "任务已有下一步命令，可以继续一次前台推进。",
+    en: "The task already has a next command and can continue with one foreground step."
+  },
+  boundaryActionContinueLabel: {
+    zh: "继续/恢复前台执行",
+    en: "Continue or resume foreground work"
+  },
+  boundaryActionEvidenceLabel: {
+    zh: "补真实结果或证据",
+    en: "Provide real result or evidence"
+  },
+  boundaryActionReviewLabel: {
+    zh: "送独立 review",
+    en: "Send to independent review"
+  },
+  boundaryActionStatusLabel: {
+    zh: "调整任务状态",
+    en: "Adjust task status"
+  },
+  boundaryActionKillLabel: {
+    zh: "通过 status 标记 killed",
+    en: "Mark killed through status"
+  },
+  compactCardScope: {
+    zh: ({ stage, domain, status }) => `${stage}/${domain} · ${status}`,
+    en: ({ stage, domain, status }) => `${stage}/${domain} · ${status}`
+  },
+  compactCardNoEvidence: {
+    zh: "尚未列出证据要求。",
+    en: "No evidence requirement is listed yet."
+  },
+  compactCardNoAutomaticExecution: {
+    zh: "不会自动执行；需要显式确认。",
+    en: "No automatic execution; explicit confirmation is required."
+  },
+  compactCardFirstActionFallback: {
+    zh: "确认后执行下一步前台动作。",
+    en: "After confirmation, run the next foreground action."
+  },
+  compactCardBoundaryFallback: {
+    zh: "如果缺少真实证据，Dove 会记录边界而不是声称完成。",
+    en: "If real evidence is missing, Dove records a boundary instead of claiming completion."
+  },
   defaultDoveTitle: {
     zh: "未命名任务工作区",
     en: "Untitled Mission Workspace"

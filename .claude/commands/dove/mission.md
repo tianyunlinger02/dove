@@ -5,9 +5,9 @@ Convert a user demand into a Dove task contract, then after approval run one bou
 ## Daily use
 
 - Use this for one concrete user demand that should become a durable task and receive one bounded foreground pass.
-- Describe the desired outcome in normal language; Dove converts it into title, stage, domain, level, checklist, evidence expectations, and execution route.
+- Describe the desired outcome in normal language; Dove converts it into title, stage, domain, level, checklist, evidence expectations, compact task card, and execution route.
 - Targeting: Creates a new mission under the init goal; first-run hosts may propose the init goal and mission together before writing.
-- Confirmation: Show the converted contract first, then ask whether to approve and run one pass, adjust, or cancel.
+- Confirmation: Show the compact task card and converted contract first, then ask whether to approve and run one pass, adjust, or cancel.
 - Outcome: After approval, the task packet exists and the host either records the pass result or persists an explicit boundary with evidence requirements and role handoff.
 
 ## Contract
@@ -26,7 +26,7 @@ Convert a user demand into a Dove task contract, then after approval run one bou
 5. Require explicit operator approval before creating or changing durable workflow state or consuming bounded authority.
 6. Require an existing init goal before converting user demand into a mission task contract.
 7. Treat the operator input as natural-language demand, not as an already-created task.
-8. Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, evidence expectations, autonomous checklist proposal, and recommended execution route.
+8. Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, evidence expectations, autonomous checklist proposal, compact task card, and recommended execution route.
 9. After returning the proposal, use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) with options: approve conversion and run one pass, adjust conversion, or cancel; only pass `confirmed: true` to `create_dove_task` after the operator approves the converted contract.
 10. Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.
 11. User-created mission tasks default to level 3, while explicit operator-created levels 1, 2, 3, or deeper are allowed under the level-0 init goal.

@@ -9,10 +9,10 @@ Run all ready and in-progress Dove missions once, and create blocker-investigati
 
 ## Daily use
 
-- Use this to inspect the ready/in-progress queue, blocked queue, and pending queue, then run one foreground operator pass after confirmation.
+- Use this to inspect compact queue cards for the ready/in-progress queue, blocked queue, and pending queue, then run one foreground operator pass after confirmation.
 - Do not claim real work happened unless the host supplies actual pass results or a safe internal step can run.
 - Targeting: Works over the active mission queue rather than one ad hoc target.
-- Confirmation: Preview the queue with writes: [] first; require approval before recording results or creating blocker investigation missions.
+- Confirmation: Preview compact queue cards with writes: [] first; require approval before recording results or creating blocker investigation missions.
 - Outcome: Runnable work is recorded from real results, blocked work gets pending investigation missions, and unresolved host work remains awaiting evidence through explicit boundaries.
 
 ## Contract
@@ -29,7 +29,7 @@ Run all ready and in-progress Dove missions once, and create blocker-investigati
 3. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/config.json`, `.dove/config.local.json`, `.dove/state.json`, `.dove/task-packets/index.json`, `.dove/runtime`, `.dove/meta/operator-lessons.json`.
 4. Prefer the `run_dove_operator` MCP tool when available.
 5. Require explicit operator approval before creating or changing durable workflow state or consuming bounded authority.
-6. First call `run_dove_operator` without confirmation to return the proposal-only execution contract, including `autoRunnableTasks`, `hostPassRequiredTasks`, blocked missions, pending skipped missions, and `writes: []`.
+6. First call `run_dove_operator` without confirmation to return the proposal-only execution contract, including compact queue cards, `autoRunnableTasks`, `hostPassRequiredTasks`, blocked missions, pending skipped missions, and `writes: []`.
 7. Use interactive confirmation controls when the host supports them before passing `confirmed: true`.
 8. Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.
 9. For ready and in-progress missions, run one safe internal workflow step when available or collect one real host pass result in order; pass per-task results to `run_dove_operator` so Dove records lifecycle and runtime state.

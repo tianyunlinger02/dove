@@ -187,6 +187,7 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("only pass `confirmed: true` to `create_dove_task` after the operator approves the converted contract"), true, `${relativePath} must require approval before task materialization`);
     assert.equal(commandText.includes("Classify each task as `plan`, `execute`, or `audit`"), true, `${relativePath} must expose task classification`);
     assert.equal(commandText.includes("autonomous checklist proposal"), true, `${relativePath} must include checklist proposal in mission intake`);
+    assert.equal(commandText.includes("compact task card"), true, `${relativePath} must surface compact task cards in mission confirmation`);
     assert.equal(commandText.includes("explicit operator-created levels 1, 2, 3, or deeper"), true, `${relativePath} must state explicit user mission levels`);
     assert.equal(commandText.includes("Autonomously decide whether a checklist is needed"), true, `${relativePath} must document autonomous checklist selection`);
     assert.equal(commandText.includes("must have level greater than the parent mission level"), true, `${relativePath} must enforce child checklist depth`);
@@ -205,6 +206,7 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("Return a proposal-only auto contract first"), true, `${relativePath} must expose the auto confirmation contract`);
     assert.equal(commandText.includes("`proposedTask`"), true, `${relativePath} must expose converted auto task proposals`);
     assert.equal(commandText.includes("`selectedTask`"), true, `${relativePath} must expose selected durable task proposals`);
+    assert.equal(commandText.includes("compact task/auto cards"), true, `${relativePath} must surface compact cards in auto confirmation`);
     assert.equal(commandText.includes("AskUserQuestion"), true, `${relativePath} must name Claude Code interactive confirmation support`);
     assert.equal(commandText.includes("present indexed packet choices through confirmation UX"), true, `${relativePath} must use confirmation UX for task selection`);
     assert.equal(commandText.includes("Require explicit operator confirmation"), true, `${relativePath} must require confirmation`);
@@ -248,7 +250,15 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("Do not print internal mission summary dumps"), true, `${relativePath} must forbid noisy mission summary dumps`);
     assert.equal(commandText.includes("mission counts, status counts, recent completed missions, or recent killed missions"), true, `${relativePath} must name the hidden status summary fields`);
     assert.equal(commandText.includes("if there are no adjustable missions, do not print a mission list"), true, `${relativePath} must omit empty adjustable mission lists`);
+    assert.equal(commandText.includes("daily home screen"), true, `${relativePath} must describe status as the daily home screen`);
+    assert.equal(commandText.includes("ranked 1-3 next action cards"), true, `${relativePath} must expose ranked status next actions`);
+    assert.equal(commandText.includes("after live context first"), true, `${relativePath} must keep live context first before durable action cards`);
     assert.equal(commandText.includes("actionableBoundaries"), true, `${relativePath} must expose actionable boundary metadata`);
+    assert.equal(commandText.includes("boundaryActionCards"), true, `${relativePath} must expose proposal-only boundary action cards`);
+    assert.equal(commandText.includes("boundary action cards"), true, `${relativePath} must document boundary action cards`);
+    assert.equal(commandText.includes("compact cards"), true, `${relativePath} must surface compact status cards`);
+    assert.equal(commandText.includes("compact adjustment cards"), true, `${relativePath} must surface compact status adjustment cards`);
+    assert.equal(commandText.includes("no counts/completed-killed recaps"), true, `${relativePath} must forbid counts and completed/killed recaps`);
     assert.equal(commandText.includes("current boundary metadata"), true, `${relativePath} must explain boundary state without treating it as live host context`);
     assert.equal(commandText.includes("Boundary types are first-class metadata, not machine status choices"), true, `${relativePath} must keep boundaries separate from status enum`);
     assert.equal(commandText.includes("现在是什么情况"), false, `${relativePath} command prompt should keep canonical instructions in English`);
@@ -265,6 +275,7 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
 
   if (command.id === "dove.operator") {
     assert.equal(commandText.includes("run_dove_operator"), true, `${relativePath} must route through run_dove_operator`);
+    assert.equal(commandText.includes("compact queue cards"), true, `${relativePath} must surface compact operator queue cards`);
     assert.equal(commandText.includes("`autoRunnableTasks`"), true, `${relativePath} must include auto-runnable mission queue`);
     assert.equal(commandText.includes("`hostPassRequiredTasks`"), true, `${relativePath} must include host-pass-required mission queue`);
     assert.equal(commandText.includes("blocked missions"), true, `${relativePath} must include blocked mission handling`);

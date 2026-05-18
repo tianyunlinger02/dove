@@ -86,6 +86,9 @@ async function main() {
   assert.equal(missionProposal.executionMode, "single-foreground-pass");
   assert.equal(missionProposal.proposedTask.level, 3);
   assert.equal(missionProposal.confirmArgs.confirmed, true);
+  assert.equal(missionProposal.taskCard.presentation, "compact-task-card");
+  assert.equal(missionProposal.taskCard.proposalOnly, true);
+  assert.equal(missionProposal.taskCard.noAutoApply, true);
   assert.equal(missionProposal.checklistProposal.autoSelected, true);
   assert.equal(missionProposal.checklistProposal.itemCount, 3);
   assert.ok(missionProposal.checklistProposal.items.every((item) => item.creatorKind === "system"));
@@ -227,6 +230,9 @@ async function main() {
   assert.equal(needsConfirmation.selectedTask.id, packetId);
   assert.equal(needsConfirmation.confirmArgs.confirmed, true);
   assert.equal(needsConfirmation.confirmArgs.packetId, packetId);
+  assert.equal(needsConfirmation.taskCard.presentation, "compact-task-card");
+  assert.equal(needsConfirmation.autoCard.presentation, "compact-auto-card");
+  assert.equal(needsConfirmation.autoCard.proposalOnly, true);
 
   const autoProposal = await callTool("run_dove_auto", {
     id: "validator-auto-demand",
@@ -241,6 +247,8 @@ async function main() {
   assert.equal(autoProposal.executionMode, "multi-round-foreground-auto");
   assert.equal(autoProposal.proposedTask.id, "validator-auto-demand");
   assert.equal(autoProposal.checklistProposal.autoSelected, true);
+  assert.equal(autoProposal.taskCard.presentation, "compact-task-card");
+  assert.equal(autoProposal.autoCard.presentation, "compact-auto-card");
   assert.equal(autoProposal.confirmArgs.confirmed, true);
   assert.equal(autoProposal.confirmArgs.checklistItems.length, 3);
 
@@ -285,12 +293,24 @@ async function main() {
 
   const status = await callTool("query_dove_status", {});
   assert.equal(status.mode, "dove-status-query");
+  assert.equal(status.proposalOnly, true);
+  assert.equal(status.noAutoApply, true);
+  assert.deepEqual(status.writes, []);
+  assert.equal(status.dailyHome.presentation, "dove-status-home");
+  assert.equal(status.dailyHome.liveContextFirst, true);
+  assert.ok(status.dailyHome.nextActions.length <= 3);
+  assert.ok(status.dailyHome.nextActions.every((card) => card.proposalOnly === true && card.noAutoApply === true));
+  assert.ok(status.dailyHome.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
+  assert.deepEqual(status.dailyHome.suppressUserFacingDumps, ["mission counts", "status counts", "recent completed missions", "recent killed missions"]);
   assert.ok(status.dashboard.tasks.counts.total >= 1);
   assert.ok(status.dashboard.tasks.tree.length >= 1);
   assert.equal(status.dashboard.tasks.index.activeInitId, initGoal.init.id);
+  assert.equal(status.dashboard.dailyHome.presentation, "dove-status-home");
+  assert.ok(Array.isArray(status.dashboard.tasks.boundaryActionCards));
   assert.ok(status.projectSummary && typeof status.projectSummary === "object");
   assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
   assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.ok(status.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
   assert.equal(status.statusAdjustmentContract.items.some((item) => item.packetId === secondMission.createdTask.id), false);
   assert.equal(status.statusAdjustmentContract.items.some((item) => ["completed", "killed"].includes(item.currentStatus)), false);
   assert.equal(status.taskGraph, undefined);
@@ -304,6 +324,9 @@ async function main() {
   assert.equal(statusAdjustmentPreview.proposalOnly, true);
   assert.deepEqual(statusAdjustmentPreview.writes, []);
   assert.deepEqual(statusAdjustmentPreview.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.equal(statusAdjustmentPreview.adjustmentCards.length, 1);
+  assert.equal(statusAdjustmentPreview.adjustmentCards[0].presentation, "compact-status-adjustment-card");
+  assert.equal(statusAdjustmentPreview.adjustmentCards[0].proposalOnly, true);
 
   const statusAdjustment = await callTool("apply_dove_status_adjustments", statusAdjustmentPreview.confirmArgs);
   assert.ok(["applied", "skipped"].includes(statusAdjustment.status));
@@ -316,6 +339,8 @@ async function main() {
   assert.equal(operatorPreview.executionMode, "operator-one-foreground-pass");
   assert.equal(operatorPreview.foreground, true);
   assert.equal(operatorPreview.background, false);
+  assert.ok(operatorPreview.queueCards && typeof operatorPreview.queueCards === "object");
+  assert.ok(Array.isArray(operatorPreview.queueCards.runnable));
 
   const recordedLesson = await callTool("record_operator_lesson", {
     title: "Keep MCP validator retrospectives distilled",

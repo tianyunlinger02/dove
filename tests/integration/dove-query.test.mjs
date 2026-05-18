@@ -636,6 +636,13 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.proposalOnly, true);
   assert.equal(result.noAutoApply, true);
   assert.deepEqual(result.writes, []);
+  assert.equal(result.dailyHome.presentation, "dove-status-home");
+  assert.equal(result.dailyHome.liveContextFirst, true);
+  assert.ok(result.dailyHome.nextActions.length <= 3);
+  assert.ok(result.dailyHome.nextActions.every((card) => card.proposalOnly === true && card.noAutoApply === true));
+  assert.ok(result.dailyHome.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
+  assert.deepEqual(result.dailyHome.suppressUserFacingDumps, ["mission counts", "status counts", "recent completed missions", "recent killed missions"]);
+  assert.deepEqual(result.dashboard.dailyHome, result.dailyHome);
   assert.deepEqual(after, before);
   assert.equal(result.current.domain, "engineering");
   assert.equal(result.current.stage, "execute");
@@ -675,9 +682,23 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(runtimeTask.continuationState.command, "project:dove.auto");
   assert.equal(result.actionableBoundaries.some((boundary) => boundary.packetId === "runtime-progress" && boundary.type === "awaiting-host-pass"), true);
   assert.equal(result.dashboard.tasks.actionableBoundaries.some((boundary) => boundary.packetId === "runtime-progress"), true);
+  const runtimeBoundaryCard = result.boundaryActionCards.find((card) => card.packetId === "runtime-progress");
+  assert.ok(runtimeBoundaryCard);
+  assert.equal(runtimeBoundaryCard.kind, "provide-evidence-or-result");
+  assert.equal(runtimeBoundaryCard.command, "project:dove.auto");
+  assert.deepEqual(runtimeBoundaryCard.requires, ["implementation evidence", "provide-host-pass-result"]);
+  assert.equal(runtimeBoundaryCard.options.some((option) => option.kind === "kill-through-status" && option.tool === "apply_dove_status_adjustments"), true);
+  assert.deepEqual(result.dashboard.tasks.boundaryActionCards, result.boundaryActionCards);
+  const runtimeNextAction = result.dailyHome.nextActions.find((card) => card.packetId === "runtime-progress");
+  assert.ok(runtimeNextAction);
+  assert.equal(runtimeNextAction.kind, "provide-evidence");
+  assert.equal(runtimeNextAction.command, "project:dove.auto");
+  assert.equal(runtimeNextAction.rank, 1);
 
   const statusAdjustmentItems = Object.fromEntries(result.statusAdjustmentContract.items.map((item) => [item.packetId, item]));
   assert.deepEqual(result.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.equal(result.statusAdjustmentContract.adjustmentCards.length, result.statusAdjustmentContract.items.length);
+  assert.ok(result.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
   assert.equal(Boolean(statusAdjustmentItems["status-packet"]), true);
   assert.equal(Boolean(statusAdjustmentItems["plain-pending"]), true);
   assert.equal(Boolean(statusAdjustmentItems["blocked-dependency"]), true);
@@ -691,6 +712,8 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(statusAdjustmentItems["runtime-progress"].recommendedStatus, "in-progress");
   assert.equal(statusAdjustmentItems["runtime-progress"].currentBoundary.type, "awaiting-host-pass");
   assert.equal(statusAdjustmentItems["runtime-progress"].actionableBoundary.type, "awaiting-host-pass");
+  assert.equal(statusAdjustmentItems["runtime-progress"].adjustmentCard.presentation, "compact-status-adjustment-card");
+  assert.equal(statusAdjustmentItems["runtime-progress"].adjustmentCard.proposalOnly, true);
   assert.equal(statusAdjustmentItems["runtime-progress"].lastEvent.type, "task.boundary.opened");
   assert.equal(statusAdjustmentItems["runtime-completed"].recommendedStatus, "completed");
   assert.equal(statusAdjustmentItems["runtime-completed"].lastStopReason, "completion-confirmed-by-mission-pass");

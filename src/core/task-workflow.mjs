@@ -263,6 +263,96 @@ function ownerRoleFor(classification = {}) {
   return "builder";
 }
 
+function compactScope(task = {}, responseLanguage = "zh") {
+  return doveText(responseLanguage, "compactCardScope", {
+    stage: task.stage ?? "execute",
+    domain: task.domain ?? "engineering",
+    status: task.status ?? "pending"
+  });
+}
+
+function compactEvidence(task = {}, responseLanguage = "zh") {
+  const evidence = normalizeStringArray(task.evidenceExpectations);
+  return evidence.length > 0 ? evidence : [doveText(responseLanguage, "compactCardNoEvidence")];
+}
+
+function compactStepLabels(steps = []) {
+  if (!Array.isArray(steps)) {
+    return [];
+  }
+  return steps.map((step) => {
+    if (typeof step === "string") {
+      return step;
+    }
+    if (step && typeof step === "object" && !Array.isArray(step)) {
+      return [step.command, step.completeTask === true ? "complete" : null].filter(Boolean).join(" ");
+    }
+    return "";
+  }).filter(Boolean);
+}
+
+function buildTaskConfirmationCard(task = {}, context = {}, responseLanguage = "zh") {
+  return {
+    presentation: "compact-task-card",
+    packetId: task.id ?? null,
+    title: task.title ?? doveText(responseLanguage, "taskFallbackTitle"),
+    why: task.summary ?? context.why ?? "",
+    scope: compactScope(task, responseLanguage),
+    stage: task.stage ?? null,
+    domain: task.domain ?? null,
+    status: task.status ?? null,
+    level: task.level ?? null,
+    firstAction: context.firstAction ?? task.nextAction ?? doveText(responseLanguage, "compactCardFirstActionFallback"),
+    evidenceRequired: compactEvidence(task, responseLanguage),
+    boundaryOrResume: context.boundaryOrResume ?? doveText(responseLanguage, "compactCardBoundaryFallback"),
+    confirmation: doveText(responseLanguage, "compactCardNoAutomaticExecution"),
+    confirmationRequired: true,
+    proposalOnly: true,
+    noAutoApply: true
+  };
+}
+
+function buildAutoConfirmationCard(task = {}, autoPlan = {}, context = {}, responseLanguage = "zh") {
+  const proposedSteps = compactStepLabels(autoPlan.proposedSteps);
+  return {
+    presentation: "compact-auto-card",
+    packetId: task.id ?? null,
+    title: task.title ?? doveText(responseLanguage, "taskFallbackTitle"),
+    scope: compactScope(task, responseLanguage),
+    maxIterations: context.maxIterations ?? null,
+    firstAction: proposedSteps[0] ?? task.nextAction ?? doveText(responseLanguage, "compactCardFirstActionFallback"),
+    proposedSteps,
+    safeToRun: autoPlan.safeToRun ?? false,
+    requiresHostPass: autoPlan.requiresHostPass ?? false,
+    why: autoPlan.whyThisStep ?? task.summary ?? "",
+    evidenceRequired: compactEvidence(task, responseLanguage),
+    boundaryOrResume: doveText(responseLanguage, "compactCardBoundaryFallback"),
+    confirmation: doveText(responseLanguage, "compactCardNoAutomaticExecution"),
+    confirmationRequired: true,
+    proposalOnly: true,
+    noAutoApply: true
+  };
+}
+
+function buildOperatorQueueCard(task = {}, context = {}, responseLanguage = "zh") {
+  return {
+    presentation: "compact-operator-queue-card",
+    queue: context.queue ?? "pending",
+    packetId: task.id ?? null,
+    title: task.title ?? doveText(responseLanguage, "taskFallbackTitle"),
+    status: task.status ?? null,
+    scope: compactScope(task, responseLanguage),
+    firstAction: task.nextAction ?? context.firstAction ?? doveText(responseLanguage, "compactCardFirstActionFallback"),
+    why: context.why ?? task.rationale ?? task.summary ?? "",
+    evidenceRequired: compactEvidence(task, responseLanguage),
+    boundaryOrResume: task.blockedReason ?? task.nextAction ?? doveText(responseLanguage, "compactCardBoundaryFallback"),
+    confirmation: doveText(responseLanguage, "compactCardNoAutomaticExecution"),
+    confirmationRequired: true,
+    proposalOnly: true,
+    noAutoApply: true
+  };
+}
+
 function activeLessons(root, packetId = null) {
   const lessons = readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] });
   return (Array.isArray(lessons.lessons) ? lessons.lessons : []).filter((lesson) => {
@@ -856,6 +946,7 @@ export function createDoveTask(root, args = {}) {
       initMaterializationRequired,
       proposedInit,
       proposedTask: packet,
+      taskCard: buildTaskConfirmationCard(packet, { firstAction: packet.nextAction }, responseLanguage),
       classification,
       blockers,
       evidenceExpectations: packet.evidenceExpectations,
@@ -1235,6 +1326,22 @@ function normalizeStatusAdjustment(item, index) {
   };
 }
 
+function buildStatusAdjustmentPreviewCard(adjustment, responseLanguage = "zh") {
+  return {
+    presentation: "compact-status-adjustment-card",
+    packetId: adjustment.packetId,
+    requestedStatus: adjustment.status,
+    why: adjustment.reason || doveText(responseLanguage, "statusAdjustConfirmMessage"),
+    firstAction: "apply_dove_status_adjustments",
+    evidenceRequired: adjustment.artifactRefs.length > 0 ? adjustment.artifactRefs : [doveText(responseLanguage, "compactCardNoEvidence")],
+    boundaryOrResume: adjustment.nextAction ?? null,
+    confirmation: doveText(responseLanguage, "compactCardNoAutomaticExecution"),
+    confirmationRequired: true,
+    proposalOnly: true,
+    noAutoApply: true
+  };
+}
+
 export function applyDoveStatusAdjustments(root, args = {}) {
   assertGovernanceMutationRegistered("apply-dove-status-adjustments", "guarded");
   ensureWorkspace(root);
@@ -1249,6 +1356,7 @@ export function applyDoveStatusAdjustments(root, args = {}) {
       confirmationRequired: true,
       statusChoices: DOVE_TASK_STATUSES,
       adjustments,
+      adjustmentCards: adjustments.map((adjustment) => buildStatusAdjustmentPreviewCard(adjustment, responseLanguage)),
       confirmArgs: {
         ...args,
         confirmed: true,
@@ -1546,6 +1654,13 @@ export function runDoveOperator(root, args = {}) {
       foreground: true,
       background: false,
       daemon: false,
+      queueCards: {
+        autoRunnable: queue.autoRunnable.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "auto-runnable" }, responseLanguage)),
+        hostPassRequired: queue.hostPassRequired.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "host-pass-required", why: doveText(responseLanguage, "operatorAwaitingStopReason") }, responseLanguage)),
+        runnable: queue.runnable.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "runnable" }, responseLanguage)),
+        blocked: queue.blocked.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "blocked" }, responseLanguage)),
+        pending: queue.pending.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "pending" }, responseLanguage))
+      },
       autoRunnableTasks: queue.autoRunnable.map(operatorTaskSummary),
       hostPassRequiredTasks: queue.hostPassRequired.map(operatorTaskSummary),
       runnableTasks: queue.runnable.map(operatorTaskSummary),
@@ -2245,6 +2360,8 @@ function autoSelectionConfirmation(root, args, selected, maxIterations, response
     demandConversion: false,
     executionMode: "multi-round-foreground-auto",
     selectedTask: task,
+    taskCard: buildTaskConfirmationCard(task, { firstAction: task.nextAction ?? nextCommandFor(classification) }, responseLanguage),
+    autoCard: buildAutoConfirmationCard(task, autoPlan, { maxIterations }, responseLanguage),
     classification,
     blockers: [...normalizeStringArray(task.dependencies), ...normalizeStringArray(task.blockedBy)],
     evidenceExpectations: normalizeStringArray(task.evidenceExpectations),
@@ -2278,6 +2395,8 @@ function autoDemandConfirmation(root, args, maxIterations) {
     initMaterializationRequired,
     proposedInit,
     proposedTask: packet,
+    taskCard: buildTaskConfirmationCard(packet, { firstAction: packet.nextAction }, responseLanguage),
+    autoCard: buildAutoConfirmationCard(packet, autoPlan, { maxIterations }, responseLanguage),
     classification,
     blockers,
     evidenceExpectations: packet.evidenceExpectations,

@@ -5,9 +5,9 @@ Convert demand like mission intake, then after confirmation run multi-round fore
 ## Daily use
 
 - Use this when the user wants Dove to continue through bounded foreground iterations after the same demand-to-task intake as mission.
-- Start from a new demand or an existing durable task; auto should propose concrete safe steps before consuming the iteration budget.
+- Start from a new demand or an existing durable task; auto should propose compact task/auto cards and concrete safe steps before consuming the iteration budget.
 - Targeting: Selects an existing packet when the target is clear, otherwise proposes a new task contract.
-- Confirmation: Require explicit approval of the selected/proposed task, max iteration budget, and concrete foreground steps.
+- Confirmation: Require explicit approval of the compact task/auto cards, selected/proposed task, max iteration budget, and concrete foreground steps.
 - Outcome: Each foreground iteration is recorded in runtime results and stops at completion, blocker, review/provider boundary, or budget exhaustion with an explicit boundary.
 
 ## Contract
@@ -26,7 +26,7 @@ Convert demand like mission intake, then after confirmation run multi-round fore
 5. Require explicit operator approval before creating or changing durable workflow state or consuming bounded authority.
 6. Use the same demand-to-task intake and classification model as `/dove:mission` before autonomous execution starts.
 7. Allow `/dove:auto` to be invoked directly on a new user demand or an existing durable task; it does not require running `/dove:mission` first.
-8. Return a proposal-only auto contract first: either a converted `proposedTask` with checklist proposal or a `selectedTask` from durable packet selection, plus confirmation args and max iteration budget.
+8. Return a proposal-only auto contract first: either a converted `proposedTask` with checklist proposal or a `selectedTask` from durable packet selection, plus compact task/auto cards, confirmation args, and max iteration budget.
 9. Use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) before passing `confirmed: true`; options should approve and run bounded auto, adjust target/contract, or cancel.
 10. When an existing task target is missing or ambiguous, present indexed packet choices through confirmation UX instead of guessing.
 11. Require explicit operator confirmation before execution beyond task creation or selection.

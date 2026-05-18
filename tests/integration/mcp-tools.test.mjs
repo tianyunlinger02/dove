@@ -250,10 +250,16 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(status.mode, "dove-status-query");
     assert.equal(status.responseLanguage, "zh");
     assert.equal(status.proposalOnly, true);
+    assert.equal(status.noAutoApply, true);
     assert.equal(status.query, true);
     assert.deepEqual(status.writes, []);
+    assert.equal(status.dailyHome.presentation, "dove-status-home");
+    assert.equal(status.dailyHome.liveContextFirst, true);
+    assert.ok(status.dailyHome.nextActions.length <= 3);
+    assert.ok(status.dailyHome.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
     assert.ok(status.dashboard && typeof status.dashboard === "object");
     assert.ok(status.dashboard.tasks && typeof status.dashboard.tasks === "object");
+    assert.equal(status.dashboard.dailyHome.presentation, "dove-status-home");
     assert.ok(status.projectSummary && typeof status.projectSummary === "object");
     assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
     assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
@@ -303,6 +309,10 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(proposal.executionMode, "single-foreground-pass");
     assert.equal(proposal.proposedTask.id, "mission-confirm-task");
     assert.equal(proposal.proposedTask.rootId, init.init.id);
+    assert.equal(proposal.taskCard.presentation, "compact-task-card");
+    assert.equal(proposal.taskCard.packetId, "mission-confirm-task");
+    assert.equal(proposal.taskCard.proposalOnly, true);
+    assert.equal(proposal.taskCard.noAutoApply, true);
     assert.equal(proposal.confirmArgs.confirmed, true);
 
     const englishProposal = extractToolJson(dispatchTool(root, "create_dove_task", {
@@ -313,6 +323,7 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     }));
     assert.equal(englishProposal.status, "needs-confirmation");
     assert.equal(englishProposal.responseLanguage, "en");
+    assert.equal(englishProposal.taskCard.confirmation, "No automatic execution; explicit confirmation is required.");
     assert.match(englishProposal.message, /Approve this demand-to-task mission contract/);
 
     const proposedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
@@ -496,8 +507,12 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
 
     const status = extractToolJson(dispatchTool(root, "query_dove_status", {}));
     assert.ok(status.projectSummary);
+    assert.equal(status.dailyHome.presentation, "dove-status-home");
+    assert.ok(status.dailyHome.nextActions.length <= 3);
     assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
     assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+    assert.equal(status.statusAdjustmentContract.adjustmentCards.length, status.statusAdjustmentContract.items.length);
+    assert.ok(status.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
     const itemIds = status.statusAdjustmentContract.items.map((candidate) => candidate.packetId);
     assert.equal(itemIds.includes(init.init.id), false);
     assert.equal(itemIds.includes("status-ready-task"), true);
@@ -516,6 +531,10 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.equal(preview.status, "needs-confirmation");
     assert.equal(preview.proposalOnly, true);
     assert.deepEqual(preview.writes, []);
+    assert.equal(preview.adjustmentCards.length, 1);
+    assert.equal(preview.adjustmentCards[0].presentation, "compact-status-adjustment-card");
+    assert.equal(preview.adjustmentCards[0].packetId, "status-ready-task");
+    assert.equal(preview.adjustmentCards[0].proposalOnly, true);
     assert.equal(preview.confirmArgs.confirmed, true);
     const previewIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     assert.equal(previewIndex.items.find((candidate) => candidate.id === "status-ready-task").status, "ready");
@@ -584,6 +603,9 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.deepEqual(preview.runnableTasks.map((task) => task.id).sort(), ["operator-auto-ready", "operator-host-missing", "operator-host-progress"].sort());
     assert.deepEqual(preview.blockedTasks.map((task) => task.id).sort(), ["operator-blocked", "operator-unresolved"].sort());
     assert.deepEqual(preview.pendingTasks.map((task) => task.id), ["operator-pending"]);
+    assert.deepEqual(preview.queueCards.autoRunnable.map((card) => card.packetId), ["operator-auto-ready"]);
+    assert.deepEqual(preview.queueCards.hostPassRequired.map((card) => card.packetId).sort(), ["operator-host-missing", "operator-host-progress"].sort());
+    assert.equal(preview.queueCards.blocked.every((card) => card.presentation === "compact-operator-queue-card" && card.proposalOnly === true), true);
     assert.equal(preview.blockedTasks.find((task) => task.id === "operator-unresolved").unresolvedDependencyIds[0], "missing-dependency");
 
     const run = extractToolJson(dispatchTool(root, "run_dove_operator", {
@@ -724,6 +746,9 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(needsConfirmation.selectedTask.id, "auto-foreground-task");
     assert.equal(needsConfirmation.confirmArgs.confirmed, true);
     assert.equal(needsConfirmation.confirmArgs.packetId, "auto-foreground-task");
+    assert.equal(needsConfirmation.taskCard.presentation, "compact-task-card");
+    assert.equal(needsConfirmation.autoCard.presentation, "compact-auto-card");
+    assert.equal(needsConfirmation.autoCard.proposalOnly, true);
     assert.equal(needsConfirmation.foreground, true);
     assert.equal(needsConfirmation.background, false);
     assert.equal(needsConfirmation.maxIterations, 3);
@@ -751,6 +776,8 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(demandConfirmation.demandConversion, true);
     assert.equal(demandConfirmation.executionMode, "multi-round-foreground-auto");
     assert.equal(demandConfirmation.proposedTask.id, "auto-demand-task");
+    assert.equal(demandConfirmation.taskCard.presentation, "compact-task-card");
+    assert.equal(demandConfirmation.autoCard.presentation, "compact-auto-card");
     assert.equal(demandConfirmation.checklistProposal.autoSelected, true);
     assert.equal(demandConfirmation.confirmArgs.confirmed, true);
     assert.equal(demandConfirmation.confirmArgs.checklistItems.length, 3);
@@ -994,6 +1021,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const foregroundTool = toolDefinitions.find((item) => item.name === "run_autonomy_foreground");
   const operateTool = toolDefinitions.find((item) => item.name === "run_autonomy_operate");
   assert.ok(createDoveTaskTool, "create_dove_task should exist");
+  assert.match(createDoveTaskTool.description, /compact task card/);
   assert.ok(createDoveTaskTool.inputSchema.properties.confirmed, "create_dove_task should expose confirmed");
   assert.ok(createDoveTaskTool.inputSchema.properties.confirm, "create_dove_task should expose confirm");
   assert.ok(createDoveTaskTool.inputSchema.properties.initTitle, "create_dove_task should expose first-run init title");
@@ -1027,9 +1055,11 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(recordMissionPassTool.inputSchema.properties.childMissions, "record_dove_mission_pass should expose childMissions");
   assert.ok(recordMissionPassTool.inputSchema.properties.planConversion, "record_dove_mission_pass should expose planConversion");
   assert.ok(applyStatusAdjustmentsTool, "apply_dove_status_adjustments should exist");
+  assert.match(applyStatusAdjustmentsTool.description, /compact status adjustment cards/);
   assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.confirmed, "apply_dove_status_adjustments should expose confirmed");
   assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.adjustments, "apply_dove_status_adjustments should expose adjustments");
   assert.ok(runDoveAutoTool, "run_dove_auto should exist");
+  assert.match(runDoveAutoTool.description, /compact task\/auto cards/);
   assert.ok(runDoveAutoTool.inputSchema.properties.missionPacketId, "run_dove_auto should expose missionPacketId");
   assert.ok(runDoveAutoTool.inputSchema.properties.taskId, "run_dove_auto should expose taskId");
   assert.ok(runDoveAutoTool.inputSchema.properties.packetTarget, "run_dove_auto should expose packetTarget");
@@ -1039,6 +1069,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(runDoveAutoTool.inputSchema.properties.steps, "run_dove_auto should expose foreground steps");
   assert.ok(runDoveAutoTool.inputSchema.properties.completeTask, "run_dove_auto should expose explicit completion");
   assert.ok(runDoveOperatorTool, "run_dove_operator should exist");
+  assert.match(runDoveOperatorTool.description, /compact queue cards/);
   assert.ok(runDoveOperatorTool.inputSchema.properties.confirmed, "run_dove_operator should expose confirmed");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults, "run_dove_operator should expose taskResults");
   assert.ok(approvalsQueryTool, "query_program_approvals should exist");
@@ -1046,6 +1077,8 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(doveMissionQueryTool, "query_dove_mission should exist");
   assert.ok(doveBoardQueryTool, "query_dove_mission_board should exist");
   assert.ok(doveStatusQueryTool, "query_dove_status should exist");
+  assert.match(doveStatusQueryTool.description, /dailyHome/);
+  assert.match(doveStatusQueryTool.description, /boundary action cards/);
   assert.ok(doveAuditQueryTool, "query_dove_audit should exist");
   assert.ok(doveReturnQueryTool, "query_dove_return should exist");
   assert.ok(doveOnboardingQueryTool, "query_dove_onboarding should exist");

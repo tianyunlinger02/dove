@@ -895,6 +895,284 @@ function boundaryRecommendsBlocked(task) {
   return ["blocked-boundary", "missing-required-materials", "provider-failed", "workflow-error-boundary", "needs-review", "awaiting-provider-output", "awaiting-review-output"].includes(boundary?.type);
 }
 
+function statusActionBase(fields = {}) {
+  return {
+    proposalOnly: true,
+    noAutoApply: true,
+    confirmationRequired: true,
+    ...fields
+  };
+}
+
+function boundaryActionKind(boundary) {
+  if (["needs-review", "awaiting-review-output"].includes(boundary?.type)) {
+    return "send-to-review";
+  }
+  if (["awaiting-host-pass", "awaiting-host-pass-result", "awaiting-host-results", "awaiting-provider-output", "missing-required-materials"].includes(boundary?.type)) {
+    return "provide-evidence-or-result";
+  }
+  return "adjust-status";
+}
+
+function toPublicDoveCommand(command, fallback = "project:dove.status") {
+  const normalized = typeof command === "string" ? command.trim() : "";
+  if (!normalized) {
+    return fallback;
+  }
+  if (normalized.startsWith("project:dove.")) {
+    return normalized;
+  }
+  const toolRoutes = {
+    run_dove_auto: "project:dove.auto",
+    run_dove_operator: "project:dove.operator",
+    create_dove_task: "project:dove.mission",
+    record_dove_mission_pass: "project:dove.mission",
+    apply_dove_status_adjustments: "project:dove.status",
+    run_audio_review: "project:dove.review",
+    run_dove_review_loop: "project:dove.review-loop",
+    run_experience_workflow: "project:dove.experience",
+    run_figure_workflow: "project:dove.figure",
+    register_source: "project:dove.source",
+    upsert_note: "project:dove.note",
+    upsert_draft: "project:dove.draft",
+    build_rebuttal: "project:dove.rebuttal"
+  };
+  return toolRoutes[normalized] ?? (normalized.startsWith("dove.") ? `project:${normalized}` : fallback);
+}
+
+function boundaryActionCommand(task, boundary, kind) {
+  if (kind === "send-to-review") {
+    return "project:dove.review";
+  }
+  if (kind === "adjust-status") {
+    return "project:dove.status";
+  }
+  return toPublicDoveCommand(boundary?.command ?? task.continuationState?.command ?? task.nextAction, "project:dove.status");
+}
+
+function boundaryActionLabel(kind, responseLanguage) {
+  if (kind === "send-to-review") {
+    return doveText(responseLanguage, "boundaryActionReviewLabel");
+  }
+  if (kind === "provide-evidence-or-result") {
+    return doveText(responseLanguage, "boundaryActionEvidenceLabel");
+  }
+  if (kind === "kill-through-status") {
+    return doveText(responseLanguage, "boundaryActionKillLabel");
+  }
+  if (kind === "continue-resume") {
+    return doveText(responseLanguage, "boundaryActionContinueLabel");
+  }
+  return doveText(responseLanguage, "boundaryActionStatusLabel");
+}
+
+function boundaryActionOption(kind, task, boundary, responseLanguage) {
+  const command = boundaryActionCommand(task, boundary, kind);
+  return statusActionBase({
+    id: `${boundary.id}-${kind}`,
+    label: boundaryActionLabel(kind, responseLanguage),
+    kind,
+    command,
+    tool: ["adjust-status", "kill-through-status"].includes(kind) ? "apply_dove_status_adjustments" : null,
+    packetId: task.id,
+    boundaryId: boundary.id,
+    boundaryType: boundary.type,
+    requires: mergeStringArrays(boundary.requiredInputs, boundary.requiredActions),
+    requiredInputs: normalizeStringArray(boundary.requiredInputs),
+    requiredActions: normalizeStringArray(boundary.requiredActions)
+  });
+}
+
+function buildBoundaryActionCard(task, responseLanguage = "zh") {
+  const boundary = task.actionableBoundary ?? summarizeActionableBoundary(task);
+  if (!boundary) {
+    return null;
+  }
+  const primaryKind = boundaryActionKind(boundary);
+  const optionKinds = Array.from(new Set([
+    task.continuationState || task.nextAction ? "continue-resume" : null,
+    primaryKind,
+    "adjust-status",
+    "kill-through-status"
+  ].filter(Boolean)));
+  const options = optionKinds.map((kind) => boundaryActionOption(kind, task, boundary, responseLanguage));
+  const primaryOption = options.find((option) => option.kind === primaryKind) ?? options[0];
+  return statusActionBase({
+    id: `boundary-action-${boundary.id}`,
+    label: primaryOption.label,
+    kind: primaryKind,
+    command: primaryOption.command,
+    tool: primaryOption.tool,
+    packetId: task.id,
+    title: task.title,
+    boundaryId: boundary.id,
+    boundaryType: boundary.type,
+    reason: boundary.reason,
+    summary: boundary.summary,
+    requiredInputs: normalizeStringArray(boundary.requiredInputs),
+    requiredActions: normalizeStringArray(boundary.requiredActions),
+    requires: mergeStringArrays(boundary.requiredInputs, boundary.requiredActions),
+    ownerRole: boundary.ownerRole ?? task.ownerRole ?? null,
+    nextRole: boundary.nextRole ?? task.nextRole ?? null,
+    handoff: boundary.handoff ?? task.handoff ?? null,
+    runId: boundary.runId ?? null,
+    options
+  });
+}
+
+function rankStatusActionCards(cards) {
+  return cards
+    .filter(Boolean)
+    .sort((left, right) => (left.priority ?? 100) - (right.priority ?? 100) || String(left.title ?? "").localeCompare(String(right.title ?? "")))
+    .slice(0, 3)
+    .map((card, index) => {
+      const { priority, ...rest } = card;
+      return { ...rest, rank: index + 1 };
+    });
+}
+
+function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, responseLanguage = "zh" }) {
+  const cards = [];
+  const seen = new Set();
+  const pushCard = (key, card) => {
+    if (!key || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    cards.push(statusActionBase(card));
+  };
+  if (!initTask) {
+    pushCard("init", {
+      priority: 0,
+      kind: "init",
+      title: doveText(responseLanguage, "statusHomeInitTitle"),
+      why: doveText(responseLanguage, "statusHomeInitWhy"),
+      command: "project:dove.init",
+      firstAction: "project:dove.init",
+      evidenceRequired: []
+    });
+  }
+  for (const action of boundaryActionCards) {
+    const kind = action.kind === "send-to-review" ? "review-needed" : action.kind === "provide-evidence-or-result" ? "provide-evidence" : "boundary-resume";
+    pushCard(`boundary:${action.boundaryId}`, {
+      priority: 10,
+      kind,
+      title: doveText(responseLanguage, "statusHomeBoundaryTitle", { title: action.title ?? action.packetId }),
+      why: doveText(responseLanguage, "statusHomeBoundaryWhy", { reason: action.reason }),
+      packetId: action.packetId,
+      command: action.command,
+      firstAction: action.label,
+      evidenceRequired: action.requires,
+      boundary: {
+        id: action.boundaryId,
+        type: action.boundaryType,
+        reason: action.reason,
+        requiredInputs: action.requiredInputs,
+        requiredActions: action.requiredActions
+      },
+      handoff: action.handoff,
+      boundaryActionCard: action
+    });
+  }
+  for (const task of activeTasks) {
+    if (!task.continuationState) {
+      continue;
+    }
+    pushCard(`continuation:${task.id}`, {
+      priority: 20,
+      kind: "continue-task",
+      title: doveText(responseLanguage, "statusHomeContinuationTitle", { title: task.title }),
+      why: doveText(responseLanguage, "statusHomeContinuationWhy"),
+      packetId: task.id,
+      command: toPublicDoveCommand(task.continuationState.command ?? task.nextAction, "project:dove.auto"),
+      firstAction: toPublicDoveCommand(task.continuationState.command ?? task.nextAction, "project:dove.auto"),
+      evidenceRequired: normalizeStringArray(task.evidenceExpectations),
+      continuation: task.continuationState,
+      handoff: task.handoff ?? null
+    });
+  }
+  for (const task of blockedTasks) {
+    pushCard(`blocked:${task.id}`, {
+      priority: 30,
+      kind: "blocked-unblock",
+      title: doveText(responseLanguage, "statusHomeBlockedTitle", { title: task.title }),
+      why: doveText(responseLanguage, "statusHomeBlockedWhy", { reason: task.blockedReason ?? task.lastStopReason }),
+      packetId: task.id,
+      command: "project:dove.status",
+      firstAction: "project:dove.status",
+      evidenceRequired: normalizeStringArray(task.evidenceExpectations),
+      boundary: task.currentBoundary ?? null,
+      handoff: task.handoff ?? null
+    });
+  }
+  if ((review.unresolvedConcernCount ?? 0) > 0) {
+    pushCard("review", {
+      priority: 40,
+      kind: "review-needed",
+      title: doveText(responseLanguage, "statusHomeReviewTitle"),
+      why: doveText(responseLanguage, "statusHomeReviewWhy"),
+      command: "project:dove.review",
+      firstAction: "project:dove.review",
+      evidenceRequired: normalizeStringArray(review.unresolvedConcernIds)
+    });
+  }
+  for (const task of activeTasks) {
+    if (!task.nextAction) {
+      continue;
+    }
+    pushCard(`next:${task.id}`, {
+      priority: 50,
+      kind: "continue-task",
+      title: doveText(responseLanguage, "statusHomeContinueTitle", { title: task.title }),
+      why: doveText(responseLanguage, "statusHomeContinueWhy"),
+      packetId: task.id,
+      command: toPublicDoveCommand(task.nextAction),
+      firstAction: toPublicDoveCommand(task.nextAction),
+      evidenceRequired: normalizeStringArray(task.evidenceExpectations),
+      boundary: task.currentBoundary ?? null,
+      handoff: task.handoff ?? null
+    });
+  }
+  if (initTask && activeTasks.length === 0) {
+    pushCard("mission", {
+      priority: 60,
+      kind: "create-mission",
+      title: doveText(responseLanguage, "statusHomeCreateMissionTitle"),
+      why: doveText(responseLanguage, "statusHomeCreateMissionWhy"),
+      command: "project:dove.mission",
+      firstAction: "project:dove.mission",
+      evidenceRequired: []
+    });
+  }
+  return rankStatusActionCards(cards);
+}
+
+function buildStatusAdjustmentCard(task, recommendedStatus, responseLanguage = "zh") {
+  return statusActionBase({
+    presentation: "compact-status-adjustment-card",
+    packetId: task.id,
+    title: task.title,
+    currentStatus: task.status,
+    recommendedStatus,
+    scope: doveText(responseLanguage, "compactCardScope", { stage: task.stage, domain: task.domain, status: task.status }),
+    why: task.blockedReason ?? task.lastStopReason ?? doveText(responseLanguage, "compactCardFirstActionFallback"),
+    firstAction: "apply_dove_status_adjustments",
+    evidenceRequired: normalizeStringArray(task.evidenceExpectations),
+    boundaryOrResume: task.actionableBoundary ?? task.currentBoundary ?? null,
+    confirmation: doveText(responseLanguage, "compactCardNoAutomaticExecution")
+  });
+}
+
+function buildDailyHome({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, responseLanguage = "zh" }) {
+  return {
+    presentation: "dove-status-home",
+    liveContextFirst: true,
+    nextActions: buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, responseLanguage }),
+    boundaryActionCards,
+    suppressUserFacingDumps: ["mission counts", "status counts", "recent completed missions", "recent killed missions"]
+  };
+}
+
 function applicableLessonsForTask(inputs, task) {
   const lessons = Array.isArray(inputs.operatorLessons.lessons) ? inputs.operatorLessons.lessons : [];
   const linkedLessonIds = new Set(normalizeStringArray(task.lessonIds));
@@ -974,8 +1252,34 @@ function recommendedStatusForTask(task) {
   return task.status;
 }
 
-function buildStatusAdjustmentContract(tasks) {
+function buildStatusAdjustmentContract(tasks, responseLanguage = "zh") {
   const adjustableTasks = sortStatusTasks(tasks.filter((task) => task.level !== 0 && !["completed", "killed"].includes(task.status)));
+  const items = adjustableTasks.map((task, index) => {
+    const recommendedStatus = recommendedStatusForTask(task);
+    const adjustmentCard = buildStatusAdjustmentCard(task, recommendedStatus, responseLanguage);
+    return {
+      index: index + 1,
+      packetId: task.id,
+      title: task.title,
+      currentStatus: task.status,
+      recommendedStatus,
+      level: task.level,
+      stage: task.stage,
+      domain: task.domain,
+      blockedReason: task.blockedReason,
+      lastStopReason: task.lastStopReason,
+      currentBoundary: task.currentBoundary ?? null,
+      actionableBoundary: task.actionableBoundary ?? null,
+      handoff: task.handoff ?? null,
+      lastEvent: task.lastEvent ?? null,
+      adjustmentCard,
+      choices: DOVE_TASK_STATUSES,
+      confirmArgs: {
+        adjustments: [{ packetId: task.id, status: recommendedStatus }],
+        confirmed: true
+      }
+    };
+  });
   return {
     proposalOnly: true,
     noAutoApply: true,
@@ -983,30 +1287,8 @@ function buildStatusAdjustmentContract(tasks) {
     mutationTool: "apply_dove_status_adjustments",
     statusChoices: DOVE_TASK_STATUSES,
     itemCount: adjustableTasks.length,
-    items: adjustableTasks.map((task, index) => {
-      const recommendedStatus = recommendedStatusForTask(task);
-      return {
-        index: index + 1,
-        packetId: task.id,
-        title: task.title,
-        currentStatus: task.status,
-        recommendedStatus,
-        level: task.level,
-        stage: task.stage,
-        domain: task.domain,
-        blockedReason: task.blockedReason,
-        lastStopReason: task.lastStopReason,
-        currentBoundary: task.currentBoundary ?? null,
-        actionableBoundary: task.actionableBoundary ?? null,
-        handoff: task.handoff ?? null,
-        lastEvent: task.lastEvent ?? null,
-        choices: DOVE_TASK_STATUSES,
-        confirmArgs: {
-          adjustments: [{ packetId: task.id, status: recommendedStatus }],
-          confirmed: true
-        }
-      };
-    })
+    adjustmentCards: items.map((item) => item.adjustmentCard),
+    items
   };
 }
 
@@ -1645,6 +1927,7 @@ export function queryDoveStatus(root, args = {}) {
   const activeStatusIds = new Set(["pending", "ready", "in-progress", "blocked"]);
   const activeTasks = visibleTasks.filter((task) => task.level !== 0 && activeStatusIds.has(task.status));
   const actionableBoundaries = activeTasks.map(summarizeActionableBoundary).filter(Boolean);
+  const boundaryActionCards = activeTasks.map((task) => buildBoundaryActionCard(task, responseLanguage)).filter(Boolean);
   const blockedTasks = activeTasks.filter(hasTaskBlockerSignal);
   const completedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "completed")).slice(0, 10);
   const killedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "killed")).slice(0, 10);
@@ -1671,7 +1954,8 @@ export function queryDoveStatus(root, args = {}) {
   const projectObjective = inputs.state.dove?.objective ?? inputs.state.dove?.thesis ?? initTask?.summary ?? inputs.board.objective ?? null;
   const projectFocus = activeTasks[0]?.currentFocus ?? (activeTasks.length === 0 ? projectObjective : inputs.state.orchestration?.currentFocus ?? inputs.board.currentFocus ?? projectObjective);
   const projectSummary = buildProjectSummary({ title: projectTitle, objective: projectObjective, focus: projectFocus, initTask, tasks, activeTasks, blockedTasks, review, versions, experiments, blockers, nextCommand, returnStatus });
-  const statusAdjustmentContract = buildStatusAdjustmentContract(visibleTasks);
+  const statusAdjustmentContract = buildStatusAdjustmentContract(visibleTasks, responseLanguage);
+  const dailyHome = buildDailyHome({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, responseLanguage });
   return {
     mode: "dove-status-query",
     query: true,
@@ -1681,7 +1965,9 @@ export function queryDoveStatus(root, args = {}) {
     responseLanguage,
     projectSummary,
     statusAdjustmentContract,
+    dailyHome,
     actionableBoundaries,
+    boundaryActionCards,
     current: {
       domain: currentDomain,
       stage: currentStage,
@@ -1691,6 +1977,7 @@ export function queryDoveStatus(root, args = {}) {
     dashboard: {
       projectSummary,
       statusAdjustmentContract,
+      dailyHome,
       project: {
         title: projectTitle,
         objective: projectObjective,
@@ -1726,6 +2013,7 @@ export function queryDoveStatus(root, args = {}) {
         active: activeTasks,
         blocked: blockedTasks,
         actionableBoundaries,
+        boundaryActionCards,
         recentCompleted: completedTasks,
         recentKilled: killedTasks,
         activeTaskIds: activeTasks.map((task) => task.id),

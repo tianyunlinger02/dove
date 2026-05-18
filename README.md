@@ -92,7 +92,7 @@ Preset workflows should resolve or ask for the durable task packet instead of si
 /dove:status
 ```
 
-Status is read-only by default: it first reports the live host-visible development situation, then shows only adjustable Dove missions and their actionable boundaries when there is something actionable. It does not print mission counts or completed/killed recaps.
+Status is read-only by default: it first reports the live host-visible development situation, then acts as a daily home screen with ranked 1-3 next action cards, boundary action cards, and only adjustable Dove missions when there is something actionable. It does not print mission counts or completed/killed recaps.
 
 6. Close durable learning only when there is a reusable lesson:
 
@@ -109,10 +109,10 @@ Dove exposes one flat user-facing command set:
 | Command | Purpose |
 | --- | --- |
 | `project:dove.init` | Create/update the unique level-0 project goal. |
-| `project:dove.mission` | Convert a natural-language demand into a task contract; after approval, materialize it and run one bounded foreground pass. |
-| `project:dove.auto` | Convert demand or select a task; after approval, run bounded multi-round foreground iterations until completion or a boundary. |
-| `project:dove.status` | Explain the live development situation, then show only actionable non-completed/non-killed mission status adjustments when present or requested. |
-| `project:dove.operator` | Run one confirmed foreground pass over ready/in-progress work, splitting safe internal steps from host-pass-required work, and create pending blocker-investigation plan missions for blocked work. |
+| `project:dove.mission` | Convert a natural-language demand into a compact task-card contract; after approval, materialize it and run one bounded foreground pass. |
+| `project:dove.auto` | Convert demand or select a task with compact task/auto cards; after approval, run bounded multi-round foreground iterations until completion or a boundary. |
+| `project:dove.status` | Explain the live development situation, then show a daily home screen with ranked action cards, boundaries, and guarded status adjustments. |
+| `project:dove.operator` | Preview compact queue cards, then run one confirmed foreground pass over ready/in-progress work and blocker-investigation planning. |
 | `project:dove.lessons` | Query or record global/task-bound lessons that future work must obey. |
 | `project:dove.version` | Snapshot a direction change and clear active tasks except init. |
 | `project:dove.source` | Organize external information and provenance. |
@@ -131,7 +131,7 @@ Older router, plan, checklist, audit, return, follow-through, onboarding, govern
 Dove uses one task tree across paper, experiment, and engineering work:
 
 - There is exactly one level-0 init task.
-- `/dove:mission` first converts the operator's natural-language demand into a proposal-only task contract; when the host supports interactive confirmation controls, the operator chooses approve conversion and run one pass, adjust conversion, or cancel before anything is materialized into `.dove/task-packets/`.
+- `/dove:mission` first converts the operator's natural-language demand into a proposal-only task contract with a compact task card; when the host supports interactive confirmation controls, the operator chooses approve conversion and run one pass, adjust conversion, or cancel before anything is materialized into `.dove/task-packets/`.
 - `/dove:init` is the only level-0 creation path; `/dove:mission` creates work under that root.
 - User-created mission tasks default to level 3 and may explicitly use level 1, 2, 3, or deeper when the operator supplies a level.
 - `/dove:mission` can autonomously propose checklist/subtask packets, but they are materialized only after the same confirmation as the parent mission.
@@ -140,10 +140,10 @@ Dove uses one task tree across paper, experiment, and engineering work:
 - Task-scoped writes must resolve to one durable `.dove/task-packets` packet before mutation.
 - After approval, `/dove:mission` immediately performs one bounded foreground pass and records the result with `record_dove_mission_pass`.
 - When a completed `/dove:mission` pass is a `plan` task, Dove converts supplied plan outputs into pending durable missions: the default follow-up mission is level 3, and optional child missions can be level 4, 5, or deeper.
-- `/dove:status` first explains the live development situation from host-visible context, not from `.dove` internals, then only lists non-init missions that can be adjusted, excluding `completed` and `killed`; if there are no adjustable missions, it does not show a mission list or completed/killed recap. Hosts should ask at most one confirmation dialog for status changes, do nothing when the dialog does not provide clear `packetId -> status` adjustments, and call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
+- `/dove:status` first explains the live development situation from host-visible context, not from `.dove` internals, then shows `dailyHome` as ranked 1-3 next action cards and proposal-only boundary action cards. It only lists non-init missions that can be adjusted, excluding `completed` and `killed`; if there are no adjustable missions, it does not show a mission list or completed/killed recap. Hosts should ask at most one confirmation dialog with compact adjustment cards, do nothing when the dialog does not provide clear `packetId -> status` adjustments, and call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
 - Boundaries are first-class task/runtime metadata, not extra statuses. An open boundary records why work stopped, required inputs/actions, `ownerRole`, `nextRole`, and optional `handoff` so the next foreground command knows who should resume.
-- `/dove:operator` previews auto-runnable, host-pass-required, blocked, and pending queues; after confirmation it runs one safe internal step when available, otherwise waits for real host pass results, records an awaiting boundary, and turns `blocked` missions into pending plan missions that investigate the blocker reason.
-- `/dove:auto` can start directly from a new demand or an existing task, runs only in the foreground call, records each iteration in `.dove/runtime/results.json`, appends lifecycle/boundary events in `.dove/runtime/events.json`, and uses `.dove/state.json.settings.auto.maxIterations` with default 3.
+- `/dove:operator` previews compact cards for auto-runnable, host-pass-required, blocked, and pending queues; after confirmation it runs one safe internal step when available, otherwise waits for real host pass results, records an awaiting boundary, and turns `blocked` missions into pending plan missions that investigate the blocker reason.
+- `/dove:auto` can start directly from a new demand or an existing task, confirms compact task/auto cards before execution, runs only in the foreground call, records each iteration in `.dove/runtime/results.json`, appends lifecycle/boundary events in `.dove/runtime/events.json`, and uses `.dove/state.json.settings.auto.maxIterations` with default 3.
 - Ambiguous natural-language task targeting follows `.dove/state.json.settings.taskTargetResolution.autoSelect`, but missing targets or tied top candidates must stop for explicit task confirmation instead of guessing.
 
 ## Language configuration
@@ -202,7 +202,7 @@ Dove includes a local stdio MCP server named `dove`:
 }
 ```
 
-MCP tools provide deterministic access to workspace state, task graphs, open questions, decisions, lineage, operator lessons, status, actionable boundaries, confirmed status adjustments, demand-to-task conversion, mission pass recording, operator passes, task reset, audio review, experience workflows, figures, drafts, rebuttal artifacts, role context, packet context, artifact context, and runtime event/result logs. MCP complements `.dove/`; it does not replace the file-backed source of truth.
+MCP tools provide deterministic access to workspace state, task graphs, open questions, decisions, lineage, operator lessons, status `dailyHome`, actionable boundaries, compact confirmation cards, confirmed status adjustments, demand-to-task conversion, mission pass recording, operator passes, task reset, audio review, experience workflows, figures, drafts, rebuttal artifacts, role context, packet context, artifact context, and runtime event/result logs. MCP complements `.dove/`; it does not replace the file-backed source of truth.
 
 ## Development
 
