@@ -128,6 +128,10 @@ async function main() {
   assert.equal(missionPass.result.maxIterations, 1);
   assert.equal(missionPass.result.iterationCount, 1);
   assert.equal(missionPass.result.packetId, packetId);
+  assert.equal(missionPass.resultCard.presentation, "compact-result-summary-card");
+  assert.equal(missionPass.resultCard.surface, "dove.mission");
+  assert.equal(missionPass.resultCard.packetId, packetId);
+  assert.equal(missionPass.resultCard.proposalOnly, false);
 
   const source = await callTool("register_source", {
     packetId,
@@ -202,6 +206,8 @@ async function main() {
   assert.equal(review.status, "prepared-awaiting-audio");
   assert.equal(review.privacyBoundary.projectContextShared, false);
   assert.equal(review.privacyBoundary.writerPrivateTranscriptShared, false);
+  assert.equal(review.resultCard.presentation, "compact-result-summary-card");
+  assert.equal(review.resultCard.surface, "dove.review");
 
   const reviewLoop = await callTool("run_dove_review_loop", {
     packetId,
@@ -277,6 +283,9 @@ async function main() {
   assert.equal(autoRun.result.iterations[0].outcome, "awaiting-review-output");
   assert.equal(autoRun.result.stopReason, "awaiting-audio-review-output");
   assert.ok(autoRun.result.allowedInternalCommands.includes("dove.review-loop"));
+  assert.equal(autoRun.resultCard.presentation, "compact-result-summary-card");
+  assert.equal(autoRun.resultCard.surface, "dove.auto");
+  assert.equal(autoRun.resultCard.requiresAction, true);
 
   const secondMission = await callTool("create_dove_task", {
     id: "validator-kill-task",
@@ -331,6 +340,8 @@ async function main() {
   const statusAdjustment = await callTool("apply_dove_status_adjustments", statusAdjustmentPreview.confirmArgs);
   assert.ok(["applied", "skipped"].includes(statusAdjustment.status));
   assert.equal(statusAdjustment.rejected.length, 0);
+  assert.equal(statusAdjustment.resultCard.presentation, "compact-result-summary-card");
+  assert.equal(statusAdjustment.resultCard.surface, "dove.status");
 
   const operatorPreview = await callTool("run_dove_operator", {});
   assert.equal(operatorPreview.status, "needs-confirmation");
@@ -341,6 +352,10 @@ async function main() {
   assert.equal(operatorPreview.background, false);
   assert.ok(operatorPreview.queueCards && typeof operatorPreview.queueCards === "object");
   assert.ok(Array.isArray(operatorPreview.queueCards.runnable));
+
+  const operatorRun = await callTool("run_dove_operator", { confirmed: true, runId: "validator-operator-run" });
+  assert.equal(operatorRun.resultCard.presentation, "compact-result-summary-card");
+  assert.equal(operatorRun.resultCard.surface, "dove.operator");
 
   const recordedLesson = await callTool("record_operator_lesson", {
     title: "Keep MCP validator retrospectives distilled",

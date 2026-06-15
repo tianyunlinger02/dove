@@ -1173,6 +1173,11 @@ function buildDailyHome({ initTask, activeTasks, blockedTasks, review, boundaryA
   };
 }
 
+function selectDailyHomeNextCommand(dailyHome, fallbackNextCommand) {
+  const firstAction = Array.isArray(dailyHome?.nextActions) ? dailyHome.nextActions.find((card) => typeof card?.command === "string" && card.command.trim()) : null;
+  return firstAction?.command ?? fallbackNextCommand;
+}
+
 function applicableLessonsForTask(inputs, task) {
   const lessons = Array.isArray(inputs.operatorLessons.lessons) ? inputs.operatorLessons.lessons : [];
   const linkedLessonIds = new Set(normalizeStringArray(task.lessonIds));
@@ -1936,7 +1941,7 @@ export function queryDoveStatus(root, args = {}) {
   const lessons = summarizeStatusLessons(inputs);
   const versions = summarizeStatusVersions(inputs);
   const experiments = summarizeStatusExperiments(inputs);
-  const nextCommand = selectStatusNextCommand({ initTask, activeTasks, blockedTasks, review });
+  const fallbackNextCommand = selectStatusNextCommand({ initTask, activeTasks, blockedTasks, review });
   const currentStage = requestedStage ?? activeTasks[0]?.stage ?? initTask?.stage ?? null;
   const currentDomain = requestedDomain ?? activeTasks[0]?.domain ?? initTask?.domain ?? normalizeDoveDomainId(inputs.workspaceIndex.dove?.currentDomain, null);
   const primaryRole = currentStage === "audit" ? "reviewer" : currentStage === "execute" ? "builder" : "planner";
@@ -1953,9 +1958,10 @@ export function queryDoveStatus(root, args = {}) {
   const projectTitle = inputs.state.dove?.title ?? initTask?.title ?? doveText(responseLanguage, "projectTitleFallback");
   const projectObjective = inputs.state.dove?.objective ?? inputs.state.dove?.thesis ?? initTask?.summary ?? inputs.board.objective ?? null;
   const projectFocus = activeTasks[0]?.currentFocus ?? (activeTasks.length === 0 ? projectObjective : inputs.state.orchestration?.currentFocus ?? inputs.board.currentFocus ?? projectObjective);
+  const dailyHome = buildDailyHome({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, responseLanguage });
+  const nextCommand = selectDailyHomeNextCommand(dailyHome, fallbackNextCommand);
   const projectSummary = buildProjectSummary({ title: projectTitle, objective: projectObjective, focus: projectFocus, initTask, tasks, activeTasks, blockedTasks, review, versions, experiments, blockers, nextCommand, returnStatus });
   const statusAdjustmentContract = buildStatusAdjustmentContract(visibleTasks, responseLanguage);
-  const dailyHome = buildDailyHome({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, responseLanguage });
   return {
     mode: "dove-status-query",
     query: true,

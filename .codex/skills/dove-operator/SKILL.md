@@ -13,7 +13,12 @@ Run all ready and in-progress Dove missions once, and create blocker-investigati
 - Do not claim real work happened unless the host supplies actual pass results or a safe internal step can run.
 - Targeting: Works over the active mission queue rather than one ad hoc target.
 - Confirmation: Preview compact queue cards with writes: [] first; require approval before recording results or creating blocker investigation missions.
-- Outcome: Runnable work is recorded from real results, blocked work gets pending investigation missions, and unresolved host work remains awaiting evidence through explicit boundaries.
+- Outcome: Runnable work is recorded from real results, blocked work gets pending investigation missions, and unresolved host work remains awaiting evidence through explicit boundaries with a localized resultCard summary.
+
+## Examples
+
+- `/dove:operator`
+- `/dove:operator Run one confirmed queue pass and record real host pass results`
 
 ## Contract
 
@@ -36,7 +41,7 @@ Run all ready and in-progress Dove missions once, and create blocker-investigati
 10. Do not claim real engineering, paper, or experiment work happened when neither a safe internal step nor an actual host pass result exists; let `run_dove_operator` record awaiting host results instead.
 11. When no safe internal step or actual host pass result exists, persist an `awaiting-host-pass-result` boundary rather than marking work complete.
 12. Preserve durable role handoff metadata while running queue passes; do not expose planner/builder/reviewer as separate slash commands.
-13. For blocked missions, create pending child plan missions that investigate the blocker reason and link back to the blocked mission.
+13. For blocked missions, create pending child plan missions that investigate the blocker reason and link back to the blocked mission, then return a localized `resultCard` summary of updated, awaiting, and created work.
 14. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
 15. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
 16. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

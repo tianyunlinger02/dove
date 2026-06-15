@@ -22,6 +22,7 @@ import { runAudioReview } from "./audio-review.mjs";
 import { runDoveReviewLoop } from "./dove-review-loop.mjs";
 import { normalizeRebuttalIssues, buildRebuttalStrategy } from "./orchestration.mjs";
 import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
+import { buildCommandResultCard } from "./result-cards.mjs";
 import { appendEvent, appendResult, loadRuntimeArtifacts, saveRuntimeArtifacts } from "./runtime-state.mjs";
 
 function slugify(value) {
@@ -353,6 +354,243 @@ function buildOperatorQueueCard(task = {}, context = {}, responseLanguage = "zh"
   };
 }
 
+function taskWorkflowDurableWrites(responseLanguage = "zh", { runtime = false, lifecycle = true, planConversion = null } = {}) {
+  const writes = lifecycle ? [
+    doveText(responseLanguage, "resultCardTaskPacketUpdated"),
+    doveText(responseLanguage, "resultCardTaskIndexUpdated"),
+    doveText(responseLanguage, "resultCardRuntimeEventRecorded")
+  ] : [];
+  if (runtime) {
+    writes.push(doveText(responseLanguage, "resultCardRuntimeResultRecorded"));
+  }
+  if (planConversion?.createdMissions?.length > 0 || planConversion?.reusedMissions?.length > 0) {
+    writes.push(`${ARTIFACT_PATHS.taskPacketsIndex}: plan missions ${planConversion.createdMissions?.length ?? 0} created, ${planConversion.reusedMissions?.length ?? 0} reused`);
+  }
+  return writes;
+}
+
+function buildWorkflowHandoffSuggestion(task = {}, result = {}, responseLanguage = "zh") {
+  const boundary = result.boundary ?? task.boundary ?? null;
+  const statusText = `${result.status ?? ""} ${result.outcome ?? ""} ${result.stopReason ?? ""}`;
+  const actionableStop = Boolean(boundary) || /awaiting|blocked|required|missing|failed|exhausted|needs-/u.test(statusText);
+  if (!actionableStop) {
+    return null;
+  }
+  const ownerRole = boundary?.ownerRole ?? task.ownerRole ?? null;
+  const nextRole = boundary?.nextRole ?? task.nextRole ?? ownerRole;
+  const requiredInputs = normalizeStringArray(boundary?.requiredInputs);
+  const requiredActions = normalizeStringArray(boundary?.requiredActions);
+  const requires = normalizeStringArray([...requiredInputs, ...requiredActions]);
+  const reason = boundary?.reason ?? result.stopReason ?? null;
+  const roleTransfer = ownerRole && nextRole && ownerRole !== nextRole;
+  return {
+    presentation: "dove-handoff-suggestion",
+    boundaryId: boundary?.id ?? null,
+    boundaryType: boundary?.type ?? result.outcome ?? result.status ?? null,
+    ownerRole,
+    nextRole,
+    handoff: boundary?.handoff ?? task.handoff ?? null,
+    requiredInputs,
+    requiredActions,
+    requires,
+    reason,
+    summary: roleTransfer
+      ? doveText(responseLanguage, "resultCardHandoffRoleTransfer", { ownerRole, nextRole })
+      : doveText(responseLanguage, "resultCardHandoffResolveBoundary", { ownerRole })
+  };
+}
+
+function workflowActionMetadata(task = {}, result = {}, handoffSuggestion = null) {
+  const boundary = result.boundary ?? task.boundary ?? null;
+  const hasHandoffContext = Boolean(boundary || handoffSuggestion);
+  const requiredInputs = hasHandoffContext ? normalizeStringArray(boundary?.requiredInputs ?? handoffSuggestion?.requiredInputs) : [];
+  const requiredActions = hasHandoffContext ? normalizeStringArray(boundary?.requiredActions ?? handoffSuggestion?.requiredActions) : [];
+  return {
+    boundary,
+    boundaryId: boundary?.id ?? handoffSuggestion?.boundaryId ?? null,
+    boundaryType: boundary?.type ?? handoffSuggestion?.boundaryType ?? (hasHandoffContext ? result.outcome ?? result.status ?? null : null),
+    ownerRole: hasHandoffContext ? boundary?.ownerRole ?? handoffSuggestion?.ownerRole ?? task.ownerRole ?? null : null,
+    nextRole: hasHandoffContext ? boundary?.nextRole ?? handoffSuggestion?.nextRole ?? task.nextRole ?? null : null,
+    handoff: hasHandoffContext ? boundary?.handoff ?? task.handoff ?? handoffSuggestion?.handoff ?? null : null,
+    requiredInputs,
+    requiredActions,
+    requires: normalizeStringArray([...requiredInputs, ...requiredActions]),
+    handoffSuggestion
+  };
+}
+
+function withWorkflowActionMetadata(actions = [], task = {}, result = {}, responseLanguage = "zh", handoffSuggestion = null) {
+  const suggestion = handoffSuggestion ?? buildWorkflowHandoffSuggestion(task, result, responseLanguage);
+  const metadata = workflowActionMetadata(task, result, suggestion);
+  return (Array.isArray(actions) ? actions : []).map((action) => ({
+    ...metadata,
+    ...action,
+    boundary: action.boundary ?? metadata.boundary,
+    boundaryId: action.boundaryId ?? metadata.boundaryId,
+    boundaryType: action.boundaryType ?? metadata.boundaryType,
+    ownerRole: action.ownerRole ?? metadata.ownerRole,
+    nextRole: action.nextRole ?? metadata.nextRole,
+    handoff: action.handoff ?? metadata.handoff,
+    requiredInputs: action.requiredInputs ?? metadata.requiredInputs,
+    requiredActions: action.requiredActions ?? metadata.requiredActions,
+    requires: action.requires ?? metadata.requires,
+    handoffSuggestion: action.handoffSuggestion ?? metadata.handoffSuggestion
+  }));
+}
+
+function operatorHandoffSuggestion(result = {}, responseLanguage = "zh") {
+  if (result.awaitingResultTaskIds?.length > 0) {
+    return {
+      presentation: "dove-handoff-suggestion",
+      boundaryType: "awaiting-host-pass-result",
+      ownerRole: "builder",
+      nextRole: "builder",
+      requires: result.awaitingResultTaskIds,
+      requiredActions: ["provide-host-pass-result"],
+      reason: result.stopReason,
+      summary: doveText(responseLanguage, "resultCardHandoffProvideEvidence")
+    };
+  }
+  if (result.blockerPlanConversion?.createdMissions?.length > 0) {
+    return {
+      presentation: "dove-handoff-suggestion",
+      boundaryType: "blocked-mission-investigation",
+      ownerRole: "planner",
+      nextRole: "planner",
+      requires: result.blockerPlanConversion.createdMissions.map((mission) => mission.id),
+      summary: doveText(responseLanguage, "resultCardHandoffResolveBoundary", { ownerRole: "planner" })
+    };
+  }
+  return null;
+}
+
+function missionResultCard(task = {}, result = {}, context = {}, responseLanguage = "zh") {
+  const handoffSuggestion = buildWorkflowHandoffSuggestion(task, result, responseLanguage);
+  const nextAction = context.nextAction ?? result.iterations?.[0]?.output?.nextAction;
+  const baseNextActions = Array.isArray(context.nextActions) && context.nextActions.length > 0
+    ? context.nextActions
+    : (nextAction ? [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: nextAction, packetId: task.id }] : []);
+  return buildCommandResultCard({
+    surface: "dove.mission",
+    command: "record_dove_mission_pass",
+    packetId: task.id,
+    title: task.title,
+    runId: result.id,
+    status: result.status,
+    outcome: result.outcome,
+    summary: context.summary ?? result.iterations?.[0]?.output?.summary,
+    stopReason: result.stopReason,
+    taskStatusBefore: result.taskStatusBefore,
+    taskStatusAfter: result.taskStatusAfter,
+    evidenceLinks: context.evidenceLinks,
+    artifactRefs: context.artifactRefs,
+    validationEvidence: context.validationEvidence,
+    evidenceExplanation: context.evidenceExplanation,
+    artifactResolution: context.artifactResolution,
+    durableWrites: taskWorkflowDurableWrites(responseLanguage, { runtime: true, lifecycle: true, planConversion: context.planConversion }),
+    boundary: task.boundary ?? null,
+    nextAction,
+    nextActions: withWorkflowActionMetadata(baseNextActions, task, result, responseLanguage, handoffSuggestion),
+    foreground: result.foreground,
+    background: result.background,
+    daemon: result.daemon
+  }, responseLanguage);
+}
+
+function autoResultCard(task = {}, result = {}, context = {}, responseLanguage = "zh") {
+  const evidenceLinks = result.iterations?.flatMap((iteration) => normalizeStringArray(iteration.output?.evidenceLinks ?? iteration.evidenceLinks)) ?? [];
+  const artifactRefs = result.iterations?.flatMap((iteration) => normalizeStringArray(iteration.output?.artifactRefs ?? iteration.artifactRefs)) ?? [];
+  const handoffSuggestion = buildWorkflowHandoffSuggestion(task, result, responseLanguage);
+  const baseNextActions = context.nextActions ?? (result.status === "awaiting-host-pass"
+    ? [{ title: doveText(responseLanguage, "resultCardNextProvideEvidence"), command: "record_dove_mission_pass", packetId: task.id, confirmationRequired: true }]
+    : [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: context.nextAction ?? task.nextAction ?? "project:dove.status", packetId: task.id }]);
+  const nextActions = withWorkflowActionMetadata(baseNextActions, task, result, responseLanguage, handoffSuggestion);
+  return buildCommandResultCard({
+    surface: "dove.auto",
+    command: "run_dove_auto",
+    packetId: task.id,
+    title: task.title,
+    runId: result.id,
+    status: result.status,
+    outcome: result.outcome,
+    summary: result.outcome,
+    stopReason: result.stopReason,
+    taskStatusBefore: result.taskStatusBefore,
+    taskStatusAfter: result.taskStatusAfter,
+    evidenceLinks,
+    artifactRefs,
+    durableWrites: taskWorkflowDurableWrites(responseLanguage, { runtime: true, lifecycle: result.taskStatusBefore !== result.taskStatusAfter || Boolean(result.boundary) }),
+    boundary: result.boundary ?? task.boundary ?? null,
+    nextActions,
+    foreground: result.foreground,
+    background: result.background,
+    daemon: result.daemon
+  }, responseLanguage);
+}
+
+function operatorResultCard(result = {}, context = {}, responseLanguage = "zh") {
+  const evidenceLinks = result.iterations?.flatMap((iteration) => normalizeStringArray(iteration.evidenceLinks ?? iteration.output?.evidenceLinks)) ?? [];
+  const artifactRefs = result.iterations?.flatMap((iteration) => normalizeStringArray(iteration.artifactRefs ?? iteration.output?.artifactRefs)) ?? [];
+  const createdBlockerCount = result.blockerPlanConversion?.createdMissions?.length ?? 0;
+  const handoffSuggestion = operatorHandoffSuggestion(result, responseLanguage);
+  const baseNextActions = result.awaitingResultTaskIds?.length > 0
+    ? [{ title: doveText(responseLanguage, "resultCardNextProvideEvidence"), command: "project:dove.status", requires: result.awaitingResultTaskIds }]
+    : [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: context.nextAction ?? "project:dove.status" }];
+  const nextActions = baseNextActions.map((action) => handoffSuggestion ? {
+    ...action,
+    boundaryId: handoffSuggestion.boundaryId,
+    boundaryType: handoffSuggestion.boundaryType,
+    ownerRole: handoffSuggestion.ownerRole,
+    nextRole: handoffSuggestion.nextRole,
+    requiredInputs: handoffSuggestion.requiredInputs,
+    requiredActions: handoffSuggestion.requiredActions,
+    requires: action.requires ?? handoffSuggestion.requires,
+    handoffSuggestion
+  } : action);
+  return buildCommandResultCard({
+    surface: "dove.operator",
+    command: "run_dove_operator",
+    packetIds: result.updatedTaskIds,
+    runId: result.id,
+    status: result.status,
+    outcome: result.outcome,
+    summary: `updated=${result.updatedTaskIds?.length ?? 0}; awaiting=${result.awaitingResultTaskIds?.length ?? 0}; blockers-created=${createdBlockerCount}`,
+    stopReason: result.stopReason,
+    evidenceLinks,
+    artifactRefs,
+    durableWrites: [
+      doveText(responseLanguage, "resultCardRuntimeResultRecorded"),
+      ...(result.updatedTaskIds?.length > 0 ? [doveText(responseLanguage, "resultCardTaskPacketUpdated"), doveText(responseLanguage, "resultCardTaskIndexUpdated"), doveText(responseLanguage, "resultCardRuntimeEventRecorded")] : []),
+      ...(createdBlockerCount > 0 ? [`${ARTIFACT_PATHS.taskPacketsIndex}: blocker investigation missions created=${createdBlockerCount}`] : [])
+    ],
+    nextAction: context.nextAction ?? "project:dove.status",
+    nextActions,
+    foreground: result.foreground,
+    background: result.background,
+    daemon: result.daemon
+  }, responseLanguage);
+}
+
+function statusAdjustmentResultCard(result = {}, responseLanguage = "zh") {
+  const applied = Array.isArray(result.applied) ? result.applied : [];
+  const skipped = Array.isArray(result.skipped) ? result.skipped : [];
+  const rejected = Array.isArray(result.rejected) ? result.rejected : [];
+  return buildCommandResultCard({
+    surface: "dove.status",
+    command: "apply_dove_status_adjustments",
+    packetIds: applied.map((item) => item.packetId),
+    status: result.status,
+    outcome: result.status,
+    summary: `applied=${applied.length}; skipped=${skipped.length}; rejected=${rejected.length}`,
+    durableWrites: applied.length > 0 ? [doveText(responseLanguage, "resultCardTaskPacketUpdated"), doveText(responseLanguage, "resultCardTaskIndexUpdated"), doveText(responseLanguage, "resultCardRuntimeEventRecorded")] : [],
+    nextAction: "project:dove.status",
+    nextActions: [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: "project:dove.status" }],
+    foreground: true,
+    background: false,
+    daemon: false
+  }, responseLanguage);
+}
+
 function activeLessons(root, packetId = null) {
   const lessons = readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] });
   return (Array.isArray(lessons.lessons) ? lessons.lessons : []).filter((lesson) => {
@@ -466,9 +704,9 @@ function generatedChecklistItems(args = {}, classification, responseLanguage = "
   }
   const validationTitle = classification.stage === "audit" ? doveText(responseLanguage, "checklistReviewTitle") : doveText(responseLanguage, "checklistValidateTitle");
   return [
-    { id: "clarify-scope-acceptance-evidence", title: doveText(responseLanguage, "checklistClarifyTitle"), summary: doveText(responseLanguage, "checklistClarifySummary") },
-    { id: "perform-core-mission-work", title: doveText(responseLanguage, "checklistWorkTitle"), summary: doveText(responseLanguage, "checklistWorkSummary") },
-    { id: classification.stage === "audit" ? "run-independent-review-record-findings" : "validate-evidence-record-completion", title: validationTitle, summary: doveText(responseLanguage, "checklistValidateSummary") }
+    { title: doveText(responseLanguage, "checklistClarifyTitle"), summary: doveText(responseLanguage, "checklistClarifySummary") },
+    { title: doveText(responseLanguage, "checklistWorkTitle"), summary: doveText(responseLanguage, "checklistWorkSummary") },
+    { title: validationTitle, summary: doveText(responseLanguage, "checklistValidateSummary") }
   ];
 }
 
@@ -1010,6 +1248,7 @@ export function createDoveTask(root, args = {}) {
       missionPass,
       task: missionPass.task,
       result: missionPass.result,
+      resultCard: missionPass.resultCard,
       nextAction: missionPass.nextAction
     };
   }
@@ -1031,6 +1270,29 @@ function workflowTargetOptions() {
   };
 }
 
+function evidenceExplanationForResolution(artifactResolution, responseLanguage = "zh") {
+  if (!artifactResolution || typeof artifactResolution !== "object" || Array.isArray(artifactResolution)) {
+    return null;
+  }
+  const keyByCode = {
+    "no-artifacts": "evidenceResolutionNoArtifacts",
+    "no-selected-packet": "evidenceResolutionNoSelectedPacket",
+    "accepted-self-artifacts": "evidenceResolutionAcceptedSelf",
+    "accepted-descendant-artifacts": "evidenceResolutionAcceptedDescendant",
+    "no-existing-artifact-owner": "evidenceResolutionNoExistingOwner",
+    "artifact-conflict": "evidenceResolutionConflict"
+  };
+  const code = normalizeString(artifactResolution.explanationCode, "no-artifacts");
+  return {
+    code,
+    message: doveText(responseLanguage, keyByCode[code] ?? "evidenceResolutionNoArtifacts"),
+    selectedPacketId: normalizeString(artifactResolution.selectedPacketId, null),
+    requestedArtifacts: normalizeStringArray(artifactResolution.requestedArtifacts),
+    acceptedPacketIds: Array.isArray(artifactResolution.acceptedMatches) ? artifactResolution.acceptedMatches.map((match) => match.packetId).filter(Boolean) : [],
+    conflictingPacketIds: Array.isArray(artifactResolution.conflictingMatches) ? artifactResolution.conflictingMatches.map((match) => match.packetId).filter(Boolean) : []
+  };
+}
+
 function chooseTask(root, index, args = {}) {
   const candidates = candidateTasks(index);
   if (Number.isFinite(args.index)) {
@@ -1040,12 +1302,15 @@ function chooseTask(root, index, args = {}) {
     try {
       const resolved = resolveDurableTaskPacket(root, args, workflowTargetOptions());
       const indexed = (index.items ?? []).find((item) => item.id === resolved.packetId) ?? resolved.packet;
-      return { selected: indexed, candidates, resolution: resolved.resolution };
+      return { selected: indexed, candidates, resolution: resolved.resolution, artifactResolution: resolved.artifactResolution };
     } catch (error) {
       return {
         selected: null,
         candidates: Array.isArray(error.candidates) && error.candidates.length > 0 ? error.candidates : candidates,
-        resolutionError: error.message
+        resolutionError: error.message,
+        resolutionErrorCode: error.resolutionErrorCode ?? error.code,
+        resolutionErrorReason: error.reason,
+        artifactResolution: error.artifactResolution ?? null
       };
     }
   }
@@ -1154,13 +1419,20 @@ export function recordDoveMissionPass(root, args = {}) {
   ensureWorkspace(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const index = loadTaskIndex(root);
-  const { selected, candidates } = chooseTask(root, index, args);
+  const selection = chooseTask(root, index, args);
+  const { selected, candidates } = selection;
+  const selectionEvidenceExplanation = evidenceExplanationForResolution(selection.artifactResolution, responseLanguage);
   if (!selected) {
     return {
       status: "needs-task-selection",
       choices: taskSelectionChoices(candidates),
       responseLanguage,
-      message: doveText(responseLanguage, "missionPassSelectMessage")
+      message: doveText(responseLanguage, "missionPassSelectMessage"),
+      resolutionError: selection.resolutionError,
+      resolutionErrorCode: selection.resolutionErrorCode,
+      resolutionErrorReason: selection.resolutionErrorReason,
+      artifactResolution: selection.artifactResolution ?? null,
+      evidenceExplanation: selectionEvidenceExplanation
     };
   }
   if (selected.level === 0) {
@@ -1233,12 +1505,28 @@ export function recordDoveMissionPass(root, args = {}) {
     updatedAt: timestamp
   };
   persistAutoResult(root, result);
+  const resultCard = missionResultCard(task, result, {
+    summary,
+    evidenceLinks,
+    artifactRefs,
+    validationEvidence: args.validationEvidencePaths,
+    planConversion,
+    artifactResolution: selection.artifactResolution,
+    evidenceExplanation: selectionEvidenceExplanation,
+    nextAction,
+    nextActions: resultStatus === "completed"
+      ? [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: nextAction, packetId: task.id }]
+      : [{ title: doveText(responseLanguage, "resultCardNextProvideEvidence"), command: "project:dove.status", packetId: task.id, confirmationRequired: true }]
+  }, responseLanguage);
   return {
     status: result.status,
     task,
     result,
+    resultCard,
     evidenceLinks,
     artifactRefs,
+    artifactResolution: selection.artifactResolution ?? null,
+    evidenceExplanation: selectionEvidenceExplanation,
     planConversion,
     createdPlanMissions: result.createdPlanMissions,
     reusedPlanMissions: result.reusedPlanMissions,
@@ -1367,7 +1655,7 @@ export function applyDoveStatusAdjustments(root, args = {}) {
     };
   }
   if (adjustments.length === 0) {
-    return {
+    const result = {
       status: "no-op",
       applied: [],
       skipped: [],
@@ -1376,6 +1664,10 @@ export function applyDoveStatusAdjustments(root, args = {}) {
       activeTaskIds: loadTaskIndex(root).taskModel.activeTaskIds,
       responseLanguage,
       taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex
+    };
+    return {
+      ...result,
+      resultCard: statusAdjustmentResultCard(result, responseLanguage)
     };
   }
   const catalog = readTaskPacketCatalog(root);
@@ -1405,7 +1697,7 @@ export function applyDoveStatusAdjustments(root, args = {}) {
     catalog.byId.set(packetId, updated);
     applied.push({ packetId, fromStatus: packet.status, toStatus: updated.status, title: updated.title, level: updated.level });
   }
-  return {
+  const result = {
     status: rejected.length > 0 && applied.length > 0 ? "partially-applied" : rejected.length > 0 ? "rejected" : "applied",
     applied,
     skipped,
@@ -1414,6 +1706,10 @@ export function applyDoveStatusAdjustments(root, args = {}) {
     activeTaskIds: loadTaskIndex(root).taskModel.activeTaskIds,
     responseLanguage,
     taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex
+  };
+  return {
+    ...result,
+    resultCard: statusAdjustmentResultCard(result, responseLanguage)
   };
 }
 
@@ -1741,9 +2037,11 @@ export function runDoveOperator(root, args = {}) {
     updatedAt: nowIso()
   };
   persistAutoResult(root, result);
+  const resultCard = operatorResultCard(result, { nextAction: "project:dove.status" }, responseLanguage);
   return {
     status: result.status,
     result,
+    resultCard,
     autoRunnableTasks: queue.autoRunnable.map(operatorTaskSummary),
     hostPassRequiredTasks: queue.hostPassRequired.map(operatorTaskSummary),
     updatedTasks: updatedTasks.map(operatorTaskSummary),
@@ -2519,21 +2817,21 @@ export function runDoveAuto(root, args = {}) {
     result.outcome = "task-already-killed";
     result.stopReason = "task-killed";
     persistAutoResult(root, result);
-    return { status: result.status, task, result, applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
+    return { status: result.status, task, result, resultCard: autoResultCard(task, result, { nextAction: task.nextAction }, responseLanguage), applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
   }
   if (task.status === "completed") {
     result.status = "completed";
     result.outcome = "task-already-completed";
     result.stopReason = "task-completed";
     persistAutoResult(root, result);
-    return { status: result.status, task, result, applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
+    return { status: result.status, task, result, resultCard: autoResultCard(task, result, { nextAction: task.nextAction }, responseLanguage), applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
   }
   if (task.status === "blocked") {
     result.status = "blocked";
     result.outcome = "task-already-blocked";
     result.stopReason = "task-blocked";
     persistAutoResult(root, result);
-    return { status: result.status, task, result, applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
+    return { status: result.status, task, result, resultCard: autoResultCard(task, result, { nextAction: task.nextAction }, responseLanguage), applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
   }
 
   const autoPlan = inferAutoStepsForTask(task, args);
@@ -2576,6 +2874,7 @@ export function runDoveAuto(root, args = {}) {
       status: result.status,
       task,
       result,
+      resultCard: autoResultCard(task, result, { nextAction: task.nextAction }, responseLanguage),
       boundary: task.boundary,
       applicableLessons: activeLessons(root, task.id),
       responseLanguage,
@@ -2743,6 +3042,7 @@ export function runDoveAuto(root, args = {}) {
     status: result.status,
     task,
     result,
+    resultCard: autoResultCard(task, result, { nextAction: task.nextAction }, responseLanguage),
     boundary: task.boundary ?? null,
     applicableLessons: activeLessons(root, task.id),
     responseLanguage,

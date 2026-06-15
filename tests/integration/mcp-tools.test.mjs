@@ -256,6 +256,10 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(status.dailyHome.presentation, "dove-status-home");
     assert.equal(status.dailyHome.liveContextFirst, true);
     assert.ok(status.dailyHome.nextActions.length <= 3);
+    assert.equal(status.current.nextCommand, status.dailyHome.nextActions[0].command);
+    assert.equal(status.board.nextCommand, status.dailyHome.nextActions[0].command);
+    assert.equal(status.dashboard.nextAction, status.dailyHome.nextActions[0].command);
+    assert.equal(status.suggestedNextCommand, status.dailyHome.nextActions[0].command);
     assert.ok(status.dailyHome.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
     assert.ok(status.dashboard && typeof status.dashboard === "object");
     assert.ok(status.dashboard.tasks && typeof status.dashboard.tasks === "object");
@@ -351,6 +355,11 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(pass.result.maxIterations, 1);
     assert.equal(pass.result.iterationCount, 1);
     assert.equal(pass.result.packetId, "mission-confirm-task");
+    assert.equal(pass.resultCard.presentation, "compact-result-summary-card");
+    assert.equal(pass.resultCard.surface, "dove.mission");
+    assert.equal(pass.resultCard.packetId, "mission-confirm-task");
+    assert.ok(pass.resultCard.evidence.includes(".dove/task-packets/index.json"));
+    assert.equal(pass.resultCard.proposalOnly, false);
 
     const materializedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     assert.deepEqual(materializedIndex.items.map((item) => item.id), ["mission-confirm-init", "mission-confirm-task"]);
@@ -370,6 +379,8 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(passRecorded.missionPassRequired, false);
     assert.equal(passRecorded.task.status, "completed");
     assert.equal(passRecorded.result.packetId, "mission-pass-recorded-task");
+    assert.equal(passRecorded.resultCard.presentation, "compact-result-summary-card");
+    assert.equal(passRecorded.resultCard.packetId, passRecorded.missionPass.resultCard.packetId);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -509,6 +520,8 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.ok(status.projectSummary);
     assert.equal(status.dailyHome.presentation, "dove-status-home");
     assert.ok(status.dailyHome.nextActions.length <= 3);
+    assert.equal(status.current.nextCommand, status.dailyHome.nextActions[0].command);
+    assert.equal(status.dashboard.nextAction, status.dailyHome.nextActions[0].command);
     assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
     assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
     assert.equal(status.statusAdjustmentContract.adjustmentCards.length, status.statusAdjustmentContract.items.length);
@@ -544,6 +557,9 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.deepEqual(applied.rejected, []);
     assert.equal(applied.applied[0].fromStatus, "ready");
     assert.equal(applied.applied[0].toStatus, "blocked");
+    assert.equal(applied.resultCard.presentation, "compact-result-summary-card");
+    assert.equal(applied.resultCard.surface, "dove.status");
+    assert.equal(applied.resultCard.proposalOnly, false);
     const postApplyStatus = extractToolJson(dispatchTool(root, "query_dove_status", {}));
     const blockedAdjustedItem = postApplyStatus.statusAdjustmentContract.items.find((candidate) => candidate.packetId === "status-ready-task");
     assert.ok(blockedAdjustedItem);
@@ -565,6 +581,8 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.deepEqual(noOp.skipped, []);
     assert.deepEqual(noOp.rejected, []);
     assert.deepEqual(noOp.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+    assert.equal(noOp.resultCard.presentation, "compact-result-summary-card");
+    assert.equal(noOp.resultCard.status, "no-op");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -620,6 +638,13 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.deepEqual(run.updatedTasks.map((task) => task.id).sort(), ["operator-auto-ready", "operator-host-missing", "operator-host-progress"].sort());
     assert.deepEqual(run.result.autoRunnableTaskIds, ["operator-auto-ready"]);
     assert.deepEqual(run.result.hostPassRequiredTaskIds.sort(), ["operator-host-missing", "operator-host-progress"].sort());
+    assert.equal(run.resultCard.presentation, "compact-result-summary-card");
+    assert.equal(run.resultCard.surface, "dove.operator");
+    assert.equal(run.resultCard.requiresAction, true);
+    assert.equal(run.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-host-pass-result");
+    assert.equal(run.resultCard.nextActions[0].handoffSuggestion.ownerRole, "builder");
+    assert.deepEqual(run.resultCard.nextActions[0].requires, ["operator-host-missing"]);
+    assert.deepEqual(run.resultCard.nextActions[0].requiredActions, ["provide-host-pass-result"]);
     assert.equal(run.blockerPlanConversion.createdMissions.length, 2);
     const blockerPlan = run.blockerPlanConversion.createdMissions.find((mission) => mission.parentId === "operator-blocked");
     assert.equal(blockerPlan.status, "pending");
@@ -635,6 +660,7 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.equal(persisted.surface, "dove.operator");
     assert.equal(persisted.foreground, true);
     assert.equal(persisted.status, "awaiting-host-results");
+    assert.equal(persisted.resultCard, undefined);
     const taskIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     const missingTask = taskIndex.items.find((item) => item.id === "operator-host-missing");
     assert.equal(missingTask.boundary.type, "awaiting-host-pass-result");
@@ -669,6 +695,7 @@ test("create_dove_task materializes checklist children below explicit mission le
     assert.ok(proposal.checklistProposal.items.every((item) => item.parentId === "mission-checklist-parent"));
     assert.ok(proposal.checklistProposal.items.every((item) => item.creatorKind === "system"));
     assert.ok(proposal.checklistProposal.items.every((item) => item.level > proposal.proposedTask.level));
+    assert.ok(proposal.checklistProposal.items.every((item) => item.id.startsWith("mission-checklist-parent-checklist-")));
 
     const proposedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     assert.deepEqual(proposedIndex.items.map((item) => item.id), [init.init.id]);
@@ -682,6 +709,7 @@ test("create_dove_task materializes checklist children below explicit mission le
       assert.equal(child.rootId, init.init.id);
       assert.equal(child.creatorKind, "system");
       assert.ok(child.level > created.createdTask.level);
+      assert.ok(child.id.startsWith(`${created.createdTask.id}-checklist-`));
     }
 
     const materializedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
@@ -690,6 +718,110 @@ test("create_dove_task materializes checklist children below explicit mission le
       "mission-checklist-parent",
       ...created.createdChecklistTasks.map((item) => item.id)
     ]);
+
+    const secondCreated = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "mission-checklist-second-parent",
+      goal: "Implement and validate another checklist-backed mission workflow.",
+      title: "Second mission checklist parent",
+      level: 2,
+      autoChecklist: true,
+      evidenceExpectations: ["implementation", "validation"],
+      confirmed: true
+    }));
+    assert.equal(secondCreated.createdChecklistTasks.length, 3);
+    const firstChildIds = new Set(created.createdChecklistTasks.map((item) => item.id));
+    for (const child of secondCreated.createdChecklistTasks) {
+      assert.ok(child.id.startsWith(`${secondCreated.createdTask.id}-checklist-`));
+      assert.equal(firstChildIds.has(child.id), false);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("record_dove_mission_pass accepts descendant evidence for explicit parent packet", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-parent-child-evidence-"));
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "parent-child-evidence-init",
+      goal: "Validate parent mission pass evidence lineage."
+    });
+    const created = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "parent-child-evidence-parent",
+      goal: "Record parent mission evidence produced by checklist children.",
+      title: "Parent child evidence mission",
+      autoChecklist: true,
+      confirmed: true
+    }));
+    assert.equal(created.createdChecklistTasks.length, 3);
+    const child = created.createdChecklistTasks[0];
+    const childArtifact = ".dove/audio/reviews/parent-child-evidence/report.md";
+
+    const childPass = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+      packetId: child.id,
+      runId: "parent-child-evidence-child-pass",
+      resultStatus: "completed",
+      resultSummary: "Checklist child produced explicit review evidence.",
+      artifactRefs: [childArtifact],
+      evidenceLinks: [childArtifact]
+    }));
+    assert.equal(childPass.status, "completed");
+    assert.equal(childPass.result.packetId, child.id);
+
+    const parentPass = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+      packetId: created.createdTask.id,
+      runId: "parent-child-evidence-parent-pass",
+      resultStatus: "completed",
+      resultSummary: "Parent mission can close with evidence produced by its own checklist child.",
+      artifactRefs: [childArtifact],
+      evidenceLinks: [childArtifact]
+    }));
+    assert.equal(parentPass.status, "completed");
+    assert.equal(parentPass.result.packetId, created.createdTask.id);
+    assert.ok(parentPass.artifactRefs.includes(childArtifact));
+    assert.deepEqual(parentPass.evidenceLinks, [childArtifact]);
+    assert.equal(parentPass.evidenceExplanation.code, "accepted-descendant-artifacts");
+    assert.equal(parentPass.artifactResolution.acceptedMatches[0].packetId, child.id);
+    assert.equal(parentPass.artifactResolution.acceptedMatches[0].relation, "descendant");
+    assert.equal(parentPass.resultCard.evidenceExplanation.code, "accepted-descendant-artifacts");
+    assert.equal(parentPass.resultCard.evidenceSelection.acceptedMatches[0].packetId, child.id);
+
+    const persistedParent = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", `${created.createdTask.id}.json`), "utf8"));
+    assert.ok(persistedParent.artifactRefs.includes(childArtifact));
+    assert.deepEqual(persistedParent.evidenceLinks, [childArtifact]);
+
+    const siblingArtifact = ".dove/audio/reviews/parent-child-evidence-sibling/report.md";
+    const sibling = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "parent-child-evidence-sibling",
+      goal: "Produce sibling evidence that should not be accepted by the parent.",
+      title: "Parent child evidence sibling",
+      checklist: false,
+      confirmed: true
+    }));
+    const siblingPass = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+      packetId: sibling.createdTask.id,
+      runId: "parent-child-evidence-sibling-pass",
+      resultStatus: "completed",
+      resultSummary: "Sibling task produced its own evidence.",
+      artifactRefs: [siblingArtifact],
+      evidenceLinks: [siblingArtifact]
+    }));
+    assert.equal(siblingPass.status, "completed");
+
+    const rejected = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+      packetId: created.createdTask.id,
+      runId: "parent-child-evidence-sibling-conflict",
+      resultStatus: "completed",
+      resultSummary: "Parent should not accept sibling-owned evidence.",
+      artifactRefs: [siblingArtifact],
+      evidenceLinks: [siblingArtifact]
+    }));
+    assert.equal(rejected.status, "needs-task-selection");
+    assert.ok(rejected.choices.some((choice) => choice.id === sibling.createdTask.id));
+    assert.equal(rejected.resolutionErrorCode, "artifact-conflict");
+    assert.equal(rejected.evidenceExplanation.code, "artifact-conflict");
+    assert.equal(rejected.artifactResolution.conflictingMatches[0].packetId, sibling.createdTask.id);
+    assert.equal(rejected.artifactResolution.conflictingMatches[0].relation, "sibling");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -802,6 +934,13 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(hostBoundary.boundary.type, "awaiting-host-pass");
     assert.equal(hostBoundary.task.boundary.type, "awaiting-host-pass");
     assert.deepEqual(hostBoundary.task.boundary.requiredActions, ["provide-host-pass-result", "provide-explicit-auto-step"]);
+    assert.equal(hostBoundary.resultCard.presentation, "compact-result-summary-card");
+    assert.equal(hostBoundary.resultCard.surface, "dove.auto");
+    assert.equal(hostBoundary.resultCard.requiresAction, true);
+    assert.equal(hostBoundary.resultCard.nextActions[0].boundaryType, "awaiting-host-pass");
+    assert.equal(hostBoundary.resultCard.nextActions[0].ownerRole, "builder");
+    assert.equal(hostBoundary.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-host-pass");
+    assert.deepEqual(hostBoundary.resultCard.nextActions[0].requiredActions, ["provide-host-pass-result", "provide-explicit-auto-step"]);
 
     const autoRun = extractToolJson(dispatchTool(root, "run_dove_auto", {
       packetId: "auto-foreground-task",
@@ -822,12 +961,16 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.deepEqual(autoRun.result.iterations.map((iteration) => iteration.command), ["dove.note", "dove.status"]);
     assert.equal(autoRun.result.stopReason, "completion-confirmed-by-auto-step");
     assert.equal(autoRun.result.taskStatusAfter, "completed");
+    assert.equal(autoRun.resultCard.presentation, "compact-result-summary-card");
+    assert.equal(autoRun.resultCard.surface, "dove.auto");
+    assert.equal(autoRun.resultCard.completed, true);
 
     const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
     const persisted = runtimeResults.entries.find((item) => item.id === "auto-foreground-run");
     assert.ok(persisted, "auto runtime result should be persisted");
     assert.equal(persisted.iterationCount, 2);
     assert.equal(persisted.background, false);
+    assert.equal(persisted.resultCard, undefined);
     const runtimeEvents = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "events.json"), "utf8"));
     assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.boundary.opened" && entry.packetId === "auto-host-boundary-task"), true);
     assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.lifecycle.transitioned" && entry.packetId === "auto-foreground-task" && entry.toStatus === "completed"), true);
@@ -912,6 +1055,32 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.equal(imported.verdict, "coherent");
     const reviewLog = fs.readFileSync(path.join(root, ".dove", "reviews", "log.md"), "utf8");
     assert.doesNotMatch(reviewLog, /PRIVATE/);
+    const runReview = extractToolJson(dispatchTool(root, "run_audio_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-2", scope: "mcp validation" }));
+    assert.equal(runReview.status, "prepared-awaiting-audio");
+    assert.equal(runReview.resultCard.presentation, "compact-result-summary-card");
+    assert.equal(runReview.resultCard.surface, "dove.review");
+    assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-review-output");
+    assert.equal(runReview.resultCard.nextActions[0].nextRole, "reviewer");
+    assert.deepEqual(runReview.resultCard.nextActions[0].requiredActions, ["complete-isolated-review-handoff"]);
+    fs.writeFileSync(path.join(root, runReview.reportPath), "# MCP isolated report\n\nNeeds validation evidence.\n", "utf8");
+    fs.writeFileSync(path.join(root, runReview.handoffPath), `${JSON.stringify({
+      version: 1,
+      runId: runReview.runId,
+      status: "completed",
+      verdict: "needs-evidence",
+      reviewerId: "mcp-reviewer",
+      summary: "MCP isolated review needs validation evidence.",
+      inputPath: runReview.inputPath,
+      inputSha256: runReview.inputSha256,
+      reportPath: runReview.reportPath,
+      findings: [{ id: "missing-validation", severity: "medium", summary: "Provide validation evidence." }],
+      actionItems: ["Provide validation evidence."]
+    }, null, 2)}\n`, "utf8");
+    const needsEvidence = extractToolJson(dispatchTool(root, "import_audio_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-2" }));
+    assert.equal(needsEvidence.resultCard.nextActions[0].command, "project:dove.mission");
+    assert.equal(needsEvidence.resultCard.nextActions[0].handoffSuggestion.boundaryType, "audio-review-needs-evidence");
+    assert.deepEqual(needsEvidence.resultCard.nextActions[0].requiredActions, ["Provide validation evidence."]);
+    assert.equal(runReview.privacyBoundary.projectContextShared, false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1022,6 +1191,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const operateTool = toolDefinitions.find((item) => item.name === "run_autonomy_operate");
   assert.ok(createDoveTaskTool, "create_dove_task should exist");
   assert.match(createDoveTaskTool.description, /compact task card/);
+  assert.match(createDoveTaskTool.description, /resultCard/);
   assert.ok(createDoveTaskTool.inputSchema.properties.confirmed, "create_dove_task should expose confirmed");
   assert.ok(createDoveTaskTool.inputSchema.properties.confirm, "create_dove_task should expose confirm");
   assert.ok(createDoveTaskTool.inputSchema.properties.initTitle, "create_dove_task should expose first-run init title");
@@ -1041,6 +1211,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(createDoveTaskTool.inputSchema.properties.resultSummary, "create_dove_task should expose mission pass resultSummary");
   assert.ok(createDoveTaskTool.inputSchema.properties.evidencePaths, "create_dove_task should expose mission pass evidence paths");
   assert.ok(recordMissionPassTool, "record_dove_mission_pass should exist");
+  assert.match(recordMissionPassTool.description, /resultCard/);
   assert.ok(recordMissionPassTool.inputSchema.properties.runId, "record_dove_mission_pass should expose runId");
   assert.ok(recordMissionPassTool.inputSchema.properties.resultStatus, "record_dove_mission_pass should expose resultStatus");
   assert.ok(recordMissionPassTool.inputSchema.properties.completeTask, "record_dove_mission_pass should expose completeTask");
@@ -1056,10 +1227,12 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(recordMissionPassTool.inputSchema.properties.planConversion, "record_dove_mission_pass should expose planConversion");
   assert.ok(applyStatusAdjustmentsTool, "apply_dove_status_adjustments should exist");
   assert.match(applyStatusAdjustmentsTool.description, /compact status adjustment cards/);
+  assert.match(applyStatusAdjustmentsTool.description, /resultCard/);
   assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.confirmed, "apply_dove_status_adjustments should expose confirmed");
   assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.adjustments, "apply_dove_status_adjustments should expose adjustments");
   assert.ok(runDoveAutoTool, "run_dove_auto should exist");
   assert.match(runDoveAutoTool.description, /compact task\/auto cards/);
+  assert.match(runDoveAutoTool.description, /resultCard/);
   assert.ok(runDoveAutoTool.inputSchema.properties.missionPacketId, "run_dove_auto should expose missionPacketId");
   assert.ok(runDoveAutoTool.inputSchema.properties.taskId, "run_dove_auto should expose taskId");
   assert.ok(runDoveAutoTool.inputSchema.properties.packetTarget, "run_dove_auto should expose packetTarget");
@@ -1070,6 +1243,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(runDoveAutoTool.inputSchema.properties.completeTask, "run_dove_auto should expose explicit completion");
   assert.ok(runDoveOperatorTool, "run_dove_operator should exist");
   assert.match(runDoveOperatorTool.description, /compact queue cards/);
+  assert.match(runDoveOperatorTool.description, /resultCard/);
   assert.ok(runDoveOperatorTool.inputSchema.properties.confirmed, "run_dove_operator should expose confirmed");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults, "run_dove_operator should expose taskResults");
   assert.ok(approvalsQueryTool, "query_program_approvals should exist");
@@ -1087,6 +1261,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(importIsolatedReviewTool, "import_isolated_review should exist");
   assert.ok(runExperienceTool, "run_experience_workflow should exist");
   assert.ok(runAudioReviewTool, "run_audio_review should exist");
+  assert.match(runAudioReviewTool.description, /resultCard/);
   assert.ok(runReviewLoopTool, "run_dove_review_loop should exist");
   assert.ok(runFigureTool, "run_figure_workflow should exist");
   assert.ok(prepareFigureTool, "prepare_figure_generation should exist");

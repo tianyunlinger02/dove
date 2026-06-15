@@ -1260,9 +1260,10 @@ function normalizeWorkspaceDove(raw = {}, fallback = null) {
   const missionLifecycle = normalizeObject(raw.missionLifecycle);
   const missionModel = normalizeObject(raw.missionModel);
   const domainCounts = normalizeObject(raw.domainCounts);
+  const { taskCenteredCommands: _legacyTaskCenteredCommands, ...rawDove } = raw;
   return {
     ...base,
-    ...raw,
+    ...rawDove,
     kernelVersion: normalizeString(raw.kernelVersion, base.kernelVersion),
     unified: normalizeBoolean(raw.unified, base.unified),
     explicitOnly: normalizeBoolean(raw.explicitOnly, base.explicitOnly),

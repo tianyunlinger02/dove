@@ -71,6 +71,11 @@ function dailyUseBullets(command) {
   ].filter(Boolean);
 }
 
+function exampleBullets(command) {
+  const examples = command.ux?.examples;
+  return Array.isArray(examples) ? examples.map((example) => String(example).trim()).filter(Boolean) : [];
+}
+
 function guardrailBullets(command) {
   const bullets = [
     "Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.",
@@ -98,10 +103,16 @@ function renderNumbered(bullets) {
   return bullets.map((bullet, index) => `${index + 1}. ${bullet}`).join("\n");
 }
 
+function renderExamples(command) {
+  const examples = exampleBullets(command);
+  return examples.length > 0 ? `\n\n## Examples\n\n${examples.map((example) => `- \`${example}\``).join("\n")}` : "";
+}
+
 function renderBody(command, heading) {
   const dailyUse = renderBullets(dailyUseBullets(command));
+  const examples = renderExamples(command);
   const guardrails = renderNumbered(guardrailBullets(command));
-  return `# ${heading}\n\n${command.summary}\n\n## Daily use\n\n${dailyUse}\n\n## Contract\n\n- Command id: \`${command.id}\`\n- Domain: \`${command.domain}\`\n- Category: \`${command.category}\`\n- Policy: \`${command.policy}\`\n\n## Guardrails\n\n${guardrails}\n`;
+  return `# ${heading}\n\n${command.summary}\n\n## Daily use\n\n${dailyUse}${examples}\n\n## Contract\n\n- Command id: \`${command.id}\`\n- Domain: \`${command.domain}\`\n- Category: \`${command.category}\`\n- Policy: \`${command.policy}\`\n\n## Guardrails\n\n${guardrails}\n`;
 }
 
 function renderSkill(command) {

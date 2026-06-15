@@ -15,6 +15,11 @@ Create a direction-change point, clear active non-init tasks, and preserve the i
 - Confirmation: Guarded reset; require a reason before clearing active non-init tasks.
 - Outcome: A version snapshot is stored, active non-init tasks are cleared, and the next command is mission.
 
+## Examples
+
+- `/dove:version Change direction to focus on result-card usability`
+- `/dove:version Start a fresh figure workflow direction while preserving the init goal`
+
 ## Contract
 
 - Command id: `dove.version`

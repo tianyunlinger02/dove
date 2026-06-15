@@ -13,7 +13,12 @@ Convert demand like mission intake, then after confirmation run multi-round fore
 - Start from a new demand or an existing durable task; auto should propose compact task/auto cards and concrete safe steps before consuming the iteration budget.
 - Targeting: Selects an existing packet when the target is clear, otherwise proposes a new task contract.
 - Confirmation: Require explicit approval of the compact task/auto cards, selected/proposed task, max iteration budget, and concrete foreground steps.
-- Outcome: Each foreground iteration is recorded in runtime results and stops at completion, blocker, review/provider boundary, or budget exhaustion with an explicit boundary.
+- Outcome: Each foreground iteration is recorded in runtime results and stops at completion, blocker, review/provider boundary, or budget exhaustion with an explicit boundary and localized resultCard summary.
+
+## Examples
+
+- `/dove:auto Continue the current Dove UX improvement task for up to three foreground rounds`
+- `/dove:auto Run the selected task until completion or an explicit boundary`
 
 ## Contract
 
@@ -37,7 +42,7 @@ Convert demand like mission intake, then after confirmation run multi-round fore
 11. Require explicit operator confirmation before execution beyond task creation or selection.
 12. Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.
 13. Use `.dove/state.json.settings.auto.maxIterations` as the default foreground iteration limit; the default is 3.
-14. Record each foreground iteration and stop reason in `.dove/runtime/results.json`.
+14. Record each foreground iteration and stop reason in `.dove/runtime/results.json`, and return a localized `resultCard` summary without persisting the UX-only card in runtime results.
 15. May internally call public Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status as needed.
 16. Stop at completed, blocked, killed, authority/review boundary, missing provider credentials, conflicting packet target, or step-budget exhaustion.
 17. When a boundary is reached, persist the first-class boundary with required inputs/actions, role handoff, and next command; do not continue through hidden background work.

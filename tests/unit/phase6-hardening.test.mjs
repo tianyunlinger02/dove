@@ -190,6 +190,94 @@ test("task packet resolver handles explicit ids, targets, ambiguity, and artifac
   assert.equal(selected.resolution.candidates.length, 1);
 });
 
+test("task packet resolver allows explicit parent to cite descendant artifacts but rejects unrelated matches", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  const parentArtifact = ".dove/runtime/lineage-parent-result.json";
+  const childArtifact = ".dove/audio/reviews/lineage-child/report.md";
+  const grandchildArtifact = ".dove/runtime/lineage-grandchild-result.json";
+  const siblingArtifact = ".dove/runtime/lineage-sibling-result.json";
+  const unrelatedArtifact = ".dove/runtime/unrelated-result.json";
+
+  seedTaskPacket(root, "lineage-parent", {
+    title: "Lineage parent",
+    parentId: "init",
+    rootId: "init",
+    level: 3,
+    artifactRefs: [parentArtifact]
+  });
+  seedTaskPacket(root, "lineage-child", {
+    title: "Lineage child",
+    parentId: "lineage-parent",
+    rootId: "init",
+    level: 4,
+    artifactRefs: [childArtifact],
+    evidenceLinks: [childArtifact]
+  });
+  seedTaskPacket(root, "lineage-grandchild", {
+    title: "Lineage grandchild",
+    parentId: "lineage-child",
+    rootId: "init",
+    level: 5,
+    outputPaths: [grandchildArtifact]
+  });
+  seedTaskPacket(root, "lineage-sibling", {
+    title: "Lineage sibling",
+    parentId: "init",
+    rootId: "init",
+    level: 3,
+    evidenceLinks: [siblingArtifact]
+  });
+  seedTaskPacket(root, "other-root-task", {
+    title: "Other root task",
+    parentId: "other-init",
+    rootId: "other-init",
+    level: 3,
+    outputPaths: [unrelatedArtifact]
+  });
+
+  const childEvidence = resolveDurableTaskPacket(root, { packetId: "lineage-parent", evidenceLinks: [childArtifact] }, { artifactFields: ["evidenceLinks"] });
+  assert.equal(childEvidence.packetId, "lineage-parent");
+  assert.equal(childEvidence.artifactResolution.explanationCode, "accepted-descendant-artifacts");
+  assert.equal(childEvidence.artifactResolution.acceptedMatches[0].packetId, "lineage-child");
+  assert.equal(childEvidence.artifactResolution.acceptedMatches[0].relation, "descendant");
+  const grandchildOutput = resolveDurableTaskPacket(root, { packetId: "lineage-parent", outputPaths: [grandchildArtifact] }, { artifactFields: ["outputPaths"] });
+  assert.equal(grandchildOutput.packetId, "lineage-parent");
+  assert.equal(grandchildOutput.artifactResolution.acceptedMatches[0].relation, "descendant");
+
+  let siblingError = null;
+  assert.throws(() => {
+    try {
+      resolveDurableTaskPacket(root, { packetId: "lineage-parent", evidenceLinks: [siblingArtifact] }, { artifactFields: ["evidenceLinks"] });
+    } catch (error) {
+      siblingError = error;
+      throw error;
+    }
+  }, /conflict/);
+  assert.equal(siblingError.artifactResolution.explanationCode, "artifact-conflict");
+  assert.equal(siblingError.artifactResolution.conflictingMatches[0].relation, "sibling");
+  let unrelatedError = null;
+  assert.throws(() => {
+    try {
+      resolveDurableTaskPacket(root, { packetId: "lineage-parent", outputPaths: [unrelatedArtifact] }, { artifactFields: ["outputPaths"] });
+    } catch (error) {
+      unrelatedError = error;
+      throw error;
+    }
+  }, /conflict/);
+  assert.equal(unrelatedError.artifactResolution.conflictingMatches[0].relation, "other-root");
+  let ancestorError = null;
+  assert.throws(() => {
+    try {
+      resolveDurableTaskPacket(root, { packetId: "lineage-child", artifactRefs: [parentArtifact] }, { artifactFields: ["artifactRefs"] });
+    } catch (error) {
+      ancestorError = error;
+      throw error;
+    }
+  }, /conflict/);
+  assert.equal(ancestorError.artifactResolution.conflictingMatches[0].relation, "ancestor");
+});
+
 test("task-scoped resolver rejects writes when no durable packet exists", () => {
   const root = tempRoot();
   ensureWorkspace(root);

@@ -15,6 +15,11 @@ Create or update the single project-level Dove goal as the unique level-0 task.
 - Confirmation: Guarded mutation only; update the existing init instead of creating another root.
 - Outcome: The workspace has one level-0 init task and the next practical command is mission or auto.
 
+## Examples
+
+- `/dove:init Make Dove a local-first research and engineering workflow`
+- `/dove:init Refresh the project goal around daily Dove usability`
+
 ## Contract
 
 - Command id: `dove.init`

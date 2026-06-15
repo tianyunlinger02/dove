@@ -147,6 +147,18 @@ test("task packet index exposes the task-centered model defaults", () => {
   assert.deepEqual(index.domainCounts, { paper: 0, experiment: 0, engineering: 0 });
 });
 
+test("workspace index normalization drops legacy removed command lists", () => {
+  const normalized = normalizeWorkspaceIndex({
+    dove: {
+      taskCenteredCommands: ["project:dove.kill", "project:dove.status"],
+      overview: "Legacy workspace index."
+    }
+  });
+
+  assert.equal("taskCenteredCommands" in normalized.dove, false);
+  assert.equal(normalized.dove.overview, "Legacy workspace index.");
+});
+
 test("boundary and handoff metadata stay separate from task statuses", () => {
   assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
   assert.ok(DOVE_BOUNDARY_TYPES.includes("awaiting-host-pass"));

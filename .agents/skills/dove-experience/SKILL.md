@@ -15,6 +15,11 @@ Convert an idea into experiment goals/plans/results and bridge validated outcome
 - Confirmation: Ask for task confirmation when experiment/result/claim signals do not identify one packet.
 - Outcome: Experiment artifacts, audit state, and claim bridge events are linked to the selected task.
 
+## Examples
+
+- `/dove:experience Design an experiment to validate retrieval quality`
+- `/dove:experience Import this experiment result and bridge it to the claim`
+
 ## Contract
 
 - Command id: `dove.experience`

@@ -6,6 +6,8 @@ import { ARTIFACT_PATHS, DOVE_AUDIO_CONTEXT_POLICY } from "./schema.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { appendText, assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 import { readTaskPacketCatalog } from "./task-packets.mjs";
+import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
+import { buildCommandResultCard } from "./result-cards.mjs";
 
 const REVIEW_VERDICTS = new Set(["coherent", "needs-revision", "needs-evidence", "blocked"]);
 const HANDOFF_STATUSES = new Set(["completed", "blocked", "failed"]);
@@ -106,6 +108,103 @@ function normalizeHandoff(root, raw = {}) {
     actionItems: normalizeStringArray(raw.actionItems ?? findings.map((finding) => finding.summary)),
     privateTranscriptImported: false
   };
+}
+
+function audioReviewPreparedHandoffSuggestion(prepared = {}, responseLanguage = "zh") {
+  const requiredInputs = normalizeStringArray([prepared.inputPath, prepared.handoffPath, prepared.reportPath]);
+  return {
+    presentation: "dove-handoff-suggestion",
+    boundaryType: "awaiting-review-output",
+    ownerRole: "builder",
+    nextRole: "reviewer",
+    requiredInputs,
+    requiredActions: ["complete-isolated-review-handoff"],
+    requires: requiredInputs,
+    reason: "awaiting-audio-review-output",
+    summary: doveText(responseLanguage, "resultCardHandoffImportReview")
+  };
+}
+
+function audioReviewImportedHandoffSuggestion(imported = {}, responseLanguage = "zh") {
+  if (imported.verdict === "coherent") {
+    return null;
+  }
+  const requiredActions = normalizeStringArray(imported.actionItems).length > 0
+    ? normalizeStringArray(imported.actionItems)
+    : ["address-audio-review-findings"];
+  return {
+    presentation: "dove-handoff-suggestion",
+    boundaryType: `audio-review-${imported.verdict ?? "needs-revision"}`,
+    ownerRole: "builder",
+    nextRole: "builder",
+    requiredActions,
+    requires: requiredActions,
+    reason: imported.summary ?? imported.verdict ?? null,
+    summary: doveText(responseLanguage, "resultCardHandoffAddressReview")
+  };
+}
+
+function audioReviewPreparedCard(prepared = {}, responseLanguage = "zh") {
+  const handoffSuggestion = audioReviewPreparedHandoffSuggestion(prepared, responseLanguage);
+  return buildCommandResultCard({
+    surface: "dove.review",
+    command: "run_audio_review",
+    packetId: prepared.packetId,
+    runId: prepared.runId,
+    status: prepared.status,
+    outcome: "awaiting-audio-review-output",
+    summary: doveText(responseLanguage, "resultCardReviewInputPrepared"),
+    evidenceLinks: [prepared.inputPath, prepared.handoffPath, prepared.reportPath, ...normalizeStringArray(prepared.reviewedArtifactPaths)],
+    durableWrites: [doveText(responseLanguage, "resultCardReviewInputPrepared"), prepared.inputPath, relativeRunPath(prepared.runId, "manifest.json")],
+    nextActions: [{
+      title: doveText(responseLanguage, "resultCardNextImportReview"),
+      command: "import_audio_review",
+      packetId: prepared.packetId,
+      boundaryType: handoffSuggestion.boundaryType,
+      ownerRole: handoffSuggestion.ownerRole,
+      nextRole: handoffSuggestion.nextRole,
+      requiredInputs: handoffSuggestion.requiredInputs,
+      requiredActions: handoffSuggestion.requiredActions,
+      requires: handoffSuggestion.requires,
+      handoffSuggestion,
+      confirmationRequired: true
+    }],
+    foreground: true,
+    background: false,
+    daemon: false
+  }, responseLanguage);
+}
+
+function audioReviewImportedCard(imported = {}, packetId = null, responseLanguage = "zh") {
+  const handoffSuggestion = audioReviewImportedHandoffSuggestion(imported, responseLanguage);
+  const nextActions = handoffSuggestion ? [{
+    title: doveText(responseLanguage, "resultCardNextCreateFixMission"),
+    command: "project:dove.mission",
+    packetId,
+    boundaryType: handoffSuggestion.boundaryType,
+    ownerRole: handoffSuggestion.ownerRole,
+    nextRole: handoffSuggestion.nextRole,
+    requiredActions: handoffSuggestion.requiredActions,
+    requires: handoffSuggestion.requires,
+    handoffSuggestion,
+    confirmationRequired: true
+  }] : [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: "project:dove.status", packetId }];
+  return buildCommandResultCard({
+    surface: "dove.review",
+    command: "import_audio_review",
+    packetId,
+    runId: imported.runId,
+    status: imported.status,
+    outcome: imported.verdict,
+    summary: imported.summary ?? doveText(responseLanguage, "resultCardReviewImported"),
+    evidenceLinks: [imported.handoffPath, imported.reportPath, imported.inputPath].filter(Boolean),
+    validationEvidence: [imported.verdict].filter(Boolean),
+    durableWrites: [doveText(responseLanguage, "resultCardReviewImported"), ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewConcerns, relativeRunPath(imported.runId, "manifest.json")],
+    nextActions,
+    foreground: true,
+    background: false,
+    daemon: false
+  }, responseLanguage);
 }
 
 function renderReviewLogEntry({ handoff, reportPath, reportSha256 }) {
@@ -221,7 +320,7 @@ export function prepareAudioReview(root, args = {}) {
   };
   writeText(root, manifest.inputPath, inputText);
   writeJson(root, relativeRunPath(runId, "manifest.json"), manifest);
-  return {
+  const prepared = {
     status: "prepared",
     runId,
     packetId: target.packetId,
@@ -231,6 +330,10 @@ export function prepareAudioReview(root, args = {}) {
     reportPath: manifest.reportPath,
     reviewedArtifactPaths,
     privacyBoundary: input.privacyBoundary
+  };
+  return {
+    ...prepared,
+    resultCard: audioReviewPreparedCard(prepared, resolveDoveResponseLanguage(root, args))
   };
 }
 
@@ -278,7 +381,7 @@ export function importAudioReview(root, args = {}) {
     reviewerId: handoff.reviewerId
   };
   writeJson(root, manifestPath, updatedManifest);
-  return {
+  const imported = {
     status: "imported",
     runId,
     verdict: handoff.verdict,
@@ -294,21 +397,32 @@ export function importAudioReview(root, args = {}) {
     reportSha256,
     privateTranscriptImported: false
   };
+  return {
+    ...imported,
+    resultCard: audioReviewImportedCard(imported, manifest.packetId, resolveDoveResponseLanguage(root, args))
+  };
 }
 
 export function runAudioReview(root, args = {}) {
   assertGovernanceMutationRegistered("run-audio-review", "guarded");
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
   const prepared = prepareAudioReview(root, args);
   const handoffPath = args.handoffPath ?? prepared.handoffPath;
   if (fs.existsSync(resolvePath(root, handoffPath))) {
+    const imported = importAudioReview(root, { ...args, runId: prepared.runId, handoffPath, reportPath: args.reportPath ?? prepared.reportPath });
     return {
       ...prepared,
-      imported: importAudioReview(root, { ...args, runId: prepared.runId, handoffPath, reportPath: args.reportPath ?? prepared.reportPath })
+      imported,
+      resultCard: imported.resultCard
     };
   }
-  return {
+  const awaiting = {
     ...prepared,
     status: "prepared-awaiting-audio",
     importArgs: { runId: prepared.runId, handoffPath: prepared.handoffPath, reportPath: prepared.reportPath }
+  };
+  return {
+    ...awaiting,
+    resultCard: audioReviewPreparedCard(awaiting, responseLanguage)
   };
 }

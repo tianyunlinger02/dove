@@ -8,7 +8,12 @@ Convert a user demand into a Dove task contract, then after approval run one bou
 - Describe the desired outcome in normal language; Dove converts it into title, stage, domain, level, checklist, evidence expectations, compact task card, and execution route.
 - Targeting: Creates a new mission under the init goal; first-run hosts may propose the init goal and mission together before writing.
 - Confirmation: Show the compact task card and converted contract first, then ask whether to approve and run one pass, adjust, or cancel.
-- Outcome: After approval, the task packet exists and the host either records the pass result or persists an explicit boundary with evidence requirements and role handoff.
+- Outcome: After approval, the task packet exists and the host either records the pass result or persists an explicit boundary with evidence requirements, role handoff, and a localized resultCard summary.
+
+## Examples
+
+- `/dove:mission Fix the status dashboard next-action mismatch`
+- `/dove:mission Turn the latest review feedback into one executable task`
 
 ## Contract
 
@@ -33,7 +38,7 @@ Convert a user demand into a Dove task contract, then after approval run one bou
 12. Autonomously decide whether a checklist is needed; system-created checklist/subtask packets must be children of their mission and must have level greater than the parent mission level.
 13. After materialization, immediately execute one bounded foreground pass in the same command invocation, using the appropriate host tools or top-level Dove workflow.
 14. Do not tell the operator to run `/dove:auto` for the first execution pass.
-15. After the pass, call `record_dove_mission_pass` to persist the mission result, task status, evidence, blockers, and next action.
+15. After the pass, call `record_dove_mission_pass` to persist the mission result, task status, evidence, blockers, next action, and localized `resultCard` summary.
 16. If the bounded pass cannot be completed with real host/provider evidence, record a first-class boundary such as `awaiting-host-pass`, `missing-required-materials`, or `needs-review` with ownerRole, nextRole, handoff, and evidence requirements instead of claiming completion.
 17. When a completed mission pass has stage `plan`, pass explicit plan outputs to `record_dove_mission_pass` through `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion` so Dove converts the plan into pending durable missions.
 18. Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`.

@@ -15,6 +15,11 @@ Run an isolated audio review over final plan/results and explicitly supplied art
 - Confirmation: Reviewer handoff/import remains explicit and artifact-bounded.
 - Outcome: Audio review input/output artifacts are recorded without breaking isolation boundaries.
 
+## Examples
+
+- `/dove:review Review the final plan and result artifacts only`
+- `/dove:review Prepare an isolated reviewer handoff for the current task`
+
 ## Contract
 
 - Command id: `dove.review`
@@ -31,7 +36,7 @@ Run an isolated audio review over final plan/results and explicitly supplied art
 5. Use explicit handoff artifacts for reviewer isolation; do not share hidden session context.
 6. The audio reviewer may read only the current task summary, final plan paths, final result paths, explicit artifact paths, artifact hashes, instructions, and output contract.
 7. Do not share writer private transcript, broad project context, orchestration board context, or reviewer private transcript.
-8. Import only declared handoff/report artifacts back into Dove review ledgers.
+8. Import only declared handoff/report artifacts back into Dove review ledgers and return a localized `resultCard` summary for prepared/imported review states.
 9. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
 10. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
 11. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.

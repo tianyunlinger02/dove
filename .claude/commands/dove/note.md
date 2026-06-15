@@ -10,6 +10,11 @@ Organize internal information from the repository, `.dove`, existing artifacts, 
 - Confirmation: If the target is missing or ambiguous, ask for task confirmation before writing.
 - Outcome: The selected task has internal notes linked to relevant artifacts.
 
+## Examples
+
+- `/dove:note Summarize how the status dashboard chooses its next action`
+- `/dove:note Record the boundary case found during this validation run`
+
 ## Contract
 
 - Command id: `dove.note`

@@ -15,6 +15,11 @@ Normalize reviewer issues, build a rebuttal strategy, and draft submission/revis
 - Confirmation: Do not draft final responses from unnormalized issues or unsupported evidence.
 - Outcome: Normalized issues, strategy, and response drafts are stored with durable evidence links.
 
+## Examples
+
+- `/dove:rebuttal Normalize reviewer issues and build the response strategy`
+- `/dove:rebuttal Draft an evidence-backed response for the missing-experiment concern`
+
 ## Contract
 
 - Command id: `dove.rebuttal`

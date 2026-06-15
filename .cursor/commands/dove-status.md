@@ -8,7 +8,12 @@ Show the live development situation, then a daily home screen with ranked Dove a
 - Then show ranked 1-3 next action cards, actionable boundaries, and boundary action cards before any raw durable details.
 - Targeting: Shows non-init adjustment targets except completed and killed missions; no counts/completed-killed recaps, mission counts, or status-count dumps.
 - Confirmation: Use compact adjustment cards and at most one confirmation dialog for status changes; no parseable packetId-to-status adjustment means no mutation.
-- Outcome: The operator sees current work, actionable boundaries, blockers, next action, and optional guarded status adjustments without hidden writes or noisy mission summaries.
+- Outcome: The operator sees current work, actionable boundaries, blockers, next action, optional guarded status adjustments, and localized resultCard summaries after confirmed adjustments without hidden writes or noisy mission summaries.
+
+## Examples
+
+- `/dove:status`
+- `/dove:status Show what is blocked and whether any mission status should change`
 
 ## Contract
 
@@ -35,7 +40,7 @@ Show the live development situation, then a daily home screen with ranked Dove a
 14. When the host supports interactive confirmation controls, use a single confirmation dialog to ask whether the operator wants to modify mission statuses only when there are adjustable missions or the operator clearly asks to change states; do not paginate by mission count or collect choices across multiple dialogs.
 15. The single confirmation dialog must provide a no-change path and a change/provide-adjustment-details path; if the operator does not provide parseable `packetId -> status` adjustments in that single dialog, do not call a mutation tool and instead ask for a clear adjustment format.
 16. For status adjustment choices, preserve exactly `["pending", "ready", "in-progress", "blocked", "completed", "killed"]` as the machine status enum.
-17. Only call `apply_dove_status_adjustments` with `confirmed: true` after that single dialog yields explicit operator-confirmed status adjustments.
+17. Only call `apply_dove_status_adjustments` with `confirmed: true` after that single dialog yields explicit operator-confirmed status adjustments, then show the localized `resultCard` summary.
 18. Killing a mission is now a status choice in this UX, not a standalone public slash command.
 19. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
 20. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.

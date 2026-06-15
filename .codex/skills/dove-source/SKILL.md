@@ -15,6 +15,11 @@ Collect and organize external information such as web, literature, API, or opera
 - Confirmation: If no unique task target is available, ask for packet selection instead of guessing.
 - Outcome: The selected task has durable source metadata and provenance links.
 
+## Examples
+
+- `/dove:source Register this paper as evidence for the selected task`
+- `/dove:source Save the operator-provided API notes as an external source`
+
 ## Contract
 
 - Command id: `dove.source`

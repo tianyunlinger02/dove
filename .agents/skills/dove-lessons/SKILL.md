@@ -15,6 +15,11 @@ Inspect or record global and task-bound lessons that future Dove work must obey.
 - Confirmation: When task binding is ambiguous, show task choices and wait for the operator.
 - Outcome: Applicable lessons are available to later mission, auto, operator, and status surfaces without importing raw traces.
 
+## Examples
+
+- `/dove:lessons Record that status should not show completed or killed mission lists`
+- `/dove:lessons Show lessons that apply to the selected task`
+
 ## Contract
 
 - Command id: `dove.lessons`

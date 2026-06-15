@@ -164,11 +164,18 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
   const commandText = readRelative(relativePath);
   assert.ok(command.ux, `${command.id} should declare daily UX metadata in the manifest`);
   assert.ok(Array.isArray(command.ux.dailyFlow) && command.ux.dailyFlow.length > 0, `${command.id} should declare daily flow guidance`);
+  assert.ok(Array.isArray(command.ux.examples) && command.ux.examples.length >= 2 && command.ux.examples.length <= 3, `${command.id} should declare 2-3 daily examples`);
   assert.equal(commandText.includes("## Daily use"), true, `${relativePath} must put daily use guidance before guardrails`);
+  assert.equal(commandText.includes("## Examples"), true, `${relativePath} must expose concrete daily examples`);
+  assert.equal(commandText.indexOf("## Daily use") < commandText.indexOf("## Examples"), true, `${relativePath} must show examples after daily use guidance`);
+  assert.equal(commandText.indexOf("## Examples") < commandText.indexOf("## Contract"), true, `${relativePath} must show examples before the contract details`);
   assert.equal(commandText.includes("## Guardrails"), true, `${relativePath} must separate guardrails from daily flow`);
   assert.equal(commandText.includes("## Workflow"), false, `${relativePath} must not bury daily use inside the old workflow checklist heading`);
   assert.equal(commandText.includes("response language preference"), true, `${relativePath} must instruct hosts to honor Dove language preference`);
   assert.equal(commandText.includes("default is `zh`"), true, `${relativePath} must document Chinese as the default response language`);
+  for (const example of command.ux.examples) {
+    assert.equal(commandText.includes(example), true, `${relativePath} must render example ${example}`);
+  }
   for (const requiredTool of command.requiredTools ?? []) {
     assert.equal(commandText.includes(requiredTool), true, `${relativePath} must mention ${requiredTool}`);
   }
@@ -198,6 +205,7 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("level 4, 5, or deeper"), true, `${relativePath} must allow deeper child missions from plan outputs`);
     assert.equal(commandText.includes("record a first-class boundary"), true, `${relativePath} must record explicit boundaries instead of fake completion`);
     assert.equal(commandText.includes("ownerRole, nextRole, handoff"), true, `${relativePath} must expose role handoff metadata for incomplete mission passes`);
+    assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after mission passes`);
   }
 
   if (command.id === "dove.auto") {
@@ -218,6 +226,7 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("persist the first-class boundary"), true, `${relativePath} must persist boundary metadata when auto stops`);
     assert.equal(commandText.includes("Do not claim host/code/provider/experiment work"), true, `${relativePath} must not claim external work without evidence`);
     assert.equal(commandText.includes("hidden background work"), true, `${relativePath} must keep auto continuation explicit and foreground-only`);
+    assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after auto runs`);
   }
 
   if (command.id === "dove.figure") {
@@ -230,6 +239,7 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
   if (command.id === "dove.review") {
     assert.equal(commandText.includes("audio reviewer may read only"), true, `${relativePath} must document the audio isolation boundary`);
     assert.equal(commandText.includes("Do not share writer private transcript"), true, `${relativePath} must forbid broad/private context sharing`);
+    assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries for review states`);
   }
 
   if (command.id === "dove.review-loop") {
@@ -271,6 +281,7 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("Collect status choices across pages"), false, `${relativePath} must not collect status choices across pages`);
     assert.equal(commandText.includes("one final confirmation summary"), false, `${relativePath} must not require the old extra final confirmation summary`);
     assert.equal(commandText.includes("not a standalone public slash command"), true, `${relativePath} must route killing through status UX`);
+    assert.equal(commandText.includes("localized resultCard summaries"), true, `${relativePath} must surface resultCard summaries after status adjustments`);
   }
 
   if (command.id === "dove.operator") {
@@ -285,6 +296,7 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("`awaiting-host-pass-result` boundary"), true, `${relativePath} must persist host-result boundaries instead of fake completion`);
     assert.equal(commandText.includes("do not expose planner/builder/reviewer as separate slash commands"), true, `${relativePath} must not add role slash surfaces`);
     assert.equal(commandText.includes("pending child plan missions"), true, `${relativePath} must create blocker investigation plan missions`);
+    assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after operator runs`);
   }
 }
 

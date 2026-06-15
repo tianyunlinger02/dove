@@ -317,21 +317,37 @@ function scorePackets(packets, targets, artifacts) {
   }).filter((candidate) => candidate.score > 0).sort((left, right) => right.score - left.score || left.packetId.localeCompare(right.packetId));
 }
 
-function resolutionError(reason, candidates = []) {
-  const candidateText = candidates.length > 0
-    ? ` Candidates: ${candidates.map((candidate) => `${candidate.packetId}(${candidate.packet.title ?? candidate.packetId}, score=${candidate.score.toFixed(2)})`).join(", ")}.`
+function candidateScoreText(score) {
+  return Number.isFinite(score) ? score.toFixed(2) : "0.00";
+}
+
+function candidateSummary(candidate = {}) {
+  const packet = candidate.packet ?? {};
+  return {
+    packetId: candidate.packetId,
+    title: packet.title ?? candidate.title ?? candidate.packetId,
+    status: packet.status ?? candidate.status,
+    level: packet.level ?? candidate.level,
+    score: Number.isFinite(candidate.score) ? candidate.score : 0,
+    matchedBy: candidate.matchedBy ?? {}
+  };
+}
+
+function resolutionError(reason, candidates = [], details = {}) {
+  const summaries = candidates.map((candidate) => candidateSummary(candidate));
+  const candidateText = summaries.length > 0
+    ? ` Candidates: ${summaries.map((candidate) => `${candidate.packetId}(${candidate.title ?? candidate.packetId}, score=${candidateScoreText(candidate.score)})`).join(", ")}.`
     : "";
   const error = new Error(`${reason}${candidateText} Provide packetId or confirm one candidate explicitly before writing.`);
   error.code = "TASK_PACKET_RESOLUTION_REQUIRED";
   error.reason = reason;
-  error.candidates = candidates.map((candidate) => ({
-    packetId: candidate.packetId,
-    title: candidate.packet.title ?? candidate.packetId,
-    status: candidate.packet.status,
-    level: candidate.packet.level,
-    score: candidate.score,
-    matchedBy: candidate.matchedBy
-  }));
+  error.candidates = summaries;
+  if (details.artifactResolution) {
+    error.artifactResolution = details.artifactResolution;
+  }
+  if (details.resolutionErrorCode) {
+    error.resolutionErrorCode = details.resolutionErrorCode;
+  }
   return error;
 }
 
@@ -343,15 +359,138 @@ function hasTiedTopCandidate(candidates = []) {
   return candidates.length > 1 && candidates[0].score === candidates[1].score;
 }
 
+function normalizeRelationId(value) {
+  return typeof value === "string" && value.trim() ? normalizeTaskPacketId(value) : null;
+}
+
+function buildPacketRelationMap(packets = []) {
+  const relationMap = new Map();
+  for (const packet of packets) {
+    const packetId = normalizeRelationId(packet?.id);
+    if (packetId) {
+      relationMap.set(packetId, packet);
+    }
+  }
+  return relationMap;
+}
+
+function isDescendantPacket(ancestor, candidate, packetsById) {
+  const ancestorId = normalizeRelationId(ancestor?.id);
+  let parentId = normalizeRelationId(candidate?.parentId);
+  const seen = new Set();
+  while (ancestorId && parentId && !seen.has(parentId)) {
+    if (parentId === ancestorId) {
+      return true;
+    }
+    seen.add(parentId);
+    const parent = packetsById.get(parentId);
+    parentId = normalizeRelationId(parent?.parentId);
+  }
+  return false;
+}
+
+function packetRelation(selected, candidate, packetsById) {
+  const selectedId = normalizeRelationId(selected?.id);
+  const candidateId = normalizeRelationId(candidate?.id);
+  if (!selectedId || !candidateId) {
+    return "unrelated";
+  }
+  if (candidateId === selectedId) {
+    return "self";
+  }
+  if (isDescendantPacket(selected, candidate, packetsById)) {
+    return "descendant";
+  }
+  if (isDescendantPacket(candidate, selected, packetsById)) {
+    return "ancestor";
+  }
+  const selectedParentId = normalizeRelationId(selected?.parentId);
+  const candidateParentId = normalizeRelationId(candidate?.parentId);
+  if (selectedParentId && candidateParentId && selectedParentId === candidateParentId) {
+    return "sibling";
+  }
+  const selectedRootId = normalizeRelationId(selected?.rootId);
+  const candidateRootId = normalizeRelationId(candidate?.rootId);
+  if (selectedRootId && candidateRootId && selectedRootId !== candidateRootId) {
+    return "other-root";
+  }
+  return "unrelated";
+}
+
+function matchedArtifactsForPacket(packet, artifacts = []) {
+  const artifactSet = packetArtifactSet(packet);
+  return uniqueStrings(artifacts.filter((artifact) => artifactSet.has(artifact) || artifactSet.has(slugify(artifact))));
+}
+
+function artifactMatchSummary(packet, artifacts = [], relation = null) {
+  const score = artifactScore(packet, artifacts);
+  return {
+    packetId: packet.id,
+    title: packet.title ?? packet.id,
+    status: packet.status,
+    level: packet.level,
+    relation,
+    score,
+    matchedBy: { artifact: score },
+    matchedArtifacts: matchedArtifactsForPacket(packet, artifacts)
+  };
+}
+
+export function analyzeArtifactConsistency(packet, packets, artifacts = []) {
+  const requestedArtifacts = uniqueStrings(artifacts);
+  const selectedPacketId = normalizeRelationId(packet?.id);
+  if (!packet || requestedArtifacts.length === 0) {
+    return {
+      selectedPacketId,
+      requestedArtifacts,
+      matchingPackets: [],
+      acceptedMatches: [],
+      conflictingMatches: [],
+      hasConflict: false,
+      explanationCode: requestedArtifacts.length === 0 ? "no-artifacts" : "no-selected-packet"
+    };
+  }
+  const packetsById = buildPacketRelationMap(packets);
+  const matchingPackets = packets
+    .filter((candidate) => artifactScore(candidate, requestedArtifacts) > 0)
+    .map((candidate) => artifactMatchSummary(candidate, requestedArtifacts, packetRelation(packet, candidate, packetsById)));
+  const acceptedMatches = matchingPackets.filter((match) => ["self", "descendant"].includes(match.relation));
+  const conflictingMatches = matchingPackets.filter((match) => !["self", "descendant"].includes(match.relation));
+  const hasConflict = conflictingMatches.length > 0;
+  const explanationCode = hasConflict
+    ? "artifact-conflict"
+    : acceptedMatches.some((match) => match.relation === "descendant")
+      ? "accepted-descendant-artifacts"
+      : acceptedMatches.some((match) => match.relation === "self")
+        ? "accepted-self-artifacts"
+        : "no-existing-artifact-owner";
+  return {
+    selectedPacketId,
+    requestedArtifacts,
+    matchingPackets,
+    acceptedMatches,
+    conflictingMatches,
+    hasConflict,
+    explanationCode
+  };
+}
+
 function ensureArtifactConsistency(packet, packets, artifacts = []) {
-  if (!packet || artifacts.length === 0) {
-    return;
+  const artifactResolution = analyzeArtifactConsistency(packet, packets, artifacts);
+  if (artifactResolution.hasConflict) {
+    throw resolutionError(`Task target artifact ids conflict with packet ${packet.id}.`, artifactResolution.conflictingMatches.map((match) => ({
+      packetId: match.packetId,
+      title: match.title,
+      status: match.status,
+      level: match.level,
+      score: match.score,
+      matchedBy: match.matchedBy
+    })), {
+      artifactResolution,
+      resolutionErrorCode: artifactResolution.explanationCode
+    });
   }
-  const matchingPackets = packets.filter((candidate) => artifactScore(candidate, artifacts) > 0);
-  const conflictingPackets = matchingPackets.filter((candidate) => candidate.id !== packet.id);
-  if (conflictingPackets.length > 0) {
-    throw resolutionError(`Task target artifact ids conflict with packet ${packet.id}.`, conflictingPackets.map((item) => ({ packet: item, packetId: item.id, score: artifactScore(item, artifacts), matchedBy: { artifact: artifactScore(item, artifacts) } })));
-  }
+  return artifactResolution;
 }
 
 export function resolveDurableTaskPacket(root, args = {}, options = {}) {
@@ -371,16 +510,18 @@ export function resolveDurableTaskPacket(root, args = {}, options = {}) {
     if (!packet) {
       throw resolutionError(`Task target packet ${explicitIds[0]} does not exist in ${ARTIFACT_PATHS.taskPacketsIndex}.`);
     }
-    ensureArtifactConsistency(packet, catalog.packets, artifacts);
+    const artifactResolution = ensureArtifactConsistency(packet, catalog.packets, artifacts);
     return {
       packet,
       packetId: packet.id,
       resolution: {
         mode: "explicit-packet-id",
         autoSelect: settings.autoSelect,
-        candidates: [{ packetId: packet.id, score: 1 }]
+        candidates: [{ packetId: packet.id, score: 1 }],
+        artifactResolution
       },
-      artifactIds: artifacts
+      artifactIds: artifacts,
+      artifactResolution
     };
   }
 
@@ -407,7 +548,7 @@ export function resolveDurableTaskPacket(root, args = {}, options = {}) {
   if (settings.autoSelect && top.matchedBy.targetText > 0 && top.score < settings.autoSelectMinScore) {
     throw resolutionError(`Task target confidence ${top.score.toFixed(2)} is below autoSelectMinScore ${settings.autoSelectMinScore}.`, candidates);
   }
-  ensureArtifactConsistency(top.packet, catalog.packets, artifacts);
+  const artifactResolution = ensureArtifactConsistency(top.packet, catalog.packets, artifacts);
 
   return {
     packet: top.packet,
@@ -420,9 +561,11 @@ export function resolveDurableTaskPacket(root, args = {}, options = {}) {
         score: candidate.score,
         matchedBy: candidate.matchedBy
       })),
-      selectedScore: top.score
+      selectedScore: top.score,
+      artifactResolution
     },
-    artifactIds: artifacts
+    artifactIds: artifacts,
+    artifactResolution
   };
 }
 

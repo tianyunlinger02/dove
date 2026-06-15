@@ -16,7 +16,7 @@ export { importAudioReview, prepareAudioReview, runAudioReview } from "./audio-r
 export { runDoveReviewLoop } from "./dove-review-loop.mjs";
 export { issueProgramApproval, materializeGuidancePacket, planCampaign, queryCampaigns, queryDecisions, queryGovernanceCoverageReport, queryLineage, queryMetaOptimize, queryOpenQuestions, queryOperatorLessons, queryOperatorFollowThrough, queryProgramApprovals, queryTaskGraph, queryWorkspaceIndex, readActionContextBundle, readArtifactContextManifest, readBoundaryReport as queryBoundaryReport, readBoundaryReport, readPacketContextManifest, readPhaseContextManifest, readRoleContextManifest, recordOperatorFollowThrough, recordOperatorLesson, refreshDurableSurfaces, revokeProgramApproval, summarizeSessionJournal } from "./navigation.mjs";
 export { runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate } from "./runtime.mjs";
-export { readTaskPacketCatalog, readTaskTargetResolutionSettings, resolveDurableTaskPacket, assertResolvedTaskPacket, normalizeTaskPacketId } from "./task-packets.mjs";
+export { analyzeArtifactConsistency, readTaskPacketCatalog, readTaskTargetResolutionSettings, resolveDurableTaskPacket, assertResolvedTaskPacket, normalizeTaskPacketId } from "./task-packets.mjs";
 export { assertTaskScopedMutationTarget, getGovernanceMutationEntry } from "./mutation-guard.mjs";
 export { assertNoInlineSecrets, loadDoveConfig, loadDoveLanguageConfig, loadExplicitDoveLanguageConfig, loadFigureGenerationConfig, redactDoveConfig } from "./config.mjs";
 export { doveText, isDoveChinese, resolveDoveResponseLanguage } from "./i18n.mjs";

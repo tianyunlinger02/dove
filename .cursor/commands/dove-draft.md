@@ -10,6 +10,11 @@ Generate or modify paper draft content from prompts, existing materials, experie
 - Confirmation: Ask for packet confirmation when the section/task target is ambiguous.
 - Outcome: Draft content or section status is updated with evidence-aware placeholders where needed.
 
+## Examples
+
+- `/dove:draft Draft the methods section from linked evidence`
+- `/dove:draft Revise the introduction using the latest review findings`
+
 ## Contract
 
 - Command id: `dove.draft`

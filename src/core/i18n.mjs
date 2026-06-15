@@ -334,6 +334,114 @@ const TEXT = {
     zh: "如果缺少真实证据，Dove 会记录边界而不是声称完成。",
     en: "If real evidence is missing, Dove records a boundary instead of claiming completion."
   },
+  resultCardHappenedFallback: {
+    zh: "已记录本次 Dove 命令结果。",
+    en: "Recorded this Dove command result."
+  },
+  resultCardNoEvidence: {
+    zh: "本次结果没有记录显式证据。",
+    en: "No explicit evidence was recorded for this result."
+  },
+  resultCardNoValidation: {
+    zh: "本次结果没有记录显式验证输出。",
+    en: "No explicit validation output was recorded for this result."
+  },
+  resultCardCodeNotInspected: {
+    zh: "本次工具没有检查代码改动；不要从本卡片推断代码文件。",
+    en: "This tool did not inspect code changes; do not infer changed code files from this card."
+  },
+  resultCardNoDurableWrites: {
+    zh: "本次结果没有声明新的持久写入。",
+    en: "This result did not declare new durable writes."
+  },
+  resultCardRuntimeResultRecorded: {
+    zh: "已记录 runtime result。",
+    en: "Runtime result recorded."
+  },
+  resultCardTaskPacketUpdated: {
+    zh: "已更新任务 packet。",
+    en: "Task packet updated."
+  },
+  resultCardTaskIndexUpdated: {
+    zh: "已更新 task packet index。",
+    en: "Task packet index updated."
+  },
+  resultCardRuntimeEventRecorded: {
+    zh: "已记录 runtime/lifecycle event。",
+    en: "Runtime/lifecycle event recorded."
+  },
+  resultCardReviewInputPrepared: {
+    zh: "已准备隔离 review 输入包。",
+    en: "Isolated review input bundle prepared."
+  },
+  resultCardReviewImported: {
+    zh: "已导入隔离 review handoff。",
+    en: "Isolated review handoff imported."
+  },
+  resultCardNextStatus: {
+    zh: "查看 Dove status。",
+    en: "Open Dove status."
+  },
+  resultCardNextProvideEvidence: {
+    zh: "补真实结果或证据。",
+    en: "Provide real result or evidence."
+  },
+  resultCardNextImportReview: {
+    zh: "导入 review handoff。",
+    en: "Import review handoff."
+  },
+  resultCardNextAdjustStatus: {
+    zh: "通过 status 调整任务状态。",
+    en: "Adjust task status through status."
+  },
+  evidenceResolutionNoArtifacts: {
+    zh: "本次没有提供用于选择任务的 artifact/evidence 路径。",
+    en: "No artifact/evidence path was provided for task selection."
+  },
+  evidenceResolutionNoSelectedPacket: {
+    zh: "本次没有选中可接收证据的持久任务。",
+    en: "No durable task was selected to receive evidence."
+  },
+  evidenceResolutionAcceptedSelf: {
+    zh: "证据已经属于当前任务，可以直接记录到该任务。",
+    en: "The evidence already belongs to the selected task and can be recorded there."
+  },
+  evidenceResolutionAcceptedDescendant: {
+    zh: "证据属于当前任务的子任务，可以归入这个父任务结果。",
+    en: "The evidence belongs to a descendant task and can be rolled up into this parent result."
+  },
+  evidenceResolutionNoExistingOwner: {
+    zh: "提供的证据尚未被其他任务声明；本次会归入当前选中的任务。",
+    en: "The provided evidence is not claimed by another task; this pass can attach it to the selected task."
+  },
+  evidenceResolutionConflict: {
+    zh: "提供的证据已被其他任务声明；需要选择正确 packet，或改用当前任务/子任务的证据。",
+    en: "The provided evidence is already claimed by another task; choose the correct packet or use evidence from the selected task/descendants."
+  },
+  resultCardHandoffResolveBoundary: {
+    zh: ({ ownerRole }) => `由 ${ownerRole || "当前角色"} 处理当前边界，补齐输入或证据后再回到 status。`,
+    en: ({ ownerRole }) => `${ownerRole || "the current role"} should resolve the current boundary, provide required input/evidence, then return to status.`
+  },
+  resultCardHandoffRoleTransfer: {
+    zh: ({ ownerRole, nextRole }) => `从 ${ownerRole || "当前角色"} 交接给 ${nextRole || "下一角色"} 处理当前边界。`,
+    en: ({ ownerRole, nextRole }) => `Hand off from ${ownerRole || "the current role"} to ${nextRole || "the next role"} to resolve the current boundary.`
+  },
+  resultCardHandoffProvideEvidence: {
+    zh: "需要操作者或主机侧补真实执行结果/证据；Dove 不会假装已经完成。",
+    en: "The operator or host must provide real execution results/evidence; Dove will not pretend the work is complete."
+  },
+  resultCardHandoffImportReview: {
+    zh: "等待 reviewer 产出 handoff/report 后导入；不要导入 reviewer 私有 transcript。",
+    en: "Wait for the reviewer handoff/report, then import it; do not import reviewer private transcript."
+  },
+  resultCardHandoffAddressReview: {
+    zh: "review 已返回需要处理的问题；下一步应创建或推进修复任务。",
+    en: "Review returned issues to address; next create or advance a fix task."
+  },
+  resultCardNextCreateFixMission: {
+    zh: "创建或推进修复 mission。",
+    en: "Create or advance a fix mission."
+  },
   defaultDoveTitle: {
     zh: "未命名任务工作区",
     en: "Untitled Mission Workspace"

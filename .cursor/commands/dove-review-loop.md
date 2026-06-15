@@ -10,6 +10,11 @@ Loop isolated review, draft revision, and experience planning until coherent or 
 - Confirmation: Run only bounded foreground iterations; default max is 3 unless configured otherwise.
 - Outcome: Each loop iteration records review, draft, and experience state until the task is coherent or blocked.
 
+## Examples
+
+- `/dove:review-loop Run up to three review and revision rounds for the current draft`
+- `/dove:review-loop Stop when the task is coherent or reaches an evidence boundary`
+
 ## Contract
 
 - Command id: `dove.review-loop`

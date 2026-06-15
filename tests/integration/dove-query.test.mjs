@@ -647,7 +647,12 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.current.domain, "engineering");
   assert.equal(result.current.stage, "execute");
   assert.equal(result.current.primaryRole, "builder");
-  assert.equal(result.current.nextCommand, "project:dove.status");
+  assert.equal(result.current.nextCommand, result.dailyHome.nextActions[0].command);
+  assert.equal(result.current.nextCommand, "project:dove.auto");
+  assert.equal(result.board.nextCommand, result.dailyHome.nextActions[0].command);
+  assert.equal(result.dashboard.project.nextAction, result.dailyHome.nextActions[0].command);
+  assert.equal(result.dashboard.nextAction, result.dailyHome.nextActions[0].command);
+  assert.equal(result.suggestedNextCommand, result.dailyHome.nextActions[0].command);
   assert.equal(result.board.domain, "engineering");
   assert.equal(result.dashboard.init.id, "dove-global-init");
   assert.deepEqual(result.dashboard.tasks.activeTaskIds, ["blocked-dependency", "plain-pending", "runtime-completed", "runtime-progress", "status-packet"]);

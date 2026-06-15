@@ -15,6 +15,11 @@ Turn one user-described figure intent into materials, optional generation/import
 - Confirmation: Ask for packet confirmation when the figure target is unclear; provider calls require explicit safe configuration.
 - Outcome: A figure plan/run, safe import when available, caption provenance, and QA status are recorded.
 
+## Examples
+
+- `/dove:figure Draw a workflow diagram for the mission-auto-status loop`
+- `/dove:figure Prepare the main results figure and caption provenance`
+
 ## Contract
 
 - Command id: `dove.figure`
