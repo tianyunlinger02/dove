@@ -6,6 +6,7 @@ import {
   createCampaignsIndex,
   createClaimBridgeLog,
   createDefaultBoard,
+  createDocumentLedgerIndex,
   createDoveAuthorityManifest,
   createEvidenceIndex,
   createExperimentAuditsIndex,
@@ -56,6 +57,7 @@ import {
   createWorkflowBoundaries,
   createWorkspaceIndex,
   normalizeCampaignsIndex,
+  normalizeDocumentLedgerIndex,
   normalizeDoveAuthorityManifest,
   normalizeMetaExecutionBridgeCandidatesIndex,
   normalizeMetaGovernanceCoverageIndex,
@@ -82,6 +84,7 @@ import {
 
 export const WORKSPACE_BOOTSTRAP_DIRECTORIES = [
   ARTIFACT_PATHS.doveRoot,
+  ARTIFACT_PATHS.publicDir,
   ".dove/contracts",
   ".dove/orchestration",
   ARTIFACT_PATHS.taskPacketsDir,
@@ -102,6 +105,7 @@ export const WORKSPACE_BOOTSTRAP_DIRECTORIES = [
   ".dove/sources",
   ".dove/notes",
   ".dove/evidence",
+  ARTIFACT_PATHS.documentsDir,
   ".dove/claims",
   ".dove/drafts",
   ".dove/experiments",
@@ -158,6 +162,7 @@ export function createWorkspaceBootstrapJsonArtifacts(state) {
     [ARTIFACT_PATHS.sources, createSourcesIndex],
     [ARTIFACT_PATHS.notes, createNotesIndex],
     [ARTIFACT_PATHS.evidence, createEvidenceIndex],
+    [ARTIFACT_PATHS.documentsLedger, createDocumentLedgerIndex],
     [ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex],
     [ARTIFACT_PATHS.reviewState, createReviewState],
     [ARTIFACT_PATHS.reviewConcerns, createReviewConcernsIndex],
@@ -213,6 +218,7 @@ export function createWorkspaceBootstrapJsonArtifacts(state) {
 export function createManagedWorkspaceJsonArtifacts() {
   return [
     [ARTIFACT_PATHS.workflowBoundaries, createWorkflowBoundaries, normalizeWorkflowBoundaries],
+    [ARTIFACT_PATHS.documentsLedger, createDocumentLedgerIndex, normalizeDocumentLedgerIndex],
     [ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex, normalizeMetaExecutionBridgeCandidatesIndex],
     [ARTIFACT_PATHS.metaGovernanceCoverage, createMetaGovernanceCoverageIndex, normalizeMetaGovernanceCoverageIndex],
     [ARTIFACT_PATHS.metaGovernanceCoverageReport, createMetaGovernanceCoverageReport, normalizeMetaGovernanceCoverageReport],

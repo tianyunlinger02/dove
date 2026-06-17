@@ -6,7 +6,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runIsolatedReview } from "../src/core/index.mjs";
+import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runIsolatedReview } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
 import {
@@ -43,6 +43,7 @@ Usage:
   dove sync [target] [--force] [--host <opencode|claude|codex|cursor|agents|all>]
   dove doctor [target]
   dove onboard [target] [--write-map] [--max-depth <n>] [--max-files <n>]
+  dove publish-status [target] [--quiet] [--include-archived]
   dove orchestrate [target] [--request <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--allow-autonomy]
   dove mission [target] [--goal <text>] [--domain <id>] [--stage <id>] [--artifact <path>] [--acceptance-check <text>]
   dove status [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived]
@@ -1861,6 +1862,18 @@ if (command === "onboard") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
   const result = discoverPaperArtifacts(target, buildOnboardingArgs(commandRest));
   console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
+}
+
+if (command === "publish-status") {
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  const result = publishDoveStatus(target, {
+    includeArchived: commandRest.includes("--include-archived"),
+    responseLanguage: readFlagValue(commandRest, "--response-language") ?? readFlagValue(commandRest, "--language")
+  });
+  if (!commandRest.includes("--quiet")) {
+    console.log(JSON.stringify(result, null, 2));
+  }
   process.exit(0);
 }
 

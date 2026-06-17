@@ -2197,6 +2197,7 @@ test("governance registry completely binds the expected mutating command and MCP
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_status"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_dove_audit"), true);
   assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_operator_lessons"), true);
+  assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_document_ledger"), true);
   for (const publicCommandId of ["dove.init", "dove.mission", "dove.auto", "dove.status", "dove.operator", "dove.lessons", "dove.version", "dove.source", "dove.note", "dove.figure", "dove.experience", "dove.draft", "dove.review", "dove.review-loop", "dove.rebuttal"]) {
     assert.equal(fs.existsSync(path.join(commandDir, `${publicCommandId}.md`)), true);
   }
@@ -5246,7 +5247,9 @@ test("every governance registry entry binds to real command or MCP surfaces plus
     fs.readFileSync(path.join(process.cwd(), "src/core/task-workflow.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/experience-workflow.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/audio-review.mjs"), "utf8"),
-    fs.readFileSync(path.join(process.cwd(), "src/core/dove-review-loop.mjs"), "utf8")
+    fs.readFileSync(path.join(process.cwd(), "src/core/dove-review-loop.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/public-status.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/documents.mjs"), "utf8")
   ];
 
   for (const entry of registry) {

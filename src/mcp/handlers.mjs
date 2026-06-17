@@ -22,7 +22,9 @@ import {
   prepareAudioReview,
   prepareFigureGeneration,
   prepareIsolatedReview,
+  publishDoveStatus,
   normalizeRebuttalIssues,
+  queryDocumentLedger,
   readBoundaryReport,
   queryDecisions,
   launchDoveMission,
@@ -51,6 +53,7 @@ import {
   readPhaseContextManifest,
   readState,
   readRoleContextManifest,
+  recordDocumentEvidence,
   recordDoveMissionPass,
   recordOperatorFollowThrough,
   recordOperatorLesson,
@@ -141,6 +144,12 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(queryDoveMissionBoard(root, args));
       case "query_dove_status":
         return makeTextResult(queryDoveStatus(root, args));
+      case "publish_dove_status":
+        return makeTextResult(publishDoveStatus(root, args));
+      case "query_document_ledger":
+        return makeTextResult(queryDocumentLedger(root, args));
+      case "record_document_evidence":
+        return makeTextResult(recordDocumentEvidence(root, args));
       case "query_dove_audit":
         return makeTextResult(queryDoveAudit(root, args));
       case "query_dove_return":

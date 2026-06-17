@@ -44,6 +44,9 @@ export const DOVE_TASK_CREATOR_KINDS = ["user", "system"];
 export const DOVE_AUDIO_CONTEXT_POLICY = "final-plan-results-and-explicit-artifacts-only";
 export const DOVE_RESPONSE_LANGUAGES = ["zh", "en"];
 export const DEFAULT_DOVE_RESPONSE_LANGUAGE = "zh";
+export const DOVE_DOCUMENT_KINDS = ["draft", "note", "review", "figure", "experiment", "source", "claim-support", "operator-note", "implementation-summary", "decision-record", "other"];
+export const DOVE_DOCUMENT_STATUSES = ["planned", "created", "active", "superseded", "archived", "published"];
+export const DOVE_DOCUMENT_EVIDENCE_SCOPES = ["internal", "external", "mixed"];
 
 const DOVE_RESPONSE_LANGUAGE_ALIASES = {
   zh: "zh",
@@ -151,9 +154,9 @@ export const PAPER_LIFECYCLE_FAMILIES = [
   {
     id: "knowledge",
     label: "Knowledge",
-    summary: "Sources, notes, evidence, claims, bibliography, wiki, and long-horizon memory.",
+    summary: "Sources, notes, document evidence, claims, bibliography, wiki, and long-horizon memory.",
     roleHints: ["builder"],
-    artifactPathKeys: ["sources", "notes", "evidence", "claims", "bibliography", "citationLog", "wiki", "wikiEntities", "wikiRelations", "metaLongHorizonMemory", "metaOperatorLessons"]
+    artifactPathKeys: ["sources", "notes", "evidence", "documentsLedger", "claims", "bibliography", "citationLog", "wiki", "wikiEntities", "wikiRelations", "metaLongHorizonMemory", "metaOperatorLessons"]
   }
 ];
 
@@ -247,7 +250,8 @@ const GOVERNANCE_GUARDED_MUTATION_SCOPE_METADATA = {
   "compare-versions": taskScopedMutationMetadata([]),
   "materialize-guidance-packet": governanceScopeMetadata("task-materialization"),
   "launch-dove-mission": governanceScopeMetadata("task-materialization"),
-  "record-dove-mission-pass": taskScopedMutationMetadata(["runId", "evidenceLinks", "artifactRefs"])
+  "record-dove-mission-pass": taskScopedMutationMetadata(["runId", "evidenceLinks", "artifactRefs"]),
+  "record-document-evidence": taskScopedMutationMetadata(["id", "documentId", "documentPath", "artifactRefs", "evidenceLinks", "sourceRefs", "claimIds"])
 };
 
 export const GOVERNANCE_GUARDED_MUTATIONS = [
@@ -296,7 +300,8 @@ export const GOVERNANCE_GUARDED_MUTATIONS = [
   { id: "create-version-snapshot", action: "Creating a version snapshot", artifactPath: ".dove/versions/index.json", surfaceBindings: { coreFunction: "createVersionSnapshot", mcpTool: "create_version_snapshot", commandIds: ["dove.version"] } },
   { id: "compare-versions", action: "Comparing versions", artifactPath: ".dove/versions/comparisons.json", surfaceBindings: { coreFunction: "compareVersions", mcpTool: "compare_versions", commandIds: ["dove.version"] } },
   { id: "materialize-guidance-packet", action: "Materializing accepted guidance into a durable task packet", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "materializeGuidancePacket", mcpTool: "materialize_guidance_packet", commandIds: [] } },
-  { id: "launch-dove-mission", action: "Launching a governed Dove mission by materializing accepted guidance into the authoritative .dove task-packet store", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "launchDoveMission", mcpTool: "launch_dove_mission", commandIds: [] } }
+  { id: "launch-dove-mission", action: "Launching a governed Dove mission by materializing accepted guidance into the authoritative .dove task-packet store", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "launchDoveMission", mcpTool: "launch_dove_mission", commandIds: [] } },
+  { id: "record-document-evidence", action: "Recording an explicit document/evidence ledger entry without capturing raw transcripts or overwriting existing documents", artifactPath: ".dove/documents/ledger.json", surfaceBindings: { coreFunction: "recordDocumentEvidence", mcpTool: "record_document_evidence", commandIds: [] } }
 ].map((entry) => ({
   ...entry,
   ...(GOVERNANCE_GUARDED_MUTATION_SCOPE_METADATA[entry.id] ?? governanceScopeMetadata("workspace-global"))
@@ -323,6 +328,7 @@ const GOVERNANCE_EXEMPT_MUTATION_SCOPE_METADATA = {
   "persist-review-log": governanceScopeMetadata("internal-helper"),
   "persist-rebuttal-issues": governanceScopeMetadata("internal-helper"),
   "refresh-durable-surfaces": governanceScopeMetadata("derived-refresh"),
+  "publish-dove-status": governanceScopeMetadata("derived-refresh"),
   "summarize-session-journal": governanceScopeMetadata("governance-bookkeeping")
 };
 
@@ -347,6 +353,7 @@ export const GOVERNANCE_EXEMPT_MUTATIONS = [
   { id: "persist-review-log", action: "Review log persistence is an internal helper used by guarded review flows and bounded runtime review execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".dove/reviews/log.md", ownerRole: "reviewer", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistReviewLog", mcpTool: "run_review_loop", commandIds: ["dove.review"] } },
   { id: "persist-rebuttal-issues", action: "Rebuttal issue persistence is an internal helper used by guarded review/rebuttal flows and bounded runtime review execution, and is explicitly exempt as a standalone mutation entrypoint.", artifactPath: ".dove/rebuttal/issues.json", ownerRole: "reviewer", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "internal-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "persistRebuttalIssues", mcpTool: "normalize_rebuttal_issues", commandIds: ["dove.rebuttal"] } },
   { id: "refresh-durable-surfaces", action: "Durable surface refresh is a proposal-only summarization step and remains exempt.", artifactPath: ".dove/workspace/index.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "summary-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "refreshDurableSurfaces", mcpTool: "query_workspace_index", commandIds: ["dove.status"] } },
+  { id: "publish-dove-status", action: "Publishing sanitized public status artifacts remains exempt because it derives a read-only external summary from durable Dove state without approving, materializing, or executing work.", artifactPath: ".dove/public", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-06-16T00:00:00.000Z", lastReviewedAt: "2026-06-16T00:00:00.000Z", reasonCode: "public-derived-status-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "publishDoveStatus", mcpTool: "publish_dove_status", commandIds: [] } },
   { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".dove/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "query_meta_optimize", commandIds: [] } }
 ].map((entry) => ({
   ...entry,
@@ -374,6 +381,7 @@ export const GOVERNANCE_READONLY_TOOLS = [
   "query_dove_mission",
   "query_dove_mission_board",
   "query_dove_status",
+  "query_document_ledger",
   "query_dove_audit",
   "query_dove_return",
   "query_program_approvals",
@@ -434,7 +442,8 @@ export const GOVERNANCE_NEGATIVE_COVERAGE = [
   { id: "create-version-snapshot", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
   { id: "compare-versions", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
   { id: "materialize-guidance-packet", level: "dynamic", tests: ["materializeGuidancePacket creates a durable packet from accepted remediation guidance and binds follow-through"] },
-  { id: "launch-dove-mission", level: "dynamic", tests: ["launchDoveMission materializes accepted guidance through the .dove mission packet store and refuses dual-root Dove authority"] }
+  { id: "launch-dove-mission", level: "dynamic", tests: ["launchDoveMission materializes accepted guidance through the .dove mission packet store and refuses dual-root Dove authority"] },
+  { id: "record-document-evidence", level: "dynamic", tests: ["record_document_evidence stores internal and public-safe document evidence without publishing raw internal entries"] }
 ];
 
 export function resolveResumeCommandForPhase(phase) {
@@ -564,6 +573,12 @@ export const ARTIFACT_PATHS = {
   doveRoot: ".dove",
   state: ".dove/state.json",
   readme: ".dove/README.md",
+  publicDir: ".dove/public",
+  publicStatusJson: ".dove/public/status.json",
+  publicStatusMarkdown: ".dove/public/status.md",
+  publicStatusHtml: ".dove/public/index.html",
+  documentsDir: ".dove/documents",
+  documentsLedger: ".dove/documents/ledger.json",
   project: ".dove/project.md",
   researchContract: ".dove/contracts/research-contract.md",
   orchestrationBoard: ".dove/orchestration/board.json",
@@ -1902,7 +1917,8 @@ export function normalizeWorkflowBoundaries(raw = {}) {
       doveRootManifest: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.doveRootManifest),
       executionBridgeCandidates: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaExecutionBridgeCandidates),
       operatorLessons: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaOperatorLessons),
-      remediationPacks: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaRemediationPacks)
+      remediationPacks: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaRemediationPacks),
+      documentsLedger: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.documentsLedger)
     },
     notes: normalizeStringArray(raw.notes, base.notes),
     updatedAt: raw.updatedAt ?? base.updatedAt
@@ -1919,6 +1935,93 @@ export function createNotesIndex() {
 
 export function createEvidenceIndex() {
   return { version: 3, claims: [], updatedAt: null };
+}
+
+function normalizeDocumentKind(value, fallback = "other") {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return DOVE_DOCUMENT_KINDS.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeDocumentStatus(value, fallback = "created") {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return DOVE_DOCUMENT_STATUSES.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeDocumentEvidenceScope(value, fallback = "internal") {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return DOVE_DOCUMENT_EVIDENCE_SCOPES.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeUniqueStringArray(value, fallback = []) {
+  return Array.from(new Set(normalizeStringArray(value, fallback).map((item) => item.trim()).filter(Boolean)));
+}
+
+function createDocumentLedgerSummary(entries = []) {
+  const lastEntry = entries.at(-1) ?? null;
+  return {
+    documentCount: entries.length,
+    internalEvidenceCount: entries.filter((entry) => entry.evidenceScope === "internal").length,
+    externalEvidenceCount: entries.filter((entry) => entry.evidenceScope === "external").length,
+    mixedEvidenceCount: entries.filter((entry) => entry.evidenceScope === "mixed").length,
+    publicSafeCount: entries.filter((entry) => entry.publicSafe === true).length,
+    lastDocumentId: lastEntry?.documentId ?? null,
+    lastUpdatedAt: lastEntry?.updatedAt ?? lastEntry?.createdAt ?? null,
+    overview: entries.length > 0 ? `${entries.length} document evidence entr${entries.length === 1 ? "y" : "ies"} recorded.` : "No document evidence has been recorded yet.",
+    ledgerPath: ARTIFACT_PATHS.documentsLedger
+  };
+}
+
+function normalizeDocumentLedgerEntry(value, index = 0) {
+  const source = normalizeObject(value);
+  const id = normalizeString(source.id, `document-entry-${index + 1}`);
+  const documentId = normalizeString(source.documentId, id);
+  const evidenceScope = normalizeDocumentEvidenceScope(source.evidenceScope ?? source.scope, "internal");
+  const publicSafe = normalizeBoolean(source.publicSafe, false);
+  return {
+    id,
+    packetId: normalizeString(source.packetId ?? source.taskPacketId ?? source.missionPacketId ?? source.taskId, null),
+    documentId,
+    title: normalizeString(source.title, documentId),
+    documentPath: normalizeString(source.documentPath ?? source.path, null),
+    documentKind: normalizeDocumentKind(source.documentKind ?? source.kind, "other"),
+    status: normalizeDocumentStatus(source.status, "created"),
+    evidenceScope,
+    publicSafe,
+    summary: normalizeString(source.summary, ""),
+    context: normalizeString(source.context, ""),
+    sourceRefs: normalizeUniqueStringArray(source.sourceRefs ?? source.sourceIds),
+    artifactRefs: normalizeUniqueStringArray(source.artifactRefs ?? source.artifactPaths),
+    evidenceLinks: normalizeUniqueStringArray(source.evidenceLinks ?? source.evidencePaths),
+    claimIds: normalizeUniqueStringArray(source.claimIds ?? source.claims),
+    createdAt: normalizeString(source.createdAt, null),
+    updatedAt: normalizeString(source.updatedAt, source.createdAt ?? null),
+    createdBy: normalizeString(source.createdBy ?? source.actorRole, "operator"),
+    appendOnly: true,
+    rawTranscriptIncluded: false,
+    privateReasoningIncluded: false,
+    environmentIncluded: false
+  };
+}
+
+export function createDocumentLedgerIndex() {
+  const entries = [];
+  return {
+    version: 1,
+    entries,
+    summary: createDocumentLedgerSummary(entries),
+    updatedAt: null
+  };
+}
+
+export function normalizeDocumentLedgerIndex(raw = {}) {
+  const source = normalizeObject(raw);
+  const entries = normalizeObjectArray(source.entries).map((entry, index) => normalizeDocumentLedgerEntry(entry, index));
+  return {
+    version: 1,
+    entries,
+    summary: createDocumentLedgerSummary(entries),
+    updatedAt: normalizeString(source.updatedAt, entries.at(-1)?.updatedAt ?? entries.at(-1)?.createdAt ?? null)
+  };
 }
 
 export function createTaskPacketsIndex() {
@@ -3847,6 +3950,7 @@ export function createWorkflowBoundaries() {
     ".dove/sources/index.json",
     ".dove/notes/index.json",
     ".dove/evidence/index.json",
+    ".dove/documents/ledger.json",
     ".dove/claims/CLAIMS_FROM_RESULTS.md",
     ".dove/claims/bridge-log.json",
     ".dove/reviews/log.md",
@@ -3917,6 +4021,7 @@ export function createWorkflowBoundaries() {
       ".dove/sources",
       ".dove/notes",
       ".dove/evidence",
+      ".dove/documents",
       ".dove/experiments",
       ".dove/reviews",
       ".dove/rebuttal",
@@ -3937,6 +4042,7 @@ export function createWorkflowBoundaries() {
       workspaceIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.workspaceIndex),
       doveRootManifest: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.doveRootManifest),
       operatorLessons: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.metaOperatorLessons),
+      documentsLedger: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.documentsLedger),
       programsIndex: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.programsIndex),
       programRuns: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.programRuns),
       programApprovals: createManagedArtifactMeta("bootstrap-only", ARTIFACT_PATHS.programApprovals)

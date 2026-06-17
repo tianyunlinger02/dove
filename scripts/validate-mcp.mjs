@@ -54,6 +54,9 @@ async function main() {
     "upsert_note",
     "upsert_draft",
     "query_dove_status",
+    "publish_dove_status",
+    "query_document_ledger",
+    "record_document_evidence",
     "record_operator_lesson"
   ]) {
     assert.equal(toolNames.has(requiredTool), true, `Missing MCP tool ${requiredTool}`);
@@ -132,6 +135,38 @@ async function main() {
   assert.equal(missionPass.resultCard.surface, "dove.mission");
   assert.equal(missionPass.resultCard.packetId, packetId);
   assert.equal(missionPass.resultCard.proposalOnly, false);
+
+  const internalDocumentEvidence = await callTool("record_document_evidence", {
+    packetId,
+    id: "validator-internal-document-evidence",
+    title: "Validator internal document evidence",
+    documentKind: "implementation-summary",
+    evidenceScope: "internal",
+    summary: "Validator internal document evidence stays out of public status.",
+    artifactRefs: [".dove/task-packets/index.json"]
+  });
+  assert.equal(internalDocumentEvidence.status, "recorded");
+  assert.equal(internalDocumentEvidence.entry.publicSafe, false);
+  assert.equal(internalDocumentEvidence.entry.evidenceScope, "internal");
+
+  const publicDocumentEvidence = await callTool("record_document_evidence", {
+    packetId,
+    id: "validator-public-document-evidence",
+    title: "Validator public document evidence",
+    documentKind: "source",
+    evidenceScope: "external",
+    publicSafe: true,
+    summary: "Validator public-safe document evidence summary.",
+    evidenceLinks: [".dove/evidence/index.json"]
+  });
+  assert.equal(publicDocumentEvidence.status, "recorded");
+  assert.equal(publicDocumentEvidence.entry.publicSafe, true);
+
+  const documentLedger = await callTool("query_document_ledger", { packetId });
+  assert.equal(documentLedger.proposalOnly, true);
+  assert.equal(documentLedger.noAutoApply, true);
+  assert.deepEqual(documentLedger.writes, []);
+  assert.equal(documentLedger.entries.length, 2);
 
   const source = await callTool("register_source", {
     packetId,
@@ -315,6 +350,19 @@ async function main() {
   assert.ok(status.dashboard.tasks.tree.length >= 1);
   assert.equal(status.dashboard.tasks.index.activeInitId, initGoal.init.id);
   assert.equal(status.dashboard.dailyHome.presentation, "dove-status-home");
+
+  const publicStatus = await callTool("publish_dove_status", { generatedAt: "2026-06-16T00:00:00.000Z" });
+  assert.equal(publicStatus.mode, "dove-public-status-publish");
+  assert.deepEqual(publicStatus.writes, [".dove/public/status.json", ".dove/public/status.md", ".dove/public/index.html"]);
+  assert.equal(publicStatus.privacy.transcriptsIncluded, false);
+  assert.equal(publicStatus.privacy.documentLedgerRawEntriesIncluded, false);
+  assert.equal(publicStatus.privacy.documentBodiesIncluded, false);
+  assert.equal(publicStatus.snapshot.documents.counts.publicSafe >= 1, true);
+  assert.ok(publicStatus.snapshot.documents.recentPublicSafe.some((entry) => entry.id === "validator-public-document-evidence"));
+  assert.equal(publicStatus.noExternalProcess, true);
+  assert.equal(fs.existsSync(path.join(tempWorkspace, ".dove", "public", "status.json")), true);
+  assert.equal(fs.existsSync(path.join(tempWorkspace, ".dove", "public", "status.md")), true);
+  assert.equal(fs.existsSync(path.join(tempWorkspace, ".dove", "public", "index.html")), true);
   assert.ok(Array.isArray(status.dashboard.tasks.boundaryActionCards));
   assert.ok(status.projectSummary && typeof status.projectSummary === "object");
   assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");

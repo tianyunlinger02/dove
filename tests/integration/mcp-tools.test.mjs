@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -62,6 +63,9 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "query_dove_mission",
     "query_dove_mission_board",
     "query_dove_status",
+    "publish_dove_status",
+    "query_document_ledger",
+    "record_document_evidence",
     "query_dove_audit",
     "query_dove_return",
     "init_dove_goal",
@@ -134,10 +138,10 @@ test("MCP tool definitions include the mature workflow tools", () => {
 
 test("doctor MCP probe requires current Dove tools without calling mutating tools", () => {
   const probeText = fs.readFileSync(path.join(process.cwd(), "scripts", "doctor-mcp-probe.mjs"), "utf8");
-  for (const requiredTool of ["query_dove_status", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_operate"]) {
+  for (const requiredTool of ["query_dove_status", "publish_dove_status", "query_document_ledger", "record_document_evidence", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_operate"]) {
     assert.match(probeText, new RegExp(`"${requiredTool}"`));
   }
-  for (const mutatingTool of ["init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
+  for (const mutatingTool of ["publish_dove_status", "record_document_evidence", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
     assert.equal(probeText.includes(`tools/call", { name: "${mutatingTool}"`), false, `doctor probe must not call mutating tool ${mutatingTool}`);
   }
 });
@@ -155,6 +159,62 @@ test("MCP validation scripts share bounded stdio client timeouts", () => {
     assert.match(scriptText, /createMcpStdioClient/);
     assert.match(scriptText, /notify\("notifications\/initialized"\)/);
     assert.doesNotMatch(scriptText, /const pending = new Map\(\)/);
+  }
+});
+
+test("Dove MCP server supports Claude Code JSONL stdio framing", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-jsonl-"));
+  const server = spawn(process.execPath, [path.join(process.cwd(), "mcp", "dove-state-server.mjs")], {
+    cwd: root,
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  const responses = [];
+  let stdout = "";
+  let stderr = "";
+
+  server.stdout.setEncoding("utf8");
+  server.stdout.on("data", (chunk) => {
+    stdout += chunk;
+    while (stdout.includes("\n")) {
+      const lineEnd = stdout.indexOf("\n");
+      const line = stdout.slice(0, lineEnd).trim();
+      stdout = stdout.slice(lineEnd + 1);
+      if (line) {
+        responses.push(JSON.parse(line));
+      }
+    }
+  });
+  server.stderr.setEncoding("utf8");
+  server.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+
+  function send(id, method, params = {}) {
+    server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+  }
+
+  try {
+    send(1, "initialize");
+    send(2, "tools/list");
+    await new Promise((resolve, reject) => {
+      const startedAt = Date.now();
+      const timer = setInterval(() => {
+        if (responses.length >= 2) {
+          clearInterval(timer);
+          resolve();
+          return;
+        }
+        if (Date.now() - startedAt > 5000) {
+          clearInterval(timer);
+          reject(new Error(`Timed out waiting for JSONL MCP responses. stderr=${stderr}`));
+        }
+      }, 20);
+    });
+
+    assert.equal(responses[0].result.serverInfo.name, "dove");
+    assert.ok(responses[1].result.tools.some((tool) => tool.name === "query_dove_status"));
+  } finally {
+    server.kill();
   }
 });
 
@@ -285,6 +345,169 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(pipeline.diagnostics.noExternalProcess, true);
     assert.equal(pipeline.diagnostics.noGitInspection, true);
     assert.ok(pipeline.stages.some((stage) => stage.id === "return" && stage.commandId === "project:dove.status"));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("publish_dove_status writes sanitized public artifacts", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-public-status-"));
+  try {
+    extractToolJson(dispatchTool(root, "init_dove_goal", {
+      id: "public-status-init",
+      title: "Public status init",
+      goal: "Expose progress without exposing secrets."
+    }));
+    const proposal = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "public-status-task",
+      goal: "Publish status without leaking api_key=supersecret.",
+      title: "Public status task api_key=supersecret"
+    }));
+    extractToolJson(dispatchTool(root, "create_dove_task", proposal.confirmArgs));
+
+    const published = extractToolJson(dispatchTool(root, "publish_dove_status", { generatedAt: "2026-06-16T00:00:00.000Z" }));
+    assert.equal(published.mode, "dove-public-status-publish");
+    assert.equal(published.status, "published");
+    assert.deepEqual(published.writes, [".dove/public/status.json", ".dove/public/status.md", ".dove/public/index.html"]);
+    assert.equal(published.privacy.sanitized, true);
+    assert.equal(published.privacy.transcriptsIncluded, false);
+    assert.equal(published.privacy.runtimeEntriesIncluded, false);
+    assert.equal(published.privacy.documentLedgerRawEntriesIncluded, false);
+    assert.equal(published.privacy.documentBodiesIncluded, false);
+    assert.equal(published.snapshot.documents.counts.total, 0);
+    assert.equal(published.noExternalProcess, true);
+    assert.equal(published.cloudflareTunnelStarted, false);
+    assert.equal(published.snapshot.tasks.active.some((task) => task.id === "public-status-task"), true);
+
+    const jsonPath = path.join(root, ".dove", "public", "status.json");
+    const mdPath = path.join(root, ".dove", "public", "status.md");
+    const htmlPath = path.join(root, ".dove", "public", "index.html");
+    assert.equal(fs.existsSync(jsonPath), true);
+    assert.equal(fs.existsSync(mdPath), true);
+    assert.equal(fs.existsSync(htmlPath), true);
+    const publicText = `${fs.readFileSync(jsonPath, "utf8")}\n${fs.readFileSync(mdPath, "utf8")}\n${fs.readFileSync(htmlPath, "utf8")}`;
+    assert.equal(publicText.includes("supersecret"), false);
+    assert.match(publicText, /<redacted>/);
+    assert.match(publicText, /不包含 raw transcripts/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("document evidence ledger stores internal and public-safe entries without publishing raw bodies", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-doc-ledger-"));
+  try {
+    extractToolJson(dispatchTool(root, "init_dove_goal", {
+      id: "doc-ledger-init",
+      title: "Document ledger init",
+      goal: "Validate document evidence archival."
+    }));
+    const created = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "doc-ledger-task",
+      goal: "Record internal and external document evidence.",
+      title: "Document ledger task",
+      checklist: false,
+      confirmed: true
+    }));
+    const packetId = created.createdTask.id;
+
+    const internal = extractToolJson(dispatchTool(root, "record_document_evidence", {
+      packetId,
+      id: "internal-review-entry",
+      title: "Internal review evidence",
+      documentKind: "review",
+      evidenceScope: "internal",
+      summary: "Internal ledger-only summary api_key=private-ledger-secret.",
+      artifactRefs: [".dove/reviews/internal.md"],
+      evidenceLinks: [".dove/runtime/results.json"]
+    }));
+    assert.equal(internal.status, "recorded");
+    assert.equal(internal.createdDocument, false);
+    assert.equal(internal.entry.publicSafe, false);
+    assert.equal(internal.entry.evidenceScope, "internal");
+    assert.deepEqual(internal.writes, [".dove/documents/ledger.json"]);
+
+    const internalQuery = extractToolJson(dispatchTool(root, "query_document_ledger", { packetId, publicSafe: false }));
+    assert.equal(internalQuery.mode, "document-ledger-query");
+    assert.equal(internalQuery.proposalOnly, true);
+    assert.equal(internalQuery.noAutoApply, true);
+    assert.deepEqual(internalQuery.writes, []);
+    assert.equal(internalQuery.entries.length, 1);
+    assert.equal(internalQuery.entries[0].id, "internal-review-entry");
+    assert.equal(internalQuery.privacy.documentBodiesIncluded, false);
+
+    const internalOnlyPublic = extractToolJson(dispatchTool(root, "publish_dove_status", { generatedAt: "2026-06-17T00:00:00.000Z" }));
+    assert.equal(internalOnlyPublic.snapshot.documents.counts.total, 0);
+    assert.equal(internalOnlyPublic.snapshot.documents.counts.publicSafe, 0);
+    assert.deepEqual(internalOnlyPublic.snapshot.documents.recentPublicSafe, []);
+
+    const publicEntry = extractToolJson(dispatchTool(root, "record_document_evidence", {
+      packetId,
+      id: "public-source-entry",
+      title: "Public source evidence",
+      documentKind: "source",
+      evidenceScope: "external",
+      publicSafe: true,
+      summary: "Public-safe external evidence summary.",
+      artifactRefs: [".dove/sources/index.json"],
+      evidenceLinks: [".dove/evidence/index.json"],
+      createDocument: true,
+      documentPath: ".dove/documents/source/public-evidence.md",
+      body: "# Public evidence body\n\nDocument body should not be copied to public status.\n"
+    }));
+    assert.equal(publicEntry.createdDocument, true);
+    assert.equal(publicEntry.entry.publicSafe, true);
+    assert.equal(publicEntry.entry.documentPath, ".dove/documents/source/public-evidence.md");
+    assert.equal(fs.existsSync(path.join(root, publicEntry.entry.documentPath)), true);
+
+    const duplicateCreate = extractToolJson(dispatchTool(root, "record_document_evidence", {
+      packetId,
+      id: "public-source-entry-duplicate",
+      title: "Public source evidence duplicate",
+      documentKind: "source",
+      evidenceScope: "external",
+      publicSafe: true,
+      summary: "Duplicate public-safe evidence summary.",
+      createDocument: true,
+      documentPath: ".dove/documents/source/public-evidence.md",
+      body: "# Duplicate public evidence body\n"
+    }));
+    assert.equal(duplicateCreate.createdDocument, true);
+    assert.equal(duplicateCreate.entry.documentPath, ".dove/documents/source/public-evidence-2.md");
+    assert.equal(fs.existsSync(path.join(root, duplicateCreate.entry.documentPath)), true);
+
+    const appended = extractToolJson(dispatchTool(root, "record_document_evidence", {
+      packetId,
+      id: "public-source-entry-append",
+      title: "Public source evidence append",
+      documentKind: "source",
+      evidenceScope: "external",
+      publicSafe: true,
+      summary: "Append public-safe evidence summary.",
+      appendDocument: true,
+      documentPath: publicEntry.entry.documentPath,
+      body: "Appended archive-only body."
+    }));
+    assert.equal(appended.appendedDocument, true);
+    assert.match(fs.readFileSync(path.join(root, publicEntry.entry.documentPath), "utf8"), /Appended archive-only body/);
+
+    const publicQuery = extractToolJson(dispatchTool(root, "query_document_ledger", { packetId, publicSafe: true }));
+    assert.equal(publicQuery.entries.length, 3);
+    assert.ok(publicQuery.entries.every((entry) => entry.publicSafe === true));
+
+    const published = extractToolJson(dispatchTool(root, "publish_dove_status", { generatedAt: "2026-06-17T01:00:00.000Z" }));
+    assert.equal(published.snapshot.documents.counts.total, 3);
+    assert.equal(published.snapshot.documents.counts.publicSafe, 3);
+    assert.equal(published.snapshot.documents.recentPublicSafe.length, 3);
+    assert.equal(published.snapshot.documents.recentPublicSafe[0].title, "Public source evidence");
+    assert.equal(published.privacy.documentLedgerRawEntriesIncluded, false);
+    assert.equal(published.privacy.documentBodiesIncluded, false);
+
+    const publicText = `${fs.readFileSync(path.join(root, ".dove", "public", "status.json"), "utf8")}\n${fs.readFileSync(path.join(root, ".dove", "public", "status.md"), "utf8")}\n${fs.readFileSync(path.join(root, ".dove", "public", "index.html"), "utf8")}`;
+    assert.match(publicText, /Public-safe external evidence summary/);
+    assert.equal(publicText.includes("private-ledger-secret"), false);
+    assert.equal(publicText.includes("Document body should not be copied"), false);
+    assert.equal(publicText.includes("Appended archive-only body"), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1171,6 +1394,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const doveMissionQueryTool = toolDefinitions.find((item) => item.name === "query_dove_mission");
   const doveBoardQueryTool = toolDefinitions.find((item) => item.name === "query_dove_mission_board");
   const doveStatusQueryTool = toolDefinitions.find((item) => item.name === "query_dove_status");
+  const publishStatusTool = toolDefinitions.find((item) => item.name === "publish_dove_status");
   const doveAuditQueryTool = toolDefinitions.find((item) => item.name === "query_dove_audit");
   const doveReturnQueryTool = toolDefinitions.find((item) => item.name === "query_dove_return");
   const doveOnboardingQueryTool = toolDefinitions.find((item) => item.name === "query_dove_onboarding");
@@ -1253,6 +1477,10 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(doveStatusQueryTool, "query_dove_status should exist");
   assert.match(doveStatusQueryTool.description, /dailyHome/);
   assert.match(doveStatusQueryTool.description, /boundary action cards/);
+  assert.ok(publishStatusTool, "publish_dove_status should exist");
+  assert.match(publishStatusTool.description, /sanitized public Dove project progress artifacts/);
+  assert.ok(publishStatusTool.inputSchema.properties.includeArchived, "publish_dove_status should expose includeArchived");
+  assert.ok(publishStatusTool.inputSchema.properties.responseLanguage, "publish_dove_status should expose responseLanguage");
   assert.ok(doveAuditQueryTool, "query_dove_audit should exist");
   assert.ok(doveReturnQueryTool, "query_dove_return should exist");
   assert.ok(doveOnboardingQueryTool, "query_dove_onboarding should exist");

@@ -10,6 +10,9 @@ import {
   DEFAULT_DOVE_RESPONSE_LANGUAGE,
   DOVE_AUDIO_CONTEXT_POLICY,
   DOVE_BOUNDARY_STATUSES,
+  DOVE_DOCUMENT_EVIDENCE_SCOPES,
+  DOVE_DOCUMENT_KINDS,
+  DOVE_DOCUMENT_STATUSES,
   DOVE_BOUNDARY_TYPES,
   DOVE_DOMAIN_GUIDANCE,
   DOVE_DOMAIN_IDS,
@@ -29,6 +32,7 @@ import {
   SCHEMA_VERSION,
   createDefaultBoard,
   createDefaultState,
+  createDocumentLedgerIndex,
   createDoveAuthorityManifest,
   createMetaOperatorLessonsIndex,
   createTaskPacketsIndex,
@@ -41,6 +45,7 @@ import {
   normalizeDoveHandoffStatus,
   normalizeDovePrimaryRoleId,
   normalizeDoveResponseLanguage,
+  normalizeDocumentLedgerIndex,
   normalizeMetaOperatorLessonsIndex,
   normalizeRuntimeEventsIndex,
   normalizeRuntimeResultsIndex,
@@ -233,6 +238,70 @@ test("runtime event and result indexes normalize legacy items into canonical ent
   assert.equal(runtimeResults.summary.runCount, 3);
 });
 
+test("document ledger index records document evidence boundaries", () => {
+  const index = createDocumentLedgerIndex();
+  assert.equal(ARTIFACT_PATHS.documentsDir, ".dove/documents");
+  assert.equal(ARTIFACT_PATHS.documentsLedger, ".dove/documents/ledger.json");
+  assert.deepEqual(DOVE_DOCUMENT_KINDS, ["draft", "note", "review", "figure", "experiment", "source", "claim-support", "operator-note", "implementation-summary", "decision-record", "other"]);
+  assert.deepEqual(DOVE_DOCUMENT_STATUSES, ["planned", "created", "active", "superseded", "archived", "published"]);
+  assert.deepEqual(DOVE_DOCUMENT_EVIDENCE_SCOPES, ["internal", "external", "mixed"]);
+  assert.equal(index.version, 1);
+  assert.deepEqual(index.entries, []);
+  assert.equal(index.summary.documentCount, 0);
+  assert.equal(index.summary.publicSafeCount, 0);
+  assert.equal(index.summary.ledgerPath, ARTIFACT_PATHS.documentsLedger);
+
+  const normalized = normalizeDocumentLedgerIndex({
+    version: 99,
+    entries: [{
+      id: "doc-alpha",
+      packetId: "packet-alpha",
+      documentId: "external-review-alpha",
+      title: "External review alpha",
+      documentPath: ".dove/documents/review/external-review-alpha.md",
+      documentKind: "review",
+      status: "published",
+      evidenceScope: "external",
+      publicSafe: true,
+      summary: "Public-safe review summary.",
+      sourceRefs: ["source-alpha", "source-alpha", ""],
+      artifactRefs: [".dove/drafts/introduction.md"],
+      evidenceLinks: [".dove/evidence/index.json"],
+      claimIds: ["claim-alpha"],
+      createdAt: "2026-06-17T00:00:00.000Z",
+      updatedAt: "2026-06-17T00:00:00.000Z",
+      rawTranscriptIncluded: true,
+      privateReasoningIncluded: true,
+      environmentIncluded: true
+    }, {
+      id: "doc-beta",
+      documentKind: "bad-kind",
+      status: "bad-status",
+      evidenceScope: "mixed",
+      publicSafe: false
+    }, "bad-shape"],
+    updatedAt: "2026-06-17T00:00:00.000Z"
+  });
+
+  assert.equal(normalized.version, 1);
+  assert.equal(normalized.entries.length, 2);
+  assert.equal(normalized.entries[0].documentKind, "review");
+  assert.equal(normalized.entries[0].status, "published");
+  assert.equal(normalized.entries[0].evidenceScope, "external");
+  assert.equal(normalized.entries[0].publicSafe, true);
+  assert.deepEqual(normalized.entries[0].sourceRefs, ["source-alpha"]);
+  assert.equal(normalized.entries[0].rawTranscriptIncluded, false);
+  assert.equal(normalized.entries[0].privateReasoningIncluded, false);
+  assert.equal(normalized.entries[0].environmentIncluded, false);
+  assert.equal(normalized.entries[1].documentKind, "other");
+  assert.equal(normalized.entries[1].status, "created");
+  assert.equal(normalized.summary.documentCount, 2);
+  assert.equal(normalized.summary.externalEvidenceCount, 1);
+  assert.equal(normalized.summary.mixedEvidenceCount, 1);
+  assert.equal(normalized.summary.publicSafeCount, 1);
+  assert.equal(normalized.summary.lastDocumentId, "doc-beta");
+});
+
 test("operator lessons index is explicit-only and normalized", () => {
   const index = createMetaOperatorLessonsIndex();
   assert.equal(ARTIFACT_PATHS.metaOperatorLessons, ".dove/meta/operator-lessons.json");
@@ -412,6 +481,33 @@ test("ensureWorkspace creates and repairs the operator lessons artifact", () => 
     assert.equal(repaired.noAutoApply, true);
     assert.deepEqual(repaired.lessons, []);
     assert.equal(repaired.summary.lessonCount, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("ensureWorkspace creates and repairs the document ledger artifact", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-schema-documents-"));
+  try {
+    ensureWorkspace(root);
+    const ledger = readJson(root, ARTIFACT_PATHS.documentsLedger, {});
+    assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.documentsDir)), true);
+    assert.equal(ledger.version, 1);
+    assert.deepEqual(ledger.entries, []);
+    assert.equal(ledger.summary.documentCount, 0);
+    assert.equal(ledger.summary.ledgerPath, ARTIFACT_PATHS.documentsLedger);
+
+    fs.writeFileSync(path.join(root, ARTIFACT_PATHS.documentsLedger), JSON.stringify({ entries: [{ id: "repair-doc", evidenceScope: "external", publicSafe: true }], summary: { documentCount: 99 } }), "utf8");
+    ensureWorkspace(root);
+
+    const repaired = readJson(root, ARTIFACT_PATHS.documentsLedger, {});
+    assert.equal(repaired.version, 1);
+    assert.equal(repaired.entries.length, 1);
+    assert.equal(repaired.entries[0].id, "repair-doc");
+    assert.equal(repaired.entries[0].evidenceScope, "external");
+    assert.equal(repaired.summary.documentCount, 1);
+    assert.equal(repaired.summary.externalEvidenceCount, 1);
+    assert.equal(repaired.summary.publicSafeCount, 1);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
