@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import {
   ARTIFACT_PATHS,
   createDocumentLedgerIndex,
@@ -6,10 +9,12 @@ import {
   createTaskPacketsIndex,
   normalizeDocumentLedgerIndex
 } from "./schema.mjs";
+import { loadDoveConfig, normalizeGlobalStatusProjects, resolveDoveGlobalStatusOutputDir } from "./config.mjs";
 import { queryDoveStatus } from "./dove.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
 
 const PUBLIC_STATUS_VERSION = 1;
+const GLOBAL_PUBLIC_STATUS_VERSION = 1;
 const PUBLIC_TASK_LIMIT = 12;
 const PUBLIC_RECENT_LIMIT = 8;
 const SECRET_PATTERNS = [
@@ -286,6 +291,390 @@ function renderHtml(snapshot) {
 </body>
 </html>
 `;
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function arrayValue(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  return value === undefined || value === null ? [] : [value];
+}
+
+function slugify(value, fallback) {
+  const raw = publicString(value, 160) ?? fallback;
+  const slug = String(raw ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || fallback;
+}
+
+function dedupeProjects(projects) {
+  const byRoot = new Map();
+  for (const project of projects) {
+    byRoot.set(project.root, project);
+  }
+  return Array.from(byRoot.values());
+}
+
+function withCollisionSafeSlugs(projects) {
+  const used = new Map();
+  return projects.map((project, index) => {
+    const base = slugify(project.slug ?? project.id ?? project.title ?? path.basename(project.root), `project-${index + 1}`);
+    const count = used.get(base) ?? 0;
+    used.set(base, count + 1);
+    const slug = count === 0 ? base : `${base}-${count + 1}`;
+    return {
+      ...project,
+      id: project.id ?? slug,
+      slug,
+      title: project.title ?? path.basename(project.root)
+    };
+  });
+}
+
+function resolveGlobalStatusSelection(root, options = {}) {
+  const env = options.env ?? process.env;
+  const config = loadDoveConfig(root, env);
+  const explicitProjects = normalizeGlobalStatusProjects([
+    ...arrayValue(options.projects),
+    ...arrayValue(options.projectRoots).map((projectRoot) => ({ root: projectRoot })),
+    ...arrayValue(options.projectRoot).map((projectRoot) => ({ root: projectRoot }))
+  ]);
+  const configuredProjects = config.globalStatus.projects;
+  const selected = explicitProjects.length > 0
+    ? (options.includeConfig ? [...configuredProjects, ...explicitProjects] : explicitProjects)
+    : configuredProjects;
+  return {
+    env,
+    config,
+    outputDir: resolveDoveGlobalStatusOutputDir(options.outputDir ?? config.globalStatus.outputDir, env),
+    projects: withCollisionSafeSlugs(dedupeProjects(selected))
+  };
+}
+
+function readProjectPublicStatus(project) {
+  const jsonPath = path.join(project.root, ARTIFACT_PATHS.publicStatusJson);
+  if (!fs.existsSync(jsonPath)) {
+    return { status: "missing", project, snapshot: null, reason: `${ARTIFACT_PATHS.publicStatusJson} is missing` };
+  }
+  try {
+    const snapshot = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+    if (!isPlainObject(snapshot) || snapshot.mode !== "dove-public-status") {
+      return { status: "invalid", project, snapshot: null, reason: "status.json is not a Dove public status snapshot" };
+    }
+    return { status: "published", project, snapshot, reason: null };
+  } catch {
+    return { status: "invalid", project, snapshot: null, reason: "status.json could not be parsed" };
+  }
+}
+
+function projectLinks(slug) {
+  return {
+    html: `projects/${slug}/index.html`,
+    json: `projects/${slug}/status.json`,
+    markdown: `projects/${slug}/status.md`
+  };
+}
+
+function publicProjectCard(readResult) {
+  const { project, snapshot, status, reason } = readResult;
+  const title = publicString(project.title ?? snapshot?.project?.title, 220) ?? project.slug;
+  return {
+    id: publicString(project.id, 160) ?? project.slug,
+    slug: project.slug,
+    title,
+    status,
+    generatedAt: publicString(snapshot?.generatedAt, 80),
+    summary: status === "published"
+      ? firstPublicString(snapshot?.project?.currentFocus, snapshot?.project?.objective, snapshot?.project?.nextAction)
+      : publicString(reason, 220),
+    project: status === "published" ? {
+      title: publicString(snapshot?.project?.title, 220),
+      objective: publicString(snapshot?.project?.objective),
+      currentFocus: publicString(snapshot?.project?.currentFocus),
+      nextAction: publicString(snapshot?.project?.nextAction, 160)
+    } : null,
+    progress: status === "published" ? {
+      counts: snapshot?.progress?.counts ?? {},
+      review: publicReview(snapshot?.progress?.review),
+      runtime: snapshot?.progress?.runtime ?? {}
+    } : null,
+    documents: status === "published" ? snapshot?.documents ?? null : null,
+    links: projectLinks(project.slug)
+  };
+}
+
+function buildGlobalStatusSnapshotFromReadResults(readResults, generatedAt) {
+  const projectCards = readResults.map(publicProjectCard);
+  const counts = {
+    configured: readResults.length,
+    published: projectCards.filter((project) => project.status === "published").length,
+    missing: projectCards.filter((project) => project.status === "missing").length,
+    invalid: projectCards.filter((project) => project.status === "invalid").length,
+    skipped: projectCards.filter((project) => project.status === "skipped").length
+  };
+  return {
+    version: GLOBAL_PUBLIC_STATUS_VERSION,
+    mode: "dove-global-public-status",
+    generatedAt,
+    counts,
+    projects: projectCards,
+    publicArtifacts: {
+      json: "status.json",
+      markdown: "status.md",
+      html: "index.html",
+      projectsDir: "projects"
+    },
+    privacy: {
+      sanitized: true,
+      derivedOnly: true,
+      rawDoveDumpIncluded: false,
+      absoluteRootsIncluded: false,
+      transcriptsIncluded: false,
+      privateReasoningIncluded: false,
+      environmentIncluded: false,
+      runtimeEntriesIncluded: false,
+      documentLedgerRawEntriesIncluded: false,
+      documentBodiesIncluded: false,
+      cloudflareTunnelStarted: false
+    }
+  };
+}
+
+function buildGlobalStatusSnapshot(root, options = {}) {
+  const { projects } = resolveGlobalStatusSelection(root, options);
+  return buildGlobalStatusSnapshotFromReadResults(projects.map(readProjectPublicStatus), options.generatedAt ?? nowIso());
+}
+
+function renderGlobalMarkdown(snapshot) {
+  const projects = markdownList(snapshot.projects, (project) => {
+    const counts = project.progress?.counts ?? {};
+    const active = Number(counts.active ?? 0);
+    const blocked = Number(counts.blocked ?? 0);
+    const completed = Number(counts.completed ?? 0);
+    return `- [${project.title}](${project.links.html}) — ${project.status}；活跃 ${active} / 阻塞 ${blocked} / 完成 ${completed}${project.summary ? `；${project.summary}` : ""}`;
+  });
+  return `# Dove 全局项目进展
+
+> 自动生成：${snapshot.generatedAt}
+> 来源：各项目 \`.dove/public\` 的公开安全摘要；不包含本机绝对路径、raw .dove dump、transcript、私密推理、环境变量或文档正文。
+
+## 概览
+
+- 已配置项目：${snapshot.counts.configured}
+- 已发布项目：${snapshot.counts.published}
+- 缺失 public status：${snapshot.counts.missing}
+- 无效 public status：${snapshot.counts.invalid}
+
+## 项目
+
+${projects}
+## 公开边界
+
+- 这个全局页面只聚合每个项目已经公开安全的 \`.dove/public/status.*\`。
+- 不扫描整台电脑，不启动 HTTP server 或 Cloudflare tunnel。
+- 若要外网访问，建议只暴露这个全局 public 目录，并在 Cloudflare/反代层加访问控制。
+`;
+}
+
+function htmlProjectCards(projects) {
+  if (!projects.length) {
+    return "<li>暂无已配置项目</li>";
+  }
+  return projects.map((project) => {
+    const counts = project.progress?.counts ?? {};
+    return `<li><strong><a href="${escapeHtml(project.links.html)}">${escapeHtml(project.title)}</a></strong> <code>${escapeHtml(project.status)}</code><br><span>活跃 ${escapeHtml(counts.active ?? 0)} · 阻塞 ${escapeHtml(counts.blocked ?? 0)} · 完成 ${escapeHtml(counts.completed ?? 0)}</span>${project.summary ? `<p>${escapeHtml(project.summary)}</p>` : ""}</li>`;
+  }).join("\n");
+}
+
+function renderGlobalHtml(snapshot) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dove 全局项目进展</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: #0f172a; color: #e2e8f0; }
+    main { max-width: 980px; margin: 0 auto; padding: 32px 20px 56px; }
+    a { color: #93c5fd; }
+    .hero, section { background: rgba(15, 23, 42, 0.82); border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 18px; padding: 20px; margin: 16px 0; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28); }
+    h1, h2 { margin: 0 0 12px; }
+    .meta, .muted { color: #94a3b8; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    .metric { background: rgba(30, 41, 59, 0.72); border-radius: 14px; padding: 14px; }
+    .metric strong { display: block; font-size: 1.8rem; }
+    li { margin: 0 0 14px; }
+    code { background: rgba(148, 163, 184, 0.18); border-radius: 6px; padding: 2px 6px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="hero">
+    <p class="meta">Dove global public status · ${escapeHtml(snapshot.generatedAt)}</p>
+    <h1>Dove 全局项目进展</h1>
+    <p>聚合所有显式注册项目的公开安全状态页。</p>
+    <p><a href="status.json">status.json</a> · <a href="status.md">status.md</a></p>
+  </div>
+  <section>
+    <h2>概览</h2>
+    <div class="grid">
+      <div class="metric"><strong>${snapshot.counts.configured}</strong><span>已配置</span></div>
+      <div class="metric"><strong>${snapshot.counts.published}</strong><span>已发布</span></div>
+      <div class="metric"><strong>${snapshot.counts.missing}</strong><span>缺失</span></div>
+      <div class="metric"><strong>${snapshot.counts.invalid}</strong><span>无效</span></div>
+    </div>
+  </section>
+  <section><h2>项目</h2><ul>${htmlProjectCards(snapshot.projects)}</ul></section>
+  <section><h2>公开边界</h2><p class="muted">此页面只聚合各项目已发布的公开安全摘要，不包含本机绝对路径、raw .dove dump、transcript、私密推理、环境变量、token、密码或文档正文。Dove 不会自动启动 HTTP server 或 Cloudflare tunnel。</p></section>
+</main>
+</body>
+</html>
+`;
+}
+
+function projectPlaceholderMarkdown(project, status, reason) {
+  const title = publicString(project.title, 220) ?? project.slug;
+  return `# ${title}
+
+- 状态：${status}
+- 原因：${publicString(reason, 220) ?? "项目 public status 不可用"}
+`;
+}
+
+function projectPlaceholderHtml(project, status, reason) {
+  const title = publicString(project.title, 220) ?? project.slug;
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title></head><body><main><h1>${escapeHtml(title)}</h1><p>状态：${escapeHtml(status)}</p><p>${escapeHtml(publicString(reason, 220) ?? "项目 public status 不可用")}</p><p><a href="../../index.html">返回全局首页</a></p></main></body></html>
+`;
+}
+
+function ensureAbsoluteDir(dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function writeAbsoluteJson(filePath, value) {
+  ensureAbsoluteDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function writeAbsoluteText(filePath, value) {
+  ensureAbsoluteDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, value, "utf8");
+}
+
+function readPublicText(project, relativePath, fallback) {
+  const fullPath = path.join(project.root, relativePath);
+  try {
+    return fs.existsSync(fullPath) ? fs.readFileSync(fullPath, "utf8") : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeGlobalProjectArtifacts(outputDir, readResult) {
+  const { project, snapshot, status, reason } = readResult;
+  const projectDir = path.join(outputDir, "projects", project.slug);
+  const projectSnapshot = snapshot ?? {
+    version: 1,
+    mode: "dove-global-project-placeholder",
+    status,
+    title: publicString(project.title, 220) ?? project.slug,
+    generatedAt: null,
+    summary: publicString(reason, 220),
+    links: projectLinks(project.slug),
+    privacy: {
+      sanitized: true,
+      derivedOnly: true,
+      absoluteRootsIncluded: false
+    }
+  };
+  const markdown = snapshot
+    ? readPublicText(project, ARTIFACT_PATHS.publicStatusMarkdown, projectPlaceholderMarkdown(project, status, reason))
+    : projectPlaceholderMarkdown(project, status, reason);
+  const html = snapshot
+    ? readPublicText(project, ARTIFACT_PATHS.publicStatusHtml, projectPlaceholderHtml(project, status, reason))
+    : projectPlaceholderHtml(project, status, reason);
+  writeAbsoluteJson(path.join(projectDir, "status.json"), projectSnapshot);
+  writeAbsoluteText(path.join(projectDir, "status.md"), markdown);
+  writeAbsoluteText(path.join(projectDir, "index.html"), html);
+  return [
+    path.join(projectDir, "status.json"),
+    path.join(projectDir, "status.md"),
+    path.join(projectDir, "index.html")
+  ].map((filePath) => path.relative(outputDir, filePath).split(path.sep).join("/"));
+}
+
+export function buildDoveGlobalPublicStatus(root, options = {}) {
+  return buildGlobalStatusSnapshot(root, options);
+}
+
+function refreshGlobalProjectPublicStatus(project, options = {}) {
+  try {
+    if (!fs.existsSync(project.root) || !fs.statSync(project.root).isDirectory()) {
+      return { status: "skipped", project, snapshot: null, reason: "project root is missing" };
+    }
+    publishDoveStatus(project.root, {
+      includeArchived: Boolean(options.includeArchived),
+      responseLanguage: options.responseLanguage,
+      generatedAt: options.generatedAt
+    });
+    return null;
+  } catch {
+    return { status: "skipped", project, snapshot: null, reason: "project public status refresh failed" };
+  }
+}
+
+export function publishDoveGlobalStatus(root, options = {}) {
+  assertGovernanceMutationRegistered("publish-dove-global-status", "exempt");
+  const selection = resolveGlobalStatusSelection(root, options);
+  const refreshResults = [];
+  const readResults = selection.projects.map((project) => {
+    const refreshFailure = options.refresh ? refreshGlobalProjectPublicStatus(project, options) : null;
+    if (refreshFailure) {
+      refreshResults.push({ slug: project.slug, title: publicString(project.title, 220), status: refreshFailure.status, reason: refreshFailure.reason });
+      return refreshFailure;
+    }
+    if (options.refresh) {
+      refreshResults.push({ slug: project.slug, title: publicString(project.title, 220), status: "refreshed" });
+    }
+    return readProjectPublicStatus(project);
+  });
+  const snapshot = buildGlobalStatusSnapshotFromReadResults(readResults, options.generatedAt ?? nowIso());
+  const markdown = renderGlobalMarkdown(snapshot);
+  const html = renderGlobalHtml(snapshot);
+  const writes = [];
+  writeAbsoluteJson(path.join(selection.outputDir, "status.json"), snapshot);
+  writes.push("status.json");
+  writeAbsoluteText(path.join(selection.outputDir, "status.md"), markdown);
+  writes.push("status.md");
+  writeAbsoluteText(path.join(selection.outputDir, "index.html"), html);
+  writes.push("index.html");
+  for (const readResult of readResults) {
+    writes.push(...writeGlobalProjectArtifacts(selection.outputDir, readResult));
+  }
+  return {
+    mode: "dove-global-public-status-publish",
+    status: "published",
+    generatedAt: snapshot.generatedAt,
+    outputDir: selection.outputDir,
+    projectCount: selection.projects.length,
+    refresh: Boolean(options.refresh),
+    refreshResults,
+    writes,
+    publicArtifacts: snapshot.publicArtifacts,
+    snapshot,
+    privacy: snapshot.privacy,
+    noDaemon: true,
+    noScheduler: true,
+    noExternalProcess: true,
+    cloudflareTunnelStarted: false
+  };
 }
 
 export function buildDovePublicStatus(root, options = {}) {

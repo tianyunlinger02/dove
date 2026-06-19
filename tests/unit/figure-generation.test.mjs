@@ -12,9 +12,11 @@ import {
   initProject,
   loadDoveConfig,
   loadDoveLanguageConfig,
+  normalizeGlobalStatusProjects,
   prepareFigureGeneration,
   readJson,
   registerSource,
+  resolveDoveGlobalStatusOutputDir,
   upsertClaims,
   upsertFigurePlan,
   upsertNote,
@@ -256,4 +258,93 @@ test("Dove config supports response language with Chinese default and English ov
 
   fs.writeFileSync(configPath, JSON.stringify({ language: "fr" }), "utf8");
   assert.throws(() => loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath }), /Unsupported Dove response language/);
+});
+
+test("Dove global status config normalizes projects and output directories", () => {
+  const root = tempRoot();
+  const projectA = path.join(root, "project-a");
+  const projectB = path.join(root, "project-b");
+  const disabledProject = path.join(root, "disabled-project");
+  const normalized = normalizeGlobalStatusProjects([
+    projectA,
+    { root: projectB, slug: "Project B", name: "Project B Title" },
+    { root: projectA, title: "Project A Override" },
+    { root: disabledProject, enabled: false }
+  ]);
+  assert.equal(normalized.length, 2);
+  assert.equal(normalized[0].root, projectA);
+  assert.equal(normalized[0].title, "Project A Override");
+  assert.equal(normalized[1].root, projectB);
+  assert.equal(normalized[1].slug, "Project B");
+  assert.equal(normalized.some((project) => project.root === disabledProject), false);
+
+  const configPath = path.join(root, "dove-config.json");
+  const outputDir = path.join(root, "global-public");
+  fs.writeFileSync(configPath, JSON.stringify({
+    globalStatus: {
+      outputDir,
+      projects: [projectA, { root: projectB, slug: "project-b", title: "Project B" }, { root: disabledProject, enabled: false }]
+    }
+  }), "utf8");
+  const config = loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath });
+  assert.equal(config.globalStatus.outputDir, outputDir);
+  assert.deepEqual(config.globalStatus.projects.map((project) => project.root), [projectA, projectB]);
+  assert.deepEqual(config.globalStatus.projects.map((project) => project.slug), [null, "project-b"]);
+
+  fs.writeFileSync(configPath, JSON.stringify({ publicStatus: { projects: [projectA] } }), "utf8");
+  const aliasConfig = loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath });
+  assert.deepEqual(aliasConfig.globalStatus.projects.map((project) => project.root), [projectA]);
+
+  const cloudflareConfigPath = path.join(root, "cloudflared.yml");
+  const credentialsFile = path.join(root, "cloudflared.json");
+  fs.writeFileSync(configPath, JSON.stringify({
+    globalStatus: {
+      outputDir,
+      auth: {
+        enabled: "true",
+        password: "local-page-password",
+        passwordEnv: "DOVE_GLOBAL_STATUS_PASSWORD"
+      },
+      cloudflare: {
+        enabled: "true",
+        domain: "KELI.EU.CC",
+        tunnelName: "dove-global-status",
+        originHost: "localhost",
+        originPort: "8788",
+        configPath: cloudflareConfigPath,
+        credentialsFile,
+        tokenEnv: "DOVE_CLOUDFLARE_TUNNEL_TOKEN",
+        dnsResolverAddrs: ["1.1.1.1:53", "1.1.1.1:53", "1.0.0.1:53"]
+      }
+    }
+  }), "utf8");
+  const cloudflareConfig = loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath });
+  assert.equal(cloudflareConfig.globalStatus.auth.enabled, true);
+  assert.equal(cloudflareConfig.globalStatus.auth.password, "local-page-password");
+  assert.equal(cloudflareConfig.globalStatus.auth.passwordEnv, "DOVE_GLOBAL_STATUS_PASSWORD");
+  assert.equal(cloudflareConfig.globalStatus.cloudflare.enabled, true);
+  assert.equal(cloudflareConfig.globalStatus.cloudflare.domain, "keli.eu.cc");
+  assert.equal(cloudflareConfig.globalStatus.cloudflare.tunnelName, "dove-global-status");
+  assert.equal(cloudflareConfig.globalStatus.cloudflare.originHost, "localhost");
+  assert.equal(cloudflareConfig.globalStatus.cloudflare.originPort, 8788);
+  assert.equal(cloudflareConfig.globalStatus.cloudflare.configPath, cloudflareConfigPath);
+  assert.equal(cloudflareConfig.globalStatus.cloudflare.credentialsFile, credentialsFile);
+  assert.equal(cloudflareConfig.globalStatus.cloudflare.tokenEnv, "DOVE_CLOUDFLARE_TUNNEL_TOKEN");
+  assert.deepEqual(cloudflareConfig.globalStatus.cloudflare.dnsResolverAddrs, ["1.1.1.1:53", "1.0.0.1:53"]);
+
+  fs.writeFileSync(configPath, JSON.stringify({ globalStatus: { cloudflare: { domain: "https://keli.eu.cc/status" } } }), "utf8");
+  assert.throws(() => loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath }), /bare hostname/);
+  fs.writeFileSync(configPath, JSON.stringify({ globalStatus: { cloudflare: { originHost: "0.0.0.0" } } }), "utf8");
+  assert.throws(() => loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath }), /loopback-only/);
+  fs.writeFileSync(configPath, JSON.stringify({ globalStatus: { cloudflare: { token: "secret-token" } } }), "utf8");
+  assert.throws(() => loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath }), /inline secret/);
+  fs.writeFileSync(configPath, JSON.stringify({ globalStatus: { auth: { enabled: true, password: "inline-password" } } }), "utf8");
+  const inlinePasswordConfig = loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath });
+  assert.equal(inlinePasswordConfig.globalStatus.auth.password, "inline-password");
+  fs.writeFileSync(configPath, JSON.stringify({ globalStatus: { outputDir, cloudflare: { configPath: path.join(outputDir, "cloudflared.yml") } } }), "utf8");
+  assert.throws(() => loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath }), /public output directory/);
+
+  const xdgDataHome = path.join(root, "xdg-data");
+  assert.equal(resolveDoveGlobalStatusOutputDir(null, { XDG_DATA_HOME: xdgDataHome }), path.join(xdgDataHome, "dove", "public"));
+  assert.equal(resolveDoveGlobalStatusOutputDir(outputDir, {}), outputDir);
 });

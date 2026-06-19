@@ -6,7 +6,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runIsolatedReview } from "../src/core/index.mjs";
+import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runGlobalStatusServingForeground, runIsolatedReview } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
 import {
@@ -44,6 +44,8 @@ Usage:
   dove doctor [target]
   dove onboard [target] [--write-map] [--max-depth <n>] [--max-files <n>]
   dove publish-status [target] [--quiet] [--include-archived]
+  dove publish-global-status [projectRoot ...] [--project <root>] [--output <dir>] [--refresh] [--include-config] [--quiet]
+  dove serve-global-status [projectRoot ...] [--project <root>] [--output <dir>] [--refresh] [--include-config] [--auth|--no-auth] [--auth-password-env <ENV_NAME>] [--cloudflare|--no-cloudflare] [--configure-cloudflare] [--domain <hostname>] [--port <port>] [--host <loopback>] [--dns-resolver-addrs <address:port>] [--dry-run] [--quiet]
   dove orchestrate [target] [--request <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--allow-autonomy]
   dove mission [target] [--goal <text>] [--domain <id>] [--stage <id>] [--artifact <path>] [--acceptance-check <text>]
   dove status [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived]
@@ -74,6 +76,23 @@ function readFlagValues(args, flags) {
       values.push(args[index + 1]);
       index += 1;
     }
+  }
+  return values;
+}
+
+function readPositionalArgs(args, valueFlags = []) {
+  const valueFlagSet = new Set(valueFlags);
+  const values = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (valueFlagSet.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (String(arg).startsWith("--")) {
+      continue;
+    }
+    values.push(arg);
   }
   return values;
 }
@@ -1870,6 +1889,66 @@ if (command === "publish-status") {
   const result = publishDoveStatus(target, {
     includeArchived: commandRest.includes("--include-archived"),
     responseLanguage: readFlagValue(commandRest, "--response-language") ?? readFlagValue(commandRest, "--language")
+  });
+  if (!commandRest.includes("--quiet")) {
+    console.log(JSON.stringify(result, null, 2));
+  }
+  process.exit(0);
+}
+
+if (command === "publish-global-status") {
+  const commandRest = [maybeTarget, ...rest].filter(Boolean);
+  const projectRoots = [
+    ...readPositionalArgs(commandRest, ["--project", "--output", "--response-language", "--language", "--generated-at"]),
+    ...readFlagValues(commandRest, ["--project"])
+  ];
+  const result = publishDoveGlobalStatus(resolveTarget("."), {
+    projectRoots,
+    outputDir: readFlagValue(commandRest, "--output"),
+    refresh: commandRest.includes("--refresh"),
+    includeConfig: commandRest.includes("--include-config"),
+    includeArchived: commandRest.includes("--include-archived"),
+    responseLanguage: readFlagValue(commandRest, "--response-language") ?? readFlagValue(commandRest, "--language"),
+    generatedAt: readFlagValue(commandRest, "--generated-at")
+  });
+  if (!commandRest.includes("--quiet")) {
+    console.log(JSON.stringify(result, null, 2));
+  }
+  process.exit(0);
+}
+
+if (command === "serve-global-status") {
+  const commandRest = [maybeTarget, ...rest].filter(Boolean);
+  const valueFlags = ["--project", "--output", "--response-language", "--language", "--generated-at", "--auth-user", "--auth-username", "--auth-password-env", "--domain", "--hostname", "--port", "--host", "--tunnel-name", "--cloudflared-path", "--cloudflare-config", "--credentials-file", "--token-env", "--dns-resolver-addrs"];
+  const projectRoots = [
+    ...readPositionalArgs(commandRest, valueFlags),
+    ...readFlagValues(commandRest, ["--project"])
+  ];
+  const auth = commandRest.includes("--no-auth") ? false : (commandRest.includes("--auth") ? true : undefined);
+  const cloudflare = commandRest.includes("--no-cloudflare") ? false : (commandRest.includes("--cloudflare") ? true : undefined);
+  const result = await runGlobalStatusServingForeground(resolveTarget("."), {
+    projectRoots,
+    outputDir: readFlagValue(commandRest, "--output"),
+    refresh: commandRest.includes("--refresh"),
+    includeConfig: commandRest.includes("--include-config"),
+    includeArchived: commandRest.includes("--include-archived"),
+    responseLanguage: readFlagValue(commandRest, "--response-language") ?? readFlagValue(commandRest, "--language"),
+    generatedAt: readFlagValue(commandRest, "--generated-at"),
+    auth,
+    authUser: readFlagValue(commandRest, "--auth-user") ?? readFlagValue(commandRest, "--auth-username"),
+    authPasswordEnv: readFlagValue(commandRest, "--auth-password-env"),
+    cloudflare,
+    configureCloudflare: commandRest.includes("--configure-cloudflare"),
+    domain: readFlagValue(commandRest, "--domain") ?? readFlagValue(commandRest, "--hostname"),
+    port: readFlagValue(commandRest, "--port"),
+    host: readFlagValue(commandRest, "--host"),
+    tunnelName: readFlagValue(commandRest, "--tunnel-name"),
+    cloudflaredPath: readFlagValue(commandRest, "--cloudflared-path"),
+    cloudflareConfigPath: readFlagValue(commandRest, "--cloudflare-config"),
+    credentialsFile: readFlagValue(commandRest, "--credentials-file"),
+    tokenEnv: readFlagValue(commandRest, "--token-env"),
+    dnsResolverAddrs: readFlagValues(commandRest, ["--dns-resolver-addrs"]),
+    dryRun: commandRest.includes("--dry-run")
   });
   if (!commandRest.includes("--quiet")) {
     console.log(JSON.stringify(result, null, 2));

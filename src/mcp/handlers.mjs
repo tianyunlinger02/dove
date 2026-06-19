@@ -22,6 +22,7 @@ import {
   prepareAudioReview,
   prepareFigureGeneration,
   prepareIsolatedReview,
+  publishDoveGlobalStatus,
   publishDoveStatus,
   normalizeRebuttalIssues,
   queryDocumentLedger,
@@ -146,6 +147,8 @@ export function dispatchTool(root, name, args = {}) {
         return makeTextResult(queryDoveStatus(root, args));
       case "publish_dove_status":
         return makeTextResult(publishDoveStatus(root, args));
+      case "publish_dove_global_status":
+        return makeTextResult(publishDoveGlobalStatus(root, args));
       case "query_document_ledger":
         return makeTextResult(queryDocumentLedger(root, args));
       case "record_document_evidence":

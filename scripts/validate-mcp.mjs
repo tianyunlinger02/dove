@@ -55,6 +55,7 @@ async function main() {
     "upsert_draft",
     "query_dove_status",
     "publish_dove_status",
+    "publish_dove_global_status",
     "query_document_ledger",
     "record_document_evidence",
     "record_operator_lesson"
@@ -363,6 +364,23 @@ async function main() {
   assert.equal(fs.existsSync(path.join(tempWorkspace, ".dove", "public", "status.json")), true);
   assert.equal(fs.existsSync(path.join(tempWorkspace, ".dove", "public", "status.md")), true);
   assert.equal(fs.existsSync(path.join(tempWorkspace, ".dove", "public", "index.html")), true);
+
+  const globalOutputDir = path.join(tempWorkspace, "global-public");
+  const globalStatus = await callTool("publish_dove_global_status", {
+    projectRoots: [tempWorkspace, path.join(tempWorkspace, "missing-project")],
+    outputDir: globalOutputDir,
+    generatedAt: "2026-06-16T00:05:00.000Z"
+  });
+  assert.equal(globalStatus.mode, "dove-global-public-status-publish");
+  assert.equal(globalStatus.snapshot.counts.configured, 2);
+  assert.equal(globalStatus.snapshot.counts.published, 1);
+  assert.equal(globalStatus.snapshot.counts.missing, 1);
+  assert.equal(fs.existsSync(path.join(globalOutputDir, "status.json")), true);
+  assert.equal(fs.existsSync(path.join(globalOutputDir, "status.md")), true);
+  assert.equal(fs.existsSync(path.join(globalOutputDir, "index.html")), true);
+  const globalPublicText = `${fs.readFileSync(path.join(globalOutputDir, "status.json"), "utf8")}\n${fs.readFileSync(path.join(globalOutputDir, "status.md"), "utf8")}\n${fs.readFileSync(path.join(globalOutputDir, "index.html"), "utf8")}`;
+  assert.equal(globalPublicText.includes(tempWorkspace), false);
+
   assert.ok(Array.isArray(status.dashboard.tasks.boundaryActionCards));
   assert.ok(status.projectSummary && typeof status.projectSummary === "object");
   assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");

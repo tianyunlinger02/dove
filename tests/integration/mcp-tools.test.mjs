@@ -64,6 +64,7 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "query_dove_mission_board",
     "query_dove_status",
     "publish_dove_status",
+    "publish_dove_global_status",
     "query_document_ledger",
     "record_document_evidence",
     "query_dove_audit",
@@ -138,10 +139,10 @@ test("MCP tool definitions include the mature workflow tools", () => {
 
 test("doctor MCP probe requires current Dove tools without calling mutating tools", () => {
   const probeText = fs.readFileSync(path.join(process.cwd(), "scripts", "doctor-mcp-probe.mjs"), "utf8");
-  for (const requiredTool of ["query_dove_status", "publish_dove_status", "query_document_ledger", "record_document_evidence", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_operate"]) {
+  for (const requiredTool of ["query_dove_status", "publish_dove_status", "publish_dove_global_status", "query_document_ledger", "record_document_evidence", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_operate"]) {
     assert.match(probeText, new RegExp(`"${requiredTool}"`));
   }
-  for (const mutatingTool of ["publish_dove_status", "record_document_evidence", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
+  for (const mutatingTool of ["publish_dove_status", "publish_dove_global_status", "record_document_evidence", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
     assert.equal(probeText.includes(`tools/call", { name: "${mutatingTool}"`), false, `doctor probe must not call mutating tool ${mutatingTool}`);
   }
 });
@@ -389,6 +390,67 @@ test("publish_dove_status writes sanitized public artifacts", () => {
     assert.equal(publicText.includes("supersecret"), false);
     assert.match(publicText, /<redacted>/);
     assert.match(publicText, /不包含 raw transcripts/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("publish_dove_global_status aggregates explicit project public artifacts without leaking roots", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-global-public-status-"));
+  const projectA = path.join(root, "project-a");
+  const projectB = path.join(root, "project-b");
+  const missingProject = path.join(root, "missing-project");
+  const outputDir = path.join(root, "global-public");
+  try {
+    for (const [projectRoot, suffix] of [[projectA, "a"], [projectB, "b"]]) {
+      fs.mkdirSync(projectRoot, { recursive: true });
+      extractToolJson(dispatchTool(projectRoot, "init_dove_goal", {
+        id: `global-status-init-${suffix}`,
+        title: `Global Status Project ${suffix.toUpperCase()}`,
+        goal: "Expose a project-local public status for global aggregation."
+      }));
+      extractToolJson(dispatchTool(projectRoot, "create_dove_task", {
+        id: `global-status-task-${suffix}`,
+        goal: "Publish project status for the global index.",
+        title: `Global status task ${suffix}`,
+        confirmed: true
+      }));
+      extractToolJson(dispatchTool(projectRoot, "publish_dove_status", { generatedAt: `2026-06-17T0${suffix === "a" ? "1" : "2"}:00:00.000Z` }));
+    }
+
+    const published = extractToolJson(dispatchTool(root, "publish_dove_global_status", {
+      projectRoots: [projectA, projectB, missingProject],
+      outputDir,
+      generatedAt: "2026-06-17T03:00:00.000Z"
+    }));
+    assert.equal(published.mode, "dove-global-public-status-publish");
+    assert.equal(published.status, "published");
+    assert.equal(published.refresh, false);
+    assert.equal(published.snapshot.counts.configured, 3);
+    assert.equal(published.snapshot.counts.published, 2);
+    assert.equal(published.snapshot.counts.missing, 1);
+    assert.equal(published.privacy.absoluteRootsIncluded, false);
+    assert.equal(published.noExternalProcess, true);
+    assert.equal(published.cloudflareTunnelStarted, false);
+    assert.equal(fs.existsSync(path.join(outputDir, "status.json")), true);
+    assert.equal(fs.existsSync(path.join(outputDir, "status.md")), true);
+    assert.equal(fs.existsSync(path.join(outputDir, "index.html")), true);
+    assert.equal(fs.existsSync(path.join(outputDir, "projects", "project-a", "status.json")), true);
+    assert.equal(fs.existsSync(path.join(outputDir, "projects", "project-b", "index.html")), true);
+    assert.equal(fs.existsSync(path.join(outputDir, "projects", "missing-project", "status.md")), true);
+
+    const publicText = [
+      path.join(outputDir, "status.json"),
+      path.join(outputDir, "status.md"),
+      path.join(outputDir, "index.html"),
+      path.join(outputDir, "projects", "missing-project", "status.json"),
+      path.join(outputDir, "projects", "missing-project", "status.md"),
+      path.join(outputDir, "projects", "missing-project", "index.html")
+    ].map((filePath) => fs.readFileSync(filePath, "utf8")).join("\n");
+    assert.equal(publicText.includes(root), false);
+    assert.match(publicText, /Global Status Project A/);
+    assert.match(publicText, /missing-project/);
+    assert.ok(published.snapshot.projects.every((project) => !Object.hasOwn(project, "root")));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1395,6 +1457,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const doveBoardQueryTool = toolDefinitions.find((item) => item.name === "query_dove_mission_board");
   const doveStatusQueryTool = toolDefinitions.find((item) => item.name === "query_dove_status");
   const publishStatusTool = toolDefinitions.find((item) => item.name === "publish_dove_status");
+  const publishGlobalStatusTool = toolDefinitions.find((item) => item.name === "publish_dove_global_status");
   const doveAuditQueryTool = toolDefinitions.find((item) => item.name === "query_dove_audit");
   const doveReturnQueryTool = toolDefinitions.find((item) => item.name === "query_dove_return");
   const doveOnboardingQueryTool = toolDefinitions.find((item) => item.name === "query_dove_onboarding");
@@ -1481,6 +1544,13 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.match(publishStatusTool.description, /sanitized public Dove project progress artifacts/);
   assert.ok(publishStatusTool.inputSchema.properties.includeArchived, "publish_dove_status should expose includeArchived");
   assert.ok(publishStatusTool.inputSchema.properties.responseLanguage, "publish_dove_status should expose responseLanguage");
+  assert.ok(publishGlobalStatusTool, "publish_dove_global_status should exist");
+  assert.match(publishGlobalStatusTool.description, /global static Dove status index/);
+  assert.ok(publishGlobalStatusTool.inputSchema.properties.projectRoots, "publish_dove_global_status should expose projectRoots");
+  assert.ok(publishGlobalStatusTool.inputSchema.properties.projects, "publish_dove_global_status should expose projects");
+  assert.ok(publishGlobalStatusTool.inputSchema.properties.outputDir, "publish_dove_global_status should expose outputDir");
+  assert.ok(publishGlobalStatusTool.inputSchema.properties.refresh, "publish_dove_global_status should expose refresh");
+  assert.ok(publishGlobalStatusTool.inputSchema.properties.includeConfig, "publish_dove_global_status should expose includeConfig");
   assert.ok(doveAuditQueryTool, "query_dove_audit should exist");
   assert.ok(doveReturnQueryTool, "query_dove_return should exist");
   assert.ok(doveOnboardingQueryTool, "query_dove_onboarding should exist");

@@ -2103,6 +2103,8 @@ test("governance registry completely binds the expected mutating command and MCP
     "record_operator_lesson",
     "record_operator_follow_through",
     "query_meta_optimize",
+    "publish_dove_status",
+    "publish_dove_global_status",
     "plan_campaign",
     "materialize_guidance_packet",
     "launch_dove_mission",
@@ -5249,6 +5251,7 @@ test("every governance registry entry binds to real command or MCP surfaces plus
     fs.readFileSync(path.join(process.cwd(), "src/core/audio-review.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/dove-review-loop.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/public-status.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/global-status-serving.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/documents.mjs"), "utf8")
   ];
 
@@ -5260,7 +5263,7 @@ test("every governance registry entry binds to real command or MCP surfaces plus
       assert.equal(typeof bindings.mcpTool, "string");
       assert.equal(toolNames.has(bindings.mcpTool), true, `${entry.id} missing bound MCP tool ${bindings.mcpTool}`);
     } else {
-      assert.equal(bindings.commandIds.length > 0, true, `${entry.id} without MCP tool must bind at least one command surface`);
+      assert.equal(bindings.commandIds.length > 0 || typeof bindings.cliCommand === "string", true, `${entry.id} without MCP tool must bind at least one command or CLI surface`);
     }
     for (const commandId of bindings.commandIds) {
       assert.equal(fs.existsSync(path.join(commandDir, `${commandId}.md`)), true, `${entry.id} missing command surface ${commandId}`);

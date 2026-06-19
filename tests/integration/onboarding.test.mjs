@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-import { ARTIFACT_PATHS, discoverPaperArtifacts, ensureWorkspace, queryDoveOnboarding } from "../../src/core/index.mjs";
+import { ARTIFACT_PATHS, createDoveTask, discoverPaperArtifacts, ensureWorkspace, initDoveGoal, queryDoveOnboarding } from "../../src/core/index.mjs";
 
 const ROOT = process.cwd();
 const CLI = path.join(ROOT, "bin", "dove.mjs");
@@ -23,6 +23,21 @@ function writeFixturePaper(root) {
   fs.writeFileSync(path.join(root, "figures", "plot.pdf"), "%PDF fixture\n", "utf8");
   fs.writeFileSync(path.join(root, "results", "metrics.json"), "{\"accuracy\":1}\n", "utf8");
   return { manuscriptPath, manuscriptBefore: fs.readFileSync(manuscriptPath, "utf8") };
+}
+
+function seedDoveProject(root, suffix) {
+  fs.mkdirSync(root, { recursive: true });
+  initDoveGoal(root, {
+    id: `cli-global-init-${suffix}`,
+    title: `CLI Global Project ${suffix}`,
+    goal: "Validate CLI global public status publishing."
+  });
+  createDoveTask(root, {
+    id: `cli-global-task-${suffix}`,
+    title: `CLI global task ${suffix}`,
+    goal: "Keep one project available for CLI global status aggregation.",
+    confirmed: true
+  });
 }
 
 test("discoverPaperArtifacts proposes mappings without writing by default", () => {
@@ -137,6 +152,72 @@ test("CLI onboard supports flag-first optional target parsing", () => {
   assert.equal(payload.writeMap, true);
   assert.deepEqual(payload.written, [ARTIFACT_PATHS.workspaceArtifactMap]);
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), true);
+});
+
+test("CLI publish-global-status refreshes only explicit projects", () => {
+  const root = tempRoot("dove-global-status-cli-");
+  const projectA = path.join(root, "project-a");
+  const projectB = path.join(root, "project-b");
+  const outputDir = path.join(root, "global-public");
+  try {
+    seedDoveProject(projectA, "a");
+    seedDoveProject(projectB, "b");
+
+    const result = spawnSync("node", [CLI, "publish-global-status", "--project", projectA, "--output", outputDir, "--refresh", "--quiet"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(result.stdout, "");
+    assert.equal(fs.existsSync(path.join(projectA, ".dove", "public", "status.json")), true);
+    assert.equal(fs.existsSync(path.join(projectB, ".dove", "public", "status.json")), false);
+    assert.equal(fs.existsSync(path.join(outputDir, "status.json")), true);
+    assert.equal(fs.existsSync(path.join(outputDir, "status.md")), true);
+    assert.equal(fs.existsSync(path.join(outputDir, "index.html")), true);
+    const snapshot = JSON.parse(fs.readFileSync(path.join(outputDir, "status.json"), "utf8"));
+    assert.equal(snapshot.mode, "dove-global-public-status");
+    assert.equal(snapshot.counts.configured, 1);
+    assert.equal(snapshot.counts.published, 1);
+    assert.equal(snapshot.privacy.absoluteRootsIncluded, false);
+    const publicText = `${fs.readFileSync(path.join(outputDir, "status.json"), "utf8")}\n${fs.readFileSync(path.join(outputDir, "status.md"), "utf8")}\n${fs.readFileSync(path.join(outputDir, "index.html"), "utf8")}`;
+    assert.equal(publicText.includes(root), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI serve-global-status dry-run plans explicit Cloudflare serving without publishing", () => {
+  const root = tempRoot("dove-global-status-serve-cli-");
+  const projectRoot = path.join(root, "project-a");
+  const outputDir = path.join(root, "global-public");
+  const configPath = path.join(root, "dove-config.json");
+  try {
+    fs.writeFileSync(configPath, JSON.stringify({}), "utf8");
+    const result = spawnSync("node", [CLI, "serve-global-status", "--project", projectRoot, "--output", outputDir, "--auth", "--auth-password-env", "DOVE_GLOBAL_STATUS_PASSWORD", "--cloudflare", "--domain", "keli.eu.cc", "--port", "8787", "--dry-run"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: { ...process.env, DOVE_CONFIG_PATH: configPath }
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.mode, "dove-global-status-serving-plan");
+    assert.equal(payload.dryRun, true);
+    assert.equal(payload.willStartHttpServer, false);
+    assert.equal(payload.willStartExternalProcess, false);
+    assert.equal(payload.auth.enabled, true);
+    assert.equal(payload.auth.scheme, "password");
+    assert.equal(payload.auth.passwordConfigured, false);
+    assert.equal(payload.auth.passwordEnv, "DOVE_GLOBAL_STATUS_PASSWORD");
+    assert.equal(payload.auth.passwordEnvConfigured, true);
+    assert.equal(payload.cloudflare.enabled, true);
+    assert.equal(payload.cloudflare.domain, "keli.eu.cc");
+    assert.deepEqual(payload.cloudflare.commands.routeDns.args, ["tunnel", "route", "dns", payload.cloudflare.tunnelName, "keli.eu.cc"]);
+    assert.equal(fs.existsSync(path.join(outputDir, "status.json")), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("legacy migration alias is rejected", () => {

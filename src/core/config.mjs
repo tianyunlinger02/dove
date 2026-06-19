@@ -7,9 +7,13 @@ import { DEFAULT_DOVE_RESPONSE_LANGUAGE, normalizeDoveResponseLanguage } from ".
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_MAX_PROMPT_CHARS = 20000;
 const DEFAULT_MAX_SVG_BYTES = 1000000;
+const DEFAULT_GLOBAL_STATUS_ORIGIN_PORT = 8787;
 const SECRET_KEY_PATTERN = /(?:api[-_]?key|token|secret|password|authorization|bearer)/i;
 const INLINE_BEARER_VALUE_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/i;
 const ENV_REF_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
+const HOSTNAME_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+const TUNNEL_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 
 const DEFAULT_DOVE_CONFIG = {
   version: 1,
@@ -19,6 +23,28 @@ const DEFAULT_DOVE_CONFIG = {
     providers: [],
     maxPromptChars: DEFAULT_MAX_PROMPT_CHARS,
     maxSvgBytes: DEFAULT_MAX_SVG_BYTES
+  },
+  globalStatus: {
+    outputDir: null,
+    projects: [],
+    auth: {
+      enabled: false,
+      username: "dove",
+      password: null,
+      passwordEnv: null
+    },
+    cloudflare: {
+      enabled: false,
+      domain: null,
+      tunnelName: null,
+      cloudflaredPath: "cloudflared",
+      originHost: "127.0.0.1",
+      originPort: DEFAULT_GLOBAL_STATUS_ORIGIN_PORT,
+      configPath: null,
+      credentialsFile: null,
+      tokenEnv: null,
+      dnsResolverAddrs: []
+    }
   }
 };
 
@@ -38,8 +64,52 @@ function normalizePositiveInteger(value, fallback, min, max) {
   return Math.min(max, Math.max(min, Math.trunc(numeric)));
 }
 
+function normalizeBoolean(value, fallback = false) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "off"].includes(normalized)) {
+      return false;
+    }
+  }
+  return fallback;
+}
+
 function normalizeString(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function expandHomePath(value) {
+  const normalized = normalizeString(value);
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === "~") {
+    return os.homedir();
+  }
+  if (normalized.startsWith("~/")) {
+    return path.join(os.homedir(), normalized.slice(2));
+  }
+  return normalized;
+}
+
+function resolveAbsolutePath(value) {
+  const expanded = expandHomePath(value);
+  return expanded ? path.resolve(expanded) : null;
+}
+
+export function resolveDoveGlobalStatusOutputDir(value = null, env = process.env) {
+  const explicit = resolveAbsolutePath(value);
+  if (explicit) {
+    return explicit;
+  }
+  const xdgDataHome = resolveAbsolutePath(env.XDG_DATA_HOME);
+  return path.join(xdgDataHome ?? path.join(os.homedir(), ".local", "share"), "dove", "public");
 }
 
 function normalizeEnvRef(value) {
@@ -55,6 +125,10 @@ function normalizeEnvRef(value) {
 
 function isAllowedSecretReference(key) {
   return /Env$/.test(key) || /EnvVar$/.test(key);
+}
+
+function isAllowedInlineSecretPath(configPath) {
+  return configPath === "globalStatus.auth.password" || configPath.endsWith(".globalStatus.auth.password");
 }
 
 export function assertNoInlineSecrets(value, configPath = "config") {
@@ -73,7 +147,7 @@ export function assertNoInlineSecrets(value, configPath = "config") {
   }
   for (const [key, item] of Object.entries(value)) {
     const nextPath = `${configPath}.${key}`;
-    if (SECRET_KEY_PATTERN.test(key) && !isAllowedSecretReference(key)) {
+    if (SECRET_KEY_PATTERN.test(key) && !isAllowedSecretReference(key) && !isAllowedInlineSecretPath(nextPath)) {
       throw new Error(`Dove config must not contain inline secret field ${nextPath}; use an env-var reference such as apiKeyEnv instead.`);
     }
     assertNoInlineSecrets(item, nextPath);
@@ -112,10 +186,10 @@ function mergeConfig(base, override) {
 }
 
 function configPaths(root, env) {
-  const paths = [];
   if (normalizeString(env.DOVE_CONFIG_PATH)) {
-    paths.push(path.resolve(env.DOVE_CONFIG_PATH));
+    return [path.resolve(env.DOVE_CONFIG_PATH)];
   }
+  const paths = [];
   if (normalizeString(env.XDG_CONFIG_HOME)) {
     paths.push(path.join(env.XDG_CONFIG_HOME, "dove", "config.json"));
   }
@@ -232,13 +306,176 @@ function normalizeFigureGenerationConfig(rawConfig = {}) {
   };
 }
 
+function normalizeGlobalStatusProject(rawProject) {
+  const source = typeof rawProject === "string" ? { root: rawProject } : rawProject;
+  if (!isPlainObject(source)) {
+    return null;
+  }
+  if (source.enabled === false) {
+    return null;
+  }
+  const root = resolveAbsolutePath(source.root ?? source.path ?? source.workspace ?? source.workspaceRoot);
+  if (!root) {
+    return null;
+  }
+  return {
+    root,
+    id: normalizeString(source.id),
+    slug: normalizeString(source.slug),
+    title: normalizeString(source.title ?? source.name),
+    enabled: true
+  };
+}
+
+export function normalizeGlobalStatusProjects(rawProjects = []) {
+  const projects = Array.isArray(rawProjects) ? rawProjects : [];
+  const byRoot = new Map();
+  for (const rawProject of projects) {
+    const project = normalizeGlobalStatusProject(rawProject);
+    if (!project) {
+      continue;
+    }
+    byRoot.set(project.root, project);
+  }
+  return Array.from(byRoot.values());
+}
+
+function normalizeHostname(value, label) {
+  const normalized = normalizeString(value);
+  if (!normalized) {
+    return null;
+  }
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(normalized) || normalized.includes("/") || normalized.includes(":")) {
+    throw new Error(`Dove global status Cloudflare ${label} must be a bare hostname: ${normalized}`);
+  }
+  const hostname = normalized.toLowerCase();
+  if (hostname.length > 253 || hostname.startsWith(".") || hostname.endsWith(".")) {
+    throw new Error(`Dove global status Cloudflare ${label} must be a valid hostname: ${normalized}`);
+  }
+  const labels = hostname.split(".");
+  if (labels.length < 2 || !labels.every((item) => HOSTNAME_LABEL_PATTERN.test(item))) {
+    throw new Error(`Dove global status Cloudflare ${label} must be a valid hostname: ${normalized}`);
+  }
+  return hostname;
+}
+
+function normalizeLoopbackHost(value) {
+  const normalized = normalizeString(value) ?? "127.0.0.1";
+  if (!LOOPBACK_HOSTS.has(normalized)) {
+    throw new Error(`Dove global status serving host must be loopback-only: ${normalized}`);
+  }
+  return normalized;
+}
+
+function normalizeTunnelName(value) {
+  const normalized = normalizeString(value);
+  if (!normalized) {
+    return null;
+  }
+  if (!TUNNEL_NAME_PATTERN.test(normalized)) {
+    throw new Error(`Dove global status Cloudflare tunnelName must contain only letters, digits, dots, dashes, or underscores: ${normalized}`);
+  }
+  return normalized;
+}
+
+function normalizeDnsResolverAddrs(value) {
+  const rawItems = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
+  const items = rawItems.map(normalizeString).filter(Boolean);
+  for (const item of items) {
+    if (!item.includes(":") || item.includes("://") || item.includes("/") || /\s/.test(item)) {
+      throw new Error(`Dove global status Cloudflare dnsResolverAddrs entries must be address:port values: ${item}`);
+    }
+  }
+  return Array.from(new Set(items));
+}
+
+function isPathInside(childPath, parentPath) {
+  const relative = path.relative(parentPath, childPath);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function assertOutsidePublicDir(filePath, outputDir, label) {
+  if (!filePath || !outputDir) {
+    return;
+  }
+  if (isPathInside(filePath, outputDir)) {
+    throw new Error(`Dove global status Cloudflare ${label} must not be inside the public output directory.`);
+  }
+}
+
+export function normalizeGlobalStatusCloudflareConfig(rawConfig = {}, rawGlobalStatus = {}, outputDir = null) {
+  const source = isPlainObject(rawConfig) ? rawConfig : {};
+  assertNoInlineSecrets(source, "globalStatus.cloudflare");
+  const enabled = normalizeBoolean(source.enabled ?? rawGlobalStatus.cloudflareEnabled, false);
+  const domain = normalizeHostname(source.domain ?? source.hostname ?? rawGlobalStatus.cloudflareDomain ?? rawGlobalStatus.cloudflareHostname, "domain");
+  const tunnelName = normalizeTunnelName(source.tunnelName ?? rawGlobalStatus.cloudflareTunnelName);
+  const cloudflaredPath = normalizeString(source.cloudflaredPath ?? source.command ?? rawGlobalStatus.cloudflaredPath) ?? "cloudflared";
+  const originHost = normalizeLoopbackHost(source.originHost ?? source.host ?? rawGlobalStatus.cloudflareOriginHost);
+  const originPort = normalizePositiveInteger(source.originPort ?? source.port ?? rawGlobalStatus.cloudflareOriginPort, DEFAULT_GLOBAL_STATUS_ORIGIN_PORT, 1, 65535);
+  const configPath = resolveAbsolutePath(source.configPath ?? source.configFile ?? rawGlobalStatus.cloudflareConfigPath);
+  const credentialsFile = resolveAbsolutePath(source.credentialsFile ?? rawGlobalStatus.cloudflareCredentialsFile);
+  const tokenEnv = normalizeEnvRef(source.tokenEnv ?? rawGlobalStatus.cloudflareTokenEnv);
+  const dnsResolverAddrs = normalizeDnsResolverAddrs(source.dnsResolverAddrs ?? rawGlobalStatus.cloudflareDnsResolverAddrs);
+
+  assertOutsidePublicDir(configPath, outputDir, "configPath");
+  assertOutsidePublicDir(credentialsFile, outputDir, "credentialsFile");
+
+  return {
+    enabled,
+    domain,
+    tunnelName,
+    cloudflaredPath,
+    originHost,
+    originPort,
+    configPath,
+    credentialsFile,
+    tokenEnv,
+    dnsResolverAddrs
+  };
+}
+
+export function normalizeGlobalStatusAuthConfig(rawConfig = {}, rawGlobalStatus = {}) {
+  const source = isPlainObject(rawConfig) ? rawConfig : {};
+  assertNoInlineSecrets(source, "globalStatus.auth");
+  return {
+    enabled: normalizeBoolean(source.enabled ?? rawGlobalStatus.authEnabled, false),
+    username: normalizeString(source.username ?? source.user ?? rawGlobalStatus.authUsername ?? rawGlobalStatus.authUser) ?? "dove",
+    password: normalizeString(source.password ?? rawGlobalStatus.authPassword),
+    passwordEnv: normalizeEnvRef(source.passwordEnv ?? source.passwordEnvVar ?? rawGlobalStatus.authPasswordEnv ?? rawGlobalStatus.authPasswordEnvVar)
+  };
+}
+
+function normalizeGlobalStatusConfig(rawConfig = {}) {
+  const source = isPlainObject(rawConfig) ? rawConfig : {};
+  assertNoInlineSecrets(source, "globalStatus");
+  const outputDir = resolveAbsolutePath(source.outputDir ?? source.publicDir ?? source.directory);
+  return {
+    outputDir,
+    projects: normalizeGlobalStatusProjects(source.projects),
+    auth: normalizeGlobalStatusAuthConfig(source.auth, source),
+    cloudflare: normalizeGlobalStatusCloudflareConfig(source.cloudflare, source, outputDir)
+  };
+}
+
 function normalizeDoveConfig(rawConfig) {
   const source = isPlainObject(rawConfig) ? rawConfig : {};
   assertNoInlineSecrets(source, "doveConfig");
+  const publicStatusSource = isPlainObject(source.publicStatus) ? source.publicStatus : {};
+  const globalStatusSource = isPlainObject(source.globalStatus) ? source.globalStatus : {};
+  const globalStatusOutputDir = globalStatusSource.outputDir ?? globalStatusSource.publicDir ?? globalStatusSource.directory
+    ?? publicStatusSource.outputDir ?? publicStatusSource.publicDir ?? publicStatusSource.directory;
+  const globalStatusProjects = Array.isArray(globalStatusSource.projects) && globalStatusSource.projects.length > 0
+    ? globalStatusSource.projects
+    : publicStatusSource.projects;
   return {
     version: 1,
     language: normalizeDoveResponseLanguage(source.language ?? source.responseLanguage, DEFAULT_DOVE_RESPONSE_LANGUAGE, { strict: true }),
-    figureGeneration: normalizeFigureGenerationConfig(source.figureGeneration)
+    figureGeneration: normalizeFigureGenerationConfig(source.figureGeneration),
+    globalStatus: normalizeGlobalStatusConfig({
+      ...globalStatusSource,
+      outputDir: globalStatusOutputDir,
+      projects: globalStatusProjects
+    })
   };
 }
 

@@ -33,6 +33,7 @@ async function main() {
     "query_dove_mission_board",
     "query_dove_status",
     "publish_dove_status",
+    "publish_dove_global_status",
     "query_document_ledger",
     "record_document_evidence",
     "query_dove_audit",

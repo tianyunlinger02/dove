@@ -82,9 +82,51 @@ Important durable surfaces include:
 - `.dove/runtime/results.json` — append-only foreground run and iteration results.
 - `.dove/runtime/events.json` — append-only lifecycle, boundary, handoff, and workflow events.
 - `.dove/runtime/continuation.json` — explicit next-command hints for later foreground invocations.
-- `.dove/config.json`, `.dove/config.local.json`, `DOVE_CONFIG_PATH`, `DOVE_LANGUAGE`, and `DOVE_FIGURE_*` overrides — non-secret response-language and provider configuration; secrets should be referenced through environment-variable names such as `apiKeyEnv`.
+- `.dove/config.json`, `.dove/config.local.json`, `DOVE_CONFIG_PATH`, `DOVE_LANGUAGE`, and `DOVE_FIGURE_*` overrides — response-language, provider, and status-serving configuration; provider/API/tunnel secrets should be referenced through environment-variable names such as `apiKeyEnv`.
 
 Commands and skills provide behavior, but there is no hidden scheduler or swarm runtime. Optional MCP helpers mutate files deterministically; they do not replace `.dove/` as the source of truth.
+
+## Global public status and Cloudflare serving
+
+`dove publish-global-status --refresh` publishes a static global index from configured or explicit project `.dove/public/status.*` files. It writes only the global public output directory, does not scan the computer, and does not start an HTTP server, Cloudflare tunnel, daemon, scheduler, or refresh loop.
+
+Configure the global index in `~/.config/dove/config.json`, `DOVE_CONFIG_PATH`, or workspace `.dove/config*.json`:
+
+```json
+{
+  "globalStatus": {
+    "outputDir": "~/.local/share/dove/public",
+    "projects": [
+      {
+        "root": "/home/nvme01/paper_factory",
+        "slug": "paper-factory",
+        "title": "paper_factory"
+      }
+    ],
+    "auth": {
+      "enabled": true,
+      "password": "<status-page-password>"
+    },
+    "cloudflare": {
+      "enabled": true,
+      "domain": "keli.eu.cc",
+      "tunnelName": "dove-global-status",
+      "originHost": "127.0.0.1",
+      "originPort": 8787,
+      "configPath": null,
+      "credentialsFile": null,
+      "tokenEnv": "DOVE_CLOUDFLARE_TUNNEL_TOKEN",
+      "dnsResolverAddrs": ["1.1.1.1:53", "1.0.0.1:53"]
+    }
+  }
+}
+```
+
+`dove serve-global-status --refresh` is the explicit foreground serving path. It publishes once, serves only the sanitized global public directory over loopback, enforces `auth` with a password-only login page when enabled, and then runs Cloudflare Tunnel visibly in the foreground. Stop it with Ctrl-C. The status-page password may be stored in local/global Dove config as `auth.password`, or referenced through `auth.passwordEnv` when you prefer environment injection. Cloudflare API tokens and tunnel tokens must not be stored inline in Dove config; use `tokenEnv` or cloudflared credentials instead. A `tokenEnv` tunnel is treated as already provisioned, so run it without `--configure-cloudflare`; configure the public hostname/DNS in Cloudflare Dashboard or use cloudflared login credentials with `--configure-cloudflare` when Dove should create the named tunnel and route DNS. Set `dnsResolverAddrs` when the host resolver cannot resolve Cloudflare Tunnel SRV records such as `_v2-origintunneld._tcp.argotunnel.com`.
+
+Use `dove serve-global-status --dry-run --auth --cloudflare --domain keli.eu.cc` to inspect the planned auth summary, local URL, public URL, and `cloudflared` argv arrays without starting a server or changing Cloudflare DNS. If you use `auth.passwordEnv` instead of `auth.password`, pass `--auth-password-env DOVE_GLOBAL_STATUS_PASSWORD` or configure the same field in Dove config.
+
+When `auth.passwordEnv` is used, set that environment variable before running the real foreground server. Dove uses the value only for the local server check and removes it from the `cloudflared` child environment.
 
 ## Language configuration
 
