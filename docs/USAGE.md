@@ -39,7 +39,7 @@ Older router, checklist, plan, audit, return, follow-through, onboarding, govern
 ## First 10 minutes with Dove
 
 1. Install Dove and run `dove doctor` to check the package, adapters, MCP entrypoint, and workspace artifacts.
-2. Pick the syntax for your host. The canonical command id is `dove.mission`; Claude Code users normally type `/dove:mission`, while OpenCode users commonly see `project:dove.mission`.
+2. Pick the syntax for your host. The canonical command id is `dove.mission`; Claude Code users should have one user-level `/dove:mission` entrypoint, while OpenCode users commonly see project adapters as `project:dove.mission`.
 3. Start with a real demand, not a command inventory. For engineering work, use `/dove:mission 修复 doctor 报错并运行相关验证`; Dove should propose a task contract, ask for confirmation, then record the foreground pass result or persist a clear boundary for missing host evidence. If no init goal exists, the same confirmation should show the proposed init and task before writing either one.
 4. Use presets inside a selected or newly created task: `/dove:figure 画 pipeline overview`, `/dove:draft 修改 introduction`, or `/dove:experience 规划并记录 ablation 结果`. Presets should resolve one durable task packet or ask for confirmation instead of silently guessing.
 5. Use `/dove:status` as the default read-only daily home screen. It first reports the live host-visible development situation, then shows ranked 1-3 next action cards, boundary action cards, and only adjustable Dove missions when there is something actionable; it does not print mission counts or completed/killed recaps.

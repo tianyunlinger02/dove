@@ -14,7 +14,7 @@ The supported install path is host-neutral at the core and adapter-based at the 
 4. bootstrap missing `.dove/` artifacts without overwriting user-owned workspace state
 5. write `.dove/manifest.json` as the Dove authority manifest
 
-Supported adapter IDs are `opencode`, `claude`, `codex`, `cursor`, `agents`, and `all`. OpenCode remains the default install target, and every supported host receives the same flat top-level Dove command set generated from the manifest.
+Supported project adapter IDs are `opencode`, `codex`, `cursor`, `agents`, and `all`. OpenCode remains the default install target, and every supported project-local host receives the same flat top-level Dove command set generated from the manifest. Claude Code uses one user-level `/dove:*` command set, so project installs do not copy `.claude/commands/dove`.
 
 ## Project-local install
 
@@ -24,8 +24,8 @@ From the repository root:
 # Default: neutral core + OpenCode adapter
 node ./bin/dove.mjs install . --force
 
-# Install selected optional adapters
-node ./bin/dove.mjs install . --force --host claude,cursor
+# Install selected optional project adapters
+node ./bin/dove.mjs install . --force --host cursor
 node ./bin/dove.mjs install . --force --host codex --host agents
 
 # Install every safe adapter surface
@@ -94,7 +94,7 @@ The doctor command checks the neutral core, `.dove/state.json`, `.dove/manifest.
 
 `install` and `sync` treat `.dove/` as user-owned workspace data. The CLI bootstraps missing `.dove` artifacts via the workspace initializer, but it does not copy a packaged `.dove/` tree over the target project as managed code.
 
-Adapter copying is allowlisted to Dove surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.claude/commands/dove`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. Those paths are derived from `src/core/command-manifest.mjs`; run `npm run commands:generate` to rewrite adapters and `npm run commands:check` to detect drift. Local development scaffolding and host settings are not installed as Dove product surfaces. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
+Adapter copying is allowlisted to Dove project surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. Those paths are derived from `src/core/command-manifest.mjs`; run `npm run commands:generate` to rewrite adapters and `npm run commands:check` to detect drift. Local development scaffolding, host settings, and project-local `.claude/commands/dove` files are not installed as Dove product surfaces. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
 
 ## Validation
 

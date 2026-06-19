@@ -39,8 +39,8 @@ function usage() {
   console.log(`dove
 
 Usage:
-  dove install [target] [--force] [--host <opencode|claude|codex|cursor|agents|all>]
-  dove sync [target] [--force] [--host <opencode|claude|codex|cursor|agents|all>]
+  dove install [target] [--force] [--host <opencode|codex|cursor|agents|all>]
+  dove sync [target] [--force] [--host <opencode|codex|cursor|agents|all>]
   dove doctor [target]
   dove onboard [target] [--write-map] [--max-depth <n>] [--max-files <n>]
   dove publish-status [target] [--quiet] [--include-archived]
@@ -157,6 +157,10 @@ function resolveHostAdapters(args = []) {
   const requested = rawValues.flatMap((value) => String(value).split(",").map((item) => item.trim()).filter(Boolean));
   if (requested.includes("all")) {
     return HOST_IDS;
+  }
+  const unsupportedProjectHosts = requested.filter((host) => host === "claude");
+  if (unsupportedProjectHosts.length > 0) {
+    throw new Error("Claude Code uses the user-level /dove:* command set; project install/sync does not copy .claude/commands/dove. Keep project state in .dove/ and use a supported project adapter: " + `${HOST_IDS.join(", ")}, all.`);
   }
   const invalid = requested.filter((host) => !Object.hasOwn(HOST_ADAPTERS, host));
   if (invalid.length > 0) {

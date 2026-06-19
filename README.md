@@ -31,7 +31,7 @@ AI coding and writing sessions are powerful, but they often lose continuity acro
 - **Explicit lessons and retrospectives** for reusable task experience without raw runtime traces
 - **First-class boundaries and role handoffs** for work that needs host input, review, provider output, or missing materials
 - **Append-only runtime events/results** for auditable foreground transitions and stop reasons
-- **Generated host adapters** for OpenCode, Claude Code, Codex, Cursor, and shared agent-skill hosts
+- **Generated project host adapters** for OpenCode, Codex, Cursor, and shared agent-skill hosts
 - **Optional MCP tools** for deterministic reads and file-backed mutations
 - **Bounded foreground auto work** that requires confirmation and stops at explicit boundaries
 
@@ -43,7 +43,7 @@ Dove does not rely on hidden chat memory, a daemon, a scheduler, or a host-speci
 - `mcp/dove-state-server.mjs` — the local stdio MCP server
 - `src/` — core workflow, artifact, governance, command-manifest, MCP, and validation logic
 - `scripts/` — adapter generation, validation, doctor, audit, and packaging checks
-- `.opencode/`, `.claude/`, `.codex/`, `.cursor/`, `.agents/` — generated Dove adapter surfaces
+- `.opencode/`, `.codex/`, `.cursor/`, `.agents/` — generated project-local Dove adapter surfaces
 - `docs/` — installation, usage, packaging, and capability documentation
 - `tests/` — Node test coverage for the core package behavior
 
@@ -66,7 +66,7 @@ node ./bin/dove.mjs install /path/to/project --force
 node ./bin/dove.mjs doctor /path/to/project
 ```
 
-2. Use the command syntax for your host. Dove's canonical command id is `dove.mission`; Claude Code exposes it as `/dove:mission`, while OpenCode commonly exposes it as `project:dove.mission`. The examples below use Claude Code slash syntax.
+2. Use the command syntax for your host. Dove's canonical command id is `dove.mission`; Claude Code should expose a single user-level `/dove:mission` entrypoint, while OpenCode commonly exposes project adapters as `project:dove.mission`. The examples below use Claude Code slash syntax.
 
 3. Start with a real demand instead of a command inventory:
 
@@ -171,13 +171,14 @@ Put that in `.dove/config.json` or `.dove/config.local.json`; `DOVE_LANGUAGE` an
 
 ## Host adapters
 
-The canonical command inventory lives in `src/core/command-manifest.mjs`. Generated adapters expose the same Dove concepts across supported hosts:
+The canonical command inventory lives in `src/core/command-manifest.mjs`. Generated project adapters expose the same Dove concepts across supported project-local hosts:
 
 - OpenCode commands and skills
-- Claude Code commands
 - Codex skills and agent defaults
 - Cursor commands
 - shared `.agents/skills` surfaces
+
+Claude Code uses one user-level `/dove:*` command set instead of project-local `.claude/commands/dove` files, so normal project installs keep Dove state in `.dove/` without creating duplicate Claude command entries.
 
 Regenerate and check adapter drift with:
 

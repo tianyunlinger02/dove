@@ -122,8 +122,7 @@ function renderSkill(command) {
 
 export function renderCommandAdapter(hostId, command) {
   switch (hostId) {
-    case "opencode":
-    case "claude": return renderBody(command, command.id);
+    case "opencode": return renderBody(command, command.id);
     case "cursor": return renderBody(command, `dove-${hostCommandSlug(command.id)}`);
     case "codex":
     case "agents": return renderSkill(command);

@@ -2,11 +2,10 @@ export const CORE_INSTALL_PATHS = ["README.md", "bin", "docs", "mcp", "scripts",
 
 export const DEFAULT_HOST_ADAPTERS = ["opencode"];
 
-export const HOST_IDS = ["opencode", "claude", "codex", "cursor", "agents"];
+export const HOST_IDS = ["opencode", "codex", "cursor", "agents"];
 
 export const HOST_DEFINITIONS = {
   opencode: { label: "OpenCode", jsonChecks: [".opencode.json"] },
-  claude: { label: "Claude Code", jsonChecks: [] },
   codex: { label: "Codex", jsonChecks: [] },
   cursor: { label: "Cursor", jsonChecks: [] },
   agents: { label: "Shared agent skills", jsonChecks: [] }
@@ -14,7 +13,6 @@ export const HOST_DEFINITIONS = {
 
 export const MANAGED_HOST_ADAPTER_PATHS = {
   opencode: [".opencode/commands/dove*.md", ".opencode/skills/dove-*", ".opencode.json"],
-  claude: [".claude/commands/dove"],
   codex: [".codex/skills/dove-*"],
   cursor: [".cursor/commands/dove-*.md"],
   agents: [".agents/skills/dove-*", "AGENTS.md"]
@@ -24,7 +22,6 @@ export const MANAGED_PACKAGE_PATHS = [
   ".opencode/commands/dove*.md",
   ".opencode/skills/dove-*",
   ".opencode.json",
-  ".claude/commands/dove",
   ".codex/skills/dove-*",
   ".cursor/commands/dove-*.md",
   ".agents/skills/dove-*",
@@ -477,7 +474,6 @@ export function adapterPathForCommand(hostId, command) {
   const hostSlug = hostCommandSlug(commandId);
   switch (hostId) {
     case "opencode": return `.opencode/commands/${commandId}.md`;
-    case "claude": return `.claude/commands/dove/${commandIdToSlug(commandId).replace(/\./g, "/")}.md`;
     case "cursor": return `.cursor/commands/dove-${hostSlug}.md`;
     case "codex": return `.codex/skills/dove-${hostSlug}/SKILL.md`;
     case "agents": return `.agents/skills/dove-${hostSlug}/SKILL.md`;

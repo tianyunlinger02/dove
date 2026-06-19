@@ -704,11 +704,11 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.equal(boundaries.managedArtifacts.workflowBoundaries.revisionId, "schema-v6:bootstrap-only");
   assert.equal(boundaries.managedArtifacts.workspaceIndex.path, ".dove/workspace/index.json");
   assert.equal(boundaries.managedArtifacts.doveRootManifest.path, ".dove/manifest.json");
-  assert.deepEqual(boundaries.managedPaths, [".opencode/commands/dove*.md", ".opencode/skills/dove-*", ".opencode.json", ".claude/commands/dove", ".codex/skills/dove-*", ".cursor/commands/dove-*.md", ".agents/skills/dove-*", "AGENTS.md", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
+  assert.deepEqual(boundaries.managedPaths, [".opencode/commands/dove*.md", ".opencode/skills/dove-*", ".opencode.json", ".codex/skills/dove-*", ".cursor/commands/dove-*.md", ".agents/skills/dove-*", "AGENTS.md", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.neutralCorePaths, ["README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.defaultHostAdapters, ["opencode"]);
-  assert.deepEqual(boundaries.availableHostAdapters, ["opencode", "claude", "codex", "cursor", "agents"]);
-  assert.deepEqual(boundaries.managedHostAdapterPaths.claude, [".claude/commands/dove"]);
+  assert.deepEqual(boundaries.availableHostAdapters, ["opencode", "codex", "cursor", "agents"]);
+  assert.equal(Object.hasOwn(boundaries.managedHostAdapterPaths, "claude"), false);
   assert.deepEqual(boundaries.managedHostAdapterPaths.codex, [".codex/skills/dove-*"]);
   assert.deepEqual(boundaries.managedHostAdapterPaths.cursor, [".cursor/commands/dove-*.md"]);
   assert.deepEqual(boundaries.managedHostAdapterPaths.agents, [".agents/skills/dove-*", "AGENTS.md"]);

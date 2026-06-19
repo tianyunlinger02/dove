@@ -17,7 +17,6 @@ This repository does not contain a React/browser frontend. The Trellis `frontend
 ├── .opencode/
 │   ├── commands/          # Generated OpenCode command adapters, e.g. dove.status.md
 │   └── skills/            # OpenCode role/discipline skill packs, one SKILL.md per skill
-├── .claude/commands/dove/ # Generated Claude Code command adapters
 ├── .cursor/commands/      # Generated Cursor command adapters
 ├── .codex/skills/         # Generated Codex skill adapters, one dove-*/SKILL.md per command
 ├── .agents/skills/        # Generated shared agent skill adapters, one dove-*/SKILL.md per command
@@ -48,7 +47,7 @@ This repository does not contain a React/browser frontend. The Trellis `frontend
 - Put MCP exposure in `src/mcp/*.mjs`. `src/mcp/tool-definitions.mjs` defines schemas; `src/mcp/handlers.mjs` dispatches tool names to core functions.
 - Put install/doctor/autonomy CLI wiring in `bin/dove.mjs`; keep reusable behavior in `src/core/`.
 - Put adapter generation in `scripts/generate-command-adapters.mjs`, and validation/audit scripts in `scripts/*.mjs` wired through `package.json`.
-- Put generated host adapters in `.opencode/commands/`, `.claude/commands/dove/`, `.cursor/commands/`, `.codex/skills/dove-*/SKILL.md`, and `.agents/skills/dove-*/SKILL.md`. Do not hand-maintain divergent command inventories per host.
+- Put generated project host adapters in `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/dove-*/SKILL.md`, and `.agents/skills/dove-*/SKILL.md`. Do not hand-maintain divergent command inventories per project-local host; Claude Code uses user-level `/dove:*` entries instead of project-local `.claude/commands/dove/`.
 - Put OpenCode role skills in `.opencode/skills/dove-*/SKILL.md`.
 - Treat `.dove/` as the durable artifact model, not as generated scratch. Bootstrap may create files there, but package update logic must preserve user-owned state.
 
@@ -58,7 +57,7 @@ This repository does not contain a React/browser frontend. The Trellis `frontend
 
 - JavaScript modules use ESM `.mjs` and kebab-case filenames where they are executables/scripts (`validate-mcp.mjs`, `dove-state-server.mjs`). Core modules use descriptive lower-case names (`schema.mjs`, `orchestration.mjs`).
 - Command IDs live in `src/core/command-manifest.mjs` as flat top-level `dove.<surface>` entries for all public Dove surfaces.
-- Generated adapter slugs are derived from command IDs: Claude uses `.claude/commands/dove/<surface>.md`, Cursor uses `.cursor/commands/dove-<slug>.md`, and Codex/Agents use `dove-<slug>/SKILL.md`.
+- Generated project adapter slugs are derived from command IDs: Cursor uses `.cursor/commands/dove-<slug>.md`, and Codex/Agents use `dove-<slug>/SKILL.md`.
 - OpenCode role skills use `dove-<discipline>/SKILL.md` with YAML frontmatter.
 - Durable artifact paths are centralized in `ARTIFACT_PATHS` in `src/core/schema.mjs`; do not scatter new `.dove/...` string constants through command, MCP, or test surfaces.
 - Role IDs are explicit and lower-case hyphenated (`rebuttal-lead`, `experiment-planner`, `version-analyst`).

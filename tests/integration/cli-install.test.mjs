@@ -165,25 +165,35 @@ test("CLI install copies the workflow pack into a target workspace", () => {
 
 test("CLI install can install optional host adapters without local unsafe files", () => {
   const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-install-hosts-"));
-  const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude,cursor", "--host", "agents"], {
+  const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "cursor", "--host", "agents"], {
     cwd: ROOT,
     encoding: "utf8"
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
-  assert.deepEqual(payload.hosts, ["claude", "cursor", "agents"]);
-  assert.ok(fs.existsSync(path.join(target, ".claude", "commands")));
-  assert.equal(fs.existsSync(path.join(target, ".claude", "agents")), false);
+  assert.deepEqual(payload.hosts, ["cursor", "agents"]);
+  assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "dove")), false);
   assert.ok(fs.existsSync(path.join(target, ".cursor", "commands")));
   assert.ok(fs.existsSync(path.join(target, ".agents", "skills")));
   assert.ok(fs.existsSync(path.join(target, "AGENTS.md")));
-  assertDoveHostPaths(target, ["claude", "cursor", "agents"]);
-  assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "trellis", "start.md")), false);
+  assertDoveHostPaths(target, ["cursor", "agents"]);
   assert.equal(fs.existsSync(path.join(target, ".cursor", "commands", "trellis-start.md")), false);
   assert.equal(fs.existsSync(path.join(target, ".agents", "skills", "start", "SKILL.md")), false);
   assert.equal(fs.existsSync(path.join(target, ".claude", "settings.local.json")), false);
   assert.equal(fs.existsSync(path.join(target, ".opencode", "node_modules")), false);
+});
+
+test("CLI install rejects project-level Claude command adapters", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-install-claude-rejected-"));
+  const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /Claude Code uses the user-level \/dove:\* command set/);
+  assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "dove")), false);
 });
 
 test("CLI install all host adapters skips unsafe local artifacts", () => {
@@ -195,14 +205,14 @@ test("CLI install all host adapters skips unsafe local artifacts", () => {
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
-  assert.deepEqual(payload.hosts, ["opencode", "claude", "codex", "cursor", "agents"]);
+  assert.deepEqual(payload.hosts, ["opencode", "codex", "cursor", "agents"]);
   assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.status.md")));
-  assert.ok(fs.existsSync(path.join(target, ".claude", "commands")));
+  assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "dove")), false);
   assert.equal(fs.existsSync(path.join(target, ".codex", "agents")), false);
   assert.equal(fs.existsSync(path.join(target, ".codex", "config.toml")), false);
   assert.ok(fs.existsSync(path.join(target, ".cursor", "commands")));
   assert.ok(fs.existsSync(path.join(target, ".agents", "skills")));
-  assertDoveHostPaths(target, ["opencode", "claude", "cursor", "codex", "agents"]);
+  assertDoveHostPaths(target, ["opencode", "cursor", "codex", "agents"]);
   assert.equal(fs.existsSync(path.join(target, ".codex", "skills", "parallel", "SKILL.md")), false);
   assert.equal(fs.existsSync(path.join(target, ".opencode", "node_modules")), false);
   assert.equal(fs.existsSync(path.join(target, ".claude", "settings.local.json")), false);
@@ -240,7 +250,7 @@ test("CLI doctor returns non-zero for unhealthy workspaces", () => {
 
 test("CLI doctor reports installed host adapters for multi-host workspaces", () => {
   const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-hosts-"));
-  spawnSync("node", [CLI, "install", target, "--force", "--host", "claude,cursor"], {
+  spawnSync("node", [CLI, "install", target, "--force", "--host", "cursor,codex"], {
     cwd: ROOT,
     encoding: "utf8"
   });
@@ -252,8 +262,8 @@ test("CLI doctor reports installed host adapters for multi-host workspaces", () 
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
-  assert.deepEqual(payload.hostAdapters, ["claude", "cursor"]);
-  assert.ok(payload.checks.some((check) => check.check === "host-adapter:claude" && check.ok));
+  assert.deepEqual(payload.hostAdapters, ["codex", "cursor"]);
+  assert.ok(payload.checks.some((check) => check.check === "host-adapter:codex" && check.ok));
   assert.ok(payload.checks.some((check) => check.check === "host-adapter:cursor" && check.ok));
   assert.ok(payload.checks.some((check) => check.check === "dove-authority" && check.ok));
   assert.equal(payload.managedArtifacts.doveAuthorityManifest.authoritativeRoot, ".dove");
@@ -262,11 +272,11 @@ test("CLI doctor reports installed host adapters for multi-host workspaces", () 
 
 test("CLI doctor fails when a required Dove adapter is missing", () => {
   const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-missing-host-"));
-  spawnSync("node", [CLI, "install", target, "--force", "--host", "claude"], {
+  spawnSync("node", [CLI, "install", target, "--force", "--host", "cursor"], {
     cwd: ROOT,
     encoding: "utf8"
   });
-  const missingAdapterPath = ".claude/commands/dove/draft.md";
+  const missingAdapterPath = ".cursor/commands/dove-draft.md";
   fs.rmSync(path.join(target, missingAdapterPath));
 
   const result = spawnSync("node", [CLI, "doctor", target], {
@@ -277,7 +287,7 @@ test("CLI doctor fails when a required Dove adapter is missing", () => {
   assert.equal(result.status, 1, result.stdout);
   const payload = JSON.parse(result.stdout);
   assert.ok(payload.missing.includes(missingAdapterPath));
-  assert.ok(payload.checks.some((check) => check.check === "host-adapter:claude" && !check.ok && check.requiredPaths.includes(missingAdapterPath)));
+  assert.ok(payload.checks.some((check) => check.check === "host-adapter:cursor" && !check.ok && check.requiredPaths.includes(missingAdapterPath)));
 });
 
 test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy workspaces", () => {

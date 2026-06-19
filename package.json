@@ -8,7 +8,6 @@
   },
   "files": [
     ".agents/skills/dove-*/SKILL.md",
-    ".claude/commands/dove",
     ".codex/skills/dove-*/SKILL.md",
     ".cursor/commands/dove-*.md",
     ".opencode/commands/dove*.md",
