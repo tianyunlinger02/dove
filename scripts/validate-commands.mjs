@@ -162,6 +162,12 @@ for (const removedCommandId of removedCommandIds) {
 
 for (const { command, relativePath } of generatedAdapterEntries()) {
   const commandText = readRelative(relativePath);
+  const frontmatterEnd = commandText.indexOf("\n---\n\n");
+  assert.equal(commandText.startsWith("---\n"), true, `${relativePath} must expose frontmatter for host slash command lists`);
+  assert.ok(frontmatterEnd > 0, `${relativePath} must close frontmatter before the command body`);
+  const frontmatter = commandText.slice(0, frontmatterEnd + "\n---".length);
+  assert.equal(frontmatter.includes("description:"), true, `${relativePath} must expose a short slash-list description`);
+  assert.equal(frontmatter.includes(command.summary), true, `${relativePath} frontmatter description must come from the canonical command summary`);
   assert.ok(command.ux, `${command.id} should declare daily UX metadata in the manifest`);
   assert.ok(Array.isArray(command.ux.dailyFlow) && command.ux.dailyFlow.length > 0, `${command.id} should declare daily flow guidance`);
   assert.ok(Array.isArray(command.ux.examples) && command.ux.examples.length >= 2 && command.ux.examples.length <= 3, `${command.id} should declare 2-3 daily examples`);
@@ -257,9 +263,19 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("live development situation"), true, `${relativePath} must explain the live development situation`);
     assert.equal(commandText.includes("do not treat `.dove/` context as the live development situation"), true, `${relativePath} must separate live context from Dove durable context`);
     assert.equal(commandText.includes("host-visible context"), true, `${relativePath} must use host-visible context for live status`);
-    assert.equal(commandText.includes("Do not print internal mission summary dumps"), true, `${relativePath} must forbid noisy mission summary dumps`);
-    assert.equal(commandText.includes("mission counts, status counts, recent completed missions, or recent killed missions"), true, `${relativePath} must name the hidden status summary fields`);
-    assert.equal(commandText.includes("if there are no adjustable missions, do not print a mission list"), true, `${relativePath} must omit empty adjustable mission lists`);
+    assert.equal(commandText.includes("statusHome"), true, `${relativePath} must use the compact status home envelope`);
+    assert.equal(commandText.includes("without `detail: \"full\"`"), true, `${relativePath} must default to compact status queries`);
+    assert.equal(commandText.includes("request `detail: \"full\"`"), true, `${relativePath} must reserve full status details for explicit expansion`);
+    assert.equal(commandText.includes("saved full status result file"), true, `${relativePath} must forbid reading full saved status files by default`);
+    assert.equal(commandText.includes("dailyHome.missionList"), true, `${relativePath} must expose the grouped in-host mission list`);
+    assert.equal(commandText.includes("grouped as `todo`, `doing`, and `blocked`"), true, `${relativePath} must document user-facing mission groups`);
+    assert.equal(commandText.includes("with `done` collapsed by default"), true, `${relativePath} must keep done missions collapsed by default`);
+    assert.equal(commandText.includes("default in-host task list"), true, `${relativePath} must show missions inside the host`);
+    assert.equal(commandText.includes("without leaving Claude/OpenCode"), true, `${relativePath} must avoid routing operators back to shell for mission inspection`);
+    assert.equal(commandText.includes("Do not print raw internal dumps"), true, `${relativePath} must forbid noisy raw status dumps`);
+    assert.equal(commandText.includes("raw status-count objects, recent completed mission recaps, or recent killed mission recaps"), true, `${relativePath} must name hidden raw status dump fields`);
+    assert.equal(commandText.includes("if showing done missions, keep the `done` group collapsed"), true, `${relativePath} must collapse done mission details unless requested`);
+    assert.equal(commandText.includes("if there are no adjustable missions, do not print a mission list"), false, `${relativePath} must not keep the old no-mission-list status UX`);
     assert.equal(commandText.includes("daily home screen"), true, `${relativePath} must describe status as the daily home screen`);
     assert.equal(commandText.includes("ranked 1-3 next action cards"), true, `${relativePath} must expose ranked status next actions`);
     assert.equal(commandText.includes("after live context first"), true, `${relativePath} must keep live context first before durable action cards`);
@@ -268,7 +284,7 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("boundary action cards"), true, `${relativePath} must document boundary action cards`);
     assert.equal(commandText.includes("compact cards"), true, `${relativePath} must surface compact status cards`);
     assert.equal(commandText.includes("compact adjustment cards"), true, `${relativePath} must surface compact status adjustment cards`);
-    assert.equal(commandText.includes("no counts/completed-killed recaps"), true, `${relativePath} must forbid counts and completed/killed recaps`);
+    assert.equal(commandText.includes("no raw status-count dumps or completed/killed recaps"), true, `${relativePath} must forbid raw counts and completed/killed recaps`);
     assert.equal(commandText.includes("current boundary metadata"), true, `${relativePath} must explain boundary state without treating it as live host context`);
     assert.equal(commandText.includes("Boundary types are first-class metadata, not machine status choices"), true, `${relativePath} must keep boundaries separate from status enum`);
     assert.equal(commandText.includes("现在是什么情况"), false, `${relativePath} command prompt should keep canonical instructions in English`);

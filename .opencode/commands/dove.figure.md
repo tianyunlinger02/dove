@@ -1,3 +1,7 @@
+---
+description: "Turn one user-described figure intent into materials, optional generation/import, caption provenance, and QA status."
+---
+
 # dove.figure
 
 Turn one user-described figure intent into materials, optional generation/import, caption provenance, and QA status.

@@ -1,3 +1,7 @@
+---
+description: "Create a direction-change point, clear active non-init tasks, and preserve the init goal plus necessary lessons."
+---
+
 # dove-version
 
 Create a direction-change point, clear active non-init tasks, and preserve the init goal plus necessary lessons.

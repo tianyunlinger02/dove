@@ -19,7 +19,7 @@ Dove exposes one flat public command surface:
 | Command | Use it for |
 | --- | --- |
 | `project:dove.init` | Create or update the single project-level goal, represented as the unique level-0 task. |
-| `project:dove.mission` | Convert a natural-language demand into a compact task-card contract; after approval, materialize it and run one bounded foreground pass. |
+| `project:dove.mission` | Convert a natural-language demand into a durable work contract with scope, deliverables, evidence, done criteria, and recommended next routes; after approval, materialize it and run one bounded foreground pass. |
 | `project:dove.auto` | Convert demand or select a task with compact task/auto cards; after approval, run bounded multi-round foreground iterations until completion, a boundary, or the configured limit. |
 | `project:dove.status` | Inspect the live development situation, then show a daily home screen with ranked action cards, boundaries, and guarded status adjustments. |
 | `project:dove.operator` | Preview compact queue cards, then run one confirmed foreground pass over ready/in-progress work and blocker-investigation planning. |
@@ -42,23 +42,35 @@ Older router, checklist, plan, audit, return, follow-through, onboarding, govern
 2. Pick the syntax for your host. The canonical command id is `dove.mission`; Claude Code users should have one user-level `/dove:mission` entrypoint, while OpenCode users commonly see project adapters as `project:dove.mission`.
 3. Start with a real demand, not a command inventory. For engineering work, use `/dove:mission 修复 doctor 报错并运行相关验证`; Dove should propose a task contract, ask for confirmation, then record the foreground pass result or persist a clear boundary for missing host evidence. If no init goal exists, the same confirmation should show the proposed init and task before writing either one.
 4. Use presets inside a selected or newly created task: `/dove:figure 画 pipeline overview`, `/dove:draft 修改 introduction`, or `/dove:experience 规划并记录 ablation 结果`. Presets should resolve one durable task packet or ask for confirmation instead of silently guessing.
-5. Use `/dove:status` as the default read-only daily home screen. It first reports the live host-visible development situation, then shows ranked 1-3 next action cards, boundary action cards, and only adjustable Dove missions when there is something actionable; it does not print mission counts or completed/killed recaps.
+5. Use `/dove:status` as the default read-only daily home screen. It first reports the live host-visible development situation, then shows the current mission list grouped as `todo`, `doing`, and `blocked`, with `done` collapsed by default, followed by ranked 1-3 next action cards and boundary action cards. The terminal `dove status` command prints the same grouped human summary by default; `dove status --json` or `dove status --format json` returns compact JSON, while `dove status --full --json` or `dove status --detail full --json` returns the full machine-readable dashboard. Use `dove statusline .` for terminal status bars that need a one-line read-only mission summary.
 6. Use `/dove:operator` when you want to preview and run one foreground pass over queued work; it must not claim host work happened without pass results or a safe internal workflow step.
 7. When a task yields reusable operating knowledge, record it with `/dove:lessons`.
+
+## Terminal statusline
+
+`dove statusline .` prints a compact one-line mission summary for terminal status bars, tmux status commands, or explicit foreground polling:
+
+```bash
+dove statusline .
+watch -n 5 'dove statusline .'
+```
+
+The output includes `open`, `todo`, `doing`, and `blocked` mission counts. It intentionally does not show the next action, so the persistent terminal line stays stable and does not compete with `/dove:status` for routing decisions. `dove statusline --json` returns the same compact summary as JSON. This command is read-only: it calls the status query path, does not refresh derived state, does not publish public status, does not start a server, and does not run a daemon, scheduler, hidden loop, or background continuation. `watch` is only an operator-owned foreground terminal command.
 
 ## Task model
 
 Dove treats work as a tree rooted at one init task:
 
 - There is exactly one level-0 init task.
-- `/dove:mission` first converts the operator's natural-language demand into a proposal-only task contract with a compact task card; when the host supports interactive confirmation controls, the operator chooses approve conversion and run one pass, adjust conversion, or cancel before anything is materialized into `.dove/task-packets/`.
+- `/dove:mission` first converts the operator's natural-language demand into a proposal-only durable work contract with a compact task card. The contract names the purpose, in-scope deliverables, out-of-scope boundaries, evidence contract, done criteria, practical impact, and ranked recommended routes with copyable packet-target commands. When the host supports interactive confirmation controls, the operator chooses approve conversion and run one pass, adjust conversion, or cancel before anything is materialized into `.dove/task-packets/`.
 - `/dove:init` is the only level-0 creation path; `/dove:mission` creates work under that root.
 - User-created mission tasks default to level 3 and may explicitly use level 1, 2, 3, or deeper when the operator supplies a level.
 - `/dove:mission` can autonomously propose checklist/subtask packets, but they are materialized only after the same conversion approval as the parent mission.
 - System-created checklist/subtask packets are children of their mission and must have `level > parent.level`, so they are always deeper than the user task they serve.
 - After approval, `/dove:mission` immediately performs one bounded foreground pass and records its task status, evidence, blockers, and next action with `record_dove_mission_pass`.
+- After a packet exists, `/dove:status` should route continuation to `/dove:auto --packet-id <id>` or a domain workflow such as `/dove:draft`, `/dove:source`, `/dove:note`, `/dove:experience`, `/dove:figure`, or `/dove:review`; `/dove:mission` is for converting a new demand into a contract, not for repeatedly continuing an existing packet.
 - When a completed mission pass has stage `plan`, Dove converts supplied `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion` output into pending durable missions. The default follow-up mission is level 3; child missions can be level 4, 5, or deeper.
-- `/dove:status` first reports the live development situation from host-visible context, not from `.dove` internals, then shows `dailyHome` as ranked 1-3 next action cards and proposal-only boundary action cards. It only lists non-init missions that can be adjusted, excluding `completed` and `killed`; if there are no adjustable missions, it does not show a mission list or completed/killed recap. Hosts should ask at most one confirmation dialog with compact adjustment cards, do nothing when the dialog does not provide clear `packetId -> status` adjustments, then call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
+- `/dove:status` first reports the live development situation from host-visible context, not from `.dove` internals, then uses the default compact `statusHome`/`dailyHome` result to show `dailyHome.missionList` grouped as `todo`, `doing`, `blocked`, and collapsed `done`, followed by ranked 1-3 next action cards and proposal-only boundary action cards. Hosts should show the grouped mission list by default so the operator can inspect tasks without leaving Claude/OpenCode; they should not request `detail: "full"` or read a saved full status result file unless the operator explicitly asks to expand/debug details. Hosts should ask at most one confirmation dialog with compact adjustment cards only when status changes are requested or clearly actionable, do nothing when the dialog does not provide clear `packetId -> status` adjustments, then call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
 - Boundary types such as `awaiting-host-pass`, `needs-review`, and `awaiting-provider-output` are first-class metadata, not task statuses. They keep the current machine status coarse while recording required inputs/actions, `ownerRole`, `nextRole`, and optional `handoff` metadata.
 - `/dove:operator` previews compact cards for auto-runnable, host-pass-required, blocked, and pending queues before confirmation. Confirmed runs execute one safe internal step when available, otherwise require real foreground pass results, persist awaiting boundaries, and create pending plan missions for blocked-task investigation.
 - Dove computes stage (`plan`, `execute`, `audit`) and domain (`paper`, `experiment`, `engineering`) from the request unless explicit values are supplied.
@@ -201,7 +213,7 @@ It stops at completed, blocked, killed, review/authority boundary, missing provi
 
 ## MCP tools
 
-The optional MCP layer exposes deterministic helpers for hosts and integrations, including `dailyHome`, proposal-only action cards, and compact confirmation cards. Public workflows use tools such as:
+The optional MCP layer exposes deterministic helpers for hosts and integrations, including compact `statusHome`/`dailyHome`, proposal-only action cards, and compact confirmation cards. Full status dashboard, task tree, and runtime details are available only when callers explicitly request full detail. Public workflows use tools such as:
 
 - `init_dove_goal`
 - `create_dove_task`

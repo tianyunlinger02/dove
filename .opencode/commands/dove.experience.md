@@ -1,3 +1,7 @@
+---
+description: "Convert an idea into experiment goals/plans/results and bridge validated outcomes into claims or conclusions."
+---
+
 # dove.experience
 
 Convert an idea into experiment goals/plans/results and bridge validated outcomes into claims or conclusions.

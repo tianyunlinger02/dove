@@ -679,7 +679,11 @@ export function publishDoveGlobalStatus(root, options = {}) {
 
 export function buildDovePublicStatus(root, options = {}) {
   ensureWorkspace(root);
-  const status = queryDoveStatus(root, { includeArchived: Boolean(options.includeArchived), responseLanguage: options.responseLanguage });
+  const status = queryDoveStatus(root, {
+    includeArchived: Boolean(options.includeArchived),
+    responseLanguage: options.responseLanguage,
+    detail: "full"
+  });
   const tasks = status.dashboard?.tasks ?? {};
   const project = status.dashboard?.project ?? {};
   const generatedAt = options.generatedAt ?? nowIso();

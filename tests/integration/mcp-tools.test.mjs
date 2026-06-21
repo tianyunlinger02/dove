@@ -308,23 +308,28 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(fs.existsSync(path.join(root, ".dove", "workspace", "artifact-map.json")), false);
 
     const status = extractToolJson(dispatchTool(root, "query_dove_status", { domain: "paper" }));
+    const fullStatus = extractToolJson(dispatchTool(root, "query_dove_status", { domain: "paper", detail: "full" }));
     assert.equal(status.mode, "dove-status-query");
     assert.equal(status.responseLanguage, "zh");
     assert.equal(status.proposalOnly, true);
     assert.equal(status.noAutoApply, true);
     assert.equal(status.query, true);
     assert.deepEqual(status.writes, []);
+    assert.equal(status.detail, "compact");
+    assert.equal(status.statusHome.presentation, "dove-status-compact-home");
+    assert.equal(status.dashboard, undefined);
+    assert.equal(fullStatus.detail, "full");
+    assert.ok(fullStatus.dashboard && typeof fullStatus.dashboard === "object");
     assert.equal(status.dailyHome.presentation, "dove-status-home");
     assert.equal(status.dailyHome.liveContextFirst, true);
     assert.ok(status.dailyHome.nextActions.length <= 3);
     assert.equal(status.current.nextCommand, status.dailyHome.nextActions[0].command);
     assert.equal(status.board.nextCommand, status.dailyHome.nextActions[0].command);
-    assert.equal(status.dashboard.nextAction, status.dailyHome.nextActions[0].command);
+    assert.equal(fullStatus.dashboard.nextAction, fullStatus.dailyHome.nextActions[0].command);
     assert.equal(status.suggestedNextCommand, status.dailyHome.nextActions[0].command);
     assert.ok(status.dailyHome.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
-    assert.ok(status.dashboard && typeof status.dashboard === "object");
-    assert.ok(status.dashboard.tasks && typeof status.dashboard.tasks === "object");
-    assert.equal(status.dashboard.dailyHome.presentation, "dove-status-home");
+    assert.ok(fullStatus.dashboard.tasks && typeof fullStatus.dashboard.tasks === "object");
+    assert.equal(fullStatus.dashboard.dailyHome.presentation, "dove-status-home");
     assert.ok(status.projectSummary && typeof status.projectSummary === "object");
     assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
     assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
@@ -602,7 +607,16 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(proposal.taskCard.packetId, "mission-confirm-task");
     assert.equal(proposal.taskCard.proposalOnly, true);
     assert.equal(proposal.taskCard.noAutoApply, true);
+    assert.equal(proposal.workContract.purpose.includes("Mission conversion task"), true);
+    assert.ok(proposal.workContract.deliverables.length > 0);
+    assert.ok(proposal.workContract.outOfScope.length > 0);
+    assert.ok(proposal.workContract.evidenceContract.length > 0);
+    assert.ok(proposal.workContract.doneCriteria.length > 0);
+    assert.equal(proposal.workContract.recommendedRoutes[0].command, "project:dove.auto");
+    assert.equal(proposal.workContract.recommendedRoutes[0].copyableCommand, "project:dove.auto --packet-id mission-confirm-task");
+    assert.deepEqual(proposal.taskCard.recommendedRoutes, proposal.workContract.recommendedRoutes);
     assert.equal(proposal.confirmArgs.confirmed, true);
+    assert.deepEqual(proposal.confirmArgs.workContract, proposal.workContract);
 
     const englishProposal = extractToolJson(dispatchTool(root, "create_dove_task", {
       id: "mission-confirm-task-en",
@@ -626,6 +640,9 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(created.missionPassRequired, true);
     assert.equal(created.recordMissionPassTool, "record_dove_mission_pass");
     assert.equal(created.createdTask.id, "mission-confirm-task");
+    assert.deepEqual(created.createdTask.workContract, proposal.workContract);
+    const createdPacket = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "mission-confirm-task.json"), "utf8"));
+    assert.deepEqual(createdPacket.workContract, proposal.workContract);
 
     const pass = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
       packetId: created.createdTask.id,
@@ -802,11 +819,16 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     }
 
     const status = extractToolJson(dispatchTool(root, "query_dove_status", {}));
+    const fullStatus = extractToolJson(dispatchTool(root, "query_dove_status", { detail: "full" }));
     assert.ok(status.projectSummary);
+    assert.equal(status.detail, "compact");
+    assert.equal(status.dashboard, undefined);
+    assert.equal(fullStatus.detail, "full");
+    assert.ok(fullStatus.dashboard);
     assert.equal(status.dailyHome.presentation, "dove-status-home");
     assert.ok(status.dailyHome.nextActions.length <= 3);
     assert.equal(status.current.nextCommand, status.dailyHome.nextActions[0].command);
-    assert.equal(status.dashboard.nextAction, status.dailyHome.nextActions[0].command);
+    assert.equal(fullStatus.dashboard.nextAction, fullStatus.dailyHome.nextActions[0].command);
     assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
     assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
     assert.equal(status.statusAdjustmentContract.adjustmentCards.length, status.statusAdjustmentContract.items.length);
@@ -1053,6 +1075,19 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
     assert.equal(childPass.status, "completed");
     assert.equal(childPass.result.packetId, child.id);
 
+    for (const [index, checklistChild] of created.createdChecklistTasks.slice(1).entries()) {
+      const checklistArtifact = `.dove/audio/reviews/parent-child-evidence/checklist-${index + 2}.md`;
+      const checklistPass = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+        packetId: checklistChild.id,
+        runId: `parent-child-evidence-child-${index + 2}-pass`,
+        resultStatus: "completed",
+        resultSummary: "Checklist child is done before parent closure.",
+        artifactRefs: [checklistArtifact],
+        evidenceLinks: [checklistArtifact]
+      }));
+      assert.equal(checklistPass.status, "completed");
+    }
+
     const parentPass = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
       packetId: created.createdTask.id,
       runId: "parent-child-evidence-parent-pass",
@@ -1107,6 +1142,165 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
     assert.equal(rejected.evidenceExplanation.code, "artifact-conflict");
     assert.equal(rejected.artifactResolution.conflictingMatches[0].packetId, sibling.createdTask.id);
     assert.equal(rejected.artifactResolution.conflictingMatches[0].relation, "sibling");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("record_dove_mission_pass requires checklist children to be done before parent mission", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-parent-child-completion-"));
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "parent-child-completion-init",
+      goal: "Validate parent completion waits for checklist children."
+    });
+    const created = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "parent-child-completion-parent",
+      goal: "Complete a checklist-backed parent mission.",
+      title: "Parent child completion mission",
+      autoChecklist: true,
+      confirmed: true
+    }));
+    assert.equal(created.createdChecklistTasks.length, 3);
+
+    const artifact = ".dove/runtime/parent-child-completion-result.json";
+    const blocked = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+      packetId: created.createdTask.id,
+      runId: "parent-child-completion-blocked-pass",
+      resultStatus: "completed",
+      resultSummary: "Parent result cannot close before checklist children.",
+      artifactRefs: [artifact],
+      evidenceLinks: [artifact]
+    }));
+    assert.equal(blocked.status, "needs-checklist-reconciliation");
+    assert.equal(blocked.requestedStatus, "done");
+    assert.equal(blocked.machineStatus, "completed");
+    assert.deepEqual(blocked.openChecklistChildIds.sort(), created.createdChecklistTasks.map((child) => child.id).sort());
+
+    for (const [index, child] of created.createdChecklistTasks.entries()) {
+      const childArtifact = `.dove/runtime/parent-child-completion-child-${index + 1}.json`;
+      const childPass = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+        packetId: child.id,
+        runId: `${child.id}-pass`,
+        resultStatus: "completed",
+        resultSummary: "Checklist child is done.",
+        artifactRefs: [childArtifact],
+        evidenceLinks: [childArtifact]
+      }));
+      assert.equal(childPass.status, "completed");
+    }
+
+    const pass = extractToolJson(dispatchTool(root, "record_dove_mission_pass", {
+      packetId: created.createdTask.id,
+      runId: "parent-child-completion-pass",
+      resultStatus: "completed",
+      resultSummary: "Parent can close after checklist children are done.",
+      artifactRefs: [artifact],
+      evidenceLinks: [artifact]
+    }));
+    assert.equal(pass.status, "completed");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("apply_dove_status_adjustments rejects completed parents with open checklist children", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-parent-child-repair-"));
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "parent-child-repair-init",
+      goal: "Validate completed parent checklist reconciliation."
+    });
+    const created = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "parent-child-repair-parent",
+      goal: "Reject a legacy completed parent with open checklist children.",
+      title: "Parent child repair mission",
+      autoChecklist: true,
+      confirmed: true
+    }));
+    const timestamp = new Date().toISOString();
+    const parentPath = path.join(root, ".dove", "task-packets", "packets", `${created.createdTask.id}.json`);
+    const parentPacket = JSON.parse(fs.readFileSync(parentPath, "utf8"));
+    fs.writeFileSync(parentPath, `${JSON.stringify({ ...parentPacket, status: "completed", lifecycleStatus: "completed", completedAt: timestamp, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+    const archivedChild = created.createdChecklistTasks[0];
+    const archivedChildPath = path.join(root, ".dove", "task-packets", "packets", `${archivedChild.id}.json`);
+    const archivedChildPacket = JSON.parse(fs.readFileSync(archivedChildPath, "utf8"));
+    fs.writeFileSync(archivedChildPath, `${JSON.stringify({ ...archivedChildPacket, lifecycleStatus: "archived", updatedAt: timestamp }, null, 2)}\n`, "utf8");
+    const expectedOpenChildren = created.createdChecklistTasks.slice(1);
+    const indexPath = path.join(root, ".dove", "task-packets", "index.json");
+    const index = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+    fs.writeFileSync(indexPath, `${JSON.stringify({
+      ...index,
+      items: index.items.map((item) => {
+        if (item.id === created.createdTask.id) {
+          return { ...item, status: "completed", lifecycleStatus: "completed", completedAt: timestamp, updatedAt: timestamp };
+        }
+        if (item.id === archivedChild.id) {
+          return { ...item, lifecycleStatus: "archived", updatedAt: timestamp };
+        }
+        return item;
+      })
+    }, null, 2)}\n`, "utf8");
+
+    const statusHome = extractToolJson(dispatchTool(root, "query_dove_status", {}));
+    assert.equal(statusHome.dailyHome.completionConsistency.status, "needs-reconciliation");
+    assert.equal(statusHome.dailyHome.completionConsistency.findings[0].parentDisplayStatus, "done");
+    assert.equal(statusHome.dailyHome.completionConsistency.findings[0].parentMachineStatus, "completed");
+    assert.deepEqual(statusHome.dailyHome.completionConsistency.findings[0].openChecklistChildIds.sort(), expectedOpenChildren.map((child) => child.id).sort());
+
+    const filteredStatusHome = extractToolJson(dispatchTool(root, "query_dove_status", { status: "completed" }));
+    assert.equal(filteredStatusHome.dailyHome.completionConsistency.status, "needs-reconciliation");
+    assert.deepEqual(filteredStatusHome.dailyHome.completionConsistency.findings[0].openChecklistChildIds.sort(), expectedOpenChildren.map((child) => child.id).sort());
+    assert.equal(statusHome.dailyHome.nextActions[0].kind, "reconcile-completion-consistency");
+    assert.equal(statusHome.dailyHome.nextActions[0].findingCount, 1);
+    assert.equal(statusHome.dailyHome.nextActions[0].openChecklistChildCount, expectedOpenChildren.length);
+
+    const rejected = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
+      confirmed: true,
+      adjustments: [{ packetId: created.createdTask.id, status: "completed" }]
+    }));
+    assert.equal(rejected.status, "rejected");
+    assert.equal(rejected.rejected[0].completionBlock.status, "needs-checklist-reconciliation");
+    assert.equal(rejected.rejected[0].completionBlock.requestedStatus, "done");
+    assert.deepEqual(rejected.rejected[0].completionBlock.openChecklistChildIds.sort(), expectedOpenChildren.map((child) => child.id).sort());
+
+    const unchangedIndex = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+    for (const child of created.createdChecklistTasks) {
+      assert.equal(unchangedIndex.items.find((item) => item.id === child.id).status, "ready");
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("apply_dove_status_adjustments accepts parent and checklist completion in one unordered batch", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-parent-child-batch-completion-"));
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "parent-child-batch-completion-init",
+      goal: "Validate batch completion order for checklist-backed parents."
+    });
+    const created = extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "parent-child-batch-completion-parent",
+      goal: "Complete parent and checklist children in one confirmation.",
+      title: "Parent child batch completion mission",
+      autoChecklist: true,
+      confirmed: true
+    }));
+
+    const result = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
+      confirmed: true,
+      adjustments: [
+        { packetId: created.createdTask.id, status: "completed" },
+        ...created.createdChecklistTasks.map((child) => ({ packetId: child.id, status: "completed" }))
+      ]
+    }));
+    assert.equal(result.status, "applied");
+    assert.equal(result.rejected.length, 0);
+    assert.deepEqual(result.applied.map((item) => item.packetId).sort(), [created.createdTask.id, ...created.createdChecklistTasks.map((child) => child.id)].sort());
+
+    const statusHome = extractToolJson(dispatchTool(root, "query_dove_status", {}));
+    assert.equal(statusHome.dailyHome.completionConsistency.status, "consistent");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1497,6 +1691,11 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(createDoveTaskTool.inputSchema.properties.resultStatus, "create_dove_task should expose mission pass resultStatus");
   assert.ok(createDoveTaskTool.inputSchema.properties.resultSummary, "create_dove_task should expose mission pass resultSummary");
   assert.ok(createDoveTaskTool.inputSchema.properties.evidencePaths, "create_dove_task should expose mission pass evidence paths");
+  assert.ok(createDoveTaskTool.inputSchema.properties.workContract, "create_dove_task should expose workContract");
+  assert.ok(createDoveTaskTool.inputSchema.properties.deliverables, "create_dove_task should expose deliverables");
+  assert.ok(createDoveTaskTool.inputSchema.properties.evidenceContract, "create_dove_task should expose evidenceContract");
+  assert.ok(createDoveTaskTool.inputSchema.properties.doneCriteria, "create_dove_task should expose doneCriteria");
+  assert.ok(createDoveTaskTool.inputSchema.properties.recommendedRoutes, "create_dove_task should expose recommendedRoutes");
   assert.ok(recordMissionPassTool, "record_dove_mission_pass should exist");
   assert.match(recordMissionPassTool.description, /resultCard/);
   assert.ok(recordMissionPassTool.inputSchema.properties.runId, "record_dove_mission_pass should expose runId");
@@ -1598,6 +1797,9 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(doveStatusQueryTool.inputSchema.properties.packetId, "query_dove_status should expose packetId");
   assert.ok(doveStatusQueryTool.inputSchema.properties.status, "query_dove_status should expose status");
   assert.ok(doveStatusQueryTool.inputSchema.properties.includeArchived, "query_dove_status should expose includeArchived");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.detail, "query_dove_status should expose detail");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.full, "query_dove_status should expose full");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.includeDetails, "query_dove_status should expose includeDetails");
   assert.ok(doveAuditQueryTool.inputSchema.properties.scope, "query_dove_audit should expose scope");
   assert.ok(doveAuditQueryTool.inputSchema.properties.changedFilePaths, "query_dove_audit should expose changedFilePaths");
   assert.ok(doveAuditQueryTool.inputSchema.properties.validationOutputPaths, "query_dove_audit should expose validationOutputPaths");

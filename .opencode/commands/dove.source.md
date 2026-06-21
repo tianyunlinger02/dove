@@ -1,3 +1,7 @@
+---
+description: "Collect and organize external information such as web, literature, API, or operator-provided sources for the selected task."
+---
+
 # dove.source
 
 Collect and organize external information such as web, literature, API, or operator-provided sources for the selected task.

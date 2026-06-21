@@ -1,3 +1,7 @@
+---
+description: "Run all ready and in-progress Dove missions once, and create blocker-investigation plan missions for blocked work."
+---
+
 # dove.operator
 
 Run all ready and in-progress Dove missions once, and create blocker-investigation plan missions for blocked work.

@@ -115,15 +115,29 @@ function renderBody(command, heading) {
   return `# ${heading}\n\n${command.summary}\n\n## Daily use\n\n${dailyUse}${examples}\n\n## Contract\n\n- Command id: \`${command.id}\`\n- Domain: \`${command.domain}\`\n- Category: \`${command.category}\`\n- Policy: \`${command.policy}\`\n\n## Guardrails\n\n${guardrails}\n`;
 }
 
+function renderFrontmatter(command, fields = {}) {
+  const lines = ["---"];
+  if (fields.name) {
+    lines.push(`name: ${fields.name}`);
+  }
+  lines.push(`description: ${yamlString(command.summary)}`);
+  lines.push("---", "");
+  return lines.join("\n");
+}
+
+function renderMarkdownCommand(command, heading) {
+  return `${renderFrontmatter(command)}\n${renderBody(command, heading)}`;
+}
+
 function renderSkill(command) {
   const name = `dove-${hostCommandSlug(command.id)}`;
-  return `---\nname: ${name}\ndescription: ${yamlString(command.summary)}\n---\n\n${renderBody(command, markdownTitle(command))}`;
+  return `${renderFrontmatter(command, { name })}\n${renderBody(command, markdownTitle(command))}`;
 }
 
 export function renderCommandAdapter(hostId, command) {
   switch (hostId) {
-    case "opencode": return renderBody(command, command.id);
-    case "cursor": return renderBody(command, `dove-${hostCommandSlug(command.id)}`);
+    case "opencode": return renderMarkdownCommand(command, command.id);
+    case "cursor": return renderMarkdownCommand(command, `dove-${hostCommandSlug(command.id)}`);
     case "codex":
     case "agents": return renderSkill(command);
     default: throw new Error(`Unknown host adapter: ${hostId}`);

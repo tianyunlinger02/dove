@@ -1,3 +1,7 @@
+---
+description: "Normalize reviewer issues, build a rebuttal strategy, and draft submission/revision responses."
+---
+
 # dove-rebuttal
 
 Normalize reviewer issues, build a rebuttal strategy, and draft submission/revision responses.

@@ -1,3 +1,7 @@
+---
+description: "Inspect or record global and task-bound lessons that future Dove work must obey."
+---
+
 # dove.lessons
 
 Inspect or record global and task-bound lessons that future Dove work must obey.

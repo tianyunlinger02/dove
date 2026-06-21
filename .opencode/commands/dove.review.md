@@ -1,3 +1,7 @@
+---
+description: "Run an isolated audio review over final plan/results and explicitly supplied artifacts without inheriting full project context."
+---
+
 # dove.review
 
 Run an isolated audio review over final plan/results and explicitly supplied artifacts without inheriting full project context.

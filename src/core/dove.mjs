@@ -86,6 +86,14 @@ function objectOrFallback(value, fallback) {
 const VALIDATION_OUTPUT_READ_LIMIT_BYTES = 24 * 1024;
 const ARCHIVED_PACKET_STATUSES = new Set(["archived", "archived-with-lineage"]);
 
+function archivedPacketStatus(value) {
+  return ARCHIVED_PACKET_STATUSES.has(String(value ?? "").trim().toLowerCase());
+}
+
+function isArchivedStatusTask(task) {
+  return archivedPacketStatus(task?.status) || archivedPacketStatus(task?.lifecycleStatus);
+}
+
 function normalizeStringArray(value) {
   const values = Array.isArray(value) ? value : (typeof value === "string" ? [value] : []);
   return Array.from(new Set(values.map((item) => String(item).trim()).filter(Boolean)));
@@ -96,7 +104,7 @@ function mergeStringArrays(...values) {
 }
 
 function activePackets(packets = []) {
-  return packets.filter((packet) => !ARCHIVED_PACKET_STATUSES.has(packet.lifecycleStatus));
+  return packets.filter((packet) => !archivedPacketStatus(packet.lifecycleStatus));
 }
 
 function normalizeProjectRelativePath(rawPath) {
@@ -700,40 +708,113 @@ function normalizeDoveStatusLevel(packet) {
   return Number.isFinite(level) ? level : 3;
 }
 
-function summarizeDoveStatusTask(packet) {
+function normalizeStatusContractStringArray(value) {
+  if (Array.isArray(value)) {
+    return normalizeStringArray(value);
+  }
+  return typeof value === "string" && value.trim() ? [value.trim()] : [];
+}
+
+function firstStatusContractStringArray(...values) {
+  for (const value of values) {
+    const normalized = normalizeStatusContractStringArray(value);
+    if (normalized.length > 0) {
+      return normalized;
+    }
+  }
+  return [];
+}
+
+function statusCopyableCommand(command, packetId) {
+  const publicCommand = toPublicDoveCommand(command, "project:dove.auto");
+  return packetId ? `${publicCommand} --packet-id ${packetId}` : publicCommand;
+}
+
+function normalizeStatusContractRoutes(routes) {
+  return (Array.isArray(routes) ? routes : []).map((route, index) => {
+    const source = typeof route === "string" ? { command: route } : objectOrFallback(route, {});
+    const command = typeof source.command === "string" && source.command.trim() ? toPublicDoveCommand(source.command, source.command) : null;
+    if (!command) {
+      return null;
+    }
+    return {
+      label: source.label ?? source.title ?? null,
+      command,
+      copyableCommand: source.copyableCommand ?? source.copyCommand ?? null,
+      packetId: source.packetId ?? source.taskPacketId ?? source.missionPacketId ?? null,
+      when: source.when ?? source.reason ?? null,
+      role: source.role ?? source.ownerRole ?? null,
+      evidenceRequired: normalizeStatusContractStringArray(source.evidenceRequired ?? source.evidenceContract ?? source.evidenceExpectations),
+      doneCriteria: normalizeStatusContractStringArray(source.doneCriteria),
+      rank: Number.isFinite(source.rank) ? source.rank : index + 1
+    };
+  }).filter(Boolean);
+}
+
+function normalizeDoveStatusWorkContract(contract) {
+  const explicit = objectOrFallback(contract, null);
+  if (!explicit) {
+    return null;
+  }
+  return {
+    purpose: explicit.purpose ?? null,
+    deliverables: normalizeStatusContractStringArray(explicit.deliverables),
+    outOfScope: firstStatusContractStringArray(explicit.outOfScope, explicit.outOfScopeItems),
+    evidenceContract: normalizeStatusContractStringArray(explicit.evidenceContract),
+    doneCriteria: normalizeStatusContractStringArray(explicit.doneCriteria),
+    recommendedRoutes: normalizeStatusContractRoutes(explicit.recommendedRoutes),
+    practicalImpact: explicit.practicalImpact ?? null
+  };
+}
+
+function summarizeDoveStatusTask(packet, responseLanguage = "zh") {
   const id = String(packet.id ?? packet.packetId ?? packet.missionPacketId ?? "").trim();
   const aliases = missionPacketAliases({ ...packet, id });
+  const title = packet.title ?? id;
+  const summary = packet.summary ?? packet.currentFocus ?? null;
+  const stage = normalizeDoveStatusTaskStage(packet);
+  const domain = normalizeDoveStatusTaskDomain(packet);
+  const evidenceExpectations = normalizeStringArray(packet.evidenceExpectations ?? packet.acceptanceChecks);
+  const ownerRole = packet.ownerRole ?? null;
+  const nextRole = packet.nextRole ?? null;
+  const nextAction = packet.nextAction ?? null;
+  const workContract = normalizeDoveStatusWorkContract(packet.workContract);
+  const status = normalizeDoveStatusTaskStatus(packet);
   return {
     id,
     ...aliases,
-    title: packet.title ?? id,
-    summary: packet.summary ?? packet.currentFocus ?? null,
+    title,
+    summary,
     parentId: packet.parentId ?? null,
     rootId: packet.rootId ?? null,
     level: normalizeDoveStatusLevel(packet),
     creatorKind: normalizeDoveStatusCreatorKind(packet),
-    stage: normalizeDoveStatusTaskStage(packet),
-    domain: normalizeDoveStatusTaskDomain(packet),
-    status: normalizeDoveStatusTaskStatus(packet),
+    stage,
+    domain,
+    status,
+    displayStatus: status === "completed" || status === "killed" ? "done" : status,
     lifecycleStatus: packet.lifecycleStatus ?? packet.status ?? null,
     dependencies: normalizeStringArray(packet.dependencies ?? packet.dependencyIds),
     blockedBy: normalizeStringArray(packet.blockedBy ?? packet.blockerIds),
     blockedReason: packet.blockedReason ?? packet.blockerReason ?? packet.blockingReason ?? null,
     lessonIds: normalizeStringArray(packet.lessonIds),
-    evidenceExpectations: normalizeStringArray(packet.evidenceExpectations ?? packet.acceptanceChecks),
+    sourcePlanTaskId: packet.sourcePlanTaskId ?? null,
+    derivedFrom: packet.derivedFrom ?? null,
+    evidenceExpectations,
+    workContract,
     artifactRefs: mergeStringArrays(packet.artifactRefs, packet.artifactPaths, packet.outputPaths, packet.evidenceLinks),
     outputPaths: normalizeStringArray(packet.outputPaths),
     evidenceLinks: normalizeStringArray(packet.evidenceLinks),
     contextPolicy: packet.contextPolicy ?? null,
     currentFocus: packet.currentFocus ?? null,
-    nextAction: packet.nextAction ?? null,
+    nextAction,
     createdAt: packet.createdAt ?? null,
     updatedAt: packet.updatedAt ?? null,
     completedAt: packet.completedAt ?? null,
     killedAt: packet.killedAt ?? null,
     killReason: packet.killReason ?? null,
-    ownerRole: packet.ownerRole ?? null,
-    nextRole: packet.nextRole ?? null,
+    ownerRole,
+    nextRole,
     boundary: normalizeDoveBoundary(packet.boundary, null),
     boundaryHistory: Array.isArray(packet.boundaryHistory) ? packet.boundaryHistory.map((item) => normalizeDoveBoundary(item, null)).filter(Boolean) : [],
     handoff: normalizeDoveHandoff(packet.handoff, null),
@@ -1031,9 +1112,54 @@ function rankStatusActionCards(cards) {
     });
 }
 
-function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, responseLanguage = "zh" }) {
+function completionConsistencyFindings(completionConsistency = {}) {
+  return Array.isArray(completionConsistency.findings) ? completionConsistency.findings : [];
+}
+
+function completionConsistencyOpenChecklistChildIds(completionConsistency = {}) {
+  return new Set(completionConsistencyFindings(completionConsistency).flatMap((finding) => normalizeStringArray(finding.openChecklistChildIds)));
+}
+
+function buildCompletionReconciliationCard(completionConsistency = {}, responseLanguage = "zh") {
+  const findings = completionConsistencyFindings(completionConsistency);
+  if (findings.length === 0) {
+    return null;
+  }
+  const openChecklistChildIds = Array.from(completionConsistencyOpenChecklistChildIds(completionConsistency));
+  return statusActionBase({
+    priority: 5,
+    kind: "reconcile-completion-consistency",
+    title: doveText(responseLanguage, "statusHomeReconcileTitle", { count: findings.length }),
+    why: doveText(responseLanguage, "statusHomeReconcileWhy"),
+    command: "project:dove.status",
+    firstAction: "project:dove.status",
+    affectedParentIds: normalizeStringArray(findings.map((finding) => finding.parentId)),
+    findingCount: findings.length,
+    openChecklistChildCount: openChecklistChildIds.length,
+    openChecklistChildIds,
+    evidenceRequired: openChecklistChildIds,
+    doneCriteria: [doveText(responseLanguage, "statusHomeReconcileDoneCriteria")],
+    findings
+  });
+}
+
+function primaryStatusRoute(task = {}) {
+  const routes = Array.isArray(task.workContract?.recommendedRoutes) ? task.workContract.recommendedRoutes : [];
+  return routes.find((route) => typeof route?.command === "string" && route.command.trim()) ?? null;
+}
+
+function statusRouteEvidence(task = {}, route = null) {
+  return firstStatusContractStringArray(route?.evidenceRequired, task.workContract?.evidenceContract, task.evidenceExpectations);
+}
+
+function statusRouteDoneCriteria(task = {}, route = null) {
+  return firstStatusContractStringArray(route?.doneCriteria, task.workContract?.doneCriteria);
+}
+
+function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, completionConsistency, responseLanguage = "zh" }) {
   const cards = [];
   const seen = new Set();
+  const reconciliationChildIds = completionConsistencyOpenChecklistChildIds(completionConsistency);
   const pushCard = (key, card) => {
     if (!key || seen.has(key)) {
       return;
@@ -1052,7 +1178,11 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, revie
       evidenceRequired: []
     });
   }
+  pushCard("completion-consistency", buildCompletionReconciliationCard(completionConsistency, responseLanguage));
   for (const action of boundaryActionCards) {
+    if (reconciliationChildIds.has(action.packetId)) {
+      continue;
+    }
     const kind = action.kind === "send-to-review" ? "review-needed" : action.kind === "provide-evidence-or-result" ? "provide-evidence" : "boundary-resume";
     pushCard(`boundary:${action.boundaryId}`, {
       priority: 10,
@@ -1075,18 +1205,24 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, revie
     });
   }
   for (const task of activeTasks) {
-    if (!task.continuationState) {
+    if (reconciliationChildIds.has(task.id) || !task.continuationState) {
       continue;
     }
+    const route = primaryStatusRoute(task);
+    const command = toPublicDoveCommand(task.continuationState.command ?? route?.command ?? task.nextAction, "project:dove.auto");
     pushCard(`continuation:${task.id}`, {
       priority: 20,
       kind: "continue-task",
       title: doveText(responseLanguage, "statusHomeContinuationTitle", { title: task.title }),
-      why: doveText(responseLanguage, "statusHomeContinuationWhy"),
+      why: route?.when ?? task.workContract?.practicalImpact ?? doveText(responseLanguage, "statusHomeContinuationWhy"),
       packetId: task.id,
-      command: toPublicDoveCommand(task.continuationState.command ?? task.nextAction, "project:dove.auto"),
-      firstAction: toPublicDoveCommand(task.continuationState.command ?? task.nextAction, "project:dove.auto"),
-      evidenceRequired: normalizeStringArray(task.evidenceExpectations),
+      command,
+      firstAction: route?.copyableCommand ?? statusCopyableCommand(command, task.id),
+      copyableCommand: route?.copyableCommand ?? statusCopyableCommand(command, task.id),
+      evidenceRequired: statusRouteEvidence(task, route),
+      doneCriteria: statusRouteDoneCriteria(task, route),
+      workContract: task.workContract,
+      route,
       continuation: task.continuationState,
       handoff: task.handoff ?? null
     });
@@ -1117,18 +1253,27 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, revie
     });
   }
   for (const task of activeTasks) {
-    if (!task.nextAction) {
+    if (reconciliationChildIds.has(task.id)) {
       continue;
     }
+    const route = primaryStatusRoute(task);
+    if (!task.nextAction && !route) {
+      continue;
+    }
+    const command = toPublicDoveCommand(route?.command ?? task.nextAction, "project:dove.auto");
     pushCard(`next:${task.id}`, {
       priority: 50,
       kind: "continue-task",
       title: doveText(responseLanguage, "statusHomeContinueTitle", { title: task.title }),
-      why: doveText(responseLanguage, "statusHomeContinueWhy"),
+      why: route?.when ?? task.workContract?.practicalImpact ?? doveText(responseLanguage, "statusHomeContinueWhy"),
       packetId: task.id,
-      command: toPublicDoveCommand(task.nextAction),
-      firstAction: toPublicDoveCommand(task.nextAction),
-      evidenceRequired: normalizeStringArray(task.evidenceExpectations),
+      command,
+      firstAction: route?.copyableCommand ?? statusCopyableCommand(command, task.id),
+      copyableCommand: route?.copyableCommand ?? statusCopyableCommand(command, task.id),
+      evidenceRequired: statusRouteEvidence(task, route),
+      doneCriteria: statusRouteDoneCriteria(task, route),
+      workContract: task.workContract,
+      route,
       boundary: task.currentBoundary ?? null,
       handoff: task.handoff ?? null
     });
@@ -1163,13 +1308,15 @@ function buildStatusAdjustmentCard(task, recommendedStatus, responseLanguage = "
   });
 }
 
-function buildDailyHome({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, responseLanguage = "zh" }) {
+function buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, responseLanguage = "zh" }) {
   return {
     presentation: "dove-status-home",
     liveContextFirst: true,
-    nextActions: buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, responseLanguage }),
+    nextActions: buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, completionConsistency, responseLanguage }),
+    missionList: buildStatusMissionList(visibleTasks),
+    completionConsistency,
     boundaryActionCards,
-    suppressUserFacingDumps: ["mission counts", "status counts", "recent completed missions", "recent killed missions"]
+    suppressUserFacingDumps: ["raw mission counts", "raw status counts", "recent completed missions", "recent killed missions"]
   };
 }
 
@@ -1297,15 +1444,336 @@ function buildStatusAdjustmentContract(tasks, responseLanguage = "zh") {
   };
 }
 
-function buildProjectSummary({ title, objective, focus, initTask, tasks, activeTasks, blockedTasks, review, versions, experiments, blockers, nextCommand, returnStatus }) {
+const STATUS_COMPACT_GROUP_LIMITS = {
+  doing: 5,
+  blocked: 5,
+  todo: 5,
+  done: 0
+};
+
+const STATUS_ADJUSTMENT_PREVIEW_LIMIT = 8;
+
+function wantsFullDoveStatus(args = {}) {
+  const detail = String(args.detail ?? args.view ?? args.resultMode ?? "").trim().toLowerCase();
+  return detail === "full" || detail === "details" || detail === "debug" || booleanArg(args.full) || booleanArg(args.includeDetails);
+}
+
+function compactStatusGroup(group = {}, limit = 0) {
+  const items = Array.isArray(group.items) ? group.items : [];
+  const shownItems = items.slice(0, limit);
+  return {
+    ...group,
+    items: shownItems,
+    itemCount: items.length,
+    shownCount: shownItems.length,
+    hiddenCount: Math.max(0, items.length - shownItems.length),
+    defaultCollapsed: Boolean(group.defaultCollapsed || limit === 0)
+  };
+}
+
+function compactStatusMissionList(missionList = {}) {
+  const groups = missionList.groups ?? {};
+  const compactGroups = Object.fromEntries(Object.entries(STATUS_COMPACT_GROUP_LIMITS).map(([name, limit]) => [name, compactStatusGroup(groups[name], limit)]));
+  const hiddenCount = Object.values(compactGroups).reduce((total, group) => total + (group.hiddenCount ?? 0), 0);
+  return {
+    ...missionList,
+    detail: "compact",
+    groups: compactGroups,
+    previewLimits: STATUS_COMPACT_GROUP_LIMITS,
+    hiddenItemCount: hiddenCount,
+    detailsAvailable: hiddenCount > 0
+  };
+}
+
+function compactWorkContract(contract) {
+  if (!contract) {
+    return null;
+  }
+  return {
+    purpose: contract.purpose ?? null,
+    deliverables: normalizeStringArray(contract.deliverables).slice(0, 3),
+    evidenceContract: normalizeStringArray(contract.evidenceContract).slice(0, 3),
+    doneCriteria: normalizeStringArray(contract.doneCriteria).slice(0, 3),
+    practicalImpact: contract.practicalImpact ?? null
+  };
+}
+
+function compactStatusActionCard(card) {
+  if (!card || typeof card !== "object") {
+    return card;
+  }
+  return {
+    presentation: card.presentation,
+    proposalOnly: card.proposalOnly,
+    noAutoApply: card.noAutoApply,
+    rank: card.rank,
+    priority: card.priority,
+    kind: card.kind,
+    title: card.title,
+    why: card.why,
+    packetId: card.packetId,
+    affectedParentIds: normalizeStringArray(card.affectedParentIds),
+    findingCount: card.findingCount,
+    openChecklistChildCount: card.openChecklistChildCount,
+    openChecklistChildIds: normalizeStringArray(card.openChecklistChildIds).slice(0, 20),
+    command: card.command,
+    firstAction: card.firstAction,
+    copyableCommand: card.copyableCommand,
+    evidenceRequired: normalizeStringArray(card.evidenceRequired).slice(0, 5),
+    doneCriteria: normalizeStringArray(card.doneCriteria).slice(0, 5),
+    workContract: compactWorkContract(card.workContract),
+    boundaryType: card.boundaryType ?? card.boundary?.type ?? null,
+    reason: card.reason ?? card.boundary?.reason ?? null,
+    requires: normalizeStringArray(card.requires).slice(0, 5),
+    options: Array.isArray(card.options) ? card.options.slice(0, 4) : undefined
+  };
+}
+
+function compactStatusAdjustmentItem(item) {
+  return {
+    index: item.index,
+    packetId: item.packetId,
+    title: item.title,
+    currentStatus: item.currentStatus,
+    recommendedStatus: item.recommendedStatus,
+    level: item.level,
+    stage: item.stage,
+    domain: item.domain,
+    blockedReason: item.blockedReason ?? null,
+    lastStopReason: item.lastStopReason ?? null,
+    boundaryType: item.currentBoundary?.type ?? item.actionableBoundary?.type ?? null,
+    choices: item.choices,
+    confirmArgs: item.confirmArgs
+  };
+}
+
+function compactStatusAdjustmentContract(contract = {}) {
+  const items = Array.isArray(contract.items) ? contract.items : [];
+  const shownItems = items.slice(0, STATUS_ADJUSTMENT_PREVIEW_LIMIT).map(compactStatusAdjustmentItem);
+  const adjustmentCards = Array.isArray(contract.adjustmentCards) ? contract.adjustmentCards.slice(0, STATUS_ADJUSTMENT_PREVIEW_LIMIT).map(compactStatusActionCard) : [];
+  return {
+    proposalOnly: contract.proposalOnly,
+    noAutoApply: contract.noAutoApply,
+    writes: Array.isArray(contract.writes) ? contract.writes : [],
+    mutationTool: contract.mutationTool,
+    statusChoices: contract.statusChoices,
+    itemCount: contract.itemCount ?? items.length,
+    previewItemCount: shownItems.length,
+    hiddenItemCount: Math.max(0, items.length - shownItems.length),
+    adjustmentCards,
+    items: shownItems,
+    detailsAvailable: items.length > shownItems.length
+  };
+}
+
+function compactDiagnostics(diagnostics = {}) {
+  return {
+    readErrors: Array.isArray(diagnostics.readErrors) ? diagnostics.readErrors : [],
+    mayRefreshDerivedSurfaces: diagnostics.mayRefreshDerivedSurfaces ?? false,
+    noCommandExecution: diagnostics.noCommandExecution ?? true,
+    noExternalProcess: diagnostics.noExternalProcess ?? true,
+    noGitInspection: diagnostics.noGitInspection ?? true,
+    noSourceMutation: diagnostics.noSourceMutation ?? true,
+    omittedSections: ["dashboard", "task tree", "active task objects", "recent completed/killed mission recaps", "runtime event/result details"],
+    fullDetails: { detail: "full" }
+  };
+}
+
+function compactDoveStatusResult(result, args = {}) {
+  const missionList = compactStatusMissionList(result.dailyHome?.missionList);
+  const nextActions = (Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : []).slice(0, 3).map(compactStatusActionCard);
+  const boundaryActionCards = (Array.isArray(result.dailyHome?.boundaryActionCards) ? result.dailyHome.boundaryActionCards : []).slice(0, 5).map(compactStatusActionCard);
+  const statusAdjustmentContract = compactStatusAdjustmentContract(result.statusAdjustmentContract);
+  const dailyHome = {
+    ...result.dailyHome,
+    detail: "compact",
+    missionList,
+    nextActions,
+    boundaryActionCards,
+    detailsAvailable: true,
+    fullDetails: {
+      tool: "query_dove_status",
+      args: compactStatusDetailArgs(args)
+    }
+  };
+  const statusHome = {
+    presentation: "dove-status-compact-home",
+    detail: "compact",
+    liveContextFirst: true,
+    summary: {
+      title: result.projectSummary?.title ?? null,
+      objective: result.projectSummary?.objective ?? null,
+      currentFocus: result.projectSummary?.currentFocus ?? null,
+      openMissionCount: missionList.summary?.openCount ?? 0,
+      todoMissionCount: missionList.summary?.todoCount ?? 0,
+      doingMissionCount: missionList.summary?.doingCount ?? 0,
+      blockedMissionCount: missionList.summary?.blockedCount ?? 0,
+      doneMissionCount: missionList.summary?.doneCount ?? 0,
+      reviewVerdict: result.projectSummary?.reviewVerdict ?? null,
+      returnStatus: result.projectSummary?.returnStatus ?? null,
+      nextCommand: result.suggestedNextCommand ?? result.current?.nextCommand ?? null
+    },
+    missionList,
+    nextActions,
+    boundaryActionCards,
+    statusAdjustmentPreview: statusAdjustmentContract,
+    detailsAvailable: true,
+    fullDetails: dailyHome.fullDetails
+  };
+  return {
+    mode: result.mode,
+    query: result.query,
+    proposalOnly: result.proposalOnly,
+    noAutoApply: result.noAutoApply,
+    writes: result.writes,
+    responseLanguage: result.responseLanguage,
+    detail: "compact",
+    detailsAvailable: true,
+    projectSummary: result.projectSummary,
+    statusHome,
+    statusAdjustmentContract,
+    dailyHome,
+    actionableBoundaries: (Array.isArray(result.actionableBoundaries) ? result.actionableBoundaries : []).slice(0, 5),
+    boundaryActionCards,
+    current: result.current,
+    board: result.board,
+    suggestedNextCommand: result.suggestedNextCommand,
+    diagnostics: compactDiagnostics(result.diagnostics)
+  };
+}
+
+function compactStatusDetailArgs(args = {}) {
+  return {
+    domain: args.domain ?? args.doveDomain ?? args.missionDomain,
+    stage: args.stage ?? args.missionStage,
+    packetIds: normalizeStringArray(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds),
+    statuses: normalizeStringArray(args.status ?? args.statuses),
+    includeArchived: booleanArg(args.includeArchived),
+    detail: "full"
+  };
+}
+
+function missionUserGroupForStatus(status) {
+  if (status === "blocked") {
+    return "blocked";
+  }
+  if (status === "in-progress") {
+    return "doing";
+  }
+  if (status === "completed" || status === "killed") {
+    return "done";
+  }
+  return "todo";
+}
+
+function summarizeStatusMissionListItem(task, index) {
+  const recommendedStatus = recommendedStatusForTask(task);
+  const group = missionUserGroupForStatus(recommendedStatus);
+  return {
+    index,
+    packetId: task.id,
+    title: task.title,
+    group,
+    status: task.status,
+    recommendedStatus,
+    stage: task.stage,
+    domain: task.domain,
+    level: task.level,
+    blockedReason: task.blockedReason ?? null,
+    lastStopReason: task.lastStopReason ?? null,
+    boundaryType: task.currentBoundary?.type ?? null,
+    evidenceRequired: normalizeStringArray(task.evidenceExpectations),
+    artifactRefs: normalizeStringArray(task.artifactRefs)
+  };
+}
+
+function openChecklistChildForStatusParent(task, parentId) {
+  return task.parentId === parentId
+    && task.creatorKind === "system"
+    && !task.derivedFrom
+    && !task.sourcePlanTaskId
+    && !isArchivedStatusTask(task)
+    && !["completed", "killed"].includes(task.status);
+}
+
+function buildCompletionConsistency(tasks = [], responseLanguage = "zh") {
+  const byParentId = new Map();
+  for (const task of tasks) {
+    if (!task.parentId || !openChecklistChildForStatusParent(task, task.parentId)) {
+      continue;
+    }
+    byParentId.set(task.parentId, [...(byParentId.get(task.parentId) ?? []), task]);
+  }
+  const findings = tasks.filter((task) => task.status === "completed" && byParentId.has(task.id)).map((parent) => {
+    const openChildren = sortStatusTasks(byParentId.get(parent.id) ?? []);
+    return {
+      id: `completion-consistency-${parent.id}`,
+      type: "completed-parent-open-checklist",
+      severity: "blocking",
+      parentId: parent.id,
+      parentTitle: parent.title,
+      parentDisplayStatus: "done",
+      parentMachineStatus: parent.status,
+      openChecklistChildIds: openChildren.map((child) => child.id),
+      openChecklistChildren: openChildren.map((child) => ({ id: child.id, title: child.title, status: child.status, displayStatus: child.displayStatus ?? child.status })),
+      nextAction: "project:dove.status",
+      summary: responseLanguage === "en" ? "A done parent mission still has open checklist children." : "done 父 mission 下仍有 open checklist 子项。"
+    };
+  });
+  return {
+    status: findings.length > 0 ? "needs-reconciliation" : "consistent",
+    findingCount: findings.length,
+    findings
+  };
+}
+
+function buildStatusMissionList(tasks) {
+  const items = sortStatusTasks(tasks.filter((task) => task.level !== 0)).map((task, index) => summarizeStatusMissionListItem(task, index + 1));
+  const groups = {
+    todo: { label: "todo", description: "pending or ready missions", defaultCollapsed: false, items: [] },
+    doing: { label: "doing", description: "missions with in-progress foreground runtime state", defaultCollapsed: false, items: [] },
+    blocked: { label: "blocked", description: "missions blocked by dependency, boundary, or missing evidence", defaultCollapsed: false, items: [] },
+    done: { label: "done", description: "completed or killed missions", defaultCollapsed: true, items: [] }
+  };
+  for (const item of items) {
+    groups[item.group].items.push(item);
+  }
+  return {
+    presentation: "dove-mission-list",
+    statusModel: {
+      userGroups: ["todo", "doing", "blocked", "done"],
+      machineStatuses: DOVE_TASK_STATUSES,
+      mapping: {
+        todo: ["pending", "ready"],
+        doing: ["in-progress"],
+        blocked: ["blocked"],
+        done: ["completed", "killed"]
+      }
+    },
+    summary: {
+      totalCount: items.length,
+      openCount: groups.todo.items.length + groups.doing.items.length + groups.blocked.items.length,
+      todoCount: groups.todo.items.length,
+      doingCount: groups.doing.items.length,
+      blockedCount: groups.blocked.items.length,
+      doneCount: groups.done.items.length
+    },
+    groups
+  };
+}
+
+function buildProjectSummary({ title, objective, focus, initTask, tasks, activeTasks, blockedTasks, missionList, review, versions, experiments, blockers, nextCommand, returnStatus }) {
   return {
     title,
     objective,
     currentFocus: focus,
     initTaskId: initTask?.id ?? null,
     missionCount: tasks.filter((task) => task.level !== 0).length,
+    openMissionCount: missionList?.summary?.openCount ?? activeTasks.length,
+    todoMissionCount: missionList?.summary?.todoCount ?? 0,
+    doingMissionCount: missionList?.summary?.doingCount ?? 0,
     activeMissionCount: activeTasks.length,
-    blockedMissionCount: blockedTasks.length,
+    blockedMissionCount: missionList?.summary?.blockedCount ?? blockedTasks.length,
     statusCounts: countBy(tasks.map((task) => task.status), DOVE_TASK_STATUSES),
     reviewVerdict: review.verdict,
     unresolvedConcernCount: review.unresolvedConcernCount,
@@ -1908,7 +2376,10 @@ export function queryPaperPipeline(root, args = {}) {
 export function queryDoveStatus(root, args = {}) {
   const inputs = readDoveInputs(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args, { state: inputs.state });
-  const tasks = sortStatusTasks(enrichStatusTasks((Array.isArray(inputs.taskCatalog.packets) ? inputs.taskCatalog.packets : []).map(summarizeDoveStatusTask).filter((task) => task.id), inputs));
+  const includeArchived = booleanArg(args.includeArchived);
+  const allTasks = sortStatusTasks(enrichStatusTasks((Array.isArray(inputs.taskCatalog.packets) ? inputs.taskCatalog.packets : []).map((packet) => summarizeDoveStatusTask(packet, responseLanguage)).filter((task) => task.id), inputs));
+  const tasks = includeArchived ? allTasks : allTasks.filter((task) => !isArchivedStatusTask(task));
+  const consistencyTasks = allTasks.filter((task) => !isArchivedStatusTask(task));
   const requestedDomain = normalizeDoveDomainId(args.domain ?? args.doveDomain ?? args.missionDomain, null);
   const requestedStage = normalizeStatusStageArg(args.stage ?? args.missionStage);
   const requestedStatuses = normalizeStringArray(args.status ?? args.statuses);
@@ -1936,6 +2407,7 @@ export function queryDoveStatus(root, args = {}) {
   const blockedTasks = activeTasks.filter(hasTaskBlockerSignal);
   const completedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "completed")).slice(0, 10);
   const killedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "killed")).slice(0, 10);
+  const completionConsistency = buildCompletionConsistency(consistencyTasks, responseLanguage);
   const review = summarizeStatusReview(inputs);
   const blockers = buildStatusBlockers(inputs, blockedTasks, responseLanguage);
   const lessons = summarizeStatusLessons(inputs);
@@ -1947,7 +2419,7 @@ export function queryDoveStatus(root, args = {}) {
   const primaryRole = currentStage === "audit" ? "reviewer" : currentStage === "execute" ? "builder" : "planner";
   const returnStatus = inputs.readErrors.length > 0
     ? "blocked"
-    : blockers.length > 0
+    : blockers.length > 0 || completionConsistency.status === "needs-reconciliation"
       ? "blocked"
       : activeTasks.length > 0
         ? "in-progress"
@@ -1958,17 +2430,18 @@ export function queryDoveStatus(root, args = {}) {
   const projectTitle = inputs.state.dove?.title ?? initTask?.title ?? doveText(responseLanguage, "projectTitleFallback");
   const projectObjective = inputs.state.dove?.objective ?? inputs.state.dove?.thesis ?? initTask?.summary ?? inputs.board.objective ?? null;
   const projectFocus = activeTasks[0]?.currentFocus ?? (activeTasks.length === 0 ? projectObjective : inputs.state.orchestration?.currentFocus ?? inputs.board.currentFocus ?? projectObjective);
-  const dailyHome = buildDailyHome({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, responseLanguage });
+  const dailyHome = buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, responseLanguage });
   const nextCommand = selectDailyHomeNextCommand(dailyHome, fallbackNextCommand);
-  const projectSummary = buildProjectSummary({ title: projectTitle, objective: projectObjective, focus: projectFocus, initTask, tasks, activeTasks, blockedTasks, review, versions, experiments, blockers, nextCommand, returnStatus });
+  const projectSummary = buildProjectSummary({ title: projectTitle, objective: projectObjective, focus: projectFocus, initTask, tasks, activeTasks, blockedTasks, missionList: dailyHome.missionList, review, versions, experiments, blockers, nextCommand, returnStatus });
   const statusAdjustmentContract = buildStatusAdjustmentContract(visibleTasks, responseLanguage);
-  return {
+  const fullResult = {
     mode: "dove-status-query",
     query: true,
     proposalOnly: true,
     noAutoApply: true,
     writes: [],
     responseLanguage,
+    detail: "full",
     projectSummary,
     statusAdjustmentContract,
     dailyHome,
@@ -2017,6 +2490,7 @@ export function queryDoveStatus(root, args = {}) {
       tasks: {
         tree: buildStatusTaskTree(visibleTasks),
         active: activeTasks,
+        grouped: dailyHome.missionList,
         blocked: blockedTasks,
         actionableBoundaries,
         boundaryActionCards,
@@ -2085,6 +2559,7 @@ export function queryDoveStatus(root, args = {}) {
       noSourceMutation: true
     }
   };
+  return wantsFullDoveStatus(args) ? fullResult : compactDoveStatusResult(fullResult, args);
 }
 
 export function queryDoveOrchestrate(root, args = {}) {

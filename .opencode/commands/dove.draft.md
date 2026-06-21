@@ -1,3 +1,7 @@
+---
+description: "Generate or modify paper draft content from prompts, existing materials, experience, figures, and review information."
+---
+
 # dove.draft
 
 Generate or modify paper draft content from prompts, existing materials, experience, figures, and review information.

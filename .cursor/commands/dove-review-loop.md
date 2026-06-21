@@ -1,3 +1,7 @@
+---
+description: "Loop isolated review, draft revision, and experience planning until coherent or blocked, with max iterations from global config."
+---
+
 # dove-review-loop
 
 Loop isolated review, draft revision, and experience planning until coherent or blocked, with max iterations from global config.

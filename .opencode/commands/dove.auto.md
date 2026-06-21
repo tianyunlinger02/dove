@@ -1,3 +1,7 @@
+---
+description: "Convert demand like mission intake, then after confirmation run multi-round foreground autonomy until completion or a boundary is reached."
+---
+
 # dove.auto
 
 Convert demand like mission intake, then after confirmation run multi-round foreground autonomy until completion or a boundary is reached.

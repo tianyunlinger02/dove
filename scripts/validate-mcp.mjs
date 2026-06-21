@@ -337,20 +337,31 @@ async function main() {
   assert.equal(killed.killedTask.status, "killed");
 
   const status = await callTool("query_dove_status", {});
+  const fullStatus = await callTool("query_dove_status", { detail: "full" });
   assert.equal(status.mode, "dove-status-query");
   assert.equal(status.proposalOnly, true);
   assert.equal(status.noAutoApply, true);
   assert.deepEqual(status.writes, []);
+  assert.equal(status.detail, "compact");
+  assert.equal(status.statusHome.presentation, "dove-status-compact-home");
+  assert.equal(status.dashboard, undefined);
+  assert.equal(fullStatus.detail, "full");
+  assert.ok(fullStatus.dashboard);
   assert.equal(status.dailyHome.presentation, "dove-status-home");
   assert.equal(status.dailyHome.liveContextFirst, true);
   assert.ok(status.dailyHome.nextActions.length <= 3);
   assert.ok(status.dailyHome.nextActions.every((card) => card.proposalOnly === true && card.noAutoApply === true));
   assert.ok(status.dailyHome.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
-  assert.deepEqual(status.dailyHome.suppressUserFacingDumps, ["mission counts", "status counts", "recent completed missions", "recent killed missions"]);
-  assert.ok(status.dashboard.tasks.counts.total >= 1);
-  assert.ok(status.dashboard.tasks.tree.length >= 1);
-  assert.equal(status.dashboard.tasks.index.activeInitId, initGoal.init.id);
-  assert.equal(status.dashboard.dailyHome.presentation, "dove-status-home");
+  assert.deepEqual(status.dailyHome.suppressUserFacingDumps, ["raw mission counts", "raw status counts", "recent completed missions", "recent killed missions"]);
+  assert.equal(status.dailyHome.missionList.presentation, "dove-mission-list");
+  assert.deepEqual(status.dailyHome.missionList.statusModel.userGroups, ["todo", "doing", "blocked", "done"]);
+  assert.deepEqual(status.dailyHome.missionList.statusModel.machineStatuses, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.equal(status.dailyHome.missionList.groups.done.defaultCollapsed, true);
+  assert.ok(fullStatus.dashboard.tasks.counts.total >= 1);
+  assert.ok(fullStatus.dashboard.tasks.tree.length >= 1);
+  assert.equal(fullStatus.dashboard.tasks.index.activeInitId, initGoal.init.id);
+  assert.deepEqual(fullStatus.dashboard.tasks.grouped, fullStatus.dailyHome.missionList);
+  assert.equal(fullStatus.dashboard.dailyHome.presentation, "dove-status-home");
 
   const publicStatus = await callTool("publish_dove_status", { generatedAt: "2026-06-16T00:00:00.000Z" });
   assert.equal(publicStatus.mode, "dove-public-status-publish");
@@ -381,7 +392,7 @@ async function main() {
   const globalPublicText = `${fs.readFileSync(path.join(globalOutputDir, "status.json"), "utf8")}\n${fs.readFileSync(path.join(globalOutputDir, "status.md"), "utf8")}\n${fs.readFileSync(path.join(globalOutputDir, "index.html"), "utf8")}`;
   assert.equal(globalPublicText.includes(tempWorkspace), false);
 
-  assert.ok(Array.isArray(status.dashboard.tasks.boundaryActionCards));
+  assert.ok(Array.isArray(fullStatus.dashboard.tasks.boundaryActionCards));
   assert.ok(status.projectSummary && typeof status.projectSummary === "object");
   assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
   assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);

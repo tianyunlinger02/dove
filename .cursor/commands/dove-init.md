@@ -1,3 +1,7 @@
+---
+description: "Create or update the single project-level Dove goal as the unique level-0 task."
+---
+
 # dove-init
 
 Create or update the single project-level Dove goal as the unique level-0 task.

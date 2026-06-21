@@ -98,8 +98,59 @@ function taskContextPath(packetId) {
   return path.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`);
 }
 
+const ARCHIVED_TASK_STATUSES = new Set(["archived", "archived-with-lineage"]);
+
 function activeStatus(status) {
   return !["completed", "killed", "archived", "archived-with-lineage"].includes(status);
+}
+
+function archivedTaskStatus(task) {
+  return [task?.status, task?.lifecycleStatus].some((status) => ARCHIVED_TASK_STATUSES.has(String(status ?? "").trim().toLowerCase()));
+}
+
+function openChecklistChildForParent(task, parentId) {
+  return task?.parentId === parentId
+    && task.creatorKind === "system"
+    && !task.derivedFrom
+    && !task.sourcePlanTaskId
+    && !archivedTaskStatus(task)
+    && activeStatus(normalizeStatus(task.status ?? task.lifecycleStatus, "pending"));
+}
+
+function openChecklistChildrenForParent(root, parent) {
+  const catalog = readTaskPacketCatalog(root);
+  return Array.from(catalog.byId.values()).filter((task) => openChecklistChildForParent(task, parent.id));
+}
+
+function checklistCompletionBlock(root, task, status, responseLanguage = "zh") {
+  if (status !== "completed") {
+    return null;
+  }
+  const openChecklistChildren = openChecklistChildrenForParent(root, task);
+  if (openChecklistChildren.length === 0) {
+    return null;
+  }
+  const message = responseLanguage === "en"
+    ? "The parent mission cannot be marked done while checklist children remain open."
+    : "父 mission 仍有 open checklist 子项，不能标记为 done。";
+  return {
+    status: "needs-checklist-reconciliation",
+    requestedStatus: "done",
+    machineStatus: "completed",
+    packetId: task.id,
+    title: task.title,
+    openChecklistChildIds: openChecklistChildren.map((child) => child.id),
+    openChecklistChildren: openChecklistChildren.map((child) => ({
+      id: child.id,
+      packetId: child.id,
+      title: child.title,
+      status: child.status,
+      displayStatus: child.status === "completed" || child.status === "killed" ? "done" : child.status,
+      parentId: child.parentId
+    })),
+    nextAction: "project:dove.status",
+    message
+  };
 }
 
 function normalizeIndex(index = createTaskPacketsIndex()) {
@@ -254,6 +305,171 @@ function nextCommandFor(classification) {
   return "project:dove.auto";
 }
 
+function publicMissionCommand(command, fallback = "project:dove.auto") {
+  const normalized = normalizeString(command, "");
+  if (!normalized) {
+    return fallback;
+  }
+  if (normalized.startsWith("project:dove.")) {
+    return normalized;
+  }
+  const toolRoutes = {
+    run_dove_auto: "project:dove.auto",
+    run_dove_operator: "project:dove.operator",
+    create_dove_task: "project:dove.mission",
+    record_dove_mission_pass: "project:dove.mission",
+    run_audio_review: "project:dove.review",
+    run_dove_review_loop: "project:dove.review-loop",
+    run_experience_workflow: "project:dove.experience",
+    run_figure_workflow: "project:dove.figure",
+    register_source: "project:dove.source",
+    upsert_note: "project:dove.note",
+    upsert_draft: "project:dove.draft",
+    build_rebuttal: "project:dove.rebuttal"
+  };
+  return toolRoutes[normalized] ?? fallback;
+}
+
+function copyableMissionCommand(command, packetId) {
+  const publicCommand = publicMissionCommand(command);
+  return packetId ? `${publicCommand} --packet-id ${packetId}` : publicCommand;
+}
+
+function normalizeContractStringArray(value) {
+  if (Array.isArray(value)) {
+    return normalizeStringArray(value);
+  }
+  return typeof value === "string" && value.trim() ? [value.trim()] : [];
+}
+
+function firstContractStringArray(...values) {
+  for (const value of values) {
+    const normalized = normalizeContractStringArray(value);
+    if (normalized.length > 0) {
+      return normalized;
+    }
+  }
+  return [];
+}
+
+function defaultContractDeliverables(task = {}, responseLanguage = "zh") {
+  if (task.stage === "audit") {
+    return normalizeContractStringArray(doveText(responseLanguage, "workContractDeliverablesAudit", { title: task.title }));
+  }
+  if (task.stage === "plan") {
+    return normalizeContractStringArray(doveText(responseLanguage, "workContractDeliverablesPlan", { title: task.title }));
+  }
+  if (task.domain === "experiment") {
+    return normalizeContractStringArray(doveText(responseLanguage, "workContractDeliverablesExperiment", { title: task.title }));
+  }
+  if (task.domain === "paper") {
+    return normalizeContractStringArray(doveText(responseLanguage, "workContractDeliverablesPaper", { title: task.title }));
+  }
+  return normalizeContractStringArray(doveText(responseLanguage, "workContractDeliverablesEngineering", { title: task.title }));
+}
+
+function defaultContractEvidence(task = {}, responseLanguage = "zh") {
+  const evidence = normalizeContractStringArray(task.evidenceExpectations);
+  return evidence.length > 0 ? evidence : normalizeContractStringArray(doveText(responseLanguage, "workContractEvidenceDefault", { title: task.title }));
+}
+
+function defaultContractDoneCriteria(task = {}, responseLanguage = "zh") {
+  return normalizeContractStringArray(doveText(responseLanguage, "workContractDoneDefault", { title: task.title }));
+}
+
+function defaultContractOutOfScope(responseLanguage = "zh") {
+  return normalizeContractStringArray(doveText(responseLanguage, "workContractOutOfScopeDefault"));
+}
+
+function defaultContractImpact(task = {}, responseLanguage = "zh") {
+  if (task.stage === "audit") {
+    return doveText(responseLanguage, "workContractImpactAudit", { title: task.title });
+  }
+  if (task.stage === "plan") {
+    return doveText(responseLanguage, "workContractImpactPlan", { title: task.title });
+  }
+  if (task.domain === "experiment") {
+    return doveText(responseLanguage, "workContractImpactExperiment", { title: task.title });
+  }
+  if (task.domain === "paper") {
+    return doveText(responseLanguage, "workContractImpactPaper", { title: task.title });
+  }
+  return doveText(responseLanguage, "workContractImpactEngineering", { title: task.title });
+}
+
+function routeLabelFor(command, responseLanguage = "zh") {
+  if (command === "project:dove.auto") {
+    return doveText(responseLanguage, "workContractRouteAutoLabel");
+  }
+  if (command === "project:dove.review" || command === "project:dove.review-loop") {
+    return doveText(responseLanguage, "workContractRouteReviewLabel");
+  }
+  return doveText(responseLanguage, "workContractRoutePrimaryLabel");
+}
+
+function routeWhenFor(command, responseLanguage = "zh") {
+  if (command === "project:dove.auto") {
+    return doveText(responseLanguage, "workContractRouteAutoWhen");
+  }
+  if (command === "project:dove.review" || command === "project:dove.review-loop") {
+    return doveText(responseLanguage, "workContractRouteReviewWhen");
+  }
+  return doveText(responseLanguage, "workContractRoutePrimaryWhen");
+}
+
+function normalizeContractRoutes(routes, task = {}, responseLanguage = "zh") {
+  return (Array.isArray(routes) ? routes : []).map((route, index) => {
+    const source = typeof route === "string" ? { command: route } : plainObject(route);
+    const command = publicMissionCommand(source.command ?? source.nextAction ?? source.workflow, publicMissionCommand(task.nextAction ?? nextCommandFor(task)));
+    if (!command) {
+      return null;
+    }
+    return {
+      label: normalizeString(source.label ?? source.title, routeLabelFor(command, responseLanguage)),
+      command,
+      copyableCommand: normalizeString(source.copyableCommand ?? source.copyCommand, copyableMissionCommand(command, task.id)),
+      packetId: normalizeString(source.packetId ?? source.taskPacketId ?? source.missionPacketId, task.id ?? null),
+      when: normalizeString(source.when ?? source.reason, routeWhenFor(command, responseLanguage)),
+      role: normalizeDovePrimaryRoleId(source.role ?? source.ownerRole ?? task.nextRole ?? task.ownerRole, ownerRoleFor(task)),
+      evidenceRequired: firstContractStringArray(source.evidenceRequired, source.evidenceContract, source.evidenceExpectations, task.evidenceExpectations),
+      doneCriteria: firstContractStringArray(source.doneCriteria, task.workContract?.doneCriteria),
+      rank: Number.isFinite(source.rank) ? source.rank : index + 1
+    };
+  }).filter(Boolean);
+}
+
+function defaultContractRoutes(task = {}, responseLanguage = "zh") {
+  const primary = publicMissionCommand(task.nextAction ?? nextCommandFor(task));
+  const routes = [{ command: primary }];
+  if (primary !== "project:dove.auto") {
+    routes.push({ command: "project:dove.auto" });
+  }
+  return normalizeContractRoutes(routes, task, responseLanguage);
+}
+
+function normalizeWorkContract(task = {}, args = {}, classification = {}, responseLanguage = "zh") {
+  const classifiedTask = {
+    ...task,
+    stage: task.stage ?? classification.stage ?? "execute",
+    domain: task.domain ?? classification.domain ?? "engineering"
+  };
+  const explicit = plainObject(args.workContract ?? task.workContract);
+  const deliverables = firstContractStringArray(explicit.deliverables, args.deliverables, defaultContractDeliverables(classifiedTask, responseLanguage));
+  const evidenceContract = firstContractStringArray(explicit.evidenceContract, args.evidenceContract, args.evidenceExpectations, args.acceptanceChecks, defaultContractEvidence(classifiedTask, responseLanguage));
+  const doneCriteria = firstContractStringArray(explicit.doneCriteria, args.doneCriteria, args.acceptanceChecks, defaultContractDoneCriteria(classifiedTask, responseLanguage));
+  const outOfScope = firstContractStringArray(explicit.outOfScope, explicit.outOfScopeItems, args.outOfScope, args.outOfScopeItems, defaultContractOutOfScope(responseLanguage));
+  const recommendedRoutes = normalizeContractRoutes(explicit.recommendedRoutes ?? args.recommendedRoutes, { ...classifiedTask, workContract: { doneCriteria } }, responseLanguage);
+  return {
+    purpose: normalizeString(explicit.purpose ?? args.purpose, doveText(responseLanguage, "workContractPurpose", { title: classifiedTask.title, stage: classifiedTask.stage, domain: classifiedTask.domain })),
+    deliverables,
+    outOfScope,
+    evidenceContract,
+    doneCriteria,
+    recommendedRoutes: recommendedRoutes.length > 0 ? recommendedRoutes : defaultContractRoutes({ ...classifiedTask, workContract: { doneCriteria } }, responseLanguage),
+    practicalImpact: normalizeString(explicit.practicalImpact ?? args.practicalImpact, defaultContractImpact(classifiedTask, responseLanguage))
+  };
+}
+
 function ownerRoleFor(classification = {}) {
   if (classification.stage === "audit") {
     return "reviewer";
@@ -293,18 +509,22 @@ function compactStepLabels(steps = []) {
 }
 
 function buildTaskConfirmationCard(task = {}, context = {}, responseLanguage = "zh") {
+  const workContract = task.workContract ?? context.workContract ?? null;
   return {
     presentation: "compact-task-card",
     packetId: task.id ?? null,
     title: task.title ?? doveText(responseLanguage, "taskFallbackTitle"),
-    why: task.summary ?? context.why ?? "",
+    why: workContract?.practicalImpact ?? task.summary ?? context.why ?? "",
     scope: compactScope(task, responseLanguage),
     stage: task.stage ?? null,
     domain: task.domain ?? null,
     status: task.status ?? null,
     level: task.level ?? null,
-    firstAction: context.firstAction ?? task.nextAction ?? doveText(responseLanguage, "compactCardFirstActionFallback"),
-    evidenceRequired: compactEvidence(task, responseLanguage),
+    firstAction: workContract?.recommendedRoutes?.[0]?.copyableCommand ?? context.firstAction ?? task.nextAction ?? doveText(responseLanguage, "compactCardFirstActionFallback"),
+    evidenceRequired: workContract?.evidenceContract ?? compactEvidence(task, responseLanguage),
+    deliverables: workContract?.deliverables ?? [],
+    doneCriteria: workContract?.doneCriteria ?? [],
+    recommendedRoutes: workContract?.recommendedRoutes ?? [],
     boundaryOrResume: context.boundaryOrResume ?? doveText(responseLanguage, "compactCardBoundaryFallback"),
     confirmation: doveText(responseLanguage, "compactCardNoAutomaticExecution"),
     confirmationRequired: true,
@@ -611,7 +831,7 @@ function buildPacket(root, args, init, classification, overrides = {}) {
   const id = normalizeTaskPacketId(overrides.id ?? args.id ?? args.packetId ?? `task-${slugify(requestedTitle)}-${Date.now().toString(36)}`);
   const level = overrides.level ?? normalizeMissionLevel(args, state.settings.taskModel.userDefaultLevel);
   const status = normalizeStatus(overrides.status ?? args.status, dependencies.length > 0 || blockedBy.length > 0 ? "blocked" : "ready");
-  return {
+  const basePacket = {
     id,
     title: requestedTitle,
     summary: normalizeString(overrides.summary ?? args.summary ?? args.goal ?? args.objective ?? args.prompt, requestedTitle),
@@ -644,8 +864,15 @@ function buildPacket(root, args, init, classification, overrides = {}) {
     packetContextPath: taskContextPath(id),
     currentFocus: normalizeString(overrides.currentFocus ?? args.currentFocus ?? args.goal ?? args.objective ?? args.prompt, requestedTitle),
     nextAction: normalizeString(overrides.nextAction ?? args.nextAction, nextCommandFor(classification)),
-    evidenceExpectations: normalizeStringArray(args.evidenceExpectations),
+    evidenceExpectations: normalizeStringArray([
+      ...normalizeStringArray(args.evidenceExpectations),
+      ...normalizeStringArray(args.acceptanceChecks)
+    ]),
     ...(overrides.extraFields && typeof overrides.extraFields === "object" && !Array.isArray(overrides.extraFields) ? overrides.extraFields : {})
+  };
+  return {
+    ...basePacket,
+    workContract: normalizeWorkContract(basePacket, args, classification, responseLanguage)
   };
 }
 
@@ -971,6 +1198,7 @@ function materializeDoveTask(root, contract) {
     classification,
     blockers,
     evidenceExpectations: packet.evidenceExpectations,
+    workContract: packet.workContract,
     recommendedNextCommand: packet.nextAction,
     applicableLessons,
     responseLanguage,
@@ -1184,7 +1412,8 @@ export function createDoveTask(root, args = {}) {
       initMaterializationRequired,
       proposedInit,
       proposedTask: packet,
-      taskCard: buildTaskConfirmationCard(packet, { firstAction: packet.nextAction }, responseLanguage),
+      workContract: packet.workContract,
+      taskCard: buildTaskConfirmationCard(packet, { firstAction: packet.nextAction, workContract: packet.workContract }, responseLanguage),
       classification,
       blockers,
       evidenceExpectations: packet.evidenceExpectations,
@@ -1211,6 +1440,7 @@ export function createDoveTask(root, args = {}) {
         dependencies: packet.dependencies,
         blockedBy: packet.blockedBy,
         evidenceExpectations: packet.evidenceExpectations,
+        workContract: packet.workContract,
         artifactRefs: packet.artifactRefs,
         contextPolicy: packet.contextPolicy,
         lessonIds: packet.lessonIds,
@@ -1440,6 +1670,16 @@ export function recordDoveMissionPass(root, args = {}) {
   }
   const taskBefore = loadFullTask(root, selected);
   const resultStatus = normalizeMissionPassStatus(args);
+  const completionBlock = checklistCompletionBlock(root, taskBefore, resultStatus, responseLanguage);
+  if (completionBlock) {
+    return {
+      ...completionBlock,
+      responseLanguage,
+      proposalOnly: true,
+      noAutoApply: true,
+      writes: []
+    };
+  }
   const timestamp = nowIso();
   const runId = normalizeTaskPacketId(args.runId ?? `mission-${taskBefore.id}-${Date.now().toString(36)}`);
   const nextAction = normalizeString(args.nextAction, resultStatus === "completed" ? "project:dove.status" : taskBefore.nextAction ?? "project:dove.status");
@@ -1618,7 +1858,8 @@ function buildStatusAdjustmentPreviewCard(adjustment, responseLanguage = "zh") {
   return {
     presentation: "compact-status-adjustment-card",
     packetId: adjustment.packetId,
-    requestedStatus: adjustment.status,
+    requestedStatus: adjustment.status === "completed" ? "done" : adjustment.status,
+    machineStatus: adjustment.status,
     why: adjustment.reason || doveText(responseLanguage, "statusAdjustConfirmMessage"),
     firstAction: "apply_dove_status_adjustments",
     evidenceRequired: adjustment.artifactRefs.length > 0 ? adjustment.artifactRefs : [doveText(responseLanguage, "compactCardNoEvidence")],
@@ -1671,10 +1912,17 @@ export function applyDoveStatusAdjustments(root, args = {}) {
     };
   }
   const catalog = readTaskPacketCatalog(root);
+  const adjustmentLevel = (adjustment) => {
+    if (!adjustment.packetId) {
+      return -1;
+    }
+    return catalog.byId.get(normalizeTaskPacketId(adjustment.packetId))?.level ?? -1;
+  };
+  const orderedAdjustments = [...adjustments].sort((left, right) => adjustmentLevel(right) - adjustmentLevel(left) || left.index - right.index);
   const applied = [];
   const skipped = [];
   const rejected = [];
-  for (const adjustment of adjustments) {
+  for (const adjustment of orderedAdjustments) {
     if (!adjustment.packetId || !adjustment.status) {
       rejected.push({ ...adjustment, reason: doveText(responseLanguage, "statusAdjustMissingReason") });
       continue;
@@ -1689,13 +1937,26 @@ export function applyDoveStatusAdjustments(root, args = {}) {
       rejected.push({ ...adjustment, packetId, reason: doveText(responseLanguage, "statusAdjustInitReason") });
       continue;
     }
-    if (packet.status === adjustment.status) {
-      skipped.push({ packetId, status: adjustment.status, reason: doveText(responseLanguage, "statusAdjustSameReason") });
+    const completionBlock = checklistCompletionBlock(root, packet, adjustment.status, responseLanguage);
+    if (completionBlock) {
+      rejected.push({ ...adjustment, packetId, reason: completionBlock.message, completionBlock });
       continue;
     }
-    const updated = updateTaskLifecycle(root, packet, adjustment.status, lifecycleFieldsForStatus(adjustment.status, { ...adjustment, surface: "dove.status", command: "apply_dove_status_adjustments" }, nowIso(), responseLanguage));
+    const fields = lifecycleFieldsForStatus(adjustment.status, { ...adjustment, surface: "dove.status", command: "apply_dove_status_adjustments" }, nowIso(), responseLanguage);
+    if (packet.status === adjustment.status) {
+      skipped.push({ packetId, status: adjustment.status, displayStatus: adjustment.status === "completed" || adjustment.status === "killed" ? "done" : adjustment.status, reason: doveText(responseLanguage, "statusAdjustSameReason") });
+      continue;
+    }
+    const updated = updateTaskLifecycle(root, packet, adjustment.status, fields);
     catalog.byId.set(packetId, updated);
-    applied.push({ packetId, fromStatus: packet.status, toStatus: updated.status, title: updated.title, level: updated.level });
+    applied.push({
+      packetId,
+      fromStatus: packet.status,
+      toStatus: updated.status,
+      displayStatus: updated.status === "completed" || updated.status === "killed" ? "done" : updated.status,
+      title: updated.title,
+      level: updated.level
+    });
   }
   const result = {
     status: rejected.length > 0 && applied.length > 0 ? "partially-applied" : rejected.length > 0 ? "rejected" : "applied",
@@ -2458,6 +2719,16 @@ function persistentLifecycleFields(fields = {}) {
   return Object.fromEntries(allowedKeys.filter((key) => fields[key] !== undefined).map((key) => [key, fields[key]]));
 }
 
+function assertChecklistCompletionReady(root, task, status, responseLanguage = "zh") {
+  const block = checklistCompletionBlock(root, task, status, responseLanguage);
+  if (block) {
+    const error = new Error(block.message);
+    error.code = block.status;
+    error.openChecklistChildIds = block.openChecklistChildIds;
+    throw error;
+  }
+}
+
 function recordLifecycleEvents(root, packet, transition, openedBoundary, resolvedBoundary, handoff) {
   const artifacts = loadRuntimeArtifacts(root);
   const baseCount = artifacts.events.entries?.length ?? 0;
@@ -2524,6 +2795,7 @@ function recordLifecycleEvents(root, packet, transition, openedBoundary, resolve
 function updateTaskLifecycle(root, task, status, fields = {}) {
   const timestamp = nowIso();
   const fullTask = loadFullTask(root, task);
+  assertChecklistCompletionReady(root, fullTask, status, resolveDoveResponseLanguage(root, fields));
   const fromStatus = fullTask.status;
   const artifactRefs = fields.artifactRefs !== undefined ? normalizeStringArray(fields.artifactRefs) : fullTask.artifactRefs;
   const evidenceLinks = fields.evidenceLinks !== undefined ? normalizeStringArray(fields.evidenceLinks) : fullTask.evidenceLinks;

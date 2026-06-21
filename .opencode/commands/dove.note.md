@@ -1,3 +1,7 @@
+---
+description: "Organize internal information from the repository, `.dove`, existing artifacts, and operator notes for the selected task."
+---
+
 # dove.note
 
 Organize internal information from the repository, `.dove`, existing artifacts, and operator notes for the selected task.

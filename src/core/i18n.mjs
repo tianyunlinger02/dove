@@ -122,6 +122,86 @@ const TEXT = {
     zh: "已批准的需求到任务契约已经物化。现在执行一次有边界的前台任务，然后记录任务执行结果。",
     en: "The approved demand-to-task mission contract is materialized. Execute one bounded foreground pass now, then record the mission pass result."
   },
+  workContractPurpose: {
+    zh: ({ title, stage, domain }) => `把“${title}”转成可执行、可验证、可续接的 ${stage}/${domain} 工作合同。`,
+    en: ({ title, stage, domain }) => `Turn “${title}” into an executable, verifiable, resumable ${stage}/${domain} work contract.`
+  },
+  workContractDeliverablesPlan: {
+    zh: ({ title }) => [`${title} 的可执行计划和拆分后的后续任务。`, "明确证据缺口、阻塞条件和下一步路线。"],
+    en: ({ title }) => [`An executable plan for ${title} with follow-up tasks.`, "Explicit evidence gaps, blockers, and next routes."]
+  },
+  workContractDeliverablesPaper: {
+    zh: ({ title }) => [`${title} 对应的草稿、改写或论文产物。`, "支撑该产物的 source、note、claim、figure 或 review 证据引用。"],
+    en: ({ title }) => [`A draft, revision, or paper artifact for ${title}.`, "Source, note, claim, figure, or review evidence references supporting the artifact."]
+  },
+  workContractDeliverablesExperiment: {
+    zh: ({ title }) => [`${title} 的实验计划、结果或审计记录。`, "把实验结果桥接到 claim 或明确不能桥接的原因。"],
+    en: ({ title }) => [`An experiment plan, result, or audit record for ${title}.`, "A bridge from result to claim, or an explicit reason it cannot be bridged."]
+  },
+  workContractDeliverablesAudit: {
+    zh: ({ title }) => [`${title} 的独立检查结论。`, "可执行的修订项、证据缺口或阻塞边界。"],
+    en: ({ title }) => [`Independent review findings for ${title}.`, "Actionable revisions, evidence gaps, or blocker boundaries."]
+  },
+  workContractDeliverablesEngineering: {
+    zh: ({ title }) => [`${title} 对应的代码、配置、文档或测试改动。`, "能复现实质进展的验证证据。"],
+    en: ({ title }) => [`Code, configuration, documentation, or test changes for ${title}.`, "Validation evidence that proves real progress."]
+  },
+  workContractEvidenceDefault: {
+    zh: "列出实际修改、产物路径、测试/验证输出，或记录无法继续的明确边界。",
+    en: "List actual changes, artifact paths, test/validation output, or an explicit boundary that blocks continuation."
+  },
+  workContractDoneDefault: {
+    zh: "交付物已经产出，证据可以被 status/review 追踪，且下一步不是重新解释需求。",
+    en: "Deliverables exist, evidence is traceable by status/review, and the next step is not re-explaining the demand."
+  },
+  workContractOutOfScopeDefault: {
+    zh: ["不虚构实验、论文、review 或工程结果。", "不在没有真实证据时把任务标记 completed。", "不启动隐藏后台执行、daemon 或 scheduler。"],
+    en: ["Do not fabricate experiment, paper, review, or engineering results.", "Do not mark the task completed without real evidence.", "Do not start hidden background execution, daemons, or schedulers."]
+  },
+  workContractImpactPlan: {
+    zh: "把模糊方向切成可执行任务，后续 status 能直接显示该做哪一步。",
+    en: "Turns a vague direction into executable tasks so status can show the next concrete step."
+  },
+  workContractImpactPaper: {
+    zh: "把论文推进绑定到可检查的草稿/证据产物，减少只创建任务但不知道怎么写的情况。",
+    en: "Binds paper progress to inspectable draft/evidence artifacts instead of creating a task with no writing path."
+  },
+  workContractImpactExperiment: {
+    zh: "把实验推进绑定到计划、结果、审计和 claim 桥接，避免只记录想法。",
+    en: "Binds experiment progress to planning, results, audit, and claim bridging instead of only recording an idea."
+  },
+  workContractImpactAudit: {
+    zh: "把检查结果转成可修订、可验证的下一步，而不是停在泛泛 review。",
+    en: "Turns review into actionable, verifiable revision steps instead of generic feedback."
+  },
+  workContractImpactEngineering: {
+    zh: "把工程需求绑定到改动和验证证据，status 可以继续推进而不是只展示任务名。",
+    en: "Binds engineering work to changes and validation evidence so status can continue the work instead of only showing a task name."
+  },
+  workContractRoutePrimaryLabel: {
+    zh: "首选推进路线",
+    en: "Primary route"
+  },
+  workContractRoutePrimaryWhen: {
+    zh: "需要按合同产出第一批真实交付物和证据时使用。",
+    en: "Use when producing the first real deliverables and evidence for the contract."
+  },
+  workContractRouteAutoLabel: {
+    zh: "多轮自动推进",
+    en: "Multi-round auto route"
+  },
+  workContractRouteAutoWhen: {
+    zh: "已有任务合同，想让 Dove 在前台多轮推进直到完成或边界时使用。",
+    en: "Use when a task contract exists and Dove should run foreground iterations until completion or a boundary."
+  },
+  workContractRouteReviewLabel: {
+    zh: "审查/验收路线",
+    en: "Review route"
+  },
+  workContractRouteReviewWhen: {
+    zh: "需要独立检查证据、草稿、结果或完成状态时使用。",
+    en: "Use when evidence, drafts, results, or completion state need independent review."
+  },
   missionPassSelectMessage: {
     zh: "记录任务执行结果前，请先通过 index 或 packetId 选择一个持久任务。",
     en: "Select a durable task by index or packetId before recording the mission pass."
@@ -293,6 +373,18 @@ const TEXT = {
   statusHomeContinueWhy: {
     zh: "任务已有下一步命令，可以继续一次前台推进。",
     en: "The task already has a next command and can continue with one foreground step."
+  },
+  statusHomeReconcileTitle: {
+    zh: ({ count }) => `核对 ${count} 个 done 父 mission 的 checklist 一致性`,
+    en: ({ count }) => `Reconcile checklist consistency for ${count} done parent mission${count === 1 ? "" : "s"}`
+  },
+  statusHomeReconcileWhy: {
+    zh: "已有父 mission 是 done，但下面还有 open checklist 子项；先核对这些子项是否被父任务证据覆盖，覆盖才逐项标 done，否则应重开父任务。",
+    en: "A parent mission is done while checklist children remain open; verify whether the parent evidence covers each child, mark covered children done, or reopen the parent."
+  },
+  statusHomeReconcileDoneCriteria: {
+    zh: "每个 open checklist 子项都有对应证据，或父 mission 被退回 open 状态继续处理。",
+    en: "Each open checklist child has matching evidence, or the parent mission is moved back to an open state for continued work."
   },
   boundaryActionContinueLabel: {
     zh: "继续/恢复前台执行",
