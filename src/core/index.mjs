@@ -3,6 +3,7 @@ export { ensureWorkspace, extractCitationKeysFromText, listArtifacts, listDraftF
 export { evaluateEvidence, upsertClaims } from "./evidence.mjs";
 export { discoverPaperArtifacts, queryDoveOnboarding } from "./onboarding.mjs";
 export { launchDoveMission, queryDoveAudit, queryDoveMission, queryDoveMissionBoard, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, queryPaperPipeline } from "./dove.mjs";
+export { buildIntentFrame, buildPreActionGuidance, buildWorkflowFrame, compactPreActionLesson, inferPrimaryRoleForSurface, inferSubagentSpecialty, selectPreActionLessons, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 export { queryPaperAudit } from "./paper-audit.mjs";
 export { appendHandoff, bridgeExperimentResultToClaim, buildRebuttalStrategy, classifyWorkflowIntent, compareVersions, createVersionSnapshot, loadBoard, runExperimentAudit, saveBoard, updateResearchBrief, upsertExperimentPlan, upsertExperimentResult, upsertOrchestrationBoard, normalizeRebuttalIssues } from "./orchestration.mjs";
 export { appendReviewLog, runReviewLoop, upsertRevisionPlan } from "./reviews.mjs";

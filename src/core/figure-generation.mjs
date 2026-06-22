@@ -5,8 +5,10 @@ import path from "node:path";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { assertNoInlineSecrets, loadFigureGenerationConfig, redactDoveConfig } from "./config.mjs";
+import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
+import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { validateFigurePipeline } from "./artifacts.mjs";
 import {
   assertFollowThroughReady,
@@ -31,6 +33,29 @@ function slugify(value) {
 function normalizeStringArray(value, fallback = []) {
   const source = Array.isArray(value) ? value : fallback;
   return Array.from(new Set(source.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim())));
+}
+
+function figureGenerationGuidanceSummary(root, args = {}, target = {}, details = {}) {
+  return summarizePreActionGuidance(buildPreActionGuidance({
+    surface: "dove.figure",
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: args.intent ?? args.description ?? args.caption ?? args.captionDraft ?? args.figureId ?? args.id ?? null,
+    roleId: "builder",
+    packet: target.packet,
+    currentContext: {
+      domain: target.packet?.domain ?? null,
+      stage: target.packet?.stage ?? "execute",
+      primaryRole: "builder"
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: details.nextAction ?? "project:dove.figure",
+    routeHint: details.nextAction ?? "project:dove.figure",
+    workflowKind: "figure",
+    domain: target.packet?.domain ?? null,
+    stage: target.packet?.stage ?? "execute",
+    tags: ["figure", "artifact-provenance", "qa"],
+    statusSummary: details.statusSummary
+  }));
 }
 
 function normalizeRelativePath(value, fallback = null) {
@@ -718,7 +743,17 @@ export function prepareFigureGeneration(root, args = {}) {
     inputPath,
     promptPath,
     outputManifestPath: generation.outputManifestPath,
-    manifestPath
+    manifestPath,
+    preActionGuidanceSummary: figureGenerationGuidanceSummary(root, args, target, {
+      nextAction: missingRequirementIds.length > 0 ? "project:dove.figure" : "project:dove.review",
+      statusSummary: {
+        runId,
+        figureId: figure.id,
+        materialStatus: materialRecord.status,
+        missingRequirementCount: missingRequirementIds.length,
+        providerExecutionStatus: providerExecution?.status ?? null
+      }
+    })
   };
 }
 
@@ -827,6 +862,16 @@ export function importFigureGeneration(root, args = {}) {
     finalSvgPath,
     finalSha256: generation.finalSha256,
     qaIssueCount: validation.issueCount,
-    qaPath: validation.qaPath
+    qaPath: validation.qaPath,
+    preActionGuidanceSummary: figureGenerationGuidanceSummary(root, args, target, {
+      nextAction: validation.issueCount > 0 ? "project:dove.figure" : "project:dove.review",
+      statusSummary: {
+        runId,
+        figureId: figure.id,
+        captionId: caption.id,
+        finalSvgPath,
+        qaIssueCount: validation.issueCount
+      }
+    })
   };
 }

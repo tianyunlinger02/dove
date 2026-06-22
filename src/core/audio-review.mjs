@@ -7,6 +7,7 @@ import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { appendText, assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 import { readTaskPacketCatalog } from "./task-packets.mjs";
 import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
+import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
 
 const REVIEW_VERDICTS = new Set(["coherent", "needs-revision", "needs-evidence", "blocked"]);
@@ -25,6 +26,29 @@ function normalizeString(value, fallback = "") {
 
 function normalizeStringArray(value) {
   return Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean))) : [];
+}
+
+function audioGuidanceSummary(root, args = {}, target = {}, details = {}) {
+  return summarizePreActionGuidance(buildPreActionGuidance({
+    surface: "dove.review",
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: args.instructions ?? args.scope ?? "audio review",
+    roleId: "reviewer",
+    packet: target.packet,
+    currentContext: {
+      domain: target.packet?.domain ?? null,
+      stage: target.packet?.stage ?? "audit",
+      primaryRole: "reviewer"
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: details.nextAction ?? "project:dove.review",
+    routeHint: "project:dove.review",
+    workflowKind: "audio-review",
+    domain: target.packet?.domain ?? null,
+    stage: target.packet?.stage ?? "audit",
+    tags: ["review", "audio", "isolated-handoff"],
+    statusSummary: details.statusSummary
+  }));
 }
 
 function stableJson(value) {
@@ -169,6 +193,7 @@ function audioReviewPreparedCard(prepared = {}, responseLanguage = "zh") {
       handoffSuggestion,
       confirmationRequired: true
     }],
+    preActionGuidanceSummary: prepared.preActionGuidanceSummary ?? null,
     foreground: true,
     background: false,
     daemon: false
@@ -201,6 +226,7 @@ function audioReviewImportedCard(imported = {}, packetId = null, responseLanguag
     validationEvidence: [imported.verdict].filter(Boolean),
     durableWrites: [doveText(responseLanguage, "resultCardReviewImported"), ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewConcerns, relativeRunPath(imported.runId, "manifest.json")],
     nextActions,
+    preActionGuidanceSummary: imported.preActionGuidanceSummary ?? null,
     foreground: true,
     background: false,
     daemon: false
@@ -329,7 +355,16 @@ export function prepareAudioReview(root, args = {}) {
     handoffPath: manifest.handoffPath,
     reportPath: manifest.reportPath,
     reviewedArtifactPaths,
-    privacyBoundary: input.privacyBoundary
+    privacyBoundary: input.privacyBoundary,
+    preActionGuidanceSummary: audioGuidanceSummary(root, args, target, {
+      nextAction: "import_audio_review",
+      statusSummary: {
+        status: "prepared",
+        runId,
+        reviewedArtifactCount: reviewedArtifactPaths.length,
+        contextPolicy: input.contextPolicy
+      }
+    })
   };
   return {
     ...prepared,
@@ -339,7 +374,7 @@ export function prepareAudioReview(root, args = {}) {
 
 export function importAudioReview(root, args = {}) {
   assertGovernanceMutationRegistered("import-audio-review", "guarded");
-  assertTaskScopedMutationTarget(root, "import-audio-review", args);
+  const target = assertTaskScopedMutationTarget(root, "import-audio-review", args);
   ensureWorkspace(root);
   const runId = normalizeRunId(args.runId);
   const manifestPath = relativeRunPath(runId, "manifest.json");
@@ -395,7 +430,17 @@ export function importAudioReview(root, args = {}) {
     inputSha256: manifest.inputSha256,
     handoffSha256,
     reportSha256,
-    privateTranscriptImported: false
+    privateTranscriptImported: false,
+    preActionGuidanceSummary: audioGuidanceSummary(root, args, target, {
+      nextAction: handoff.verdict === "coherent" ? "project:dove.status" : "project:dove.mission",
+      statusSummary: {
+        status: "imported",
+        runId,
+        verdict: handoff.verdict,
+        findingCount: handoff.findings.length,
+        actionItemCount: handoff.actionItems.length
+      }
+    })
   };
   return {
     ...imported,

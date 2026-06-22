@@ -15,6 +15,50 @@ function extractToolJson(result) {
   return JSON.parse(result.content[0].text);
 }
 
+function assertFullPreActionGuidance(guidance, expected = {}) {
+  assert.ok(guidance && typeof guidance === "object", "expected full pre-action guidance");
+  assert.equal(guidance.presentation, "dove-pre-action-guidance");
+  assert.equal(guidance.mode, "read-only-guidance");
+  if (expected.surface) {
+    assert.equal(guidance.surface, expected.surface);
+  }
+  if (expected.primaryRole) {
+    assert.equal(guidance.roleFrame?.primaryRole, expected.primaryRole);
+  }
+  if (expected.subagentSpecialty) {
+    assert.equal(guidance.roleFrame?.subagentSpecialty, expected.subagentSpecialty);
+  }
+  assert.equal(guidance.intentFrame?.ordinaryPromptFirst, true);
+  assert.equal(guidance.intentFrame?.missionAsWorkContract, true);
+  assert.equal(guidance.intentFrame?.noDedicatedMissionListCommand, true);
+  assert.equal(guidance.lessonRecall?.automatic, true);
+  assert.equal(guidance.lessonRecall?.readOnly, true);
+  assert.equal(guidance.lessonRecall?.recordingExplicitOnly, true);
+  assert.equal(guidance.lessonRecall?.lessonsPath, ".dove/meta/operator-lessons.json");
+  assert.equal(guidance.guardrails?.explicitOnly, true);
+  assert.equal(guidance.guardrails?.noHiddenRuntime, true);
+  assert.equal(guidance.guardrails?.noAutoApply, true);
+  assert.equal(guidance.guardrails?.requiresConfirmationForWrites, true);
+  assert.equal(guidance.guardrails?.boundedForegroundOnly, true);
+}
+
+function assertPreActionGuidanceSummary(summary, expected = {}) {
+  assert.ok(summary && typeof summary === "object", "expected pre-action guidance summary");
+  assert.equal(summary.presentation, "dove-pre-action-guidance-summary");
+  if (expected.surface) {
+    assert.equal(summary.surface, expected.surface);
+  }
+  if (expected.primaryRole) {
+    assert.equal(summary.primaryRole, expected.primaryRole);
+  }
+  if (expected.subagentSpecialty) {
+    assert.equal(summary.subagentSpecialty, expected.subagentSpecialty);
+  }
+  assert.equal(summary.noHiddenRuntime, true);
+  assert.equal(summary.requiresConfirmationForWrites, true);
+  assert.equal(summary.recordingExplicitOnly, true);
+}
+
 function seedTaskPacket(root, packetId = "mcp-main-packet") {
   const timestamp = new Date(0).toISOString();
   const packet = {
@@ -316,18 +360,25 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(status.query, true);
     assert.deepEqual(status.writes, []);
     assert.equal(status.detail, "compact");
-    assert.equal(status.statusHome.presentation, "dove-status-compact-home");
+    assert.equal(status.statusHome.presentation, "dove-project-situation-home");
+    assert.equal(status.statusHome.liveContextFirst, true);
+    assert.ok(status.statusHome.currentContext && typeof status.statusHome.currentContext === "object");
+    assertFullPreActionGuidance(status.statusHome.preActionGuidance, { surface: "dove.status", primaryRole: "planner" });
+    assert.ok(status.statusHome.projectState && typeof status.statusHome.projectState === "object");
+    assert.ok(status.statusHome.blockersAndReconciliation && typeof status.statusHome.blockersAndReconciliation === "object");
+    assert.ok(status.statusHome.nextSteps && typeof status.statusHome.nextSteps === "object");
+    assert.equal(status.statusHome.optionalMissionDetails.defaultCollapsed, true);
     assert.equal(status.dashboard, undefined);
+    assert.equal(status.dailyHome, undefined);
     assert.equal(fullStatus.detail, "full");
     assert.ok(fullStatus.dashboard && typeof fullStatus.dashboard === "object");
-    assert.equal(status.dailyHome.presentation, "dove-status-home");
-    assert.equal(status.dailyHome.liveContextFirst, true);
-    assert.ok(status.dailyHome.nextActions.length <= 3);
-    assert.equal(status.current.nextCommand, status.dailyHome.nextActions[0].command);
-    assert.equal(status.board.nextCommand, status.dailyHome.nextActions[0].command);
+    assert.ok(status.statusHome.nextSteps.ranked.length <= 3);
+    assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.kind && card.title && card.command));
+    assert.equal(status.current.nextCommand, status.statusHome.nextSteps.primary.command);
+    assert.equal(status.board.nextCommand, status.statusHome.nextSteps.primary.command);
     assert.equal(fullStatus.dashboard.nextAction, fullStatus.dailyHome.nextActions[0].command);
-    assert.equal(status.suggestedNextCommand, status.dailyHome.nextActions[0].command);
-    assert.ok(status.dailyHome.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
+    assert.equal(status.suggestedNextCommand, status.statusHome.nextSteps.primary.command);
+    assert.ok(status.statusHome.blockersAndReconciliation.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
     assert.ok(fullStatus.dashboard.tasks && typeof fullStatus.dashboard.tasks === "object");
     assert.equal(fullStatus.dashboard.dailyHome.presentation, "dove-status-home");
     assert.ok(status.projectSummary && typeof status.projectSummary === "object");
@@ -493,6 +544,8 @@ test("document evidence ledger stores internal and public-safe entries without p
     assert.equal(internal.entry.publicSafe, false);
     assert.equal(internal.entry.evidenceScope, "internal");
     assert.deepEqual(internal.writes, [".dove/documents/ledger.json"]);
+    assertPreActionGuidanceSummary(internal.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
+    assertPreActionGuidanceSummary(internal.resultCard.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
 
     const internalQuery = extractToolJson(dispatchTool(root, "query_document_ledger", { packetId, publicSafe: false }));
     assert.equal(internalQuery.mode, "document-ledger-query");
@@ -526,6 +579,8 @@ test("document evidence ledger stores internal and public-safe entries without p
     assert.equal(publicEntry.entry.publicSafe, true);
     assert.equal(publicEntry.entry.documentPath, ".dove/documents/source/public-evidence.md");
     assert.equal(fs.existsSync(path.join(root, publicEntry.entry.documentPath)), true);
+    assertPreActionGuidanceSummary(publicEntry.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
+    assertPreActionGuidanceSummary(publicEntry.resultCard.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
 
     const duplicateCreate = extractToolJson(dispatchTool(root, "record_document_evidence", {
       packetId,
@@ -542,6 +597,8 @@ test("document evidence ledger stores internal and public-safe entries without p
     assert.equal(duplicateCreate.createdDocument, true);
     assert.equal(duplicateCreate.entry.documentPath, ".dove/documents/source/public-evidence-2.md");
     assert.equal(fs.existsSync(path.join(root, duplicateCreate.entry.documentPath)), true);
+    assertPreActionGuidanceSummary(duplicateCreate.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
+    assertPreActionGuidanceSummary(duplicateCreate.resultCard.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
 
     const appended = extractToolJson(dispatchTool(root, "record_document_evidence", {
       packetId,
@@ -557,6 +614,8 @@ test("document evidence ledger stores internal and public-safe entries without p
     }));
     assert.equal(appended.appendedDocument, true);
     assert.match(fs.readFileSync(path.join(root, publicEntry.entry.documentPath), "utf8"), /Appended archive-only body/);
+    assertPreActionGuidanceSummary(appended.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
+    assertPreActionGuidanceSummary(appended.resultCard.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
 
     const publicQuery = extractToolJson(dispatchTool(root, "query_document_ledger", { packetId, publicSafe: true }));
     assert.equal(publicQuery.entries.length, 3);
@@ -575,6 +634,151 @@ test("document evidence ledger stores internal and public-safe entries without p
     assert.equal(publicText.includes("private-ledger-secret"), false);
     assert.equal(publicText.includes("Document body should not be copied"), false);
     assert.equal(publicText.includes("Appended archive-only body"), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-thin-guidance-"));
+  try {
+    extractToolJson(dispatchTool(root, "ensure_workspace", {}));
+    const packetId = seedTaskPacket(root, "thin-summary-packet");
+    const override = "Integration test exercises direct thin-surface guidance summaries.";
+
+    const source = extractToolJson(dispatchTool(root, "register_source", {
+      packetId,
+      citationKey: "thin2026guidance",
+      title: "Thin Surface Guidance",
+      authors: ["Validator"],
+      year: 2026,
+      sourceType: "paper"
+    }));
+    assertPreActionGuidanceSummary(source.preActionGuidanceSummary, { surface: "dove.source", primaryRole: "builder" });
+
+    const note = extractToolJson(dispatchTool(root, "upsert_note", {
+      packetId,
+      title: "Thin guidance note",
+      sectionId: "introduction",
+      sourceIds: [source.id],
+      summary: "Thin surfaces should preserve guidance summaries.",
+      claims: ["Thin surfaces preserve guidance summaries."]
+    }));
+    assertPreActionGuidanceSummary(note.preActionGuidanceSummary, { surface: "dove.note", primaryRole: "builder" });
+
+    const claims = extractToolJson(dispatchTool(root, "upsert_claims", {
+      packetId,
+      claims: [{
+        id: "thin-guidance-claim",
+        text: "Thin workflow surfaces return pre-action guidance summaries.",
+        sectionId: "introduction",
+        sourceIds: [source.id],
+        noteIds: [note.id],
+        evidenceLinks: [".dove/notes/index.json"],
+        status: "draft",
+        confidence: "medium"
+      }],
+      policyOverrideReason: override
+    }));
+    assert.ok(claims.claims.some((claim) => claim.id === "thin-guidance-claim"));
+    assertPreActionGuidanceSummary(claims.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "builder" });
+
+    const experimentPlan = extractToolJson(dispatchTool(root, "upsert_experiment_plan", {
+      packetId,
+      id: "thin-guidance-experiment",
+      title: "Thin guidance experiment",
+      claimId: "thin-guidance-claim",
+      hypothesis: "Direct thin surfaces preserve guidance summaries.",
+      methodology: "Record a direct result and inspect audit and bridge summaries.",
+      successMetric: "All direct returns include guidance summaries.",
+      comparisonTargets: ["chat-only"],
+      policyOverrideReason: override
+    }));
+    assert.equal(experimentPlan.id, "thin-guidance-experiment");
+    assertPreActionGuidanceSummary(experimentPlan.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "builder" });
+    const experimentPacketId = `experiment-${experimentPlan.id}`;
+
+    const experimentResult = extractToolJson(dispatchTool(root, "upsert_experiment_result", {
+      packetId: experimentPacketId,
+      result: {
+        id: "thin-guidance-result",
+        experimentId: "thin-guidance-experiment",
+        claimId: "thin-guidance-claim",
+        outcome: "supports",
+        summary: "Thin result supports the guidance summary claim.",
+        evidenceLinks: [".dove/evidence/index.json"],
+        comparisonTargets: ["chat-only"]
+      },
+      policyOverrideReason: override
+    }));
+    assert.equal(experimentResult.id, "thin-guidance-result");
+    assertPreActionGuidanceSummary(experimentResult.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "builder" });
+
+    const experimentAudit = extractToolJson(dispatchTool(root, "run_experiment_audit", {
+      packetId: experimentPacketId,
+      resultId: "thin-guidance-result",
+      policyOverrideReason: override
+    }));
+    assert.equal(experimentAudit.resultId, "thin-guidance-result");
+    assertPreActionGuidanceSummary(experimentAudit.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "reviewer" });
+
+    const claimBridge = extractToolJson(dispatchTool(root, "bridge_result_to_claim", {
+      packetId: experimentPacketId,
+      resultId: "thin-guidance-result",
+      auditIds: [experimentAudit.id],
+      reason: "Bridge thin result into claim state for guidance summary coverage.",
+      policyOverrideReason: override
+    }));
+    assert.equal(claimBridge.resultId, "thin-guidance-result");
+    assertPreActionGuidanceSummary(claimBridge.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "builder" });
+
+    const checklist = extractToolJson(dispatchTool(root, "sync_checklist", {}));
+    assert.equal(checklist.checklistPath, ".dove/checklists/current.md");
+    assertPreActionGuidanceSummary(checklist.preActionGuidanceSummary, { surface: "dove.status", primaryRole: "planner" });
+
+    const citations = extractToolJson(dispatchTool(root, "sync_citations", { preservePhase: true }));
+    assert.equal(citations.sourceCount, 1);
+    assertPreActionGuidanceSummary(citations.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "builder" });
+
+    const wiki = extractToolJson(dispatchTool(root, "refresh_wiki", {}));
+    assert.equal(wiki.wikiPath, ".dove/wiki/index.md");
+    assertPreActionGuidanceSummary(wiki.preActionGuidanceSummary, { surface: "dove.status", primaryRole: "planner" });
+
+    const figurePlan = extractToolJson(dispatchTool(root, "upsert_figure_plan", {
+      packetId,
+      items: [{
+        id: "thin-guidance-figure",
+        name: "Thin guidance figure",
+        purpose: "Show thin workflow guidance summary coverage.",
+        targetClaimIds: ["thin-guidance-claim"],
+        relatedExperimentIds: ["thin-guidance-experiment"],
+        requiredVisualElements: ["claim", "experiment", "guidance"],
+        captionIntent: "Explain how direct figure surfaces preserve provenance guidance.",
+        outputFormat: "svg"
+      }]
+    }));
+    assert.equal(figurePlan.figureCount, 1);
+    assertPreActionGuidanceSummary(figurePlan.preActionGuidanceSummary, { surface: "dove.figure", primaryRole: "builder" });
+
+    const preparedFigure = extractToolJson(dispatchTool(root, "prepare_figure_generation", {
+      packetId,
+      figureId: "thin-guidance-figure",
+      runId: "thin-guidance-figure-run",
+      allowMissingMaterials: true
+    }));
+    assert.equal(preparedFigure.runId, "thin-guidance-figure-run");
+    assertPreActionGuidanceSummary(preparedFigure.preActionGuidanceSummary, { surface: "dove.figure", primaryRole: "builder" });
+
+    const importedFigure = extractToolJson(dispatchTool(root, "import_figure_generation", {
+      packetId,
+      figureId: "thin-guidance-figure",
+      runId: preparedFigure.runId,
+      finalSvgPath: ".dove/figures/runs/thin-guidance-figure-run/final.svg",
+      svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Thin guidance figure</text></svg>",
+      caption: "Thin guidance figure records safe import provenance."
+    }));
+    assert.equal(importedFigure.finalSvgPath, ".dove/figures/thin-guidance-figure.final.svg");
+    assertPreActionGuidanceSummary(importedFigure.preActionGuidanceSummary, { surface: "dove.figure", primaryRole: "builder" });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -607,6 +811,8 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(proposal.taskCard.packetId, "mission-confirm-task");
     assert.equal(proposal.taskCard.proposalOnly, true);
     assert.equal(proposal.taskCard.noAutoApply, true);
+    assertFullPreActionGuidance(proposal.preActionGuidance, { surface: "dove.mission", primaryRole: "planner" });
+    assertFullPreActionGuidance(proposal.taskCard.preActionGuidance, { surface: "dove.mission", primaryRole: "planner" });
     assert.equal(proposal.workContract.purpose.includes("Mission conversion task"), true);
     assert.ok(proposal.workContract.deliverables.length > 0);
     assert.ok(proposal.workContract.outOfScope.length > 0);
@@ -639,6 +845,7 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(created.executionMode, "single-foreground-pass");
     assert.equal(created.missionPassRequired, true);
     assert.equal(created.recordMissionPassTool, "record_dove_mission_pass");
+    assertPreActionGuidanceSummary(created.preActionGuidanceSummary, { surface: "dove.mission", primaryRole: "planner" });
     assert.equal(created.createdTask.id, "mission-confirm-task");
     assert.deepEqual(created.createdTask.workContract, proposal.workContract);
     const createdPacket = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "mission-confirm-task.json"), "utf8"));
@@ -660,6 +867,8 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(pass.resultCard.presentation, "compact-result-summary-card");
     assert.equal(pass.resultCard.surface, "dove.mission");
     assert.equal(pass.resultCard.packetId, "mission-confirm-task");
+    assertPreActionGuidanceSummary(pass.preActionGuidanceSummary, { surface: "dove.mission" });
+    assertPreActionGuidanceSummary(pass.resultCard.preActionGuidanceSummary, { surface: "dove.mission" });
     assert.ok(pass.resultCard.evidence.includes(".dove/task-packets/index.json"));
     assert.equal(pass.resultCard.proposalOnly, false);
 
@@ -683,6 +892,8 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(passRecorded.result.packetId, "mission-pass-recorded-task");
     assert.equal(passRecorded.resultCard.presentation, "compact-result-summary-card");
     assert.equal(passRecorded.resultCard.packetId, passRecorded.missionPass.resultCard.packetId);
+    assertPreActionGuidanceSummary(passRecorded.preActionGuidanceSummary, { surface: "dove.mission" });
+    assertPreActionGuidanceSummary(passRecorded.resultCard.preActionGuidanceSummary, { surface: "dove.mission" });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -825,9 +1036,11 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.equal(status.dashboard, undefined);
     assert.equal(fullStatus.detail, "full");
     assert.ok(fullStatus.dashboard);
-    assert.equal(status.dailyHome.presentation, "dove-status-home");
-    assert.ok(status.dailyHome.nextActions.length <= 3);
-    assert.equal(status.current.nextCommand, status.dailyHome.nextActions[0].command);
+    assert.equal(status.statusHome.presentation, "dove-project-situation-home");
+    assert.equal(status.dailyHome, undefined);
+    assert.ok(status.statusHome.nextSteps.ranked.length <= 3);
+    assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.kind && card.title && card.command));
+    assert.equal(status.current.nextCommand, status.statusHome.nextSteps.primary.command);
     assert.equal(fullStatus.dashboard.nextAction, fullStatus.dailyHome.nextActions[0].command);
     assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
     assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
@@ -930,7 +1143,10 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.deepEqual(preview.pendingTasks.map((task) => task.id), ["operator-pending"]);
     assert.deepEqual(preview.queueCards.autoRunnable.map((card) => card.packetId), ["operator-auto-ready"]);
     assert.deepEqual(preview.queueCards.hostPassRequired.map((card) => card.packetId).sort(), ["operator-host-missing", "operator-host-progress"].sort());
+    assertFullPreActionGuidance(preview.preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
+    assertFullPreActionGuidance(preview.queueCards.autoRunnable[0].preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
     assert.equal(preview.queueCards.blocked.every((card) => card.presentation === "compact-operator-queue-card" && card.proposalOnly === true), true);
+    assertFullPreActionGuidance(preview.queueCards.blocked[0].preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
     assert.equal(preview.blockedTasks.find((task) => task.id === "operator-unresolved").unresolvedDependencyIds[0], "missing-dependency");
 
     const run = extractToolJson(dispatchTool(root, "run_dove_operator", {
@@ -947,6 +1163,8 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.deepEqual(run.result.hostPassRequiredTaskIds.sort(), ["operator-host-missing", "operator-host-progress"].sort());
     assert.equal(run.resultCard.presentation, "compact-result-summary-card");
     assert.equal(run.resultCard.surface, "dove.operator");
+    assertPreActionGuidanceSummary(run.preActionGuidanceSummary, { surface: "dove.operator", primaryRole: "planner" });
+    assertPreActionGuidanceSummary(run.resultCard.preActionGuidanceSummary, { surface: "dove.operator", primaryRole: "planner" });
     assert.equal(run.resultCard.requiresAction, true);
     assert.equal(run.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-host-pass-result");
     assert.equal(run.resultCard.nextActions[0].handoffSuggestion.ownerRole, "builder");
@@ -1243,17 +1461,17 @@ test("apply_dove_status_adjustments rejects completed parents with open checklis
     }, null, 2)}\n`, "utf8");
 
     const statusHome = extractToolJson(dispatchTool(root, "query_dove_status", {}));
-    assert.equal(statusHome.dailyHome.completionConsistency.status, "needs-reconciliation");
-    assert.equal(statusHome.dailyHome.completionConsistency.findings[0].parentDisplayStatus, "done");
-    assert.equal(statusHome.dailyHome.completionConsistency.findings[0].parentMachineStatus, "completed");
-    assert.deepEqual(statusHome.dailyHome.completionConsistency.findings[0].openChecklistChildIds.sort(), expectedOpenChildren.map((child) => child.id).sort());
+    assert.equal(statusHome.statusHome.blockersAndReconciliation.completionConsistency.status, "needs-reconciliation");
+    assert.equal(statusHome.statusHome.blockersAndReconciliation.completionConsistency.findings[0].parentDisplayStatus, "done");
+    assert.equal(statusHome.statusHome.blockersAndReconciliation.completionConsistency.findings[0].parentMachineStatus, "completed");
+    assert.deepEqual(statusHome.statusHome.blockersAndReconciliation.completionConsistency.findings[0].openChecklistChildIds.sort(), expectedOpenChildren.map((child) => child.id).sort());
 
     const filteredStatusHome = extractToolJson(dispatchTool(root, "query_dove_status", { status: "completed" }));
-    assert.equal(filteredStatusHome.dailyHome.completionConsistency.status, "needs-reconciliation");
-    assert.deepEqual(filteredStatusHome.dailyHome.completionConsistency.findings[0].openChecklistChildIds.sort(), expectedOpenChildren.map((child) => child.id).sort());
-    assert.equal(statusHome.dailyHome.nextActions[0].kind, "reconcile-completion-consistency");
-    assert.equal(statusHome.dailyHome.nextActions[0].findingCount, 1);
-    assert.equal(statusHome.dailyHome.nextActions[0].openChecklistChildCount, expectedOpenChildren.length);
+    assert.equal(filteredStatusHome.statusHome.blockersAndReconciliation.completionConsistency.status, "needs-reconciliation");
+    assert.deepEqual(filteredStatusHome.statusHome.blockersAndReconciliation.completionConsistency.findings[0].openChecklistChildIds.sort(), expectedOpenChildren.map((child) => child.id).sort());
+    assert.equal(statusHome.statusHome.nextSteps.ranked[0].kind, "reconcile-completion-consistency");
+    assert.equal(statusHome.statusHome.nextSteps.ranked[0].findingCount, 1);
+    assert.equal(statusHome.statusHome.nextSteps.ranked[0].openChecklistChildCount, expectedOpenChildren.length);
 
     const rejected = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
       confirmed: true,
@@ -1300,7 +1518,7 @@ test("apply_dove_status_adjustments accepts parent and checklist completion in o
     assert.deepEqual(result.applied.map((item) => item.packetId).sort(), [created.createdTask.id, ...created.createdChecklistTasks.map((child) => child.id)].sort());
 
     const statusHome = extractToolJson(dispatchTool(root, "query_dove_status", {}));
-    assert.equal(statusHome.dailyHome.completionConsistency.status, "consistent");
+    assert.equal(statusHome.statusHome.blockersAndReconciliation.completionConsistency.status, "consistent");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1360,6 +1578,9 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(needsConfirmation.taskCard.presentation, "compact-task-card");
     assert.equal(needsConfirmation.autoCard.presentation, "compact-auto-card");
     assert.equal(needsConfirmation.autoCard.proposalOnly, true);
+    assertFullPreActionGuidance(needsConfirmation.preActionGuidance, { surface: "dove.auto", primaryRole: "builder" });
+    assertFullPreActionGuidance(needsConfirmation.taskCard.preActionGuidance, { surface: "dove.auto", primaryRole: "builder" });
+    assertFullPreActionGuidance(needsConfirmation.autoCard.preActionGuidance, { surface: "dove.auto", primaryRole: "builder" });
     assert.equal(needsConfirmation.foreground, true);
     assert.equal(needsConfirmation.background, false);
     assert.equal(needsConfirmation.maxIterations, 3);
@@ -1389,6 +1610,9 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(demandConfirmation.proposedTask.id, "auto-demand-task");
     assert.equal(demandConfirmation.taskCard.presentation, "compact-task-card");
     assert.equal(demandConfirmation.autoCard.presentation, "compact-auto-card");
+    assertFullPreActionGuidance(demandConfirmation.preActionGuidance, { surface: "dove.auto", primaryRole: "builder" });
+    assertFullPreActionGuidance(demandConfirmation.taskCard.preActionGuidance, { surface: "dove.auto", primaryRole: "builder" });
+    assertFullPreActionGuidance(demandConfirmation.autoCard.preActionGuidance, { surface: "dove.auto", primaryRole: "builder" });
     assert.equal(demandConfirmation.checklistProposal.autoSelected, true);
     assert.equal(demandConfirmation.confirmArgs.confirmed, true);
     assert.equal(demandConfirmation.confirmArgs.checklistItems.length, 3);
@@ -1415,6 +1639,7 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.deepEqual(hostBoundary.task.boundary.requiredActions, ["provide-host-pass-result", "provide-explicit-auto-step"]);
     assert.equal(hostBoundary.resultCard.presentation, "compact-result-summary-card");
     assert.equal(hostBoundary.resultCard.surface, "dove.auto");
+    assertPreActionGuidanceSummary(hostBoundary.resultCard.preActionGuidanceSummary, { surface: "dove.auto", primaryRole: "builder" });
     assert.equal(hostBoundary.resultCard.requiresAction, true);
     assert.equal(hostBoundary.resultCard.nextActions[0].boundaryType, "awaiting-host-pass");
     assert.equal(hostBoundary.resultCard.nextActions[0].ownerRole, "builder");
@@ -1442,6 +1667,7 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(autoRun.result.taskStatusAfter, "completed");
     assert.equal(autoRun.resultCard.presentation, "compact-result-summary-card");
     assert.equal(autoRun.resultCard.surface, "dove.auto");
+    assertPreActionGuidanceSummary(autoRun.resultCard.preActionGuidanceSummary, { surface: "dove.auto", primaryRole: "builder" });
     assert.equal(autoRun.resultCard.completed, true);
 
     const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
@@ -1508,6 +1734,7 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     const prepared = extractToolJson(dispatchTool(root, "prepare_isolated_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-1", scope: "mcp validation" }));
     assert.equal(prepared.status, "prepared");
     assert.equal(prepared.runId, "mcp-isolated-1");
+    assertPreActionGuidanceSummary(prepared.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
     assert.match(prepared.inputPath, /\.dove\/reviews\/isolated\/mcp-isolated-1\/input\.json/);
 
     const reportPath = path.join(root, prepared.reportPath);
@@ -1530,6 +1757,7 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
 
     const imported = extractToolJson(dispatchTool(root, "import_isolated_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-1" }));
     assert.equal(imported.status, "imported");
+    assertPreActionGuidanceSummary(imported.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
     assert.equal(imported.privateTranscriptImported, false);
     assert.equal(imported.verdict, "coherent");
     const reviewLog = fs.readFileSync(path.join(root, ".dove", "reviews", "log.md"), "utf8");
@@ -1538,6 +1766,7 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.equal(runReview.status, "prepared-awaiting-audio");
     assert.equal(runReview.resultCard.presentation, "compact-result-summary-card");
     assert.equal(runReview.resultCard.surface, "dove.review");
+    assertPreActionGuidanceSummary(runReview.resultCard.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
     assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-review-output");
     assert.equal(runReview.resultCard.nextActions[0].nextRole, "reviewer");
     assert.deepEqual(runReview.resultCard.nextActions[0].requiredActions, ["complete-isolated-review-handoff"]);
@@ -1556,6 +1785,7 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
       actionItems: ["Provide validation evidence."]
     }, null, 2)}\n`, "utf8");
     const needsEvidence = extractToolJson(dispatchTool(root, "import_audio_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-2" }));
+    assertPreActionGuidanceSummary(needsEvidence.resultCard.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
     assert.equal(needsEvidence.resultCard.nextActions[0].command, "project:dove.mission");
     assert.equal(needsEvidence.resultCard.nextActions[0].handoffSuggestion.boundaryType, "audio-review-needs-evidence");
     assert.deepEqual(needsEvidence.resultCard.nextActions[0].requiredActions, ["Provide validation evidence."]);
@@ -1650,6 +1880,8 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const doveMissionQueryTool = toolDefinitions.find((item) => item.name === "query_dove_mission");
   const doveBoardQueryTool = toolDefinitions.find((item) => item.name === "query_dove_mission_board");
   const doveStatusQueryTool = toolDefinitions.find((item) => item.name === "query_dove_status");
+  const queryOperatorLessonsTool = toolDefinitions.find((item) => item.name === "query_operator_lessons");
+  const recordOperatorLessonTool = toolDefinitions.find((item) => item.name === "record_operator_lesson");
   const publishStatusTool = toolDefinitions.find((item) => item.name === "publish_dove_status");
   const publishGlobalStatusTool = toolDefinitions.find((item) => item.name === "publish_dove_global_status");
   const doveAuditQueryTool = toolDefinitions.find((item) => item.name === "query_dove_audit");
@@ -1672,7 +1904,10 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const operateTool = toolDefinitions.find((item) => item.name === "run_autonomy_operate");
   assert.ok(createDoveTaskTool, "create_dove_task should exist");
   assert.match(createDoveTaskTool.description, /compact task card/);
-  assert.match(createDoveTaskTool.description, /resultCard/);
+  assert.match(createDoveTaskTool.description, /preActionGuidance/);
+  assert.match(createDoveTaskTool.description, /mission is a durable work\/progress object/);
+  assert.match(createDoveTaskTool.description, /bounded foreground mission pass/);
+  assert.match(createDoveTaskTool.description, /resultCard\/preActionGuidanceSummary/);
   assert.ok(createDoveTaskTool.inputSchema.properties.confirmed, "create_dove_task should expose confirmed");
   assert.ok(createDoveTaskTool.inputSchema.properties.confirm, "create_dove_task should expose confirm");
   assert.ok(createDoveTaskTool.inputSchema.properties.initTitle, "create_dove_task should expose first-run init title");
@@ -1718,7 +1953,9 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.adjustments, "apply_dove_status_adjustments should expose adjustments");
   assert.ok(runDoveAutoTool, "run_dove_auto should exist");
   assert.match(runDoveAutoTool.description, /compact task\/auto cards/);
-  assert.match(runDoveAutoTool.description, /resultCard/);
+  assert.match(runDoveAutoTool.description, /preActionGuidance/);
+  assert.match(runDoveAutoTool.description, /bounded foreground iterations/);
+  assert.match(runDoveAutoTool.description, /no hidden continuation, scheduler, or daemon/);
   assert.ok(runDoveAutoTool.inputSchema.properties.missionPacketId, "run_dove_auto should expose missionPacketId");
   assert.ok(runDoveAutoTool.inputSchema.properties.taskId, "run_dove_auto should expose taskId");
   assert.ok(runDoveAutoTool.inputSchema.properties.packetTarget, "run_dove_auto should expose packetTarget");
@@ -1729,7 +1966,10 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(runDoveAutoTool.inputSchema.properties.completeTask, "run_dove_auto should expose explicit completion");
   assert.ok(runDoveOperatorTool, "run_dove_operator should exist");
   assert.match(runDoveOperatorTool.description, /compact queue cards/);
+  assert.match(runDoveOperatorTool.description, /planner preActionGuidance/);
+  assert.match(runDoveOperatorTool.description, /read-only lesson recall/);
   assert.match(runDoveOperatorTool.description, /resultCard/);
+  assert.match(runDoveOperatorTool.description, /no scheduler or hidden runtime/);
   assert.ok(runDoveOperatorTool.inputSchema.properties.confirmed, "run_dove_operator should expose confirmed");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults, "run_dove_operator should expose taskResults");
   assert.ok(approvalsQueryTool, "query_program_approvals should exist");
@@ -1737,8 +1977,18 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(doveMissionQueryTool, "query_dove_mission should exist");
   assert.ok(doveBoardQueryTool, "query_dove_mission_board should exist");
   assert.ok(doveStatusQueryTool, "query_dove_status should exist");
-  assert.match(doveStatusQueryTool.description, /dailyHome/);
-  assert.match(doveStatusQueryTool.description, /boundary action cards/);
+  assert.match(doveStatusQueryTool.description, /whole-project statusHome/);
+  assert.match(doveStatusQueryTool.description, /statusHome\.preActionGuidance/);
+  assert.match(doveStatusQueryTool.description, /ordinary-prompt intent routing/);
+  assert.match(doveStatusQueryTool.description, /automatic read-only lesson recall/);
+  assert.match(doveStatusQueryTool.description, /Planner\/Builder\/Reviewer role-framed next action/);
+  assert.match(doveStatusQueryTool.description, /optional mission details/);
+  assert.ok(queryOperatorLessonsTool, "query_operator_lessons should exist");
+  assert.match(queryOperatorLessonsTool.description, /recall applicable lessons automatically/);
+  assert.match(queryOperatorLessonsTool.description, /read-only preActionGuidance/);
+  assert.ok(recordOperatorLessonTool, "record_operator_lesson should exist");
+  assert.match(recordOperatorLessonTool.description, /auto-recall lessons read-only/);
+  assert.match(recordOperatorLessonTool.description, /recording never happens implicitly/);
   assert.ok(publishStatusTool, "publish_dove_status should exist");
   assert.match(publishStatusTool.description, /sanitized public Dove project progress artifacts/);
   assert.ok(publishStatusTool.inputSchema.properties.includeArchived, "publish_dove_status should expose includeArchived");
@@ -1755,12 +2005,25 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(doveOnboardingQueryTool, "query_dove_onboarding should exist");
   assert.ok(paperPipelineQueryTool, "query_paper_pipeline should exist");
   assert.ok(prepareIsolatedReviewTool, "prepare_isolated_review should exist");
+  assert.match(prepareIsolatedReviewTool.description, /Reviewer preActionGuidanceSummary/);
+  assert.match(prepareIsolatedReviewTool.description, /explicit isolation boundaries/);
   assert.ok(importIsolatedReviewTool, "import_isolated_review should exist");
+  assert.match(importIsolatedReviewTool.description, /Reviewer preActionGuidanceSummary/);
+  assert.match(importIsolatedReviewTool.description, /private transcripts/);
   assert.ok(runExperienceTool, "run_experience_workflow should exist");
+  assert.match(runExperienceTool.description, /Builder\/experiment-planner preActionGuidance/);
+  assert.match(runExperienceTool.description, /read-only lesson recall/);
+  assert.match(runExperienceTool.description, /claim-bridge boundary/);
   assert.ok(runAudioReviewTool, "run_audio_review should exist");
   assert.match(runAudioReviewTool.description, /resultCard/);
+  assert.match(runAudioReviewTool.description, /Reviewer preActionGuidanceSummary/);
   assert.ok(runReviewLoopTool, "run_dove_review_loop should exist");
+  assert.match(runReviewLoopTool.description, /Reviewer preActionGuidance/);
+  assert.match(runReviewLoopTool.description, /foreground stop conditions/);
   assert.ok(runFigureTool, "run_figure_workflow should exist");
+  assert.match(runFigureTool.description, /Builder preActionGuidance/);
+  assert.match(runFigureTool.description, /artifact-provenance/);
+  assert.match(runFigureTool.description, /QA gates/);
   assert.ok(prepareFigureTool, "prepare_figure_generation should exist");
   assert.ok(importFigureTool, "import_figure_generation should exist");
   assert.ok(doveOnboardingQueryTool.inputSchema.properties.maxDepth, "query_dove_onboarding should expose maxDepth");

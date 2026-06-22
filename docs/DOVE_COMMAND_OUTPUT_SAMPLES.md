@@ -543,7 +543,7 @@ Record output excerpt:
     "nextTime": ["先看 resultCard.nextActions"],
     "status": "active"
   },
-  "writes": [".dove/lessons/operator-lessons.json"]
+  "writes": [".dove/meta/operator-lessons.json"]
 }
 ```
 

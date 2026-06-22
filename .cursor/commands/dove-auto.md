@@ -9,7 +9,7 @@ Convert demand like mission intake, then after confirmation run multi-round fore
 ## Daily use
 
 - Use this when the user wants Dove to continue through bounded foreground iterations after the same demand-to-task intake as mission.
-- Start from a new demand or an existing durable task; auto should propose compact task/auto cards and concrete safe steps before consuming the iteration budget.
+- Start from a new demand or an existing durable task; auto should propose compact task/auto cards, preActionGuidance, recalled lessons, role frame, and concrete safe steps before consuming the iteration budget.
 - Targeting: Selects an existing packet when the target is clear, otherwise proposes a new task contract.
 - Confirmation: Require explicit approval of the compact task/auto cards, selected/proposed task, max iteration budget, and concrete foreground steps.
 - Outcome: Each foreground iteration is recorded in runtime results and stops at completion, blocker, review/provider boundary, or budget exhaustion with an explicit boundary and localized resultCard summary.
@@ -33,19 +33,24 @@ Convert demand like mission intake, then after confirmation run multi-round fore
 3. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/config.json`, `.dove/config.local.json`, `.dove/state.json`, `.dove/task-packets/index.json`, `.dove/runtime`, `.dove/meta/operator-lessons.json`.
 4. Prefer the `run_dove_auto` MCP tool when available.
 5. Require explicit operator approval before creating or changing durable workflow state or consuming bounded authority.
-6. Use the same demand-to-task intake and classification model as `/dove:mission` before autonomous execution starts.
-7. Allow `/dove:auto` to be invoked directly on a new user demand or an existing durable task; it does not require running `/dove:mission` first.
-8. Return a proposal-only auto contract first: either a converted `proposedTask` with checklist proposal or a `selectedTask` from durable packet selection, plus compact task/auto cards, confirmation args, and max iteration budget.
-9. Use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) before passing `confirmed: true`; options should approve and run bounded auto, adjust target/contract, or cancel.
-10. When an existing task target is missing or ambiguous, present indexed packet choices through confirmation UX instead of guessing.
-11. Require explicit operator confirmation before execution beyond task creation or selection.
-12. Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.
-13. Use `.dove/state.json.settings.auto.maxIterations` as the default foreground iteration limit; the default is 3.
-14. Record each foreground iteration and stop reason in `.dove/runtime/results.json`, and return a localized `resultCard` summary without persisting the UX-only card in runtime results.
-15. May internally call public Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status as needed.
-16. Stop at completed, blocked, killed, authority/review boundary, missing provider credentials, conflicting packet target, or step-budget exhaustion.
-17. When a boundary is reached, persist the first-class boundary with required inputs/actions, role handoff, and next command; do not continue through hidden background work.
-18. Do not claim host/code/provider/experiment work was completed without real evidence; stop at an awaiting-host/provider boundary instead.
-19. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-20. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-21. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+6. For ordinary prompts, first use compact `query_dove_status` and `statusHome.preActionGuidance` for intent routing before choosing a mutation command; users should not need to guess slash command names.
+7. Treat `preActionGuidance` as read-only guidance that automatically recalls applicable lessons from `.dove/meta/operator-lessons.json`; recording lessons remains explicit through `/dove:lessons` and `record_operator_lesson` only.
+8. Frame work through Planner, Builder, and Reviewer primary roles; researcher, experiment-planner, revision-lead, rebuttal-lead, version-analyst, and review-loop are subagents/modes under those roles, not public slash surfaces.
+9. Treat status as the project command center and mission as a durable work contract/progress object; do not make a mission board the default UI.
+10. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
+11. Use the same demand-to-task intake and classification model as `/dove:mission` before autonomous execution starts.
+12. Allow `/dove:auto` to be invoked directly on a new user demand or an existing durable task; it does not require running `/dove:mission` first.
+13. Return a proposal-only auto contract first: either a converted `proposedTask` with checklist proposal or a `selectedTask` from durable packet selection, plus compact task/auto cards, confirmation args, and max iteration budget.
+14. Use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) before passing `confirmed: true`; options should approve and run bounded auto, adjust target/contract, or cancel.
+15. When an existing task target is missing or ambiguous, present indexed packet choices through confirmation UX instead of guessing.
+16. Require explicit operator confirmation before execution beyond task creation or selection.
+17. Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.
+18. Use `.dove/state.json.settings.auto.maxIterations` as the default foreground iteration limit; the default is 3.
+19. Record each foreground iteration and stop reason in `.dove/runtime/results.json`, and return a localized `resultCard` summary without persisting the UX-only card in runtime results.
+20. May internally call public Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status as needed.
+21. Stop at completed, blocked, killed, authority/review boundary, missing provider credentials, conflicting packet target, or step-budget exhaustion.
+22. When a boundary is reached, persist the first-class boundary with required inputs/actions, role handoff, and next command; do not continue through hidden background work.
+23. Do not claim host/code/provider/experiment work was completed without real evidence; stop at an awaiting-host/provider boundary instead.
+24. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+25. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+26. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

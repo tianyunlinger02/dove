@@ -35,6 +35,7 @@ import {
 } from "./schema.mjs";
 import { materializeGuidancePacket } from "./navigation.mjs";
 import { queryPaperAudit } from "./paper-audit.mjs";
+import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { readTaskPacketCatalog } from "./task-packets.mjs";
 import { assertGovernanceMutationRegistered } from "./workspace.mjs";
 import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
@@ -1161,7 +1162,7 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, revie
   const seen = new Set();
   const reconciliationChildIds = completionConsistencyOpenChecklistChildIds(completionConsistency);
   const pushCard = (key, card) => {
-    if (!key || seen.has(key)) {
+    if (!key || seen.has(key) || !card) {
       return;
     }
     seen.add(key);
@@ -1320,9 +1321,10 @@ function buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, rev
   };
 }
 
-function selectDailyHomeNextCommand(dailyHome, fallbackNextCommand) {
-  const firstAction = Array.isArray(dailyHome?.nextActions) ? dailyHome.nextActions.find((card) => typeof card?.command === "string" && card.command.trim()) : null;
-  return firstAction?.command ?? fallbackNextCommand;
+function selectDailyHomeNextCommand(statusHome, fallbackNextCommand) {
+  const ranked = Array.isArray(statusHome?.nextSteps?.ranked) ? statusHome.nextSteps.ranked : statusHome?.nextActions;
+  const firstAction = Array.isArray(ranked) ? ranked.find((card) => typeof card?.command === "string" && card.command.trim()) : null;
+  return firstAction?.command ?? statusHome?.nextSteps?.suggestedNextCommand ?? fallbackNextCommand;
 }
 
 function applicableLessonsForTask(inputs, task) {
@@ -1579,47 +1581,111 @@ function compactDiagnostics(diagnostics = {}) {
   };
 }
 
-function compactDoveStatusResult(result, args = {}) {
-  const missionList = compactStatusMissionList(result.dailyHome?.missionList);
-  const nextActions = (Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : []).slice(0, 3).map(compactStatusActionCard);
-  const boundaryActionCards = (Array.isArray(result.dailyHome?.boundaryActionCards) ? result.dailyHome.boundaryActionCards : []).slice(0, 5).map(compactStatusActionCard);
-  const statusAdjustmentContract = compactStatusAdjustmentContract(result.statusAdjustmentContract);
-  const dailyHome = {
-    ...result.dailyHome,
+function compactCompletionConsistency(consistency = {}) {
+  const findings = Array.isArray(consistency.findings) ? consistency.findings : [];
+  return {
+    status: consistency.status ?? "consistent",
+    findingCount: consistency.findingCount ?? findings.length,
+    findings: findings.slice(0, 5).map((finding) => ({
+      id: finding.id,
+      type: finding.type,
+      severity: finding.severity,
+      parentId: finding.parentId,
+      parentTitle: finding.parentTitle,
+      parentDisplayStatus: finding.parentDisplayStatus,
+      parentMachineStatus: finding.parentMachineStatus,
+      openChecklistChildCount: normalizeStringArray(finding.openChecklistChildIds).length,
+      openChecklistChildIds: normalizeStringArray(finding.openChecklistChildIds).slice(0, 20),
+      nextAction: finding.nextAction,
+      summary: finding.summary
+    }))
+  };
+}
+
+function buildCompactStatusHome({ result, missionList, nextActions, boundaryActionCards, statusAdjustmentContract, preActionGuidance, args }) {
+  const summary = result.projectSummary ?? {};
+  const current = result.current ?? {};
+  const dashboard = result.dashboard ?? {};
+  const readErrors = Array.isArray(result.diagnostics?.readErrors) ? result.diagnostics.readErrors : [];
+  const blockers = Array.isArray(dashboard.blockers) ? dashboard.blockers : [];
+  const runtimeContinuation = dashboard.runtime?.continuation ?? null;
+  const completionConsistency = compactCompletionConsistency(result.dailyHome?.completionConsistency);
+  const missionSummary = missionList.summary ?? {};
+  const primaryStep = nextActions[0] ?? null;
+  return {
+    presentation: "dove-project-situation-home",
     detail: "compact",
-    missionList,
-    nextActions,
-    boundaryActionCards,
+    liveContextFirst: true,
+    currentContext: {
+      title: summary.title ?? null,
+      objective: summary.objective ?? null,
+      currentFocus: summary.currentFocus ?? null,
+      domain: current.domain ?? null,
+      stage: current.stage ?? null,
+      primaryRole: current.primaryRole ?? null,
+      durableRoot: dashboard.project?.durableRoot ?? ARTIFACT_PATHS.doveRoot,
+      runtimeContinuation
+    },
+    preActionGuidance: preActionGuidance ?? result.preActionGuidance ?? null,
+    projectState: {
+      returnStatus: summary.returnStatus ?? null,
+      reviewVerdict: summary.reviewVerdict ?? null,
+      unresolvedConcernCount: summary.unresolvedConcernCount ?? 0,
+      missionCounts: {
+        open: missionSummary.openCount ?? 0,
+        todo: missionSummary.todoCount ?? 0,
+        doing: missionSummary.doingCount ?? 0,
+        blocked: missionSummary.blockedCount ?? 0,
+        done: missionSummary.doneCount ?? 0
+      },
+      blockerCount: blockers.length,
+      readErrorCount: readErrors.length,
+      statusAdjustmentCount: statusAdjustmentContract.itemCount ?? 0
+    },
+    blockersAndReconciliation: {
+      status: readErrors.length > 0 || blockers.length > 0 || completionConsistency.status === "needs-reconciliation" ? "blocked" : "clear",
+      readErrors,
+      blockers: blockers.slice(0, 5),
+      blockerCount: blockers.length,
+      completionConsistency,
+      boundaryActionCards,
+      boundaryActionCount: boundaryActionCards.length
+    },
+    nextSteps: {
+      primary: primaryStep,
+      ranked: nextActions,
+      count: nextActions.length,
+      suggestedNextCommand: result.suggestedNextCommand ?? current.nextCommand ?? null
+    },
+    optionalMissionDetails: {
+      ...missionList,
+      defaultCollapsed: true,
+      expandWhenAsked: true,
+      promptExamples: ["有哪些 mission", "show current missions"]
+    },
+    statusAdjustmentPreview: statusAdjustmentContract,
     detailsAvailable: true,
     fullDetails: {
       tool: "query_dove_status",
       args: compactStatusDetailArgs(args)
     }
   };
-  const statusHome = {
-    presentation: "dove-status-compact-home",
-    detail: "compact",
-    liveContextFirst: true,
-    summary: {
-      title: result.projectSummary?.title ?? null,
-      objective: result.projectSummary?.objective ?? null,
-      currentFocus: result.projectSummary?.currentFocus ?? null,
-      openMissionCount: missionList.summary?.openCount ?? 0,
-      todoMissionCount: missionList.summary?.todoCount ?? 0,
-      doingMissionCount: missionList.summary?.doingCount ?? 0,
-      blockedMissionCount: missionList.summary?.blockedCount ?? 0,
-      doneMissionCount: missionList.summary?.doneCount ?? 0,
-      reviewVerdict: result.projectSummary?.reviewVerdict ?? null,
-      returnStatus: result.projectSummary?.returnStatus ?? null,
-      nextCommand: result.suggestedNextCommand ?? result.current?.nextCommand ?? null
-    },
+}
+
+function compactDoveStatusResult(result, args = {}) {
+  const missionList = compactStatusMissionList(result.dailyHome?.missionList);
+  const nextActions = (Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : []).slice(0, 3).map(compactStatusActionCard);
+  const boundaryActionCards = (Array.isArray(result.dailyHome?.boundaryActionCards) ? result.dailyHome.boundaryActionCards : []).slice(0, 5).map(compactStatusActionCard);
+  const statusAdjustmentContract = compactStatusAdjustmentContract(result.statusAdjustmentContract);
+  const statusHome = buildCompactStatusHome({
+    result,
     missionList,
     nextActions,
     boundaryActionCards,
-    statusAdjustmentPreview: statusAdjustmentContract,
-    detailsAvailable: true,
-    fullDetails: dailyHome.fullDetails
-  };
+    statusAdjustmentContract,
+    preActionGuidance: result.preActionGuidance,
+    args
+  });
   return {
     mode: result.mode,
     query: result.query,
@@ -1632,7 +1698,6 @@ function compactDoveStatusResult(result, args = {}) {
     projectSummary: result.projectSummary,
     statusHome,
     statusAdjustmentContract,
-    dailyHome,
     actionableBoundaries: (Array.isArray(result.actionableBoundaries) ? result.actionableBoundaries : []).slice(0, 5),
     boundaryActionCards,
     current: result.current,
@@ -2434,6 +2499,34 @@ export function queryDoveStatus(root, args = {}) {
   const nextCommand = selectDailyHomeNextCommand(dailyHome, fallbackNextCommand);
   const projectSummary = buildProjectSummary({ title: projectTitle, objective: projectObjective, focus: projectFocus, initTask, tasks, activeTasks, blockedTasks, missionList: dailyHome.missionList, review, versions, experiments, blockers, nextCommand, returnStatus });
   const statusAdjustmentContract = buildStatusAdjustmentContract(visibleTasks, responseLanguage);
+  const preActionGuidance = buildPreActionGuidance({
+    surface: "dove.status",
+    responseLanguage,
+    request: args.request ?? args.userRequest ?? args.prompt ?? null,
+    roleId: primaryRole,
+    currentContext: {
+      title: projectTitle,
+      objective: projectObjective,
+      currentFocus: projectFocus,
+      domain: currentDomain,
+      stage: currentStage,
+      primaryRole
+    },
+    operatorLessons: inputs.operatorLessons,
+    nextAction: dailyHome.nextActions?.[0] ?? nextCommand,
+    routeHint: nextCommand,
+    workflowKind: "status",
+    domain: currentDomain,
+    stage: currentStage,
+    statusSummary: {
+      returnStatus,
+      activeTaskCount: activeTasks.length,
+      blockerCount: blockers.length,
+      unresolvedConcernCount: review.unresolvedConcernCount,
+      readErrorCount: inputs.readErrors.length,
+      statusAdjustmentCount: statusAdjustmentContract.itemCount ?? 0
+    }
+  });
   const fullResult = {
     mode: "dove-status-query",
     query: true,
@@ -2443,6 +2536,7 @@ export function queryDoveStatus(root, args = {}) {
     responseLanguage,
     detail: "full",
     projectSummary,
+    preActionGuidance,
     statusAdjustmentContract,
     dailyHome,
     actionableBoundaries,

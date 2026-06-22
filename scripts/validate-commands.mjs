@@ -189,6 +189,19 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes(removedCommandId), false, `${relativePath} must not mention removed command ${removedCommandId}`);
   }
 
+  assert.equal(commandText.includes("ordinary prompts"), true, `${relativePath} must route ordinary prompts through status guidance`);
+  assert.equal(commandText.includes("statusHome.preActionGuidance"), true, `${relativePath} must mention preActionGuidance`);
+  assert.equal(commandText.includes("read-only guidance"), true, `${relativePath} must keep guidance read-only`);
+  assert.equal(commandText.includes(".dove/meta/operator-lessons.json"), true, `${relativePath} must auto-recall lessons from the canonical lessons path`);
+  assert.equal(commandText.includes("recording lessons remains explicit"), true, `${relativePath} must forbid implicit lesson recording`);
+  assert.equal(commandText.includes("Planner, Builder, and Reviewer"), true, `${relativePath} must frame the three primary roles`);
+  assert.equal(commandText.includes("subagents/modes"), true, `${relativePath} must keep specialties under primary roles`);
+  assert.equal(commandText.includes("not public slash surfaces"), true, `${relativePath} must forbid specialty/role public slash surfaces`);
+  assert.equal(commandText.includes("status as the project command center"), true, `${relativePath} must keep status as command center`);
+  assert.equal(commandText.includes("mission as a durable work contract/progress object"), true, `${relativePath} must keep mission as work contract/progress object`);
+  assert.equal(commandText.includes("Never create hidden runtime"), true, `${relativePath} must forbid hidden runtime`);
+  assert.equal(commandText.includes("explicit bounded foreground work"), true, `${relativePath} must keep runtime foreground-bounded`);
+
   if (command.id === "dove.mission") {
     assert.equal(commandText.includes("create_dove_task"), true, `${relativePath} must route demand conversion through create_dove_task`);
     assert.equal(commandText.includes("record_dove_mission_pass"), true, `${relativePath} must record the one-pass mission result`);
@@ -260,31 +273,35 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
   if (command.id === "dove.status") {
     assert.equal(commandText.includes("query_dove_status"), true, `${relativePath} must query status before adjustment`);
     assert.equal(commandText.includes("apply_dove_status_adjustments"), true, `${relativePath} must expose the guarded status adjustment bridge`);
+    assert.equal(commandText.includes("whole-project situation home"), true, `${relativePath} must describe status as a project situation home`);
     assert.equal(commandText.includes("live development situation"), true, `${relativePath} must explain the live development situation`);
     assert.equal(commandText.includes("do not treat `.dove/` context as the live development situation"), true, `${relativePath} must separate live context from Dove durable context`);
     assert.equal(commandText.includes("host-visible context"), true, `${relativePath} must use host-visible context for live status`);
-    assert.equal(commandText.includes("statusHome"), true, `${relativePath} must use the compact status home envelope`);
+    assert.equal(commandText.includes("statusHome.currentContext"), true, `${relativePath} must expose current context`);
+    assert.equal(commandText.includes("statusHome.preActionGuidance"), true, `${relativePath} must expose pre-action guidance after current context`);
+    assert.equal(commandText.includes("automatic read-only lesson recall"), true, `${relativePath} must expose automatic lesson recall in status guidance`);
+    assert.equal(commandText.includes("Planner/Builder/Reviewer role frame"), true, `${relativePath} must expose role-framed status guidance`);
+    assert.equal(commandText.includes("statusHome.projectState"), true, `${relativePath} must expose project state`);
+    assert.equal(commandText.includes("statusHome.blockersAndReconciliation"), true, `${relativePath} must expose blockers and reconciliation`);
+    assert.equal(commandText.includes("statusHome.nextSteps"), true, `${relativePath} must expose ranked next steps`);
+    assert.equal(commandText.includes("statusHome.optionalMissionDetails"), true, `${relativePath} must expose optional mission details`);
     assert.equal(commandText.includes("without `detail: \"full\"`"), true, `${relativePath} must default to compact status queries`);
     assert.equal(commandText.includes("request `detail: \"full\"`"), true, `${relativePath} must reserve full status details for explicit expansion`);
     assert.equal(commandText.includes("saved full status result file"), true, `${relativePath} must forbid reading full saved status files by default`);
-    assert.equal(commandText.includes("dailyHome.missionList"), true, `${relativePath} must expose the grouped in-host mission list`);
-    assert.equal(commandText.includes("grouped as `todo`, `doing`, and `blocked`"), true, `${relativePath} must document user-facing mission groups`);
-    assert.equal(commandText.includes("with `done` collapsed by default"), true, `${relativePath} must keep done missions collapsed by default`);
-    assert.equal(commandText.includes("default in-host task list"), true, `${relativePath} must show missions inside the host`);
-    assert.equal(commandText.includes("without leaving Claude/OpenCode"), true, `${relativePath} must avoid routing operators back to shell for mission inspection`);
+    assert.equal(commandText.includes("Do not make mission lists the default body"), true, `${relativePath} must not make status a mission board`);
+    assert.equal(commandText.includes("collapsed by default"), true, `${relativePath} must collapse optional mission details by default`);
+    assert.equal(commandText.includes("show current missions"), true, `${relativePath} must allow ordinary prompt mission expansion`);
+    assert.equal(commandText.includes("/dove:missions"), true, `${relativePath} must explicitly forbid a dedicated missions slash command`);
+    assert.equal(commandText.includes("/dove:board"), true, `${relativePath} must explicitly forbid a dedicated board slash command`);
+    assert.equal(commandText.includes("/dove:list"), true, `${relativePath} must explicitly forbid a dedicated list slash command`);
+    assert.equal(commandText.includes("do not route mission-list questions to `/dove:mission`"), true, `${relativePath} must keep mission intake separate from mission listing`);
+    assert.equal(commandText.includes("query_dove_mission_board"), true, `${relativePath} must classify mission board as low-level/debug`);
     assert.equal(commandText.includes("Do not print raw internal dumps"), true, `${relativePath} must forbid noisy raw status dumps`);
     assert.equal(commandText.includes("raw status-count objects, recent completed mission recaps, or recent killed mission recaps"), true, `${relativePath} must name hidden raw status dump fields`);
-    assert.equal(commandText.includes("if showing done missions, keep the `done` group collapsed"), true, `${relativePath} must collapse done mission details unless requested`);
-    assert.equal(commandText.includes("if there are no adjustable missions, do not print a mission list"), false, `${relativePath} must not keep the old no-mission-list status UX`);
-    assert.equal(commandText.includes("daily home screen"), true, `${relativePath} must describe status as the daily home screen`);
-    assert.equal(commandText.includes("ranked 1-3 next action cards"), true, `${relativePath} must expose ranked status next actions`);
-    assert.equal(commandText.includes("after live context first"), true, `${relativePath} must keep live context first before durable action cards`);
+    assert.equal(commandText.includes("if showing optional mission details, keep the `done` group collapsed"), true, `${relativePath} must collapse done mission details unless requested`);
+    assert.equal(commandText.includes("ranked 1-3 next steps"), true, `${relativePath} must expose ranked status next steps`);
     assert.equal(commandText.includes("actionableBoundaries"), true, `${relativePath} must expose actionable boundary metadata`);
     assert.equal(commandText.includes("boundaryActionCards"), true, `${relativePath} must expose proposal-only boundary action cards`);
-    assert.equal(commandText.includes("boundary action cards"), true, `${relativePath} must document boundary action cards`);
-    assert.equal(commandText.includes("compact cards"), true, `${relativePath} must surface compact status cards`);
-    assert.equal(commandText.includes("compact adjustment cards"), true, `${relativePath} must surface compact status adjustment cards`);
-    assert.equal(commandText.includes("no raw status-count dumps or completed/killed recaps"), true, `${relativePath} must forbid raw counts and completed/killed recaps`);
     assert.equal(commandText.includes("current boundary metadata"), true, `${relativePath} must explain boundary state without treating it as live host context`);
     assert.equal(commandText.includes("Boundary types are first-class metadata, not machine status choices"), true, `${relativePath} must keep boundaries separate from status enum`);
     assert.equal(commandText.includes("现在是什么情况"), false, `${relativePath} command prompt should keep canonical instructions in English`);
@@ -297,12 +314,14 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("Collect status choices across pages"), false, `${relativePath} must not collect status choices across pages`);
     assert.equal(commandText.includes("one final confirmation summary"), false, `${relativePath} must not require the old extra final confirmation summary`);
     assert.equal(commandText.includes("not a standalone public slash command"), true, `${relativePath} must route killing through status UX`);
-    assert.equal(commandText.includes("localized resultCard summaries"), true, `${relativePath} must surface resultCard summaries after status adjustments`);
+    assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after status adjustments`);
   }
 
   if (command.id === "dove.operator") {
     assert.equal(commandText.includes("run_dove_operator"), true, `${relativePath} must route through run_dove_operator`);
     assert.equal(commandText.includes("compact queue cards"), true, `${relativePath} must surface compact operator queue cards`);
+    assert.equal(commandText.includes("planner preActionGuidance"), true, `${relativePath} must surface operator planner guidance`);
+    assert.equal(commandText.includes("read-only lesson recall"), true, `${relativePath} must surface operator lesson recall`);
     assert.equal(commandText.includes("`autoRunnableTasks`"), true, `${relativePath} must include auto-runnable mission queue`);
     assert.equal(commandText.includes("`hostPassRequiredTasks`"), true, `${relativePath} must include host-pass-required mission queue`);
     assert.equal(commandText.includes("blocked missions"), true, `${relativePath} must include blocked mission handling`);
@@ -318,6 +337,30 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
 
 for (const relativePath of OPENCODE_ROLE_SKILL_PATHS) {
   assert.ok(fs.existsSync(path.join(ROOT, relativePath)), `Missing skill: ${relativePath}`);
+}
+
+for (const role of ["planner", "builder", "reviewer"]) {
+  const relativePath = `.opencode/skills/dove-${role}/SKILL.md`;
+  const skillText = readRelative(relativePath);
+  assert.equal(skillText.includes("Planner, Builder, and Reviewer as the only primary Dove roles"), true, `${relativePath} must present the three primary roles`);
+  assert.equal(skillText.includes(".dove/context/actions/current.json"), true, `${relativePath} must read current action context`);
+  assert.equal(skillText.includes(".dove/meta/operator-lessons.json"), true, `${relativePath} must read operator lessons before action`);
+  assert.equal(skillText.includes("Do not start hidden runtimes"), true, `${relativePath} must forbid hidden runtimes`);
+  assert.equal(skillText.includes("unconfirmed writes"), true, `${relativePath} must forbid unconfirmed writes`);
+}
+
+const specialtySkillParents = {
+  ".opencode/skills/dove-researcher/SKILL.md": "Builder-side subagent/mode",
+  ".opencode/skills/dove-experiment-planning/SKILL.md": "Builder-side subagent/mode",
+  ".opencode/skills/dove-version-analyst/SKILL.md": "Planner-side audit subagent/mode",
+  ".opencode/skills/dove-review-loop/SKILL.md": "Reviewer-side or reviewer-mediated subagent/mode"
+};
+for (const [relativePath, marker] of Object.entries(specialtySkillParents)) {
+  const skillText = readRelative(relativePath);
+  assert.equal(skillText.includes(marker), true, `${relativePath} must declare its primary-role parent`);
+  assert.equal(skillText.includes("not a manually switchable primary role or public slash surface"), true, `${relativePath} must not look like a peer public role`);
+  assert.equal(skillText.includes(".dove/meta/operator-lessons.json"), true, `${relativePath} must read operator lessons before action`);
+  assert.equal(skillText.includes("Do not start hidden runtimes"), true, `${relativePath} must forbid hidden runtimes`);
 }
 
 const opencodeConfig = JSON.parse(fs.readFileSync(path.join(ROOT, ".opencode.json"), "utf8"));

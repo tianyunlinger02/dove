@@ -22,6 +22,7 @@ import { runAudioReview } from "./audio-review.mjs";
 import { runDoveReviewLoop } from "./dove-review-loop.mjs";
 import { normalizeRebuttalIssues, buildRebuttalStrategy } from "./orchestration.mjs";
 import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
+import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
 import { appendEvent, appendResult, loadRuntimeArtifacts, saveRuntimeArtifacts } from "./runtime-state.mjs";
 
@@ -525,6 +526,7 @@ function buildTaskConfirmationCard(task = {}, context = {}, responseLanguage = "
     deliverables: workContract?.deliverables ?? [],
     doneCriteria: workContract?.doneCriteria ?? [],
     recommendedRoutes: workContract?.recommendedRoutes ?? [],
+    preActionGuidance: context.preActionGuidance ?? null,
     boundaryOrResume: context.boundaryOrResume ?? doveText(responseLanguage, "compactCardBoundaryFallback"),
     confirmation: doveText(responseLanguage, "compactCardNoAutomaticExecution"),
     confirmationRequired: true,
@@ -543,6 +545,7 @@ function buildAutoConfirmationCard(task = {}, autoPlan = {}, context = {}, respo
     maxIterations: context.maxIterations ?? null,
     firstAction: proposedSteps[0] ?? task.nextAction ?? doveText(responseLanguage, "compactCardFirstActionFallback"),
     proposedSteps,
+    preActionGuidance: context.preActionGuidance ?? null,
     safeToRun: autoPlan.safeToRun ?? false,
     requiresHostPass: autoPlan.requiresHostPass ?? false,
     why: autoPlan.whyThisStep ?? task.summary ?? "",
@@ -566,6 +569,7 @@ function buildOperatorQueueCard(task = {}, context = {}, responseLanguage = "zh"
     firstAction: task.nextAction ?? context.firstAction ?? doveText(responseLanguage, "compactCardFirstActionFallback"),
     why: context.why ?? task.rationale ?? task.summary ?? "",
     evidenceRequired: compactEvidence(task, responseLanguage),
+    preActionGuidance: context.preActionGuidance ?? null,
     boundaryOrResume: task.blockedReason ?? task.nextAction ?? doveText(responseLanguage, "compactCardBoundaryFallback"),
     confirmation: doveText(responseLanguage, "compactCardNoAutomaticExecution"),
     confirmationRequired: true,
@@ -711,6 +715,7 @@ function missionResultCard(task = {}, result = {}, context = {}, responseLanguag
     boundary: task.boundary ?? null,
     nextAction,
     nextActions: withWorkflowActionMetadata(baseNextActions, task, result, responseLanguage, handoffSuggestion),
+    preActionGuidanceSummary: context.preActionGuidanceSummary ?? null,
     foreground: result.foreground,
     background: result.background,
     daemon: result.daemon
@@ -742,6 +747,7 @@ function autoResultCard(task = {}, result = {}, context = {}, responseLanguage =
     durableWrites: taskWorkflowDurableWrites(responseLanguage, { runtime: true, lifecycle: result.taskStatusBefore !== result.taskStatusAfter || Boolean(result.boundary) }),
     boundary: result.boundary ?? task.boundary ?? null,
     nextActions,
+    preActionGuidanceSummary: context.preActionGuidanceSummary ?? null,
     foreground: result.foreground,
     background: result.background,
     daemon: result.daemon
@@ -785,6 +791,7 @@ function operatorResultCard(result = {}, context = {}, responseLanguage = "zh") 
     ],
     nextAction: context.nextAction ?? "project:dove.status",
     nextActions,
+    preActionGuidanceSummary: context.preActionGuidanceSummary ?? null,
     foreground: result.foreground,
     background: result.background,
     daemon: result.daemon
@@ -811,13 +818,48 @@ function statusAdjustmentResultCard(result = {}, responseLanguage = "zh") {
   }, responseLanguage);
 }
 
+function readOperatorLessonsIndex(root) {
+  return readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] });
+}
+
 function activeLessons(root, packetId = null) {
-  const lessons = readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] });
+  const lessons = readOperatorLessonsIndex(root);
   return (Array.isArray(lessons.lessons) ? lessons.lessons : []).filter((lesson) => {
     const status = lesson.status ?? "active";
     const packetIds = normalizeStringArray(lesson.packetIds);
     return status === "active" && (!packetId || packetIds.length === 0 || packetIds.includes(packetId));
   }).map((lesson) => ({ id: lesson.id, title: lesson.title, mustObey: lesson.mustObey ?? true, nextTime: lesson.nextTime ?? [] }));
+}
+
+function preActionGuidanceForTask(root, surface, task = {}, context = {}, responseLanguage = "zh") {
+  return buildPreActionGuidance({
+    surface,
+    responseLanguage,
+    request: context.request ?? task.summary ?? task.title ?? null,
+    roleId: context.roleId ?? task.ownerRole ?? task.nextRole,
+    subagentSpecialty: context.subagentSpecialty,
+    packet: task,
+    currentContext: {
+      domain: task.domain ?? context.domain ?? null,
+      stage: task.stage ?? context.stage ?? null,
+      primaryRole: context.roleId ?? task.ownerRole ?? task.nextRole ?? null
+    },
+    operatorLessons: context.operatorLessons ?? readOperatorLessonsIndex(root),
+    nextAction: context.nextAction ?? task.nextAction ?? null,
+    routeHint: context.routeHint ?? task.nextAction ?? null,
+    workflowKind: context.workflowKind,
+    domain: task.domain ?? context.domain ?? null,
+    stage: task.stage ?? context.stage ?? null,
+    tags: context.tags ?? []
+  });
+}
+
+function preActionGuidanceSummaryForTask(root, surface, task = {}, context = {}, responseLanguage = "zh") {
+  return summarizePreActionGuidance(preActionGuidanceForTask(root, surface, task, context, responseLanguage));
+}
+
+function requestTextFromArgs(args = {}) {
+  return normalizeString(args.goal ?? args.objective ?? args.prompt ?? args.title ?? args.summary ?? args.request ?? args.userRequest, null);
 }
 
 function buildPacket(root, args, init, classification, overrides = {}) {
@@ -1401,6 +1443,12 @@ export function createDoveTask(root, args = {}) {
   const contract = buildDoveTaskContract(root, args);
   const { packet, checklistProposal, classification, blockers, applicableLessons, responseLanguage, proposedInit, initMaterializationRequired } = contract;
   if (!hasExplicitConfirmation(args)) {
+    const preActionGuidance = preActionGuidanceForTask(root, "dove.mission", packet, {
+      request: requestTextFromArgs(args),
+      roleId: "planner",
+      nextAction: packet.nextAction,
+      workflowKind: "mission"
+    }, responseLanguage);
     return {
       status: "needs-confirmation",
       proposalOnly: true,
@@ -1413,7 +1461,8 @@ export function createDoveTask(root, args = {}) {
       proposedInit,
       proposedTask: packet,
       workContract: packet.workContract,
-      taskCard: buildTaskConfirmationCard(packet, { firstAction: packet.nextAction, workContract: packet.workContract }, responseLanguage),
+      preActionGuidance,
+      taskCard: buildTaskConfirmationCard(packet, { firstAction: packet.nextAction, workContract: packet.workContract, preActionGuidance }, responseLanguage),
       classification,
       blockers,
       evidenceExpectations: packet.evidenceExpectations,
@@ -1452,6 +1501,12 @@ export function createDoveTask(root, args = {}) {
     };
   }
   const materialized = materializeDoveTask(root, contract);
+  const preActionGuidanceSummary = preActionGuidanceSummaryForTask(root, "dove.mission", materialized.createdTask, {
+    request: requestTextFromArgs(args),
+    roleId: "planner",
+    nextAction: materialized.createdTask.nextAction,
+    workflowKind: "mission"
+  }, responseLanguage);
   const recordMissionPassArgs = {
     packetId: materialized.createdTask.id,
     runId: normalizeTaskPacketId(args.runId ?? `mission-${materialized.createdTask.id}-${Date.now().toString(36)}`)
@@ -1465,6 +1520,7 @@ export function createDoveTask(root, args = {}) {
     daemon: false,
     recordMissionPassTool: "record_dove_mission_pass",
     recordMissionPassArgs,
+    preActionGuidanceSummary,
     message: doveText(responseLanguage, "createTaskMaterializedMessage"),
     responseLanguage,
     ...materialized
@@ -1745,6 +1801,12 @@ export function recordDoveMissionPass(root, args = {}) {
     updatedAt: timestamp
   };
   persistAutoResult(root, result);
+  const preActionGuidanceSummary = preActionGuidanceSummaryForTask(root, "dove.mission", task, {
+    request: summary,
+    roleId: task.ownerRole ?? "builder",
+    nextAction,
+    workflowKind: "mission-pass"
+  }, responseLanguage);
   const resultCard = missionResultCard(task, result, {
     summary,
     evidenceLinks,
@@ -1753,6 +1815,7 @@ export function recordDoveMissionPass(root, args = {}) {
     planConversion,
     artifactResolution: selection.artifactResolution,
     evidenceExplanation: selectionEvidenceExplanation,
+    preActionGuidanceSummary,
     nextAction,
     nextActions: resultStatus === "completed"
       ? [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: nextAction, packetId: task.id }]
@@ -1763,6 +1826,7 @@ export function recordDoveMissionPass(root, args = {}) {
     task,
     result,
     resultCard,
+    preActionGuidanceSummary,
     evidenceLinks,
     artifactRefs,
     artifactResolution: selection.artifactResolution ?? null,
@@ -2201,6 +2265,23 @@ export function runDoveOperator(root, args = {}) {
   const index = loadTaskIndex(root);
   const queue = operatorQueue(index);
   if (!hasExplicitConfirmation(args)) {
+    const preActionGuidance = buildPreActionGuidance({
+      surface: "dove.operator",
+      responseLanguage,
+      request: requestTextFromArgs(args),
+      roleId: "planner",
+      operatorLessons: readOperatorLessonsIndex(root),
+      nextAction: "project:dove.status",
+      routeHint: "project:dove.status",
+      workflowKind: "operator",
+      statusSummary: {
+        autoRunnableCount: queue.autoRunnable.length,
+        hostPassRequiredCount: queue.hostPassRequired.length,
+        runnableCount: queue.runnable.length,
+        blockedCount: queue.blocked.length,
+        pendingCount: queue.pending.length
+      }
+    });
     return {
       status: "needs-confirmation",
       proposalOnly: true,
@@ -2208,15 +2289,16 @@ export function runDoveOperator(root, args = {}) {
       writes: [],
       confirmationRequired: true,
       executionMode: "operator-one-foreground-pass",
+      preActionGuidance,
       foreground: true,
       background: false,
       daemon: false,
       queueCards: {
-        autoRunnable: queue.autoRunnable.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "auto-runnable" }, responseLanguage)),
-        hostPassRequired: queue.hostPassRequired.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "host-pass-required", why: doveText(responseLanguage, "operatorAwaitingStopReason") }, responseLanguage)),
-        runnable: queue.runnable.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "runnable" }, responseLanguage)),
-        blocked: queue.blocked.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "blocked" }, responseLanguage)),
-        pending: queue.pending.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "pending" }, responseLanguage))
+        autoRunnable: queue.autoRunnable.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "auto-runnable", preActionGuidance }, responseLanguage)),
+        hostPassRequired: queue.hostPassRequired.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "host-pass-required", why: doveText(responseLanguage, "operatorAwaitingStopReason"), preActionGuidance }, responseLanguage)),
+        runnable: queue.runnable.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "runnable", preActionGuidance }, responseLanguage)),
+        blocked: queue.blocked.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "blocked", preActionGuidance }, responseLanguage)),
+        pending: queue.pending.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "pending", preActionGuidance }, responseLanguage))
       },
       autoRunnableTasks: queue.autoRunnable.map(operatorTaskSummary),
       hostPassRequiredTasks: queue.hostPassRequired.map(operatorTaskSummary),
@@ -2298,11 +2380,29 @@ export function runDoveOperator(root, args = {}) {
     updatedAt: nowIso()
   };
   persistAutoResult(root, result);
-  const resultCard = operatorResultCard(result, { nextAction: "project:dove.status" }, responseLanguage);
+  const preActionGuidanceSummary = summarizePreActionGuidance(buildPreActionGuidance({
+    surface: "dove.operator",
+    responseLanguage,
+    request: requestTextFromArgs(args),
+    roleId: "planner",
+    operatorLessons: readOperatorLessonsIndex(root),
+    nextAction: "project:dove.status",
+    routeHint: "project:dove.status",
+    workflowKind: "operator",
+    statusSummary: {
+      autoRunnableCount: queue.autoRunnable.length,
+      hostPassRequiredCount: queue.hostPassRequired.length,
+      runnableCount: queue.runnable.length,
+      blockedCount: queue.blocked.length,
+      pendingCount: queue.pending.length
+    }
+  }));
+  const resultCard = operatorResultCard(result, { nextAction: "project:dove.status", preActionGuidanceSummary }, responseLanguage);
   return {
     status: result.status,
     result,
     resultCard,
+    preActionGuidanceSummary,
     autoRunnableTasks: queue.autoRunnable.map(operatorTaskSummary),
     hostPassRequiredTasks: queue.hostPassRequired.map(operatorTaskSummary),
     updatedTasks: updatedTasks.map(operatorTaskSummary),
@@ -2916,6 +3016,12 @@ function autoConfirmArgs(args = {}, maxIterations, values = {}) {
 function autoSelectionConfirmation(root, args, selected, maxIterations, responseLanguage = "zh") {
   const task = loadFullTask(root, selected);
   const autoPlan = inferAutoStepsForTask(task, args);
+  const preActionGuidance = preActionGuidanceForTask(root, "dove.auto", task, {
+    request: requestTextFromArgs(args),
+    roleId: "builder",
+    nextAction: task.nextAction,
+    workflowKind: "auto"
+  }, responseLanguage);
   const classification = {
     stage: task.stage,
     domain: task.domain,
@@ -2930,8 +3036,9 @@ function autoSelectionConfirmation(root, args, selected, maxIterations, response
     demandConversion: false,
     executionMode: "multi-round-foreground-auto",
     selectedTask: task,
-    taskCard: buildTaskConfirmationCard(task, { firstAction: task.nextAction ?? nextCommandFor(classification) }, responseLanguage),
-    autoCard: buildAutoConfirmationCard(task, autoPlan, { maxIterations }, responseLanguage),
+    preActionGuidance,
+    taskCard: buildTaskConfirmationCard(task, { firstAction: task.nextAction ?? nextCommandFor(classification), preActionGuidance }, responseLanguage),
+    autoCard: buildAutoConfirmationCard(task, autoPlan, { maxIterations, preActionGuidance }, responseLanguage),
     classification,
     blockers: [...normalizeStringArray(task.dependencies), ...normalizeStringArray(task.blockedBy)],
     evidenceExpectations: normalizeStringArray(task.evidenceExpectations),
@@ -2954,6 +3061,12 @@ function autoDemandConfirmation(root, args, maxIterations) {
   const contract = buildDoveTaskContract(root, args);
   const { packet, checklistProposal, classification, blockers, applicableLessons, responseLanguage, proposedInit, initMaterializationRequired } = contract;
   const autoPlan = inferAutoStepsForTask(packet, args);
+  const preActionGuidance = preActionGuidanceForTask(root, "dove.auto", packet, {
+    request: requestTextFromArgs(args),
+    roleId: "builder",
+    nextAction: packet.nextAction,
+    workflowKind: "auto"
+  }, responseLanguage);
   return {
     status: "needs-confirmation",
     proposalOnly: true,
@@ -2965,8 +3078,9 @@ function autoDemandConfirmation(root, args, maxIterations) {
     initMaterializationRequired,
     proposedInit,
     proposedTask: packet,
-    taskCard: buildTaskConfirmationCard(packet, { firstAction: packet.nextAction }, responseLanguage),
-    autoCard: buildAutoConfirmationCard(packet, autoPlan, { maxIterations }, responseLanguage),
+    preActionGuidance,
+    taskCard: buildTaskConfirmationCard(packet, { firstAction: packet.nextAction, preActionGuidance }, responseLanguage),
+    autoCard: buildAutoConfirmationCard(packet, autoPlan, { maxIterations, preActionGuidance }, responseLanguage),
     classification,
     blockers,
     evidenceExpectations: packet.evidenceExpectations,
@@ -3083,27 +3197,33 @@ export function runDoveAuto(root, args = {}) {
     createdAt: timestamp,
     updatedAt: timestamp
   };
+  const preActionGuidanceSummary = preActionGuidanceSummaryForTask(root, "dove.auto", task, {
+    request: requestTextFromArgs(args),
+    roleId: "builder",
+    nextAction: task.nextAction,
+    workflowKind: "auto"
+  }, responseLanguage);
 
   if (task.status === "killed") {
     result.status = "stopped-killed";
     result.outcome = "task-already-killed";
     result.stopReason = "task-killed";
     persistAutoResult(root, result);
-    return { status: result.status, task, result, resultCard: autoResultCard(task, result, { nextAction: task.nextAction }, responseLanguage), applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
+    return { status: result.status, task, result, resultCard: autoResultCard(task, result, { nextAction: task.nextAction, preActionGuidanceSummary }, responseLanguage), applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
   }
   if (task.status === "completed") {
     result.status = "completed";
     result.outcome = "task-already-completed";
     result.stopReason = "task-completed";
     persistAutoResult(root, result);
-    return { status: result.status, task, result, resultCard: autoResultCard(task, result, { nextAction: task.nextAction }, responseLanguage), applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
+    return { status: result.status, task, result, resultCard: autoResultCard(task, result, { nextAction: task.nextAction, preActionGuidanceSummary }, responseLanguage), applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
   }
   if (task.status === "blocked") {
     result.status = "blocked";
     result.outcome = "task-already-blocked";
     result.stopReason = "task-blocked";
     persistAutoResult(root, result);
-    return { status: result.status, task, result, resultCard: autoResultCard(task, result, { nextAction: task.nextAction }, responseLanguage), applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
+    return { status: result.status, task, result, resultCard: autoResultCard(task, result, { nextAction: task.nextAction, preActionGuidanceSummary }, responseLanguage), applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
   }
 
   const autoPlan = inferAutoStepsForTask(task, args);
@@ -3146,7 +3266,7 @@ export function runDoveAuto(root, args = {}) {
       status: result.status,
       task,
       result,
-      resultCard: autoResultCard(task, result, { nextAction: task.nextAction }, responseLanguage),
+      resultCard: autoResultCard(task, result, { nextAction: task.nextAction, preActionGuidanceSummary }, responseLanguage),
       boundary: task.boundary,
       applicableLessons: activeLessons(root, task.id),
       responseLanguage,
@@ -3314,7 +3434,7 @@ export function runDoveAuto(root, args = {}) {
     status: result.status,
     task,
     result,
-    resultCard: autoResultCard(task, result, { nextAction: task.nextAction }, responseLanguage),
+    resultCard: autoResultCard(task, result, { nextAction: task.nextAction, preActionGuidanceSummary }, responseLanguage),
     boundary: task.boundary ?? null,
     applicableLessons: activeLessons(root, task.id),
     responseLanguage,

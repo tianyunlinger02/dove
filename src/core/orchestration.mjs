@@ -2,8 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
+import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, createMetaOperatorFollowThroughIndex, normalizeMetaOperatorFollowThroughIndex, resolveResumeCommandForPhase, roleCanActAs } from "./schema.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
 
@@ -68,6 +70,33 @@ function normalizeStringArray(value) {
   return Array.isArray(value)
     ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean)))
     : [];
+}
+
+function workflowGuidanceSummary(root, args = {}, details = {}) {
+  const packet = details.packet ?? null;
+  const stage = details.stage ?? packet?.stage ?? null;
+  const domain = details.domain ?? packet?.domain ?? null;
+  return summarizePreActionGuidance(buildPreActionGuidance({
+    surface: details.surface,
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: details.request ?? args.goal ?? args.objective ?? args.title ?? args.summary ?? args.scope ?? null,
+    roleId: details.roleId,
+    subagentSpecialty: details.subagentSpecialty,
+    packet,
+    currentContext: {
+      domain,
+      stage,
+      primaryRole: details.roleId ?? null
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: details.nextAction ?? null,
+    routeHint: details.routeHint ?? details.nextAction ?? null,
+    workflowKind: details.workflowKind,
+    domain,
+    stage,
+    tags: details.tags ?? [],
+    statusSummary: details.statusSummary
+  }));
 }
 
 function isIsoTimestamp(value) {
@@ -1039,12 +1068,25 @@ function resolveDurableExperimentResult(resultsIndex, args = {}, actionLabel = "
 
 export function runExperimentAudit(root, args = {}) {
   assertGovernanceMutationRegistered("run-experiment-audit", "guarded");
-  assertTaskScopedMutationTarget(root, "run-experiment-audit", args);
+  const target = assertTaskScopedMutationTarget(root, "run-experiment-audit", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Running an experiment audit",
     expectedRole: "experiment-planner"
   });
-  return persistExperimentAudit(root, args);
+  const audit = persistExperimentAudit(root, args);
+  return {
+    ...audit,
+    preActionGuidanceSummary: workflowGuidanceSummary(root, args, {
+      surface: "dove.experience",
+      roleId: "reviewer",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "audit",
+      workflowKind: "experiment-audit",
+      nextAction: audit.bridgeReadiness === "ready" ? "project:dove.experience" : "project:dove.review",
+      tags: ["experiment", "audit", "review"],
+      statusSummary: { auditId: audit.id, auditVerdict: audit.auditVerdict, bridgeReadiness: audit.bridgeReadiness }
+    })
+  };
 }
 
 export function persistExperimentAudit(root, args = {}) {
@@ -1153,13 +1195,27 @@ export function persistExperimentAudit(root, args = {}) {
 
 export function bridgeExperimentResultToClaim(root, args = {}) {
   assertGovernanceMutationRegistered("bridge-experiment-result-to-claim", "guarded");
-  assertTaskScopedMutationTarget(root, "bridge-experiment-result-to-claim", args);
+  const target = assertTaskScopedMutationTarget(root, "bridge-experiment-result-to-claim", args);
   assertFollowThroughReady(root, "Bridging an experiment result to a claim", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Bridging an experiment result to a claim",
     expectedRole: "experiment-planner"
   });
-  return persistExperimentResultClaimBridge(root, args);
+  const bridge = persistExperimentResultClaimBridge(root, args);
+  return {
+    ...bridge,
+    preActionGuidanceSummary: workflowGuidanceSummary(root, args, {
+      surface: "dove.experience",
+      roleId: "builder",
+      subagentSpecialty: "experiment-planner",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "execute",
+      workflowKind: "claim-bridge",
+      nextAction: bridge.bridgeStatus === "applied" ? "project:dove.review" : "project:dove.experience",
+      tags: ["experiment", "claim-bridge", "evidence"],
+      statusSummary: { bridgeId: bridge.id, bridgeStatus: bridge.bridgeStatus, claimId: bridge.claimId }
+    })
+  };
 }
 
 export function persistExperimentResultClaimBridge(root, args = {}) {
@@ -1256,7 +1312,7 @@ export function persistExperimentResultClaimBridge(root, args = {}) {
 
 export function upsertExperimentPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-experiment-plan", "guarded");
-  assertTaskScopedMutationTarget(root, "upsert-experiment-plan", args);
+  const target = assertTaskScopedMutationTarget(root, "upsert-experiment-plan", args);
   assertFollowThroughReady(root, "Updating an experiment plan", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Updating an experiment plan",
@@ -1309,7 +1365,20 @@ export function upsertExperimentPlan(root, args = {}) {
     summary: `Updated experiment plan ${nextPlan.id}.`,
     artifactPaths: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentLog, ARTIFACT_PATHS.taskPacketsIndex]
   });
-  return nextPlan;
+  return {
+    ...nextPlan,
+    preActionGuidanceSummary: workflowGuidanceSummary(root, args, {
+      surface: "dove.experience",
+      roleId: "builder",
+      subagentSpecialty: "experiment-planner",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "execute",
+      workflowKind: "experience",
+      nextAction: "project:dove.experience",
+      tags: ["experiment", "plan"],
+      statusSummary: { experimentId: nextPlan.id, status: nextPlan.status }
+    })
+  };
 }
 
 export function upsertExperimentResult(root, args = {}) {
@@ -1418,7 +1487,26 @@ export function upsertExperimentResult(root, args = {}) {
     summary: `Updated experiment result ${result.id}.`,
     artifactPaths: [ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog, ARTIFACT_PATHS.experimentLog, ARTIFACT_PATHS.taskPacketsIndex]
   });
-  return resultsIndex.items[resultIndex];
+  return {
+    ...resultsIndex.items[resultIndex],
+    preActionGuidanceSummary: workflowGuidanceSummary(root, args, {
+      surface: "dove.experience",
+      roleId: "builder",
+      subagentSpecialty: "experiment-planner",
+      packet: taskTarget.packet,
+      stage: taskTarget.packet?.stage ?? "execute",
+      workflowKind: "experience-result",
+      nextAction: "project:dove.review",
+      tags: ["experiment", "result", "claim-bridge", "audit"],
+      statusSummary: {
+        experimentId: result.experimentId,
+        resultId: result.id,
+        outcome: result.outcome,
+        auditId: audit.id,
+        bridgeStatus: bridgeEvent.status
+      }
+    })
+  };
 }
 
 function normalizeIssue(issue = {}, index = 0) {
@@ -1438,13 +1526,26 @@ function normalizeIssue(issue = {}, index = 0) {
 
 export function normalizeRebuttalIssues(root, args = {}) {
   assertGovernanceMutationRegistered("normalize-rebuttal-issues", "guarded");
-  assertTaskScopedMutationTarget(root, "normalize-rebuttal-issues", args);
+  const target = assertTaskScopedMutationTarget(root, "normalize-rebuttal-issues", args);
   assertFollowThroughReady(root, "Normalizing rebuttal issues", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Normalizing rebuttal issues",
     expectedRole: "reviewer"
   });
-  return persistRebuttalIssues(root, args);
+  const next = persistRebuttalIssues(root, args);
+  return {
+    ...next,
+    preActionGuidanceSummary: workflowGuidanceSummary(root, args, {
+      surface: "dove.review",
+      roleId: "reviewer",
+      packet: target.packet,
+      stage: args.stage ?? target.packet?.stage ?? "audit",
+      workflowKind: "review",
+      nextAction: "project:dove.rebuttal",
+      tags: ["review", "rebuttal", "issue-normalization"],
+      statusSummary: { issueCount: next.items?.length ?? 0 }
+    })
+  };
 }
 
 export function persistRebuttalIssues(root, args = {}) {
@@ -1489,7 +1590,7 @@ export function persistRebuttalIssues(root, args = {}) {
 
 export function buildRebuttalStrategy(root, args = {}) {
   assertGovernanceMutationRegistered("build-rebuttal-strategy", "guarded");
-  assertTaskScopedMutationTarget(root, "build-rebuttal-strategy", args);
+  const target = assertTaskScopedMutationTarget(root, "build-rebuttal-strategy", args);
   assertFollowThroughReady(root, "Building the rebuttal strategy", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Building the rebuttal strategy",
@@ -1550,7 +1651,22 @@ export function buildRebuttalStrategy(root, args = {}) {
     summary: `Built rebuttal strategy for ${issues.items.length} issues.`,
     artifactPaths: [ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft, ARTIFACT_PATHS.navigationReport]
   });
-  return { strategyPath: ARTIFACT_PATHS.rebuttalStrategy, responseDraftPath: ARTIFACT_PATHS.rebuttalResponseDraft, issueCount: issues.items.length };
+  return {
+    strategyPath: ARTIFACT_PATHS.rebuttalStrategy,
+    responseDraftPath: ARTIFACT_PATHS.rebuttalResponseDraft,
+    issueCount: issues.items.length,
+    preActionGuidanceSummary: workflowGuidanceSummary(root, args, {
+      surface: "dove.rebuttal",
+      roleId: "builder",
+      subagentSpecialty: "revision-lead",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "execute",
+      workflowKind: "rebuttal",
+      nextAction: "project:dove.review",
+      tags: ["rebuttal", "revision", "evidence"],
+      statusSummary: { issueCount: issues.items.length }
+    })
+  };
 }
 
 function readSnapshot(root, snapshotId) {

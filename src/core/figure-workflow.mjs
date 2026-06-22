@@ -4,7 +4,9 @@ import path from "node:path";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { assertNoInlineSecrets } from "./config.mjs";
 import { importFigureGeneration, prepareFigureGeneration } from "./figure-generation.mjs";
+import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { upsertFigurePlan, validateFigurePipeline } from "./artifacts.mjs";
 import {
   assertFollowThroughReady,
@@ -222,8 +224,36 @@ export function runFigureWorkflow(root, args = {}) {
   }
 
   const validation = validateFigurePipeline(root);
+  const status = statusFor(prepared, imported, validation);
+  const preActionGuidance = buildPreActionGuidance({
+    surface: "dove.figure",
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: firstText(args.intent, args.description, args.summary, args.purpose, args.captionIntent, args.name, args.title),
+    roleId: "builder",
+    packet: target.packet,
+    currentContext: {
+      domain: target.packet?.domain ?? null,
+      stage: target.packet?.stage ?? "execute",
+      primaryRole: "builder"
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: imported ? "project:dove.review" : "project:dove.figure",
+    routeHint: "project:dove.figure",
+    workflowKind: "figure",
+    domain: target.packet?.domain ?? null,
+    stage: target.packet?.stage ?? "execute",
+    tags: ["figure", "artifact-provenance", "qa"],
+    statusSummary: {
+      status,
+      materialStatus: prepared.materialStatus,
+      missingRequirementCount: prepared.missingRequirementIds?.length ?? 0,
+      qaIssueCount: validation.issueCount,
+      imported: Boolean(imported)
+    }
+  });
   return {
-    status: statusFor(prepared, imported, validation),
+    status,
+    preActionGuidance,
     figureId,
     runId: prepared.runId,
     packetId: target.packetId,

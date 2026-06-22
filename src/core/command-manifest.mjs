@@ -37,6 +37,7 @@ export const MANAGED_PACKAGE_PATHS = [
 export const OPENCODE_ROLE_SKILL_PATHS = [
   ".opencode/skills/dove-pipeline/SKILL.md",
   ".opencode/skills/dove-planner/SKILL.md",
+  ".opencode/skills/dove-builder/SKILL.md",
   ".opencode/skills/dove-researcher/SKILL.md",
   ".opencode/skills/dove-reviewer/SKILL.md",
   ".opencode/skills/dove-rebuttal-strategist/SKILL.md",
@@ -166,6 +167,14 @@ const TASK_SCOPED_WRITE_CONSTRAINTS = [
   "Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets."
 ];
 
+const AGENT_WORKFLOW_CONSTRAINTS = [
+  "For ordinary prompts, first use compact `query_dove_status` and `statusHome.preActionGuidance` for intent routing before choosing a mutation command; users should not need to guess slash command names.",
+  "Treat `preActionGuidance` as read-only guidance that automatically recalls applicable lessons from `.dove/meta/operator-lessons.json`; recording lessons remains explicit through `/dove:lessons` and `record_operator_lesson` only.",
+  "Frame work through Planner, Builder, and Reviewer primary roles; researcher, experiment-planner, revision-lead, rebuttal-lead, version-analyst, and review-loop are subagents/modes under those roles, not public slash surfaces.",
+  "Treat status as the project command center and mission as a durable work contract/progress object; do not make a mission board the default UI.",
+  "Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work."
+];
+
 const COMMAND_SURFACES_BASE = [
   {
     id: "dove.init",
@@ -203,9 +212,9 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "explicit-approval",
-    summary: "Show the live development situation, then a daily home screen with ranked Dove actions and guarded status-adjustment UX.",
+    summary: "Show the whole-project situation home: live context, durable project state, blockers, reconciliation, and next steps.",
     requiredTools: ["query_dove_status", "apply_dove_status_adjustments"],
-    constraints: ["Use status as the unified project and task dashboard; do not expose separate plan, checklist, audit, return, or orchestration slash surfaces.", "First call `query_dove_status` without `detail: \"full\"` to obtain the compact read-only Dove status home, but do not treat `.dove/` context as the live development situation. Explain the live development situation from host-visible context first: current user request, current session work, known worktree state when available, latest validation/test evidence, active implementation blockers, and what was just completed or is still pending. If live context was not inspected, say so instead of inferring it from `.dove/`.", "Keep `query_dove_status` read-only: it must return `proposalOnly: true`, `noAutoApply: true`, and `writes: []`.", "Use `statusHome` and compact `dailyHome` as the daily home screen: after live context first, present `dailyHome.missionList` grouped as `todo`, `doing`, and `blocked`, with `done` collapsed by default, before ranked 1-3 next action cards and proposal-only boundary action cards.", "Use `dailyHome.missionList` as the default in-host task list so the operator can inspect missions without leaving Claude/OpenCode to run a shell command; do not read a saved full status result file or request `detail: \"full\"` unless the operator explicitly asks to expand/debug full details.", "When `dailyHome.completionConsistency.status` is `needs-reconciliation`, present it as a legacy consistency issue: a done parent mission still has open checklist children. Do not recommend blanket-marking children done/completed; say to verify child evidence first, then either mark covered children done through confirmed status adjustment or reopen the parent mission.", "Use `actionableBoundaries`, `boundaryActionCards`, and current boundary metadata from `query_dove_status` to explain why missions are waiting, what evidence is required, and who owns the next role handoff.", "Use compact cards for status adjustment previews when available. Do not print raw internal dumps such as raw status-count objects, recent completed mission recaps, or recent killed mission recaps; if showing done missions, keep the `done` group collapsed unless the operator asks to expand it.", "Boundary types are first-class metadata, not machine status choices; keep status choices exactly `[\"pending\", \"ready\", \"in-progress\", \"blocked\", \"completed\", \"killed\"]`.", "When the host supports interactive confirmation controls, use a single confirmation dialog to ask whether the operator wants to modify mission statuses only when there are adjustable missions or the operator clearly asks to change states; build compact adjustment cards from adjustable missions excluding `completed` and `killed`; do not paginate by mission count or collect choices across multiple dialogs.", "The single confirmation dialog must provide a no-change path and a change/provide-adjustment-details path; if the operator does not provide parseable `packetId -> status` adjustments in that single dialog, do not call a mutation tool and instead ask for a clear adjustment format.", "For status adjustment choices, preserve exactly `[\"pending\", \"ready\", \"in-progress\", \"blocked\", \"completed\", \"killed\"]` as the machine status enum.", "Only call `apply_dove_status_adjustments` with `confirmed: true` after that single dialog yields explicit operator-confirmed status adjustments, then show the localized `resultCard` summary.", "Killing a mission is now a status choice in this UX, not a standalone public slash command."]
+    constraints: ["Use status as the unified whole-project situation home; do not expose separate plan, checklist, audit, return, orchestration, missions, board, or list slash surfaces.", "First call `query_dove_status` without `detail: \"full\"` to obtain the compact read-only Dove project situation home, but do not treat `.dove/` context as the live development situation. Explain the live development situation from host-visible context first: current user request, current session work, known worktree state when available, latest validation/test evidence, active implementation blockers, and what was just completed or is still pending. If live context was not inspected, say so instead of inferring it from `.dove/`.", "Keep `query_dove_status` read-only: it must return `proposalOnly: true`, `noAutoApply: true`, and `writes: []`.", "Use `statusHome` as the compact project situation home with this order: host-visible live development situation, `statusHome.currentContext`, `statusHome.preActionGuidance`, `statusHome.projectState`, `statusHome.blockersAndReconciliation`, `statusHome.nextSteps`, and optional mission details only when the operator asks.", "Do not make mission lists the default body of `/dove:status`; `statusHome.optionalMissionDetails` is collapsed by default and exists only for normal prompt expansion such as `show current missions` or `有哪些 mission`.", "For normal mission-list prompts, answer from compact `query_dove_status` and expand `statusHome.optionalMissionDetails`; do not add or require `/dove:missions`, `/dove:board`, `/dove:list`, and do not route mission-list questions to `/dove:mission`.", "Treat `query_dove_mission_board` as a low-level MCP/debug board, not the default host route for ordinary mission-list prompts.", "Do not read a saved full status result file or request `detail: \"full\"` unless the operator explicitly asks to expand/debug full details.", "When `statusHome.blockersAndReconciliation.completionConsistency.status` is `needs-reconciliation`, present it as a legacy consistency issue: a done parent mission still has open checklist children. Do not recommend blanket-marking children done/completed; say to verify child evidence first, then either mark covered children done through confirmed status adjustment or reopen the parent mission.", "Use `actionableBoundaries`, `boundaryActionCards`, and current boundary metadata from `query_dove_status` to explain why missions are waiting, what evidence is required, and who owns the next role handoff.", "Use compact cards for status adjustment previews when available. Do not print raw internal dumps such as raw status-count objects, recent completed mission recaps, or recent killed mission recaps; if showing optional mission details, keep the `done` group collapsed unless the operator asks to expand it.", "Boundary types are first-class metadata, not machine status choices; keep status choices exactly `[\"pending\", \"ready\", \"in-progress\", \"blocked\", \"completed\", \"killed\"]`.", "When the host supports interactive confirmation controls, use a single confirmation dialog to ask whether the operator wants to modify mission statuses only when there are adjustable missions or the operator clearly asks to change states; build compact adjustment cards from adjustable missions excluding `completed` and `killed`; do not paginate by mission count or collect choices across multiple dialogs.", "The single confirmation dialog must provide a no-change path and a change/provide-adjustment-details path; if the operator does not provide parseable `packetId -> status` adjustments in that single dialog, do not call a mutation tool and instead ask for a clear adjustment format.", "For status adjustment choices, preserve exactly `[\"pending\", \"ready\", \"in-progress\", \"blocked\", \"completed\", \"killed\"]` as the machine status enum.", "Only call `apply_dove_status_adjustments` with `confirmed: true` after that single dialog yields explicit operator-confirmed status adjustments, then show the localized `resultCard` summary.", "Killing a mission is now a status choice in this UX, not a standalone public slash command."]
   },
   {
     id: "dove.operator",
@@ -328,38 +337,38 @@ const COMMAND_UX_DETAILS = {
     examples: ["/dove:init Make Dove a local-first research and engineering workflow", "/dove:init Refresh the project goal around daily Dove usability"]
   },
   "dove.mission": {
-    dailyFlow: ["Use this for one concrete user demand that should become a durable task and receive one bounded foreground pass.", "Describe the desired outcome in normal language; Dove converts it into title, stage, domain, level, checklist, evidence expectations, compact task card, and execution route."],
+    dailyFlow: ["Use this for one concrete user demand that should become a durable task and receive one bounded foreground pass.", "Describe the desired outcome in normal language; Dove converts it into title, stage, domain, level, checklist, evidence expectations, compact task card, preActionGuidance with read-only lesson recall, and execution route."],
     targetingBehavior: "Creates a new mission under the init goal; first-run hosts may propose the init goal and mission together before writing.",
-    confirmationBehavior: "Show the compact task card and converted contract first, then ask whether to approve and run one pass, adjust, or cancel.",
+    confirmationBehavior: "Show the compact task card, role-framed preActionGuidance, and converted contract first, then ask whether to approve and run one pass, adjust, or cancel.",
     expectedOutcome: "After approval, the task packet exists and the host either records the pass result or persists an explicit boundary with evidence requirements, role handoff, and a localized resultCard summary.",
     examples: ["/dove:mission Fix the status dashboard next-action mismatch", "/dove:mission Turn the latest review feedback into one executable task"]
   },
   "dove.auto": {
-    dailyFlow: ["Use this when the user wants Dove to continue through bounded foreground iterations after the same demand-to-task intake as mission.", "Start from a new demand or an existing durable task; auto should propose compact task/auto cards and concrete safe steps before consuming the iteration budget."],
+    dailyFlow: ["Use this when the user wants Dove to continue through bounded foreground iterations after the same demand-to-task intake as mission.", "Start from a new demand or an existing durable task; auto should propose compact task/auto cards, preActionGuidance, recalled lessons, role frame, and concrete safe steps before consuming the iteration budget."],
     targetingBehavior: "Selects an existing packet when the target is clear, otherwise proposes a new task contract.",
     confirmationBehavior: "Require explicit approval of the compact task/auto cards, selected/proposed task, max iteration budget, and concrete foreground steps.",
     expectedOutcome: "Each foreground iteration is recorded in runtime results and stops at completion, blocker, review/provider boundary, or budget exhaustion with an explicit boundary and localized resultCard summary.",
     examples: ["/dove:auto Continue the current Dove UX improvement task for up to three foreground rounds", "/dove:auto Run the selected task until completion or an explicit boundary"]
   },
   "dove.status": {
-    dailyFlow: ["Use this as the daily home screen: report the host-visible development situation first.", "Then show compact statusHome/dailyHome.missionList grouped as todo/doing/blocked with done collapsed, followed by ranked 1-3 next action cards, actionable boundaries, and boundary action cards; only request full durable details when the operator explicitly asks to expand/debug."],
-    targetingBehavior: "Shows non-init missions grouped as todo/doing/blocked with done collapsed by default; no raw status-count dumps or completed/killed recaps unless the operator asks to expand done.",
+    dailyFlow: ["Use this as the whole-project situation home: report the host-visible development situation first.", "Then show durable current context, statusHome.preActionGuidance with automatic read-only lesson recall and Planner/Builder/Reviewer role frame, project state, blockers/reconciliation, and ranked 1-3 next steps; expand optional mission details only when the operator asks and only request full durable details for explicit debug/expansion."],
+    targetingBehavior: "Default output is not a mission board. Mission details live under statusHome.optionalMissionDetails, are collapsed by default, and can be expanded for normal prompts such as show current missions without adding a dedicated slash command.",
     confirmationBehavior: "Use compact adjustment cards and at most one confirmation dialog for status changes; no parseable packetId-to-status adjustment means no mutation.",
-    expectedOutcome: "The operator sees current work, grouped missions, actionable boundaries, blockers, next action, optional guarded status adjustments, and localized resultCard summaries after confirmed adjustments without hidden writes or noisy raw summaries.",
-    examples: ["/dove:status", "/dove:status Show what is blocked and whether any mission status should change"]
+    expectedOutcome: "The operator sees the current project situation, context, blockers, reconciliation issues, next action, optional guarded status adjustments, and localized resultCard summaries after confirmed adjustments without hidden writes or noisy raw summaries.",
+    examples: ["/dove:status", "/dove:status Show what is blocked and what the next step is"]
   },
   "dove.operator": {
-    dailyFlow: ["Use this to inspect compact queue cards for the ready/in-progress queue, blocked queue, and pending queue, then run one foreground operator pass after confirmation.", "Do not claim real work happened unless the host supplies actual pass results or a safe internal step can run."],
+    dailyFlow: ["Use this to inspect compact queue cards plus planner preActionGuidance for the ready/in-progress queue, blocked queue, and pending queue, then run one foreground operator pass after confirmation.", "Do not claim real work happened unless the host supplies actual pass results or a safe internal step can run."],
     targetingBehavior: "Works over the active mission queue rather than one ad hoc target.",
-    confirmationBehavior: "Preview compact queue cards with writes: [] first; require approval before recording results or creating blocker investigation missions.",
+    confirmationBehavior: "Preview compact queue cards, read-only lesson recall, Planner/Builder/Reviewer role frame, and writes: [] first; require approval before recording results or creating blocker investigation missions.",
     expectedOutcome: "Runnable work is recorded from real results, blocked work gets pending investigation missions, and unresolved host work remains awaiting evidence through explicit boundaries with a localized resultCard summary.",
     examples: ["/dove:operator", "/dove:operator Run one confirmed queue pass and record real host pass results"]
   },
   "dove.lessons": {
-    dailyFlow: ["Use this when a closed task yields reusable guidance that future Dove work should obey.", "Keep lessons short and explicit: problem, decision, pitfall, validation, and next-time guidance."],
+    dailyFlow: ["Use this when a closed task yields reusable guidance that future Dove work should obey; ordinary action surfaces recall lessons automatically as read-only preActionGuidance.", "Keep lesson recording explicit and short: problem, decision, pitfall, validation, and next-time guidance."],
     targetingBehavior: "Can record global lessons or bind a lesson to a resolved task packet.",
     confirmationBehavior: "When task binding is ambiguous, show task choices and wait for the operator.",
-    expectedOutcome: "Applicable lessons are available to later mission, auto, operator, and status surfaces without importing raw traces.",
+    expectedOutcome: "Applicable lessons are automatically recalled read-only in later status, mission, auto, operator, and professional workflow preActionGuidance without importing raw traces or recording new lessons implicitly.",
     examples: ["/dove:lessons Record that status should not show completed or killed mission lists", "/dove:lessons Show lessons that apply to the selected task"]
   },
   "dove.version": {
@@ -430,6 +439,7 @@ const COMMAND_UX_DETAILS = {
 export const COMMAND_SURFACES = COMMAND_SURFACES_BASE.map((surface) => {
   const withUx = {
     ...surface,
+    constraints: [...AGENT_WORKFLOW_CONSTRAINTS, ...(surface.constraints ?? [])],
     ux: COMMAND_UX_DETAILS[surface.id]
   };
   const hasTaskScopedWrite = (surface.requiredTools ?? []).some((toolId) => TASK_SCOPED_WRITE_TOOL_IDS.has(toolId));
@@ -438,7 +448,7 @@ export const COMMAND_SURFACES = COMMAND_SURFACES_BASE.map((surface) => {
   }
   return {
     ...withUx,
-    constraints: [...(surface.constraints ?? []), ...TASK_SCOPED_WRITE_CONSTRAINTS]
+    constraints: [...withUx.constraints, ...TASK_SCOPED_WRITE_CONSTRAINTS]
   };
 });
 

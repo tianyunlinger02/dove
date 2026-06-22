@@ -11,6 +11,8 @@ import {
   loadBoard,
   upsertOrchestrationBoard
 } from "./orchestration.mjs";
+import { resolveDoveResponseLanguage } from "./i18n.mjs";
+import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import {
   assertGovernanceMutationRegistered,
   assertFollowThroughReady,
@@ -44,6 +46,33 @@ function normalizeIdentifier(value, fallback) {
 function normalizeStringArray(values, fallback = []) {
   const source = Array.isArray(values) ? values : fallback;
   return Array.from(new Set(source.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim())));
+}
+
+function artifactGuidanceSummary(root, args = {}, details = {}) {
+  const packet = details.packet ?? null;
+  const stage = details.stage ?? packet?.stage ?? null;
+  const domain = details.domain ?? packet?.domain ?? null;
+  return summarizePreActionGuidance(buildPreActionGuidance({
+    surface: details.surface,
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: details.request ?? args.title ?? args.summary ?? args.body ?? args.intent ?? null,
+    roleId: details.roleId,
+    subagentSpecialty: details.subagentSpecialty,
+    packet,
+    currentContext: {
+      domain,
+      stage,
+      primaryRole: details.roleId ?? null
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: details.nextAction ?? null,
+    routeHint: details.routeHint ?? details.nextAction ?? null,
+    workflowKind: details.workflowKind,
+    domain,
+    stage,
+    tags: details.tags ?? [],
+    statusSummary: details.statusSummary
+  }));
 }
 
 function normalizeRelativePath(value, fallback) {
@@ -1898,7 +1927,7 @@ export function readState(root) {
 
 export function registerSource(root, args = {}) {
   assertGovernanceMutationRegistered("register-source", "guarded");
-  assertTaskScopedMutationTarget(root, "register-source", args);
+  const target = assertTaskScopedMutationTarget(root, "register-source", args);
   assertFollowThroughReady(root, "Registering a source", args);
   ensureWorkspace(root);
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
@@ -1935,12 +1964,25 @@ export function registerSource(root, args = {}) {
     summary: `Registered source ${source.id}.`,
     artifactPaths: [ARTIFACT_PATHS.sources, ARTIFACT_PATHS.citationLog, ARTIFACT_PATHS.queryPack]
   });
-  return source;
+  return {
+    ...source,
+    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
+      surface: "dove.source",
+      roleId: "builder",
+      subagentSpecialty: "researcher",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "execute",
+      workflowKind: "source",
+      nextAction: "project:dove.note",
+      tags: ["source", "evidence", "research"],
+      statusSummary: { sourceId: source.id, citationKey: source.citationKey }
+    })
+  };
 }
 
 export function upsertNote(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-note", "guarded");
-  assertTaskScopedMutationTarget(root, "upsert-note", args);
+  const target = assertTaskScopedMutationTarget(root, "upsert-note", args);
   if (!args.skipFollowThroughReady) {
     assertFollowThroughReady(root, "Recording a structured note", args);
   }
@@ -1986,12 +2028,25 @@ export function upsertNote(root, args = {}) {
     summary: `Updated note ${note.id}.`,
     artifactPaths: [ARTIFACT_PATHS.notes, ARTIFACT_PATHS.queryPack, ARTIFACT_PATHS.sessionSummary]
   });
-  return note;
+  return {
+    ...note,
+    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
+      surface: "dove.note",
+      roleId: "builder",
+      subagentSpecialty: "researcher",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "execute",
+      workflowKind: "note",
+      nextAction: "project:dove.experience",
+      tags: ["note", "evidence", "research"],
+      statusSummary: { noteId: note.id, sourceIdCount: note.sourceIds.length }
+    })
+  };
 }
 
 export function upsertPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-plan", "guarded");
-  assertTaskScopedMutationTarget(root, "upsert-plan", args);
+  const target = assertTaskScopedMutationTarget(root, "upsert-plan", args);
   assertFollowThroughReady(root, "Updating the Dove mission plan", args);
   const state = loadState(root);
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
@@ -2020,12 +2075,25 @@ export function upsertPlan(root, args = {}) {
     summary: zh ? "已更新当前 Dove 任务计划。" : "Updated current Dove mission plan.",
     artifactPaths: [ARTIFACT_PATHS.plan, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary]
   });
-  return { planPath: ARTIFACT_PATHS.plan, thesis: nextState.dove.thesis };
+  return {
+    planPath: ARTIFACT_PATHS.plan,
+    thesis: nextState.dove.thesis,
+    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
+      surface: "dove.plan",
+      roleId: "planner",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "plan",
+      workflowKind: "plan",
+      nextAction: "project:dove.status",
+      tags: ["plan", "gate", "scope"],
+      statusSummary: { planPath: ARTIFACT_PATHS.plan, thesis: nextState.dove.thesis }
+    })
+  };
 }
 
 export function upsertOutline(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-outline", "guarded");
-  assertTaskScopedMutationTarget(root, "upsert-outline", args);
+  const target = assertTaskScopedMutationTarget(root, "upsert-outline", args);
   assertFollowThroughReady(root, "Updating the paper outline", args);
   let state = loadState(root);
   const zh = state.settings?.responseLanguage !== "en";
@@ -2059,12 +2127,25 @@ export function upsertOutline(root, args = {}) {
     summary: zh ? "已更新当前 outline。" : "Updated current outline.",
     artifactPaths: [ARTIFACT_PATHS.outline, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary]
   });
-  return { outlinePath: ARTIFACT_PATHS.outline, sectionCount: Object.keys(state.sections).length };
+  return {
+    outlinePath: ARTIFACT_PATHS.outline,
+    sectionCount: Object.keys(state.sections).length,
+    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
+      surface: "dove.draft",
+      roleId: "planner",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "plan",
+      workflowKind: "outline",
+      nextAction: "project:dove.draft",
+      tags: ["outline", "draft", "gate"],
+      statusSummary: { outlinePath: ARTIFACT_PATHS.outline, sectionCount: Object.keys(state.sections).length }
+    })
+  };
 }
 
 export function upsertDraft(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-draft", "guarded");
-  assertTaskScopedMutationTarget(root, "upsert-draft", args);
+  const target = assertTaskScopedMutationTarget(root, "upsert-draft", args);
   assertFollowThroughReady(root, "Updating a draft section", args);
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
@@ -2099,12 +2180,26 @@ export function upsertDraft(root, args = {}) {
     summary: `Updated draft for section ${sectionId}.`,
     artifactPaths: [draftPath, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport]
   });
-  return { draftPath, sectionId };
+  return {
+    draftPath,
+    sectionId,
+    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
+      surface: "dove.draft",
+      roleId: "builder",
+      subagentSpecialty: "researcher",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "execute",
+      workflowKind: "draft",
+      nextAction: "project:dove.review",
+      tags: ["draft", "claims", "citations"],
+      statusSummary: { sectionId, draftPath }
+    })
+  };
 }
 
 export function setSectionStatus(root, args = {}) {
   assertGovernanceMutationRegistered("set-section-status", "guarded");
-  assertTaskScopedMutationTarget(root, "set-section-status", args);
+  const target = assertTaskScopedMutationTarget(root, "set-section-status", args);
   assertFollowThroughReady(root, "Updating a section status", args);
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
@@ -2130,7 +2225,19 @@ export function setSectionStatus(root, args = {}) {
     summary: `Set section ${sectionId} to ${state.sections[sectionId].status}.`,
     artifactPaths: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.orchestrationBoard, ARTIFACT_PATHS.sessionSummary]
   });
-  return state.sections[sectionId];
+  return {
+    ...state.sections[sectionId],
+    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
+      surface: "dove.draft",
+      roleId: "planner",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "plan",
+      workflowKind: "section-status",
+      nextAction: "project:dove.status",
+      tags: ["section", "status", "gate"],
+      statusSummary: { sectionId, status: state.sections[sectionId].status }
+    })
+  };
 }
 
 export function syncChecklist(root) {
@@ -2149,12 +2256,24 @@ export function syncChecklist(root) {
     summary: state.settings?.responseLanguage === "en" ? "Refreshed checklist from current workspace state." : "已根据当前工作区状态刷新检查清单。",
     artifactPaths: [ARTIFACT_PATHS.checklist, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.workspaceIndex]
   });
-  return { checklistPath: ARTIFACT_PATHS.checklist, openItemCount: reviewState.openItems.length };
+  return {
+    checklistPath: ARTIFACT_PATHS.checklist,
+    openItemCount: reviewState.openItems.length,
+    preActionGuidanceSummary: artifactGuidanceSummary(root, {}, {
+      surface: "dove.status",
+      roleId: "planner",
+      stage: state.pipeline.currentStage,
+      workflowKind: "checklist",
+      nextAction: "project:dove.status",
+      tags: ["checklist", "gate", "status"],
+      statusSummary: { checklistPath: ARTIFACT_PATHS.checklist, openItemCount: reviewState.openItems.length }
+    })
+  };
 }
 
 export function upsertFigurePlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-figure-plan", "guarded");
-  assertTaskScopedMutationTarget(root, "upsert-figure-plan", args);
+  const target = assertTaskScopedMutationTarget(root, "upsert-figure-plan", args);
   assertFollowThroughReady(root, "Updating the figure plan", args);
   const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: null });
   const normalizedItems = (Array.isArray(args.items) ? args.items : []).map(normalizeFigureItem);
@@ -2253,7 +2372,21 @@ export function upsertFigurePlan(root, args = {}) {
     summary: `Updated figure backlog with ${normalizedItems.length} items.`,
     artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureMaterials, ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureCaptions, ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.figuresReadme]
   });
-  return { figureCount: normalizedItems.length, qaIssueCount: qa.issues.length, qaPath: ARTIFACT_PATHS.figureQa };
+  return {
+    figureCount: normalizedItems.length,
+    qaIssueCount: qa.issues.length,
+    qaPath: ARTIFACT_PATHS.figureQa,
+    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
+      surface: "dove.figure",
+      roleId: "builder",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "execute",
+      workflowKind: "figure",
+      nextAction: "project:dove.figure",
+      tags: ["figure", "artifact-provenance", "qa"],
+      statusSummary: { figureCount: normalizedItems.length, qaIssueCount: qa.issues.length }
+    })
+  };
 }
 
 export function syncCitations(root, args = {}) {
@@ -2296,7 +2429,21 @@ export function syncCitations(root, args = {}) {
     summary: `Synchronized citations for ${citedKeys.size} cited keys.`,
     artifactPaths: [ARTIFACT_PATHS.bibliography, ARTIFACT_PATHS.citationLog, ARTIFACT_PATHS.navigationReport]
   });
-  return { sourceCount: sources.items.length, citedKeyCount: citedKeys.size, missingKeys };
+  return {
+    sourceCount: sources.items.length,
+    citedKeyCount: citedKeys.size,
+    missingKeys,
+    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
+      surface: "dove.draft",
+      roleId: "builder",
+      subagentSpecialty: "researcher",
+      stage: state.pipeline.currentStage,
+      workflowKind: "citations",
+      nextAction: "project:dove.review",
+      tags: ["citations", "evidence", "review"],
+      statusSummary: { sourceCount: sources.items.length, citedKeyCount: citedKeys.size, missingKeyCount: missingKeys.length }
+    })
+  };
 }
 
 export function refreshWiki(root, args = {}) {
@@ -2341,12 +2488,25 @@ export function refreshWiki(root, args = {}) {
     summary: "Refreshed wiki, typed wiki indexes, query pack, and navigation surfaces.",
     artifactPaths: [ARTIFACT_PATHS.wiki, ARTIFACT_PATHS.queryPack, ARTIFACT_PATHS.wikiEntities, ARTIFACT_PATHS.wikiRelations, ARTIFACT_PATHS.navigationReport]
   });
-  return { wikiPath: ARTIFACT_PATHS.wiki, noteCount: notes.items.length, claimCount: evidence.claims.length };
+  return {
+    wikiPath: ARTIFACT_PATHS.wiki,
+    noteCount: notes.items.length,
+    claimCount: evidence.claims.length,
+    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
+      surface: "dove.status",
+      roleId: "planner",
+      stage: board.currentPhase ?? state.pipeline.currentStage,
+      workflowKind: "wiki-refresh",
+      nextAction: "project:dove.status",
+      tags: ["wiki", "context", "evidence"],
+      statusSummary: { wikiPath: ARTIFACT_PATHS.wiki, noteCount: notes.items.length, claimCount: evidence.claims.length }
+    })
+  };
 }
 
 export function buildRebuttal(root, args = {}) {
   assertGovernanceMutationRegistered("build-rebuttal", "guarded");
-  assertTaskScopedMutationTarget(root, "build-rebuttal", args);
+  const target = assertTaskScopedMutationTarget(root, "build-rebuttal", args);
   assertFollowThroughReady(root, "Building the rebuttal draft", args);
   ensureWorkspace(root);
   const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 2, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
@@ -2376,7 +2536,21 @@ export function buildRebuttal(root, args = {}) {
     summary: "Built artifact-backed rebuttal draft.",
     artifactPaths: [draftPath, ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft]
   });
-  return { draftPath, openReviewItemCount: reviewState.openItems.length };
+  return {
+    draftPath,
+    openReviewItemCount: reviewState.openItems.length,
+    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
+      surface: "dove.rebuttal",
+      roleId: "builder",
+      subagentSpecialty: "revision-lead",
+      packet: target.packet,
+      stage: target.packet?.stage ?? "execute",
+      workflowKind: "rebuttal",
+      nextAction: "project:dove.review",
+      tags: ["rebuttal", "revision", "evidence"],
+      statusSummary: { openReviewItemCount: reviewState.openItems.length, draftPath }
+    })
+  };
 }
 
 export function listWorkspaceArtifacts(root) {

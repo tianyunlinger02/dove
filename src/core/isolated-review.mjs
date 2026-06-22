@@ -7,6 +7,8 @@ import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { appendText, assertFollowThroughReady, assertGovernanceMutationRegistered, ensureDir, ensureWorkspace, listDraftFiles, loadState, nowIso, readJson, readText, resolvePath, writeJson, writeText } from "./workspace.mjs";
 import { appendHandoff, loadBoard } from "./orchestration.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
+import { resolveDoveResponseLanguage } from "./i18n.mjs";
+import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 
 const DEFAULT_REVIEWED_PATHS = [
   ARTIFACT_PATHS.orchestrationBoard,
@@ -33,6 +35,29 @@ function normalizeStringArray(value) {
     return [];
   }
   return value.filter((item) => typeof item === "string").map((item) => item.trim()).filter(Boolean);
+}
+
+function isolatedGuidanceSummary(root, args = {}, target = {}, details = {}) {
+  return summarizePreActionGuidance(buildPreActionGuidance({
+    surface: "dove.review",
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: args.instructions ?? args.scope ?? "isolated review",
+    roleId: "reviewer",
+    packet: target.packet,
+    currentContext: {
+      domain: target.packet?.domain ?? null,
+      stage: target.packet?.stage ?? "audit",
+      primaryRole: "reviewer"
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: details.nextAction ?? "project:dove.review",
+    routeHint: "project:dove.review",
+    workflowKind: "isolated-review",
+    domain: target.packet?.domain ?? null,
+    stage: target.packet?.stage ?? "audit",
+    tags: ["review", "isolated-handoff", "independent-audit"],
+    statusSummary: details.statusSummary
+  }));
 }
 
 function stableJson(value) {
@@ -191,7 +216,7 @@ function upsertImportedConcerns(root, handoff) {
 
 export function prepareIsolatedReview(root, args = {}) {
   assertGovernanceMutationRegistered("prepare-isolated-review", "guarded");
-  assertTaskScopedMutationTarget(root, "prepare-isolated-review", args);
+  const target = assertTaskScopedMutationTarget(root, "prepare-isolated-review", args);
   assertFollowThroughReady(root, "Preparing an isolated reviewer input bundle", args);
   ensureWorkspace(root);
   const runId = normalizeRunId(args.runId);
@@ -268,13 +293,21 @@ export function prepareIsolatedReview(root, args = {}) {
     inputSha256: inputSha256,
     handoffPath: manifest.handoffPath,
     reportPath: manifest.reportPath,
-    reviewedArtifactPaths
+    reviewedArtifactPaths,
+    preActionGuidanceSummary: isolatedGuidanceSummary(root, args, target, {
+      nextAction: "import_isolated_review",
+      statusSummary: {
+        status: "prepared",
+        runId,
+        reviewedArtifactCount: reviewedArtifactPaths.length
+      }
+    })
   };
 }
 
 export function importIsolatedReview(root, args = {}) {
   assertGovernanceMutationRegistered("import-isolated-review", "guarded");
-  assertTaskScopedMutationTarget(root, "import-isolated-review", args);
+  const target = assertTaskScopedMutationTarget(root, "import-isolated-review", args);
   assertFollowThroughReady(root, "Importing an isolated reviewer handoff", args);
   const runId = normalizeRunId(args.runId);
   const manifestPath = relativeRunPath(runId, "manifest.json");
@@ -347,7 +380,17 @@ export function importIsolatedReview(root, args = {}) {
     inputSha256: manifest.inputSha256,
     handoffSha256,
     reportSha256,
-    privateTranscriptImported: false
+    privateTranscriptImported: false,
+    preActionGuidanceSummary: isolatedGuidanceSummary(root, args, target, {
+      nextAction: handoff.verdict === "coherent" ? "project:dove.status" : "project:dove.rebuttal",
+      statusSummary: {
+        status: "imported",
+        runId,
+        verdict: handoff.verdict,
+        findingCount: handoff.findings.length,
+        actionItemCount: handoff.actionItems.length
+      }
+    })
   };
 }
 

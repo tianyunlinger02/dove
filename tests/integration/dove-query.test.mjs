@@ -73,10 +73,17 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
     encoding: "utf8"
   });
   assert.equal(human.status, 0, human.stderr || human.stdout);
-  assert.match(human.stdout, /^Dove status:/);
-  assert.match(human.stdout, /Next actions:/);
+  assert.match(human.stdout, /^Dove current situation:/);
+  assert.match(human.stdout, /Current context:/);
+  assert.match(human.stdout, /Pre-action guidance:/);
+  assert.match(human.stdout, /guardrails: writes require confirmation; no hidden runtime/);
+  assert.match(human.stdout, /Project state:/);
+  assert.match(human.stdout, /Blockers and reconciliation:/);
+  assert.match(human.stdout, /Next steps:/);
+  assert.match(human.stdout, /Mission details: collapsed by default/);
   assert.match(human.stdout, /Use --json or --format json for compact JSON/);
   assert.doesNotMatch(human.stdout, /^\{/);
+  assert.doesNotMatch(human.stdout, /Machine statuses:/);
   assert.doesNotMatch(human.stdout, /"statusAdjustmentContract"/);
 
   const machine = spawnSync("node", [CLI, "status", root, "--json"], {
@@ -90,11 +97,72 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   assert.equal(parsed.proposalOnly, true);
   assert.ok(parsed.statusAdjustmentContract);
   assert.equal(parsed.dashboard, undefined);
-  assert.equal(parsed.statusHome.presentation, "dove-status-compact-home");
+  assert.equal(parsed.dailyHome, undefined);
+  assert.equal(parsed.statusHome.presentation, "dove-project-situation-home");
+  assert.ok(parsed.statusHome.currentContext);
+  assert.equal(parsed.statusHome.preActionGuidance.presentation, "dove-pre-action-guidance");
+  assert.equal(parsed.statusHome.preActionGuidance.mode, "read-only-guidance");
+  assert.equal(parsed.statusHome.preActionGuidance.intentFrame.ordinaryPromptFirst, true);
+  assert.equal(parsed.statusHome.preActionGuidance.intentFrame.missionAsWorkContract, true);
+  assert.equal(parsed.statusHome.preActionGuidance.lessonRecall.automatic, true);
+  assert.equal(parsed.statusHome.preActionGuidance.lessonRecall.readOnly, true);
+  assert.equal(parsed.statusHome.preActionGuidance.lessonRecall.recordingExplicitOnly, true);
+  assert.equal(parsed.statusHome.preActionGuidance.lessonRecall.lessonsPath, ".dove/meta/operator-lessons.json");
+  assert.equal(parsed.statusHome.preActionGuidance.guardrails.noHiddenRuntime, true);
+  assert.ok(parsed.statusHome.projectState);
+  assert.ok(parsed.statusHome.blockersAndReconciliation);
+  assert.ok(parsed.statusHome.nextSteps);
+  assert.ok(parsed.statusHome.nextSteps.ranked.every((card) => card.kind && card.title && card.command));
+  assert.ok(parsed.statusHome.optionalMissionDetails);
+
+  const fullStressPackets = Array.from({ length: 30 }, (_, index) => ({
+    id: `full-status-stress-${index}`,
+    title: `Full status stress packet ${index}`,
+    summary: `Full status serialization payload ${index}: ${"large durable status payload ".repeat(8)}`,
+    status: index === 0 ? "blocked" : "ready",
+    lifecycleStatus: "active",
+    lifecycleFamily: "work-unit",
+    doveDomain: "engineering",
+    domain: "engineering",
+    phase: "execute",
+    stage: "execute",
+    assignedRole: "builder",
+    level: 1,
+    creatorKind: "operator",
+    currentFocus: `Keep full CLI JSON valid for packet ${index}`,
+    nextAction: "project:dove.mission",
+    blockedReason: index === 0 ? "needs unblock evidence" : null,
+    outputPaths: [`.dove/runtime/full-status-stress-${index}.json`],
+    evidenceLinks: [`tests/full-status-stress-${index}.test.mjs`],
+    workContract: {
+      purpose: "Ensure full status output can exceed pipe buffer size without truncation.",
+      deliverables: [`large-result-${index}`, `validation-${index}`],
+      doneCriteria: [`full JSON parses for packet ${index}`]
+    }
+  }));
+  for (const packet of fullStressPackets) {
+    writeTaskPacket(root, packet);
+  }
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
+    version: 3,
+    items: fullStressPackets,
+    updatedAt: null
+  });
+
+  const fullHuman = spawnSync("node", [CLI, "status", root, "--full"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 5 * 1024 * 1024
+  });
+  assert.equal(fullHuman.status, 0, fullHuman.stderr || fullHuman.stdout);
+  assert.match(fullHuman.stdout, /Blockers and reconciliation:/);
+  assert.match(fullHuman.stdout, /status: blocked/);
+  assert.match(fullHuman.stdout, /blockers: 1/);
 
   const fullMachine = spawnSync("node", [CLI, "status", root, "--full", "--json"], {
     cwd: ROOT,
-    encoding: "utf8"
+    encoding: "utf8",
+    maxBuffer: 5 * 1024 * 1024
   });
   assert.equal(fullMachine.status, 0, fullMachine.stderr || fullMachine.stdout);
   const fullParsed = JSON.parse(fullMachine.stdout);
@@ -697,43 +765,73 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.deepEqual(result.writes, []);
   assert.equal(result.detail, "compact");
   assert.equal(result.dashboard, undefined);
-  assert.equal(result.statusHome.presentation, "dove-status-compact-home");
+  assert.equal(result.dailyHome, undefined);
+  assert.equal(result.statusHome.presentation, "dove-project-situation-home");
+  assert.equal(result.statusHome.liveContextFirst, true);
   assert.equal(result.statusHome.fullDetails.args.detail, "full");
+  assert.ok(result.statusHome.currentContext);
+  assert.equal(result.statusHome.preActionGuidance.presentation, "dove-pre-action-guidance");
+  assert.equal(result.statusHome.preActionGuidance.mode, "read-only-guidance");
+  assert.equal(result.statusHome.preActionGuidance.intentFrame.ordinaryPromptFirst, true);
+  assert.equal(result.statusHome.preActionGuidance.intentFrame.missionAsWorkContract, true);
+  assert.equal(result.statusHome.preActionGuidance.intentFrame.noDedicatedMissionListCommand, true);
+  assert.equal(result.statusHome.preActionGuidance.lessonRecall.automatic, true);
+  assert.equal(result.statusHome.preActionGuidance.lessonRecall.readOnly, true);
+  assert.equal(result.statusHome.preActionGuidance.lessonRecall.recordingExplicitOnly, true);
+  assert.equal(result.statusHome.preActionGuidance.lessonRecall.lessonsPath, ".dove/meta/operator-lessons.json");
+  assert.equal(result.statusHome.preActionGuidance.guardrails.explicitOnly, true);
+  assert.equal(result.statusHome.preActionGuidance.guardrails.noHiddenRuntime, true);
+  assert.equal(result.statusHome.preActionGuidance.guardrails.noAutoApply, true);
+  assert.equal(result.statusHome.preActionGuidance.guardrails.requiresConfirmationForWrites, true);
+  assert.equal(result.statusHome.preActionGuidance.guardrails.boundedForegroundOnly, true);
+  assert.ok(result.statusHome.preActionGuidance.lessonRecall.topLessons.some((lesson) => lesson.id === "status-packet-lesson"));
+  assert.equal(result.statusHome.preActionGuidance.lessonRecall.topLessons.some((lesson) => lesson.id === "retired-status-lesson"), false);
+  assert.ok(result.statusHome.projectState);
+  assert.ok(result.statusHome.blockersAndReconciliation);
+  assert.ok(result.statusHome.nextSteps);
+  assert.equal(result.statusHome.optionalMissionDetails.defaultCollapsed, true);
   assert.equal(fullResult.detail, "full");
   assert.ok(fullResult.dashboard);
-  assert.equal(result.dailyHome.presentation, "dove-status-home");
-  assert.equal(result.dailyHome.liveContextFirst, true);
-  assert.ok(result.dailyHome.nextActions.length <= 3);
-  assert.ok(result.dailyHome.nextActions.every((card) => card.proposalOnly === true && card.noAutoApply === true));
-  assert.ok(result.dailyHome.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
-  assert.equal(result.dailyHome.missionList.presentation, "dove-mission-list");
-  assert.deepEqual(result.dailyHome.missionList.statusModel.userGroups, ["todo", "doing", "blocked", "done"]);
-  assert.deepEqual(result.dailyHome.missionList.statusModel.machineStatuses, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
-  assert.deepEqual(result.dailyHome.missionList.groups.todo.items.map((item) => item.packetId), ["plain-pending", "status-packet"]);
-  assert.deepEqual(result.dailyHome.missionList.groups.doing.items.map((item) => item.packetId), ["runtime-progress"]);
-  assert.deepEqual(result.dailyHome.missionList.groups.blocked.items.map((item) => item.packetId), ["blocked-dependency"]);
-  assert.deepEqual(result.dailyHome.missionList.groups.done.items.map((item) => item.packetId), []);
-  assert.equal(result.dailyHome.missionList.groups.done.itemCount, 3);
-  assert.equal(result.dailyHome.missionList.groups.done.hiddenCount, 3);
+  assert.equal(result.statusHome.currentContext.domain, "engineering");
+  assert.equal(result.statusHome.currentContext.stage, "execute");
+  assert.equal(result.statusHome.currentContext.primaryRole, "builder");
+  assert.equal(result.statusHome.projectState.missionCounts.open, 4);
+  assert.equal(result.statusHome.projectState.missionCounts.todo, 2);
+  assert.equal(result.statusHome.projectState.missionCounts.doing, 1);
+  assert.equal(result.statusHome.projectState.missionCounts.blocked, 1);
+  assert.equal(result.statusHome.projectState.missionCounts.done, 3);
+  assert.ok(result.statusHome.nextSteps.ranked.length <= 3);
+  assert.ok(result.statusHome.nextSteps.ranked.every((card) => card.kind && card.title && card.command));
+  assert.ok(result.statusHome.nextSteps.ranked.every((card) => card.proposalOnly === true && card.noAutoApply === true));
+  assert.ok(result.statusHome.blockersAndReconciliation.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
+  const optionalMissionDetails = result.statusHome.optionalMissionDetails;
+  assert.equal(optionalMissionDetails.presentation, "dove-mission-list");
+  assert.deepEqual(optionalMissionDetails.statusModel.userGroups, ["todo", "doing", "blocked", "done"]);
+  assert.deepEqual(optionalMissionDetails.statusModel.machineStatuses, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.deepEqual(optionalMissionDetails.groups.todo.items.map((item) => item.packetId), ["plain-pending", "status-packet"]);
+  assert.deepEqual(optionalMissionDetails.groups.doing.items.map((item) => item.packetId), ["runtime-progress"]);
+  assert.deepEqual(optionalMissionDetails.groups.blocked.items.map((item) => item.packetId), ["blocked-dependency"]);
+  assert.deepEqual(optionalMissionDetails.groups.done.items.map((item) => item.packetId), []);
+  assert.equal(optionalMissionDetails.groups.done.itemCount, 3);
+  assert.equal(optionalMissionDetails.groups.done.hiddenCount, 3);
   assert.deepEqual(fullResult.dailyHome.missionList.groups.done.items.map((item) => item.packetId), ["runtime-completed", "zz-status-completed", "zz-status-killed"]);
-  assert.equal(result.dailyHome.missionList.summary.openCount, 4);
-  assert.equal(result.dailyHome.missionList.summary.todoCount, 2);
-  assert.equal(result.dailyHome.missionList.summary.doingCount, 1);
-  assert.equal(result.dailyHome.missionList.summary.blockedCount, 1);
-  assert.equal(result.dailyHome.missionList.summary.doneCount, 3);
-  assert.deepEqual(result.dailyHome.suppressUserFacingDumps, ["raw mission counts", "raw status counts", "recent completed missions", "recent killed missions"]);
+  assert.equal(optionalMissionDetails.summary.openCount, 4);
+  assert.equal(optionalMissionDetails.summary.todoCount, 2);
+  assert.equal(optionalMissionDetails.summary.doingCount, 1);
+  assert.equal(optionalMissionDetails.summary.blockedCount, 1);
+  assert.equal(optionalMissionDetails.summary.doneCount, 3);
   assert.deepEqual(fullResult.dashboard.dailyHome, fullResult.dailyHome);
   assert.deepEqual(fullResult.dashboard.tasks.grouped, fullResult.dailyHome.missionList);
   assert.deepEqual(after, before);
   assert.equal(result.current.domain, "engineering");
   assert.equal(result.current.stage, "execute");
   assert.equal(result.current.primaryRole, "builder");
-  assert.equal(result.current.nextCommand, result.dailyHome.nextActions[0].command);
+  assert.equal(result.current.nextCommand, result.statusHome.nextSteps.primary.command);
   assert.equal(result.current.nextCommand, "project:dove.auto");
-  assert.equal(result.board.nextCommand, result.dailyHome.nextActions[0].command);
+  assert.equal(result.board.nextCommand, result.statusHome.nextSteps.primary.command);
   assert.equal(fullResult.dashboard.project.nextAction, fullResult.dailyHome.nextActions[0].command);
   assert.equal(fullResult.dashboard.nextAction, fullResult.dailyHome.nextActions[0].command);
-  assert.equal(result.suggestedNextCommand, result.dailyHome.nextActions[0].command);
+  assert.equal(result.suggestedNextCommand, result.statusHome.nextSteps.primary.command);
   assert.equal(result.board.domain, "engineering");
   assert.equal(result.projectSummary.openMissionCount, 4);
   assert.equal(result.projectSummary.todoMissionCount, 2);
@@ -799,18 +897,34 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
     encoding: "utf8"
   });
   assert.equal(humanStatus.status, 0, humanStatus.stderr || humanStatus.stdout);
-  assert.match(humanStatus.stdout, /State: open 4, todo 2, doing 1, blocked 1/);
-  assert.match(humanStatus.stdout, /Missions:/);
-  assert.match(humanStatus.stdout, /doing: 1/);
-  assert.match(humanStatus.stdout, /runtime-progress: Runtime progress mission \[ready->in-progress\]/);
-  assert.match(humanStatus.stdout, /blocked: 1/);
-  assert.match(humanStatus.stdout, /blocked-dependency: Blocked by unresolved dependency \[ready->blocked\]/);
-  assert.match(humanStatus.stdout, /todo: 2/);
-  assert.match(humanStatus.stdout, /plain-pending: Plain pending mission \[pending->ready\]/);
-  assert.match(humanStatus.stdout, /done: 3/);
+  assert.match(humanStatus.stdout, /Dove current situation:/);
+  assert.match(humanStatus.stdout, /Current context:/);
+  assert.match(humanStatus.stdout, /Pre-action guidance:/);
+  assert.match(humanStatus.stdout, /guardrails: writes require confirmation; no hidden runtime/);
+  assert.match(humanStatus.stdout, /Project state:/);
+  assert.match(humanStatus.stdout, /missions: open 4, todo 2, doing 1, blocked 1, done 3/);
+  assert.match(humanStatus.stdout, /Blockers and reconciliation:/);
+  assert.match(humanStatus.stdout, /Next steps:/);
+  assert.match(humanStatus.stdout, /Mission details: collapsed by default/);
+  assert.doesNotMatch(humanStatus.stdout, /Machine statuses:/);
+  assert.doesNotMatch(humanStatus.stdout, /runtime-progress: Runtime progress mission \[ready->in-progress\]/);
   assert.match(humanStatus.stdout, /command: project:dove\.auto --packet-id runtime-progress/);
   assert.match(humanStatus.stdout, /deliver:/);
   assert.match(humanStatus.stdout, /done:/);
+
+  const humanStatusWithMissions = spawnSync("node", [CLI, "status", root, "--missions"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(humanStatusWithMissions.status, 0, humanStatusWithMissions.stderr || humanStatusWithMissions.stdout);
+  assert.match(humanStatusWithMissions.stdout, /Mission details:/);
+  assert.match(humanStatusWithMissions.stdout, /doing: 1/);
+  assert.match(humanStatusWithMissions.stdout, /runtime-progress: Runtime progress mission \[ready->in-progress\]/);
+  assert.match(humanStatusWithMissions.stdout, /blocked: 1/);
+  assert.match(humanStatusWithMissions.stdout, /blocked-dependency: Blocked by unresolved dependency \[ready->blocked\]/);
+  assert.match(humanStatusWithMissions.stdout, /todo: 2/);
+  assert.match(humanStatusWithMissions.stdout, /plain-pending: Plain pending mission \[pending->ready\]/);
+  assert.match(humanStatusWithMissions.stdout, /done: 3/);
 
   const beforeStatusline = snapshotArtifacts(root, statusWatchedArtifacts);
   const humanStatusline = spawnSync("node", [CLI, "statusline", root, "--domain", "engineering"], {
@@ -1376,7 +1490,7 @@ test("CLI Dove orchestrate, mission, status, audit, and return commands expose p
   assert.deepEqual(statusPayload.writes, []);
   assert.equal(statusPayload.board.domain, "engineering");
   assert.equal(statusPayload.dashboard, undefined);
-  assert.equal(statusPayload.statusHome.presentation, "dove-status-compact-home");
+  assert.equal(statusPayload.statusHome.presentation, "dove-project-situation-home");
   assert.equal(statusPayload.navigation, undefined);
   assert.equal(statusPayload.diagnostics.omittedSections.includes("dashboard"), true);
   assert.equal(statusPayload.diagnostics.mayRefreshDerivedSurfaces, false);

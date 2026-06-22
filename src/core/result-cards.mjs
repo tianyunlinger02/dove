@@ -136,6 +136,7 @@ export function buildCommandResultCard(details = {}, responseLanguage = "zh") {
     taskStatusBefore: normalizeString(details.taskStatusBefore, null),
     taskStatusAfter: normalizeString(details.taskStatusAfter, null),
     nextActions: resultActions(details.nextActions, details.nextAction, responseLanguage),
+    preActionGuidanceSummary: normalizePlainObject(details.preActionGuidanceSummary),
     foreground: details.foreground === undefined ? null : Boolean(details.foreground),
     background: details.background === undefined ? null : Boolean(details.background),
     daemon: details.daemon === undefined ? null : Boolean(details.daemon),

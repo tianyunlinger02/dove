@@ -1,9 +1,11 @@
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { evaluateFigurePipeline } from "./artifacts.mjs";
 import { evaluateEvidence } from "./evidence.mjs";
+import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { assertRoleBoundMutation, loadBoard, normalizeRebuttalIssues, persistRebuttalIssues, upsertOrchestrationBoard } from "./orchestration.mjs";
+import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { appendText, assertGovernanceMutationRegistered, assertFollowThroughReady, listDraftFiles, loadState, nowIso, readJson, saveState, writeJson, writeText } from "./workspace.mjs";
 
 const UNRESOLVED_CONCERN_STATUSES = new Set(["open", "awaiting-author-response", "author-response-submitted", "escalated", "contested"]);
@@ -462,13 +464,38 @@ export function upsertRevisionPlan(root, args = {}) {
 
 export function runReviewLoop(root, args = {}) {
   assertGovernanceMutationRegistered("run-review-loop", "guarded");
-  assertTaskScopedMutationTarget(root, "run-review-loop", args);
+  const target = assertTaskScopedMutationTarget(root, "run-review-loop", args);
   assertFollowThroughReady(root, "Running the review loop", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Running the review loop",
     expectedRole: "reviewer"
   });
-  return persistReviewLoop(root, args);
+  const entry = persistReviewLoop(root, args);
+  const preActionGuidance = buildPreActionGuidance({
+    surface: "dove.review",
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: args.scope ?? args.stage ?? "current paper pipeline",
+    roleId: "reviewer",
+    packet: target.packet,
+    currentContext: {
+      domain: target.packet?.domain ?? null,
+      stage: args.stage ?? target.packet?.stage ?? "audit",
+      primaryRole: "reviewer"
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: entry.verdict === "coherent" ? "project:dove.status" : "project:dove.rebuttal",
+    routeHint: "project:dove.review",
+    workflowKind: "review",
+    domain: target.packet?.domain ?? null,
+    stage: args.stage ?? target.packet?.stage ?? "audit",
+    tags: ["review", "independent-audit", "evidence"],
+    statusSummary: {
+      verdict: entry.verdict,
+      findingCount: entry.findings?.length ?? 0,
+      actionItemCount: entry.actionItems?.length ?? 0
+    }
+  });
+  return { ...entry, preActionGuidance };
 }
 
 export function persistReviewLoop(root, args = {}) {

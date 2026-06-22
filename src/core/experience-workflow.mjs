@@ -1,7 +1,9 @@
 import {
   ARTIFACT_PATHS
 } from "./schema.mjs";
+import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
 
 function slugify(value) {
@@ -158,8 +160,38 @@ export function runExperienceWorkflow(root, args = {}) {
     }
   }
 
+  const status = result ? (bridge?.status === "applied" ? "bridged" : "recorded") : "planned";
+  const preActionGuidance = buildPreActionGuidance({
+    surface: "dove.experience",
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: normalizeString(rawPlan.goal ?? rawPlan.idea ?? rawPlan.title ?? args.idea, null),
+    roleId: "builder",
+    subagentSpecialty: "experiment-planner",
+    packet: target.packet,
+    currentContext: {
+      domain: target.packet?.domain ?? null,
+      stage: target.packet?.stage ?? "execute",
+      primaryRole: "builder"
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: result ? "project:dove.review" : "project:dove.experience",
+    routeHint: "project:dove.experience",
+    workflowKind: "experience",
+    domain: target.packet?.domain ?? null,
+    stage: target.packet?.stage ?? "execute",
+    tags: ["experiment", "claim-bridge", "audit"],
+    statusSummary: {
+      status,
+      experimentId,
+      hasResult: Boolean(result),
+      auditVerdict: audit?.auditVerdict ?? null,
+      bridgeStatus: bridge?.status ?? null
+    }
+  });
+
   return {
-    status: result ? (bridge?.status === "applied" ? "bridged" : "recorded") : "planned",
+    status,
+    preActionGuidance,
     packetId: target.packetId,
     plan,
     result,

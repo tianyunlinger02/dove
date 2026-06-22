@@ -1,7 +1,9 @@
 import path from "node:path";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
+import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { appendText, assertGovernanceMutationRegistered, ensureWorkspace, loadState, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
 import { runAudioReview } from "./audio-review.mjs";
 import { runExperienceWorkflow } from "./experience-workflow.mjs";
@@ -117,8 +119,29 @@ export function runDoveReviewLoop(root, args = {}) {
   stateIndex.lastReviewedAt = timestamp;
   writeJson(root, ARTIFACT_PATHS.reviewState, stateIndex);
   appendText(root, ARTIFACT_PATHS.reviewLog, `## ${timestamp} — dove-review-loop\n\n- Run: ${runId}\n- Packet: ${target.packetId}\n- Status: ${status}\n- Stop reason: ${stopReason}\n- Iterations: ${iterations.length}/${maxIterations}\n\n`);
+  const preActionGuidance = buildPreActionGuidance({
+    surface: "dove.review",
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: args.instructions ?? args.scope ?? args.summary ?? "review loop",
+    roleId: "reviewer",
+    packet: target.packet,
+    currentContext: {
+      domain: target.packet?.domain ?? null,
+      stage: target.packet?.stage ?? "audit",
+      primaryRole: "reviewer"
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: status === "coherent" ? "project:dove.status" : "project:dove.review",
+    routeHint: "project:dove.review",
+    workflowKind: "review-loop",
+    domain: target.packet?.domain ?? null,
+    stage: target.packet?.stage ?? "audit",
+    tags: ["review", "audio", "experience", "iteration"],
+    statusSummary: { status, stopReason, iterationCount: iterations.length, maxIterations }
+  });
   return {
     status,
+    preActionGuidance,
     stopReason,
     packetId: target.packetId,
     runId,

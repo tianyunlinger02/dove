@@ -1,7 +1,9 @@
 import { ARTIFACT_PATHS } from "./schema.mjs";
+import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { assertRoleBoundMutation, loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, extractCitationKeysFromText, nowIso, readJson, readText, writeJson, writeText, listDraftFiles } from "./workspace.mjs";
 
 function slugify(value) {
@@ -9,6 +11,30 @@ function slugify(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "item";
+}
+
+function claimsGuidanceSummary(root, args = {}, target = {}, statusSummary = {}) {
+  return summarizePreActionGuidance(buildPreActionGuidance({
+    surface: "dove.draft",
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: args.summary ?? args.title ?? args.claims?.[0]?.text ?? null,
+    roleId: "builder",
+    subagentSpecialty: "researcher",
+    packet: target.packet,
+    currentContext: {
+      domain: target.packet?.domain ?? null,
+      stage: target.packet?.stage ?? "execute",
+      primaryRole: "builder"
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: "project:dove.review",
+    routeHint: "project:dove.draft",
+    workflowKind: "claims",
+    domain: target.packet?.domain ?? null,
+    stage: target.packet?.stage ?? "execute",
+    tags: ["claims", "evidence", "citations"],
+    statusSummary
+  }));
 }
 
 function normalizeClaim(claim, index) {
@@ -57,7 +83,7 @@ function renderClaimsMarkdown(claims) {
 
 export function upsertClaims(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-claims", "guarded");
-  assertTaskScopedMutationTarget(root, "upsert-claims", args);
+  const target = assertTaskScopedMutationTarget(root, "upsert-claims", args);
   assertFollowThroughReady(root, "Updating evidence-backed claims", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Updating evidence-backed claims",
@@ -119,7 +145,13 @@ export function upsertClaims(root, args = {}) {
     summary: `Upserted ${claims.length} durable claims.`,
     artifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.claims, ARTIFACT_PATHS.navigationReport]
   });
-  return next;
+  return {
+    ...next,
+    preActionGuidanceSummary: claimsGuidanceSummary(root, args, target, {
+      claimCount: claims.length,
+      inputClaimCount: inputClaims.length
+    })
+  };
 }
 
 export function evaluateEvidence(root) {

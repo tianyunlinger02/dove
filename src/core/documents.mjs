@@ -9,7 +9,9 @@ import {
   createDocumentLedgerIndex,
   normalizeDocumentLedgerIndex
 } from "./schema.mjs";
+import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { assertGovernanceMutationRegistered, appendText, ensureWorkspace, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 
 function slugify(value, fallback = "document") {
@@ -82,7 +84,36 @@ function publicSafeFromArgs(args = {}) {
   return args.publicSafe === true || args.visibility === "public-safe";
 }
 
-function buildResultCard({ entry, writes, createdDocument, appendedDocument }) {
+function documentGuidanceSummary(root, args = {}, target = {}, entry = {}) {
+  return summarizePreActionGuidance(buildPreActionGuidance({
+    surface: "dove.documents",
+    responseLanguage: resolveDoveResponseLanguage(root, args),
+    request: args.title ?? args.documentTitle ?? args.summary ?? entry.title ?? null,
+    roleId: "builder",
+    subagentSpecialty: "researcher",
+    packet: target.packet,
+    currentContext: {
+      domain: target.packet?.domain ?? null,
+      stage: target.packet?.stage ?? "execute",
+      primaryRole: "builder"
+    },
+    operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
+    nextAction: "project:dove.status",
+    routeHint: "project:dove.status",
+    workflowKind: "document-evidence",
+    domain: target.packet?.domain ?? null,
+    stage: target.packet?.stage ?? "execute",
+    tags: ["document", "evidence", "provenance"],
+    statusSummary: {
+      documentId: entry.documentId ?? null,
+      documentKind: entry.documentKind ?? null,
+      evidenceScope: entry.evidenceScope ?? null,
+      publicSafe: entry.publicSafe === true
+    }
+  }));
+}
+
+function buildResultCard({ entry, writes, createdDocument, appendedDocument, preActionGuidanceSummary }) {
   const evidence = [...entry.evidenceLinks, ...entry.artifactRefs, ...entry.sourceRefs];
   return {
     presentation: "compact-result-summary-card",
@@ -97,7 +128,8 @@ function buildResultCard({ entry, writes, createdDocument, appendedDocument }) {
     validation: ["本次只记录显式传入的文档/证据元数据，未声明额外验证结果。"],
     nextActions: ["project:dove.status"],
     proposalOnly: false,
-    confirmationRequired: false
+    confirmationRequired: false,
+    preActionGuidanceSummary
   };
 }
 
@@ -215,6 +247,7 @@ export function recordDocumentEvidence(root, args = {}) {
     updatedAt: timestamp
   });
   writeJson(root, ARTIFACT_PATHS.documentsLedger, nextLedger);
+  const preActionGuidanceSummary = documentGuidanceSummary(root, args, target, entry);
   return {
     mode: "document-evidence-record",
     status: "recorded",
@@ -234,6 +267,7 @@ export function recordDocumentEvidence(root, args = {}) {
       defaultEvidenceScope: "internal",
       publicProjectionDerivedOnly: true
     },
-    resultCard: buildResultCard({ entry, writes, createdDocument, appendedDocument })
+    preActionGuidanceSummary,
+    resultCard: buildResultCard({ entry, writes, createdDocument, appendedDocument, preActionGuidanceSummary })
   };
 }
