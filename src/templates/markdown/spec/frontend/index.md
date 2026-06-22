@@ -43,7 +43,7 @@ Before changing package behavior, read the relevant documents below:
 - MCP interface: `src/mcp/` and `mcp/dove-state-server.mjs`.
 - Command manifest: `src/core/command-manifest.mjs`.
 - Adapter generator: `scripts/generate-command-adapters.mjs`.
-- Operator surfaces: `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/`, `.agents/skills/`, and `.opencode/skills/`. Claude Code uses user-level `/dove:*` entries, not project-local `.claude/commands/dove/`.
+- Operator surfaces: `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/`, `.agents/skills/`, and `.opencode/skills/`. Claude Code uses manifest-rendered user-level `/dove:*` entries via `dove install/sync --host claude`, not project-local `.claude/commands/dove/`.
 - Durable state model: `.dove/`.
 - Validation: `npm run check` combines generated adapter drift checks, command validation, MCP validation, governance audit, and Node tests; `npm run release:check` is the full pre-release gate.
 

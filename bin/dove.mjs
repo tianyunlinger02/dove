@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
@@ -21,7 +22,8 @@ import {
   normalizeWorkspaceIndex,
   normalizeWorkspaceMetaOptimize
 } from "../src/core/schema.mjs";
-import { CORE_INSTALL_PATHS, DEFAULT_HOST_ADAPTERS, HOST_ADAPTERS, HOST_IDS } from "../src/core/command-manifest.mjs";
+import { CORE_INSTALL_PATHS, DEFAULT_HOST_ADAPTERS, HOST_ADAPTERS, HOST_IDS, USER_HOST_IDS } from "../src/core/command-manifest.mjs";
+import { writeClaudeUserCommandAdapters } from "../scripts/generate-command-adapters.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,8 +41,8 @@ function usage() {
   console.log(`dove
 
 Usage:
-  dove install [target] [--force] [--host <opencode|codex|cursor|agents|all>]
-  dove sync [target] [--force] [--host <opencode|codex|cursor|agents|all>]
+  dove install [target] [--force] [--host <opencode|codex|cursor|agents|claude|all>]
+  dove sync [target] [--force] [--host <opencode|codex|cursor|agents|claude|all>]
   dove doctor [target]
   dove onboard [target] [--write-map] [--max-depth <n>] [--max-files <n>]
   dove publish-status [target] [--quiet] [--include-archived]
@@ -159,11 +161,7 @@ function resolveHostAdapters(args = []) {
   if (requested.includes("all")) {
     return HOST_IDS;
   }
-  const unsupportedProjectHosts = requested.filter((host) => host === "claude");
-  if (unsupportedProjectHosts.length > 0) {
-    throw new Error("Claude Code uses the user-level /dove:* command set; project install/sync does not copy .claude/commands/dove. Keep project state in .dove/ and use a supported project adapter: " + `${HOST_IDS.join(", ")}, all.`);
-  }
-  const invalid = requested.filter((host) => !Object.hasOwn(HOST_ADAPTERS, host));
+  const invalid = requested.filter((host) => !HOST_IDS.includes(host));
   if (invalid.length > 0) {
     throw new Error(`Unknown host adapter(s): ${invalid.join(", ")}. Available adapters: ${HOST_IDS.join(", ")}, all.`);
   }
@@ -189,6 +187,10 @@ function resolveOptionalTargetAndRest(rawTarget, rest = []) {
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function resolveClaudeConfigRoot() {
+  return path.resolve(process.env.DOVE_CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"));
 }
 
 function shouldSkipCopy(relativePath) {
@@ -233,10 +235,13 @@ function copyRecursive(source, destination, force, sourceRoot = source, skipped 
 }
 
 function buildInstallPaths(hosts) {
-  const hostPaths = hosts.flatMap((host) => HOST_ADAPTERS[host].paths.map((relativePath) => ({ host, relativePath })));
+  const projectHosts = hosts.filter((host) => Object.hasOwn(HOST_ADAPTERS, host));
+  const userHosts = hosts.filter((host) => USER_HOST_IDS.includes(host));
+  const hostPaths = projectHosts.flatMap((host) => HOST_ADAPTERS[host].paths.map((relativePath) => ({ host, relativePath })));
   return {
     corePaths: CORE_INSTALL_PATHS,
     hostPaths,
+    userHosts,
     allPaths: [...CORE_INSTALL_PATHS, ...hostPaths.map((item) => item.relativePath)]
   };
 }
@@ -305,7 +310,11 @@ function buildDoveStatusArgs(rest = []) {
     includeArchived: rest.includes("--include-archived"),
     detail: detail ?? (rest.includes("--full") ? "full" : undefined),
     full: rest.includes("--full"),
-    includeDetails: rest.includes("--include-details")
+    includeDetails: rest.includes("--include-details"),
+    showMissions: rest.includes("--missions") || rest.includes("--show-missions"),
+    includeMissionDetails: rest.includes("--include-mission-details"),
+    requestStatusAdjustment: rest.includes("--request-status-adjustment") || rest.includes("--status-adjustment") || rest.includes("--show-status-adjustments"),
+    includeStatusAdjustmentPreview: rest.includes("--include-status-adjustment-preview")
   };
 }
 
@@ -677,6 +686,7 @@ function installOrSync(target, force, args = []) {
   const skippedUnsafePaths = [];
   const copiedCorePaths = [];
   const copiedHostPaths = [];
+  const copiedUserHostPaths = [];
 
   for (const relativePath of installPaths.corePaths) {
     const source = path.join(PACKAGE_ROOT, relativePath);
@@ -696,13 +706,21 @@ function installOrSync(target, force, args = []) {
     copiedHostPaths.push({ host, path: relativePath });
   }
 
+  if (installPaths.userHosts.includes("claude")) {
+    const claudeConfigRoot = resolveClaudeConfigRoot();
+    for (const relativePath of writeClaudeUserCommandAdapters(claudeConfigRoot)) {
+      copiedUserHostPaths.push({ host: "claude", path: relativePath, root: claudeConfigRoot });
+    }
+  }
+
   ensureWorkspace(target);
-  const copied = [...copiedCorePaths, ...copiedHostPaths.map((item) => item.path), ".dove/* (bootstrap only, user-owned state preserved)"];
+  const copied = [...copiedCorePaths, ...copiedHostPaths.map((item) => item.path), ...copiedUserHostPaths.map((item) => `claude:${item.path}`), ".dove/* (bootstrap only, user-owned state preserved)"];
   return {
     target,
     copied,
     copiedCorePaths,
     copiedHostPaths,
+    copiedUserHostPaths,
     skippedUnsafePaths: Array.from(new Set(skippedUnsafePaths)).sort(),
     hosts,
     force,

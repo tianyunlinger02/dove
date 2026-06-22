@@ -707,7 +707,7 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.deepEqual(boundaries.managedPaths, [".opencode/commands/dove*.md", ".opencode/skills/dove-*", ".opencode.json", ".codex/skills/dove-*", ".cursor/commands/dove-*.md", ".agents/skills/dove-*", "AGENTS.md", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.neutralCorePaths, ["README.md", "bin", "docs", "mcp", "scripts", "src"]);
   assert.deepEqual(boundaries.defaultHostAdapters, ["opencode"]);
-  assert.deepEqual(boundaries.availableHostAdapters, ["opencode", "codex", "cursor", "agents"]);
+  assert.deepEqual(boundaries.availableHostAdapters, ["opencode", "codex", "cursor", "agents", "claude"]);
   assert.equal(Object.hasOwn(boundaries.managedHostAdapterPaths, "claude"), false);
   assert.deepEqual(boundaries.managedHostAdapterPaths.codex, [".codex/skills/dove-*"]);
   assert.deepEqual(boundaries.managedHostAdapterPaths.cursor, [".cursor/commands/dove-*.md"]);

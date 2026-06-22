@@ -47,7 +47,7 @@ This repository does not contain a React/browser frontend. The Trellis `frontend
 - Put MCP exposure in `src/mcp/*.mjs`. `src/mcp/tool-definitions.mjs` defines schemas; `src/mcp/handlers.mjs` dispatches tool names to core functions.
 - Put install/doctor/autonomy CLI wiring in `bin/dove.mjs`; keep reusable behavior in `src/core/`.
 - Put adapter generation in `scripts/generate-command-adapters.mjs`, and validation/audit scripts in `scripts/*.mjs` wired through `package.json`.
-- Put generated project host adapters in `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/dove-*/SKILL.md`, and `.agents/skills/dove-*/SKILL.md`. Do not hand-maintain divergent command inventories per project-local host; Claude Code uses user-level `/dove:*` entries instead of project-local `.claude/commands/dove/`.
+- Put generated project host adapters in `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/dove-*/SKILL.md`, and `.agents/skills/dove-*/SKILL.md`. Do not hand-maintain divergent command inventories per project-local host; Claude Code uses manifest-rendered user-level `/dove:*` entries via `dove install/sync --host claude` instead of project-local `.claude/commands/dove/`.
 - Put OpenCode role skills in `.opencode/skills/dove-*/SKILL.md`.
 - Treat `.dove/` as the durable artifact model, not as generated scratch. Bootstrap may create files there, but package update logic must preserve user-owned state.
 

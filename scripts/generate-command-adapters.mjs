@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   COMMAND_SURFACES,
-  HOST_IDS,
+  PROJECT_HOST_IDS,
   adapterPathForCommand,
   commandContextPaths,
   hostCommandSlug
@@ -136,7 +136,8 @@ function renderSkill(command) {
 
 export function renderCommandAdapter(hostId, command) {
   switch (hostId) {
-    case "opencode": return renderMarkdownCommand(command, command.id);
+    case "opencode":
+    case "claude": return renderMarkdownCommand(command, command.id);
     case "cursor": return renderMarkdownCommand(command, `dove-${hostCommandSlug(command.id)}`);
     case "codex":
     case "agents": return renderSkill(command);
@@ -145,12 +146,32 @@ export function renderCommandAdapter(hostId, command) {
 }
 
 export function generatedAdapterEntries() {
-  return HOST_IDS.flatMap((hostId) => COMMAND_SURFACES.map((command) => ({
+  return PROJECT_HOST_IDS.flatMap((hostId) => COMMAND_SURFACES.map((command) => ({
     hostId,
     command,
     relativePath: adapterPathForCommand(hostId, command),
     content: renderCommandAdapter(hostId, command)
   })));
+}
+
+export function generatedClaudeUserCommandEntries() {
+  return COMMAND_SURFACES.map((command) => ({
+    hostId: "claude",
+    command,
+    relativePath: adapterPathForCommand("claude", command),
+    content: renderCommandAdapter("claude", command)
+  }));
+}
+
+export function writeClaudeUserCommandAdapters(claudeConfigRoot) {
+  const written = [];
+  for (const entry of generatedClaudeUserCommandEntries()) {
+    const absolutePath = path.join(claudeConfigRoot, entry.relativePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, `${entry.content.trimEnd()}\n`, "utf8");
+    written.push(entry.relativePath);
+  }
+  return written;
 }
 
 function listFiles(root, relativeDir, acceptPath) {

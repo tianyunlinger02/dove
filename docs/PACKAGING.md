@@ -10,7 +10,7 @@ The packaged surface is:
 - the `dove` binary at `bin/dove.mjs`
 - the stdio MCP wrapper at `mcp/dove-state-server.mjs`
 - default OpenCode adapter files: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, and `.opencode.json`
-- optional Dove-only project adapter files for Codex, Cursor, and shared agent-skill hosts, generated from `src/core/command-manifest.mjs`; Claude Code uses a user-level `/dove:*` command set instead of packaged project `.claude/commands/dove` files
+- optional Dove-only project adapter files for Codex, Cursor, and shared agent-skill hosts, generated from `src/core/command-manifest.mjs`; Claude Code uses a manifest-rendered user-level `/dove:*` command set written by `dove install/sync --host claude` instead of packaged project `.claude/commands/dove` files
 
 The project-local `.dove/` directory is created or repaired at install time. It is not shipped as a package snapshot. OpenCode is the default adapter, and the canonical command manifest generates the flat Dove adapter set for every supported project-local host.
 

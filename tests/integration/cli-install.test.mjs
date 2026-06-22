@@ -6,11 +6,11 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { checkGeneratedAdapters, writeGeneratedAdapters } from "../../scripts/generate-command-adapters.mjs";
-import { HOST_IDS, commandAdapterPathsForHost } from "../../src/core/command-manifest.mjs";
+import { PROJECT_HOST_IDS, commandAdapterPathsForHost } from "../../src/core/command-manifest.mjs";
 
 const ROOT = process.cwd();
 const CLI = path.join(ROOT, "bin", "dove.mjs");
-const DOVE_HOST_PATHS = Object.fromEntries(HOST_IDS.map((hostId) => [hostId, commandAdapterPathsForHost(hostId)]));
+const DOVE_HOST_PATHS = Object.fromEntries(PROJECT_HOST_IDS.map((hostId) => [hostId, commandAdapterPathsForHost(hostId)]));
 
 function assertDoveHostPaths(target, hostIds) {
   for (const hostId of hostIds) {
@@ -184,30 +184,42 @@ test("CLI install can install optional host adapters without local unsafe files"
   assert.equal(fs.existsSync(path.join(target, ".opencode", "node_modules")), false);
 });
 
-test("CLI install rejects project-level Claude command adapters", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-install-claude-rejected-"));
+test("CLI install writes Claude user-level command adapters without project-local .claude files", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-install-claude-user-"));
+  const claudeConfigRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dove-claude-config-"));
   const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude"], {
     cwd: ROOT,
-    encoding: "utf8"
-  });
-
-  assert.notEqual(result.status, 0);
-  assert.match(`${result.stderr}\n${result.stdout}`, /Claude Code uses the user-level \/dove:\* command set/);
-  assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "dove")), false);
-});
-
-test("CLI install all host adapters skips unsafe local artifacts", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-install-all-hosts-"));
-  const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "all"], {
-    cwd: ROOT,
-    encoding: "utf8"
+    encoding: "utf8",
+    env: { ...process.env, DOVE_CLAUDE_CONFIG_DIR: claudeConfigRoot }
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
-  assert.deepEqual(payload.hosts, ["opencode", "codex", "cursor", "agents"]);
+  assert.deepEqual(payload.hosts, ["claude"]);
+  assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "dove")), false);
+  assert.ok(fs.existsSync(path.join(claudeConfigRoot, "commands", "dove", "status.md")));
+  const statusCommand = fs.readFileSync(path.join(claudeConfigRoot, "commands", "dove", "status.md"), "utf8");
+  assert.match(statusCommand, /whole-project situation home/);
+  assert.match(statusCommand, /default status must not render a `Missions` section/);
+  assert.doesNotMatch(statusCommand, /dailyHome\.missionList/);
+  assert.doesNotMatch(statusCommand, /Mission 主页/);
+});
+
+test("CLI install all host adapters skips unsafe local artifacts", () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-install-all-hosts-"));
+  const claudeConfigRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dove-claude-config-"));
+  const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "all"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: { ...process.env, DOVE_CLAUDE_CONFIG_DIR: claudeConfigRoot }
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.deepEqual(payload.hosts, ["opencode", "codex", "cursor", "agents", "claude"]);
   assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.status.md")));
   assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "dove")), false);
+  assert.ok(fs.existsSync(path.join(claudeConfigRoot, "commands", "dove", "status.md")));
   assert.equal(fs.existsSync(path.join(target, ".codex", "agents")), false);
   assert.equal(fs.existsSync(path.join(target, ".codex", "config.toml")), false);
   assert.ok(fs.existsSync(path.join(target, ".cursor", "commands")));

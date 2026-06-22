@@ -14,7 +14,7 @@ The supported install path is host-neutral at the core and adapter-based at the 
 4. bootstrap missing `.dove/` artifacts without overwriting user-owned workspace state
 5. write `.dove/manifest.json` as the Dove authority manifest
 
-Supported project adapter IDs are `opencode`, `codex`, `cursor`, `agents`, and `all`. OpenCode remains the default install target, and every supported project-local host receives the same flat top-level Dove command set generated from the manifest. Claude Code uses one user-level `/dove:*` command set, so project installs do not copy `.claude/commands/dove`.
+Supported adapter IDs are `opencode`, `codex`, `cursor`, `agents`, `claude`, and `all`. OpenCode remains the default install target, every supported project-local host receives the same flat top-level Dove command set generated from the manifest, and `claude` writes the same manifest-generated commands into the current user's Claude Code config. Claude Code uses one user-level `/dove:*` command set, so project installs do not copy `.claude/commands/dove` into the target project.
 
 ## Project-local install
 
@@ -28,8 +28,11 @@ node ./bin/dove.mjs install . --force
 node ./bin/dove.mjs install . --force --host cursor
 node ./bin/dove.mjs install . --force --host codex --host agents
 
-# Install every safe adapter surface
+# Install every safe adapter surface, including the user-level Claude Code commands
 node ./bin/dove.mjs install . --force --host all
+
+# Sync only the user-level Claude Code /dove:* commands
+node ./bin/dove.mjs sync . --force --host claude
 ```
 
 `sync` accepts the same `--host` flags.
@@ -94,7 +97,7 @@ The doctor command checks the neutral core, `.dove/state.json`, `.dove/manifest.
 
 `install` and `sync` treat `.dove/` as user-owned workspace data. The CLI bootstraps missing `.dove` artifacts via the workspace initializer, but it does not copy a packaged `.dove/` tree over the target project as managed code.
 
-Adapter copying is allowlisted to Dove project surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. Those paths are derived from `src/core/command-manifest.mjs`; run `npm run commands:generate` to rewrite adapters and `npm run commands:check` to detect drift. Local development scaffolding, host settings, and project-local `.claude/commands/dove` files are not installed as Dove product surfaces. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
+Adapter copying is allowlisted to Dove project surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. Those paths are derived from `src/core/command-manifest.mjs`; run `npm run commands:generate` to rewrite checked-in project adapters and `npm run commands:check` to detect drift. The `claude` host is user-level: `install`/`sync` render the same manifest commands to `~/.claude/commands/dove` (or `DOVE_CLAUDE_CONFIG_DIR` for tests) without copying `.claude/commands/dove` into the target project. Local development scaffolding, host settings, and project-local `.claude/commands/dove` files are not installed as Dove product surfaces. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
 
 ## Validation
 

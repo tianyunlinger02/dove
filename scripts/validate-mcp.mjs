@@ -108,7 +108,7 @@ async function main() {
 
   const toolByName = new Map(listed.tools.map((tool) => [tool.name, tool]));
   const descriptionChecks = {
-    query_dove_status: ["statusHome.preActionGuidance", "automatic read-only lesson recall", "Planner/Builder/Reviewer role-framed next action"],
+    query_dove_status: ["statusHome.preActionGuidance", "automatic read-only lesson recall", "Planner/Builder/Reviewer role-framed next action", "mission counts only", "must not render a Missions panel", "requestStatusAdjustment"],
     create_dove_task: ["preActionGuidance", "mission is a durable work/progress object", "bounded foreground mission pass"],
     run_dove_auto: ["preActionGuidance", "no hidden continuation", "scheduler", "daemon"],
     run_dove_operator: ["planner preActionGuidance", "read-only lesson recall", "no scheduler or hidden runtime"],
@@ -589,6 +589,8 @@ async function main() {
   assert.equal(killed.killedTask.status, "killed");
 
   const status = await callTool("query_dove_status", {});
+  const missionStatus = await callTool("query_dove_status", { showMissions: true });
+  const adjustmentStatus = await callTool("query_dove_status", { requestStatusAdjustment: true });
   const fullStatus = await callTool("query_dove_status", { detail: "full" });
   assert.equal(status.mode, "dove-status-query");
   assert.equal(status.proposalOnly, true);
@@ -607,9 +609,15 @@ async function main() {
   assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.proposalOnly === true && card.noAutoApply === true));
   assert.equal(status.statusHome.optionalMissionDetails.presentation, "dove-mission-list");
   assert.equal(status.statusHome.optionalMissionDetails.defaultCollapsed, true);
+  assert.equal(status.statusHome.optionalMissionDetails.detail, "summary");
+  assert.equal(status.statusHome.optionalMissionDetails.missionItemsIncluded, false);
+  assert.equal("groups" in status.statusHome.optionalMissionDetails, false);
   assert.deepEqual(status.statusHome.optionalMissionDetails.statusModel.userGroups, ["todo", "doing", "blocked", "done"]);
   assert.deepEqual(status.statusHome.optionalMissionDetails.statusModel.machineStatuses, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
-  assert.equal(status.statusHome.optionalMissionDetails.groups.done.defaultCollapsed, true);
+  assert.equal(status.statusHome.optionalMissionDetails.requestArgs.showMissions, true);
+  assert.equal(missionStatus.statusHome.optionalMissionDetails.detail, "compact");
+  assert.equal(missionStatus.statusHome.optionalMissionDetails.missionItemsIncluded, true);
+  assert.equal(missionStatus.statusHome.optionalMissionDetails.groups.done.defaultCollapsed, true);
   assert.equal(status.dashboard, undefined);
   assert.equal(status.dailyHome, undefined);
   assert.equal(fullStatus.detail, "full");
@@ -653,9 +661,14 @@ async function main() {
   assert.ok(status.projectSummary && typeof status.projectSummary === "object");
   assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
   assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
-  assert.ok(status.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
-  assert.equal(status.statusAdjustmentContract.items.some((item) => item.packetId === secondMission.createdTask.id), false);
-  assert.equal(status.statusAdjustmentContract.items.some((item) => ["completed", "killed"].includes(item.currentStatus)), false);
+  assert.equal(status.statusAdjustmentContract.statusAdjustmentItemsIncluded, false);
+  assert.deepEqual(status.statusAdjustmentContract.items, []);
+  assert.deepEqual(status.statusAdjustmentContract.adjustmentCards, []);
+  assert.equal(status.statusHome.statusAdjustmentPreview.requestArgs.requestStatusAdjustment, true);
+  assert.equal(adjustmentStatus.statusAdjustmentContract.statusAdjustmentItemsIncluded, true);
+  assert.ok(adjustmentStatus.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
+  assert.equal(adjustmentStatus.statusAdjustmentContract.items.some((item) => item.packetId === secondMission.createdTask.id), false);
+  assert.equal(adjustmentStatus.statusAdjustmentContract.items.some((item) => ["completed", "killed"].includes(item.currentStatus)), false);
   assert.equal(status.taskGraph, undefined);
   assert.equal(status.paperLifecycle, undefined);
   assert.equal(status.diagnostics.mayRefreshDerivedSurfaces, false);

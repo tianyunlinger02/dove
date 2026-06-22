@@ -178,7 +178,7 @@ The canonical command inventory lives in `src/core/command-manifest.mjs`. Genera
 - Cursor commands
 - shared `.agents/skills` surfaces
 
-Claude Code uses one user-level `/dove:*` command set instead of project-local `.claude/commands/dove` files, so normal project installs keep Dove state in `.dove/` without creating duplicate Claude command entries.
+Claude Code uses one user-level `/dove:*` command set instead of project-local `.claude/commands/dove` files; `dove install/sync --host claude` renders that user command set from the same manifest while normal project installs keep Dove state in `.dove/` without creating duplicate Claude command entries.
 
 Regenerate and check adapter drift with:
 

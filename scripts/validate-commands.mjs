@@ -11,13 +11,13 @@ import {
 } from "../src/core/schema.mjs";
 import {
   COMMAND_SURFACES,
-  HOST_IDS,
+  PROJECT_HOST_IDS,
   OPENCODE_ROLE_SKILL_PATHS,
   TOOL_CONTEXT_PATHS,
   adapterPathForCommand,
   commandContextPaths
 } from "../src/core/command-manifest.mjs";
-import { checkGeneratedAdapters, generatedAdapterEntries } from "./generate-command-adapters.mjs";
+import { checkGeneratedAdapters, generatedAdapterEntries, generatedClaudeUserCommandEntries } from "./generate-command-adapters.mjs";
 
 const ROOT = process.cwd();
 
@@ -154,14 +154,18 @@ for (const removedCommandId of removedCommandIds) {
 const generatedCommandIds = new Set(generatedAdapterEntries().map(({ command }) => command.id));
 for (const removedCommandId of removedCommandIds) {
   assert.equal(generatedCommandIds.has(removedCommandId), false, `${removedCommandId} must not generate adapter surfaces`);
-  for (const hostId of HOST_IDS) {
+  for (const hostId of PROJECT_HOST_IDS) {
     const adapterPath = adapterPathForCommand(hostId, removedCommandId);
     assert.equal(fs.existsSync(path.join(ROOT, adapterPath)), false, `${adapterPath} must be deleted instead of kept as a compatibility surface`);
   }
 }
 
-for (const { command, relativePath } of generatedAdapterEntries()) {
-  const commandText = readRelative(relativePath);
+const adapterEntriesForValidation = [
+  ...generatedAdapterEntries().map((entry) => ({ ...entry, commandText: readRelative(entry.relativePath) })),
+  ...generatedClaudeUserCommandEntries().map((entry) => ({ ...entry, relativePath: `claude-user:${entry.relativePath}`, commandText: entry.content }))
+];
+
+for (const { command, relativePath, commandText } of adapterEntriesForValidation) {
   const frontmatterEnd = commandText.indexOf("\n---\n\n");
   assert.equal(commandText.startsWith("---\n"), true, `${relativePath} must expose frontmatter for host slash command lists`);
   assert.ok(frontmatterEnd > 0, `${relativePath} must close frontmatter before the command body`);
@@ -289,6 +293,12 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("request `detail: \"full\"`"), true, `${relativePath} must reserve full status details for explicit expansion`);
     assert.equal(commandText.includes("saved full status result file"), true, `${relativePath} must forbid reading full saved status files by default`);
     assert.equal(commandText.includes("Do not make mission lists the default body"), true, `${relativePath} must not make status a mission board`);
+    assert.equal(commandText.includes("dailyHome.missionList"), false, `${relativePath} must not keep stale mission-board-first dailyHome wording`);
+    assert.equal(commandText.includes("Mission 主页"), false, `${relativePath} must not keep stale Chinese mission-board wording`);
+    assert.equal(commandText.includes("default status must not render a `Missions` section"), true, `${relativePath} must forbid default Missions sections`);
+    assert.equal(commandText.includes("mission item groups omitted"), true, `${relativePath} must omit mission item groups by default`);
+    assert.equal(commandText.includes("showMissions"), true, `${relativePath} must expose explicit mission expansion args`);
+    assert.equal(commandText.includes("includeMissionDetails"), true, `${relativePath} must expose explicit mission detail args`);
     assert.equal(commandText.includes("collapsed by default"), true, `${relativePath} must collapse optional mission details by default`);
     assert.equal(commandText.includes("show current missions"), true, `${relativePath} must allow ordinary prompt mission expansion`);
     assert.equal(commandText.includes("/dove:missions"), true, `${relativePath} must explicitly forbid a dedicated missions slash command`);
@@ -307,6 +317,9 @@ for (const { command, relativePath } of generatedAdapterEntries()) {
     assert.equal(commandText.includes("现在是什么情况"), false, `${relativePath} command prompt should keep canonical instructions in English`);
     assert.equal(commandText.includes("[\"pending\", \"ready\", \"in-progress\", \"blocked\", \"completed\", \"killed\"]"), true, `${relativePath} must expose exact status choices`);
     assert.equal(commandText.includes("excluding `completed` and `killed`"), true, `${relativePath} must exclude completed and killed tasks from displayed adjustment targets`);
+    assert.equal(commandText.includes("do not ask whether to modify mission statuses during default `/dove:status`"), true, `${relativePath} must not ask for status changes by default`);
+    assert.equal(commandText.includes("requestStatusAdjustment"), true, `${relativePath} must expose explicit status adjustment preview args`);
+    assert.equal(commandText.includes("includeStatusAdjustmentPreview"), true, `${relativePath} must expose explicit status adjustment preview args`);
     assert.equal(commandText.includes("single confirmation dialog"), true, `${relativePath} must use one status confirmation dialog`);
     assert.equal(commandText.includes("do not paginate by mission count"), true, `${relativePath} must forbid paginated status confirmation by mission count`);
     assert.equal(commandText.includes("parseable `packetId -> status`"), true, `${relativePath} must require clear packet-to-status adjustments before mutation`);

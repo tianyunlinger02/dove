@@ -96,6 +96,9 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   assert.equal(parsed.detail, "compact");
   assert.equal(parsed.proposalOnly, true);
   assert.ok(parsed.statusAdjustmentContract);
+  assert.equal(parsed.statusAdjustmentContract.statusAdjustmentItemsIncluded, false);
+  assert.deepEqual(parsed.statusAdjustmentContract.items, []);
+  assert.deepEqual(parsed.statusAdjustmentContract.adjustmentCards, []);
   assert.equal(parsed.dashboard, undefined);
   assert.equal(parsed.dailyHome, undefined);
   assert.equal(parsed.statusHome.presentation, "dove-project-situation-home");
@@ -755,6 +758,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   const before = snapshotArtifacts(root, statusWatchedArtifacts);
 
   const result = queryDoveStatus(root, { domain: "engineering" });
+  const expandedResult = queryDoveStatus(root, { domain: "engineering", showMissions: true, requestStatusAdjustment: true });
   const fullResult = queryDoveStatus(root, { domain: "engineering", detail: "full" });
   const after = snapshotArtifacts(root, statusWatchedArtifacts);
 
@@ -806,14 +810,26 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.ok(result.statusHome.blockersAndReconciliation.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true));
   const optionalMissionDetails = result.statusHome.optionalMissionDetails;
   assert.equal(optionalMissionDetails.presentation, "dove-mission-list");
+  assert.equal(optionalMissionDetails.detail, "summary");
+  assert.equal(optionalMissionDetails.missionItemsIncluded, false);
+  assert.equal(optionalMissionDetails.groupsOmitted, true);
+  assert.equal("groups" in optionalMissionDetails, false);
   assert.deepEqual(optionalMissionDetails.statusModel.userGroups, ["todo", "doing", "blocked", "done"]);
   assert.deepEqual(optionalMissionDetails.statusModel.machineStatuses, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
-  assert.deepEqual(optionalMissionDetails.groups.todo.items.map((item) => item.packetId), ["plain-pending", "status-packet"]);
-  assert.deepEqual(optionalMissionDetails.groups.doing.items.map((item) => item.packetId), ["runtime-progress"]);
-  assert.deepEqual(optionalMissionDetails.groups.blocked.items.map((item) => item.packetId), ["blocked-dependency"]);
-  assert.deepEqual(optionalMissionDetails.groups.done.items.map((item) => item.packetId), []);
-  assert.equal(optionalMissionDetails.groups.done.itemCount, 3);
-  assert.equal(optionalMissionDetails.groups.done.hiddenCount, 3);
+  assert.equal(optionalMissionDetails.groupCounts.todo.itemCount, 2);
+  assert.equal(optionalMissionDetails.groupCounts.doing.itemCount, 1);
+  assert.equal(optionalMissionDetails.groupCounts.blocked.itemCount, 1);
+  assert.equal(optionalMissionDetails.groupCounts.done.itemCount, 3);
+  assert.equal(optionalMissionDetails.requestArgs.showMissions, true);
+  const expandedMissionDetails = expandedResult.statusHome.optionalMissionDetails;
+  assert.equal(expandedMissionDetails.detail, "compact");
+  assert.equal(expandedMissionDetails.missionItemsIncluded, true);
+  assert.deepEqual(expandedMissionDetails.groups.todo.items.map((item) => item.packetId), ["plain-pending", "status-packet"]);
+  assert.deepEqual(expandedMissionDetails.groups.doing.items.map((item) => item.packetId), ["runtime-progress"]);
+  assert.deepEqual(expandedMissionDetails.groups.blocked.items.map((item) => item.packetId), ["blocked-dependency"]);
+  assert.deepEqual(expandedMissionDetails.groups.done.items.map((item) => item.packetId), []);
+  assert.equal(expandedMissionDetails.groups.done.itemCount, 3);
+  assert.equal(expandedMissionDetails.groups.done.hiddenCount, 3);
   assert.deepEqual(fullResult.dailyHome.missionList.groups.done.items.map((item) => item.packetId), ["runtime-completed", "zz-status-completed", "zz-status-killed"]);
   assert.equal(optionalMissionDetails.summary.openCount, 4);
   assert.equal(optionalMissionDetails.summary.todoCount, 2);
@@ -969,8 +985,13 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
 
   const statusAdjustmentItems = Object.fromEntries(fullResult.statusAdjustmentContract.items.map((item) => [item.packetId, item]));
   assert.deepEqual(result.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
-  assert.equal(result.statusAdjustmentContract.adjustmentCards.length, result.statusAdjustmentContract.items.length);
-  assert.ok(result.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
+  assert.equal(result.statusAdjustmentContract.statusAdjustmentItemsIncluded, false);
+  assert.deepEqual(result.statusAdjustmentContract.items, []);
+  assert.deepEqual(result.statusAdjustmentContract.adjustmentCards, []);
+  assert.equal(result.statusHome.statusAdjustmentPreview.requestArgs.requestStatusAdjustment, true);
+  assert.equal(expandedResult.statusAdjustmentContract.statusAdjustmentItemsIncluded, true);
+  assert.equal(expandedResult.statusAdjustmentContract.adjustmentCards.length, expandedResult.statusAdjustmentContract.items.length);
+  assert.ok(expandedResult.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
   assert.equal(Boolean(statusAdjustmentItems["status-packet"]), true);
   assert.equal(Boolean(statusAdjustmentItems["plain-pending"]), true);
   assert.equal(Boolean(statusAdjustmentItems["blocked-dependency"]), true);

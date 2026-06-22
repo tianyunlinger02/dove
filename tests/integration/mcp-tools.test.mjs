@@ -368,6 +368,11 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.ok(status.statusHome.blockersAndReconciliation && typeof status.statusHome.blockersAndReconciliation === "object");
     assert.ok(status.statusHome.nextSteps && typeof status.statusHome.nextSteps === "object");
     assert.equal(status.statusHome.optionalMissionDetails.defaultCollapsed, true);
+    assert.equal(status.statusHome.optionalMissionDetails.missionItemsIncluded, false);
+    assert.equal("groups" in status.statusHome.optionalMissionDetails, false);
+    assert.equal(status.statusAdjustmentContract.statusAdjustmentItemsIncluded, false);
+    assert.deepEqual(status.statusAdjustmentContract.items, []);
+    assert.deepEqual(status.statusAdjustmentContract.adjustmentCards, []);
     assert.equal(status.dashboard, undefined);
     assert.equal(status.dailyHome, undefined);
     assert.equal(fullStatus.detail, "full");
@@ -1030,6 +1035,7 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     }
 
     const status = extractToolJson(dispatchTool(root, "query_dove_status", {}));
+    const adjustmentStatus = extractToolJson(dispatchTool(root, "query_dove_status", { requestStatusAdjustment: true }));
     const fullStatus = extractToolJson(dispatchTool(root, "query_dove_status", { detail: "full" }));
     assert.ok(status.projectSummary);
     assert.equal(status.detail, "compact");
@@ -1044,17 +1050,22 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.equal(fullStatus.dashboard.nextAction, fullStatus.dailyHome.nextActions[0].command);
     assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
     assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
-    assert.equal(status.statusAdjustmentContract.adjustmentCards.length, status.statusAdjustmentContract.items.length);
-    assert.ok(status.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
-    const itemIds = status.statusAdjustmentContract.items.map((candidate) => candidate.packetId);
+    assert.equal(status.statusAdjustmentContract.statusAdjustmentItemsIncluded, false);
+    assert.deepEqual(status.statusAdjustmentContract.items, []);
+    assert.deepEqual(status.statusAdjustmentContract.adjustmentCards, []);
+    assert.equal(status.statusHome.statusAdjustmentPreview.requestArgs.requestStatusAdjustment, true);
+    assert.equal(adjustmentStatus.statusAdjustmentContract.statusAdjustmentItemsIncluded, true);
+    assert.equal(adjustmentStatus.statusAdjustmentContract.adjustmentCards.length, adjustmentStatus.statusAdjustmentContract.items.length);
+    assert.ok(adjustmentStatus.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
+    const itemIds = adjustmentStatus.statusAdjustmentContract.items.map((candidate) => candidate.packetId);
     assert.equal(itemIds.includes(init.init.id), false);
     assert.equal(itemIds.includes("status-ready-task"), true);
     assert.equal(itemIds.includes("status-progress-task"), true);
     assert.equal(itemIds.includes("status-blocked-task"), true);
     assert.equal(itemIds.includes("status-completed-task"), false);
     assert.equal(itemIds.includes("status-killed-task"), false);
-    assert.equal(status.statusAdjustmentContract.items.some((candidate) => ["completed", "killed"].includes(candidate.currentStatus)), false);
-    const item = status.statusAdjustmentContract.items.find((candidate) => candidate.packetId === "status-ready-task");
+    assert.equal(adjustmentStatus.statusAdjustmentContract.items.some((candidate) => ["completed", "killed"].includes(candidate.currentStatus)), false);
+    const item = adjustmentStatus.statusAdjustmentContract.items.find((candidate) => candidate.packetId === "status-ready-task");
     assert.ok(item);
     assert.deepEqual(item.choices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
 
@@ -1080,7 +1091,7 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.equal(applied.resultCard.presentation, "compact-result-summary-card");
     assert.equal(applied.resultCard.surface, "dove.status");
     assert.equal(applied.resultCard.proposalOnly, false);
-    const postApplyStatus = extractToolJson(dispatchTool(root, "query_dove_status", {}));
+    const postApplyStatus = extractToolJson(dispatchTool(root, "query_dove_status", { requestStatusAdjustment: true }));
     const blockedAdjustedItem = postApplyStatus.statusAdjustmentContract.items.find((candidate) => candidate.packetId === "status-ready-task");
     assert.ok(blockedAdjustedItem);
     assert.equal(blockedAdjustedItem.currentStatus, "blocked");
@@ -2063,6 +2074,10 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(doveStatusQueryTool.inputSchema.properties.detail, "query_dove_status should expose detail");
   assert.ok(doveStatusQueryTool.inputSchema.properties.full, "query_dove_status should expose full");
   assert.ok(doveStatusQueryTool.inputSchema.properties.includeDetails, "query_dove_status should expose includeDetails");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.showMissions, "query_dove_status should expose showMissions");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.includeMissionDetails, "query_dove_status should expose includeMissionDetails");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.requestStatusAdjustment, "query_dove_status should expose requestStatusAdjustment");
+  assert.ok(doveStatusQueryTool.inputSchema.properties.includeStatusAdjustmentPreview, "query_dove_status should expose includeStatusAdjustmentPreview");
   assert.ok(doveAuditQueryTool.inputSchema.properties.scope, "query_dove_audit should expose scope");
   assert.ok(doveAuditQueryTool.inputSchema.properties.changedFilePaths, "query_dove_audit should expose changedFilePaths");
   assert.ok(doveAuditQueryTool.inputSchema.properties.validationOutputPaths, "query_dove_audit should expose validationOutputPaths");

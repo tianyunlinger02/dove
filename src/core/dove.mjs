@@ -1460,6 +1460,16 @@ function wantsFullDoveStatus(args = {}) {
   return detail === "full" || detail === "details" || detail === "debug" || booleanArg(args.full) || booleanArg(args.includeDetails);
 }
 
+function wantsMissionDetails(args = {}) {
+  const detail = String(args.detail ?? args.view ?? args.resultMode ?? "").trim().toLowerCase();
+  return booleanArg(args.showMissions) || booleanArg(args.includeMissionDetails) || booleanArg(args.missions) || ["missions", "mission-details", "mission-list"].includes(detail);
+}
+
+function wantsStatusAdjustmentPreview(args = {}) {
+  const detail = String(args.detail ?? args.view ?? args.resultMode ?? "").trim().toLowerCase();
+  return booleanArg(args.requestStatusAdjustment) || booleanArg(args.includeStatusAdjustmentPreview) || booleanArg(args.showStatusAdjustments) || ["status-adjustments", "adjustments", "status-preview"].includes(detail);
+}
+
 function compactStatusGroup(group = {}, limit = 0) {
   const items = Array.isArray(group.items) ? group.items : [];
   const shownItems = items.slice(0, limit);
@@ -1473,8 +1483,39 @@ function compactStatusGroup(group = {}, limit = 0) {
   };
 }
 
-function compactStatusMissionList(missionList = {}) {
+function compactStatusGroupCounts(groups = {}) {
+  return Object.fromEntries(Object.keys(STATUS_COMPACT_GROUP_LIMITS).map((name) => {
+    const group = groups[name] ?? {};
+    const items = Array.isArray(group.items) ? group.items : [];
+    return [name, {
+      label: group.label ?? name,
+      description: group.description ?? null,
+      itemCount: group.itemCount ?? items.length,
+      defaultCollapsed: true
+    }];
+  }));
+}
+
+function compactStatusMissionList(missionList = {}, options = {}) {
   const groups = missionList.groups ?? {};
+  if (options.includeItems !== true) {
+    const groupCounts = compactStatusGroupCounts(groups);
+    const hiddenCount = Object.values(groupCounts).reduce((total, group) => total + (group.itemCount ?? 0), 0);
+    return {
+      presentation: missionList.presentation ?? "dove-mission-list",
+      detail: "summary",
+      summary: missionList.summary ?? {},
+      statusModel: missionList.statusModel ?? {},
+      defaultCollapsed: true,
+      expandWhenAsked: true,
+      expanded: false,
+      missionItemsIncluded: false,
+      groupsOmitted: true,
+      groupCounts,
+      hiddenItemCount: hiddenCount,
+      detailsAvailable: hiddenCount > 0
+    };
+  }
   const compactGroups = Object.fromEntries(Object.entries(STATUS_COMPACT_GROUP_LIMITS).map(([name, limit]) => [name, compactStatusGroup(groups[name], limit)]));
   const hiddenCount = Object.values(compactGroups).reduce((total, group) => total + (group.hiddenCount ?? 0), 0);
   return {
@@ -1483,7 +1524,9 @@ function compactStatusMissionList(missionList = {}) {
     groups: compactGroups,
     previewLimits: STATUS_COMPACT_GROUP_LIMITS,
     hiddenItemCount: hiddenCount,
-    detailsAvailable: hiddenCount > 0
+    detailsAvailable: hiddenCount > 0,
+    expanded: true,
+    missionItemsIncluded: true
   };
 }
 
@@ -1549,8 +1592,27 @@ function compactStatusAdjustmentItem(item) {
   };
 }
 
-function compactStatusAdjustmentContract(contract = {}) {
+function compactStatusAdjustmentContract(contract = {}, options = {}) {
   const items = Array.isArray(contract.items) ? contract.items : [];
+  if (options.includeItems !== true) {
+    return {
+      proposalOnly: contract.proposalOnly,
+      noAutoApply: contract.noAutoApply,
+      writes: Array.isArray(contract.writes) ? contract.writes : [],
+      mutationTool: contract.mutationTool,
+      statusChoices: contract.statusChoices,
+      itemCount: contract.itemCount ?? items.length,
+      previewItemCount: 0,
+      hiddenItemCount: items.length,
+      adjustmentCards: [],
+      items: [],
+      defaultCollapsed: true,
+      expandWhenAsked: true,
+      confirmationRequiresExplicitRequest: true,
+      statusAdjustmentItemsIncluded: false,
+      detailsAvailable: items.length > 0
+    };
+  }
   const shownItems = items.slice(0, STATUS_ADJUSTMENT_PREVIEW_LIMIT).map(compactStatusAdjustmentItem);
   const adjustmentCards = Array.isArray(contract.adjustmentCards) ? contract.adjustmentCards.slice(0, STATUS_ADJUSTMENT_PREVIEW_LIMIT).map(compactStatusActionCard) : [];
   return {
@@ -1564,6 +1626,10 @@ function compactStatusAdjustmentContract(contract = {}) {
     hiddenItemCount: Math.max(0, items.length - shownItems.length),
     adjustmentCards,
     items: shownItems,
+    defaultCollapsed: true,
+    expandWhenAsked: true,
+    confirmationRequiresExplicitRequest: true,
+    statusAdjustmentItemsIncluded: true,
     detailsAvailable: items.length > shownItems.length
   };
 }
@@ -1661,9 +1727,16 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
       ...missionList,
       defaultCollapsed: true,
       expandWhenAsked: true,
-      promptExamples: ["有哪些 mission", "show current missions"]
+      promptExamples: ["有哪些 mission", "show current missions"],
+      requestArgs: compactStatusMissionDetailArgs(args)
     },
-    statusAdjustmentPreview: statusAdjustmentContract,
+    statusAdjustmentPreview: {
+      ...statusAdjustmentContract,
+      defaultCollapsed: true,
+      expandWhenAsked: true,
+      promptExamples: ["修改 mission 状态", "change mission status"],
+      requestArgs: compactStatusAdjustmentPreviewArgs(args)
+    },
     detailsAvailable: true,
     fullDetails: {
       tool: "query_dove_status",
@@ -1673,10 +1746,12 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
 }
 
 function compactDoveStatusResult(result, args = {}) {
-  const missionList = compactStatusMissionList(result.dailyHome?.missionList);
+  const includeMissionDetails = wantsMissionDetails(args);
+  const includeStatusAdjustmentPreview = wantsStatusAdjustmentPreview(args);
+  const missionList = compactStatusMissionList(result.dailyHome?.missionList, { includeItems: includeMissionDetails });
   const nextActions = (Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : []).slice(0, 3).map(compactStatusActionCard);
   const boundaryActionCards = (Array.isArray(result.dailyHome?.boundaryActionCards) ? result.dailyHome.boundaryActionCards : []).slice(0, 5).map(compactStatusActionCard);
-  const statusAdjustmentContract = compactStatusAdjustmentContract(result.statusAdjustmentContract);
+  const statusAdjustmentContract = compactStatusAdjustmentContract(result.statusAdjustmentContract, { includeItems: includeStatusAdjustmentPreview });
   const statusHome = buildCompactStatusHome({
     result,
     missionList,
@@ -1716,6 +1791,25 @@ function compactStatusDetailArgs(args = {}) {
     includeArchived: booleanArg(args.includeArchived),
     detail: "full"
   };
+}
+
+function compactStatusExpansionArgs(args = {}, expansion = {}) {
+  return {
+    domain: args.domain ?? args.doveDomain ?? args.missionDomain,
+    stage: args.stage ?? args.missionStage,
+    packetIds: normalizeStringArray(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds),
+    statuses: normalizeStringArray(args.status ?? args.statuses),
+    includeArchived: booleanArg(args.includeArchived),
+    ...expansion
+  };
+}
+
+function compactStatusMissionDetailArgs(args = {}) {
+  return compactStatusExpansionArgs(args, { showMissions: true });
+}
+
+function compactStatusAdjustmentPreviewArgs(args = {}) {
+  return compactStatusExpansionArgs(args, { requestStatusAdjustment: true });
 }
 
 function missionUserGroupForStatus(status) {

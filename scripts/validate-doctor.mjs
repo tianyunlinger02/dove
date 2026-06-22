@@ -10,10 +10,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
 
-function run(command, args) {
+function run(command, args, env = process.env) {
   const result = spawnSync(command, args, {
     cwd: PACKAGE_ROOT,
-    stdio: "inherit"
+    stdio: "inherit",
+    env
   });
   if (result.error) {
     throw result.error;
@@ -22,15 +23,18 @@ function run(command, args) {
 }
 
 const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-"));
+const claudeConfigRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dove-claude-config-"));
 let exitCode = 0;
 
 try {
-  exitCode = run("node", ["./bin/dove.mjs", "install", target, "--force", "--host", "all"]);
+  const env = { ...process.env, DOVE_CLAUDE_CONFIG_DIR: claudeConfigRoot };
+  exitCode = run("node", ["./bin/dove.mjs", "install", target, "--force", "--host", "all"], env);
   if (exitCode === 0) {
-    exitCode = run("node", ["./bin/dove.mjs", "doctor", target]);
+    exitCode = run("node", ["./bin/dove.mjs", "doctor", target], env);
   }
 } finally {
   fs.rmSync(target, { recursive: true, force: true });
+  fs.rmSync(claudeConfigRoot, { recursive: true, force: true });
 }
 
 process.exitCode = exitCode;

@@ -8,7 +8,7 @@
 
 There are no React components in this repository. Treat each public surface as a component with a small, explicit contract:
 
-- Generated project command adapters in `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/`, and `.agents/skills/` are host-specific prompt or skill adapter components; Claude Code uses user-level `/dove:*` entries instead of project-local `.claude/commands/dove/`.
+- Generated project command adapters in `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/`, and `.agents/skills/` are host-specific prompt or skill adapter components; Claude Code uses manifest-rendered user-level `/dove:*` entries via `dove install/sync --host claude` instead of project-local `.claude/commands/dove/`.
 - OpenCode role skills in `.opencode/skills/dove-*/` are reusable role/discipline components.
 - CLI subcommands in `bin/dove.mjs` are terminal components.
 - MCP tools in `src/mcp/tool-definitions.mjs` and `src/mcp/handlers.mjs` are API components.
