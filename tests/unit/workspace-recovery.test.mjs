@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 import { readJson } from "../../src/core/index.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 
 test("readJson repairs malformed JSON using the fallback and preserves a backup", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-json-"));
+  const root = createTempRoot("dove-json-");
   const relative = ".dove/state.json";
   fs.mkdirSync(path.join(root, ".dove"), { recursive: true });
   fs.writeFileSync(path.join(root, relative), "{broken json", "utf8");

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+
+import { cleanupTempWorkspace, createTempWorkspace } from "./temp-workspace.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,8 +22,8 @@ function run(command, args, env = process.env) {
   return result.status ?? 1;
 }
 
-const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-"));
-const claudeConfigRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dove-claude-config-"));
+const target = createTempWorkspace("dove-doctor-");
+const claudeConfigRoot = createTempWorkspace("dove-claude-config-");
 let exitCode = 0;
 
 try {
@@ -33,8 +33,8 @@ try {
     exitCode = run("node", ["./bin/dove.mjs", "doctor", target], env);
   }
 } finally {
-  fs.rmSync(target, { recursive: true, force: true });
-  fs.rmSync(claudeConfigRoot, { recursive: true, force: true });
+  cleanupTempWorkspace(target);
+  cleanupTempWorkspace(claudeConfigRoot);
 }
 
 process.exitCode = exitCode;

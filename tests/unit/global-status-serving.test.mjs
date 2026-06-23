@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 
 import { buildGlobalStatusServingPlan, createStaticGlobalStatusServer, runGlobalStatusServingForeground, validateGlobalPublicServeRoot } from "../../src/core/index.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-global-serving-"));
+  return createTempRoot("dove-global-serving-");
 }
 
 function writeGlobalPublicStatus(outputDir) {

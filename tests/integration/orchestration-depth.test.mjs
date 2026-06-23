@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 import {
@@ -23,9 +22,10 @@ import {
   upsertNote,
   upsertOrchestrationBoard
 } from "../../src/core/index.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-depth-"));
+  return createTempRoot("dove-depth-");
 }
 
 function seedTaskPacket(root, packetId = "depth-main-packet") {

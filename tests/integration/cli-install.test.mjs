@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { checkGeneratedAdapters, writeGeneratedAdapters } from "../../scripts/generate-command-adapters.mjs";
 import { PROJECT_HOST_IDS, commandAdapterPathsForHost } from "../../src/core/command-manifest.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
 const CLI = path.join(ROOT, "bin", "dove.mjs");
@@ -87,7 +87,7 @@ test("npm package dry-run includes Dove-only adapters and current public docs", 
 });
 
 test("generated adapter check reports stale managed adapter files", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-generated-adapters-"));
+  const target = createTempRoot("dove-generated-adapters-");
 
   try {
     writeGeneratedAdapters(target);
@@ -118,13 +118,13 @@ test("release and maturity checks validate doctor through a clean install", () =
   assert.doesNotMatch(packageJson.scripts["release:check"], /npm run doctor(?!:validate)/);
   assert.match(maturityText, /\["npm", \["run", "doctor:validate"\]\]/);
   assert.doesNotMatch(maturityText, /\["node", \["\.\/bin\/dove\.mjs", "doctor", "\."\]\]/);
-  assert.match(doctorValidationText, /mkdtempSync\(path\.join\(os\.tmpdir\(\), "dove-doctor-"\)\)/);
+  assert.match(doctorValidationText, /createTempWorkspace\("dove-doctor-"\)/);
   assert.match(doctorValidationText, /"install", target, "--force", "--host", "all"/);
   assert.match(doctorValidationText, /"doctor", target/);
 });
 
 test("CLI install copies the workflow pack into a target workspace", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-install-"));
+  const target = createTempRoot("dove-install-");
   const result = spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -164,7 +164,7 @@ test("CLI install copies the workflow pack into a target workspace", () => {
 });
 
 test("CLI install can install optional host adapters without local unsafe files", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-install-hosts-"));
+  const target = createTempRoot("dove-install-hosts-");
   const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "cursor", "--host", "agents"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -185,8 +185,8 @@ test("CLI install can install optional host adapters without local unsafe files"
 });
 
 test("CLI install writes Claude user-level command adapters without project-local .claude files", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-install-claude-user-"));
-  const claudeConfigRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dove-claude-config-"));
+  const target = createTempRoot("dove-install-claude-user-");
+  const claudeConfigRoot = createTempRoot("dove-claude-config-");
   const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude"], {
     cwd: ROOT,
     encoding: "utf8",
@@ -206,8 +206,8 @@ test("CLI install writes Claude user-level command adapters without project-loca
 });
 
 test("CLI install all host adapters skips unsafe local artifacts", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-install-all-hosts-"));
-  const claudeConfigRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dove-claude-config-"));
+  const target = createTempRoot("dove-install-all-hosts-");
+  const claudeConfigRoot = createTempRoot("dove-claude-config-");
   const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "all"], {
     cwd: ROOT,
     encoding: "utf8",
@@ -231,7 +231,7 @@ test("CLI install all host adapters skips unsafe local artifacts", () => {
 });
 
 test("CLI sync preserves user-owned .dove workspace state", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-sync-"));
+  const target = createTempRoot("dove-sync-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -251,7 +251,7 @@ test("CLI sync preserves user-owned .dove workspace state", () => {
 });
 
 test("CLI doctor returns non-zero for unhealthy workspaces", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-"));
+  const target = createTempRoot("dove-doctor-");
   const result = spawnSync("node", [CLI, "doctor", target], {
     cwd: ROOT,
     encoding: "utf8"
@@ -261,7 +261,7 @@ test("CLI doctor returns non-zero for unhealthy workspaces", () => {
 });
 
 test("CLI doctor reports installed host adapters for multi-host workspaces", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-hosts-"));
+  const target = createTempRoot("dove-doctor-hosts-");
   spawnSync("node", [CLI, "install", target, "--force", "--host", "cursor,codex"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -283,7 +283,7 @@ test("CLI doctor reports installed host adapters for multi-host workspaces", () 
 });
 
 test("CLI doctor fails when a required Dove adapter is missing", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-missing-host-"));
+  const target = createTempRoot("dove-doctor-missing-host-");
   spawnSync("node", [CLI, "install", target, "--force", "--host", "cursor"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -303,7 +303,7 @@ test("CLI doctor fails when a required Dove adapter is missing", () => {
 });
 
 test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy workspaces", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-meta-optimize-"));
+  const target = createTempRoot("dove-doctor-meta-optimize-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -328,7 +328,7 @@ test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy w
 });
 
 test("CLI autonomy-once and doctor expose runtime status visibility", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-autonomy-runtime-"));
+  const target = createTempRoot("dove-autonomy-runtime-");
   const install = spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -365,7 +365,7 @@ test("CLI autonomy-once and doctor expose runtime status visibility", () => {
 });
 
 test("CLI doctor fails when key JSON artifacts are malformed", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-bad-json-"));
+  const target = createTempRoot("dove-doctor-bad-json-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -382,7 +382,7 @@ test("CLI doctor fails when key JSON artifacts are malformed", () => {
 });
 
 test("CLI doctor reports ignored stale workspace artifacts as warnings", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-legacy-root-"));
+  const target = createTempRoot("dove-doctor-legacy-root-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -406,7 +406,7 @@ test("CLI doctor reports ignored stale workspace artifacts as warnings", () => {
 });
 
 test("CLI doctor reports degraded typed wiki relations explicitly", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-wiki-health-"));
+  const target = createTempRoot("dove-doctor-wiki-health-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -495,7 +495,7 @@ test("CLI doctor reports degraded typed wiki relations explicitly", () => {
 });
 
 test("CLI doctor reports explicit non-object managed artifact internals before normalization", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-bad-shape-"));
+  const target = createTempRoot("dove-doctor-bad-shape-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -534,7 +534,7 @@ test("CLI doctor reports explicit non-object managed artifact internals before n
 });
 
 test("CLI doctor reports workspace metaOptimize mirror drift explicitly", () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), "dove-doctor-meta-drift-"));
+  const target = createTempRoot("dove-doctor-meta-drift-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"

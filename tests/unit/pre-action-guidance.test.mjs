@@ -6,6 +6,7 @@ import {
   selectPreActionLessons,
   summarizePreActionGuidance
 } from "../../src/core/index.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 
 test("pre-action guidance ranks active packet lessons and keeps guardrails explicit", () => {
   const operatorLessons = {

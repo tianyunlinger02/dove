@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 import {
@@ -9,9 +8,10 @@ import {
   queryPaperAudit
 } from "../../src/core/index.mjs";
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-audit-"));
+  return createTempRoot("dove-audit-");
 }
 
 function snapshotArtifacts(root, relativePaths) {

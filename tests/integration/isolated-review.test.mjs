@@ -1,17 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { ensureWorkspace, initProject, upsertDraft, upsertOrchestrationBoard } from "../../src/core/index.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
 const CLI = path.join(ROOT, "bin", "dove.mjs");
 
 function tempRoot(prefix = "dove-isolated-review-") {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  return createTempRoot(prefix);
 }
 
 function seedTaskPacket(root, packetId = "isolated-review-packet") {

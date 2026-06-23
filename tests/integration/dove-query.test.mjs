@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -17,13 +16,14 @@ import {
   queryMetaOptimize
 } from "../../src/core/index.mjs";
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
 const CLI = path.join(ROOT, "bin", "dove.mjs");
 const DOVE_CLI = path.join(ROOT, "bin", "dove.mjs");
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-dove-query-"));
+  return createTempRoot("dove-dove-query-");
 }
 
 function writeJson(root, relativePath, value) {

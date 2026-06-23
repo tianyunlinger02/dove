@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 import { createMcpStdioClient } from "./mcp-stdio-client.mjs";
+import { cleanupTempWorkspace, createTempWorkspace } from "./temp-workspace.mjs";
 
 const ROOT = process.cwd();
 const serverScriptPath = path.join(ROOT, "mcp", "dove-state-server.mjs");
-const tempWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "dove-validate-"));
+const tempWorkspace = createTempWorkspace("dove-validate-");
 const { call, notify, kill } = createMcpStdioClient({ args: [serverScriptPath], cwd: tempWorkspace });
 
 function extractJson(result) {
@@ -759,5 +759,5 @@ try {
   console.error(error instanceof Error ? (error.stack ?? error.message) : error);
   process.exitCode = 1;
 } finally {
-  fs.rmSync(tempWorkspace, { recursive: true, force: true });
+  cleanupTempWorkspace(tempWorkspace);
 }

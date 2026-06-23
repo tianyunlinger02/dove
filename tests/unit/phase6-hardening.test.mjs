@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 import {
@@ -64,9 +63,10 @@ import {
 } from "../../src/core/index.mjs";
 import { toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
 import { createMetaExecutionBridgeCandidatesIndex, createMetaLongHorizonMemory, createMetaOperatorLessonsIndex, createMetaOperatorPlaybooksIndex, createMetaOptimizerState, createMetaRemediationPacksIndex } from "../../src/core/schema.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "dove-phase6-"));
+  return createTempRoot("dove-phase6-");
 }
 
 test("governance audit static detector covers async exports, const exports, and fs writes", () => {

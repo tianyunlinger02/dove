@@ -2,12 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS } from "../../src/core/index.mjs";
 import { dispatchTool } from "../../src/mcp/handlers.mjs";
 import { toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function extractToolJson(result) {
   assert.ok(result.content?.[0]?.text, "Expected text content in MCP tool result");
@@ -208,7 +208,7 @@ test("MCP validation scripts share bounded stdio client timeouts", () => {
 });
 
 test("Dove MCP server supports Claude Code JSONL stdio framing", async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-jsonl-"));
+  const root = createTempRoot("dove-mcp-jsonl-");
   const server = spawn(process.execPath, [path.join(process.cwd(), "mcp", "dove-state-server.mjs")], {
     cwd: root,
     stdio: ["pipe", "pipe", "pipe"]
@@ -275,7 +275,7 @@ test("every MCP tool surface is classified as guarded, exempt, or read-only", ()
 });
 
 test("operator lessons MCP tools query, record, and reject raw Trellis traces", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-lessons-"));
+  const root = createTempRoot("dove-mcp-lessons-");
   try {
     const packetId = seedTaskPacket(root, "lesson-target-packet");
     const empty = extractToolJson(dispatchTool(root, "query_operator_lessons", {}));
@@ -340,7 +340,7 @@ test("operator lessons MCP tools query, record, and reject raw Trellis traces", 
 });
 
 test("onboarding, status, and paper pipeline MCP queries stay proposal-only", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-query-surfaces-"));
+  const root = createTempRoot("dove-mcp-query-surfaces-");
   try {
     fs.writeFileSync(path.join(root, "main.tex"), "\\documentclass{article}\n\\begin{document}Hi\\end{document}\n", "utf8");
     const onboarding = extractToolJson(dispatchTool(root, "query_dove_onboarding", { writeMap: true }));
@@ -413,7 +413,7 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
 });
 
 test("publish_dove_status writes sanitized public artifacts", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-public-status-"));
+  const root = createTempRoot("dove-mcp-public-status-");
   try {
     extractToolJson(dispatchTool(root, "init_dove_goal", {
       id: "public-status-init",
@@ -457,7 +457,7 @@ test("publish_dove_status writes sanitized public artifacts", () => {
 });
 
 test("publish_dove_global_status aggregates explicit project public artifacts without leaking roots", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-global-public-status-"));
+  const root = createTempRoot("dove-mcp-global-public-status-");
   const projectA = path.join(root, "project-a");
   const projectB = path.join(root, "project-b");
   const missingProject = path.join(root, "missing-project");
@@ -518,7 +518,7 @@ test("publish_dove_global_status aggregates explicit project public artifacts wi
 });
 
 test("document evidence ledger stores internal and public-safe entries without publishing raw bodies", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-doc-ledger-"));
+  const root = createTempRoot("dove-mcp-doc-ledger-");
   try {
     extractToolJson(dispatchTool(root, "init_dove_goal", {
       id: "doc-ledger-init",
@@ -645,7 +645,7 @@ test("document evidence ledger stores internal and public-safe entries without p
 });
 
 test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-thin-guidance-"));
+  const root = createTempRoot("dove-mcp-thin-guidance-");
   try {
     extractToolJson(dispatchTool(root, "ensure_workspace", {}));
     const packetId = seedTaskPacket(root, "thin-summary-packet");
@@ -790,7 +790,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
 });
 
 test("create_dove_task converts demand before materializing a one-pass mission", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-mission-confirm-"));
+  const root = createTempRoot("dove-mcp-mission-confirm-");
   try {
     const init = extractToolJson(dispatchTool(root, "init_dove_goal", {
       id: "mission-confirm-init",
@@ -905,7 +905,7 @@ test("create_dove_task converts demand before materializing a one-pass mission",
 });
 
 test("create_dove_task can propose first-run init and mission together", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-first-run-mission-"));
+  const root = createTempRoot("dove-mcp-first-run-mission-");
   try {
     const proposal = extractToolJson(dispatchTool(root, "create_dove_task", {
       id: "first-run-mission-task",
@@ -944,7 +944,7 @@ test("create_dove_task can propose first-run init and mission together", () => {
 });
 
 test("completed plan mission pass materializes pending executable missions", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-plan-conversion-"));
+  const root = createTempRoot("dove-mcp-plan-conversion-");
   try {
     const init = extractToolJson(dispatchTool(root, "init_dove_goal", {
       id: "plan-conversion-init",
@@ -1013,7 +1013,7 @@ test("completed plan mission pass materializes pending executable missions", () 
 });
 
 test("status adjustment contract applies confirmed non-completed and non-killed mission status choices", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-status-adjust-"));
+  const root = createTempRoot("dove-mcp-status-adjust-");
   try {
     const init = extractToolJson(dispatchTool(root, "init_dove_goal", {
       id: "status-adjust-init",
@@ -1120,7 +1120,7 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
 });
 
 test("run_dove_operator previews queues and creates blocker investigation missions", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-operator-"));
+  const root = createTempRoot("dove-mcp-operator-");
   try {
     dispatchTool(root, "init_dove_goal", {
       id: "operator-init",
@@ -1210,7 +1210,7 @@ test("run_dove_operator previews queues and creates blocker investigation missio
 });
 
 test("create_dove_task materializes checklist children below explicit mission levels", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-mission-checklist-"));
+  const root = createTempRoot("dove-mcp-mission-checklist-");
   try {
     const init = extractToolJson(dispatchTool(root, "init_dove_goal", {
       id: "mission-checklist-init",
@@ -1276,7 +1276,7 @@ test("create_dove_task materializes checklist children below explicit mission le
 });
 
 test("record_dove_mission_pass accepts descendant evidence for explicit parent packet", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-parent-child-evidence-"));
+  const root = createTempRoot("dove-mcp-parent-child-evidence-");
   try {
     dispatchTool(root, "init_dove_goal", {
       id: "parent-child-evidence-init",
@@ -1377,7 +1377,7 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
 });
 
 test("record_dove_mission_pass requires checklist children to be done before parent mission", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-parent-child-completion-"));
+  const root = createTempRoot("dove-mcp-parent-child-completion-");
   try {
     dispatchTool(root, "init_dove_goal", {
       id: "parent-child-completion-init",
@@ -1434,7 +1434,7 @@ test("record_dove_mission_pass requires checklist children to be done before par
 });
 
 test("apply_dove_status_adjustments rejects completed parents with open checklist children", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-parent-child-repair-"));
+  const root = createTempRoot("dove-mcp-parent-child-repair-");
   try {
     dispatchTool(root, "init_dove_goal", {
       id: "parent-child-repair-init",
@@ -1503,7 +1503,7 @@ test("apply_dove_status_adjustments rejects completed parents with open checklis
 });
 
 test("apply_dove_status_adjustments accepts parent and checklist completion in one unordered batch", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-parent-child-batch-completion-"));
+  const root = createTempRoot("dove-mcp-parent-child-batch-completion-");
   try {
     dispatchTool(root, "init_dove_goal", {
       id: "parent-child-batch-completion-init",
@@ -1536,7 +1536,7 @@ test("apply_dove_status_adjustments accepts parent and checklist completion in o
 });
 
 test("create_dove_task rejects checklist children that are not deeper than the parent mission", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-mission-checklist-reject-"));
+  const root = createTempRoot("dove-mcp-mission-checklist-reject-");
   try {
     dispatchTool(root, "init_dove_goal", {
       id: "mission-checklist-reject-init",
@@ -1559,7 +1559,7 @@ test("create_dove_task rejects checklist children that are not deeper than the p
 });
 
 test("run_dove_auto records bounded foreground iterations", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-auto-foreground-"));
+  const root = createTempRoot("dove-mcp-auto-foreground-");
   try {
     dispatchTool(root, "init_dove_goal", {
       id: "auto-foreground-init",
@@ -1700,7 +1700,7 @@ test("run_dove_auto records bounded foreground iterations", () => {
 });
 
 test("run_dove_auto can propose first-run init and materialize after confirmation", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-first-run-auto-"));
+  const root = createTempRoot("dove-mcp-first-run-auto-");
   try {
     const proposal = extractToolJson(dispatchTool(root, "run_dove_auto", {
       id: "first-run-auto-task",
@@ -1739,7 +1739,7 @@ test("run_dove_auto can propose first-run init and materialize after confirmatio
 });
 
 test("isolated review MCP tools prepare and import explicit handoff artifacts", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-mcp-isolated-review-"));
+  const root = createTempRoot("dove-mcp-isolated-review-");
   try {
     seedTaskPacket(root);
     const prepared = extractToolJson(dispatchTool(root, "prepare_isolated_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-1", scope: "mcp validation" }));

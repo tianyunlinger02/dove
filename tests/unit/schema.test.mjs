@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 import { ensureWorkspace, readJson } from "../../src/core/workspace.mjs";
+import { createTempRoot } from "../helpers/temp-root.mjs";
 import {
   ARTIFACT_PATHS,
   DEFAULT_DOVE_RESPONSE_LANGUAGE,
@@ -429,7 +429,7 @@ test("campaign indexes and workspace mirrors are normalized", () => {
 });
 
 test("ensureWorkspace creates and repairs the campaigns artifact", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-schema-campaigns-"));
+  const root = createTempRoot("dove-schema-campaigns-");
   ensureWorkspace(root);
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), false);
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.doveRootManifest)), true);
@@ -462,7 +462,7 @@ test("ensureWorkspace creates and repairs the campaigns artifact", () => {
 });
 
 test("ensureWorkspace creates and repairs the operator lessons artifact", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-schema-lessons-"));
+  const root = createTempRoot("dove-schema-lessons-");
   try {
     ensureWorkspace(root);
     const lessons = readJson(root, ARTIFACT_PATHS.metaOperatorLessons, {});
@@ -487,7 +487,7 @@ test("ensureWorkspace creates and repairs the operator lessons artifact", () => 
 });
 
 test("ensureWorkspace creates and repairs the document ledger artifact", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dove-schema-documents-"));
+  const root = createTempRoot("dove-schema-documents-");
   try {
     ensureWorkspace(root);
     const ledger = readJson(root, ARTIFACT_PATHS.documentsLedger, {});
