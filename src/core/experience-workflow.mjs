@@ -21,6 +21,14 @@ function normalizeStringArray(value) {
   return Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean))) : [];
 }
 
+function hasNonEmptyString(value) {
+  return typeof value === "string" && value.trim();
+}
+
+function hasExperienceObjective(rawPlan = {}, args = {}) {
+  return [rawPlan.experimentId, rawPlan.id, rawPlan.goal, rawPlan.idea, args.idea, rawPlan.title].some(hasNonEmptyString);
+}
+
 function renderClaimsMarkdown(claims = []) {
   return [
     "# Claims From Results",
@@ -57,15 +65,19 @@ export function runExperienceWorkflow(root, args = {}) {
   ensureWorkspace(root);
   const timestamp = nowIso();
   const rawPlan = args.plan && typeof args.plan === "object" ? args.plan : args;
-  const experimentId = slugify(rawPlan.experimentId ?? rawPlan.id ?? rawPlan.goal ?? rawPlan.title ?? `experience-${timestamp}`);
+  const resultInput = args.result && typeof args.result === "object" ? args.result : (args.outcome || args.resultSummary || args.summary || normalizeStringArray(args.evidenceLinks ?? args.artifactPaths).length > 0 ? args : null);
+  if (!hasExperienceObjective(rawPlan, args)) {
+    throw new Error("run_experience_workflow requires an experiment goal, title, idea, or experimentId.");
+  }
+  const experimentId = slugify(rawPlan.experimentId ?? rawPlan.id ?? rawPlan.goal ?? rawPlan.title);
   const claimId = normalizeString(rawPlan.claimId ?? args.claimId, null);
   const plan = {
     id: experimentId,
     packetId: target.packetId,
-    title: normalizeString(rawPlan.title ?? rawPlan.goal, "Experience plan"),
-    goal: normalizeString(rawPlan.goal ?? rawPlan.idea ?? args.idea, "Define the experiment goal."),
-    methodology: normalizeString(rawPlan.methodology ?? rawPlan.method, "TODO[method]: define methodology before execution."),
-    successMetric: normalizeString(rawPlan.successMetric ?? rawPlan.metric, "TODO[metric]: define success metric before execution."),
+    title: normalizeString(rawPlan.title ?? rawPlan.goal, experimentId.replace(/-/g, " ")),
+    goal: normalizeString(rawPlan.goal ?? rawPlan.idea ?? args.idea ?? rawPlan.title, ""),
+    methodology: normalizeString(rawPlan.methodology ?? rawPlan.method, ""),
+    successMetric: normalizeString(rawPlan.successMetric ?? rawPlan.metric, ""),
     comparisonTargets: normalizeStringArray(rawPlan.comparisonTargets ?? rawPlan.baselines),
     claimId,
     status: normalizeString(rawPlan.status, "planned"),
@@ -77,7 +89,6 @@ export function runExperienceWorkflow(root, args = {}) {
   plansIndex.updatedAt = timestamp;
   writeJson(root, ARTIFACT_PATHS.experimentPlans, plansIndex);
 
-  const resultInput = args.result && typeof args.result === "object" ? args.result : (args.outcome || args.resultSummary ? args : null);
   let result = null;
   let audit = null;
   let bridge = null;
@@ -89,7 +100,7 @@ export function runExperienceWorkflow(root, args = {}) {
       experimentId,
       claimId: normalizeString(resultInput.claimId ?? claimId, null),
       outcome: normalizeOutcome(resultInput.outcome),
-      summary: normalizeString(resultInput.summary ?? resultInput.resultSummary, "TODO[result]: record the observed result."),
+      summary: normalizeString(resultInput.summary ?? resultInput.resultSummary, ""),
       evidenceLinks: normalizeStringArray(resultInput.evidenceLinks ?? resultInput.artifactPaths),
       comparisonTargets: normalizeStringArray(resultInput.comparisonTargets),
       createdAt: resultInput.createdAt ?? timestamp,
@@ -102,8 +113,9 @@ export function runExperienceWorkflow(root, args = {}) {
     const integrityFlags = [];
     if (!result.claimId) integrityFlags.push("missing-claim-link");
     if (result.evidenceLinks.length === 0) integrityFlags.push("missing-evidence-links");
-    if (plan.methodology.startsWith("TODO[")) integrityFlags.push("missing-methodology");
-    if (plan.successMetric.startsWith("TODO[")) integrityFlags.push("missing-success-metric");
+    if (!plan.methodology) integrityFlags.push("missing-methodology");
+    if (!plan.successMetric) integrityFlags.push("missing-success-metric");
+    if (!result.summary) integrityFlags.push("missing-result-summary");
     if (result.outcome === "pending") integrityFlags.push("pending-outcome");
     audit = {
       id: slugify(`${result.id}-audit`),

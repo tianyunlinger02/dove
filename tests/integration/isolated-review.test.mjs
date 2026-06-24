@@ -65,7 +65,7 @@ test("isolated-review CLI imports only handoff and report from external reviewer
   });
   upsertDraft(root, {
     sectionId: "method",
-    content: "# Method\n\nWe claim the isolated reviewer improves rigor. TODO[citation]\n",
+    body: "# Method\n\nWe claim the isolated reviewer improves rigor. TODO[citation]\n",
     actorRole: "planner",
     policyOverrideReason: "Seed draft fixture for isolated review test."
   });

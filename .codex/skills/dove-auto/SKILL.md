@@ -50,9 +50,11 @@ Convert demand like mission intake, then after confirmation run multi-round fore
 19. Use `.dove/state.json.settings.auto.maxIterations` as the default foreground iteration limit; the default is 3.
 20. Record each foreground iteration and stop reason in `.dove/runtime/results.json`, and return a localized `resultCard` summary without persisting the UX-only card in runtime results.
 21. May internally call public Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status as needed.
-22. Stop at completed, blocked, killed, authority/review boundary, missing provider credentials, conflicting packet target, or step-budget exhaustion.
-23. When a boundary is reached, persist the first-class boundary with required inputs/actions, role handoff, and next command; do not continue through hidden background work.
-24. Do not claim host/code/provider/experiment work was completed without real evidence; stop at an awaiting-host/provider boundary instead.
-25. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-26. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-27. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+22. For source-research tasks, do not call confirmed `run_dove_auto` with only a packet id; first collect real URLs/templates/guidelines in the current foreground host pass, then provide them as explicit `steps: [{ command: "dove.source", args: { sources: [...] } }]` or let Dove persist a `source-requires-host-provenance` boundary.
+23. Do not auto-run source, note, draft, experience, or review-loop steps without the material they need: source needs title/locator provenance, note needs synthesis content, draft needs body content, experience needs a goal/title/idea/experimentId, and review-loop draft/experience substeps need explicit material.
+24. Stop at completed, blocked, killed, authority/review boundary, missing provider credentials, conflicting packet target, or step-budget exhaustion.
+25. When a boundary is reached, persist the first-class boundary with required inputs/actions, role handoff, and next command; do not continue through hidden background work.
+26. Do not claim host/code/provider/experiment work was completed without real evidence; stop at an awaiting-host/provider boundary instead.
+27. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+28. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+29. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

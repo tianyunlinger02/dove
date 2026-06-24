@@ -43,13 +43,14 @@ Collect and organize external provenance such as web, literature, venue template
 11. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
 12. Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.
 13. Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.
-14. Use explicit configured providers or operator-provided material; do not hide network/provider calls.
-15. Link each source to the resolved durable task packet through packetIds.
-16. For reviewer-guideline or 审稿偏好 research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact.
-17. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
-18. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
-19. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
-20. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
-21. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-22. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-23. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+14. Never call `register_source` with only a packet id; every new source must include a real title or locator, and source-research auto runs must collect those URLs/templates/guidelines before writing.
+15. Use explicit configured providers or operator-provided material; do not hide network/provider calls.
+16. Link each source to the resolved durable task packet through packetIds.
+17. For reviewer-guideline or 审稿偏好 research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact.
+18. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
+19. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
+20. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
+21. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
+22. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+23. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+24. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

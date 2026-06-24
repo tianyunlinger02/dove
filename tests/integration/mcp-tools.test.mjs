@@ -651,6 +651,43 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     const packetId = seedTaskPacket(root, "thin-summary-packet");
     const override = "Integration test exercises direct thin-surface guidance summaries.";
 
+    const emptySource = dispatchTool(root, "register_source", { packetId });
+    assert.equal(emptySource.isError, true);
+    assert.match(emptySource.content[0].text, /title or locator/);
+
+    const emptyNote = dispatchTool(root, "upsert_note", { packetId, noteId: "empty-note" });
+    assert.equal(emptyNote.isError, true);
+    assert.match(emptyNote.content[0].text, /summary, quote, claim, or open question/);
+    const notesPath = path.join(root, ".dove", "notes", "index.json");
+    if (fs.existsSync(notesPath)) {
+      assert.equal(JSON.parse(fs.readFileSync(notesPath, "utf8")).items.length, 0);
+    }
+
+    const emptyDraft = dispatchTool(root, "upsert_draft", { packetId, sectionId: "empty-draft" });
+    assert.equal(emptyDraft.isError, true);
+    assert.match(emptyDraft.content[0].text, /requires body content/);
+    assert.equal(fs.existsSync(path.join(root, ".dove", "drafts", "empty-draft.md")), false);
+
+    const emptyExperience = dispatchTool(root, "run_experience_workflow", { packetId });
+    assert.equal(emptyExperience.isError, true);
+    assert.match(emptyExperience.content[0].text, /experiment goal, title, idea, or experimentId/);
+    const experimentPlansPath = path.join(root, ".dove", "experiments", "plans.json");
+    if (fs.existsSync(experimentPlansPath)) {
+      assert.equal(JSON.parse(fs.readFileSync(experimentPlansPath, "utf8")).items.length, 0);
+    }
+
+    const emptyReviewLoopDraft = dispatchTool(root, "run_dove_review_loop", { packetId, runId: "empty-review-loop-draft", draft: {} });
+    assert.equal(emptyReviewLoopDraft.isError, true);
+    assert.match(emptyReviewLoopDraft.content[0].text, /draftBody or draft\.body/);
+    const emptyReviewLoopExperience = dispatchTool(root, "run_dove_review_loop", { packetId, runId: "empty-review-loop-experience", experience: {} });
+    assert.equal(emptyReviewLoopExperience.isError, true);
+    assert.match(emptyReviewLoopExperience.content[0].text, /experienceGoal or an experience goal/);
+    const reviewArtifactText = [path.join(root, ".dove", "reviews", "REVIEW_STATE.json"), path.join(root, ".dove", "reviews", "log.md")]
+      .filter((filePath) => fs.existsSync(filePath))
+      .map((filePath) => fs.readFileSync(filePath, "utf8"))
+      .join("\n");
+    assert.equal(reviewArtifactText.includes("empty-review-loop"), false);
+
     const source = extractToolJson(dispatchTool(root, "register_source", {
       packetId,
       citationKey: "thin2026guidance",
@@ -1173,9 +1210,13 @@ test("run_dove_operator previews queues and creates blocker investigation missio
       goal: "Validate operator queue semantics."
     });
     for (const task of [
-      { id: "operator-auto-ready", title: "Operator auto-ready source task", status: "ready", nextAction: "project:dove.source" },
+      { id: "operator-auto-ready", title: "Operator auto-ready lessons task", status: "ready", nextAction: "project:dove.lessons" },
       { id: "operator-host-progress", title: "Operator host progress task", status: "in-progress" },
       { id: "operator-host-missing", title: "Operator host missing task", status: "ready" },
+      { id: "operator-source-host-pass", title: "Operator source task needs provenance", status: "ready", nextAction: "project:dove.source" },
+      { id: "operator-note-host-pass", title: "Operator note task needs synthesis", status: "ready", nextAction: "project:dove.note" },
+      { id: "operator-draft-host-pass", title: "Operator draft task needs body", status: "ready", nextAction: "project:dove.draft" },
+      { id: "operator-experience-host-pass", title: "Operator experience task needs objective", status: "ready", nextAction: "project:dove.experience" },
       { id: "operator-unresolved", title: "Operator unresolved dependency task", status: "ready", dependencies: ["missing-dependency"] },
       { id: "operator-blocked", title: "Operator blocked task", status: "blocked" },
       { id: "operator-pending", title: "Operator pending task", status: "pending" }
@@ -1190,16 +1231,21 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     }
 
     const preview = extractToolJson(dispatchTool(root, "run_dove_operator", {}));
+    const hostPassRequiredIds = ["operator-draft-host-pass", "operator-experience-host-pass", "operator-host-missing", "operator-host-progress", "operator-note-host-pass", "operator-source-host-pass"];
     assert.equal(preview.status, "needs-confirmation");
     assert.equal(preview.proposalOnly, true);
     assert.deepEqual(preview.writes, []);
     assert.deepEqual(preview.autoRunnableTasks.map((task) => task.id), ["operator-auto-ready"]);
-    assert.deepEqual(preview.hostPassRequiredTasks.map((task) => task.id).sort(), ["operator-host-missing", "operator-host-progress"].sort());
-    assert.deepEqual(preview.runnableTasks.map((task) => task.id).sort(), ["operator-auto-ready", "operator-host-missing", "operator-host-progress"].sort());
+    assert.deepEqual(preview.hostPassRequiredTasks.map((task) => task.id).sort(), hostPassRequiredIds.sort());
+    assert.equal(preview.hostPassRequiredTasks.find((task) => task.id === "operator-source-host-pass").whyThisStep, "source-requires-host-provenance");
+    assert.equal(preview.hostPassRequiredTasks.find((task) => task.id === "operator-note-host-pass").whyThisStep, "note-requires-host-synthesis");
+    assert.equal(preview.hostPassRequiredTasks.find((task) => task.id === "operator-draft-host-pass").whyThisStep, "draft-requires-host-content");
+    assert.equal(preview.hostPassRequiredTasks.find((task) => task.id === "operator-experience-host-pass").whyThisStep, "experience-requires-host-objective");
+    assert.deepEqual(preview.runnableTasks.map((task) => task.id).sort(), ["operator-auto-ready", ...hostPassRequiredIds].sort());
     assert.deepEqual(preview.blockedTasks.map((task) => task.id).sort(), ["operator-blocked", "operator-unresolved"].sort());
     assert.deepEqual(preview.pendingTasks.map((task) => task.id), ["operator-pending"]);
     assert.deepEqual(preview.queueCards.autoRunnable.map((card) => card.packetId), ["operator-auto-ready"]);
-    assert.deepEqual(preview.queueCards.hostPassRequired.map((card) => card.packetId).sort(), ["operator-host-missing", "operator-host-progress"].sort());
+    assert.deepEqual(preview.queueCards.hostPassRequired.map((card) => card.packetId).sort(), hostPassRequiredIds.sort());
     assertFullPreActionGuidance(preview.preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
     assertFullPreActionGuidance(preview.queueCards.autoRunnable[0].preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
     assert.equal(preview.queueCards.blocked.every((card) => card.presentation === "compact-operator-queue-card" && card.proposalOnly === true), true);
@@ -1213,11 +1259,12 @@ test("run_dove_operator previews queues and creates blocker investigation missio
         { packetId: "operator-host-progress", resultStatus: "completed", summary: "Host progress task completed." }
       ]
     }));
+    const awaitingHostIds = hostPassRequiredIds.filter((id) => id !== "operator-host-progress");
     assert.equal(run.status, "awaiting-host-results");
-    assert.deepEqual(run.awaitingResultTaskIds, ["operator-host-missing"]);
-    assert.deepEqual(run.updatedTasks.map((task) => task.id).sort(), ["operator-auto-ready", "operator-host-missing", "operator-host-progress"].sort());
+    assert.deepEqual([...run.awaitingResultTaskIds].sort(), [...awaitingHostIds].sort());
+    assert.deepEqual(run.updatedTasks.map((task) => task.id).sort(), ["operator-auto-ready", ...hostPassRequiredIds].sort());
     assert.deepEqual(run.result.autoRunnableTaskIds, ["operator-auto-ready"]);
-    assert.deepEqual(run.result.hostPassRequiredTaskIds.sort(), ["operator-host-missing", "operator-host-progress"].sort());
+    assert.deepEqual(run.result.hostPassRequiredTaskIds.sort(), hostPassRequiredIds.sort());
     assert.equal(run.resultCard.presentation, "compact-result-summary-card");
     assert.equal(run.resultCard.surface, "dove.operator");
     assertPreActionGuidanceSummary(run.preActionGuidanceSummary, { surface: "dove.operator", primaryRole: "planner" });
@@ -1225,8 +1272,21 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.equal(run.resultCard.requiresAction, true);
     assert.equal(run.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-host-pass-result");
     assert.equal(run.resultCard.nextActions[0].handoffSuggestion.ownerRole, "builder");
-    assert.deepEqual(run.resultCard.nextActions[0].requires, ["operator-host-missing"]);
-    assert.deepEqual(run.resultCard.nextActions[0].requiredActions, ["provide-host-pass-result"]);
+    assert.deepEqual([...run.resultCard.nextActions[0].requires].sort(), [...awaitingHostIds].sort());
+    for (const requiredAction of [
+      "provide-host-pass-result",
+      "collect-source-provenance",
+      "call-register-source-with-sources-array",
+      "synthesize-note-content",
+      "call-upsert-note-with-summary-or-claims",
+      "write-draft-body",
+      "call-upsert-draft-with-body",
+      "define-experience-objective",
+      "call-run-experience-workflow-with-goal-or-experimentId",
+      "provide-explicit-auto-step"
+    ]) {
+      assert.ok(run.resultCard.nextActions[0].requiredActions.includes(requiredAction), `${requiredAction} should be surfaced`);
+    }
     assert.equal(run.blockerPlanConversion.createdMissions.length, 2);
     const blockerPlan = run.blockerPlanConversion.createdMissions.find((mission) => mission.parentId === "operator-blocked");
     assert.equal(blockerPlan.status, "pending");
@@ -1247,6 +1307,11 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     const missingTask = taskIndex.items.find((item) => item.id === "operator-host-missing");
     assert.equal(missingTask.boundary.type, "awaiting-host-pass-result");
     assert.equal(missingTask.boundary.status, "open");
+    assert.deepEqual(missingTask.boundary.requiredActions, ["provide-host-pass-result", "provide-explicit-auto-step"]);
+    assert.deepEqual(taskIndex.items.find((item) => item.id === "operator-source-host-pass").boundary.requiredActions, ["collect-source-provenance", "call-register-source-with-sources-array", "provide-explicit-auto-step"]);
+    assert.deepEqual(taskIndex.items.find((item) => item.id === "operator-note-host-pass").boundary.requiredActions, ["synthesize-note-content", "call-upsert-note-with-summary-or-claims", "provide-explicit-auto-step"]);
+    assert.deepEqual(taskIndex.items.find((item) => item.id === "operator-draft-host-pass").boundary.requiredActions, ["write-draft-body", "call-upsert-draft-with-body", "provide-explicit-auto-step"]);
+    assert.deepEqual(taskIndex.items.find((item) => item.id === "operator-experience-host-pass").boundary.requiredActions, ["define-experience-objective", "call-run-experience-workflow-with-goal-or-experimentId", "provide-explicit-auto-step"]);
     const runtimeEvents = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "events.json"), "utf8"));
     assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.boundary.opened" && entry.packetId === "operator-host-missing"), true);
     assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.lifecycle.transitioned" && entry.packetId === "operator-host-progress" && entry.toStatus === "completed"), true);
@@ -1703,6 +1768,80 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(hostBoundary.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-host-pass");
     assert.deepEqual(hostBoundary.resultCard.nextActions[0].requiredActions, ["provide-host-pass-result", "provide-explicit-auto-step"]);
 
+    extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "auto-source-needs-host",
+      goal: "Collect CVPR author kit source provenance and register external URLs.",
+      title: "Auto source needs host provenance",
+      confirmed: true,
+      checklist: false
+    }));
+    const sourceConfirmation = extractToolJson(dispatchTool(root, "run_dove_auto", {
+      packetId: "auto-source-needs-host"
+    }));
+    assert.equal(sourceConfirmation.status, "needs-confirmation");
+    assert.deepEqual(sourceConfirmation.proposedSteps, [{ index: 1, command: "dove.source", completeTask: false }]);
+    assert.equal(sourceConfirmation.safeToRun, false);
+    assert.equal(sourceConfirmation.requiresHostPass, true);
+    assert.equal(sourceConfirmation.whyThisStep, "source-requires-host-provenance");
+
+    const sourceBoundary = extractToolJson(dispatchTool(root, "run_dove_auto", {
+      packetId: "auto-source-needs-host",
+      confirmed: true,
+      runId: "auto-source-needs-host-run"
+    }));
+    assert.equal(sourceBoundary.status, "awaiting-host-pass");
+    assert.equal(sourceBoundary.result.iterations[0].command, null);
+    assert.equal(sourceBoundary.result.stopReason, "source-requires-host-provenance");
+    assert.equal(sourceBoundary.task.status, "ready");
+    assert.deepEqual(sourceBoundary.task.boundary.requiredActions, ["collect-source-provenance", "call-register-source-with-sources-array", "provide-explicit-auto-step"]);
+    const sourceIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "sources", "index.json"), "utf8"));
+    assert.equal(sourceIndex.items.length, 0);
+
+    for (const missingMaterialCase of [
+      {
+        id: "auto-note-needs-synthesis",
+        step: { command: "dove.note", args: { title: "Missing note synthesis" } },
+        reason: "note-requires-host-synthesis",
+        requiredActions: ["synthesize-note-content", "call-upsert-note-with-summary-or-claims", "provide-explicit-auto-step"]
+      },
+      {
+        id: "auto-draft-needs-body",
+        step: { command: "dove.draft", args: { sectionId: "missing-draft-body" } },
+        reason: "draft-requires-host-content",
+        requiredActions: ["write-draft-body", "call-upsert-draft-with-body", "provide-explicit-auto-step"]
+      },
+      {
+        id: "auto-experience-needs-objective",
+        step: { command: "dove.experience", args: {} },
+        reason: "experience-requires-host-objective",
+        requiredActions: ["define-experience-objective", "call-run-experience-workflow-with-goal-or-experimentId", "provide-explicit-auto-step"]
+      },
+      {
+        id: "auto-review-loop-needs-material",
+        step: { command: "dove.review-loop", args: { draft: {} } },
+        reason: "review-loop-requires-host-material",
+        requiredActions: ["provide-review-loop-draft-or-experience-material", "provide-explicit-auto-step"]
+      }
+    ]) {
+      extractToolJson(dispatchTool(root, "create_dove_task", {
+        id: missingMaterialCase.id,
+        goal: `Validate ${missingMaterialCase.reason}.`,
+        title: missingMaterialCase.id,
+        confirmed: true,
+        checklist: false
+      }));
+      const boundary = extractToolJson(dispatchTool(root, "run_dove_auto", {
+        packetId: missingMaterialCase.id,
+        confirmed: true,
+        runId: `${missingMaterialCase.id}-run`,
+        steps: [missingMaterialCase.step]
+      }));
+      assert.equal(boundary.status, "awaiting-host-pass");
+      assert.equal(boundary.result.stopReason, missingMaterialCase.reason);
+      assert.deepEqual(boundary.task.boundary.requiredActions, missingMaterialCase.requiredActions);
+      assert.deepEqual(boundary.resultCard.nextActions[0].requiredActions, missingMaterialCase.requiredActions);
+    }
+
     const autoRun = extractToolJson(dispatchTool(root, "run_dove_auto", {
       packetId: "auto-foreground-task",
       confirmed: true,
@@ -1931,6 +2070,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const recordDocumentEvidenceTool = toolDefinitions.find((item) => item.name === "record_document_evidence");
   const registerSourceTool = toolDefinitions.find((item) => item.name === "register_source");
   const upsertNoteTool = toolDefinitions.find((item) => item.name === "upsert_note");
+  const upsertDraftTool = toolDefinitions.find((item) => item.name === "upsert_draft");
   const applyStatusAdjustmentsTool = toolDefinitions.find((item) => item.name === "apply_dove_status_adjustments");
   const runDoveAutoTool = toolDefinitions.find((item) => item.name === "run_dove_auto");
   const runDoveOperatorTool = toolDefinitions.find((item) => item.name === "run_dove_operator");
@@ -2015,6 +2155,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.match(runDoveAutoTool.description, /compact task\/auto cards/);
   assert.match(runDoveAutoTool.description, /preActionGuidance/);
   assert.match(runDoveAutoTool.description, /bounded foreground iterations/);
+  assert.match(runDoveAutoTool.description, /placeholder writes/);
   assert.match(runDoveAutoTool.description, /no hidden continuation, scheduler, or daemon/);
   assert.ok(runDoveAutoTool.inputSchema.properties.missionPacketId, "run_dove_auto should expose missionPacketId");
   assert.ok(runDoveAutoTool.inputSchema.properties.taskId, "run_dove_auto should expose taskId");
@@ -2029,6 +2170,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.match(runDoveOperatorTool.description, /planner preActionGuidance/);
   assert.match(runDoveOperatorTool.description, /read-only lesson recall/);
   assert.match(runDoveOperatorTool.description, /resultCard/);
+  assert.match(runDoveOperatorTool.description, /material-specific host-pass requiredActions/);
   assert.match(runDoveOperatorTool.description, /no scheduler or hidden runtime/);
   assert.ok(runDoveOperatorTool.inputSchema.properties.confirmed, "run_dove_operator should expose confirmed");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults, "run_dove_operator should expose taskResults");
@@ -2066,6 +2208,10 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.match(upsertNoteTool.description, /pressure-test findings/);
   assert.match(upsertNoteTool.description, /writing-style summaries/);
   assert.match(upsertNoteTool.description, /reviewer-preference analysis/);
+  assert.match(upsertNoteTool.description, /summary, quote, claim, or open question/);
+  assert.ok(upsertDraftTool, "upsert_draft should exist");
+  assert.match(upsertDraftTool.description, /require body content/);
+  assert.match(upsertDraftTool.description, /set_section_status/);
   assert.ok(publishStatusTool, "publish_dove_status should exist");
   assert.match(publishStatusTool.description, /sanitized public Dove project progress artifacts/);
   assert.ok(publishStatusTool.inputSchema.properties.includeArchived, "publish_dove_status should expose includeArchived");
@@ -2090,12 +2236,15 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(runExperienceTool, "run_experience_workflow should exist");
   assert.match(runExperienceTool.description, /Builder\/experiment-planner preActionGuidance/);
   assert.match(runExperienceTool.description, /read-only lesson recall/);
+  assert.match(runExperienceTool.description, /real experiment goal, title, idea, or experimentId/);
   assert.match(runExperienceTool.description, /claim-bridge boundary/);
   assert.ok(runAudioReviewTool, "run_audio_review should exist");
   assert.match(runAudioReviewTool.description, /resultCard/);
   assert.match(runAudioReviewTool.description, /Reviewer preActionGuidanceSummary/);
   assert.ok(runReviewLoopTool, "run_dove_review_loop should exist");
   assert.match(runReviewLoopTool.description, /Reviewer preActionGuidance/);
+  assert.match(runReviewLoopTool.description, /draftBody or draft\.body/);
+  assert.match(runReviewLoopTool.description, /experience substeps require/);
   assert.match(runReviewLoopTool.description, /foreground stop conditions/);
   assert.ok(runFigureTool, "run_figure_workflow should exist");
   assert.match(runFigureTool.description, /Builder preActionGuidance/);

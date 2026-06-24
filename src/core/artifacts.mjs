@@ -48,6 +48,17 @@ function normalizeStringArray(values, fallback = []) {
   return Array.from(new Set(source.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim())));
 }
 
+function hasNonEmptyString(value) {
+  return typeof value === "string" && value.trim();
+}
+
+function hasStructuredNoteSynthesis(args = {}) {
+  return hasNonEmptyString(args.summary)
+    || normalizeStringArray(args.quotes).length > 0
+    || normalizeStringArray(args.claims).length > 0
+    || normalizeStringArray(args.openQuestions).length > 0;
+}
+
 function artifactGuidanceSummary(root, args = {}, details = {}) {
   const packet = details.packet ?? null;
   const stage = details.stage ?? packet?.stage ?? null;
@@ -1932,6 +1943,23 @@ function sourceInputsFromArgs(args = {}) {
   return [args];
 }
 
+function hasSourceProvenance(input = {}) {
+  return [input.title, input.locator].some((value) => typeof value === "string" && value.trim());
+}
+
+function findExistingSourceIndex(sources, input = {}, baseId = null) {
+  return sources.items.findIndex((item) => (baseId && item.id === baseId) || (input.citationKey && item.citationKey === input.citationKey));
+}
+
+function assertSourceInputHasProvenance(input = {}, sources, baseId) {
+  if (findExistingSourceIndex(sources, input, baseId) >= 0) {
+    return;
+  }
+  if (!hasSourceProvenance(input)) {
+    throw new Error("register_source requires each new source to include a title or locator.");
+  }
+}
+
 function mergeIds(...values) {
   return Array.from(new Set(values.flatMap((value) => normalizeStringArray(value))));
 }
@@ -1939,7 +1967,7 @@ function mergeIds(...values) {
 function upsertSourceItem(sources, input = {}, context = {}) {
   const sourceIndex = context.initialCount + context.itemOffset + 1;
   const baseId = normalizeIdentifier(input.sourceId, `${slugify(input.citationKey ?? input.title ?? `source-${sourceIndex}`)}${input.year ? `-${input.year}` : ""}`);
-  const existingIndex = sources.items.findIndex((item) => item.id === baseId || (input.citationKey && item.citationKey === input.citationKey));
+  const existingIndex = findExistingSourceIndex(sources, input, baseId);
   const existing = existingIndex >= 0 ? sources.items[existingIndex] : null;
   const packetIds = mergeIds(existing?.packetIds, input.packetIds, context.packetId ? [context.packetId] : []);
   const source = {
@@ -1992,14 +2020,19 @@ export function registerSource(root, args = {}) {
   }
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const initialCount = sources.items.length;
-  const registered = sourceInputs.map((input, index) => upsertSourceItem(sources, input, {
-    initialCount,
-    itemOffset: index,
-    origin: args.origin,
-    sourceType: args.sourceType,
-    packetId: target.packet?.id,
-    timestamp
-  }));
+  const registered = sourceInputs.map((input, index) => {
+    const sourceIndex = initialCount + index + 1;
+    const baseId = normalizeIdentifier(input.sourceId, `${slugify(input.citationKey ?? input.title ?? `source-${sourceIndex}`)}${input.year ? `-${input.year}` : ""}`);
+    assertSourceInputHasProvenance(input, sources, baseId);
+    return upsertSourceItem(sources, input, {
+      initialCount,
+      itemOffset: index,
+      origin: args.origin,
+      sourceType: args.sourceType,
+      packetId: target.packet?.id,
+      timestamp
+    });
+  });
   sources.updatedAt = timestamp;
   writeJson(root, ARTIFACT_PATHS.sources, sources);
   syncCitationArtifacts(root, { preservePhase: true });
@@ -2055,23 +2088,27 @@ export function upsertNote(root, args = {}) {
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const knownSourceIds = new Set(sources.items.flatMap((item) => [item.id, item.citationKey].filter(Boolean)));
-  const requestedSourceIds = Array.isArray(args.sourceIds) ? args.sourceIds : [];
+  const sourceIdsProvided = Array.isArray(args.sourceIds);
+  const requestedSourceIds = sourceIdsProvided ? normalizeStringArray(args.sourceIds) : [];
   const unknownSourceIds = requestedSourceIds.filter((id) => !knownSourceIds.has(id));
   if (unknownSourceIds.length > 0) throw new Error(`Note references unknown sources: ${unknownSourceIds.join(", ")}`);
   const noteId = normalizeIdentifier(args.noteId, `${args.sectionId ?? "general"}-${args.title ?? `note-${notes.items.length + 1}`}`);
   const existingIndex = notes.items.findIndex((item) => item.id === noteId);
   const existing = existingIndex >= 0 ? notes.items[existingIndex] : null;
+  if (!existing && !hasStructuredNoteSynthesis(args)) {
+    throw new Error("upsert_note requires each new note to include a summary, quote, claim, or open question.");
+  }
   const note = {
     ...(existing ?? {}),
     id: noteId,
-    title: args.title ?? existing?.title ?? "Untitled Note",
+    title: args.title ?? existing?.title ?? noteId.replace(/-/g, " "),
     sectionId: normalizeIdentifier(args.sectionId, existing?.sectionId ?? "introduction"),
-    sourceIds: requestedSourceIds,
+    sourceIds: sourceIdsProvided ? requestedSourceIds : existing?.sourceIds ?? [],
     packetIds: mergeIds(existing?.packetIds, args.packetIds, target.packet?.id ? [target.packet.id] : []),
     summary: args.summary ?? existing?.summary ?? "",
-    quotes: Array.isArray(args.quotes) ? args.quotes : existing?.quotes ?? [],
-    claims: Array.isArray(args.claims) ? args.claims : existing?.claims ?? [],
-    openQuestions: Array.isArray(args.openQuestions) ? args.openQuestions : existing?.openQuestions ?? [],
+    quotes: Array.isArray(args.quotes) ? normalizeStringArray(args.quotes) : existing?.quotes ?? [],
+    claims: Array.isArray(args.claims) ? normalizeStringArray(args.claims) : existing?.claims ?? [],
+    openQuestions: Array.isArray(args.openQuestions) ? normalizeStringArray(args.openQuestions) : existing?.openQuestions ?? [],
     updatedAt: nowIso()
   };
   if (existingIndex >= 0) notes.items[existingIndex] = note;
@@ -2223,9 +2260,12 @@ export function upsertDraft(root, args = {}) {
     assertStageAtLeast(state, "outline", "Strict mode requires an approved outline stage before drafting.");
     assertStrictCondition(evidence.claims.length > 0, "Strict mode requires evidence-backed claims before drafting.");
   }
+  if (!hasNonEmptyString(args.body)) {
+    throw new Error("upsert_draft requires body content; use set_section_status for metadata-only section updates.");
+  }
   const draftPath = `${ARTIFACT_PATHS.draftsDir}/${sectionId}.md`;
   const title = args.title ?? sectionId.replace(/-/g, " ");
-  const body = args.body ?? `# ${title}\n\nTODO[citation]: add evidence-backed content for this section.\n`;
+  const body = args.body;
   writeText(root, draftPath, body);
 
   state.sections[sectionId] = {

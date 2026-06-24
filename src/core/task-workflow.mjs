@@ -710,13 +710,14 @@ function withWorkflowActionMetadata(actions = [], task = {}, result = {}, respon
 
 function operatorHandoffSuggestion(result = {}, responseLanguage = "zh") {
   if (result.awaitingResultTaskIds?.length > 0) {
+    const requiredActions = normalizeStringArray(result.awaitingRequiredActions);
     return {
       presentation: "dove-handoff-suggestion",
       boundaryType: "awaiting-host-pass-result",
       ownerRole: "builder",
       nextRole: "builder",
       requires: result.awaitingResultTaskIds,
-      requiredActions: ["provide-host-pass-result"],
+      requiredActions: requiredActions.length > 0 ? requiredActions : ["provide-host-pass-result"],
       reason: result.stopReason,
       summary: doveText(responseLanguage, "resultCardHandoffProvideEvidence")
     };
@@ -2195,10 +2196,10 @@ function runOperatorInternalStep(root, taskItem, timestamp, responseLanguage = "
       surface: "dove.operator",
       command: "host-pass-result",
       boundaryType: "awaiting-host-pass-result",
-      reason: iteration.stopReason,
-      stopReason: iteration.stopReason,
+      reason: autoPlan.whyThisStep ?? iteration.stopReason,
+      stopReason: autoPlan.whyThisStep ?? iteration.stopReason,
       summary: iteration.outcome,
-      requiredActions: ["provide-host-pass-result"],
+      requiredActions: autoHostPassRequiredActions(autoPlan),
       nextAction: "project:dove.status"
     });
     return {
@@ -2377,6 +2378,7 @@ export function runDoveOperator(root, args = {}) {
   }
   for (const taskItem of queue.hostPassRequired) {
     const task = loadFullTask(root, taskItem);
+    const autoPlan = inferAutoStepsForTask(task, {});
     const taskResult = resultMap.get(task.id);
     if (!taskResult) {
       const iteration = operatorAwaitingHostIteration(task, timestamp, responseLanguage);
@@ -2385,10 +2387,10 @@ export function runDoveOperator(root, args = {}) {
         surface: "dove.operator",
         command: "host-pass-result",
         boundaryType: "awaiting-host-pass-result",
-        reason: iteration.stopReason,
-        stopReason: iteration.stopReason,
+        reason: autoPlan.whyThisStep ?? iteration.stopReason,
+        stopReason: autoPlan.whyThisStep ?? iteration.stopReason,
         summary: iteration.outcome,
-        requiredActions: ["provide-host-pass-result"],
+        requiredActions: autoHostPassRequiredActions(autoPlan),
         nextAction: "project:dove.status"
       });
       awaitingResults.push(task.id);
@@ -2401,6 +2403,10 @@ export function runDoveOperator(root, args = {}) {
     iterations.push(hostResult.iteration);
   }
   const blockerPlanConversion = materializeBlockedInvestigationMissions(root, queue.blocked, runId, responseLanguage);
+  const awaitingResultSet = new Set(awaitingResults);
+  const awaitingRequiredActions = Array.from(new Set(updatedTasks
+    .filter((task) => awaitingResultSet.has(task.id))
+    .flatMap((task) => normalizeStringArray(task.boundary?.requiredActions ?? task.requiredActions))));
   const result = {
     id: runId,
     surface: "dove.operator",
@@ -2416,6 +2422,7 @@ export function runDoveOperator(root, args = {}) {
     runnableTaskIds: queue.runnable.map((task) => task.id),
     updatedTaskIds: updatedTasks.map((task) => task.id),
     awaitingResultTaskIds: awaitingResults,
+    awaitingRequiredActions,
     blockedTaskIds: queue.blocked.map((task) => task.id),
     pendingTaskIds: queue.pending.map((task) => task.id),
     blockerPlanConversion,
@@ -2611,10 +2618,111 @@ function normalizeExplicitAutoSteps(args = {}) {
   }).filter((step) => step.command);
 }
 
+function hasNonEmptyString(value) {
+  return typeof value === "string" && value.trim();
+}
+
+function hasSourceItemProvenance(args = {}) {
+  return [args.title, args.locator].some(hasNonEmptyString);
+}
+
+function hasAutoSourceProvenanceArgs(args = {}) {
+  if (Array.isArray(args.sources)) {
+    return args.sources.length > 0 && args.sources.every((item) => item && typeof item === "object" && !Array.isArray(item) && hasSourceItemProvenance(item));
+  }
+  return hasNonEmptyString(args.locator) || (hasNonEmptyString(args.title) && [args.sourceId, args.citationKey].some(hasNonEmptyString));
+}
+
+function hasAutoNoteSynthesisArgs(args = {}) {
+  return hasNonEmptyString(args.summary)
+    || normalizeStringArray(args.quotes).length > 0
+    || normalizeStringArray(args.claims).length > 0
+    || normalizeStringArray(args.openQuestions).length > 0;
+}
+
+function hasAutoDraftContentArgs(args = {}) {
+  return hasNonEmptyString(args.body);
+}
+
+function hasAutoExperienceObjectiveArgs(args = {}) {
+  const plan = args.plan && typeof args.plan === "object" && !Array.isArray(args.plan) ? args.plan : args;
+  return [plan.experimentId, plan.id, plan.goal, plan.idea, args.idea, plan.title].some(hasNonEmptyString);
+}
+
+function reviewLoopDraftRequestedWithoutContent(args = {}) {
+  return Boolean(args.draft || args.draftBody) && !hasNonEmptyString(args.draftBody ?? args.draft?.body);
+}
+
+function reviewLoopExperienceRequestedWithoutObjective(args = {}) {
+  if (!args.experience && !args.experienceGoal) {
+    return false;
+  }
+  const experience = args.experience && typeof args.experience === "object" && !Array.isArray(args.experience) ? args.experience : {};
+  return ![args.experienceGoal, experience.experimentId, experience.id, experience.goal, experience.idea, experience.title].some(hasNonEmptyString);
+}
+
+function autoStepHostPassReason(command, stepArgs = {}) {
+  if (command === "dove.source" && !hasAutoSourceProvenanceArgs(stepArgs)) {
+    return "source-requires-host-provenance";
+  }
+  if (command === "dove.note" && !hasAutoNoteSynthesisArgs(stepArgs)) {
+    return "note-requires-host-synthesis";
+  }
+  if (command === "dove.draft" && !hasAutoDraftContentArgs(stepArgs)) {
+    return "draft-requires-host-content";
+  }
+  if (command === "dove.experience" && !hasAutoExperienceObjectiveArgs(stepArgs)) {
+    return "experience-requires-host-objective";
+  }
+  if (command === "dove.review-loop" && (reviewLoopDraftRequestedWithoutContent(stepArgs) || reviewLoopExperienceRequestedWithoutObjective(stepArgs))) {
+    return "review-loop-requires-host-material";
+  }
+  return null;
+}
+
+function autoPlanFromSteps(steps, whyThisStep) {
+  const hostPassReason = steps.map((step) => autoStepHostPassReason(step.command, step.args)).find(Boolean);
+  if (hostPassReason) {
+    return {
+      steps: [],
+      proposedSteps: summarizeAutoSteps(steps),
+      safeToRun: false,
+      requiresHostPass: true,
+      whyThisStep: hostPassReason
+    };
+  }
+  return {
+    steps,
+    proposedSteps: summarizeAutoSteps(steps),
+    safeToRun: true,
+    requiresHostPass: false,
+    whyThisStep
+  };
+}
+
 function taskIntentText(task = {}, args = {}) {
   return [args.goal, args.objective, args.prompt, args.title, args.summary, args.intent, args.command, args.workflow, args.preset, args.nextCommand, task.title, task.summary, task.currentFocus, task.nextAction, task.stage, task.domain]
     .map((value) => String(value ?? "").toLowerCase())
     .join(" ");
+}
+
+function autoHostPassRequiredActions(autoPlan = {}) {
+  if (autoPlan.whyThisStep === "source-requires-host-provenance") {
+    return ["collect-source-provenance", "call-register-source-with-sources-array", "provide-explicit-auto-step"];
+  }
+  if (autoPlan.whyThisStep === "note-requires-host-synthesis") {
+    return ["synthesize-note-content", "call-upsert-note-with-summary-or-claims", "provide-explicit-auto-step"];
+  }
+  if (autoPlan.whyThisStep === "draft-requires-host-content") {
+    return ["write-draft-body", "call-upsert-draft-with-body", "provide-explicit-auto-step"];
+  }
+  if (autoPlan.whyThisStep === "experience-requires-host-objective") {
+    return ["define-experience-objective", "call-run-experience-workflow-with-goal-or-experimentId", "provide-explicit-auto-step"];
+  }
+  if (autoPlan.whyThisStep === "review-loop-requires-host-material") {
+    return ["provide-review-loop-draft-or-experience-material", "provide-explicit-auto-step"];
+  }
+  return ["provide-host-pass-result", "provide-explicit-auto-step"];
 }
 
 function summarizeAutoSteps(steps = []) {
@@ -2628,35 +2736,17 @@ function summarizeAutoSteps(steps = []) {
 function inferAutoStepsForTask(task = {}, args = {}) {
   const explicitSteps = normalizeExplicitAutoSteps(args);
   if (explicitSteps.length > 0) {
-    return {
-      steps: explicitSteps,
-      proposedSteps: summarizeAutoSteps(explicitSteps),
-      safeToRun: true,
-      requiresHostPass: false,
-      whyThisStep: "explicit-auto-steps"
-    };
+    return autoPlanFromSteps(explicitSteps, "explicit-auto-steps");
   }
   const explicitCommand = normalizeAutoCommandId(args.command ?? args.workflow ?? args.preset ?? args.nextCommand);
   if (explicitCommand) {
     const steps = [{ command: explicitCommand, args: stripAutoControlArgs(args), completeTask: args.completeTask === true || args.complete === true }];
-    return {
-      steps,
-      proposedSteps: summarizeAutoSteps(steps),
-      safeToRun: true,
-      requiresHostPass: false,
-      whyThisStep: `explicit-auto-command:${explicitCommand}`
-    };
+    return autoPlanFromSteps(steps, `explicit-auto-command:${explicitCommand}`);
   }
   const taskCommand = normalizeConcreteAutoCommandId(task.nextAction);
   if (taskCommand) {
     const steps = [{ command: taskCommand, args: stripAutoControlArgs(args), completeTask: args.completeTask === true || args.complete === true }];
-    return {
-      steps,
-      proposedSteps: summarizeAutoSteps(steps),
-      safeToRun: true,
-      requiresHostPass: false,
-      whyThisStep: `task-next-action:${taskCommand}`
-    };
+    return autoPlanFromSteps(steps, `task-next-action:${taskCommand}`);
   }
   const text = taskIntentText(task, args);
   const stepArgs = stripAutoControlArgs(args);
@@ -2667,13 +2757,7 @@ function inferAutoStepsForTask(task = {}, args = {}) {
   });
   if (inferredCommand) {
     const steps = [{ command: inferredCommand, args: stepArgs, completeTask: args.completeTask === true || args.complete === true }];
-    return {
-      steps,
-      proposedSteps: summarizeAutoSteps(steps),
-      safeToRun: true,
-      requiresHostPass: false,
-      whyThisStep: `inferred-safe-workflow:${inferredCommand}`
-    };
+    return autoPlanFromSteps(steps, `inferred-safe-workflow:${inferredCommand}`);
   }
   const continuationRoute = projectContinuationRoute(task.nextAction);
   return {
@@ -3299,13 +3383,13 @@ export function runDoveAuto(root, args = {}) {
       command: null,
       status: "awaiting-host-pass",
       outcome: "host-pass-required",
-      stopReason: "requires-host-pass-or-explicit-workflow-step",
+      stopReason: autoPlan.whyThisStep,
       startedAt: timestamp,
       completedAt
     });
     result.status = "awaiting-host-pass";
     result.outcome = "host-pass-required";
-    result.stopReason = "requires-host-pass-or-explicit-workflow-step";
+    result.stopReason = autoPlan.whyThisStep;
     task = updateTaskLifecycle(root, task, task.status, {
       runId: resultId,
       surface: "dove.auto",
@@ -3314,7 +3398,7 @@ export function runDoveAuto(root, args = {}) {
       reason: result.stopReason,
       stopReason: result.stopReason,
       summary: result.outcome,
-      requiredActions: ["provide-host-pass-result", "provide-explicit-auto-step"],
+      requiredActions: autoHostPassRequiredActions(autoPlan),
       nextAction: task.nextAction
     });
     result.boundary = task.boundary;
@@ -3366,13 +3450,13 @@ export function runDoveAuto(root, args = {}) {
         command: null,
         status: "awaiting-host-pass",
         outcome: "host-pass-required",
-        stopReason: "requires-host-pass-or-explicit-workflow-step",
+        stopReason: autoPlan.whyThisStep,
         startedAt,
         completedAt
       });
       result.status = "awaiting-host-pass";
       result.outcome = "host-pass-required";
-      result.stopReason = doveText(responseLanguage, "autoNoStepStopReason");
+      result.stopReason = autoPlan.whyThisStep;
       task = updateTaskLifecycle(root, task, task.status, {
         runId: resultId,
         surface: "dove.auto",
@@ -3381,7 +3465,7 @@ export function runDoveAuto(root, args = {}) {
         reason: result.stopReason,
         stopReason: result.stopReason,
         summary: result.outcome,
-        requiredActions: ["provide-host-pass-result", "provide-explicit-auto-step"],
+        requiredActions: autoHostPassRequiredActions(autoPlan),
         nextAction: task.nextAction
       });
       result.boundary = task.boundary;

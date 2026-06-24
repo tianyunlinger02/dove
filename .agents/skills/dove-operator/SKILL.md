@@ -45,7 +45,7 @@ Run all ready and in-progress Dove missions once, and create blocker-investigati
 14. Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.
 15. For ready and in-progress missions, run one safe internal workflow step when available or collect one real host pass result in order; pass per-task results to `run_dove_operator` so Dove records lifecycle and runtime state.
 16. Do not claim real engineering, paper, or experiment work happened when neither a safe internal step nor an actual host pass result exists; let `run_dove_operator` record awaiting host results instead.
-17. When no safe internal step or actual host pass result exists, persist an `awaiting-host-pass-result` boundary rather than marking work complete.
+17. When no safe internal step, missing step material, or actual host pass result exists, persist an `awaiting-host-pass-result` boundary with material-specific requiredActions rather than marking work complete.
 18. Preserve durable role handoff metadata while running queue passes; do not expose planner/builder/reviewer as separate slash commands.
 19. For blocked missions, create pending child plan missions that investigate the blocker reason and link back to the blocked mission, then return a localized `resultCard` summary of updated, awaiting, and created work.
 20. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.

@@ -40,12 +40,13 @@ Generate or modify paper draft content from prompts, existing materials, experie
 10. Treat status as the project command center and mission as a durable work contract/progress object; do not make a mission board the default UI.
 11. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
 12. Draft as completely as current evidence allows.
-13. Use explicit placeholders for missing evidence or citations instead of fabricating support.
-14. Incorporate applicable source, note, experience, figure, and review context linked to the resolved task.
-15. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
-16. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
-17. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
-18. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
-19. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-20. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-21. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+13. Do not create or update a draft without body content; use `set_section_status` for metadata-only updates.
+14. Use explicit placeholders for missing evidence or citations inside real draft content instead of fabricating support.
+15. Incorporate applicable source, note, experience, figure, and review context linked to the resolved task.
+16. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
+17. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
+18. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
+19. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
+20. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+21. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+22. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

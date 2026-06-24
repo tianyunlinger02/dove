@@ -42,11 +42,12 @@ Loop isolated review, draft revision, and experience planning until coherent or 
 11. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
 12. Use default 3 as the max iteration count unless `.dove/state.json.settings.reviewLoop.maxIterations` says otherwise.
 13. Each iteration should run review, update draft work, and plan missing experience/evidence as needed.
-14. Stop early when review is coherent, the task is blocked, a provider boundary is reached, or user input is required.
-15. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
-16. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
-17. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
-18. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
-19. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-20. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-21. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+14. If a draft substep is requested, provide draftBody or draft.body before the loop starts; if an experience substep is requested, provide a goal, title, idea, or experimentId before the loop starts.
+15. Stop early when review is coherent, the task is blocked, a provider boundary is reached, or user input is required.
+16. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
+17. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
+18. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
+19. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
+20. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+21. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+22. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

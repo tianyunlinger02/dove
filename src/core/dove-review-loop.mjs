@@ -23,11 +23,22 @@ function normalizeStringArray(value) {
   return Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean))) : [];
 }
 
+function hasNonEmptyString(value) {
+  return typeof value === "string" && value.trim();
+}
+
+function hasExperienceObjective(args = {}) {
+  return [args.experimentId, args.id, args.goal, args.idea, args.title].some(hasNonEmptyString);
+}
+
 function writeDraftPlaceholder(root, args, iteration, packetId) {
   const sectionId = slugify(args.sectionId ?? `review-loop-${iteration}`);
   const title = normalizeString(args.title, sectionId.replace(/-/g, " "));
   const draftPath = path.posix.join(ARTIFACT_PATHS.draftsDir, `${sectionId}.md`);
-  const body = normalizeString(args.body, `# ${title}\n\nTODO[evidence]: revise this section after audio review and experience evidence are available.\n`);
+  const body = normalizeString(args.body, null);
+  if (!body) {
+    throw new Error("run_dove_review_loop draft updates require draftBody or draft.body.");
+  }
   writeText(root, draftPath, body);
   const state = loadState(root);
   state.sections[sectionId] = {
@@ -50,6 +61,26 @@ export function runDoveReviewLoop(root, args = {}) {
   const requestedMax = Number.isFinite(args.maxIterations) ? Math.max(1, Math.floor(args.maxIterations)) : configuredMax;
   const maxIterations = Math.min(requestedMax, configuredMax);
   const runId = slugify(args.runId ?? `review-loop-${target.packetId}-${Date.now().toString(36)}`);
+  const draftArgs = {
+    ...(args.draft && typeof args.draft === "object" ? args.draft : {}),
+    body: args.draftBody ?? args.draft?.body,
+    sectionId: args.sectionId,
+    title: args.title,
+    summary: args.summary
+  };
+  const draftRequested = Boolean(args.draft || args.draftBody);
+  if (draftRequested && !hasNonEmptyString(draftArgs.body)) {
+    throw new Error("run_dove_review_loop draft updates require draftBody or draft.body.");
+  }
+  const experienceArgs = {
+    ...(args.experience && typeof args.experience === "object" ? args.experience : {}),
+    packetId: target.packetId,
+    goal: args.experienceGoal ?? args.experience?.goal
+  };
+  const experienceRequested = Boolean(args.experience || args.experienceGoal);
+  if (experienceRequested && !hasExperienceObjective(experienceArgs)) {
+    throw new Error("run_dove_review_loop experience updates require experienceGoal or an experience goal, title, idea, or experimentId.");
+  }
   const iterations = [];
   let status = "completed";
   let stopReason = "max-iterations-reached";
@@ -64,18 +95,8 @@ export function runDoveReviewLoop(root, args = {}) {
       finalPlanPaths: normalizeStringArray(args.finalPlanPaths),
       finalResultPaths: normalizeStringArray(args.finalResultPaths)
     });
-    const draft = args.draft || args.draftBody ? writeDraftPlaceholder(root, {
-      ...(args.draft && typeof args.draft === "object" ? args.draft : {}),
-      body: args.draftBody ?? args.draft?.body,
-      sectionId: args.sectionId,
-      title: args.title,
-      summary: args.summary
-    }, iterationNumber, target.packetId) : null;
-    const experience = args.experience || args.experienceGoal ? runExperienceWorkflow(root, {
-      ...(args.experience && typeof args.experience === "object" ? args.experience : {}),
-      packetId: target.packetId,
-      goal: args.experienceGoal ?? args.experience?.goal ?? `Resolve evidence gaps from review loop ${runId}.`
-    }) : null;
+    const draft = draftRequested ? writeDraftPlaceholder(root, draftArgs, iterationNumber, target.packetId) : null;
+    const experience = experienceRequested ? runExperienceWorkflow(root, experienceArgs) : null;
     iterations.push({ iteration: iterationNumber, review, draft, experience });
     const verdict = review.imported?.verdict;
     if (verdict === "coherent") {
