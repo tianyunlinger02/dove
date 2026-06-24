@@ -280,20 +280,66 @@ function initPacket(index) {
   return (index.items ?? []).find((item) => item.level === 0 && item.status !== "killed") ?? null;
 }
 
+function workflowSignals(text) {
+  const value = String(text ?? "").toLowerCase();
+  const source = /\b(source|sources|citation|citations|literature|paper search|reference|references|bibliography|template|templates|author kit|latex|overleaf|venue|venues|guideline|guidelines|style file|style files|call for papers|cfp|ranking|rankings|journal|journals|conference|conferences|evidence[-_ ]?urls?|provenance|deposit|bind|archive)\b|来源|引用|文献|模板|作者包|会议|期刊|一区|高水平|写作风格|审稿偏好|证据链接|沉淀|绑定|归档/u.test(value);
+  const reviewLoop = /\b(review-loop|revision loop)\b|审稿循环|评审循环/u.test(value);
+  const review = /\b(review|audit|audio|verify|check|integrity)\b|审查|审核|复审|检查|完整性/u.test(value);
+  const figure = /\b(figure|diagram|pipeline overview)\b|示意图|流程图|图表/u.test(value);
+  const draft = /\b(draft|revise|section|introduction|abstract)\b|草稿|修改|章节|引言|摘要/u.test(value);
+  const experiment = /\b(experiment|ablation|baseline|metric|result)\b|实验|消融|指标|结果/u.test(value);
+  const plan = /\b(plan|design|outline|proposal)\b|规划|计划|方案/u.test(value);
+  const paper = source || figure || draft || /\b(paper|claim|rebuttal|reviewer)\b|论文|返修|审稿/u.test(value);
+  return { source, reviewLoop, review, figure, draft, experiment, plan, paper };
+}
+
+function workflowCommandFromSignals(signals = {}) {
+  if (signals.source) {
+    return "dove.source";
+  }
+  if (signals.reviewLoop) {
+    return "dove.review-loop";
+  }
+  if (signals.review) {
+    return "dove.review";
+  }
+  if (signals.figure) {
+    return "dove.figure";
+  }
+  if (signals.draft) {
+    return "dove.draft";
+  }
+  if (signals.experiment) {
+    return "dove.experience";
+  }
+  return null;
+}
+
+function projectCommandForWorkflow(command) {
+  return command ? `project:${command}` : null;
+}
+
 function classifyTask(args = {}) {
   const text = [args.goal, args.objective, args.prompt, args.title, args.summary, args.intent].map((item) => String(item ?? "").toLowerCase()).join(" ");
   const explicitStage = normalizeAllowed(args.stage ?? args.missionStage, DOVE_TASK_STAGES, null);
   const explicitDomain = normalizeAllowed(args.domain ?? args.doveDomain ?? args.missionDomain, DOVE_TASK_DOMAINS, null);
-  const stage = explicitStage ?? (/(review|audit|check|verify|audio|审稿|审核|检查)/u.test(text) ? "audit" : /(plan|design|outline|proposal|规划|计划|方案)/u.test(text) ? "plan" : "execute");
-  const domain = explicitDomain ?? (/(experiment|ablation|baseline|metric|result|实验|消融|指标)/u.test(text) ? "experiment" : /(paper|draft|claim|figure|citation|rebuttal|reviewer|论文|草稿|图|返修|审稿)/u.test(text) ? "paper" : "engineering");
+  const signals = workflowSignals(text);
+  const workflowCommand = workflowCommandFromSignals(signals);
+  const stage = explicitStage ?? (signals.source ? "execute" : signals.review || signals.reviewLoop ? "audit" : signals.plan ? "plan" : "execute");
+  const domain = explicitDomain ?? (signals.experiment ? "experiment" : signals.paper ? "paper" : "engineering");
   return {
     stage,
     domain,
-    rationale: [`stage=${stage}`, `domain=${domain}`]
+    workflowCommand,
+    rationale: [`stage=${stage}`, `domain=${domain}`, workflowCommand ? `workflow=${workflowCommand}` : null].filter(Boolean)
   };
 }
 
 function nextCommandFor(classification) {
+  const workflowCommand = projectCommandForWorkflow(classification.workflowCommand);
+  if (workflowCommand) {
+    return workflowCommand;
+  }
   if (classification.stage === "audit") {
     return "project:dove.review";
   }
@@ -2502,6 +2548,16 @@ function normalizeAutoCommandId(value) {
   return AUTO_INTERNAL_COMMANDS.includes(normalized) ? normalized : null;
 }
 
+function normalizeConcreteAutoCommandId(value) {
+  const command = normalizeAutoCommandId(value);
+  return command && !["dove.status", "dove.auto"].includes(command) ? command : null;
+}
+
+function projectContinuationRoute(value) {
+  const raw = typeof value === "string" ? value.trim().toLowerCase().replace(/^project:/, "") : "";
+  return ["dove.status", "dove.auto"].includes(raw) ? raw : null;
+}
+
 function stripAutoControlArgs(args = {}) {
   const {
     actions: _actions,
@@ -2580,7 +2636,7 @@ function inferAutoStepsForTask(task = {}, args = {}) {
       whyThisStep: "explicit-auto-steps"
     };
   }
-  const explicitCommand = normalizeAutoCommandId(args.command ?? args.workflow ?? args.preset ?? args.nextCommand ?? task.nextAction);
+  const explicitCommand = normalizeAutoCommandId(args.command ?? args.workflow ?? args.preset ?? args.nextCommand);
   if (explicitCommand) {
     const steps = [{ command: explicitCommand, args: stripAutoControlArgs(args), completeTask: args.completeTask === true || args.complete === true }];
     return {
@@ -2588,24 +2644,27 @@ function inferAutoStepsForTask(task = {}, args = {}) {
       proposedSteps: summarizeAutoSteps(steps),
       safeToRun: true,
       requiresHostPass: false,
-      whyThisStep: `explicit-or-task-next-action:${explicitCommand}`
+      whyThisStep: `explicit-auto-command:${explicitCommand}`
+    };
+  }
+  const taskCommand = normalizeConcreteAutoCommandId(task.nextAction);
+  if (taskCommand) {
+    const steps = [{ command: taskCommand, args: stripAutoControlArgs(args), completeTask: args.completeTask === true || args.complete === true }];
+    return {
+      steps,
+      proposedSteps: summarizeAutoSteps(steps),
+      safeToRun: true,
+      requiresHostPass: false,
+      whyThisStep: `task-next-action:${taskCommand}`
     };
   }
   const text = taskIntentText(task, args);
   const stepArgs = stripAutoControlArgs(args);
-  const inferredCommand = /(review-loop|revision loop|审稿循环|评审循环)/u.test(text)
-    ? "dove.review-loop"
-    : /(review|audit|audio|审稿|审核|复审)/u.test(text)
-      ? "dove.review"
-      : /(figure|diagram|pipeline overview|图|示意图|流程图)/u.test(text)
-        ? "dove.figure"
-        : /(draft|revise|section|introduction|abstract|草稿|修改|章节|引言|摘要)/u.test(text)
-          ? "dove.draft"
-          : (task.domain === "experiment" || /(experiment|ablation|baseline|metric|result|evidence|实验|消融|指标|结果|证据)/u.test(text))
-            ? "dove.experience"
-            : /(source|citation|literature|paper search|reference|来源|引用|文献)/u.test(text)
-              ? "dove.source"
-              : null;
+  const signals = workflowSignals(text);
+  const inferredCommand = workflowCommandFromSignals({
+    ...signals,
+    experiment: task.domain === "experiment" || signals.experiment
+  });
   if (inferredCommand) {
     const steps = [{ command: inferredCommand, args: stepArgs, completeTask: args.completeTask === true || args.complete === true }];
     return {
@@ -2616,12 +2675,13 @@ function inferAutoStepsForTask(task = {}, args = {}) {
       whyThisStep: `inferred-safe-workflow:${inferredCommand}`
     };
   }
+  const continuationRoute = projectContinuationRoute(task.nextAction);
   return {
     steps: [],
     proposedSteps: [],
     safeToRun: false,
     requiresHostPass: true,
-    whyThisStep: "requires-host-pass-or-explicit-workflow-step"
+    whyThisStep: continuationRoute ? `project-continuation-requires-status-triage:${continuationRoute}` : "requires-host-pass-or-explicit-workflow-step"
   };
 }
 

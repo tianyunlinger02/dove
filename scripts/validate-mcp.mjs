@@ -123,9 +123,9 @@ async function main() {
     run_review_loop: ["independent review", "role-framed preActionGuidance"],
     prepare_isolated_review: ["Reviewer preActionGuidanceSummary", "explicit isolation boundaries"],
     import_isolated_review: ["Reviewer preActionGuidanceSummary", "private transcripts"],
-    record_document_evidence: ["Builder/researcher preActionGuidanceSummary", "raw transcripts/private reasoning"],
-    register_source: ["Builder/researcher preActionGuidanceSummary", "evidence provenance"],
-    upsert_note: ["Builder/researcher preActionGuidanceSummary", "evidence guardrails"],
+    record_document_evidence: ["Builder/researcher preActionGuidanceSummary", "internal summaries, pressure-test reports, and synthesized outputs", "source/artifact provenance", "raw transcripts/private reasoning"],
+    register_source: ["Builder/researcher preActionGuidanceSummary", "external source records", "sources: [...]", "upsert_note", "record_document_evidence"],
+    upsert_note: ["Builder/researcher preActionGuidanceSummary", "internal synthesis", "pressure-test findings", "writing-style summaries", "reviewer-preference analysis"],
     upsert_plan: ["Planner preActionGuidanceSummary", "scope/gate guardrails"],
     upsert_outline: ["Planner preActionGuidanceSummary", "draft gate guardrails"],
     set_section_status: ["Planner preActionGuidanceSummary", "section gate context"],
@@ -144,6 +144,10 @@ async function main() {
       requireTextIncludes(description, fragment, `${toolName} description`);
     }
   }
+  const registerSourceSchema = toolByName.get("register_source")?.inputSchema?.properties ?? {};
+  assert.equal(registerSourceSchema.sources?.type, "array", "register_source must expose batch sources array");
+  assert.ok(registerSourceSchema.sources?.items?.properties?.sourceId, "register_source batch items must expose sourceId");
+  assert.ok(registerSourceSchema.sources?.items?.properties?.citationKey, "register_source batch items must expose citationKey");
 
   await callTool("ensure_workspace");
 
@@ -271,7 +275,33 @@ async function main() {
     origin: "validator"
   });
   assert.equal(source.citationKey, "smith2026dove");
+  assert.ok(source.packetIds.includes(packetId));
   requirePreActionGuidanceSummary(source.preActionGuidanceSummary, { surface: "dove.source", primaryRole: "builder" });
+
+  const batchSources = await callTool("register_source", {
+    packetId,
+    sourceType: "guideline",
+    origin: "validator",
+    sources: [
+      {
+        sourceId: "validator-author-kit",
+        citationKey: "validatorAuthorKit2026",
+        title: "Validator Author Kit",
+        locator: "Validator author-kit fixture"
+      },
+      {
+        sourceId: "validator-reviewer-guidelines",
+        citationKey: "validatorReviewerGuidelines2026",
+        title: "Validator Reviewer Guidelines",
+        locator: "Validator reviewer-guidelines fixture"
+      }
+    ]
+  });
+  assert.equal(batchSources.status, "registered");
+  assert.equal(batchSources.sourceCount, 2);
+  assert.deepEqual(batchSources.sourceIds, ["validator-author-kit", "validator-reviewer-guidelines"]);
+  assert.ok(batchSources.items.every((item) => item.packetIds.includes(packetId)));
+  requirePreActionGuidanceSummary(batchSources.preActionGuidanceSummary, { surface: "dove.source", primaryRole: "builder" });
 
   const note = await callTool("upsert_note", {
     packetId,
@@ -283,7 +313,21 @@ async function main() {
     openQuestions: ["Need a stronger comparison baseline."]
   });
   assert.equal(note.sectionId, "introduction");
+  assert.ok(note.packetIds.includes(packetId));
   requirePreActionGuidanceSummary(note.preActionGuidanceSummary, { surface: "dove.note", primaryRole: "builder" });
+
+  const batchNote = await callTool("upsert_note", {
+    packetId,
+    noteId: "validator-venue-intelligence",
+    title: "Validator venue intelligence",
+    sectionId: "venue-writing",
+    sourceIds: batchSources.sourceIds,
+    summary: "Reviewer-preference synthesis belongs in notes after sources are registered.",
+    claims: ["Writing-preference analysis is internal synthesis, not an external source."]
+  });
+  assert.deepEqual(batchNote.sourceIds, batchSources.sourceIds);
+  assert.ok(batchNote.packetIds.includes(packetId));
+  requirePreActionGuidanceSummary(batchNote.preActionGuidanceSummary, { surface: "dove.note", primaryRole: "builder" });
 
   const plan = await callTool("upsert_plan", {
     packetId,
@@ -384,7 +428,7 @@ async function main() {
   requirePreActionGuidanceSummary(checklistSync.preActionGuidanceSummary, { surface: "dove.status", primaryRole: "planner" });
 
   const citationSync = await callTool("sync_citations", { preservePhase: true });
-  assert.equal(citationSync.sourceCount >= 1, true);
+  assert.equal(citationSync.sourceCount >= 3, true);
   requirePreActionGuidanceSummary(citationSync.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "builder" });
 
   const wikiRefresh = await callTool("refresh_wiki", {});

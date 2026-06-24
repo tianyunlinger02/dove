@@ -35,14 +35,15 @@ Create a direction-change point, clear active non-init tasks, and preserve the i
 4. Prefer the `reset_dove_version` MCP tool when available.
 5. Only perform the governed mutation owned by this surface, scoped to the operator request.
 6. For ordinary prompts, first use compact `query_dove_status` and `statusHome.preActionGuidance` for intent routing before choosing a mutation command; users should not need to guess slash command names.
-7. Treat `preActionGuidance` as read-only guidance that automatically recalls applicable lessons from `.dove/meta/operator-lessons.json`; recording lessons remains explicit through `/dove:lessons` and `record_operator_lesson` only.
-8. Frame work through Planner, Builder, and Reviewer primary roles; researcher, experiment-planner, revision-lead, rebuttal-lead, version-analyst, and review-loop are subagents/modes under those roles, not public slash surfaces.
-9. Treat status as the project command center and mission as a durable work contract/progress object; do not make a mission board the default UI.
-10. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
-11. Snapshot the current direction before resetting active tasks.
-12. Clear active non-init tasks so only the level-0 init task remains active.
-13. Preserve the level-0 init goal and required global or task lessons that still apply to future work.
-14. Return a clean status summary and recommend `/dove:mission` for the next direction.
-15. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-16. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-17. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+7. For ordinary prompts that ask to bind, save, deposit, archive, or 沉淀 results to a main task, resolve the durable packet first, register external URLs/templates/guidelines as packet-bound sources, then synthesize internal findings through `upsert_note` or `record_document_evidence` instead of treating the synthesis as an external source.
+8. Treat `preActionGuidance` as read-only guidance that automatically recalls applicable lessons from `.dove/meta/operator-lessons.json`; recording lessons remains explicit through `/dove:lessons` and `record_operator_lesson` only.
+9. Frame work through Planner, Builder, and Reviewer primary roles; researcher, experiment-planner, revision-lead, rebuttal-lead, version-analyst, and review-loop are subagents/modes under those roles, not public slash surfaces.
+10. Treat status as the project command center and mission as a durable work contract/progress object; do not make a mission board the default UI.
+11. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
+12. Snapshot the current direction before resetting active tasks.
+13. Clear active non-init tasks so only the level-0 init task remains active.
+14. Preserve the level-0 init goal and required global or task lessons that still apply to future work.
+15. Return a clean status summary and recommend `/dove:mission` for the next direction.
+16. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+17. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+18. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

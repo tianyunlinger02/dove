@@ -90,7 +90,7 @@ function normalizeWorkflowStage(stage, surface = "dove.status") {
   if (normalized === "return") {
     return "return";
   }
-  if (["dove.auto", "dove.figure", "dove.experience", "dove.draft", "dove.source", "dove.note", "dove.claim"].includes(surface)) {
+  if (["dove.auto", "dove.figure", "dove.experience", "dove.draft", "dove.source", "dove.note", "dove.document", "dove.documents", "dove.claim"].includes(surface)) {
     return "execute";
   }
   if (["dove.review", "dove.audit", "dove.paper-audit", "dove.audio-review", "dove.isolated-review"].includes(surface)) {
@@ -119,7 +119,7 @@ export function inferPrimaryRoleForSurface(surface, context = {}) {
   if (surfaceIn(normalizedSurface, ["review", "audit"])) {
     return "reviewer";
   }
-  if (surfaceIn(normalizedSurface, ["auto", "figure", "experience", "draft", "source", "note", "claim", "experiment", "rebuttal"])) {
+  if (surfaceIn(normalizedSurface, ["auto", "figure", "experience", "draft", "source", "note", "document", "claim", "experiment", "rebuttal"])) {
     return "builder";
   }
   return "planner";
@@ -162,6 +162,15 @@ function interpretedIntentForSurface(surface, context = {}, responseLanguage = "
   }
   if (surface === "dove.operator") {
     return text(responseLanguage, "由 planner 协调 ready/blocked work，并只执行显式确认的一次前台 pass。", "Let the planner coordinate ready/blocked work and run only one explicitly confirmed foreground pass.");
+  }
+  if (surface === "dove.source") {
+    return text(responseLanguage, "把外部链接、模板、指南、venue/ranking 证据先注册为 packet-bound sources，再进入 note 或 document evidence 综合沉淀。", "Register external links, templates, guidelines, and venue/ranking evidence as packet-bound sources first, then synthesize them through note or document evidence.");
+  }
+  if (surface === "dove.note") {
+    return text(responseLanguage, "把已注册 sources 综合成绑定主任务的结构化 note；内部压力测试总结和写作偏好不要伪装成 external source。", "Synthesize registered sources into a packet-bound structured note; internal pressure-test summaries and writing preferences must not be disguised as external sources.");
+  }
+  if (surface === "dove.document" || surface === "dove.documents") {
+    return text(responseLanguage, "把报告或产物作为 document evidence 绑定到 durable packet，并保留 source/artifact provenance。", "Bind reports or outputs as document evidence to a durable packet while preserving source/artifact provenance.");
   }
   return text(responseLanguage, "先用三角色和 lesson guardrail 框住行动，再进入具体 Dove workflow。", "Frame the action with the three roles and lesson guardrails before entering the concrete Dove workflow.");
 }
@@ -209,6 +218,10 @@ function workflowRouteForSurface(surface, command, responseLanguage = "zh") {
     "dove.auto": "run_dove_auto preview -> confirmed bounded foreground pass",
     "dove.operator": "run_dove_operator preview -> confirmed queue pass",
     "dove.review": "review/audit workflow with independent reviewer boundary",
+    "dove.source": "register_source external provenance intake, optionally batch -> upsert_note or record_document_evidence synthesis",
+    "dove.note": "upsert_note packet-bound synthesis from registered sources -> claims or document evidence",
+    "dove.document": "record_document_evidence packet-bound report/archive ledger with source and artifact provenance",
+    "dove.documents": "record_document_evidence packet-bound report/archive ledger with source and artifact provenance",
     "dove.figure": "figure materials -> generation/import -> caption/provenance -> QA",
     "dove.experience": "experiment plan/result -> audit -> claim bridge",
     "dove.rebuttal": "review issue board -> builder revision strategy -> response draft"

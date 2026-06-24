@@ -106,3 +106,48 @@ test("pre-action guidance ranks active packet lessons and keeps guardrails expli
   assert.equal(summary.requiresConfirmationForWrites, true);
   assert.equal(summary.recordingExplicitOnly, true);
 });
+
+test("pre-action guidance explains source note and document deposition routes", () => {
+  const source = buildPreActionGuidance({
+    surface: "dove.source",
+    responseLanguage: "en",
+    workflowKind: "source",
+    tags: ["source"]
+  });
+  assert.equal(source.roleFrame.primaryRole, "builder");
+  assert.equal(source.roleFrame.subagentSpecialty, "researcher");
+  assert.match(source.intentFrame.interpretedIntent, /Register external links, templates, guidelines/);
+  assert.match(source.workflowFrame.recommendedRoute, /register_source/);
+  assert.match(source.workflowFrame.recommendedRoute, /batch/);
+  assert.match(source.workflowFrame.recommendedRoute, /upsert_note/);
+  assert.match(source.workflowFrame.recommendedRoute, /record_document_evidence/);
+  assert.equal(source.guardrails.noHiddenRuntime, true);
+  assert.equal(source.lessonRecall.recordingExplicitOnly, true);
+
+  const note = buildPreActionGuidance({
+    surface: "dove.note",
+    responseLanguage: "en",
+    workflowKind: "note",
+    tags: ["note"]
+  });
+  assert.equal(note.roleFrame.primaryRole, "builder");
+  assert.equal(note.roleFrame.subagentSpecialty, "researcher");
+  assert.match(note.intentFrame.interpretedIntent, /Synthesize registered sources/);
+  assert.match(note.intentFrame.interpretedIntent, /must not be disguised as external sources/);
+  assert.match(note.workflowFrame.recommendedRoute, /upsert_note/);
+  assert.match(note.workflowFrame.recommendedRoute, /packet-bound synthesis/);
+  assert.match(note.workflowFrame.recommendedRoute, /registered sources/);
+
+  const documents = buildPreActionGuidance({
+    surface: "dove.documents",
+    responseLanguage: "en",
+    workflowKind: "document-evidence",
+    tags: ["document", "evidence"]
+  });
+  assert.equal(documents.roleFrame.primaryRole, "builder");
+  assert.equal(documents.intentFrame.interpretedIntent, "Bind reports or outputs as document evidence to a durable packet while preserving source/artifact provenance.");
+  assert.match(documents.workflowFrame.recommendedRoute, /record_document_evidence/);
+  assert.match(documents.workflowFrame.recommendedRoute, /packet-bound report\/archive ledger/);
+  assert.match(documents.workflowFrame.recommendedRoute, /source and artifact provenance/);
+  assert.equal(documents.guardrails.boundedForegroundOnly, true);
+});

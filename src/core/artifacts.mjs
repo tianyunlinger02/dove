@@ -1925,31 +1925,84 @@ export function readState(root) {
   return { ...state, orchestrationBoard: loadBoard(root), workspaceIndex: queryWorkspaceIndex(root) };
 }
 
+function sourceInputsFromArgs(args = {}) {
+  if (Array.isArray(args.sources)) {
+    return args.sources.map((item) => item && typeof item === "object" && !Array.isArray(item) ? item : {});
+  }
+  return [args];
+}
+
+function mergeIds(...values) {
+  return Array.from(new Set(values.flatMap((value) => normalizeStringArray(value))));
+}
+
+function upsertSourceItem(sources, input = {}, context = {}) {
+  const sourceIndex = context.initialCount + context.itemOffset + 1;
+  const baseId = normalizeIdentifier(input.sourceId, `${slugify(input.citationKey ?? input.title ?? `source-${sourceIndex}`)}${input.year ? `-${input.year}` : ""}`);
+  const existingIndex = sources.items.findIndex((item) => item.id === baseId || (input.citationKey && item.citationKey === input.citationKey));
+  const existing = existingIndex >= 0 ? sources.items[existingIndex] : null;
+  const packetIds = mergeIds(existing?.packetIds, input.packetIds, context.packetId ? [context.packetId] : []);
+  const source = {
+    ...(existing ?? {}),
+    id: baseId,
+    citationKey: input.citationKey ?? existing?.citationKey ?? baseId,
+    title: input.title ?? existing?.title ?? "Untitled Source",
+    authors: Array.isArray(input.authors) ? input.authors : existing?.authors ?? [],
+    year: input.year ?? existing?.year ?? "",
+    locator: input.locator ?? existing?.locator ?? "",
+    sourceType: input.sourceType ?? context.sourceType ?? existing?.sourceType ?? "paper",
+    abstract: input.abstract ?? existing?.abstract ?? "",
+    origin: input.origin ?? context.origin ?? existing?.origin ?? "manual",
+    packetIds,
+    addedAt: existing?.addedAt ?? context.timestamp,
+    updatedAt: context.timestamp
+  };
+  if (existingIndex >= 0) sources.items[existingIndex] = source;
+  else sources.items.push(source);
+  return source;
+}
+
+function syncCitationArtifacts(root, args = {}) {
+  const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
+  const citedKeys = new Set();
+  for (const draftFile of listDraftFiles(root)) {
+    const draftPath = `${ARTIFACT_PATHS.draftsDir}/${draftFile}`;
+    const draftContent = readText(root, draftPath, "");
+    for (const key of extractCitationKeysFromText(draftContent)) citedKeys.add(key);
+  }
+  const missingKeys = Array.from(citedKeys).filter((key) => !sources.items.some((source) => source.id === key || source.citationKey === key)).sort();
+  const selectedSources = args.citedOnly
+    ? sources.items.filter((source) => citedKeys.has(source.citationKey ?? source.id) || citedKeys.has(source.id))
+    : sources.items;
+  const bibliography = selectedSources.map(renderBibEntry).join("\n\n");
+  writeText(root, ARTIFACT_PATHS.bibliography, bibliography ? `${bibliography}\n` : "");
+  writeText(root, ARTIFACT_PATHS.citationLog, renderCitationLog(sources, citedKeys, missingKeys));
+  return { sources, citedKeys, missingKeys };
+}
+
 export function registerSource(root, args = {}) {
   assertGovernanceMutationRegistered("register-source", "guarded");
   const target = assertTaskScopedMutationTarget(root, "register-source", args);
   assertFollowThroughReady(root, "Registering a source", args);
   ensureWorkspace(root);
+  const timestamp = nowIso();
+  const sourceInputs = sourceInputsFromArgs(args);
+  if (sourceInputs.length === 0) {
+    throw new Error("register_source requires at least one source.");
+  }
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
-  const baseId = normalizeIdentifier(args.sourceId, `${slugify(args.citationKey ?? args.title ?? `source-${sources.items.length + 1}`)}${args.year ? `-${args.year}` : ""}`);
-  const source = {
-    id: baseId,
-    citationKey: args.citationKey ?? baseId,
-    title: args.title ?? "Untitled Source",
-    authors: Array.isArray(args.authors) ? args.authors : [],
-    year: args.year ?? "",
-    locator: args.locator ?? "",
-    sourceType: args.sourceType ?? "paper",
-    abstract: args.abstract ?? "",
-    origin: args.origin ?? "manual",
-    addedAt: nowIso()
-  };
-  const existingIndex = sources.items.findIndex((item) => item.id === source.id || item.citationKey === source.citationKey);
-  if (existingIndex >= 0) sources.items[existingIndex] = { ...sources.items[existingIndex], ...source };
-  else sources.items.push(source);
-  sources.updatedAt = nowIso();
+  const initialCount = sources.items.length;
+  const registered = sourceInputs.map((input, index) => upsertSourceItem(sources, input, {
+    initialCount,
+    itemOffset: index,
+    origin: args.origin,
+    sourceType: args.sourceType,
+    packetId: target.packet?.id,
+    timestamp
+  }));
+  sources.updatedAt = timestamp;
   writeJson(root, ARTIFACT_PATHS.sources, sources);
-  syncCitations(root, { preservePhase: true });
+  syncCitationArtifacts(root, { preservePhase: true });
   const state = loadState(root);
   syncPhase(root, state, {
     stage: "sources",
@@ -1961,22 +2014,34 @@ export function registerSource(root, args = {}) {
   });
   refreshDurableSurfaces(root, {
     type: "register-source",
-    summary: `Registered source ${source.id}.`,
+    summary: registered.length === 1 ? `Registered source ${registered[0].id}.` : `Registered ${registered.length} sources.`,
     artifactPaths: [ARTIFACT_PATHS.sources, ARTIFACT_PATHS.citationLog, ARTIFACT_PATHS.queryPack]
   });
+  const guidanceSummary = artifactGuidanceSummary(root, args, {
+    surface: "dove.source",
+    roleId: "builder",
+    subagentSpecialty: "researcher",
+    packet: target.packet,
+    stage: target.packet?.stage ?? "execute",
+    workflowKind: "source",
+    nextAction: "project:dove.note",
+    tags: ["source", "evidence", "research"],
+    statusSummary: { sourceIds: registered.map((source) => source.id), sourceCount: registered.length }
+  });
+  if (!Array.isArray(args.sources)) {
+    return {
+      ...registered[0],
+      preActionGuidanceSummary: guidanceSummary
+    };
+  }
   return {
-    ...source,
-    preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
-      surface: "dove.source",
-      roleId: "builder",
-      subagentSpecialty: "researcher",
-      packet: target.packet,
-      stage: target.packet?.stage ?? "execute",
-      workflowKind: "source",
-      nextAction: "project:dove.note",
-      tags: ["source", "evidence", "research"],
-      statusSummary: { sourceId: source.id, citationKey: source.citationKey }
-    })
+    status: "registered",
+    sourceCount: registered.length,
+    sourceIds: registered.map((source) => source.id),
+    citationKeys: registered.map((source) => source.citationKey),
+    items: registered,
+    packetId: target.packet?.id ?? null,
+    preActionGuidanceSummary: guidanceSummary
   };
 }
 
@@ -1993,18 +2058,22 @@ export function upsertNote(root, args = {}) {
   const requestedSourceIds = Array.isArray(args.sourceIds) ? args.sourceIds : [];
   const unknownSourceIds = requestedSourceIds.filter((id) => !knownSourceIds.has(id));
   if (unknownSourceIds.length > 0) throw new Error(`Note references unknown sources: ${unknownSourceIds.join(", ")}`);
+  const noteId = normalizeIdentifier(args.noteId, `${args.sectionId ?? "general"}-${args.title ?? `note-${notes.items.length + 1}`}`);
+  const existingIndex = notes.items.findIndex((item) => item.id === noteId);
+  const existing = existingIndex >= 0 ? notes.items[existingIndex] : null;
   const note = {
-    id: normalizeIdentifier(args.noteId, `${args.sectionId ?? "general"}-${args.title ?? `note-${notes.items.length + 1}`}`),
-    title: args.title ?? "Untitled Note",
-    sectionId: normalizeIdentifier(args.sectionId, "introduction"),
+    ...(existing ?? {}),
+    id: noteId,
+    title: args.title ?? existing?.title ?? "Untitled Note",
+    sectionId: normalizeIdentifier(args.sectionId, existing?.sectionId ?? "introduction"),
     sourceIds: requestedSourceIds,
-    summary: args.summary ?? "",
-    quotes: Array.isArray(args.quotes) ? args.quotes : [],
-    claims: Array.isArray(args.claims) ? args.claims : [],
-    openQuestions: Array.isArray(args.openQuestions) ? args.openQuestions : [],
+    packetIds: mergeIds(existing?.packetIds, args.packetIds, target.packet?.id ? [target.packet.id] : []),
+    summary: args.summary ?? existing?.summary ?? "",
+    quotes: Array.isArray(args.quotes) ? args.quotes : existing?.quotes ?? [],
+    claims: Array.isArray(args.claims) ? args.claims : existing?.claims ?? [],
+    openQuestions: Array.isArray(args.openQuestions) ? args.openQuestions : existing?.openQuestions ?? [],
     updatedAt: nowIso()
   };
-  const existingIndex = notes.items.findIndex((item) => item.id === note.id);
   if (existingIndex >= 0) notes.items[existingIndex] = note;
   else notes.items.push(note);
   notes.updatedAt = nowIso();
@@ -2393,20 +2462,7 @@ export function syncCitations(root, args = {}) {
   assertGovernanceMutationRegistered("sync-citations", "guarded");
   assertFollowThroughReady(root, "Updating citation artifacts", args);
   ensureWorkspace(root);
-  const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
-  const citedKeys = new Set();
-  for (const draftFile of listDraftFiles(root)) {
-    const draftPath = `${ARTIFACT_PATHS.draftsDir}/${draftFile}`;
-    const draftContent = readText(root, draftPath, "");
-    for (const key of extractCitationKeysFromText(draftContent)) citedKeys.add(key);
-  }
-  const missingKeys = Array.from(citedKeys).filter((key) => !sources.items.some((source) => source.id === key || source.citationKey === key)).sort();
-  const selectedSources = args.citedOnly
-    ? sources.items.filter((source) => citedKeys.has(source.citationKey ?? source.id) || citedKeys.has(source.id))
-    : sources.items;
-  const bibliography = selectedSources.map(renderBibEntry).join("\n\n");
-  writeText(root, ARTIFACT_PATHS.bibliography, bibliography ? `${bibliography}\n` : "");
-  writeText(root, ARTIFACT_PATHS.citationLog, renderCitationLog(sources, citedKeys, missingKeys));
+  const { sources, citedKeys, missingKeys } = syncCitationArtifacts(root, args);
   const state = loadState(root);
   syncPhase(root, state, args.preservePhase ? {
     stage: state.pipeline.currentStage,

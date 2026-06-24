@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
+  createDoveTask,
   ensureWorkspace,
   launchDoveMission,
   queryDoveAudit,
@@ -13,7 +14,8 @@ import {
   queryDoveOrchestrate,
   queryDoveReturn,
   queryDoveStatus,
-  queryMetaOptimize
+  queryMetaOptimize,
+  runDoveAuto
 } from "../../src/core/index.mjs";
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -42,7 +44,8 @@ function writeTaskPacket(root, packet) {
   for (const relativePath of [packetPath, packetContextPath]) {
     fs.mkdirSync(path.dirname(path.join(root, relativePath)), { recursive: true });
   }
-  writeJson(root, packetPath, { ...packet, packetPath, packetContextPath });
+  const packetRecord = { ...packet, packetPath, packetContextPath };
+  writeJson(root, packetPath, packetRecord);
   writeJson(root, packetContextPath, {
     id: packet.id,
     parentId: packet.parentId ?? null,
@@ -61,6 +64,20 @@ function writeTaskPacket(root, packet) {
     nextAction: packet.nextAction ?? null,
     updatedAt: packet.updatedAt ?? null
   });
+  const indexPath = path.join(root, ARTIFACT_PATHS.taskPacketsIndex);
+  const existingIndex = fs.existsSync(indexPath)
+    ? JSON.parse(fs.readFileSync(indexPath, "utf8"))
+    : { version: 3, items: [], taskModel: { activeTaskIds: [] }, updatedAt: null };
+  if (!existingIndex.items?.some((item) => item.id === packet.id)) {
+    writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
+      ...existingIndex,
+      items: [...(existingIndex.items ?? []), packetRecord],
+      taskModel: {
+        ...(existingIndex.taskModel ?? {}),
+        activeTaskIds: Array.from(new Set([...(existingIndex.taskModel?.activeTaskIds ?? []), packet.id]))
+      }
+    });
+  }
   return { packetPath, packetContextPath };
 }
 
@@ -1133,6 +1150,84 @@ test("queryDoveOrchestrate routes an engineering mission without writing artifac
   assert.equal(result.diagnostics.noCommandExecution, true);
   assert.equal(result.diagnostics.noGitInspection, true);
   assert.deepEqual(after, before);
+});
+
+test("createDoveTask routes venue source research ahead of reviewer audit", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+
+  const sourceResearch = createDoveTask(root, {
+    id: "venue-source-research",
+    title: "调研计算机 venue 模板与审稿偏好",
+    goal: "调查 CVPR author kit, reviewer guidelines, 文献, 模板, 写作风格和审稿偏好，并沉淀来源。",
+    checklist: false
+  });
+
+  assert.equal(sourceResearch.status, "needs-confirmation");
+  assert.equal(sourceResearch.proposedTask.nextAction, "project:dove.source");
+  assert.equal(sourceResearch.recommendedNextCommand, "project:dove.source");
+  assert.equal(sourceResearch.classification.workflowCommand, "dove.source");
+  assert.equal(sourceResearch.classification.stage, "execute");
+  assert.equal(sourceResearch.classification.domain, "paper");
+
+  const trueAudit = createDoveTask(root, {
+    id: "draft-review-audit",
+    title: "审查这份草稿",
+    goal: "Review and audit this draft, verify evidence integrity, and report reviewer findings.",
+    checklist: false
+  });
+
+  assert.equal(trueAudit.status, "needs-confirmation");
+  assert.equal(trueAudit.proposedTask.nextAction, "project:dove.review");
+  assert.equal(trueAudit.recommendedNextCommand, "project:dove.review");
+  assert.equal(trueAudit.classification.workflowCommand, "dove.review");
+  assert.equal(trueAudit.classification.stage, "audit");
+});
+
+test("runDoveAuto treats project continuation routes as host triage, not concrete steps", () => {
+  const statusRoot = tempRoot();
+  ensureWorkspace(statusRoot);
+  writeTaskPacket(statusRoot, {
+    id: "status-continuation",
+    title: "Status continuation",
+    summary: "Needs command-center triage before work continues.",
+    status: "ready",
+    lifecycleStatus: "active",
+    stage: "execute",
+    domain: "paper",
+    level: 1,
+    creatorKind: "operator",
+    nextAction: "project:dove.status"
+  });
+
+  const statusAuto = runDoveAuto(statusRoot, { packetId: "status-continuation" });
+  assert.equal(statusAuto.status, "needs-confirmation");
+  assert.deepEqual(statusAuto.proposedSteps, []);
+  assert.equal(statusAuto.safeToRun, false);
+  assert.equal(statusAuto.requiresHostPass, true);
+  assert.equal(statusAuto.whyThisStep, "project-continuation-requires-status-triage:dove.status");
+
+  const autoRoot = tempRoot();
+  ensureWorkspace(autoRoot);
+  writeTaskPacket(autoRoot, {
+    id: "auto-continuation",
+    title: "Auto continuation",
+    summary: "Needs ordinary-prompt status triage before selecting concrete work.",
+    status: "ready",
+    lifecycleStatus: "active",
+    stage: "execute",
+    domain: "paper",
+    level: 1,
+    creatorKind: "operator",
+    nextAction: "project:dove.auto"
+  });
+
+  const autoContinuation = runDoveAuto(autoRoot, { packetId: "auto-continuation" });
+  assert.equal(autoContinuation.status, "needs-confirmation");
+  assert.deepEqual(autoContinuation.proposedSteps, []);
+  assert.equal(autoContinuation.safeToRun, false);
+  assert.equal(autoContinuation.requiresHostPass, true);
+  assert.equal(autoContinuation.whyThisStep, "project-continuation-requires-status-triage:dove.auto");
 });
 
 test("queryDoveAudit reports audit and return readiness without writing artifacts", () => {

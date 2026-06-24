@@ -660,6 +660,32 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
       sourceType: "paper"
     }));
     assertPreActionGuidanceSummary(source.preActionGuidanceSummary, { surface: "dove.source", primaryRole: "builder" });
+    assert.ok(source.packetIds.includes(packetId));
+
+    const batchSources = extractToolJson(dispatchTool(root, "register_source", {
+      packetId,
+      sourceType: "guideline",
+      origin: "integration-test",
+      sources: [
+        {
+          sourceId: "cvpr-author-kit",
+          citationKey: "cvprAuthorKit2026",
+          title: "CVPR Author Kit",
+          locator: "CVPR author-kit fixture"
+        },
+        {
+          sourceId: "cvpr-reviewer-guidelines",
+          citationKey: "cvprReviewerGuidelines2026",
+          title: "CVPR Reviewer Guidelines",
+          locator: "CVPR reviewer-guidelines fixture"
+        }
+      ]
+    }));
+    assert.equal(batchSources.status, "registered");
+    assert.equal(batchSources.sourceCount, 2);
+    assert.deepEqual(batchSources.sourceIds, ["cvpr-author-kit", "cvpr-reviewer-guidelines"]);
+    assert.ok(batchSources.items.every((item) => item.packetIds.includes(packetId)));
+    assertPreActionGuidanceSummary(batchSources.preActionGuidanceSummary, { surface: "dove.source", primaryRole: "builder" });
 
     const note = extractToolJson(dispatchTool(root, "upsert_note", {
       packetId,
@@ -670,6 +696,26 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
       claims: ["Thin surfaces preserve guidance summaries."]
     }));
     assertPreActionGuidanceSummary(note.preActionGuidanceSummary, { surface: "dove.note", primaryRole: "builder" });
+    assert.ok(note.packetIds.includes(packetId));
+
+    const batchNote = extractToolJson(dispatchTool(root, "upsert_note", {
+      packetId,
+      noteId: "venue-writing-intelligence",
+      title: "Venue writing intelligence",
+      sectionId: "venue-writing",
+      sourceIds: batchSources.sourceIds,
+      summary: "Reviewer-preference synthesis belongs in notes after external provenance is registered.",
+      claims: ["Venue writing preferences are internal synthesis, not an external source."]
+    }));
+    assert.deepEqual(batchNote.sourceIds, batchSources.sourceIds);
+    assert.ok(batchNote.packetIds.includes(packetId));
+    assertPreActionGuidanceSummary(batchNote.preActionGuidanceSummary, { surface: "dove.note", primaryRole: "builder" });
+
+    const persistedSources = JSON.parse(fs.readFileSync(path.join(root, ".dove", "sources", "index.json"), "utf8"));
+    assert.equal(persistedSources.items.length, 3);
+    assert.ok(persistedSources.items.every((item) => item.packetIds.includes(packetId)));
+    const persistedNotes = JSON.parse(fs.readFileSync(path.join(root, ".dove", "notes", "index.json"), "utf8"));
+    assert.ok(persistedNotes.items.every((item) => item.packetIds.includes(packetId)));
 
     const claims = extractToolJson(dispatchTool(root, "upsert_claims", {
       packetId,
@@ -742,7 +788,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     assertPreActionGuidanceSummary(checklist.preActionGuidanceSummary, { surface: "dove.status", primaryRole: "planner" });
 
     const citations = extractToolJson(dispatchTool(root, "sync_citations", { preservePhase: true }));
-    assert.equal(citations.sourceCount, 1);
+    assert.equal(citations.sourceCount, 3);
     assertPreActionGuidanceSummary(citations.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "builder" });
 
     const wiki = extractToolJson(dispatchTool(root, "refresh_wiki", {}));
@@ -1127,7 +1173,7 @@ test("run_dove_operator previews queues and creates blocker investigation missio
       goal: "Validate operator queue semantics."
     });
     for (const task of [
-      { id: "operator-auto-ready", title: "Operator auto-ready task", status: "ready", nextAction: "project:dove.status" },
+      { id: "operator-auto-ready", title: "Operator auto-ready source task", status: "ready", nextAction: "project:dove.source" },
       { id: "operator-host-progress", title: "Operator host progress task", status: "in-progress" },
       { id: "operator-host-missing", title: "Operator host missing task", status: "ready" },
       { id: "operator-unresolved", title: "Operator unresolved dependency task", status: "ready", dependencies: ["missing-dependency"] },
@@ -1882,6 +1928,9 @@ test("role-bound MCP tools expose explicit override fields", () => {
 
   const createDoveTaskTool = toolDefinitions.find((item) => item.name === "create_dove_task");
   const recordMissionPassTool = toolDefinitions.find((item) => item.name === "record_dove_mission_pass");
+  const recordDocumentEvidenceTool = toolDefinitions.find((item) => item.name === "record_document_evidence");
+  const registerSourceTool = toolDefinitions.find((item) => item.name === "register_source");
+  const upsertNoteTool = toolDefinitions.find((item) => item.name === "upsert_note");
   const applyStatusAdjustmentsTool = toolDefinitions.find((item) => item.name === "apply_dove_status_adjustments");
   const runDoveAutoTool = toolDefinitions.find((item) => item.name === "run_dove_auto");
   const runDoveOperatorTool = toolDefinitions.find((item) => item.name === "run_dove_operator");
@@ -2000,6 +2049,23 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(recordOperatorLessonTool, "record_operator_lesson should exist");
   assert.match(recordOperatorLessonTool.description, /auto-recall lessons read-only/);
   assert.match(recordOperatorLessonTool.description, /recording never happens implicitly/);
+  assert.ok(recordDocumentEvidenceTool, "record_document_evidence should exist");
+  assert.match(recordDocumentEvidenceTool.description, /document\/evidence ledger entry/);
+  assert.match(recordDocumentEvidenceTool.description, /source\/artifact provenance/);
+  assert.match(recordDocumentEvidenceTool.description, /internal summaries, pressure-test reports, and synthesized outputs/);
+  assert.ok(registerSourceTool, "register_source should exist");
+  assert.match(registerSourceTool.description, /external source records/);
+  assert.match(registerSourceTool.description, /sources: \[\.\.\.\]/);
+  assert.match(registerSourceTool.description, /upsert_note/);
+  assert.match(registerSourceTool.description, /record_document_evidence/);
+  assert.ok(registerSourceTool.inputSchema.properties.sources, "register_source should expose batch sources");
+  assert.equal(registerSourceTool.inputSchema.properties.sources.type, "array");
+  assert.ok(registerSourceTool.inputSchema.properties.sources.items.properties.sourceId, "register_source batch items should expose sourceId");
+  assert.ok(upsertNoteTool, "upsert_note should exist");
+  assert.match(upsertNoteTool.description, /internal synthesis/);
+  assert.match(upsertNoteTool.description, /pressure-test findings/);
+  assert.match(upsertNoteTool.description, /writing-style summaries/);
+  assert.match(upsertNoteTool.description, /reviewer-preference analysis/);
   assert.ok(publishStatusTool, "publish_dove_status should exist");
   assert.match(publishStatusTool.description, /sanitized public Dove project progress artifacts/);
   assert.ok(publishStatusTool.inputSchema.properties.includeArchived, "publish_dove_status should expose includeArchived");

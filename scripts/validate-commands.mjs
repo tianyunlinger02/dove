@@ -195,6 +195,9 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
 
   assert.equal(commandText.includes("ordinary prompts"), true, `${relativePath} must route ordinary prompts through status guidance`);
   assert.equal(commandText.includes("statusHome.preActionGuidance"), true, `${relativePath} must mention preActionGuidance`);
+  assert.equal(commandText.includes("bind, save, deposit, archive, or 沉淀"), true, `${relativePath} must explain ordinary prompt deposition routing`);
+  assert.equal(commandText.includes("register external URLs/templates/guidelines as packet-bound sources"), true, `${relativePath} must route external evidence through sources first`);
+  assert.equal(commandText.includes("`upsert_note` or `record_document_evidence`"), true, `${relativePath} must route synthesis into note or document evidence`);
   assert.equal(commandText.includes("read-only guidance"), true, `${relativePath} must keep guidance read-only`);
   assert.equal(commandText.includes(".dove/meta/operator-lessons.json"), true, `${relativePath} must auto-recall lessons from the canonical lessons path`);
   assert.equal(commandText.includes("recording lessons remains explicit"), true, `${relativePath} must forbid implicit lesson recording`);
@@ -250,6 +253,30 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
     assert.equal(commandText.includes("Do not claim host/code/provider/experiment work"), true, `${relativePath} must not claim external work without evidence`);
     assert.equal(commandText.includes("hidden background work"), true, `${relativePath} must keep auto continuation explicit and foreground-only`);
     assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after auto runs`);
+  }
+
+  if (command.id === "dove.source") {
+    assert.equal(commandText.includes("Collect and organize external provenance"), true, `${relativePath} must frame source as external provenance intake`);
+    assert.equal(commandText.includes("external information intake, not internal note consolidation"), true, `${relativePath} must keep sources separate from internal synthesis`);
+    assert.equal(commandText.includes("pressure-test summaries and writing-style synthesis belong in note or document evidence"), true, `${relativePath} must route internal synthesis away from sources`);
+    assert.equal(commandText.includes("sources: [...]"), true, `${relativePath} must document batch source intake`);
+    assert.equal(commandText.includes("multiple URLs/templates/guidelines"), true, `${relativePath} must support multi-source provenance capture`);
+    assert.equal(commandText.includes("packetIds"), true, `${relativePath} must require packet-bound source provenance`);
+    assert.equal(commandText.includes("reviewer-guideline or 审稿偏好 research"), true, `${relativePath} must cover reviewer-preference source research`);
+    assert.equal(commandText.includes("Builder/researcher source intake"), true, `${relativePath} must keep reviewer-guideline research in Builder/researcher source intake`);
+    assert.equal(commandText.includes("independent audit of an artifact"), true, `${relativePath} must reserve review workflow for explicit artifact audit`);
+    assert.equal(commandText.includes("record_document_evidence"), true, `${relativePath} must mention the document evidence deposition route`);
+  }
+
+  if (command.id === "dove.note") {
+    assert.equal(commandText.includes("packet-bound internal synthesis"), true, `${relativePath} must frame notes as packet-bound synthesis`);
+    assert.equal(commandText.includes("pressure-test results"), true, `${relativePath} must include pressure-test results as note material`);
+    assert.equal(commandText.includes("internal information consolidation, not external source discovery"), true, `${relativePath} must separate notes from source discovery`);
+    assert.equal(commandText.includes("external URLs/templates/guidelines must already be registered as sources"), true, `${relativePath} must require registered source provenance before synthesis`);
+    assert.equal(commandText.includes("bind/save/deposit/沉淀 requests"), true, `${relativePath} must handle deposition prompts through note or document evidence`);
+    assert.equal(commandText.includes("record_document_evidence"), true, `${relativePath} must mention the document evidence alternative`);
+    assert.equal(commandText.includes("packetIds"), true, `${relativePath} must require packet-bound notes`);
+    assert.equal(commandText.includes("sourceIds/artifacts"), true, `${relativePath} must preserve note links to sources and artifacts`);
   }
 
   if (command.id === "dove.figure") {

@@ -174,6 +174,7 @@ const TASK_SCOPED_WRITE_CONSTRAINTS = [
 
 const AGENT_WORKFLOW_CONSTRAINTS = [
   "For ordinary prompts, first use compact `query_dove_status` and `statusHome.preActionGuidance` for intent routing before choosing a mutation command; users should not need to guess slash command names.",
+  "For ordinary prompts that ask to bind, save, deposit, archive, or 沉淀 results to a main task, resolve the durable packet first, register external URLs/templates/guidelines as packet-bound sources, then synthesize internal findings through `upsert_note` or `record_document_evidence` instead of treating the synthesis as an external source.",
   "Treat `preActionGuidance` as read-only guidance that automatically recalls applicable lessons from `.dove/meta/operator-lessons.json`; recording lessons remains explicit through `/dove:lessons` and `record_operator_lesson` only.",
   "Frame work through Planner, Builder, and Reviewer primary roles; researcher, experiment-planner, revision-lead, rebuttal-lead, version-analyst, and review-loop are subagents/modes under those roles, not public slash surfaces.",
   "Treat status as the project command center and mission as a durable work contract/progress object; do not make a mission board the default UI.",
@@ -257,9 +258,9 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "guarded-mutation",
-    summary: "Collect and organize external information such as web, literature, API, or operator-provided sources for the selected task.",
+    summary: "Collect and organize external provenance such as web, literature, venue templates, reviewer guidelines, rankings, APIs, or operator-provided sources for the selected task.",
     requiredTools: ["register_source"],
-    constraints: ["Treat source as external information intake, not internal note consolidation.", "Use explicit configured providers or operator-provided material; do not hide network/provider calls.", "Link each source to the resolved durable task packet."]
+    constraints: ["Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.", "Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.", "Use explicit configured providers or operator-provided material; do not hide network/provider calls.", "Link each source to the resolved durable task packet through packetIds.", "For reviewer-guideline or 审稿偏好 research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact."]
   },
   {
     id: "dove.note",
@@ -267,9 +268,9 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "guarded-mutation",
-    summary: "Organize internal information from the repository, `.dove`, existing artifacts, and operator notes for the selected task.",
+    summary: "Organize packet-bound internal synthesis from registered sources, `.dove`, existing artifacts, pressure-test results, and operator notes for the selected task.",
     requiredTools: ["upsert_note"],
-    constraints: ["Treat note as internal information consolidation, not external source discovery.", "Link notes to the resolved durable task packet and relevant artifacts."]
+    constraints: ["Treat note as internal information consolidation, not external source discovery; external URLs/templates/guidelines must already be registered as sources when they are evidence.", "For bind/save/deposit/沉淀 requests, write the synthesized findings here or in `record_document_evidence` after source provenance is registered.", "Link notes to the resolved durable task packet through packetIds and to relevant sourceIds/artifacts."]
   },
   {
     id: "dove.figure",
@@ -384,18 +385,18 @@ const COMMAND_UX_DETAILS = {
     examples: ["/dove:version Change direction to focus on result-card usability", "/dove:version Start a fresh figure workflow direction while preserving the init goal"]
   },
   "dove.source": {
-    dailyFlow: ["Use this to register external information such as papers, web findings, API docs, citations, or operator-provided provenance.", "Keep source intake separate from internal notes."],
-    targetingBehavior: "Resolve or confirm the durable task packet before recording external source metadata.",
+    dailyFlow: ["Use this to register external information such as papers, web findings, venue templates, reviewer guidelines, rankings, API docs, citations, or operator-provided provenance.", "For bind/save/deposit/沉淀 prompts, register external URLs/templates/guidelines as packet-bound sources first, then use note or document evidence for synthesis.", "Keep source intake separate from internal notes and pressure-test summaries."],
+    targetingBehavior: "Resolve or confirm the durable task packet before recording external source metadata; batch multiple sources with `sources: [...]` when available.",
     confirmationBehavior: "If no unique task target is available, ask for packet selection instead of guessing.",
-    expectedOutcome: "The selected task has durable source metadata and provenance links.",
-    examples: ["/dove:source Register this paper as evidence for the selected task", "/dove:source Save the operator-provided API notes as an external source"]
+    expectedOutcome: "The selected task has durable packet-bound source metadata and provenance links.",
+    examples: ["/dove:source Register these CVPR author/reviewer guideline URLs for the selected task", "/dove:source Batch-save venue templates and ranking pages as sources before writing the synthesis note"]
   },
   "dove.note": {
-    dailyFlow: ["Use this to consolidate internal information from the repository, existing artifacts, `.dove/`, or operator notes.", "Use source for external material; use note for project-local understanding."],
+    dailyFlow: ["Use this to consolidate internal information from registered sources, existing artifacts, `.dove/`, pressure-test results, or operator notes.", "Use source for external material; use note for project-local synthesis and writing-style/reviewer-preference summaries.", "For bind/save/deposit/沉淀 prompts, write the synthesized result here or in document evidence after source provenance is registered."],
     targetingBehavior: "Resolve or confirm the durable task packet before writing notes.",
     confirmationBehavior: "If the target is missing or ambiguous, ask for task confirmation before writing.",
-    expectedOutcome: "The selected task has internal notes linked to relevant artifacts.",
-    examples: ["/dove:note Summarize how the status dashboard chooses its next action", "/dove:note Record the boundary case found during this validation run"]
+    expectedOutcome: "The selected task has packet-bound internal notes linked to relevant sources and artifacts.",
+    examples: ["/dove:note Summarize what the registered venue sources imply for this task", "/dove:note Capture the pressure-test finding and link it to registered sources"]
   },
   "dove.figure": {
     dailyFlow: ["Use this when the user describes the figure they want once, including where it should help the paper or task.", "Dove should gather linked materials, prepare generation/import, write caption provenance, and validate QA without exposing low-level figure tools."],
