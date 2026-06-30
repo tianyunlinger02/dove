@@ -23,7 +23,7 @@ npm run release:check
 npm run pack:dry-run
 ```
 
-`npm run check` runs generated adapter drift checks, command validation, MCP validation, governance coverage audit, and the Node test suite. `npm run doctor:validate` installs Dove into a clean temporary workspace and runs doctor there. `npm run release:check` adds maturity audit, clean doctor validation, and package dry-run for the full pre-release/package gate.
+`npm run check` runs generated adapter drift checks, command validation, MCP validation, workflow-goal pressure validation, governance coverage audit, and the Node test suite. `npm run doctor:validate` installs Dove into a clean temporary workspace and runs doctor there. `npm run release:check` adds maturity audit, clean doctor validation, and package dry-run for the full pre-release/package gate.
 
 ---
 

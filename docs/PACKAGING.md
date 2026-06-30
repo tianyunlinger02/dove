@@ -37,7 +37,7 @@ npm run commands:check
 npm run release:check
 ```
 
-`commands:generate` rewrites checked-in host adapters from the canonical manifest. `commands:check` fails on adapter drift. `release:check` is the full package gate: generated adapter drift, command validation, MCP validation, governance audit, maturity audit, clean-install doctor validation, tests, and package dry-run.
+`commands:generate` rewrites checked-in host adapters from the canonical manifest. `commands:check` fails on adapter drift. `workflow-goals:validate` runs executable product-goal pressure scenarios, including no-fake-progress operator semantics. `release:check` is the full package gate: generated adapter drift, command validation, MCP validation, workflow-goal validation, governance audit, maturity audit, clean-install doctor validation, tests, and package dry-run.
 
 ## Dry-run packaging
 

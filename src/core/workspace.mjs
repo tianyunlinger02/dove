@@ -11,6 +11,7 @@ import {
   normalizeMetaOperatorFollowThroughIndex,
   normalizeState
 } from "./schema.mjs";
+import { currentMutationContext, jsonContent } from "./mutation-backend.mjs";
 import {
   WORKSPACE_BOOTSTRAP_DIRECTORIES,
   createManagedWorkspaceJsonArtifacts,
@@ -47,40 +48,48 @@ function cloneFallback(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
 }
 
-function repairMalformedJson(root, relativePath, fallback) {
-  const fullPath = resolvePath(root, relativePath);
-  const backupPath = `${fullPath}.broken-${Date.now()}`;
-  const recovered = cloneFallback(fallback);
-
-  ensureDir(path.dirname(fullPath));
-  if (fs.existsSync(fullPath)) {
-    fs.copyFileSync(fullPath, backupPath);
+function fileExists(root, relativePath) {
+  const context = currentMutationContext(root);
+  if (context) {
+    return context.fileExists(relativePath);
   }
-  writeJson(root, relativePath, recovered);
-  return recovered;
+  return fs.existsSync(resolvePath(root, relativePath));
 }
 
 export function readJson(root, relativePath, fallback) {
+  const context = currentMutationContext(root);
+  if (context) {
+    return context.readJson(relativePath, fallback);
+  }
   const fullPath = resolvePath(root, relativePath);
   if (!fs.existsSync(fullPath)) {
     return cloneFallback(fallback);
   }
   try {
     return JSON.parse(fs.readFileSync(fullPath, "utf8"));
-  } catch {
-    return repairMalformedJson(root, relativePath, fallback);
+  } catch (error) {
+    throw new Error(`Malformed JSON in ${relativePath}: ${error.message}`);
   }
 }
 
 export function writeJson(root, relativePath, value) {
+  const context = currentMutationContext(root);
+  if (context) {
+    return context.writeJson(relativePath, value);
+  }
   const fullPath = resolvePath(root, relativePath);
   ensureDir(path.dirname(fullPath));
-  fs.writeFileSync(fullPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  fs.writeFileSync(fullPath, jsonContent(value), "utf8");
+  return null;
 }
 
 function writeJsonIfChanged(root, relativePath, value) {
+  const context = currentMutationContext(root);
+  if (context) {
+    return context.writeJsonIfChanged(relativePath, value);
+  }
   const fullPath = resolvePath(root, relativePath);
-  const nextContent = `${JSON.stringify(value, null, 2)}\n`;
+  const nextContent = jsonContent(value);
   ensureDir(path.dirname(fullPath));
   if (fs.existsSync(fullPath) && fs.readFileSync(fullPath, "utf8") === nextContent) {
     return false;
@@ -96,6 +105,10 @@ function reconcileManagedJsonArtifact(root, relativePath, fallback, normalize) {
 }
 
 export function readText(root, relativePath, fallback = "") {
+  const context = currentMutationContext(root);
+  if (context) {
+    return context.readText(relativePath, fallback);
+  }
   const fullPath = resolvePath(root, relativePath);
   if (!fs.existsSync(fullPath)) {
     return fallback;
@@ -104,18 +117,32 @@ export function readText(root, relativePath, fallback = "") {
 }
 
 export function writeText(root, relativePath, content) {
+  const context = currentMutationContext(root);
+  if (context) {
+    return context.writeText(relativePath, content);
+  }
   const fullPath = resolvePath(root, relativePath);
   ensureDir(path.dirname(fullPath));
   fs.writeFileSync(fullPath, content, "utf8");
+  return null;
 }
 
 export function appendText(root, relativePath, content) {
+  const context = currentMutationContext(root);
+  if (context) {
+    return context.appendText(relativePath, content);
+  }
   const fullPath = resolvePath(root, relativePath);
   ensureDir(path.dirname(fullPath));
   fs.appendFileSync(fullPath, content, "utf8");
+  return null;
 }
 
 function ensureFile(root, relativePath, content) {
+  const context = currentMutationContext(root);
+  if (context) {
+    return context.ensureFile(relativePath, content);
+  }
   const fullPath = resolvePath(root, relativePath);
   ensureDir(path.dirname(fullPath));
   if (!fs.existsSync(fullPath)) {
@@ -127,13 +154,18 @@ function ensureFile(root, relativePath, content) {
 
 export function ensureWorkspace(root) {
   const state = normalizeState(readJson(root, ARTIFACT_PATHS.state, createDefaultState));
+  const context = currentMutationContext(root);
 
   const created = [];
   for (const relativeDir of WORKSPACE_BOOTSTRAP_DIRECTORIES) {
-    ensureDir(resolvePath(root, relativeDir));
+    if (context) {
+      context.ensureDirectory(relativeDir);
+    } else {
+      ensureDir(resolvePath(root, relativeDir));
+    }
   }
 
-  if (!fs.existsSync(resolvePath(root, ARTIFACT_PATHS.state))) {
+  if (!fileExists(root, ARTIFACT_PATHS.state)) {
     writeJson(root, ARTIFACT_PATHS.state, state);
     created.push(ARTIFACT_PATHS.state);
   }
@@ -145,7 +177,7 @@ export function ensureWorkspace(root) {
   }
 
   for (const [relativePath, factory] of createWorkspaceBootstrapJsonArtifacts(state)) {
-    if (isBootstrapManagedDovePath(relativePath) && !fs.existsSync(resolvePath(root, relativePath))) {
+    if (isBootstrapManagedDovePath(relativePath) && !fileExists(root, relativePath)) {
       writeJson(root, relativePath, factory());
       created.push(relativePath);
     }

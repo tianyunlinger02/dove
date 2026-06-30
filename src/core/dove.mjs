@@ -14,6 +14,7 @@ import {
   createDefaultState,
   createDoveAuthorityManifest,
   createDoveWorkspaceKernel,
+  createMutationProvenanceIndex,
   createReviewState,
   createRuntimeContinuationIndex,
   createRuntimeEventsIndex,
@@ -22,11 +23,16 @@ import {
   createVersionComparisonsIndex,
   createVersionsIndex,
   createWorkspaceIndex,
+  doveExecutionContractReadiness,
+  doveExecutionCriteriaCoverage,
   normalizeDoveBoundary,
   normalizeDoveDomainId,
+  normalizeDoveExecutionContract,
   normalizeDoveHandoff,
   normalizeDoveMissionLifecycleStage,
   normalizeDoveAuthorityManifest,
+  normalizeDoveVerifiedCriteria,
+  normalizeMutationProvenanceIndex,
   normalizeRuntimeContinuationIndex,
   normalizeRuntimeEventsIndex,
   normalizeRuntimeResultsIndex,
@@ -780,6 +786,13 @@ function summarizeDoveStatusTask(packet, responseLanguage = "zh") {
   const nextRole = packet.nextRole ?? null;
   const nextAction = packet.nextAction ?? null;
   const workContract = normalizeDoveStatusWorkContract(packet.workContract);
+  const executionContract = normalizeDoveExecutionContract(packet.executionContract, null);
+  const executionReadiness = doveExecutionContractReadiness(executionContract);
+  const verifiedCriteria = normalizeDoveVerifiedCriteria(packet.verifiedCriteria);
+  const criteriaCoverage = doveExecutionCriteriaCoverage(executionContract, verifiedCriteria);
+  const validationEvidencePaths = normalizeStringArray(packet.validationEvidencePaths);
+  const verificationEvidencePaths = normalizeStringArray(packet.verificationEvidencePaths);
+  const criteriaEvidencePaths = normalizeStringArray(verifiedCriteria.flatMap((item) => item.evidencePaths ?? []));
   const status = normalizeDoveStatusTaskStatus(packet);
   return {
     id,
@@ -803,7 +816,13 @@ function summarizeDoveStatusTask(packet, responseLanguage = "zh") {
     derivedFrom: packet.derivedFrom ?? null,
     evidenceExpectations,
     workContract,
-    artifactRefs: mergeStringArrays(packet.artifactRefs, packet.artifactPaths, packet.outputPaths, packet.evidenceLinks),
+    executionContract,
+    executionReadiness,
+    verifiedCriteria,
+    criteriaCoverage,
+    validationEvidencePaths,
+    verificationEvidencePaths,
+    artifactRefs: mergeStringArrays(packet.artifactRefs, packet.artifactPaths, packet.outputPaths, packet.evidenceLinks, validationEvidencePaths, verificationEvidencePaths, criteriaEvidencePaths),
     outputPaths: normalizeStringArray(packet.outputPaths),
     evidenceLinks: normalizeStringArray(packet.evidenceLinks),
     contextPolicy: packet.contextPolicy ?? null,
@@ -974,7 +993,7 @@ function summarizeActionableBoundary(task) {
 
 function boundaryRecommendsBlocked(task) {
   const boundary = task.currentBoundary ?? openBoundaryForTask(task);
-  return ["blocked-boundary", "missing-required-materials", "provider-failed", "workflow-error-boundary", "needs-review", "awaiting-provider-output", "awaiting-review-output"].includes(boundary?.type);
+  return ["blocked-boundary", "missing-executable-contract", "plan-output-not-executable", "missing-required-materials", "provider-failed", "workflow-error-boundary", "verification-failed", "debug-retry-required", "fix-required", "needs-review", "awaiting-provider-output", "awaiting-review-output"].includes(boundary?.type);
 }
 
 function statusActionBase(fields = {}) {
@@ -990,7 +1009,7 @@ function boundaryActionKind(boundary) {
   if (["needs-review", "awaiting-review-output"].includes(boundary?.type)) {
     return "send-to-review";
   }
-  if (["awaiting-host-pass", "awaiting-host-pass-result", "awaiting-host-results", "awaiting-provider-output", "missing-required-materials"].includes(boundary?.type)) {
+  if (["awaiting-host-pass", "awaiting-host-pass-result", "awaiting-host-results", "host-tool-blocked", "awaiting-provider-output", "missing-executable-contract", "plan-output-not-executable", "missing-required-materials", "verification-failed", "debug-retry-required", "fix-required"].includes(boundary?.type)) {
     return "provide-evidence-or-result";
   }
   return "adjust-status";
@@ -1128,7 +1147,7 @@ function buildCompletionReconciliationCard(completionConsistency = {}, responseL
   }
   const openChecklistChildIds = Array.from(completionConsistencyOpenChecklistChildIds(completionConsistency));
   return statusActionBase({
-    priority: 5,
+    priority: 70,
     kind: "reconcile-completion-consistency",
     title: doveText(responseLanguage, "statusHomeReconcileTitle", { count: findings.length }),
     why: doveText(responseLanguage, "statusHomeReconcileWhy"),
@@ -1150,11 +1169,178 @@ function primaryStatusRoute(task = {}) {
 }
 
 function statusRouteEvidence(task = {}, route = null) {
-  return firstStatusContractStringArray(route?.evidenceRequired, task.workContract?.evidenceContract, task.evidenceExpectations);
+  return firstStatusContractStringArray(route?.evidenceRequired, task.executionReadiness?.evidenceRequired, task.executionReadiness?.requiredMaterials, task.workContract?.evidenceContract, task.evidenceExpectations);
 }
 
 function statusRouteDoneCriteria(task = {}, route = null) {
-  return firstStatusContractStringArray(route?.doneCriteria, task.workContract?.doneCriteria);
+  return firstStatusContractStringArray(route?.doneCriteria, task.executionContract?.convergence?.criteria, task.executionContract?.convergence?.definitionOfDone, task.workContract?.doneCriteria);
+}
+
+function statusInlineText(responseLanguage, zh, en) {
+  return responseLanguage === "en" ? en : zh;
+}
+
+function statusTaskEvidenceBundle(task = {}) {
+  return mergeStringArrays(
+    task.artifactRefs,
+    task.outputPaths,
+    task.evidenceLinks,
+    task.validationEvidencePaths,
+    task.verificationEvidencePaths,
+    task.verifiedCriteria?.flatMap((item) => item.evidencePaths ?? [])
+  );
+}
+
+function missingExecutionMaterials(task = {}) {
+  const required = normalizeStringArray(task.executionReadiness?.requiredMaterials);
+  if (required.length === 0) {
+    return [];
+  }
+  const available = new Set(statusTaskEvidenceBundle(task).map((item) => item.toLowerCase()));
+  return required.filter((item) => !available.has(item.toLowerCase()));
+}
+
+function hasExecutableContract(task = {}) {
+  return task.executionReadiness?.ready === true;
+}
+
+function buildMissingExecutionContractCard(task, responseLanguage = "zh") {
+  if (hasExecutableContract(task)) {
+    return null;
+  }
+  return statusActionBase({
+    priority: 20,
+    kind: "missing-executable-contract",
+    title: statusInlineText(responseLanguage, `补齐可执行合同：${task.title}`, `Add executable contract: ${task.title}`),
+    why: statusInlineText(responseLanguage, "Planner 必须先产出 action、implementation、convergence.criteria 和 failureRoutes，不能让任务只停留在 mission 文案。", "Planner must provide action, implementation, convergence.criteria, and failureRoutes before the task can execute."),
+    packetId: task.id,
+    command: "project:dove.mission",
+    firstAction: statusCopyableCommand("project:dove.mission", task.id),
+    evidenceRequired: normalizeStringArray(task.executionReadiness?.missing).map((item) => item === "executionContract" ? item : `executionContract.${item}`),
+    doneCriteria: [statusInlineText(responseLanguage, "任务包含可执行合同，并明确 Builder 证据与 Reviewer 验证标准。", "Task has an executable contract with Builder evidence and Reviewer verification criteria.")],
+    executionReadiness: task.executionReadiness,
+    nextRole: "planner"
+  });
+}
+
+function buildMissingExecutionMaterialsCard(task, responseLanguage = "zh") {
+  if (!hasExecutableContract(task)) {
+    return null;
+  }
+  const missingMaterials = missingExecutionMaterials(task);
+  if (missingMaterials.length === 0) {
+    return null;
+  }
+  return statusActionBase({
+    priority: 30,
+    kind: "missing-required-materials",
+    title: statusInlineText(responseLanguage, `补材料/输入：${task.title}`, `Provide materials/inputs: ${task.title}`),
+    why: statusInlineText(responseLanguage, "执行合同声明了必需输入或 artifact，Builder 不能在材料缺失时假装推进。", "The execution contract declares required inputs or artifacts; Builder cannot claim progress while materials are missing."),
+    packetId: task.id,
+    command: "project:dove.status",
+    firstAction: "project:dove.status",
+    evidenceRequired: missingMaterials,
+    doneCriteria: [statusInlineText(responseLanguage, "缺失材料被注册为 source、artifact 或 verification evidence。", "Missing materials are registered as source, artifact, or verification evidence.")],
+    requiredMaterials: missingMaterials,
+    executionContract: task.executionContract,
+    nextRole: "planner"
+  });
+}
+
+function taskNeedsBuilderExecution(task = {}) {
+  const hasEvidence = statusTaskEvidenceBundle(task).length > 0;
+  return hasExecutableContract(task) && missingExecutionMaterials(task).length === 0 && !(task.criteriaCoverage?.complete === false && hasEvidence);
+}
+
+function buildReadyBuilderExecutionCard(task, responseLanguage = "zh") {
+  if (!taskNeedsBuilderExecution(task)) {
+    return null;
+  }
+  const route = primaryStatusRoute(task);
+  const command = toPublicDoveCommand(route?.command ?? task.nextAction, "project:dove.auto");
+  return statusActionBase({
+    priority: 40,
+    kind: "ready-builder-execution",
+    title: statusInlineText(responseLanguage, `执行合同：${task.title}`, `Execute contract: ${task.title}`),
+    why: statusInlineText(responseLanguage, "合同已可执行，下一步应由 Builder 产出真实证据，而不是继续整理状态。", "The contract is executable; Builder should now produce real evidence instead of more bookkeeping."),
+    packetId: task.id,
+    command,
+    firstAction: route?.copyableCommand ?? statusCopyableCommand(command, task.id),
+    copyableCommand: route?.copyableCommand ?? statusCopyableCommand(command, task.id),
+    evidenceRequired: statusRouteEvidence(task, route),
+    doneCriteria: statusRouteDoneCriteria(task, route),
+    executionContract: task.executionContract,
+    nextRole: "builder"
+  });
+}
+
+function buildVerificationGapCard(task, responseLanguage = "zh") {
+  if (!hasExecutableContract(task) || task.criteriaCoverage?.complete !== false || statusTaskEvidenceBundle(task).length === 0) {
+    return null;
+  }
+  return statusActionBase({
+    priority: 45,
+    kind: "verification-failed",
+    title: statusInlineText(responseLanguage, `补验证覆盖：${task.title}`, `Complete verification coverage: ${task.title}`),
+    why: statusInlineText(responseLanguage, "已有执行证据，但 verifiedCriteria 尚未覆盖全部 convergence.criteria。", "Execution evidence exists, but verifiedCriteria does not cover all convergence.criteria."),
+    packetId: task.id,
+    command: "project:dove.status",
+    firstAction: "project:dove.status",
+    evidenceRequired: normalizeStringArray(task.criteriaCoverage?.missing),
+    doneCriteria: normalizeStringArray(task.criteriaCoverage?.required),
+    criteriaCoverage: task.criteriaCoverage,
+    nextRole: "reviewer"
+  });
+}
+
+function buildStatusExecutionGaps(activeTasks = []) {
+  const missingContractTasks = [];
+  const missingMaterialTasks = [];
+  const verificationGapTasks = [];
+  const readyBuilderTasks = [];
+  const requiredMaterials = [];
+  const evidenceRequired = [];
+  for (const task of activeTasks) {
+    if (task.actionableBoundary) {
+      continue;
+    }
+    if (!hasExecutableContract(task)) {
+      missingContractTasks.push(task);
+      evidenceRequired.push(...normalizeStringArray(task.executionReadiness?.missing).map((item) => item === "executionContract" ? item : `executionContract.${item}`));
+      continue;
+    }
+    const missingMaterials = missingExecutionMaterials(task);
+    if (missingMaterials.length > 0) {
+      missingMaterialTasks.push(task);
+      requiredMaterials.push(...missingMaterials);
+      evidenceRequired.push(...missingMaterials);
+      continue;
+    }
+    if (task.criteriaCoverage?.complete === false && statusTaskEvidenceBundle(task).length > 0) {
+      verificationGapTasks.push(task);
+      evidenceRequired.push(...normalizeStringArray(task.criteriaCoverage.missing));
+      continue;
+    }
+    if (taskNeedsBuilderExecution(task)) {
+      readyBuilderTasks.push(task);
+      evidenceRequired.push(...statusRouteEvidence(task, primaryStatusRoute(task)));
+    }
+  }
+  return {
+    missingContractTaskIds: missingContractTasks.map((task) => task.id),
+    missingMaterialTaskIds: missingMaterialTasks.map((task) => task.id),
+    verificationGapTaskIds: verificationGapTasks.map((task) => task.id),
+    readyBuilderTaskIds: readyBuilderTasks.map((task) => task.id),
+    requiredMaterials: mergeStringArrays(requiredMaterials),
+    evidenceRequired: mergeStringArrays(evidenceRequired),
+    counts: {
+      missingContract: missingContractTasks.length,
+      missingMaterials: missingMaterialTasks.length,
+      verificationGaps: verificationGapTasks.length,
+      readyBuilder: readyBuilderTasks.length,
+      blocking: missingContractTasks.length + missingMaterialTasks.length + verificationGapTasks.length
+    }
+  };
 }
 
 function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, completionConsistency, responseLanguage = "zh" }) {
@@ -1204,6 +1390,15 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, revie
       handoff: action.handoff,
       boundaryActionCard: action
     });
+  }
+  for (const task of activeTasks) {
+    if (reconciliationChildIds.has(task.id) || task.actionableBoundary) {
+      continue;
+    }
+    pushCard(`execution-contract:${task.id}`, buildMissingExecutionContractCard(task, responseLanguage));
+    pushCard(`execution-materials:${task.id}`, buildMissingExecutionMaterialsCard(task, responseLanguage));
+    pushCard(`execution-builder:${task.id}`, buildReadyBuilderExecutionCard(task, responseLanguage));
+    pushCard(`execution-verification:${task.id}`, buildVerificationGapCard(task, responseLanguage));
   }
   for (const task of activeTasks) {
     if (reconciliationChildIds.has(task.id) || !task.continuationState) {
@@ -1309,13 +1504,14 @@ function buildStatusAdjustmentCard(task, recommendedStatus, responseLanguage = "
   });
 }
 
-function buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, responseLanguage = "zh" }) {
+function buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, executionGaps, responseLanguage = "zh" }) {
   return {
     presentation: "dove-status-home",
     liveContextFirst: true,
     nextActions: buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, completionConsistency, responseLanguage }),
     missionList: buildStatusMissionList(visibleTasks),
     completionConsistency,
+    executionGaps,
     boundaryActionCards,
     suppressUserFacingDumps: ["raw mission counts", "raw status counts", "recent completed missions", "recent killed missions"]
   };
@@ -1567,6 +1763,17 @@ function compactStatusActionCard(card) {
     evidenceRequired: normalizeStringArray(card.evidenceRequired).slice(0, 5),
     doneCriteria: normalizeStringArray(card.doneCriteria).slice(0, 5),
     workContract: compactWorkContract(card.workContract),
+    executionReadiness: card.executionReadiness ? {
+      ready: Boolean(card.executionReadiness.ready),
+      status: card.executionReadiness.status ?? null,
+      missing: normalizeStringArray(card.executionReadiness.missing).slice(0, 5)
+    } : undefined,
+    requiredMaterials: normalizeStringArray(card.requiredMaterials).slice(0, 5),
+    criteriaCoverage: card.criteriaCoverage ? {
+      complete: Boolean(card.criteriaCoverage.complete),
+      missing: normalizeStringArray(card.criteriaCoverage.missing).slice(0, 5)
+    } : undefined,
+    nextRole: card.nextRole ?? null,
     boundaryType: card.boundaryType ?? card.boundary?.type ?? null,
     reason: card.reason ?? card.boundary?.reason ?? null,
     requires: normalizeStringArray(card.requires).slice(0, 5),
@@ -1668,6 +1875,82 @@ function compactCompletionConsistency(consistency = {}) {
   };
 }
 
+function buildHostFileCheckpointNotice() {
+  return {
+    required: true,
+    detected: false,
+    kind: "host-file-checkpoint",
+    status: "not-programmatically-verifiable",
+    scope: "host-runtime",
+    verificationRequired: true,
+    projectFilesRequired: true,
+    externalWriteCaptureRequired: true,
+    externalWriteCaptureVerified: false
+  };
+}
+
+function buildMutationRollbackModel(root) {
+  const indexPath = resolveProjectPath(root, ARTIFACT_PATHS.mutationsIndex);
+  let index = createMutationProvenanceIndex();
+  if (fs.existsSync(indexPath)) {
+    try {
+      index = normalizeMutationProvenanceIndex(JSON.parse(fs.readFileSync(indexPath, "utf8")));
+    } catch {
+      index = createMutationProvenanceIndex();
+    }
+  }
+  const summary = index.summary ?? createMutationProvenanceIndex().summary;
+  return {
+    patchPlanSupported: true,
+    hostTrackedFileEditsRequired: true,
+    directProcessWritesAreRollbackSafe: false,
+    lastMutationMode: summary.lastMutationMode ?? null,
+    lastAppliedBy: summary.lastAppliedBy ?? null,
+    hostRollbackEligible: Boolean(summary.hostRollbackEligible),
+    hostCheckpointVerified: false,
+    externalWriteCaptureVerified: false,
+    doveRestoreSupported: false,
+    mutationProvenancePath: ARTIFACT_PATHS.mutationsIndex,
+    mutationCount: summary.mutationCount ?? 0,
+    patchPlanCount: summary.patchPlanCount ?? 0,
+    directProcessCount: summary.directProcessCount ?? 0
+  };
+}
+
+function buildDurableContextNotice(root, responseLanguage = "zh") {
+  const hostCheckpoint = buildHostFileCheckpointNotice(root);
+  const mutationRollbackModel = buildMutationRollbackModel(root);
+  const recoveryActions = [
+    { kind: "refresh-status", command: "project:dove.status", mutation: false },
+    { kind: "apply-mutation-plan-with-host-tracked-edits", command: "mutationMode: patch-plan", mutation: true, handledByHost: true, hostTrackedFileEditsRequired: true },
+    { kind: "use-direct-process-as-unverified", command: "mutationMode: direct-process", mutation: true, hostRollbackEligible: false },
+    { kind: "adjust-status", command: "apply_dove_status_adjustments", mutation: true, confirmationRequired: true }
+  ];
+  return {
+    presentation: "dove-durable-context-notice",
+    stateSource: "filesystem-durable-state",
+    durableRoot: ARTIFACT_PATHS.doveRoot,
+    rollbackCoverage: "host-tracked-mutation-plan-required",
+    nativeHostRollbackRequiresFileCheckpoint: true,
+    hostCheckpointDetected: hostCheckpoint.detected,
+    hostCheckpointStatus: hostCheckpoint.status,
+    hostCheckpoint,
+    mutationRollbackModel,
+    projectVisibilityRequired: true,
+    projectVisibilityVerified: false,
+    externalWriteCaptureRequired: true,
+    externalWriteCaptureVerified: false,
+    doveRestoreSupported: false,
+    doveRestoreCommand: null,
+    automaticRollback: false,
+    trackedDurablePaths: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.mutationsIndex],
+    localOnlyIgnoredPaths: [".dove/config.local.json"],
+    summary: doveText(responseLanguage, "durableContextNoticeSummary"),
+    recovery: doveText(responseLanguage, "durableContextNoticeRecovery"),
+    recoveryActions
+  };
+}
+
 function buildCompactStatusHome({ result, missionList, nextActions, boundaryActionCards, statusAdjustmentContract, preActionGuidance, args }) {
   const summary = result.projectSummary ?? {};
   const current = result.current ?? {};
@@ -1677,7 +1960,10 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
   const runtimeContinuation = dashboard.runtime?.continuation ?? null;
   const completionConsistency = compactCompletionConsistency(result.dailyHome?.completionConsistency);
   const missionSummary = missionList.summary ?? {};
+  const executionGaps = result.dailyHome?.executionGaps ?? {};
+  const executionBlockingCount = executionGaps.counts?.blocking ?? 0;
   const primaryStep = nextActions[0] ?? null;
+  const durableContextNotice = result.durableContextNotice ?? null;
   return {
     presentation: "dove-project-situation-home",
     detail: "compact",
@@ -1690,8 +1976,19 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
       stage: current.stage ?? null,
       primaryRole: current.primaryRole ?? null,
       durableRoot: dashboard.project?.durableRoot ?? ARTIFACT_PATHS.doveRoot,
+      stateSource: durableContextNotice?.stateSource ?? "filesystem-durable-state",
+      nativeHostRollbackRequiresFileCheckpoint: durableContextNotice?.nativeHostRollbackRequiresFileCheckpoint ?? true,
+      hostCheckpointDetected: durableContextNotice?.hostCheckpointDetected ?? false,
+      hostCheckpointStatus: durableContextNotice?.hostCheckpointStatus ?? "not-programmatically-verifiable",
+      mutationRollbackModel: durableContextNotice?.mutationRollbackModel ?? null,
+      externalWriteCaptureRequired: durableContextNotice?.externalWriteCaptureRequired ?? true,
+      externalWriteCaptureVerified: durableContextNotice?.externalWriteCaptureVerified ?? false,
+      doveRestoreSupported: durableContextNotice?.doveRestoreSupported ?? false,
+      projectVisibilityRequired: durableContextNotice?.projectVisibilityRequired ?? true,
+      projectVisibilityVerified: durableContextNotice?.projectVisibilityVerified ?? false,
       runtimeContinuation
     },
+    durableContextNotice,
     preActionGuidance: preActionGuidance ?? result.preActionGuidance ?? null,
     projectState: {
       returnStatus: summary.returnStatus ?? null,
@@ -1706,14 +2003,29 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
       },
       blockerCount: blockers.length,
       readErrorCount: readErrors.length,
-      statusAdjustmentCount: statusAdjustmentContract.itemCount ?? 0
+      statusAdjustmentCount: statusAdjustmentContract.itemCount ?? 0,
+      executionGaps: {
+        missingContract: executionGaps.counts?.missingContract ?? 0,
+        missingMaterials: executionGaps.counts?.missingMaterials ?? 0,
+        verificationGaps: executionGaps.counts?.verificationGaps ?? 0,
+        readyBuilder: executionGaps.counts?.readyBuilder ?? 0,
+        blocking: executionGaps.counts?.blocking ?? 0
+      }
     },
     blockersAndReconciliation: {
-      status: readErrors.length > 0 || blockers.length > 0 || completionConsistency.status === "needs-reconciliation" ? "blocked" : "clear",
+      status: readErrors.length > 0 || blockers.length > 0 || completionConsistency.status === "needs-reconciliation" || executionBlockingCount > 0 ? "blocked" : "clear",
       readErrors,
       blockers: blockers.slice(0, 5),
       blockerCount: blockers.length,
       completionConsistency,
+      executionGaps: {
+        missingContract: executionGaps.counts?.missingContract ?? 0,
+        missingMaterials: executionGaps.counts?.missingMaterials ?? 0,
+        verificationGaps: executionGaps.counts?.verificationGaps ?? 0,
+        readyBuilder: executionGaps.counts?.readyBuilder ?? 0,
+        blocking: executionBlockingCount
+      },
+      durableContextNotice,
       boundaryActionCards,
       boundaryActionCount: boundaryActionCards.length
     },
@@ -1771,6 +2083,7 @@ function compactDoveStatusResult(result, args = {}) {
     detail: "compact",
     detailsAvailable: true,
     projectSummary: result.projectSummary,
+    durableContextNotice: result.durableContextNotice,
     statusHome,
     statusAdjustmentContract,
     actionableBoundaries: (Array.isArray(result.actionableBoundaries) ? result.actionableBoundaries : []).slice(0, 5),
@@ -2567,6 +2880,7 @@ export function queryDoveStatus(root, args = {}) {
   const completedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "completed")).slice(0, 10);
   const killedTasks = sortRecentStatusTasks(visibleTasks.filter((task) => task.status === "killed")).slice(0, 10);
   const completionConsistency = buildCompletionConsistency(consistencyTasks, responseLanguage);
+  const executionGaps = buildStatusExecutionGaps(activeTasks);
   const review = summarizeStatusReview(inputs);
   const blockers = buildStatusBlockers(inputs, blockedTasks, responseLanguage);
   const lessons = summarizeStatusLessons(inputs);
@@ -2578,7 +2892,7 @@ export function queryDoveStatus(root, args = {}) {
   const primaryRole = currentStage === "audit" ? "reviewer" : currentStage === "execute" ? "builder" : "planner";
   const returnStatus = inputs.readErrors.length > 0
     ? "blocked"
-    : blockers.length > 0 || completionConsistency.status === "needs-reconciliation"
+    : blockers.length > 0 || completionConsistency.status === "needs-reconciliation" || (executionGaps.counts?.blocking ?? 0) > 0
       ? "blocked"
       : activeTasks.length > 0
         ? "in-progress"
@@ -2589,10 +2903,11 @@ export function queryDoveStatus(root, args = {}) {
   const projectTitle = inputs.state.dove?.title ?? initTask?.title ?? doveText(responseLanguage, "projectTitleFallback");
   const projectObjective = inputs.state.dove?.objective ?? inputs.state.dove?.thesis ?? initTask?.summary ?? inputs.board.objective ?? null;
   const projectFocus = activeTasks[0]?.currentFocus ?? (activeTasks.length === 0 ? projectObjective : inputs.state.orchestration?.currentFocus ?? inputs.board.currentFocus ?? projectObjective);
-  const dailyHome = buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, responseLanguage });
+  const dailyHome = buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, executionGaps, responseLanguage });
   const nextCommand = selectDailyHomeNextCommand(dailyHome, fallbackNextCommand);
   const projectSummary = buildProjectSummary({ title: projectTitle, objective: projectObjective, focus: projectFocus, initTask, tasks, activeTasks, blockedTasks, missionList: dailyHome.missionList, review, versions, experiments, blockers, nextCommand, returnStatus });
   const statusAdjustmentContract = buildStatusAdjustmentContract(visibleTasks, responseLanguage);
+  const durableContextNotice = buildDurableContextNotice(root, responseLanguage);
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.status",
     responseLanguage,
@@ -2618,7 +2933,8 @@ export function queryDoveStatus(root, args = {}) {
       blockerCount: blockers.length,
       unresolvedConcernCount: review.unresolvedConcernCount,
       readErrorCount: inputs.readErrors.length,
-      statusAdjustmentCount: statusAdjustmentContract.itemCount ?? 0
+      statusAdjustmentCount: statusAdjustmentContract.itemCount ?? 0,
+      executionGaps
     }
   });
   const fullResult = {
@@ -2630,6 +2946,7 @@ export function queryDoveStatus(root, args = {}) {
     responseLanguage,
     detail: "full",
     projectSummary,
+    durableContextNotice,
     preActionGuidance,
     statusAdjustmentContract,
     dailyHome,
@@ -2651,6 +2968,7 @@ export function queryDoveStatus(root, args = {}) {
         responseLanguage,
         durableRoot: ARTIFACT_PATHS.doveRoot,
         authoritativeRoot: inputs.doveAuthorityManifest.authoritativeRoot ?? ARTIFACT_PATHS.doveRoot,
+        durableContextNotice,
         currentFocus: projectFocus,
         nextAction: nextCommand,
         pipeline: {
@@ -2740,6 +3058,7 @@ export function queryDoveStatus(root, args = {}) {
         wikiPath: ARTIFACT_PATHS.wiki
       },
       primaryStateSources: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.taskPacketsPacketsDir, ARTIFACT_PATHS.runtimeContinuation, ARTIFACT_PATHS.runtimeEvents, ARTIFACT_PATHS.runtimeResults, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.versionsIndex, ARTIFACT_PATHS.metaOperatorLessons],
+      durableContextNotice,
       mayRefreshDerivedSurfaces: false,
       noCommandExecution: true,
       noExternalProcess: true,

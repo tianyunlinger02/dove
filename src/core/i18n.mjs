@@ -66,17 +66,9 @@ const TEXT = {
     zh: "Dove 任务",
     en: "Dove task"
   },
-  missionFallbackTitle: {
-    zh: "Dove 任务",
-    en: "Dove mission"
-  },
   executePlannedWork: {
     zh: "执行已规划的 Dove 工作",
     en: "Execute planned Dove work"
-  },
-  childMissionFallback: {
-    zh: ({ title }) => `${title} 子任务`,
-    en: ({ title }) => `${title} child`
   },
   checklistItem: {
     zh: ({ index }) => `检查项 ${index}`,
@@ -267,8 +259,8 @@ const TEXT = {
     en: "Recommend the next state or concrete unblock action"
   },
   operatorConfirmMessage: {
-    zh: "请先确认，然后 Dove operator 才会为 ready/in-progress 任务记录一次前台执行，并为阻塞任务创建阻塞调查计划任务。",
-    en: "Confirm before Dove operator records one foreground pass for ready/in-progress missions and creates blocker-investigation plan missions."
+    zh: "请先确认，然后 Dove operator 只会运行安全内部步骤、记录你显式提供的 host 结果，或为阻塞任务创建调查计划；缺少 host 结果的任务会保持不变并返回所需证据。",
+    en: "Confirm before Dove operator runs only safe internal steps, records explicitly supplied host results, or creates blocker-investigation plan missions; missions missing host results remain unchanged and return required evidence."
   },
   operatorAwaitingStopReason: {
     zh: "未提供主机侧任务结果，因此 Dove 不声称已经执行。",
@@ -317,6 +309,14 @@ const TEXT = {
   autoNoStepStopReason: {
     zh: "本次 auto 迭代未提供具体且安全的工作流步骤。",
     en: "No concrete safe workflow step was supplied for this auto iteration."
+  },
+  durableContextNoticeSummary: {
+    zh: "Dove 的 .dove 状态是项目内文件系统事实源；要让这些工作流产物有资格随 Claude 或其他编程终端回滚，应使用 mutationMode: patch-plan 并由 host 的受追踪文件编辑机制应用；CLI/MCP direct-process 写入不被声明为已验证可回滚。",
+    en: "Dove .dove state is an in-project filesystem source of truth; to make those workflow artifacts eligible for Claude or other programming-terminal rollback, use mutationMode: patch-plan and apply it through host-tracked file edits. CLI/MCP direct-process writes are not declared verified rollback-safe."
+  },
+  durableContextNoticeRecovery: {
+    zh: "如果 host 回滚后 .dove 没有一起回滚，不要使用 reset_dove_version 当恢复入口；改用 patch-plan 让 host tracked edits 应用后再依赖 host 回滚。direct-process 仍可用于功能优先写入，但回滚覆盖保持 unverified。",
+    en: "If .dove did not roll back with the host rollback, do not use reset_dove_version as a restore path; use patch-plan so host tracked edits apply the files before relying on host rollback. direct-process remains available for functional writes, but rollback coverage stays unverified."
   },
   statusHomeInitTitle: {
     zh: "先创建 Dove 项目目标",

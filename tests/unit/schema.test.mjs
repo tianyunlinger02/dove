@@ -94,6 +94,7 @@ test("createDefaultState exposes durable artifact paths", () => {
   assert.equal(state.artifacts.metaLongHorizonMemory, ".dove/meta/long-horizon-memory.json");
   assert.equal(state.artifacts.metaOperatorLessons, ".dove/meta/operator-lessons.json");
   assert.equal(state.artifacts.versionsIndex, ".dove/versions/index.json");
+  assert.equal(state.artifacts.mutationsIndex, ".dove/mutations/index.json");
   assert.equal(state.artifacts.audioReviewsDir, ".dove/audio/reviews");
   assert.deepEqual(DOVE_RESPONSE_LANGUAGES, ["zh", "en"]);
   assert.equal(DEFAULT_DOVE_RESPONSE_LANGUAGE, "zh");
@@ -167,6 +168,7 @@ test("workspace index normalization drops legacy removed command lists", () => {
 test("boundary and handoff metadata stay separate from task statuses", () => {
   assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
   assert.ok(DOVE_BOUNDARY_TYPES.includes("awaiting-host-pass"));
+  assert.ok(DOVE_BOUNDARY_TYPES.includes("host-tool-blocked"));
   assert.ok(DOVE_BOUNDARY_TYPES.includes("needs-review"));
   assert.ok(DOVE_BOUNDARY_TYPES.includes("awaiting-provider-output"));
   assert.deepEqual(DOVE_BOUNDARY_STATUSES, ["open", "resolved"]);

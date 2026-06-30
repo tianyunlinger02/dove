@@ -13,6 +13,7 @@ import {
 } from "./orchestration.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
+import { buildCommandResultCard } from "./result-cards.mjs";
 import {
   assertGovernanceMutationRegistered,
   assertFollowThroughReady,
@@ -1947,6 +1948,133 @@ function hasSourceProvenance(input = {}) {
   return [input.title, input.locator].some((value) => typeof value === "string" && value.trim());
 }
 
+const UNVERIFIED_SOURCE_EVIDENCE_PATTERNS = [
+  { code: "webfetch-blocked", pattern: /\b(?:web\s*fetch|webfetch|fetch)\b[^\n]*(?:blocked|failed|error|unable|could not|safe[- ]domain|safe domain|network restriction|enterprise security)/iu },
+  { code: "websearch-zero-results", pattern: /\b(?:web\s*search|websearch|search)\b[^\n]*(?:did\s*0\s*searches|0\s*searches|zero\s*(?:searches|results)|no\s*(?:searches|results)|blocked|failed|error)/iu },
+  { code: "safe-domain-verification-blocked", pattern: /(?:unable to verify.*domain|domain.*safe to fetch|safe[- ]domain verification|enterprise security policies|network restrictions)/iu },
+  { code: "host-tool-blocked", pattern: /\b(?:host tool|safety classifier|tool availability|mcp|retrieval)\b[^\n]*(?:blocked|unavailable|failed|denied|rejected)/iu }
+];
+
+function sourceVerificationText(input = {}, context = {}) {
+  return [input.origin, context.origin, input.abstract].filter((value) => typeof value === "string" && value.trim()).join("\n");
+}
+
+function unverifiedSourceEvidence(input = {}, context = {}) {
+  const text = sourceVerificationText(input, context);
+  if (!text) {
+    return null;
+  }
+  const match = UNVERIFIED_SOURCE_EVIDENCE_PATTERNS.find(({ pattern }) => pattern.test(text));
+  if (!match) {
+    return null;
+  }
+  return {
+    code: match.code,
+    evidence: text.length > 240 ? `${text.slice(0, 237)}...` : text
+  };
+}
+
+function findUnverifiedSourceInputs(inputs = [], args = {}) {
+  return inputs.map((input, index) => {
+    const evidence = unverifiedSourceEvidence(input, { origin: args.origin });
+    if (!evidence) {
+      return null;
+    }
+    return {
+      index: index + 1,
+      sourceId: input.sourceId ?? input.citationKey ?? input.title ?? input.locator ?? `source-${index + 1}`,
+      title: input.title ?? null,
+      locator: input.locator ?? null,
+      reason: evidence.code,
+      evidence: evidence.evidence
+    };
+  }).filter(Boolean);
+}
+
+function unverifiedSourceResult(root, args = {}, target = {}, rejectedSources = []) {
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const zh = responseLanguage !== "en";
+  const packetId = target.packet?.id ?? null;
+  const requiredActions = [
+    "retry-host-search-or-use-authorized-retrieval",
+    "provide-verifiable-source-title-and-locator",
+    "call-register-source-only-after-successful-access-or-operator-provided-material"
+  ];
+  const summary = zh
+    ? "来源检索或抓取失败，Dove 未登记 source provenance。"
+    : "Source search or fetch failed, so Dove did not register source provenance.";
+  const boundary = {
+    id: normalizeIdentifier(`boundary-${packetId ?? "source"}-host-tool-blocked`, `boundary-${Date.now().toString(36)}`),
+    type: "host-tool-blocked",
+    status: "open",
+    packetId,
+    sourceSurface: "dove.source",
+    command: "register_source",
+    reason: "source-provenance-unverified",
+    summary,
+    requiredInputs: [],
+    requiredActions,
+    ownerRole: "builder",
+    nextRole: "builder",
+    createdAt: nowIso()
+  };
+  const preActionGuidanceSummary = artifactGuidanceSummary(root, args, {
+    surface: "dove.source",
+    roleId: "builder",
+    subagentSpecialty: "researcher",
+    packet: target.packet,
+    stage: target.packet?.stage ?? "execute",
+    workflowKind: "source",
+    nextAction: "project:dove.status",
+    tags: ["source", "evidence", "research", "boundary"],
+    statusSummary: { rejectedSourceCount: rejectedSources.length, sourceCount: 0 }
+  });
+  const result = {
+    status: "needs-source-verification",
+    outcome: "source-provenance-unverified",
+    stopReason: "source-provenance-unverified",
+    proposalOnly: true,
+    noAutoApply: true,
+    writes: [],
+    sourceCount: 0,
+    rejectedSourceCount: rejectedSources.length,
+    rejectedSources,
+    packetId,
+    boundary,
+    requiredActions,
+    message: zh
+      ? "检索/抓取失败、0 搜索结果或 safe-domain 阻断不能作为 source provenance 登记；请先提供可验证来源或授权的 host 检索结果。"
+      : "Failed fetch/search, zero search results, or safe-domain blocks cannot be registered as source provenance; provide verifiable sources or authorized host retrieval results first.",
+    nextAction: "project:dove.status",
+    preActionGuidanceSummary
+  };
+  return {
+    ...result,
+    resultCard: buildCommandResultCard({
+      surface: "dove.source",
+      command: "register_source",
+      packetId,
+      status: result.status,
+      outcome: result.outcome,
+      summary,
+      durableWrites: [],
+      evidence: [],
+      validation: [],
+      stopReason: result.stopReason,
+      boundary,
+      nextActions: [{
+        kind: "provide-evidence-or-result",
+        title: zh ? "补充可验证来源证据" : "Provide verifiable source evidence",
+        command: "project:dove.source",
+        packetId,
+        boundaryType: boundary.type,
+        requiredActions
+      }],
+      preActionGuidanceSummary
+    }, responseLanguage)
+  };
+}
+
 function findExistingSourceIndex(sources, input = {}, baseId = null) {
   return sources.items.findIndex((item) => (baseId && item.id === baseId) || (input.citationKey && item.citationKey === input.citationKey));
 }
@@ -2017,6 +2145,10 @@ export function registerSource(root, args = {}) {
   const sourceInputs = sourceInputsFromArgs(args);
   if (sourceInputs.length === 0) {
     throw new Error("register_source requires at least one source.");
+  }
+  const unverifiedSources = findUnverifiedSourceInputs(sourceInputs, args);
+  if (unverifiedSources.length > 0) {
+    return unverifiedSourceResult(root, args, target, unverifiedSources);
   }
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const initialCount = sources.items.length;

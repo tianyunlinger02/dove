@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -22,6 +23,21 @@ async function callTool(name, args = {}) {
 
 function requireTextIncludes(text, needle, label) {
   assert.equal(text.includes(needle), true, `${label} must include ${needle}`);
+}
+
+function requireDoveWorkspaceVisibilityPolicy() {
+  const durableStateCheck = spawnSync("git", ["check-ignore", "-v", ".dove/state.json", ".dove/task-packets/index.json"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(durableStateCheck.status, 1, `.dove durable state must remain normal workspace files, not ignored local-only config: ${durableStateCheck.stdout}${durableStateCheck.stderr}`);
+
+  const localConfigCheck = spawnSync("git", ["check-ignore", "-v", ".dove/config.local.json"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(localConfigCheck.status, 0, `.dove/config.local.json must remain local-only ignored: ${localConfigCheck.stdout}${localConfigCheck.stderr}`);
+  assert.match(localConfigCheck.stdout, /\.dove\/config\.local\.json/);
 }
 
 function requireFullPreActionGuidance(guidance, expected = {}) {
@@ -48,6 +64,57 @@ function requireFullPreActionGuidance(guidance, expected = {}) {
   assert.equal(guidance.guardrails?.boundedForegroundOnly, true);
 }
 
+function requireDurableContextNotice(notice) {
+  assert.ok(notice && typeof notice === "object", "Expected durable context notice object");
+  assert.equal(notice.presentation, "dove-durable-context-notice");
+  assert.equal(notice.stateSource, "filesystem-durable-state");
+  assert.equal(notice.durableRoot, ".dove");
+  assert.equal(notice.rollbackCoverage, "host-tracked-mutation-plan-required");
+  assert.equal("nativeProjectRollbackExpected" in notice, false);
+  assert.equal("nativeProjectRollbackRequiresProjectCheckpoint" in notice, false);
+  assert.equal("projectCheckpointDetected" in notice, false);
+  assert.equal("projectCheckpointStatus" in notice, false);
+  assert.equal("projectCheckpoint" in notice, false);
+  assert.equal(notice.nativeHostRollbackRequiresFileCheckpoint, true);
+  assert.equal(notice.hostCheckpointDetected, false);
+  assert.equal(notice.hostCheckpointStatus, "not-programmatically-verifiable");
+  assert.ok(notice.hostCheckpoint && typeof notice.hostCheckpoint === "object");
+  assert.equal(notice.hostCheckpoint.required, true);
+  assert.equal(notice.hostCheckpoint.verificationRequired, true);
+  assert.equal(notice.hostCheckpoint.externalWriteCaptureRequired, true);
+  assert.ok(notice.mutationRollbackModel && typeof notice.mutationRollbackModel === "object");
+  assert.equal(notice.mutationRollbackModel.patchPlanSupported, true);
+  assert.equal(notice.mutationRollbackModel.hostTrackedFileEditsRequired, true);
+  assert.equal(notice.mutationRollbackModel.directProcessWritesAreRollbackSafe, false);
+  assert.equal(notice.mutationRollbackModel.hostCheckpointVerified, false);
+  assert.equal(notice.mutationRollbackModel.externalWriteCaptureVerified, false);
+  assert.equal(notice.mutationRollbackModel.doveRestoreSupported, false);
+  assert.equal(notice.mutationRollbackModel.mutationProvenancePath, ".dove/mutations/index.json");
+  assert.equal(notice.externalWriteCaptureRequired, true);
+  assert.equal(notice.externalWriteCaptureVerified, false);
+  assert.equal(notice.projectVisibilityRequired, true);
+  assert.equal(notice.projectVisibilityVerified, false);
+  assert.equal(notice.doveRestoreSupported, false);
+  assert.equal(notice.doveRestoreCommand, null);
+  assert.equal(notice.automaticRollback, false);
+  assert.equal("rollbackSupported" in notice, false);
+  assert.equal("rollbackCheckpointAvailable" in notice, false);
+  assert.equal("latestRollbackCheckpoint" in notice, false);
+  assert.deepEqual(notice.trackedDurablePaths, [".dove/state.json", ".dove/task-packets/index.json", ".dove/mutations/index.json"]);
+  assert.deepEqual(notice.localOnlyIgnoredPaths, [".dove/config.local.json"]);
+  assert.match(notice.summary, /\.dove/);
+  assert.match(notice.recovery, /patch-plan|direct-process|host|回滚|rollback/);
+  assert.deepEqual(notice.recoveryActions.map((action) => action.kind), ["refresh-status", "apply-mutation-plan-with-host-tracked-edits", "use-direct-process-as-unverified", "adjust-status"]);
+  assert.equal(notice.recoveryActions[0].mutation, false);
+  assert.equal(notice.recoveryActions[1].mutation, true);
+  assert.equal(notice.recoveryActions[1].handledByHost, true);
+  assert.equal(notice.recoveryActions[1].hostTrackedFileEditsRequired, true);
+  assert.equal(notice.recoveryActions[2].mutation, true);
+  assert.equal(notice.recoveryActions[2].hostRollbackEligible, false);
+  assert.equal("requiresCheckpointKind" in notice.recoveryActions[2], false);
+  assert.equal(notice.recoveryActions[3].confirmationRequired, true);
+}
+
 function requirePreActionGuidanceSummary(summary, expected = {}) {
   assert.ok(summary && typeof summary === "object", "Expected pre-action guidance summary object");
   assert.equal(summary.presentation, "dove-pre-action-guidance-summary");
@@ -63,6 +130,8 @@ function requirePreActionGuidanceSummary(summary, expected = {}) {
 }
 
 async function main() {
+  requireDoveWorkspaceVisibilityPolicy();
+
   const init = await call("initialize", {
     protocolVersion: "2024-11-05",
     capabilities: {},
@@ -108,10 +177,11 @@ async function main() {
 
   const toolByName = new Map(listed.tools.map((tool) => [tool.name, tool]));
   const descriptionChecks = {
-    query_dove_status: ["statusHome.preActionGuidance", "automatic read-only lesson recall", "Planner/Builder/Reviewer role-framed next action", "mission counts only", "must not render a Missions panel", "requestStatusAdjustment"],
+    query_dove_status: ["statusHome.durableContextNotice", "mutationRollbackModel", "patch-plan plus host-tracked file-edit requirements", "host checkpoint verification limits", "unverified direct-process writes", "not git detection", "not direct-process", "not reset_dove_version", "statusHome.preActionGuidance", "automatic read-only lesson recall", "Planner/Builder/Reviewer role-framed next action", "mission counts only", "must not render a Missions panel", "requestStatusAdjustment"],
     create_dove_task: ["preActionGuidance", "mission is a durable work/progress object", "bounded foreground mission pass"],
-    run_dove_auto: ["preActionGuidance", "no hidden continuation", "scheduler", "daemon"],
-    run_dove_operator: ["planner preActionGuidance", "read-only lesson recall", "no scheduler or hidden runtime"],
+    record_dove_mission_pass: ["host-tool-blocked", "visibly blocked"],
+    run_dove_auto: ["preActionGuidance", "host-tool-blocked", "no hidden continuation", "scheduler", "daemon"],
+    run_dove_operator: ["planner preActionGuidance", "host-tool-blocked", "read-only lesson recall", "no scheduler or hidden runtime"],
     query_operator_lessons: ["recall applicable lessons automatically", "read-only preActionGuidance"],
     record_operator_lesson: ["auto-recall lessons read-only", "recording never happens implicitly"],
     run_experience_workflow: ["Builder/experiment-planner preActionGuidance", "read-only lesson recall", "claim-bridge boundary"],
@@ -120,6 +190,7 @@ async function main() {
     import_audio_review: ["Reviewer preActionGuidanceSummary", "private reviewer transcripts"],
     run_audio_review: ["Reviewer preActionGuidanceSummary", "localized resultCard"],
     run_dove_review_loop: ["Reviewer preActionGuidance", "foreground stop conditions"],
+    reset_dove_version: ["direction-change snapshot", "not a .dove rollback restore entrypoint", "mutationMode: patch-plan", "host-tracked file edits", "host native checkpoint"],
     run_review_loop: ["independent review", "role-framed preActionGuidance"],
     prepare_isolated_review: ["Reviewer preActionGuidanceSummary", "explicit isolation boundaries"],
     import_isolated_review: ["Reviewer preActionGuidanceSummary", "private transcripts"],
@@ -148,6 +219,13 @@ async function main() {
   assert.equal(registerSourceSchema.sources?.type, "array", "register_source must expose batch sources array");
   assert.ok(registerSourceSchema.sources?.items?.properties?.sourceId, "register_source batch items must expose sourceId");
   assert.ok(registerSourceSchema.sources?.items?.properties?.citationKey, "register_source batch items must expose citationKey");
+  const resetVersionSchema = toolByName.get("reset_dove_version")?.inputSchema?.properties ?? {};
+  for (const property of ["id", "versionId", "title", "reason", "summary"]) {
+    assert.ok(resetVersionSchema[property], `reset_dove_version must expose ${property}`);
+  }
+  for (const property of ["rollbackCheckpointId", "restoreCheckpointId", "checkpointId", "restoreVersionId", "confirmed", "confirm"]) {
+    assert.equal(resetVersionSchema[property], undefined, `reset_dove_version must not expose ${property}`);
+  }
 
   await callTool("ensure_workspace");
 
@@ -436,8 +514,9 @@ async function main() {
   requirePreActionGuidanceSummary(wikiRefresh.preActionGuidanceSummary, { surface: "dove.status", primaryRole: "planner" });
 
   const experience = await callTool("run_experience_workflow", {
-    packetId,
-    experimentId: "validator-experience",
+    packetId: directExperimentPacketId,
+    experimentId: "validator-direct-experiment",
+    claimId: "validator-direct-claim",
     goal: "Compare task-centered Dove against a chat-only workflow.",
     methodology: "Check durable artifact completeness.",
     successMetric: "Fewer missing evidence links",
@@ -448,9 +527,11 @@ async function main() {
       evidenceLinks: [".dove/notes/index.json"]
     }
   });
-  assert.ok(["recorded", "bridged"].includes(experience.status));
-  assert.equal(experience.packetId, packetId);
-  assert.equal(experience.plan.id, "validator-experience");
+  assert.equal(experience.status, "bridged");
+  assert.equal(experience.audit.auditVerdict, "clean");
+  assert.equal(experience.bridge.status, "applied");
+  assert.equal(experience.packetId, directExperimentPacketId);
+  assert.equal(experience.plan.id, "validator-direct-experiment");
   requireFullPreActionGuidance(experience.preActionGuidance, { surface: "dove.experience", primaryRole: "builder" });
   assert.equal(experience.preActionGuidance.roleFrame.subagentSpecialty, "experiment-planner");
 
@@ -642,8 +723,23 @@ async function main() {
   assert.deepEqual(status.writes, []);
   assert.equal(status.detail, "compact");
   assert.equal(status.statusHome.presentation, "dove-project-situation-home");
+  requireDurableContextNotice(status.durableContextNotice);
+  assert.deepEqual(status.statusHome.durableContextNotice, status.durableContextNotice);
   assert.equal(status.statusHome.liveContextFirst, true);
   assert.ok(status.statusHome.currentContext && typeof status.statusHome.currentContext === "object");
+  assert.equal(status.statusHome.currentContext.stateSource, "filesystem-durable-state");
+  assert.equal("nativeProjectRollbackExpected" in status.statusHome.currentContext, false);
+  assert.equal("nativeProjectRollbackRequiresProjectCheckpoint" in status.statusHome.currentContext, false);
+  assert.equal("projectCheckpointDetected" in status.statusHome.currentContext, false);
+  assert.equal("projectCheckpointStatus" in status.statusHome.currentContext, false);
+  assert.equal(status.statusHome.currentContext.nativeHostRollbackRequiresFileCheckpoint, true);
+  assert.equal(status.statusHome.currentContext.hostCheckpointDetected, false);
+  assert.equal(status.statusHome.currentContext.hostCheckpointStatus, "not-programmatically-verifiable");
+  assert.equal(status.statusHome.currentContext.externalWriteCaptureRequired, true);
+  assert.equal(status.statusHome.currentContext.externalWriteCaptureVerified, false);
+  assert.equal(status.statusHome.currentContext.doveRestoreSupported, false);
+  assert.equal(status.statusHome.currentContext.projectVisibilityRequired, true);
+  assert.deepEqual(status.statusHome.blockersAndReconciliation.durableContextNotice, status.durableContextNotice);
   requireFullPreActionGuidance(status.statusHome.preActionGuidance, { surface: "dove.status", primaryRole: "planner" });
   assert.ok(status.statusHome.projectState && typeof status.statusHome.projectState === "object");
   assert.ok(status.statusHome.blockersAndReconciliation && typeof status.statusHome.blockersAndReconciliation === "object");
@@ -665,7 +761,10 @@ async function main() {
   assert.equal(status.dashboard, undefined);
   assert.equal(status.dailyHome, undefined);
   assert.equal(fullStatus.detail, "full");
+  requireDurableContextNotice(fullStatus.durableContextNotice);
   assert.ok(fullStatus.dashboard);
+  assert.deepEqual(fullStatus.dashboard.project.durableContextNotice, fullStatus.durableContextNotice);
+  assert.deepEqual(fullStatus.diagnostics.durableContextNotice, fullStatus.durableContextNotice);
   assert.ok(fullStatus.dashboard.tasks.counts.total >= 1);
   assert.ok(fullStatus.dashboard.tasks.tree.length >= 1);
   assert.equal(fullStatus.dashboard.tasks.index.activeInitId, initGoal.init.id);

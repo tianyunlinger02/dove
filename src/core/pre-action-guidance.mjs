@@ -2,7 +2,11 @@ import {
   ARTIFACT_PATHS,
   DOVE_PRIMARY_ROLES,
   PRIMARY_ROLE_IDS,
-  ROLE_HIERARCHY
+  ROLE_HIERARCHY,
+  doveExecutionContractReadiness,
+  doveExecutionCriteriaCoverage,
+  normalizeDoveExecutionContract,
+  normalizeDoveVerifiedCriteria
 } from "./schema.mjs";
 
 const FULL_LESSON_LIMIT = 5;
@@ -28,6 +32,10 @@ function normalizeStringArray(value) {
 
 function normalizeObjectArray(value) {
   return Array.isArray(value) ? value.filter((item) => item && typeof item === "object" && !Array.isArray(item)) : [];
+}
+
+function normalizeObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function normalizeSurface(surface) {
@@ -279,19 +287,81 @@ function stopConditionsForSurface(surface, responseLanguage = "zh") {
   ];
 }
 
+function executionGuidanceStopCondition({ readiness, coverage, statusExecutionGaps }, responseLanguage = "zh") {
+  if (readiness && !readiness.ready) {
+    return text(responseLanguage, "缺可执行合同时停止在 Planner，不进入 Builder 或 completion。", "Stop at Planner when the executable contract is missing; do not enter Builder or completion.");
+  }
+  if (normalizeStringArray(statusExecutionGaps?.missingMaterialTaskIds).length > 0) {
+    return text(responseLanguage, "缺 source/material/read-first 输入时停止并要求补材料。", "Stop and require materials when source/material/read-first inputs are missing.");
+  }
+  if (coverage && coverage.complete === false) {
+    return text(responseLanguage, "convergence.criteria 未覆盖时停止在 verification/reviewer gate。", "Stop at the verification/reviewer gate when convergence.criteria are not covered.");
+  }
+  if (normalizeStringArray(statusExecutionGaps?.verificationGapTaskIds).length > 0) {
+    return text(responseLanguage, "已有结果但缺 verifiedCriteria 时停止在 Reviewer 验证。", "Stop at Reviewer verification when results exist but verifiedCriteria is missing.");
+  }
+  return text(responseLanguage, "下一步只能执行当前显式前台 pass，并返回证据或边界。", "Run only the current explicit foreground pass next, returning evidence or a boundary.");
+}
+
+function buildExecutionGuidance(context = {}, primaryRole = "planner", responseLanguage = "zh") {
+  const packet = normalizeObject(context.packet);
+  const statusExecutionGaps = normalizeObject(context.statusSummary?.executionGaps);
+  const hasPacket = Boolean(packet.id ?? packet.packetId ?? packet.taskPacketId);
+  const contract = hasPacket ? normalizeDoveExecutionContract(packet.executionContract, null) : null;
+  const readiness = hasPacket ? doveExecutionContractReadiness(contract) : null;
+  const verifiedCriteria = hasPacket ? normalizeDoveVerifiedCriteria(packet.verifiedCriteria) : [];
+  const coverage = hasPacket ? doveExecutionCriteriaCoverage(contract, verifiedCriteria) : null;
+  const missingContractTaskIds = normalizeStringArray(statusExecutionGaps.missingContractTaskIds);
+  const missingMaterialTaskIds = normalizeStringArray(statusExecutionGaps.missingMaterialTaskIds);
+  const verificationGapTaskIds = normalizeStringArray(statusExecutionGaps.verificationGapTaskIds);
+  const readyBuilderTaskIds = normalizeStringArray(statusExecutionGaps.readyBuilderTaskIds);
+  const nextRole = !hasPacket && missingContractTaskIds.length > 0
+    ? "planner"
+    : readiness && !readiness.ready
+      ? "planner"
+      : missingMaterialTaskIds.length > 0
+        ? "planner"
+        : (coverage?.complete === false || verificationGapTaskIds.length > 0)
+          ? "reviewer"
+          : readyBuilderTaskIds.length > 0
+            ? "builder"
+            : primaryRole;
+  return {
+    executableContractPresent: hasPacket ? Boolean(contract) : missingContractTaskIds.length === 0 ? null : false,
+    executableContractReady: hasPacket ? readiness?.ready === true : null,
+    executionContractStatus: hasPacket ? readiness?.status ?? null : null,
+    missingContractFields: hasPacket ? normalizeStringArray(readiness?.missing) : [],
+    missingContractTaskIds,
+    missingMaterialTaskIds,
+    verificationGapTaskIds,
+    readyBuilderTaskIds,
+    requiredMaterials: hasPacket ? normalizeStringArray(readiness?.requiredMaterials) : normalizeStringArray(statusExecutionGaps.requiredMaterials),
+    evidenceRequired: hasPacket ? normalizeStringArray(readiness?.evidenceRequired) : normalizeStringArray(statusExecutionGaps.evidenceRequired),
+    criteriaCoverage: coverage ? {
+      complete: Boolean(coverage.complete),
+      missing: normalizeStringArray(coverage.missing),
+      requiredCount: normalizeStringArray(coverage.required).length
+    } : null,
+    nextRole,
+    stopCondition: executionGuidanceStopCondition({ readiness, coverage, statusExecutionGaps }, responseLanguage)
+  };
+}
+
 export function buildWorkflowFrame(surface, context = {}, responseLanguage = "zh") {
   const normalizedSurface = normalizeSurface(surface);
   const currentStage = normalizeWorkflowStage(context.stage ?? context.currentContext?.stage ?? context.packet?.stage, normalizedSurface);
   const command = commandFromNextAction(context.nextAction ?? context.routeHint);
   const nextHumanAction = normalizeString(context.nextHumanAction, null) ?? titleFromNextAction(context.nextAction) ?? command ?? workflowRouteForSurface(normalizedSurface, null, responseLanguage);
   const primaryRole = inferPrimaryRoleForSurface(normalizedSurface, context);
+  const executionGuidance = buildExecutionGuidance(context, primaryRole, responseLanguage);
   return {
     currentStage,
     recommendedRoute: workflowRouteForSurface(normalizedSurface, command, responseLanguage),
     nextHumanAction,
     allowedForegroundFlow: foregroundFlowForSurface(normalizedSurface, responseLanguage),
+    executionGuidance,
     gates: gatesForSurface(normalizedSurface, primaryRole, responseLanguage),
-    stopConditions: stopConditionsForSurface(normalizedSurface, responseLanguage)
+    stopConditions: [executionGuidance.stopCondition, ...stopConditionsForSurface(normalizedSurface, responseLanguage)]
   };
 }
 
@@ -471,6 +541,9 @@ export function summarizePreActionGuidance(guidance = {}) {
     primaryRoleLabel: guidance.roleFrame?.primaryRoleLabel ?? null,
     subagentSpecialty: guidance.roleFrame?.subagentSpecialty ?? null,
     nextHumanAction: guidance.workflowFrame?.nextHumanAction ?? null,
+    executionNextRole: guidance.workflowFrame?.executionGuidance?.nextRole ?? null,
+    executableContractReady: guidance.workflowFrame?.executionGuidance?.executableContractReady ?? null,
+    stopCondition: guidance.workflowFrame?.executionGuidance?.stopCondition ?? null,
     lessonIds: topLessons.map((lesson) => lesson.id).filter(Boolean),
     noHiddenRuntime: guidance.guardrails?.noHiddenRuntime === true,
     requiresConfirmationForWrites: guidance.guardrails?.requiresConfirmationForWrites === true,

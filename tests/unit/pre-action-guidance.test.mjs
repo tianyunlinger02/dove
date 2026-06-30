@@ -6,7 +6,52 @@ import {
   selectPreActionLessons,
   summarizePreActionGuidance
 } from "../../src/core/index.mjs";
-import { createTempRoot } from "../helpers/temp-root.mjs";
+
+const GUIDANCE_CRITERION = "Guidance execution criterion";
+const GUIDANCE_EVIDENCE_PATH = ".dove/evidence/guidance-verification.log";
+
+function guidanceExecutionContract(overrides = {}) {
+  const base = {
+    chainType: "engineering-host-pass-verify",
+    roleSequence: ["builder", "reviewer"],
+    readFirst: [],
+    action: "project:dove.auto",
+    implementation: ["Produce guidance workflow evidence."],
+    files: [],
+    materials: {
+      requiredInputs: [],
+      requiredArtifacts: [],
+      sourceRefs: [],
+      artifactRefs: []
+    },
+    convergence: {
+      criteria: [GUIDANCE_CRITERION],
+      verificationCommands: ["node --test tests/unit/pre-action-guidance.test.mjs"],
+      evidenceRequired: [GUIDANCE_EVIDENCE_PATH],
+      definitionOfDone: "The guidance execution criterion is verified."
+    },
+    failureRoutes: [
+      { on: "verification-failed", boundaryType: "verification-failed", nextAction: "project:dove.status", requiredActions: ["provide-verified-criteria"] }
+    ]
+  };
+  return {
+    ...base,
+    ...overrides,
+    roleSequence: overrides.roleSequence ?? base.roleSequence,
+    readFirst: overrides.readFirst ?? base.readFirst,
+    implementation: overrides.implementation ?? base.implementation,
+    files: overrides.files ?? base.files,
+    materials: {
+      ...base.materials,
+      ...(overrides.materials ?? {})
+    },
+    convergence: {
+      ...base.convergence,
+      ...(overrides.convergence ?? {})
+    },
+    failureRoutes: overrides.failureRoutes ?? base.failureRoutes
+  };
+}
 
 test("pre-action guidance ranks active packet lessons and keeps guardrails explicit", () => {
   const operatorLessons = {
@@ -105,6 +150,68 @@ test("pre-action guidance ranks active packet lessons and keeps guardrails expli
   assert.equal(summary.noHiddenRuntime, true);
   assert.equal(summary.requiresConfirmationForWrites, true);
   assert.equal(summary.recordingExplicitOnly, true);
+});
+
+test("pre-action guidance routes executable workflow gaps to planner builder and reviewer", () => {
+  const missingContract = buildPreActionGuidance({
+    surface: "dove.status",
+    responseLanguage: "en",
+    roleId: "builder",
+    statusSummary: {
+      executionGaps: {
+        missingContractTaskIds: ["missing-contract-task"],
+        missingMaterialTaskIds: ["missing-material-task"],
+        verificationGapTaskIds: [],
+        readyBuilderTaskIds: [],
+        requiredMaterials: ["sources/cvpr-template.md"],
+        evidenceRequired: ["executionContract"]
+      }
+    }
+  });
+  assert.equal(missingContract.workflowFrame.executionGuidance.executableContractPresent, false);
+  assert.equal(missingContract.workflowFrame.executionGuidance.nextRole, "planner");
+  assert.deepEqual(missingContract.workflowFrame.executionGuidance.missingContractTaskIds, ["missing-contract-task"]);
+  assert.deepEqual(missingContract.workflowFrame.executionGuidance.missingMaterialTaskIds, ["missing-material-task"]);
+  assert.deepEqual(missingContract.workflowFrame.executionGuidance.requiredMaterials, ["sources/cvpr-template.md"]);
+  assert.deepEqual(missingContract.workflowFrame.executionGuidance.evidenceRequired, ["executionContract"]);
+  assert.match(missingContract.workflowFrame.executionGuidance.stopCondition, /materials|Planner/);
+
+  const readyBuilder = buildPreActionGuidance({
+    surface: "dove.auto",
+    responseLanguage: "en",
+    roleId: "builder",
+    statusSummary: {
+      executionGaps: {
+        missingContractTaskIds: [],
+        missingMaterialTaskIds: [],
+        verificationGapTaskIds: [],
+        readyBuilderTaskIds: ["ready-builder-task"],
+        requiredMaterials: [],
+        evidenceRequired: [GUIDANCE_EVIDENCE_PATH]
+      }
+    }
+  });
+  assert.equal(readyBuilder.workflowFrame.executionGuidance.nextRole, "builder");
+  assert.deepEqual(readyBuilder.workflowFrame.executionGuidance.readyBuilderTaskIds, ["ready-builder-task"]);
+  assert.deepEqual(readyBuilder.workflowFrame.executionGuidance.evidenceRequired, [GUIDANCE_EVIDENCE_PATH]);
+  assert.match(readyBuilder.workflowFrame.executionGuidance.stopCondition, /foreground pass/);
+
+  const reviewerGate = buildPreActionGuidance({
+    surface: "dove.review",
+    responseLanguage: "en",
+    roleId: "reviewer",
+    packet: {
+      id: "reviewer-gate-task",
+      executionContract: guidanceExecutionContract(),
+      verifiedCriteria: []
+    }
+  });
+  assert.equal(reviewerGate.workflowFrame.executionGuidance.executableContractPresent, true);
+  assert.equal(reviewerGate.workflowFrame.executionGuidance.executableContractReady, true);
+  assert.equal(reviewerGate.workflowFrame.executionGuidance.nextRole, "reviewer");
+  assert.deepEqual(reviewerGate.workflowFrame.executionGuidance.criteriaCoverage.missing, [GUIDANCE_CRITERION]);
+  assert.equal(reviewerGate.workflowFrame.executionGuidance.criteriaCoverage.complete, false);
+  assert.match(reviewerGate.workflowFrame.executionGuidance.stopCondition, /verification\/reviewer/);
 });
 
 test("pre-action guidance explains source note and document deposition routes", () => {

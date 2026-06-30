@@ -12,7 +12,9 @@ import {
   createDefaultState,
   createTaskPacketsIndex,
   normalizeDoveBoundary,
+  normalizeDoveExecutionContract,
   normalizeDoveHandoff,
+  normalizeDoveVerifiedCriteria,
   normalizeSettings
 } from "./schema.mjs";
 
@@ -141,6 +143,10 @@ function normalizePacketCandidate(root, packet = {}) {
     auditIds: uniqueStrings([...normalizeStringArray(merged.auditIds), ...normalizeStringArray(contextObject.auditIds)]),
     outputPaths: uniqueStrings([...normalizeStringArray(merged.outputPaths), ...normalizeStringArray(contextObject.outputPaths)]),
     evidenceLinks: uniqueStrings([...normalizeStringArray(merged.evidenceLinks), ...normalizeStringArray(contextObject.evidenceLinks)]),
+    validationEvidencePaths: uniqueStrings([...normalizeStringArray(merged.validationEvidencePaths), ...normalizeStringArray(contextObject.validationEvidencePaths)]),
+    verificationEvidencePaths: uniqueStrings([...normalizeStringArray(merged.verificationEvidencePaths), ...normalizeStringArray(contextObject.verificationEvidencePaths)]),
+    verifiedCriteria: normalizeDoveVerifiedCriteria(merged.verifiedCriteria ?? contextObject.verifiedCriteria),
+    executionContract: normalizeDoveExecutionContract(merged.executionContract, null),
     context: contextObject
   };
 }
@@ -236,7 +242,10 @@ function packetArtifactSet(packet) {
     ...normalizeStringArray(packet.resultIds),
     ...normalizeStringArray(packet.auditIds),
     ...normalizeStringArray(packet.outputPaths),
-    ...normalizeStringArray(packet.evidenceLinks)
+    ...normalizeStringArray(packet.evidenceLinks),
+    ...normalizeStringArray(packet.validationEvidencePaths),
+    ...normalizeStringArray(packet.verificationEvidencePaths),
+    ...normalizeStringArray(packet.verifiedCriteria?.flatMap((item) => item.evidencePaths ?? []))
   ]));
 }
 

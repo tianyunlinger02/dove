@@ -11,6 +11,7 @@ import {
 } from "./schema.mjs";
 import { loadDoveConfig, normalizeGlobalStatusProjects, resolveDoveGlobalStatusOutputDir } from "./config.mjs";
 import { queryDoveStatus } from "./dove.mjs";
+import { isPatchPlanMode } from "./mutation-backend.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
 
 const PUBLIC_STATUS_VERSION = 1;
@@ -568,6 +569,38 @@ function writeAbsoluteText(filePath, value) {
   fs.writeFileSync(filePath, value, "utf8");
 }
 
+function projectRelativeOutputPath(root, filePath) {
+  const relativePath = path.relative(path.resolve(root), path.resolve(filePath));
+  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    return null;
+  }
+  return relativePath.split(path.sep).join("/");
+}
+
+function writeOutputJson(root, filePath, value) {
+  const relativePath = projectRelativeOutputPath(root, filePath);
+  if (relativePath) {
+    writeJson(root, relativePath, value);
+    return;
+  }
+  if (isPatchPlanMode(root)) {
+    throw new Error("publish_dove_global_status patch-plan requires outputDir to stay inside the target project.");
+  }
+  writeAbsoluteJson(filePath, value);
+}
+
+function writeOutputText(root, filePath, value) {
+  const relativePath = projectRelativeOutputPath(root, filePath);
+  if (relativePath) {
+    writeText(root, relativePath, value);
+    return;
+  }
+  if (isPatchPlanMode(root)) {
+    throw new Error("publish_dove_global_status patch-plan requires outputDir to stay inside the target project.");
+  }
+  writeAbsoluteText(filePath, value);
+}
+
 function readPublicText(project, relativePath, fallback) {
   const fullPath = path.join(project.root, relativePath);
   try {
@@ -577,7 +610,7 @@ function readPublicText(project, relativePath, fallback) {
   }
 }
 
-function writeGlobalProjectArtifacts(outputDir, readResult) {
+function writeGlobalProjectArtifacts(root, outputDir, readResult) {
   const { project, snapshot, status, reason } = readResult;
   const projectDir = path.join(outputDir, "projects", project.slug);
   const projectSnapshot = snapshot ?? {
@@ -600,9 +633,9 @@ function writeGlobalProjectArtifacts(outputDir, readResult) {
   const html = snapshot
     ? readPublicText(project, ARTIFACT_PATHS.publicStatusHtml, projectPlaceholderHtml(project, status, reason))
     : projectPlaceholderHtml(project, status, reason);
-  writeAbsoluteJson(path.join(projectDir, "status.json"), projectSnapshot);
-  writeAbsoluteText(path.join(projectDir, "status.md"), markdown);
-  writeAbsoluteText(path.join(projectDir, "index.html"), html);
+  writeOutputJson(root, path.join(projectDir, "status.json"), projectSnapshot);
+  writeOutputText(root, path.join(projectDir, "status.md"), markdown);
+  writeOutputText(root, path.join(projectDir, "index.html"), html);
   return [
     path.join(projectDir, "status.json"),
     path.join(projectDir, "status.md"),
@@ -632,6 +665,9 @@ function refreshGlobalProjectPublicStatus(project, options = {}) {
 
 export function publishDoveGlobalStatus(root, options = {}) {
   assertGovernanceMutationRegistered("publish-dove-global-status", "exempt");
+  if (options.refresh && isPatchPlanMode(root)) {
+    throw new Error("publish_dove_global_status patch-plan does not support refresh; publish each project status with patch-plan before aggregating.");
+  }
   const selection = resolveGlobalStatusSelection(root, options);
   const refreshResults = [];
   const readResults = selection.projects.map((project) => {
@@ -649,14 +685,14 @@ export function publishDoveGlobalStatus(root, options = {}) {
   const markdown = renderGlobalMarkdown(snapshot);
   const html = renderGlobalHtml(snapshot);
   const writes = [];
-  writeAbsoluteJson(path.join(selection.outputDir, "status.json"), snapshot);
+  writeOutputJson(root, path.join(selection.outputDir, "status.json"), snapshot);
   writes.push("status.json");
-  writeAbsoluteText(path.join(selection.outputDir, "status.md"), markdown);
+  writeOutputText(root, path.join(selection.outputDir, "status.md"), markdown);
   writes.push("status.md");
-  writeAbsoluteText(path.join(selection.outputDir, "index.html"), html);
+  writeOutputText(root, path.join(selection.outputDir, "index.html"), html);
   writes.push("index.html");
   for (const readResult of readResults) {
-    writes.push(...writeGlobalProjectArtifacts(selection.outputDir, readResult));
+    writes.push(...writeGlobalProjectArtifacts(root, selection.outputDir, readResult));
   }
   return {
     mode: "dove-global-public-status-publish",

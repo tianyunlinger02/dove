@@ -14,7 +14,7 @@ Collect and organize external provenance such as web, literature, venue template
 - Keep source intake separate from internal notes and pressure-test summaries.
 - Targeting: Resolve or confirm the durable task packet before recording external source metadata; batch multiple sources with `sources: [...]` when available.
 - Confirmation: If no unique task target is available, ask for packet selection instead of guessing.
-- Outcome: The selected task has durable packet-bound source metadata and provenance links.
+- Outcome: The selected task has durable packet-bound source metadata when provenance is verified; failed search/fetch returns or surfaces a host-tool-blocked no-write boundary instead of source metadata.
 
 ## Examples
 
@@ -39,18 +39,25 @@ Collect and organize external provenance such as web, literature, venue template
 7. For ordinary prompts that ask to bind, save, deposit, archive, or 沉淀 results to a main task, resolve the durable packet first, register external URLs/templates/guidelines as packet-bound sources, then synthesize internal findings through `upsert_note` or `record_document_evidence` instead of treating the synthesis as an external source.
 8. Treat `preActionGuidance` as read-only guidance that automatically recalls applicable lessons from `.dove/meta/operator-lessons.json`; recording lessons remains explicit through `/dove:lessons` and `record_operator_lesson` only.
 9. Frame work through Planner, Builder, and Reviewer primary roles; researcher, experiment-planner, revision-lead, rebuttal-lead, version-analyst, and review-loop are subagents/modes under those roles, not public slash surfaces.
-10. Treat status as the project command center and mission as a durable work contract/progress object; do not make a mission board the default UI.
-11. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
-12. Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.
-13. Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.
-14. Never call `register_source` with only a packet id; every new source must include a real title or locator, and source-research auto runs must collect those URLs/templates/guidelines before writing.
-15. Use explicit configured providers or operator-provided material; do not hide network/provider calls.
-16. Link each source to the resolved durable task packet through packetIds.
-17. For reviewer-guideline or 审稿偏好 research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact.
-18. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
-19. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
-20. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
-21. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
-22. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-23. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-24. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+10. Planner output must be executable: every new or plan-derived mission needs canonical `executionContract.action`, `implementation`, `convergence.criteria`, and `failureRoutes`; do not invent substitute child missions or infer child work from the parent title when explicit child mission details are missing.
+11. Builder completion requires a result summary plus real evidence/artifact/validation/verification paths and `verifiedCriteria` that covers every `executionContract.convergence.criteria` item; read-only status, summary-only output, or unknown step status must not mark work complete.
+12. Reviewer and audit work may inspect evidence and record explicit review state, but must stay read-only with respect to Builder outputs unless an operator explicitly asks to record review/revision artifacts.
+13. Treat status as the project command center and mission as a durable work contract/progress object; rank missing executable contracts, missing source/material inputs, ready Builder execution, verification gaps, reviewer/audit needs, and reconciliation above optional mission details.
+14. Dove `.dove/` durable state participates in host rollback only through host-tracked file edits: request `mutationMode: "patch-plan"`, inspect the returned operations, and apply them with the host's tracked file-edit mechanism. Direct CLI/MCP `direct-process` writes remain functional but rollback-unverified; git presence is not proof, and host rollback must not be routed through `reset_dove_version`.
+15. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
+16. Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.
+17. Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.
+18. Never call `register_source` with only a packet id; every new source must include a real title or locator, and source-research auto runs must collect those URLs/templates/guidelines before writing.
+19. Treat host search output such as `Did 0 searches`, zero results, empty result sets, or unavailable search as a hard retrieval failure; do not describe it as finding official sources, and do not infer locators from memory or prior transcript context.
+20. Do not call `register_source` when search/fetch returned zero results, safe-domain verification failed, or retrieval was blocked; record or surface a `host-tool-blocked` boundary until verifiable source evidence exists.
+21. If the host denies or blocks the boundary-recording mutation, stop and report that no durable source or boundary update was written; do not retry another mutating Dove call such as patch-plan without explicit operator approval.
+22. Use explicit configured providers or operator-provided material; do not hide network/provider calls.
+23. Link each source to the resolved durable task packet through packetIds.
+24. For reviewer-guideline or 审稿偏好 research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact.
+25. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
+26. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
+27. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
+28. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
+29. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+30. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+31. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

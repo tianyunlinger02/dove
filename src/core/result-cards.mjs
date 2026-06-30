@@ -81,8 +81,8 @@ function resultActions(actions = [], nextAction = null, responseLanguage = "zh")
 function requiresAction(status, boundary, stopReason) {
   const statusText = normalizeString(status, "") ?? "";
   return Boolean(boundary)
-    || ["blocked", "blocked-boundary", "awaiting-host-pass", "awaiting-host-results", "prepared-awaiting-audio", "step-budget-exhausted", "stopped-killed"].includes(statusText)
-    || /awaiting|missing|required|blocked|failed|exhausted/u.test(String(stopReason ?? ""));
+    || ["blocked", "blocked-boundary", "awaiting-host-pass", "awaiting-host-results", "needs-host-results", "needs-completion-evidence", "needs-explicit-progress-step", "needs-review", "prepared-awaiting-audio", "prepared-awaiting-output", "step-budget-exhausted", "max-iterations-exhausted", "stopped-killed"].includes(statusText)
+    || /awaiting|missing|required|blocked|failed|exhausted|needs-/u.test(String(stopReason ?? ""));
 }
 
 export function buildCommandResultCard(details = {}, responseLanguage = "zh") {
@@ -141,7 +141,7 @@ export function buildCommandResultCard(details = {}, responseLanguage = "zh") {
     background: details.background === undefined ? null : Boolean(details.background),
     daemon: details.daemon === undefined ? null : Boolean(details.daemon),
     completed: status === "completed",
-    stopped: Boolean(stopReason || boundary || ["blocked", "blocked-boundary", "awaiting-host-pass", "awaiting-host-results", "step-budget-exhausted", "stopped-killed"].includes(status ?? "")),
+    stopped: Boolean(stopReason || boundary || ["blocked", "blocked-boundary", "awaiting-host-pass", "awaiting-host-results", "needs-host-results", "needs-completion-evidence", "needs-explicit-progress-step", "needs-review", "prepared-awaiting-output", "step-budget-exhausted", "max-iterations-exhausted", "stopped-killed"].includes(status ?? "")),
     requiresAction: requiresAction(status, boundary, stopReason),
     proposalOnly: false,
     confirmationRequired: false

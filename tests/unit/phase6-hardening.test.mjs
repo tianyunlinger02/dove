@@ -35,6 +35,9 @@ import {
   updateResearchBrief,
   appendHandoff,
   appendReviewLog,
+  recordDoveMissionPass,
+  runDoveAuto,
+  runDoveOperator,
   buildRebuttal,
   buildRebuttalStrategy,
   bridgeExperimentResultToClaim,
@@ -136,6 +139,195 @@ function writeTaskTargetSettings(root, overrides) {
     }
   });
 }
+
+const HARDENING_CRITERION = "Hardening convergence criterion";
+const HARDENING_EVIDENCE_PATH = ".dove/evidence/hardening-verification.log";
+
+function hardeningExecutionContract(overrides = {}) {
+  const base = {
+    chainType: "engineering-host-pass-verify",
+    roleSequence: ["builder", "reviewer"],
+    readFirst: [],
+    action: "project:dove.auto",
+    implementation: ["Produce hardening workflow evidence."],
+    files: [],
+    materials: {
+      requiredInputs: [],
+      requiredArtifacts: [],
+      sourceRefs: [],
+      artifactRefs: []
+    },
+    convergence: {
+      criteria: [HARDENING_CRITERION],
+      verificationCommands: ["node --test tests/unit/phase6-hardening.test.mjs"],
+      evidenceRequired: [HARDENING_EVIDENCE_PATH],
+      definitionOfDone: "The hardening criterion is verified."
+    },
+    failureRoutes: [
+      { on: "verification-failed", boundaryType: "verification-failed", nextAction: "project:dove.status", requiredActions: ["provide-verified-criteria"] }
+    ]
+  };
+  return {
+    ...base,
+    ...overrides,
+    roleSequence: overrides.roleSequence ?? base.roleSequence,
+    readFirst: overrides.readFirst ?? base.readFirst,
+    implementation: overrides.implementation ?? base.implementation,
+    files: overrides.files ?? base.files,
+    materials: {
+      ...base.materials,
+      ...(overrides.materials ?? {})
+    },
+    convergence: {
+      ...base.convergence,
+      ...(overrides.convergence ?? {})
+    },
+    failureRoutes: overrides.failureRoutes ?? base.failureRoutes
+  };
+}
+
+function hardeningVerifiedCriteria(criterion = HARDENING_CRITERION) {
+  return [{ criterion, status: "verified", evidencePaths: [HARDENING_EVIDENCE_PATH] }];
+}
+
+test("workflow completion hardening rejects fake completion signals", () => {
+  const missionRoot = tempRoot();
+  try {
+    ensureWorkspace(missionRoot);
+    seedTaskPacket(missionRoot, "summary-only-mission", {
+      status: "ready",
+      level: 3,
+      stage: "execute",
+      executionContract: hardeningExecutionContract()
+    });
+    const summaryOnly = recordDoveMissionPass(missionRoot, {
+      packetId: "summary-only-mission",
+      resultStatus: "completed",
+      summary: "Summary without evidence must not complete."
+    });
+    assert.equal(summaryOnly.status, "needs-completion-evidence");
+    assert.equal(summaryOnly.boundaryType, "missing-required-materials");
+    assert.deepEqual(summaryOnly.writes, []);
+    assert.equal(readJson(missionRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "summary-only-mission").status, "ready");
+  } finally {
+    fs.rmSync(missionRoot, { recursive: true, force: true });
+  }
+
+  const readOnlyRoot = tempRoot();
+  try {
+    ensureWorkspace(readOnlyRoot);
+    seedTaskPacket(readOnlyRoot, "read-only-auto", {
+      status: "ready",
+      level: 3,
+      stage: "execute",
+      executionContract: hardeningExecutionContract(),
+      nextAction: "project:dove.status"
+    });
+    const readOnly = runDoveAuto(readOnlyRoot, {
+      packetId: "read-only-auto",
+      confirmed: true,
+      runId: "read-only-auto-run",
+      steps: [{ command: "dove.status", completeTask: true }]
+    });
+    assert.equal(readOnly.status, "needs-explicit-progress-step");
+    assert.equal(readOnly.requestedStatus, "completed");
+    assert.deepEqual(readOnly.writes, []);
+    assert.equal(readOnly.task.status, "ready");
+    assert.equal(readOnly.result.taskStatusAfter, "ready");
+  } finally {
+    fs.rmSync(readOnlyRoot, { recursive: true, force: true });
+  }
+
+  const autoRoot = tempRoot();
+  try {
+    ensureWorkspace(autoRoot);
+    seedTaskPacket(autoRoot, "auto-unverified-artifact", {
+      status: "ready",
+      level: 3,
+      stage: "execute",
+      executionContract: hardeningExecutionContract()
+    });
+    const autoUnverified = runDoveAuto(autoRoot, {
+      packetId: "auto-unverified-artifact",
+      confirmed: true,
+      runId: "auto-unverified-artifact-run",
+      steps: [{
+        command: "dove.note",
+        completeTask: true,
+        args: {
+          noteId: "auto-unverified-note",
+          title: "Auto unverified note",
+          sectionId: "hardening",
+          summary: "Artifact output without verified criteria must not complete."
+        }
+      }]
+    });
+    assert.equal(autoUnverified.status, "verification-failed");
+    assert.equal(autoUnverified.task.status, "blocked");
+    assert.equal(autoUnverified.boundary.type, "verification-failed");
+    assert.deepEqual(autoUnverified.boundary.requiredActions, ["provide-verified-criteria", "cover-missing-convergence-criteria", "attach-verification-evidence"]);
+  } finally {
+    fs.rmSync(autoRoot, { recursive: true, force: true });
+  }
+
+  const operatorRoot = tempRoot();
+  try {
+    ensureWorkspace(operatorRoot);
+    seedTaskPacket(operatorRoot, "operator-summary-only", {
+      status: "ready",
+      level: 3,
+      stage: "execute",
+      goal: "Collect source provenance through a host pass.",
+      nextAction: "project:dove.source",
+      executionContract: hardeningExecutionContract()
+    });
+    const operator = runDoveOperator(operatorRoot, {
+      confirmed: true,
+      runId: "operator-summary-only-run",
+      taskResults: [{
+        packetId: "operator-summary-only",
+        resultStatus: "completed",
+        summary: "Host pass says done without evidence."
+      }]
+    });
+    assert.equal(operator.result.iterations[0].status, "needs-completion-evidence");
+    assert.equal(operator.updatedTasks[0].status, "blocked");
+    const operatorSummaryOnlyTask = readJson(operatorRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "operator-summary-only");
+    assert.equal(operatorSummaryOnlyTask.status, "blocked");
+    assert.equal(operatorSummaryOnlyTask.boundary.type, "missing-required-materials");
+  } finally {
+    fs.rmSync(operatorRoot, { recursive: true, force: true });
+  }
+
+  const unknownRoot = tempRoot();
+  try {
+    ensureWorkspace(unknownRoot);
+    seedTaskPacket(unknownRoot, "operator-unknown-status", {
+      status: "ready",
+      level: 3,
+      stage: "execute",
+      goal: "Collect source provenance through a host pass.",
+      nextAction: "project:dove.source",
+      executionContract: hardeningExecutionContract()
+    });
+    const unknown = runDoveOperator(unknownRoot, {
+      confirmed: true,
+      runId: "operator-unknown-status-run",
+      taskResults: [{
+        packetId: "operator-unknown-status",
+        resultStatus: "mystery",
+        summary: "Unknown host result status should not be normalized to completed.",
+        verificationEvidencePaths: [HARDENING_EVIDENCE_PATH],
+        verifiedCriteria: hardeningVerifiedCriteria()
+      }]
+    });
+    assert.equal(unknown.result.iterations[0].status, "in-progress");
+    assert.equal(unknown.updatedTasks[0].status, "in-progress");
+    assert.equal(readJson(unknownRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "operator-unknown-status").status, "in-progress");
+  } finally {
+    fs.rmSync(unknownRoot, { recursive: true, force: true });
+  }
+});
 
 test("task packet resolver handles explicit ids, targets, ambiguity, and artifact conflicts", () => {
   const root = tempRoot();

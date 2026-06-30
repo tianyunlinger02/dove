@@ -88,8 +88,11 @@ import {
   upsertPlan,
   upsertRevisionPlan,
   validateFigurePipeline,
-  summarizeSessionJournal
+  summarizeSessionJournal,
+  currentMutationContext,
+  runWithMutationContext
 } from "../core/index.mjs";
+import { MUTATING_TOOL_NAMES } from "./tool-definitions.mjs";
 
 function makeTextResult(data) {
   return {
@@ -104,189 +107,245 @@ function makeErrorResult(message) {
   };
 }
 
+const mutationMetadataKeys = [
+  "mutationId",
+  "mutationMode",
+  "writesApplied",
+  "hostRollbackEligible",
+  "hostTrackedFileEditsRequired",
+  "directProcessWritesAreRollbackSafe",
+  "externalWriteCaptureVerified",
+  "doveRestoreSupported",
+  "mutationSummary",
+  "mutationPlan"
+];
+
+function stripMutationControlArgs(args = {}) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return {};
+  }
+  const { mutationMode, ...rest } = args;
+  return rest;
+}
+
+function extractPacketId(args = {}) {
+  return args.packetId ?? args.taskPacketId ?? args.missionPacketId ?? args.taskId ?? null;
+}
+
+function mutationMetadataFrom(wrapped) {
+  return Object.fromEntries(mutationMetadataKeys.filter((key) => key in wrapped).map((key) => [key, wrapped[key]]));
+}
+
+function mergeMutationMetadata(data, wrapped) {
+  const metadata = mutationMetadataFrom(wrapped);
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    return { ...data, ...metadata };
+  }
+  return { result: data, ...metadata };
+}
+
+function dispatchToolWithMutationContext(root, name, args = {}) {
+  const cleanArgs = stripMutationControlArgs(args);
+  const wrapped = runWithMutationContext(root, {
+    actionId: name,
+    mutationMode: args?.mutationMode,
+    hostId: "mcp",
+    packetId: extractPacketId(args)
+  }, () => dispatchTool(root, name, cleanArgs));
+  if (wrapped.isError) {
+    return makeErrorResult(wrapped.content?.[0]?.text ?? `Failed to run ${name}`);
+  }
+  const data = JSON.parse(wrapped.content?.[0]?.text ?? "null");
+  return makeTextResult(mergeMutationMetadata(data, wrapped));
+}
+
 export function dispatchTool(root, name, args = {}) {
   try {
+    if (MUTATING_TOOL_NAMES.has(name) && !currentMutationContext(root)) {
+      return dispatchToolWithMutationContext(root, name, args);
+    }
+    const result = (data) => makeTextResult(data);
     switch (name) {
       case "ensure_workspace":
-        return makeTextResult(ensureWorkspace(root));
+        return result(ensureWorkspace(root));
       case "init_project":
-        return makeTextResult(initProject(root, args));
+        return result(initProject(root, args));
       case "read_state":
-        return makeTextResult(readState(root));
+        return result(readState(root));
       case "query_task_graph":
-        return makeTextResult(queryTaskGraph(root));
+        return result(queryTaskGraph(root));
       case "query_open_questions":
-        return makeTextResult(queryOpenQuestions(root));
+        return result(queryOpenQuestions(root));
       case "query_decisions":
-        return makeTextResult(queryDecisions(root));
+        return result(queryDecisions(root));
       case "query_lineage":
-        return makeTextResult(queryLineage(root));
+        return result(queryLineage(root));
       case "query_workspace_index":
-        return makeTextResult(queryWorkspaceIndex(root));
+        return result(queryWorkspaceIndex(root));
       case "query_meta_optimize":
-        return makeTextResult(queryMetaOptimize(root));
+        return result(queryMetaOptimize(root));
       case "query_governance_coverage_report":
-        return makeTextResult(queryGovernanceCoverageReport(root));
+        return result(queryGovernanceCoverageReport(root));
       case "query_operator_lessons":
-        return makeTextResult(queryOperatorLessons(root, args));
+        return result(queryOperatorLessons(root, args));
       case "query_operator_follow_through":
-        return makeTextResult(queryOperatorFollowThrough(root));
+        return result(queryOperatorFollowThrough(root));
       case "query_paper_audit":
-        return makeTextResult(queryPaperAudit(root, args));
+        return result(queryPaperAudit(root, args));
       case "query_dove_onboarding":
-        return makeTextResult(queryDoveOnboarding(root, args));
+        return result(queryDoveOnboarding(root, args));
       case "query_paper_pipeline":
-        return makeTextResult(queryPaperPipeline(root, args));
+        return result(queryPaperPipeline(root, args));
       case "query_dove_orchestrate":
-        return makeTextResult(queryDoveOrchestrate(root, args));
+        return result(queryDoveOrchestrate(root, args));
       case "query_dove_mission":
-        return makeTextResult(queryDoveMission(root, args));
+        return result(queryDoveMission(root, args));
       case "query_dove_mission_board":
-        return makeTextResult(queryDoveMissionBoard(root, args));
+        return result(queryDoveMissionBoard(root, args));
       case "query_dove_status":
-        return makeTextResult(queryDoveStatus(root, args));
+        return result(queryDoveStatus(root, args));
       case "publish_dove_status":
-        return makeTextResult(publishDoveStatus(root, args));
+        return result(publishDoveStatus(root, args));
       case "publish_dove_global_status":
-        return makeTextResult(publishDoveGlobalStatus(root, args));
+        return result(publishDoveGlobalStatus(root, args));
       case "query_document_ledger":
-        return makeTextResult(queryDocumentLedger(root, args));
+        return result(queryDocumentLedger(root, args));
       case "record_document_evidence":
-        return makeTextResult(recordDocumentEvidence(root, args));
+        return result(recordDocumentEvidence(root, args));
       case "query_dove_audit":
-        return makeTextResult(queryDoveAudit(root, args));
+        return result(queryDoveAudit(root, args));
       case "query_dove_return":
-        return makeTextResult(queryDoveReturn(root, args));
+        return result(queryDoveReturn(root, args));
       case "init_dove_goal":
-        return makeTextResult(initDoveGoal(root, args));
+        return result(initDoveGoal(root, args));
       case "create_dove_task":
-        return makeTextResult(createDoveTask(root, args));
+        return result(createDoveTask(root, args));
       case "record_dove_mission_pass":
-        return makeTextResult(recordDoveMissionPass(root, args));
+        return result(recordDoveMissionPass(root, args));
       case "run_dove_auto":
-        return makeTextResult(runDoveAuto(root, args));
+        return result(runDoveAuto(root, args));
       case "apply_dove_status_adjustments":
-        return makeTextResult(applyDoveStatusAdjustments(root, args));
+        return result(applyDoveStatusAdjustments(root, args));
       case "run_dove_operator":
-        return makeTextResult(runDoveOperator(root, args));
+        return result(runDoveOperator(root, args));
       case "kill_dove_task":
-        return makeTextResult(killDoveTask(root, args));
+        return result(killDoveTask(root, args));
       case "reset_dove_version":
-        return makeTextResult(resetDoveVersion(root, args));
+        return result(resetDoveVersion(root, args));
       case "run_experience_workflow":
-        return makeTextResult(runExperienceWorkflow(root, args));
+        return result(runExperienceWorkflow(root, args));
       case "prepare_audio_review":
-        return makeTextResult(prepareAudioReview(root, args));
+        return result(prepareAudioReview(root, args));
       case "import_audio_review":
-        return makeTextResult(importAudioReview(root, args));
+        return result(importAudioReview(root, args));
       case "run_audio_review":
-        return makeTextResult(runAudioReview(root, args));
+        return result(runAudioReview(root, args));
       case "run_dove_review_loop":
-        return makeTextResult(runDoveReviewLoop(root, args));
+        return result(runDoveReviewLoop(root, args));
       case "launch_dove_mission":
-        return makeTextResult(launchDoveMission(root, args));
+        return result(launchDoveMission(root, args));
       case "query_program_approvals":
-        return makeTextResult(queryProgramApprovals(root, args));
+        return result(queryProgramApprovals(root, args));
       case "query_campaigns":
-        return makeTextResult(queryCampaigns(root, args));
+        return result(queryCampaigns(root, args));
       case "query_boundary_report":
-        return makeTextResult(readBoundaryReport(root));
+        return result(readBoundaryReport(root));
       case "read_role_context_manifest":
-        return makeTextResult(readRoleContextManifest(root, args.roleId));
+        return result(readRoleContextManifest(root, args.roleId));
       case "read_phase_context_manifest":
-        return makeTextResult(readPhaseContextManifest(root, args.phaseId));
+        return result(readPhaseContextManifest(root, args.phaseId));
       case "read_packet_context_manifest":
-        return makeTextResult(readPacketContextManifest(root, args.packetId));
+        return result(readPacketContextManifest(root, args.packetId));
       case "read_artifact_context_manifest":
-        return makeTextResult(readArtifactContextManifest(root, args.artifactPath));
+        return result(readArtifactContextManifest(root, args.artifactPath));
       case "read_action_context_bundle":
-        return makeTextResult(readActionContextBundle(root, args));
+        return result(readActionContextBundle(root, args));
       case "summarize_session_journal":
-        return makeTextResult(summarizeSessionJournal(root));
+        return result(summarizeSessionJournal(root));
       case "upsert_orchestration_board":
-        return makeTextResult(upsertOrchestrationBoard(root, args));
+        return result(upsertOrchestrationBoard(root, args));
       case "append_handoff":
-        return makeTextResult(appendHandoff(root, args));
+        return result(appendHandoff(root, args));
       case "update_research_brief":
-        return makeTextResult(updateResearchBrief(root, args));
+        return result(updateResearchBrief(root, args));
       case "register_source":
-        return makeTextResult(registerSource(root, args));
+        return result(registerSource(root, args));
       case "upsert_note":
-        return makeTextResult(upsertNote(root, args));
+        return result(upsertNote(root, args));
       case "upsert_claims":
-        return makeTextResult(upsertClaims(root, args));
+        return result(upsertClaims(root, args));
       case "upsert_experiment_plan":
-        return makeTextResult(upsertExperimentPlan(root, args));
+        return result(upsertExperimentPlan(root, args));
       case "upsert_experiment_result":
-        return makeTextResult(upsertExperimentResult(root, args));
+        return result(upsertExperimentResult(root, args));
       case "run_experiment_audit":
-        return makeTextResult(runExperimentAudit(root, args));
+        return result(runExperimentAudit(root, args));
       case "bridge_result_to_claim":
-        return makeTextResult(bridgeExperimentResultToClaim(root, args));
+        return result(bridgeExperimentResultToClaim(root, args));
       case "upsert_plan":
-        return makeTextResult(upsertPlan(root, args));
+        return result(upsertPlan(root, args));
       case "upsert_outline":
-        return makeTextResult(upsertOutline(root, args));
+        return result(upsertOutline(root, args));
       case "upsert_draft":
-        return makeTextResult(upsertDraft(root, args));
+        return result(upsertDraft(root, args));
       case "run_review_loop":
-        return makeTextResult(runReviewLoop(root, args));
+        return result(runReviewLoop(root, args));
       case "append_review_log":
-        return makeTextResult(appendReviewLog(root, args));
+        return result(appendReviewLog(root, args));
       case "prepare_isolated_review":
-        return makeTextResult(prepareIsolatedReview(root, args));
+        return result(prepareIsolatedReview(root, args));
       case "import_isolated_review":
-        return makeTextResult(importIsolatedReview(root, args));
+        return result(importIsolatedReview(root, args));
       case "upsert_revision_plan":
-        return makeTextResult(upsertRevisionPlan(root, args));
+        return result(upsertRevisionPlan(root, args));
       case "set_section_status":
-        return makeTextResult(setSectionStatus(root, args));
+        return result(setSectionStatus(root, args));
       case "sync_checklist":
-        return makeTextResult(syncChecklist(root));
+        return result(syncChecklist(root));
       case "sync_citations":
-        return makeTextResult(syncCitations(root, args));
+        return result(syncCitations(root, args));
       case "refresh_wiki":
-        return makeTextResult(refreshWiki(root));
+        return result(refreshWiki(root));
       case "normalize_rebuttal_issues":
-        return makeTextResult(normalizeRebuttalIssues(root, args));
+        return result(normalizeRebuttalIssues(root, args));
       case "build_rebuttal_strategy":
-        return makeTextResult(buildRebuttalStrategy(root, args));
+        return result(buildRebuttalStrategy(root, args));
       case "build_rebuttal":
-        return makeTextResult(buildRebuttal(root, args));
+        return result(buildRebuttal(root, args));
       case "create_version_snapshot":
-        return makeTextResult(createVersionSnapshot(root, args));
+        return result(createVersionSnapshot(root, args));
       case "compare_versions":
-        return makeTextResult(compareVersions(root, args));
+        return result(compareVersions(root, args));
       case "list_artifacts":
-        return makeTextResult(listWorkspaceArtifacts(root));
+        return result(listWorkspaceArtifacts(root));
       case "upsert_figure_plan":
-        return makeTextResult(upsertFigurePlan(root, args));
+        return result(upsertFigurePlan(root, args));
       case "run_figure_workflow":
-        return makeTextResult(runFigureWorkflow(root, args));
+        return result(runFigureWorkflow(root, args));
       case "prepare_figure_generation":
-        return makeTextResult(prepareFigureGeneration(root, args));
+        return result(prepareFigureGeneration(root, args));
       case "import_figure_generation":
-        return makeTextResult(importFigureGeneration(root, args));
+        return result(importFigureGeneration(root, args));
       case "validate_figure_pipeline":
-        return makeTextResult(validateFigurePipeline(root));
+        return result(validateFigurePipeline(root));
       case "record_operator_follow_through":
-        return makeTextResult(recordOperatorFollowThrough(root, args));
+        return result(recordOperatorFollowThrough(root, args));
       case "record_operator_lesson":
-        return makeTextResult(recordOperatorLesson(root, args));
+        return result(recordOperatorLesson(root, args));
       case "issue_program_approval":
-        return makeTextResult(issueProgramApproval(root, args));
+        return result(issueProgramApproval(root, args));
       case "plan_campaign":
-        return makeTextResult(planCampaign(root, args));
+        return result(planCampaign(root, args));
       case "revoke_program_approval":
-        return makeTextResult(revokeProgramApproval(root, args));
+        return result(revokeProgramApproval(root, args));
       case "materialize_guidance_packet":
-        return makeTextResult(materializeGuidancePacket(root, args));
+        return result(materializeGuidancePacket(root, args));
       case "run_autonomy_once":
-        return makeTextResult(runAutonomyControlPlaneOnce(root, args));
+        return result(runAutonomyControlPlaneOnce(root, args));
       case "run_autonomy_foreground":
-        return makeTextResult(runAutonomyForeground(root, args));
+        return result(runAutonomyForeground(root, args));
       case "run_autonomy_operate":
-        return makeTextResult(runAutonomyOperate(root, args));
+        return result(runAutonomyOperate(root, args));
       default:
         return makeErrorResult(`Unknown tool: ${name}`);
     }

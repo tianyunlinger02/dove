@@ -154,6 +154,53 @@ test("CLI onboard supports flag-first optional target parsing", () => {
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), true);
 });
 
+test("CLI onboard write-map patch-plan returns operations without writing disk", () => {
+  const root = tempRoot("dove-onboarding-patch-plan-");
+  writeFixturePaper(root);
+
+  const result = spawnSync("node", [CLI, "onboard", "--write-map", "--mutation-mode", "patch-plan"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.mutationMode, "patch-plan");
+  assert.equal(payload.writesApplied, false);
+  assert.equal(payload.hostRollbackEligible, true);
+  assert.equal(payload.writeMap, true);
+  assert.deepEqual(payload.written, [ARTIFACT_PATHS.workspaceArtifactMap]);
+  assert.equal(payload.mutationPlan.operations.some((operation) => operation.relativePath === ARTIFACT_PATHS.workspaceArtifactMap), true);
+  assert.equal(payload.mutationPlan.operations.some((operation) => operation.relativePath === ARTIFACT_PATHS.mutationsIndex), true);
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), false);
+});
+
+test("CLI install rejects patch-plan mode before bootstrap writes", () => {
+  const root = tempRoot("dove-install-patch-plan-");
+
+  const result = spawnSync("node", [CLI, "install", root, "--mutation-mode", "patch-plan"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /install cannot run in patch-plan mode/);
+  assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+});
+
+test("CLI doctor rejects patch-plan mode before bootstrap writes", () => {
+  const root = tempRoot("dove-doctor-patch-plan-");
+
+  const result = spawnSync("node", [CLI, "doctor", root, "--mutation-mode", "patch-plan"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /doctor cannot run in patch-plan mode/);
+  assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+});
+
 test("CLI publish-global-status refreshes only explicit projects", () => {
   const root = tempRoot("dove-global-status-cli-");
   const projectA = path.join(root, "project-a");
@@ -182,6 +229,55 @@ test("CLI publish-global-status refreshes only explicit projects", () => {
     assert.equal(snapshot.privacy.absoluteRootsIncluded, false);
     const publicText = `${fs.readFileSync(path.join(outputDir, "status.json"), "utf8")}\n${fs.readFileSync(path.join(outputDir, "status.md"), "utf8")}\n${fs.readFileSync(path.join(outputDir, "index.html"), "utf8")}`;
     assert.equal(publicText.includes(root), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI publish-global-status patch-plan stages project-local output", () => {
+  const root = tempRoot("dove-global-status-cli-patch-");
+  const projectA = path.join(root, "project-a");
+  const outputDir = path.join(root, "global-public");
+  try {
+    seedDoveProject(projectA, "a");
+    const statusResult = spawnSync("node", [CLI, "publish-status", projectA, "--quiet"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(statusResult.status, 0, statusResult.stderr || statusResult.stdout);
+
+    const result = spawnSync("node", [CLI, "publish-global-status", "--project", projectA, "--output", outputDir, "--mutation-mode", "patch-plan"], {
+      cwd: root,
+      encoding: "utf8"
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.mode, "dove-global-public-status-publish");
+    assert.equal(payload.mutationMode, "patch-plan");
+    assert.equal(payload.writesApplied, false);
+    assert.equal(payload.hostRollbackEligible, true);
+    assert.equal(payload.mutationPlan.operations.some((operation) => operation.relativePath === "global-public/status.json"), true);
+    assert.equal(payload.mutationPlan.operations.some((operation) => operation.relativePath === "global-public/projects/project-a/status.json"), true);
+    assert.equal(payload.mutationPlan.operations.some((operation) => operation.relativePath === ARTIFACT_PATHS.mutationsIndex), true);
+    assert.equal(fs.existsSync(outputDir), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI serve-global-status rejects patch-plan mode", () => {
+  const root = tempRoot("dove-global-status-serve-patch-");
+  const outputDir = path.join(root, "global-public");
+  try {
+    const result = spawnSync("node", [CLI, "serve-global-status", "--output", outputDir, "--dry-run", "--mutation-mode", "patch-plan"], {
+      cwd: root,
+      encoding: "utf8"
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /serve-global-status cannot run in patch-plan mode/);
+    assert.equal(fs.existsSync(outputDir), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

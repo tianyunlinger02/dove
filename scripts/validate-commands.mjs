@@ -127,6 +127,7 @@ const commandIdSet = new Set(commandIds);
 for (const requiredRuntimePath of [".dove/runtime/continuation.json", ".dove/runtime/events.json", ".dove/runtime/results.json"]) {
   assert.equal(TOOL_CONTEXT_PATHS.query_dove_status.includes(requiredRuntimePath), true, `query_dove_status should read ${requiredRuntimePath}`);
 }
+assert.equal(TOOL_CONTEXT_PATHS.query_dove_status.includes(".dove/versions/rollback-index.json"), false, "query_dove_status must not read a Dove-specific rollback index");
 for (const removedCommandId of removedCommandIds) {
   assert.equal(commandIdSet.has(removedCommandId), false, `${removedCommandId} must not remain as a public command surface`);
 }
@@ -230,6 +231,7 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
     assert.equal(commandText.includes("level 3 and `pending`"), true, `${relativePath} must default converted plan missions to pending level 3`);
     assert.equal(commandText.includes("level 4, 5, or deeper"), true, `${relativePath} must allow deeper child missions from plan outputs`);
     assert.equal(commandText.includes("record a first-class boundary"), true, `${relativePath} must record explicit boundaries instead of fake completion`);
+    assert.equal(commandText.includes("`host-tool-blocked`"), true, `${relativePath} must expose host tool/classifier failures as blocked boundaries`);
     assert.equal(commandText.includes("ownerRole, nextRole, handoff"), true, `${relativePath} must expose role handoff metadata for incomplete mission passes`);
     assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after mission passes`);
   }
@@ -248,6 +250,12 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
     assert.equal(commandText.includes("default is 3"), true, `${relativePath} must document the default auto iteration count`);
     assert.equal(commandText.includes("Record each foreground iteration"), true, `${relativePath} must document runtime iteration records`);
     assert.equal(commandText.includes("source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status"), true, `${relativePath} must document internal top-level workflow calls`);
+    assert.equal(commandText.includes("run the foreground host research pass before confirmed execution"), true, `${relativePath} must require host research before confirmed source-research auto`);
+    assert.equal(commandText.includes("explicit `steps` for both `dove.source` and `dove.note`"), true, `${relativePath} must deposit source and note in one explicit auto sequence`);
+    assert.equal(commandText.includes("Do not claim source research succeeded when host search/fetch tools return zero results"), true, `${relativePath} must not claim source research from empty host search results`);
+    assert.equal(commandText.includes("only records a `source-requires-host-provenance` boundary and does not advance the research"), true, `${relativePath} must warn against empty packet-id-only source auto runs`);
+    assert.equal(commandText.includes("call `record_dove_mission_pass` for the packet with `resultStatus: \"blocked\"`, `boundaryType: \"host-tool-blocked\"`"), true, `${relativePath} must require blocked mission pass records for host tool failures`);
+    assert.equal(commandText.includes("do not leave the task in-progress"), true, `${relativePath} must not leave failed host tool work in-progress`);
     assert.equal(commandText.includes("Stop at completed, blocked, killed"), true, `${relativePath} must document stop conditions`);
     assert.equal(commandText.includes("persist the first-class boundary"), true, `${relativePath} must persist boundary metadata when auto stops`);
     assert.equal(commandText.includes("Do not claim host/code/provider/experiment work"), true, `${relativePath} must not claim external work without evidence`);
@@ -297,8 +305,13 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
   }
 
   if (command.id === "dove.version") {
-    assert.equal(commandText.includes("Clear active non-init tasks"), true, `${relativePath} must state version reset behavior`);
-    assert.equal(commandText.includes("Preserve the level-0 init goal"), true, `${relativePath} must state init/lesson preservation`);
+    assert.equal(commandText.includes("direction-change point"), true, `${relativePath} must frame version as a direction reset`);
+    assert.equal(commandText.includes("not a `.dove` restore command"), true, `${relativePath} must reject Dove-specific rollback restore semantics`);
+    assert.equal(commandText.includes("host-tracked file edits"), true, `${relativePath} must route rollback eligibility through host-tracked file edits`);
+    assert.equal(commandText.includes("patch-plan operations"), true, `${relativePath} must require patch-plan operations for host rollback eligibility`);
+    assert.equal(commandText.includes("rollbackCheckpointId"), false, `${relativePath} must not expose checkpoint restore targeting`);
+    assert.equal(commandText.includes("confirmed: true"), false, `${relativePath} must not require confirmed rollback restore`);
+    assert.equal(commandText.includes("Preserve the level-0 init goal"), true, `${relativePath} must state init/lesson preservation for direction resets`);
   }
 
   if (command.id === "dove.status") {
@@ -309,6 +322,20 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
     assert.equal(commandText.includes("do not treat `.dove/` context as the live development situation"), true, `${relativePath} must separate live context from Dove durable context`);
     assert.equal(commandText.includes("host-visible context"), true, `${relativePath} must use host-visible context for live status`);
     assert.equal(commandText.includes("statusHome.currentContext"), true, `${relativePath} must expose current context`);
+    assert.equal(commandText.includes("statusHome.durableContextNotice"), true, `${relativePath} must expose durable context notice`);
+    assert.equal(commandText.includes("mutationRollbackModel"), true, `${relativePath} must expose mutation rollback model`);
+    assert.equal(commandText.includes("host-tracked file edits"), true, `${relativePath} must expose host-tracked file-edit rollback eligibility`);
+    assert.equal(commandText.includes("mutationMode: \"patch-plan\""), true, `${relativePath} must expose patch-plan rollback eligibility`);
+    assert.equal(commandText.includes("hostCheckpointStatus: not-programmatically-verifiable"), true, `${relativePath} must expose host checkpoint verification status`);
+    assert.equal(commandText.includes("externalWriteCaptureVerified: false"), true, `${relativePath} must expose unverified Dove external-write capture`);
+    assert.equal(commandText.includes("directProcessWritesAreRollbackSafe: false"), true, `${relativePath} must expose direct-process rollback limits`);
+    assert.equal(commandText.includes("nativeProjectRollbackRequiresProjectCheckpoint"), false, `${relativePath} must not expose project checkpoint rollback fields`);
+    assert.equal(commandText.includes("projectCheckpointStatus"), false, `${relativePath} must not expose project checkpoint status`);
+    assert.equal(commandText.includes("nativeProjectRollbackExpected: true"), false, `${relativePath} must not overpromise native rollback coverage`);
+    assert.equal(commandText.includes("doveRestoreSupported: false"), true, `${relativePath} must reject a separate Dove restore path`);
+    assert.equal(commandText.includes("rollback checkpoint availability"), false, `${relativePath} must not expose rollback checkpoint availability`);
+    assert.equal(commandText.includes("latestRollbackCheckpoint"), false, `${relativePath} must not expose latest rollback checkpoint metadata`);
+    assert.equal(commandText.includes("confirmed `reset_dove_version` restore route"), false, `${relativePath} must not route host rollback through reset_dove_version`);
     assert.equal(commandText.includes("statusHome.preActionGuidance"), true, `${relativePath} must expose pre-action guidance after current context`);
     assert.equal(commandText.includes("automatic read-only lesson recall"), true, `${relativePath} must expose automatic lesson recall in status guidance`);
     assert.equal(commandText.includes("Planner/Builder/Reviewer role frame"), true, `${relativePath} must expose role-framed status guidance`);
@@ -368,7 +395,10 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
     assert.equal(commandText.includes("writes: []"), true, `${relativePath} must expose proposal-only operator preview`);
     assert.equal(commandText.includes("foreground call only"), true, `${relativePath} must keep operator foreground-only`);
     assert.equal(commandText.includes("awaiting host results"), true, `${relativePath} must not claim host work without results`);
-    assert.equal(commandText.includes("`awaiting-host-pass-result` boundary"), true, `${relativePath} must persist host-result boundaries instead of fake completion`);
+    assert.equal(commandText.includes("host-pass-required missions without taskResults must remain unchanged"), true, `${relativePath} must leave missing host-result missions unchanged`);
+    assert.equal(commandText.includes("do not persist an `awaiting-host-pass-result` boundary just to show activity"), true, `${relativePath} must not write fake host-result boundaries`);
+    assert.equal(commandText.includes("boundaryType `host-tool-blocked`"), true, `${relativePath} must record host tool failures as blocked task results`);
+    assert.equal(commandText.includes("leaving the mission in-progress"), true, `${relativePath} must not leave failed host tool work in-progress`);
     assert.equal(commandText.includes("do not expose planner/builder/reviewer as separate slash commands"), true, `${relativePath} must not add role slash surfaces`);
     assert.equal(commandText.includes("pending child plan missions"), true, `${relativePath} must create blocker investigation plan missions`);
     assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after operator runs`);

@@ -172,6 +172,7 @@ test("runFigureWorkflow prepares materials without marking a final figure ready 
 
     assert.equal(result.status, "prepared-awaiting-output");
     assert.equal(result.imported, null);
+    assert.equal(result.finalSvgPath, null);
     assert.equal(result.materialStatus, "ready");
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "prepared-only.final.svg")), false);
   } finally {

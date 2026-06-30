@@ -23,6 +23,52 @@ import { createTempRoot } from "../helpers/temp-root.mjs";
 const ROOT = process.cwd();
 const CLI = path.join(ROOT, "bin", "dove.mjs");
 const DOVE_CLI = path.join(ROOT, "bin", "dove.mjs");
+const STATUS_EXECUTION_CRITERION = "Status execution criterion";
+const STATUS_VERIFICATION_PATH = ".dove/evidence/status-verification.log";
+
+function statusExecutionContract(overrides = {}) {
+  const base = {
+    chainType: "engineering-host-pass-verify",
+    roleSequence: ["builder", "reviewer"],
+    readFirst: [],
+    action: "project:dove.auto",
+    implementation: ["Produce status-routed workflow evidence."],
+    files: [],
+    materials: {
+      requiredInputs: [],
+      requiredArtifacts: [],
+      sourceRefs: [],
+      artifactRefs: []
+    },
+    convergence: {
+      criteria: [STATUS_EXECUTION_CRITERION],
+      verificationCommands: ["node --test tests/integration/dove-query.test.mjs"],
+      evidenceRequired: [STATUS_VERIFICATION_PATH],
+      definitionOfDone: "The status execution criterion is verified."
+    },
+    failureRoutes: [
+      { on: "missing-required-materials", boundaryType: "missing-required-materials", nextAction: "project:dove.status", requiredActions: ["provide-required-materials"] },
+      { on: "verification-failed", boundaryType: "verification-failed", nextAction: "project:dove.status", requiredActions: ["provide-verified-criteria"] }
+    ]
+  };
+  return {
+    ...base,
+    ...overrides,
+    roleSequence: overrides.roleSequence ?? base.roleSequence,
+    readFirst: overrides.readFirst ?? base.readFirst,
+    implementation: overrides.implementation ?? base.implementation,
+    files: overrides.files ?? base.files,
+    materials: {
+      ...base.materials,
+      ...(overrides.materials ?? {})
+    },
+    convergence: {
+      ...base.convergence,
+      ...(overrides.convergence ?? {})
+    },
+    failureRoutes: overrides.failureRoutes ?? base.failureRoutes
+  };
+}
 
 function tempRoot() {
   return createTempRoot("dove-dove-query-");
@@ -36,6 +82,58 @@ function writeText(root, relativePath, value) {
   const fullPath = path.join(root, relativePath);
   fs.mkdirSync(path.dirname(fullPath), { recursive: true });
   fs.writeFileSync(fullPath, value, "utf8");
+}
+
+function assertDurableContextNotice(notice) {
+  assert.ok(notice && typeof notice === "object", "expected durable context notice");
+  assert.equal(notice.presentation, "dove-durable-context-notice");
+  assert.equal(notice.stateSource, "filesystem-durable-state");
+  assert.equal(notice.durableRoot, ".dove");
+  assert.equal(notice.rollbackCoverage, "host-tracked-mutation-plan-required");
+  assert.equal("nativeProjectRollbackExpected" in notice, false);
+  assert.equal("nativeProjectRollbackRequiresProjectCheckpoint" in notice, false);
+  assert.equal("projectCheckpointDetected" in notice, false);
+  assert.equal("projectCheckpointStatus" in notice, false);
+  assert.equal("projectCheckpoint" in notice, false);
+  assert.equal(notice.nativeHostRollbackRequiresFileCheckpoint, true);
+  assert.equal(notice.hostCheckpointDetected, false);
+  assert.equal(notice.hostCheckpointStatus, "not-programmatically-verifiable");
+  assert.ok(notice.hostCheckpoint && typeof notice.hostCheckpoint === "object");
+  assert.equal(notice.hostCheckpoint.required, true);
+  assert.equal(notice.hostCheckpoint.verificationRequired, true);
+  assert.equal(notice.hostCheckpoint.externalWriteCaptureRequired, true);
+  assert.ok(notice.mutationRollbackModel && typeof notice.mutationRollbackModel === "object");
+  assert.equal(notice.mutationRollbackModel.patchPlanSupported, true);
+  assert.equal(notice.mutationRollbackModel.hostTrackedFileEditsRequired, true);
+  assert.equal(notice.mutationRollbackModel.directProcessWritesAreRollbackSafe, false);
+  assert.equal(notice.mutationRollbackModel.hostCheckpointVerified, false);
+  assert.equal(notice.mutationRollbackModel.externalWriteCaptureVerified, false);
+  assert.equal(notice.mutationRollbackModel.doveRestoreSupported, false);
+  assert.equal(notice.mutationRollbackModel.mutationProvenancePath, ".dove/mutations/index.json");
+  assert.equal(notice.externalWriteCaptureRequired, true);
+  assert.equal(notice.externalWriteCaptureVerified, false);
+  assert.equal(notice.projectVisibilityRequired, true);
+  assert.equal(notice.projectVisibilityVerified, false);
+  assert.equal(notice.doveRestoreSupported, false);
+  assert.equal(notice.doveRestoreCommand, null);
+  assert.equal(notice.automaticRollback, false);
+  assert.equal("rollbackSupported" in notice, false);
+  assert.equal("rollbackCheckpointAvailable" in notice, false);
+  assert.equal("latestRollbackCheckpoint" in notice, false);
+  assert.deepEqual(notice.trackedDurablePaths, [".dove/state.json", ".dove/task-packets/index.json", ".dove/mutations/index.json"]);
+  assert.deepEqual(notice.localOnlyIgnoredPaths, [".dove/config.local.json"]);
+  assert.match(notice.summary, /\.dove/);
+  assert.match(notice.summary, /mutationMode|direct-process|patch-plan/);
+  assert.match(notice.recovery, /patch-plan|direct-process|回滚|rollback/);
+  assert.deepEqual(notice.recoveryActions.map((action) => action.kind), ["refresh-status", "apply-mutation-plan-with-host-tracked-edits", "use-direct-process-as-unverified", "adjust-status"]);
+  assert.equal(notice.recoveryActions[0].mutation, false);
+  assert.equal(notice.recoveryActions[1].mutation, true);
+  assert.equal(notice.recoveryActions[1].handledByHost, true);
+  assert.equal(notice.recoveryActions[1].hostTrackedFileEditsRequired, true);
+  assert.equal(notice.recoveryActions[2].mutation, true);
+  assert.equal(notice.recoveryActions[2].hostRollbackEligible, false);
+  assert.equal("requiresCheckpointKind" in notice.recoveryActions[2], false);
+  assert.equal(notice.recoveryActions[3].confirmationRequired, true);
 }
 
 function writeTaskPacket(root, packet) {
@@ -92,6 +190,14 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   assert.equal(human.status, 0, human.stderr || human.stdout);
   assert.match(human.stdout, /^Dove current situation:/);
   assert.match(human.stdout, /Current context:/);
+  assert.match(human.stdout, /Durable state:/);
+  assert.match(human.stdout, /rollback coverage: host-tracked-mutation-plan-required/);
+  assert.match(human.stdout, /host checkpoint: not-programmatically-verifiable/);
+  assert.match(human.stdout, /patch-plan supported: yes/);
+  assert.match(human.stdout, /direct-process rollback-safe: no/);
+  assert.match(human.stdout, /external Dove writes captured: unverified/);
+  assert.match(human.stdout, /Dove restore command: none/);
+  assert.match(human.stdout, /recovery: request mutationMode: patch-plan, inspect the operations, and apply them through host-tracked file edits before relying on host rollback/);
   assert.match(human.stdout, /Pre-action guidance:/);
   assert.match(human.stdout, /guardrails: writes require confirmation; no hidden runtime/);
   assert.match(human.stdout, /Project state:/);
@@ -119,7 +225,22 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   assert.equal(parsed.dashboard, undefined);
   assert.equal(parsed.dailyHome, undefined);
   assert.equal(parsed.statusHome.presentation, "dove-project-situation-home");
+  assertDurableContextNotice(parsed.durableContextNotice);
+  assert.deepEqual(parsed.statusHome.durableContextNotice, parsed.durableContextNotice);
   assert.ok(parsed.statusHome.currentContext);
+  assert.equal(parsed.statusHome.currentContext.stateSource, "filesystem-durable-state");
+  assert.equal("nativeProjectRollbackExpected" in parsed.statusHome.currentContext, false);
+  assert.equal("nativeProjectRollbackRequiresProjectCheckpoint" in parsed.statusHome.currentContext, false);
+  assert.equal("projectCheckpointDetected" in parsed.statusHome.currentContext, false);
+  assert.equal("projectCheckpointStatus" in parsed.statusHome.currentContext, false);
+  assert.equal(parsed.statusHome.currentContext.nativeHostRollbackRequiresFileCheckpoint, true);
+  assert.equal(parsed.statusHome.currentContext.hostCheckpointDetected, false);
+  assert.equal(parsed.statusHome.currentContext.hostCheckpointStatus, "not-programmatically-verifiable");
+  assert.equal(parsed.statusHome.currentContext.externalWriteCaptureRequired, true);
+  assert.equal(parsed.statusHome.currentContext.externalWriteCaptureVerified, false);
+  assert.equal(parsed.statusHome.currentContext.doveRestoreSupported, false);
+  assert.equal(parsed.statusHome.currentContext.projectVisibilityRequired, true);
+  assert.deepEqual(parsed.statusHome.blockersAndReconciliation.durableContextNotice, parsed.durableContextNotice);
   assert.equal(parsed.statusHome.preActionGuidance.presentation, "dove-pre-action-guidance");
   assert.equal(parsed.statusHome.preActionGuidance.mode, "read-only-guidance");
   assert.equal(parsed.statusHome.preActionGuidance.intentFrame.ordinaryPromptFirst, true);
@@ -189,6 +310,20 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   assert.equal(fullParsed.mode, "dove-status-query");
   assert.equal(fullParsed.detail, "full");
   assert.ok(fullParsed.dashboard);
+});
+
+test("status reports host rollback capture as unverifiable from Dove", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  const result = queryDoveStatus(root);
+  assertDurableContextNotice(result.durableContextNotice);
+  assert.equal(result.durableContextNotice.hostCheckpointDetected, false);
+  assert.equal(result.durableContextNotice.hostCheckpointStatus, "not-programmatically-verifiable");
+  assert.equal(result.durableContextNotice.hostCheckpoint.kind, "host-file-checkpoint");
+  assert.equal(result.durableContextNotice.externalWriteCaptureVerified, false);
+  assert.equal(result.statusHome.currentContext.hostCheckpointDetected, false);
+  assert.equal(result.statusHome.currentContext.hostCheckpointStatus, "not-programmatically-verifiable");
+  assert.equal(result.statusHome.currentContext.externalWriteCaptureVerified, false);
 });
 
 function seedDoveLaunchGuidance(root) {
@@ -434,6 +569,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
         lifecycleStatus: "ready",
         dependencies: [],
         blockedBy: [],
+        executionContract: statusExecutionContract({ convergence: { criteria: ["Status packet evidence verified"] } }),
+        verifiedCriteria: [{ criterion: "Status packet evidence verified", status: "verified", evidencePaths: [STATUS_VERIFICATION_PATH] }],
+        verificationEvidencePaths: [STATUS_VERIFICATION_PATH],
         nextAction: "project:dove.auto"
       },
       {
@@ -450,6 +588,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
         lifecycleStatus: "pending",
         dependencies: [],
         blockedBy: [],
+        executionContract: statusExecutionContract({ convergence: { criteria: ["Plain pending evidence verified"] } }),
+        verifiedCriteria: [{ criterion: "Plain pending evidence verified", status: "verified", evidencePaths: [STATUS_VERIFICATION_PATH] }],
+        verificationEvidencePaths: [STATUS_VERIFICATION_PATH],
         nextAction: "project:dove.auto"
       },
       {
@@ -466,6 +607,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
         lifecycleStatus: "ready",
         dependencies: ["missing-dependency"],
         blockedBy: [],
+        executionContract: statusExecutionContract({ convergence: { criteria: ["Blocked dependency evidence verified"] } }),
+        verifiedCriteria: [{ criterion: "Blocked dependency evidence verified", status: "verified", evidencePaths: [STATUS_VERIFICATION_PATH] }],
+        verificationEvidencePaths: [STATUS_VERIFICATION_PATH],
         nextAction: "project:dove.status"
       },
       {
@@ -535,6 +679,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
         lifecycleStatus: "pending",
         dependencies: [],
         blockedBy: [],
+        executionContract: statusExecutionContract({ convergence: { criteria: ["Runtime completed evidence verified"] } }),
+        verifiedCriteria: [{ criterion: "Runtime completed evidence verified", status: "verified", evidencePaths: [STATUS_VERIFICATION_PATH] }],
+        verificationEvidencePaths: [STATUS_VERIFICATION_PATH],
         nextAction: "project:dove.status"
       },
       {
@@ -602,6 +749,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
     artifactRefs: ["docs/USAGE.md"],
     outputPaths: ["src/core/dove.mjs"],
     evidenceLinks: ["tests/integration/dove-query.test.mjs"],
+    executionContract: statusExecutionContract({ convergence: { criteria: ["Status packet evidence verified"] } }),
+    verifiedCriteria: [{ criterion: "Status packet evidence verified", status: "verified", evidencePaths: [STATUS_VERIFICATION_PATH] }],
+    verificationEvidencePaths: [STATUS_VERIFICATION_PATH],
     currentFocus: "Use full packet catalog data in status.",
     nextAction: "project:dove.auto"
   });
@@ -788,9 +938,24 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.dashboard, undefined);
   assert.equal(result.dailyHome, undefined);
   assert.equal(result.statusHome.presentation, "dove-project-situation-home");
+  assertDurableContextNotice(result.durableContextNotice);
+  assert.deepEqual(result.statusHome.durableContextNotice, result.durableContextNotice);
   assert.equal(result.statusHome.liveContextFirst, true);
   assert.equal(result.statusHome.fullDetails.args.detail, "full");
   assert.ok(result.statusHome.currentContext);
+  assert.equal(result.statusHome.currentContext.stateSource, "filesystem-durable-state");
+  assert.equal("nativeProjectRollbackExpected" in result.statusHome.currentContext, false);
+  assert.equal("nativeProjectRollbackRequiresProjectCheckpoint" in result.statusHome.currentContext, false);
+  assert.equal("projectCheckpointDetected" in result.statusHome.currentContext, false);
+  assert.equal("projectCheckpointStatus" in result.statusHome.currentContext, false);
+  assert.equal(result.statusHome.currentContext.nativeHostRollbackRequiresFileCheckpoint, true);
+  assert.equal(result.statusHome.currentContext.hostCheckpointDetected, false);
+  assert.equal(result.statusHome.currentContext.hostCheckpointStatus, "not-programmatically-verifiable");
+  assert.equal(result.statusHome.currentContext.externalWriteCaptureRequired, true);
+  assert.equal(result.statusHome.currentContext.externalWriteCaptureVerified, false);
+  assert.equal(result.statusHome.currentContext.doveRestoreSupported, false);
+  assert.equal(result.statusHome.currentContext.projectVisibilityRequired, true);
+  assert.deepEqual(result.statusHome.blockersAndReconciliation.durableContextNotice, result.durableContextNotice);
   assert.equal(result.statusHome.preActionGuidance.presentation, "dove-pre-action-guidance");
   assert.equal(result.statusHome.preActionGuidance.mode, "read-only-guidance");
   assert.equal(result.statusHome.preActionGuidance.intentFrame.ordinaryPromptFirst, true);
@@ -812,6 +977,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.ok(result.statusHome.nextSteps);
   assert.equal(result.statusHome.optionalMissionDetails.defaultCollapsed, true);
   assert.equal(fullResult.detail, "full");
+  assertDurableContextNotice(fullResult.durableContextNotice);
+  assert.deepEqual(fullResult.dashboard.project.durableContextNotice, fullResult.durableContextNotice);
+  assert.deepEqual(fullResult.diagnostics.durableContextNotice, fullResult.durableContextNotice);
   assert.ok(fullResult.dashboard);
   assert.equal(result.statusHome.currentContext.domain, "engineering");
   assert.equal(result.statusHome.currentContext.stage, "execute");
@@ -1044,7 +1212,129 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.diagnostics.noCommandExecution, true);
   assert.equal(result.diagnostics.noExternalProcess, true);
   assert.equal(result.diagnostics.noGitInspection, true);
+  assert.equal("gitInspection" in result.diagnostics, false);
   assert.equal(result.diagnostics.noSourceMutation, true);
+});
+
+test("queryDoveStatus routes executable workflow gaps before mission details", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+
+  writeTaskPacket(root, {
+    id: "dove-global-init",
+    title: "Dove goal",
+    summary: "Route executable workflow gaps before mission display.",
+    parentId: null,
+    rootId: "dove-global-init",
+    level: 0,
+    creatorKind: "user",
+    stage: "plan",
+    domain: "engineering",
+    status: "ready",
+    lifecycleStatus: "ready",
+    dependencies: [],
+    blockedBy: [],
+    nextAction: "project:dove.status"
+  });
+  writeTaskPacket(root, {
+    id: "aa-missing-contract",
+    title: "Missing contract task",
+    summary: "Planner must produce an executable contract before Builder can run.",
+    parentId: "dove-global-init",
+    rootId: "dove-global-init",
+    level: 3,
+    creatorKind: "user",
+    stage: "execute",
+    domain: "engineering",
+    status: "ready",
+    lifecycleStatus: "ready",
+    dependencies: [],
+    blockedBy: [],
+    nextAction: "project:dove.auto"
+  });
+  writeTaskPacket(root, {
+    id: "bb-missing-material",
+    title: "Missing materials task",
+    summary: "The contract requires source material before execution.",
+    parentId: "dove-global-init",
+    rootId: "dove-global-init",
+    level: 3,
+    creatorKind: "user",
+    stage: "execute",
+    domain: "engineering",
+    status: "ready",
+    lifecycleStatus: "ready",
+    dependencies: [],
+    blockedBy: [],
+    executionContract: statusExecutionContract({
+      materials: { requiredInputs: ["sources/cvpr-template.md"] },
+      convergence: { criteria: ["Missing materials criterion"] }
+    }),
+    nextAction: "project:dove.auto"
+  });
+  writeTaskPacket(root, {
+    id: "cc-verification-gap",
+    title: "Verification gap task",
+    summary: "Evidence exists but verifiedCriteria does not cover convergence.",
+    parentId: "dove-global-init",
+    rootId: "dove-global-init",
+    level: 3,
+    creatorKind: "user",
+    stage: "execute",
+    domain: "engineering",
+    status: "ready",
+    lifecycleStatus: "ready",
+    dependencies: [],
+    blockedBy: [],
+    executionContract: statusExecutionContract({
+      convergence: { criteria: ["Verification gap criterion"], evidenceRequired: [STATUS_VERIFICATION_PATH] }
+    }),
+    artifactRefs: ["drafts/status-gap.md"],
+    verificationEvidencePaths: [STATUS_VERIFICATION_PATH],
+    verifiedCriteria: [{ criterion: "Unrelated criterion", status: "verified", evidencePaths: [STATUS_VERIFICATION_PATH] }],
+    nextAction: "project:dove.auto"
+  });
+
+  const result = queryDoveStatus(root, { domain: "engineering" });
+  const fullResult = queryDoveStatus(root, { domain: "engineering", detail: "full" });
+
+  assert.equal(result.projectSummary.returnStatus, "blocked");
+  assert.equal(result.statusHome.blockersAndReconciliation.status, "blocked");
+  assert.deepEqual(result.statusHome.projectState.executionGaps, {
+    missingContract: 1,
+    missingMaterials: 1,
+    verificationGaps: 1,
+    readyBuilder: 0,
+    blocking: 3
+  });
+  assert.deepEqual(fullResult.dailyHome.executionGaps.missingContractTaskIds, ["aa-missing-contract"]);
+  assert.deepEqual(fullResult.dailyHome.executionGaps.missingMaterialTaskIds, ["bb-missing-material"]);
+  assert.deepEqual(fullResult.dailyHome.executionGaps.verificationGapTaskIds, ["cc-verification-gap"]);
+  assert.deepEqual(result.statusHome.nextSteps.ranked.map((card) => card.kind), [
+    "missing-executable-contract",
+    "missing-required-materials",
+    "verification-failed"
+  ]);
+  assert.deepEqual(result.statusHome.nextSteps.ranked.map((card) => card.packetId), [
+    "aa-missing-contract",
+    "bb-missing-material",
+    "cc-verification-gap"
+  ]);
+  assert.equal(result.statusHome.nextSteps.ranked[0].command, "project:dove.mission");
+  assert.equal(result.statusHome.nextSteps.ranked[0].nextRole, "planner");
+  assert.deepEqual(result.statusHome.nextSteps.ranked[0].evidenceRequired, ["executionContract"]);
+  assert.equal(result.statusHome.nextSteps.ranked[1].nextRole, "planner");
+  assert.deepEqual(result.statusHome.nextSteps.ranked[1].requiredMaterials, ["sources/cvpr-template.md"]);
+  assert.equal(result.statusHome.nextSteps.ranked[2].nextRole, "reviewer");
+  assert.deepEqual(result.statusHome.nextSteps.ranked[2].criteriaCoverage.missing, ["Verification gap criterion"]);
+  assert.equal(result.statusHome.optionalMissionDetails.defaultCollapsed, true);
+  assert.equal(result.statusHome.optionalMissionDetails.missionItemsIncluded, false);
+  assert.equal(result.statusHome.preActionGuidance.mode, "read-only-guidance");
+  assert.equal(result.statusHome.preActionGuidance.workflowFrame.executionGuidance.nextRole, "planner");
+  assert.deepEqual(result.statusHome.preActionGuidance.workflowFrame.executionGuidance.missingContractTaskIds, ["aa-missing-contract"]);
+  assert.deepEqual(result.statusHome.preActionGuidance.workflowFrame.executionGuidance.missingMaterialTaskIds, ["bb-missing-material"]);
+  assert.deepEqual(result.statusHome.preActionGuidance.workflowFrame.executionGuidance.verificationGapTaskIds, ["cc-verification-gap"]);
+  assert.equal(result.statusHome.preActionGuidance.lessonRecall.readOnly, true);
 });
 
 test("queryDoveMission frames an engineering mission without writing artifacts", () => {

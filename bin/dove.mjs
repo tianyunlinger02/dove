@@ -7,7 +7,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runGlobalStatusServingForeground, runIsolatedReview } from "../src/core/index.mjs";
+import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runGlobalStatusServingForeground, runIsolatedReview, runWithMutationContext } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
 import {
@@ -44,9 +44,9 @@ Usage:
   dove install [target] [--force] [--host <opencode|codex|cursor|agents|claude|all>]
   dove sync [target] [--force] [--host <opencode|codex|cursor|agents|claude|all>]
   dove doctor [target]
-  dove onboard [target] [--write-map] [--max-depth <n>] [--max-files <n>]
-  dove publish-status [target] [--quiet] [--include-archived]
-  dove publish-global-status [projectRoot ...] [--project <root>] [--output <dir>] [--refresh] [--include-config] [--quiet]
+  dove onboard [target] [--write-map] [--max-depth <n>] [--max-files <n>] [--mutation-mode <patch-plan|direct-process>]
+  dove publish-status [target] [--quiet] [--include-archived] [--mutation-mode <patch-plan|direct-process>]
+  dove publish-global-status [projectRoot ...] [--project <root>] [--output <dir>] [--refresh] [--include-config] [--quiet] [--mutation-mode <patch-plan|direct-process>]
   dove serve-global-status [projectRoot ...] [--project <root>] [--output <dir>] [--refresh] [--include-config] [--auth|--no-auth] [--auth-password-env <ENV_NAME>] [--cloudflare|--no-cloudflare] [--configure-cloudflare] [--domain <hostname>] [--port <port>] [--host <loopback>] [--dns-resolver-addrs <address:port>] [--dry-run] [--quiet]
   dove orchestrate [target] [--request <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--allow-autonomy]
   dove mission [target] [--goal <text>] [--domain <id>] [--stage <id>] [--artifact <path>] [--acceptance-check <text>]
@@ -54,13 +54,13 @@ Usage:
   dove statusline [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived] [--json|--format json]
   dove audit [target] [--scope <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
   dove return [target] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
-  dove launch [target] --source-type <type> --source-id <id> --execute-by <iso> --review-after <iso> [--mission-packet-id <id>] [--goal <text>] [--domain <id>] [--stage <id>]
-  dove isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>]
-  dove isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>]
-  dove isolated-review-import [target] --run-id <id>
-  dove autonomy-once [target] [--actor-role <role>]
-  dove autonomy-foreground [target] [--actor-role <role>] [--max-steps <n>] [--packet-id <id>] [--program-run-id <id>] [--approval-id <id>]
-  dove autonomy-operate [target] [--objective <text> | --source-type <type> --source-id <id>] [--actor-role <role>] [--worker-role <role>] [--max-steps <n>]
+  dove launch [target] --source-type <type> --source-id <id> --execute-by <iso> --review-after <iso> [--mission-packet-id <id>] [--goal <text>] [--domain <id>] [--stage <id>] [--mutation-mode <patch-plan|direct-process>]
+  dove isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>] [--mutation-mode direct-process]
+  dove isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>] [--mutation-mode <patch-plan|direct-process>]
+  dove isolated-review-import [target] --run-id <id> [--mutation-mode <patch-plan|direct-process>]
+  dove autonomy-once [target] [--actor-role <role>] [--mutation-mode <patch-plan|direct-process>]
+  dove autonomy-foreground [target] [--actor-role <role>] [--max-steps <n>] [--packet-id <id>] [--program-run-id <id>] [--approval-id <id>] [--mutation-mode <patch-plan|direct-process>]
+  dove autonomy-operate [target] [--objective <text> | --source-type <type> --source-id <id>] [--actor-role <role>] [--worker-role <role>] [--max-steps <n>] [--mutation-mode <patch-plan|direct-process>]
 `);
 }
 
@@ -98,6 +98,48 @@ function readPositionalArgs(args, valueFlags = []) {
     values.push(arg);
   }
   return values;
+}
+
+function readMutationMode(args = []) {
+  const value = readFlagValue(args, "--mutation-mode");
+  if (value === null) {
+    if (args.includes("--mutation-mode")) {
+      throw new Error("--mutation-mode requires patch-plan or direct-process");
+    }
+    return undefined;
+  }
+  if (value !== "patch-plan" && value !== "direct-process") {
+    throw new Error("--mutation-mode must be patch-plan or direct-process");
+  }
+  return value;
+}
+
+function stripMutationModeFlag(args = []) {
+  const stripped = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === "--mutation-mode") {
+      index += 1;
+      continue;
+    }
+    stripped.push(args[index]);
+  }
+  return stripped;
+}
+
+function withMutationContext(target, actionId, rawRest, callback, options = {}) {
+  const rest = stripMutationModeFlag(rawRest);
+  return runWithMutationContext(target, {
+    actionId,
+    mutationMode: readMutationMode(rawRest),
+    hostId: "cli",
+    packetId: options.packetId ?? readFirstFlagValue(rest, ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id"])
+  }, () => callback(rest));
+}
+
+function rejectPatchPlanMode(commandName, rawRest, reason) {
+  if (readMutationMode(rawRest) === "patch-plan") {
+    throw new Error(`${commandName} cannot run in patch-plan mode; ${reason}`);
+  }
 }
 
 function parseCommandArgs(command) {
@@ -446,6 +488,7 @@ function formatDoveStatusForCli(result, target, options = {}) {
   const currentContext = statusHome.currentContext ?? {};
   const projectState = statusHome.projectState ?? {};
   const blockersAndReconciliation = statusHome.blockersAndReconciliation ?? {};
+  const durableContextNotice = statusHome.durableContextNotice ?? result.durableContextNotice ?? blockersAndReconciliation.durableContextNotice ?? null;
   const preActionGuidance = statusHome.preActionGuidance ?? result.preActionGuidance ?? {};
   const current = result.current ?? {};
   const nextActions = Array.isArray(statusHome.nextSteps?.ranked) ? statusHome.nextSteps.ranked : Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : [];
@@ -455,9 +498,11 @@ function formatDoveStatusForCli(result, target, options = {}) {
   const dashboardBlockers = Array.isArray(result.dashboard?.blockers) ? result.dashboard.blockers : [];
   const readErrors = Array.isArray(blockersAndReconciliation.readErrors) ? blockersAndReconciliation.readErrors : Array.isArray(result.diagnostics?.readErrors) ? result.diagnostics.readErrors : [];
   const completionConsistency = blockersAndReconciliation.completionConsistency ?? result.dailyHome?.completionConsistency ?? {};
+  const executionGaps = blockersAndReconciliation.executionGaps ?? projectState.executionGaps ?? result.dailyHome?.executionGaps?.counts ?? {};
+  const executionBlockingCount = executionGaps.blocking ?? 0;
   const blockerCount = blockersAndReconciliation.blockerCount ?? projectState.blockerCount ?? dashboardBlockers.length;
   const boundaryCount = blockersAndReconciliation.boundaryActionCount ?? boundaryCards.length;
-  const reconciliationStatus = blockersAndReconciliation.status ?? (readErrors.length > 0 || blockerCount > 0 || completionConsistency.status === "needs-reconciliation" ? "blocked" : "clear");
+  const reconciliationStatus = blockersAndReconciliation.status ?? (readErrors.length > 0 || blockerCount > 0 || completionConsistency.status === "needs-reconciliation" || executionBlockingCount > 0 ? "blocked" : "clear");
   const lines = [
     `Dove current situation: ${compactText(summary.title ?? currentContext.title ?? "untitled", 120)}`,
     `Target: ${target}`,
@@ -470,6 +515,18 @@ function formatDoveStatusForCli(result, target, options = {}) {
   if (currentContext.runtimeContinuation?.currentPacketId) {
     lines.push(`  runtime continuation: ${currentContext.runtimeContinuation.currentPacketId}`);
   }
+  if (durableContextNotice) {
+    lines.push("");
+    lines.push("Durable state:");
+    lines.push(`  source: ${durableContextNotice.stateSource ?? "filesystem-durable-state"} (${durableContextNotice.durableRoot ?? ".dove"})`);
+    lines.push(`  rollback coverage: ${durableContextNotice.rollbackCoverage ?? "host-tracked-mutation-plan-required"}`);
+    lines.push(`  host checkpoint: ${durableContextNotice.hostCheckpointStatus ?? "not-programmatically-verifiable"}`);
+    lines.push(`  patch-plan supported: ${durableContextNotice.mutationRollbackModel?.patchPlanSupported ? "yes" : "unknown"}`);
+    lines.push(`  direct-process rollback-safe: ${durableContextNotice.mutationRollbackModel?.directProcessWritesAreRollbackSafe ? "yes" : "no"}`);
+    lines.push(`  external Dove writes captured: ${durableContextNotice.externalWriteCaptureVerified ? "verified" : "unverified"}`);
+    lines.push(`  Dove restore command: ${durableContextNotice.doveRestoreSupported ? durableContextNotice.doveRestoreCommand ?? "available" : "none"}`);
+    lines.push("  recovery: request mutationMode: patch-plan, inspect the operations, and apply them through host-tracked file edits before relying on host rollback");
+  }
   lines.push("");
   lines.push(...formatPreActionGuidanceForCli(preActionGuidance));
   lines.push("");
@@ -481,6 +538,7 @@ function formatDoveStatusForCli(result, target, options = {}) {
   lines.push("Blockers and reconciliation:");
   lines.push(`  status: ${reconciliationStatus}`);
   lines.push(`  blockers: ${blockerCount}; read errors: ${readErrors.length}; boundaries: ${boundaryCount}`);
+  lines.push(`  execution gaps: missing contract ${executionGaps.missingContract ?? 0}, missing materials ${executionGaps.missingMaterials ?? 0}, verification gaps ${executionGaps.verificationGaps ?? 0}`);
   lines.push(`  completion consistency: ${completionConsistency.status ?? "consistent"}`);
   if (readErrors.length > 0) {
     lines.push(`  first read error: ${compactText(readErrors[0], 140)}`);
@@ -2147,7 +2205,7 @@ function runDoveSurface(surface, rawTarget, rawRest = []) {
   if (surface === "return") {
     return queryDoveReturn(target, buildDoveReturnArgs(commandRest));
   }
-  return launchDoveMission(target, buildDoveLaunchArgs(commandRest));
+  return withMutationContext(target, "launch_dove_mission", commandRest, (cleanRest) => launchDoveMission(target, buildDoveLaunchArgs(cleanRest)));
 }
 
 if (!command || command === "help" || command === "--help") {
@@ -2157,30 +2215,36 @@ if (!command || command === "help" || command === "--help") {
 
 if (command === "install" || command === "sync") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = installOrSync(target, commandRest.includes("--force"), commandRest);
+  rejectPatchPlanMode(command, commandRest, "install/sync copies adapter files and may write user-level host configuration, so use direct-process only.");
+  const cleanRest = stripMutationModeFlag(commandRest);
+  const result = installOrSync(target, cleanRest.includes("--force"), cleanRest);
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
 if (command === "doctor") {
-  const { target } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  rejectPatchPlanMode(command, commandRest, "doctor may bootstrap missing workspace files while checking health, so use direct-process only.");
   doctor(target);
   process.exit(process.exitCode ?? 0);
 }
 
 if (command === "onboard") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = discoverPaperArtifacts(target, buildOnboardingArgs(commandRest));
+  const mutating = commandRest.includes("--write-map") || commandRest.includes("--mutation-mode");
+  const result = mutating
+    ? withMutationContext(target, "dove_onboard", commandRest, (cleanRest) => discoverPaperArtifacts(target, buildOnboardingArgs(cleanRest)))
+    : discoverPaperArtifacts(target, buildOnboardingArgs(commandRest));
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
 if (command === "publish-status") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = publishDoveStatus(target, {
-    includeArchived: commandRest.includes("--include-archived"),
-    responseLanguage: readFlagValue(commandRest, "--response-language") ?? readFlagValue(commandRest, "--language")
-  });
+  const result = withMutationContext(target, "publish_dove_status", commandRest, (cleanRest) => publishDoveStatus(target, {
+    includeArchived: cleanRest.includes("--include-archived"),
+    responseLanguage: readFlagValue(cleanRest, "--response-language") ?? readFlagValue(cleanRest, "--language")
+  }));
   if (!commandRest.includes("--quiet")) {
     console.log(JSON.stringify(result, null, 2));
   }
@@ -2189,18 +2253,21 @@ if (command === "publish-status") {
 
 if (command === "publish-global-status") {
   const commandRest = [maybeTarget, ...rest].filter(Boolean);
-  const projectRoots = [
-    ...readPositionalArgs(commandRest, ["--project", "--output", "--response-language", "--language", "--generated-at"]),
-    ...readFlagValues(commandRest, ["--project"])
-  ];
-  const result = publishDoveGlobalStatus(resolveTarget("."), {
-    projectRoots,
-    outputDir: readFlagValue(commandRest, "--output"),
-    refresh: commandRest.includes("--refresh"),
-    includeConfig: commandRest.includes("--include-config"),
-    includeArchived: commandRest.includes("--include-archived"),
-    responseLanguage: readFlagValue(commandRest, "--response-language") ?? readFlagValue(commandRest, "--language"),
-    generatedAt: readFlagValue(commandRest, "--generated-at")
+  const target = resolveTarget(".");
+  const result = withMutationContext(target, "publish_dove_global_status", commandRest, (cleanRest) => {
+    const projectRoots = [
+      ...readPositionalArgs(cleanRest, ["--project", "--output", "--response-language", "--language", "--generated-at"]),
+      ...readFlagValues(cleanRest, ["--project"])
+    ];
+    return publishDoveGlobalStatus(target, {
+      projectRoots,
+      outputDir: readFlagValue(cleanRest, "--output"),
+      refresh: cleanRest.includes("--refresh"),
+      includeConfig: cleanRest.includes("--include-config"),
+      includeArchived: cleanRest.includes("--include-archived"),
+      responseLanguage: readFlagValue(cleanRest, "--response-language") ?? readFlagValue(cleanRest, "--language"),
+      generatedAt: readFlagValue(cleanRest, "--generated-at")
+    });
   });
   if (!commandRest.includes("--quiet")) {
     console.log(JSON.stringify(result, null, 2));
@@ -2210,38 +2277,40 @@ if (command === "publish-global-status") {
 
 if (command === "serve-global-status") {
   const commandRest = [maybeTarget, ...rest].filter(Boolean);
+  rejectPatchPlanMode(command, commandRest, "serving can start a foreground server and may write global/Cloudflare configuration, so use direct-process only.");
+  const cleanRest = stripMutationModeFlag(commandRest);
   const valueFlags = ["--project", "--output", "--response-language", "--language", "--generated-at", "--auth-user", "--auth-username", "--auth-password-env", "--domain", "--hostname", "--port", "--host", "--tunnel-name", "--cloudflared-path", "--cloudflare-config", "--credentials-file", "--token-env", "--dns-resolver-addrs"];
   const projectRoots = [
-    ...readPositionalArgs(commandRest, valueFlags),
-    ...readFlagValues(commandRest, ["--project"])
+    ...readPositionalArgs(cleanRest, valueFlags),
+    ...readFlagValues(cleanRest, ["--project"])
   ];
-  const auth = commandRest.includes("--no-auth") ? false : (commandRest.includes("--auth") ? true : undefined);
-  const cloudflare = commandRest.includes("--no-cloudflare") ? false : (commandRest.includes("--cloudflare") ? true : undefined);
+  const auth = cleanRest.includes("--no-auth") ? false : (cleanRest.includes("--auth") ? true : undefined);
+  const cloudflare = cleanRest.includes("--no-cloudflare") ? false : (cleanRest.includes("--cloudflare") ? true : undefined);
   const result = await runGlobalStatusServingForeground(resolveTarget("."), {
     projectRoots,
-    outputDir: readFlagValue(commandRest, "--output"),
-    refresh: commandRest.includes("--refresh"),
-    includeConfig: commandRest.includes("--include-config"),
-    includeArchived: commandRest.includes("--include-archived"),
-    responseLanguage: readFlagValue(commandRest, "--response-language") ?? readFlagValue(commandRest, "--language"),
-    generatedAt: readFlagValue(commandRest, "--generated-at"),
+    outputDir: readFlagValue(cleanRest, "--output"),
+    refresh: cleanRest.includes("--refresh"),
+    includeConfig: cleanRest.includes("--include-config"),
+    includeArchived: cleanRest.includes("--include-archived"),
+    responseLanguage: readFlagValue(cleanRest, "--response-language") ?? readFlagValue(cleanRest, "--language"),
+    generatedAt: readFlagValue(cleanRest, "--generated-at"),
     auth,
-    authUser: readFlagValue(commandRest, "--auth-user") ?? readFlagValue(commandRest, "--auth-username"),
-    authPasswordEnv: readFlagValue(commandRest, "--auth-password-env"),
+    authUser: readFlagValue(cleanRest, "--auth-user") ?? readFlagValue(cleanRest, "--auth-username"),
+    authPasswordEnv: readFlagValue(cleanRest, "--auth-password-env"),
     cloudflare,
-    configureCloudflare: commandRest.includes("--configure-cloudflare"),
-    domain: readFlagValue(commandRest, "--domain") ?? readFlagValue(commandRest, "--hostname"),
-    port: readFlagValue(commandRest, "--port"),
-    host: readFlagValue(commandRest, "--host"),
-    tunnelName: readFlagValue(commandRest, "--tunnel-name"),
-    cloudflaredPath: readFlagValue(commandRest, "--cloudflared-path"),
-    cloudflareConfigPath: readFlagValue(commandRest, "--cloudflare-config"),
-    credentialsFile: readFlagValue(commandRest, "--credentials-file"),
-    tokenEnv: readFlagValue(commandRest, "--token-env"),
-    dnsResolverAddrs: readFlagValues(commandRest, ["--dns-resolver-addrs"]),
-    dryRun: commandRest.includes("--dry-run")
+    configureCloudflare: cleanRest.includes("--configure-cloudflare"),
+    domain: readFlagValue(cleanRest, "--domain") ?? readFlagValue(cleanRest, "--hostname"),
+    port: readFlagValue(cleanRest, "--port"),
+    host: readFlagValue(cleanRest, "--host"),
+    tunnelName: readFlagValue(cleanRest, "--tunnel-name"),
+    cloudflaredPath: readFlagValue(cleanRest, "--cloudflared-path"),
+    cloudflareConfigPath: readFlagValue(cleanRest, "--cloudflare-config"),
+    credentialsFile: readFlagValue(cleanRest, "--credentials-file"),
+    tokenEnv: readFlagValue(cleanRest, "--token-env"),
+    dnsResolverAddrs: readFlagValues(cleanRest, ["--dns-resolver-addrs"]),
+    dryRun: cleanRest.includes("--dry-run")
   });
-  if (!commandRest.includes("--quiet")) {
+  if (!cleanRest.includes("--quiet")) {
     console.log(JSON.stringify(result, null, 2));
   }
   process.exit(0);
@@ -2272,60 +2341,64 @@ if (["orchestrate", "mission", "status", "audit", "return", "launch"].includes(c
 
 if (command === "isolated-review-prepare") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = prepareIsolatedReview(target, buildIsolatedReviewArgs(commandRest));
+  const result = withMutationContext(target, "prepare_isolated_review", commandRest, (cleanRest) => prepareIsolatedReview(target, buildIsolatedReviewArgs(cleanRest)));
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
 if (command === "isolated-review-import") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const runId = readFlagValue(commandRest, "--run-id");
-  const result = importIsolatedReview(target, {
-    runId,
-    handoffPath: readFlagValue(commandRest, "--handoff"),
-    reportPath: readFlagValue(commandRest, "--report")
-  });
+  const result = withMutationContext(target, "import_isolated_review", commandRest, (cleanRest) => importIsolatedReview(target, {
+    runId: readFlagValue(cleanRest, "--run-id"),
+    handoffPath: readFlagValue(cleanRest, "--handoff"),
+    reportPath: readFlagValue(cleanRest, "--report")
+  }));
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
 if (command === "isolated-review") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const reviewerCommand = readFlagValue(commandRest, "--reviewer-command") ?? process.env.DOVE_ISOLATED_REVIEWER_COMMAND;
-  const prepared = runIsolatedReview(target, buildIsolatedReviewArgs(commandRest));
-  const reviewer = invokeIsolatedReviewer(reviewerCommand, prepared, target);
-  const imported = importIsolatedReview(target, prepared.importArgs);
-  console.log(JSON.stringify({
-    ...imported,
-    status: "completed",
-    runId: prepared.runId,
-    reviewerCommandConfigured: Boolean(reviewerCommand),
-    reviewerExitStatus: reviewer.status
-  }, null, 2));
+  if (readMutationMode(commandRest) === "patch-plan") {
+    throw new Error("isolated-review cannot run an external reviewer in patch-plan mode; use isolated-review-prepare, apply the returned plan with host-tracked edits, then run/import the reviewer artifacts.");
+  }
+  const result = withMutationContext(target, "run_isolated_review", commandRest, (cleanRest) => {
+    const reviewerCommand = readFlagValue(cleanRest, "--reviewer-command") ?? process.env.DOVE_ISOLATED_REVIEWER_COMMAND;
+    const prepared = runIsolatedReview(target, buildIsolatedReviewArgs(cleanRest));
+    const reviewer = invokeIsolatedReviewer(reviewerCommand, prepared, target);
+    const imported = importIsolatedReview(target, prepared.importArgs);
+    return {
+      ...imported,
+      status: "completed",
+      runId: prepared.runId,
+      reviewerCommandConfigured: Boolean(reviewerCommand),
+      reviewerExitStatus: reviewer.status
+    };
+  });
+  console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
 if (command === "autonomy-once") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const actorRole = readFlagValue(commandRest, "--actor-role") ?? "planner";
-  const result = runAutonomyControlPlaneOnce(target, { actorRole });
+  const result = withMutationContext(target, "run_autonomy_once", commandRest, (cleanRest) => runAutonomyControlPlaneOnce(target, {
+    actorRole: readFlagValue(cleanRest, "--actor-role") ?? "planner"
+  }));
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }
 
 if (command === "autonomy-foreground") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const actorRole = readFlagValue(commandRest, "--actor-role") ?? "planner";
-  const maxSteps = readFlagValue(commandRest, "--max-steps");
-  const packetId = readFlagValue(commandRest, "--packet-id");
-  const programRunId = readFlagValue(commandRest, "--program-run-id");
-  const approvalId = readFlagValue(commandRest, "--approval-id");
-  const result = runAutonomyForeground(target, {
-    actorRole,
-    maxSteps: maxSteps ? Number(maxSteps) : undefined,
-    packetId,
-    programRunId,
-    approvalId
+  const result = withMutationContext(target, "run_autonomy_foreground", commandRest, (cleanRest) => {
+    const maxSteps = readFlagValue(cleanRest, "--max-steps");
+    return runAutonomyForeground(target, {
+      actorRole: readFlagValue(cleanRest, "--actor-role") ?? "planner",
+      maxSteps: maxSteps ? Number(maxSteps) : undefined,
+      packetId: readFlagValue(cleanRest, "--packet-id"),
+      programRunId: readFlagValue(cleanRest, "--program-run-id"),
+      approvalId: readFlagValue(cleanRest, "--approval-id")
+    });
   });
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
@@ -2333,25 +2406,25 @@ if (command === "autonomy-foreground") {
 
 if (command === "autonomy-operate") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const actorRole = readFlagValue(commandRest, "--actor-role") ?? "planner";
-  const workerRole = readFlagValue(commandRest, "--worker-role") ?? "researcher";
-  const maxSteps = readFlagValue(commandRest, "--max-steps");
-  const result = runAutonomyOperate(target, {
-    actorRole,
-    workerRole,
-    maxSteps: maxSteps ? Number(maxSteps) : undefined,
-    objective: readFlagValue(commandRest, "--objective"),
-    sourceType: readFlagValue(commandRest, "--source-type"),
-    sourceId: readFlagValue(commandRest, "--source-id"),
-    packetId: readFlagValue(commandRest, "--packet-id"),
-    programId: readFlagValue(commandRest, "--program-id"),
-    programRunId: readFlagValue(commandRest, "--program-run-id"),
-    approvalId: readFlagValue(commandRest, "--approval-id"),
-    campaignId: readFlagValue(commandRest, "--campaign-id"),
-    campaignStepId: readFlagValue(commandRest, "--campaign-step-id"),
-    executeBy: readFlagValue(commandRest, "--execute-by"),
-    reviewAfter: readFlagValue(commandRest, "--review-after"),
-    expiresAt: readFlagValue(commandRest, "--expires-at")
+  const result = withMutationContext(target, "run_autonomy_operate", commandRest, (cleanRest) => {
+    const maxSteps = readFlagValue(cleanRest, "--max-steps");
+    return runAutonomyOperate(target, {
+      actorRole: readFlagValue(cleanRest, "--actor-role") ?? "planner",
+      workerRole: readFlagValue(cleanRest, "--worker-role") ?? "researcher",
+      maxSteps: maxSteps ? Number(maxSteps) : undefined,
+      objective: readFlagValue(cleanRest, "--objective"),
+      sourceType: readFlagValue(cleanRest, "--source-type"),
+      sourceId: readFlagValue(cleanRest, "--source-id"),
+      packetId: readFlagValue(cleanRest, "--packet-id"),
+      programId: readFlagValue(cleanRest, "--program-id"),
+      programRunId: readFlagValue(cleanRest, "--program-run-id"),
+      approvalId: readFlagValue(cleanRest, "--approval-id"),
+      campaignId: readFlagValue(cleanRest, "--campaign-id"),
+      campaignStepId: readFlagValue(cleanRest, "--campaign-step-id"),
+      executeBy: readFlagValue(cleanRest, "--execute-by"),
+      reviewAfter: readFlagValue(cleanRest, "--review-after"),
+      expiresAt: readFlagValue(cleanRest, "--expires-at")
+    });
   });
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);

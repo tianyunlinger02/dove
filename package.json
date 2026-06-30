@@ -36,10 +36,11 @@
     "commands:generate": "node ./scripts/generate-command-adapters.mjs",
     "commands:check": "node ./scripts/generate-command-adapters.mjs --check",
     "commands:validate": "node ./scripts/validate-commands.mjs",
+    "workflow-goals:validate": "node ./scripts/validate-workflow-goals.mjs",
     "governance:audit": "node ./scripts/audit-governance-coverage.mjs",
     "maturity:audit": "node ./scripts/validate-maturity.mjs",
     "test": "node --test ./tests/**/*.test.mjs",
-    "check": "npm run commands:check && npm run commands:validate && npm run mcp:validate && npm run governance:audit && npm test",
+    "check": "npm run commands:check && npm run commands:validate && npm run mcp:validate && npm run workflow-goals:validate && npm run governance:audit && npm test",
     "release:check": "npm run commands:check && npm run maturity:audit && npm run pack:dry-run",
     "pack:dry-run": "npm pack --dry-run"
   },

@@ -82,7 +82,7 @@ export function runDoveReviewLoop(root, args = {}) {
     throw new Error("run_dove_review_loop experience updates require experienceGoal or an experience goal, title, idea, or experimentId.");
   }
   const iterations = [];
-  let status = "completed";
+  let status = "max-iterations-exhausted";
   let stopReason = "max-iterations-reached";
 
   for (let index = 0; index < maxIterations; index += 1) {

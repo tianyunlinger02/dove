@@ -138,6 +138,7 @@ export function runExperienceWorkflow(root, args = {}) {
       const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
       const claimIndex = (evidence.claims ?? []).findIndex((claim) => claim.id === result.claimId);
       const claimExists = claimIndex >= 0;
+      const bridgeReady = claimExists && audit.auditVerdict === "clean";
       const nextStatus = audit.auditVerdict === "clean" && result.outcome === "supports" ? "supported" : audit.auditVerdict === "clean" && ["refutes", "failed"].includes(result.outcome) ? "refuted" : "needs-review";
       bridge = {
         id: slugify(`${result.id}-bridge`),
@@ -145,18 +146,18 @@ export function runExperienceWorkflow(root, args = {}) {
         experimentId,
         resultId: result.id,
         claimId: result.claimId,
-        status: claimExists ? "applied" : "held-missing-claim",
+        status: bridgeReady ? "applied" : claimExists ? "held-audit-blocked" : "held-missing-claim",
         mapping: result.outcome,
         auditId: audit.id,
-        claimStateAfter: claimExists ? nextStatus : null,
-        reason: claimExists ? result.summary : `Claim ${result.claimId} does not exist yet.`,
+        claimStateAfter: bridgeReady ? nextStatus : claimExists ? "needs-review" : null,
+        reason: bridgeReady ? result.summary : claimExists ? `Audit ${audit.id} is blocked: ${audit.integrityFlags.join(", ")}.` : `Claim ${result.claimId} does not exist yet.`,
         updatedAt: timestamp
       };
       const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
       bridgeLog.items = upsertById(Array.isArray(bridgeLog.items) ? bridgeLog.items : [], bridge);
       bridgeLog.updatedAt = timestamp;
       writeJson(root, ARTIFACT_PATHS.claimBridgeLog, bridgeLog);
-      if (claimExists) {
+      if (bridgeReady) {
         evidence.claims[claimIndex] = {
           ...evidence.claims[claimIndex],
           status: nextStatus,
@@ -172,7 +173,7 @@ export function runExperienceWorkflow(root, args = {}) {
     }
   }
 
-  const status = result ? (bridge?.status === "applied" ? "bridged" : "recorded") : "planned";
+  const status = result ? (audit?.auditVerdict === "clean" && bridge?.status === "applied" ? "bridged" : audit?.auditVerdict === "clean" ? "recorded" : "needs-review") : "planned";
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.experience",
     responseLanguage: resolveDoveResponseLanguage(root, args),

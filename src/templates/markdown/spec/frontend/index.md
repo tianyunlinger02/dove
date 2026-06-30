@@ -45,7 +45,7 @@ Before changing package behavior, read the relevant documents below:
 - Adapter generator: `scripts/generate-command-adapters.mjs`.
 - Operator surfaces: `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/`, `.agents/skills/`, and `.opencode/skills/`. Claude Code uses manifest-rendered user-level `/dove:*` entries via `dove install/sync --host claude`, not project-local `.claude/commands/dove/`.
 - Durable state model: `.dove/`.
-- Validation: `npm run check` combines generated adapter drift checks, command validation, MCP validation, governance audit, and Node tests; `npm run release:check` is the full pre-release gate.
+- Validation: `npm run check` combines generated adapter drift checks, command validation, MCP validation, workflow-goal pressure validation, governance audit, and Node tests; `npm run release:check` is the full pre-release gate.
 
 ---
 

@@ -267,7 +267,7 @@ export function runFigureWorkflow(root, args = {}) {
     imported,
     validation,
     captionId: imported?.captionId ?? null,
-    finalSvgPath: imported?.finalSvgPath ?? item.finalSvgPath,
+    finalSvgPath: imported?.finalSvgPath ?? null,
     qaIssueCount: validation.issueCount,
     qaPath: validation.qaPath
   };

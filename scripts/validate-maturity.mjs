@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 const steps = [
   ["npm", ["run", "commands:validate"]],
   ["npm", ["run", "mcp:validate"]],
+  ["npm", ["run", "workflow-goals:validate"]],
   ["npm", ["run", "governance:audit"]],
   ["npm", ["test"]],
   ["npm", ["run", "doctor:validate"]]

@@ -30,11 +30,17 @@ export const DOVE_BOUNDARY_TYPES = [
   "awaiting-host-pass",
   "awaiting-host-pass-result",
   "awaiting-host-results",
+  "host-tool-blocked",
   "blocked-boundary",
   "needs-review",
   "awaiting-provider-output",
   "awaiting-review-output",
   "missing-required-materials",
+  "missing-executable-contract",
+  "plan-output-not-executable",
+  "verification-failed",
+  "debug-retry-required",
+  "fix-required",
   "provider-failed",
   "workflow-error-boundary"
 ];
@@ -261,7 +267,7 @@ export const GOVERNANCE_GUARDED_MUTATIONS = [
   { id: "record-dove-mission-pass", action: "Recording one foreground Dove mission execution pass", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "recordDoveMissionPass", mcpTool: "record_dove_mission_pass", commandIds: ["dove.mission"] } },
   { id: "run-dove-auto", action: "Running demand-to-task intake and bounded autonomous task completion", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "runDoveAuto", mcpTool: "run_dove_auto", commandIds: ["dove.auto"] } },
   { id: "apply-dove-status-adjustments", action: "Applying explicitly confirmed Dove task status adjustments", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "applyDoveStatusAdjustments", mcpTool: "apply_dove_status_adjustments", commandIds: ["dove.status"] } },
-  { id: "run-dove-operator", action: "Running one confirmed foreground operator pass across ready and in-progress Dove tasks", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "runDoveOperator", mcpTool: "run_dove_operator", commandIds: ["dove.operator"] } },
+  { id: "run-dove-operator", action: "Running one confirmed foreground operator pass over safe internal steps, explicit host results, and blocker planning", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "runDoveOperator", mcpTool: "run_dove_operator", commandIds: ["dove.operator"] } },
   { id: "kill-dove-task", action: "Killing a non-init Dove task", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "killDoveTask", mcpTool: "kill_dove_task", commandIds: [] } },
   { id: "reset-dove-version", action: "Resetting active Dove tasks for a new version direction", artifactPath: ".dove/versions/index.json", surfaceBindings: { coreFunction: "resetDoveVersion", mcpTool: "reset_dove_version", commandIds: ["dove.version"] } },
   { id: "run-experience-workflow", action: "Planning, recording, auditing, and bridging experience evidence into claims", artifactPath: ".dove/experiments/results.json", surfaceBindings: { coreFunction: "runExperienceWorkflow", mcpTool: "run_experience_workflow", commandIds: ["dove.experience"] } },
@@ -663,6 +669,8 @@ export const ARTIFACT_PATHS = {
   runtimeLeases: ".dove/runtime/leases.json",
   runtimeEvents: ".dove/runtime/events.json",
   runtimeResults: ".dove/runtime/results.json",
+  mutationsDir: ".dove/mutations",
+  mutationsIndex: ".dove/mutations/index.json",
   metaDir: ".dove/meta",
   metaEvents: ".dove/meta/events.json",
   metaExecutionBridgeCandidates: ".dove/meta/execution-bridge-candidates.json",
@@ -1132,6 +1140,149 @@ export function normalizeDoveHandoff(value, fallback = null) {
     requestedAt: source.requestedAt ?? fallback?.requestedAt ?? null,
     acceptedAt: source.acceptedAt ?? fallback?.acceptedAt ?? null,
     completedAt: source.completedAt ?? fallback?.completedAt ?? null
+  };
+}
+
+export const DOVE_EXECUTION_CHAIN_TYPES = [
+  "paper-source-note-draft-review",
+  "experiment-plan-result-audit",
+  "engineering-host-pass-verify",
+  "plan-to-executable-missions"
+];
+
+function normalizeExecutionStrings(value, fallback = []) {
+  const values = Array.isArray(value) ? value : (typeof value === "string" && value.trim() ? [value] : fallback);
+  return Array.from(new Set(values.map((item) => String(item).trim()).filter(Boolean)));
+}
+
+function normalizeExecutionFile(value) {
+  const source = normalizeObject(value, null);
+  if (!source) {
+    return null;
+  }
+  const file = {
+    path: normalizeString(source.path, null),
+    action: normalizeString(source.action, null),
+    target: normalizeString(source.target, null),
+    change: normalizeString(source.change, null)
+  };
+  return Object.values(file).some(Boolean) ? file : null;
+}
+
+function normalizeExecutionRoute(value) {
+  const source = normalizeObject(value, null);
+  if (!source) {
+    return null;
+  }
+  const route = {
+    on: normalizeString(source.on, null),
+    boundaryType: normalizeDoveBoundaryType(source.boundaryType, "blocked-boundary"),
+    nextAction: normalizeString(source.nextAction, null),
+    requiredActions: normalizeExecutionStrings(source.requiredActions)
+  };
+  return route.on || route.nextAction || route.requiredActions.length > 0 ? route : null;
+}
+
+export function normalizeDoveExecutionContract(value, fallback = null) {
+  const source = normalizeObject(value, null);
+  const base = normalizeObject(fallback, {});
+  if (!source && Object.keys(base).length === 0) {
+    return null;
+  }
+  const materialSource = normalizeObject(source?.materials, base.materials ?? {});
+  const convergenceSource = normalizeObject(source?.convergence, base.convergence ?? {});
+  const chainType = normalizeString(source?.chainType, base.chainType ?? "engineering-host-pass-verify");
+  return {
+    chainType: DOVE_EXECUTION_CHAIN_TYPES.includes(chainType) ? chainType : "engineering-host-pass-verify",
+    roleSequence: normalizeExecutionStrings(source?.roleSequence, base.roleSequence ?? ["planner", "builder", "reviewer"]).map((role) => normalizeDovePrimaryRoleId(role, "builder")),
+    readFirst: normalizeExecutionStrings(source?.readFirst, base.readFirst ?? []),
+    action: normalizeString(source?.action, base.action ?? ""),
+    implementation: normalizeExecutionStrings(source?.implementation, base.implementation ?? []),
+    files: normalizeObjectArray(source?.files ?? base.files).map(normalizeExecutionFile).filter(Boolean),
+    materials: {
+      requiredInputs: normalizeExecutionStrings(materialSource.requiredInputs),
+      requiredArtifacts: normalizeExecutionStrings(materialSource.requiredArtifacts),
+      sourceRefs: normalizeExecutionStrings(materialSource.sourceRefs),
+      artifactRefs: normalizeExecutionStrings(materialSource.artifactRefs)
+    },
+    convergence: {
+      criteria: normalizeExecutionStrings(convergenceSource.criteria),
+      verificationCommands: normalizeExecutionStrings(convergenceSource.verificationCommands),
+      evidenceRequired: normalizeExecutionStrings(convergenceSource.evidenceRequired),
+      definitionOfDone: normalizeString(convergenceSource.definitionOfDone, "")
+    },
+    failureRoutes: normalizeObjectArray(source?.failureRoutes ?? base.failureRoutes).map(normalizeExecutionRoute).filter(Boolean)
+  };
+}
+
+export function doveExecutionContractReadiness(value) {
+  const contract = normalizeDoveExecutionContract(value, null);
+  if (!contract) {
+    return {
+      ready: false,
+      status: "missing-executable-contract",
+      missing: ["executionContract"],
+      criteria: [],
+      evidenceRequired: [],
+      requiredMaterials: []
+    };
+  }
+  const missing = [
+    contract.action ? null : "action",
+    contract.implementation.length > 0 ? null : "implementation",
+    contract.convergence.criteria.length > 0 ? null : "convergence.criteria",
+    contract.failureRoutes.length > 0 ? null : "failureRoutes"
+  ].filter(Boolean);
+  return {
+    ready: missing.length === 0,
+    status: missing.length === 0 ? "ready" : "missing-executable-contract",
+    missing,
+    criteria: contract.convergence.criteria,
+    evidenceRequired: contract.convergence.evidenceRequired,
+    requiredMaterials: [
+      ...contract.materials.requiredInputs,
+      ...contract.materials.requiredArtifacts,
+      ...contract.materials.sourceRefs,
+      ...contract.materials.artifactRefs
+    ]
+  };
+}
+
+export function normalizeDoveVerifiedCriteria(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => {
+    if (typeof item === "string" && item.trim()) {
+      return { criterion: item.trim(), status: "verified", evidencePaths: [] };
+    }
+    const source = normalizeObject(item, null);
+    if (!source) {
+      return null;
+    }
+    const criterion = normalizeString(source.criterion, null);
+    if (!criterion) {
+      return null;
+    }
+    return {
+      criterion,
+      status: normalizeString(source.status, "verified"),
+      evidencePaths: normalizeExecutionStrings(source.evidencePaths)
+    };
+  }).filter(Boolean);
+}
+
+export function doveExecutionCriteriaCoverage(contractValue, verifiedCriteriaValue) {
+  const contract = normalizeDoveExecutionContract(contractValue, null);
+  const required = contract?.convergence.criteria ?? [];
+  const verified = normalizeDoveVerifiedCriteria(verifiedCriteriaValue).filter((item) => ["verified", "passed", "met"].includes(String(item.status).trim().toLowerCase()));
+  const verifiedKeys = new Set(verified.map((item) => item.criterion.trim().toLowerCase()));
+  const missing = required.filter((criterion) => !verifiedKeys.has(criterion.trim().toLowerCase()));
+  return {
+    complete: required.length === 0 || missing.length === 0,
+    required,
+    verified,
+    missing
   };
 }
 
@@ -2025,6 +2176,68 @@ export function normalizeDocumentLedgerIndex(raw = {}) {
     entries,
     summary: createDocumentLedgerSummary(entries),
     updatedAt: normalizeString(source.updatedAt, entries.at(-1)?.updatedAt ?? entries.at(-1)?.createdAt ?? null)
+  };
+}
+
+function createMutationProvenanceSummary(entries) {
+  const patchPlanCount = entries.filter((entry) => entry.mutationMode === "patch-plan").length;
+  const directProcessCount = entries.filter((entry) => entry.mutationMode === "direct-process").length;
+  const lastEntry = entries.at(-1) ?? null;
+  return {
+    mutationCount: entries.length,
+    patchPlanCount,
+    directProcessCount,
+    lastMutationId: lastEntry?.id ?? null,
+    lastMutationMode: lastEntry?.mutationMode ?? null,
+    lastAppliedBy: lastEntry?.appliedBy ?? null,
+    hostRollbackEligible: lastEntry?.hostRollbackEligible ?? false,
+    hostCheckpointVerified: false,
+    doveRestoreSupported: false
+  };
+}
+
+function normalizeMutationProvenanceEntry(raw = {}, index = 0) {
+  const source = normalizeObject(raw);
+  const mutationMode = source.mutationMode === "patch-plan" ? "patch-plan" : "direct-process";
+  const writesApplied = normalizeBoolean(source.writesApplied, mutationMode === "direct-process");
+  return {
+    id: normalizeString(source.id ?? source.mutationId, `mutation-${index + 1}`),
+    actionId: normalizeString(source.actionId, "unspecified"),
+    packetId: normalizeString(source.packetId, null),
+    mutationMode,
+    writesApplied,
+    appliedBy: normalizeString(source.appliedBy, mutationMode === "patch-plan" ? "host-tracked-file-edits-required" : "node-fs"),
+    hostId: normalizeString(source.hostId, "unknown"),
+    hostRollbackEligible: normalizeBoolean(source.hostRollbackEligible, mutationMode === "patch-plan"),
+    hostTrackedFileEditsRequired: normalizeBoolean(source.hostTrackedFileEditsRequired, mutationMode === "patch-plan"),
+    hostCheckpointVerified: false,
+    directProcessWritesAreRollbackSafe: false,
+    externalWriteCaptureVerified: false,
+    doveRestoreSupported: false,
+    operationCount: Number.isFinite(source.operationCount) ? Math.max(0, Math.floor(source.operationCount)) : normalizeUniqueStringArray(source.paths).length,
+    paths: normalizeUniqueStringArray(source.paths),
+    createdAt: normalizeString(source.createdAt, null)
+  };
+}
+
+export function createMutationProvenanceIndex() {
+  const entries = [];
+  return {
+    version: 1,
+    entries,
+    summary: createMutationProvenanceSummary(entries),
+    updatedAt: null
+  };
+}
+
+export function normalizeMutationProvenanceIndex(raw = {}) {
+  const source = normalizeObject(raw);
+  const entries = normalizeObjectArray(source.entries).map((entry, index) => normalizeMutationProvenanceEntry(entry, index));
+  return {
+    version: 1,
+    entries,
+    summary: createMutationProvenanceSummary(entries),
+    updatedAt: normalizeString(source.updatedAt, entries.at(-1)?.createdAt ?? null)
   };
 }
 

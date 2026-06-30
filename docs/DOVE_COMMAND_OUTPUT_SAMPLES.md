@@ -419,7 +419,7 @@ Daily effect:
 
 ### `dove.operator`
 
-Purpose: preview the queue, then run one confirmed foreground operator pass across runnable or host-result-required tasks.
+Purpose: preview the queue, then run one confirmed foreground operator pass over safe internal steps, explicit host results, and blocker planning; host-result-required tasks without supplied results stay unchanged.
 
 Example invocation:
 
@@ -473,7 +473,7 @@ Confirmed output:
     "command": "run_dove_operator",
     "packetIds": ["sample-operator-task"],
     "status": "completed",
-    "happened": "updated=1; awaiting=0; blockers-created=0",
+    "happened": "updated=1; awaiting-results=0; skipped-host-pass=0; blockers-created=0",
     "evidence": ["docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"],
     "nextActions": [
       { "command": "project:dove.status", "proposalOnly": true }
@@ -482,7 +482,7 @@ Confirmed output:
 }
 ```
 
-Awaiting host-result output includes handoff metadata:
+Awaiting host-result output includes handoff metadata but does not change host-pass-required tasks unless a real task result or explicit host-tool-blocked result is supplied:
 
 ```json
 {

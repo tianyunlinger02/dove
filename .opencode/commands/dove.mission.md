@@ -37,25 +37,29 @@ Convert a user demand into a Dove task contract, then after approval run one bou
 7. For ordinary prompts that ask to bind, save, deposit, archive, or 沉淀 results to a main task, resolve the durable packet first, register external URLs/templates/guidelines as packet-bound sources, then synthesize internal findings through `upsert_note` or `record_document_evidence` instead of treating the synthesis as an external source.
 8. Treat `preActionGuidance` as read-only guidance that automatically recalls applicable lessons from `.dove/meta/operator-lessons.json`; recording lessons remains explicit through `/dove:lessons` and `record_operator_lesson` only.
 9. Frame work through Planner, Builder, and Reviewer primary roles; researcher, experiment-planner, revision-lead, rebuttal-lead, version-analyst, and review-loop are subagents/modes under those roles, not public slash surfaces.
-10. Treat status as the project command center and mission as a durable work contract/progress object; do not make a mission board the default UI.
-11. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
-12. Require an existing init goal before converting user demand into a mission task contract.
-13. Treat the operator input as natural-language demand, not as an already-created task.
-14. Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, autonomous checklist proposal, compact task card, and a durable `workContract` with purpose, deliverables, out-of-scope boundaries, evidence contract, done criteria, practical impact, and recommended routes with copyable packet-target commands.
-15. After returning the proposal, use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) with options: approve conversion and run one pass, adjust conversion, or cancel; only pass `confirmed: true` to `create_dove_task` after the operator approves the converted contract.
-16. Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.
-17. User-created mission tasks default to level 3, while explicit operator-created levels 1, 2, 3, or deeper are allowed under the level-0 init goal.
-18. Autonomously decide whether a checklist is needed; system-created checklist/subtask packets must be children of their mission and must have level greater than the parent mission level.
-19. After materialization, immediately execute one bounded foreground pass in the same command invocation, using the appropriate host tools or top-level Dove workflow.
-20. Do not tell the operator to run `/dove:auto` for the first execution pass.
-21. After the pass, call `record_dove_mission_pass` to persist the mission result, task status, evidence, blockers, next action, and localized `resultCard` summary.
-22. If the bounded pass cannot be completed with real host/provider evidence, record a first-class boundary such as `awaiting-host-pass`, `missing-required-materials`, or `needs-review` with ownerRole, nextRole, handoff, and evidence requirements instead of claiming completion.
-23. When a completed mission pass has stage `plan`, pass explicit plan outputs to `record_dove_mission_pass` through `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion` so Dove converts the plan into pending durable missions.
-24. Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`.
-25. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
-26. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
-27. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
-28. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
-29. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-30. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-31. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+10. Planner output must be executable: every new or plan-derived mission needs canonical `executionContract.action`, `implementation`, `convergence.criteria`, and `failureRoutes`; do not invent substitute child missions or infer child work from the parent title when explicit child mission details are missing.
+11. Builder completion requires a result summary plus real evidence/artifact/validation/verification paths and `verifiedCriteria` that covers every `executionContract.convergence.criteria` item; read-only status, summary-only output, or unknown step status must not mark work complete.
+12. Reviewer and audit work may inspect evidence and record explicit review state, but must stay read-only with respect to Builder outputs unless an operator explicitly asks to record review/revision artifacts.
+13. Treat status as the project command center and mission as a durable work contract/progress object; rank missing executable contracts, missing source/material inputs, ready Builder execution, verification gaps, reviewer/audit needs, and reconciliation above optional mission details.
+14. Dove `.dove/` durable state participates in host rollback only through host-tracked file edits: request `mutationMode: "patch-plan"`, inspect the returned operations, and apply them with the host's tracked file-edit mechanism. Direct CLI/MCP `direct-process` writes remain functional but rollback-unverified; git presence is not proof, and host rollback must not be routed through `reset_dove_version`.
+15. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
+16. Require an existing init goal before converting user demand into a mission task contract.
+17. Treat the operator input as natural-language demand, not as an already-created task.
+18. Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, autonomous checklist proposal, compact task card, durable `workContract`, and canonical `executionContract` with action, implementation, materials/readFirst requirements, convergence criteria, evidence requirements, and failure routes.
+19. After returning the proposal, use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) with options: approve conversion and run one pass, adjust conversion, or cancel; only pass `confirmed: true` to `create_dove_task` after the operator approves the converted contract.
+20. Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.
+21. User-created mission tasks default to level 3, while explicit operator-created levels 1, 2, 3, or deeper are allowed under the level-0 init goal.
+22. Autonomously decide whether a checklist is needed; system-created checklist/subtask packets must be children of their mission and must have level greater than the parent mission level.
+23. After materialization, immediately execute one bounded foreground pass in the same command invocation, using the appropriate host tools or top-level Dove workflow.
+24. Do not tell the operator to run `/dove:auto` for the first execution pass.
+25. After the pass, call `record_dove_mission_pass` to persist the mission result, task status, evidence, blockers, next action, localized `resultCard` summary, `verificationEvidencePaths`, and `verifiedCriteria`; completed results must satisfy the task's `executionContract.convergence.criteria`.
+26. If the bounded pass cannot be completed with real host/provider evidence, record a first-class boundary such as `awaiting-host-pass`, `host-tool-blocked`, `missing-required-materials`, or `needs-review` with ownerRole, nextRole, handoff, and evidence requirements instead of claiming completion.
+27. When a completed mission pass has stage `plan`, pass explicit child mission outputs to `record_dove_mission_pass` through `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion`; each child must include its own explicit title/goal/objective/summary and executable `executionContract`, otherwise record a planning boundary instead of completing the plan.
+28. Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`.
+29. Before any task-scoped write, resolve the operator's target to an existing durable `.dove/task-packets` packet; never use the latest-created packet as the only implicit target.
+30. If no explicit packetId, natural-language target, or linked artifact is supplied and more than one packet candidate exists, stop and use confirmation UX before writing.
+31. If target resolution is ambiguous or multiple candidates share the top confidence, use confirmation UX to select a packet; `.dove/state.json.settings.taskTargetResolution.autoSelect` may only select a unique high-confidence candidate.
+32. Reject the write when explicit packet ids or linked artifact ids point to conflicting durable packets.
+33. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
+34. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+35. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
