@@ -223,8 +223,10 @@ test("pre-action guidance explains source note and document deposition routes", 
   });
   assert.equal(source.roleFrame.primaryRole, "builder");
   assert.equal(source.roleFrame.subagentSpecialty, "researcher");
-  assert.match(source.intentFrame.interpretedIntent, /Register external links, templates, guidelines/);
+  assert.match(source.intentFrame.interpretedIntent, /Register verified external links, templates, guidelines/);
+  assert.match(source.intentFrame.interpretedIntent, /candidate links/);
   assert.match(source.workflowFrame.recommendedRoute, /register_source/);
+  assert.match(source.workflowFrame.recommendedRoute, /candidate links separate/);
   assert.match(source.workflowFrame.recommendedRoute, /batch/);
   assert.match(source.workflowFrame.recommendedRoute, /upsert_note/);
   assert.match(source.workflowFrame.recommendedRoute, /record_document_evidence/);

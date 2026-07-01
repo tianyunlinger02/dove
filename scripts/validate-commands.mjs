@@ -198,6 +198,9 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
   assert.equal(commandText.includes("statusHome.preActionGuidance"), true, `${relativePath} must mention preActionGuidance`);
   assert.equal(commandText.includes("bind, save, deposit, archive, or 沉淀"), true, `${relativePath} must explain ordinary prompt deposition routing`);
   assert.equal(commandText.includes("register external URLs/templates/guidelines as packet-bound sources"), true, `${relativePath} must route external evidence through sources first`);
+  assert.equal(commandText.includes("snapshot-backed or registered sources"), true, `${relativePath} must separate verified sources from candidates`);
+  assert.equal(commandText.includes("candidate links"), true, `${relativePath} must name candidate links separately from sources`);
+  assert.equal(commandText.includes("generic `Sources:` list"), true, `${relativePath} must forbid generic Sources lists for unverified candidates`);
   assert.equal(commandText.includes("`upsert_note` or `record_document_evidence`"), true, `${relativePath} must route synthesis into note or document evidence`);
   assert.equal(commandText.includes("read-only guidance"), true, `${relativePath} must keep guidance read-only`);
   assert.equal(commandText.includes(".dove/meta/operator-lessons.json"), true, `${relativePath} must auto-recall lessons from the canonical lessons path`);
@@ -289,6 +292,12 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
 
   if (command.id === "dove.figure") {
     assert.equal(commandText.includes("run_figure_workflow"), true, `${relativePath} must route through run_figure_workflow`);
+    assert.equal(commandText.includes("providerId: \"none\""), true, `${relativePath} must document the figure plan-only provider sentinel`);
+    assert.equal(commandText.includes("plan-only/manual-output"), true, `${relativePath} must support plan-only figure preparation`);
+    assert.equal(commandText.includes("awaiting-provider-output"), true, `${relativePath} must surface awaiting-provider-output for plan-only figures`);
+    assert.equal(commandText.includes("providerId: \"gpt-image2\""), true, `${relativePath} must document the built-in gpt-image2 provider`);
+    assert.equal(commandText.includes("OPENAI_API_KEY"), true, `${relativePath} must require env-var OpenAI credentials for gpt-image2`);
+    assert.equal(commandText.includes("separate low-level figure-plan write"), true, `${relativePath} must not require a separate low-level figure-plan write`);
     for (const lowLevelTool of ["upsert_figure_plan", "prepare_figure_generation", "import_figure_generation", "validate_figure_pipeline"]) {
       assert.equal(commandText.includes(lowLevelTool), false, `${relativePath} must not expose low-level figure tool ${lowLevelTool} as the daily slash contract`);
     }
@@ -386,11 +395,12 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
 
   if (command.id === "dove.operator") {
     assert.equal(commandText.includes("run_dove_operator"), true, `${relativePath} must route through run_dove_operator`);
-    assert.equal(commandText.includes("compact queue cards"), true, `${relativePath} must surface compact operator queue cards`);
+    assert.equal(commandText.includes("compact queue summary/cards"), true, `${relativePath} must surface compact operator queue summary/cards`);
     assert.equal(commandText.includes("planner preActionGuidance"), true, `${relativePath} must surface operator planner guidance`);
     assert.equal(commandText.includes("read-only lesson recall"), true, `${relativePath} must surface operator lesson recall`);
-    assert.equal(commandText.includes("`autoRunnableTasks`"), true, `${relativePath} must include auto-runnable mission queue`);
-    assert.equal(commandText.includes("`hostPassRequiredTasks`"), true, `${relativePath} must include host-pass-required mission queue`);
+    assert.equal(commandText.includes("`queueSummary`"), true, `${relativePath} must include compact queue summary`);
+    assert.equal(commandText.includes("`queuePreview`"), true, `${relativePath} must include compact queue preview`);
+    assert.equal(commandText.includes("`includeQueueDetails: true`"), true, `${relativePath} must gate full queue details behind includeQueueDetails`);
     assert.equal(commandText.includes("blocked missions"), true, `${relativePath} must include blocked mission handling`);
     assert.equal(commandText.includes("writes: []"), true, `${relativePath} must expose proposal-only operator preview`);
     assert.equal(commandText.includes("foreground call only"), true, `${relativePath} must keep operator foreground-only`);

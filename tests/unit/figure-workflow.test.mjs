@@ -102,6 +102,10 @@ test("runFigureWorkflow turns one SVG-backed intent into a validated figure", ()
     assert.equal(result.finalSvgPath, ".dove/figures/single-intent.final.svg");
     assert.equal(result.stageFiles.templateCreated, true);
     assert.equal(result.stageFiles.editableCreated, true);
+    assert.equal(result.boundary, null);
+    assert.equal(result.boundaryType, null);
+    assert.ok(result.artifactRefs.includes(ARTIFACT_PATHS.figureQa));
+    assert.deepEqual(result.validationEvidencePaths, [ARTIFACT_PATHS.figureQa]);
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "single-intent.final.svg")), true);
 
     const captions = readJson(root, ARTIFACT_PATHS.figureCaptions, { version: 1, items: [] });
@@ -174,7 +178,110 @@ test("runFigureWorkflow prepares materials without marking a final figure ready 
     assert.equal(result.imported, null);
     assert.equal(result.finalSvgPath, null);
     assert.equal(result.materialStatus, "ready");
+    assert.equal(result.boundaryType, "awaiting-provider-output");
+    assert.equal(result.boundary.type, "awaiting-provider-output");
+    assert.deepEqual(result.boundary.requiredInputs, ["finalSvgPath-or-outputManifestPath-or-svgContent"]);
+    assert.ok(result.requiredActions.includes("run-provider-or-import-output"));
+    assert.ok(result.artifactRefs.includes(ARTIFACT_PATHS.figureGenerations));
+    assert.deepEqual(result.validationEvidencePaths, [ARTIFACT_PATHS.figureQa]);
+    assert.equal(result.nextAction, "project:dove.figure");
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "prepared-only.final.svg")), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runFigureWorkflow treats providerId none as a plan-only figure run", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+
+    const result = runFigureWorkflow(root, {
+      packetId,
+      figureId: "plan-only-provider-none",
+      runId: "plan-only-provider-none-run",
+      intent: "Prepare a figure plan without generating art yet.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      requiredVisualElements: ["plan-only node"],
+      providerId: "none",
+      executeProvider: false,
+      env: {
+        DOVE_FIGURE_PROVIDER_ID: "default-command-provider",
+        DOVE_FIGURE_PROVIDER_TYPE: "external-command",
+        DOVE_FIGURE_COMMAND: process.execPath
+      }
+    });
+
+    assert.equal(result.status, "prepared-awaiting-output");
+    assert.equal(result.providerReadiness.status, "not-configured");
+    assert.equal(result.providerExecution, null);
+    assert.equal(result.boundaryType, "awaiting-provider-output");
+    assert.ok(result.requiredActions.includes("run-provider-or-import-output"));
+    assert.equal(result.imported, null);
+    assert.equal(result.finalSvgPath, null);
+    assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "plan-only-provider-none.final.svg")), false);
+    const figure = readFigures(root).items.find((item) => item.id === "plan-only-provider-none");
+    assert.equal(figure.generationProviderId, "none");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runFigureWorkflow surfaces missing figure materials as a boundary", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+
+    const result = runFigureWorkflow(root, {
+      packetId,
+      figureId: "missing-materials",
+      runId: "missing-materials-run",
+      intent: "Prepare a figure that depends on an absent artifact.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      sourceArtifactPaths: [".dove/figures/missing-material.csv"],
+      requiredVisualElements: ["missing artifact marker"]
+    });
+
+    assert.equal(result.status, "blocked-missing-materials");
+    assert.equal(result.materialStatus, "needs-materials");
+    assert.equal(result.boundaryType, "missing-required-materials");
+    assert.equal(result.boundary.type, "missing-required-materials");
+    assert.equal(result.boundary.requiredInputs.some((item) => item.includes("missing-material")), true);
+    assert.ok(result.requiredActions.includes("provide-figure-materials"));
+    assert.ok(result.requiredActions.includes("resolve-missing-figure-requirements"));
+    assert.equal(result.nextAction, "project:dove.figure");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runFigureWorkflow surfaces provider failures as a boundary", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+
+    const result = runFigureWorkflow(root, {
+      packetId,
+      figureId: "provider-failure",
+      runId: "provider-failure-run",
+      intent: "Try to draw a figure with provider execution enabled but no provider configured.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      requiredVisualElements: ["provider failure marker"],
+      executeProvider: true,
+      env: {}
+    });
+
+    assert.equal(result.status, "provider-failed");
+    assert.equal(result.providerExecution.status, "failed");
+    assert.equal(result.boundaryType, "provider-failed");
+    assert.equal(result.boundary.type, "provider-failed");
+    assert.deepEqual(result.boundary.requiredInputs, ["provider-error-resolution-or-manual-output"]);
+    assert.ok(result.requiredActions.includes("fix-figure-provider-and-retry"));
+    assert.ok(result.requiredActions.includes("import-manual-figure-output"));
+    assert.equal(result.nextAction, "project:dove.figure");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

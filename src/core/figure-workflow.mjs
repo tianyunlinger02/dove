@@ -181,6 +181,77 @@ function statusFor(prepared, imported, validation) {
   return "prepared-awaiting-output";
 }
 
+function figureArtifactRefs(validation) {
+  return normalizeStringArray([
+    ARTIFACT_PATHS.figuresIndex,
+    ARTIFACT_PATHS.figureGenerations,
+    ARTIFACT_PATHS.figureMaterials,
+    ARTIFACT_PATHS.figureQa,
+    validation?.qaPath
+  ]);
+}
+
+function figureValidationEvidencePaths(validation) {
+  return normalizeStringArray([validation?.qaPath]);
+}
+
+function figureBoundaryFor(status, prepared, validation, figureId, runId) {
+  const artifactRefs = figureArtifactRefs(validation);
+  if (status === "blocked-missing-materials") {
+    return {
+      id: `${figureId}-${runId}-missing-materials`,
+      type: "missing-required-materials",
+      reason: `Figure ${figureId} is missing required materials: ${(prepared.missingRequirementIds ?? []).join(", ")}.`,
+      requiredInputs: prepared.missingRequirementIds ?? [],
+      requiredActions: ["provide-figure-materials", "resolve-missing-figure-requirements"],
+      artifactRefs,
+      nextAction: "project:dove.figure",
+      ownerRole: "builder",
+      nextRole: "builder"
+    };
+  }
+  if (status === "prepared-awaiting-output") {
+    return {
+      id: `${figureId}-${runId}-awaiting-provider-output`,
+      type: "awaiting-provider-output",
+      reason: `Figure ${figureId} has prepared materials but no final SVG or output manifest yet.`,
+      requiredInputs: ["finalSvgPath-or-outputManifestPath-or-svgContent"],
+      requiredActions: ["run-provider-or-import-output", "provide-final-svg-or-output-manifest"],
+      artifactRefs,
+      nextAction: "project:dove.figure",
+      ownerRole: "builder",
+      nextRole: "builder"
+    };
+  }
+  if (status === "provider-failed") {
+    return {
+      id: `${figureId}-${runId}-provider-failed`,
+      type: "provider-failed",
+      reason: prepared.providerExecution?.error ?? `Figure provider failed for ${figureId}.`,
+      requiredInputs: ["provider-error-resolution-or-manual-output"],
+      requiredActions: ["fix-figure-provider-and-retry", "import-manual-figure-output"],
+      artifactRefs,
+      nextAction: "project:dove.figure",
+      ownerRole: "builder",
+      nextRole: "builder"
+    };
+  }
+  if (status === "qa-needs-attention") {
+    return {
+      id: `${figureId}-${runId}-qa-needs-attention`,
+      type: "needs-review",
+      reason: `Figure ${figureId} has ${validation.issueCount} QA issue(s) requiring review.`,
+      requiredInputs: [validation.qaPath],
+      requiredActions: ["review-figure-qa", "resolve-figure-qa-issues"],
+      artifactRefs,
+      nextAction: "project:dove.review",
+      ownerRole: "builder",
+      nextRole: "reviewer"
+    };
+  }
+  return null;
+}
+
 export function runFigureWorkflow(root, args = {}) {
   assertGovernanceMutationRegistered("run-figure-workflow", "guarded");
   const target = assertTaskScopedMutationTarget(root, "run-figure-workflow", args);
@@ -225,6 +296,9 @@ export function runFigureWorkflow(root, args = {}) {
 
   const validation = validateFigurePipeline(root);
   const status = statusFor(prepared, imported, validation);
+  const artifactRefs = figureArtifactRefs(validation);
+  const validationEvidencePaths = figureValidationEvidencePaths(validation);
+  const boundary = figureBoundaryFor(status, prepared, validation, figureId, prepared.runId);
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.figure",
     responseLanguage: resolveDoveResponseLanguage(root, args),
@@ -237,7 +311,7 @@ export function runFigureWorkflow(root, args = {}) {
       primaryRole: "builder"
     },
     operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
-    nextAction: imported ? "project:dove.review" : "project:dove.figure",
+    nextAction: boundary?.nextAction ?? (imported ? "project:dove.review" : "project:dove.figure"),
     routeHint: "project:dove.figure",
     workflowKind: "figure",
     domain: target.packet?.domain ?? null,
@@ -257,6 +331,12 @@ export function runFigureWorkflow(root, args = {}) {
     figureId,
     runId: prepared.runId,
     packetId: target.packetId,
+    boundary,
+    boundaryType: boundary?.type ?? null,
+    requiredActions: boundary?.requiredActions ?? [],
+    artifactRefs,
+    validationEvidencePaths,
+    nextAction: boundary?.nextAction ?? (imported ? "project:dove.review" : "project:dove.figure"),
     plan,
     stageFiles,
     materialStatus: prepared.materialStatus,

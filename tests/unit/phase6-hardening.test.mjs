@@ -283,6 +283,7 @@ test("workflow completion hardening rejects fake completion signals", () => {
     });
     const operator = runDoveOperator(operatorRoot, {
       confirmed: true,
+      includeQueueDetails: true,
       runId: "operator-summary-only-run",
       taskResults: [{
         packetId: "operator-summary-only",
@@ -312,6 +313,7 @@ test("workflow completion hardening rejects fake completion signals", () => {
     });
     const unknown = runDoveOperator(unknownRoot, {
       confirmed: true,
+      includeQueueDetails: true,
       runId: "operator-unknown-status-run",
       taskResults: [{
         packetId: "operator-unknown-status",
@@ -447,7 +449,14 @@ test("task packet resolver allows explicit parent to cite descendant artifacts b
     }
   }, /conflict/);
   assert.equal(siblingError.artifactResolution.explanationCode, "artifact-conflict");
+  assert.equal(siblingError.artifactResolution.selectedPacket.packetId, "lineage-parent");
   assert.equal(siblingError.artifactResolution.conflictingMatches[0].relation, "sibling");
+  assert.deepEqual(siblingError.artifactResolution.conflictingMatches[0].matchedArtifacts, [siblingArtifact]);
+  assert.equal(siblingError.candidates[0].relation, "sibling");
+  assert.deepEqual(siblingError.candidates[0].matchedArtifacts, [siblingArtifact]);
+  assert.ok(siblingError.suggestedActions.includes(`write-to-owner-packet lineage-sibling for ${siblingArtifact}`));
+  assert.ok(siblingError.suggestedActions.includes("choose-or-create-descendant-of lineage-parent before attaching new artifacts"));
+  assert.match(siblingError.message, /Suggested actions:/);
   let unrelatedError = null;
   assert.throws(() => {
     try {
@@ -457,7 +466,12 @@ test("task packet resolver allows explicit parent to cite descendant artifacts b
       throw error;
     }
   }, /conflict/);
+  assert.equal(unrelatedError.artifactResolution.selectedPacket.packetId, "lineage-parent");
   assert.equal(unrelatedError.artifactResolution.conflictingMatches[0].relation, "other-root");
+  assert.deepEqual(unrelatedError.artifactResolution.conflictingMatches[0].matchedArtifacts, [unrelatedArtifact]);
+  assert.equal(unrelatedError.candidates[0].relation, "other-root");
+  assert.deepEqual(unrelatedError.candidates[0].matchedArtifacts, [unrelatedArtifact]);
+  assert.ok(unrelatedError.suggestedActions.includes(`write-to-owner-packet other-root-task for ${unrelatedArtifact}`));
   let ancestorError = null;
   assert.throws(() => {
     try {
@@ -467,7 +481,12 @@ test("task packet resolver allows explicit parent to cite descendant artifacts b
       throw error;
     }
   }, /conflict/);
+  assert.equal(ancestorError.artifactResolution.selectedPacket.packetId, "lineage-child");
   assert.equal(ancestorError.artifactResolution.conflictingMatches[0].relation, "ancestor");
+  assert.deepEqual(ancestorError.artifactResolution.conflictingMatches[0].matchedArtifacts, [parentArtifact]);
+  assert.equal(ancestorError.candidates[0].relation, "ancestor");
+  assert.deepEqual(ancestorError.candidates[0].matchedArtifacts, [parentArtifact]);
+  assert.ok(ancestorError.suggestedActions.includes(`write-to-owner-packet lineage-parent for ${parentArtifact}`));
 });
 
 test("task-scoped resolver rejects writes when no durable packet exists", () => {

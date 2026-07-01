@@ -2461,6 +2461,63 @@ function operatorTaskSummary(task) {
   return summary;
 }
 
+function operatorTaskIds(tasks = []) {
+  return tasks.map((task) => task.id).filter(Boolean);
+}
+
+function operatorQueueSummary(queue = {}) {
+  const autoRunnable = queue.autoRunnable ?? [];
+  const hostPassRequired = queue.hostPassRequired ?? [];
+  const runnable = queue.runnable ?? [];
+  const blocked = queue.blocked ?? [];
+  const pending = queue.pending ?? [];
+  return {
+    autoRunnableCount: autoRunnable.length,
+    hostPassRequiredCount: hostPassRequired.length,
+    runnableCount: runnable.length,
+    blockedCount: blocked.length,
+    pendingCount: pending.length,
+    autoRunnableTaskIds: operatorTaskIds(autoRunnable),
+    hostPassRequiredTaskIds: operatorTaskIds(hostPassRequired),
+    runnableTaskIds: operatorTaskIds(runnable),
+    blockedTaskIds: operatorTaskIds(blocked),
+    pendingTaskIds: operatorTaskIds(pending)
+  };
+}
+
+function operatorQueueCards(queue = {}, preActionGuidance = null, responseLanguage = "zh", { includeGuidance = false } = {}) {
+  const guidance = includeGuidance ? preActionGuidance : null;
+  return {
+    autoRunnable: (queue.autoRunnable ?? []).map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "auto-runnable", preActionGuidance: guidance }, responseLanguage)),
+    hostPassRequired: (queue.hostPassRequired ?? []).map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "host-pass-required", why: doveText(responseLanguage, "operatorAwaitingStopReason"), preActionGuidance: guidance }, responseLanguage)),
+    runnable: (queue.runnable ?? []).map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "runnable", preActionGuidance: guidance }, responseLanguage)),
+    blocked: (queue.blocked ?? []).map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "blocked", preActionGuidance: guidance }, responseLanguage)),
+    pending: (queue.pending ?? []).map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "pending", preActionGuidance: guidance }, responseLanguage))
+  };
+}
+
+function operatorQueuePreview(queue = {}, responseLanguage = "zh") {
+  const cards = operatorQueueCards(queue, null, responseLanguage);
+  return Object.fromEntries(Object.entries(cards).map(([key, value]) => [key, value.slice(0, 2)]));
+}
+
+function compactOperatorBlockerPlanConversion(conversion = {}) {
+  return {
+    missionCount: conversion.missionCount ?? 0,
+    createdMissionIds: operatorTaskIds(conversion.createdMissions ?? []),
+    reusedMissionIds: operatorTaskIds(conversion.reusedMissions ?? []),
+    taskIndexPath: conversion.taskIndexPath ?? ARTIFACT_PATHS.taskPacketsIndex
+  };
+}
+
+function compactOperatorResult(result = {}) {
+  const { iterations: _iterations, blockerPlanConversion, ...summary } = result;
+  return {
+    ...summary,
+    blockerPlanConversion: compactOperatorBlockerPlanConversion(blockerPlanConversion)
+  };
+}
+
 function operatorResultMap(args = {}) {
   const results = objectArray(args.taskResults ?? args.results ?? args.passResults);
   const entries = results.map((result) => {
@@ -2686,6 +2743,7 @@ export function runDoveOperator(root, args = {}) {
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const index = loadTaskIndex(root);
   const queue = operatorQueue(index);
+  const includeQueueDetails = args.includeQueueDetails === true;
   if (!hasExplicitConfirmation(args)) {
     const preActionGuidance = buildPreActionGuidance({
       surface: "dove.operator",
@@ -2704,7 +2762,7 @@ export function runDoveOperator(root, args = {}) {
         pendingCount: queue.pending.length
       }
     });
-    return {
+    const response = {
       status: "needs-confirmation",
       proposalOnly: true,
       noAutoApply: true,
@@ -2715,18 +2773,9 @@ export function runDoveOperator(root, args = {}) {
       foreground: true,
       background: false,
       daemon: false,
-      queueCards: {
-        autoRunnable: queue.autoRunnable.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "auto-runnable", preActionGuidance }, responseLanguage)),
-        hostPassRequired: queue.hostPassRequired.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "host-pass-required", why: doveText(responseLanguage, "operatorAwaitingStopReason"), preActionGuidance }, responseLanguage)),
-        runnable: queue.runnable.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "runnable", preActionGuidance }, responseLanguage)),
-        blocked: queue.blocked.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "blocked", preActionGuidance }, responseLanguage)),
-        pending: queue.pending.map((task) => buildOperatorQueueCard(operatorTaskSummary(task), { queue: "pending", preActionGuidance }, responseLanguage))
-      },
-      autoRunnableTasks: queue.autoRunnable.map(operatorTaskSummary),
-      hostPassRequiredTasks: queue.hostPassRequired.map(operatorTaskSummary),
-      runnableTasks: queue.runnable.map(operatorTaskSummary),
-      blockedTasks: queue.blocked.map(operatorTaskSummary),
-      pendingTasks: queue.pending.map(operatorTaskSummary),
+      queueSummary: operatorQueueSummary(queue),
+      queuePreview: operatorQueuePreview(queue, responseLanguage),
+      includeQueueDetails,
       confirmArgs: {
         ...args,
         confirmed: true
@@ -2734,6 +2783,17 @@ export function runDoveOperator(root, args = {}) {
       responseLanguage,
       message: doveText(responseLanguage, "operatorConfirmMessage")
     };
+    if (includeQueueDetails) {
+      Object.assign(response, {
+        queueCards: operatorQueueCards(queue, preActionGuidance, responseLanguage, { includeGuidance: true }),
+        autoRunnableTasks: queue.autoRunnable.map(operatorTaskSummary),
+        hostPassRequiredTasks: queue.hostPassRequired.map(operatorTaskSummary),
+        runnableTasks: queue.runnable.map(operatorTaskSummary),
+        blockedTasks: queue.blocked.map(operatorTaskSummary),
+        pendingTasks: queue.pending.map(operatorTaskSummary)
+      });
+    }
+    return response;
   }
   const timestamp = nowIso();
   const runId = normalizeTaskPacketId(args.runId ?? `operator-${Date.now().toString(36)}`);
@@ -2824,21 +2884,31 @@ export function runDoveOperator(root, args = {}) {
     }
   }));
   const resultCard = operatorResultCard(result, { nextAction: "project:dove.status", preActionGuidanceSummary }, responseLanguage);
-  return {
+  const response = {
     status: result.status,
-    result,
+    operatorResultSummary: compactOperatorResult(result),
     resultCard,
     preActionGuidanceSummary,
-    autoRunnableTasks: queue.autoRunnable.map(operatorTaskSummary),
-    hostPassRequiredTasks: queue.hostPassRequired.map(operatorTaskSummary),
-    updatedTasks: updatedTasks.map(operatorTaskSummary),
+    queueSummary: operatorQueueSummary(queue),
+    updatedTaskIds: updatedTasks.map((task) => task.id),
     awaitingResultTaskIds: awaitingResults,
     skippedHostPassTaskIds,
     awaitingRequiredActions,
-    blockerPlanConversion,
+    blockerPlanConversion: compactOperatorBlockerPlanConversion(blockerPlanConversion),
+    includeQueueDetails,
     responseLanguage,
     nextAction: "project:dove.status"
   };
+  if (includeQueueDetails) {
+    Object.assign(response, {
+      result,
+      autoRunnableTasks: queue.autoRunnable.map(operatorTaskSummary),
+      hostPassRequiredTasks: queue.hostPassRequired.map(operatorTaskSummary),
+      updatedTasks: updatedTasks.map(operatorTaskSummary),
+      blockerPlanConversionDetails: blockerPlanConversion
+    });
+  }
+  return response;
 }
 
 export function resetDoveVersion(root, args = {}) {

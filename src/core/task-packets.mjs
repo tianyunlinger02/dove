@@ -332,7 +332,7 @@ function candidateScoreText(score) {
 
 function candidateSummary(candidate = {}) {
   const packet = candidate.packet ?? {};
-  return {
+  const summary = {
     packetId: candidate.packetId,
     title: packet.title ?? candidate.title ?? candidate.packetId,
     status: packet.status ?? candidate.status,
@@ -340,17 +340,28 @@ function candidateSummary(candidate = {}) {
     score: Number.isFinite(candidate.score) ? candidate.score : 0,
     matchedBy: candidate.matchedBy ?? {}
   };
+  if (candidate.relation) {
+    summary.relation = candidate.relation;
+  }
+  const matchedArtifacts = uniqueStrings(candidate.matchedArtifacts ?? []);
+  if (matchedArtifacts.length > 0) {
+    summary.matchedArtifacts = matchedArtifacts;
+  }
+  return summary;
 }
 
 function resolutionError(reason, candidates = [], details = {}) {
   const summaries = candidates.map((candidate) => candidateSummary(candidate));
+  const suggestedActions = uniqueStrings(details.suggestedActions ?? details.artifactResolution?.suggestedActions ?? []);
   const candidateText = summaries.length > 0
     ? ` Candidates: ${summaries.map((candidate) => `${candidate.packetId}(${candidate.title ?? candidate.packetId}, score=${candidateScoreText(candidate.score)})`).join(", ")}.`
     : "";
-  const error = new Error(`${reason}${candidateText} Provide packetId or confirm one candidate explicitly before writing.`);
+  const suggestionText = suggestedActions.length > 0 ? ` Suggested actions: ${suggestedActions.join("; ")}.` : "";
+  const error = new Error(`${reason}${candidateText}${suggestionText} Provide packetId or confirm one candidate explicitly before writing.`);
   error.code = "TASK_PACKET_RESOLUTION_REQUIRED";
   error.reason = reason;
   error.candidates = summaries;
+  error.suggestedActions = suggestedActions;
   if (details.artifactResolution) {
     error.artifactResolution = details.artifactResolution;
   }
@@ -445,17 +456,42 @@ function artifactMatchSummary(packet, artifacts = [], relation = null) {
   };
 }
 
+function packetSelectionSummary(packet) {
+  return packet ? {
+    packetId: packet.id,
+    title: packet.title ?? packet.id,
+    status: packet.status,
+    level: packet.level
+  } : null;
+}
+
+function artifactConflictSuggestedActions(selectedPacket, requestedArtifacts = [], conflictingMatches = []) {
+  const selectedId = selectedPacket?.packetId ?? "selected-packet";
+  const ownerActions = conflictingMatches.map((match) => {
+    const artifacts = match.matchedArtifacts?.length > 0 ? ` for ${match.matchedArtifacts.join(", ")}` : "";
+    return `write-to-owner-packet ${match.packetId}${artifacts}`;
+  });
+  return uniqueStrings([
+    ...ownerActions,
+    `choose-or-create-descendant-of ${selectedId} before attaching new artifacts`,
+    `do-not-attach-unrelated-artifacts ${requestedArtifacts.join(", ") || "requested artifacts"} to ${selectedId}`
+  ]);
+}
+
 export function analyzeArtifactConsistency(packet, packets, artifacts = []) {
   const requestedArtifacts = uniqueStrings(artifacts);
   const selectedPacketId = normalizeRelationId(packet?.id);
+  const selectedPacket = packetSelectionSummary(packet);
   if (!packet || requestedArtifacts.length === 0) {
     return {
       selectedPacketId,
+      selectedPacket,
       requestedArtifacts,
       matchingPackets: [],
       acceptedMatches: [],
       conflictingMatches: [],
       hasConflict: false,
+      suggestedActions: [],
       explanationCode: requestedArtifacts.length === 0 ? "no-artifacts" : "no-selected-packet"
     };
   }
@@ -473,13 +509,16 @@ export function analyzeArtifactConsistency(packet, packets, artifacts = []) {
       : acceptedMatches.some((match) => match.relation === "self")
         ? "accepted-self-artifacts"
         : "no-existing-artifact-owner";
+  const suggestedActions = hasConflict ? artifactConflictSuggestedActions(selectedPacket, requestedArtifacts, conflictingMatches) : [];
   return {
     selectedPacketId,
+    selectedPacket,
     requestedArtifacts,
     matchingPackets,
     acceptedMatches,
     conflictingMatches,
     hasConflict,
+    suggestedActions,
     explanationCode
   };
 }
@@ -492,10 +531,13 @@ function ensureArtifactConsistency(packet, packets, artifacts = []) {
       title: match.title,
       status: match.status,
       level: match.level,
+      relation: match.relation,
       score: match.score,
-      matchedBy: match.matchedBy
+      matchedBy: match.matchedBy,
+      matchedArtifacts: match.matchedArtifacts
     })), {
       artifactResolution,
+      suggestedActions: artifactResolution.suggestedActions,
       resolutionErrorCode: artifactResolution.explanationCode
     });
   }

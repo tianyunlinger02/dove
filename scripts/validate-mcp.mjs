@@ -185,7 +185,7 @@ async function main() {
     query_operator_lessons: ["recall applicable lessons automatically", "read-only preActionGuidance"],
     record_operator_lesson: ["auto-recall lessons read-only", "recording never happens implicitly"],
     run_experience_workflow: ["Builder/experiment-planner preActionGuidance", "read-only lesson recall", "claim-bridge boundary"],
-    run_figure_workflow: ["Builder preActionGuidance", "artifact-provenance", "QA gates"],
+    run_figure_workflow: ["Builder preActionGuidance", "artifact-provenance", "QA gates", "providerId none", "plan-only/manual-output", "awaiting-provider-output", "providerId gpt-image2", "OPENAI_API_KEY"],
     prepare_audio_review: ["Reviewer preActionGuidanceSummary", "no-private-transcript boundary"],
     import_audio_review: ["Reviewer preActionGuidanceSummary", "private reviewer transcripts"],
     run_audio_review: ["Reviewer preActionGuidanceSummary", "localized resultCard"],
@@ -195,7 +195,7 @@ async function main() {
     prepare_isolated_review: ["Reviewer preActionGuidanceSummary", "explicit isolation boundaries"],
     import_isolated_review: ["Reviewer preActionGuidanceSummary", "private transcripts"],
     record_document_evidence: ["Builder/researcher preActionGuidanceSummary", "internal summaries, pressure-test reports, and synthesized outputs", "source/artifact provenance", "raw transcripts/private reasoning"],
-    register_source: ["Builder/researcher preActionGuidanceSummary", "external source records", "sources: [...]", "upsert_note", "record_document_evidence"],
+    register_source: ["Builder/researcher preActionGuidanceSummary", "external source records", "sources: [...]", "verified registered sources", "candidate links", "upsert_note", "record_document_evidence"],
     upsert_note: ["Builder/researcher preActionGuidanceSummary", "internal synthesis", "pressure-test findings", "writing-style summaries", "reviewer-preference analysis"],
     upsert_plan: ["Planner preActionGuidanceSummary", "scope/gate guardrails"],
     upsert_outline: ["Planner preActionGuidanceSummary", "draft gate guardrails"],
@@ -205,7 +205,7 @@ async function main() {
     refresh_wiki: ["Planner preActionGuidanceSummary", "reusable context refresh"],
     run_experiment_audit: ["Reviewer preActionGuidanceSummary", "audit gate"],
     bridge_result_to_claim: ["Builder/experiment-planner preActionGuidanceSummary", "result-to-claim bridge"],
-    prepare_figure_generation: ["Builder preActionGuidanceSummary", "material provenance"],
+    prepare_figure_generation: ["Builder preActionGuidanceSummary", "material provenance", "providerId gpt-image2", "OPENAI_API_KEY", "inline secret"],
     import_figure_generation: ["Builder preActionGuidanceSummary", "artifact-provenance gate"]
   };
   for (const [toolName, requiredFragments] of Object.entries(descriptionChecks)) {
@@ -840,10 +840,17 @@ async function main() {
   assert.equal(operatorPreview.executionMode, "operator-one-foreground-pass");
   assert.equal(operatorPreview.foreground, true);
   assert.equal(operatorPreview.background, false);
-  assert.ok(operatorPreview.queueCards && typeof operatorPreview.queueCards === "object");
-  assert.ok(Array.isArray(operatorPreview.queueCards.runnable));
+  assert.ok(operatorPreview.queueSummary && typeof operatorPreview.queueSummary === "object");
+  assert.ok(operatorPreview.queuePreview && typeof operatorPreview.queuePreview === "object");
+  assert.equal(operatorPreview.queueCards, undefined);
+  assert.equal(operatorPreview.autoRunnableTasks, undefined);
+  assert.equal(operatorPreview.hostPassRequiredTasks, undefined);
   requireFullPreActionGuidance(operatorPreview.preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
-  for (const queueCard of Object.values(operatorPreview.queueCards).flat()) {
+
+  const detailedOperatorPreview = await callTool("run_dove_operator", { includeQueueDetails: true });
+  assert.ok(detailedOperatorPreview.queueCards && typeof detailedOperatorPreview.queueCards === "object");
+  assert.ok(Array.isArray(detailedOperatorPreview.queueCards.runnable));
+  for (const queueCard of Object.values(detailedOperatorPreview.queueCards).flat()) {
     requireFullPreActionGuidance(queueCard.preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
   }
 

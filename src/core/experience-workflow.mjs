@@ -59,6 +59,77 @@ function upsertById(items, item) {
   return items;
 }
 
+function requiredActionsForIntegrityFlags(flags = []) {
+  const actions = {
+    "missing-claim-link": "link-result-to-claim-or-create-claim",
+    "missing-evidence-links": "attach-experiment-evidence",
+    "missing-methodology": "provide-experiment-methodology",
+    "missing-success-metric": "provide-success-metric",
+    "missing-result-summary": "provide-result-summary",
+    "pending-outcome": "provide-concrete-outcome"
+  };
+  return normalizeStringArray(flags.map((flag) => actions[flag] ?? `resolve-${flag}`));
+}
+
+function experienceBoundaryFor({ status, plan, result, audit, bridge, artifactRefs }) {
+  if (audit?.auditVerdict === "blocked") {
+    const requiredActions = requiredActionsForIntegrityFlags(audit.integrityFlags);
+    const materialFlags = ["missing-claim-link", "missing-evidence-links", "missing-methodology", "missing-success-metric", "missing-result-summary"];
+    const hasMissingMaterials = audit.integrityFlags.some((flag) => materialFlags.includes(flag));
+    return {
+      id: `${result?.id ?? plan.id}-audit-blocked`,
+      type: hasMissingMaterials ? "missing-required-materials" : "needs-review",
+      reason: `Experiment audit ${audit.id} is blocked: ${audit.integrityFlags.join(", ")}.`,
+      requiredInputs: audit.integrityFlags,
+      requiredActions,
+      artifactRefs,
+      nextAction: hasMissingMaterials ? "project:dove.experience" : "project:dove.review",
+      ownerRole: "builder",
+      nextRole: hasMissingMaterials ? "builder" : "reviewer"
+    };
+  }
+  if (bridge?.status === "held-missing-claim") {
+    return {
+      id: `${bridge.id}-missing-claim`,
+      type: "missing-required-materials",
+      reason: bridge.reason,
+      requiredInputs: [bridge.claimId],
+      requiredActions: ["create-or-link-claim-before-bridge"],
+      artifactRefs,
+      nextAction: "project:dove.experience",
+      ownerRole: "builder",
+      nextRole: "builder"
+    };
+  }
+  if (bridge?.status === "held-audit-blocked") {
+    return {
+      id: `${bridge.id}-audit-blocked`,
+      type: "needs-review",
+      reason: bridge.reason,
+      requiredInputs: audit?.integrityFlags ?? [],
+      requiredActions: ["resolve-experiment-audit-flags"],
+      artifactRefs,
+      nextAction: "project:dove.review",
+      ownerRole: "builder",
+      nextRole: "reviewer"
+    };
+  }
+  if (status === "recorded" && result && !bridge) {
+    return {
+      id: `${result.id}-bridge-required`,
+      type: "missing-required-materials",
+      reason: `Experiment result ${result.id} is recorded but not linked to a durable claim bridge.`,
+      requiredInputs: ["claimId"],
+      requiredActions: ["link-result-to-claim-or-create-claim"],
+      artifactRefs,
+      nextAction: "project:dove.experience",
+      ownerRole: "builder",
+      nextRole: "builder"
+    };
+  }
+  return null;
+}
+
 export function runExperienceWorkflow(root, args = {}) {
   assertGovernanceMutationRegistered("run-experience-workflow", "guarded");
   const target = assertTaskScopedMutationTarget(root, "run-experience-workflow", args);
@@ -173,7 +244,9 @@ export function runExperienceWorkflow(root, args = {}) {
     }
   }
 
+  const artifactRefs = [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog];
   const status = result ? (audit?.auditVerdict === "clean" && bridge?.status === "applied" ? "bridged" : audit?.auditVerdict === "clean" ? "recorded" : "needs-review") : "planned";
+  const boundary = experienceBoundaryFor({ status, plan, result, audit, bridge, artifactRefs });
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.experience",
     responseLanguage: resolveDoveResponseLanguage(root, args),
@@ -187,7 +260,7 @@ export function runExperienceWorkflow(root, args = {}) {
       primaryRole: "builder"
     },
     operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
-    nextAction: result ? "project:dove.review" : "project:dove.experience",
+    nextAction: boundary?.nextAction ?? (result ? "project:dove.review" : "project:dove.experience"),
     routeHint: "project:dove.experience",
     workflowKind: "experience",
     domain: target.packet?.domain ?? null,
@@ -210,6 +283,12 @@ export function runExperienceWorkflow(root, args = {}) {
     result,
     audit,
     bridge,
-    artifacts: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog]
+    boundary,
+    boundaryType: boundary?.type ?? null,
+    requiredActions: boundary?.requiredActions ?? [],
+    artifactRefs,
+    validationEvidencePaths: audit ? [ARTIFACT_PATHS.experimentAudits] : [],
+    nextAction: boundary?.nextAction ?? (result ? "project:dove.review" : "project:dove.experience"),
+    artifacts: artifactRefs
   };
 }

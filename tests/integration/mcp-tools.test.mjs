@@ -993,6 +993,10 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     }));
     assertPreActionGuidanceSummary(note.preActionGuidanceSummary, { surface: "dove.note", primaryRole: "builder" });
     assert.ok(note.packetIds.includes(packetId));
+    assert.deepEqual(note.artifactWrites.primaryArtifactPaths, [".dove/notes/index.json"]);
+    assert.deepEqual(note.artifactWrites.synthesisArtifactPaths, [".dove/wiki/query_pack.md"]);
+    assert.ok(note.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/workspace/index.json"));
+    assert.ok(note.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/sessions/LATEST_SUMMARY.md"));
 
     const batchNote = extractToolJson(dispatchTool(root, "upsert_note", {
       packetId,
@@ -1573,8 +1577,12 @@ test("run_dove_operator leaves host-pass-only queues unchanged without taskResul
 
     const preview = extractToolJson(dispatchTool(root, "run_dove_operator", {}));
     assert.equal(preview.status, "needs-confirmation");
-    assert.deepEqual(preview.autoRunnableTasks, []);
-    assert.deepEqual(preview.hostPassRequiredTasks.map((task) => task.id), ["operator-host-only-source"]);
+    assert.deepEqual(preview.queueSummary.autoRunnableTaskIds, []);
+    assert.deepEqual(preview.queueSummary.hostPassRequiredTaskIds, ["operator-host-only-source"]);
+    assert.equal(preview.autoRunnableTasks, undefined);
+    assert.equal(preview.hostPassRequiredTasks, undefined);
+    assert.equal(preview.queueCards, undefined);
+    assert.deepEqual(preview.queuePreview.hostPassRequired.map((card) => card.packetId), ["operator-host-only-source"]);
 
     const run = extractToolJson(dispatchTool(root, "run_dove_operator", {
       confirmed: true,
@@ -1582,10 +1590,11 @@ test("run_dove_operator leaves host-pass-only queues unchanged without taskResul
     }));
 
     assert.equal(run.status, "needs-host-results");
-    assert.deepEqual(run.updatedTasks, []);
+    assert.deepEqual(run.updatedTaskIds, []);
+    assert.equal(run.updatedTasks, undefined);
     assert.deepEqual(run.awaitingResultTaskIds, ["operator-host-only-source"]);
-    assert.deepEqual(run.result.skippedHostPassTaskIds, ["operator-host-only-source"]);
-    assert.equal(run.result.runtimeRecorded, false);
+    assert.deepEqual(run.operatorResultSummary.skippedHostPassTaskIds, ["operator-host-only-source"]);
+    assert.equal(run.operatorResultSummary.runtimeRecorded, false);
     assert.equal(run.resultCard.status, "needs-host-results");
     assert.deepEqual(run.resultCard.packetIds, []);
     assert.equal(run.resultCard.durableWrites.length, 1);
@@ -1636,22 +1645,31 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.equal(preview.status, "needs-confirmation");
     assert.equal(preview.proposalOnly, true);
     assert.deepEqual(preview.writes, []);
-    assert.deepEqual(preview.autoRunnableTasks.map((task) => task.id), ["operator-auto-ready"]);
-    assert.deepEqual(preview.hostPassRequiredTasks.map((task) => task.id).sort(), hostPassRequiredIds.sort());
-    assert.equal(preview.hostPassRequiredTasks.find((task) => task.id === "operator-source-host-pass").whyThisStep, "source-requires-host-provenance");
-    assert.equal(preview.hostPassRequiredTasks.find((task) => task.id === "operator-note-host-pass").whyThisStep, "note-requires-host-synthesis");
-    assert.equal(preview.hostPassRequiredTasks.find((task) => task.id === "operator-draft-host-pass").whyThisStep, "draft-requires-host-content");
-    assert.equal(preview.hostPassRequiredTasks.find((task) => task.id === "operator-experience-host-pass").whyThisStep, "experience-requires-host-objective");
-    assert.deepEqual(preview.runnableTasks.map((task) => task.id).sort(), ["operator-auto-ready", ...hostPassRequiredIds].sort());
-    assert.deepEqual(preview.blockedTasks.map((task) => task.id).sort(), ["operator-blocked", "operator-unresolved"].sort());
-    assert.deepEqual(preview.pendingTasks.map((task) => task.id), ["operator-pending"]);
-    assert.deepEqual(preview.queueCards.autoRunnable.map((card) => card.packetId), ["operator-auto-ready"]);
-    assert.deepEqual(preview.queueCards.hostPassRequired.map((card) => card.packetId).sort(), hostPassRequiredIds.sort());
+    assert.deepEqual(preview.queueSummary.autoRunnableTaskIds, ["operator-auto-ready"]);
+    assert.deepEqual(preview.queueSummary.hostPassRequiredTaskIds.sort(), hostPassRequiredIds.sort());
+    assert.deepEqual(preview.queueSummary.runnableTaskIds.sort(), ["operator-auto-ready", ...hostPassRequiredIds].sort());
+    assert.deepEqual(preview.queueSummary.blockedTaskIds.sort(), ["operator-blocked", "operator-unresolved"].sort());
+    assert.deepEqual(preview.queueSummary.pendingTaskIds, ["operator-pending"]);
+    assert.equal(preview.autoRunnableTasks, undefined);
+    assert.equal(preview.hostPassRequiredTasks, undefined);
+    assert.equal(preview.queueCards, undefined);
+    assert.deepEqual(preview.queuePreview.autoRunnable.map((card) => card.packetId), ["operator-auto-ready"]);
+    assert.equal(preview.queuePreview.hostPassRequired.length, 2);
     assertFullPreActionGuidance(preview.preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
-    assertFullPreActionGuidance(preview.queueCards.autoRunnable[0].preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
-    assert.equal(preview.queueCards.blocked.every((card) => card.presentation === "compact-operator-queue-card" && card.proposalOnly === true), true);
-    assertFullPreActionGuidance(preview.queueCards.blocked[0].preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
-    assert.equal(preview.blockedTasks.find((task) => task.id === "operator-unresolved").unresolvedDependencyIds[0], "missing-dependency");
+
+    const detailedPreview = extractToolJson(dispatchTool(root, "run_dove_operator", { includeQueueDetails: true }));
+    assert.deepEqual(detailedPreview.autoRunnableTasks.map((task) => task.id), ["operator-auto-ready"]);
+    assert.deepEqual(detailedPreview.hostPassRequiredTasks.map((task) => task.id).sort(), hostPassRequiredIds.sort());
+    assert.equal(detailedPreview.hostPassRequiredTasks.find((task) => task.id === "operator-source-host-pass").whyThisStep, "source-requires-host-provenance");
+    assert.equal(detailedPreview.hostPassRequiredTasks.find((task) => task.id === "operator-note-host-pass").whyThisStep, "note-requires-host-synthesis");
+    assert.equal(detailedPreview.hostPassRequiredTasks.find((task) => task.id === "operator-draft-host-pass").whyThisStep, "draft-requires-host-content");
+    assert.equal(detailedPreview.hostPassRequiredTasks.find((task) => task.id === "operator-experience-host-pass").whyThisStep, "experience-requires-host-objective");
+    assert.deepEqual(detailedPreview.queueCards.autoRunnable.map((card) => card.packetId), ["operator-auto-ready"]);
+    assert.deepEqual(detailedPreview.queueCards.hostPassRequired.map((card) => card.packetId).sort(), hostPassRequiredIds.sort());
+    assertFullPreActionGuidance(detailedPreview.queueCards.autoRunnable[0].preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
+    assert.equal(detailedPreview.queueCards.blocked.every((card) => card.presentation === "compact-operator-queue-card" && card.proposalOnly === true), true);
+    assertFullPreActionGuidance(detailedPreview.queueCards.blocked[0].preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
+    assert.equal(detailedPreview.blockedTasks.find((task) => task.id === "operator-unresolved").unresolvedDependencyIds[0], "missing-dependency");
 
     const run = extractToolJson(dispatchTool(root, "run_dove_operator", {
       confirmed: true,
@@ -1669,10 +1687,12 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     const awaitingHostIds = hostPassRequiredIds.filter((id) => id !== "operator-host-progress");
     assert.equal(run.status, "awaiting-host-results");
     assert.deepEqual([...run.awaitingResultTaskIds].sort(), [...awaitingHostIds].sort());
-    assert.deepEqual(run.updatedTasks.map((task) => task.id).sort(), ["operator-auto-ready", "operator-host-progress"].sort());
-    assert.deepEqual(run.result.autoRunnableTaskIds, ["operator-auto-ready"]);
-    assert.deepEqual(run.result.hostPassRequiredTaskIds.sort(), hostPassRequiredIds.sort());
-    assert.deepEqual(run.result.skippedHostPassTaskIds.sort(), awaitingHostIds.sort());
+    assert.deepEqual(run.updatedTaskIds.sort(), ["operator-auto-ready", "operator-host-progress"].sort());
+    assert.equal(run.updatedTasks, undefined);
+    assert.equal(run.result, undefined);
+    assert.deepEqual(run.operatorResultSummary.autoRunnableTaskIds, ["operator-auto-ready"]);
+    assert.deepEqual(run.operatorResultSummary.hostPassRequiredTaskIds.sort(), hostPassRequiredIds.sort());
+    assert.deepEqual(run.operatorResultSummary.skippedHostPassTaskIds.sort(), awaitingHostIds.sort());
     assert.equal(run.resultCard.presentation, "compact-result-summary-card");
     assert.equal(run.resultCard.surface, "dove.operator");
     assertPreActionGuidanceSummary(run.preActionGuidanceSummary, { surface: "dove.operator", primaryRole: "planner" });
@@ -1695,15 +1715,10 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     ]) {
       assert.ok(run.resultCard.nextActions[0].requiredActions.includes(requiredAction), `${requiredAction} should be surfaced`);
     }
-    assert.equal(run.blockerPlanConversion.createdMissions.length, 2);
-    const blockerPlan = run.blockerPlanConversion.createdMissions.find((mission) => mission.parentId === "operator-blocked");
-    assert.equal(blockerPlan.status, "pending");
-    assert.equal(blockerPlan.stage, "plan");
-    assert.equal(blockerPlan.level, 4);
-    const unresolvedPlan = run.blockerPlanConversion.createdMissions.find((mission) => mission.parentId === "operator-unresolved");
-    assert.equal(unresolvedPlan.status, "pending");
-    assert.equal(unresolvedPlan.stage, "plan");
-    assert.equal(unresolvedPlan.level, 4);
+    assert.equal(run.blockerPlanConversion.missionCount, 2);
+    assert.equal(run.blockerPlanConversion.createdMissionIds.length, 2);
+    assert.deepEqual(run.blockerPlanConversion.reusedMissionIds, []);
+    assert.equal(run.blockerPlanConversion.taskIndexPath, ".dove/task-packets/index.json");
 
     const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
     const persisted = runtimeResults.entries.find((item) => item.id === "operator-run");
@@ -1712,6 +1727,16 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.equal(persisted.status, "awaiting-host-results");
     assert.equal(persisted.resultCard, undefined);
     const taskIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    const createdBlockerPlans = run.blockerPlanConversion.createdMissionIds.map((id) => taskIndex.items.find((item) => item.id === id));
+    assert.equal(createdBlockerPlans.every(Boolean), true);
+    const blockerPlan = createdBlockerPlans.find((mission) => mission.parentId === "operator-blocked");
+    assert.equal(blockerPlan.status, "pending");
+    assert.equal(blockerPlan.stage, "plan");
+    assert.equal(blockerPlan.level, 4);
+    const unresolvedPlan = createdBlockerPlans.find((mission) => mission.parentId === "operator-unresolved");
+    assert.equal(unresolvedPlan.status, "pending");
+    assert.equal(unresolvedPlan.stage, "plan");
+    assert.equal(unresolvedPlan.level, 4);
     const missingTask = taskIndex.items.find((item) => item.id === "operator-host-missing");
     assert.equal(missingTask.status, "ready");
     assert.equal(missingTask.boundary, null);
@@ -2788,7 +2813,8 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.verifiedCriteria, "run_dove_auto steps should expose verifiedCriteria");
   assert.ok(runDoveAutoTool.inputSchema.properties.completeTask, "run_dove_auto should expose explicit completion");
   assert.ok(runDoveOperatorTool, "run_dove_operator should exist");
-  assert.match(runDoveOperatorTool.description, /compact queue cards/);
+  assert.match(runDoveOperatorTool.description, /compact queue summary\/cards/);
+  assert.match(runDoveOperatorTool.description, /includeQueueDetails/);
   assert.match(runDoveOperatorTool.description, /planner preActionGuidance/);
   assert.match(runDoveOperatorTool.description, /read-only lesson recall/);
   assert.match(runDoveOperatorTool.description, /resultCard/);
@@ -2796,6 +2822,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.match(runDoveOperatorTool.description, /host-tool-blocked task results/);
   assert.match(runDoveOperatorTool.description, /no scheduler or hidden runtime/);
   assert.ok(runDoveOperatorTool.inputSchema.properties.confirmed, "run_dove_operator should expose confirmed");
+  assert.ok(runDoveOperatorTool.inputSchema.properties.includeQueueDetails, "run_dove_operator should expose includeQueueDetails");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults, "run_dove_operator should expose taskResults");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults.items.properties.executionContract, "operator taskResults should expose executionContract");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults.items.properties.verifiedCriteria, "operator taskResults should expose verifiedCriteria");

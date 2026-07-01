@@ -471,8 +471,10 @@ function runOperatorHostPassWithoutResultsGoal(root, dispatch) {
 
   const preview = parseToolJson(dispatch(root, "run_dove_operator", {}), "run_dove_operator preview");
   expect(preview.status === "needs-confirmation", "Operator preview must require confirmation", { status: preview.status });
-  expect(Array.isArray(preview.autoRunnableTasks) && preview.autoRunnableTasks.length === 0, "Host-pass-only queue must not report auto-runnable work", { autoRunnableTasks: preview.autoRunnableTasks });
-  expect(JSON.stringify((preview.hostPassRequiredTasks ?? []).map((task) => task.id)) === JSON.stringify([packetId]), "Operator preview must classify the task as host-pass-required", { hostPassRequiredTasks: preview.hostPassRequiredTasks });
+  expect(preview.autoRunnableTasks === undefined, "Operator preview must stay compact by default", { autoRunnableTasks: preview.autoRunnableTasks });
+  expect(preview.hostPassRequiredTasks === undefined, "Operator preview must not return full host-pass arrays by default", { hostPassRequiredTasks: preview.hostPassRequiredTasks });
+  expect(Array.isArray(preview.queueSummary?.autoRunnableTaskIds) && preview.queueSummary.autoRunnableTaskIds.length === 0, "Host-pass-only queue must not report auto-runnable work", { queueSummary: preview.queueSummary });
+  expect(JSON.stringify(preview.queueSummary?.hostPassRequiredTaskIds ?? []) === JSON.stringify([packetId]), "Operator preview must classify the task as host-pass-required", { queueSummary: preview.queueSummary });
   expect(Array.isArray(preview.writes) && preview.writes.length === 0, "Operator preview must remain proposal-only", { writes: preview.writes });
 
   const run = parseToolJson(dispatch(root, "run_dove_operator", {
@@ -480,10 +482,11 @@ function runOperatorHostPassWithoutResultsGoal(root, dispatch) {
     runId
   }), "run_dove_operator confirmed");
   expect(run.status === "needs-host-results", "Confirmed operator run without taskResults must stop at needs-host-results", { status: run.status });
-  expect(Array.isArray(run.updatedTasks) && run.updatedTasks.length === 0, "Confirmed operator run without taskResults must not report updated tasks", { updatedTasks: run.updatedTasks });
+  expect(run.updatedTasks === undefined, "Confirmed operator run must stay compact by default", { updatedTasks: run.updatedTasks });
+  expect(Array.isArray(run.updatedTaskIds) && run.updatedTaskIds.length === 0, "Confirmed operator run without taskResults must not report updated task ids", { updatedTaskIds: run.updatedTaskIds });
   expect(JSON.stringify(run.awaitingResultTaskIds ?? []) === JSON.stringify([packetId]), "Confirmed operator run must report awaiting host result task ids", { awaitingResultTaskIds: run.awaitingResultTaskIds });
-  expect(JSON.stringify(run.skippedHostPassTaskIds ?? run.result?.skippedHostPassTaskIds ?? []) === JSON.stringify([packetId]), "Confirmed operator run must report skipped host-pass task ids", { skippedHostPassTaskIds: run.skippedHostPassTaskIds, resultSkipped: run.result?.skippedHostPassTaskIds });
-  expect(run.result?.runtimeRecorded === false, "Confirmed operator run without actual work must not record a runtime result", { runtimeRecorded: run.result?.runtimeRecorded });
+  expect(JSON.stringify(run.skippedHostPassTaskIds ?? []) === JSON.stringify([packetId]), "Confirmed operator run must report skipped host-pass task ids", { skippedHostPassTaskIds: run.skippedHostPassTaskIds });
+  expect(run.operatorResultSummary?.runtimeRecorded === false, "Confirmed operator run without actual work must not record a runtime result", { runtimeRecorded: run.operatorResultSummary?.runtimeRecorded });
   expect(run.resultCard?.status === "needs-host-results", "Result card must preserve needs-host-results status", { resultCardStatus: run.resultCard?.status });
   expect(Array.isArray(run.resultCard?.packetIds) && run.resultCard.packetIds.length === 0, "Result card must not list affected packet ids when nothing changed", { packetIds: run.resultCard?.packetIds });
   expect((run.awaitingRequiredActions ?? []).includes("collect-source-provenance"), "Confirmed operator run must return source provenance required action", { awaitingRequiredActions: run.awaitingRequiredActions });
@@ -513,8 +516,8 @@ function runOperatorHostPassWithoutResultsGoal(root, dispatch) {
       runId,
       previewStatus: preview.status,
       runStatus: run.status,
-      updatedTaskCount: run.updatedTasks.length,
-      runtimeRecorded: run.result.runtimeRecorded,
+      updatedTaskCount: run.updatedTaskIds.length,
+      runtimeRecorded: run.operatorResultSummary.runtimeRecorded,
       finalTaskStatus: afterTask.status,
       finalBoundary: afterTask.boundary,
       runtimeEntryPersisted: false,
@@ -848,6 +851,7 @@ function runOperatorHostResultRequiresCriteriaGoal(root, dispatch) {
 
   const run = parseToolJson(dispatch(root, "run_dove_operator", {
     confirmed: true,
+    includeQueueDetails: true,
     runId,
     taskResults: [{
       packetId,

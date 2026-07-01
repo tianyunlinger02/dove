@@ -1594,7 +1594,7 @@ export function buildRebuttalStrategy(root, args = {}) {
   assertFollowThroughReady(root, "Building the rebuttal strategy", args);
   assertRoleBoundMutation(root, args, {
     actionLabel: "Building the rebuttal strategy",
-    expectedRole: "rebuttal-lead"
+    expectedRole: "builder"
   });
   const issues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   const board = loadBoard(root);

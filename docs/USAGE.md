@@ -97,6 +97,8 @@ Important durable surfaces include:
 - `.dove/mutations/index.json` — mutation provenance and rollback eligibility metadata; it records patch-plan/direct-process source facts and is not a restore ledger.
 - `.dove/config.json`, `.dove/config.local.json`, `DOVE_CONFIG_PATH`, `DOVE_LANGUAGE`, and `DOVE_FIGURE_*` overrides — response-language, provider, and status-serving configuration; provider/API/tunnel secrets should be referenced through environment-variable names such as `apiKeyEnv`.
 
+For OpenAI image generation, explicitly select the built-in provider with `providerId: "gpt-image2"` or `DOVE_FIGURE_PROVIDER_ID=gpt-image2`. Dove uses model `gpt-image-2`, reads the API key from `OPENAI_API_KEY`, writes the returned raster image under `.dove/figures/runs/<runId>/`, wraps it in a local SVG for the existing import/QA pipeline, and never stores inline API keys in `.dove/config*.json`.
+
 Commands and skills provide behavior, but there is no hidden scheduler or swarm runtime. Optional MCP helpers mutate files deterministically; they do not replace `.dove/` as the source of truth.
 
 ## Global public status and Cloudflare serving

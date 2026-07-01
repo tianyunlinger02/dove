@@ -2268,6 +2268,11 @@ export function upsertNote(root, args = {}) {
   });
   return {
     ...note,
+    artifactWrites: {
+      primaryArtifactPaths: [ARTIFACT_PATHS.notes],
+      synthesisArtifactPaths: [ARTIFACT_PATHS.queryPack],
+      refreshOnlyArtifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionJournal]
+    },
     preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
       surface: "dove.note",
       roleId: "builder",
@@ -2752,7 +2757,7 @@ export function buildRebuttal(root, args = {}) {
   syncPhase(root, state, {
     stage: "rebuttal",
     resumeCommand: "project:dove.version",
-    role: "rebuttal-lead",
+    role: "builder",
     intentType: "respond",
     currentFocus: "Convert normalized concerns into an evidence-backed rebuttal.",
     nextAction: "Snapshot the paper once rebuttal changes stabilize.",

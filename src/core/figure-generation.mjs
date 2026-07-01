@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
-import { assertNoInlineSecrets, loadFigureGenerationConfig, redactDoveConfig } from "./config.mjs";
+import { assertNoInlineSecrets, createGptImage2FigureProvider, loadFigureGenerationConfig, redactDoveConfig } from "./config.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
@@ -307,10 +307,37 @@ function buildMaterialRequirements(root, figure, args = {}) {
   return Array.from(byId.values());
 }
 
+function providerIdIsNone(value) {
+  return typeof value === "string" && value.trim().toLowerCase() === "none";
+}
+
+function providerIdIsGptImage2(value) {
+  return typeof value === "string" && value.trim().toLowerCase().replace(/[-_]/g, "") === "gptimage2";
+}
+
+function normalizeProviderId(value) {
+  if (typeof value !== "string") {
+    return value ?? null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function selectedProviderIdFor(config, providerId) {
+  if (providerIdIsNone(providerId)) {
+    return null;
+  }
+  const explicitProviderId = normalizeProviderId(providerId);
+  if (explicitProviderId) {
+    return explicitProviderId;
+  }
+  return providerIdIsNone(config.defaultProviderId) ? null : normalizeProviderId(config.defaultProviderId);
+}
+
 function selectProvider(config, providerId, env) {
-  const selectedProviderId = providerId ?? config.defaultProviderId;
+  const selectedProviderId = selectedProviderIdFor(config, providerId);
   const provider = selectedProviderId
-    ? config.providers.find((item) => item.id === selectedProviderId)
+    ? config.providers.find((item) => item.id === selectedProviderId) ?? (providerIdIsGptImage2(selectedProviderId) ? createGptImage2FigureProvider() : null)
     : null;
   if (selectedProviderId && !provider) {
     throw new Error(`Unknown figure generation provider: ${selectedProviderId}`);
@@ -346,6 +373,9 @@ function providerRequestSummary(provider, readiness) {
     endpoint: provider.endpoint ?? null,
     command: provider.command ?? null,
     model: provider.model ?? null,
+    imageSize: provider.imageSize ?? null,
+    imageQuality: provider.imageQuality ?? null,
+    imageBackground: provider.imageBackground ?? null,
     timeoutMs: provider.timeoutMs,
     maxPromptChars: provider.maxPromptChars,
     maxSvgBytes: provider.maxSvgBytes,
@@ -517,21 +547,7 @@ function invokeExternalCommandProvider(root, provider, inputPath, runId, timesta
   return writeProviderOutput(root, runId, result.stdout, timestamp);
 }
 
-function invokeHttpJsonProvider(root, provider, input, prompt, env, runId, timestamp) {
-  const apiKey = provider.apiKeyEnv ? env[provider.apiKeyEnv] : null;
-  if (provider.apiKeyEnv && !apiKey) {
-    throw new Error(`Figure provider ${provider.id} requires environment variable ${provider.apiKeyEnv}.`);
-  }
-  const requestBody = {
-    endpoint: provider.endpoint,
-    apiKey,
-    timeoutMs: provider.timeoutMs,
-    request: {
-      model: provider.model ?? undefined,
-      prompt,
-      input
-    }
-  };
+function postProviderJson(provider, label, payload, maxBuffer = provider.maxSvgBytes * 2 + 100000) {
   const script = `
 const chunks = [];
 process.stdin.on("data", (chunk) => chunks.push(chunk));
@@ -540,7 +556,7 @@ process.stdin.on("end", async () => {
     const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), payload.timeoutMs);
-    const headers = { "content-type": "application/json", "accept": "application/json, image/svg+xml, text/plain" };
+    const headers = { "content-type": "application/json", "accept": payload.accept || "application/json" };
     if (payload.apiKey) headers.authorization = \`Bearer \${payload.apiKey}\`;
     const response = await fetch(payload.endpoint, { method: "POST", headers, body: JSON.stringify(payload.request), signal: controller.signal });
     clearTimeout(timer);
@@ -553,18 +569,117 @@ process.stdin.on("end", async () => {
 });
 `;
   const result = spawnSync(process.execPath, ["-e", script], {
-    input: JSON.stringify(requestBody),
+    input: JSON.stringify(payload),
     encoding: "utf8",
     timeout: provider.timeoutMs + 1000,
-    maxBuffer: provider.maxSvgBytes * 2 + 100000
+    maxBuffer
   });
-  assertSpawnSucceeded(result, `HTTP figure provider ${provider.id}`, provider.timeoutMs);
+  assertSpawnSucceeded(result, label, provider.timeoutMs);
   const response = JSON.parse(result.stdout);
   if (!response.ok) {
-    throw new Error(`HTTP figure provider ${provider.id} returned ${response.status}: ${String(response.body ?? "").slice(0, 1000)}`);
+    throw new Error(`${label} returned ${response.status}: ${String(response.body ?? "").slice(0, 1000)}`);
   }
+  return response;
+}
+
+function invokeHttpJsonProvider(root, provider, input, prompt, env, runId, timestamp) {
+  const apiKey = provider.apiKeyEnv ? env[provider.apiKeyEnv] : null;
+  if (provider.apiKeyEnv && !apiKey) {
+    throw new Error(`Figure provider ${provider.id} requires environment variable ${provider.apiKeyEnv}.`);
+  }
+  const response = postProviderJson(provider, `HTTP figure provider ${provider.id}`, {
+    endpoint: provider.endpoint,
+    apiKey,
+    timeoutMs: provider.timeoutMs,
+    accept: "application/json, image/svg+xml, text/plain",
+    request: {
+      model: provider.model ?? undefined,
+      prompt,
+      input
+    }
+  });
   const providerOutput = response.contentType.includes("json") ? JSON.parse(response.body) : response.body;
   return writeProviderOutput(root, runId, providerOutput, timestamp);
+}
+
+function xmlEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function dimensionsFromImageSize(value) {
+  const match = typeof value === "string" ? value.match(/^(\d+)x(\d+)$/) : null;
+  return match ? { width: Number(match[1]), height: Number(match[2]) } : { width: 1024, height: 1024 };
+}
+
+function openAiImageRequest(provider, prompt) {
+  const request = {
+    model: provider.model ?? "gpt-image-2",
+    prompt,
+    n: 1
+  };
+  if (provider.imageSize) {
+    request.size = provider.imageSize;
+  }
+  if (provider.imageQuality) {
+    request.quality = provider.imageQuality;
+  }
+  if (provider.imageBackground) {
+    request.background = provider.imageBackground;
+  }
+  return request;
+}
+
+function openAiImageData(responseBody, providerId) {
+  const parsed = JSON.parse(responseBody);
+  const item = Array.isArray(parsed.data) ? parsed.data[0] : null;
+  const b64 = item?.b64_json ?? item?.image?.b64_json;
+  if (typeof b64 !== "string" || b64.trim().length === 0) {
+    throw new Error(`OpenAI image provider ${providerId} did not return b64_json image data.`);
+  }
+  return {
+    b64,
+    revisedPrompt: item?.revised_prompt ?? item?.revisedPrompt ?? null,
+    responseId: parsed.id ?? null
+  };
+}
+
+function invokeOpenAiImageProvider(root, provider, input, prompt, env, runId, timestamp) {
+  const apiKey = provider.apiKeyEnv ? env[provider.apiKeyEnv] : null;
+  if (provider.apiKeyEnv && !apiKey) {
+    throw new Error(`Figure provider ${provider.id} requires environment variable ${provider.apiKeyEnv}.`);
+  }
+  const response = postProviderJson(provider, `OpenAI image figure provider ${provider.id}`, {
+    endpoint: provider.endpoint,
+    apiKey,
+    timeoutMs: provider.timeoutMs,
+    accept: "application/json",
+    request: openAiImageRequest(provider, prompt)
+  }, provider.maxSvgBytes * 8 + 100000);
+  const image = openAiImageData(response.body, provider.id);
+  const imagePath = `${generationRunDir(runId)}/gpt-image2.png`;
+  ensureDir(path.dirname(resolvePath(root, imagePath)));
+  fs.writeFileSync(resolvePath(root, imagePath), Buffer.from(image.b64, "base64"));
+  const finalSvgPath = assertSafeFigurePath(input.figure?.finalSvgPath ?? `${generationRunDir(runId)}/final.svg`, "OpenAI image finalSvgPath", [generationRunDir(runId), ".dove/figures/"]);
+  const href = path.posix.relative(path.posix.dirname(finalSvgPath), imagePath) || path.posix.basename(imagePath);
+  const { width, height } = dimensionsFromImageSize(provider.imageSize);
+  const title = xmlEscape(input.figure?.name ?? input.figureId ?? "Generated figure");
+  const desc = xmlEscape(input.figure?.purpose ?? "Generated by an OpenAI image provider and wrapped as a local SVG artifact.");
+  const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc"><title id="title">${title}</title><desc id="desc">${desc}</desc><image href="${xmlEscape(href)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"/></svg>\n`;
+  return writeProviderOutput(root, runId, {
+    finalSvgPath,
+    svgContent,
+    caption: `${input.figure?.name ?? input.figureId ?? "Figure"} generated with ${provider.id}.`,
+    rasterImagePath: imagePath,
+    providerResponseId: image.responseId,
+    revisedPrompt: image.revisedPrompt,
+    model: provider.model ?? "gpt-image-2",
+    imageSize: provider.imageSize ?? null,
+    generatedAt: timestamp
+  }, timestamp);
 }
 
 function executeFigureProvider(root, provider, input, prompt, env, runId, timestamp) {
@@ -573,6 +688,9 @@ function executeFigureProvider(root, provider, input, prompt, env, runId, timest
   }
   if (provider.type === "http-json") {
     return invokeHttpJsonProvider(root, provider, input, prompt, env, runId, timestamp);
+  }
+  if (provider.type === "openai-image") {
+    return invokeOpenAiImageProvider(root, provider, input, prompt, env, runId, timestamp);
   }
   throw new Error(`Unsupported figure provider type: ${provider.type}`);
 }

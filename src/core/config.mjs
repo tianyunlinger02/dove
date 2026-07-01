@@ -8,6 +8,9 @@ const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_MAX_PROMPT_CHARS = 20000;
 const DEFAULT_MAX_SVG_BYTES = 1000000;
 const DEFAULT_GLOBAL_STATUS_ORIGIN_PORT = 8787;
+const GPT_IMAGE2_PROVIDER_ID = "gpt-image2";
+const GPT_IMAGE2_MODEL = "gpt-image-2";
+const OPENAI_IMAGE_ENDPOINT = "https://api.openai.com/v1/images/generations";
 const SECRET_KEY_PATTERN = /(?:api[-_]?key|token|secret|password|authorization|bearer)/i;
 const INLINE_BEARER_VALUE_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/i;
 const ENV_REF_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
@@ -82,6 +85,22 @@ function normalizeBoolean(value, fallback = false) {
 
 function normalizeString(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function isGptImage2Identifier(value) {
+  const normalized = normalizeString(value)?.toLowerCase().replace(/[-_]/g, "") ?? null;
+  return normalized === "gptimage2";
+}
+
+function inferFigureProviderType(providerType, providerId, endpoint, command, model) {
+  const explicitType = normalizeString(providerType);
+  if (explicitType) {
+    return explicitType;
+  }
+  if (isGptImage2Identifier(providerId) || isGptImage2Identifier(model)) {
+    return "openai-image";
+  }
+  return endpoint ? "http-json" : command ? "external-command" : "external-command";
 }
 
 function expandHomePath(value) {
@@ -224,15 +243,19 @@ function envConfig(env) {
     figureGeneration.maxSvgBytes = env.DOVE_FIGURE_MAX_SVG_BYTES;
   }
   if (hasProviderOverride) {
-    const id = providerId ?? "env-figure-provider";
+    const id = providerId ?? (isGptImage2Identifier(model) ? GPT_IMAGE2_PROVIDER_ID : "env-figure-provider");
+    const type = inferFigureProviderType(providerType, id, endpoint, command, model);
     figureGeneration.defaultProviderId = id;
     figureGeneration.providers = [{
       id,
-      type: providerType ?? (endpoint ? "http-json" : "external-command"),
+      type,
       endpoint,
       command,
-      model,
-      apiKeyEnv,
+      model: model ?? (type === "openai-image" ? GPT_IMAGE2_MODEL : null),
+      apiKeyEnv: apiKeyEnv ?? (type === "openai-image" ? "OPENAI_API_KEY" : null),
+      imageSize: env.DOVE_FIGURE_IMAGE_SIZE,
+      imageQuality: env.DOVE_FIGURE_IMAGE_QUALITY,
+      imageBackground: env.DOVE_FIGURE_IMAGE_BACKGROUND,
       timeoutMs: env.DOVE_FIGURE_TIMEOUT_MS,
       maxPromptChars: env.DOVE_FIGURE_MAX_PROMPT_CHARS,
       maxSvgBytes: env.DOVE_FIGURE_MAX_SVG_BYTES
@@ -254,8 +277,8 @@ function normalizeProvider(rawProvider) {
   if (!id) {
     throw new Error("Dove figure provider config requires a non-empty id.");
   }
-  const type = normalizeString(rawProvider.type) ?? (rawProvider.endpoint ? "http-json" : "external-command");
-  if (!["http-json", "external-command"].includes(type)) {
+  const type = inferFigureProviderType(rawProvider.type, id, rawProvider.endpoint, rawProvider.command, rawProvider.model);
+  if (!["http-json", "external-command", "openai-image"].includes(type)) {
     throw new Error(`Unsupported Dove figure provider type: ${type}`);
   }
   const provider = {
@@ -265,11 +288,11 @@ function normalizeProvider(rawProvider) {
     maxPromptChars: normalizePositiveInteger(rawProvider.maxPromptChars, DEFAULT_MAX_PROMPT_CHARS, 1000, 200000),
     maxSvgBytes: normalizePositiveInteger(rawProvider.maxSvgBytes, DEFAULT_MAX_SVG_BYTES, 1000, 10000000)
   };
-  const model = normalizeString(rawProvider.model);
+  const model = normalizeString(rawProvider.model) ?? (type === "openai-image" ? GPT_IMAGE2_MODEL : null);
   if (model) {
     provider.model = model;
   }
-  const endpoint = normalizeString(rawProvider.endpoint);
+  const endpoint = normalizeString(rawProvider.endpoint) ?? (type === "openai-image" ? OPENAI_IMAGE_ENDPOINT : null);
   if (endpoint) {
     provider.endpoint = endpoint;
   }
@@ -277,12 +300,24 @@ function normalizeProvider(rawProvider) {
   if (command) {
     provider.command = command;
   }
-  const apiKeyEnv = normalizeEnvRef(rawProvider.apiKeyEnv);
+  const apiKeyEnv = normalizeEnvRef(rawProvider.apiKeyEnv ?? (type === "openai-image" ? "OPENAI_API_KEY" : null));
   if (apiKeyEnv) {
     provider.apiKeyEnv = apiKeyEnv;
   }
-  if (type === "http-json" && !provider.endpoint) {
-    throw new Error(`Dove figure provider ${id} uses http-json but has no endpoint.`);
+  const imageSize = normalizeString(rawProvider.imageSize ?? rawProvider.size);
+  if (imageSize) {
+    provider.imageSize = imageSize;
+  }
+  const imageQuality = normalizeString(rawProvider.imageQuality ?? rawProvider.quality);
+  if (imageQuality) {
+    provider.imageQuality = imageQuality;
+  }
+  const imageBackground = normalizeString(rawProvider.imageBackground ?? rawProvider.background);
+  if (imageBackground) {
+    provider.imageBackground = imageBackground;
+  }
+  if ((type === "http-json" || type === "openai-image") && !provider.endpoint) {
+    throw new Error(`Dove figure provider ${id} uses ${type} but has no endpoint.`);
   }
   if (type === "external-command" && !provider.command) {
     throw new Error(`Dove figure provider ${id} uses external-command but has no command.`);
@@ -290,12 +325,26 @@ function normalizeProvider(rawProvider) {
   return provider;
 }
 
+export function createGptImage2FigureProvider(overrides = {}) {
+  const source = isPlainObject(overrides) ? overrides : {};
+  return normalizeProvider({
+    id: GPT_IMAGE2_PROVIDER_ID,
+    type: "openai-image",
+    endpoint: OPENAI_IMAGE_ENDPOINT,
+    model: GPT_IMAGE2_MODEL,
+    apiKeyEnv: "OPENAI_API_KEY",
+    imageSize: "1024x1024",
+    ...source
+  });
+}
+
 function normalizeFigureGenerationConfig(rawConfig = {}) {
   const source = isPlainObject(rawConfig) ? rawConfig : {};
   assertNoInlineSecrets(source, "figureGeneration");
-  const providers = Array.isArray(source.providers) ? source.providers.map(normalizeProvider) : [];
-  const defaultProviderId = normalizeString(source.defaultProviderId) ?? providers[0]?.id ?? null;
-  if (defaultProviderId && !providers.some((provider) => provider.id === defaultProviderId)) {
+  const hasExplicitProviders = Array.isArray(source.providers);
+  const providers = hasExplicitProviders ? source.providers.map(normalizeProvider) : [];
+  const defaultProviderId = normalizeString(source.defaultProviderId) ?? (hasExplicitProviders ? providers[0]?.id : null) ?? null;
+  if (defaultProviderId && !providers.some((provider) => provider.id === defaultProviderId) && !isGptImage2Identifier(defaultProviderId)) {
     throw new Error(`Dove figureGeneration.defaultProviderId references unknown provider: ${defaultProviderId}`);
   }
   return {

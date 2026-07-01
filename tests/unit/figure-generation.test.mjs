@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -26,6 +27,98 @@ import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
   return createTempRoot("dove-figure-generation-");
+}
+
+const TINY_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+
+async function withMockOpenAiImageServer(callback) {
+  const requests = [];
+  const script = `
+const http = require("node:http");
+const image = ${JSON.stringify(TINY_PNG_BASE64)};
+const server = http.createServer((request, response) => {
+  const chunks = [];
+  request.on("data", (chunk) => chunks.push(chunk));
+  request.on("end", () => {
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    process.stdout.write(JSON.stringify({ request: {
+      method: request.method,
+      url: request.url,
+      authorization: request.headers.authorization,
+      body
+    } }) + "\\n");
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({
+      id: "img-test",
+      data: [{ b64_json: image, revised_prompt: "Revised workflow prompt." }]
+    }));
+  });
+});
+server.listen(0, "127.0.0.1", () => {
+  const address = server.address();
+  process.stdout.write(JSON.stringify({ endpoint: "http://127.0.0.1:" + address.port + "/v1/images/generations" }) + "\\n");
+});
+process.on("SIGTERM", () => server.close(() => process.exit(0)));
+`;
+  const child = spawn(process.execPath, ["-e", script], { stdio: ["ignore", "pipe", "pipe"] });
+  let stdout = "";
+  let stderr = "";
+  let endpointResolved = false;
+  const endpoint = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Mock OpenAI image server did not start: ${stderr}`)), 5000);
+    const handleLine = (line) => {
+      if (!line.trim()) {
+        return;
+      }
+      const message = JSON.parse(line);
+      if (message.endpoint && !endpointResolved) {
+        endpointResolved = true;
+        clearTimeout(timer);
+        resolve(message.endpoint);
+        return;
+      }
+      if (message.request) {
+        requests.push(message.request);
+      }
+    };
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+      let newlineIndex = stdout.indexOf("\n");
+      while (newlineIndex >= 0) {
+        const line = stdout.slice(0, newlineIndex);
+        stdout = stdout.slice(newlineIndex + 1);
+        handleLine(line);
+        newlineIndex = stdout.indexOf("\n");
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (!endpointResolved) {
+        clearTimeout(timer);
+        reject(new Error(`Mock OpenAI image server exited with ${code}: ${stderr}`));
+      }
+    });
+  });
+  try {
+    return await callback(endpoint, requests);
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGTERM");
+      await new Promise((resolve) => child.once("exit", resolve));
+    }
+  }
+}
+
+async function waitForRequestCount(requests, expectedCount) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (requests.length >= expectedCount) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 }
 
 function seedTaskPacket(root, packetId = "figure-main-packet") {
@@ -242,6 +335,112 @@ test("Dove figure config rejects inline secrets and accepts env secret reference
 
   fs.writeFileSync(configPath, JSON.stringify({ figureGeneration: { providers: [{ id: "bad", type: "http-json", endpoint: "https://drawing.invalid", apiKey: "secret" }] } }), "utf8");
   assert.throws(() => loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath }), /inline secret/);
+});
+
+test("Dove figure config exposes gpt-image2 as an explicit env provider without inline secrets", () => {
+  const root = tempRoot();
+  try {
+    const config = loadDoveConfig(root, {
+      DOVE_CONFIG_PATH: path.join(root, "missing-config.json"),
+      DOVE_FIGURE_PROVIDER_ID: "gpt-image2",
+      DOVE_FIGURE_ENDPOINT: "http://127.0.0.1:1/v1/images/generations",
+      DOVE_FIGURE_IMAGE_SIZE: "512x512",
+      OPENAI_API_KEY: "not-persisted"
+    });
+    assert.equal(config.figureGeneration.defaultProviderId, "gpt-image2");
+    assert.equal(config.figureGeneration.providers[0].id, "gpt-image2");
+    assert.equal(config.figureGeneration.providers[0].type, "openai-image");
+    assert.equal(config.figureGeneration.providers[0].model, "gpt-image-2");
+    assert.equal(config.figureGeneration.providers[0].apiKeyEnv, "OPENAI_API_KEY");
+    assert.equal(config.figureGeneration.providers[0].imageSize, "512x512");
+    assert.equal(config.figureGeneration.providers[0].apiKey, undefined);
+
+    const configPath = path.join(root, "dove-config.json");
+    fs.writeFileSync(configPath, JSON.stringify({ figureGeneration: { defaultProviderId: "gpt-image2" } }), "utf8");
+    const builtinSelection = loadDoveConfig(root, { DOVE_CONFIG_PATH: configPath });
+    assert.equal(builtinSelection.figureGeneration.defaultProviderId, "gpt-image2");
+    assert.deepEqual(builtinSelection.figureGeneration.providers, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("prepareFigureGeneration invokes gpt-image2 through the OpenAI image provider path", async () => {
+  await withMockOpenAiImageServer(async (endpoint, requests) => {
+    const root = tempRoot();
+    try {
+      const packetId = seedFigureWorkspace(root);
+      const env = {
+        DOVE_CONFIG_PATH: path.join(root, "missing-config.json"),
+        DOVE_FIGURE_PROVIDER_ID: "gpt-image2",
+        DOVE_FIGURE_ENDPOINT: endpoint,
+        DOVE_FIGURE_IMAGE_SIZE: "64x32",
+        OPENAI_API_KEY: "test-key"
+      };
+
+      const prepared = prepareFigureGeneration(root, {
+        packetId,
+        figureId: "workflow",
+        runId: "gpt-image2-run",
+        executeProvider: true,
+        env
+      });
+      assert.equal(prepared.providerReadiness.status, "ready");
+      assert.equal(prepared.providerExecution.status, "completed");
+      await waitForRequestCount(requests, 1);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0].method, "POST");
+      assert.equal(requests[0].authorization, "Bearer test-key");
+      assert.equal(requests[0].body.model, "gpt-image-2");
+      assert.equal(requests[0].body.response_format, undefined);
+      assert.equal(requests[0].body.size, "64x32");
+      assert.match(requests[0].body.prompt, /Workflow Figure/);
+
+      const manifest = readJson(root, prepared.outputManifestPath, {});
+      assert.equal(manifest.finalSvgPath, ".dove/figures/workflow.final.svg");
+      assert.equal(manifest.rasterImagePath, ".dove/figures/runs/gpt-image2-run/gpt-image2.png");
+      assert.equal(manifest.providerResponseId, "img-test");
+      assert.equal(manifest.revisedPrompt, "Revised workflow prompt.");
+      assert.equal(manifest.model, "gpt-image-2");
+      assert.equal(manifest.imageSize, "64x32");
+      assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "runs", "gpt-image2-run", "gpt-image2.png")), true);
+
+      const imported = importFigureGeneration(root, { packetId, figureId: "workflow", runId: "gpt-image2-run", env });
+      assert.equal(imported.qaIssueCount, 0);
+      assert.equal(imported.finalSvgPath, ".dove/figures/workflow.final.svg");
+      const finalSvg = fs.readFileSync(path.join(root, ".dove", "figures", "workflow.final.svg"), "utf8");
+      assert.match(finalSvg, /<image href="runs\/gpt-image2-run\/gpt-image2\.png"/);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+test("prepareFigureGeneration reports missing OPENAI_API_KEY for gpt-image2", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkspace(root);
+    const prepared = prepareFigureGeneration(root, {
+      packetId,
+      figureId: "workflow",
+      runId: "gpt-image2-missing-key-run",
+      executeProvider: true,
+      env: {
+        DOVE_CONFIG_PATH: path.join(root, "missing-config.json"),
+        DOVE_FIGURE_PROVIDER_ID: "gpt-image2"
+      }
+    });
+    assert.equal(prepared.providerReadiness.status, "missing-secret-env");
+    assert.equal(prepared.providerReadiness.apiKeyEnv, "OPENAI_API_KEY");
+    assert.equal(prepared.providerExecution.status, "failed");
+    assert.match(prepared.providerExecution.error, /OPENAI_API_KEY/);
+
+    const generations = readJson(root, ARTIFACT_PATHS.figureGenerations, { version: 1, items: [] });
+    const generation = generations.items.find((item) => item.id === "gpt-image2-missing-key-run");
+    assert.equal(generation.status, "provider-failed");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("Dove config supports response language with Chinese default and English override", () => {
