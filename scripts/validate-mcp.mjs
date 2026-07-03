@@ -693,7 +693,7 @@ async function main() {
   assert.equal(autoRun.result.iterationCount, 1);
   assert.equal(autoRun.result.iterations[0].command, "dove.review");
   assert.equal(autoRun.result.iterations[0].outcome, "awaiting-review-output");
-  assert.equal(autoRun.result.stopReason, "awaiting-audio-review-output");
+  assert.equal(autoRun.result.stopReason, "awaiting-review-output");
   assert.ok(autoRun.result.allowedInternalCommands.includes("dove.review-loop"));
   assert.equal(autoRun.resultCard.presentation, "compact-result-summary-card");
   assert.equal(autoRun.resultCard.surface, "dove.auto");
@@ -752,8 +752,8 @@ async function main() {
   assert.equal(status.statusHome.optionalMissionDetails.detail, "summary");
   assert.equal(status.statusHome.optionalMissionDetails.missionItemsIncluded, false);
   assert.equal("groups" in status.statusHome.optionalMissionDetails, false);
-  assert.deepEqual(status.statusHome.optionalMissionDetails.statusModel.userGroups, ["todo", "doing", "blocked", "done"]);
-  assert.deepEqual(status.statusHome.optionalMissionDetails.statusModel.machineStatuses, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.deepEqual(status.statusHome.optionalMissionDetails.statusModel.userGroups, ["todo", "doing", "blocked", "done", "archived"]);
+  assert.deepEqual(status.statusHome.optionalMissionDetails.statusModel.machineStatuses, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
   assert.equal(status.statusHome.optionalMissionDetails.requestArgs.showMissions, true);
   assert.equal(missionStatus.statusHome.optionalMissionDetails.detail, "compact");
   assert.equal(missionStatus.statusHome.optionalMissionDetails.missionItemsIncluded, true);
@@ -803,7 +803,7 @@ async function main() {
   assert.ok(Array.isArray(fullStatus.dashboard.tasks.boundaryActionCards));
   assert.ok(status.projectSummary && typeof status.projectSummary === "object");
   assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
-  assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
   assert.equal(status.statusAdjustmentContract.statusAdjustmentItemsIncluded, false);
   assert.deepEqual(status.statusAdjustmentContract.items, []);
   assert.deepEqual(status.statusAdjustmentContract.adjustmentCards, []);
@@ -822,7 +822,7 @@ async function main() {
   assert.equal(statusAdjustmentPreview.status, "needs-confirmation");
   assert.equal(statusAdjustmentPreview.proposalOnly, true);
   assert.deepEqual(statusAdjustmentPreview.writes, []);
-  assert.deepEqual(statusAdjustmentPreview.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.deepEqual(statusAdjustmentPreview.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
   assert.equal(statusAdjustmentPreview.adjustmentCards.length, 1);
   assert.equal(statusAdjustmentPreview.adjustmentCards[0].presentation, "compact-status-adjustment-card");
   assert.equal(statusAdjustmentPreview.adjustmentCards[0].proposalOnly, true);

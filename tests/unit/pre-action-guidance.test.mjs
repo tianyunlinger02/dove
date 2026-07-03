@@ -152,6 +152,43 @@ test("pre-action guidance ranks active packet lessons and keeps guardrails expli
   assert.equal(summary.recordingExplicitOnly, true);
 });
 
+test("pre-action guidance auto recall does not expose raw lesson action text", () => {
+  const staleErrorText = "Unsupported Dove figure provider type: openai-image";
+  const operatorLessons = {
+    lessons: [
+      {
+        id: "historical-provider-error",
+        title: "Historical provider error lesson",
+        status: "active",
+        actorRole: "builder",
+        domain: "engineering",
+        stage: "execute",
+        nextTime: [staleErrorText],
+        tags: ["figure"]
+      }
+    ]
+  };
+
+  const guidance = buildPreActionGuidance({
+    surface: "dove.figure",
+    responseLanguage: "en",
+    roleId: "builder",
+    packet: { id: "packet-a", domain: "engineering", stage: "execute" },
+    operatorLessons,
+    workflowKind: "figure",
+    domain: "engineering",
+    stage: "execute",
+    tags: ["figure"]
+  });
+
+  const lesson = guidance.lessonRecall.topLessons[0];
+  assert.equal(lesson.id, "historical-provider-error");
+  assert.equal(lesson.nextTimeCount, 1);
+  assert.equal(lesson.hasNextTimeGuidance, true);
+  assert.equal("nextTime" in lesson, false);
+  assert.equal(JSON.stringify(guidance).includes(staleErrorText), false);
+});
+
 test("pre-action guidance routes executable workflow gaps to planner builder and reviewer", () => {
   const missingContract = buildPreActionGuidance({
     surface: "dove.status",

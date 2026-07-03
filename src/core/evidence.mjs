@@ -174,6 +174,10 @@ export function evaluateEvidence(root) {
   const auditIntegrityFlags = [];
 
   for (const claim of evidence.claims) {
+    const heldBridgeForClaim = (bridgeLog.items ?? []).find((item) => item.claimId === claim.id && (item.bridgeStatus === "held-for-review" || item.auditVerdict === "blocked"));
+    if (heldBridgeForClaim && claim.latestBridgeId !== heldBridgeForClaim.id) {
+      claimBridgeProblems.push({ claim, reason: "bridge-held-for-review", bridgeId: heldBridgeForClaim.id, auditIds: heldBridgeForClaim.auditIds ?? [] });
+    }
     if (!Array.isArray(claim.sourceIds) || claim.sourceIds.length === 0) {
       unsupportedClaims.push(claim);
       continue;

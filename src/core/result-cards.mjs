@@ -1,4 +1,5 @@
 import { doveText } from "./i18n.mjs";
+import { normalizeDoveExecutionReceipt } from "./schema.mjs";
 
 function normalizeString(value, fallback = null) {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
@@ -34,6 +35,35 @@ function normalizeMatchArray(value) {
     matchedBy: normalizePlainObject(item.matchedBy) ?? {},
     matchedArtifacts: normalizeStringArray(item.matchedArtifacts)
   }));
+}
+
+function compactExecutionReceipt(value) {
+  const receipt = normalizeDoveExecutionReceipt(value, null);
+  if (!receipt) {
+    return null;
+  }
+  return {
+    receiptId: receipt.receiptId ?? null,
+    runId: receipt.runId ?? null,
+    packetId: receipt.packetId ?? null,
+    surface: receipt.surface ?? null,
+    command: receipt.command ?? null,
+    actionType: receipt.actionType ?? null,
+    status: receipt.status ?? null,
+    outcome: receipt.outcome ?? null,
+    resultSummary: receipt.publicSafeSummary ?? receipt.resultSummary ?? null,
+    lifecycleTransition: receipt.lifecycleTransition ?? null,
+    evidenceCount: normalizeStringArray([
+      ...normalizeStringArray(receipt.evidenceLinks),
+      ...normalizeStringArray(receipt.evidencePaths),
+      ...normalizeStringArray(receipt.artifactRefs),
+      ...normalizeStringArray(receipt.artifactPaths),
+      ...normalizeStringArray(receipt.validationEvidencePaths),
+      ...normalizeStringArray(receipt.verificationEvidencePaths)
+    ]).length,
+    criteriaCoverage: receipt.criteriaCoverage ?? null,
+    nextAction: receipt.nextAction ?? null
+  };
 }
 
 function resultAction(action, responseLanguage = "zh") {
@@ -86,19 +116,27 @@ function requiresAction(status, boundary, stopReason) {
 }
 
 export function buildCommandResultCard(details = {}, responseLanguage = "zh") {
+  const receipt = normalizeDoveExecutionReceipt(details.executionReceipt, null);
+  const executionReceipt = compactExecutionReceipt(receipt);
   const evidence = [
     ...normalizeStringArray(details.evidenceLinks),
     ...normalizeStringArray(details.evidencePaths),
     ...normalizeStringArray(details.artifactRefs),
     ...normalizeStringArray(details.artifactPaths),
     ...normalizeStringArray(details.evidence),
-    ...normalizeStringArray(details.artifacts)
+    ...normalizeStringArray(details.artifacts),
+    ...normalizeStringArray(receipt?.evidenceLinks),
+    ...normalizeStringArray(receipt?.evidencePaths),
+    ...normalizeStringArray(receipt?.artifactRefs),
+    ...normalizeStringArray(receipt?.artifactPaths)
   ];
   const validation = [
     ...normalizeStringArray(details.validationEvidence),
     ...normalizeStringArray(details.validationEvidencePaths),
     ...normalizeStringArray(details.validation),
-    ...normalizeStringArray(details.validationOutputPaths)
+    ...normalizeStringArray(details.validationOutputPaths),
+    ...normalizeStringArray(receipt?.validationEvidencePaths),
+    ...normalizeStringArray(receipt?.verificationEvidencePaths)
   ];
   const status = normalizeString(details.status, null);
   const boundary = details.boundary ?? null;
@@ -120,6 +158,7 @@ export function buildCommandResultCard(details = {}, responseLanguage = "zh") {
     packetId: normalizeString(details.packetId, null),
     packetIds: normalizeStringArray(details.packetIds),
     runId: normalizeString(details.runId ?? details.id, null),
+    executionReceipt,
     title: normalizeString(details.title, null),
     status,
     outcome: normalizeString(details.outcome, null),

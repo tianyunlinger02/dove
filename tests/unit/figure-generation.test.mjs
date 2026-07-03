@@ -17,6 +17,7 @@ import {
   readJson,
   registerSource,
   resolveDoveGlobalStatusOutputDir,
+  runWithMutationContext,
   upsertClaims,
   upsertFigurePlan,
   upsertNote,
@@ -205,7 +206,7 @@ test("importFigureGeneration validates SVG, records caption provenance, and clea
     packetId,
     figureId: "workflow",
     runId: "workflow-run",
-    svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Evidence to claim</text></svg>",
+    svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Evidence node flows to claim node</text></svg>",
     caption: "Workflow Figure explains how source-backed evidence flows into the claim."
   });
   assert.equal(imported.finalSvgPath, ".dove/figures/workflow.final.svg");
@@ -256,8 +257,9 @@ const fs = require("node:fs");
 const input = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 process.stdout.write(JSON.stringify({
   finalSvgPath: ".dove/figures/runs/" + input.runId + "/provider.svg",
-  svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider output</text></svg>",
-  caption: "Provider generated a workflow figure."
+  svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider output claim node</text></svg>",
+  caption: "Provider generated a workflow figure for the claim node.",
+  semanticCoverage: { visualElements: ["evidence node", "claim node"] }
 }));
 `, "utf8");
   fs.chmodSync(providerScript, 0o755);
@@ -278,6 +280,50 @@ process.stdout.write(JSON.stringify({
 
   const imported = importFigureGeneration(root, { packetId, figureId: "workflow", runId: "provider-run" });
   assert.equal(imported.qaIssueCount, 0);
+});
+
+test("prepareFigureGeneration does not execute providers in patch-plan mode", () => {
+  const root = tempRoot();
+  const packetId = seedFigureWorkspace(root);
+  const providerScript = path.join(root, "patch-plan-provider.cjs");
+  fs.writeFileSync(providerScript, `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync("provider-spawned.txt", "spawned", "utf8");
+process.stdout.write(JSON.stringify({
+  finalSvgPath: ".dove/figures/runs/patch-plan-provider-run/provider.svg",
+  svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider output claim node</text></svg>",
+  caption: "Provider generated a workflow figure for the claim node."
+}));
+`, "utf8");
+  fs.chmodSync(providerScript, 0o755);
+
+  const planned = runWithMutationContext(root, { actionId: "figure-provider-patch-plan", mutationMode: "patch-plan" }, () => prepareFigureGeneration(root, {
+    packetId,
+    figureId: "workflow",
+    runId: "patch-plan-provider-run",
+    executeProvider: true,
+    env: {
+      DOVE_FIGURE_PROVIDER_ID: "patch-plan-command",
+      DOVE_FIGURE_PROVIDER_TYPE: "external-command",
+      DOVE_FIGURE_COMMAND: providerScript
+    }
+  }));
+
+  assert.equal(planned.providerExecution.status, "awaiting-provider-output");
+  assert.equal(planned.providerExecution.requiredMutationMode, "direct-process");
+  assert.equal(planned.providerExecution.directProcessRequired, true);
+  assert.equal(planned.mutationMode, "patch-plan");
+  assert.equal(planned.writesApplied, false);
+  assert.equal(planned.hostRollbackEligible, true);
+  assert.equal(fs.existsSync(path.join(root, "provider-spawned.txt")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "runs", "patch-plan-provider-run", "provider.svg")), false);
+
+  const generationsOperation = planned.mutationPlan.operations.find((operation) => operation.relativePath === ARTIFACT_PATHS.figureGenerations);
+  assert.ok(generationsOperation);
+  const generations = JSON.parse(generationsOperation.content);
+  const generation = generations.items.find((item) => item.id === "patch-plan-provider-run");
+  assert.equal(generation.status, "awaiting-provider-output");
+  assert.equal(generation.providerExecution.requiredMutationMode, "direct-process");
 });
 
 test("provider output manifests reject inline secret fields before persistence", () => {
@@ -406,10 +452,25 @@ test("prepareFigureGeneration invokes gpt-image2 through the OpenAI image provid
       assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "runs", "gpt-image2-run", "gpt-image2.png")), true);
 
       const imported = importFigureGeneration(root, { packetId, figureId: "workflow", runId: "gpt-image2-run", env });
-      assert.equal(imported.qaIssueCount, 0);
+      assert.ok(imported.qaIssueCount > 0);
       assert.equal(imported.finalSvgPath, ".dove/figures/workflow.final.svg");
+      let qa = readJson(root, ARTIFACT_PATHS.figureQa, { version: 1, items: [], issues: [] });
+      assert.ok(qa.issues.some((issue) => issue.code === "raster-semantic-review-required"));
       const finalSvg = fs.readFileSync(path.join(root, ".dove", "figures", "workflow.final.svg"), "utf8");
       assert.match(finalSvg, /<image href="runs\/gpt-image2-run\/gpt-image2\.png"/);
+
+      const reviewedImport = importFigureGeneration(root, {
+        packetId,
+        figureId: "workflow",
+        runId: "gpt-image2-run",
+        caption: "Workflow Figure shows source-backed evidence flowing from the evidence node into the claim node.",
+        semanticCoverage: { visualElements: ["evidence node", "claim node"] },
+        semanticReview: { status: "approved", evidencePaths: [ARTIFACT_PATHS.figureQa] },
+        env
+      });
+      assert.equal(reviewedImport.qaIssueCount, 0);
+      qa = readJson(root, ARTIFACT_PATHS.figureQa, { version: 1, items: [], issues: [] });
+      assert.equal(qa.items[0].semanticCoverage.rasterSemanticReviewPassed, true);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -432,12 +493,13 @@ test("prepareFigureGeneration reports missing OPENAI_API_KEY for gpt-image2", ()
     });
     assert.equal(prepared.providerReadiness.status, "missing-secret-env");
     assert.equal(prepared.providerReadiness.apiKeyEnv, "OPENAI_API_KEY");
-    assert.equal(prepared.providerExecution.status, "failed");
+    assert.equal(prepared.providerExecution.status, "missing-secret-env");
+    assert.equal(prepared.providerExecution.apiKeyEnv, "OPENAI_API_KEY");
     assert.match(prepared.providerExecution.error, /OPENAI_API_KEY/);
 
     const generations = readJson(root, ARTIFACT_PATHS.figureGenerations, { version: 1, items: [] });
     const generation = generations.items.find((item) => item.id === "gpt-image2-missing-key-run");
-    assert.equal(generation.status, "provider-failed");
+    assert.equal(generation.status, "missing-secret-env");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

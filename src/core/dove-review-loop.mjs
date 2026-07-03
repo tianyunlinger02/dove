@@ -106,7 +106,7 @@ export function runDoveReviewLoop(root, args = {}) {
     }
     if (review.status === "prepared-awaiting-audio") {
       status = "blocked";
-      stopReason = "awaiting-audio-review-output";
+      stopReason = "awaiting-review-output";
       break;
     }
     if (verdict === "blocked") {

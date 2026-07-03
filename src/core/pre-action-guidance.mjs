@@ -428,12 +428,14 @@ function scoreLesson(lesson = {}, context = {}) {
 }
 
 export function compactPreActionLesson(lesson = {}, matchInfo = {}) {
+  const nextTimeCount = normalizeStringArray(lesson.nextTime).length;
   return {
     id: lesson.id,
     title: lesson.title,
     matchedBecause: normalizeStringArray(matchInfo.matchedBecause),
     mustObey: lesson.mustObey ?? true,
-    nextTime: normalizeStringArray(lesson.nextTime).slice(0, 5),
+    nextTimeCount,
+    hasNextTimeGuidance: nextTimeCount > 0,
     role: lesson.actorRole ?? null,
     domain: lesson.domain ?? null,
     stage: lesson.stage ?? null,

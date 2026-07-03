@@ -6,6 +6,7 @@ import { assertNoInlineSecrets } from "./config.mjs";
 import { importFigureGeneration, prepareFigureGeneration } from "./figure-generation.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { isPatchPlanMode } from "./mutation-backend.mjs";
 import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { upsertFigurePlan, validateFigurePipeline } from "./artifacts.mjs";
 import {
@@ -146,7 +147,9 @@ function ensureSvgFile(root, relativePath, content) {
   if (!relativePath || fs.existsSync(resolvePath(root, relativePath))) {
     return false;
   }
-  ensureDir(path.dirname(resolvePath(root, relativePath)));
+  if (!isPatchPlanMode(root)) {
+    ensureDir(path.dirname(resolvePath(root, relativePath)));
+  }
   writeText(root, relativePath, content);
   return true;
 }
@@ -169,6 +172,9 @@ function hasImportableOutput(args, prepared) {
 }
 
 function statusFor(prepared, imported, validation) {
+  if (prepared.providerExecution?.status === "missing-secret-env") {
+    return "missing-secret-env";
+  }
   if (prepared.providerExecution?.status === "failed") {
     return "provider-failed";
   }
@@ -211,12 +217,28 @@ function figureBoundaryFor(status, prepared, validation, figureId, runId) {
     };
   }
   if (status === "prepared-awaiting-output") {
+    const providerRequiredActions = normalizeStringArray(prepared.providerExecution?.requiredActions);
+    const providerRequiredInputs = prepared.providerExecution?.requiredMutationMode ? [`mutationMode: ${prepared.providerExecution.requiredMutationMode}`] : [];
     return {
       id: `${figureId}-${runId}-awaiting-provider-output`,
       type: "awaiting-provider-output",
-      reason: `Figure ${figureId} has prepared materials but no final SVG or output manifest yet.`,
-      requiredInputs: ["finalSvgPath-or-outputManifestPath-or-svgContent"],
-      requiredActions: ["run-provider-or-import-output", "provide-final-svg-or-output-manifest"],
+      reason: prepared.providerExecution?.reason ?? `Figure ${figureId} has prepared materials but no final SVG or output manifest yet.`,
+      requiredInputs: normalizeStringArray([...providerRequiredInputs, "finalSvgPath-or-outputManifestPath-or-svgContent"]),
+      requiredActions: normalizeStringArray([...providerRequiredActions, "run-provider-or-import-output", "provide-final-svg-or-output-manifest"]),
+      artifactRefs,
+      nextAction: "project:dove.figure",
+      ownerRole: "builder",
+      nextRole: "builder"
+    };
+  }
+  if (status === "missing-secret-env") {
+    const apiKeyEnv = prepared.providerExecution?.apiKeyEnv ?? prepared.providerReadiness?.apiKeyEnv ?? "provider-api-key-env";
+    return {
+      id: `${figureId}-${runId}-missing-secret-env`,
+      type: "missing-secret-env",
+      reason: prepared.providerExecution?.error ?? `Figure provider for ${figureId} requires environment variable ${apiKeyEnv}.`,
+      requiredInputs: [apiKeyEnv],
+      requiredActions: ["set-provider-api-key-env", "retry-figure-provider", "import-manual-figure-output"],
       artifactRefs,
       nextAction: "project:dove.figure",
       ownerRole: "builder",
@@ -290,6 +312,8 @@ export function runFigureWorkflow(root, args = {}) {
       captionId: args.captionId,
       finalSvgPath: args.finalSvgPath,
       svgContent: args.svgContent,
+      semanticCoverage: args.semanticCoverage,
+      semanticReview: args.semanticReview,
       env: args.env
     });
   }

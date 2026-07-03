@@ -131,7 +131,6 @@ function publicRuntime(status) {
       runCount: Number(runtime.results?.runCount ?? 0),
       completedCount: Number(runtime.results?.completedCount ?? 0),
       errorCount: Number(runtime.results?.errorCount ?? 0),
-      lastRunId: publicString(runtime.results?.lastRunId, 160),
       lastStatus: publicString(runtime.results?.lastStatus, 120),
       lastOutcome: publicString(runtime.results?.lastOutcome, 160),
       overview: publicString(runtime.results?.overview)
@@ -139,7 +138,6 @@ function publicRuntime(status) {
     events: {
       eventCount: Number(runtime.events?.eventCount ?? 0),
       lastEventType: publicString(runtime.events?.lastEventType, 120),
-      lastRunId: publicString(runtime.events?.lastRunId, 160),
       overview: publicString(runtime.events?.overview)
     }
   };
@@ -209,7 +207,7 @@ function renderMarkdown(snapshot) {
   const recentCompleted = markdownList(snapshot.tasks.recentCompleted, (task) => `- ${task.title} \`${task.id}\`${task.completedAt ? ` — ${task.completedAt}` : ""}`);
   const actions = markdownList(snapshot.nextActions, (action) => `- ${action.title ?? action.command} ${action.command ? `\`${action.command}\`` : ""}${action.why ? ` — ${action.why}` : ""}`);
   const documents = markdownList(snapshot.documents.recentPublicSafe, (entry) => `- ${entry.title} \`${entry.documentId ?? entry.id}\` — ${entry.documentKind}/${entry.status}/${entry.evidenceScope}${entry.summary ? `；${entry.summary}` : ""}`);
-  return `# Dove 项目进展\n\n> 自动生成：${snapshot.generatedAt}\n> 来源：Dove durable state 的公开安全摘要；不包含 raw transcripts、私密推理、环境变量或完整 .dove dump。\n\n## 目标\n\n- 项目：${snapshot.project.title ?? "未设置"}\n- 目标：${snapshot.project.objective ?? "未设置"}\n- 当前焦点：${snapshot.project.currentFocus ?? "暂无"}\n- 下一步：${snapshot.project.nextAction ?? "project:dove.status"}\n\n## 进展概览\n\n- 活跃任务：${snapshot.progress.counts.active}\n- 阻塞任务：${snapshot.progress.counts.blocked}\n- 已完成任务：${snapshot.progress.counts.completed}\n- 已杀死任务：${snapshot.progress.counts.killed}\n- Review verdict：${snapshot.progress.review.verdict}\n- Runtime：${snapshot.progress.runtime.results.lastStatus ?? "never-run"}/${snapshot.progress.runtime.results.lastOutcome ?? "not-started"}\n- 公开安全文档/证据：${snapshot.documents.counts.publicSafe}/${snapshot.documents.counts.total}\n\n## 当前活跃任务\n\n${activeTasks}\n## 阻塞 / 边界\n\n${blockedTasks}\n## 最近完成\n\n${recentCompleted}\n## 建议下一步\n\n${actions}\n## 公开文档 / 证据摘要\n\n${documents}\n## 公开边界\n\n- 仅公开派生摘要，不公开 raw runtime entries、raw document ledger entries 或文档正文。\n- 不公开 Claude/host transcript、隐藏推理、环境变量、token、密码或完整 .dove 内容。\n- 若要外网访问，建议只暴露 \`.dove/public\`，并在 Cloudflare/反代层加访问控制。\n`;
+  return `# Dove 项目进展\n\n> 自动生成：${snapshot.generatedAt}\n> 来源：Dove durable state 的公开安全摘要；不包含 raw transcripts、私密推理、环境变量或完整 .dove dump。\n\n## 目标\n\n- 项目：${snapshot.project.title ?? "未设置"}\n- 目标：${snapshot.project.objective ?? "未设置"}\n- 当前焦点：${snapshot.project.currentFocus ?? "暂无"}\n- 下一步：${snapshot.project.nextAction ?? "project:dove.status"}\n\n## 进展概览\n\n- 活跃任务：${snapshot.progress.counts.active}\n- 阻塞任务：${snapshot.progress.counts.blocked}\n- 已完成任务：${snapshot.progress.counts.completed}\n- 已杀死任务：${snapshot.progress.counts.killed}\n- 已归档任务：${snapshot.progress.counts.archived}${snapshot.progress.counts.archivedHidden ? `（默认隐藏 ${snapshot.progress.counts.archivedHidden}）` : ""}\n- Review verdict：${snapshot.progress.review.verdict}\n- Runtime：${snapshot.progress.runtime.results.lastStatus ?? "never-run"}/${snapshot.progress.runtime.results.lastOutcome ?? "not-started"}\n- 公开安全文档/证据：${snapshot.documents.counts.publicSafe}/${snapshot.documents.counts.total}\n\n## 当前活跃任务\n\n${activeTasks}\n## 阻塞 / 边界\n\n${blockedTasks}\n## 最近完成\n\n${recentCompleted}\n## 建议下一步\n\n${actions}\n## 公开文档 / 证据摘要\n\n${documents}\n## 公开边界\n\n- 仅公开派生摘要，不公开 raw runtime entries、raw document ledger entries 或文档正文。\n- 不公开 Claude/host transcript、隐藏推理、环境变量、token、密码或完整 .dove 内容。\n- 若要外网访问，建议只暴露 \`.dove/public\`，并在 Cloudflare/反代层加访问控制。\n`;
 }
 
 function escapeHtml(value) {
@@ -277,6 +275,7 @@ function renderHtml(snapshot) {
       <div class="metric"><strong>${snapshot.progress.counts.blocked}</strong><span>阻塞</span></div>
       <div class="metric"><strong>${snapshot.progress.counts.completed}</strong><span>完成</span></div>
       <div class="metric"><strong>${snapshot.progress.counts.killed}</strong><span>杀死</span></div>
+      <div class="metric"><strong>${snapshot.progress.counts.archived}${snapshot.progress.counts.archivedHidden ? ` / ${snapshot.progress.counts.archivedHidden}` : ""}</strong><span>归档 / 默认隐藏</span></div>
       <div class="metric"><strong>${snapshot.documents.counts.publicSafe}/${snapshot.documents.counts.total}</strong><span>公开文档/证据</span></div>
     </div>
     <p class="muted">Review: ${escapeHtml(snapshot.progress.review.verdict)} · Runtime: ${escapeHtml(snapshot.progress.runtime.results.lastStatus ?? "never-run")}/${escapeHtml(snapshot.progress.runtime.results.lastOutcome ?? "not-started")}</p>
@@ -458,7 +457,10 @@ function renderGlobalMarkdown(snapshot) {
     const active = Number(counts.active ?? 0);
     const blocked = Number(counts.blocked ?? 0);
     const completed = Number(counts.completed ?? 0);
-    return `- [${project.title}](${project.links.html}) — ${project.status}；活跃 ${active} / 阻塞 ${blocked} / 完成 ${completed}${project.summary ? `；${project.summary}` : ""}`;
+    const archived = Number(counts.archived ?? 0);
+    const archivedHidden = Number(counts.archivedHidden ?? 0);
+    const archiveSummary = archived > 0 || archivedHidden > 0 ? ` / 归档 ${archived}${archivedHidden ? `（隐藏 ${archivedHidden}）` : ""}` : "";
+    return `- [${project.title}](${project.links.html}) — ${project.status}；活跃 ${active} / 阻塞 ${blocked} / 完成 ${completed}${archiveSummary}${project.summary ? `；${project.summary}` : ""}`;
   });
   return `# Dove 全局项目进展
 
@@ -489,7 +491,10 @@ function htmlProjectCards(projects) {
   }
   return projects.map((project) => {
     const counts = project.progress?.counts ?? {};
-    return `<li><strong><a href="${escapeHtml(project.links.html)}">${escapeHtml(project.title)}</a></strong> <code>${escapeHtml(project.status)}</code><br><span>活跃 ${escapeHtml(counts.active ?? 0)} · 阻塞 ${escapeHtml(counts.blocked ?? 0)} · 完成 ${escapeHtml(counts.completed ?? 0)}</span>${project.summary ? `<p>${escapeHtml(project.summary)}</p>` : ""}</li>`;
+    const archived = Number(counts.archived ?? 0);
+    const archivedHidden = Number(counts.archivedHidden ?? 0);
+    const archiveSummary = archived > 0 || archivedHidden > 0 ? ` · 归档 ${archived}${archivedHidden ? `（隐藏 ${archivedHidden}）` : ""}` : "";
+    return `<li><strong><a href="${escapeHtml(project.links.html)}">${escapeHtml(project.title)}</a></strong> <code>${escapeHtml(project.status)}</code><br><span>活跃 ${escapeHtml(counts.active ?? 0)} · 阻塞 ${escapeHtml(counts.blocked ?? 0)} · 完成 ${escapeHtml(counts.completed ?? 0)}${escapeHtml(archiveSummary)}</span>${project.summary ? `<p>${escapeHtml(project.summary)}</p>` : ""}</li>`;
   }).join("\n");
 }
 
@@ -748,6 +753,8 @@ export function buildDovePublicStatus(root, options = {}) {
         blocked: Number(tasks.counts?.blocked ?? 0),
         completed: Number(tasks.counts?.completed ?? 0),
         killed: Number(tasks.counts?.killed ?? 0),
+        archived: Number(tasks.counts?.archived ?? 0),
+        archivedHidden: Number(tasks.counts?.archivedHidden ?? 0),
         byStatus: tasks.counts?.byStatus ?? {}
       },
       review: publicReview(status.dashboard?.review),

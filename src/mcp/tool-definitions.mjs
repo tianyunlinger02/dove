@@ -70,8 +70,36 @@ const verifiedCriteriaItemProps = {
   evidencePaths: { type: "array", items: { type: "string" } }
 };
 
+const executionReceiptProps = {
+  receiptId: { type: "string" },
+  runId: { type: "string" },
+  packetId: { type: "string" },
+  command: { type: "string" },
+  surface: { type: "string" },
+  actionType: { type: "string" },
+  startedAt: { type: "string" },
+  completedAt: { type: "string" },
+  status: { type: "string" },
+  outcome: { type: "string" },
+  resultSummary: { type: "string" },
+  publicSafeSummary: { type: "string" },
+  nextAction: { type: "string" },
+  lifecycleTransition: { type: "object", properties: { previousStatus: { type: "string" }, nextStatus: { type: "string" } } },
+  artifactRefs: { type: "array", items: { type: "string" } },
+  artifactPaths: { type: "array", items: { type: "string" } },
+  evidenceLinks: { type: "array", items: { type: "string" } },
+  evidencePaths: { type: "array", items: { type: "string" } },
+  validationEvidencePaths: { type: "array", items: { type: "string" } },
+  verificationEvidencePaths: { type: "array", items: { type: "string" } },
+  verifiedCriteria: { type: "array", items: { type: "object", properties: verifiedCriteriaItemProps } },
+  criteriaCoverage: { type: "object" },
+  validationGateResults: { type: "array", items: { type: "object" } },
+  boundary: { type: "object" }
+};
+
 const executionVerificationProps = {
   executionContract: { type: "object", properties: executionContractProps },
+  executionReceipt: { type: "object", properties: executionReceiptProps },
   validationEvidencePaths: { type: "array", items: { type: "string" } },
   verificationEvidencePaths: { type: "array", items: { type: "string" } },
   verifiedCriteria: { type: "array", items: { type: "object", properties: verifiedCriteriaItemProps } }
@@ -149,7 +177,7 @@ const operatorTaskResultProps = {
 const mutationModeProperty = {
   type: "string",
   enum: ["patch-plan", "direct-process"],
-  description: "Canonical Dove mutation mode. patch-plan returns declarative file operations for host-tracked application; direct-process writes from the Dove process and is not verified host rollback-safe."
+  description: "Canonical Dove mutation mode. patch-plan returns declarative file operations for host-tracked application; direct-process writes from the Dove process and is not verified host rollback-safe. If omitted, host-facing MCP calls keep functional direct-process behavior and return hostRollbackIneligibleReason plus rollbackAdvice when writes are not host-rollback eligible."
 };
 
 export const MUTATING_TOOL_NAMES = new Set([
@@ -308,7 +336,7 @@ const baseToolDefinitions = [
       })
     }
   },
-  { name: "run_dove_operator", description: "Preview compact queue summary/cards with planner preActionGuidance and read-only lesson recall by default, optionally returning full queue details only when includeQueueDetails is true; after explicit confirmation run one foreground operator pass across safe internal steps, explicit host-supplied task results, and blocker planning; host-pass work without taskResults remains unchanged and is returned with material-specific host-pass requiredActions, host-tool-blocked task results record host-side safety classifier or tool-availability failures, pending blocker-investigation plan missions are created for blocked work, and a localized resultCard is returned; no scheduler or hidden runtime.", inputSchema: { type: "object", properties: { confirmed: { type: "boolean" }, confirm: { type: "boolean" }, includeQueueDetails: { type: "boolean" }, runId: { type: "string" }, taskResults: { type: "array", items: { type: "object", properties: operatorTaskResultProps } }, results: { type: "array", items: { type: "object", properties: operatorTaskResultProps } }, passResults: { type: "array", items: { type: "object", properties: operatorTaskResultProps } } } } },
+  { name: "run_dove_operator", description: "Preview compact queue summary/cards with planner preActionGuidance and read-only lesson recall by default, optionally returning full queue details only when includeQueueDetails is true; after explicit confirmation run one foreground operator pass across safe internal steps and explicit host-supplied task results. Host-pass work without taskResults remains unchanged and is returned with material-specific host-pass requiredActions, host-tool-blocked task results record host-side safety classifier or tool-availability failures, blocked work is proposal-only by default, and pending blocker-investigation plan missions are created only when blockerInvestigationMode is create or createBlockedInvestigations is true. Returns created/reused blocker counts and a localized resultCard; no scheduler or hidden runtime.", inputSchema: { type: "object", properties: { confirmed: { type: "boolean" }, confirm: { type: "boolean" }, includeQueueDetails: { type: "boolean" }, blockerInvestigationMode: { type: "string", enum: ["none", "propose", "create"] }, createBlockedInvestigations: { type: "boolean" }, runId: { type: "string" }, taskResults: { type: "array", items: { type: "object", properties: operatorTaskResultProps } }, results: { type: "array", items: { type: "object", properties: operatorTaskResultProps } }, passResults: { type: "array", items: { type: "object", properties: operatorTaskResultProps } } } } },
   { name: "kill_dove_task", description: "Internal guarded capability to kill a non-init Dove task; public operators normally choose killed through /dove:status status adjustment UX.", inputSchema: { type: "object", properties: { packetId: { type: "string" }, taskPacketId: { type: "string" }, taskId: { type: "string" }, id: { type: "string" }, target: { type: "string" }, taskName: { type: "string" }, title: { type: "string" }, index: { type: "number" }, reason: { type: "string" }, killReason: { type: "string" } } } },
   { name: "reset_dove_version", description: "Create a direction-change snapshot and clear active tasks except the level-0 init task. This is not a .dove rollback restore entrypoint; host/context rollback should use mutationMode: patch-plan applied through host-tracked file edits before relying on the host native checkpoint.", inputSchema: { type: "object", properties: { id: { type: "string" }, versionId: { type: "string" }, title: { type: "string" }, reason: { type: "string" }, summary: { type: "string" } } } },
   { name: "run_experience_workflow", description: "Plan, record, audit, and bridge experiment experience into claim state after resolving the durable task packet; every new experience requires a real experiment goal, title, idea, or experimentId, and missing objectives should become an explicit host-pass boundary instead of a placeholder plan. Returns Builder/experiment-planner preActionGuidance with read-only lesson recall, audit gate, and claim-bridge boundary.", inputSchema: { type: "object", properties: withTaskTarget({ id: { type: "string" }, experimentId: { type: "string" }, goal: { type: "string" }, idea: { type: "string" }, title: { type: "string" }, methodology: { type: "string" }, method: { type: "string" }, successMetric: { type: "string" }, metric: { type: "string" }, comparisonTargets: { type: "array", items: { type: "string" } }, baselines: { type: "array", items: { type: "string" } }, claimId: { type: "string" }, result: { type: "object" }, resultId: { type: "string" }, outcome: { type: "string" }, summary: { type: "string" }, resultSummary: { type: "string" }, evidenceLinks: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } } }) } },

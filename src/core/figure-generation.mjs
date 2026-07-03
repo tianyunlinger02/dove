@@ -7,6 +7,7 @@ import { ARTIFACT_PATHS } from "./schema.mjs";
 import { assertNoInlineSecrets, createGptImage2FigureProvider, loadFigureGenerationConfig, redactDoveConfig } from "./config.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { isPatchPlanMode } from "./mutation-backend.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { validateFigurePipeline } from "./artifacts.mjs";
@@ -33,6 +34,37 @@ function slugify(value) {
 function normalizeStringArray(value, fallback = []) {
   const source = Array.isArray(value) ? value : fallback;
   return Array.from(new Set(source.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim())));
+}
+
+function normalizePlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+function normalizeSemanticCoverage(value) {
+  const source = normalizePlainObject(value);
+  if (!source) {
+    return null;
+  }
+  return {
+    ...source,
+    visualElements: normalizeStringArray(source.visualElements),
+    coveredVisualElements: normalizeStringArray(source.coveredVisualElements),
+    evidencePaths: normalizeStringArray(source.evidencePaths),
+    artifactPaths: normalizeStringArray(source.artifactPaths)
+  };
+}
+
+function normalizeSemanticReview(value) {
+  const source = normalizePlainObject(value);
+  if (!source) {
+    return null;
+  }
+  return {
+    ...source,
+    status: typeof source.status === "string" ? source.status.trim() : source.status,
+    evidencePaths: normalizeStringArray(source.evidencePaths),
+    artifactPaths: normalizeStringArray(source.artifactPaths)
+  };
 }
 
 function figureGenerationGuidanceSummary(root, args = {}, target = {}, details = {}) {
@@ -695,6 +727,19 @@ function executeFigureProvider(root, provider, input, prompt, env, runId, timest
   throw new Error(`Unsupported figure provider type: ${provider.type}`);
 }
 
+function patchPlanProviderExecutionBoundary(provider) {
+  return {
+    status: "awaiting-provider-output",
+    reason: `Figure provider ${provider.id} requires direct-process execution because provider calls may spawn processes, call external APIs, or write binary outputs that patch-plan cannot safely represent.`,
+    providerId: provider.id,
+    providerType: provider.type,
+    requiredMutationMode: "direct-process",
+    requiredActions: ["retry-with-mutationMode-direct-process", "import-manual-figure-output"],
+    directProcessRequired: true,
+    hostRollbackEligible: false
+  };
+}
+
 function updateFigureIndexesForImport(root, figure, generation, caption, timestamp) {
   const figures = readFigures(root);
   figures.items = (figures.items ?? []).map((item) => item.id === figure.id ? {
@@ -825,6 +870,16 @@ export function prepareFigureGeneration(root, args = {}) {
   if (args.executeProvider === true) {
     if (!provider) {
       providerExecution = { status: "failed", error: "No figure generation provider is configured." };
+    } else if (isPatchPlanMode(root)) {
+      providerExecution = patchPlanProviderExecutionBoundary(provider);
+      generation = { ...generation, status: providerExecution.status, providerExecution, updatedAt: timestamp };
+    } else if (readiness.status === "missing-secret-env") {
+      providerExecution = {
+        status: "missing-secret-env",
+        error: readiness.summary,
+        apiKeyEnv: readiness.apiKeyEnv ?? provider.apiKeyEnv ?? null
+      };
+      generation = { ...generation, status: "missing-secret-env", providerError: providerExecution.error, updatedAt: timestamp };
     } else if (missingRequirementIds.length > 0 && args.allowMissingMaterials !== true) {
       providerExecution = { status: "skipped-missing-materials", missingRequirementIds };
     } else {
@@ -904,30 +959,37 @@ export function importFigureGeneration(root, args = {}) {
     caption: args.caption ?? args.captionDraft
   });
   assertManifestHasNoInlineSecrets(root, outputManifestPath, manifest, "figureGeneration.outputManifest");
+  const semanticCoverage = normalizeSemanticCoverage(args.semanticCoverage ?? manifest.semanticCoverage ?? existingGeneration.semanticCoverage);
+  const semanticReview = normalizeSemanticReview(args.semanticReview ?? manifest.semanticReview ?? existingGeneration.semanticReview);
+  if (semanticCoverage || semanticReview) {
+    writeJson(root, outputManifestPath, {
+      ...manifest,
+      ...(semanticCoverage ? { semanticCoverage } : {}),
+      ...(semanticReview ? { semanticReview } : {})
+    });
+  }
   const rawSvgContent = typeof args.svgContent === "string" ? args.svgContent : typeof manifest.svg === "string" ? manifest.svg : null;
   const sourceSvgPath = assertSafeFigurePath(args.finalSvgPath ?? manifest.finalSvgPath ?? manifest.svgPath ?? `${generationRunDir(runId)}/final.svg`, "finalSvgPath", [generationRunDir(runId), ".dove/figures/"]);
   const finalSvgPath = assertSafeFigurePath(figure.finalSvgPath, "figure.finalSvgPath");
-  const sourceFullPath = resolvePath(root, sourceSvgPath);
 
-  if (rawSvgContent && !fs.existsSync(sourceFullPath)) {
+  if (rawSvgContent) {
     writeText(root, sourceSvgPath, rawSvgContent.endsWith("\n") ? rawSvgContent : `${rawSvgContent}\n`);
   }
-  if (!fs.existsSync(sourceFullPath)) {
+  const svgContent = readText(root, sourceSvgPath, "");
+  if (!svgContent) {
     throw new Error(`Generated SVG output does not exist: ${sourceSvgPath}`);
   }
 
   const config = loadFigureGenerationConfig(root, args.env ?? process.env);
   const provider = existingGeneration.providerId ? config.providers.find((item) => item.id === existingGeneration.providerId) : null;
   const maxSvgBytes = provider?.maxSvgBytes ?? config.maxSvgBytes;
-  const svgContent = readText(root, sourceSvgPath, "");
   const safetyIssues = svgSafetyIssues(svgContent, maxSvgBytes);
   if (safetyIssues.length > 0) {
     throw new Error(`Generated SVG failed safety validation: ${safetyIssues.join(" ")}`);
   }
 
   if (sourceSvgPath !== finalSvgPath) {
-    ensureDir(path.dirname(resolvePath(root, finalSvgPath)));
-    fs.copyFileSync(sourceFullPath, resolvePath(root, finalSvgPath));
+    writeText(root, finalSvgPath, svgContent);
   }
 
   const timestamp = nowIso();
@@ -940,7 +1002,9 @@ export function importFigureGeneration(root, args = {}) {
     finalSha256: sha256(svgContent),
     importedAt: timestamp,
     updatedAt: timestamp,
-    safety: { status: "passed", checks: ["script", "event-handlers", "foreignObject", "remote-hrefs", "remote-url-resources"], maxSvgBytes }
+    safety: { status: "passed", checks: ["script", "event-handlers", "foreignObject", "remote-hrefs", "remote-url-resources"], maxSvgBytes },
+    ...(semanticCoverage ? { semanticCoverage } : {}),
+    ...(semanticReview ? { semanticReview } : {})
   };
   const caption = {
     id: slugify(args.captionId ?? `${figure.id}-${runId}-caption`),

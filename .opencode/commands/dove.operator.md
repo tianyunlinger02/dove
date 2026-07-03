@@ -1,10 +1,10 @@
 ---
-description: "Run one confirmed foreground operator pass over only safe internal steps, explicit host results, and blocker-investigation planning."
+description: "Run one confirmed foreground operator pass over only safe internal steps, explicit host results, and optional blocker-investigation planning."
 ---
 
 # dove.operator
 
-Run one confirmed foreground operator pass over only safe internal steps, explicit host results, and blocker-investigation planning.
+Run one confirmed foreground operator pass over only safe internal steps, explicit host results, and optional blocker-investigation planning.
 
 ## Daily use
 
@@ -52,7 +52,7 @@ Run one confirmed foreground operator pass over only safe internal steps, explic
 22. When no safe internal step, missing step material, or actual host pass result exists, do not persist an `awaiting-host-pass-result` boundary just to show activity; return the material-specific requiredActions and keep durable writes empty unless another real operator action occurred.
 23. If a host-side search/fetch/shell/MCP safety classifier or tool-availability failure prevents collecting the pass result, pass a blocked task result with boundaryType `host-tool-blocked` and requiredActions naming the failed host tool instead of leaving the mission in-progress.
 24. Preserve durable role handoff metadata while running queue passes; do not expose planner/builder/reviewer as separate slash commands.
-25. For blocked missions, create pending child plan missions that investigate the blocker reason and link back to the blocked mission, then return a localized `resultCard` summary of updated, awaiting, skipped host-pass, and created work.
+25. For blocked missions, default to proposal-only blocker-investigation guidance and do not write child missions; create pending child investigation plan missions only when the operator explicitly requests `blockerInvestigationMode: "create"` or `createBlockedInvestigations: true`, then report created and reused counts separately in the localized `resultCard` summary.
 26. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
 27. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
 28. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.

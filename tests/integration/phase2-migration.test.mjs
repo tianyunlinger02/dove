@@ -235,8 +235,8 @@ test("figure workflow prepares materials, imports generated output, and writes c
     packetId,
     figureId: "main-figure",
     runId: "main-figure-run",
-    svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Main figure</text></svg>",
-    caption: "Main Figure explains the method-to-result flow for the linked claim."
+    svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Pipeline boxes show the method-to-result flow beside a comparison chart for the linked claim.</text></svg>",
+    caption: "Main Figure explains the source-backed method-to-result flow with pipeline boxes and a comparison chart for the linked claim."
   });
 
   const briefs = JSON.parse(fs.readFileSync(path.join(root, ".dove", "figures", "briefs.json"), "utf8"));

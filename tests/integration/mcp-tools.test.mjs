@@ -531,7 +531,7 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(fullStatus.dashboard.dailyHome.presentation, "dove-status-home");
     assert.ok(status.projectSummary && typeof status.projectSummary === "object");
     assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
-    assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+    assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
     assert.deepEqual(status.statusAdjustmentContract.writes, []);
     assert.equal(status.taskGraph, undefined);
     assert.equal(status.paperLifecycle, undefined);
@@ -551,6 +551,130 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(pipeline.diagnostics.noGitInspection, true);
     assert.ok(pipeline.stages.some((stage) => stage.id === "return" && stage.commandId === "project:dove.status"));
   } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("MCP run_figure_workflow routes gpt-image2 missing key to a secret boundary", () => {
+  const root = createTempRoot("dove-mcp-figure-gpt-image2-");
+  const previousEnv = {
+    DOVE_CONFIG_PATH: process.env.DOVE_CONFIG_PATH,
+    DOVE_FIGURE_PROVIDER_ID: process.env.DOVE_FIGURE_PROVIDER_ID,
+    DOVE_FIGURE_PROVIDER: process.env.DOVE_FIGURE_PROVIDER,
+    DOVE_FIGURE_PROVIDER_TYPE: process.env.DOVE_FIGURE_PROVIDER_TYPE,
+    DOVE_FIGURE_ENDPOINT: process.env.DOVE_FIGURE_ENDPOINT,
+    DOVE_FIGURE_COMMAND: process.env.DOVE_FIGURE_COMMAND,
+    DOVE_FIGURE_MODEL: process.env.DOVE_FIGURE_MODEL,
+    DOVE_FIGURE_API_KEY_ENV: process.env.DOVE_FIGURE_API_KEY_ENV,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY
+  };
+  try {
+    seedTaskPacket(root, "mcp-figure-packet");
+    process.env.DOVE_CONFIG_PATH = path.join(root, "missing-config.json");
+    for (const key of ["DOVE_FIGURE_PROVIDER_ID", "DOVE_FIGURE_PROVIDER", "DOVE_FIGURE_PROVIDER_TYPE", "DOVE_FIGURE_ENDPOINT", "DOVE_FIGURE_COMMAND", "DOVE_FIGURE_MODEL", "DOVE_FIGURE_API_KEY_ENV", "OPENAI_API_KEY"]) {
+      delete process.env[key];
+    }
+
+    const result = extractToolJson(dispatchTool(root, "run_figure_workflow", {
+      packetId: "mcp-figure-packet",
+      figureId: "mcp-gpt-image2",
+      runId: "mcp-gpt-image2-missing-key-run",
+      intent: "Draw a gpt-image2 figure through the MCP tool path.",
+      requiredVisualElements: ["mcp evidence node", "mcp claim node"],
+      providerId: "gpt-image2",
+      executeProvider: true
+    }));
+
+    assert.equal(result.status, "missing-secret-env");
+    assert.equal(result.providerReadiness.status, "missing-secret-env");
+    assert.equal(result.providerExecution.status, "missing-secret-env");
+    assert.equal(result.providerExecution.apiKeyEnv, "OPENAI_API_KEY");
+    assert.equal(result.boundaryType, "missing-secret-env");
+    assert.equal(result.boundary.type, "missing-secret-env");
+    assert.deepEqual(result.boundary.requiredInputs, ["OPENAI_API_KEY"]);
+    assert.ok(result.requiredActions.includes("set-provider-api-key-env"));
+  } finally {
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("MCP run_figure_workflow keeps provider execution as a direct-process boundary in patch-plan mode", () => {
+  const root = createTempRoot("dove-mcp-figure-patch-plan-");
+  const providerScript = path.join(root, "mcp-patch-plan-provider.cjs");
+  const previousEnv = {
+    DOVE_CONFIG_PATH: process.env.DOVE_CONFIG_PATH,
+    DOVE_FIGURE_PROVIDER_ID: process.env.DOVE_FIGURE_PROVIDER_ID,
+    DOVE_FIGURE_PROVIDER: process.env.DOVE_FIGURE_PROVIDER,
+    DOVE_FIGURE_PROVIDER_TYPE: process.env.DOVE_FIGURE_PROVIDER_TYPE,
+    DOVE_FIGURE_ENDPOINT: process.env.DOVE_FIGURE_ENDPOINT,
+    DOVE_FIGURE_COMMAND: process.env.DOVE_FIGURE_COMMAND,
+    DOVE_FIGURE_MODEL: process.env.DOVE_FIGURE_MODEL,
+    DOVE_FIGURE_API_KEY_ENV: process.env.DOVE_FIGURE_API_KEY_ENV,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY
+  };
+  try {
+    seedTaskPacket(root, "mcp-figure-patch-plan-packet");
+    fs.writeFileSync(providerScript, `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync("mcp-provider-spawned.txt", "spawned", "utf8");
+process.stdout.write(JSON.stringify({
+  finalSvgPath: ".dove/figures/runs/mcp-patch-plan-run/provider.svg",
+  svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>MCP provider output claim node</text></svg>",
+  caption: "MCP provider generated the workflow figure for the claim node."
+}));
+`, "utf8");
+    fs.chmodSync(providerScript, 0o755);
+    process.env.DOVE_CONFIG_PATH = path.join(root, "missing-config.json");
+    process.env.DOVE_FIGURE_PROVIDER_ID = "mcp-patch-plan-command";
+    process.env.DOVE_FIGURE_PROVIDER_TYPE = "external-command";
+    process.env.DOVE_FIGURE_COMMAND = providerScript;
+    for (const key of ["DOVE_FIGURE_PROVIDER", "DOVE_FIGURE_ENDPOINT", "DOVE_FIGURE_MODEL", "DOVE_FIGURE_API_KEY_ENV", "OPENAI_API_KEY"]) {
+      delete process.env[key];
+    }
+
+    const result = extractToolJson(dispatchTool(root, "run_figure_workflow", {
+      mutationMode: "patch-plan",
+      packetId: "mcp-figure-patch-plan-packet",
+      figureId: "mcp-patch-plan",
+      runId: "mcp-patch-plan-run",
+      intent: "Draw a provider-backed figure through MCP patch-plan mode.",
+      requiredVisualElements: ["provider output", "claim node"],
+      executeProvider: true
+    }));
+
+    assert.equal(result.mutationMode, "patch-plan");
+    assert.equal(result.mutationModeSource, "explicit");
+    assert.equal(result.writesApplied, false);
+    assert.equal(result.hostRollbackEligible, true);
+    assert.equal(result.status, "prepared-awaiting-output");
+    assert.equal(result.providerExecution.status, "awaiting-provider-output");
+    assert.equal(result.providerExecution.requiredMutationMode, "direct-process");
+    assert.equal(result.providerExecution.directProcessRequired, true);
+    assert.equal(result.boundaryType, "awaiting-provider-output");
+    assert.ok(result.boundary.requiredInputs.includes("mutationMode: direct-process"));
+    assert.ok(result.requiredActions.includes("retry-with-mutationMode-direct-process"));
+    assert.equal(result.imported, null);
+    assert.equal(result.finalSvgPath, null);
+    assert.equal(fs.existsSync(path.join(root, "mcp-provider-spawned.txt")), false);
+    assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "mcp-patch-plan.final.svg")), false);
+    assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "runs", "mcp-patch-plan-run", "provider.svg")), false);
+    assert.ok(result.mutationPlan.operations.some((operation) => operation.relativePath === ".dove/figures/index.json"));
+    assert.ok(result.mutationPlan.operations.some((operation) => operation.relativePath === ".dove/figures/generations.json"));
+  } finally {
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
@@ -601,8 +725,11 @@ test("MCP patch-plan mutations return host-applied operations without writing di
       goal: "Return file operations for host-tracked application."
     }));
     assert.equal(planned.mutationMode, "patch-plan");
+    assert.equal(planned.mutationModeSource, "explicit");
     assert.equal(planned.writesApplied, false);
     assert.equal(planned.hostRollbackEligible, true);
+    assert.equal(planned.hostRollbackIneligibleReason, null);
+    assert.equal(planned.recommendedMutationMode, null);
     assert.equal(planned.hostTrackedFileEditsRequired, true);
     assert.equal(planned.directProcessWritesAreRollbackSafe, false);
     assert.equal(planned.externalWriteCaptureVerified, false);
@@ -621,6 +748,34 @@ test("MCP patch-plan mutations return host-applied operations without writing di
   }
 });
 
+test("MCP default direct-process mutations report rollback limits", () => {
+  const root = createTempRoot("dove-mcp-default-direct-");
+  try {
+    const result = extractToolJson(dispatchTool(root, "init_dove_goal", {
+      id: "default-direct-init",
+      title: "Default direct init",
+      goal: "Write normally while reporting host rollback limits."
+    }));
+    assert.equal(result.mutationMode, "direct-process");
+    assert.equal(result.mutationModeSource, "default");
+    assert.equal(result.writesApplied, true);
+    assert.equal(result.hostRollbackEligible, false);
+    assert.match(result.hostRollbackIneligibleReason, /direct-process writes are performed by the Dove process/);
+    assert.equal(result.recommendedMutationMode, "patch-plan");
+    assert.match(result.rollbackAdvice, /mutationMode: patch-plan/);
+    assert.equal(fs.existsSync(path.join(root, ".dove", "state.json")), true);
+
+    const status = extractToolJson(dispatchTool(root, "query_dove_status", {}));
+    assert.equal(status.durableContextNotice.mutationRollbackModel.lastMutationMode, "direct-process");
+    assert.match(status.durableContextNotice.mutationRollbackModel.hostRollbackIneligibleReason, /direct-process writes/);
+    assert.equal(status.durableContextNotice.mutationRollbackModel.recommendedMutationMode, "patch-plan");
+    assert.match(status.durableContextNotice.recoveryActions[2].rollbackAdvice, /mutationMode: patch-plan/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
 test("publish_dove_status writes sanitized public artifacts", () => {
   const root = createTempRoot("dove-mcp-public-status-");
   try {
@@ -635,6 +790,19 @@ test("publish_dove_status writes sanitized public artifacts", () => {
       title: "Public status task api_key=supersecret"
     }));
     extractToolJson(dispatchTool(root, "create_dove_task", proposal.confirmArgs));
+    extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "public-status-archived",
+      goal: "Archived public status noise should not leak details.",
+      title: "Archived public status secret api_key=archivedsecret",
+      status: "ready",
+      confirmed: true,
+      checklist: false
+    }));
+    const archived = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
+      confirmed: true,
+      adjustments: [{ packetId: "public-status-archived", status: "archived", reason: "Retired public dogfood noise." }]
+    }));
+    assert.equal(archived.status, "applied");
 
     const published = extractToolJson(dispatchTool(root, "publish_dove_status", { generatedAt: "2026-06-16T00:00:00.000Z" }));
     assert.equal(published.mode, "dove-public-status-publish");
@@ -648,7 +816,10 @@ test("publish_dove_status writes sanitized public artifacts", () => {
     assert.equal(published.snapshot.documents.counts.total, 0);
     assert.equal(published.noExternalProcess, true);
     assert.equal(published.cloudflareTunnelStarted, false);
+    assert.equal(published.snapshot.progress.counts.archived, 0);
+    assert.equal(published.snapshot.progress.counts.archivedHidden, 1);
     assert.equal(published.snapshot.tasks.active.some((task) => task.id === "public-status-task"), true);
+    assert.equal(published.snapshot.tasks.active.some((task) => task.id === "public-status-archived"), false);
 
     const jsonPath = path.join(root, ".dove", "public", "status.json");
     const mdPath = path.join(root, ".dove", "public", "status.md");
@@ -658,7 +829,12 @@ test("publish_dove_status writes sanitized public artifacts", () => {
     assert.equal(fs.existsSync(htmlPath), true);
     const publicText = `${fs.readFileSync(jsonPath, "utf8")}\n${fs.readFileSync(mdPath, "utf8")}\n${fs.readFileSync(htmlPath, "utf8")}`;
     assert.equal(publicText.includes("supersecret"), false);
+    assert.equal(publicText.includes("archivedsecret"), false);
+    assert.equal(publicText.includes("public-status-archived"), false);
+    assert.equal(publicText.includes("Archived public status secret"), false);
+    assert.equal(publicText.includes("Retired public dogfood noise"), false);
     assert.match(publicText, /<redacted>/);
+    assert.match(publicText, /默认隐藏 1/);
     assert.match(publicText, /不包含 raw transcripts/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -1224,7 +1400,17 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assertPreActionGuidanceSummary(pass.preActionGuidanceSummary, { surface: "dove.mission" });
     assertPreActionGuidanceSummary(pass.resultCard.preActionGuidanceSummary, { surface: "dove.mission" });
     assert.ok(pass.resultCard.evidence.includes(".dove/task-packets/index.json"));
+    assert.equal(pass.executionReceipt.packetId, "mission-confirm-task");
+    assert.equal(pass.result.executionReceipt.packetId, "mission-confirm-task");
+    assert.equal(pass.resultCard.executionReceipt.packetId, "mission-confirm-task");
+    assert.equal(pass.resultCard.executionReceipt.criteriaCoverage.complete, true);
+    assert.ok(pass.resultCard.executionReceipt.evidenceCount >= 2);
     assert.equal(pass.resultCard.proposalOnly, false);
+
+    const statusAfterPass = extractToolJson(dispatchTool(root, "query_dove_status", {}));
+    assert.equal(statusAfterPass.statusHome.recentExecutionReceipts.count, 1);
+    assert.equal(statusAfterPass.statusHome.recentExecutionReceipts.items[0].packetId, "mission-confirm-task");
+    assert.equal(statusAfterPass.statusHome.recentExecutionReceipts.items[0].criteriaCoverage.complete, true);
 
     const materializedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     assert.deepEqual(materializedIndex.items.map((item) => item.id), ["mission-confirm-init", "mission-confirm-task"]);
@@ -1450,7 +1636,7 @@ test("completed plan mission pass materializes pending executable missions", () 
   }
 });
 
-test("status adjustment contract applies confirmed non-completed and non-killed mission status choices", () => {
+test("status adjustment contract applies confirmed non-terminal mission status choices and archives cleanup", () => {
   const root = createTempRoot("dove-mcp-status-adjust-");
   try {
     const init = extractToolJson(dispatchTool(root, "init_dove_goal", {
@@ -1487,7 +1673,7 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.equal(status.current.nextCommand, status.statusHome.nextSteps.primary.command);
     assert.equal(fullStatus.dashboard.nextAction, fullStatus.dailyHome.nextActions[0].command);
     assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
-    assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+    assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
     assert.equal(status.statusAdjustmentContract.statusAdjustmentItemsIncluded, false);
     assert.deepEqual(status.statusAdjustmentContract.items, []);
     assert.deepEqual(status.statusAdjustmentContract.adjustmentCards, []);
@@ -1505,7 +1691,7 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.equal(adjustmentStatus.statusAdjustmentContract.items.some((candidate) => ["completed", "killed"].includes(candidate.currentStatus)), false);
     const item = adjustmentStatus.statusAdjustmentContract.items.find((candidate) => candidate.packetId === "status-ready-task");
     assert.ok(item);
-    assert.deepEqual(item.choices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+    assert.deepEqual(item.choices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
 
     const preview = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
       adjustments: [{ packetId: "status-ready-task", status: "blocked", reason: "Needs investigation." }]
@@ -1534,6 +1720,45 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.ok(blockedAdjustedItem);
     assert.equal(blockedAdjustedItem.currentStatus, "blocked");
 
+    const archivedApplied = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
+      confirmed: true,
+      runId: "status-archive-run",
+      adjustments: [{ packetId: "status-progress-task", status: "archived", reason: "Retired status adjustment dogfood." }]
+    }));
+    assert.equal(archivedApplied.status, "applied");
+    assert.deepEqual(archivedApplied.rejected, []);
+    assert.equal(archivedApplied.applied[0].fromStatus, "in-progress");
+    assert.equal(archivedApplied.applied[0].toStatus, "archived");
+    assert.equal(archivedApplied.executionReceipts[0].packetId, "status-progress-task");
+    assert.equal(archivedApplied.executionReceipts[0].actionType, "cleanup");
+    assert.equal(archivedApplied.executionReceipts[0].lifecycleTransition.previousStatus, "in-progress");
+    assert.equal(archivedApplied.executionReceipts[0].lifecycleTransition.nextStatus, "archived");
+    assert.equal(archivedApplied.resultCard.executionReceipt.actionType, "cleanup");
+
+    const archivedPacket = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "status-progress-task.json"), "utf8"));
+    assert.equal(archivedPacket.status, "archived");
+    assert.equal(archivedPacket.lifecycleStatus, "archived");
+    assert.equal(archivedPacket.archiveReason, "Retired status adjustment dogfood.");
+    assert.ok(archivedPacket.archivedAt);
+    const archivedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.equal(archivedIndex.taskModel.activeTaskIds.includes("status-progress-task"), false);
+    assert.equal(archivedIndex.items.find((candidate) => candidate.id === "status-progress-task").status, "archived");
+    const archiveRuntimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
+    const archiveRun = archiveRuntimeResults.entries.find((entry) => entry.id === "status-archive-run");
+    assert.ok(archiveRun);
+    assert.equal(archiveRun.iterations[0].packetId, "status-progress-task");
+    assert.equal(archiveRun.iterations[0].executionReceipt.actionType, "cleanup");
+
+    const postArchiveDefault = extractToolJson(dispatchTool(root, "query_dove_status", { requestStatusAdjustment: true }));
+    assert.equal(postArchiveDefault.statusHome.projectState.missionCounts.archived, 0);
+    assert.equal(postArchiveDefault.statusHome.projectState.missionCounts.archivedHidden, 1);
+    assert.equal(postArchiveDefault.statusAdjustmentContract.items.some((candidate) => candidate.packetId === "status-progress-task"), false);
+    const postArchiveIncluded = extractToolJson(dispatchTool(root, "query_dove_status", { detail: "full", includeArchived: true, requestStatusAdjustment: true }));
+    assert.equal(postArchiveIncluded.dashboard.tasks.counts.archived, 1);
+    assert.equal(postArchiveIncluded.dashboard.tasks.counts.archivedHidden, 0);
+    assert.equal(postArchiveIncluded.dashboard.tasks.tree[0].children.some((task) => task.id === "status-progress-task" && task.status === "archived"), true);
+    assert.equal(postArchiveIncluded.statusAdjustmentContract.items.some((candidate) => candidate.packetId === "status-progress-task"), false);
+
     const rejected = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
       confirmed: true,
       adjustments: [{ packetId: init.init.id, status: "killed" }]
@@ -1549,9 +1774,85 @@ test("status adjustment contract applies confirmed non-completed and non-killed 
     assert.deepEqual(noOp.applied, []);
     assert.deepEqual(noOp.skipped, []);
     assert.deepEqual(noOp.rejected, []);
-    assert.deepEqual(noOp.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+    assert.deepEqual(noOp.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
     assert.equal(noOp.resultCard.presentation, "compact-result-summary-card");
     assert.equal(noOp.resultCard.status, "no-op");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("apply_dove_status_adjustments records execution receipts for verified completion", () => {
+  const root = createTempRoot("dove-mcp-status-receipt-");
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "status-receipt-init",
+      goal: "Validate status adjustment execution receipts."
+    });
+    extractToolJson(dispatchTool(root, "create_dove_task", {
+      id: "status-receipt-task",
+      title: "Status receipt task",
+      goal: "Complete through status adjustment only when verification evidence is attached.",
+      status: "ready",
+      executionContract: mcpExecutionContract(),
+      confirmed: true,
+      checklist: false
+    }));
+
+    const rejected = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
+      confirmed: true,
+      runId: "status-receipt-run-rejected",
+      adjustments: [{
+        packetId: "status-receipt-task",
+        status: "completed",
+        reason: "Summary without verification evidence."
+      }]
+    }));
+    assert.equal(rejected.status, "rejected");
+    assert.equal(rejected.rejected[0].completionBlock.status, "needs-completion-evidence");
+
+    const applied = extractToolJson(dispatchTool(root, "apply_dove_status_adjustments", {
+      confirmed: true,
+      runId: "status-receipt-run",
+      adjustments: [{
+        packetId: "status-receipt-task",
+        status: "completed",
+        reason: "Verified status adjustment completion.",
+        artifactRefs: [".dove/drafts/status-receipt.md"],
+        verificationEvidencePaths: [MCP_VERIFICATION_PATH],
+        verifiedCriteria: mcpVerifiedCriteria(),
+        executionReceipt: {
+          receiptId: "status-adjustment-explicit-receipt",
+          actionType: "verify",
+          artifactRefs: [".dove/drafts/status-receipt.md"],
+          verificationEvidencePaths: [MCP_VERIFICATION_PATH],
+          verifiedCriteria: mcpVerifiedCriteria(),
+          criteriaCoverage: {
+            complete: true,
+            required: [MCP_EXECUTION_CRITERION],
+            missing: [],
+            verified: mcpVerifiedCriteria()
+          }
+        }
+      }]
+    }));
+    assert.equal(applied.status, "applied");
+    assert.equal(applied.applied[0].toStatus, "completed");
+    assert.equal(applied.executionReceipts[0].receiptId, "status-adjustment-explicit-receipt");
+    assert.equal(applied.executionReceipts[0].packetId, "status-receipt-task");
+    assert.equal(applied.resultCard.executionReceipt.receiptId, "status-adjustment-explicit-receipt");
+    assert.equal(applied.resultCard.executionReceipt.criteriaCoverage.complete, true);
+
+    const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
+    const persisted = runtimeResults.entries.find((item) => item.id === "status-receipt-run");
+    assert.ok(persisted, "status adjustment runtime result should be persisted");
+    assert.equal(persisted.iterations[0].packetId, "status-receipt-task");
+    assert.equal(persisted.iterations[0].executionReceipt.receiptId, "status-adjustment-explicit-receipt");
+
+    const status = extractToolJson(dispatchTool(root, "query_dove_status", {}));
+    assert.equal(status.statusHome.recentExecutionReceipts.items[0].packetId, "status-receipt-task");
+    assert.equal(status.statusHome.recentExecutionReceipts.items[0].receiptId, "status-adjustment-explicit-receipt");
+    assert.equal(status.statusHome.recentExecutionReceipts.items[0].criteriaCoverage.complete, true);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1612,7 +1913,7 @@ test("run_dove_operator leaves host-pass-only queues unchanged without taskResul
   }
 });
 
-test("run_dove_operator previews queues and creates blocker investigation missions", () => {
+test("run_dove_operator previews blocker investigations and only creates them when explicit", () => {
   const root = createTempRoot("dove-mcp-operator-");
   try {
     dispatchTool(root, "init_dove_goal", {
@@ -1650,6 +1951,10 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.deepEqual(preview.queueSummary.runnableTaskIds.sort(), ["operator-auto-ready", ...hostPassRequiredIds].sort());
     assert.deepEqual(preview.queueSummary.blockedTaskIds.sort(), ["operator-blocked", "operator-unresolved"].sort());
     assert.deepEqual(preview.queueSummary.pendingTaskIds, ["operator-pending"]);
+    assert.equal(preview.blockerInvestigationMode, "propose");
+    assert.equal(preview.blockerPlanConversion.proposalOnly, true);
+    assert.deepEqual(preview.blockerPlanConversion.proposedBlockedTaskIds.sort(), ["operator-blocked", "operator-unresolved"].sort());
+    assert.equal(preview.blockerPlanConversion.createdCount, 0);
     assert.equal(preview.autoRunnableTasks, undefined);
     assert.equal(preview.hostPassRequiredTasks, undefined);
     assert.equal(preview.queueCards, undefined);
@@ -1715,8 +2020,14 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     ]) {
       assert.ok(run.resultCard.nextActions[0].requiredActions.includes(requiredAction), `${requiredAction} should be surfaced`);
     }
-    assert.equal(run.blockerPlanConversion.missionCount, 2);
-    assert.equal(run.blockerPlanConversion.createdMissionIds.length, 2);
+    assert.equal(run.blockerInvestigationMode, "propose");
+    assert.equal(run.blockerPlanConversion.mode, "propose");
+    assert.equal(run.blockerPlanConversion.proposalOnly, true);
+    assert.deepEqual(run.blockerPlanConversion.proposedBlockedTaskIds.sort(), ["operator-blocked", "operator-unresolved"].sort());
+    assert.equal(run.blockerPlanConversion.missionCount, 0);
+    assert.equal(run.blockerPlanConversion.createdCount, 0);
+    assert.equal(run.blockerPlanConversion.reusedCount, 0);
+    assert.deepEqual(run.blockerPlanConversion.createdMissionIds, []);
     assert.deepEqual(run.blockerPlanConversion.reusedMissionIds, []);
     assert.equal(run.blockerPlanConversion.taskIndexPath, ".dove/task-packets/index.json");
 
@@ -1727,16 +2038,7 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     assert.equal(persisted.status, "awaiting-host-results");
     assert.equal(persisted.resultCard, undefined);
     const taskIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
-    const createdBlockerPlans = run.blockerPlanConversion.createdMissionIds.map((id) => taskIndex.items.find((item) => item.id === id));
-    assert.equal(createdBlockerPlans.every(Boolean), true);
-    const blockerPlan = createdBlockerPlans.find((mission) => mission.parentId === "operator-blocked");
-    assert.equal(blockerPlan.status, "pending");
-    assert.equal(blockerPlan.stage, "plan");
-    assert.equal(blockerPlan.level, 4);
-    const unresolvedPlan = createdBlockerPlans.find((mission) => mission.parentId === "operator-unresolved");
-    assert.equal(unresolvedPlan.status, "pending");
-    assert.equal(unresolvedPlan.stage, "plan");
-    assert.equal(unresolvedPlan.level, 4);
+    assert.equal(taskIndex.items.some((item) => item.derivedFrom === "blocked-mission-investigation"), false);
     const missingTask = taskIndex.items.find((item) => item.id === "operator-host-missing");
     assert.equal(missingTask.status, "ready");
     assert.equal(missingTask.boundary, null);
@@ -1756,6 +2058,43 @@ test("run_dove_operator previews queues and creates blocker investigation missio
     const runtimeEvents = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "events.json"), "utf8"));
     assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.boundary.opened" && entry.packetId === "operator-host-missing"), false);
     assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.lifecycle.transitioned" && entry.packetId === "operator-host-progress" && entry.toStatus === "completed"), true);
+
+    const createRun = extractToolJson(dispatchTool(root, "run_dove_operator", {
+      confirmed: true,
+      runId: "operator-create-blockers-run",
+      blockerInvestigationMode: "create"
+    }));
+    assert.equal(createRun.blockerInvestigationMode, "create");
+    assert.equal(createRun.blockerPlanConversion.mode, "create");
+    assert.equal(createRun.blockerPlanConversion.proposalOnly, false);
+    assert.equal(createRun.blockerPlanConversion.createdCount, 2);
+    assert.equal(createRun.blockerPlanConversion.reusedCount, 0);
+    assert.equal(createRun.blockerPlanConversion.missionCount, 2);
+    assert.equal(createRun.blockerPlanConversion.createdMissionIds.length, 2);
+    assert.deepEqual(createRun.blockerPlanConversion.reusedMissionIds, []);
+    const createTaskIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    const createdBlockerPlans = createRun.blockerPlanConversion.createdMissionIds.map((id) => createTaskIndex.items.find((item) => item.id === id));
+    assert.equal(createdBlockerPlans.every(Boolean), true);
+    const blockerPlan = createdBlockerPlans.find((mission) => mission.parentId === "operator-blocked");
+    assert.equal(blockerPlan.status, "pending");
+    assert.equal(blockerPlan.stage, "plan");
+    assert.equal(blockerPlan.level, 4);
+    const unresolvedPlan = createdBlockerPlans.find((mission) => mission.parentId === "operator-unresolved");
+    assert.equal(unresolvedPlan.status, "pending");
+    assert.equal(unresolvedPlan.stage, "plan");
+    assert.equal(unresolvedPlan.level, 4);
+
+    const reuseRun = extractToolJson(dispatchTool(root, "run_dove_operator", {
+      confirmed: true,
+      runId: "operator-reuse-blockers-run",
+      createBlockedInvestigations: true
+    }));
+    assert.equal(reuseRun.blockerInvestigationMode, "create");
+    assert.equal(reuseRun.blockerPlanConversion.createdCount, 0);
+    assert.equal(reuseRun.blockerPlanConversion.reusedCount, 2);
+    assert.equal(reuseRun.blockerPlanConversion.missionCount, 0);
+    assert.deepEqual(reuseRun.blockerPlanConversion.createdMissionIds, []);
+    assert.equal(reuseRun.blockerPlanConversion.reusedMissionIds.length, 2);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -2452,6 +2791,20 @@ test("run_dove_auto records bounded foreground iterations", () => {
           outputArtifacts: [".dove/notes/index.json"],
           verificationEvidencePaths: [MCP_VERIFICATION_PATH],
           verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(foregroundTask.createdTask)),
+          executionReceipt: {
+            receiptId: "auto-explicit-step-receipt",
+            packetId: "auto-foreground-task",
+            actionType: "build",
+            artifactRefs: [".dove/notes/index.json"],
+            verificationEvidencePaths: [MCP_VERIFICATION_PATH],
+            verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(foregroundTask.createdTask)),
+            criteriaCoverage: {
+              complete: true,
+              required: [mcpTaskCriterion(foregroundTask.createdTask)],
+              missing: [],
+              verified: mcpVerifiedCriteria(mcpTaskCriterion(foregroundTask.createdTask))
+            }
+          },
           args: {
             noteId: "auto-completion-note",
             title: "Auto completion note",
@@ -2468,10 +2821,14 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(autoRun.result.maxIterations, 3);
     assert.equal(autoRun.result.iterationCount, 2);
     assert.deepEqual(autoRun.result.iterations.map((iteration) => iteration.command), ["dove.note", "dove.note"]);
+    assert.equal(autoRun.result.iterations[1].executionReceipt.receiptId, "auto-explicit-step-receipt");
+    assert.equal(autoRun.result.iterations[1].executionReceipt.criteriaCoverage.complete, true);
     assert.equal(autoRun.result.stopReason, "completion-confirmed-by-auto-step");
     assert.equal(autoRun.result.taskStatusAfter, "completed");
     assert.equal(autoRun.resultCard.presentation, "compact-result-summary-card");
     assert.equal(autoRun.resultCard.surface, "dove.auto");
+    assert.equal(autoRun.resultCard.executionReceipt.receiptId, "auto-explicit-step-receipt");
+    assert.equal(autoRun.resultCard.executionReceipt.criteriaCoverage.complete, true);
     assertPreActionGuidanceSummary(autoRun.resultCard.preActionGuidanceSummary, { surface: "dove.auto", primaryRole: "builder" });
     assert.equal(autoRun.resultCard.completed, true);
 
@@ -2479,6 +2836,8 @@ test("run_dove_auto records bounded foreground iterations", () => {
     const persisted = runtimeResults.entries.find((item) => item.id === "auto-foreground-run");
     assert.ok(persisted, "auto runtime result should be persisted");
     assert.equal(persisted.iterationCount, 2);
+    assert.equal(persisted.iterations[1].executionReceipt.receiptId, "auto-explicit-step-receipt");
+    assert.equal(persisted.iterations[1].executionReceipt.criteriaCoverage.complete, true);
     assert.equal(persisted.background, false);
     assert.equal(persisted.resultCard, undefined);
     const runtimeEvents = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "events.json"), "utf8"));
@@ -2585,8 +2944,16 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.equal(runReview.resultCard.surface, "dove.review");
     assertPreActionGuidanceSummary(runReview.resultCard.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
     assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-review-output");
+    assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.reason, "awaiting-audio-review-output");
     assert.equal(runReview.resultCard.nextActions[0].nextRole, "reviewer");
     assert.deepEqual(runReview.resultCard.nextActions[0].requiredActions, ["complete-isolated-review-handoff"]);
+
+    const reviewLoop = extractToolJson(dispatchTool(root, "run_dove_review_loop", { packetId: "mcp-main-packet", runId: "mcp-review-loop-awaiting-output", maxIterations: 1 }));
+    assert.equal(reviewLoop.status, "blocked");
+    assert.equal(reviewLoop.stopReason, "awaiting-review-output");
+    assert.equal(reviewLoop.iterations[0].review.status, "prepared-awaiting-audio");
+    assert.equal(reviewLoop.iterations[0].review.resultCard.nextActions[0].handoffSuggestion.reason, "awaiting-audio-review-output");
+
     fs.writeFileSync(path.join(root, runReview.reportPath), "# MCP isolated report\n\nNeeds validation evidence.\n", "utf8");
     fs.writeFileSync(path.join(root, runReview.handoffPath), `${JSON.stringify({
       version: 1,
@@ -2750,6 +3117,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(createDoveTaskTool.inputSchema.properties.evidencePaths, "create_dove_task should expose mission pass evidence paths");
   assert.ok(createDoveTaskTool.inputSchema.properties.workContract, "create_dove_task should expose workContract");
   assert.ok(createDoveTaskTool.inputSchema.properties.executionContract, "create_dove_task should expose executionContract");
+  assert.ok(createDoveTaskTool.inputSchema.properties.executionReceipt, "create_dove_task should expose executionReceipt");
   assert.ok(createDoveTaskTool.inputSchema.properties.verifiedCriteria, "create_dove_task should expose verifiedCriteria");
   assert.ok(createDoveTaskTool.inputSchema.properties.validationEvidencePaths, "create_dove_task should expose validationEvidencePaths");
   assert.ok(createDoveTaskTool.inputSchema.properties.verificationEvidencePaths, "create_dove_task should expose verificationEvidencePaths");
@@ -2769,6 +3137,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(recordMissionPassTool.inputSchema.properties.evidenceLinks, "record_dove_mission_pass should expose evidenceLinks");
   assert.ok(recordMissionPassTool.inputSchema.properties.artifactRefs, "record_dove_mission_pass should expose artifactRefs");
   assert.ok(recordMissionPassTool.inputSchema.properties.executionContract, "record_dove_mission_pass should expose executionContract");
+  assert.ok(recordMissionPassTool.inputSchema.properties.executionReceipt, "record_dove_mission_pass should expose executionReceipt");
   assert.ok(recordMissionPassTool.inputSchema.properties.verifiedCriteria, "record_dove_mission_pass should expose verifiedCriteria");
   assert.ok(recordMissionPassTool.inputSchema.properties.validationEvidencePaths, "record_dove_mission_pass should expose validationEvidencePaths");
   assert.ok(recordMissionPassTool.inputSchema.properties.verificationEvidencePaths, "record_dove_mission_pass should expose verificationEvidencePaths");
@@ -2776,6 +3145,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(recordMissionPassTool.inputSchema.properties.nextAction, "record_dove_mission_pass should expose nextAction");
   assert.ok(recordMissionPassTool.inputSchema.properties.plannedMissions, "record_dove_mission_pass should expose plannedMissions");
   assert.ok(recordMissionPassTool.inputSchema.properties.plannedMissions.items.properties.executionContract, "plannedMissions should expose executionContract");
+  assert.ok(recordMissionPassTool.inputSchema.properties.plannedMissions.items.properties.executionReceipt, "plannedMissions should expose executionReceipt");
   assert.ok(recordMissionPassTool.inputSchema.properties.plannedMissions.items.properties.verifiedCriteria, "plannedMissions should expose verifiedCriteria");
   assert.ok(recordMissionPassTool.inputSchema.properties.resultingMissions, "record_dove_mission_pass should expose resultingMissions");
   assert.ok(recordMissionPassTool.inputSchema.properties.missions, "record_dove_mission_pass should expose missions");
@@ -2786,6 +3156,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.match(applyStatusAdjustmentsTool.description, /resultCard/);
   assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.confirmed, "apply_dove_status_adjustments should expose confirmed");
   assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.adjustments, "apply_dove_status_adjustments should expose adjustments");
+  assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.adjustments.items.properties.executionReceipt, "status adjustments should expose executionReceipt");
   assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.adjustments.items.properties.verificationEvidencePaths, "status adjustments should expose verificationEvidencePaths");
   assert.ok(applyStatusAdjustmentsTool.inputSchema.properties.adjustments.items.properties.verifiedCriteria, "status adjustments should expose verifiedCriteria");
   assert.ok(runDoveAutoTool, "run_dove_auto should exist");
@@ -2810,7 +3181,9 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.convergenceChecks, "run_dove_auto steps should expose convergenceChecks");
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.failureRoutes, "run_dove_auto steps should expose failureRoutes");
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.executionContract, "run_dove_auto steps should expose executionContract");
+  assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.executionReceipt, "run_dove_auto steps should expose executionReceipt");
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.verifiedCriteria, "run_dove_auto steps should expose verifiedCriteria");
+  assert.ok(runDoveAutoTool.inputSchema.properties.autoSteps.items.properties.executionReceipt, "run_dove_auto autoSteps should expose executionReceipt");
   assert.ok(runDoveAutoTool.inputSchema.properties.completeTask, "run_dove_auto should expose explicit completion");
   assert.ok(runDoveOperatorTool, "run_dove_operator should exist");
   assert.match(runDoveOperatorTool.description, /compact queue summary\/cards/);
@@ -2825,6 +3198,7 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(runDoveOperatorTool.inputSchema.properties.includeQueueDetails, "run_dove_operator should expose includeQueueDetails");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults, "run_dove_operator should expose taskResults");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults.items.properties.executionContract, "operator taskResults should expose executionContract");
+  assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults.items.properties.executionReceipt, "operator taskResults should expose executionReceipt");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults.items.properties.verifiedCriteria, "operator taskResults should expose verifiedCriteria");
   assert.ok(runDoveOperatorTool.inputSchema.properties.taskResults.items.properties.verificationEvidencePaths, "operator taskResults should expose verificationEvidencePaths");
   assert.ok(approvalsQueryTool, "query_program_approvals should exist");

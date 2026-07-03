@@ -4413,6 +4413,76 @@ test("runAutonomyControlPlaneOnce executes one approved program-level result bri
   assert.equal(workspaceIndex.programs.lastProgramOutcome, "executed-program-step");
 });
 
+test("runAutonomyControlPlaneOnce holds blocked bridge events without mutating claim state", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Program Held Bridge", objective: "Record a blocked bridge without applying claim state." });
+  const { remediationPack } = seedAutonomyGuidance(root);
+
+  writeJson(root, ARTIFACT_PATHS.experimentResults, {
+    version: 1,
+    items: [{ id: "result-held-bridge", experimentId: "exp-held-bridge", claimId: "claim-held-bridge", outcome: "supports", summary: "Bridge should wait for review.", evidenceLinks: [ARTIFACT_PATHS.experimentLog], comparisonTargets: [], latestAuditId: null, latestBridgeId: null }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.experimentAudits, {
+    version: 1,
+    items: [{ id: "audit-held-bridge", experimentId: "exp-held-bridge", resultId: "result-held-bridge", claimId: "claim-held-bridge", reviewedArtifactRefs: [ARTIFACT_PATHS.experimentResults], requiredArtifactRefs: [ARTIFACT_PATHS.experimentResults], missingArtifactRefs: [], auditFindings: ["Review found unresolved provenance."], integrityFlags: ["missing-reviewed-artifact-refs"], confidence: "low", outcomeMapping: "supports", auditVerdict: "blocked", bridgeReadiness: "blocked", resultOutcome: "supports", evidenceLinkCount: 1, comparisonTargetCount: 0, claimStateBefore: { status: "draft", confidence: "medium" }, updatedAt: new Date(0).toISOString() }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.evidence, {
+    version: 3,
+    claims: [{ id: "claim-held-bridge", text: "Held bridge claim", status: "draft", confidence: "medium", sectionId: "results", sourceIds: [], noteIds: [], experimentIds: [], evidenceLinks: [], gap: "" }],
+    updatedAt: null
+  });
+
+  seedAcceptedAutonomyPacket(root, {
+    packetId: "task-program-held-bridge",
+    sourceType: "remediation-pack",
+    sourceId: remediationPack.id,
+    sourceArtifactPath: remediationPack.sourceArtifactPath,
+    title: "Held bridge packet",
+    nextAction: "Run one blocked result bridge.",
+    actorRole: "planner",
+    packetAssignedRole: "experiment-planner",
+    workerRole: "experiment-planner",
+    followThroughId: "follow-through-task-program-held-bridge"
+  });
+
+  issueProgramApproval(root, {
+    packetId: "task-program-held-bridge",
+    programId: "program-held-bridge",
+    programTitle: "Program held bridge",
+    programObjective: "Do not apply a blocked bridge to claim state.",
+    programRunId: "program-held-bridge-run-1",
+    approvalId: "program-held-bridge-approval-1",
+    actorRole: "planner",
+    workerRole: "experiment-planner",
+    allowedStepType: "bridge-result-to-claim",
+    bridgeResultId: "result-held-bridge",
+    bridgeAuditIds: ["audit-held-bridge"],
+    bridgeReason: "Hold blocked audit for reviewer action.",
+    executeBy: "2099-01-01T00:00:00.000Z",
+    reviewAfter: "2099-01-01T12:00:00.000Z",
+    summary: "Approved one bounded held bridge."
+  });
+
+  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
+  const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, null);
+  const evidence = readJson(root, ARTIFACT_PATHS.evidence, null);
+  const bridge = (bridgeLog.items ?? []).find((item) => item.resultId === "result-held-bridge");
+  const claim = (evidence.claims ?? []).find((item) => item.id === "claim-held-bridge");
+
+  assert.equal(result.status, "completed");
+  assert.equal(bridge.bridgeStatus, "held-for-review");
+  assert.equal(bridge.mapping, "integrity-hold");
+  assert.equal(bridge.claimStateAfter.status, "draft");
+  assert.equal(claim.status, "draft");
+  assert.equal(claim.confidence, "medium");
+  assert.equal(claim.latestBridgeId ?? null, null);
+  assert.equal(claim.bridgeStatus ?? null, null);
+  assert.deepEqual(claim.experimentIds, []);
+});
+
 test("runAutonomyControlPlaneOnce executes one approved program-level review loop step", () => {
   const root = tempRoot();
   ensureWorkspace(root);

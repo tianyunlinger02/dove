@@ -435,9 +435,10 @@ test("supporting results with blocked audits hold claim promotion for review", (
   assert.ok(audit.integrityFlags.includes("missing-methodology"));
   assert.equal(bridge.mapping, "integrity-hold");
   assert.equal(bridge.bridgeStatus, "held-for-review");
-  assert.equal(claim.status, "needs-review");
-  assert.equal(claim.latestAuditVerdict, "blocked");
-  assert.equal(claim.bridgeStatus, "held-for-review");
+  assert.equal(claim.status, "draft");
+  assert.equal(claim.latestAuditVerdict ?? null, null);
+  assert.equal(claim.bridgeStatus ?? null, null);
+  assert.equal(claim.latestBridgeId ?? null, null);
   assert.ok(evidence.claimBridgeProblems.some((item) => item.reason === "bridge-held-for-review"));
 });
 

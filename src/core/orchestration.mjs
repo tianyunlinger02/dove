@@ -650,13 +650,17 @@ function collectFinalizeBlockersFromClaims(root) {
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
   const bridgeById = new Map((bridgeLog.items ?? []).map((item) => [item.id, item]));
+  const heldBridgeClaimIds = new Set((bridgeLog.items ?? [])
+    .filter((bridge) => bridge.bridgeStatus === "held-for-review" || bridge.auditVerdict === "blocked")
+    .map((bridge) => bridge.claimId)
+    .filter(Boolean));
   const blockedClaimIds = new Set();
 
   for (const claim of evidence.claims ?? []) {
     if (!claim || typeof claim !== "object") {
       continue;
     }
-    if (claim.bridgeStatus === "held-for-review" || claim.latestAuditVerdict === "blocked") {
+    if (claim.bridgeStatus === "held-for-review" || claim.latestAuditVerdict === "blocked" || heldBridgeClaimIds.has(claim.id)) {
       blockedClaimIds.add(claim.id);
       continue;
     }
@@ -1224,16 +1228,38 @@ export function persistExperimentResultClaimBridge(root, args = {}) {
   const auditsIndex = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
   const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
   const result = resolveDurableExperimentResult(resultsIndex, args, "Result bridge");
+  if (!result.claimId) {
+    throw new Error(`Claim bridge requires result ${result.id} to include claimId.`);
+  }
+  if (!(result.summary ?? "").trim()) {
+    throw new Error(`Claim bridge requires result ${result.id} to include a durable result summary.`);
+  }
+  if ((result.evidenceLinks ?? []).length === 0) {
+    throw new Error(`Claim bridge requires result ${result.id} to include durable evidence links.`);
+  }
   const claimIndex = evidence.claims.findIndex((item) => item.id === result.claimId);
   if (claimIndex === -1) {
     throw new Error(`Claim bridge could not find claim ${result.claimId}`);
   }
   const currentClaim = evidence.claims[claimIndex];
   const before = { status: currentClaim.status, confidence: currentClaim.confidence };
-  const auditIds = normalizeStringArray(args.auditIds);
-  const audits = auditIds.length > 0
-    ? auditIds.map((id) => auditsIndex.items.find((item) => item.id === id)).filter(Boolean)
-    : auditsIndex.items.filter((item) => item.resultId === result.id);
+  const requestedAuditIds = normalizeStringArray(args.auditIds);
+  const auditById = new Map((auditsIndex.items ?? []).map((item) => [item.id, item]));
+  const missingAuditIds = requestedAuditIds.filter((id) => !auditById.has(id));
+  if (missingAuditIds.length > 0) {
+    throw new Error(`Claim bridge requires durable experiment audit records; missing auditIds: ${missingAuditIds.join(", ")}.`);
+  }
+  const audits = requestedAuditIds.length > 0
+    ? requestedAuditIds.map((id) => auditById.get(id))
+    : (auditsIndex.items ?? []).filter((item) => item.resultId === result.id);
+  if (audits.length === 0) {
+    throw new Error(`Claim bridge requires at least one durable experiment audit for result ${result.id}.`);
+  }
+  const mismatchedAudits = audits.filter((audit) => audit.resultId !== result.id || audit.claimId !== result.claimId);
+  if (mismatchedAudits.length > 0) {
+    throw new Error(`Claim bridge audit records do not match result ${result.id}: ${mismatchedAudits.map((audit) => audit.id).join(", ")}.`);
+  }
+  const auditIds = audits.map((audit) => audit.id);
   const auditVerdict = audits.some((audit) => audit.auditVerdict === "blocked")
     ? "blocked"
     : audits.some((audit) => audit.auditVerdict === "concern")
@@ -1248,7 +1274,6 @@ export function persistExperimentResultClaimBridge(root, args = {}) {
   let stateChange = "hold";
   if (auditVerdict !== "clean") {
     mapping = "integrity-hold";
-    after = { status: "needs-review", confidence: "low" };
     stateChange = "hold";
   } else if (result.outcome === "supports") {
     mapping = "supports";
@@ -1294,12 +1319,16 @@ export function persistExperimentResultClaimBridge(root, args = {}) {
   bridgeLog.updatedAt = nowIso();
   writeJson(root, ARTIFACT_PATHS.claimBridgeLog, bridgeLog);
 
+  if (bridgeStatus !== "applied") {
+    return bridgeEvent;
+  }
+
   evidence.claims[claimIndex] = {
     ...currentClaim,
     status: after.status,
     confidence: after.confidence,
     latestAuditId: audits[0]?.id ?? currentClaim.latestAuditId ?? null,
-    latestAuditVerdict: auditVerdict === "missing" ? currentClaim.latestAuditVerdict ?? null : auditVerdict,
+    latestAuditVerdict: auditVerdict,
     latestBridgeId: bridgeEvent.id,
     bridgeStatus,
     experimentIds: Array.from(new Set([...(currentClaim.experimentIds ?? []), result.experimentId]))
@@ -1425,13 +1454,44 @@ export function upsertExperimentResult(root, args = {}) {
     policyOverrideReason: args.policyOverrideReason,
     actorRole: args.actorRole
   });
-  const bridgeEvent = bridgeExperimentResultToClaim(root, {
-    resultId: result.id,
-    packetId: taskTarget.packetId ?? args.packetId,
-    auditIds: [audit.id],
-    policyOverrideReason: args.policyOverrideReason,
-    actorRole: args.actorRole
-  });
+  let bridgeEvent;
+  if (audit.auditVerdict === "clean" && result.claimId) {
+    bridgeEvent = bridgeExperimentResultToClaim(root, {
+      resultId: result.id,
+      packetId: taskTarget.packetId ?? args.packetId,
+      auditIds: [audit.id],
+      policyOverrideReason: args.policyOverrideReason,
+      actorRole: args.actorRole
+    });
+  } else {
+    const claim = result.claimId ? evidence.claims.find((item) => item.id === result.claimId) : null;
+    const before = { status: claim?.status ?? null, confidence: claim?.confidence ?? null };
+    bridgeEvent = {
+      id: slugify(`${result.id}-integrity-hold-bridge`),
+      experimentId: result.experimentId,
+      resultId: result.id,
+      claimId: result.claimId,
+      mapping: "integrity-hold",
+      confidenceBefore: before.confidence,
+      confidenceAfter: before.confidence,
+      statusBefore: before.status,
+      statusAfter: before.status,
+      claimStateBefore: before,
+      claimStateAfter: before,
+      auditIds: [audit.id],
+      auditVerdict: audit.auditVerdict,
+      integrityFlags: audit.integrityFlags ?? [],
+      bridgeStatus: "held-for-review",
+      stateChange: "hold",
+      reviewRequiredBeforeFinalize: true,
+      reason: `Experiment ${result.experimentId} cannot update claim ${result.claimId ?? "unlinked"} until audit integrity gaps are resolved: ${(audit.integrityFlags ?? []).join(", ") || audit.auditVerdict}.`,
+      updatedAt: nowIso()
+    };
+    const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
+    bridgeLog.items = [...(bridgeLog.items ?? []).filter((item) => item.id !== bridgeEvent.id), bridgeEvent];
+    bridgeLog.updatedAt = nowIso();
+    writeJson(root, ARTIFACT_PATHS.claimBridgeLog, bridgeLog);
+  }
   const resultIndex = resultsIndex.items.findIndex((item) => item.id === result.id);
   resultsIndex.items[resultIndex] = {
     ...resultsIndex.items[resultIndex],
@@ -1503,7 +1563,7 @@ export function upsertExperimentResult(root, args = {}) {
         resultId: result.id,
         outcome: result.outcome,
         auditId: audit.id,
-        bridgeStatus: bridgeEvent.status
+        bridgeStatus: bridgeEvent.bridgeStatus
       }
     })
   };

@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
+  DOVE_ARCHIVED_TASK_STATUSES,
   DOVE_PRIMARY_ROLES,
   DOVE_TASK_CREATOR_KINDS,
   DOVE_TASK_DOMAINS,
@@ -28,6 +29,7 @@ import {
   normalizeDoveBoundary,
   normalizeDoveDomainId,
   normalizeDoveExecutionContract,
+  normalizeDoveExecutionReceipt,
   normalizeDoveHandoff,
   normalizeDoveMissionLifecycleStage,
   normalizeDoveAuthorityManifest,
@@ -91,7 +93,7 @@ function objectOrFallback(value, fallback) {
 }
 
 const VALIDATION_OUTPUT_READ_LIMIT_BYTES = 24 * 1024;
-const ARCHIVED_PACKET_STATUSES = new Set(["archived", "archived-with-lineage"]);
+const ARCHIVED_PACKET_STATUSES = new Set(DOVE_ARCHIVED_TASK_STATUSES);
 
 function archivedPacketStatus(value) {
   return ARCHIVED_PACKET_STATUSES.has(String(value ?? "").trim().toLowerCase());
@@ -111,7 +113,7 @@ function mergeStringArrays(...values) {
 }
 
 function activePackets(packets = []) {
-  return packets.filter((packet) => !archivedPacketStatus(packet.lifecycleStatus));
+  return packets.filter((packet) => !archivedPacketStatus(packet.status) && !archivedPacketStatus(packet.lifecycleStatus));
 }
 
 function normalizeProjectRelativePath(rawPath) {
@@ -668,6 +670,9 @@ function readDoveInputs(root) {
 }
 
 function normalizeDoveStatusTaskStatus(packet) {
+  if ([packet.status, packet.lifecycleStatus].some(archivedPacketStatus)) {
+    return "archived";
+  }
   const raw = String(packet.status ?? packet.lifecycleStatus ?? "pending").trim().toLowerCase();
   if (DOVE_TASK_STATUSES.includes(raw)) {
     return raw;
@@ -833,6 +838,8 @@ function summarizeDoveStatusTask(packet, responseLanguage = "zh") {
     completedAt: packet.completedAt ?? null,
     killedAt: packet.killedAt ?? null,
     killReason: packet.killReason ?? null,
+    archivedAt: packet.archivedAt ?? null,
+    archiveReason: packet.archiveReason ?? null,
     ownerRole,
     nextRole,
     boundary: normalizeDoveBoundary(packet.boundary, null),
@@ -882,8 +889,38 @@ function runtimeTimestamp(entry, iteration = null) {
   return iteration?.completedAt ?? iteration?.startedAt ?? entry.updatedAt ?? entry.recordedAt ?? entry.completedAt ?? entry.createdAt ?? entry.startedAt ?? "";
 }
 
+function compactRuntimeExecutionReceipt(value) {
+  const receipt = normalizeDoveExecutionReceipt(value, null);
+  if (!receipt) {
+    return null;
+  }
+  return {
+    receiptId: receipt.receiptId ?? null,
+    runId: receipt.runId ?? null,
+    packetId: receipt.packetId ?? null,
+    surface: receipt.surface ?? null,
+    command: receipt.command ?? null,
+    actionType: receipt.actionType ?? null,
+    status: receipt.status ?? null,
+    outcome: receipt.outcome ?? null,
+    resultSummary: receipt.publicSafeSummary ?? receipt.resultSummary ?? null,
+    lifecycleTransition: receipt.lifecycleTransition ?? null,
+    evidenceCount: mergeStringArrays(
+      receipt.evidenceLinks,
+      receipt.evidencePaths,
+      receipt.artifactRefs,
+      receipt.artifactPaths,
+      receipt.validationEvidencePaths,
+      receipt.verificationEvidencePaths
+    ).length,
+    criteriaCoverage: receipt.criteriaCoverage ?? null,
+    nextAction: receipt.nextAction ?? null
+  };
+}
+
 function summarizeRuntimeRun(entry, packetId) {
   const iteration = runtimeIterationForPacket(entry, packetId);
+  const executionReceipt = compactRuntimeExecutionReceipt(iteration?.output?.executionReceipt ?? iteration?.executionReceipt ?? entry.executionReceipt);
   return {
     id: entry.id ?? entry.runId ?? null,
     surface: entry.surface ?? null,
@@ -892,6 +929,7 @@ function summarizeRuntimeRun(entry, packetId) {
     outcome: iteration?.outcome ?? entry.outcome ?? null,
     stopReason: iteration?.stopReason ?? entry.stopReason ?? null,
     command: iteration?.command ?? entry.command ?? null,
+    executionReceipt,
     startedAt: iteration?.startedAt ?? entry.startedAt ?? entry.createdAt ?? null,
     completedAt: iteration?.completedAt ?? entry.completedAt ?? entry.updatedAt ?? entry.recordedAt ?? null,
     updatedAt: entry.updatedAt ?? entry.recordedAt ?? null
@@ -993,7 +1031,7 @@ function summarizeActionableBoundary(task) {
 
 function boundaryRecommendsBlocked(task) {
   const boundary = task.currentBoundary ?? openBoundaryForTask(task);
-  return ["blocked-boundary", "missing-executable-contract", "plan-output-not-executable", "missing-required-materials", "provider-failed", "workflow-error-boundary", "verification-failed", "debug-retry-required", "fix-required", "needs-review", "awaiting-provider-output", "awaiting-review-output"].includes(boundary?.type);
+  return ["blocked-boundary", "missing-executable-contract", "plan-output-not-executable", "missing-required-materials", "missing-secret-env", "provider-failed", "workflow-error-boundary", "verification-failed", "debug-retry-required", "fix-required", "needs-review", "awaiting-provider-output", "awaiting-review-output"].includes(boundary?.type);
 }
 
 function statusActionBase(fields = {}) {
@@ -1009,7 +1047,7 @@ function boundaryActionKind(boundary) {
   if (["needs-review", "awaiting-review-output"].includes(boundary?.type)) {
     return "send-to-review";
   }
-  if (["awaiting-host-pass", "awaiting-host-pass-result", "awaiting-host-results", "host-tool-blocked", "awaiting-provider-output", "missing-executable-contract", "plan-output-not-executable", "missing-required-materials", "verification-failed", "debug-retry-required", "fix-required"].includes(boundary?.type)) {
+  if (["awaiting-host-pass", "awaiting-host-pass-result", "awaiting-host-results", "host-tool-blocked", "awaiting-provider-output", "missing-executable-contract", "plan-output-not-executable", "missing-required-materials", "missing-secret-env", "verification-failed", "debug-retry-required", "fix-required"].includes(boundary?.type)) {
     return "provide-evidence-or-result";
   }
   return "adjust-status";
@@ -1293,6 +1331,42 @@ function buildVerificationGapCard(task, responseLanguage = "zh") {
   });
 }
 
+function taskLooksLikeCleanupNoise(task = {}) {
+  if (task.derivedFrom === "blocked-mission-investigation") {
+    return true;
+  }
+  const searchable = normalizeStringArray([task.id, task.title, task.summary, task.sourceId, task.sourceType, task.creatorKind]).join(" ").toLowerCase();
+  return /\bdogfood\b|visible[-_ ]?test|operator[-_ ]?investigation|blocked[-_ ]?mission[-_ ]?investigation/.test(searchable);
+}
+
+function cleanupArchiveCandidates(tasks = []) {
+  return sortStatusTasks(tasks.filter((task) => task.level !== 0
+    && !["completed", "killed", "archived"].includes(task.status)
+    && !isArchivedStatusTask(task)
+    && taskLooksLikeCleanupNoise(task))).slice(0, 5);
+}
+
+function buildCleanupArchiveCard(tasks = [], responseLanguage = "zh") {
+  const candidates = cleanupArchiveCandidates(tasks);
+  if (candidates.length === 0) {
+    return null;
+  }
+  const candidateIds = candidates.map((task) => task.id);
+  return statusActionBase({
+    priority: 80,
+    kind: "cleanup-archive",
+    title: statusInlineText(responseLanguage, "归档过期测试/调查噪音", "Archive stale test/investigation noise"),
+    why: statusInlineText(responseLanguage, "发现疑似 dogfood 或 operator blocker-investigation 噪音；只建议通过显式 status adjustment 归档，不删除证据。", "Likely dogfood or operator blocker-investigation noise was found; archive it only through explicit status adjustment and preserve evidence."),
+    command: "project:dove.status",
+    firstAction: "project:dove.status --request-status-adjustment",
+    copyableCommand: "project:dove.status --request-status-adjustment",
+    evidenceRequired: candidateIds,
+    doneCriteria: [statusInlineText(responseLanguage, "确认这些 packet 已过期后，将它们调整为 archived，保留 durable evidence。", "After confirming these packets are stale, adjust them to archived while preserving durable evidence.")],
+    requires: candidateIds,
+    options: [{ kind: "preview-status-adjustments", label: statusInlineText(responseLanguage, "预览状态调整", "Preview status adjustments"), command: "project:dove.status --request-status-adjustment" }]
+  });
+}
+
 function buildStatusExecutionGaps(activeTasks = []) {
   const missingContractTasks = [];
   const missingMaterialTasks = [];
@@ -1343,7 +1417,7 @@ function buildStatusExecutionGaps(activeTasks = []) {
   };
 }
 
-function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, completionConsistency, responseLanguage = "zh" }) {
+function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, responseLanguage = "zh" }) {
   const cards = [];
   const seen = new Set();
   const reconciliationChildIds = completionConsistencyOpenChecklistChildIds(completionConsistency);
@@ -1485,6 +1559,7 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, revie
       evidenceRequired: []
     });
   }
+  pushCard("cleanup-archive", buildCleanupArchiveCard(visibleTasks, responseLanguage));
   return rankStatusActionCards(cards);
 }
 
@@ -1504,12 +1579,42 @@ function buildStatusAdjustmentCard(task, recommendedStatus, responseLanguage = "
   });
 }
 
-function buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, executionGaps, responseLanguage = "zh" }) {
+function buildRecentExecutionReceipts(tasks = []) {
+  const seen = new Set();
+  return sortRecentStatusTasks(tasks)
+    .map((task) => {
+      const receipt = task.lastRun?.executionReceipt ?? null;
+      if (!receipt) {
+        return null;
+      }
+      return {
+        ...receipt,
+        packetId: receipt.packetId ?? task.id,
+        title: task.title ?? null,
+        completedAt: task.lastRun?.completedAt ?? task.lastRun?.updatedAt ?? null
+      };
+    })
+    .filter((receipt) => {
+      if (!receipt) {
+        return false;
+      }
+      const key = receipt.receiptId ?? receipt.runId ?? `${receipt.packetId}:${receipt.completedAt ?? "unknown"}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 5);
+}
+
+function buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, executionGaps, archivedHiddenCount = 0, responseLanguage = "zh" }) {
   return {
     presentation: "dove-status-home",
     liveContextFirst: true,
-    nextActions: buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, review, boundaryActionCards, completionConsistency, responseLanguage }),
-    missionList: buildStatusMissionList(visibleTasks),
+    nextActions: buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, responseLanguage }),
+    recentExecutionReceipts: buildRecentExecutionReceipts(visibleTasks),
+    missionList: buildStatusMissionList(visibleTasks, { archivedHiddenCount }),
     completionConsistency,
     executionGaps,
     boundaryActionCards,
@@ -1587,6 +1692,9 @@ function runtimeIndicatesCompleted(task) {
 }
 
 function recommendedStatusForTask(task) {
+  if (task.status === "archived" || isArchivedStatusTask(task)) {
+    return "archived";
+  }
   if (runtimeIndicatesCompleted(task)) {
     return "completed";
   }
@@ -1603,7 +1711,7 @@ function recommendedStatusForTask(task) {
 }
 
 function buildStatusAdjustmentContract(tasks, responseLanguage = "zh") {
-  const adjustableTasks = sortStatusTasks(tasks.filter((task) => task.level !== 0 && !["completed", "killed"].includes(task.status)));
+  const adjustableTasks = sortStatusTasks(tasks.filter((task) => task.level !== 0 && !["completed", "killed", "archived"].includes(task.status) && !isArchivedStatusTask(task)));
   const items = adjustableTasks.map((task, index) => {
     const recommendedStatus = recommendedStatusForTask(task);
     const adjustmentCard = buildStatusAdjustmentCard(task, recommendedStatus, responseLanguage);
@@ -1646,7 +1754,8 @@ const STATUS_COMPACT_GROUP_LIMITS = {
   doing: 5,
   blocked: 5,
   todo: 5,
-  done: 0
+  done: 0,
+  archived: 0
 };
 
 const STATUS_ADJUSTMENT_PREVIEW_LIMIT = 8;
@@ -1907,6 +2016,9 @@ function buildMutationRollbackModel(root) {
     lastMutationMode: summary.lastMutationMode ?? null,
     lastAppliedBy: summary.lastAppliedBy ?? null,
     hostRollbackEligible: Boolean(summary.hostRollbackEligible),
+    hostRollbackIneligibleReason: summary.hostRollbackIneligibleReason ?? null,
+    recommendedMutationMode: summary.recommendedMutationMode ?? null,
+    rollbackAdvice: summary.rollbackAdvice ?? null,
     hostCheckpointVerified: false,
     externalWriteCaptureVerified: false,
     doveRestoreSupported: false,
@@ -1923,7 +2035,7 @@ function buildDurableContextNotice(root, responseLanguage = "zh") {
   const recoveryActions = [
     { kind: "refresh-status", command: "project:dove.status", mutation: false },
     { kind: "apply-mutation-plan-with-host-tracked-edits", command: "mutationMode: patch-plan", mutation: true, handledByHost: true, hostTrackedFileEditsRequired: true },
-    { kind: "use-direct-process-as-unverified", command: "mutationMode: direct-process", mutation: true, hostRollbackEligible: false },
+    { kind: "use-direct-process-as-unverified", command: "mutationMode: direct-process", mutation: true, hostRollbackEligible: false, hostRollbackIneligibleReason: mutationRollbackModel.hostRollbackIneligibleReason, rollbackAdvice: mutationRollbackModel.rollbackAdvice },
     { kind: "adjust-status", command: "apply_dove_status_adjustments", mutation: true, confirmationRequired: true }
   ];
   return {
@@ -1962,6 +2074,7 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
   const missionSummary = missionList.summary ?? {};
   const executionGaps = result.dailyHome?.executionGaps ?? {};
   const executionBlockingCount = executionGaps.counts?.blocking ?? 0;
+  const recentExecutionReceipts = Array.isArray(result.dailyHome?.recentExecutionReceipts) ? result.dailyHome.recentExecutionReceipts : [];
   const primaryStep = nextActions[0] ?? null;
   const durableContextNotice = result.durableContextNotice ?? null;
   return {
@@ -1990,6 +2103,11 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
     },
     durableContextNotice,
     preActionGuidance: preActionGuidance ?? result.preActionGuidance ?? null,
+    recentExecutionReceipts: {
+      items: recentExecutionReceipts.slice(0, 3),
+      count: recentExecutionReceipts.length,
+      defaultCollapsed: false
+    },
     projectState: {
       returnStatus: summary.returnStatus ?? null,
       reviewVerdict: summary.reviewVerdict ?? null,
@@ -1999,7 +2117,9 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
         todo: missionSummary.todoCount ?? 0,
         doing: missionSummary.doingCount ?? 0,
         blocked: missionSummary.blockedCount ?? 0,
-        done: missionSummary.doneCount ?? 0
+        done: missionSummary.doneCount ?? 0,
+        archived: missionSummary.archivedCount ?? summary.archivedMissionCount ?? 0,
+        archivedHidden: summary.archivedHiddenCount ?? 0
       },
       blockerCount: blockers.length,
       readErrorCount: readErrors.length,
@@ -2126,6 +2246,9 @@ function compactStatusAdjustmentPreviewArgs(args = {}) {
 }
 
 function missionUserGroupForStatus(status) {
+  if (status === "archived") {
+    return "archived";
+  }
   if (status === "blocked") {
     return "blocked";
   }
@@ -2199,13 +2322,14 @@ function buildCompletionConsistency(tasks = [], responseLanguage = "zh") {
   };
 }
 
-function buildStatusMissionList(tasks) {
+function buildStatusMissionList(tasks, options = {}) {
   const items = sortStatusTasks(tasks.filter((task) => task.level !== 0)).map((task, index) => summarizeStatusMissionListItem(task, index + 1));
   const groups = {
     todo: { label: "todo", description: "pending or ready missions", defaultCollapsed: false, items: [] },
     doing: { label: "doing", description: "missions with in-progress foreground runtime state", defaultCollapsed: false, items: [] },
     blocked: { label: "blocked", description: "missions blocked by dependency, boundary, or missing evidence", defaultCollapsed: false, items: [] },
-    done: { label: "done", description: "completed or killed missions", defaultCollapsed: true, items: [] }
+    done: { label: "done", description: "completed or killed missions", defaultCollapsed: true, items: [] },
+    archived: { label: "archived", description: "archived missions hidden from the default project situation", defaultCollapsed: true, items: [] }
   };
   for (const item of items) {
     groups[item.group].items.push(item);
@@ -2213,13 +2337,14 @@ function buildStatusMissionList(tasks) {
   return {
     presentation: "dove-mission-list",
     statusModel: {
-      userGroups: ["todo", "doing", "blocked", "done"],
+      userGroups: ["todo", "doing", "blocked", "done", "archived"],
       machineStatuses: DOVE_TASK_STATUSES,
       mapping: {
         todo: ["pending", "ready"],
         doing: ["in-progress"],
         blocked: ["blocked"],
-        done: ["completed", "killed"]
+        done: ["completed", "killed"],
+        archived: ["archived"]
       }
     },
     summary: {
@@ -2228,13 +2353,15 @@ function buildStatusMissionList(tasks) {
       todoCount: groups.todo.items.length,
       doingCount: groups.doing.items.length,
       blockedCount: groups.blocked.items.length,
-      doneCount: groups.done.items.length
+      doneCount: groups.done.items.length,
+      archivedCount: groups.archived.items.length,
+      archivedHiddenCount: Number(options.archivedHiddenCount ?? 0)
     },
     groups
   };
 }
 
-function buildProjectSummary({ title, objective, focus, initTask, tasks, activeTasks, blockedTasks, missionList, review, versions, experiments, blockers, nextCommand, returnStatus }) {
+function buildProjectSummary({ title, objective, focus, initTask, tasks, activeTasks, blockedTasks, missionList, review, versions, experiments, blockers, nextCommand, returnStatus, archivedHiddenCount = 0 }) {
   return {
     title,
     objective,
@@ -2246,6 +2373,8 @@ function buildProjectSummary({ title, objective, focus, initTask, tasks, activeT
     doingMissionCount: missionList?.summary?.doingCount ?? 0,
     activeMissionCount: activeTasks.length,
     blockedMissionCount: missionList?.summary?.blockedCount ?? blockedTasks.length,
+    archivedMissionCount: missionList?.summary?.archivedCount ?? 0,
+    archivedHiddenCount,
     statusCounts: countBy(tasks.map((task) => task.status), DOVE_TASK_STATUSES),
     reviewVerdict: review.verdict,
     unresolvedConcernCount: review.unresolvedConcernCount,
@@ -2399,7 +2528,7 @@ function inferDomain(args, inputs) {
   if (explicit) {
     return explicit;
   }
-  const activePacket = inputs.packets.find((packet) => packet.lifecycleStatus !== "archived" && packet.lifecycleStatus !== "archived-with-lineage");
+  const activePacket = inputs.packets.find((packet) => !archivedPacketStatus(packet.status) && !archivedPacketStatus(packet.lifecycleStatus));
   return activePacket?.doveDomain ?? normalizeDoveDomainId(inputs.workspaceIndex.dove?.currentDomain, "paper");
 }
 
@@ -2584,7 +2713,7 @@ function buildMissionBoardMission(packet) {
     ...missionPacketAliases(packet),
     missionStage,
     primaryRole: primaryRole.id,
-    archived: ARCHIVED_PACKET_STATUSES.has(packet.lifecycleStatus)
+    archived: archivedPacketStatus(packet.status) || archivedPacketStatus(packet.lifecycleStatus)
   };
 }
 
@@ -2610,7 +2739,7 @@ function matchesMissionBoardFilters(mission, args = {}) {
 
 function queueNameForMission(mission) {
   const lifecycleStatus = mission.lifecycleStatus ?? "active";
-  if (ARCHIVED_PACKET_STATUSES.has(lifecycleStatus)) {
+  if (mission.archived || archivedPacketStatus(mission.status) || archivedPacketStatus(lifecycleStatus)) {
     return "archived";
   }
   if (lifecycleStatus === "review-needed") {
@@ -2850,7 +2979,9 @@ export function queryDoveStatus(root, args = {}) {
   const responseLanguage = resolveDoveResponseLanguage(root, args, { state: inputs.state });
   const includeArchived = booleanArg(args.includeArchived);
   const allTasks = sortStatusTasks(enrichStatusTasks((Array.isArray(inputs.taskCatalog.packets) ? inputs.taskCatalog.packets : []).map((packet) => summarizeDoveStatusTask(packet, responseLanguage)).filter((task) => task.id), inputs));
+  const archivedTasks = allTasks.filter(isArchivedStatusTask);
   const tasks = includeArchived ? allTasks : allTasks.filter((task) => !isArchivedStatusTask(task));
+  const archivedHiddenCount = includeArchived ? 0 : archivedTasks.length;
   const consistencyTasks = allTasks.filter((task) => !isArchivedStatusTask(task));
   const requestedDomain = normalizeDoveDomainId(args.domain ?? args.doveDomain ?? args.missionDomain, null);
   const requestedStage = normalizeStatusStageArg(args.stage ?? args.missionStage);
@@ -2903,9 +3034,9 @@ export function queryDoveStatus(root, args = {}) {
   const projectTitle = inputs.state.dove?.title ?? initTask?.title ?? doveText(responseLanguage, "projectTitleFallback");
   const projectObjective = inputs.state.dove?.objective ?? inputs.state.dove?.thesis ?? initTask?.summary ?? inputs.board.objective ?? null;
   const projectFocus = activeTasks[0]?.currentFocus ?? (activeTasks.length === 0 ? projectObjective : inputs.state.orchestration?.currentFocus ?? inputs.board.currentFocus ?? projectObjective);
-  const dailyHome = buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, executionGaps, responseLanguage });
+  const dailyHome = buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, executionGaps, archivedHiddenCount, responseLanguage });
   const nextCommand = selectDailyHomeNextCommand(dailyHome, fallbackNextCommand);
-  const projectSummary = buildProjectSummary({ title: projectTitle, objective: projectObjective, focus: projectFocus, initTask, tasks, activeTasks, blockedTasks, missionList: dailyHome.missionList, review, versions, experiments, blockers, nextCommand, returnStatus });
+  const projectSummary = buildProjectSummary({ title: projectTitle, objective: projectObjective, focus: projectFocus, initTask, tasks, activeTasks, blockedTasks, missionList: dailyHome.missionList, review, versions, experiments, blockers, nextCommand, returnStatus, archivedHiddenCount });
   const statusAdjustmentContract = buildStatusAdjustmentContract(visibleTasks, responseLanguage);
   const durableContextNotice = buildDurableContextNotice(root, responseLanguage);
   const preActionGuidance = buildPreActionGuidance({
@@ -3010,6 +3141,8 @@ export function queryDoveStatus(root, args = {}) {
           blocked: blockedTasks.length,
           completed: tasks.filter((task) => task.status === "completed").length,
           killed: tasks.filter((task) => task.status === "killed").length,
+          archived: tasks.filter((task) => task.status === "archived" || isArchivedStatusTask(task)).length,
+          archivedHidden: archivedHiddenCount,
           byStatus: countBy(tasks.map((task) => task.status), DOVE_TASK_STATUSES),
           byDomain: countBy(tasks.map((task) => task.domain), DOVE_TASK_DOMAINS),
           byStage: countBy(tasks.map((task) => task.stage), DOVE_TASK_STAGES),

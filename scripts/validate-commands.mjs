@@ -111,7 +111,7 @@ function readRelative(relativePath) {
 const drift = checkGeneratedAdapters(ROOT);
 assert.equal(drift.length, 0, `Generated command adapter drift: ${drift.map((item) => `${item.relativePath} (${item.reason})`).join(", ")}`);
 
-assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed"], "Boundary reasons must not be added to the public task status enum");
+assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"], "Boundary reasons must not be added to the public task status enum");
 for (const boundaryType of DOVE_BOUNDARY_TYPES) {
   assert.equal(DOVE_TASK_STATUSES.includes(boundaryType), false, `${boundaryType} must remain boundary metadata, not a task status`);
 }
@@ -378,8 +378,8 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
     assert.equal(commandText.includes("current boundary metadata"), true, `${relativePath} must explain boundary state without treating it as live host context`);
     assert.equal(commandText.includes("Boundary types are first-class metadata, not machine status choices"), true, `${relativePath} must keep boundaries separate from status enum`);
     assert.equal(commandText.includes("现在是什么情况"), false, `${relativePath} command prompt should keep canonical instructions in English`);
-    assert.equal(commandText.includes("[\"pending\", \"ready\", \"in-progress\", \"blocked\", \"completed\", \"killed\"]"), true, `${relativePath} must expose exact status choices`);
-    assert.equal(commandText.includes("excluding `completed` and `killed`"), true, `${relativePath} must exclude completed and killed tasks from displayed adjustment targets`);
+    assert.equal(commandText.includes("[\"pending\", \"ready\", \"in-progress\", \"blocked\", \"completed\", \"killed\", \"archived\"]"), true, `${relativePath} must expose exact status choices`);
+    assert.equal(commandText.includes("excluding `completed`, `killed`, and `archived`"), true, `${relativePath} must exclude completed, killed, and archived tasks from displayed adjustment targets`);
     assert.equal(commandText.includes("do not ask whether to modify mission statuses during default `/dove:status`"), true, `${relativePath} must not ask for status changes by default`);
     assert.equal(commandText.includes("requestStatusAdjustment"), true, `${relativePath} must expose explicit status adjustment preview args`);
     assert.equal(commandText.includes("includeStatusAdjustmentPreview"), true, `${relativePath} must expose explicit status adjustment preview args`);
@@ -410,7 +410,7 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
     assert.equal(commandText.includes("boundaryType `host-tool-blocked`"), true, `${relativePath} must record host tool failures as blocked task results`);
     assert.equal(commandText.includes("leaving the mission in-progress"), true, `${relativePath} must not leave failed host tool work in-progress`);
     assert.equal(commandText.includes("do not expose planner/builder/reviewer as separate slash commands"), true, `${relativePath} must not add role slash surfaces`);
-    assert.equal(commandText.includes("pending child plan missions"), true, `${relativePath} must create blocker investigation plan missions`);
+    assert.equal(commandText.includes("create pending child investigation plan missions only when"), true, `${relativePath} must create blocker investigation plan missions only after explicit request`);
     assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after operator runs`);
   }
 }

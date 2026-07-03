@@ -267,6 +267,97 @@ function buildPathIssue({ figure, code, severity, stage, summary, artifactPaths,
   };
 }
 
+const FIGURE_QA_STOP_WORDS = new Set([
+  "and",
+  "are",
+  "chart",
+  "diagram",
+  "draw",
+  "figure",
+  "flow",
+  "for",
+  "from",
+  "generated",
+  "graph",
+  "into",
+  "node",
+  "paper",
+  "show",
+  "shows",
+  "the",
+  "this",
+  "using",
+  "with",
+  "workflow"
+]);
+
+function normalizeQaText(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function qaTokens(value) {
+  return normalizeQaText(value)
+    .split(" ")
+    .filter((token) => token.length > 2 && !FIGURE_QA_STOP_WORDS.has(token));
+}
+
+function textCoversQaLabel(text, label) {
+  const labelTokens = qaTokens(label);
+  if (labelTokens.length === 0) {
+    return false;
+  }
+  const textTokens = new Set(qaTokens(text));
+  return labelTokens.every((token) => textTokens.has(token));
+}
+
+function textSharesQaToken(text, targets = []) {
+  const textTokens = new Set(qaTokens(text));
+  return targets.some((target) => qaTokens(target).some((token) => textTokens.has(token)));
+}
+
+function readSafeFigureJson(root, relativePath) {
+  const normalizedPath = normalizeFigureArtifactPath(relativePath);
+  if (!normalizedPath || !isSafeProjectRelativePath(normalizedPath)) {
+    return null;
+  }
+  return readJson(root, normalizedPath, null);
+}
+
+function readSafeFigureText(root, relativePath) {
+  const normalizedPath = normalizeFigureArtifactPath(relativePath);
+  if (!normalizedPath || !isSafeProjectRelativePath(normalizedPath)) {
+    return "";
+  }
+  return readText(root, normalizedPath, "");
+}
+
+function semanticCoverageStrings(value, field) {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  return normalizeStringArray(value[field]);
+}
+
+function semanticReviewPassed(value) {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const status = String(value.status ?? value.reviewStatus ?? value.verdict ?? "").trim().toLowerCase();
+  return value.reviewed === true || value.humanReviewed === true || ["passed", "verified", "approved"].includes(status);
+}
+
+function claimHasMaterialProvenance(claim) {
+  return normalizeStringArray(claim?.sourceIds).length > 0
+    || normalizeStringArray(claim?.noteIds).length > 0
+    || normalizeStringArray(claim?.experimentIds).length > 0
+    || normalizeStringArray(claim?.evidenceLinks).length > 0;
+}
+
 function buildFigureQa(root) {
   const state = loadState(root);
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
@@ -546,9 +637,7 @@ function buildFigureQa(root) {
 
     for (const pathCheck of stagePathChecks) {
       const normalizedPath = normalizeFigureArtifactPath(pathCheck.value);
-      const exists = normalizedPath && isSafeProjectRelativePath(normalizedPath)
-        ? fs.existsSync(resolvePath(root, normalizedPath))
-        : false;
+      const exists = Boolean(readSafeFigureText(root, normalizedPath));
       fileChecks.stagedArtifacts[pathCheck.field] = { path: normalizedPath, exists };
 
       if (!normalizedPath || !isSafeProjectRelativePath(normalizedPath)) {
@@ -722,6 +811,45 @@ function buildFigureQa(root) {
     const figureGenerations = generationsByFigure.get(figure.id) ?? [];
     const importedGeneration = figureGenerations.find((item) => item.status === "imported" && item.finalSvgPath === figure.finalSvgPath) ?? figureGenerations.find((item) => item.status === "imported");
     const caption = captionByFigure.get(figure.id);
+    const outputManifest = readSafeFigureJson(root, importedGeneration?.outputManifestPath);
+    const finalSvgContent = readSafeFigureText(root, figure.finalSvgPath);
+    const semanticCoverage = outputManifest?.semanticCoverage ?? importedGeneration?.semanticCoverage ?? {};
+    const semanticReview = outputManifest?.semanticReview ?? importedGeneration?.semanticReview ?? semanticCoverage;
+    const declaredVisualCoverage = normalizeStringArray([
+      ...semanticCoverageStrings(semanticCoverage, "visualElements"),
+      ...semanticCoverageStrings(semanticCoverage, "coveredVisualElements"),
+      ...normalizeStringArray(outputManifest?.visualElements)
+    ]);
+    const semanticText = [
+      caption?.text,
+      finalSvgContent,
+      outputManifest?.caption,
+      outputManifest?.description,
+      outputManifest?.revisedPrompt,
+      semanticCoverage.summary
+    ].filter(Boolean).join("\n");
+    const requiredVisualElements = normalizeStringArray(figure.requiredVisualElements);
+    const coveredVisualElements = requiredVisualElements.filter((item) => declaredVisualCoverage.some((covered) => textCoversQaLabel(covered, item)) || textCoversQaLabel(semanticText, item));
+    const missingVisualElements = requiredVisualElements.filter((item) => !coveredVisualElements.includes(item));
+    const linkedClaims = targetClaimIds.map((claimId) => (evidence.claims ?? []).find((claim) => claim.id === claimId)).filter(Boolean);
+    const ungroundedClaims = linkedClaims.filter((claim) => !claimHasMaterialProvenance(claim));
+    const captionText = caption?.text ?? "";
+    const captionGrounded = Boolean(captionText.trim()) && (
+      linkedClaims.length === 0
+        ? textSharesQaToken(captionText, [figure.narrativeIntent, figure.purpose, ...sourceSections])
+        : linkedClaims.every((claim) => textSharesQaToken(captionText, [claim.text, claim.summary, claim.gap, ...(claim.sourceIds ?? []), ...(claim.noteIds ?? []), ...(claim.experimentIds ?? [])]))
+    );
+    const rasterWrapper = Boolean(importedGeneration?.rasterImagePath ?? outputManifest?.rasterImagePath) || /<image\b/i.test(finalSvgContent);
+    const rasterReviewPassed = !rasterWrapper || semanticReviewPassed(semanticReview);
+    const figureSemanticCoverage = {
+      requiredVisualElements,
+      coveredVisualElements,
+      missingVisualElements,
+      captionGrounded,
+      rasterWrapper,
+      rasterSemanticReviewPassed: rasterReviewPassed,
+      materialProvenanceReady: Boolean(materialRecord) && (materialRecord.missingRequirementIds ?? []).length === 0 && ungroundedClaims.length === 0
+    };
 
     if (!materialRecord) {
       figureIssues.push(buildPathIssue({
@@ -741,6 +869,18 @@ function buildFigureQa(root) {
         stage: "materials",
         summary: `Figure ${figure.id} has unresolved material requirements: ${materialRecord.missingRequirementIds.join(", ")}.`,
         artifactPaths: [ARTIFACT_PATHS.figureMaterials, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    }
+
+    if (ungroundedClaims.length > 0) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "ungrounded-claim-materials",
+        severity: "high",
+        stage: "materials",
+        summary: `Figure ${figure.id} links claims without source, note, experiment, or evidence provenance: ${ungroundedClaims.map((claim) => claim.id).join(", ")}.`,
+        artifactPaths: [ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.figureMaterials, ARTIFACT_PATHS.figureQa],
         timestamp
       }));
     }
@@ -779,6 +919,30 @@ function buildFigureQa(root) {
       }));
     }
 
+    if (missingVisualElements.length > 0 && importedGeneration) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "missing-visual-element-coverage",
+        severity: "high",
+        stage: "generation",
+        summary: `Figure ${figure.id} imported output does not cover required visual elements: ${missingVisualElements.join(", ")}.`,
+        artifactPaths: [ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureCaptions, ARTIFACT_PATHS.figureQa, figure.finalSvgPath].filter(Boolean),
+        timestamp
+      }));
+    }
+
+    if (rasterWrapper && !rasterReviewPassed) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "raster-semantic-review-required",
+        severity: "medium",
+        stage: "generation",
+        summary: `Figure ${figure.id} wraps a raster image in SVG; safety validation passed, but semantic visual coverage still needs explicit review evidence.`,
+        artifactPaths: [ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureQa, importedGeneration?.outputManifestPath, figure.finalSvgPath].filter(Boolean),
+        timestamp
+      }));
+    }
+
     if (!caption) {
       figureIssues.push(buildPathIssue({
         figure,
@@ -797,6 +961,16 @@ function buildFigureQa(root) {
         stage: "caption",
         summary: `Figure ${figure.id} has an empty caption.`,
         artifactPaths: [ARTIFACT_PATHS.figureCaptions, ARTIFACT_PATHS.figureQa],
+        timestamp
+      }));
+    } else if (!captionGrounded) {
+      figureIssues.push(buildPathIssue({
+        figure,
+        code: "ungrounded-caption",
+        severity: "high",
+        stage: "caption",
+        summary: `Figure ${figure.id} caption is not grounded in linked claims, materials, or declared figure intent.`,
+        artifactPaths: [ARTIFACT_PATHS.figureCaptions, ARTIFACT_PATHS.evidence, ARTIFACT_PATHS.figureQa],
         timestamp
       }));
     }
@@ -836,7 +1010,9 @@ function buildFigureQa(root) {
       materialStatus: materialRecord?.status ?? "missing",
       generationStatus: importedGeneration?.status ?? (figureGenerations[0]?.status ?? "missing"),
       captionStatus: caption?.text ? "ready" : "missing",
+      semanticCoverage: figureSemanticCoverage,
       latestGenerationRunId: importedGeneration?.id ?? figureGenerations[0]?.id ?? null,
+      latestOutputManifestPath: importedGeneration?.outputManifestPath ?? figureGenerations[0]?.outputManifestPath ?? null,
       captionId: caption?.id ?? null,
       updatedAt: timestamp
     });

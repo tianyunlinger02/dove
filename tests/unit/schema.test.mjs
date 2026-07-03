@@ -9,6 +9,7 @@ import {
   ARTIFACT_PATHS,
   DEFAULT_DOVE_RESPONSE_LANGUAGE,
   DOVE_AUDIO_CONTEXT_POLICY,
+  DOVE_ARCHIVED_TASK_STATUSES,
   DOVE_BOUNDARY_STATUSES,
   DOVE_DOCUMENT_EVIDENCE_SCOPES,
   DOVE_DOCUMENT_KINDS,
@@ -41,6 +42,7 @@ import {
   normalizeDoveAuthorityManifest,
   normalizeDoveBoundary,
   normalizeDoveBoundaryType,
+  normalizeDoveExecutionReceipt,
   normalizeDoveHandoff,
   normalizeDoveHandoffStatus,
   normalizeDovePrimaryRoleId,
@@ -143,7 +145,8 @@ test("task packet index exposes the task-centered model defaults", () => {
   assert.equal(index.version, 4);
   assert.deepEqual(DOVE_TASK_STAGES, ["plan", "execute", "audit"]);
   assert.deepEqual(DOVE_TASK_DOMAINS, ["paper", "experiment", "engineering"]);
-  assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
+  assert.deepEqual(DOVE_ARCHIVED_TASK_STATUSES, ["archived", "archived-with-lineage"]);
   assert.deepEqual(DOVE_TASK_CREATOR_KINDS, ["user", "system"]);
   assert.equal(index.taskModel.uniqueInitLevel, 0);
   assert.equal(index.taskModel.userDefaultLevel, 3);
@@ -166,7 +169,7 @@ test("workspace index normalization drops legacy removed command lists", () => {
 });
 
 test("boundary and handoff metadata stay separate from task statuses", () => {
-  assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.deepEqual(DOVE_TASK_STATUSES, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
   assert.ok(DOVE_BOUNDARY_TYPES.includes("awaiting-host-pass"));
   assert.ok(DOVE_BOUNDARY_TYPES.includes("host-tool-blocked"));
   assert.ok(DOVE_BOUNDARY_TYPES.includes("needs-review"));
@@ -238,6 +241,38 @@ test("runtime event and result indexes normalize legacy items into canonical ent
   assert.deepEqual(runtimeResults.entries.map((entry) => entry.id ?? entry.runId), ["run-legacy", "run-new"]);
   assert.equal(runtimeResults.entries[0].status, "error");
   assert.equal(runtimeResults.summary.runCount, 3);
+});
+
+test("execution receipts normalize lifecycle evidence and criteria coverage", () => {
+  const receipt = normalizeDoveExecutionReceipt({
+    id: "receipt-source-id",
+    runId: "run-receipt",
+    packetId: "packet-receipt",
+    command: "record_dove_mission_pass",
+    surface: "dove.mission",
+    actionType: "build",
+    summary: "Receipt fallback summary.",
+    evidenceLinks: [" evidence.md ", "evidence.md"],
+    artifactPaths: ["artifact.md"],
+    verificationEvidencePaths: ["verification.log"],
+    lifecycleTransition: { previousStatus: "ready", nextStatus: "completed" },
+    verifiedCriteria: [{ criterion: "Criterion covered", status: "verified", evidencePaths: ["verification.log"] }],
+    criteriaCoverage: {
+      complete: true,
+      required: ["Criterion covered"],
+      missing: [],
+      verified: [{ criterion: "Criterion covered", status: "verified", evidencePaths: ["verification.log"] }]
+    }
+  });
+
+  assert.equal(receipt.receiptId, "receipt-source-id");
+  assert.equal(receipt.resultSummary, "Receipt fallback summary.");
+  assert.deepEqual(receipt.evidenceLinks, ["evidence.md"]);
+  assert.deepEqual(receipt.artifactPaths, ["artifact.md"]);
+  assert.deepEqual(receipt.lifecycleTransition, { previousStatus: "ready", nextStatus: "completed" });
+  assert.equal(receipt.criteriaCoverage.complete, true);
+  assert.deepEqual(receipt.criteriaCoverage.required, ["Criterion covered"]);
+  assert.deepEqual(receipt.verifiedCriteria.map((item) => item.criterion), ["Criterion covered"]);
 });
 
 test("document ledger index records document evidence boundaries", () => {

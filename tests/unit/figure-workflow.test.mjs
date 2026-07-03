@@ -10,6 +10,7 @@ import {
   readJson,
   registerSource,
   runFigureWorkflow,
+  runWithMutationContext,
   upsertClaims,
   upsertFigurePlan,
   upsertNote,
@@ -91,8 +92,8 @@ test("runFigureWorkflow turns one SVG-backed intent into a validated figure", ()
       targetClaimIds: ["claim-figure-workflow"],
       sourceSections: ["method"],
       requiredVisualElements: ["evidence node", "claim node", "review gate"],
-      svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Evidence to claim</text></svg>",
-      caption: "The figure explains how source-backed evidence flows into a paper claim."
+      svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Evidence node flows to claim node through review gate</text></svg>",
+      caption: "The figure explains how source-backed evidence flows through a review gate into a paper claim."
     });
 
     assert.equal(result.status, "validated");
@@ -118,6 +119,36 @@ test("runFigureWorkflow turns one SVG-backed intent into a validated figure", ()
   }
 });
 
+test("runFigureWorkflow imports inline SVG as patch-plan operations without writing final files", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+
+    const result = runWithMutationContext(root, { actionId: "figure-workflow-inline-svg-patch-plan", mutationMode: "patch-plan" }, () => runFigureWorkflow(root, {
+      packetId,
+      figureId: "inline-svg-patch-plan",
+      runId: "inline-svg-patch-plan-run",
+      intent: "Draw the evidence-to-claim workflow for the method section in patch-plan mode.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      requiredVisualElements: ["evidence node", "claim node", "review gate"],
+      svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Evidence node flows to claim node through review gate</text></svg>",
+      caption: "The figure explains how source-backed evidence flows through a review gate into a paper claim."
+    }));
+
+    assert.equal(result.status, "validated");
+    assert.equal(result.mutationMode, "patch-plan");
+    assert.equal(result.writesApplied, false);
+    assert.equal(result.hostRollbackEligible, true);
+    assert.equal(result.finalSvgPath, ".dove/figures/inline-svg-patch-plan.final.svg");
+    assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "inline-svg-patch-plan.final.svg")), false);
+    assert.ok(result.mutationPlan.operations.some((operation) => operation.relativePath === ".dove/figures/inline-svg-patch-plan.final.svg"));
+    assert.ok(result.mutationPlan.operations.some((operation) => operation.relativePath === ARTIFACT_PATHS.figureQa));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("runFigureWorkflow auto-imports completed external-command provider output", () => {
   const root = tempRoot();
   try {
@@ -128,8 +159,9 @@ const fs = require("node:fs");
 const input = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 process.stdout.write(JSON.stringify({
   finalSvgPath: ".dove/figures/runs/" + input.runId + "/provider.svg",
-  svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider workflow</text></svg>",
-  caption: "Provider generated the workflow figure."
+  svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider output claim node</text></svg>",
+  caption: "Provider generated the workflow figure for the claim node.",
+  semanticCoverage: { visualElements: ["provider output", "claim node"] }
 }));
 `, "utf8");
     fs.chmodSync(providerScript, 0o755);
@@ -154,6 +186,56 @@ process.stdout.write(JSON.stringify({
     assert.equal(result.providerExecution.status, "completed");
     assert.equal(result.imported.finalSvgPath, ".dove/figures/provider-intent.final.svg");
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "provider-intent.final.svg")), true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runFigureWorkflow keeps provider execution as a direct-process boundary in patch-plan mode", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+    const providerScript = path.join(root, "patch-plan-workflow-provider.cjs");
+    fs.writeFileSync(providerScript, `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync("workflow-provider-spawned.txt", "spawned", "utf8");
+process.stdout.write(JSON.stringify({
+  finalSvgPath: ".dove/figures/runs/patch-plan-workflow-run/provider.svg",
+  svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider output claim node</text></svg>",
+  caption: "Provider generated the workflow figure for the claim node."
+}));
+`, "utf8");
+    fs.chmodSync(providerScript, 0o755);
+
+    const result = runWithMutationContext(root, { actionId: "figure-workflow-patch-plan", mutationMode: "patch-plan" }, () => runFigureWorkflow(root, {
+      packetId,
+      figureId: "patch-plan-workflow",
+      runId: "patch-plan-workflow-run",
+      intent: "Draw the provider-generated evidence workflow figure in patch-plan mode.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      requiredVisualElements: ["provider output", "claim node"],
+      executeProvider: true,
+      env: {
+        DOVE_FIGURE_PROVIDER_ID: "patch-plan-workflow-command",
+        DOVE_FIGURE_PROVIDER_TYPE: "external-command",
+        DOVE_FIGURE_COMMAND: providerScript
+      }
+    }));
+
+    assert.equal(result.status, "prepared-awaiting-output");
+    assert.equal(result.providerExecution.status, "awaiting-provider-output");
+    assert.equal(result.providerExecution.requiredMutationMode, "direct-process");
+    assert.equal(result.boundaryType, "awaiting-provider-output");
+    assert.equal(result.boundary.type, "awaiting-provider-output");
+    assert.ok(result.requiredActions.includes("retry-with-mutationMode-direct-process"));
+    assert.ok(result.boundary.requiredInputs.includes("mutationMode: direct-process"));
+    assert.equal(result.imported, null);
+    assert.equal(result.finalSvgPath, null);
+    assert.equal(result.mutationMode, "patch-plan");
+    assert.equal(result.writesApplied, false);
+    assert.equal(fs.existsSync(path.join(root, "workflow-provider-spawned.txt")), false);
+    assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "patch-plan-workflow.final.svg")), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -261,27 +343,76 @@ test("runFigureWorkflow surfaces provider failures as a boundary", () => {
   const root = tempRoot();
   try {
     const packetId = seedFigureWorkflowContext(root);
+    const providerScript = path.join(root, "failing-figure-provider.cjs");
+    fs.writeFileSync(providerScript, `#!/usr/bin/env node
+process.stderr.write("provider failed intentionally");
+process.exit(3);
+`, "utf8");
+    fs.chmodSync(providerScript, 0o755);
 
     const result = runFigureWorkflow(root, {
       packetId,
       figureId: "provider-failure",
       runId: "provider-failure-run",
-      intent: "Try to draw a figure with provider execution enabled but no provider configured.",
+      intent: "Try to draw a figure with a provider that exits unsuccessfully.",
       targetClaimIds: ["claim-figure-workflow"],
       sourceSections: ["method"],
       requiredVisualElements: ["provider failure marker"],
       executeProvider: true,
-      env: {}
+      env: {
+        DOVE_CONFIG_PATH: path.join(root, "missing-config.json"),
+        DOVE_FIGURE_PROVIDER_ID: "failing-command",
+        DOVE_FIGURE_PROVIDER_TYPE: "external-command",
+        DOVE_FIGURE_COMMAND: providerScript
+      }
     });
 
     assert.equal(result.status, "provider-failed");
     assert.equal(result.providerExecution.status, "failed");
+    assert.match(result.providerExecution.error, /provider failed intentionally/);
     assert.equal(result.boundaryType, "provider-failed");
     assert.equal(result.boundary.type, "provider-failed");
     assert.deepEqual(result.boundary.requiredInputs, ["provider-error-resolution-or-manual-output"]);
     assert.ok(result.requiredActions.includes("fix-figure-provider-and-retry"));
     assert.ok(result.requiredActions.includes("import-manual-figure-output"));
     assert.equal(result.nextAction, "project:dove.figure");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runFigureWorkflow routes gpt-image2 missing key to a secret boundary", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+
+    const result = runFigureWorkflow(root, {
+      packetId,
+      figureId: "gpt-image2-missing-key",
+      runId: "gpt-image2-missing-key-run",
+      intent: "Draw the gpt-image2 evidence workflow figure.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      requiredVisualElements: ["evidence node", "claim node"],
+      providerId: "gpt-image2",
+      executeProvider: true,
+      env: {
+        DOVE_CONFIG_PATH: path.join(root, "missing-config.json"),
+        DOVE_FIGURE_PROVIDER_ID: "gpt-image2"
+      }
+    });
+
+    assert.equal(result.status, "missing-secret-env");
+    assert.equal(result.providerReadiness.status, "missing-secret-env");
+    assert.equal(result.providerExecution.status, "missing-secret-env");
+    assert.equal(result.providerExecution.apiKeyEnv, "OPENAI_API_KEY");
+    assert.equal(result.boundaryType, "missing-secret-env");
+    assert.equal(result.boundary.type, "missing-secret-env");
+    assert.deepEqual(result.boundary.requiredInputs, ["OPENAI_API_KEY"]);
+    assert.ok(result.requiredActions.includes("set-provider-api-key-env"));
+    assert.equal(result.imported, null);
+    assert.equal(result.finalSvgPath, null);
+    assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "gpt-image2-missing-key.final.svg")), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

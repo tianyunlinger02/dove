@@ -6,6 +6,8 @@ import path from "node:path";
 import { ARTIFACT_PATHS, createMutationProvenanceIndex, normalizeMutationProvenanceIndex } from "./schema.mjs";
 
 const mutationStorage = new AsyncLocalStorage();
+const DIRECT_PROCESS_ROLLBACK_REASON = "direct-process writes are performed by the Dove process, not by host-tracked file edits; native programming-terminal rollback cannot be verified for those writes.";
+const PATCH_PLAN_ROLLBACK_ADVICE = "Use mutationMode: patch-plan and apply the returned operations through host-tracked file edits before relying on host rollback.";
 
 function sha256(content) {
   return crypto.createHash("sha256").update(content, "utf8").digest("hex");
@@ -71,6 +73,7 @@ export class MutationContext {
     this.id = options.id ?? buildMutationId();
     this.actionId = options.actionId ?? "unspecified";
     this.mutationMode = normalizeMutationMode(options.mutationMode);
+    this.mutationModeSource = options.mutationMode === "patch-plan" || options.mutationMode === "direct-process" ? "explicit" : "default";
     this.hostId = options.hostId ?? "unknown";
     this.packetId = options.packetId ?? null;
     this.createdAt = options.createdAt ?? new Date().toISOString();
@@ -200,6 +203,7 @@ export class MutationContext {
       actionId: this.actionId,
       packetId: this.packetId,
       mutationMode: this.mutationMode,
+      mutationModeSource: this.mutationModeSource,
       writesApplied: !this.patchPlanMode,
       appliedBy: this.patchPlanMode ? "host-tracked-file-edits-required" : "node-fs",
       hostId: this.hostId,
@@ -209,6 +213,9 @@ export class MutationContext {
       directProcessWritesAreRollbackSafe: false,
       externalWriteCaptureVerified: false,
       doveRestoreSupported: false,
+      hostRollbackIneligibleReason: this.patchPlanMode ? null : DIRECT_PROCESS_ROLLBACK_REASON,
+      recommendedMutationMode: this.patchPlanMode ? null : "patch-plan",
+      rollbackAdvice: this.patchPlanMode ? null : PATCH_PLAN_ROLLBACK_ADVICE,
       operationCount: operations.length,
       paths: operations.map((operation) => operation.relativePath),
       createdAt: this.createdAt
@@ -228,10 +235,14 @@ export class MutationContext {
       mutationId: this.id,
       actionId: this.actionId,
       mutationMode: this.mutationMode,
+      mutationModeSource: this.mutationModeSource,
       writesApplied,
       operationCount: operations.length,
       paths: operations.map((operation) => operation.relativePath),
       hostRollbackEligible: this.patchPlanMode,
+      hostRollbackIneligibleReason: this.patchPlanMode ? null : DIRECT_PROCESS_ROLLBACK_REASON,
+      recommendedMutationMode: this.patchPlanMode ? null : "patch-plan",
+      rollbackAdvice: this.patchPlanMode ? null : PATCH_PLAN_ROLLBACK_ADVICE,
       externalWriteCaptureVerified: false,
       doveRestoreSupported: false
     };
@@ -244,12 +255,16 @@ export class MutationContext {
     const metadata = {
       mutationId: this.id,
       mutationMode: this.mutationMode,
+      mutationModeSource: this.mutationModeSource,
       writesApplied,
       hostRollbackEligible: this.patchPlanMode,
       hostTrackedFileEditsRequired: this.patchPlanMode,
       directProcessWritesAreRollbackSafe: false,
       externalWriteCaptureVerified: false,
       doveRestoreSupported: false,
+      hostRollbackIneligibleReason: this.patchPlanMode ? null : DIRECT_PROCESS_ROLLBACK_REASON,
+      recommendedMutationMode: this.patchPlanMode ? null : "patch-plan",
+      rollbackAdvice: this.patchPlanMode ? null : PATCH_PLAN_ROLLBACK_ADVICE,
       mutationSummary: this.summary({ writesApplied })
     };
     if (this.patchPlanMode) {
@@ -259,6 +274,7 @@ export class MutationContext {
         actionId: this.actionId,
         hostId: this.hostId,
         packetId: this.packetId,
+        mutationModeSource: this.mutationModeSource,
         createdAt: this.createdAt,
         writesApplied: false,
         hostTrackedFileEditsRequired: true,

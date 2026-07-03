@@ -2,6 +2,7 @@ import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
+  DOVE_ARCHIVED_TASK_STATUSES,
   DOVE_AUDIO_CONTEXT_POLICY,
   DOVE_TASK_CREATOR_KINDS,
   DOVE_TASK_DOMAINS,
@@ -13,6 +14,7 @@ import {
   normalizeDoveBoundary,
   normalizeDoveBoundaryType,
   normalizeDoveExecutionContract,
+  normalizeDoveExecutionReceipt,
   normalizeDoveHandoff,
   normalizeDoveVerifiedCriteria,
   normalizeDovePrimaryRoleId
@@ -103,10 +105,11 @@ function taskContextPath(packetId) {
   return path.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`);
 }
 
-const ARCHIVED_TASK_STATUSES = new Set(["archived", "archived-with-lineage"]);
+const ARCHIVED_TASK_STATUSES = new Set(DOVE_ARCHIVED_TASK_STATUSES);
 
 function activeStatus(status) {
-  return !["completed", "killed", "archived", "archived-with-lineage"].includes(status);
+  const normalized = String(status ?? "").trim().toLowerCase();
+  return !["completed", "killed"].includes(normalized) && !ARCHIVED_TASK_STATUSES.has(normalized);
 }
 
 function archivedTaskStatus(task) {
@@ -161,14 +164,14 @@ function checklistCompletionBlock(root, task, status, responseLanguage = "zh") {
 function normalizeIndex(index = createTaskPacketsIndex()) {
   const base = createTaskPacketsIndex();
   const items = Array.isArray(index.items) ? index.items.filter((item) => item && typeof item === "object" && !Array.isArray(item)) : [];
-  const activeInit = items.find((item) => item.level === 0 && item.status !== "killed") ?? null;
+  const activeInit = items.find((item) => item.level === 0 && activeStatus(item.status)) ?? null;
   const activeItems = items.filter((item) => item.level !== 0 && activeStatus(item.status));
   const lifecycleCounts = {};
   const stageCounts = Object.fromEntries(DOVE_TASK_STAGES.map((stage) => [stage, 0]));
   const domainCounts = Object.fromEntries(DOVE_TASK_DOMAINS.map((domain) => [domain, 0]));
   const levelCounts = {};
   for (const item of items) {
-    const status = normalizeStatus(item.status ?? item.lifecycleStatus, "pending");
+    const status = archivedTaskStatus(item) ? "archived" : normalizeStatus(item.status ?? item.lifecycleStatus, "pending");
     lifecycleCounts[status] = (lifecycleCounts[status] ?? 0) + 1;
     if (DOVE_TASK_STAGES.includes(item.stage)) {
       stageCounts[item.stage] += 1;
@@ -813,10 +816,23 @@ function operatorHandoffSuggestion(result = {}, responseLanguage = "zh") {
   if (result.blockerPlanConversion?.createdMissions?.length > 0) {
     return {
       presentation: "dove-handoff-suggestion",
-      boundaryType: "blocked-mission-investigation",
+      boundaryType: "blocked-boundary",
       ownerRole: "planner",
       nextRole: "planner",
       requires: result.blockerPlanConversion.createdMissions.map((mission) => mission.id),
+      summary: doveText(responseLanguage, "resultCardHandoffResolveBoundary", { ownerRole: "planner" })
+    };
+  }
+  const proposedBlockedTaskIds = normalizeStringArray(result.blockerPlanConversion?.proposedBlockedTaskIds);
+  if (proposedBlockedTaskIds.length > 0) {
+    return {
+      presentation: "dove-handoff-suggestion",
+      boundaryType: "blocked-boundary",
+      ownerRole: "planner",
+      nextRole: "planner",
+      requires: proposedBlockedTaskIds,
+      requiredActions: ["rerun-operator-with-blockerInvestigationMode-create"],
+      reason: result.stopReason,
       summary: doveText(responseLanguage, "resultCardHandoffResolveBoundary", { ownerRole: "planner" })
     };
   }
@@ -844,6 +860,7 @@ function missionResultCard(task = {}, result = {}, context = {}, responseLanguag
     evidenceLinks: context.evidenceLinks,
     artifactRefs: context.artifactRefs,
     validationEvidence: context.validationEvidence,
+    executionReceipt: context.executionReceipt ?? result.executionReceipt ?? result.iterations?.[0]?.output?.executionReceipt,
     evidenceExplanation: context.evidenceExplanation,
     artifactResolution: context.artifactResolution,
     durableWrites: taskWorkflowDurableWrites(responseLanguage, { runtime: true, lifecycle: true, planConversion: context.planConversion }),
@@ -857,9 +874,39 @@ function missionResultCard(task = {}, result = {}, context = {}, responseLanguag
   }, responseLanguage);
 }
 
+function latestExecutionReceipt(iterations = [], fallback = null) {
+  return [...(Array.isArray(iterations) ? iterations : [])]
+    .reverse()
+    .map((iteration) => normalizeDoveExecutionReceipt(iteration.output?.executionReceipt ?? iteration.executionReceipt, null))
+    .find(Boolean) ?? normalizeDoveExecutionReceipt(fallback, null);
+}
+
+function mergeDoveExecutionReceipts(primary, fallback = null) {
+  const primaryReceipt = normalizeDoveExecutionReceipt(primary, null);
+  const fallbackReceipt = normalizeDoveExecutionReceipt(fallback, null);
+  if (!primaryReceipt && !fallbackReceipt) {
+    return null;
+  }
+  return normalizeDoveExecutionReceipt({
+    ...(fallbackReceipt ?? {}),
+    ...(primaryReceipt ?? {}),
+    artifactRefs: normalizeStringArray([...(fallbackReceipt?.artifactRefs ?? []), ...(primaryReceipt?.artifactRefs ?? [])]),
+    artifactPaths: normalizeStringArray([...(fallbackReceipt?.artifactPaths ?? []), ...(primaryReceipt?.artifactPaths ?? [])]),
+    evidenceLinks: normalizeStringArray([...(fallbackReceipt?.evidenceLinks ?? []), ...(primaryReceipt?.evidenceLinks ?? [])]),
+    evidencePaths: normalizeStringArray([...(fallbackReceipt?.evidencePaths ?? []), ...(primaryReceipt?.evidencePaths ?? [])]),
+    validationEvidencePaths: normalizeStringArray([...(fallbackReceipt?.validationEvidencePaths ?? []), ...(primaryReceipt?.validationEvidencePaths ?? [])]),
+    verificationEvidencePaths: normalizeStringArray([...(fallbackReceipt?.verificationEvidencePaths ?? []), ...(primaryReceipt?.verificationEvidencePaths ?? [])]),
+    verifiedCriteria: normalizeDoveVerifiedCriteria([...(fallbackReceipt?.verifiedCriteria ?? []), ...(primaryReceipt?.verifiedCriteria ?? [])]),
+    validationGateResults: objectArray([...(fallbackReceipt?.validationGateResults ?? []), ...(primaryReceipt?.validationGateResults ?? [])]),
+    criteriaCoverage: primaryReceipt?.criteriaCoverage ?? fallbackReceipt?.criteriaCoverage ?? null,
+    boundary: primaryReceipt?.boundary ?? fallbackReceipt?.boundary ?? null
+  }, fallbackReceipt);
+}
+
 function autoResultCard(task = {}, result = {}, context = {}, responseLanguage = "zh") {
   const evidenceLinks = result.iterations?.flatMap((iteration) => normalizeStringArray(iteration.output?.evidenceLinks ?? iteration.evidenceLinks)) ?? [];
   const artifactRefs = result.iterations?.flatMap((iteration) => normalizeStringArray(iteration.output?.artifactRefs ?? iteration.artifactRefs)) ?? [];
+  const executionReceipt = latestExecutionReceipt(result.iterations, result.executionReceipt);
   const handoffSuggestion = buildWorkflowHandoffSuggestion(task, result, responseLanguage);
   const baseNextActions = context.nextActions ?? (result.status === "awaiting-host-pass"
     ? [{ title: doveText(responseLanguage, "resultCardNextProvideEvidence"), command: "record_dove_mission_pass", packetId: task.id, confirmationRequired: true }]
@@ -879,6 +926,7 @@ function autoResultCard(task = {}, result = {}, context = {}, responseLanguage =
     taskStatusAfter: result.taskStatusAfter,
     evidenceLinks,
     artifactRefs,
+    executionReceipt,
     durableWrites: taskWorkflowDurableWrites(responseLanguage, { runtime: true, lifecycle: result.taskStatusBefore !== result.taskStatusAfter || Boolean(result.boundary) }),
     boundary: result.boundary ?? task.boundary ?? null,
     nextActions,
@@ -892,7 +940,10 @@ function autoResultCard(task = {}, result = {}, context = {}, responseLanguage =
 function operatorResultCard(result = {}, context = {}, responseLanguage = "zh") {
   const evidenceLinks = result.iterations?.flatMap((iteration) => normalizeStringArray(iteration.evidenceLinks ?? iteration.output?.evidenceLinks)) ?? [];
   const artifactRefs = result.iterations?.flatMap((iteration) => normalizeStringArray(iteration.artifactRefs ?? iteration.output?.artifactRefs)) ?? [];
-  const createdBlockerCount = result.blockerPlanConversion?.createdMissions?.length ?? 0;
+  const executionReceipt = latestExecutionReceipt(result.iterations, result.executionReceipt);
+  const createdBlockerCount = result.blockerPlanConversion?.createdCount ?? result.blockerPlanConversion?.createdMissions?.length ?? 0;
+  const reusedBlockerCount = result.blockerPlanConversion?.reusedCount ?? result.blockerPlanConversion?.reusedMissions?.length ?? 0;
+  const proposedBlockerCount = result.blockerPlanConversion?.proposedBlockedTaskIds?.length ?? 0;
   const skippedHostPassCount = result.skippedHostPassTaskIds?.length ?? 0;
   const runtimeRecorded = result.runtimeRecorded !== false;
   const handoffSuggestion = operatorHandoffSuggestion(result, responseLanguage);
@@ -917,10 +968,11 @@ function operatorResultCard(result = {}, context = {}, responseLanguage = "zh") 
     runId: result.id,
     status: result.status,
     outcome: result.outcome,
-    summary: `updated=${result.updatedTaskIds?.length ?? 0}; awaiting-results=${result.awaitingResultTaskIds?.length ?? 0}; skipped-host-pass=${skippedHostPassCount}; blockers-created=${createdBlockerCount}`,
+    summary: `updated=${result.updatedTaskIds?.length ?? 0}; awaiting-results=${result.awaitingResultTaskIds?.length ?? 0}; skipped-host-pass=${skippedHostPassCount}; blockers-proposed=${proposedBlockerCount}; blockers-created=${createdBlockerCount}; blockers-reused=${reusedBlockerCount}`,
     stopReason: result.stopReason,
     evidenceLinks,
     artifactRefs,
+    executionReceipt,
     durableWrites: [
       ...(runtimeRecorded ? [doveText(responseLanguage, "resultCardRuntimeResultRecorded")] : []),
       ...(result.updatedTaskIds?.length > 0 ? [doveText(responseLanguage, "resultCardTaskPacketUpdated"), doveText(responseLanguage, "resultCardTaskIndexUpdated"), doveText(responseLanguage, "resultCardRuntimeEventRecorded")] : []),
@@ -946,7 +998,8 @@ function statusAdjustmentResultCard(result = {}, responseLanguage = "zh") {
     status: result.status,
     outcome: result.status,
     summary: `applied=${applied.length}; skipped=${skipped.length}; rejected=${rejected.length}`,
-    durableWrites: applied.length > 0 ? [doveText(responseLanguage, "resultCardTaskPacketUpdated"), doveText(responseLanguage, "resultCardTaskIndexUpdated"), doveText(responseLanguage, "resultCardRuntimeEventRecorded")] : [],
+    executionReceipt: result.executionReceipt ?? result.executionReceipts?.[0] ?? null,
+    durableWrites: applied.length > 0 ? [doveText(responseLanguage, "resultCardTaskPacketUpdated"), doveText(responseLanguage, "resultCardTaskIndexUpdated"), doveText(responseLanguage, "resultCardRuntimeEventRecorded"), doveText(responseLanguage, "resultCardRuntimeResultRecorded")] : [],
     nextAction: "project:dove.status",
     nextActions: [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: "project:dove.status" }],
     foreground: true,
@@ -1853,6 +1906,7 @@ const MISSION_PASS_FIELDS = [
   "verificationEvidencePaths",
   "verifiedCriteria",
   "executionContract",
+  "executionReceipt",
   "artifactRefs",
   "artifactPaths",
   "command",
@@ -1907,16 +1961,30 @@ function hasPlanMissionOutput(args = {}) {
 }
 
 function completionEvidenceForPayload(payload = {}) {
-  const verifiedCriteria = normalizeDoveVerifiedCriteria(payload.verifiedCriteria);
-  const verificationEvidencePaths = normalizeStringArray(payload.verificationEvidencePaths);
-  const validationEvidencePaths = normalizeStringArray(payload.validationEvidencePaths);
+  const receipt = normalizeDoveExecutionReceipt(payload.executionReceipt, null);
+  const verifiedCriteria = normalizeDoveVerifiedCriteria([
+    ...normalizeDoveVerifiedCriteria(payload.verifiedCriteria),
+    ...normalizeDoveVerifiedCriteria(receipt?.verifiedCriteria)
+  ]);
+  const verificationEvidencePaths = normalizeStringArray([
+    ...normalizeStringArray(payload.verificationEvidencePaths),
+    ...normalizeStringArray(receipt?.verificationEvidencePaths)
+  ]);
+  const validationEvidencePaths = normalizeStringArray([
+    ...normalizeStringArray(payload.validationEvidencePaths),
+    ...normalizeStringArray(receipt?.validationEvidencePaths)
+  ]);
   const evidenceLinks = normalizeStringArray([
     ...normalizeStringArray(payload.evidenceLinks),
-    ...normalizeStringArray(payload.evidencePaths)
+    ...normalizeStringArray(payload.evidencePaths),
+    ...normalizeStringArray(receipt?.evidenceLinks),
+    ...normalizeStringArray(receipt?.evidencePaths)
   ]);
   const artifactRefs = normalizeStringArray([
     ...normalizeStringArray(payload.artifactRefs),
-    ...normalizeStringArray(payload.artifactPaths)
+    ...normalizeStringArray(payload.artifactPaths),
+    ...normalizeStringArray(receipt?.artifactRefs),
+    ...normalizeStringArray(receipt?.artifactPaths)
   ]);
   const criteriaEvidencePaths = normalizeStringArray(verifiedCriteria.flatMap((item) => item.evidencePaths ?? []));
   const evidencePaths = normalizeStringArray([
@@ -1933,7 +2001,8 @@ function completionEvidenceForPayload(payload = {}) {
     verificationEvidencePaths,
     verifiedCriteria,
     criteriaEvidencePaths,
-    evidencePaths
+    evidencePaths,
+    executionReceipt: receipt
   };
 }
 
@@ -2009,6 +2078,37 @@ function completionVerificationBlock(task, args = {}, responseLanguage = "zh") {
     };
   }
   return null;
+}
+
+function buildExecutionReceipt({ payload = {}, taskBefore = {}, taskAfter = {}, runId, surface, command, actionType, status, outcome, summary, nextAction, evidence = {}, startedAt, completedAt, boundary = null }) {
+  const contract = taskAfter.executionContract ?? taskBefore.executionContract ?? payload.executionContract;
+  const criteriaCoverage = doveExecutionCriteriaCoverage(contract, evidence.verifiedCriteria);
+  return normalizeDoveExecutionReceipt(payload.executionReceipt, {
+    receiptId: `${runId}-receipt`,
+    runId,
+    packetId: taskAfter.id ?? taskBefore.id ?? null,
+    command,
+    surface,
+    actionType,
+    startedAt,
+    completedAt,
+    status,
+    outcome,
+    resultSummary: summary,
+    publicSafeSummary: summary,
+    nextAction,
+    lifecycleTransition: {
+      previousStatus: taskBefore.status ?? null,
+      nextStatus: taskAfter.status ?? status ?? null
+    },
+    artifactRefs: evidence.artifactRefs,
+    evidenceLinks: evidence.evidenceLinks,
+    validationEvidencePaths: evidence.validationEvidencePaths,
+    verificationEvidencePaths: evidence.verificationEvidencePaths,
+    verifiedCriteria: evidence.verifiedCriteria,
+    criteriaCoverage,
+    boundary
+  });
 }
 
 function missionPassArgsForTask(task, args = {}) {
@@ -2091,6 +2191,25 @@ export function recordDoveMissionPass(root, args = {}) {
   const planConversion = taskBefore.stage === "plan" && resultStatus === "completed" && payload.convertPlanToMissions !== false
     ? materializePlanResultMissions(root, taskBefore, payload, runId)
     : null;
+  const startedAt = normalizeString(args.startedAt, timestamp);
+  const completedAt = normalizeString(args.completedAt, timestamp);
+  const executionReceipt = buildExecutionReceipt({
+    payload,
+    taskBefore,
+    taskAfter: task,
+    runId,
+    surface: "dove.mission",
+    command,
+    actionType: taskBefore.stage === "plan" ? "plan" : "build",
+    status: resultStatus,
+    outcome,
+    summary,
+    nextAction,
+    evidence: payloadEvidence,
+    startedAt,
+    completedAt,
+    boundary: task.boundary ?? null
+  });
   const result = {
     id: runId,
     surface: "dove.mission",
@@ -2118,16 +2237,18 @@ export function recordDoveMissionPass(root, args = {}) {
           validationEvidencePaths: payloadEvidence.validationEvidencePaths,
           verificationEvidencePaths: payloadEvidence.verificationEvidencePaths,
           verifiedCriteria: payloadEvidence.verifiedCriteria,
+          executionReceipt,
           nextAction,
           planConversion
         },
-        startedAt: normalizeString(args.startedAt, timestamp),
-        completedAt: normalizeString(args.completedAt, timestamp)
+        startedAt,
+        completedAt
       }
     ],
     planConversion,
     createdPlanMissions: planConversion?.createdMissions ?? [],
     reusedPlanMissions: planConversion?.reusedMissions ?? [],
+    executionReceipt,
     taskStatusBefore: taskBefore.status,
     taskStatusAfter: task.status,
     responseLanguage,
@@ -2148,6 +2269,7 @@ export function recordDoveMissionPass(root, args = {}) {
     validationEvidence: payloadEvidence.validationEvidencePaths,
     verificationEvidence: payloadEvidence.verificationEvidencePaths,
     verifiedCriteria: payloadEvidence.verifiedCriteria,
+    executionReceipt,
     planConversion,
     artifactResolution: selection.artifactResolution,
     evidenceExplanation: selectionEvidenceExplanation,
@@ -2162,6 +2284,7 @@ export function recordDoveMissionPass(root, args = {}) {
     task,
     result,
     resultCard,
+    executionReceipt,
     preActionGuidanceSummary,
     evidenceLinks,
     artifactRefs,
@@ -2258,6 +2381,11 @@ function lifecycleFieldsForStatus(status, args = {}, timestamp = nowIso(), respo
     fields.blockedReason = normalizeString(args.reason ?? args.blockReason ?? args.blockedReason, "");
     fields.nextAction = fields.nextAction ?? "project:dove.status";
   }
+  if (status === "archived") {
+    fields.archivedAt = timestamp;
+    fields.archiveReason = normalizeString(args.reason ?? args.archiveReason, "archived through status adjustment");
+    fields.nextAction = fields.nextAction ?? "project:dove.status";
+  }
   return fields;
 }
 
@@ -2274,6 +2402,7 @@ function normalizeStatusAdjustment(item, index) {
     validationEvidencePaths: normalizeStringArray(source.validationEvidencePaths),
     verificationEvidencePaths: normalizeStringArray(source.verificationEvidencePaths),
     verifiedCriteria: normalizeDoveVerifiedCriteria(source.verifiedCriteria),
+    executionReceipt: normalizeDoveExecutionReceipt(source.executionReceipt, null),
     executionContract: normalizeDoveExecutionContract(source.executionContract, null),
     artifactRefs: normalizeStringArray(source.artifactRefs ?? source.artifactPaths)
   };
@@ -2344,6 +2473,9 @@ export function applyDoveStatusAdjustments(root, args = {}) {
     return catalog.byId.get(normalizeTaskPacketId(adjustment.packetId))?.level ?? -1;
   };
   const orderedAdjustments = [...adjustments].sort((left, right) => adjustmentLevel(right) - adjustmentLevel(left) || left.index - right.index);
+  const resultId = normalizeTaskPacketId(args.runId ?? `status-adjust-${Date.now().toString(36)}`);
+  const executionIterations = [];
+  const executionReceipts = [];
   const applied = [];
   const skipped = [];
   const rejected = [];
@@ -2373,12 +2505,47 @@ export function applyDoveStatusAdjustments(root, args = {}) {
       rejected.push({ ...adjustment, packetId, reason: verificationBlock.message, completionBlock: verificationBlock });
       continue;
     }
-    const fields = lifecycleFieldsForStatus(adjustment.status, { ...adjustment, surface: "dove.status", command: "apply_dove_status_adjustments" }, nowIso(), responseLanguage);
+    const transitionAt = nowIso();
+    const fields = lifecycleFieldsForStatus(adjustment.status, { ...adjustment, runId: `${resultId}-${packetId}`, surface: "dove.status", command: "apply_dove_status_adjustments" }, transitionAt, responseLanguage);
     if (fullPacket.status === adjustment.status) {
       skipped.push({ packetId, status: adjustment.status, displayStatus: adjustment.status === "completed" || adjustment.status === "killed" ? "done" : adjustment.status, reason: doveText(responseLanguage, "statusAdjustSameReason") });
       continue;
     }
     const updated = updateTaskLifecycle(root, fullPacket, adjustment.status, fields);
+    const payloadEvidence = completionEvidenceForPayload(adjustment);
+    const executionReceipt = buildExecutionReceipt({
+      payload: { ...adjustment, runId: `${resultId}-${packetId}` },
+      taskBefore: fullPacket,
+      taskAfter: updated,
+      runId: `${resultId}-${packetId}`,
+      surface: "dove.status",
+      command: "apply_dove_status_adjustments",
+      actionType: adjustment.status === "completed" ? "verify" : "cleanup",
+      status: adjustment.status,
+      outcome: `status-${adjustment.status}`,
+      summary: adjustment.summary || adjustment.reason || `status-${adjustment.status}`,
+      nextAction: updated.nextAction ?? "project:dove.status",
+      evidence: payloadEvidence,
+      startedAt: transitionAt,
+      completedAt: transitionAt,
+      boundary: updated.boundary ?? null
+    });
+    executionReceipts.push(executionReceipt);
+    executionIterations.push({
+      iteration: executionIterations.length + 1,
+      packetId,
+      command: "apply_dove_status_adjustments",
+      status: adjustment.status,
+      outcome: `status-${adjustment.status}`,
+      startedAt: transitionAt,
+      completedAt: transitionAt,
+      artifactRefs: payloadEvidence.artifactRefs,
+      evidenceLinks: payloadEvidence.evidenceLinks,
+      validationEvidencePaths: payloadEvidence.validationEvidencePaths,
+      verificationEvidencePaths: payloadEvidence.verificationEvidencePaths,
+      verifiedCriteria: payloadEvidence.verifiedCriteria,
+      executionReceipt
+    });
     catalog.byId.set(packetId, updated);
     applied.push({
       packetId,
@@ -2386,19 +2553,39 @@ export function applyDoveStatusAdjustments(root, args = {}) {
       toStatus: updated.status,
       displayStatus: updated.status === "completed" || updated.status === "killed" ? "done" : updated.status,
       title: updated.title,
-      level: updated.level
+      level: updated.level,
+      executionReceipt
     });
   }
+  const completedAt = nowIso();
   const result = {
+    id: resultId,
+    runId: resultId,
+    surface: "dove.status",
+    command: "apply_dove_status_adjustments",
     status: rejected.length > 0 && applied.length > 0 ? "partially-applied" : rejected.length > 0 ? "rejected" : "applied",
+    outcome: rejected.length > 0 && applied.length > 0 ? "partially-applied" : rejected.length > 0 ? "rejected" : "applied",
+    packetIds: applied.map((item) => item.packetId),
     applied,
     skipped,
     rejected,
+    iterations: executionIterations,
+    iterationCount: executionIterations.length,
+    executionReceipts,
+    executionReceipt: executionReceipts[0] ?? null,
     statusChoices: DOVE_TASK_STATUSES,
     activeTaskIds: loadTaskIndex(root).taskModel.activeTaskIds,
+    foreground: true,
+    background: false,
+    daemon: false,
     responseLanguage,
-    taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex
+    taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex,
+    createdAt: completedAt,
+    updatedAt: completedAt
   };
+  if (applied.length > 0) {
+    persistAutoResult(root, result);
+  }
   return {
     ...result,
     resultCard: statusAdjustmentResultCard(result, responseLanguage)
@@ -2435,6 +2622,18 @@ function operatorQueue(index) {
     blocked: tasks.filter((task) => task.status === "blocked" || task.unresolvedDependencyIds.length > 0),
     pending: tasks.filter((task) => task.status === "pending")
   };
+}
+
+function blockerInvestigationTargetTasks(blockedTasks = []) {
+  return blockedTasks.filter((task) => {
+    if (normalizeStringArray(task.unresolvedDependencyIds).length > 0) {
+      return true;
+    }
+    if (task.status !== "blocked" || task.derivedFrom === "blocked-mission-investigation") {
+      return false;
+    }
+    return Object.keys(plainObject(task.boundary)).length === 0;
+  });
 }
 
 function sortOperatorTasks(tasks = []) {
@@ -2501,11 +2700,51 @@ function operatorQueuePreview(queue = {}, responseLanguage = "zh") {
   return Object.fromEntries(Object.entries(cards).map(([key, value]) => [key, value.slice(0, 2)]));
 }
 
-function compactOperatorBlockerPlanConversion(conversion = {}) {
+function normalizeBlockerInvestigationMode(args = {}) {
+  const explicit = normalizeString(args.blockerInvestigationMode, null);
+  if (explicit) {
+    const mode = explicit.toLowerCase();
+    if (!["none", "propose", "create"].includes(mode)) {
+      throw new Error('blockerInvestigationMode must be "none", "propose", or "create".');
+    }
+    return mode;
+  }
+  return args.createBlockedInvestigations === true ? "create" : "propose";
+}
+
+function emptyOperatorBlockerPlanConversion(blockedTasks = [], mode = "propose") {
+  const blockedTaskIds = operatorTaskIds(blockedTasks);
   return {
-    missionCount: conversion.missionCount ?? 0,
-    createdMissionIds: operatorTaskIds(conversion.createdMissions ?? []),
-    reusedMissionIds: operatorTaskIds(conversion.reusedMissions ?? []),
+    mode,
+    proposalOnly: mode !== "create",
+    blockedTaskIds,
+    proposedBlockedTaskIds: mode === "propose" ? blockedTaskIds : [],
+    createdMissions: [],
+    reusedMissions: [],
+    createdCount: 0,
+    reusedCount: 0,
+    missionCount: 0,
+    createdMissionIds: [],
+    reusedMissionIds: [],
+    taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex
+  };
+}
+
+function compactOperatorBlockerPlanConversion(conversion = {}) {
+  const createdMissionIds = normalizeStringArray(conversion.createdMissionIds ?? operatorTaskIds(conversion.createdMissions ?? []));
+  const reusedMissionIds = normalizeStringArray(conversion.reusedMissionIds ?? operatorTaskIds(conversion.reusedMissions ?? []));
+  const createdCount = conversion.createdCount ?? createdMissionIds.length;
+  const reusedCount = conversion.reusedCount ?? reusedMissionIds.length;
+  return {
+    mode: conversion.mode ?? "propose",
+    proposalOnly: conversion.proposalOnly !== false,
+    blockedTaskIds: normalizeStringArray(conversion.blockedTaskIds),
+    proposedBlockedTaskIds: normalizeStringArray(conversion.proposedBlockedTaskIds),
+    createdCount,
+    reusedCount,
+    missionCount: conversion.missionCount ?? createdCount,
+    createdMissionIds,
+    reusedMissionIds,
     taskIndexPath: conversion.taskIndexPath ?? ARTIFACT_PATHS.taskPacketsIndex
   };
 }
@@ -2543,6 +2782,7 @@ function operatorAwaitingHostIteration(task, timestamp, responseLanguage = "zh")
 function applyOperatorHostResult(root, taskItem, taskResult, timestamp, responseLanguage = "zh", runId = null) {
   const task = loadFullTask(root, taskItem);
   const taskStatus = normalizeMissionPassStatus(taskResult);
+  const taskResultEvidence = completionEvidenceForPayload(taskResult);
   const verificationBlock = taskStatus === "completed" ? completionVerificationBlock(task, taskResult, responseLanguage) : null;
   if (verificationBlock) {
     const updatedTask = updateTaskLifecycle(root, task, "blocked", {
@@ -2567,15 +2807,19 @@ function applyOperatorHostResult(root, taskItem, taskResult, timestamp, response
         stopReason: verificationBlock.message,
         boundary: updatedTask.boundary,
         requiredActions: verificationBlock.requiredActions ?? [],
+        evidenceLinks: taskResultEvidence.evidenceLinks,
+        artifactRefs: taskResultEvidence.artifactRefs,
+        verificationEvidencePaths: taskResultEvidence.verificationEvidencePaths,
+        verifiedCriteria: taskResultEvidence.verifiedCriteria,
+        executionReceipt: taskResultEvidence.executionReceipt,
         startedAt: normalizeString(taskResult.startedAt, timestamp),
         completedAt: normalizeString(taskResult.completedAt, timestamp)
       }
     };
   }
   const fields = lifecycleFieldsForStatus(taskStatus, { ...taskResult, runId, surface: "dove.operator", command: "host-pass-result" }, timestamp, responseLanguage);
-  fields.artifactRefs = normalizeStringArray([...(Array.isArray(task.artifactRefs) ? task.artifactRefs : []), ...normalizeStringArray(taskResult.artifactRefs ?? taskResult.artifactPaths)]);
+  fields.artifactRefs = normalizeStringArray([...(Array.isArray(task.artifactRefs) ? task.artifactRefs : []), ...taskResultEvidence.artifactRefs]);
   const updatedTask = updateTaskLifecycle(root, task, taskStatus, fields);
-  const evidence = completionEvidenceForPayload(taskResult);
   return {
     updatedTask,
     iteration: {
@@ -2584,10 +2828,11 @@ function applyOperatorHostResult(root, taskItem, taskResult, timestamp, response
       status: taskStatus,
       outcome: normalizeString(taskResult.outcome, taskStatus === "completed" ? "operator-task-completed" : taskStatus === "blocked" ? "operator-task-blocked" : "operator-task-progress"),
       summary: normalizeString(taskResult.summary ?? taskResult.resultSummary, doveText(responseLanguage, "operatorResultSummary")),
-      evidenceLinks: evidence.evidenceLinks,
+      evidenceLinks: taskResultEvidence.evidenceLinks,
       artifactRefs: fields.artifactRefs,
-      verificationEvidencePaths: evidence.verificationEvidencePaths,
-      verifiedCriteria: evidence.verifiedCriteria,
+      verificationEvidencePaths: taskResultEvidence.verificationEvidencePaths,
+      verifiedCriteria: taskResultEvidence.verifiedCriteria,
+      executionReceipt: taskResultEvidence.executionReceipt,
       startedAt: normalizeString(taskResult.startedAt, timestamp),
       completedAt: normalizeString(taskResult.completedAt, timestamp)
     }
@@ -2634,7 +2879,8 @@ function runOperatorInternalStep(root, taskItem, timestamp, responseLanguage = "
         artifactRefs: classified.artifactRefs,
         evidenceLinks: classified.evidenceLinks,
         verificationEvidencePaths: classified.verificationEvidencePaths,
-        verifiedCriteria: classified.verifiedCriteria
+        verifiedCriteria: classified.verifiedCriteria,
+        executionReceipt: classified.executionReceipt
       };
       const verificationBlock = completionVerificationBlock(workingTask, completionArgs, responseLanguage);
       if (verificationBlock) {
@@ -2663,6 +2909,11 @@ function runOperatorInternalStep(root, taskItem, timestamp, responseLanguage = "
         outcome: classified.outcome,
         stopReason: classified.stopReason,
         output: summarizeStepOutput(output),
+        artifactRefs: classified.artifactRefs,
+        evidenceLinks: classified.evidenceLinks,
+        verificationEvidencePaths: classified.verificationEvidencePaths,
+        verifiedCriteria: classified.verifiedCriteria,
+        executionReceipt: classified.executionReceipt,
         proposedSteps: autoPlan.proposedSteps,
         startedAt,
         completedAt
@@ -2689,8 +2940,9 @@ function runOperatorInternalStep(root, taskItem, timestamp, responseLanguage = "
 }
 
 function materializeBlockedInvestigationMissions(root, blockedTasks, runId, responseLanguage = "zh") {
+  const blockedTaskIds = operatorTaskIds(blockedTasks);
   if (blockedTasks.length === 0) {
-    return { createdMissions: [], reusedMissions: [], missionCount: 0, taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex };
+    return emptyOperatorBlockerPlanConversion(blockedTasks, "create");
   }
   const index = loadTaskIndex(root);
   const init = initPacket(index);
@@ -2729,10 +2981,20 @@ function materializeBlockedInvestigationMissions(root, blockedTasks, runId, resp
   if (createdMissions.length > 0) {
     persistDerivedTaskIndex(root, nextIndex, createdMissions.at(-1));
   }
+  const createdSummaries = createdMissions.map(operatorTaskSummary);
+  const reusedSummaries = reusedMissions.map(operatorTaskSummary);
   return {
-    createdMissions: createdMissions.map(operatorTaskSummary),
-    reusedMissions: reusedMissions.map(operatorTaskSummary),
-    missionCount: createdMissions.length + reusedMissions.length,
+    mode: "create",
+    proposalOnly: false,
+    blockedTaskIds,
+    proposedBlockedTaskIds: [],
+    createdMissions: createdSummaries,
+    reusedMissions: reusedSummaries,
+    createdCount: createdSummaries.length,
+    reusedCount: reusedSummaries.length,
+    missionCount: createdSummaries.length,
+    createdMissionIds: operatorTaskIds(createdSummaries),
+    reusedMissionIds: operatorTaskIds(reusedSummaries),
     taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex
   };
 }
@@ -2744,6 +3006,9 @@ export function runDoveOperator(root, args = {}) {
   const index = loadTaskIndex(root);
   const queue = operatorQueue(index);
   const includeQueueDetails = args.includeQueueDetails === true;
+  const blockerInvestigationMode = normalizeBlockerInvestigationMode(args);
+  const blockerInvestigationTargets = blockerInvestigationTargetTasks(queue.blocked);
+  const blockerInvestigationProposal = emptyOperatorBlockerPlanConversion(blockerInvestigationTargets, blockerInvestigationMode);
   if (!hasExplicitConfirmation(args)) {
     const preActionGuidance = buildPreActionGuidance({
       surface: "dove.operator",
@@ -2759,7 +3024,8 @@ export function runDoveOperator(root, args = {}) {
         hostPassRequiredCount: queue.hostPassRequired.length,
         runnableCount: queue.runnable.length,
         blockedCount: queue.blocked.length,
-        pendingCount: queue.pending.length
+        pendingCount: queue.pending.length,
+        blockerInvestigationMode
       }
     });
     const response = {
@@ -2775,6 +3041,8 @@ export function runDoveOperator(root, args = {}) {
       daemon: false,
       queueSummary: operatorQueueSummary(queue),
       queuePreview: operatorQueuePreview(queue, responseLanguage),
+      blockerInvestigationMode,
+      blockerPlanConversion: compactOperatorBlockerPlanConversion(blockerInvestigationProposal),
       includeQueueDetails,
       confirmArgs: {
         ...args,
@@ -2827,7 +3095,9 @@ export function runDoveOperator(root, args = {}) {
     updatedTasks.push(hostResult.updatedTask);
     iterations.push(hostResult.iteration);
   }
-  const blockerPlanConversion = materializeBlockedInvestigationMissions(root, queue.blocked, runId, responseLanguage);
+  const blockerPlanConversion = blockerInvestigationMode === "create"
+    ? materializeBlockedInvestigationMissions(root, blockerInvestigationTargets, runId, responseLanguage)
+    : emptyOperatorBlockerPlanConversion(blockerInvestigationTargets, blockerInvestigationMode);
   const awaitingResultSet = new Set(awaitingResults);
   const awaitingRequiredActions = Array.from(new Set([
     ...updatedTasks
@@ -2835,12 +3105,19 @@ export function runDoveOperator(root, args = {}) {
       .flatMap((task) => normalizeStringArray(task.boundary?.requiredActions ?? task.requiredActions)),
     ...skippedHostPassRequiredActions
   ]));
-  const durableWorkHappened = iterations.length > 0 || updatedTasks.length > 0 || blockerPlanConversion.missionCount > 0;
+  const durableWorkHappened = iterations.length > 0 || updatedTasks.length > 0 || (blockerPlanConversion.createdCount ?? 0) > 0;
+  const blockerProposalPending = blockerPlanConversion.proposedBlockedTaskIds?.length > 0;
+  const resultStatus = awaitingResults.length > 0
+    ? (durableWorkHappened ? "awaiting-host-results" : "needs-host-results")
+    : (blockerProposalPending ? "blocked-investigation-proposed" : "completed");
+  const resultOutcome = awaitingResults.length > 0
+    ? (durableWorkHappened ? "operator-pass-results-required" : "operator-pass-needs-host-results")
+    : (blockerProposalPending ? "operator-blocker-investigation-proposed" : "operator-pass-recorded");
   const result = {
     id: runId,
     surface: "dove.operator",
-    status: awaitingResults.length > 0 ? (durableWorkHappened ? "awaiting-host-results" : "needs-host-results") : "completed",
-    outcome: awaitingResults.length > 0 ? (durableWorkHappened ? "operator-pass-results-required" : "operator-pass-needs-host-results") : "operator-pass-recorded",
+    status: resultStatus,
+    outcome: resultOutcome,
     foreground: true,
     background: false,
     daemon: false,
@@ -2856,9 +3133,10 @@ export function runDoveOperator(root, args = {}) {
     awaitingRequiredActions,
     blockedTaskIds: queue.blocked.map((task) => task.id),
     pendingTaskIds: queue.pending.map((task) => task.id),
+    blockerInvestigationMode,
     blockerPlanConversion,
     iterations,
-    stopReason: awaitingResults.length > 0 ? "host-pass-results-required" : null,
+    stopReason: awaitingResults.length > 0 ? "host-pass-results-required" : (blockerProposalPending ? "blocked-investigation-requires-explicit-create" : null),
     responseLanguage,
     createdAt: timestamp,
     updatedAt: nowIso()
@@ -2880,7 +3158,8 @@ export function runDoveOperator(root, args = {}) {
       hostPassRequiredCount: queue.hostPassRequired.length,
       runnableCount: queue.runnable.length,
       blockedCount: queue.blocked.length,
-      pendingCount: queue.pending.length
+      pendingCount: queue.pending.length,
+      blockerInvestigationMode
     }
   }));
   const resultCard = operatorResultCard(result, { nextAction: "project:dove.status", preActionGuidanceSummary }, responseLanguage);
@@ -2894,6 +3173,7 @@ export function runDoveOperator(root, args = {}) {
     awaitingResultTaskIds: awaitingResults,
     skippedHostPassTaskIds,
     awaitingRequiredActions,
+    blockerInvestigationMode,
     blockerPlanConversion: compactOperatorBlockerPlanConversion(blockerPlanConversion),
     includeQueueDetails,
     responseLanguage,
@@ -3069,7 +3349,8 @@ function normalizeExplicitAutoSteps(args = {}) {
       executionContract,
       validationEvidencePaths: normalizeStringArray(source.validationEvidencePaths ?? stepArgs.validationEvidencePaths),
       verificationEvidencePaths: normalizeStringArray(source.verificationEvidencePaths ?? stepArgs.verificationEvidencePaths),
-      verifiedCriteria: normalizeDoveVerifiedCriteria(source.verifiedCriteria ?? stepArgs.verifiedCriteria)
+      verifiedCriteria: normalizeDoveVerifiedCriteria(source.verifiedCriteria ?? stepArgs.verifiedCriteria),
+      executionReceipt: mergeDoveExecutionReceipts(source.executionReceipt, stepArgs.executionReceipt)
     };
   }).filter((step) => step.command);
 }
@@ -3240,6 +3521,10 @@ function summarizeAutoSteps(steps = []) {
     if (verifiedCriteria.length > 0) {
       summary.verifiedCriteria = verifiedCriteria;
     }
+    const executionReceipt = normalizeDoveExecutionReceipt(step.executionReceipt, null);
+    if (executionReceipt) {
+      summary.executionReceipt = executionReceipt;
+    }
     return summary;
   });
 }
@@ -3346,6 +3631,10 @@ function summarizeStepOutput(output) {
   if (output.providerReadiness?.status) {
     summary.providerReadiness = output.providerReadiness.status;
   }
+  const executionReceipt = normalizeDoveExecutionReceipt(output.executionReceipt, null);
+  if (executionReceipt) {
+    summary.executionReceipt = executionReceipt;
+  }
   if (output.importArgs) {
     summary.importArgs = output.importArgs;
   }
@@ -3370,20 +3659,37 @@ function autoStepArtifactRefs(command, output = {}) {
 }
 
 function completedAutoStep(command, output, outcomeStatus, options = {}) {
-  const artifactRefs = autoStepArtifactRefs(command, output);
-  const evidenceLinks = normalizeStringArray(output?.evidenceLinks ?? output?.evidencePaths);
-  const verificationEvidencePaths = normalizeStringArray(output?.verificationEvidencePaths);
-  const verifiedCriteria = normalizeDoveVerifiedCriteria(output?.verifiedCriteria);
+  const executionReceipt = normalizeDoveExecutionReceipt(output?.executionReceipt, null);
+  const artifactRefs = normalizeStringArray([
+    ...autoStepArtifactRefs(command, output),
+    ...normalizeStringArray(executionReceipt?.artifactRefs),
+    ...normalizeStringArray(executionReceipt?.artifactPaths)
+  ]);
+  const evidenceLinks = normalizeStringArray([
+    ...normalizeStringArray(output?.evidenceLinks ?? output?.evidencePaths),
+    ...normalizeStringArray(executionReceipt?.evidenceLinks),
+    ...normalizeStringArray(executionReceipt?.evidencePaths)
+  ]);
+  const verificationEvidencePaths = normalizeStringArray([
+    ...normalizeStringArray(output?.verificationEvidencePaths),
+    ...normalizeStringArray(executionReceipt?.verificationEvidencePaths),
+    ...normalizeStringArray(executionReceipt?.validationEvidencePaths)
+  ]);
+  const verifiedCriteria = normalizeDoveVerifiedCriteria([
+    ...normalizeDoveVerifiedCriteria(output?.verifiedCriteria),
+    ...normalizeDoveVerifiedCriteria(executionReceipt?.verifiedCriteria)
+  ]);
   return {
     status: "step-completed",
     outcome: `${command}-${outcomeStatus}`,
     stopReason: null,
     terminal: false,
-    canCompleteTask: options.canCompleteTask === true && (artifactRefs.length > 0 || evidenceLinks.length > 0 || verificationEvidencePaths.length > 0),
+    canCompleteTask: options.canCompleteTask === true && (artifactRefs.length > 0 || evidenceLinks.length > 0 || verificationEvidencePaths.length > 0 || verifiedCriteria.length > 0),
     artifactRefs,
     evidenceLinks,
     verificationEvidencePaths,
-    verifiedCriteria
+    verifiedCriteria,
+    executionReceipt
   };
 }
 
@@ -3393,13 +3699,16 @@ function classifyAutoStepResult(command, output) {
     return { status: "step-no-progress", outcome: `${command}-read-only`, stopReason: "read-only-auto-step", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
   }
   if (status === "prepared-awaiting-audio") {
-    return { status: "blocked-boundary", outcome: "awaiting-review-output", stopReason: "awaiting-audio-review-output", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
+    return { status: "blocked-boundary", outcome: "awaiting-review-output", stopReason: "awaiting-review-output", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
   }
   if (status === "prepared-awaiting-output") {
     return { status: "blocked-boundary", outcome: "awaiting-provider-output", stopReason: "awaiting-figure-provider-output", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
   }
   if (status === "blocked-missing-materials") {
     return { status: "blocked-boundary", outcome: "missing-required-materials", stopReason: "missing-figure-materials", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
+  }
+  if (status === "missing-secret-env") {
+    return { status: "blocked-boundary", outcome: "missing-secret-env", stopReason: "figure-provider-missing-secret-env", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
   }
   if (status === "provider-failed") {
     return { status: "blocked-boundary", outcome: "provider-failed", stopReason: "figure-provider-failed", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
@@ -3555,7 +3864,9 @@ function persistentLifecycleFields(fields = {}) {
     "resultIds",
     "auditIds",
     "versionIds",
-    "rebuttalIssueIds"
+    "rebuttalIssueIds",
+    "archivedAt",
+    "archiveReason"
   ];
   return Object.fromEntries(allowedKeys.filter((key) => fields[key] !== undefined).map((key) => [key, fields[key]]));
 }
@@ -3658,6 +3969,11 @@ function updateTaskLifecycle(root, task, status, fields = {}) {
   if (status === "killed") {
     statusFields.killedAt = fields.killedAt ?? timestamp;
     statusFields.killReason = normalizeString(fields.killReason ?? fields.reason, fullTask.killReason ?? "");
+  }
+  if (status === "archived") {
+    statusFields.archivedAt = fields.archivedAt ?? timestamp;
+    statusFields.archiveReason = normalizeString(fields.archiveReason ?? fields.reason, fullTask.archiveReason ?? "");
+    statusFields.blockedReason = null;
   }
   const openedBoundary = status === "blocked" || fields.boundary || fields.boundaryType
     ? transitionBoundaryFor(fullTask, status, { ...fields, artifactRefs }, timestamp)
@@ -4091,6 +4407,7 @@ export function runDoveAuto(root, args = {}) {
     try {
       const output = executeAutoStep(root, step.command, stepArgsForTask(task, step.args));
       const classified = classifyAutoStepResult(step.command, output);
+      const executionReceipt = mergeDoveExecutionReceipts(step.executionReceipt, classified.executionReceipt);
       const completedAt = nowIso();
       result.iterations.push({
         iteration: iterationNumber,
@@ -4099,6 +4416,11 @@ export function runDoveAuto(root, args = {}) {
         outcome: classified.outcome,
         stopReason: classified.stopReason,
         output: summarizeStepOutput(output),
+        artifactRefs: classified.artifactRefs,
+        evidenceLinks: classified.evidenceLinks,
+        verificationEvidencePaths: classified.verificationEvidencePaths,
+        verifiedCriteria: classified.verifiedCriteria,
+        executionReceipt,
         startedAt,
         completedAt
       });
@@ -4133,10 +4455,13 @@ export function runDoveAuto(root, args = {}) {
           validationEvidencePaths: normalizeStringArray(step.validationEvidencePaths),
           verificationEvidencePaths: normalizeStringArray([...(classified.verificationEvidencePaths ?? []), ...normalizeStringArray(step.verificationEvidencePaths)]),
           verifiedCriteria: normalizeDoveVerifiedCriteria([...(classified.verifiedCriteria ?? []), ...normalizeDoveVerifiedCriteria(step.verifiedCriteria)]),
+          executionReceipt,
           executionContract: step.executionContract ?? task.executionContract
         };
         const verificationBlock = completionVerificationBlock(task, completionArgs, responseLanguage);
-        if (classified.canCompleteTask !== true || verificationBlock) {
+        const completionEvidence = completionEvidenceForPayload(completionArgs);
+        const canCompleteWithEvidence = classified.canCompleteTask === true || completionEvidence.evidencePaths.length > 0 || completionEvidence.verifiedCriteria.length > 0;
+        if (!canCompleteWithEvidence || verificationBlock) {
           const block = verificationBlock ?? {
             status: "needs-completion-evidence",
             boundaryType: "missing-required-materials",

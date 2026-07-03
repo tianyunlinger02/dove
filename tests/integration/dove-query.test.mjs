@@ -200,9 +200,10 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   assert.match(human.stdout, /recovery: request mutationMode: patch-plan, inspect the operations, and apply them through host-tracked file edits before relying on host rollback/);
   assert.match(human.stdout, /Pre-action guidance:/);
   assert.match(human.stdout, /guardrails: writes require confirmation; no hidden runtime/);
-  assert.match(human.stdout, /Project state:/);
-  assert.match(human.stdout, /Blockers and reconciliation:/);
   assert.match(human.stdout, /Next steps:/);
+  assert.match(human.stdout, /Recent execution receipts:/);
+  assert.match(human.stdout, /Gaps and boundaries:/);
+  assert.match(human.stdout, /Project state:/);
   assert.match(human.stdout, /Mission details: collapsed by default/);
   assert.match(human.stdout, /Use --json or --format json for compact JSON/);
   assert.doesNotMatch(human.stdout, /^\{/);
@@ -296,7 +297,7 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
     maxBuffer: 5 * 1024 * 1024
   });
   assert.equal(fullHuman.status, 0, fullHuman.stderr || fullHuman.stdout);
-  assert.match(fullHuman.stdout, /Blockers and reconciliation:/);
+  assert.match(fullHuman.stdout, /Gaps and boundaries:/);
   assert.match(fullHuman.stdout, /status: blocked/);
   assert.match(fullHuman.stdout, /blockers: 1/);
 
@@ -719,13 +720,33 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
         nextAction: "project:dove.status",
         outputPaths: [],
         evidenceLinks: []
+      },
+      {
+        id: "zz-status-archived",
+        title: "Archived dogfood mission",
+        summary: "Archived dogfood noise should stay hidden unless requested.",
+        parentId: "dove-global-init",
+        rootId: "dove-global-init",
+        level: 3,
+        creatorKind: "user",
+        stage: "execute",
+        domain: "engineering",
+        status: "archived",
+        lifecycleStatus: "archived-with-lineage",
+        dependencies: [],
+        blockedBy: [],
+        archivedAt: "2026-05-14T23:59:00.000Z",
+        archiveReason: "Retired visible dogfood attempt.",
+        nextAction: "project:dove.status",
+        outputPaths: [],
+        evidenceLinks: []
       }
     ],
     taskModel: {
       activeInitId: "dove-global-init",
       activeTaskIds: ["status-packet"]
     },
-    lifecycleCounts: { ready: 4, pending: 2, completed: 1, killed: 1 },
+    lifecycleCounts: { ready: 4, pending: 2, completed: 1, killed: 1, archived: 1 },
     lifecycleFamilyCounts: {},
     dependencyHealth: {},
     updatedAt: null
@@ -927,6 +948,8 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   const result = queryDoveStatus(root, { domain: "engineering" });
   const expandedResult = queryDoveStatus(root, { domain: "engineering", showMissions: true, requestStatusAdjustment: true });
   const fullResult = queryDoveStatus(root, { domain: "engineering", detail: "full" });
+  const archivedExpandedResult = queryDoveStatus(root, { domain: "engineering", showMissions: true, requestStatusAdjustment: true, includeArchived: true });
+  const archivedFullResult = queryDoveStatus(root, { domain: "engineering", detail: "full", requestStatusAdjustment: true, includeArchived: true });
   const after = snapshotArtifacts(root, statusWatchedArtifacts);
 
   assert.equal(result.mode, "dove-status-query");
@@ -989,6 +1012,8 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.statusHome.projectState.missionCounts.doing, 1);
   assert.equal(result.statusHome.projectState.missionCounts.blocked, 1);
   assert.equal(result.statusHome.projectState.missionCounts.done, 3);
+  assert.equal(result.statusHome.projectState.missionCounts.archived, 0);
+  assert.equal(result.statusHome.projectState.missionCounts.archivedHidden, 1);
   assert.ok(result.statusHome.nextSteps.ranked.length <= 3);
   assert.ok(result.statusHome.nextSteps.ranked.every((card) => card.kind && card.title && card.command));
   assert.ok(result.statusHome.nextSteps.ranked.every((card) => card.proposalOnly === true && card.noAutoApply === true));
@@ -999,13 +1024,15 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(optionalMissionDetails.missionItemsIncluded, false);
   assert.equal(optionalMissionDetails.groupsOmitted, true);
   assert.equal("groups" in optionalMissionDetails, false);
-  assert.deepEqual(optionalMissionDetails.statusModel.userGroups, ["todo", "doing", "blocked", "done"]);
-  assert.deepEqual(optionalMissionDetails.statusModel.machineStatuses, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.deepEqual(optionalMissionDetails.statusModel.userGroups, ["todo", "doing", "blocked", "done", "archived"]);
+  assert.deepEqual(optionalMissionDetails.statusModel.machineStatuses, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
   assert.equal(optionalMissionDetails.groupCounts.todo.itemCount, 2);
   assert.equal(optionalMissionDetails.groupCounts.doing.itemCount, 1);
   assert.equal(optionalMissionDetails.groupCounts.blocked.itemCount, 1);
   assert.equal(optionalMissionDetails.groupCounts.done.itemCount, 3);
+  assert.equal(optionalMissionDetails.groupCounts.archived.itemCount, 0);
   assert.equal(optionalMissionDetails.requestArgs.showMissions, true);
+  assert.equal(optionalMissionDetails.requestArgs.includeArchived, false);
   const expandedMissionDetails = expandedResult.statusHome.optionalMissionDetails;
   assert.equal(expandedMissionDetails.detail, "compact");
   assert.equal(expandedMissionDetails.missionItemsIncluded, true);
@@ -1015,12 +1042,33 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.deepEqual(expandedMissionDetails.groups.done.items.map((item) => item.packetId), []);
   assert.equal(expandedMissionDetails.groups.done.itemCount, 3);
   assert.equal(expandedMissionDetails.groups.done.hiddenCount, 3);
+  assert.equal(expandedMissionDetails.groups.archived.itemCount, 0);
+  assert.deepEqual(expandedMissionDetails.groups.archived.items.map((item) => item.packetId), []);
   assert.deepEqual(fullResult.dailyHome.missionList.groups.done.items.map((item) => item.packetId), ["runtime-completed", "zz-status-completed", "zz-status-killed"]);
+  assert.equal(fullResult.dailyHome.missionList.groups.archived.items.length, 0);
+  const archivedMissionDetails = archivedExpandedResult.statusHome.optionalMissionDetails;
+  assert.equal(archivedExpandedResult.statusHome.projectState.missionCounts.archived, 1);
+  assert.equal(archivedExpandedResult.statusHome.projectState.missionCounts.archivedHidden, 0);
+  assert.equal(archivedMissionDetails.requestArgs.includeArchived, true);
+  assert.equal(archivedMissionDetails.groups.archived.itemCount, 1);
+  assert.equal(archivedMissionDetails.groups.archived.hiddenCount, 1);
+  assert.deepEqual(archivedMissionDetails.groups.archived.items.map((item) => item.packetId), []);
+  assert.deepEqual(archivedFullResult.dailyHome.missionList.groups.archived.items.map((item) => item.packetId), ["zz-status-archived"]);
+  assert.equal(archivedFullResult.dashboard.tasks.tree[0].children.some((task) => task.id === "zz-status-archived"), true);
+  const archivedTask = archivedFullResult.dashboard.tasks.tree[0].children.find((task) => task.id === "zz-status-archived");
+  assert.equal(archivedTask.status, "archived");
+  assert.equal(archivedTask.lifecycleStatus, "archived-with-lineage");
+  assert.equal(archivedTask.archivedAt, "2026-05-14T23:59:00.000Z");
+  assert.equal(archivedTask.archiveReason, "Retired visible dogfood attempt.");
   assert.equal(optionalMissionDetails.summary.openCount, 4);
   assert.equal(optionalMissionDetails.summary.todoCount, 2);
   assert.equal(optionalMissionDetails.summary.doingCount, 1);
   assert.equal(optionalMissionDetails.summary.blockedCount, 1);
   assert.equal(optionalMissionDetails.summary.doneCount, 3);
+  assert.equal(optionalMissionDetails.summary.archivedCount, 0);
+  assert.equal(optionalMissionDetails.summary.archivedHiddenCount, 1);
+  assert.equal(archivedMissionDetails.summary.archivedCount, 1);
+  assert.equal(archivedMissionDetails.summary.archivedHiddenCount, 0);
   assert.deepEqual(fullResult.dashboard.dailyHome, fullResult.dailyHome);
   assert.deepEqual(fullResult.dashboard.tasks.grouped, fullResult.dailyHome.missionList);
   assert.deepEqual(after, before);
@@ -1040,6 +1088,10 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.projectSummary.blockedMissionCount, 1);
   assert.equal(fullResult.dashboard.init.id, "dove-global-init");
   assert.deepEqual(fullResult.dashboard.tasks.activeTaskIds, ["blocked-dependency", "plain-pending", "runtime-completed", "runtime-progress", "status-packet"]);
+  assert.equal(fullResult.dashboard.tasks.counts.archived, 0);
+  assert.equal(fullResult.dashboard.tasks.counts.archivedHidden, 1);
+  assert.equal(archivedFullResult.dashboard.tasks.counts.archived, 1);
+  assert.equal(archivedFullResult.dashboard.tasks.counts.archivedHidden, 0);
   assert.equal(fullResult.dashboard.tasks.counts.byStatus.ready, 4);
   assert.equal(fullResult.dashboard.tasks.tree[0].children.some((task) => task.id === "status-packet"), true);
   assert.equal(fullResult.dashboard.runtime.continuation.currentPacketId, "runtime-progress");
@@ -1102,10 +1154,11 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.match(humanStatus.stdout, /Current context:/);
   assert.match(humanStatus.stdout, /Pre-action guidance:/);
   assert.match(humanStatus.stdout, /guardrails: writes require confirmation; no hidden runtime/);
-  assert.match(humanStatus.stdout, /Project state:/);
-  assert.match(humanStatus.stdout, /missions: open 4, todo 2, doing 1, blocked 1, done 3/);
-  assert.match(humanStatus.stdout, /Blockers and reconciliation:/);
   assert.match(humanStatus.stdout, /Next steps:/);
+  assert.match(humanStatus.stdout, /Recent execution receipts:/);
+  assert.match(humanStatus.stdout, /Gaps and boundaries:/);
+  assert.match(humanStatus.stdout, /Project state:/);
+  assert.match(humanStatus.stdout, /mission summary: open 4, blocked 1, todo 2, doing 1, archived hidden 1 \(collapsed\)/);
   assert.match(humanStatus.stdout, /Mission details: collapsed by default/);
   assert.doesNotMatch(humanStatus.stdout, /Machine statuses:/);
   assert.doesNotMatch(humanStatus.stdout, /runtime-progress: Runtime progress mission \[ready->in-progress\]/);
@@ -1139,14 +1192,10 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   const afterStatusline = snapshotArtifacts(root, statusWatchedArtifacts);
   assert.equal(humanStatusline.status, 0, humanStatusline.stderr || humanStatusline.stdout);
   assert.match(humanStatusline.stdout, /^Dove: /);
-  assert.match(humanStatusline.stdout, /open 4/);
-  assert.match(humanStatusline.stdout, /todo 2/);
-  assert.match(humanStatusline.stdout, /doing 1/);
-  assert.match(humanStatusline.stdout, /blocked 1/);
+  assert.match(humanStatusline.stdout, /next /);
+  assert.match(humanStatusline.stdout, /gaps /);
+  assert.match(humanStatusline.stdout, /missions open 4, blocked 1, todo 2, doing 1, archived hidden 1/);
   assert.doesNotMatch(humanStatusline.stdout, /active \d+/);
-  assert.doesNotMatch(humanStatusline.stdout, /boundaries \d+/);
-  assert.doesNotMatch(humanStatusline.stdout, /next/i);
-  assert.doesNotMatch(humanStatusline.stdout, /project:dove\./);
   assert.doesNotMatch(humanStatusline.stdout, /^\{/);
   assert.doesNotMatch(humanStatusline.stdout, /Status adjustments:/);
   assert.equal(machineStatusline.status, 0, machineStatusline.stderr || machineStatusline.stdout);
@@ -1159,17 +1208,19 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(parsedStatusline.summary.todoMissionCount, 2);
   assert.equal(parsedStatusline.summary.doingMissionCount, 1);
   assert.equal(parsedStatusline.summary.blockedMissionCount, 1);
+  assert.equal(parsedStatusline.summary.archivedMissionCount, 0);
+  assert.equal(parsedStatusline.summary.archivedHiddenMissionCount, 1);
   assert.equal("nextActions" in parsedStatusline, false);
   assert.equal("nextActionCount" in parsedStatusline.summary, false);
   assert.equal("activeMissionCount" in parsedStatusline.summary, false);
-  assert.doesNotMatch(parsedStatusline.text, /next/i);
+  assert.ok(parsedStatusline.summary.nextAction);
+  assert.match(parsedStatusline.text, /next /);
+  assert.match(parsedStatusline.text, /gaps /);
   assert.doesNotMatch(parsedStatusline.text, /active \d+/);
-  assert.doesNotMatch(parsedStatusline.text, /boundaries \d+/);
-  assert.doesNotMatch(parsedStatusline.text, /project:dove\./);
   assert.deepEqual(afterStatusline, beforeStatusline);
 
   const statusAdjustmentItems = Object.fromEntries(fullResult.statusAdjustmentContract.items.map((item) => [item.packetId, item]));
-  assert.deepEqual(result.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed"]);
+  assert.deepEqual(result.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
   assert.equal(result.statusAdjustmentContract.statusAdjustmentItemsIncluded, false);
   assert.deepEqual(result.statusAdjustmentContract.items, []);
   assert.deepEqual(result.statusAdjustmentContract.adjustmentCards, []);
@@ -1184,6 +1235,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(Boolean(statusAdjustmentItems["runtime-completed"]), true);
   assert.equal(Boolean(statusAdjustmentItems["zz-status-completed"]), false);
   assert.equal(Boolean(statusAdjustmentItems["zz-status-killed"]), false);
+  assert.equal(Boolean(statusAdjustmentItems["zz-status-archived"]), false);
   assert.equal(Boolean(statusAdjustmentItems["dove-global-init"]), false);
   assert.equal(statusAdjustmentItems["plain-pending"].recommendedStatus, "ready");
   assert.equal(statusAdjustmentItems["blocked-dependency"].recommendedStatus, "blocked");

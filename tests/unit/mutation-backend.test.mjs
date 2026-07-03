@@ -29,8 +29,11 @@ test("patch-plan mutations do not write to disk", () => {
 
   assert.equal(result.ok, true);
   assert.equal(result.mutationMode, "patch-plan");
+  assert.equal(result.mutationModeSource, "explicit");
   assert.equal(result.writesApplied, false);
   assert.equal(result.hostRollbackEligible, true);
+  assert.equal(result.hostRollbackIneligibleReason, null);
+  assert.equal(result.recommendedMutationMode, null);
   assert.equal(result.mutationPlan.hostTrackedFileEditsRequired, true);
   assert.deepEqual(result.mutationPlan.operations.filter((operation) => operation.relativePath !== ARTIFACT_PATHS.mutationsIndex).map((operation) => operation.relativePath), [".dove/state.json", ".dove/notes/example.md"]);
   assert.ok(result.mutationPlan.operations.some((operation) => operation.relativePath === ARTIFACT_PATHS.mutationsIndex));
@@ -48,14 +51,40 @@ test("direct-process mutations write the same final content", () => {
   });
 
   assert.equal(result.mutationMode, "direct-process");
+  assert.equal(result.mutationModeSource, "explicit");
   assert.equal(result.writesApplied, true);
   assert.equal(result.hostRollbackEligible, false);
+  assert.match(result.hostRollbackIneligibleReason, /direct-process writes are performed by the Dove process/);
+  assert.equal(result.recommendedMutationMode, "patch-plan");
+  assert.match(result.rollbackAdvice, /mutationMode: patch-plan/);
   assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".dove/state.json"), "utf8")).ok, true);
   assert.equal(fs.readFileSync(path.join(root, ".dove/notes/example.md"), "utf8"), "hello\n");
   const provenance = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.mutationsIndex), "utf8"));
   assert.equal(provenance.entries[0].mutationMode, "direct-process");
+  assert.equal(provenance.entries[0].mutationModeSource, "explicit");
   assert.equal(provenance.entries[0].hostRollbackEligible, false);
+  assert.match(provenance.entries[0].hostRollbackIneligibleReason, /direct-process/);
+  assert.equal(provenance.summary.recommendedMutationMode, "patch-plan");
 });
+
+test("default direct-process mutations report rollback limits", () => {
+  const root = createTempRoot("dove-mutation-default-direct-");
+
+  const result = runWithMutationContext(root, { actionId: "unit-test-default" }, () => {
+    writeText(root, ".dove/notes/default.md", "default direct write\n");
+    return { ok: true };
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.mutationMode, "direct-process");
+  assert.equal(result.mutationModeSource, "default");
+  assert.equal(result.hostRollbackEligible, false);
+  assert.match(result.hostRollbackIneligibleReason, /not by host-tracked file edits/);
+  assert.equal(result.recommendedMutationMode, "patch-plan");
+  assert.match(result.mutationSummary.rollbackAdvice, /host-tracked file edits/);
+  assert.equal(fs.readFileSync(path.join(root, ".dove/notes/default.md"), "utf8"), "default direct write\n");
+});
+
 
 test("patch-plan overlay reads staged writes and appends as full writes", () => {
   const root = createTempRoot("dove-mutation-overlay-");

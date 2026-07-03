@@ -395,7 +395,8 @@ function formatStatusCounts(counts = {}) {
     "in-progress": "in-progress",
     blocked: "blocked",
     completed: "completed",
-    killed: "killed"
+    killed: "killed",
+    archived: "archived"
   };
   return Object.keys(labels)
     .filter((key) => Number(counts[key] ?? 0) > 0)
@@ -412,6 +413,27 @@ function formatEvidencePreview(items = []) {
   return evidence.length > 2 ? `${shown}；+${evidence.length - 2}` : shown;
 }
 
+function formatRecentReceiptForCli(receipt = {}) {
+  const label = compactText(receipt.title ?? receipt.packetId ?? receipt.runId ?? receipt.receiptId ?? "receipt", 90);
+  const status = compactText(receipt.status ?? receipt.resultStatus ?? receipt.outcome ?? "recorded", 40);
+  const evidence = formatEvidencePreview(receipt.evidencePaths ?? receipt.validationEvidencePaths ?? receipt.artifactRefs ?? receipt.outputPaths ?? []);
+  return evidence ? `${label}: ${status}; evidence ${evidence}` : `${label}: ${status}`;
+}
+
+function formatMissionSummarySecondaryText(missionSummary = {}) {
+  const parts = [`open ${missionSummary.openCount ?? 0}`, `blocked ${missionSummary.blockedCount ?? 0}`];
+  if (Number(missionSummary.todoCount ?? 0) > 0) {
+    parts.push(`todo ${missionSummary.todoCount}`);
+  }
+  if (Number(missionSummary.doingCount ?? 0) > 0) {
+    parts.push(`doing ${missionSummary.doingCount}`);
+  }
+  if (Number(missionSummary.archivedHiddenCount ?? 0) > 0) {
+    parts.push(`archived hidden ${missionSummary.archivedHiddenCount}`);
+  }
+  return parts.join(", ");
+}
+
 function statusMissionListSummary(result = {}) {
   const missionCounts = result.statusHome?.projectState?.missionCounts;
   if (missionCounts && typeof missionCounts === "object") {
@@ -420,7 +442,9 @@ function statusMissionListSummary(result = {}) {
       todoCount: missionCounts.todo ?? 0,
       doingCount: missionCounts.doing ?? 0,
       blockedCount: missionCounts.blocked ?? 0,
-      doneCount: missionCounts.done ?? 0
+      doneCount: missionCounts.done ?? 0,
+      archivedCount: missionCounts.archived ?? 0,
+      archivedHiddenCount: missionCounts.archivedHidden ?? 0
     };
   }
   return result.statusHome?.optionalMissionDetails?.summary ?? result.dailyHome?.missionList?.summary ?? result.dashboard?.tasks?.grouped?.summary ?? {
@@ -428,8 +452,27 @@ function statusMissionListSummary(result = {}) {
     todoCount: 0,
     doingCount: 0,
     blockedCount: 0,
-    doneCount: 0
+    doneCount: 0,
+    archivedCount: 0,
+    archivedHiddenCount: 0
   };
+}
+
+function formatMissionSummaryText(missionSummary = {}) {
+  const parts = [
+    `open ${missionSummary.openCount ?? 0}`,
+    `todo ${missionSummary.todoCount ?? 0}`,
+    `doing ${missionSummary.doingCount ?? 0}`,
+    `blocked ${missionSummary.blockedCount ?? 0}`,
+    `done ${missionSummary.doneCount ?? 0}`
+  ];
+  if (Number(missionSummary.archivedCount ?? 0) > 0) {
+    parts.push(`archived ${missionSummary.archivedCount}`);
+  }
+  if (Number(missionSummary.archivedHiddenCount ?? 0) > 0) {
+    parts.push(`archived hidden ${missionSummary.archivedHiddenCount}`);
+  }
+  return parts.join(", ");
 }
 
 function formatMissionListGroup(groupName, group = {}, options = {}) {
@@ -461,6 +504,9 @@ function formatMissionListForCli(missionList = {}) {
   lines.push(...formatMissionListGroup("blocked", groups.blocked));
   lines.push(...formatMissionListGroup("todo", groups.todo));
   lines.push(...formatMissionListGroup("done", groups.done, { collapsed: true }));
+  if (Number(groups.archived?.itemCount ?? groups.archived?.items?.length ?? 0) > 0) {
+    lines.push(...formatMissionListGroup("archived", groups.archived, { collapsed: true }));
+  }
   return lines;
 }
 
@@ -492,6 +538,7 @@ function formatDoveStatusForCli(result, target, options = {}) {
   const preActionGuidance = statusHome.preActionGuidance ?? result.preActionGuidance ?? {};
   const current = result.current ?? {};
   const nextActions = Array.isArray(statusHome.nextSteps?.ranked) ? statusHome.nextSteps.ranked : Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : [];
+  const recentExecutionReceipts = Array.isArray(statusHome.recentExecutionReceipts?.items) ? statusHome.recentExecutionReceipts.items : Array.isArray(result.dailyHome?.recentExecutionReceipts) ? result.dailyHome.recentExecutionReceipts : [];
   const boundaryCards = Array.isArray(blockersAndReconciliation.boundaryActionCards) ? blockersAndReconciliation.boundaryActionCards : Array.isArray(result.dailyHome?.boundaryActionCards) ? result.dailyHome.boundaryActionCards : [];
   const missionList = statusHome.optionalMissionDetails ?? result.dailyHome?.missionList ?? result.dashboard?.tasks?.grouped ?? {};
   const missionSummary = statusMissionListSummary(result);
@@ -523,31 +570,15 @@ function formatDoveStatusForCli(result, target, options = {}) {
     lines.push(`  host checkpoint: ${durableContextNotice.hostCheckpointStatus ?? "not-programmatically-verifiable"}`);
     lines.push(`  patch-plan supported: ${durableContextNotice.mutationRollbackModel?.patchPlanSupported ? "yes" : "unknown"}`);
     lines.push(`  direct-process rollback-safe: ${durableContextNotice.mutationRollbackModel?.directProcessWritesAreRollbackSafe ? "yes" : "no"}`);
+    if (durableContextNotice.mutationRollbackModel?.hostRollbackIneligibleReason) {
+      lines.push(`  last direct-process limit: ${compactText(durableContextNotice.mutationRollbackModel.hostRollbackIneligibleReason, 160)}`);
+    }
     lines.push(`  external Dove writes captured: ${durableContextNotice.externalWriteCaptureVerified ? "verified" : "unverified"}`);
     lines.push(`  Dove restore command: ${durableContextNotice.doveRestoreSupported ? durableContextNotice.doveRestoreCommand ?? "available" : "none"}`);
-    lines.push("  recovery: request mutationMode: patch-plan, inspect the operations, and apply them through host-tracked file edits before relying on host rollback");
+    lines.push(`  recovery: ${durableContextNotice.mutationRollbackModel?.rollbackAdvice ?? "request mutationMode: patch-plan, inspect the operations, and apply them through host-tracked file edits before relying on host rollback"}`);
   }
   lines.push("");
   lines.push(...formatPreActionGuidanceForCli(preActionGuidance));
-  lines.push("");
-  lines.push("Project state:");
-  lines.push(`  missions: open ${missionSummary.openCount ?? 0}, todo ${missionSummary.todoCount ?? 0}, doing ${missionSummary.doingCount ?? 0}, blocked ${missionSummary.blockedCount ?? 0}, done ${missionSummary.doneCount ?? 0}`);
-  lines.push(`  review: ${projectState.reviewVerdict ?? summary.reviewVerdict ?? "unknown"}; return: ${projectState.returnStatus ?? summary.returnStatus ?? "unknown"}`);
-  lines.push(`  status adjustments: ${projectState.statusAdjustmentCount ?? result.statusAdjustmentContract?.itemCount ?? 0} available`);
-  lines.push("");
-  lines.push("Blockers and reconciliation:");
-  lines.push(`  status: ${reconciliationStatus}`);
-  lines.push(`  blockers: ${blockerCount}; read errors: ${readErrors.length}; boundaries: ${boundaryCount}`);
-  lines.push(`  execution gaps: missing contract ${executionGaps.missingContract ?? 0}, missing materials ${executionGaps.missingMaterials ?? 0}, verification gaps ${executionGaps.verificationGaps ?? 0}`);
-  lines.push(`  completion consistency: ${completionConsistency.status ?? "consistent"}`);
-  if (readErrors.length > 0) {
-    lines.push(`  first read error: ${compactText(readErrors[0], 140)}`);
-  }
-  if (Array.isArray(completionConsistency.findings) && completionConsistency.findings.length > 0) {
-    for (const finding of completionConsistency.findings.slice(0, 2)) {
-      lines.push(`  - ${compactText(finding.summary ?? finding.type, 140)} (${finding.parentId ?? "unknown-parent"})`);
-    }
-  }
   lines.push("");
   lines.push("Next steps:");
   if (nextActions.length === 0) {
@@ -579,9 +610,30 @@ function formatDoveStatusForCli(result, target, options = {}) {
       }
     }
   }
+  lines.push("");
+  lines.push("Recent execution receipts:");
+  if (recentExecutionReceipts.length === 0) {
+    lines.push("  none");
+  } else {
+    for (const receipt of recentExecutionReceipts.slice(0, 3)) {
+      lines.push(`  - ${formatRecentReceiptForCli(receipt)}`);
+    }
+  }
+  lines.push("");
+  lines.push("Gaps and boundaries:");
+  lines.push(`  status: ${reconciliationStatus}`);
+  lines.push(`  blockers: ${blockerCount}; read errors: ${readErrors.length}; open boundaries: ${boundaryCount}`);
+  lines.push(`  execution gaps: missing contract ${executionGaps.missingContract ?? 0}, missing materials ${executionGaps.missingMaterials ?? 0}, verification gaps ${executionGaps.verificationGaps ?? 0}`);
+  lines.push(`  completion consistency: ${completionConsistency.status ?? "consistent"}`);
+  if (readErrors.length > 0) {
+    lines.push(`  first read error: ${compactText(readErrors[0], 140)}`);
+  }
+  if (Array.isArray(completionConsistency.findings) && completionConsistency.findings.length > 0) {
+    for (const finding of completionConsistency.findings.slice(0, 2)) {
+      lines.push(`  - ${compactText(finding.summary ?? finding.type, 140)} (${finding.parentId ?? "unknown-parent"})`);
+    }
+  }
   if (boundaryCards.length > 0) {
-    lines.push("");
-    lines.push("Open boundaries:");
     for (const card of boundaryCards.slice(0, 3)) {
       lines.push(`  - ${compactText(card.title, 120)} (${card.boundaryType ?? "boundary"}) -> ${card.command ?? "project:dove.status"}`);
       if (card.reason) {
@@ -592,6 +644,11 @@ function formatDoveStatusForCli(result, target, options = {}) {
       lines.push(`  ... ${boundaryCards.length - 3} more`);
     }
   }
+  lines.push("");
+  lines.push("Project state:");
+  lines.push(`  review: ${projectState.reviewVerdict ?? summary.reviewVerdict ?? "unknown"}; return: ${projectState.returnStatus ?? summary.returnStatus ?? "unknown"}`);
+  lines.push(`  status adjustments: ${projectState.statusAdjustmentCount ?? result.statusAdjustmentContract?.itemCount ?? 0} available`);
+  lines.push(`  mission summary: ${formatMissionSummarySecondaryText(missionSummary)} (collapsed)`);
   lines.push("");
   if (options.showMissions) {
     lines.push(...formatMissionListForCli(missionList));
@@ -604,18 +661,47 @@ function formatDoveStatusForCli(result, target, options = {}) {
 
 function buildDoveStatusline(result, target) {
   const summary = result.projectSummary ?? result.dashboard?.projectSummary ?? {};
+  const statusHome = result.statusHome ?? {};
+  const currentContext = statusHome.currentContext ?? {};
+  const nextActions = Array.isArray(statusHome.nextSteps?.ranked) ? statusHome.nextSteps.ranked : Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : [];
+  const recentExecutionReceipts = Array.isArray(statusHome.recentExecutionReceipts?.items) ? statusHome.recentExecutionReceipts.items : Array.isArray(result.dailyHome?.recentExecutionReceipts) ? result.dailyHome.recentExecutionReceipts : [];
+  const blockersAndReconciliation = statusHome.blockersAndReconciliation ?? {};
+  const executionGaps = blockersAndReconciliation.executionGaps ?? statusHome.projectState?.executionGaps ?? result.dailyHome?.executionGaps?.counts ?? {};
+  const boundaryCount = blockersAndReconciliation.boundaryActionCount ?? result.dailyHome?.boundaryActionCards?.length ?? 0;
   const missionSummary = statusMissionListSummary(result);
-  const readErrors = Array.isArray(result.diagnostics?.readErrors) ? result.diagnostics.readErrors : [];
-  const textParts = [
-    `Dove: ${compactText(summary.title ?? "untitled", 60)}`,
-    `open ${missionSummary.openCount ?? 0}`,
-    `todo ${missionSummary.todoCount ?? 0}`,
-    `doing ${missionSummary.doingCount ?? 0}`,
-    `blocked ${missionSummary.blockedCount ?? 0}`
-  ];
-  if (readErrors.length > 0) {
-    textParts.push(`readErrors ${readErrors.length}`);
+  const readErrors = Array.isArray(blockersAndReconciliation.readErrors) ? blockersAndReconciliation.readErrors : Array.isArray(result.diagnostics?.readErrors) ? result.diagnostics.readErrors : [];
+  const primaryAction = nextActions[0] ?? null;
+  const latestReceipt = recentExecutionReceipts[0] ?? null;
+  const focus = summary.currentFocus ?? currentContext.currentFocus;
+  const gapParts = [];
+  if (Number(executionGaps.missingContract ?? 0) > 0) {
+    gapParts.push(`contract ${executionGaps.missingContract}`);
   }
+  if (Number(executionGaps.missingMaterials ?? 0) > 0) {
+    gapParts.push(`materials ${executionGaps.missingMaterials}`);
+  }
+  if (Number(executionGaps.verificationGaps ?? 0) > 0) {
+    gapParts.push(`verify ${executionGaps.verificationGaps}`);
+  }
+  if (Number(boundaryCount) > 0) {
+    gapParts.push(`boundaries ${boundaryCount}`);
+  }
+  if (readErrors.length > 0) {
+    gapParts.push(`readErrors ${readErrors.length}`);
+  }
+  const textParts = [`Dove: ${compactText(summary.title ?? currentContext.title ?? "untitled", 50)}`];
+  if (focus) {
+    textParts.push(`focus ${compactText(focus, 70)}`);
+  }
+  if (primaryAction) {
+    const action = primaryAction.copyableCommand ?? primaryAction.firstAction ?? primaryAction.command ?? primaryAction.title;
+    textParts.push(`next ${compactText(action, 80)}`);
+  }
+  textParts.push(`gaps ${gapParts.length > 0 ? gapParts.join("/") : "clear"}`);
+  if (latestReceipt) {
+    textParts.push(`receipt ${compactText(latestReceipt.status ?? latestReceipt.outcome ?? latestReceipt.packetId ?? "recorded", 60)}`);
+  }
+  textParts.push(`missions ${formatMissionSummarySecondaryText(missionSummary)}`);
   return {
     mode: "dove-statusline",
     query: true,
@@ -624,12 +710,28 @@ function buildDoveStatusline(result, target) {
     writes: [],
     target,
     summary: {
-      title: summary.title ?? null,
+      title: summary.title ?? currentContext.title ?? null,
+      currentFocus: focus ?? null,
+      nextAction: primaryAction ? {
+        title: primaryAction.title ?? null,
+        command: primaryAction.command ?? null,
+        copyableCommand: primaryAction.copyableCommand ?? primaryAction.firstAction ?? null,
+        kind: primaryAction.kind ?? null
+      } : null,
+      executionGaps,
+      boundaryCount,
+      latestReceipt: latestReceipt ? {
+        packetId: latestReceipt.packetId ?? null,
+        status: latestReceipt.status ?? latestReceipt.outcome ?? null,
+        runId: latestReceipt.runId ?? null
+      } : null,
       openMissionCount: missionSummary.openCount ?? 0,
       todoMissionCount: missionSummary.todoCount ?? 0,
       doingMissionCount: missionSummary.doingCount ?? 0,
       blockedMissionCount: missionSummary.blockedCount ?? 0,
       doneMissionCount: missionSummary.doneCount ?? 0,
+      archivedMissionCount: missionSummary.archivedCount ?? 0,
+      archivedHiddenMissionCount: missionSummary.archivedHiddenCount ?? 0,
       statusCounts: summary.statusCounts ?? {}
     },
     text: textParts.join(" | ")

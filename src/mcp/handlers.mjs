@@ -110,12 +110,16 @@ function makeErrorResult(message) {
 const mutationMetadataKeys = [
   "mutationId",
   "mutationMode",
+  "mutationModeSource",
   "writesApplied",
   "hostRollbackEligible",
   "hostTrackedFileEditsRequired",
   "directProcessWritesAreRollbackSafe",
   "externalWriteCaptureVerified",
   "doveRestoreSupported",
+  "hostRollbackIneligibleReason",
+  "recommendedMutationMode",
+  "rollbackAdvice",
   "mutationSummary",
   "mutationPlan"
 ];

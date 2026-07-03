@@ -23,7 +23,8 @@ export const PACKAGE_VERSION = "0.2.0";
 
 export const DOVE_TASK_STAGES = ["plan", "execute", "audit"];
 export const DOVE_TASK_DOMAINS = ["paper", "experiment", "engineering"];
-export const DOVE_TASK_STATUSES = ["pending", "ready", "in-progress", "blocked", "completed", "killed"];
+export const DOVE_TASK_STATUSES = ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"];
+export const DOVE_ARCHIVED_TASK_STATUSES = ["archived", "archived-with-lineage"];
 export const DOVE_BOUNDARY_TYPES = [
   "needs-confirmation",
   "needs-task-selection",
@@ -36,6 +37,7 @@ export const DOVE_BOUNDARY_TYPES = [
   "awaiting-provider-output",
   "awaiting-review-output",
   "missing-required-materials",
+  "missing-secret-env",
   "missing-executable-contract",
   "plan-output-not-executable",
   "verification-failed",
@@ -1286,6 +1288,51 @@ export function doveExecutionCriteriaCoverage(contractValue, verifiedCriteriaVal
   };
 }
 
+export function normalizeDoveExecutionReceipt(value, fallback = null) {
+  const source = normalizeObject(value, null);
+  const base = normalizeObject(fallback, {});
+  if (!source && Object.keys(base).length === 0) {
+    return null;
+  }
+  const lifecycleSource = normalizeObject(source?.lifecycleTransition, base.lifecycleTransition ?? {});
+  const coverageSource = normalizeObject(source?.criteriaCoverage, base.criteriaCoverage ?? null);
+  const receipt = {
+    receiptId: normalizeString(source?.receiptId, base.receiptId ?? normalizeString(source?.id, base.id ?? null)),
+    runId: normalizeString(source?.runId, base.runId ?? null),
+    packetId: normalizeString(source?.packetId, base.packetId ?? null),
+    command: normalizeString(source?.command, base.command ?? null),
+    surface: normalizeString(source?.surface, base.surface ?? null),
+    actionType: normalizeString(source?.actionType, base.actionType ?? null),
+    startedAt: normalizeString(source?.startedAt, base.startedAt ?? null),
+    completedAt: normalizeString(source?.completedAt, base.completedAt ?? null),
+    status: normalizeString(source?.status, base.status ?? null),
+    outcome: normalizeString(source?.outcome, base.outcome ?? null),
+    resultSummary: normalizeString(source?.resultSummary, base.resultSummary ?? normalizeString(source?.summary, base.summary ?? null)),
+    publicSafeSummary: normalizeString(source?.publicSafeSummary, base.publicSafeSummary ?? null),
+    nextAction: normalizeString(source?.nextAction, base.nextAction ?? null),
+    lifecycleTransition: {
+      previousStatus: normalizeString(lifecycleSource.previousStatus, null),
+      nextStatus: normalizeString(lifecycleSource.nextStatus, null)
+    },
+    artifactRefs: normalizeExecutionStrings(source?.artifactRefs, base.artifactRefs ?? []),
+    artifactPaths: normalizeExecutionStrings(source?.artifactPaths, base.artifactPaths ?? []),
+    evidenceLinks: normalizeExecutionStrings(source?.evidenceLinks, base.evidenceLinks ?? []),
+    evidencePaths: normalizeExecutionStrings(source?.evidencePaths, base.evidencePaths ?? []),
+    validationEvidencePaths: normalizeExecutionStrings(source?.validationEvidencePaths, base.validationEvidencePaths ?? []),
+    verificationEvidencePaths: normalizeExecutionStrings(source?.verificationEvidencePaths, base.verificationEvidencePaths ?? []),
+    verifiedCriteria: normalizeDoveVerifiedCriteria(source?.verifiedCriteria ?? base.verifiedCriteria),
+    criteriaCoverage: coverageSource ? {
+      complete: normalizeBoolean(coverageSource.complete, false),
+      required: normalizeExecutionStrings(coverageSource.required),
+      missing: normalizeExecutionStrings(coverageSource.missing),
+      verified: normalizeDoveVerifiedCriteria(coverageSource.verified)
+    } : null,
+    validationGateResults: normalizeObjectArray(source?.validationGateResults ?? base.validationGateResults),
+    boundary: normalizeObject(source?.boundary, base.boundary ?? null)
+  };
+  return Object.fromEntries(Object.entries(receipt).filter(([, item]) => item !== null));
+}
+
 function createDoveRoleSummary(overrides = {}) {
   const roleOverrides = Object.fromEntries(normalizeObjectArray(overrides).map((role) => [role.id, role]));
   return DOVE_PRIMARY_ROLES.map((role) => ({
@@ -2191,6 +2238,9 @@ function createMutationProvenanceSummary(entries) {
     lastMutationMode: lastEntry?.mutationMode ?? null,
     lastAppliedBy: lastEntry?.appliedBy ?? null,
     hostRollbackEligible: lastEntry?.hostRollbackEligible ?? false,
+    hostRollbackIneligibleReason: lastEntry?.hostRollbackIneligibleReason ?? null,
+    recommendedMutationMode: lastEntry?.recommendedMutationMode ?? null,
+    rollbackAdvice: lastEntry?.rollbackAdvice ?? null,
     hostCheckpointVerified: false,
     doveRestoreSupported: false
   };
@@ -2205,6 +2255,7 @@ function normalizeMutationProvenanceEntry(raw = {}, index = 0) {
     actionId: normalizeString(source.actionId, "unspecified"),
     packetId: normalizeString(source.packetId, null),
     mutationMode,
+    mutationModeSource: normalizeString(source.mutationModeSource, "unknown"),
     writesApplied,
     appliedBy: normalizeString(source.appliedBy, mutationMode === "patch-plan" ? "host-tracked-file-edits-required" : "node-fs"),
     hostId: normalizeString(source.hostId, "unknown"),
@@ -2214,6 +2265,9 @@ function normalizeMutationProvenanceEntry(raw = {}, index = 0) {
     directProcessWritesAreRollbackSafe: false,
     externalWriteCaptureVerified: false,
     doveRestoreSupported: false,
+    hostRollbackIneligibleReason: normalizeString(source.hostRollbackIneligibleReason, mutationMode === "patch-plan" ? null : "direct-process writes are not verified host rollback-safe"),
+    recommendedMutationMode: normalizeString(source.recommendedMutationMode, mutationMode === "patch-plan" ? null : "patch-plan"),
+    rollbackAdvice: normalizeString(source.rollbackAdvice, mutationMode === "patch-plan" ? null : "Use mutationMode: patch-plan for host-tracked rollback eligibility."),
     operationCount: Number.isFinite(source.operationCount) ? Math.max(0, Math.floor(source.operationCount)) : normalizeUniqueStringArray(source.paths).length,
     paths: normalizeUniqueStringArray(source.paths),
     createdAt: normalizeString(source.createdAt, null)
