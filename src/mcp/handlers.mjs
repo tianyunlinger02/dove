@@ -107,69 +107,199 @@ function makeErrorResult(message) {
   };
 }
 
-const mutationMetadataKeys = [
-  "mutationId",
-  "mutationMode",
-  "mutationModeSource",
-  "writesApplied",
-  "hostRollbackEligible",
-  "hostTrackedFileEditsRequired",
-  "directProcessWritesAreRollbackSafe",
-  "externalWriteCaptureVerified",
-  "doveRestoreSupported",
-  "hostRollbackIneligibleReason",
-  "recommendedMutationMode",
-  "rollbackAdvice",
-  "mutationSummary",
-  "mutationPlan"
-];
+function isPlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
 
-function stripMutationControlArgs(args = {}) {
-  if (!args || typeof args !== "object" || Array.isArray(args)) {
+function normalizeString(value, fallback = null) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  return trimmed || fallback;
+}
+
+function normalizeStringArray(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values.map((value) => normalizeString(value)).filter(Boolean);
+}
+
+function uniqueStrings(values) {
+  return [...new Set(normalizeStringArray(values))];
+}
+
+function compactObject(fields) {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => {
+    if (value === null || value === undefined) {
+      return false;
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    if (isPlainObject(value)) {
+      return Object.keys(value).length > 0;
+    }
+    return true;
+  }));
+}
+
+function stripMcpControlArgs(args = {}) {
+  if (!isPlainObject(args)) {
     return {};
   }
-  const { mutationMode, ...rest } = args;
+  const { mutationMode, resultMode, ...rest } = args;
   return rest;
+}
+
+function normalizeMcpResultMode(args = {}) {
+  const mode = normalizeString(args?.resultMode, "compact").toLowerCase();
+  return ["compact", "full", "debug"].includes(mode) ? mode : "compact";
 }
 
 function extractPacketId(args = {}) {
   return args.packetId ?? args.taskPacketId ?? args.missionPacketId ?? args.taskId ?? null;
 }
 
-function mutationMetadataFrom(wrapped) {
-  return Object.fromEntries(mutationMetadataKeys.filter((key) => key in wrapped).map((key) => [key, wrapped[key]]));
-}
-
-function mergeMutationMetadata(data, wrapped) {
-  const metadata = mutationMetadataFrom(wrapped);
-  if (data && typeof data === "object" && !Array.isArray(data)) {
-    return { ...data, ...metadata };
+function extractStatus(data) {
+  if (!isPlainObject(data)) {
+    return "ok";
   }
-  return { result: data, ...metadata };
+  return normalizeString(data.status ?? data.resultStatus ?? data.taskStatus ?? data.mode, "ok");
 }
 
-function dispatchToolWithMutationContext(root, name, args = {}) {
-  const cleanArgs = stripMutationControlArgs(args);
-  const wrapped = runWithMutationContext(root, {
-    actionId: name,
-    mutationMode: args?.mutationMode,
-    hostId: "mcp",
-    packetId: extractPacketId(args)
-  }, () => dispatchTool(root, name, cleanArgs));
-  if (wrapped.isError) {
-    return makeErrorResult(wrapped.content?.[0]?.text ?? `Failed to run ${name}`);
+function extractBoundaryType(data) {
+  if (!isPlainObject(data)) {
+    return null;
   }
-  const data = JSON.parse(wrapped.content?.[0]?.text ?? "null");
-  return makeTextResult(mergeMutationMetadata(data, wrapped));
+  return normalizeString(data.boundaryType ?? data.boundary?.type ?? data.resultCard?.boundaryType ?? data.resultCard?.boundary?.type);
 }
 
-export function dispatchTool(root, name, args = {}) {
-  try {
-    if (MUTATING_TOOL_NAMES.has(name) && !currentMutationContext(root)) {
-      return dispatchToolWithMutationContext(root, name, args);
-    }
-    const result = (data) => makeTextResult(data);
-    switch (name) {
+function extractNextAction(data) {
+  if (!isPlainObject(data)) {
+    return null;
+  }
+  const primary = data.statusHome?.nextSteps?.primary;
+  const resultCardAction = Array.isArray(data.resultCard?.nextActions) ? data.resultCard.nextActions[0] : null;
+  return normalizeString(
+    data.nextAction
+      ?? data.nextCommand
+      ?? data.current?.nextCommand
+      ?? data.board?.nextCommand
+      ?? primary?.command
+      ?? primary?.title
+      ?? resultCardAction?.command
+      ?? resultCardAction?.title
+  );
+}
+
+function extractCurrentContext(data) {
+  if (!isPlainObject(data)) {
+    return null;
+  }
+  const statusContext = isPlainObject(data.statusHome?.currentContext) ? data.statusHome.currentContext : {};
+  return compactObject({
+    stateSource: normalizeString(statusContext.stateSource ?? data.stateSource),
+    surface: normalizeString(data.surface ?? data.resultCard?.surface),
+    command: normalizeString(data.command ?? data.resultCard?.command),
+    mode: normalizeString(data.mode),
+    packetId: normalizeString(data.packetId ?? data.taskPacketId ?? data.missionPacketId ?? data.resultCard?.packetId),
+    runId: normalizeString(data.runId ?? data.id ?? data.resultCard?.runId),
+    domain: normalizeString(data.domain ?? data.doveDomain ?? data.missionDomain),
+    stage: normalizeString(data.stage ?? data.missionStage),
+    currentFocus: normalizeString(data.currentFocus ?? data.statusHome?.projectState?.currentFocus),
+    projectTitle: normalizeString(data.projectTitle ?? data.statusHome?.projectState?.title),
+    status: extractStatus(data)
+  });
+}
+
+function extractWrites(data) {
+  if (!isPlainObject(data)) {
+    return { applied: false, count: 0, paths: [] };
+  }
+  const paths = uniqueStrings([
+    ...normalizeStringArray(data.writes),
+    ...normalizeStringArray(data.durableWrites),
+    ...normalizeStringArray(data.outputPaths)
+  ]);
+  const operationCount = Array.isArray(data.mutationPlan?.operations) ? data.mutationPlan.operations.length : 0;
+  const writesApplied = typeof data.writesApplied === "boolean" ? data.writesApplied : paths.length > 0;
+  return compactObject({
+    applied: writesApplied,
+    count: paths.length || operationCount,
+    paths: paths.slice(0, 10),
+    mutationMode: normalizeString(data.mutationMode)
+  });
+}
+
+function extractRequiredEvidence(data) {
+  if (!isPlainObject(data)) {
+    return [];
+  }
+  return uniqueStrings([
+    ...normalizeStringArray(data.requiredEvidence),
+    ...normalizeStringArray(data.evidenceRequired),
+    ...normalizeStringArray(data.executionContract?.convergence?.evidenceRequired),
+    ...normalizeStringArray(data.statusSummary?.executionGaps?.evidenceRequired),
+    ...normalizeStringArray(data.workflowFrame?.executionGuidance?.evidenceRequired)
+  ]).slice(0, 10);
+}
+
+function extractEvidencePaths(data) {
+  if (!isPlainObject(data)) {
+    return [];
+  }
+  return uniqueStrings([
+    ...normalizeStringArray(data.evidencePaths),
+    ...normalizeStringArray(data.validationEvidencePaths),
+    ...normalizeStringArray(data.verificationEvidencePaths),
+    ...normalizeStringArray(data.resultCard?.evidencePaths)
+  ]).slice(0, 10);
+}
+
+function extractResultPath(data) {
+  if (!isPlainObject(data)) {
+    return null;
+  }
+  return normalizeString(data.resultPath ?? data.reportPath ?? data.outputPath ?? data.resultCard?.resultPath);
+}
+
+function buildMcpResultContract(tool, resultMode, data) {
+  const writes = extractWrites(data);
+  return {
+    presentation: "dove-mcp-result-contract",
+    tool,
+    resultMode,
+    status: extractStatus(data),
+    writes,
+    writesApplied: writes.applied === true,
+    boundaryType: extractBoundaryType(data),
+    currentContext: extractCurrentContext(data),
+    nextAction: extractNextAction(data),
+    requiredEvidence: extractRequiredEvidence(data),
+    evidencePaths: extractEvidencePaths(data),
+    resultPath: extractResultPath(data),
+    detailsAvailable: true,
+    fullDetails: "Pass resultMode: full or resultMode: debug to include fullResult."
+  };
+}
+
+function shapeMcpResult(tool, args, data) {
+  const resultMode = normalizeMcpResultMode(args);
+  const compact = buildMcpResultContract(tool, resultMode, data);
+  if (resultMode === "full") {
+    return { ...compact, fullResult: data };
+  }
+  if (resultMode === "debug") {
+    return { ...compact, fullResult: data, diagnostics: isPlainObject(data) ? data.diagnostics ?? null : null };
+  }
+  return compact;
+}
+
+export function dispatchToolData(root, name, args = {}) {
+  const result = (data) => data;
+  switch (name) {
       case "ensure_workspace":
         return result(ensureWorkspace(root));
       case "init_project":
@@ -351,8 +481,22 @@ export function dispatchTool(root, name, args = {}) {
       case "run_autonomy_operate":
         return result(runAutonomyOperate(root, args));
       default:
-        return makeErrorResult(`Unknown tool: ${name}`);
+        throw new Error(`Unknown tool: ${name}`);
     }
+}
+
+export function dispatchTool(root, name, args = {}) {
+  try {
+    const cleanArgs = stripMcpControlArgs(args);
+    const data = MUTATING_TOOL_NAMES.has(name) && !currentMutationContext(root)
+      ? runWithMutationContext(root, {
+        actionId: name,
+        mutationMode: args?.mutationMode,
+        hostId: "mcp",
+        packetId: extractPacketId(args)
+      }, () => dispatchToolData(root, name, cleanArgs))
+      : dispatchToolData(root, name, cleanArgs);
+    return makeTextResult(shapeMcpResult(name, args, data));
   } catch (error) {
     return makeErrorResult(error instanceof Error ? error.message : String(error));
   }

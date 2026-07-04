@@ -174,6 +174,12 @@ const operatorTaskResultProps = {
   completedAt: { type: "string" }
 };
 
+const resultModeProperty = {
+  type: "string",
+  enum: ["compact", "full", "debug"],
+  description: "MCP response expansion mode. compact returns the stable result contract only; full includes fullResult; debug includes fullResult plus diagnostics."
+};
+
 const mutationModeProperty = {
   type: "string",
   enum: ["patch-plan", "direct-process"],
@@ -244,18 +250,19 @@ export const MUTATING_TOOL_NAMES = new Set([
   "run_autonomy_operate"
 ]);
 
-function addMutationMode(tool) {
-  if (!MUTATING_TOOL_NAMES.has(tool.name)) {
-    return tool;
+function addMcpControlFields(tool) {
+  const properties = {
+    ...(tool.inputSchema?.properties ?? {}),
+    resultMode: resultModeProperty
+  };
+  if (MUTATING_TOOL_NAMES.has(tool.name)) {
+    properties.mutationMode = mutationModeProperty;
   }
   return {
     ...tool,
     inputSchema: {
       ...tool.inputSchema,
-      properties: {
-        mutationMode: mutationModeProperty,
-        ...(tool.inputSchema?.properties ?? {})
-      }
+      properties
     }
   };
 }
@@ -470,4 +477,4 @@ const baseToolDefinitions = [
   ,{ name: "run_autonomy_operate", description: "Run the maximum-allowed explicit foreground research operating surface from an objective or existing proposal source through planning, materialization, bounded approval, execution, and durable stop summary.", inputSchema: { type: "object", properties: { objective: { type: "string" }, sourceType: { type: "string" }, sourceId: { type: "string" }, actorRole: { type: "string" }, workerRole: { type: "string" }, maxSteps: { type: "number" }, packetId: { type: "string" }, programId: { type: "string" }, programRunId: { type: "string" }, approvalId: { type: "string" }, campaignId: { type: "string" }, campaignStepId: { type: "string" }, executeBy: { type: "string" }, reviewAfter: { type: "string" }, expiresAt: { type: "string" }, stepSequence: { type: "array", items: { type: "object", properties: { allowedStepType: { type: "string" }, stepPayload: { type: "object" } } } }, reviewScope: { type: "string" }, reviewStage: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, rationale: { type: "string" } } } }
 ];
 
-export const toolDefinitions = baseToolDefinitions.map(addMutationMode);
+export const toolDefinitions = baseToolDefinitions.map(addMcpControlFields);

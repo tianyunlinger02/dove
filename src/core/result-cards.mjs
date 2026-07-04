@@ -21,6 +21,102 @@ function normalizePlainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 }
 
+function compactPlainObject(fields) {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => {
+    if (value === null || value === undefined) {
+      return false;
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    if (value && typeof value === "object") {
+      return Object.keys(value).length > 0;
+    }
+    return true;
+  }));
+}
+
+function publicBoundaryType(value) {
+  const boundaryType = normalizeString(value, null);
+  if (!boundaryType) {
+    return null;
+  }
+  if (["awaiting-audio-review-output"].includes(boundaryType)) {
+    return "awaiting-review-output";
+  }
+  if (["missing-secret-env", "provider-failed"].includes(boundaryType)) {
+    return "awaiting-provider-output";
+  }
+  if (boundaryType.startsWith("audio-review-") || boundaryType === "needs-review") {
+    return "verification-failed";
+  }
+  return boundaryType;
+}
+
+function publicOutcome(value) {
+  const outcome = normalizeString(value, null);
+  if (!outcome) {
+    return null;
+  }
+  return publicBoundaryType(outcome) ?? outcome;
+}
+
+function boundaryDetailWithImplementation(value, publicType) {
+  const originalType = normalizeString(value?.type ?? value?.boundaryType, null);
+  const existingDetail = normalizePlainObject(value?.detail) ?? {};
+  return compactPlainObject({
+    ...existingDetail,
+    implementationBoundaryType: originalType && publicType && originalType !== publicType ? originalType : existingDetail.implementationBoundaryType,
+    reason: normalizeString(value?.reason, null)
+  });
+}
+
+function sanitizeBoundary(value) {
+  const boundary = normalizePlainObject(value);
+  if (!boundary) {
+    return null;
+  }
+  const publicType = publicBoundaryType(boundary.type ?? boundary.boundaryType);
+  const sanitized = { ...boundary };
+  if (publicType) {
+    sanitized.type = publicType;
+  }
+  if (sanitized.boundaryType) {
+    sanitized.boundaryType = publicBoundaryType(sanitized.boundaryType) ?? sanitized.boundaryType;
+  }
+  delete sanitized.reason;
+  const detail = boundaryDetailWithImplementation(boundary, publicType);
+  if (Object.keys(detail).length > 0) {
+    sanitized.detail = detail;
+  } else {
+    delete sanitized.detail;
+  }
+  return sanitized;
+}
+
+function sanitizeHandoffSuggestion(value) {
+  const handoff = normalizePlainObject(value);
+  if (!handoff) {
+    return null;
+  }
+  const publicType = publicBoundaryType(handoff.boundaryType ?? handoff.type);
+  const sanitized = { ...handoff };
+  if (publicType) {
+    sanitized.boundaryType = publicType;
+  }
+  if (sanitized.type) {
+    sanitized.type = publicBoundaryType(sanitized.type) ?? sanitized.type;
+  }
+  delete sanitized.reason;
+  const detail = boundaryDetailWithImplementation(handoff, publicType);
+  if (Object.keys(detail).length > 0) {
+    sanitized.detail = detail;
+  } else {
+    delete sanitized.detail;
+  }
+  return sanitized;
+}
+
 function normalizeMatchArray(value) {
   if (!Array.isArray(value)) {
     return [];
@@ -79,6 +175,8 @@ function resultAction(action, responseLanguage = "zh") {
     return null;
   }
   const command = normalizeString(action.command ?? action.nextAction, null);
+  const boundary = sanitizeBoundary(action.boundary);
+  const handoffSuggestion = sanitizeHandoffSuggestion(action.handoffSuggestion);
   return {
     kind: normalizeString(action.kind, null),
     title: normalizeString(action.title ?? action.label, command ? doveText(responseLanguage, "resultCardNextStatus") : doveText(responseLanguage, "compactCardFirstActionFallback")),
@@ -88,13 +186,13 @@ function resultAction(action, responseLanguage = "zh") {
     requires: normalizeStringArray(action.requires),
     requiredInputs: normalizeStringArray(action.requiredInputs),
     requiredActions: normalizeStringArray(action.requiredActions),
-    boundary: normalizePlainObject(action.boundary),
+    boundary,
     boundaryId: normalizeString(action.boundaryId, null),
-    boundaryType: normalizeString(action.boundaryType, null),
+    boundaryType: publicBoundaryType(action.boundaryType) ?? boundary?.type ?? null,
     ownerRole: normalizeString(action.ownerRole, null),
     nextRole: normalizeString(action.nextRole, null),
     handoff: normalizePlainObject(action.handoff),
-    handoffSuggestion: normalizePlainObject(action.handoffSuggestion),
+    handoffSuggestion,
     proposalOnly: true,
     noAutoApply: true,
     confirmationRequired: action.confirmationRequired === true ? true : undefined
@@ -139,7 +237,7 @@ export function buildCommandResultCard(details = {}, responseLanguage = "zh") {
     ...normalizeStringArray(receipt?.verificationEvidencePaths)
   ];
   const status = normalizeString(details.status, null);
-  const boundary = details.boundary ?? null;
+  const boundary = sanitizeBoundary(details.boundary);
   const stopReason = normalizeString(details.stopReason, null);
   const artifactResolution = normalizePlainObject(details.artifactResolution);
   const evidenceExplanation = normalizePlainObject(details.evidenceExplanation);
@@ -161,7 +259,7 @@ export function buildCommandResultCard(details = {}, responseLanguage = "zh") {
     executionReceipt,
     title: normalizeString(details.title, null),
     status,
-    outcome: normalizeString(details.outcome, null),
+    outcome: publicOutcome(details.outcome),
     happened: normalizeString(details.happened ?? details.summary, doveText(responseLanguage, "resultCardHappenedFallback")),
     durableWrites: compactResultList(details.durableWrites, doveText(responseLanguage, "resultCardNoDurableWrites")),
     evidence: compactResultList(evidence, doveText(responseLanguage, "resultCardNoEvidence")),
@@ -170,7 +268,7 @@ export function buildCommandResultCard(details = {}, responseLanguage = "zh") {
     artifactConflicts,
     validation: compactResultList(validation, doveText(responseLanguage, "resultCardNoValidation")),
     codeChanges: compactResultList(details.codeChanges, doveText(responseLanguage, "resultCardCodeNotInspected")),
-    stopReason,
+    stopReason: publicOutcome(stopReason),
     boundary,
     taskStatusBefore: normalizeString(details.taskStatusBefore, null),
     taskStatusAfter: normalizeString(details.taskStatusAfter, null),

@@ -17,8 +17,16 @@ function extractJson(result) {
   return JSON.parse(result.content[0].text);
 }
 
+function unwrapMcpResult(payload) {
+  if (payload?.presentation === "dove-mcp-result-contract" && payload.fullResult) {
+    return payload.fullResult;
+  }
+  return payload;
+}
+
 async function callTool(name, args = {}) {
-  return extractJson(await call("tools/call", { name, arguments: args }));
+  const toolArgs = { ...args, resultMode: args.resultMode ?? "full" };
+  return unwrapMcpResult(extractJson(await call("tools/call", { name, arguments: toolArgs })));
 }
 
 function requireTextIncludes(text, needle, label) {
@@ -720,46 +728,34 @@ async function main() {
   assert.equal(status.mode, "dove-status-query");
   assert.equal(status.proposalOnly, true);
   assert.equal(status.noAutoApply, true);
-  assert.deepEqual(status.writes, []);
+  assert.deepEqual(status.writes ?? [], []);
   assert.equal(status.detail, "compact");
   assert.equal(status.statusHome.presentation, "dove-project-situation-home");
-  requireDurableContextNotice(status.durableContextNotice);
-  assert.deepEqual(status.statusHome.durableContextNotice, status.durableContextNotice);
   assert.equal(status.statusHome.liveContextFirst, true);
   assert.ok(status.statusHome.currentContext && typeof status.statusHome.currentContext === "object");
   assert.equal(status.statusHome.currentContext.stateSource, "filesystem-durable-state");
-  assert.equal("nativeProjectRollbackExpected" in status.statusHome.currentContext, false);
-  assert.equal("nativeProjectRollbackRequiresProjectCheckpoint" in status.statusHome.currentContext, false);
-  assert.equal("projectCheckpointDetected" in status.statusHome.currentContext, false);
-  assert.equal("projectCheckpointStatus" in status.statusHome.currentContext, false);
-  assert.equal(status.statusHome.currentContext.nativeHostRollbackRequiresFileCheckpoint, true);
-  assert.equal(status.statusHome.currentContext.hostCheckpointDetected, false);
-  assert.equal(status.statusHome.currentContext.hostCheckpointStatus, "not-programmatically-verifiable");
-  assert.equal(status.statusHome.currentContext.externalWriteCaptureRequired, true);
-  assert.equal(status.statusHome.currentContext.externalWriteCaptureVerified, false);
-  assert.equal(status.statusHome.currentContext.doveRestoreSupported, false);
-  assert.equal(status.statusHome.currentContext.projectVisibilityRequired, true);
-  assert.deepEqual(status.statusHome.blockersAndReconciliation.durableContextNotice, status.durableContextNotice);
-  requireFullPreActionGuidance(status.statusHome.preActionGuidance, { surface: "dove.status", primaryRole: "planner" });
-  assert.ok(status.statusHome.projectState && typeof status.statusHome.projectState === "object");
-  assert.ok(status.statusHome.blockersAndReconciliation && typeof status.statusHome.blockersAndReconciliation === "object");
+  assert.equal(status.statusHome.currentContext.durableRoot, ".dove");
+  for (const hidden of ["nativeProjectRollbackExpected", "nativeProjectRollbackRequiresProjectCheckpoint", "projectCheckpointDetected", "projectCheckpointStatus", "nativeHostRollbackRequiresFileCheckpoint", "hostCheckpointDetected", "hostCheckpointStatus", "externalWriteCaptureRequired", "externalWriteCaptureVerified", "doveRestoreSupported", "projectVisibilityRequired"]) {
+    assert.equal(hidden in status.statusHome.currentContext, false);
+  }
+  assert.equal("durableContextNotice" in status, false);
+  assert.equal("dashboard" in status, false);
+  assert.equal("dailyHome" in status, false);
+  assert.equal("diagnostics" in status, false);
+  assert.equal("statusAdjustmentContract" in status, false);
+  assert.equal("preActionGuidance" in status.statusHome, false);
+  assert.equal("projectState" in status.statusHome, false);
+  assert.equal("blockersAndReconciliation" in status.statusHome, false);
+  assert.equal("optionalMissionDetails" in status.statusHome, false);
   assert.ok(status.statusHome.nextSteps && typeof status.statusHome.nextSteps === "object");
-  assert.ok(status.statusHome.nextSteps.ranked.length <= 3);
+  assert.ok(status.statusHome.nextSteps.ranked.length <= 1);
   assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.kind && card.title && card.command));
   assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.proposalOnly === true && card.noAutoApply === true));
-  assert.equal(status.statusHome.optionalMissionDetails.presentation, "dove-mission-list");
-  assert.equal(status.statusHome.optionalMissionDetails.defaultCollapsed, true);
-  assert.equal(status.statusHome.optionalMissionDetails.detail, "summary");
-  assert.equal(status.statusHome.optionalMissionDetails.missionItemsIncluded, false);
-  assert.equal("groups" in status.statusHome.optionalMissionDetails, false);
-  assert.deepEqual(status.statusHome.optionalMissionDetails.statusModel.userGroups, ["todo", "doing", "blocked", "done", "archived"]);
-  assert.deepEqual(status.statusHome.optionalMissionDetails.statusModel.machineStatuses, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
-  assert.equal(status.statusHome.optionalMissionDetails.requestArgs.showMissions, true);
+  assert.equal(status.statusHome.expansion.missionDetails.args.showMissions, true);
+  assert.equal(status.statusHome.expansion.statusAdjustments.args.requestStatusAdjustment, true);
   assert.equal(missionStatus.statusHome.optionalMissionDetails.detail, "compact");
   assert.equal(missionStatus.statusHome.optionalMissionDetails.missionItemsIncluded, true);
   assert.equal(missionStatus.statusHome.optionalMissionDetails.groups.done.defaultCollapsed, true);
-  assert.equal(status.dashboard, undefined);
-  assert.equal(status.dailyHome, undefined);
   assert.equal(fullStatus.detail, "full");
   requireDurableContextNotice(fullStatus.durableContextNotice);
   assert.ok(fullStatus.dashboard);
@@ -801,20 +797,20 @@ async function main() {
   assert.equal(globalPublicText.includes(tempWorkspace), false);
 
   assert.ok(Array.isArray(fullStatus.dashboard.tasks.boundaryActionCards));
-  assert.ok(status.projectSummary && typeof status.projectSummary === "object");
-  assert.equal(status.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
-  assert.deepEqual(status.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
-  assert.equal(status.statusAdjustmentContract.statusAdjustmentItemsIncluded, false);
-  assert.deepEqual(status.statusAdjustmentContract.items, []);
-  assert.deepEqual(status.statusAdjustmentContract.adjustmentCards, []);
-  assert.equal(status.statusHome.statusAdjustmentPreview.requestArgs.requestStatusAdjustment, true);
-  assert.equal(adjustmentStatus.statusAdjustmentContract.statusAdjustmentItemsIncluded, true);
-  assert.ok(adjustmentStatus.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
-  assert.equal(adjustmentStatus.statusAdjustmentContract.items.some((item) => item.packetId === secondMission.createdTask.id), false);
-  assert.equal(adjustmentStatus.statusAdjustmentContract.items.some((item) => ["completed", "killed"].includes(item.currentStatus)), false);
+  assert.ok(fullStatus.projectSummary && typeof fullStatus.projectSummary === "object");
+  assert.equal(fullStatus.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
+  assert.deepEqual(fullStatus.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
+  assert.equal(fullStatus.statusAdjustmentContract.statusAdjustmentItemsIncluded ?? false, false);
+  assert.ok(Array.isArray(fullStatus.statusAdjustmentContract.items));
+  assert.ok(Array.isArray(fullStatus.statusAdjustmentContract.adjustmentCards));
+  assert.equal(adjustmentStatus.statusHome.expansion.statusAdjustments.args.requestStatusAdjustment, true);
+  assert.equal(adjustmentStatus.statusHome.statusAdjustmentPreview.statusAdjustmentItemsIncluded, true);
+  assert.ok(adjustmentStatus.statusHome.statusAdjustmentPreview.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
+  assert.equal(adjustmentStatus.statusHome.statusAdjustmentPreview.items.some((item) => item.packetId === secondMission.createdTask.id), false);
+  assert.equal(adjustmentStatus.statusHome.statusAdjustmentPreview.items.some((item) => ["completed", "killed"].includes(item.currentStatus)), false);
   assert.equal(status.taskGraph, undefined);
   assert.equal(status.paperLifecycle, undefined);
-  assert.equal(status.diagnostics.mayRefreshDerivedSurfaces, false);
+  assert.equal(fullStatus.diagnostics.mayRefreshDerivedSurfaces, false);
 
   const statusAdjustmentPreview = await callTool("apply_dove_status_adjustments", {
     adjustments: [{ packetId, status: "ready", reason: "Validator selects ready from status UX." }]
@@ -878,9 +874,9 @@ async function main() {
   const queriedLessons = await callTool("query_operator_lessons", { tag: "validator" });
   assert.equal(queriedLessons.lessonsPath, ".dove/meta/operator-lessons.json");
   assert.ok(queriedLessons.lessons.some((lesson) => lesson.id === recordedLesson.recordedLesson.id));
-  const lessonRecallStatus = await callTool("query_dove_status", {});
-  requireFullPreActionGuidance(lessonRecallStatus.statusHome.preActionGuidance, { surface: "dove.status", primaryRole: "planner" });
-  assert.ok(lessonRecallStatus.statusHome.preActionGuidance.lessonRecall.topLessons.some((lesson) => lesson.id === recordedLesson.recordedLesson.id));
+  const lessonRecallStatus = await callTool("query_dove_status", { detail: "full" });
+  requireFullPreActionGuidance(lessonRecallStatus.preActionGuidance, { surface: "dove.status", primaryRole: "planner" });
+  assert.ok(lessonRecallStatus.preActionGuidance.lessonRecall.topLessons.some((lesson) => lesson.id === recordedLesson.recordedLesson.id));
 
   const versionReset = await callTool("reset_dove_version", {
     versionId: "validator-direction-reset",

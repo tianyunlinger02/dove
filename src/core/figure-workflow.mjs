@@ -35,6 +35,21 @@ function firstText(...values) {
   return values.find((value) => typeof value === "string" && value.trim().length > 0)?.trim() ?? null;
 }
 
+function compactObject(fields) {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => {
+    if (value === null || value === undefined) {
+      return false;
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    if (value && typeof value === "object") {
+      return Object.keys(value).length > 0;
+    }
+    return true;
+  }));
+}
+
 function existingFigureById(root, figureId) {
   const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: null });
   return {
@@ -172,11 +187,8 @@ function hasImportableOutput(args, prepared) {
 }
 
 function statusFor(prepared, imported, validation) {
-  if (prepared.providerExecution?.status === "missing-secret-env") {
-    return "missing-secret-env";
-  }
-  if (prepared.providerExecution?.status === "failed") {
-    return "provider-failed";
+  if (["missing-secret-env", "failed"].includes(prepared.providerExecution?.status)) {
+    return "blocked-boundary";
   }
   if (imported) {
     return validation.issueCount === 0 ? "validated" : "qa-needs-attention";
@@ -203,6 +215,7 @@ function figureValidationEvidencePaths(validation) {
 
 function figureBoundaryFor(status, prepared, validation, figureId, runId) {
   const artifactRefs = figureArtifactRefs(validation);
+  const providerStatus = prepared.providerExecution?.status ?? null;
   if (status === "blocked-missing-materials") {
     return {
       id: `${figureId}-${runId}-missing-materials`,
@@ -216,59 +229,76 @@ function figureBoundaryFor(status, prepared, validation, figureId, runId) {
       nextRole: "builder"
     };
   }
+  if (providerStatus === "missing-secret-env") {
+    const apiKeyEnv = prepared.providerExecution?.apiKeyEnv ?? prepared.providerReadiness?.apiKeyEnv ?? "provider-api-key-env";
+    return {
+      id: `${figureId}-${runId}-awaiting-provider-output`,
+      type: "awaiting-provider-output",
+      reason: `Figure ${figureId} is awaiting provider configuration before output can be imported.`,
+      requiredInputs: [apiKeyEnv],
+      requiredActions: ["set-provider-api-key-env", "retry-figure-provider", "import-manual-figure-output"],
+      artifactRefs,
+      nextAction: "project:dove.figure",
+      ownerRole: "builder",
+      nextRole: "builder",
+      detail: compactObject({
+        implementationBoundaryType: "missing-secret-env",
+        providerStatus,
+        apiKeyEnv,
+        providerError: prepared.providerExecution?.error
+      })
+    };
+  }
+  if (providerStatus === "failed") {
+    return {
+      id: `${figureId}-${runId}-awaiting-provider-output`,
+      type: "awaiting-provider-output",
+      reason: `Figure ${figureId} is awaiting provider recovery or manual output import.`,
+      requiredInputs: ["provider-error-resolution-or-manual-output"],
+      requiredActions: ["fix-figure-provider-and-retry", "import-manual-figure-output"],
+      artifactRefs,
+      nextAction: "project:dove.figure",
+      ownerRole: "builder",
+      nextRole: "builder",
+      detail: compactObject({
+        implementationBoundaryType: "provider-failed",
+        providerStatus,
+        providerError: prepared.providerExecution?.error
+      })
+    };
+  }
   if (status === "prepared-awaiting-output") {
     const providerRequiredActions = normalizeStringArray(prepared.providerExecution?.requiredActions);
     const providerRequiredInputs = prepared.providerExecution?.requiredMutationMode ? [`mutationMode: ${prepared.providerExecution.requiredMutationMode}`] : [];
     return {
       id: `${figureId}-${runId}-awaiting-provider-output`,
       type: "awaiting-provider-output",
-      reason: prepared.providerExecution?.reason ?? `Figure ${figureId} has prepared materials but no final SVG or output manifest yet.`,
+      reason: `Figure ${figureId} is awaiting provider output or manual output import.`,
       requiredInputs: normalizeStringArray([...providerRequiredInputs, "finalSvgPath-or-outputManifestPath-or-svgContent"]),
       requiredActions: normalizeStringArray([...providerRequiredActions, "run-provider-or-import-output", "provide-final-svg-or-output-manifest"]),
       artifactRefs,
       nextAction: "project:dove.figure",
       ownerRole: "builder",
-      nextRole: "builder"
-    };
-  }
-  if (status === "missing-secret-env") {
-    const apiKeyEnv = prepared.providerExecution?.apiKeyEnv ?? prepared.providerReadiness?.apiKeyEnv ?? "provider-api-key-env";
-    return {
-      id: `${figureId}-${runId}-missing-secret-env`,
-      type: "missing-secret-env",
-      reason: prepared.providerExecution?.error ?? `Figure provider for ${figureId} requires environment variable ${apiKeyEnv}.`,
-      requiredInputs: [apiKeyEnv],
-      requiredActions: ["set-provider-api-key-env", "retry-figure-provider", "import-manual-figure-output"],
-      artifactRefs,
-      nextAction: "project:dove.figure",
-      ownerRole: "builder",
-      nextRole: "builder"
-    };
-  }
-  if (status === "provider-failed") {
-    return {
-      id: `${figureId}-${runId}-provider-failed`,
-      type: "provider-failed",
-      reason: prepared.providerExecution?.error ?? `Figure provider failed for ${figureId}.`,
-      requiredInputs: ["provider-error-resolution-or-manual-output"],
-      requiredActions: ["fix-figure-provider-and-retry", "import-manual-figure-output"],
-      artifactRefs,
-      nextAction: "project:dove.figure",
-      ownerRole: "builder",
-      nextRole: "builder"
+      nextRole: "builder",
+      detail: compactObject({
+        implementationBoundaryType: providerStatus,
+        providerReason: prepared.providerExecution?.reason,
+        requiredMutationMode: prepared.providerExecution?.requiredMutationMode
+      })
     };
   }
   if (status === "qa-needs-attention") {
     return {
       id: `${figureId}-${runId}-qa-needs-attention`,
-      type: "needs-review",
+      type: "verification-failed",
       reason: `Figure ${figureId} has ${validation.issueCount} QA issue(s) requiring review.`,
       requiredInputs: [validation.qaPath],
       requiredActions: ["review-figure-qa", "resolve-figure-qa-issues"],
       artifactRefs,
       nextAction: "project:dove.review",
       ownerRole: "builder",
-      nextRole: "reviewer"
+      nextRole: "reviewer",
+      detail: { implementationBoundaryType: "needs-review" }
     };
   }
   return null;
@@ -365,11 +395,13 @@ export function runFigureWorkflow(root, args = {}) {
     stageFiles,
     materialStatus: prepared.materialStatus,
     missingRequirementIds: prepared.missingRequirementIds,
-    providerReadiness: prepared.providerReadiness,
-    providerExecution: prepared.providerExecution,
-    prepared,
     imported,
     validation,
+    diagnostics: {
+      providerReadiness: prepared.providerReadiness,
+      providerExecution: prepared.providerExecution,
+      prepared
+    },
     captionId: imported?.captionId ?? null,
     finalSvgPath: imported?.finalSvgPath ?? null,
     qaIssueCount: validation.issueCount,

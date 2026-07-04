@@ -101,7 +101,7 @@ export function runDoveReviewLoop(root, args = {}) {
     const verdict = review.imported?.verdict;
     if (verdict === "coherent") {
       status = "coherent";
-      stopReason = "audio-review-coherent";
+      stopReason = "review-coherent";
       break;
     }
     if (review.status === "prepared-awaiting-audio") {
@@ -111,7 +111,7 @@ export function runDoveReviewLoop(root, args = {}) {
     }
     if (verdict === "blocked") {
       status = "blocked";
-      stopReason = "audio-review-blocked";
+      stopReason = "verification-failed";
       break;
     }
   }

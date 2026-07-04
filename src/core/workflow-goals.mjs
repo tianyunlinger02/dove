@@ -421,7 +421,11 @@ function parseToolJson(result, action) {
     throw new Error(`${action} failed: ${text}`);
   }
   try {
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    if (parsed?.presentation === "dove-mcp-result-contract" && parsed.fullResult) {
+      return parsed.fullResult;
+    }
+    return parsed;
   } catch (error) {
     throw new Error(`${action} returned invalid JSON: ${error.message}`);
   }
@@ -1024,6 +1028,7 @@ export function validateWorkflowGoals(options = {}) {
   if (typeof dispatch !== "function") {
     throw new Error("validateWorkflowGoals requires dispatch.");
   }
+  const dispatchForGoal = (root, name, args = {}) => dispatch(root, name, { ...args, resultMode: args.resultMode ?? "full" });
 
   validateWorkflowGoalContracts();
 
@@ -1042,7 +1047,7 @@ export function validateWorkflowGoals(options = {}) {
 
     const root = createRoot(`dove-workflow-goal-${contract.id}-`);
     try {
-      results.push(runner(root, dispatch));
+      results.push(runner(root, dispatchForGoal));
     } catch (error) {
       failures.push({
         id: contract.id,

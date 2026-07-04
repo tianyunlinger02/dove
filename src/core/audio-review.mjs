@@ -144,7 +144,7 @@ function audioReviewPreparedHandoffSuggestion(prepared = {}, responseLanguage = 
     requiredInputs,
     requiredActions: ["complete-isolated-review-handoff"],
     requires: requiredInputs,
-    reason: "awaiting-audio-review-output",
+    detail: { implementationBoundaryType: "awaiting-audio-review-output" },
     summary: doveText(responseLanguage, "resultCardHandoffImportReview")
   };
 }
@@ -156,14 +156,19 @@ function audioReviewImportedHandoffSuggestion(imported = {}, responseLanguage = 
   const requiredActions = normalizeStringArray(imported.actionItems).length > 0
     ? normalizeStringArray(imported.actionItems)
     : ["address-audio-review-findings"];
+  const implementationBoundaryType = `audio-review-${imported.verdict ?? "needs-revision"}`;
   return {
     presentation: "dove-handoff-suggestion",
-    boundaryType: `audio-review-${imported.verdict ?? "needs-revision"}`,
+    boundaryType: "verification-failed",
     ownerRole: "builder",
     nextRole: "builder",
     requiredActions,
     requires: requiredActions,
-    reason: imported.summary ?? imported.verdict ?? null,
+    detail: {
+      implementationBoundaryType,
+      reviewVerdict: imported.verdict ?? null,
+      reviewSummary: imported.summary ?? null
+    },
     summary: doveText(responseLanguage, "resultCardHandoffAddressReview")
   };
 }
@@ -176,7 +181,7 @@ function audioReviewPreparedCard(prepared = {}, responseLanguage = "zh") {
     packetId: prepared.packetId,
     runId: prepared.runId,
     status: prepared.status,
-    outcome: "awaiting-audio-review-output",
+    outcome: "awaiting-review-output",
     summary: doveText(responseLanguage, "resultCardReviewInputPrepared"),
     evidenceLinks: [prepared.inputPath, prepared.handoffPath, prepared.reportPath, ...normalizeStringArray(prepared.reviewedArtifactPaths)],
     durableWrites: [doveText(responseLanguage, "resultCardReviewInputPrepared"), prepared.inputPath, relativeRunPath(prepared.runId, "manifest.json")],

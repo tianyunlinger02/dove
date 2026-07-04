@@ -183,7 +183,7 @@ process.stdout.write(JSON.stringify({
     });
 
     assert.equal(result.status, "validated");
-    assert.equal(result.providerExecution.status, "completed");
+    assert.equal(result.diagnostics.providerExecution.status, "completed");
     assert.equal(result.imported.finalSvgPath, ".dove/figures/provider-intent.final.svg");
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "provider-intent.final.svg")), true);
   } finally {
@@ -224,8 +224,8 @@ process.stdout.write(JSON.stringify({
     }));
 
     assert.equal(result.status, "prepared-awaiting-output");
-    assert.equal(result.providerExecution.status, "awaiting-provider-output");
-    assert.equal(result.providerExecution.requiredMutationMode, "direct-process");
+    assert.equal(result.diagnostics.providerExecution.status, "awaiting-provider-output");
+    assert.equal(result.diagnostics.providerExecution.requiredMutationMode, "direct-process");
     assert.equal(result.boundaryType, "awaiting-provider-output");
     assert.equal(result.boundary.type, "awaiting-provider-output");
     assert.ok(result.requiredActions.includes("retry-with-mutationMode-direct-process"));
@@ -296,8 +296,8 @@ test("runFigureWorkflow treats providerId none as a plan-only figure run", () =>
     });
 
     assert.equal(result.status, "prepared-awaiting-output");
-    assert.equal(result.providerReadiness.status, "not-configured");
-    assert.equal(result.providerExecution, null);
+    assert.equal(result.diagnostics.providerReadiness.status, "not-configured");
+    assert.equal(result.diagnostics.providerExecution, null);
     assert.equal(result.boundaryType, "awaiting-provider-output");
     assert.ok(result.requiredActions.includes("run-provider-or-import-output"));
     assert.equal(result.imported, null);
@@ -367,11 +367,12 @@ process.exit(3);
       }
     });
 
-    assert.equal(result.status, "provider-failed");
-    assert.equal(result.providerExecution.status, "failed");
-    assert.match(result.providerExecution.error, /provider failed intentionally/);
-    assert.equal(result.boundaryType, "provider-failed");
-    assert.equal(result.boundary.type, "provider-failed");
+    assert.equal(result.status, "blocked-boundary");
+    assert.equal(result.diagnostics.providerExecution.status, "failed");
+    assert.match(result.diagnostics.providerExecution.error, /provider failed intentionally/);
+    assert.equal(result.boundaryType, "awaiting-provider-output");
+    assert.equal(result.boundary.type, "awaiting-provider-output");
+    assert.equal(result.boundary.detail.implementationBoundaryType, "provider-failed");
     assert.deepEqual(result.boundary.requiredInputs, ["provider-error-resolution-or-manual-output"]);
     assert.ok(result.requiredActions.includes("fix-figure-provider-and-retry"));
     assert.ok(result.requiredActions.includes("import-manual-figure-output"));
@@ -402,12 +403,13 @@ test("runFigureWorkflow routes gpt-image2 missing key to a secret boundary", () 
       }
     });
 
-    assert.equal(result.status, "missing-secret-env");
-    assert.equal(result.providerReadiness.status, "missing-secret-env");
-    assert.equal(result.providerExecution.status, "missing-secret-env");
-    assert.equal(result.providerExecution.apiKeyEnv, "OPENAI_API_KEY");
-    assert.equal(result.boundaryType, "missing-secret-env");
-    assert.equal(result.boundary.type, "missing-secret-env");
+    assert.equal(result.status, "blocked-boundary");
+    assert.equal(result.diagnostics.providerReadiness.status, "missing-secret-env");
+    assert.equal(result.diagnostics.providerExecution.status, "missing-secret-env");
+    assert.equal(result.diagnostics.providerExecution.apiKeyEnv, "OPENAI_API_KEY");
+    assert.equal(result.boundaryType, "awaiting-provider-output");
+    assert.equal(result.boundary.type, "awaiting-provider-output");
+    assert.equal(result.boundary.detail.implementationBoundaryType, "missing-secret-env");
     assert.deepEqual(result.boundary.requiredInputs, ["OPENAI_API_KEY"]);
     assert.ok(result.requiredActions.includes("set-provider-api-key-env"));
     assert.equal(result.imported, null);

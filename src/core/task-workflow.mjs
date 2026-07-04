@@ -3628,8 +3628,8 @@ function summarizeStepOutput(output) {
   if (Array.isArray(output.missingRequirementIds)) {
     summary.missingRequirementIds = output.missingRequirementIds;
   }
-  if (output.providerReadiness?.status) {
-    summary.providerReadiness = output.providerReadiness.status;
+  if (output.boundary?.type) {
+    summary.boundaryType = output.boundary.type;
   }
   const executionReceipt = normalizeDoveExecutionReceipt(output.executionReceipt, null);
   if (executionReceipt) {
@@ -3712,6 +3712,18 @@ function classifyAutoStepResult(command, output) {
   }
   if (status === "provider-failed") {
     return { status: "blocked-boundary", outcome: "provider-failed", stopReason: "figure-provider-failed", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
+  }
+  if (status === "blocked-boundary" && output?.boundary?.type) {
+    return {
+      status: "blocked-boundary",
+      outcome: output.boundary.type,
+      stopReason: output.stopReason ?? output.boundary.type,
+      terminal: true,
+      canCompleteTask: false,
+      artifactRefs: [],
+      evidenceLinks: [],
+      requiredActions: normalizeStringArray(output.requiredActions ?? output.boundary.requiredActions)
+    };
   }
   if (command === "dove.source" && (status === "needs-source-verification" || output?.outcome === "source-provenance-unverified")) {
     return {

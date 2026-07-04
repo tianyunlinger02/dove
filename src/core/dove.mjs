@@ -1848,11 +1848,69 @@ function compactWorkContract(contract) {
   };
 }
 
+function compactStatusObject(fields) {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => {
+    if (value === null || value === undefined) {
+      return false;
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    if (value && typeof value === "object") {
+      return Object.keys(value).length > 0;
+    }
+    return true;
+  }));
+}
+
+function publicStatusBoundaryType(value) {
+  const type = String(value ?? "").trim();
+  if (!type) {
+    return null;
+  }
+  if (["awaiting-audio-review-output"].includes(type)) {
+    return "awaiting-review-output";
+  }
+  if (["missing-secret-env", "provider-failed"].includes(type)) {
+    return "awaiting-provider-output";
+  }
+  if (["awaiting-host-pass", "awaiting-host-results", "needs-host-results", "needs-completion-evidence", "needs-explicit-progress-step"].includes(type)) {
+    return "host-tool-blocked";
+  }
+  if (type.startsWith("audio-review-") || type === "needs-review") {
+    return "verification-failed";
+  }
+  return type;
+}
+
+function compactStatusBoundary(boundary) {
+  if (!boundary || typeof boundary !== "object" || Array.isArray(boundary)) {
+    return null;
+  }
+  const implementationBoundaryType = String(boundary.type ?? boundary.boundaryType ?? "").trim() || null;
+  const type = publicStatusBoundaryType(implementationBoundaryType);
+  return compactStatusObject({
+    id: boundary.id ?? boundary.boundaryId ?? null,
+    type,
+    status: boundary.status ?? null,
+    packetId: boundary.packetId ?? null,
+    summary: boundary.summary ?? null,
+    requiredInputs: normalizeStringArray(boundary.requiredInputs),
+    requiredActions: normalizeStringArray(boundary.requiredActions),
+    command: boundary.command ?? boundary.nextAction ?? null,
+    ownerRole: boundary.ownerRole ?? null,
+    nextRole: boundary.nextRole ?? null,
+    detail: implementationBoundaryType && type && implementationBoundaryType !== type ? { implementationBoundaryType } : null
+  });
+}
+
 function compactStatusActionCard(card) {
   if (!card || typeof card !== "object") {
     return card;
   }
-  return {
+  const boundary = compactStatusBoundary(card.boundary);
+  const boundaryType = publicStatusBoundaryType(card.boundaryType ?? card.boundary?.type);
+  return compactStatusObject({
     presentation: card.presentation,
     proposalOnly: card.proposalOnly,
     noAutoApply: card.noAutoApply,
@@ -1882,12 +1940,16 @@ function compactStatusActionCard(card) {
       complete: Boolean(card.criteriaCoverage.complete),
       missing: normalizeStringArray(card.criteriaCoverage.missing).slice(0, 5)
     } : undefined,
-    nextRole: card.nextRole ?? null,
-    boundaryType: card.boundaryType ?? card.boundary?.type ?? null,
-    reason: card.reason ?? card.boundary?.reason ?? null,
-    requires: normalizeStringArray(card.requires).slice(0, 5),
-    options: Array.isArray(card.options) ? card.options.slice(0, 4) : undefined
-  };
+    boundaryId: card.boundaryId ?? card.boundary?.id ?? null,
+    summary: card.summary ?? card.boundary?.summary ?? null,
+    requiredInputs: normalizeStringArray(card.requiredInputs ?? card.boundary?.requiredInputs).slice(0, 5),
+    requiredActions: normalizeStringArray(card.requiredActions ?? card.boundary?.requiredActions).slice(0, 5),
+    ownerRole: card.ownerRole ?? card.boundary?.ownerRole ?? null,
+    nextRole: card.nextRole ?? card.boundary?.nextRole ?? null,
+    boundaryType,
+    boundary,
+    requires: normalizeStringArray(card.requires).slice(0, 5)
+  });
 }
 
 function compactStatusAdjustmentItem(item) {
@@ -2063,25 +2125,85 @@ function buildDurableContextNotice(root, responseLanguage = "zh") {
   };
 }
 
-function buildCompactStatusHome({ result, missionList, nextActions, boundaryActionCards, statusAdjustmentContract, preActionGuidance, args }) {
+function compactStatusRuntimeContinuation(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return compactStatusObject({
+    currentKind: value.currentKind ?? value.currentContinuationKind ?? null,
+    currentPacketId: value.currentPacketId ?? value.currentContinuationPacketId ?? null,
+    currentProgramRunId: value.currentProgramRunId ?? value.currentContinuationProgramRunId ?? null,
+    currentCommand: value.currentCommand ?? value.currentContinuationCommand ?? null,
+    continuationCount: value.continuationCount ?? null
+  });
+}
+
+function compactStatusBoundaryFromAction(action) {
+  if (!action) {
+    return null;
+  }
+  return compactStatusBoundary(action.boundary) ?? compactStatusBoundary({
+    id: action.boundaryId,
+    boundaryType: action.boundaryType,
+    packetId: action.packetId,
+    summary: action.summary,
+    requiredInputs: action.requiredInputs,
+    requiredActions: action.requiredActions,
+    command: action.command,
+    ownerRole: action.ownerRole,
+    nextRole: action.nextRole
+  });
+}
+
+function compactStatusRequiredEvidence({ primaryStep, boundary, boundaryActionCards, executionGaps }) {
+  return mergeStringArrays(
+    primaryStep?.evidenceRequired,
+    primaryStep?.requiredMaterials,
+    primaryStep?.requires,
+    primaryStep?.doneCriteria,
+    boundary?.requiredInputs,
+    boundary?.requiredActions,
+    boundaryActionCards.flatMap((card) => mergeStringArrays(card.evidenceRequired, card.requiredMaterials, card.requires)),
+    executionGaps.evidenceRequired,
+    executionGaps.requiredMaterials
+  ).slice(0, 12);
+}
+
+function buildCompactStatusHome({ result, missionList, nextActions, boundaryActionCards, statusAdjustmentContract, args }) {
   const summary = result.projectSummary ?? {};
   const current = result.current ?? {};
   const dashboard = result.dashboard ?? {};
   const readErrors = Array.isArray(result.diagnostics?.readErrors) ? result.diagnostics.readErrors : [];
   const blockers = Array.isArray(dashboard.blockers) ? dashboard.blockers : [];
-  const runtimeContinuation = dashboard.runtime?.continuation ?? null;
-  const completionConsistency = compactCompletionConsistency(result.dailyHome?.completionConsistency);
-  const missionSummary = missionList.summary ?? {};
+  const runtimeContinuation = compactStatusRuntimeContinuation(dashboard.runtime?.continuation);
+  const consistency = result.dailyHome?.completionConsistency ?? {};
+  const completionConsistency = {
+    status: consistency.status ?? "consistent",
+    findingCount: consistency.findingCount ?? (Array.isArray(consistency.findings) ? consistency.findings.length : 0)
+  };
   const executionGaps = result.dailyHome?.executionGaps ?? {};
-  const executionBlockingCount = executionGaps.counts?.blocking ?? 0;
-  const recentExecutionReceipts = Array.isArray(result.dailyHome?.recentExecutionReceipts) ? result.dailyHome.recentExecutionReceipts : [];
+  const executionCounts = {
+    missingContract: executionGaps.counts?.missingContract ?? 0,
+    missingMaterials: executionGaps.counts?.missingMaterials ?? 0,
+    verificationGaps: executionGaps.counts?.verificationGaps ?? 0,
+    readyBuilder: executionGaps.counts?.readyBuilder ?? 0,
+    blocking: executionGaps.counts?.blocking ?? 0
+  };
   const primaryStep = nextActions[0] ?? null;
-  const durableContextNotice = result.durableContextNotice ?? null;
-  return {
+  const boundary = compactStatusBoundaryFromAction(primaryStep) ?? compactStatusBoundaryFromAction(boundaryActionCards[0]);
+  const boundaryType = boundary?.type ?? primaryStep?.boundaryType ?? boundaryActionCards[0]?.boundaryType ?? null;
+  const requiredEvidence = compactStatusRequiredEvidence({ primaryStep, boundary, boundaryActionCards, executionGaps });
+  const gapStatus = readErrors.length > 0 || blockers.length > 0 || completionConsistency.status === "needs-reconciliation" || executionCounts.blocking > 0 || boundaryActionCards.length > 0 ? "blocked" : "clear";
+  const expansions = compactStatusObject({
+    fullDetails: { tool: "query_dove_status", args: compactStatusDetailArgs(args) },
+    missionDetails: { tool: "query_dove_status", args: compactStatusMissionDetailArgs(args) },
+    statusAdjustments: { tool: "query_dove_status", args: compactStatusAdjustmentPreviewArgs(args) }
+  });
+  return compactStatusObject({
     presentation: "dove-project-situation-home",
     detail: "compact",
     liveContextFirst: true,
-    currentContext: {
+    currentContext: compactStatusObject({
       title: summary.title ?? null,
       objective: summary.objective ?? null,
       currentFocus: summary.currentFocus ?? null,
@@ -2089,92 +2211,38 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
       stage: current.stage ?? null,
       primaryRole: current.primaryRole ?? null,
       durableRoot: dashboard.project?.durableRoot ?? ARTIFACT_PATHS.doveRoot,
-      stateSource: durableContextNotice?.stateSource ?? "filesystem-durable-state",
-      nativeHostRollbackRequiresFileCheckpoint: durableContextNotice?.nativeHostRollbackRequiresFileCheckpoint ?? true,
-      hostCheckpointDetected: durableContextNotice?.hostCheckpointDetected ?? false,
-      hostCheckpointStatus: durableContextNotice?.hostCheckpointStatus ?? "not-programmatically-verifiable",
-      mutationRollbackModel: durableContextNotice?.mutationRollbackModel ?? null,
-      externalWriteCaptureRequired: durableContextNotice?.externalWriteCaptureRequired ?? true,
-      externalWriteCaptureVerified: durableContextNotice?.externalWriteCaptureVerified ?? false,
-      doveRestoreSupported: durableContextNotice?.doveRestoreSupported ?? false,
-      projectVisibilityRequired: durableContextNotice?.projectVisibilityRequired ?? true,
-      projectVisibilityVerified: durableContextNotice?.projectVisibilityVerified ?? false,
+      stateSource: result.durableContextNotice?.stateSource ?? "filesystem-durable-state",
       runtimeContinuation
-    },
-    durableContextNotice,
-    preActionGuidance: preActionGuidance ?? result.preActionGuidance ?? null,
-    recentExecutionReceipts: {
-      items: recentExecutionReceipts.slice(0, 3),
-      count: recentExecutionReceipts.length,
-      defaultCollapsed: false
-    },
-    projectState: {
-      returnStatus: summary.returnStatus ?? null,
-      reviewVerdict: summary.reviewVerdict ?? null,
-      unresolvedConcernCount: summary.unresolvedConcernCount ?? 0,
-      missionCounts: {
-        open: missionSummary.openCount ?? 0,
-        todo: missionSummary.todoCount ?? 0,
-        doing: missionSummary.doingCount ?? 0,
-        blocked: missionSummary.blockedCount ?? 0,
-        done: missionSummary.doneCount ?? 0,
-        archived: missionSummary.archivedCount ?? summary.archivedMissionCount ?? 0,
-        archivedHidden: summary.archivedHiddenCount ?? 0
-      },
-      blockerCount: blockers.length,
-      readErrorCount: readErrors.length,
-      statusAdjustmentCount: statusAdjustmentContract.itemCount ?? 0,
-      executionGaps: {
-        missingContract: executionGaps.counts?.missingContract ?? 0,
-        missingMaterials: executionGaps.counts?.missingMaterials ?? 0,
-        verificationGaps: executionGaps.counts?.verificationGaps ?? 0,
-        readyBuilder: executionGaps.counts?.readyBuilder ?? 0,
-        blocking: executionGaps.counts?.blocking ?? 0
-      }
-    },
-    blockersAndReconciliation: {
-      status: readErrors.length > 0 || blockers.length > 0 || completionConsistency.status === "needs-reconciliation" || executionBlockingCount > 0 ? "blocked" : "clear",
-      readErrors,
-      blockers: blockers.slice(0, 5),
-      blockerCount: blockers.length,
-      completionConsistency,
-      executionGaps: {
-        missingContract: executionGaps.counts?.missingContract ?? 0,
-        missingMaterials: executionGaps.counts?.missingMaterials ?? 0,
-        verificationGaps: executionGaps.counts?.verificationGaps ?? 0,
-        readyBuilder: executionGaps.counts?.readyBuilder ?? 0,
-        blocking: executionBlockingCount
-      },
-      durableContextNotice,
-      boundaryActionCards,
-      boundaryActionCount: boundaryActionCards.length
-    },
-    nextSteps: {
+    }),
+    nextAction: primaryStep,
+    nextSteps: compactStatusObject({
       primary: primaryStep,
-      ranked: nextActions,
+      ranked: primaryStep ? [primaryStep] : [],
       count: nextActions.length,
       suggestedNextCommand: result.suggestedNextCommand ?? current.nextCommand ?? null
+    }),
+    boundary,
+    gaps: compactStatusObject({
+      status: gapStatus,
+      boundaryType,
+      boundaryCount: boundaryActionCards.length,
+      blockerCount: blockers.length,
+      readErrorCount: readErrors.length,
+      completionConsistency,
+      executionGaps: executionCounts,
+      requiredMaterials: normalizeStringArray(executionGaps.requiredMaterials).slice(0, 12)
+    }),
+    requiredEvidence,
+    writes: {
+      applied: Array.isArray(result.writes) && result.writes.length > 0,
+      count: Array.isArray(result.writes) ? result.writes.length : 0
     },
-    optionalMissionDetails: {
-      ...missionList,
-      defaultCollapsed: true,
-      expandWhenAsked: true,
-      promptExamples: ["有哪些 mission", "show current missions"],
-      requestArgs: compactStatusMissionDetailArgs(args)
-    },
-    statusAdjustmentPreview: {
-      ...statusAdjustmentContract,
-      defaultCollapsed: true,
-      expandWhenAsked: true,
-      promptExamples: ["修改 mission 状态", "change mission status"],
-      requestArgs: compactStatusAdjustmentPreviewArgs(args)
-    },
+    optionalMissionDetails: missionList.missionItemsIncluded ? missionList : null,
+    statusAdjustmentPreview: statusAdjustmentContract.statusAdjustmentItemsIncluded ? statusAdjustmentContract : null,
     detailsAvailable: true,
-    fullDetails: {
-      tool: "query_dove_status",
-      args: compactStatusDetailArgs(args)
-    }
-  };
+    expansion: expansions,
+    fullDetails: expansions.fullDetails
+  });
 }
 
 function compactDoveStatusResult(result, args = {}) {
@@ -2190,29 +2258,29 @@ function compactDoveStatusResult(result, args = {}) {
     nextActions,
     boundaryActionCards,
     statusAdjustmentContract,
-    preActionGuidance: result.preActionGuidance,
     args
   });
-  return {
+  return compactStatusObject({
     mode: result.mode,
     query: result.query,
     proposalOnly: result.proposalOnly,
     noAutoApply: result.noAutoApply,
     writes: result.writes,
+    writesApplied: Array.isArray(result.writes) && result.writes.length > 0,
     responseLanguage: result.responseLanguage,
     detail: "compact",
     detailsAvailable: true,
-    projectSummary: result.projectSummary,
-    durableContextNotice: result.durableContextNotice,
+    currentContext: statusHome.currentContext,
+    nextAction: statusHome.nextAction,
+    boundary: statusHome.boundary,
+    boundaryType: statusHome.boundary?.type ?? statusHome.gaps?.boundaryType ?? null,
+    gaps: statusHome.gaps,
+    requiredEvidence: statusHome.requiredEvidence,
     statusHome,
-    statusAdjustmentContract,
-    actionableBoundaries: (Array.isArray(result.actionableBoundaries) ? result.actionableBoundaries : []).slice(0, 5),
-    boundaryActionCards,
     current: result.current,
-    board: result.board,
     suggestedNextCommand: result.suggestedNextCommand,
-    diagnostics: compactDiagnostics(result.diagnostics)
-  };
+    expansion: statusHome.expansion
+  });
 }
 
 function compactStatusDetailArgs(args = {}) {

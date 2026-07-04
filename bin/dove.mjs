@@ -360,6 +360,11 @@ function buildDoveStatusArgs(rest = []) {
   };
 }
 
+function wantsDoveStatusMissionDetails(args = {}) {
+  const detail = String(args.detail ?? "").trim().toLowerCase();
+  return Boolean(args.showMissions || args.includeMissionDetails || ["missions", "mission-details", "mission-list"].includes(detail));
+}
+
 function wantsJsonOutput(rest = []) {
   return rest.includes("--json") || readFlagValue(rest, "--format") === "json";
 }
@@ -388,22 +393,6 @@ function compactText(value, maxLength = 180) {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
-function formatStatusCounts(counts = {}) {
-  const labels = {
-    ready: "ready",
-    pending: "pending",
-    "in-progress": "in-progress",
-    blocked: "blocked",
-    completed: "completed",
-    killed: "killed",
-    archived: "archived"
-  };
-  return Object.keys(labels)
-    .filter((key) => Number(counts[key] ?? 0) > 0)
-    .map((key) => `${labels[key]} ${counts[key]}`)
-    .join(" / ") || "none";
-}
-
 function formatEvidencePreview(items = []) {
   const evidence = Array.isArray(items) ? items.map((item) => compactText(item, 90)).filter(Boolean) : [];
   if (evidence.length === 0) {
@@ -411,68 +400,6 @@ function formatEvidencePreview(items = []) {
   }
   const shown = evidence.slice(0, 2).join("；");
   return evidence.length > 2 ? `${shown}；+${evidence.length - 2}` : shown;
-}
-
-function formatRecentReceiptForCli(receipt = {}) {
-  const label = compactText(receipt.title ?? receipt.packetId ?? receipt.runId ?? receipt.receiptId ?? "receipt", 90);
-  const status = compactText(receipt.status ?? receipt.resultStatus ?? receipt.outcome ?? "recorded", 40);
-  const evidence = formatEvidencePreview(receipt.evidencePaths ?? receipt.validationEvidencePaths ?? receipt.artifactRefs ?? receipt.outputPaths ?? []);
-  return evidence ? `${label}: ${status}; evidence ${evidence}` : `${label}: ${status}`;
-}
-
-function formatMissionSummarySecondaryText(missionSummary = {}) {
-  const parts = [`open ${missionSummary.openCount ?? 0}`, `blocked ${missionSummary.blockedCount ?? 0}`];
-  if (Number(missionSummary.todoCount ?? 0) > 0) {
-    parts.push(`todo ${missionSummary.todoCount}`);
-  }
-  if (Number(missionSummary.doingCount ?? 0) > 0) {
-    parts.push(`doing ${missionSummary.doingCount}`);
-  }
-  if (Number(missionSummary.archivedHiddenCount ?? 0) > 0) {
-    parts.push(`archived hidden ${missionSummary.archivedHiddenCount}`);
-  }
-  return parts.join(", ");
-}
-
-function statusMissionListSummary(result = {}) {
-  const missionCounts = result.statusHome?.projectState?.missionCounts;
-  if (missionCounts && typeof missionCounts === "object") {
-    return {
-      openCount: missionCounts.open ?? 0,
-      todoCount: missionCounts.todo ?? 0,
-      doingCount: missionCounts.doing ?? 0,
-      blockedCount: missionCounts.blocked ?? 0,
-      doneCount: missionCounts.done ?? 0,
-      archivedCount: missionCounts.archived ?? 0,
-      archivedHiddenCount: missionCounts.archivedHidden ?? 0
-    };
-  }
-  return result.statusHome?.optionalMissionDetails?.summary ?? result.dailyHome?.missionList?.summary ?? result.dashboard?.tasks?.grouped?.summary ?? {
-    openCount: 0,
-    todoCount: 0,
-    doingCount: 0,
-    blockedCount: 0,
-    doneCount: 0,
-    archivedCount: 0,
-    archivedHiddenCount: 0
-  };
-}
-
-function formatMissionSummaryText(missionSummary = {}) {
-  const parts = [
-    `open ${missionSummary.openCount ?? 0}`,
-    `todo ${missionSummary.todoCount ?? 0}`,
-    `doing ${missionSummary.doingCount ?? 0}`,
-    `blocked ${missionSummary.blockedCount ?? 0}`,
-    `done ${missionSummary.doneCount ?? 0}`
-  ];
-  if (Number(missionSummary.archivedCount ?? 0) > 0) {
-    parts.push(`archived ${missionSummary.archivedCount}`);
-  }
-  if (Number(missionSummary.archivedHiddenCount ?? 0) > 0) {
-    parts.push(`archived hidden ${missionSummary.archivedHiddenCount}`);
-  }
-  return parts.join(", ");
 }
 
 function formatMissionListGroup(groupName, group = {}, options = {}) {
@@ -510,169 +437,75 @@ function formatMissionListForCli(missionList = {}) {
   return lines;
 }
 
-function formatPreActionGuidanceForCli(guidance = {}) {
-  const role = guidance.roleFrame ?? {};
-  const workflow = guidance.workflowFrame ?? {};
-  const guardrails = guidance.guardrails ?? {};
-  const lessons = Array.isArray(guidance.lessonRecall?.topLessons) ? guidance.lessonRecall.topLessons : [];
-  const lines = ["Pre-action guidance:"];
-  lines.push(`  role: ${role.primaryRoleLabel ?? role.primaryRole ?? "unknown"}${role.subagentSpecialty ? ` / ${role.subagentSpecialty}` : ""}`);
-  lines.push(`  route: ${compactText(workflow.recommendedRoute ?? "unknown", 140)}`);
-  lines.push(`  next: ${compactText(workflow.nextHumanAction ?? "unknown", 140)}`);
-  if (lessons.length > 0) {
-    lines.push(`  lessons: ${lessons.slice(0, 3).map((lesson) => `${lesson.id}${lesson.title ? ` (${compactText(lesson.title, 60)})` : ""}`).join("; ")}`);
-  } else {
-    lines.push("  lessons: none active or matched");
-  }
-  lines.push(`  guardrails: ${guardrails.requiresConfirmationForWrites === true ? "writes require confirmation" : "confirm writes"}; ${guardrails.noHiddenRuntime === true ? "no hidden runtime" : "no hidden runtime expected"}`);
-  return lines;
-}
-
 function formatDoveStatusForCli(result, target, options = {}) {
-  const summary = result.projectSummary ?? result.dashboard?.projectSummary ?? {};
   const statusHome = result.statusHome ?? {};
-  const currentContext = statusHome.currentContext ?? {};
-  const projectState = statusHome.projectState ?? {};
-  const blockersAndReconciliation = statusHome.blockersAndReconciliation ?? {};
-  const durableContextNotice = statusHome.durableContextNotice ?? result.durableContextNotice ?? blockersAndReconciliation.durableContextNotice ?? null;
-  const preActionGuidance = statusHome.preActionGuidance ?? result.preActionGuidance ?? {};
+  const currentContext = statusHome.currentContext ?? result.currentContext ?? result.dashboard?.project ?? {};
   const current = result.current ?? {};
-  const nextActions = Array.isArray(statusHome.nextSteps?.ranked) ? statusHome.nextSteps.ranked : Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : [];
-  const recentExecutionReceipts = Array.isArray(statusHome.recentExecutionReceipts?.items) ? statusHome.recentExecutionReceipts.items : Array.isArray(result.dailyHome?.recentExecutionReceipts) ? result.dailyHome.recentExecutionReceipts : [];
-  const boundaryCards = Array.isArray(blockersAndReconciliation.boundaryActionCards) ? blockersAndReconciliation.boundaryActionCards : Array.isArray(result.dailyHome?.boundaryActionCards) ? result.dailyHome.boundaryActionCards : [];
+  const nextAction = statusHome.nextAction ?? result.nextAction ?? statusHome.nextSteps?.primary ?? result.dailyHome?.nextActions?.[0] ?? null;
+  const gaps = statusHome.gaps ?? result.gaps ?? {};
+  const executionGaps = gaps.executionGaps ?? result.dailyHome?.executionGaps?.counts ?? {};
+  const boundary = statusHome.boundary ?? result.boundary ?? null;
+  const requiredEvidence = Array.isArray(statusHome.requiredEvidence) ? statusHome.requiredEvidence : Array.isArray(result.requiredEvidence) ? result.requiredEvidence : [];
+  const writes = statusHome.writes ?? { applied: Boolean(result.writesApplied), count: Array.isArray(result.writes) ? result.writes.length : 0 };
   const missionList = statusHome.optionalMissionDetails ?? result.dailyHome?.missionList ?? result.dashboard?.tasks?.grouped ?? {};
-  const missionSummary = statusMissionListSummary(result);
-  const dashboardBlockers = Array.isArray(result.dashboard?.blockers) ? result.dashboard.blockers : [];
-  const readErrors = Array.isArray(blockersAndReconciliation.readErrors) ? blockersAndReconciliation.readErrors : Array.isArray(result.diagnostics?.readErrors) ? result.diagnostics.readErrors : [];
-  const completionConsistency = blockersAndReconciliation.completionConsistency ?? result.dailyHome?.completionConsistency ?? {};
-  const executionGaps = blockersAndReconciliation.executionGaps ?? projectState.executionGaps ?? result.dailyHome?.executionGaps?.counts ?? {};
-  const executionBlockingCount = executionGaps.blocking ?? 0;
-  const blockerCount = blockersAndReconciliation.blockerCount ?? projectState.blockerCount ?? dashboardBlockers.length;
-  const boundaryCount = blockersAndReconciliation.boundaryActionCount ?? boundaryCards.length;
-  const reconciliationStatus = blockersAndReconciliation.status ?? (readErrors.length > 0 || blockerCount > 0 || completionConsistency.status === "needs-reconciliation" || executionBlockingCount > 0 ? "blocked" : "clear");
   const lines = [
-    `Dove current situation: ${compactText(summary.title ?? currentContext.title ?? "untitled", 120)}`,
+    `Dove current situation: ${compactText(currentContext.title ?? result.projectSummary?.title ?? "untitled", 120)}`,
     `Target: ${target}`,
     "",
     "Current context:"
   ];
-  lines.push(`  objective: ${compactText(summary.objective ?? currentContext.objective ?? "none")}`);
-  lines.push(`  focus: ${compactText(summary.currentFocus ?? currentContext.currentFocus ?? "none")}`);
+  lines.push(`  objective: ${compactText(currentContext.objective ?? result.projectSummary?.objective ?? "none")}`);
+  lines.push(`  focus: ${compactText(currentContext.currentFocus ?? result.projectSummary?.currentFocus ?? "none")}`);
   lines.push(`  durable context: ${current.domain ?? currentContext.domain ?? "unknown"} / ${current.stage ?? currentContext.stage ?? "unknown"} / ${current.primaryRole ?? currentContext.primaryRole ?? "unknown"}`);
   if (currentContext.runtimeContinuation?.currentPacketId) {
     lines.push(`  runtime continuation: ${currentContext.runtimeContinuation.currentPacketId}`);
   }
-  if (durableContextNotice) {
-    lines.push("");
-    lines.push("Durable state:");
-    lines.push(`  source: ${durableContextNotice.stateSource ?? "filesystem-durable-state"} (${durableContextNotice.durableRoot ?? ".dove"})`);
-    lines.push(`  rollback coverage: ${durableContextNotice.rollbackCoverage ?? "host-tracked-mutation-plan-required"}`);
-    lines.push(`  host checkpoint: ${durableContextNotice.hostCheckpointStatus ?? "not-programmatically-verifiable"}`);
-    lines.push(`  patch-plan supported: ${durableContextNotice.mutationRollbackModel?.patchPlanSupported ? "yes" : "unknown"}`);
-    lines.push(`  direct-process rollback-safe: ${durableContextNotice.mutationRollbackModel?.directProcessWritesAreRollbackSafe ? "yes" : "no"}`);
-    if (durableContextNotice.mutationRollbackModel?.hostRollbackIneligibleReason) {
-      lines.push(`  last direct-process limit: ${compactText(durableContextNotice.mutationRollbackModel.hostRollbackIneligibleReason, 160)}`);
+  lines.push("");
+  lines.push("Next action:");
+  if (nextAction) {
+    const displayCommand = nextAction.copyableCommand ?? nextAction.firstAction ?? nextAction.command ?? "no-command";
+    lines.push(`  ${compactText(nextAction.title ?? nextAction.kind ?? "next", 120)} [${displayCommand}]`);
+    if (nextAction.packetId) {
+      lines.push(`  packet: ${nextAction.packetId}`);
     }
-    lines.push(`  external Dove writes captured: ${durableContextNotice.externalWriteCaptureVerified ? "verified" : "unverified"}`);
-    lines.push(`  Dove restore command: ${durableContextNotice.doveRestoreSupported ? durableContextNotice.doveRestoreCommand ?? "available" : "none"}`);
-    lines.push(`  recovery: ${durableContextNotice.mutationRollbackModel?.rollbackAdvice ?? "request mutationMode: patch-plan, inspect the operations, and apply them through host-tracked file edits before relying on host rollback"}`);
-  }
-  lines.push("");
-  lines.push(...formatPreActionGuidanceForCli(preActionGuidance));
-  lines.push("");
-  lines.push("Next steps:");
-  if (nextActions.length === 0) {
-    lines.push("  none");
   } else {
-    for (const action of nextActions.slice(0, 3)) {
-      const displayCommand = action.copyableCommand ?? action.firstAction ?? action.command ?? "no-command";
-      lines.push(`  ${action.rank ?? "-"}. ${compactText(action.title, 120)} [${displayCommand}]`);
-      if (action.packetId) {
-        lines.push(`     packet: ${action.packetId}`);
-      }
-      if (action.copyableCommand && action.command && action.copyableCommand !== action.command) {
-        lines.push(`     command: ${action.copyableCommand}`);
-      }
-      const deliverables = formatEvidencePreview(action.workContract?.deliverables);
-      if (deliverables) {
-        lines.push(`     deliver: ${deliverables}`);
-      }
-      const evidence = formatEvidencePreview(action.evidenceRequired);
-      if (evidence) {
-        lines.push(`     evidence: ${evidence}`);
-      }
-      const done = formatEvidencePreview(action.doneCriteria ?? action.workContract?.doneCriteria);
-      if (done) {
-        lines.push(`     done: ${done}`);
-      }
-      if (action.why) {
-        lines.push(`     why: ${compactText(action.why, 120)}`);
-      }
-    }
-  }
-  lines.push("");
-  lines.push("Recent execution receipts:");
-  if (recentExecutionReceipts.length === 0) {
     lines.push("  none");
-  } else {
-    for (const receipt of recentExecutionReceipts.slice(0, 3)) {
-      lines.push(`  - ${formatRecentReceiptForCli(receipt)}`);
-    }
   }
   lines.push("");
-  lines.push("Gaps and boundaries:");
-  lines.push(`  status: ${reconciliationStatus}`);
-  lines.push(`  blockers: ${blockerCount}; read errors: ${readErrors.length}; open boundaries: ${boundaryCount}`);
+  lines.push("Boundary/gap:");
+  lines.push(`  status: ${gaps.status ?? "clear"}`);
+  lines.push(`  boundary: ${boundary?.type ?? gaps.boundaryType ?? "none"}`);
+  lines.push(`  counts: boundaries ${gaps.boundaryCount ?? 0}; blockers ${gaps.blockerCount ?? 0}; read errors ${gaps.readErrorCount ?? 0}`);
   lines.push(`  execution gaps: missing contract ${executionGaps.missingContract ?? 0}, missing materials ${executionGaps.missingMaterials ?? 0}, verification gaps ${executionGaps.verificationGaps ?? 0}`);
-  lines.push(`  completion consistency: ${completionConsistency.status ?? "consistent"}`);
-  if (readErrors.length > 0) {
-    lines.push(`  first read error: ${compactText(readErrors[0], 140)}`);
-  }
-  if (Array.isArray(completionConsistency.findings) && completionConsistency.findings.length > 0) {
-    for (const finding of completionConsistency.findings.slice(0, 2)) {
-      lines.push(`  - ${compactText(finding.summary ?? finding.type, 140)} (${finding.parentId ?? "unknown-parent"})`);
-    }
-  }
-  if (boundaryCards.length > 0) {
-    for (const card of boundaryCards.slice(0, 3)) {
-      lines.push(`  - ${compactText(card.title, 120)} (${card.boundaryType ?? "boundary"}) -> ${card.command ?? "project:dove.status"}`);
-      if (card.reason) {
-        lines.push(`    reason: ${compactText(card.reason, 120)}`);
-      }
-    }
-    if (boundaryCards.length > 3) {
-      lines.push(`  ... ${boundaryCards.length - 3} more`);
+  if (boundary?.requiredInputs?.length || boundary?.requiredActions?.length) {
+    const required = formatEvidencePreview([...(boundary.requiredInputs ?? []), ...(boundary.requiredActions ?? [])]);
+    if (required) {
+      lines.push(`  boundary requires: ${required}`);
     }
   }
   lines.push("");
-  lines.push("Project state:");
-  lines.push(`  review: ${projectState.reviewVerdict ?? summary.reviewVerdict ?? "unknown"}; return: ${projectState.returnStatus ?? summary.returnStatus ?? "unknown"}`);
-  lines.push(`  status adjustments: ${projectState.statusAdjustmentCount ?? result.statusAdjustmentContract?.itemCount ?? 0} available`);
-  lines.push(`  mission summary: ${formatMissionSummarySecondaryText(missionSummary)} (collapsed)`);
+  lines.push("Required evidence:");
+  const evidence = formatEvidencePreview(requiredEvidence);
+  lines.push(`  ${evidence || "none"}`);
+  lines.push("");
+  lines.push("Writes:");
+  lines.push(`  ${writes.applied ? `applied ${writes.count ?? 0}` : "none applied"}`);
   lines.push("");
   if (options.showMissions) {
     lines.push(...formatMissionListForCli(missionList));
   } else {
-    lines.push(`Mission details: collapsed by default; use --missions or ask in the host to show current missions.`);
+    lines.push("Expansion: use --include-mission-details or --detail missions for mission groups; use --full --json or --detail full --json for full details.");
   }
-  lines.push("Use --json or --format json for compact JSON; use --full --json or --detail full --json for the full status object.");
   return `${lines.join("\n")}\n`;
 }
 
 function buildDoveStatusline(result, target) {
-  const summary = result.projectSummary ?? result.dashboard?.projectSummary ?? {};
   const statusHome = result.statusHome ?? {};
-  const currentContext = statusHome.currentContext ?? {};
-  const nextActions = Array.isArray(statusHome.nextSteps?.ranked) ? statusHome.nextSteps.ranked : Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : [];
-  const recentExecutionReceipts = Array.isArray(statusHome.recentExecutionReceipts?.items) ? statusHome.recentExecutionReceipts.items : Array.isArray(result.dailyHome?.recentExecutionReceipts) ? result.dailyHome.recentExecutionReceipts : [];
-  const blockersAndReconciliation = statusHome.blockersAndReconciliation ?? {};
-  const executionGaps = blockersAndReconciliation.executionGaps ?? statusHome.projectState?.executionGaps ?? result.dailyHome?.executionGaps?.counts ?? {};
-  const boundaryCount = blockersAndReconciliation.boundaryActionCount ?? result.dailyHome?.boundaryActionCards?.length ?? 0;
-  const missionSummary = statusMissionListSummary(result);
-  const readErrors = Array.isArray(blockersAndReconciliation.readErrors) ? blockersAndReconciliation.readErrors : Array.isArray(result.diagnostics?.readErrors) ? result.diagnostics.readErrors : [];
-  const primaryAction = nextActions[0] ?? null;
-  const latestReceipt = recentExecutionReceipts[0] ?? null;
-  const focus = summary.currentFocus ?? currentContext.currentFocus;
+  const currentContext = statusHome.currentContext ?? result.currentContext ?? result.dashboard?.project ?? {};
+  const primaryAction = statusHome.nextAction ?? result.nextAction ?? statusHome.nextSteps?.primary ?? result.dailyHome?.nextActions?.[0] ?? null;
+  const gaps = statusHome.gaps ?? result.gaps ?? {};
+  const executionGaps = gaps.executionGaps ?? result.dailyHome?.executionGaps?.counts ?? {};
+  const focus = currentContext.currentFocus ?? result.projectSummary?.currentFocus;
   const gapParts = [];
   if (Number(executionGaps.missingContract ?? 0) > 0) {
     gapParts.push(`contract ${executionGaps.missingContract}`);
@@ -683,13 +516,13 @@ function buildDoveStatusline(result, target) {
   if (Number(executionGaps.verificationGaps ?? 0) > 0) {
     gapParts.push(`verify ${executionGaps.verificationGaps}`);
   }
-  if (Number(boundaryCount) > 0) {
-    gapParts.push(`boundaries ${boundaryCount}`);
+  if (Number(gaps.boundaryCount ?? 0) > 0) {
+    gapParts.push(`boundaries ${gaps.boundaryCount}`);
   }
-  if (readErrors.length > 0) {
-    gapParts.push(`readErrors ${readErrors.length}`);
+  if (Number(gaps.readErrorCount ?? 0) > 0) {
+    gapParts.push(`readErrors ${gaps.readErrorCount}`);
   }
-  const textParts = [`Dove: ${compactText(summary.title ?? currentContext.title ?? "untitled", 50)}`];
+  const textParts = [`Dove: ${compactText(currentContext.title ?? result.projectSummary?.title ?? "untitled", 50)}`];
   if (focus) {
     textParts.push(`focus ${compactText(focus, 70)}`);
   }
@@ -698,10 +531,6 @@ function buildDoveStatusline(result, target) {
     textParts.push(`next ${compactText(action, 80)}`);
   }
   textParts.push(`gaps ${gapParts.length > 0 ? gapParts.join("/") : "clear"}`);
-  if (latestReceipt) {
-    textParts.push(`receipt ${compactText(latestReceipt.status ?? latestReceipt.outcome ?? latestReceipt.packetId ?? "recorded", 60)}`);
-  }
-  textParts.push(`missions ${formatMissionSummarySecondaryText(missionSummary)}`);
   return {
     mode: "dove-statusline",
     query: true,
@@ -710,7 +539,7 @@ function buildDoveStatusline(result, target) {
     writes: [],
     target,
     summary: {
-      title: summary.title ?? currentContext.title ?? null,
+      title: currentContext.title ?? result.projectSummary?.title ?? null,
       currentFocus: focus ?? null,
       nextAction: primaryAction ? {
         title: primaryAction.title ?? null,
@@ -718,21 +547,13 @@ function buildDoveStatusline(result, target) {
         copyableCommand: primaryAction.copyableCommand ?? primaryAction.firstAction ?? null,
         kind: primaryAction.kind ?? null
       } : null,
-      executionGaps,
-      boundaryCount,
-      latestReceipt: latestReceipt ? {
-        packetId: latestReceipt.packetId ?? null,
-        status: latestReceipt.status ?? latestReceipt.outcome ?? null,
-        runId: latestReceipt.runId ?? null
-      } : null,
-      openMissionCount: missionSummary.openCount ?? 0,
-      todoMissionCount: missionSummary.todoCount ?? 0,
-      doingMissionCount: missionSummary.doingCount ?? 0,
-      blockedMissionCount: missionSummary.blockedCount ?? 0,
-      doneMissionCount: missionSummary.doneCount ?? 0,
-      archivedMissionCount: missionSummary.archivedCount ?? 0,
-      archivedHiddenMissionCount: missionSummary.archivedHiddenCount ?? 0,
-      statusCounts: summary.statusCounts ?? {}
+      gaps: {
+        status: gaps.status ?? "clear",
+        boundaryType: gaps.boundaryType ?? result.boundaryType ?? null,
+        boundaryCount: gaps.boundaryCount ?? 0,
+        readErrorCount: gaps.readErrorCount ?? 0,
+        executionGaps
+      }
     },
     text: textParts.join(" | ")
   };
@@ -2434,7 +2255,7 @@ if (["orchestrate", "mission", "status", "audit", "return", "launch"].includes(c
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
   const result = runDoveSurface(command, target, commandRest);
   if (command === "status" && !wantsJsonOutput(commandRest)) {
-    await writeStdout(formatDoveStatusForCli(result, target, { showMissions: commandRest.includes("--missions") || commandRest.includes("--show-missions") }));
+    await writeStdout(formatDoveStatusForCli(result, target, { showMissions: wantsDoveStatusMissionDetails(buildDoveStatusArgs(commandRest)) }));
   } else {
     await printJson(result);
   }

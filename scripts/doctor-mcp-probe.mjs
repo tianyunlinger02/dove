@@ -8,6 +8,19 @@ const target = path.resolve(process.argv[2] ?? process.cwd());
 const serverScriptPath = path.join(target, "mcp", "dove-state-server.mjs");
 const { call, notify, kill } = createMcpStdioClient({ args: [serverScriptPath], cwd: target });
 
+function parseToolPayload(result) {
+  const payload = JSON.parse(result.content[0].text);
+  if (payload?.presentation === "dove-mcp-result-contract" && payload.fullResult) {
+    return payload.fullResult;
+  }
+  return payload;
+}
+
+async function callReadOnlyTool(name, args = {}) {
+  const result = await call("tools/call", { name, arguments: { ...args, resultMode: args.resultMode ?? "full" } });
+  return parseToolPayload(result);
+}
+
 async function main() {
   const init = await call("initialize", {
     protocolVersion: "2024-11-05",
@@ -68,11 +81,10 @@ async function main() {
     assert.equal(names.has(required), true, `Missing MCP tool ${required}`);
   }
 
-  await call("tools/call", { name: "read_state", arguments: {} });
-  await call("tools/call", { name: "query_workspace_index", arguments: {} });
-  await call("tools/call", { name: "query_governance_coverage_report", arguments: {} });
-  const metaOptimize = await call("tools/call", { name: "query_meta_optimize", arguments: {} });
-  const parsed = JSON.parse(metaOptimize.content[0].text);
+  await callReadOnlyTool("read_state");
+  await callReadOnlyTool("query_workspace_index");
+  await callReadOnlyTool("query_governance_coverage_report");
+  const parsed = await callReadOnlyTool("query_meta_optimize");
   assert.equal(parsed.proposalOnly, true);
   assert.ok(Array.isArray(parsed.clusters), "Expected grouped optimizer clusters");
   assert.ok(parsed.frontier && typeof parsed.frontier === "object", "Expected optimizer frontier summary");
@@ -82,12 +94,11 @@ async function main() {
   assert.equal(parsed.longHorizon.proposalOnly, true);
 
   for (const readOnlyDoveTool of ["query_dove_orchestrate", "query_dove_mission", "query_dove_mission_board", "query_dove_status", "query_document_ledger", "query_dove_audit", "query_dove_return"]) {
-    const result = await call("tools/call", { name: readOnlyDoveTool, arguments: {} });
-    const payload = JSON.parse(result.content[0].text);
+    const payload = await callReadOnlyTool(readOnlyDoveTool);
     assert.equal(payload.proposalOnly, true, `${readOnlyDoveTool} should stay proposal-only`);
-    assert.deepEqual(payload.writes, [], `${readOnlyDoveTool} should not write during doctor probe`);
+    assert.deepEqual(payload.writes ?? [], [], `${readOnlyDoveTool} should not write during doctor probe`);
   }
-  await call("tools/call", { name: "query_program_approvals", arguments: {} });
+  await callReadOnlyTool("query_program_approvals");
 }
 
 try {
