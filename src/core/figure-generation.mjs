@@ -10,7 +10,7 @@ import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { isPatchPlanMode } from "./mutation-backend.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
-import { validateFigurePipeline } from "./artifacts.mjs";
+import { summarizeFigureQa, validateFigurePipeline } from "./artifacts.mjs";
 import {
   assertFollowThroughReady,
   assertGovernanceMutationRegistered,
@@ -110,6 +110,32 @@ function assertSafeFigurePath(relativePath, label, allowedPrefixes = [".dove/fig
   const normalized = normalizeRelativePath(relativePath);
   if (!normalized || !isSafeProjectRelativePath(normalized) || !allowedPrefixes.some((prefix) => normalized.startsWith(prefix))) {
     throw new Error(`${label} must stay under ${allowedPrefixes.join(" or ")}: ${relativePath ?? "<missing>"}`);
+  }
+  return normalized;
+}
+
+function assertNoLegacyFinalSvgInput(value, label) {
+  if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, "finalSvgPath")) {
+    throw new Error(`${label} no longer accepts finalSvgPath as input; use sourceSvgPath for generated SVG input or targetFinalSvgPath for the final artifact target.`);
+  }
+}
+
+function assertNoLegacyProviderOutputFields(value, label) {
+  for (const field of ["finalSvgPath", "finalSvgContent", "svg"]) {
+    if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, field)) {
+      throw new Error(`${label} must use sourceSvgPath or svgContent; ${field} is not accepted.`);
+    }
+  }
+}
+
+function assertSafeFigureSourcePath(relativePath, label, runId) {
+  return assertSafeFigurePath(relativePath, label, [`${generationRunDir(runId)}/`]);
+}
+
+function assertSafeFigureFinalTargetPath(relativePath, label) {
+  const normalized = assertSafeFigurePath(relativePath, label);
+  if (normalized.startsWith(".dove/figures/runs/")) {
+    throw new Error(`${label} must be a final figure artifact outside .dove/figures/runs/: ${relativePath ?? "<missing>"}`);
   }
   return normalized;
 }
@@ -433,8 +459,8 @@ function buildGenerationPrompt({ figure, packet, requirements, constraints, outp
     "",
     "## Required output",
     `- Format: ${outputFormat}`,
-    `- Final artifact path: ${figure.finalSvgPath}`,
-    "- Return an output manifest with finalSvgPath and caption, or place final.svg in the run directory.",
+    `- Dove final artifact target: ${figure.finalSvgPath}`,
+    "- Return an output manifest with sourceSvgPath and caption, or return svgContent so Dove can import it into the final artifact target.",
     "",
     "## Visual elements",
     ...(normalizeStringArray(figure.requiredVisualElements).length > 0 ? normalizeStringArray(figure.requiredVisualElements).map((item) => `- ${item}`) : ["- No visual elements declared yet; infer a minimal evidence-linked figure from the materials."]),
@@ -544,15 +570,14 @@ function writeProviderOutput(root, runId, providerOutput, timestamp) {
     throw new Error("Figure provider did not return output and did not write output.json.");
   }
   assertNoInlineSecrets(output, "figureGeneration.providerOutput");
-  const outputManifestPath = assertSafeFigurePath(output.outputManifestPath ?? `${generationRunDir(runId)}/output.json`, "provider output manifest", [generationRunDir(runId), ".dove/figures/"]);
-  const svgContent = output.svgContent ?? output.finalSvgContent ?? output.svg;
-  const finalSvgPath = assertSafeFigurePath(output.finalSvgPath ?? output.svgPath ?? `${generationRunDir(runId)}/final.svg`, "provider final SVG path", [generationRunDir(runId), ".dove/figures/"]);
-  const manifest = { ...output, runId, finalSvgPath, generatedAt: output.generatedAt ?? timestamp };
-  delete manifest.svg;
+  assertNoLegacyProviderOutputFields(output, "figureGeneration.providerOutput");
+  const outputManifestPath = assertSafeFigurePath(output.outputManifestPath ?? `${generationRunDir(runId)}/output.json`, "provider output manifest", [`${generationRunDir(runId)}/`]);
+  const svgContent = output.svgContent;
+  const sourceSvgPath = assertSafeFigureSourcePath(output.sourceSvgPath ?? output.svgPath ?? `${generationRunDir(runId)}/final.svg`, "provider source SVG path", runId);
+  const manifest = { ...output, runId, sourceSvgPath, generatedAt: output.generatedAt ?? timestamp };
   delete manifest.svgContent;
-  delete manifest.finalSvgContent;
   if (typeof svgContent === "string" && svgContent.trim()) {
-    writeText(root, finalSvgPath, svgContent.endsWith("\n") ? svgContent : `${svgContent}\n`);
+    writeText(root, sourceSvgPath, svgContent.endsWith("\n") ? svgContent : `${svgContent}\n`);
   }
   writeJson(root, outputManifestPath, manifest);
   return { outputManifestPath, manifest };
@@ -695,14 +720,15 @@ function invokeOpenAiImageProvider(root, provider, input, prompt, env, runId, ti
   const imagePath = `${generationRunDir(runId)}/gpt-image2.png`;
   ensureDir(path.dirname(resolvePath(root, imagePath)));
   fs.writeFileSync(resolvePath(root, imagePath), Buffer.from(image.b64, "base64"));
-  const finalSvgPath = assertSafeFigurePath(input.figure?.finalSvgPath ?? `${generationRunDir(runId)}/final.svg`, "OpenAI image finalSvgPath", [generationRunDir(runId), ".dove/figures/"]);
-  const href = path.posix.relative(path.posix.dirname(finalSvgPath), imagePath) || path.posix.basename(imagePath);
+  const sourceSvgPath = assertSafeFigureSourcePath(`${generationRunDir(runId)}/gpt-image2.svg`, "OpenAI image sourceSvgPath", runId);
+  const targetFinalSvgPath = assertSafeFigureFinalTargetPath(input.figure?.finalSvgPath, "OpenAI image final artifact target");
+  const href = path.posix.relative(path.posix.dirname(targetFinalSvgPath), imagePath) || path.posix.basename(imagePath);
   const { width, height } = dimensionsFromImageSize(provider.imageSize);
   const title = xmlEscape(input.figure?.name ?? input.figureId ?? "Generated figure");
   const desc = xmlEscape(input.figure?.purpose ?? "Generated by an OpenAI image provider and wrapped as a local SVG artifact.");
   const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc"><title id="title">${title}</title><desc id="desc">${desc}</desc><image href="${xmlEscape(href)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"/></svg>\n`;
   return writeProviderOutput(root, runId, {
-    finalSvgPath,
+    sourceSvgPath,
     svgContent,
     caption: `${input.figure?.name ?? input.figureId ?? "Figure"} generated with ${provider.id}.`,
     rasterImagePath: imagePath,
@@ -935,6 +961,7 @@ export function importFigureGeneration(root, args = {}) {
   const target = assertTaskScopedMutationTarget(root, "import-figure-generation", args);
   assertFollowThroughReady(root, "Importing figure generation", args);
   ensureWorkspace(root);
+  assertNoLegacyFinalSvgInput(args, "import_figure_generation");
   const { env: _env, svgContent: _svgContent, ...safeArgs } = args;
   assertNoInlineSecrets(safeArgs, "figureGeneration.importArgs");
   const { figure } = resolveFigure(root, args);
@@ -954,11 +981,14 @@ export function importFigureGeneration(root, args = {}) {
     throw new Error(`Figure generation run ${runId} belongs to packet ${existingGeneration.packetId}, not ${target.packetId}.`);
   }
 
+  const defaultSourceSvgPath = `${generationRunDir(runId)}/final.svg`;
   const { manifestPath: outputManifestPath, manifest } = readOutputManifest(root, runId, args.outputManifestPath, {
-    finalSvgPath: args.finalSvgPath,
+    sourceSvgPath: args.sourceSvgPath ?? defaultSourceSvgPath,
     caption: args.caption ?? args.captionDraft
   });
   assertManifestHasNoInlineSecrets(root, outputManifestPath, manifest, "figureGeneration.outputManifest");
+  assertNoLegacyFinalSvgInput(manifest, "figureGeneration.outputManifest");
+  assertNoLegacyProviderOutputFields(manifest, "figureGeneration.outputManifest");
   const semanticCoverage = normalizeSemanticCoverage(args.semanticCoverage ?? manifest.semanticCoverage ?? existingGeneration.semanticCoverage);
   const semanticReview = normalizeSemanticReview(args.semanticReview ?? manifest.semanticReview ?? existingGeneration.semanticReview);
   if (semanticCoverage || semanticReview) {
@@ -968,9 +998,9 @@ export function importFigureGeneration(root, args = {}) {
       ...(semanticReview ? { semanticReview } : {})
     });
   }
-  const rawSvgContent = typeof args.svgContent === "string" ? args.svgContent : typeof manifest.svg === "string" ? manifest.svg : null;
-  const sourceSvgPath = assertSafeFigurePath(args.finalSvgPath ?? manifest.finalSvgPath ?? manifest.svgPath ?? `${generationRunDir(runId)}/final.svg`, "finalSvgPath", [generationRunDir(runId), ".dove/figures/"]);
-  const finalSvgPath = assertSafeFigurePath(figure.finalSvgPath, "figure.finalSvgPath");
+  const rawSvgContent = typeof args.svgContent === "string" ? args.svgContent : typeof manifest.svgContent === "string" ? manifest.svgContent : null;
+  const sourceSvgPath = assertSafeFigureSourcePath(args.sourceSvgPath ?? manifest.sourceSvgPath ?? manifest.svgPath ?? defaultSourceSvgPath, "sourceSvgPath", runId);
+  const finalSvgPath = assertSafeFigureFinalTargetPath(figure.finalSvgPath, "figure.finalSvgPath");
 
   if (rawSvgContent) {
     writeText(root, sourceSvgPath, rawSvgContent.endsWith("\n") ? rawSvgContent : `${rawSvgContent}\n`);
@@ -1031,6 +1061,7 @@ export function importFigureGeneration(root, args = {}) {
   writeJson(root, `${generationRunDir(runId)}/manifest.json`, { ...generation, captionId: caption.id });
   updateFigureIndexesForImport(root, figure, { ...generation, captionId: caption.id }, caption, timestamp);
   const validation = validateFigurePipeline(root);
+  const figureQa = summarizeFigureQa(root, figure.id, validation);
   refreshDurableSurfaces(root, {
     type: "import-figure-generation",
     summary: `Imported figure generation run ${runId} for ${figure.id}.`,
@@ -1041,18 +1072,23 @@ export function importFigureGeneration(root, args = {}) {
     figureId: figure.id,
     packetId: target.packetId,
     captionId: caption.id,
+    sourceSvgPath,
     finalSvgPath,
     finalSha256: generation.finalSha256,
-    qaIssueCount: validation.issueCount,
-    qaPath: validation.qaPath,
+    qaIssueCount: figureQa.issueCount,
+    workspaceQaIssueCount: figureQa.workspaceIssueCount,
+    qaPath: figureQa.qaPath,
+    figureQa,
     preActionGuidanceSummary: figureGenerationGuidanceSummary(root, args, target, {
-      nextAction: validation.issueCount > 0 ? "project:dove.figure" : "project:dove.review",
+      nextAction: figureQa.issueCount > 0 ? "project:dove.figure" : "project:dove.review",
       statusSummary: {
         runId,
         figureId: figure.id,
         captionId: caption.id,
+        sourceSvgPath,
         finalSvgPath,
-        qaIssueCount: validation.issueCount
+        qaIssueCount: figureQa.issueCount,
+        workspaceQaIssueCount: figureQa.workspaceIssueCount
       }
     })
   };

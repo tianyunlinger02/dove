@@ -8,7 +8,7 @@ import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { isPatchPlanMode } from "./mutation-backend.mjs";
 import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
-import { upsertFigurePlan, validateFigurePipeline } from "./artifacts.mjs";
+import { summarizeFigureQa, upsertFigurePlan, validateFigurePipeline } from "./artifacts.mjs";
 import {
   assertFollowThroughReady,
   assertGovernanceMutationRegistered,
@@ -48,6 +48,28 @@ function compactObject(fields) {
     }
     return true;
   }));
+}
+
+function normalizeRelativePath(value) {
+  return path.posix.normalize(String(value ?? "").trim().replace(/\\/g, "/").replace(/^\.\//, ""));
+}
+
+function isSafeProjectRelativePath(relativePath) {
+  return Boolean(relativePath) && !path.posix.isAbsolute(relativePath) && relativePath !== ".." && !relativePath.startsWith("../");
+}
+
+function assertSafeFinalTargetPath(relativePath, label) {
+  const normalized = normalizeRelativePath(relativePath);
+  if (!isSafeProjectRelativePath(normalized) || !normalized.startsWith(".dove/figures/") || normalized.startsWith(".dove/figures/runs/") || !normalized.endsWith(".svg")) {
+    throw new Error(`${label} must be a final SVG artifact under .dove/figures/ and outside .dove/figures/runs/: ${relativePath ?? "<missing>"}`);
+  }
+  return normalized;
+}
+
+function assertNoLegacyFinalSvgInput(value, label) {
+  if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, "finalSvgPath")) {
+    throw new Error(`${label} no longer accepts finalSvgPath as input; use sourceSvgPath for generated SVG input or targetFinalSvgPath for the final artifact target.`);
+  }
 }
 
 function existingFigureById(root, figureId) {
@@ -143,7 +165,7 @@ function buildFigureItem(root, args, target) {
     captionIntent: firstText(args.captionIntent, args.caption, args.captionDraft, existing?.captionIntent, intent) ?? intent,
     templateSvgPath: args.templateSvgPath ?? existing?.templateSvgPath ?? `.dove/figures/${figureId}.template.svg`,
     editableSvgPath: args.editableSvgPath ?? existing?.editableSvgPath ?? `.dove/figures/${figureId}.editable.svg`,
-    finalSvgPath: args.figureFinalSvgPath ?? existing?.finalSvgPath ?? `.dove/figures/${figureId}.final.svg`,
+    finalSvgPath: assertSafeFinalTargetPath(args.targetFinalSvgPath ?? existing?.finalSvgPath ?? `.dove/figures/${figureId}.final.svg`, "targetFinalSvgPath"),
     owner: args.owner ?? existing?.owner ?? target.packet.assignedRole ?? "builder",
     mode: args.mode ?? existing?.mode ?? "generated",
     status: existing?.status ?? "planned",
@@ -180,18 +202,18 @@ function ensureStageSvgFiles(root, figure) {
 function hasImportableOutput(args, prepared) {
   return Boolean(
     args.svgContent ||
-    args.finalSvgPath ||
+    args.sourceSvgPath ||
     args.outputManifestPath ||
     prepared.providerExecution?.status === "completed"
   );
 }
 
-function statusFor(prepared, imported, validation) {
+function statusFor(prepared, imported, figureQa) {
   if (["missing-secret-env", "failed"].includes(prepared.providerExecution?.status)) {
     return "blocked-boundary";
   }
   if (imported) {
-    return validation.issueCount === 0 ? "validated" : "qa-needs-attention";
+    return figureQa.issueCount === 0 ? "validated" : "qa-needs-attention";
   }
   if ((prepared.missingRequirementIds ?? []).length > 0) {
     return "blocked-missing-materials";
@@ -213,7 +235,7 @@ function figureValidationEvidencePaths(validation) {
   return normalizeStringArray([validation?.qaPath]);
 }
 
-function figureBoundaryFor(status, prepared, validation, figureId, runId) {
+function figureBoundaryFor(status, prepared, validation, figureQa, figureId, runId) {
   const artifactRefs = figureArtifactRefs(validation);
   const providerStatus = prepared.providerExecution?.status ?? null;
   if (status === "blocked-missing-materials") {
@@ -274,8 +296,8 @@ function figureBoundaryFor(status, prepared, validation, figureId, runId) {
       id: `${figureId}-${runId}-awaiting-provider-output`,
       type: "awaiting-provider-output",
       reason: `Figure ${figureId} is awaiting provider output or manual output import.`,
-      requiredInputs: normalizeStringArray([...providerRequiredInputs, "finalSvgPath-or-outputManifestPath-or-svgContent"]),
-      requiredActions: normalizeStringArray([...providerRequiredActions, "run-provider-or-import-output", "provide-final-svg-or-output-manifest"]),
+      requiredInputs: normalizeStringArray([...providerRequiredInputs, "sourceSvgPath-or-outputManifestPath-or-svgContent"]),
+      requiredActions: normalizeStringArray([...providerRequiredActions, "run-provider-or-import-output", "provide-source-svg-or-output-manifest"]),
       artifactRefs,
       nextAction: "project:dove.figure",
       ownerRole: "builder",
@@ -291,8 +313,8 @@ function figureBoundaryFor(status, prepared, validation, figureId, runId) {
     return {
       id: `${figureId}-${runId}-qa-needs-attention`,
       type: "verification-failed",
-      reason: `Figure ${figureId} has ${validation.issueCount} QA issue(s) requiring review.`,
-      requiredInputs: [validation.qaPath],
+      reason: `Figure ${figureId} has ${figureQa.issueCount} QA issue(s) requiring review.`,
+      requiredInputs: [figureQa.qaPath],
       requiredActions: ["review-figure-qa", "resolve-figure-qa-issues"],
       artifactRefs,
       nextAction: "project:dove.review",
@@ -309,6 +331,7 @@ export function runFigureWorkflow(root, args = {}) {
   const target = assertTaskScopedMutationTarget(root, "run-figure-workflow", args);
   assertFollowThroughReady(root, "Running the figure workflow", args);
   ensureWorkspace(root);
+  assertNoLegacyFinalSvgInput(args, "run_figure_workflow");
   const { env: _env, svgContent: _svgContent, ...safeArgs } = args;
   assertNoInlineSecrets(safeArgs, "figureWorkflow.args");
 
@@ -340,7 +363,7 @@ export function runFigureWorkflow(root, args = {}) {
       caption: args.caption,
       captionDraft: args.captionDraft,
       captionId: args.captionId,
-      finalSvgPath: args.finalSvgPath,
+      sourceSvgPath: args.sourceSvgPath,
       svgContent: args.svgContent,
       semanticCoverage: args.semanticCoverage,
       semanticReview: args.semanticReview,
@@ -349,10 +372,11 @@ export function runFigureWorkflow(root, args = {}) {
   }
 
   const validation = validateFigurePipeline(root);
-  const status = statusFor(prepared, imported, validation);
+  const figureQa = summarizeFigureQa(root, figureId, validation);
+  const status = statusFor(prepared, imported, figureQa);
   const artifactRefs = figureArtifactRefs(validation);
-  const validationEvidencePaths = figureValidationEvidencePaths(validation);
-  const boundary = figureBoundaryFor(status, prepared, validation, figureId, prepared.runId);
+  const validationEvidencePaths = figureValidationEvidencePaths(figureQa);
+  const boundary = figureBoundaryFor(status, prepared, validation, figureQa, figureId, prepared.runId);
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.figure",
     responseLanguage: resolveDoveResponseLanguage(root, args),
@@ -375,7 +399,8 @@ export function runFigureWorkflow(root, args = {}) {
       status,
       materialStatus: prepared.materialStatus,
       missingRequirementCount: prepared.missingRequirementIds?.length ?? 0,
-      qaIssueCount: validation.issueCount,
+      qaIssueCount: figureQa.issueCount,
+      workspaceQaIssueCount: figureQa.workspaceIssueCount,
       imported: Boolean(imported)
     }
   });
@@ -397,6 +422,7 @@ export function runFigureWorkflow(root, args = {}) {
     missingRequirementIds: prepared.missingRequirementIds,
     imported,
     validation,
+    figureQa,
     diagnostics: {
       providerReadiness: prepared.providerReadiness,
       providerExecution: prepared.providerExecution,
@@ -404,7 +430,8 @@ export function runFigureWorkflow(root, args = {}) {
     },
     captionId: imported?.captionId ?? null,
     finalSvgPath: imported?.finalSvgPath ?? null,
-    qaIssueCount: validation.issueCount,
-    qaPath: validation.qaPath
+    qaIssueCount: figureQa.issueCount,
+    workspaceQaIssueCount: figureQa.workspaceIssueCount,
+    qaPath: figureQa.qaPath
   };
 }

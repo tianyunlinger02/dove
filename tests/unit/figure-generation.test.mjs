@@ -221,6 +221,48 @@ test("importFigureGeneration validates SVG, records caption provenance, and clea
   assert.equal(qa.items[0].qaStatus, "ready");
 });
 
+test("importFigureGeneration reads sourceSvgPath and scopes QA to the imported figure", () => {
+  const root = tempRoot();
+  const packetId = seedFigureWorkspace(root);
+  const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [] });
+  upsertFigurePlan(root, {
+    packetId,
+    items: [
+      ...figures.items,
+      {
+        id: "unrelated-broken",
+        name: "Unrelated Broken Figure",
+        sourceSections: ["method"],
+        targetClaimIds: ["claim-figure"],
+        narrativeIntent: "This unrelated figure is intentionally incomplete.",
+        requiredVisualElements: ["broken node"],
+        templateSvgPath: ".dove/figures/unrelated-broken.template.svg",
+        editableSvgPath: ".dove/figures/unrelated-broken.editable.svg",
+        finalSvgPath: ".dove/figures/unrelated-broken.final.svg",
+        captionIntent: "Broken figure caption intent."
+      }
+    ]
+  });
+  prepareFigureGeneration(root, { packetId, figureId: "workflow", runId: "source-path-run" });
+  const sourceSvgPath = ".dove/figures/runs/source-path-run/manual.svg";
+  fs.mkdirSync(path.dirname(path.join(root, sourceSvgPath)), { recursive: true });
+  fs.writeFileSync(path.join(root, sourceSvgPath), "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Evidence node flows to claim node</text></svg>\n", "utf8");
+
+  const imported = importFigureGeneration(root, {
+    packetId,
+    figureId: "workflow",
+    runId: "source-path-run",
+    sourceSvgPath,
+    caption: "Workflow Figure explains how source-backed evidence flows into the claim."
+  });
+
+  assert.equal(imported.sourceSvgPath, sourceSvgPath);
+  assert.equal(imported.finalSvgPath, ".dove/figures/workflow.final.svg");
+  assert.equal(imported.qaIssueCount, 0);
+  assert.ok(imported.workspaceQaIssueCount > 0);
+  assert.equal(fs.readFileSync(path.join(root, ".dove", "figures", "workflow.final.svg"), "utf8").includes("Evidence node"), true);
+});
+
 test("importFigureGeneration rejects unsafe SVG and path traversal", () => {
   const root = tempRoot();
   const packetId = seedFigureWorkspace(root);
@@ -241,7 +283,18 @@ test("importFigureGeneration rejects unsafe SVG and path traversal", () => {
       packetId,
       figureId: "workflow",
       runId: "unsafe-run",
-      finalSvgPath: "../outside.svg",
+      finalSvgPath: ".dove/figures/runs/unsafe-run/legacy.svg",
+      svgContent: "<svg />",
+      caption: "Legacy path field."
+    });
+  }, /no longer accepts finalSvgPath/);
+
+  assert.throws(() => {
+    importFigureGeneration(root, {
+      packetId,
+      figureId: "workflow",
+      runId: "unsafe-run",
+      sourceSvgPath: "../outside.svg",
       svgContent: "<svg />",
       caption: "Unsafe path."
     });
@@ -256,7 +309,7 @@ test("prepareFigureGeneration can explicitly invoke a configured external-comman
 const fs = require("node:fs");
 const input = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 process.stdout.write(JSON.stringify({
-  finalSvgPath: ".dove/figures/runs/" + input.runId + "/provider.svg",
+  sourceSvgPath: ".dove/figures/runs/" + input.runId + "/provider.svg",
   svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider output claim node</text></svg>",
   caption: "Provider generated a workflow figure for the claim node.",
   semanticCoverage: { visualElements: ["evidence node", "claim node"] }
@@ -290,7 +343,7 @@ test("prepareFigureGeneration does not execute providers in patch-plan mode", ()
 const fs = require("node:fs");
 fs.writeFileSync("provider-spawned.txt", "spawned", "utf8");
 process.stdout.write(JSON.stringify({
-  finalSvgPath: ".dove/figures/runs/patch-plan-provider-run/provider.svg",
+  sourceSvgPath: ".dove/figures/runs/patch-plan-provider-run/provider.svg",
   svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider output claim node</text></svg>",
   caption: "Provider generated a workflow figure for the claim node."
 }));
@@ -332,7 +385,7 @@ test("provider output manifests reject inline secret fields before persistence",
   const providerScript = path.join(root, "leaky-figure-provider.cjs");
   fs.writeFileSync(providerScript, `#!/usr/bin/env node
 process.stdout.write(JSON.stringify({
-  finalSvgPath: ".dove/figures/runs/leaky-run/provider.svg",
+  sourceSvgPath: ".dove/figures/runs/leaky-run/provider.svg",
   svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider output</text></svg>",
   apiKey: "inline-secret"
 }));
@@ -443,7 +496,8 @@ test("prepareFigureGeneration invokes gpt-image2 through the OpenAI image provid
       assert.match(requests[0].body.prompt, /Workflow Figure/);
 
       const manifest = readJson(root, prepared.outputManifestPath, {});
-      assert.equal(manifest.finalSvgPath, ".dove/figures/workflow.final.svg");
+      assert.equal(manifest.sourceSvgPath, ".dove/figures/runs/gpt-image2-run/gpt-image2.svg");
+      assert.equal(manifest.finalSvgPath, undefined);
       assert.equal(manifest.rasterImagePath, ".dove/figures/runs/gpt-image2-run/gpt-image2.png");
       assert.equal(manifest.providerResponseId, "img-test");
       assert.equal(manifest.revisedPrompt, "Revised workflow prompt.");

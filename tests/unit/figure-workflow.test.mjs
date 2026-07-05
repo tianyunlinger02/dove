@@ -119,6 +119,125 @@ test("runFigureWorkflow turns one SVG-backed intent into a validated figure", ()
   }
 });
 
+test("runFigureWorkflow validates current figure despite unrelated workspace QA issues", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+    upsertFigurePlan(root, {
+      packetId,
+      items: [{
+        id: "unrelated-broken",
+        name: "Unrelated Broken Figure",
+        sourceSections: ["method"],
+        targetClaimIds: ["claim-figure-workflow"],
+        narrativeIntent: "This unrelated figure is intentionally incomplete.",
+        requiredVisualElements: ["broken node"],
+        templateSvgPath: ".dove/figures/unrelated-broken.template.svg",
+        editableSvgPath: ".dove/figures/unrelated-broken.editable.svg",
+        finalSvgPath: ".dove/figures/unrelated-broken.final.svg",
+        captionIntent: "Broken figure caption intent."
+      }]
+    });
+
+    const result = runFigureWorkflow(root, {
+      packetId,
+      figureId: "scoped-clean",
+      runId: "scoped-clean-run",
+      intent: "Draw the scoped clean figure.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      requiredVisualElements: ["scoped node"],
+      svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Scoped node</text></svg>",
+      caption: "Scoped node figure for the evidence workflow."
+    });
+
+    assert.equal(result.status, "validated");
+    assert.equal(result.qaIssueCount, 0);
+    assert.ok(result.workspaceQaIssueCount > 0);
+    assert.equal(result.boundary, null);
+    assert.equal(result.nextAction, "project:dove.review");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runFigureWorkflow imports sourceSvgPath into the canonical final target", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+    const sourceSvgPath = ".dove/figures/runs/source-path-run/manual.svg";
+    fs.mkdirSync(path.dirname(path.join(root, sourceSvgPath)), { recursive: true });
+    fs.writeFileSync(path.join(root, sourceSvgPath), "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Manual source node</text></svg>\n", "utf8");
+
+    const result = runFigureWorkflow(root, {
+      packetId,
+      figureId: "source-path",
+      runId: "source-path-run",
+      intent: "Draw the manual source figure.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      requiredVisualElements: ["manual source node"],
+      sourceSvgPath,
+      caption: "Manual source node figure for the evidence workflow."
+    });
+
+    assert.equal(result.status, "validated");
+    assert.equal(result.imported.sourceSvgPath, sourceSvgPath);
+    assert.equal(result.finalSvgPath, ".dove/figures/source-path.final.svg");
+    assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "source-path.final.svg")), true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runFigureWorkflow accepts targetFinalSvgPath as the canonical final artifact target", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+
+    const result = runFigureWorkflow(root, {
+      packetId,
+      figureId: "target-final",
+      runId: "target-final-run",
+      intent: "Draw the figure into a named final target.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      requiredVisualElements: ["target node"],
+      targetFinalSvgPath: ".dove/figures/custom-target.final.svg",
+      svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Target node</text></svg>",
+      caption: "Target node figure for the evidence workflow."
+    });
+
+    assert.equal(result.status, "validated");
+    assert.equal(result.finalSvgPath, ".dove/figures/custom-target.final.svg");
+    const figure = readFigures(root).items.find((item) => item.id === "target-final");
+    assert.equal(figure.finalSvgPath, ".dove/figures/custom-target.final.svg");
+    assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "custom-target.final.svg")), true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runFigureWorkflow rejects legacy finalSvgPath input", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+
+    assert.throws(() => runFigureWorkflow(root, {
+      packetId,
+      figureId: "legacy-final-input",
+      runId: "legacy-final-input-run",
+      intent: "Draw a figure with the old source field.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      finalSvgPath: ".dove/figures/runs/legacy-final-input-run/manual.svg",
+      caption: "Legacy field should be rejected."
+    }), /no longer accepts finalSvgPath/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("runFigureWorkflow imports inline SVG as patch-plan operations without writing final files", () => {
   const root = tempRoot();
   try {
@@ -158,7 +277,7 @@ test("runFigureWorkflow auto-imports completed external-command provider output"
 const fs = require("node:fs");
 const input = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 process.stdout.write(JSON.stringify({
-  finalSvgPath: ".dove/figures/runs/" + input.runId + "/provider.svg",
+  sourceSvgPath: ".dove/figures/runs/" + input.runId + "/provider.svg",
   svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider output claim node</text></svg>",
   caption: "Provider generated the workflow figure for the claim node.",
   semanticCoverage: { visualElements: ["provider output", "claim node"] }
@@ -200,7 +319,7 @@ test("runFigureWorkflow keeps provider execution as a direct-process boundary in
 const fs = require("node:fs");
 fs.writeFileSync("workflow-provider-spawned.txt", "spawned", "utf8");
 process.stdout.write(JSON.stringify({
-  finalSvgPath: ".dove/figures/runs/patch-plan-workflow-run/provider.svg",
+  sourceSvgPath: ".dove/figures/runs/patch-plan-workflow-run/provider.svg",
   svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>Provider output claim node</text></svg>",
   caption: "Provider generated the workflow figure for the claim node."
 }));
@@ -262,7 +381,7 @@ test("runFigureWorkflow prepares materials without marking a final figure ready 
     assert.equal(result.materialStatus, "ready");
     assert.equal(result.boundaryType, "awaiting-provider-output");
     assert.equal(result.boundary.type, "awaiting-provider-output");
-    assert.deepEqual(result.boundary.requiredInputs, ["finalSvgPath-or-outputManifestPath-or-svgContent"]);
+    assert.deepEqual(result.boundary.requiredInputs, ["sourceSvgPath-or-outputManifestPath-or-svgContent"]);
     assert.ok(result.requiredActions.includes("run-provider-or-import-output"));
     assert.ok(result.artifactRefs.includes(ARTIFACT_PATHS.figureGenerations));
     assert.deepEqual(result.validationEvidencePaths, [ARTIFACT_PATHS.figureQa]);

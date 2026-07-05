@@ -1025,6 +1025,26 @@ export function evaluateFigurePipeline(root) {
   return buildFigureQa(root);
 }
 
+export function summarizeFigureQa(root, figureId, workspaceValidation = {}) {
+  const qa = workspaceValidation?.qa && typeof workspaceValidation.qa === "object"
+    ? workspaceValidation.qa
+    : readJson(root, ARTIFACT_PATHS.figureQa, { version: 1, items: [], issues: [], updatedAt: null });
+  const issues = (qa.issues ?? []).filter((issue) => issue?.figureId === figureId);
+  const item = (qa.items ?? []).find((entry) => entry.figureId === figureId) ?? null;
+  return {
+    scope: "figure",
+    figureId,
+    item,
+    qaStatus: item?.qaStatus ?? (issues.length > 0 ? "needs-review" : "ready"),
+    issueCount: issues.length,
+    issues,
+    openIssueIds: issues.map((issue) => issue.id),
+    qaPath: workspaceValidation?.qaPath ?? ARTIFACT_PATHS.figureQa,
+    workspaceIssueCount: typeof workspaceValidation?.issueCount === "number" ? workspaceValidation.issueCount : (qa.issues ?? []).length,
+    workspaceFigureCount: typeof workspaceValidation?.figureCount === "number" ? workspaceValidation.figureCount : (qa.items ?? []).length
+  };
+}
+
 export function validateFigurePipeline(root) {
   const qa = buildFigureQa(root);
   writeJson(root, ARTIFACT_PATHS.figureQa, qa);
@@ -1033,7 +1053,7 @@ export function validateFigurePipeline(root) {
     summary: `Validated figure pipeline for ${qa.items.length} figures with ${qa.issues.length} issues.`,
     artifactPaths: [ARTIFACT_PATHS.figureQa, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureSegments, ARTIFACT_PATHS.figureTemplates, ARTIFACT_PATHS.figureEditableIndex, ARTIFACT_PATHS.figureFinalIndex, ARTIFACT_PATHS.figureMaterials, ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureCaptions]
   });
-  return { figureCount: qa.items.length, issueCount: qa.issues.length, qaPath: ARTIFACT_PATHS.figureQa };
+  return { figureCount: qa.items.length, issueCount: qa.issues.length, qaPath: ARTIFACT_PATHS.figureQa, qa };
 }
 
 function isStrictMode(state, args = {}) {

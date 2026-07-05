@@ -704,7 +704,7 @@ test("MCP run_figure_workflow keeps provider execution as a direct-process bound
 const fs = require("node:fs");
 fs.writeFileSync("mcp-provider-spawned.txt", "spawned", "utf8");
 process.stdout.write(JSON.stringify({
-  finalSvgPath: ".dove/figures/runs/mcp-patch-plan-run/provider.svg",
+  sourceSvgPath: ".dove/figures/runs/mcp-patch-plan-run/provider.svg",
   svgContent: "<svg xmlns=\\"http://www.w3.org/2000/svg\\"><text>MCP provider output claim node</text></svg>",
   caption: "MCP provider generated the workflow figure for the claim node."
 }));
@@ -1405,7 +1405,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
       packetId,
       figureId: "thin-guidance-figure",
       runId: preparedFigure.runId,
-      finalSvgPath: ".dove/figures/runs/thin-guidance-figure-run/final.svg",
+      sourceSvgPath: ".dove/figures/runs/thin-guidance-figure-run/final.svg",
       svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Thin guidance figure</text></svg>",
       caption: "Thin guidance figure records safe import provenance."
     }));
@@ -3429,12 +3429,18 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(runFigureTool.inputSchema.properties.description, "run_figure_workflow should expose description");
   assert.ok(runFigureTool.inputSchema.properties.materialHints, "run_figure_workflow should expose materialHints");
   assert.ok(runFigureTool.inputSchema.properties.executeProvider, "run_figure_workflow should expose executeProvider");
+  assert.ok(runFigureTool.inputSchema.properties.outputManifestPath, "run_figure_workflow should expose outputManifestPath");
+  assert.ok(runFigureTool.inputSchema.properties.sourceSvgPath, "run_figure_workflow should expose sourceSvgPath");
+  assert.ok(runFigureTool.inputSchema.properties.targetFinalSvgPath, "run_figure_workflow should expose targetFinalSvgPath");
   assert.ok(runFigureTool.inputSchema.properties.svgContent, "run_figure_workflow should expose svgContent");
+  assert.equal(runFigureTool.inputSchema.properties.finalSvgPath, undefined, "run_figure_workflow should not expose legacy finalSvgPath input");
   assert.ok(runFigureTool.inputSchema.properties.caption, "run_figure_workflow should expose caption");
   assert.ok(prepareFigureTool.inputSchema.properties.figureId, "prepare_figure_generation should expose figureId");
   assert.ok(prepareFigureTool.inputSchema.properties.materialHints, "prepare_figure_generation should expose materialHints");
   assert.ok(prepareFigureTool.inputSchema.properties.executeProvider, "prepare_figure_generation should expose executeProvider");
   assert.ok(importFigureTool.inputSchema.properties.outputManifestPath, "import_figure_generation should expose outputManifestPath");
+  assert.ok(importFigureTool.inputSchema.properties.sourceSvgPath, "import_figure_generation should expose sourceSvgPath");
+  assert.equal(importFigureTool.inputSchema.properties.finalSvgPath, undefined, "import_figure_generation should not expose legacy finalSvgPath input");
   assert.ok(importFigureTool.inputSchema.properties.caption, "import_figure_generation should expose caption");
   assert.ok(doveOrchestrateQueryTool.inputSchema.properties.request, "query_dove_orchestrate should expose request");
   assert.ok(doveOrchestrateQueryTool.inputSchema.properties.domain, "query_dove_orchestrate should expose domain");

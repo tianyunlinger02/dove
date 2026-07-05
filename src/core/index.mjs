@@ -8,7 +8,7 @@ export { queryPaperAudit } from "./paper-audit.mjs";
 export { appendHandoff, bridgeExperimentResultToClaim, buildRebuttalStrategy, classifyWorkflowIntent, compareVersions, createVersionSnapshot, loadBoard, runExperimentAudit, saveBoard, updateResearchBrief, upsertExperimentPlan, upsertExperimentResult, upsertOrchestrationBoard, normalizeRebuttalIssues } from "./orchestration.mjs";
 export { appendReviewLog, runReviewLoop, upsertRevisionPlan } from "./reviews.mjs";
 export { importIsolatedReview, prepareIsolatedReview, runIsolatedReview } from "./isolated-review.mjs";
-export { buildRebuttal, evaluateFigurePipeline, initProject, listWorkspaceArtifacts, readState, refreshWiki, registerSource, setSectionStatus, syncChecklist, syncCitations, upsertDraft, upsertFigurePlan, upsertNote, upsertOutline, upsertPlan, validateFigurePipeline } from "./artifacts.mjs";
+export { buildRebuttal, evaluateFigurePipeline, initProject, listWorkspaceArtifacts, readState, refreshWiki, registerSource, setSectionStatus, summarizeFigureQa, syncChecklist, syncCitations, upsertDraft, upsertFigurePlan, upsertNote, upsertOutline, upsertPlan, validateFigurePipeline } from "./artifacts.mjs";
 export { importFigureGeneration, prepareFigureGeneration } from "./figure-generation.mjs";
 export { runFigureWorkflow } from "./figure-workflow.mjs";
 export { applyDoveStatusAdjustments, createDoveTask, initDoveGoal, killDoveTask, recordDoveMissionPass, resetDoveVersion, runDoveAuto, runDoveOperator } from "./task-workflow.mjs";

@@ -610,7 +610,7 @@ async function main() {
     packetId,
     figureId: "validator-direct-figure",
     runId: preparedFigure.runId,
-    finalSvgPath: ".dove/figures/runs/validator-direct-figure-run/final.svg",
+    sourceSvgPath: ".dove/figures/runs/validator-direct-figure-run/final.svg",
     svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Direct validator figure</text></svg>",
     caption: "Direct validator figure records safe import provenance."
   });
