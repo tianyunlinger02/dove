@@ -2369,9 +2369,15 @@ export function registerSource(root, args = {}) {
     tags: ["source", "evidence", "research"],
     statusSummary: { sourceIds: registered.map((source) => source.id), sourceCount: registered.length }
   });
+  const artifactWrites = {
+    primaryArtifactPaths: [ARTIFACT_PATHS.sources],
+    synthesisArtifactPaths: [ARTIFACT_PATHS.bibliography, ARTIFACT_PATHS.citationLog, ARTIFACT_PATHS.queryPack],
+    refreshOnlyArtifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionJournal]
+  };
   if (!Array.isArray(args.sources)) {
     return {
       ...registered[0],
+      artifactWrites,
       preActionGuidanceSummary: guidanceSummary
     };
   }
@@ -2382,6 +2388,7 @@ export function registerSource(root, args = {}) {
     citationKeys: registered.map((source) => source.citationKey),
     items: registered,
     packetId: target.packet?.id ?? null,
+    artifactWrites,
     preActionGuidanceSummary: guidanceSummary
   };
 }
@@ -2605,6 +2612,10 @@ export function upsertDraft(root, args = {}) {
   return {
     draftPath,
     sectionId,
+    artifactWrites: {
+      primaryArtifactPaths: [draftPath],
+      refreshOnlyArtifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionJournal]
+    },
     preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
       surface: "dove.draft",
       roleId: "builder",

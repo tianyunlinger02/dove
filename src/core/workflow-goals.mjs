@@ -224,7 +224,7 @@ export const WORKFLOW_GOAL_CONTRACTS = [
     pressureTest: "Seed a ready task, remove its executionContract from durable packet state, then query full Dove status.",
     acceptanceCriteria: [
       "Status returns blocked because executionGaps has a missingContract count.",
-      "The first ranked next action is missing-executable-contract.",
+      "The first ranked recovery action wraps missing-executable-contract as recoveryPrimaryKind.",
       "The next action points to the Planner/mission surface.",
       "preActionGuidance reports planner as the execution next role."
     ],
@@ -957,8 +957,8 @@ function runStatusRoutesMissingExecutionContractGoal(root, dispatch) {
   const nextAction = status.dailyHome?.nextActions?.[0];
   expect(status.projectSummary?.status === "blocked" || status.dashboard?.returnReadiness?.status === "blocked", "Status must be blocked when execution contract is missing", { projectSummary: status.projectSummary, returnReadiness: status.dashboard?.returnReadiness });
   expect(status.dailyHome?.executionGaps?.counts?.missingContract === 1, "Status execution gaps must count the missing contract task", { executionGaps: status.dailyHome?.executionGaps });
-  expect(nextAction?.kind === "missing-executable-contract", "Status must rank missing executable contract first", { nextAction });
-  expect(nextAction?.packetId === packetId && nextAction?.command === "project:dove.mission", "Missing contract card must route to Planner mission surface", { nextAction });
+  expect(nextAction?.kind === "recover-current-work" && nextAction?.recoveryPrimaryKind === "missing-executable-contract", "Status must rank a recovery card for the missing executable contract first", { nextAction });
+  expect(nextAction?.packetId === packetId && nextAction?.command === "project:dove.mission", "Missing contract recovery card must route to Planner mission surface", { nextAction });
   expect(status.preActionGuidance?.workflowFrame?.executionGuidance?.nextRole === "planner", "Pre-action guidance must identify planner as next role", { executionGuidance: status.preActionGuidance?.workflowFrame?.executionGuidance });
 
   return {
@@ -972,6 +972,7 @@ function runStatusRoutesMissingExecutionContractGoal(root, dispatch) {
       returnStatus: status.projectSummary?.status ?? status.dashboard?.returnReadiness?.status,
       missingContractCount: status.dailyHome.executionGaps.counts.missingContract,
       firstActionKind: nextAction.kind,
+      recoveryPrimaryKind: nextAction.recoveryPrimaryKind,
       executionNextRole: status.preActionGuidance.workflowFrame.executionGuidance.nextRole
     },
     failureReflection: contract.failureReflection

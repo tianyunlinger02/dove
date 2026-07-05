@@ -1,19 +1,19 @@
 ---
 name: dove-status
-description: "Show the whole-project situation home: live context, durable project state, blockers, reconciliation, and next steps."
+description: "Show a human Dove status home: one-sentence state, one recommended next action, and explicit expansion paths for missions/full/debug details."
 ---
 
 # Dove Status
 
-Show the whole-project situation home: live context, durable project state, blockers, reconciliation, and next steps.
+Show a human Dove status home: one-sentence state, one recommended next action, and explicit expansion paths for missions/full/debug details.
 
 ## Daily use
 
-- Use this as the whole-project situation home: report the host-visible development situation first.
-- Then show durable current context, statusHome.durableContextNotice with mutationRollbackModel showing patch-plan plus host-tracked-edit requirements for `.dove/`, statusHome.preActionGuidance with automatic read-only lesson recall, the Planner/Builder/Reviewer role frame, execution guidance, project state, blockers/reconciliation, execution gaps, and ranked 1-3 next steps; expand optional mission details only when the operator asks and only request full durable details for explicit debug/expansion.
-- Targeting: Default output is not a mission board: do not render a Missions section from `/dove:status`. Mission details live under statusHome.optionalMissionDetails collapsed by default as summary/counts, with mission item groups omitted unless showMissions/includeMissionDetails or a normal prompt such as show current missions asks for expansion.
+- Use this to answer the ordinary operator question: what should I do next?
+- Default output should be a compact human translation layer: statusHome.headline, exactly one statusHome.nextStep, statusHome.needsAttention, statusHome.changes, and statusHome.showMore; keep currentContext, preActionGuidance, durableContextNotice, project state, blockers/reconciliation, raw boundary/action cards, and mission lists behind explicit mission/full/debug expansion.
+- Targeting: Default output is not a mission board or audit report: do not render packet ids, mission lists, boundary/gap codes, blocked counts, execution-gap counts, or required-evidence blocks unless showMissions/includeMissionDetails/full/debug or a normal prompt such as show current missions asks for expansion.
 - Confirmation: Do not ask for status changes during default `/dove:status`. Use compact adjustment cards and at most one confirmation dialog only after explicit status-change intent or requestStatusAdjustment/includeStatusAdjustmentPreview; no parseable packetId-to-status adjustment means no mutation.
-- Outcome: The operator sees the current project situation, context, blockers, reconciliation issues, next action, optional guarded status adjustments, and localized resultCard summaries after confirmed adjustments without hidden writes or noisy raw summaries.
+- Outcome: The operator sees one Dove state line, one recommended next action, one why/needs line, and one expansion/no-write hint; confirmed status adjustments still return localized resultCard summaries.
 
 ## Examples
 
@@ -49,8 +49,8 @@ Show the whole-project situation home: live context, durable project state, bloc
 18. First call `query_dove_status` without `detail: "full"` to obtain the compact read-only Dove project situation home, but do not treat `.dove/` context as the live development situation. Explain the live development situation from host-visible context first: current user request, current session work, known worktree state when available, latest validation/test evidence, active implementation blockers, and what was just completed or is still pending. If live context was not inspected, say so instead of inferring it from `.dove/`.
 19. Keep `query_dove_status` read-only: it must return `proposalOnly: true`, `noAutoApply: true`, and `writes: []`.
 20. Surface `statusHome.durableContextNotice`: filesystem durable state rollback eligibility requires `mutationRollbackModel.patchPlanSupported: true`, host-tracked file edits applying `mutationMode: "patch-plan"` operations, `hostCheckpointStatus: not-programmatically-verifiable`, `externalWriteCaptureVerified: false`, `directProcessWritesAreRollbackSafe: false`, and `doveRestoreSupported: false`; direct-process writes remain functional but rollback-unverified, and status adjustment is only for small state corrections, not rollback restore.
-21. Use `statusHome` as the compact project situation home with this order: host-visible live development situation, `statusHome.currentContext`, `statusHome.preActionGuidance`, `statusHome.nextSteps`, recent execution receipts, gaps/boundaries from `statusHome.blockersAndReconciliation`, compact `statusHome.projectState`, and optional mission details only when the operator asks.
-22. Do not make mission lists the default body of `/dove:status`; default status must not render a `Missions` section, and `statusHome.optionalMissionDetails` is collapsed by default as a summary/count expansion handle with mission item groups omitted unless the operator explicitly asks for `show current missions`, `有哪些 mission`, `--missions`, `showMissions`, or `includeMissionDetails`.
+21. Use `statusHome` as a compact human translation layer with this default order: `statusHome.headline`, exactly one `statusHome.nextStep`, `statusHome.needsAttention`, `statusHome.changes`, and `statusHome.showMore`; keep `statusHome.currentContext`, `statusHome.preActionGuidance`, blockers/reconciliation, durable context, project state, and optional mission details behind explicit mission/full/debug expansion.
+22. Do not make mission lists, packet ids, boundary/gap codes, blocked counts, execution-gap counts, or required-evidence blocks the default body of `/dove:status`; default status must answer `what should I do next?` with one recovery or continuation action, and `statusHome.optionalMissionDetails` remains collapsed unless the operator explicitly asks for `show current missions`, `有哪些 mission`, `--missions`, `showMissions`, or `includeMissionDetails`.
 23. For normal mission-list prompts, call compact `query_dove_status` with `showMissions: true` or `includeMissionDetails: true` and expand `statusHome.optionalMissionDetails`; do not add or require `/dove:missions`, `/dove:board`, `/dove:list`, and do not route mission-list questions to `/dove:mission`.
 24. Treat `query_dove_mission_board` as a low-level MCP/debug board, not the default host route for ordinary mission-list prompts.
 25. Do not read a saved full status result file or request `detail: "full"` unless the operator explicitly asks to expand/debug full details.

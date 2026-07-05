@@ -186,6 +186,77 @@ const mutationModeProperty = {
   description: "Canonical Dove mutation mode. patch-plan returns declarative file operations for host-tracked application; direct-process writes from the Dove process and is not verified host rollback-safe. If omitted, host-facing MCP calls keep functional direct-process behavior and return hostRollbackIneligibleReason plus rollbackAdvice when writes are not host-rollback eligible."
 };
 
+const operatorSurfaceProperty = {
+  type: "string",
+  enum: ["operator", "compact", "full", "debug"],
+  description: "Tool discovery surface. operator/compact lists the small everyday Dove operator surface; full/debug lists the canonical registry."
+};
+
+export const OPERATOR_TOOL_NAMES = [
+  "query_dove_status",
+  "query_dove_orchestrate",
+  "query_document_ledger",
+  "query_operator_lessons",
+  "create_dove_task",
+  "run_dove_auto",
+  "run_dove_operator",
+  "register_source",
+  "upsert_note",
+  "upsert_draft",
+  "record_document_evidence",
+  "run_figure_workflow",
+  "run_experience_workflow",
+  "run_review_loop",
+  "build_rebuttal_strategy",
+  "query_dove_return"
+];
+
+const OPERATOR_WORKFLOW_AREAS = {
+  query_dove_status: "status",
+  query_dove_orchestrate: "routing",
+  query_document_ledger: "evidence",
+  query_operator_lessons: "lessons",
+  create_dove_task: "mission",
+  run_dove_auto: "auto",
+  run_dove_operator: "operator",
+  register_source: "source",
+  upsert_note: "note",
+  upsert_draft: "draft",
+  record_document_evidence: "document",
+  run_figure_workflow: "figure",
+  run_experience_workflow: "experience",
+  run_review_loop: "review",
+  build_rebuttal_strategy: "rebuttal",
+  query_dove_return: "verification"
+};
+
+const OPERATOR_SCHEMA_FIELDS = {
+  query_dove_status: ["intent", "domain", "stage", "packetId", "status", "detail", "view", "showMissions", "includeMissionDetails", "requestStatusAdjustment", "includeStatusAdjustmentPreview", "resultMode"],
+  query_dove_orchestrate: ["request", "userRequest", "goal", "domain", "stage", "targetArtifacts", "acceptanceChecks", "allowAutonomy", "resultMode"],
+  query_document_ledger: ["packetId", "taskId", "documentKind", "status", "evidenceScope", "publicSafe", "limit", "resultMode"],
+  query_operator_lessons: ["domain", "status", "tag", "actorRole", "limit", "resultMode"],
+  create_dove_task: ["goal", "objective", "prompt", "title", "summary", "domain", "stage", "evidenceExpectations", "artifactPaths", "confirm", "confirmed", "resultMode", "mutationMode"],
+  run_dove_auto: ["packetId", "taskId", "target", "goal", "prompt", "command", "workflow", "steps", "autoSteps", "maxIterations", "maxSteps", "confirm", "confirmed", "completeTask", "completeOnSuccess", "resultMode", "mutationMode"],
+  run_dove_operator: ["confirm", "confirmed", "includeQueueDetails", "blockerInvestigationMode", "taskResults", "results", "resultMode", "mutationMode"],
+  register_source: ["packetId", "taskId", "target", "sourceId", "citationKey", "title", "authors", "year", "locator", "sourceType", "abstract", "origin", "sources", "resultMode", "mutationMode"],
+  upsert_note: ["packetId", "taskId", "target", "noteId", "title", "sectionId", "sourceIds", "summary", "quotes", "claims", "openQuestions", "resultMode", "mutationMode"],
+  upsert_draft: ["packetId", "taskId", "target", "sectionId", "title", "body", "status", "summary", "resultMode", "mutationMode"],
+  record_document_evidence: ["packetId", "taskId", "target", "documentId", "title", "documentKind", "status", "evidenceScope", "summary", "sourceRefs", "artifactRefs", "artifactPaths", "evidencePaths", "createDocument", "appendDocument", "body", "resultMode", "mutationMode"],
+  run_figure_workflow: ["packetId", "taskId", "target", "intent", "description", "figureId", "purpose", "captionIntent", "artifactPaths", "materialHints", "providerId", "executeProvider", "allowMissingMaterials", "caption", "finalSvgPath", "svgContent", "resultMode", "mutationMode"],
+  run_experience_workflow: ["packetId", "taskId", "target", "experimentId", "goal", "idea", "title", "methodology", "successMetric", "claimId", "result", "resultId", "outcome", "summary", "evidenceLinks", "artifactPaths", "resultMode", "mutationMode"],
+  run_review_loop: ["packetId", "taskId", "target", "scope", "stage", "actorRole", "resultMode", "mutationMode"],
+  build_rebuttal_strategy: ["packetId", "taskId", "target", "actorRole", "resultMode", "mutationMode"],
+  query_dove_return: ["goal", "domain", "stage", "scope", "targetArtifacts", "artifactPaths", "acceptanceChecks", "validationEvidencePaths", "evidencePaths", "reviewEvidencePaths", "resultMode"]
+};
+
+export const toolDiscoveryInputSchema = {
+  type: "object",
+  properties: {
+    surface: operatorSurfaceProperty,
+    resultMode: resultModeProperty
+  }
+};
+
 export const MUTATING_TOOL_NAMES = new Set([
   "ensure_workspace",
   "init_project",
@@ -290,7 +361,7 @@ const baseToolDefinitions = [
   { name: "query_dove_orchestrate", description: "Route one Dove mission to the next Dove command without writing, refreshing, running tests, or inspecting git.", inputSchema: { type: "object", properties: { request: { type: "string" }, userRequest: { type: "string" }, goal: { type: "string" }, domain: { type: "string" }, doveDomain: { type: "string" }, missionDomain: { type: "string" }, stage: { type: "string" }, missionStage: { type: "string" }, targetArtifacts: { type: "array", items: { type: "string" } }, artifacts: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } }, acceptanceChecks: { type: "array", items: { type: "string" } }, allowAutonomy: { type: "boolean" } } } },
   { name: "query_dove_mission", description: "Frame one proposal-only Dove mission contract from the current authoritative .dove workspace without writing durable state.", inputSchema: { type: "object", properties: { goal: { type: "string" }, domain: { type: "string" }, doveDomain: { type: "string" }, missionDomain: { type: "string" }, stage: { type: "string" }, missionStage: { type: "string" }, targetArtifacts: { type: "array", items: { type: "string" } }, artifacts: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } }, acceptanceChecks: { type: "array", items: { type: "string" } }, nextCommand: { type: "string" } } } },
   { name: "query_dove_mission_board", description: "Read the low-level Dove mission board/debug view from authoritative .dove state without writing, refreshing, running tests, or inspecting git; ordinary mission-list prompts should use query_dove_status and expand statusHome.optionalMissionDetails instead.", inputSchema: { type: "object", properties: { domain: { type: "string" }, doveDomain: { type: "string" }, missionDomain: { type: "string" }, stage: { type: "string" }, missionStage: { type: "string" }, packetId: { type: "string" }, packetIds: { type: "array", items: { type: "string" } }, missionPacketId: { type: "string" }, missionPacketIds: { type: "array", items: { type: "string" } }, status: { type: "string" }, statuses: { type: "array", items: { type: "string" } }, includeArchived: { type: "boolean" } } } },
-  { name: "query_dove_status", description: "Read the compact authoritative Dove whole-project statusHome by default: current context, statusHome.durableContextNotice showing filesystem durable state, mutationRollbackModel, patch-plan plus host-tracked file-edit requirements for .dove rollback eligibility, host checkpoint verification limits, and unverified direct-process writes, statusHome.preActionGuidance for ordinary-prompt intent routing, automatic read-only lesson recall, Planner/Builder/Reviewer role-framed next action, project state, blockers/reconciliation, ranked next steps, optional mission details as mission counts only, and collapsed status-adjustment counts. Default compact status must not render a Missions panel or ask whether to modify mission statuses. Pass showMissions/includeMissionDetails (or detail/view: missions) only for explicit ordinary mission-list prompts; pass requestStatusAdjustment/includeStatusAdjustmentPreview only when the operator explicitly asks to change mission states after a fresh status read; host/context rollback must use mutationMode: patch-plan applied through host-tracked file edits, not git detection, not direct-process, and not reset_dove_version; pass detail: full or full: true only when full dashboard/task/runtime details are explicitly needed.", inputSchema: { type: "object", properties: { domain: { type: "string" }, doveDomain: { type: "string" }, missionDomain: { type: "string" }, stage: { type: "string" }, missionStage: { type: "string" }, packetId: { type: "string" }, packetIds: { type: "array", items: { type: "string" } }, status: { type: "string" }, statuses: { type: "array", items: { type: "string" } }, includeArchived: { type: "boolean" }, detail: { type: "string" }, view: { type: "string" }, resultMode: { type: "string" }, full: { type: "boolean" }, includeDetails: { type: "boolean" }, showMissions: { type: "boolean" }, includeMissionDetails: { type: "boolean" }, requestStatusAdjustment: { type: "boolean" }, includeStatusAdjustmentPreview: { type: "boolean" } } } },
+  { name: "query_dove_status", description: "Read the compact Dove status translator by default: the compact MCP result exposes summary/headline, nextStep, needsAttention, changes, and showMore so ordinary operators see one-sentence state, one recommended action, and explicit expansion paths instead of packet/mission/boundary/gap internals. `statusHome.durableContextNotice`, mutationRollbackModel, patch-plan plus host-tracked file-edit requirements, host checkpoint verification limits, unverified direct-process writes, statusHome.preActionGuidance, automatic read-only lesson recall, Planner/Builder/Reviewer role framing, blockers/reconciliation, project state, runtime/dashboard details, and raw action candidates are available only through resultMode: full/debug or detail/full expansion. Default compact status must not render a Missions panel, blocked counts, execution-gap counts, required-evidence blocks, or ask whether to modify mission statuses. Pass showMissions/includeMissionDetails (or detail/view: missions) only for explicit ordinary mission-list prompts; pass requestStatusAdjustment/includeStatusAdjustmentPreview only when the operator explicitly asks to change mission states after a fresh status read; host/context rollback must use mutationMode: patch-plan applied through host-tracked file edits, not git detection, not direct-process, and not reset_dove_version.", inputSchema: { type: "object", properties: { domain: { type: "string" }, doveDomain: { type: "string" }, missionDomain: { type: "string" }, stage: { type: "string" }, missionStage: { type: "string" }, packetId: { type: "string" }, packetIds: { type: "array", items: { type: "string" } }, status: { type: "string" }, statuses: { type: "array", items: { type: "string" } }, includeArchived: { type: "boolean" }, intent: { type: "string", enum: ["project-status", "health-check", "contract-test"] }, detail: { type: "string" }, view: { type: "string" }, resultMode: { type: "string" }, full: { type: "boolean" }, includeDetails: { type: "boolean" }, showMissions: { type: "boolean" }, includeMissionDetails: { type: "boolean" }, requestStatusAdjustment: { type: "boolean" }, includeStatusAdjustmentPreview: { type: "boolean" } } } },
   { name: "publish_dove_status", description: "Publish sanitized public Dove project progress artifacts to .dove/public/status.json, status.md, and index.html without exposing raw transcripts, secrets, runtime entries, or starting external tunnels.", inputSchema: { type: "object", properties: { includeArchived: { type: "boolean" }, responseLanguage: { type: "string" }, generatedAt: { type: "string" } } } },
   { name: "publish_dove_global_status", description: "Publish a single global static Dove status index from explicit or configured project .dove/public artifacts without scanning the computer, exposing local roots, or starting external tunnels.", inputSchema: { type: "object", properties: { projectRoots: { type: "array", items: { type: "string" } }, projects: { type: "array", items: { type: "object" } }, outputDir: { type: "string" }, refresh: { type: "boolean" }, includeConfig: { type: "boolean" }, includeArchived: { type: "boolean" }, responseLanguage: { type: "string" }, generatedAt: { type: "string" } } } },
   { name: "query_document_ledger", description: "Read the proposal-only Dove document/evidence ledger without writing state or exposing document bodies.", inputSchema: { type: "object", properties: { packetId: { type: "string" }, taskPacketId: { type: "string" }, missionPacketId: { type: "string" }, taskId: { type: "string" }, documentKind: { type: "string" }, status: { type: "string" }, evidenceScope: { type: "string" }, publicSafe: { type: "boolean" }, limit: { type: "number" } } } },
@@ -477,4 +548,41 @@ const baseToolDefinitions = [
   ,{ name: "run_autonomy_operate", description: "Run the maximum-allowed explicit foreground research operating surface from an objective or existing proposal source through planning, materialization, bounded approval, execution, and durable stop summary.", inputSchema: { type: "object", properties: { objective: { type: "string" }, sourceType: { type: "string" }, sourceId: { type: "string" }, actorRole: { type: "string" }, workerRole: { type: "string" }, maxSteps: { type: "number" }, packetId: { type: "string" }, programId: { type: "string" }, programRunId: { type: "string" }, approvalId: { type: "string" }, campaignId: { type: "string" }, campaignStepId: { type: "string" }, executeBy: { type: "string" }, reviewAfter: { type: "string" }, expiresAt: { type: "string" }, stepSequence: { type: "array", items: { type: "object", properties: { allowedStepType: { type: "string" }, stepPayload: { type: "object" } } } }, reviewScope: { type: "string" }, reviewStage: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, rationale: { type: "string" } } } }
 ];
 
-export const toolDefinitions = baseToolDefinitions.map(addMcpControlFields);
+export const toolDefinitions = baseToolDefinitions.map(addMcpControlFields).map((tool) => ({
+  ...tool,
+  operatorTier: OPERATOR_TOOL_NAMES.includes(tool.name) ? "operator" : "advanced",
+  workflowArea: OPERATOR_WORKFLOW_AREAS[tool.name] ?? "advanced",
+  primaryEntry: OPERATOR_TOOL_NAMES.includes(tool.name),
+  internalOnly: !OPERATOR_TOOL_NAMES.includes(tool.name)
+}));
+
+function compactOperatorToolSchema(tool) {
+  const properties = tool.inputSchema?.properties ?? {};
+  const fieldNames = OPERATOR_SCHEMA_FIELDS[tool.name] ?? Object.keys(properties);
+  const compactProperties = Object.fromEntries(fieldNames
+    .filter((fieldName) => properties[fieldName])
+    .map((fieldName) => [fieldName, properties[fieldName]]));
+  return {
+    ...tool.inputSchema,
+    properties: compactProperties
+  };
+}
+
+function compactOperatorTool(tool) {
+  return {
+    ...tool,
+    inputSchema: compactOperatorToolSchema(tool),
+    discoverySurface: "operator",
+    fullDetails: "Use tools/list with surface: full or surface: debug to inspect the canonical schema."
+  };
+}
+
+export function toolDefinitionsForSurface(surface = "operator") {
+  const normalized = typeof surface === "string" ? surface.trim().toLowerCase() : "operator";
+  if (["full", "debug"].includes(normalized)) {
+    return toolDefinitions.map((tool) => ({ ...tool, discoverySurface: normalized }));
+  }
+  return toolDefinitions
+    .filter((tool) => OPERATOR_TOOL_NAMES.includes(tool.name))
+    .map(compactOperatorTool);
+}

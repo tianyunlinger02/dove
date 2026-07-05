@@ -92,6 +92,7 @@ import {
   currentMutationContext,
   runWithMutationContext
 } from "../core/index.mjs";
+import { buildContractHealth, buildOperatorRoute, buildOperatorUnblock, normalizeStatusIntent } from "../core/operator-ux.mjs";
 import { MUTATING_TOOL_NAMES } from "./tool-definitions.mjs";
 
 function makeTextResult(data) {
@@ -214,22 +215,47 @@ function extractCurrentContext(data) {
   });
 }
 
-function extractWrites(data) {
-  if (!isPlainObject(data)) {
-    return { applied: false, count: 0, paths: [] };
+function extractArtifactWritePaths(artifactWrites) {
+  if (!isPlainObject(artifactWrites)) {
+    return [];
   }
+  return uniqueStrings([
+    ...normalizeStringArray(artifactWrites.primaryArtifactPaths),
+    ...normalizeStringArray(artifactWrites.synthesisArtifactPaths),
+    ...normalizeStringArray(artifactWrites.refreshOnlyArtifactPaths),
+    ...normalizeStringArray(artifactWrites.artifactPaths),
+    ...normalizeStringArray(artifactWrites.paths)
+  ]);
+}
+
+function extractWrites(data, args = {}) {
+  if (!isPlainObject(data)) {
+    return { applied: false, count: 0, paths: [], writeIntent: "none", rollbackEligible: "not-applicable" };
+  }
+  const mutationSummaryPaths = isPlainObject(data.mutationSummary) ? data.mutationSummary.paths : null;
   const paths = uniqueStrings([
     ...normalizeStringArray(data.writes),
     ...normalizeStringArray(data.durableWrites),
-    ...normalizeStringArray(data.outputPaths)
+    ...normalizeStringArray(data.outputPaths),
+    ...normalizeStringArray(mutationSummaryPaths),
+    ...extractArtifactWritePaths(data.artifactWrites),
+    ...extractArtifactWritePaths(data.resultCard?.artifactWrites)
   ]);
   const operationCount = Array.isArray(data.mutationPlan?.operations) ? data.mutationPlan.operations.length : 0;
+  const mutationMode = normalizeString(data.mutationMode ?? args?.mutationMode);
   const writesApplied = typeof data.writesApplied === "boolean" ? data.writesApplied : paths.length > 0;
+  const hasProposedPatch = !writesApplied && (operationCount > 0 || (mutationMode === "patch-plan" && paths.length > 0));
+  const writeIntent = writesApplied ? "applied" : hasProposedPatch ? "proposed" : "none";
+  const rollbackEligible = writeIntent === "none"
+    ? "not-applicable"
+    : normalizeString(data.rollbackEligible ?? data.mutationSummary?.rollbackEligible, mutationMode === "patch-plan" ? "host-tracked" : "unverified");
   return compactObject({
     applied: writesApplied,
     count: paths.length || operationCount,
     paths: paths.slice(0, 10),
-    mutationMode: normalizeString(data.mutationMode)
+    writeIntent,
+    rollbackEligible,
+    mutationMode: writeIntent === "none" ? null : mutationMode
   });
 }
 
@@ -265,29 +291,138 @@ function extractResultPath(data) {
   return normalizeString(data.resultPath ?? data.reportPath ?? data.outputPath ?? data.resultCard?.resultPath);
 }
 
-function buildMcpResultContract(tool, resultMode, data) {
-  const writes = extractWrites(data);
+function extractSummary(data) {
+  if (!isPlainObject(data)) {
+    return "ok";
+  }
+  return normalizeString(
+    data.summary
+      ?? data.headline
+      ?? data.statusHome?.headline
+      ?? data.resultCard?.happened
+      ?? data.resultSummary
+      ?? data.outcome,
+    extractStatus(data)
+  );
+}
+
+function extractNextStep(data) {
+  if (!isPlainObject(data)) {
+    return null;
+  }
+  const statusNextStep = isPlainObject(data.statusHome?.nextStep) ? data.statusHome.nextStep : null;
+  if (statusNextStep) {
+    return statusNextStep;
+  }
+  const explicitNextStep = isPlainObject(data.nextStep) ? data.nextStep : null;
+  if (explicitNextStep) {
+    return explicitNextStep;
+  }
+  const primary = isPlainObject(data.statusHome?.nextSteps?.primary) ? data.statusHome.nextSteps.primary : null;
+  const resultCardAction = Array.isArray(data.resultCard?.nextActions) ? data.resultCard.nextActions[0] : null;
+  const source = primary ?? resultCardAction;
+  if (!source) {
+    const nextAction = extractNextAction(data);
+    return nextAction ? { label: nextAction, command: nextAction, copyableCommand: nextAction } : null;
+  }
+  const command = normalizeString(source.copyableCommand ?? source.firstAction ?? source.command);
+  return compactObject({
+    label: normalizeString(source.title ?? source.label ?? source.kind ?? command),
+    why: normalizeString(source.why ?? source.summary),
+    command: normalizeString(source.command ?? command),
+    copyableCommand: command,
+    kind: normalizeString(source.kind),
+    packetId: normalizeString(source.packetId),
+    evidenceRequired: uniqueStrings(normalizeStringArray(source.evidenceRequired)).slice(0, 8),
+    doneCriteria: uniqueStrings(normalizeStringArray(source.doneCriteria)).slice(0, 8)
+  });
+}
+
+function buildChangesContract(writes) {
+  return compactObject({
+    intent: writes.writeIntent,
+    applied: writes.applied === true,
+    count: writes.count ?? 0,
+    rollback: writes.rollbackEligible
+  });
+}
+
+function extractNeedsAttention(data, operatorUnblock) {
+  if (!isPlainObject(data)) {
+    return null;
+  }
+  const statusNeedsAttention = isPlainObject(data.statusHome?.needsAttention) ? data.statusHome.needsAttention : null;
+  if (statusNeedsAttention) {
+    return statusNeedsAttention;
+  }
+  const explicitNeedsAttention = isPlainObject(data.needsAttention) ? data.needsAttention : null;
+  if (explicitNeedsAttention) {
+    return explicitNeedsAttention;
+  }
+  if (!operatorUnblock) {
+    return null;
+  }
+  return compactObject({
+    status: "blocked",
+    summary: operatorUnblock.summary ?? operatorUnblock.blockedSummary,
+    why: operatorUnblock.why ?? operatorUnblock.cannotContinueBecause,
+    operatorAction: operatorUnblock.operatorAction ?? operatorUnblock.nextOperatorAction,
+    needs: uniqueStrings(normalizeStringArray(operatorUnblock.needs ?? operatorUnblock.requiredEvidence)).slice(0, 8)
+  });
+}
+
+function extractShowMore(data) {
+  if (isPlainObject(data?.statusHome?.showMore)) {
+    return data.statusHome.showMore;
+  }
+  if (isPlainObject(data?.showMore)) {
+    return data.showMore;
+  }
   return {
+    text: "Pass resultMode: full or resultMode: debug to include fullResult.",
+    full: { resultMode: "full" },
+    debug: { resultMode: "debug" }
+  };
+}
+
+function buildMcpResultContract(tool, resultMode, data, args = {}) {
+  const writes = extractWrites(data, args);
+  const statusIntent = tool === "query_dove_status" ? normalizeStatusIntent(args?.intent) : null;
+  const operatorRoute = buildOperatorRoute(tool, args, data);
+  const operatorUnblock = buildOperatorUnblock(data);
+  const changes = buildChangesContract(writes);
+  const showMore = extractShowMore(data);
+  return compactObject({
     presentation: "dove-mcp-result-contract",
     tool,
     resultMode,
+    summary: extractSummary(data),
+    nextStep: extractNextStep(data),
+    needsAttention: extractNeedsAttention(data, operatorUnblock),
+    changes,
+    showMore,
     status: extractStatus(data),
     writes,
     writesApplied: writes.applied === true,
+    writeIntent: writes.writeIntent,
+    rollbackEligible: writes.rollbackEligible,
     boundaryType: extractBoundaryType(data),
     currentContext: extractCurrentContext(data),
-    nextAction: extractNextAction(data),
+    operatorRoute,
+    operatorUnblock,
+    contractHealth: ["health-check", "contract-test"].includes(statusIntent) ? buildContractHealth(data) : null,
+    nextAction: extractNextAction(data) ?? "none",
     requiredEvidence: extractRequiredEvidence(data),
     evidencePaths: extractEvidencePaths(data),
     resultPath: extractResultPath(data),
     detailsAvailable: true,
     fullDetails: "Pass resultMode: full or resultMode: debug to include fullResult."
-  };
+  });
 }
 
 function shapeMcpResult(tool, args, data) {
   const resultMode = normalizeMcpResultMode(args);
-  const compact = buildMcpResultContract(tool, resultMode, data);
+  const compact = buildMcpResultContract(tool, resultMode, data, args);
   if (resultMode === "full") {
     return { ...compact, fullResult: data };
   }

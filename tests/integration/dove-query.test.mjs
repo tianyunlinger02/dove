@@ -188,13 +188,18 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
     encoding: "utf8"
   });
   assert.equal(human.status, 0, human.stderr || human.stdout);
-  assert.match(human.stdout, /^Dove current situation:/);
-  assert.match(human.stdout, /Current context:/);
-  assert.match(human.stdout, /Next action:/);
-  assert.match(human.stdout, /Boundary\/gap:/);
-  assert.match(human.stdout, /Required evidence:/);
-  assert.match(human.stdout, /Writes:/);
-  assert.match(human.stdout, /Expansion: use --include-mission-details or --detail missions/);
+  assert.match(human.stdout, /^Dove: /);
+  assert.match(human.stdout, /^Next: /m);
+  assert.match(human.stdout, /^Why: /m);
+  assert.match(human.stdout, /^More: /m);
+  assert.doesNotMatch(human.stdout, /Dove current situation:/);
+  assert.doesNotMatch(human.stdout, /Current context:/);
+  assert.doesNotMatch(human.stdout, /Next action:/);
+  assert.doesNotMatch(human.stdout, /Boundary\/gap:/);
+  assert.doesNotMatch(human.stdout, /Required evidence:/);
+  assert.doesNotMatch(human.stdout, /Writes:/);
+  assert.doesNotMatch(human.stdout, /blocked \d+/);
+  assert.doesNotMatch(human.stdout, /execution gaps:/);
   assert.doesNotMatch(human.stdout, /Durable state:/);
   assert.doesNotMatch(human.stdout, /rollback coverage:/);
   assert.doesNotMatch(human.stdout, /host checkpoint:/);
@@ -224,6 +229,23 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   assert.equal(parsed.statusHome.presentation, "dove-project-situation-home");
   assert.equal(parsed.statusHome.detail, "compact");
   assert.equal(parsed.statusHome.liveContextFirst, true);
+  assert.match(parsed.summary, /Dove/);
+  assert.equal(parsed.headline, parsed.statusHome.headline);
+  assert.ok(parsed.statusHome.headline);
+  assert.ok(parsed.statusHome.nextStep);
+  assert.equal(parsed.statusHome.nextStep.copyableCommand, "project:dove.init");
+  assert.equal(parsed.nextStep.copyableCommand, "project:dove.init");
+  assert.equal(parsed.statusHome.needsAttention.status, "clear");
+  assert.equal(parsed.needsAttention.status, "clear");
+  assert.deepEqual(parsed.statusHome.changes, {
+    intent: "none",
+    applied: false,
+    count: 0,
+    rollback: "not-applicable"
+  });
+  assert.deepEqual(parsed.changes, parsed.statusHome.changes);
+  assert.ok(parsed.statusHome.showMore.text);
+  assert.equal(parsed.showMore.noWriteSummary, parsed.statusHome.showMore.noWriteSummary);
   assert.ok(parsed.statusHome.currentContext);
   assert.equal(parsed.statusHome.currentContext.stateSource, "filesystem-durable-state");
   assert.equal(parsed.statusHome.currentContext.durableRoot, ".dove");
@@ -238,7 +260,14 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
     blocking: 0
   });
   assert.deepEqual(parsed.statusHome.requiredEvidence ?? [], []);
-  assert.deepEqual(parsed.statusHome.writes, { applied: false, count: 0 });
+  assert.deepEqual(parsed.statusHome.writes, {
+    applied: false,
+    count: 0,
+    writeIntent: "none",
+    rollbackEligible: "not-applicable"
+  });
+  assert.equal(parsed.statusHome.writeIntent, "none");
+  assert.equal(parsed.statusHome.rollbackEligible, "not-applicable");
   assert.equal(parsed.statusHome.detailsAvailable, true);
   assert.equal(parsed.statusHome.fullDetails.args.detail, "full");
   assert.equal(parsed.statusHome.expansion.fullDetails.args.detail, "full");
@@ -289,8 +318,12 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
     maxBuffer: 5 * 1024 * 1024
   });
   assert.equal(fullHuman.status, 0, fullHuman.stderr || fullHuman.stdout);
-  assert.match(fullHuman.stdout, /Boundary\/gap:/);
-  assert.match(fullHuman.stdout, /execution gaps: missing contract 30/);
+  assert.match(fullHuman.stdout, /^Dove: /);
+  assert.match(fullHuman.stdout, /^Next: /m);
+  assert.match(fullHuman.stdout, /^Why: /m);
+  assert.match(fullHuman.stdout, /^More: /m);
+  assert.doesNotMatch(fullHuman.stdout, /Boundary\/gap:/);
+  assert.doesNotMatch(fullHuman.stdout, /execution gaps:/);
   assert.doesNotMatch(fullHuman.stdout, /Gaps and boundaries:/);
 
   const fullMachine = spawnSync("node", [CLI, "status", root, "--full", "--json"], {
@@ -951,7 +984,14 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.query, true);
   assert.equal(result.proposalOnly, true);
   assert.equal(result.noAutoApply, true);
-  assert.deepEqual(result.writes ?? [], []);
+  assert.deepEqual(result.writes, {
+    applied: false,
+    count: 0,
+    writeIntent: "none",
+    rollbackEligible: "not-applicable"
+  });
+  assert.equal(result.writeIntent, "none");
+  assert.equal(result.rollbackEligible, "not-applicable");
   assert.equal(result.detail, "compact");
   assert.equal(result.dashboard, undefined);
   assert.equal(result.dailyHome, undefined);
@@ -1000,6 +1040,11 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   const expandedMissionDetails = expandedResult.statusHome.optionalMissionDetails;
   assert.equal(expandedMissionDetails.detail, "compact");
   assert.equal(expandedMissionDetails.missionItemsIncluded, true);
+  assert.equal(expandedMissionDetails.priorityLane.presentation, "dove-mission-priority-lane");
+  assert.equal(expandedMissionDetails.priorityLane.focus.packetId, "runtime-progress");
+  assert.equal(expandedMissionDetails.priorityLane.action.copyableCommand, "project:dove.auto --packet-id runtime-progress");
+  assert.equal(expandedMissionDetails.priorityLane.needs.includes("implementation evidence"), true);
+  assert.equal(expandedMissionDetails.priorityLane.needs.includes("provide-host-pass-result"), true);
   assert.deepEqual(expandedMissionDetails.groups.todo.items.map((item) => item.packetId), ["plain-pending", "status-packet"]);
   assert.deepEqual(expandedMissionDetails.groups.doing.items.map((item) => item.packetId), ["runtime-progress"]);
   assert.deepEqual(expandedMissionDetails.groups.blocked.items.map((item) => item.packetId), ["blocked-dependency"]);
@@ -1095,11 +1140,16 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.deepEqual(runtimeBoundaryCard.requires, ["implementation evidence", "provide-host-pass-result"]);
   assert.equal(runtimeBoundaryCard.options.some((option) => option.kind === "kill-through-status" && option.tool === "apply_dove_status_adjustments"), true);
   assert.deepEqual(fullResult.dashboard.tasks.boundaryActionCards, fullResult.boundaryActionCards);
-  const runtimeNextAction = fullResult.dailyHome.nextActions.find((card) => card.packetId === "runtime-progress");
+  const runtimeNextAction = fullResult.dailyHome.nextActions.find((card) => card.packetId === "runtime-progress" && card.kind === "recover-current-work");
   assert.ok(runtimeNextAction);
-  assert.equal(runtimeNextAction.kind, "provide-evidence");
+  assert.equal(runtimeNextAction.recoveryPrimaryKind, "provide-evidence");
   assert.equal(runtimeNextAction.command, "project:dove.auto");
+  assert.equal(runtimeNextAction.copyableCommand, "project:dove.auto --packet-id runtime-progress");
+  assert.equal(runtimeNextAction.title, "先为 runtime-progress 补真实结果：implementation evidence、provide-host-pass-result");
+  assert.equal(result.statusHome.nextStep.label, "先为 runtime-progress 补真实结果：implementation evidence、provide-host-pass-result");
+  assert.equal(result.statusHome.nextStep.copyableCommand, "project:dove.auto --packet-id runtime-progress");
   assert.equal(runtimeNextAction.rank, 1);
+  assert.ok(runtimeNextAction.relatedActionCount >= 1);
   const runtimeContinuationAction = fullResult.dailyHome.nextActions.find((card) => card.packetId === "runtime-progress" && card.kind === "continue-task");
   assert.ok(runtimeContinuationAction);
   assert.equal(runtimeContinuationAction.copyableCommand, "project:dove.auto --packet-id runtime-progress");
@@ -1114,16 +1164,38 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
     encoding: "utf8"
   });
   assert.equal(humanStatus.status, 0, humanStatus.stderr || humanStatus.stdout);
-  assert.match(humanStatus.stdout, /Dove current situation:/);
-  assert.match(humanStatus.stdout, /Current context:/);
-  assert.match(humanStatus.stdout, /Next action:/);
-  assert.match(humanStatus.stdout, /Boundary\/gap:/);
-  assert.match(humanStatus.stdout, /Required evidence:/);
-  assert.match(humanStatus.stdout, /Writes:/);
-  assert.match(humanStatus.stdout, /Expansion: use --include-mission-details or --detail missions/);
-  assert.match(humanStatus.stdout, /packet: runtime-progress/);
-  assert.match(humanStatus.stdout, /boundary: host-tool-blocked/);
-  assert.match(humanStatus.stdout, /Required evidence:/);
+  assert.match(humanStatus.stdout, /^Dove: /);
+  assert.match(humanStatus.stdout, /^Next: /m);
+  assert.match(humanStatus.stdout, /^Why: /m);
+  assert.match(humanStatus.stdout, /^More: /m);
+  assert.match(humanStatus.stdout, /project:dove.auto/);
+  assert.doesNotMatch(humanStatus.stdout, /Dove current situation:/);
+  assert.doesNotMatch(humanStatus.stdout, /Current context:/);
+  assert.doesNotMatch(humanStatus.stdout, /Boundary\/gap:/);
+  assert.doesNotMatch(humanStatus.stdout, /Required evidence:/);
+  assert.doesNotMatch(humanStatus.stdout, /Writes:/);
+  assert.doesNotMatch(humanStatus.stdout, /packet: runtime-progress/);
+  assert.doesNotMatch(humanStatus.stdout, /boundary: awaiting-host-pass/);
+  assert.doesNotMatch(humanStatus.stdout, /boundary: host-tool-blocked/);
+  assert.doesNotMatch(humanStatus.stdout, /boundary: awaiting-host-pass-result/);
+
+  const healthStatus = spawnSync("node", [CLI, "status", root, "--health"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(healthStatus.status, 0, healthStatus.stderr || healthStatus.stdout);
+  assert.match(healthStatus.stdout, /^Dove: /);
+  assert.match(healthStatus.stdout, /^Next: /m);
+  assert.match(healthStatus.stdout, /^Why: /m);
+  assert.match(healthStatus.stdout, /^More: /m);
+  assert.match(healthStatus.stdout, /健康检查|health check/);
+  assert.doesNotMatch(healthStatus.stdout, /Intent: health-check/);
+  assert.doesNotMatch(healthStatus.stdout, /Health-check required evidence:/);
+  assert.doesNotMatch(healthStatus.stdout, /backlog boundary requires:/);
+  assert.doesNotMatch(healthStatus.stdout, /boundary: host-tool-blocked/);
+  assert.doesNotMatch(healthStatus.stdout, /boundary: awaiting-host-pass-result/);
+  assert.doesNotMatch(healthStatus.stdout, /\nRequired evidence:/);
+
   assert.doesNotMatch(humanStatus.stdout, /Pre-action guidance:/);
   assert.doesNotMatch(humanStatus.stdout, /guardrails: writes require confirmation; no hidden runtime/);
   assert.doesNotMatch(humanStatus.stdout, /Next steps:/);
@@ -1132,8 +1204,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.doesNotMatch(humanStatus.stdout, /Project state:/);
   assert.doesNotMatch(humanStatus.stdout, /mission summary:/);
   assert.doesNotMatch(humanStatus.stdout, /Mission details:/);
+  assert.doesNotMatch(humanStatus.stdout, /Priority lane:/);
   assert.doesNotMatch(humanStatus.stdout, /Machine statuses:/);
-  assert.doesNotMatch(humanStatus.stdout, /runtime-progress: Runtime progress mission \[ready->in-progress\]/);
+  assert.doesNotMatch(humanStatus.stdout, /runtime-progress: Runtime progress mission \[doing\]/);
   assert.doesNotMatch(humanStatus.stdout, /deliver:/);
   assert.doesNotMatch(humanStatus.stdout, /done:/);
 
@@ -1143,13 +1216,23 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   });
   assert.equal(humanStatusWithMissions.status, 0, humanStatusWithMissions.stderr || humanStatusWithMissions.stdout);
   assert.match(humanStatusWithMissions.stdout, /Mission details:/);
+  assert.match(humanStatusWithMissions.stdout, /Priority lane:/);
+  assert.match(humanStatusWithMissions.stdout, /Queue summary: doing 1, blocked 1, todo 2, done 3/);
+  assert.match(humanStatusWithMissions.stdout, /Queue preview:/);
+  assert.match(humanStatusWithMissions.stdout, /runtime-progress: Runtime progress mission \[doing\]/);
+  assert.match(humanStatusWithMissions.stdout, /Need: .*implementation evidence.*provide-host-pass-result/);
+  assert.match(humanStatusWithMissions.stdout, /Next: .*project:dove\.auto --packet-id runtime-progress/);
   assert.match(humanStatusWithMissions.stdout, /doing: 1/);
-  assert.match(humanStatusWithMissions.stdout, /runtime-progress: Runtime progress mission \[ready->in-progress\]/);
+  assert.match(humanStatusWithMissions.stdout, /runtime-progress: Runtime progress mission \[doing\]/);
   assert.match(humanStatusWithMissions.stdout, /blocked: 1/);
-  assert.match(humanStatusWithMissions.stdout, /blocked-dependency: Blocked by unresolved dependency \[ready->blocked\]/);
+  assert.match(humanStatusWithMissions.stdout, /blocked-dependency: Blocked by unresolved dependency \[blocked\]/);
+  assert.match(humanStatusWithMissions.stdout, /blocked: waiting on missing-dependency/);
   assert.match(humanStatusWithMissions.stdout, /todo: 2/);
-  assert.match(humanStatusWithMissions.stdout, /plain-pending: Plain pending mission \[pending->ready\]/);
-  assert.match(humanStatusWithMissions.stdout, /done: 3/);
+  assert.match(humanStatusWithMissions.stdout, /plain-pending: Plain pending mission \[todo\]/);
+  assert.match(humanStatusWithMissions.stdout, /done: 3 \(\+3 more\)/);
+  assert.match(humanStatusWithMissions.stdout, /More detail: use --full --json for the complete mission list\./);
+  assert.doesNotMatch(humanStatusWithMissions.stdout, /boundary: awaiting-host-pass/);
+  assert.doesNotMatch(humanStatusWithMissions.stdout, /unresolved-dependencies:/);
 
   for (const extraArgs of [["--include-mission-details"], ["--detail", "missions"], ["--detail", "mission-details"], ["--detail", "mission-list"]]) {
     const expandedHumanStatus = spawnSync("node", [CLI, "status", root, ...extraArgs], {
@@ -1158,7 +1241,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
     });
     assert.equal(expandedHumanStatus.status, 0, expandedHumanStatus.stderr || expandedHumanStatus.stdout);
     assert.match(expandedHumanStatus.stdout, /Mission details:/);
-    assert.match(expandedHumanStatus.stdout, /runtime-progress: Runtime progress mission \[ready->in-progress\]/);
+    assert.match(expandedHumanStatus.stdout, /runtime-progress: Runtime progress mission \[doing\]/);
   }
 
   const beforeStatusline = snapshotArtifacts(root, statusWatchedArtifacts);
@@ -1346,13 +1429,17 @@ test("queryDoveStatus routes executable workflow gaps before mission details", (
   assert.deepEqual(fullResult.dailyHome.executionGaps.missingContractTaskIds, ["aa-missing-contract"]);
   assert.deepEqual(fullResult.dailyHome.executionGaps.missingMaterialTaskIds, ["bb-missing-material"]);
   assert.deepEqual(fullResult.dailyHome.executionGaps.verificationGapTaskIds, ["cc-verification-gap"]);
-  const fullGapActions = fullResult.dailyHome.nextActions.slice(0, 3);
-  assert.deepEqual(fullGapActions.map((card) => card.kind), [
+  const recoveryAction = fullResult.dailyHome.nextActions[0];
+  assert.equal(recoveryAction.kind, "recover-current-work");
+  assert.equal(recoveryAction.recoveryPrimaryKind, "missing-executable-contract");
+  assert.equal(recoveryAction.packetId, "aa-missing-contract");
+  assert.deepEqual(recoveryAction.relatedActionKinds, [
     "missing-executable-contract",
     "missing-required-materials",
     "verification-failed"
   ]);
-  assert.deepEqual(fullGapActions.map((card) => card.packetId), [
+  assert.equal(recoveryAction.relatedActionCount, 3);
+  assert.deepEqual(recoveryAction.detail.candidates.map((card) => card.packetId), [
     "aa-missing-contract",
     "bb-missing-material",
     "cc-verification-gap"
@@ -1361,10 +1448,10 @@ test("queryDoveStatus routes executable workflow gaps before mission details", (
   assert.equal(result.statusHome.nextSteps.primary.command, "project:dove.mission");
   assert.equal(result.statusHome.nextSteps.primary.nextRole, "planner");
   assert.deepEqual(result.statusHome.nextSteps.primary.evidenceRequired, ["executionContract"]);
-  assert.equal(fullGapActions[1].nextRole, "planner");
-  assert.deepEqual(fullGapActions[1].requiredMaterials, ["sources/cvpr-template.md"]);
-  assert.equal(fullGapActions[2].nextRole, "reviewer");
-  assert.deepEqual(fullGapActions[2].criteriaCoverage.missing, ["Verification gap criterion"]);
+  assert.equal(recoveryAction.detail.candidates[1].nextRole, "planner");
+  assert.deepEqual(recoveryAction.detail.candidates[1].requiredMaterials, ["sources/cvpr-template.md"]);
+  assert.equal(recoveryAction.detail.candidates[2].nextRole, "reviewer");
+  assert.deepEqual(recoveryAction.detail.candidates[2].criteriaCoverage.missing, ["Verification gap criterion"]);
   assert.equal("optionalMissionDetails" in result.statusHome, false);
   assert.equal("preActionGuidance" in result.statusHome, false);
   assert.equal(fullResult.preActionGuidance.mode, "read-only-guidance");
@@ -1373,6 +1460,65 @@ test("queryDoveStatus routes executable workflow gaps before mission details", (
   assert.deepEqual(fullResult.preActionGuidance.workflowFrame.executionGuidance.missingMaterialTaskIds, ["bb-missing-material"]);
   assert.deepEqual(fullResult.preActionGuidance.workflowFrame.executionGuidance.verificationGapTaskIds, ["cc-verification-gap"]);
   assert.equal(fullResult.preActionGuidance.lessonRecall.readOnly, true);
+});
+
+test("CLI status omits fallback status command for material recovery", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+
+  writeTaskPacket(root, {
+    id: "dove-global-init",
+    title: "Dove goal",
+    parentId: null,
+    rootId: "dove-global-init",
+    level: 0,
+    creatorKind: "user",
+    stage: "plan",
+    domain: "engineering",
+    status: "ready",
+    lifecycleStatus: "ready",
+    dependencies: [],
+    blockedBy: [],
+    nextAction: "project:dove.status"
+  });
+  writeTaskPacket(root, {
+    id: "material-only",
+    title: "Material only task",
+    summary: "The operator must provide source material before execution.",
+    parentId: "dove-global-init",
+    rootId: "dove-global-init",
+    level: 3,
+    creatorKind: "user",
+    stage: "execute",
+    domain: "engineering",
+    status: "ready",
+    lifecycleStatus: "ready",
+    dependencies: [],
+    blockedBy: [],
+    executionContract: statusExecutionContract({
+      materials: { requiredInputs: ["sources/template.md"] },
+      convergence: { criteria: ["Material criterion"] }
+    }),
+    nextAction: "project:dove.status"
+  });
+
+  const result = queryDoveStatus(root, { domain: "engineering" });
+  const fullResult = queryDoveStatus(root, { domain: "engineering", detail: "full" });
+  const recoveryAction = fullResult.dailyHome.nextActions[0];
+  assert.equal(recoveryAction.kind, "recover-current-work");
+  assert.equal(recoveryAction.recoveryPrimaryKind, "missing-required-materials");
+  assert.equal(recoveryAction.command, null);
+  assert.equal(recoveryAction.copyableCommand, null);
+  assert.equal(result.statusHome.nextStep.label, "先为 material-only 补材料：sources/template.md");
+  assert.equal("copyableCommand" in result.statusHome.nextStep, false);
+
+  const humanStatus = spawnSync("node", [CLI, "status", root], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(humanStatus.status, 0, humanStatus.stderr || humanStatus.stdout);
+  assert.match(humanStatus.stdout, /^Next: 先为 material-only 补材料：sources\/template\.md$/m);
+  assert.doesNotMatch(humanStatus.stdout, /\[project:dove\.status\]/);
 });
 
 test("queryDoveMission frames an engineering mission without writing artifacts", () => {
@@ -1931,7 +2077,14 @@ test("CLI Dove orchestrate, mission, status, audit, and return commands expose p
   assert.equal(statusPayload.mode, "dove-status-query");
   assert.equal(statusPayload.detail, "compact");
   assert.equal(statusPayload.proposalOnly, true);
-  assert.deepEqual(statusPayload.writes ?? [], []);
+  assert.deepEqual(statusPayload.writes, {
+    applied: false,
+    count: 0,
+    writeIntent: "none",
+    rollbackEligible: "not-applicable"
+  });
+  assert.equal(statusPayload.writeIntent, "none");
+  assert.equal(statusPayload.rollbackEligible, "not-applicable");
   assert.equal(statusPayload.current.domain, "engineering");
   assert.equal(statusPayload.currentContext.domain, "engineering");
   assert.equal(statusPayload.dashboard, undefined);

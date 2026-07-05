@@ -47,6 +47,7 @@ import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { readTaskPacketCatalog } from "./task-packets.mjs";
 import { assertGovernanceMutationRegistered } from "./workspace.mjs";
 import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
+import { buildContractHealth, buildOperatorRoute, buildOperatorUnblock, normalizeStatusIntent } from "./operator-ux.mjs";
 
 function cloneFallback(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
@@ -1170,6 +1171,182 @@ function rankStatusActionCards(cards) {
     });
 }
 
+const STATUS_RECOVERY_CARD_KINDS = new Set([
+  "reconcile-completion-consistency",
+  "boundary-resume",
+  "provide-evidence",
+  "blocked-unblock",
+  "missing-executable-contract",
+  "missing-required-materials",
+  "verification-failed",
+  "review-needed"
+]);
+
+function statusCardNeedsRecovery(card) {
+  return STATUS_RECOVERY_CARD_KINDS.has(card?.kind);
+}
+
+function recoveryCandidateDetail(card) {
+  if (!card) {
+    return null;
+  }
+  return compactStatusObject({
+    kind: card.kind,
+    title: card.title,
+    command: card.command,
+    copyableCommand: card.copyableCommand,
+    packetId: card.packetId ?? null,
+    nextRole: card.nextRole ?? null,
+    boundaryType: card.boundaryType ?? card.boundary?.type ?? null,
+    evidenceRequired: normalizeStringArray(card.evidenceRequired).slice(0, 8),
+    doneCriteria: normalizeStringArray(card.doneCriteria).slice(0, 8),
+    requiredMaterials: normalizeStringArray(card.requiredMaterials).slice(0, 8),
+    criteriaCoverage: card.criteriaCoverage ? {
+      complete: Boolean(card.criteriaCoverage.complete),
+      missing: normalizeStringArray(card.criteriaCoverage.missing).slice(0, 8)
+    } : null
+  });
+}
+
+function statusCardIsStatusTriage(card, command) {
+  return statusCardNeedsRecovery(card) && command === "project:dove.status";
+}
+
+function statusCardPublicCommand(card, fallback = null) {
+  const command = typeof card?.command === "string" && card.command.trim() ? card.command.trim() : null;
+  if (!command) {
+    return fallback;
+  }
+  const publicCommand = toPublicDoveCommand(command, fallback);
+  if (!publicCommand || statusCardIsStatusTriage(card, publicCommand)) {
+    return fallback;
+  }
+  return publicCommand;
+}
+
+function statusCardCopyableCommand(card, fallback = null) {
+  const explicit = typeof card?.copyableCommand === "string" && card.copyableCommand.trim() ? card.copyableCommand.trim() : null;
+  if (explicit && !statusCardIsStatusTriage(card, explicit)) {
+    return explicit;
+  }
+  const command = statusCardPublicCommand(card, null);
+  if (command) {
+    if (card?.packetId && /^project:dove\.(mission|auto|operator|source|note|figure|experience|draft|review|review-loop|rebuttal)$/.test(command)) {
+      return statusCopyableCommand(command, card.packetId);
+    }
+    return command;
+  }
+  const firstAction = typeof card?.firstAction === "string" && card.firstAction.trim() ? card.firstAction.trim() : null;
+  if (firstAction && (firstAction.startsWith("project:dove.") || firstAction.startsWith("dove."))) {
+    const publicFirstAction = toPublicDoveCommand(firstAction, null);
+    return publicFirstAction && !statusCardIsStatusTriage(card, publicFirstAction) ? publicFirstAction : fallback;
+  }
+  return fallback;
+}
+
+function statusShortText(value, maxLength = 90) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) {
+    return "";
+  }
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+function statusRecoverySubject(card) {
+  return statusShortText(card?.packetId ?? card?.title ?? card?.label ?? card?.kind, 72);
+}
+
+function statusRecoveryRequirement(card, responseLanguage = "zh") {
+  const items = mergeStringArrays(
+    card?.requiredMaterials,
+    card?.evidenceRequired,
+    card?.requiredInputs,
+    card?.requires,
+    card?.operatorUnblock?.needs,
+    card?.operatorUnblock?.requiredEvidence
+  ).map((item) => statusShortText(item, 52)).filter(Boolean).slice(0, 3);
+  if (items.length === 0) {
+    return "";
+  }
+  return items.join(responseLanguage === "en" ? ", " : "、");
+}
+
+function statusRecoveryLabel(responseLanguage, zhAction, enAction, subject, requirement) {
+  if (responseLanguage === "en") {
+    const base = subject ? `First ${enAction} for ${subject}` : `First ${enAction}`;
+    return requirement ? `${base}: ${requirement}` : base;
+  }
+  const base = subject ? `先为 ${subject} ${zhAction}` : `先${zhAction}`;
+  return requirement ? `${base}：${requirement}` : base;
+}
+
+function recoveryPathTitle(primaryCard, responseLanguage = "zh") {
+  const kind = primaryCard?.kind;
+  const subject = statusRecoverySubject(primaryCard);
+  const requirement = statusRecoveryRequirement(primaryCard, responseLanguage);
+  if (kind === "missing-executable-contract") {
+    return statusRecoveryLabel(responseLanguage, "补可执行合同", "add the executable contract", subject, requirement);
+  }
+  if (kind === "missing-required-materials") {
+    return statusRecoveryLabel(responseLanguage, "补材料", "provide the missing materials", subject, requirement);
+  }
+  if (kind === "verification-failed") {
+    return statusRecoveryLabel(responseLanguage, "补验证证据", "provide verification evidence", subject, requirement);
+  }
+  if (kind === "review-needed") {
+    return statusRecoveryLabel(responseLanguage, "送审或导入审查结果", "send for review or import the review result", subject, requirement);
+  }
+  if (kind === "reconcile-completion-consistency") {
+    return statusRecoveryLabel(responseLanguage, "核对父任务和 checklist 子任务状态", "reconcile parent and checklist child status", subject, requirement);
+  }
+  if (kind === "provide-evidence" || kind === "boundary-resume" || kind === "blocked-unblock") {
+    return statusRecoveryLabel(responseLanguage, "补真实结果", "provide the real result", subject, requirement);
+  }
+  return statusRecoveryLabel(responseLanguage, "处理当前阻塞", "handle the current blocker", subject, requirement);
+}
+
+function buildRecoveryPathCard(primaryCard, recoveryCards = [], responseLanguage = "zh") {
+  if (!primaryCard) {
+    return null;
+  }
+  const command = statusCardPublicCommand(primaryCard);
+  const action = statusCardCopyableCommand(primaryCard);
+  const relatedCards = recoveryCards.filter((card) => card && card !== primaryCard);
+  return statusActionBase({
+    ...primaryCard,
+    priority: Math.min(primaryCard.priority ?? 10, 9),
+    kind: "recover-current-work",
+    title: recoveryPathTitle(primaryCard, responseLanguage),
+    why: primaryCard.operatorUnblock?.blockedSummary ?? primaryCard.why ?? primaryCard.operatorUnblock?.nextOperatorAction,
+    command,
+    firstAction: action,
+    copyableCommand: action,
+    recoveryPrimaryKind: primaryCard.kind,
+    relatedActionCount: recoveryCards.length,
+    relatedActionKinds: Array.from(new Set(recoveryCards.map((card) => card?.kind).filter(Boolean))).slice(0, 8),
+    detail: compactStatusObject({
+      primary: recoveryCandidateDetail(primaryCard),
+      related: relatedCards.slice(0, 8).map(recoveryCandidateDetail),
+      candidates: recoveryCards.slice(0, 12).map(recoveryCandidateDetail)
+    })
+  });
+}
+
+function collapseStatusRecoveryCards(cards, responseLanguage = "zh") {
+  const recoveryCards = cards.filter(statusCardNeedsRecovery);
+  if (recoveryCards.length === 0) {
+    return cards;
+  }
+  const primaryRecovery = recoveryCards
+    .slice()
+    .sort((left, right) => (left.priority ?? 100) - (right.priority ?? 100) || String(left.title ?? "").localeCompare(String(right.title ?? "")))[0];
+  const collapsed = buildRecoveryPathCard(primaryRecovery, recoveryCards, responseLanguage);
+  return [
+    ...cards.filter((card) => !statusCardNeedsRecovery(card)),
+    collapsed
+  ].filter(Boolean);
+}
+
 function completionConsistencyFindings(completionConsistency = {}) {
   return Array.isArray(completionConsistency.findings) ? completionConsistency.findings : [];
 }
@@ -1445,15 +1622,32 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, visib
       continue;
     }
     const kind = action.kind === "send-to-review" ? "review-needed" : action.kind === "provide-evidence-or-result" ? "provide-evidence" : "boundary-resume";
+    const operatorUnblock = buildStatusOperatorUnblock({
+      kind,
+      reason: action.reason,
+      boundaryType: action.boundaryType,
+      boundary: {
+        id: action.boundaryId,
+        type: action.boundaryType,
+        reason: action.reason,
+        requiredInputs: action.requiredInputs,
+        requiredActions: action.requiredActions,
+        command: action.command
+      },
+      requiredActions: action.requiredActions,
+      requiredEvidence: action.requires,
+      nextAction: action.command
+    }, responseLanguage);
     pushCard(`boundary:${action.boundaryId}`, {
       priority: 10,
       kind,
       title: doveText(responseLanguage, "statusHomeBoundaryTitle", { title: action.title ?? action.packetId }),
-      why: doveText(responseLanguage, "statusHomeBoundaryWhy", { reason: action.reason }),
+      why: operatorUnblock?.blockedSummary ?? doveText(responseLanguage, "statusHomeBoundaryWhy", { reason: action.reason }),
       packetId: action.packetId,
       command: action.command,
-      firstAction: action.label,
-      evidenceRequired: action.requires,
+      firstAction: operatorUnblock?.nextOperatorAction ?? action.label,
+      evidenceRequired: operatorUnblock?.requiredEvidence?.length ? operatorUnblock.requiredEvidence : action.requires,
+      operatorUnblock,
       boundary: {
         id: action.boundaryId,
         type: action.boundaryType,
@@ -1560,7 +1754,7 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, visib
     });
   }
   pushCard("cleanup-archive", buildCleanupArchiveCard(visibleTasks, responseLanguage));
-  return rankStatusActionCards(cards);
+  return rankStatusActionCards(collapseStatusRecoveryCards(cards, responseLanguage));
 }
 
 function buildStatusAdjustmentCard(task, recommendedStatus, responseLanguage = "zh") {
@@ -1609,12 +1803,13 @@ function buildRecentExecutionReceipts(tasks = []) {
 }
 
 function buildDailyHome({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, executionGaps, archivedHiddenCount = 0, responseLanguage = "zh" }) {
+  const nextActions = buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, responseLanguage });
   return {
     presentation: "dove-status-home",
     liveContextFirst: true,
-    nextActions: buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, visibleTasks, review, boundaryActionCards, completionConsistency, responseLanguage }),
+    nextActions,
     recentExecutionReceipts: buildRecentExecutionReceipts(visibleTasks),
-    missionList: buildStatusMissionList(visibleTasks, { archivedHiddenCount }),
+    missionList: buildStatusMissionList(visibleTasks, { archivedHiddenCount, nextActions, responseLanguage }),
     completionConsistency,
     executionGaps,
     boundaryActionCards,
@@ -1863,6 +2058,19 @@ function compactStatusObject(fields) {
   }));
 }
 
+function statusNoWriteTelemetry() {
+  return {
+    applied: false,
+    count: 0,
+    writeIntent: "none",
+    rollbackEligible: "not-applicable"
+  };
+}
+
+function buildStatusOperatorUnblock(data, responseLanguage = "zh") {
+  return buildOperatorUnblock({ responseLanguage, ...data }, responseLanguage);
+}
+
 function publicStatusBoundaryType(value) {
   const type = String(value ?? "").trim();
   if (!type) {
@@ -1883,33 +2091,65 @@ function publicStatusBoundaryType(value) {
   return type;
 }
 
-function compactStatusBoundary(boundary) {
+function compactStatusBoundary(boundary, responseLanguage = "zh") {
   if (!boundary || typeof boundary !== "object" || Array.isArray(boundary)) {
     return null;
   }
   const implementationBoundaryType = String(boundary.type ?? boundary.boundaryType ?? "").trim() || null;
   const type = publicStatusBoundaryType(implementationBoundaryType);
+  const requiredInputs = normalizeStringArray(boundary.requiredInputs);
+  const requiredActions = normalizeStringArray(boundary.requiredActions);
+  const command = boundary.command ?? boundary.nextAction ?? null;
+  const operatorUnblock = buildStatusOperatorUnblock({
+    reason: boundary.reason,
+    boundaryType: type ?? implementationBoundaryType,
+    boundary: {
+      type: type ?? implementationBoundaryType,
+      reason: boundary.reason,
+      requiredInputs,
+      requiredActions,
+      command
+    },
+    requiredActions,
+    requiredEvidence: normalizeStringArray(boundary.requiredEvidence),
+    nextAction: command
+  }, responseLanguage);
   return compactStatusObject({
     id: boundary.id ?? boundary.boundaryId ?? null,
     type,
     status: boundary.status ?? null,
     packetId: boundary.packetId ?? null,
-    summary: boundary.summary ?? null,
-    requiredInputs: normalizeStringArray(boundary.requiredInputs),
-    requiredActions: normalizeStringArray(boundary.requiredActions),
-    command: boundary.command ?? boundary.nextAction ?? null,
+    summary: boundary.summary ?? operatorUnblock?.blockedSummary ?? null,
+    requiredInputs,
+    command,
     ownerRole: boundary.ownerRole ?? null,
     nextRole: boundary.nextRole ?? null,
-    detail: implementationBoundaryType && type && implementationBoundaryType !== type ? { implementationBoundaryType } : null
+    operatorUnblock,
+    detail: compactStatusObject({
+      implementationBoundaryType: implementationBoundaryType && type && implementationBoundaryType !== type ? implementationBoundaryType : null,
+      implementationReason: boundary.reason ?? null,
+      requiredActions
+    })
   });
 }
 
-function compactStatusActionCard(card) {
+function compactStatusActionCard(card, responseLanguage = "zh") {
   if (!card || typeof card !== "object") {
     return card;
   }
-  const boundary = compactStatusBoundary(card.boundary);
+  const boundary = compactStatusBoundary(card.boundary, responseLanguage);
   const boundaryType = publicStatusBoundaryType(card.boundaryType ?? card.boundary?.type);
+  const requiredActions = normalizeStringArray(card.requiredActions ?? card.boundary?.requiredActions);
+  const requires = normalizeStringArray(card.requires);
+  const operatorUnblock = buildStatusOperatorUnblock({
+    kind: card.kind,
+    reason: card.reason,
+    boundaryType,
+    boundary: card.boundary,
+    requiredActions,
+    requiredEvidence: mergeStringArrays(card.evidenceRequired, card.requiredMaterials, requires),
+    nextAction: card.copyableCommand ?? card.firstAction ?? card.command
+  }, responseLanguage) ?? boundary?.operatorUnblock ?? null;
   return compactStatusObject({
     presentation: card.presentation,
     proposalOnly: card.proposalOnly,
@@ -1917,6 +2157,9 @@ function compactStatusActionCard(card) {
     rank: card.rank,
     priority: card.priority,
     kind: card.kind,
+    recoveryPrimaryKind: card.recoveryPrimaryKind,
+    relatedActionCount: card.relatedActionCount,
+    relatedActionKinds: normalizeStringArray(card.relatedActionKinds).slice(0, 8),
     title: card.title,
     why: card.why,
     packetId: card.packetId,
@@ -1943,12 +2186,15 @@ function compactStatusActionCard(card) {
     boundaryId: card.boundaryId ?? card.boundary?.id ?? null,
     summary: card.summary ?? card.boundary?.summary ?? null,
     requiredInputs: normalizeStringArray(card.requiredInputs ?? card.boundary?.requiredInputs).slice(0, 5),
-    requiredActions: normalizeStringArray(card.requiredActions ?? card.boundary?.requiredActions).slice(0, 5),
     ownerRole: card.ownerRole ?? card.boundary?.ownerRole ?? null,
     nextRole: card.nextRole ?? card.boundary?.nextRole ?? null,
     boundaryType,
     boundary,
-    requires: normalizeStringArray(card.requires).slice(0, 5)
+    operatorUnblock,
+    detail: compactStatusObject({
+      requiredActions: requiredActions.slice(0, 5),
+      requires: requires.slice(0, 5)
+    })
   });
 }
 
@@ -1992,7 +2238,7 @@ function compactStatusAdjustmentContract(contract = {}, options = {}) {
     };
   }
   const shownItems = items.slice(0, STATUS_ADJUSTMENT_PREVIEW_LIMIT).map(compactStatusAdjustmentItem);
-  const adjustmentCards = Array.isArray(contract.adjustmentCards) ? contract.adjustmentCards.slice(0, STATUS_ADJUSTMENT_PREVIEW_LIMIT).map(compactStatusActionCard) : [];
+  const adjustmentCards = Array.isArray(contract.adjustmentCards) ? contract.adjustmentCards.slice(0, STATUS_ADJUSTMENT_PREVIEW_LIMIT).map((card) => compactStatusActionCard(card, contract.responseLanguage ?? "zh")) : [];
   return {
     proposalOnly: contract.proposalOnly,
     noAutoApply: contract.noAutoApply,
@@ -2138,11 +2384,11 @@ function compactStatusRuntimeContinuation(value) {
   });
 }
 
-function compactStatusBoundaryFromAction(action) {
+function compactStatusBoundaryFromAction(action, responseLanguage = "zh") {
   if (!action) {
     return null;
   }
-  return compactStatusBoundary(action.boundary) ?? compactStatusBoundary({
+  return compactStatusBoundary(action.boundary, responseLanguage) ?? compactStatusBoundary({
     id: action.boundaryId,
     boundaryType: action.boundaryType,
     packetId: action.packetId,
@@ -2152,7 +2398,7 @@ function compactStatusBoundaryFromAction(action) {
     command: action.command,
     ownerRole: action.ownerRole,
     nextRole: action.nextRole
-  });
+  }, responseLanguage);
 }
 
 function compactStatusRequiredEvidence({ primaryStep, boundary, boundaryActionCards, executionGaps }) {
@@ -2169,10 +2415,132 @@ function compactStatusRequiredEvidence({ primaryStep, boundary, boundaryActionCa
   ).slice(0, 12);
 }
 
+function buildStatusIntentPrimaryAction(statusIntent, { gapStatus, executionCounts, boundaryActionCards, responseLanguage = "zh" }) {
+  if (statusIntent === "project-status") {
+    return null;
+  }
+  const contractTest = statusIntent === "contract-test";
+  return compactStatusObject({
+    presentation: "dove-status-intent-card",
+    kind: statusIntent,
+    title: statusInlineText(responseLanguage, contractTest ? "Dove contract 检查" : "Dove 健康检查", contractTest ? "Dove contract check" : "Dove health check"),
+    why: statusInlineText(responseLanguage, contractTest ? "当前请求是在检查 Dove compact contract 和工具面，不把项目 backlog 当作主下一步。" : "当前请求是在检查 Dove 当前健康状态，不把项目 backlog 当作主下一步。", contractTest ? "This request checks the Dove compact contract and tool surface, so project backlog is not the primary next step." : "This request checks Dove health, so project backlog is not the primary next step."),
+    command: "query_dove_status",
+    firstAction: `query_dove_status intent: ${statusIntent}`,
+    evidenceRequired: [],
+    healthSummary: {
+      gapStatus,
+      boundaryCount: boundaryActionCards.length,
+      blockingExecutionGapCount: executionCounts.blocking ?? 0
+    }
+  });
+}
+
+function buildHumanNextStep(card, responseLanguage = "zh") {
+  if (!card) {
+    return compactStatusObject({
+      label: statusInlineText(responseLanguage, "现在没有必做动作", "No required action right now"),
+      why: statusInlineText(responseLanguage, "Dove 没有发现需要立刻处理的阻塞。", "Dove did not find an immediate blocker.")
+    });
+  }
+  const command = statusCardPublicCommand(card);
+  const copyableCommand = statusCardCopyableCommand(card);
+  return compactStatusObject({
+    label: card.title ?? card.label ?? card.kind,
+    why: card.operatorUnblock?.operatorAction ?? card.operatorUnblock?.nextOperatorAction ?? card.why ?? card.operatorUnblock?.summary ?? card.operatorUnblock?.blockedSummary,
+    command,
+    copyableCommand,
+    kind: card.kind,
+    packetId: card.packetId,
+    confirmationRequired: card.confirmationRequired ?? true,
+    evidenceRequired: normalizeStringArray(card.evidenceRequired).slice(0, 8),
+    doneCriteria: normalizeStringArray(card.doneCriteria).slice(0, 8),
+    unblocksCount: card.relatedActionCount
+  });
+}
+
+function buildHumanNeedsAttention({ gapStatus, primaryStep, boundary, blockers, readErrors, executionCounts, projectBacklogRequiredEvidence, responseLanguage = "zh" }) {
+  const operatorUnblock = primaryStep?.operatorUnblock ?? boundary?.operatorUnblock ?? null;
+  const needs = mergeStringArrays(
+    primaryStep?.evidenceRequired,
+    operatorUnblock?.needs,
+    operatorUnblock?.requiredEvidence,
+    boundary?.requiredInputs,
+    projectBacklogRequiredEvidence
+  ).slice(0, 8);
+  if (gapStatus !== "blocked") {
+    return compactStatusObject({
+      status: "clear",
+      summary: statusInlineText(responseLanguage, "当前没有明显阻塞。", "No obvious blocker right now."),
+      needs
+    });
+  }
+  const summary = operatorUnblock?.summary
+    ?? operatorUnblock?.blockedSummary
+    ?? boundary?.summary
+    ?? (readErrors.length > 0
+      ? statusInlineText(responseLanguage, "Dove 读状态时遇到文件问题。", "Dove hit a file read problem while checking status.")
+      : null)
+    ?? ((executionCounts.blocking ?? 0) > 0
+      ? statusInlineText(responseLanguage, "Dove 需要先补齐一个执行前提。", "Dove needs one execution prerequisite before continuing.")
+      : null)
+    ?? (blockers.length > 0
+      ? statusInlineText(responseLanguage, "Dove 发现当前工作有阻塞。", "Dove found a blocker in the current work.")
+      : statusInlineText(responseLanguage, "Dove 需要你先处理一个阻塞。", "Dove needs one blocker handled first."));
+  return compactStatusObject({
+    status: "blocked",
+    summary,
+    why: operatorUnblock?.why ?? operatorUnblock?.cannotContinueBecause ?? primaryStep?.why,
+    operatorAction: operatorUnblock?.operatorAction ?? operatorUnblock?.nextOperatorAction ?? primaryStep?.firstAction,
+    needs
+  });
+}
+
+function buildHumanChanges(writes = statusNoWriteTelemetry()) {
+  const writeIntent = writes.writeIntent ?? (writes.applied ? "applied" : "none");
+  return compactStatusObject({
+    intent: writeIntent,
+    applied: writes.applied === true,
+    count: writes.count ?? 0,
+    rollback: writes.rollbackEligible ?? (writeIntent === "none" ? "not-applicable" : "unverified")
+  });
+}
+
+function buildHumanShowMore({ expansions, missionList, statusAdjustmentContract, writes, responseLanguage = "zh" }) {
+  const writeIntent = writes.writeIntent ?? (writes.applied ? "applied" : "none");
+  return compactStatusObject({
+    text: statusInlineText(responseLanguage, "用 --missions 看任务细节；用 --full --json 看完整治理状态。", "Use --missions for task details; use --full --json for the full governance state."),
+    noWriteSummary: statusInlineText(responseLanguage, `本次查询没有写入：intent ${writeIntent}; rollback ${writes.rollbackEligible ?? "not-applicable"}。`, `This query made no writes: intent ${writeIntent}; rollback ${writes.rollbackEligible ?? "not-applicable"}.`),
+    missionDetails: expansions.missionDetails,
+    fullDetails: expansions.fullDetails,
+    statusAdjustments: statusAdjustmentContract.statusAdjustmentItemsIncluded || statusAdjustmentContract.itemCount > 0 ? expansions.statusAdjustments : null,
+    missionDetailsAvailable: Boolean(missionList.detailsAvailable ?? missionList.itemCount ?? missionList.missionItemsIncluded),
+    statusAdjustmentsAvailable: Boolean(statusAdjustmentContract.detailsAvailable ?? statusAdjustmentContract.itemCount)
+  });
+}
+
+function buildHumanStatusHeadline({ statusIntent, gapStatus, nextStep, needsAttention, responseLanguage = "zh" }) {
+  if (statusIntent === "health-check") {
+    return statusInlineText(responseLanguage, "Dove 健康检查完成；这次只是检查系统状态，没有写入。", "Dove health check completed; this only inspected system state and made no writes.");
+  }
+  if (statusIntent === "contract-test") {
+    return statusInlineText(responseLanguage, "Dove compact contract 检查完成；默认工具面和 full/debug 展开可用。", "Dove compact contract check completed; default tool surface and full/debug expansion are available.");
+  }
+  if (gapStatus === "blocked") {
+    return needsAttention?.summary ?? statusInlineText(responseLanguage, "Dove 正在等待你先处理一个阻塞。", "Dove is waiting for one blocker to be handled first.");
+  }
+  if (nextStep?.label) {
+    return statusInlineText(responseLanguage, `Dove 可以继续；下一步是：${nextStep.label}`, `Dove can continue; next step: ${nextStep.label}`);
+  }
+  return statusInlineText(responseLanguage, "Dove 当前没有明显阻塞。", "Dove has no obvious blocker right now.");
+}
+
 function buildCompactStatusHome({ result, missionList, nextActions, boundaryActionCards, statusAdjustmentContract, args }) {
   const summary = result.projectSummary ?? {};
   const current = result.current ?? {};
   const dashboard = result.dashboard ?? {};
+  const responseLanguage = result.responseLanguage ?? "zh";
+  const statusIntent = normalizeStatusIntent(args.intent ?? result.intent);
   const readErrors = Array.isArray(result.diagnostics?.readErrors) ? result.diagnostics.readErrors : [];
   const blockers = Array.isArray(dashboard.blockers) ? dashboard.blockers : [];
   const runtimeContinuation = compactStatusRuntimeContinuation(dashboard.runtime?.continuation);
@@ -2189,20 +2557,52 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
     readyBuilder: executionGaps.counts?.readyBuilder ?? 0,
     blocking: executionGaps.counts?.blocking ?? 0
   };
-  const primaryStep = nextActions[0] ?? null;
-  const boundary = compactStatusBoundaryFromAction(primaryStep) ?? compactStatusBoundaryFromAction(boundaryActionCards[0]);
-  const boundaryType = boundary?.type ?? primaryStep?.boundaryType ?? boundaryActionCards[0]?.boundaryType ?? null;
-  const requiredEvidence = compactStatusRequiredEvidence({ primaryStep, boundary, boundaryActionCards, executionGaps });
   const gapStatus = readErrors.length > 0 || blockers.length > 0 || completionConsistency.status === "needs-reconciliation" || executionCounts.blocking > 0 || boundaryActionCards.length > 0 ? "blocked" : "clear";
+  const projectBacklogNextAction = nextActions[0] ?? null;
+  const intentPrimaryAction = buildStatusIntentPrimaryAction(statusIntent, { gapStatus, executionCounts, boundaryActionCards, responseLanguage });
+  const primaryStep = statusIntent === "project-status" ? projectBacklogNextAction : intentPrimaryAction;
+  const boundarySourceAction = projectBacklogNextAction ?? boundaryActionCards[0] ?? null;
+  const boundary = compactStatusBoundaryFromAction(boundarySourceAction, responseLanguage) ?? compactStatusBoundaryFromAction(boundaryActionCards[0], responseLanguage);
+  const boundaryType = boundary?.type ?? boundarySourceAction?.boundaryType ?? boundaryActionCards[0]?.boundaryType ?? null;
+  const requiredEvidence = statusIntent === "project-status"
+    ? compactStatusRequiredEvidence({ primaryStep, boundary, boundaryActionCards, executionGaps })
+    : normalizeStringArray(primaryStep?.evidenceRequired);
+  const projectBacklogRequiredEvidence = statusIntent === "project-status"
+    ? []
+    : compactStatusRequiredEvidence({ primaryStep: projectBacklogNextAction, boundary, boundaryActionCards, executionGaps });
+  const operatorRoute = buildOperatorRoute("query_dove_status", { ...args, intent: statusIntent }, { responseLanguage, statusHome: { intent: statusIntent } }, responseLanguage);
+  const operatorUnblock = statusIntent === "project-status" ? (primaryStep?.operatorUnblock ?? boundary?.operatorUnblock ?? null) : null;
+  const contractHealth = ["health-check", "contract-test"].includes(statusIntent) ? buildContractHealth({ responseLanguage }, responseLanguage) : null;
+  const writes = statusNoWriteTelemetry();
   const expansions = compactStatusObject({
     fullDetails: { tool: "query_dove_status", args: compactStatusDetailArgs(args) },
     missionDetails: { tool: "query_dove_status", args: compactStatusMissionDetailArgs(args) },
     statusAdjustments: { tool: "query_dove_status", args: compactStatusAdjustmentPreviewArgs(args) }
   });
+  const nextStep = buildHumanNextStep(primaryStep, responseLanguage);
+  const needsAttention = buildHumanNeedsAttention({
+    gapStatus,
+    primaryStep,
+    boundary,
+    blockers,
+    readErrors,
+    executionCounts,
+    projectBacklogRequiredEvidence,
+    responseLanguage
+  });
+  const changes = buildHumanChanges(writes);
+  const showMore = buildHumanShowMore({ expansions, missionList, statusAdjustmentContract, writes, responseLanguage });
+  const headline = buildHumanStatusHeadline({ statusIntent, gapStatus, nextStep, needsAttention, responseLanguage });
   return compactStatusObject({
     presentation: "dove-project-situation-home",
     detail: "compact",
     liveContextFirst: true,
+    intent: statusIntent,
+    headline,
+    nextStep,
+    needsAttention,
+    changes,
+    showMore,
     currentContext: compactStatusObject({
       title: summary.title ?? null,
       objective: summary.objective ?? null,
@@ -2219,9 +2619,14 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
       primary: primaryStep,
       ranked: primaryStep ? [primaryStep] : [],
       count: nextActions.length,
-      suggestedNextCommand: result.suggestedNextCommand ?? current.nextCommand ?? null
+      suggestedNextCommand: result.suggestedNextCommand ?? current.nextCommand ?? null,
+      projectBacklogNextAction: statusIntent === "project-status" ? null : projectBacklogNextAction
     }),
+    projectBacklogNextAction: statusIntent === "project-status" ? null : projectBacklogNextAction,
     boundary,
+    operatorRoute,
+    operatorUnblock,
+    contractHealth,
     gaps: compactStatusObject({
       status: gapStatus,
       boundaryType,
@@ -2233,10 +2638,11 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
       requiredMaterials: normalizeStringArray(executionGaps.requiredMaterials).slice(0, 12)
     }),
     requiredEvidence,
-    writes: {
-      applied: Array.isArray(result.writes) && result.writes.length > 0,
-      count: Array.isArray(result.writes) ? result.writes.length : 0
-    },
+    projectBacklogRequiredEvidence,
+    writes,
+    writesApplied: false,
+    writeIntent: writes.writeIntent,
+    rollbackEligible: writes.rollbackEligible,
     optionalMissionDetails: missionList.missionItemsIncluded ? missionList : null,
     statusAdjustmentPreview: statusAdjustmentContract.statusAdjustmentItemsIncluded ? statusAdjustmentContract : null,
     detailsAvailable: true,
@@ -2248,9 +2654,10 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
 function compactDoveStatusResult(result, args = {}) {
   const includeMissionDetails = wantsMissionDetails(args);
   const includeStatusAdjustmentPreview = wantsStatusAdjustmentPreview(args);
+  const responseLanguage = result.responseLanguage ?? "zh";
   const missionList = compactStatusMissionList(result.dailyHome?.missionList, { includeItems: includeMissionDetails });
-  const nextActions = (Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : []).slice(0, 3).map(compactStatusActionCard);
-  const boundaryActionCards = (Array.isArray(result.dailyHome?.boundaryActionCards) ? result.dailyHome.boundaryActionCards : []).slice(0, 5).map(compactStatusActionCard);
+  const nextActions = (Array.isArray(result.dailyHome?.nextActions) ? result.dailyHome.nextActions : []).slice(0, 3).map((card) => compactStatusActionCard(card, responseLanguage));
+  const boundaryActionCards = (Array.isArray(result.dailyHome?.boundaryActionCards) ? result.dailyHome.boundaryActionCards : []).slice(0, 5).map((card) => compactStatusActionCard(card, responseLanguage));
   const statusAdjustmentContract = compactStatusAdjustmentContract(result.statusAdjustmentContract, { includeItems: includeStatusAdjustmentPreview });
   const statusHome = buildCompactStatusHome({
     result,
@@ -2260,22 +2667,37 @@ function compactDoveStatusResult(result, args = {}) {
     statusAdjustmentContract,
     args
   });
+  const writes = statusHome.writes ?? statusNoWriteTelemetry();
   return compactStatusObject({
     mode: result.mode,
     query: result.query,
     proposalOnly: result.proposalOnly,
     noAutoApply: result.noAutoApply,
-    writes: result.writes,
-    writesApplied: Array.isArray(result.writes) && result.writes.length > 0,
+    intent: statusHome.intent,
+    writes,
+    writesApplied: false,
+    writeIntent: writes.writeIntent,
+    rollbackEligible: writes.rollbackEligible,
     responseLanguage: result.responseLanguage,
     detail: "compact",
     detailsAvailable: true,
+    summary: statusHome.headline,
+    headline: statusHome.headline,
+    nextStep: statusHome.nextStep,
+    needsAttention: statusHome.needsAttention,
+    changes: statusHome.changes,
+    showMore: statusHome.showMore,
     currentContext: statusHome.currentContext,
     nextAction: statusHome.nextAction,
+    projectBacklogNextAction: statusHome.projectBacklogNextAction,
     boundary: statusHome.boundary,
     boundaryType: statusHome.boundary?.type ?? statusHome.gaps?.boundaryType ?? null,
+    operatorRoute: statusHome.operatorRoute,
+    operatorUnblock: statusHome.operatorUnblock,
+    contractHealth: statusHome.contractHealth,
     gaps: statusHome.gaps,
     requiredEvidence: statusHome.requiredEvidence,
+    projectBacklogRequiredEvidence: statusHome.projectBacklogRequiredEvidence,
     statusHome,
     current: result.current,
     suggestedNextCommand: result.suggestedNextCommand,
@@ -2350,6 +2772,108 @@ function summarizeStatusMissionListItem(task, index) {
   };
 }
 
+function missionPriorityNeeds(task, item, action) {
+  return mergeStringArrays(
+    action?.requiredMaterials,
+    action?.evidenceRequired,
+    action?.requiredInputs,
+    action?.requires,
+    action?.operatorUnblock?.needs,
+    action?.operatorUnblock?.requiredEvidence,
+    item?.evidenceRequired,
+    task?.evidenceExpectations,
+    task?.currentBoundary?.requiredInputs,
+    task?.currentBoundary?.requiredActions,
+    task?.workContract?.evidenceContract,
+    task?.workContract?.deliverables
+  ).map((value) => statusShortText(value, 80)).filter(Boolean).slice(0, 6);
+}
+
+function missionPriorityDoneCriteria(task, action) {
+  return mergeStringArrays(action?.doneCriteria, task?.workContract?.doneCriteria).map((value) => statusShortText(value, 90)).filter(Boolean).slice(0, 4);
+}
+
+function taskDependsOnPacket(task, packetId) {
+  if (!packetId || task?.id === packetId) {
+    return false;
+  }
+  const dependencyIds = mergeStringArrays(task?.dependencies, task?.blockedBy, task?.unresolvedDependencyIds);
+  if (dependencyIds.includes(packetId)) {
+    return true;
+  }
+  return typeof task?.blockedReason === "string" && task.blockedReason.includes(packetId);
+}
+
+function missionPriorityUnlocks(tasks, packetId) {
+  return sortStatusTasks(tasks.filter((task) => {
+    if (!taskDependsOnPacket(task, packetId)) {
+      return false;
+    }
+    const recommendedStatus = recommendedStatusForTask(task);
+    return !["completed", "killed", "archived"].includes(recommendedStatus);
+  })).slice(0, 5).map((task) => ({
+    packetId: task.id,
+    title: task.title,
+    status: task.status,
+    recommendedStatus: recommendedStatusForTask(task),
+    blockedReason: task.blockedReason ?? null
+  }));
+}
+
+function primaryMissionListAction(nextActions = [], itemById) {
+  return (Array.isArray(nextActions) ? nextActions : []).find((action) => action?.packetId && itemById.has(action.packetId)) ?? null;
+}
+
+function fallbackMissionPriorityItem(items = []) {
+  return items.find((item) => item.group === "doing")
+    ?? items.find((item) => item.group === "blocked")
+    ?? items.find((item) => item.group === "todo")
+    ?? null;
+}
+
+function buildMissionPriorityLane(tasks, items, options = {}) {
+  const itemById = new Map(items.map((item) => [item.packetId, item]));
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const primaryAction = primaryMissionListAction(options.nextActions, itemById);
+  const focusItem = primaryAction?.packetId ? itemById.get(primaryAction.packetId) : fallbackMissionPriorityItem(items);
+  if (!focusItem) {
+    return null;
+  }
+  const focusTask = taskById.get(focusItem.packetId);
+  const command = primaryAction ? statusCardPublicCommand(primaryAction) : null;
+  const copyableCommand = primaryAction ? statusCardCopyableCommand(primaryAction) : null;
+  const needs = missionPriorityNeeds(focusTask, focusItem, primaryAction);
+  const unlocks = missionPriorityUnlocks(tasks, focusItem.packetId);
+  const responseLanguage = options.responseLanguage ?? "zh";
+  const summary = responseLanguage === "en"
+    ? `Handle ${focusItem.packetId} first; it is the current bottleneck before the grouped mission list.`
+    : `先处理 ${focusItem.packetId}；这是展开任务列表前的当前瓶颈。`;
+  return compactStatusObject({
+    presentation: "dove-mission-priority-lane",
+    summary,
+    focus: compactStatusObject({
+      packetId: focusItem.packetId,
+      title: focusItem.title,
+      status: focusItem.status,
+      recommendedStatus: focusItem.recommendedStatus,
+      group: focusItem.group,
+      stage: focusItem.stage,
+      domain: focusItem.domain
+    }),
+    action: compactStatusObject({
+      label: primaryAction?.title ?? primaryAction?.label ?? null,
+      why: primaryAction?.why ?? primaryAction?.operatorUnblock?.summary ?? primaryAction?.operatorUnblock?.operatorAction ?? null,
+      command,
+      copyableCommand,
+      kind: primaryAction?.kind ?? null
+    }),
+    needs,
+    doneCriteria: missionPriorityDoneCriteria(focusTask, primaryAction),
+    unlocks,
+    relatedActionCount: primaryAction?.relatedActionCount ?? null
+  });
+}
+
 function openChecklistChildForStatusParent(task, parentId) {
   return task.parentId === parentId
     && task.creatorKind === "system"
@@ -2402,8 +2926,10 @@ function buildStatusMissionList(tasks, options = {}) {
   for (const item of items) {
     groups[item.group].items.push(item);
   }
+  const priorityLane = buildMissionPriorityLane(tasks, items, options);
   return {
     presentation: "dove-mission-list",
+    priorityLane,
     statusModel: {
       userGroups: ["todo", "doing", "blocked", "done", "archived"],
       machineStatuses: DOVE_TASK_STATUSES,
@@ -3045,6 +3571,7 @@ export function queryPaperPipeline(root, args = {}) {
 export function queryDoveStatus(root, args = {}) {
   const inputs = readDoveInputs(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args, { state: inputs.state });
+  const statusIntent = normalizeStatusIntent(args.intent);
   const includeArchived = booleanArg(args.includeArchived);
   const allTasks = sortStatusTasks(enrichStatusTasks((Array.isArray(inputs.taskCatalog.packets) ? inputs.taskCatalog.packets : []).map((packet) => summarizeDoveStatusTask(packet, responseLanguage)).filter((task) => task.id), inputs));
   const archivedTasks = allTasks.filter(isArchivedStatusTask);
@@ -3142,6 +3669,7 @@ export function queryDoveStatus(root, args = {}) {
     proposalOnly: true,
     noAutoApply: true,
     writes: [],
+    intent: statusIntent,
     responseLanguage,
     detail: "full",
     projectSummary,

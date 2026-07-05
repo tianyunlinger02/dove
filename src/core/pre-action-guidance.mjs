@@ -139,7 +139,7 @@ export function inferSubagentSpecialty(surface, context = {}) {
     return explicit;
   }
   const normalizedSurface = normalizeSurface(surface);
-  if (surfaceIn(normalizedSurface, ["source", "note", "claim"])) {
+  if (surfaceIn(normalizedSurface, ["source", "note", "claim", "draft"])) {
     return "researcher";
   }
   if (surfaceIn(normalizedSurface, ["experience", "experiment"])) {
@@ -175,10 +175,13 @@ function interpretedIntentForSurface(surface, context = {}, responseLanguage = "
     return text(responseLanguage, "把已验证外部链接、模板、指南、venue/ranking 证据先注册为 packet-bound sources；未抓取或未注册的候选链接只能列为 candidate links，再进入 note 或 document evidence 综合沉淀。", "Register verified external links, templates, guidelines, and venue/ranking evidence as packet-bound sources first; unfetched or unregistered URLs stay as candidate links before synthesis through note or document evidence.");
   }
   if (surface === "dove.note") {
-    return text(responseLanguage, "把已注册 sources 综合成绑定主任务的结构化 note；内部压力测试总结和写作偏好不要伪装成 external source。", "Synthesize registered sources into a packet-bound structured note; internal pressure-test summaries and writing preferences must not be disguised as external sources.");
+    return text(responseLanguage, "已有 summary、quote、claim 或 open question 时，直接把已注册 sources 综合成绑定主任务的结构化 note；内部压力测试总结和写作偏好不要伪装成 external source。", "When a summary, quote, claim, or open question is present, directly synthesize registered sources into a packet-bound structured note; internal pressure-test summaries and writing preferences must not be disguised as external sources.");
+  }
+  if (surface === "dove.draft") {
+    return text(responseLanguage, "已有正文时，直接记录 packet-bound draft body；缺正文时停下要求 draft content，不创建占位草稿。", "When body content is present, directly record a packet-bound draft body; when body content is missing, stop for draft content instead of creating a placeholder draft.");
   }
   if (surface === "dove.document" || surface === "dove.documents") {
-    return text(responseLanguage, "把报告或产物作为 document evidence 绑定到 durable packet，并保留 source/artifact provenance。", "Bind reports or outputs as document evidence to a durable packet while preserving source/artifact provenance.");
+    return text(responseLanguage, "已有报告或产物摘要/路径时，直接作为 document evidence 绑定到 durable packet，并保留 source/artifact provenance。", "When a report or output summary/path is present, directly bind it as document evidence to a durable packet while preserving source/artifact provenance.");
   }
   return text(responseLanguage, "先用三角色和 lesson guardrail 框住行动，再进入具体 Dove workflow。", "Frame the action with the three roles and lesson guardrails before entering the concrete Dove workflow.");
 }
@@ -226,10 +229,11 @@ function workflowRouteForSurface(surface, command, responseLanguage = "zh") {
     "dove.auto": "run_dove_auto preview -> confirmed bounded foreground pass",
     "dove.operator": "run_dove_operator preview -> confirmed queue pass",
     "dove.review": "review/audit workflow with independent reviewer boundary",
-    "dove.source": "register_source verified external provenance intake, keep candidate links separate, optionally batch -> upsert_note or record_document_evidence synthesis",
-    "dove.note": "upsert_note packet-bound synthesis from registered sources -> claims or document evidence",
-    "dove.document": "record_document_evidence packet-bound report/archive ledger with source and artifact provenance",
-    "dove.documents": "record_document_evidence packet-bound report/archive ledger with source and artifact provenance",
+    "dove.source": "register_source quick path for verified external provenance, keep candidate links separate, optionally batch -> upsert_note or record_document_evidence synthesis",
+    "dove.note": "upsert_note quick path for packet-bound synthesis from registered sources -> claims or document evidence",
+    "dove.draft": "upsert_draft quick path for an existing packet-bound draft body -> run_review_loop independent review",
+    "dove.document": "record_document_evidence quick path for packet-bound report/archive ledger with source and artifact provenance",
+    "dove.documents": "record_document_evidence quick path for packet-bound report/archive ledger with source and artifact provenance",
     "dove.figure": "figure materials -> generation/import -> caption/provenance -> QA",
     "dove.experience": "experiment plan/result -> audit -> claim bridge",
     "dove.rebuttal": "review issue board -> builder revision strategy -> response draft"

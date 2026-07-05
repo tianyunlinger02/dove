@@ -2,7 +2,7 @@ import process from "node:process";
 
 import { ensureWorkspace } from "../core/index.mjs";
 import { dispatchTool } from "./handlers.mjs";
-import { toolDefinitions } from "./tool-definitions.mjs";
+import { toolDefinitionsForSurface } from "./tool-definitions.mjs";
 
 export function startServer(root = process.cwd()) {
   ensureWorkspace(root);
@@ -49,7 +49,7 @@ export function startServer(root = process.cwd()) {
     }
 
     if (method === "tools/list") {
-      sendResponse(id, { tools: toolDefinitions });
+      sendResponse(id, { tools: toolDefinitionsForSurface(params?.surface ?? params?.detail ?? params?.view) });
       return;
     }
 

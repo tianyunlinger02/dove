@@ -152,7 +152,33 @@ async function main() {
 
   notify("notifications/initialized");
 
-  const listed = await call("tools/list");
+  const operatorListed = await call("tools/list");
+  const operatorToolNames = new Set(operatorListed.tools.map((tool) => tool.name));
+  for (const requiredTool of [
+    "query_dove_status",
+    "query_dove_orchestrate",
+    "query_document_ledger",
+    "query_operator_lessons",
+    "create_dove_task",
+    "run_dove_auto",
+    "run_dove_operator",
+    "register_source",
+    "upsert_note",
+    "upsert_draft",
+    "record_document_evidence",
+    "run_figure_workflow",
+    "run_experience_workflow",
+    "run_review_loop",
+    "build_rebuttal_strategy",
+    "query_dove_return"
+  ]) {
+    assert.equal(operatorToolNames.has(requiredTool), true, `Missing default operator MCP tool ${requiredTool}`);
+  }
+  for (const hiddenByDefaultTool of ["init_dove_goal", "record_dove_mission_pass", "materialize_guidance_packet", "launch_dove_mission"]) {
+    assert.equal(operatorToolNames.has(hiddenByDefaultTool), false, `Default MCP operator surface should not expose ${hiddenByDefaultTool}`);
+  }
+
+  const listed = await call("tools/list", { surface: "full" });
   const toolNames = new Set(listed.tools.map((tool) => tool.name));
   for (const requiredTool of [
     "init_dove_goal",
@@ -185,7 +211,7 @@ async function main() {
 
   const toolByName = new Map(listed.tools.map((tool) => [tool.name, tool]));
   const descriptionChecks = {
-    query_dove_status: ["statusHome.durableContextNotice", "mutationRollbackModel", "patch-plan plus host-tracked file-edit requirements", "host checkpoint verification limits", "unverified direct-process writes", "not git detection", "not direct-process", "not reset_dove_version", "statusHome.preActionGuidance", "automatic read-only lesson recall", "Planner/Builder/Reviewer role-framed next action", "mission counts only", "must not render a Missions panel", "requestStatusAdjustment"],
+    query_dove_status: ["summary/headline", "nextStep", "needsAttention", "changes", "showMore", "one recommended action", "resultMode: full/debug", "statusHome.durableContextNotice", "mutationRollbackModel", "patch-plan plus host-tracked file-edit requirements", "host checkpoint verification limits", "unverified direct-process writes", "not git detection", "not direct-process", "not reset_dove_version", "statusHome.preActionGuidance", "automatic read-only lesson recall", "Planner/Builder/Reviewer role framing", "must not render a Missions panel", "blocked counts", "execution-gap counts", "required-evidence blocks", "requestStatusAdjustment"],
     create_dove_task: ["preActionGuidance", "mission is a durable work/progress object", "bounded foreground mission pass"],
     record_dove_mission_pass: ["host-tool-blocked", "visibly blocked"],
     run_dove_auto: ["preActionGuidance", "host-tool-blocked", "no hidden continuation", "scheduler", "daemon"],
@@ -728,7 +754,14 @@ async function main() {
   assert.equal(status.mode, "dove-status-query");
   assert.equal(status.proposalOnly, true);
   assert.equal(status.noAutoApply, true);
-  assert.deepEqual(status.writes ?? [], []);
+  assert.deepEqual(status.writes, {
+    applied: false,
+    count: 0,
+    writeIntent: "none",
+    rollbackEligible: "not-applicable"
+  });
+  assert.equal(status.writeIntent, "none");
+  assert.equal(status.rollbackEligible, "not-applicable");
   assert.equal(status.detail, "compact");
   assert.equal(status.statusHome.presentation, "dove-project-situation-home");
   assert.equal(status.statusHome.liveContextFirst, true);

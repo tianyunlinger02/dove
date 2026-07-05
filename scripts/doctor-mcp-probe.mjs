@@ -16,6 +16,22 @@ function parseToolPayload(result) {
   return payload;
 }
 
+function assertNoWrites(payload, label) {
+  if (payload.writes === undefined) {
+    return;
+  }
+  if (Array.isArray(payload.writes)) {
+    assert.deepEqual(payload.writes, [], `${label} should not write during doctor probe`);
+    return;
+  }
+  assert.deepEqual(payload.writes, {
+    applied: false,
+    count: 0,
+    writeIntent: "none",
+    rollbackEligible: "not-applicable"
+  }, `${label} should not write during doctor probe`);
+}
+
 async function callReadOnlyTool(name, args = {}) {
   const result = await call("tools/call", { name, arguments: { ...args, resultMode: args.resultMode ?? "full" } });
   return parseToolPayload(result);
@@ -33,7 +49,34 @@ async function main() {
   assert.equal(init.serverInfo.name, "dove");
   notify("notifications/initialized");
 
-  const listed = await call("tools/list");
+  const operatorListed = await call("tools/list");
+  const operatorNames = new Set(operatorListed.tools.map((tool) => tool.name));
+  const requiredOperatorTools = [
+    "query_dove_status",
+    "query_dove_orchestrate",
+    "query_document_ledger",
+    "query_operator_lessons",
+    "create_dove_task",
+    "run_dove_auto",
+    "run_dove_operator",
+    "register_source",
+    "upsert_note",
+    "upsert_draft",
+    "record_document_evidence",
+    "run_figure_workflow",
+    "run_experience_workflow",
+    "run_review_loop",
+    "build_rebuttal_strategy",
+    "query_dove_return"
+  ];
+  for (const required of requiredOperatorTools) {
+    assert.equal(operatorNames.has(required), true, `Missing default operator MCP tool ${required}`);
+  }
+  for (const hiddenByDefault of ["ensure_workspace", "record_dove_mission_pass", "materialize_guidance_packet", "launch_dove_mission"]) {
+    assert.equal(operatorNames.has(hiddenByDefault), false, `Default MCP operator surface should not expose ${hiddenByDefault}`);
+  }
+
+  const listed = await call("tools/list", { surface: "full" });
   const names = new Set(listed.tools.map((tool) => tool.name));
   const requiredTools = [
     "ensure_workspace",
@@ -78,7 +121,7 @@ async function main() {
     "build_rebuttal"
   ];
   for (const required of requiredTools) {
-    assert.equal(names.has(required), true, `Missing MCP tool ${required}`);
+    assert.equal(names.has(required), true, `Missing full MCP tool ${required}`);
   }
 
   await callReadOnlyTool("read_state");
@@ -96,7 +139,7 @@ async function main() {
   for (const readOnlyDoveTool of ["query_dove_orchestrate", "query_dove_mission", "query_dove_mission_board", "query_dove_status", "query_document_ledger", "query_dove_audit", "query_dove_return"]) {
     const payload = await callReadOnlyTool(readOnlyDoveTool);
     assert.equal(payload.proposalOnly, true, `${readOnlyDoveTool} should stay proposal-only`);
-    assert.deepEqual(payload.writes ?? [], [], `${readOnlyDoveTool} should not write during doctor probe`);
+    assertNoWrites(payload, readOnlyDoveTool);
   }
   await callReadOnlyTool("query_program_approvals");
 }

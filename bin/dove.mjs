@@ -7,7 +7,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runGlobalStatusServingForeground, runIsolatedReview, runWithMutationContext } from "../src/core/index.mjs";
+import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, refreshDurableSurfaces, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runGlobalStatusServingForeground, runIsolatedReview, runWithMutationContext } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
 import {
@@ -50,7 +50,7 @@ Usage:
   dove serve-global-status [projectRoot ...] [--project <root>] [--output <dir>] [--refresh] [--include-config] [--auth|--no-auth] [--auth-password-env <ENV_NAME>] [--cloudflare|--no-cloudflare] [--configure-cloudflare] [--domain <hostname>] [--port <port>] [--host <loopback>] [--dns-resolver-addrs <address:port>] [--dry-run] [--quiet]
   dove orchestrate [target] [--request <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--allow-autonomy]
   dove mission [target] [--goal <text>] [--domain <id>] [--stage <id>] [--artifact <path>] [--acceptance-check <text>]
-  dove status [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived] [--missions|--show-missions] [--full|--detail full] [--json|--format json]
+  dove status [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived] [--health|--contract-test] [--missions|--show-missions] [--full|--detail full] [--json|--format json]
   dove statusline [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived] [--json|--format json]
   dove audit [target] [--scope <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
   dove return [target] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
@@ -344,7 +344,9 @@ function buildDoveReturnArgs(rest = []) {
 
 function buildDoveStatusArgs(rest = []) {
   const detail = readFirstFlagValue(rest, ["--detail", "--view", "--result-mode"]);
+  const intent = rest.includes("--contract-test") ? "contract-test" : rest.includes("--health") ? "health-check" : readFlagValue(rest, "--intent");
   return {
+    intent,
     domain: readFirstFlagValue(rest, ["--domain", "--dove-domain", "--mission-domain"]),
     stage: readFirstFlagValue(rest, ["--stage", "--mission-stage"]),
     packetIds: readFlagValues(rest, ["--packet-id", "--packet", "--mission-packet-id", "--mission-packet"]),
@@ -402,99 +404,154 @@ function formatEvidencePreview(items = []) {
   return evidence.length > 2 ? `${shown}；+${evidence.length - 2}` : shown;
 }
 
+function formatBoundarySummaryForCli(boundary, gaps = {}, operatorUnblock = null) {
+  if (operatorUnblock?.blockedSummary) {
+    return compactText(operatorUnblock.blockedSummary, 160);
+  }
+  if (operatorUnblock?.cannotContinueBecause) {
+    return compactText(operatorUnblock.cannotContinueBecause, 160);
+  }
+  if (!boundary?.type && !gaps.boundaryType) {
+    return "none";
+  }
+  return "needs operator action";
+}
+
+function formatMissionBlockedReasonForCli(value) {
+  const text = compactText(value, 140);
+  if (!text) {
+    return "";
+  }
+  if (text.startsWith("unresolved-dependencies:")) {
+    const ids = text.slice("unresolved-dependencies:".length).split(",").map((item) => item.trim()).filter(Boolean).join(", ");
+    return ids ? `waiting on ${ids}` : "waiting on another mission";
+  }
+  if (text.startsWith("blocked-by:")) {
+    const ids = text.slice("blocked-by:".length).split(",").map((item) => item.trim()).filter(Boolean).join(", ");
+    return ids ? `waiting on ${ids}` : "waiting on another mission";
+  }
+  if (/^awaiting-[a-z0-9-]+$/i.test(text)) {
+    return `needs ${text.slice("awaiting-".length).replace(/-/g, " ")}`;
+  }
+  return text;
+}
+
+function missionHumanStatus(item = {}, fallbackGroup = "todo") {
+  return ["todo", "doing", "blocked", "done"].includes(item.group) ? item.group : fallbackGroup;
+}
+
 function formatMissionListGroup(groupName, group = {}, options = {}) {
   const items = Array.isArray(group.items) ? group.items : [];
   const itemCount = Number(group.itemCount ?? items.length);
-  const hiddenCount = Number(group.hiddenCount ?? Math.max(0, itemCount - items.length));
-  const hiddenSuffix = hiddenCount > 0 ? ` (+${hiddenCount} hidden)` : "";
+  const limit = Number.isFinite(options.limit) ? Math.max(0, options.limit) : items.length;
+  const visibleItems = options.collapsed || group.defaultCollapsed ? [] : items.slice(0, limit);
+  const hiddenCount = Math.max(0, itemCount - visibleItems.length);
+  const hiddenSuffix = hiddenCount > 0 ? ` (+${hiddenCount} more)` : "";
   const lines = [`  ${groupName}: ${itemCount}${hiddenSuffix}`];
-  if (options.collapsed || group.defaultCollapsed) {
-    return lines;
-  }
-  for (const item of items) {
-    const status = item.recommendedStatus && item.recommendedStatus !== item.status ? `${item.status}->${item.recommendedStatus}` : item.status;
-    lines.push(`    - ${item.packetId}: ${compactText(item.title, 100)} [${status}]`);
-    if (item.blockedReason) {
-      lines.push(`      blocked: ${compactText(item.blockedReason, 120)}`);
+  for (const item of visibleItems) {
+    const blockedReason = formatMissionBlockedReasonForCli(item.blockedReason);
+    lines.push(`    - ${item.packetId}: ${compactText(item.title, 100)} [${missionHumanStatus(item, groupName)}]`);
+    if (blockedReason && blockedReason !== item.boundaryType) {
+      lines.push(`      blocked: ${blockedReason}`);
     }
     if (item.boundaryType) {
-      lines.push(`      boundary: ${item.boundaryType}`);
+      lines.push("      boundary: needs operator action");
     }
   }
   return lines;
+}
+
+function formatMissionPriorityLaneForCli(priorityLane = {}) {
+  const focus = priorityLane.focus ?? {};
+  if (!focus.packetId) {
+    return [];
+  }
+  const lines = ["Priority lane:", `  - ${focus.packetId}: ${compactText(focus.title, 100)} [${missionHumanStatus(focus)}]`];
+  const actionLabel = compactText(priorityLane.action?.label, 160);
+  const command = compactText(priorityLane.action?.copyableCommand, 160);
+  if (actionLabel || command) {
+    lines.push(`    Next: ${actionLabel || command}${command ? ` [${command}]` : ""}`);
+  }
+  if (Array.isArray(priorityLane.needs) && priorityLane.needs.length > 0) {
+    lines.push(`    Need: ${formatEvidencePreview(priorityLane.needs)}`);
+  }
+  if (Array.isArray(priorityLane.doneCriteria) && priorityLane.doneCriteria.length > 0) {
+    lines.push(`    Done: ${formatEvidencePreview(priorityLane.doneCriteria)}`);
+  }
+  if (Array.isArray(priorityLane.unlocks) && priorityLane.unlocks.length > 0) {
+    const unlocked = priorityLane.unlocks.slice(0, 3).map((item) => `${item.packetId}: ${compactText(item.title, 80)}`).join("；");
+    const hidden = priorityLane.unlocks.length > 3 ? `；+${priorityLane.unlocks.length - 3}` : "";
+    lines.push(`    Unlocks: ${unlocked}${hidden}`);
+  }
+  return lines;
+}
+
+function missionGroupCount(group = {}) {
+  return Number(group.itemCount ?? group.items?.length ?? 0);
+}
+
+function formatMissionQueueSummaryForCli(groups = {}) {
+  const counts = ["doing", "blocked", "todo", "done"].map((name) => `${name} ${missionGroupCount(groups[name])}`);
+  if (missionGroupCount(groups.archived) > 0) {
+    counts.push(`archived ${missionGroupCount(groups.archived)}`);
+  }
+  return [`Queue summary: ${counts.join(", ")}`];
 }
 
 function formatMissionListForCli(missionList = {}) {
   const groups = missionList.groups ?? {};
   const lines = ["Mission details:"];
-  lines.push(...formatMissionListGroup("doing", groups.doing));
-  lines.push(...formatMissionListGroup("blocked", groups.blocked));
-  lines.push(...formatMissionListGroup("todo", groups.todo));
+  lines.push(...formatMissionPriorityLaneForCli(missionList.priorityLane));
+  lines.push(...formatMissionQueueSummaryForCli(groups));
+  lines.push("Queue preview:");
+  lines.push(...formatMissionListGroup("doing", groups.doing, { limit: 2 }));
+  lines.push(...formatMissionListGroup("blocked", groups.blocked, { limit: 2 }));
+  lines.push(...formatMissionListGroup("todo", groups.todo, { limit: 2 }));
   lines.push(...formatMissionListGroup("done", groups.done, { collapsed: true }));
-  if (Number(groups.archived?.itemCount ?? groups.archived?.items?.length ?? 0) > 0) {
+  if (missionGroupCount(groups.archived) > 0) {
     lines.push(...formatMissionListGroup("archived", groups.archived, { collapsed: true }));
   }
+  lines.push("More detail: use --full --json for the complete mission list.");
   return lines;
 }
 
 function formatDoveStatusForCli(result, target, options = {}) {
   const statusHome = result.statusHome ?? {};
-  const currentContext = statusHome.currentContext ?? result.currentContext ?? result.dashboard?.project ?? {};
-  const current = result.current ?? {};
-  const nextAction = statusHome.nextAction ?? result.nextAction ?? statusHome.nextSteps?.primary ?? result.dailyHome?.nextActions?.[0] ?? null;
-  const gaps = statusHome.gaps ?? result.gaps ?? {};
-  const executionGaps = gaps.executionGaps ?? result.dailyHome?.executionGaps?.counts ?? {};
-  const boundary = statusHome.boundary ?? result.boundary ?? null;
-  const requiredEvidence = Array.isArray(statusHome.requiredEvidence) ? statusHome.requiredEvidence : Array.isArray(result.requiredEvidence) ? result.requiredEvidence : [];
-  const writes = statusHome.writes ?? { applied: Boolean(result.writesApplied), count: Array.isArray(result.writes) ? result.writes.length : 0 };
+  const fallbackAction = statusHome.nextAction ?? result.nextAction ?? statusHome.nextSteps?.primary ?? result.dailyHome?.nextActions?.[0] ?? null;
+  const nextStep = statusHome.nextStep ?? result.nextStep ?? (fallbackAction ? {
+    label: fallbackAction.title ?? fallbackAction.label ?? fallbackAction.kind,
+    why: fallbackAction.why,
+    command: fallbackAction.command,
+    copyableCommand: fallbackAction.copyableCommand ?? null
+  } : null);
+  const needsAttention = statusHome.needsAttention ?? result.needsAttention ?? {};
+  const changes = statusHome.changes ?? result.changes ?? {
+    intent: result.writeIntent ?? statusHome.writeIntent ?? "none",
+    applied: Boolean(result.writesApplied ?? statusHome.writesApplied),
+    count: result.writes?.count ?? statusHome.writes?.count ?? 0,
+    rollback: result.rollbackEligible ?? statusHome.rollbackEligible ?? "not-applicable"
+  };
+  const showMore = statusHome.showMore ?? result.showMore ?? {};
   const missionList = statusHome.optionalMissionDetails ?? result.dailyHome?.missionList ?? result.dashboard?.tasks?.grouped ?? {};
+  const headline = statusHome.headline
+    ?? result.headline
+    ?? result.summary
+    ?? `Dove current situation: ${compactText(statusHome.currentContext?.title ?? result.projectSummary?.title ?? target ?? "untitled", 120)}`;
+  const command = compactText(nextStep?.copyableCommand, 160);
+  const why = nextStep?.why ?? needsAttention.operatorAction ?? needsAttention.summary ?? showMore.noWriteSummary ?? "No immediate blocker.";
+  const more = [showMore.text, showMore.noWriteSummary]
+    .filter(Boolean)
+    .map((item) => compactText(item, 180))
+    .join(" ") || `Use --missions for task details; use --full --json for full details. This query made no writes: intent ${changes.intent}; rollback ${changes.rollback}.`;
+  const nextLabel = compactText(nextStep?.label ?? "No required action right now", 180);
   const lines = [
-    `Dove current situation: ${compactText(currentContext.title ?? result.projectSummary?.title ?? "untitled", 120)}`,
-    `Target: ${target}`,
-    "",
-    "Current context:"
+    `Dove: ${compactText(headline, 220)}`,
+    `Next: ${nextLabel}${command ? ` [${command}]` : ""}`,
+    `Why: ${compactText(why, 220)}`,
+    `More: ${more}`
   ];
-  lines.push(`  objective: ${compactText(currentContext.objective ?? result.projectSummary?.objective ?? "none")}`);
-  lines.push(`  focus: ${compactText(currentContext.currentFocus ?? result.projectSummary?.currentFocus ?? "none")}`);
-  lines.push(`  durable context: ${current.domain ?? currentContext.domain ?? "unknown"} / ${current.stage ?? currentContext.stage ?? "unknown"} / ${current.primaryRole ?? currentContext.primaryRole ?? "unknown"}`);
-  if (currentContext.runtimeContinuation?.currentPacketId) {
-    lines.push(`  runtime continuation: ${currentContext.runtimeContinuation.currentPacketId}`);
-  }
-  lines.push("");
-  lines.push("Next action:");
-  if (nextAction) {
-    const displayCommand = nextAction.copyableCommand ?? nextAction.firstAction ?? nextAction.command ?? "no-command";
-    lines.push(`  ${compactText(nextAction.title ?? nextAction.kind ?? "next", 120)} [${displayCommand}]`);
-    if (nextAction.packetId) {
-      lines.push(`  packet: ${nextAction.packetId}`);
-    }
-  } else {
-    lines.push("  none");
-  }
-  lines.push("");
-  lines.push("Boundary/gap:");
-  lines.push(`  status: ${gaps.status ?? "clear"}`);
-  lines.push(`  boundary: ${boundary?.type ?? gaps.boundaryType ?? "none"}`);
-  lines.push(`  counts: boundaries ${gaps.boundaryCount ?? 0}; blockers ${gaps.blockerCount ?? 0}; read errors ${gaps.readErrorCount ?? 0}`);
-  lines.push(`  execution gaps: missing contract ${executionGaps.missingContract ?? 0}, missing materials ${executionGaps.missingMaterials ?? 0}, verification gaps ${executionGaps.verificationGaps ?? 0}`);
-  if (boundary?.requiredInputs?.length || boundary?.requiredActions?.length) {
-    const required = formatEvidencePreview([...(boundary.requiredInputs ?? []), ...(boundary.requiredActions ?? [])]);
-    if (required) {
-      lines.push(`  boundary requires: ${required}`);
-    }
-  }
-  lines.push("");
-  lines.push("Required evidence:");
-  const evidence = formatEvidencePreview(requiredEvidence);
-  lines.push(`  ${evidence || "none"}`);
-  lines.push("");
-  lines.push("Writes:");
-  lines.push(`  ${writes.applied ? `applied ${writes.count ?? 0}` : "none applied"}`);
-  lines.push("");
   if (options.showMissions) {
-    lines.push(...formatMissionListForCli(missionList));
-  } else {
-    lines.push("Expansion: use --include-mission-details or --detail missions for mission groups; use --full --json or --detail full --json for full details.");
+    lines.push("", ...formatMissionListForCli(missionList));
   }
   return `${lines.join("\n")}\n`;
 }
@@ -1954,12 +2011,24 @@ function doctor(target) {
     }
   }
 
-  result.checks.push(...collectRawManagedArtifactChecks(target));
+  const rawManagedArtifactChecks = collectRawManagedArtifactChecks(target);
+  result.checks.push(...rawManagedArtifactChecks);
+  const rawManagedArtifactChecksPassed = rawManagedArtifactChecks.every((check) => check.ok);
   const rawMetaOptimizeConsistency = collectRawMetaOptimizeConsistencyCheck(target);
   result.checks.push(rawMetaOptimizeConsistency);
 
-  if (rawJsonChecksPassed && boundaryRawParseOk) {
+  if (rawJsonChecksPassed && boundaryRawParseOk && rawManagedArtifactChecksPassed) {
     ensureWorkspace(target);
+    try {
+      refreshDurableSurfaces(target, {
+        type: "doctor",
+        summary: "Refreshed durable surfaces during doctor health check.",
+        artifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.metaGovernanceCoverage, ARTIFACT_PATHS.metaGovernanceCoverageReport]
+      });
+      result.checks.push({ check: "durable-surface-refresh", ok: true, message: "durable surfaces refreshed" });
+    } catch (error) {
+      result.checks.push({ check: "durable-surface-refresh", ok: false, message: error instanceof Error ? error.message : String(error) });
+    }
   }
   result.missing = required.filter((relativePath) => !fs.existsSync(path.join(target, relativePath)));
   result.healthy = result.missing.length === 0;

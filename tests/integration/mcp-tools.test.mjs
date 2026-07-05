@@ -427,8 +427,20 @@ test("MCP results default to compact contracts and expand explicitly", () => {
     assert.equal(compactStatus.tool, "query_dove_status");
     assert.equal(compactStatus.resultMode, "compact");
     assert.equal(compactStatus.writesApplied, false);
+    assert.ok(compactStatus.summary);
+    assert.ok(compactStatus.nextStep && typeof compactStatus.nextStep === "object");
+    assert.equal(compactStatus.nextStep.copyableCommand, "project:dove.init");
+    assert.equal(compactStatus.needsAttention.status, "clear");
+    assert.deepEqual(compactStatus.changes, {
+      intent: "none",
+      applied: false,
+      count: 0,
+      rollback: "not-applicable"
+    });
+    assert.ok(compactStatus.showMore && typeof compactStatus.showMore === "object");
     assert.ok(compactStatus.currentContext && typeof compactStatus.currentContext === "object");
     assert.equal("nextAction" in compactStatus, true);
+    assert.equal(compactStatus.operatorUnblock?.detail, undefined);
     assert.equal("statusHome" in compactStatus, false);
     assert.equal("dashboard" in compactStatus, false);
     assert.equal("dailyHome" in compactStatus, false);
@@ -556,7 +568,14 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(status.proposalOnly, true);
     assert.equal(status.noAutoApply, true);
     assert.equal(status.query, true);
-    assert.deepEqual(status.writes ?? [], []);
+    assert.deepEqual(status.writes, {
+      applied: false,
+      count: 0,
+      writeIntent: "none",
+      rollbackEligible: "not-applicable"
+    });
+    assert.equal(status.writeIntent, "none");
+    assert.equal(status.rollbackEligible, "not-applicable");
     assert.equal(status.detail, "compact");
     assert.equal(status.statusHome.presentation, "dove-project-situation-home");
     assert.equal(status.statusHome.liveContextFirst, true);
@@ -1193,6 +1212,11 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     }));
     assertPreActionGuidanceSummary(source.preActionGuidanceSummary, { surface: "dove.source", primaryRole: "builder" });
     assert.ok(source.packetIds.includes(packetId));
+    assert.deepEqual(source.artifactWrites.primaryArtifactPaths, [".dove/sources/index.json"]);
+    assert.ok(source.artifactWrites.synthesisArtifactPaths.includes(".dove/bibliography/references.bib"));
+    assert.ok(source.artifactWrites.synthesisArtifactPaths.includes(".dove/bibliography/citation-log.md"));
+    assert.ok(source.artifactWrites.synthesisArtifactPaths.includes(".dove/wiki/query_pack.md"));
+    assert.ok(source.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/workspace/index.json"));
 
     const batchSources = extractToolJson(dispatchToolFull(root, "register_source", {
       packetId,
@@ -1218,6 +1242,9 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     assert.deepEqual(batchSources.sourceIds, ["cvpr-author-kit", "cvpr-reviewer-guidelines"]);
     assert.ok(batchSources.items.every((item) => item.packetIds.includes(packetId)));
     assertPreActionGuidanceSummary(batchSources.preActionGuidanceSummary, { surface: "dove.source", primaryRole: "builder" });
+    assert.deepEqual(batchSources.artifactWrites.primaryArtifactPaths, [".dove/sources/index.json"]);
+    assert.ok(batchSources.artifactWrites.synthesisArtifactPaths.includes(".dove/wiki/query_pack.md"));
+    assert.ok(batchSources.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/sessions/LATEST_SUMMARY.md"));
 
     const note = extractToolJson(dispatchToolFull(root, "upsert_note", {
       packetId,
@@ -1269,6 +1296,24 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     }));
     assert.ok(claims.claims.some((claim) => claim.id === "thin-guidance-claim"));
     assertPreActionGuidanceSummary(claims.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "builder" });
+
+    const draftEnvelope = extractMcpEnvelopeJson(dispatchTool(root, "upsert_draft", {
+      resultMode: "full",
+      packetId,
+      sectionId: "thin-guidance-draft",
+      title: "Thin guidance draft",
+      body: "Thin workflow surfaces preserve direct draft evidence for reviewer handoff.",
+      summary: "Draft quick path write evidence."
+    }));
+    assert.equal(draftEnvelope.writeIntent, "applied");
+    assert.equal(draftEnvelope.rollbackEligible, "unverified");
+    assert.ok(draftEnvelope.writes.paths.includes(".dove/drafts/thin-guidance-draft.md"));
+    const draft = draftEnvelope.fullResult;
+    assert.equal(draft.draftPath, ".dove/drafts/thin-guidance-draft.md");
+    assertPreActionGuidanceSummary(draft.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "builder" });
+    assert.deepEqual(draft.artifactWrites.primaryArtifactPaths, [".dove/drafts/thin-guidance-draft.md"]);
+    assert.ok(draft.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/workspace/index.json"));
+    assert.ok(draft.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/sessions/LATEST_SUMMARY.md"));
 
     const experimentPlan = extractToolJson(dispatchToolFull(root, "upsert_experiment_plan", {
       packetId,
@@ -1730,9 +1775,10 @@ test("status adjustment contract applies confirmed non-terminal mission status c
     assert.ok(fullStatus.dashboard);
     assert.equal(status.statusHome.presentation, "dove-project-situation-home");
     assert.ok(status.statusHome.nextSteps.ranked.length <= 3);
-    assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.kind && card.title && card.command));
-    assert.equal(status.current.nextCommand, status.statusHome.nextSteps.primary.command);
-    assert.equal(fullStatus.dashboard.nextAction, fullStatus.dailyHome.nextActions[0].command);
+    assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.kind && card.title));
+    assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.kind === "recover-current-work" || card.command));
+    assert.equal(status.current.nextCommand, status.statusHome.nextSteps.primary.command ?? status.suggestedNextCommand);
+    assert.equal(fullStatus.dashboard.nextAction, fullStatus.dailyHome.nextActions[0].command ?? fullStatus.suggestedNextCommand);
     assert.equal(fullStatus.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
     assert.deepEqual(fullStatus.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
     assert.equal(fullStatus.statusAdjustmentContract.items.length, 3);
@@ -2449,9 +2495,11 @@ test("apply_dove_status_adjustments rejects completed parents with open checklis
     const filteredStatusHome = extractToolJson(dispatchToolFull(root, "query_dove_status", { detail: "full", status: "completed" }));
     assert.equal(filteredStatusHome.dailyHome.completionConsistency.status, "needs-reconciliation");
     assert.deepEqual(filteredStatusHome.dailyHome.completionConsistency.findings[0].openChecklistChildIds.sort(), expectedOpenChildren.map((child) => child.id).sort());
-    assert.equal(statusHome.dailyHome.nextActions[0].kind, "reconcile-completion-consistency");
-    assert.equal(statusHome.dailyHome.nextActions[0].findingCount, 1);
-    assert.equal(statusHome.dailyHome.nextActions[0].openChecklistChildCount, expectedOpenChildren.length);
+    const recoveryAction = statusHome.dailyHome.nextActions[0];
+    assert.equal(recoveryAction.kind, "recover-current-work");
+    assert.equal(recoveryAction.recoveryPrimaryKind, "reconcile-completion-consistency");
+    assert.equal(recoveryAction.findingCount, 1);
+    assert.equal(recoveryAction.openChecklistChildCount, expectedOpenChildren.length);
 
     const rejected = extractToolJson(dispatchToolFull(root, "apply_dove_status_adjustments", {
       confirmed: true,
@@ -3271,7 +3319,14 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(doveMissionQueryTool, "query_dove_mission should exist");
   assert.ok(doveBoardQueryTool, "query_dove_mission_board should exist");
   assert.ok(doveStatusQueryTool, "query_dove_status should exist");
-  assert.match(doveStatusQueryTool.description, /whole-project statusHome/);
+  assert.match(doveStatusQueryTool.description, /compact Dove status translator/);
+  assert.match(doveStatusQueryTool.description, /summary\/headline/);
+  assert.match(doveStatusQueryTool.description, /nextStep/);
+  assert.match(doveStatusQueryTool.description, /needsAttention/);
+  assert.match(doveStatusQueryTool.description, /changes/);
+  assert.match(doveStatusQueryTool.description, /showMore/);
+  assert.match(doveStatusQueryTool.description, /one recommended action/);
+  assert.match(doveStatusQueryTool.description, /resultMode: full\/debug/);
   assert.match(doveStatusQueryTool.description, /statusHome\.durableContextNotice/);
   assert.match(doveStatusQueryTool.description, /mutationRollbackModel/);
   assert.match(doveStatusQueryTool.description, /patch-plan plus host-tracked file-edit requirements/);
@@ -3281,10 +3336,10 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.match(doveStatusQueryTool.description, /not direct-process/);
   assert.match(doveStatusQueryTool.description, /not reset_dove_version/);
   assert.match(doveStatusQueryTool.description, /statusHome\.preActionGuidance/);
-  assert.match(doveStatusQueryTool.description, /ordinary-prompt intent routing/);
   assert.match(doveStatusQueryTool.description, /automatic read-only lesson recall/);
-  assert.match(doveStatusQueryTool.description, /Planner\/Builder\/Reviewer role-framed next action/);
-  assert.match(doveStatusQueryTool.description, /optional mission details/);
+  assert.match(doveStatusQueryTool.description, /Planner\/Builder\/Reviewer role framing/);
+  assert.match(doveStatusQueryTool.description, /must not render a Missions panel/);
+  assert.match(doveStatusQueryTool.description, /showMissions\/includeMissionDetails/);
   assert.ok(resetDoveVersionTool, "reset_dove_version should exist");
   assert.match(resetDoveVersionTool.description, /direction-change snapshot/);
   assert.match(resetDoveVersionTool.description, /not a \.dove rollback restore entrypoint/);

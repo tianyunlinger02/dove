@@ -263,6 +263,7 @@ test("pre-action guidance explains source note and document deposition routes", 
   assert.match(source.intentFrame.interpretedIntent, /Register verified external links, templates, guidelines/);
   assert.match(source.intentFrame.interpretedIntent, /candidate links/);
   assert.match(source.workflowFrame.recommendedRoute, /register_source/);
+  assert.match(source.workflowFrame.recommendedRoute, /quick path/);
   assert.match(source.workflowFrame.recommendedRoute, /candidate links separate/);
   assert.match(source.workflowFrame.recommendedRoute, /batch/);
   assert.match(source.workflowFrame.recommendedRoute, /upsert_note/);
@@ -278,11 +279,26 @@ test("pre-action guidance explains source note and document deposition routes", 
   });
   assert.equal(note.roleFrame.primaryRole, "builder");
   assert.equal(note.roleFrame.subagentSpecialty, "researcher");
-  assert.match(note.intentFrame.interpretedIntent, /Synthesize registered sources/);
+  assert.match(note.intentFrame.interpretedIntent, /directly synthesize registered sources/);
   assert.match(note.intentFrame.interpretedIntent, /must not be disguised as external sources/);
   assert.match(note.workflowFrame.recommendedRoute, /upsert_note/);
+  assert.match(note.workflowFrame.recommendedRoute, /quick path/);
   assert.match(note.workflowFrame.recommendedRoute, /packet-bound synthesis/);
   assert.match(note.workflowFrame.recommendedRoute, /registered sources/);
+
+  const draft = buildPreActionGuidance({
+    surface: "dove.draft",
+    responseLanguage: "en",
+    workflowKind: "draft",
+    tags: ["draft"]
+  });
+  assert.equal(draft.roleFrame.primaryRole, "builder");
+  assert.equal(draft.roleFrame.subagentSpecialty, "researcher");
+  assert.match(draft.intentFrame.interpretedIntent, /directly record a packet-bound draft body/);
+  assert.match(draft.intentFrame.interpretedIntent, /placeholder draft/);
+  assert.match(draft.workflowFrame.recommendedRoute, /upsert_draft/);
+  assert.match(draft.workflowFrame.recommendedRoute, /quick path/);
+  assert.match(draft.workflowFrame.recommendedRoute, /run_review_loop/);
 
   const documents = buildPreActionGuidance({
     surface: "dove.documents",
@@ -291,8 +307,9 @@ test("pre-action guidance explains source note and document deposition routes", 
     tags: ["document", "evidence"]
   });
   assert.equal(documents.roleFrame.primaryRole, "builder");
-  assert.equal(documents.intentFrame.interpretedIntent, "Bind reports or outputs as document evidence to a durable packet while preserving source/artifact provenance.");
+  assert.equal(documents.intentFrame.interpretedIntent, "When a report or output summary/path is present, directly bind it as document evidence to a durable packet while preserving source/artifact provenance.");
   assert.match(documents.workflowFrame.recommendedRoute, /record_document_evidence/);
+  assert.match(documents.workflowFrame.recommendedRoute, /quick path/);
   assert.match(documents.workflowFrame.recommendedRoute, /packet-bound report\/archive ledger/);
   assert.match(documents.workflowFrame.recommendedRoute, /source and artifact provenance/);
   assert.equal(documents.guardrails.boundedForegroundOnly, true);

@@ -125,7 +125,8 @@ test("workflow goal validation routes missing contracts and preserves flat publi
   assert.ok(missingContractGoal);
   assert.equal(missingContractGoal.evidence.returnStatus, "blocked");
   assert.equal(missingContractGoal.evidence.missingContractCount, 1);
-  assert.equal(missingContractGoal.evidence.firstActionKind, "missing-executable-contract");
+  assert.equal(missingContractGoal.evidence.firstActionKind, "recover-current-work");
+  assert.equal(missingContractGoal.evidence.recoveryPrimaryKind, "missing-executable-contract");
   assert.equal(missingContractGoal.evidence.executionNextRole, "planner");
 
   const surfacesGoal = result.results.find((goal) => goal.id === "public-surfaces-stay-flat");

@@ -21,7 +21,7 @@ Dove exposes one flat public command surface:
 | `project:dove.init` | Create or update the single project-level goal, represented as the unique level-0 task. |
 | `project:dove.mission` | Convert a natural-language demand into a durable work contract with scope, deliverables, evidence, done criteria, and recommended next routes; after approval, materialize it and run one bounded foreground pass. |
 | `project:dove.auto` | Convert demand or select a task with compact task/auto cards; after approval, run bounded multi-round foreground iterations until completion, a boundary, or the configured limit. |
-| `project:dove.status` | Inspect the live development situation, then show a daily home screen with ranked action cards, boundaries, and guarded status adjustments. |
+| `project:dove.status` | Answer “what should I do next?” with one-sentence state, one recommended action, and explicit mission/full/debug expansion paths. |
 | `project:dove.operator` | Preview compact queue cards, then run one confirmed foreground pass over ready/in-progress work and blocker-investigation planning. |
 | `project:dove.lessons` | Query or record global/task-bound lessons that future Dove work must obey. |
 | `project:dove.version` | Snapshot a direction change and clear active non-init tasks while preserving init and required lessons. |
@@ -42,7 +42,7 @@ Older router, checklist, plan, audit, return, follow-through, onboarding, govern
 2. Pick the syntax for your host. The canonical command id is `dove.mission`; Claude Code users should have one user-level `/dove:mission` entrypoint, while OpenCode users commonly see project adapters as `project:dove.mission`.
 3. Start with a real demand, not a command inventory. For engineering work, use `/dove:mission 修复 doctor 报错并运行相关验证`; Dove should propose a task contract, ask for confirmation, then record the foreground pass result or persist a clear boundary for missing host evidence. If no init goal exists, the same confirmation should show the proposed init and task before writing either one.
 4. Use presets inside a selected or newly created task: `/dove:figure 画 pipeline overview`, `/dove:draft 修改 introduction`, or `/dove:experience 规划并记录 ablation 结果`. Presets should resolve one durable task packet or ask for confirmation instead of silently guessing.
-5. Use `/dove:status` as the default read-only daily home screen. It first reports the live host-visible development situation, then shows pre-action guidance, executable workflow gaps, blockers/reconciliation, and ranked next action cards. Mission details stay secondary and collapsed unless the operator explicitly asks for them. The terminal `dove status` command prints the same compact project summary by default; `dove status --json` or `dove status --format json` returns compact JSON, while `dove status --full --json` or `dove status --detail full --json` returns the full machine-readable dashboard. Use `dove statusline .` for terminal status bars that need a one-line read-only mission summary.
+5. Use `/dove:status` as the default read-only “what next?” surface. The default CLI/human view is intentionally small: `Dove:` says the current state in one sentence, `Next:` gives exactly one recommended action, `Why:` explains why that action matters, and `More:` points to `--missions`, `--json`, or `--full --json` when you want task or governance detail. The terminal `dove status` command prints the same four-line view by default; `dove status --missions` expands mission details with a `Priority lane`, then a compact `Queue summary` and short `Queue preview` instead of dumping the whole backlog. Use `--full --json` when you need the complete machine-readable mission list. `dove status --json` or `dove status --format json` returns compact JSON with `headline`, `nextStep`, `needsAttention`, `changes`, and `showMore`, while `dove status --full --json` or `dove status --detail full --json` returns the full machine-readable dashboard. Use `dove statusline .` for terminal status bars that need a one-line read-only mission summary.
 6. Use `/dove:operator` when you want to preview and run one foreground pass over queued work; it must not claim host work happened without pass results or a safe internal workflow step.
 7. When a task yields reusable operating knowledge, record it with `/dove:lessons`.
 
@@ -70,7 +70,7 @@ Dove treats work as a tree rooted at one init task:
 - After approval, `/dove:mission` immediately performs one bounded foreground pass and records its task status, evidence, blockers, and next action with `record_dove_mission_pass`.
 - After a packet exists, `/dove:status` should route continuation to `/dove:auto --packet-id <id>` or a domain workflow such as `/dove:draft`, `/dove:source`, `/dove:note`, `/dove:experience`, `/dove:figure`, or `/dove:review`; `/dove:mission` is for converting a new demand into a contract, not for repeatedly continuing an existing packet.
 - When a completed mission pass has stage `plan`, Dove converts only explicit `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion` output into pending durable missions. Every plan-derived mission must include an executable `executionContract` with `action`, `implementation`, `convergence.criteria`, and `failureRoutes`; missing or non-executable child output is rejected as a boundary instead of being inferred from the parent title.
-- `/dove:status` first reports the live development situation from host-visible context, not from `.dove` internals, then uses the default compact `statusHome`/`dailyHome` result to show pre-action guidance, executable workflow gaps, blockers/reconciliation, ranked next action cards, and proposal-only boundary action cards. Mission details remain optional/collapsed and should be expanded only when the operator explicitly asks to inspect current missions; hosts should not request `detail: "full"` or read a saved full status result file unless the operator explicitly asks to expand/debug details. Hosts should ask at most one confirmation dialog with compact adjustment cards only when status changes are requested or clearly actionable, do nothing when the dialog does not provide clear `packetId -> status` adjustments, then call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
+- `/dove:status` uses the default compact `statusHome` result as a human translation layer: `headline`, one `nextStep`, `needsAttention`, `changes`, and `showMore`. It should not make ordinary users read packet ids, mission lists, boundary/gap codes, blocked counts, execution-gap counts, or required-evidence blocks before they know the single next action. Mission details remain optional/collapsed and should be expanded only when the operator explicitly asks to inspect current missions; hosts should not request `detail: "full"` or read a saved full status result file unless the operator explicitly asks to expand/debug details. Hosts should ask at most one confirmation dialog with compact adjustment cards only when status changes are requested or clearly actionable, do nothing when the dialog does not provide clear `packetId -> status` adjustments, then call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
 - Boundary types such as `awaiting-host-pass`, `needs-review`, and `awaiting-provider-output` are first-class metadata, not task statuses. They keep the current machine status coarse while recording required inputs/actions, `ownerRole`, `nextRole`, and optional `handoff` metadata.
 - `/dove:operator` previews compact cards for auto-runnable, host-pass-required, blocked, and pending queues before confirmation. Confirmed runs execute only safe internal steps, record explicit host-supplied task results, or create pending plan missions for blocked-task investigation; host-pass-required tasks without `taskResults` remain unchanged and return the required evidence/actions instead of pretending execution happened.
 - Dove computes stage (`plan`, `execute`, `audit`) and domain (`paper`, `experiment`, `engineering`) from the request unless explicit values are supplied.
@@ -224,30 +224,30 @@ The current gate includes the operator host-pass-only pressure test: if `/dove:o
 
 ## MCP tools
 
-The optional MCP layer exposes deterministic helpers for hosts and integrations, including compact `statusHome`/`dailyHome`, proposal-only action cards, and compact confirmation cards. Full status dashboard, task tree, and runtime details are available only when callers explicitly request full detail. Public workflows use tools such as:
+The optional MCP layer exposes deterministic helpers for hosts and integrations, including compact `statusHome`/`dailyHome`, proposal-only action cards, compact confirmation cards, and operator-facing result contracts. Full status dashboard, task tree, runtime details, and the complete canonical tool registry are available only when callers explicitly request full or debug detail.
 
-- `init_dove_goal`
+Default `tools/list` discovery returns a compact operator surface rather than every canonical helper. Common entry tools include:
+
+- `query_dove_status`
+- `query_dove_orchestrate`
+- `query_document_ledger`
+- `query_operator_lessons`
 - `create_dove_task`
-- `record_dove_mission_pass`
-- `apply_dove_status_adjustments`
 - `run_dove_auto`
 - `run_dove_operator`
-- `reset_dove_version`
-- `run_experience_workflow`
-- `run_figure_workflow`
-- `run_audio_review`
-- `run_dove_review_loop`
 - `register_source`
 - `upsert_note`
 - `upsert_draft`
-- `normalize_rebuttal_issues`
+- `record_document_evidence`
+- `run_figure_workflow`
+- `run_experience_workflow`
+- `run_review_loop`
 - `build_rebuttal_strategy`
-- `build_rebuttal`
-- `query_dove_status`
-- `query_operator_lessons`
-- `record_operator_lesson`
+- `query_dove_return`
 
-Lower-level support tools remain available for internal composition, validation, import/export handoffs, and compatibility with durable artifacts. They are not necessarily public slash commands.
+Compact MCP results include `operatorRoute`, `operatorUnblock`, `writeIntent`, and `rollbackEligible` so callers can tell no-write checks from proposed patches or applied durable writes without reading a full diagnostic payload.
+
+Lower-level support tools remain available for internal composition, validation, import/export handoffs, and compatibility with durable artifacts. They can still be called by canonical name when appropriate, but they are not part of default operator discovery and are not necessarily public slash commands.
 
 ## Role model
 
