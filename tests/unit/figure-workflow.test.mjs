@@ -79,6 +79,69 @@ function readFigures(root) {
   return readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [] });
 }
 
+function assertFigureResultCard(result, expected = {}) {
+  assert.ok(result.resultCard && typeof result.resultCard === "object");
+  assert.equal(result.resultCard.presentation, "compact-result-summary-card");
+  assert.equal(result.resultCard.surface, "dove.figure");
+  assert.equal(result.resultCard.command, "run_figure_workflow");
+  assert.equal(result.resultCard.status, expected.status ?? result.status);
+  assert.equal(result.resultCard.scope.kind, "figure");
+  assert.equal(result.resultCard.scope.figureId, expected.figureId ?? result.figureId);
+  if (expected.packetId) {
+    assert.equal(result.resultCard.scope.packetId, expected.packetId);
+  }
+  if (expected.happened) {
+    assert.match(result.resultCard.happened, expected.happened);
+  }
+  const action = result.resultCard.nextActions[0];
+  assert.ok(action && typeof action === "object");
+  if (expected.nextActionTitle) {
+    assert.match(action.title, expected.nextActionTitle);
+  }
+  if (expected.nextActionCommand) {
+    assert.equal(action.command, expected.nextActionCommand);
+  }
+  if (expected.boundaryType) {
+    assert.equal(result.resultCard.boundary?.type, expected.boundaryType);
+    assert.equal(result.resultCard.boundary?.detail?.implementationBoundaryType, undefined);
+    assert.equal(result.resultCard.boundary?.detail?.implementationReason, undefined);
+    assert.equal(action.boundaryType, expected.boundaryType);
+    assert.equal(action.boundary?.type, expected.boundaryType);
+    assert.equal(action.boundary?.detail?.implementationBoundaryType, undefined);
+    assert.equal(action.boundary?.detail?.implementationReason, undefined);
+  }
+  for (const key of ["sourceSvgPath", "finalSvgPath", "qaPath", "providerExecution", "providerReadiness", "figureQa", "evidence", "validation", "codeChanges", "plan"]) {
+    assert.equal(key in result.resultCard, false, `figure resultCard leaked ${key}`);
+  }
+  for (const key of ["artifactRefs", "artifactPaths", "evidencePaths", "validationEvidencePaths", "qaPath", "resultPath"]) {
+    assert.equal(key in (result.resultCard.boundary ?? {}), false, `figure resultCard boundary leaked ${key}`);
+    assert.equal(key in (action.boundary ?? {}), false, `figure resultCard action boundary leaked ${key}`);
+  }
+  const actionText = JSON.stringify(action);
+  assert.doesNotMatch(actionText, /\.dove\//, "figure resultCard action leaked a Dove artifact path");
+  assert.doesNotMatch(actionText, /sourceSvgPath|finalSvgPath|outputManifestPath|svgContent|qaPath|figure-qa/u, "figure resultCard action leaked internal figure fields");
+}
+
+test("runFigureWorkflow does not expose generated figure ids in public summaries", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+
+    const result = runFigureWorkflow(root, {
+      packetId,
+      intent: "准备一张方法流程图，先走手工 SVG，不调用 gpt-image2"
+    });
+
+    assert.equal(result.status, "prepared-awaiting-output");
+    assert.match(result.figureId, /gpt-image2/);
+    assert.doesNotMatch(result.resultCard.happened, new RegExp(result.figureId));
+    assert.doesNotMatch(result.resultCard.happened, /gpt-image2/);
+    assert.match(result.resultCard.happened, /这张图的计划和材料包已经准备好/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("runFigureWorkflow turns one SVG-backed intent into a validated figure", () => {
   const root = tempRoot();
   try {
@@ -105,6 +168,14 @@ test("runFigureWorkflow turns one SVG-backed intent into a validated figure", ()
     assert.equal(result.stageFiles.editableCreated, true);
     assert.equal(result.boundary, null);
     assert.equal(result.boundaryType, null);
+    assertFigureResultCard(result, {
+      status: "validated",
+      figureId: "single-intent",
+      packetId,
+      happened: /通过当前图检查|ready for review/,
+      nextActionTitle: /review/,
+      nextActionCommand: "project:dove.review"
+    });
     assert.ok(result.artifactRefs.includes(ARTIFACT_PATHS.figureQa));
     assert.deepEqual(result.validationEvidencePaths, [ARTIFACT_PATHS.figureQa]);
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "single-intent.final.svg")), true);
@@ -114,6 +185,41 @@ test("runFigureWorkflow turns one SVG-backed intent into a validated figure", ()
     const figure = readFigures(root).items.find((item) => item.id === "single-intent");
     assert.equal(figure.status, "generated");
     assert.deepEqual(figure.targetClaimIds, ["claim-figure-workflow"]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runFigureWorkflow result card focuses current-figure QA issues", () => {
+  const root = tempRoot();
+  try {
+    const packetId = seedFigureWorkflowContext(root);
+
+    const result = runFigureWorkflow(root, {
+      packetId,
+      figureId: "qa-needs-attention",
+      runId: "qa-needs-attention-run",
+      intent: "Draw a figure that intentionally misses one visual element.",
+      targetClaimIds: ["claim-figure-workflow"],
+      sourceSections: ["method"],
+      requiredVisualElements: ["evidence node", "review gate"],
+      svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Evidence node only</text></svg>",
+      caption: "Evidence-only figure caption."
+    });
+
+    assert.equal(result.status, "qa-needs-attention");
+    assert.ok(result.qaIssueCount > 0);
+    assertFigureResultCard(result, {
+      status: "qa-needs-attention",
+      figureId: "qa-needs-attention",
+      packetId,
+      happened: /当前图还有|still has/,
+      nextActionTitle: /需要修|review issues/,
+      nextActionCommand: "project:dove.review",
+      boundaryType: "verification-failed"
+    });
+    assert.match(result.resultCard.happened, /当前图|this figure/);
+    assert.doesNotMatch(result.resultCard.happened, /workspace|全工作区|全局/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -156,6 +262,14 @@ test("runFigureWorkflow validates current figure despite unrelated workspace QA 
     assert.ok(result.workspaceQaIssueCount > 0);
     assert.equal(result.boundary, null);
     assert.equal(result.nextAction, "project:dove.review");
+    assertFigureResultCard(result, {
+      status: "validated",
+      figureId: "scoped-clean",
+      packetId,
+      happened: /通过当前图检查|ready for review/,
+      nextActionCommand: "project:dove.review"
+    });
+    assert.doesNotMatch(result.resultCard.happened, /workspace|全工作区|全局|unrelated|12/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -304,6 +418,13 @@ process.stdout.write(JSON.stringify({
     assert.equal(result.status, "validated");
     assert.equal(result.diagnostics.providerExecution.status, "completed");
     assert.equal(result.imported.finalSvgPath, ".dove/figures/provider-intent.final.svg");
+    assertFigureResultCard(result, {
+      status: "validated",
+      figureId: "provider-intent",
+      packetId,
+      happened: /通过当前图检查|ready for review/,
+      nextActionCommand: "project:dove.review"
+    });
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "provider-intent.final.svg")), true);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -347,6 +468,15 @@ process.stdout.write(JSON.stringify({
     assert.equal(result.diagnostics.providerExecution.requiredMutationMode, "direct-process");
     assert.equal(result.boundaryType, "awaiting-provider-output");
     assert.equal(result.boundary.type, "awaiting-provider-output");
+    assertFigureResultCard(result, {
+      status: "prepared-awaiting-output",
+      figureId: "patch-plan-workflow",
+      packetId,
+      happened: /缺 SVG 输出|needs SVG output/,
+      nextActionTitle: /SVG|provider/,
+      nextActionCommand: "project:dove.figure",
+      boundaryType: "awaiting-provider-output"
+    });
     assert.ok(result.requiredActions.includes("retry-with-mutationMode-direct-process"));
     assert.ok(result.boundary.requiredInputs.includes("mutationMode: direct-process"));
     assert.equal(result.imported, null);
@@ -382,6 +512,15 @@ test("runFigureWorkflow prepares materials without marking a final figure ready 
     assert.equal(result.boundaryType, "awaiting-provider-output");
     assert.equal(result.boundary.type, "awaiting-provider-output");
     assert.deepEqual(result.boundary.requiredInputs, ["sourceSvgPath-or-outputManifestPath-or-svgContent"]);
+    assertFigureResultCard(result, {
+      status: "prepared-awaiting-output",
+      figureId: "prepared-only",
+      packetId,
+      happened: /缺 SVG 输出|needs SVG output/,
+      nextActionTitle: /SVG/,
+      nextActionCommand: "project:dove.figure",
+      boundaryType: "awaiting-provider-output"
+    });
     assert.ok(result.requiredActions.includes("run-provider-or-import-output"));
     assert.ok(result.artifactRefs.includes(ARTIFACT_PATHS.figureGenerations));
     assert.deepEqual(result.validationEvidencePaths, [ARTIFACT_PATHS.figureQa]);
@@ -418,6 +557,15 @@ test("runFigureWorkflow treats providerId none as a plan-only figure run", () =>
     assert.equal(result.diagnostics.providerReadiness.status, "not-configured");
     assert.equal(result.diagnostics.providerExecution, null);
     assert.equal(result.boundaryType, "awaiting-provider-output");
+    assertFigureResultCard(result, {
+      status: "prepared-awaiting-output",
+      figureId: "plan-only-provider-none",
+      packetId,
+      happened: /缺 SVG 输出|needs SVG output/,
+      nextActionTitle: /SVG/,
+      nextActionCommand: "project:dove.figure",
+      boundaryType: "awaiting-provider-output"
+    });
     assert.ok(result.requiredActions.includes("run-provider-or-import-output"));
     assert.equal(result.imported, null);
     assert.equal(result.finalSvgPath, null);
@@ -450,6 +598,15 @@ test("runFigureWorkflow surfaces missing figure materials as a boundary", () => 
     assert.equal(result.boundaryType, "missing-required-materials");
     assert.equal(result.boundary.type, "missing-required-materials");
     assert.equal(result.boundary.requiredInputs.some((item) => item.includes("missing-material")), true);
+    assertFigureResultCard(result, {
+      status: "blocked-missing-materials",
+      figureId: "missing-materials",
+      packetId,
+      happened: /缺材料|missing materials/,
+      nextActionTitle: /补|missing materials/,
+      nextActionCommand: "project:dove.figure",
+      boundaryType: "missing-required-materials"
+    });
     assert.ok(result.requiredActions.includes("provide-figure-materials"));
     assert.ok(result.requiredActions.includes("resolve-missing-figure-requirements"));
     assert.equal(result.nextAction, "project:dove.figure");
@@ -492,6 +649,15 @@ process.exit(3);
     assert.equal(result.boundaryType, "awaiting-provider-output");
     assert.equal(result.boundary.type, "awaiting-provider-output");
     assert.equal(result.boundary.detail.implementationBoundaryType, "provider-failed");
+    assertFigureResultCard(result, {
+      status: "blocked-boundary",
+      figureId: "provider-failure",
+      packetId,
+      happened: /画图服务生成失败|Drawing-provider generation failed/,
+      nextActionTitle: /provider|SVG/,
+      nextActionCommand: "project:dove.figure",
+      boundaryType: "awaiting-provider-output"
+    });
     assert.deepEqual(result.boundary.requiredInputs, ["provider-error-resolution-or-manual-output"]);
     assert.ok(result.requiredActions.includes("fix-figure-provider-and-retry"));
     assert.ok(result.requiredActions.includes("import-manual-figure-output"));
@@ -529,6 +695,15 @@ test("runFigureWorkflow routes gpt-image2 missing key to a secret boundary", () 
     assert.equal(result.boundaryType, "awaiting-provider-output");
     assert.equal(result.boundary.type, "awaiting-provider-output");
     assert.equal(result.boundary.detail.implementationBoundaryType, "missing-secret-env");
+    assertFigureResultCard(result, {
+      status: "blocked-boundary",
+      figureId: "gpt-image2-missing-key",
+      packetId,
+      happened: /OPENAI_API_KEY|provider API key/,
+      nextActionTitle: /OPENAI_API_KEY|手工 SVG|manual SVG/,
+      nextActionCommand: "project:dove.figure",
+      boundaryType: "awaiting-provider-output"
+    });
     assert.deepEqual(result.boundary.requiredInputs, ["OPENAI_API_KEY"]);
     assert.ok(result.requiredActions.includes("set-provider-api-key-env"));
     assert.equal(result.imported, null);

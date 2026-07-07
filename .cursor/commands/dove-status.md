@@ -1,67 +1,42 @@
 ---
-description: "Show a human Dove status home: one-sentence state, one recommended next action, and explicit expansion paths for missions/full/debug details."
+description: "Show a natural Dove status home that explains the current situation, the smallest useful next action, and how to expand only when needed."
 ---
 
 # dove-status
 
-Show a human Dove status home: one-sentence state, one recommended next action, and explicit expansion paths for missions/full/debug details.
+Show a natural Dove status home that explains the current situation, the smallest useful next action, and how to expand only when needed.
 
 ## Daily use
 
 - Use this to answer the ordinary operator question: what should I do next?
-- Default output should be a compact human translation layer: statusHome.headline, exactly one statusHome.nextStep, statusHome.needsAttention, statusHome.changes, and statusHome.showMore; keep currentContext, preActionGuidance, durableContextNotice, project state, blockers/reconciliation, raw boundary/action cards, and mission lists behind explicit mission/full/debug expansion.
-- Targeting: Default output is not a mission board or audit report: do not render packet ids, mission lists, boundary/gap codes, blocked counts, execution-gap counts, or required-evidence blocks unless showMissions/includeMissionDetails/full/debug or a normal prompt such as show current missions asks for expansion.
-- Confirmation: Do not ask for status changes during default `/dove:status`. Use compact adjustment cards and at most one confirmation dialog only after explicit status-change intent or requestStatusAdjustment/includeStatusAdjustmentPreview; no parseable packetId-to-status adjustment means no mutation.
-- Outcome: The operator sees one Dove state line, one recommended next action, one why/needs line, and one expansion/no-write hint; confirmed status adjustments still return localized resultCard summaries.
+- Default output should read like a project assistant: briefly explain the current situation, name the smallest useful next action, and mention expansion only when it helps. Do not impose a fixed four-line template or a numbered checklist by default.
+- If the host has to inspect saved records directly, translate what it finds into user actions instead of repeating file names, ids, route strings, tool names, or storage terms.
+- Default prose should avoid storage, tool, and check jargon; describe saved project state, standing guidance, available capabilities, stored records, or current-figure review issues in ordinary language.
+- Targeting: Default output is not a mission board or audit report: do not enumerate ids, role names, version markers, mission lists, route names, repair queues, raw counts, low-level fields, evidence blocks, or diagnostics unless the operator explicitly asks to expand.
+- Confirmation: Do not ask for status changes during default `/dove:status`; preview or apply status changes only after explicit status-change intent, and require one clear confirmation step before mutation.
+- Outcome: The operator gets a short, natural status answer with an actionable next step; confirmed status adjustments still return localized resultCard summaries.
 
 ## Examples
 
 - `/dove:status`
 - `/dove:status Show what is blocked and what the next step is`
 
-## Contract
+## Operating rules
 
-- Command id: `dove.status`
-- Domain: `generic`
-- Category: `mutation`
-- Policy: `explicit-approval`
-
-## Guardrails
-
-1. Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.
-2. Follow Dove's response language preference from `.dove/config.json`, `.dove/config.local.json`, or `.dove/state.json.settings.responseLanguage`; supported values are `zh` for Chinese and `en` for English, and the default is `zh`.
-3. Read the narrow durable context first when present: `.dove/context/actions/current.json`, `.dove/workspace/index.json`, `.dove/config.json`, `.dove/config.local.json`, `.dove/state.json`, `.dove/task-packets/index.json`, `.dove/reviews/REVIEW_STATE.json`, `.dove/reviews/concerns.json`, `.dove/versions/index.json`, `.dove/versions/comparisons.json`, `.dove/meta/operator-lessons.json`, `.dove/experiments`, `.dove/checklists/current.md`, `.dove/orchestration/board.json`, `.dove/runtime/continuation.json`, `.dove/runtime/events.json`, `.dove/runtime/results.json`.
-4. Use the `query_dove_status`, `apply_dove_status_adjustments` MCP tools when available.
-5. Require explicit operator approval before creating or changing durable workflow state or consuming bounded authority.
-6. For ordinary prompts, first use compact `query_dove_status` and `statusHome.preActionGuidance` for intent routing before choosing a mutation command; users should not need to guess slash command names.
-7. For ordinary prompts that ask to bind, save, deposit, archive, or 沉淀 results to a main task, resolve the durable packet first, register external URLs/templates/guidelines as packet-bound sources, then synthesize internal findings through `upsert_note` or `record_document_evidence` instead of treating the synthesis as an external source.
-8. When reporting research or venue results, separate snapshot-backed or registered sources from candidate links, blocked retrieval candidates, and internal notes/documents; do not put unverified candidates under a generic `Sources:` list.
-9. Treat `preActionGuidance` as read-only guidance that automatically recalls applicable lessons from `.dove/meta/operator-lessons.json`; recording lessons remains explicit through `/dove:lessons` and `record_operator_lesson` only.
-10. Frame work through Planner, Builder, and Reviewer primary roles; researcher, experiment-planner, revision-lead, rebuttal-lead, version-analyst, and review-loop are subagents/modes under those roles, not public slash surfaces.
-11. Planner output must be executable: every new or plan-derived mission needs canonical `executionContract.action`, `implementation`, `convergence.criteria`, and `failureRoutes`; do not invent substitute child missions or infer child work from the parent title when explicit child mission details are missing.
-12. Builder completion requires a result summary plus real evidence/artifact/validation/verification paths and `verifiedCriteria` that covers every `executionContract.convergence.criteria` item; read-only status, summary-only output, or unknown step status must not mark work complete.
-13. Reviewer and audit work may inspect evidence and record explicit review state, but must stay read-only with respect to Builder outputs unless an operator explicitly asks to record review/revision artifacts.
-14. Treat status as the project command center and mission as a durable work contract/progress object; rank missing executable contracts, missing source/material inputs, ready Builder execution, verification gaps, reviewer/audit needs, and reconciliation above optional mission details.
-15. Dove `.dove/` durable state participates in host rollback only through host-tracked file edits: request `mutationMode: "patch-plan"`, inspect the returned operations, and apply them with the host's tracked file-edit mechanism. Direct CLI/MCP `direct-process` writes remain functional but rollback-unverified; git presence is not proof, and host rollback must not be routed through `reset_dove_version`.
-16. Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work.
-17. Use status as the unified whole-project situation home; do not expose separate plan, checklist, audit, return, orchestration, missions, board, or list slash surfaces.
-18. First call `query_dove_status` without `detail: "full"` to obtain the compact read-only Dove project situation home, but do not treat `.dove/` context as the live development situation. Explain the live development situation from host-visible context first: current user request, current session work, known worktree state when available, latest validation/test evidence, active implementation blockers, and what was just completed or is still pending. If live context was not inspected, say so instead of inferring it from `.dove/`.
-19. Keep `query_dove_status` read-only: it must return `proposalOnly: true`, `noAutoApply: true`, and `writes: []`.
-20. Surface `statusHome.durableContextNotice`: filesystem durable state rollback eligibility requires `mutationRollbackModel.patchPlanSupported: true`, host-tracked file edits applying `mutationMode: "patch-plan"` operations, `hostCheckpointStatus: not-programmatically-verifiable`, `externalWriteCaptureVerified: false`, `directProcessWritesAreRollbackSafe: false`, and `doveRestoreSupported: false`; direct-process writes remain functional but rollback-unverified, and status adjustment is only for small state corrections, not rollback restore.
-21. Use `statusHome` as a compact human translation layer with this default order: `statusHome.headline`, exactly one `statusHome.nextStep`, `statusHome.needsAttention`, `statusHome.changes`, and `statusHome.showMore`; keep `statusHome.currentContext`, `statusHome.preActionGuidance`, blockers/reconciliation, durable context, project state, and optional mission details behind explicit mission/full/debug expansion.
-22. Do not make mission lists, packet ids, boundary/gap codes, blocked counts, execution-gap counts, or required-evidence blocks the default body of `/dove:status`; default status must answer `what should I do next?` with one recovery or continuation action, and `statusHome.optionalMissionDetails` remains collapsed unless the operator explicitly asks for `show current missions`, `有哪些 mission`, `--missions`, `showMissions`, or `includeMissionDetails`.
-23. For normal mission-list prompts, call compact `query_dove_status` with `showMissions: true` or `includeMissionDetails: true` and expand `statusHome.optionalMissionDetails`; do not add or require `/dove:missions`, `/dove:board`, `/dove:list`, and do not route mission-list questions to `/dove:mission`.
-24. Treat `query_dove_mission_board` as a low-level MCP/debug board, not the default host route for ordinary mission-list prompts.
-25. Do not read a saved full status result file or request `detail: "full"` unless the operator explicitly asks to expand/debug full details.
-26. When `statusHome.blockersAndReconciliation.completionConsistency.status` is `needs-reconciliation`, present it as a legacy consistency issue: a done parent mission still has open checklist children. Do not recommend blanket-marking children done/completed; say to verify child evidence first, then either mark covered children done through confirmed status adjustment or reopen the parent mission.
-27. Use `actionableBoundaries`, `boundaryActionCards`, and current boundary metadata from `query_dove_status` to explain why missions are waiting, what evidence is required, and who owns the next role handoff.
-28. Use compact cards for status adjustment previews when available. Do not print raw internal dumps such as raw status-count objects, recent completed mission recaps, or recent killed mission recaps; if showing optional mission details, keep the `done` group collapsed unless the operator asks to expand it.
-29. Boundary types are first-class metadata, not machine status choices; keep status choices exactly `["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]`; `archived` is a cleanup lifecycle state, not deletion.
-30. When the host supports interactive confirmation controls, do not ask whether to modify mission statuses during default `/dove:status`; use a single confirmation dialog only when the operator clearly asks to change states or calls `query_dove_status` with `requestStatusAdjustment`/`includeStatusAdjustmentPreview`; build compact adjustment cards from adjustable missions excluding `completed`, `killed`, and `archived`; do not paginate by mission count or collect choices across multiple dialogs.
-31. The single confirmation dialog must provide a no-change path and a change/provide-adjustment-details path; if the operator does not provide parseable `packetId -> status` adjustments in that single dialog, do not call a mutation tool and instead ask for a clear adjustment format.
-32. For status adjustment choices, preserve exactly `["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]` as the machine status enum; default status hides archived missions and `includeArchived` may show archived counts/details without deleting evidence.
-33. Only call `apply_dove_status_adjustments` with `confirmed: true` after that single dialog yields explicit operator-confirmed status adjustments, then show the localized `resultCard` summary.
-34. Killing a mission is now a status choice in this UX, not a standalone public slash command.
-35. Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence.
-36. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-37. Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.
+1. For daily answers, first use the matching Dove capability or a local Dove CLI command; do not construct default answers by using host Read, Glob, Grep, or file-list tools over saved-record files.
+2. If the Dove capability or CLI command is unavailable, say the Dove runtime is unavailable or name the skipped live check in ordinary language instead of reading or dumping saved records.
+3. If the Dove CLI exits non-zero, report that message and stop; do not recover by reading saved records with host file tools.
+4. When a local Dove CLI is available, run `node ./bin/dove.mjs status .` from the project root before answering; summarize its compact output instead of inspecting saved records directly.
+5. Treat Dove's saved project records as the source of truth through Dove capability or local CLI results; translate those results into practical operator actions instead of repeating storage details.
+6. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
+7. Require explicit operator approval before creating or changing saved workflow records or consuming bounded authority.
+8. Start with the live situation the host can actually see, then fold in saved project state only as background guidance.
+9. Answer the operator's ordinary next-step question in short natural prose: the current situation, the smallest useful action, and why it matters when helpful.
+10. Default status is not a mission board or audit report; keep mission lists, ids, raw counts, route names, low-level fields, and diagnostics collapsed unless the operator asks to expand.
+11. When the operator asks to show missions, expand mission details inside this status surface instead of inventing separate list, board, or mission-board commands.
+12. Only preview or apply status changes after an explicit status-change request, using one confirmation step and a clear no-change path.
+13. For legacy parent/child consistency issues, tell the operator to verify child evidence first, then either mark covered children done through confirmed status adjustment or reopen the parent.
+14. After confirmed status changes, return the localized result card instead of a raw update log.
+15. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
+16. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+17. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.

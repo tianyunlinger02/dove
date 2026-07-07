@@ -7,7 +7,6 @@ import {
   COMMAND_SURFACES,
   PROJECT_HOST_IDS,
   adapterPathForCommand,
-  commandContextPaths,
   hostCommandSlug
 } from "../src/core/command-manifest.mjs";
 
@@ -27,37 +26,24 @@ function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function formatContextPaths(command) {
-  const paths = commandContextPaths(command).map((contextPath) => `\`${contextPath}\``).join(", ");
-  return `Read the narrow durable context first when present: ${paths}.`;
-}
-
-function formatTools(command) {
-  if (!command.requiredTools?.length) {
-    return "No required MCP tool; follow the command contract and route to the owning Dove surface when mutation is needed.";
-  }
-  const tools = command.requiredTools.map((tool) => `\`${tool}\``).join(", ");
-  return command.requiredTools.length === 1 ? `Prefer the ${tools} MCP tool when available.` : `Use the ${tools} MCP tools when available.`;
-}
-
 function policyLine(command) {
   switch (command.policy) {
     case "proposal-only":
-      return "Keep this surface proposal-only: inspect and route, but do not mutate durable state.";
+      return "Keep this surface proposal-only: inspect, suggest, and wait for an explicitly approved action before any change.";
     case "query":
-      return "Keep this surface read-only unless the named MCP tool explicitly performs a governed refresh.";
+      return "Keep this surface read-only unless the command explicitly asks for a governed refresh.";
     case "guarded-mutation":
-      return "Only perform the governed mutation owned by this surface, scoped to the operator request.";
+      return "Only perform the governed change owned by this surface, scoped to the operator request.";
     case "explicit-approval":
-      return "Require explicit operator approval before creating or changing durable workflow state or consuming bounded authority.";
+      return "Require explicit operator approval before creating or changing saved workflow records or consuming bounded authority.";
     case "governed-bookkeeping":
       return "Record only explicit operator bookkeeping for the governed Dove workflow.";
     case "guidance":
-      return "Provide workflow guidance only; route to another Dove surface for durable changes.";
+      return "Provide workflow guidance only; route to another Dove surface for saved changes.";
     case "isolated-handoff":
       return "Use explicit handoff artifacts for reviewer isolation; do not share hidden session context.";
     default:
-      return "Stay within the command contract and preserve Dove durable-state boundaries.";
+      return "Stay within the command contract and keep internal bookkeeping out of the default answer.";
   }
 }
 
@@ -76,22 +62,41 @@ function exampleBullets(command) {
   return Array.isArray(examples) ? examples.map((example) => String(example).trim()).filter(Boolean) : [];
 }
 
+const LOCAL_CLI_COMMANDS = new Map([
+  ["dove.status", { command: "node ./bin/dove.mjs status ." }],
+  ["dove.mission", { command: "node ./bin/dove.mjs mission ." }],
+  ["dove.figure", { command: "node ./bin/dove.mjs figure . --intent \"<figure request>\"", note: "For figure requests, use the CLI result as the source of truth, say the practical figure state in ordinary language, and do not apply returned file changes unless the operator explicitly approves. If the CLI says a task must be selected and the operator confirms one, rerun `node ./bin/dove.mjs figure . --target \"<confirmed task title>\" --intent \"<figure request>\"` instead of putting the task title inside the intent." }]
+]);
+
+function localCliBullets(command) {
+  const localCli = LOCAL_CLI_COMMANDS.get(command.id);
+  if (localCli) {
+    return [
+      `When a local Dove CLI is available, run \`${localCli.command}\` from the project root before answering; summarize its compact output instead of inspecting saved records directly.`,
+      ...(localCli.note ? [localCli.note] : [])
+    ];
+  }
+  return ["If neither a matching Dove capability nor a documented local Dove CLI command exists for this surface, do not emulate it by reading saved records with host tools; say the Dove runtime for this command is unavailable and ask for a capability or CLI route."];
+}
+
 function guardrailBullets(command) {
   const bullets = [
-    "Treat `.dove/` as the authoritative durable root and keep repository-local development scaffolding out of the Dove product surface.",
-    "Follow Dove's response language preference from `.dove/config.json`, `.dove/config.local.json`, or `.dove/state.json.settings.responseLanguage`; supported values are `zh` for Chinese and `en` for English, and the default is `zh`.",
-    formatContextPaths(command),
-    formatTools(command),
+    "For daily answers, first use the matching Dove capability or a local Dove CLI command; do not construct default answers by using host Read, Glob, Grep, or file-list tools over saved-record files.",
+    "If the Dove capability or CLI command is unavailable, say the Dove runtime is unavailable or name the skipped live check in ordinary language instead of reading or dumping saved records.",
+    "If the Dove CLI exits non-zero, report that message and stop; do not recover by reading saved records with host file tools.",
+    ...localCliBullets(command),
+    "Treat Dove's saved project records as the source of truth through Dove capability or local CLI results; translate those results into practical operator actions instead of repeating storage details.",
+    "Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.",
     policyLine(command),
-    ...(command.constraints ?? []),
-    "Preserve the primary role boundary: planner sets scope, builder performs work, and reviewer independently audits returned evidence."
+    ...(command.adapterConstraints ?? []),
+    "Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended."
   ];
   if (command.domain === "paper") {
-    bullets.push("Use paper-domain artifacts through top-level Dove presets for sources, notes, drafting, review, rebuttal, experiences, figures, and version lineage.");
+    bullets.push("Use paper workflows through the top-level Dove surfaces for sources, notes, drafting, review, rebuttal, experiences, figures, and version lineage.");
   } else {
     bullets.push("Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.");
   }
-  bullets.push("Return the next action, evidence expectations, and any unresolved blockers without claiming work that was not performed.");
+  bullets.push("Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.");
   return bullets;
 }
 
@@ -112,7 +117,7 @@ function renderBody(command, heading) {
   const dailyUse = renderBullets(dailyUseBullets(command));
   const examples = renderExamples(command);
   const guardrails = renderNumbered(guardrailBullets(command));
-  return `# ${heading}\n\n${command.summary}\n\n## Daily use\n\n${dailyUse}${examples}\n\n## Contract\n\n- Command id: \`${command.id}\`\n- Domain: \`${command.domain}\`\n- Category: \`${command.category}\`\n- Policy: \`${command.policy}\`\n\n## Guardrails\n\n${guardrails}\n`;
+  return `# ${heading}\n\n${command.summary}\n\n## Daily use\n\n${dailyUse}${examples}\n\n## Operating rules\n\n${guardrails}\n`;
 }
 
 function renderFrontmatter(command, fields = {}) {

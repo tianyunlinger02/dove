@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
+  assertResolvedTaskPacket,
   createDoveTask,
   ensureWorkspace,
   launchDoveMission,
@@ -136,6 +137,80 @@ function assertDurableContextNotice(notice) {
   assert.equal(notice.recoveryActions[3].confirmationRequired, true);
 }
 
+function assertPublicCompactStatus(result) {
+  assert.equal(result.detail, "compact");
+  assert.equal(result.detailsAvailable, true);
+  assert.equal(result.statusHome.presentation, "dove-project-situation-home");
+  assert.equal(result.statusHome.detail, "compact");
+  assert.equal(result.statusHome.liveContextFirst, true);
+  assert.equal(result.statusHome.detailsAvailable, true);
+  assert.ok(result.statusHome.headline);
+  assert.ok(result.statusHome.scope && typeof result.statusHome.scope === "object");
+  assert.equal(result.statusHome.scope.kind, "workspace");
+  assert.ok(result.statusHome.currentContext && typeof result.statusHome.currentContext === "object");
+  assert.ok(result.statusHome.nextStep && typeof result.statusHome.nextStep === "object");
+  assert.ok(result.statusHome.needsAttention && typeof result.statusHome.needsAttention === "object");
+  assert.deepEqual(result.statusHome.changes, {
+    intent: "none",
+    applied: false,
+    count: 0,
+    rollback: "not-applicable"
+  });
+  assert.deepEqual(result.changes, result.statusHome.changes);
+  assert.ok(result.statusHome.showMore?.text);
+  assert.doesNotMatch(result.statusHome.showMore.text, /--missions|--full|--json/);
+  assert.equal(result.statusHome.showMore.fullDetails.args.detail, "full");
+  assert.equal(result.statusHome.showMore.missionDetails.args.showMissions, true);
+  assert.equal(result.showMore.noWriteSummary, result.statusHome.showMore.noWriteSummary);
+
+  for (const key of [
+    "boundary",
+    "boundaryType",
+    "operatorRoute",
+    "operatorUnblock",
+    "gaps",
+    "executionGaps",
+    "requiredEvidence",
+    "projectBacklogRequiredEvidence",
+    "projectBacklogNextAction",
+    "nextAction",
+    "nextSteps",
+    "writes",
+    "writeIntent",
+    "rollbackEligible",
+    "fullDetails",
+    "expansion",
+    "durableRoot",
+    "stateSource",
+    "runtimeContinuation",
+    "contractHealth"
+  ]) {
+    assert.equal(key in result.statusHome, false, `compact statusHome leaked ${key}`);
+  }
+  for (const key of [
+    "boundary",
+    "boundaryType",
+    "operatorRoute",
+    "operatorUnblock",
+    "gaps",
+    "executionGaps",
+    "requiredEvidence",
+    "nextAction",
+    "writes",
+    "writeIntent",
+    "rollbackEligible",
+    "current",
+    "suggestedNextCommand",
+    "fullDetails",
+    "expansion"
+  ]) {
+    assert.equal(key in result, false, `compact status result leaked ${key}`);
+  }
+  for (const key of ["durableRoot", "stateSource", "hostCheckpointDetected", "hostCheckpointStatus", "externalWriteCaptureVerified"]) {
+    assert.equal(key in result.statusHome.currentContext, false, `compact currentContext leaked ${key}`);
+  }
+}
+
 function writeTaskPacket(root, packet) {
   const packetPath = packet.packetPath ?? path.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packet.id}.json`);
   const packetContextPath = packet.packetContextPath ?? path.join(ARTIFACT_PATHS.packetContextsDir, `${packet.id}.json`);
@@ -179,6 +254,116 @@ function writeTaskPacket(root, packet) {
   return { packetPath, packetContextPath };
 }
 
+test("task target resolver prefers full Unicode task titles over short ASCII fragments", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    const timestamp = new Date(0).toISOString();
+    writeTaskPacket(root, {
+      id: "venue-main",
+      title: "调研计算机高水平 venue 模板与写作偏好",
+      summary: "Main venue writing preference task.",
+      status: "in-progress",
+      lifecycleStatus: "active",
+      active: true,
+      assignedRole: "builder",
+      level: 3,
+      creatorKind: "operator",
+      domain: "paper",
+      stage: "execute",
+      updatedAt: timestamp
+    });
+    writeTaskPacket(root, {
+      id: "venue-fields",
+      title: "设计信息表字段：venue、方向、官网/模板、格式要求、代表论文、写作风格、审稿关注点。",
+      summary: "A related checklist item that shares the ASCII word venue.",
+      status: "pending",
+      lifecycleStatus: "ready",
+      active: true,
+      assignedRole: "builder",
+      level: 4,
+      creatorKind: "operator",
+      domain: "paper",
+      stage: "execute",
+      updatedAt: timestamp
+    });
+
+    const resolved = assertResolvedTaskPacket(root, {
+      target: "调研计算机高水平 venue 模板与写作偏好"
+    }, {
+      targetFields: ["target"],
+      mutationScope: "task-scoped-write"
+    });
+
+    assert.equal(resolved.packetId, "venue-main");
+    assert.equal(resolved.packet.title, "调研计算机高水平 venue 模板与写作偏好");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI figure defaults to a governed patch-plan without writing figure records", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    const timestamp = new Date(0).toISOString();
+    writeTaskPacket(root, {
+      id: "figure-cli-packet",
+      title: "Figure CLI packet",
+      summary: "Packet for figure CLI regression coverage.",
+      status: "pending",
+      lifecycleStatus: "active",
+      active: true,
+      assignedRole: "builder",
+      level: 1,
+      creatorKind: "operator",
+      domain: "paper",
+      stage: "execute",
+      updatedAt: timestamp
+    });
+    const figuresIndexPath = path.join(root, ARTIFACT_PATHS.figuresIndex);
+    const beforeFigures = fs.readFileSync(figuresIndexPath, "utf8");
+    const args = [
+      CLI,
+      "figure",
+      root,
+      "--packet-id",
+      "figure-cli-packet",
+      "--figure-id",
+      "cli-figure",
+      "--intent",
+      "Draw the research question to evidence, experiment, writing, and review loop.",
+      "--required-visual-element",
+      "research question node",
+      "--material-hint",
+      "The method section describes the evidence and review loop.",
+      "--allow-missing-materials"
+    ];
+
+    const human = spawnSync("node", args, { cwd: ROOT, encoding: "utf8" });
+    assert.equal(human.status, 0, human.stderr || human.stdout);
+    assert.match(human.stdout, /SVG|待确认方案/);
+    assert.doesNotMatch(human.stdout, /\.dove\//);
+    assert.doesNotMatch(human.stdout, /sourceSvgPath|finalSvgPath|outputManifestPath|qaPath|mutationPlan|packetId|providerId|mutationMode|patch-plan/u);
+    assert.equal(fs.readFileSync(figuresIndexPath, "utf8"), beforeFigures);
+    assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "cli-figure.template.svg")), false);
+
+    const machine = spawnSync("node", [...args, "--json"], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(machine.status, 0, machine.stderr || machine.stdout);
+    const parsed = JSON.parse(machine.stdout);
+    assert.equal(parsed.mutationMode, "patch-plan");
+    assert.equal(parsed.writesApplied, false);
+    assert.ok(parsed.mutationPlan.operations.length > 0);
+    assert.equal(parsed.resultCard.presentation, "compact-result-summary-card");
+    assert.equal(parsed.resultCard.scope.figureId, "cli-figure");
+    assert.equal("finalSvgPath" in parsed.resultCard, false);
+    assert.equal("qaPath" in parsed.resultCard, false);
+    assert.equal(fs.readFileSync(figuresIndexPath, "utf8"), beforeFigures);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("CLI status defaults to a concise human summary and keeps JSON opt-in", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -188,10 +373,12 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
     encoding: "utf8"
   });
   assert.equal(human.status, 0, human.stderr || human.stdout);
-  assert.match(human.stdout, /^Dove: /);
-  assert.match(human.stdout, /^Next: /m);
-  assert.match(human.stdout, /^Why: /m);
-  assert.match(human.stdout, /^More: /m);
+  assert.match(human.stdout, /Dove/);
+  assert.match(human.stdout, /project:dove\.init/);
+  assert.doesNotMatch(human.stdout, /^Dove: /m);
+  assert.doesNotMatch(human.stdout, /^Next: /m);
+  assert.doesNotMatch(human.stdout, /^Why: /m);
+  assert.doesNotMatch(human.stdout, /^More: /m);
   assert.doesNotMatch(human.stdout, /Dove current situation:/);
   assert.doesNotMatch(human.stdout, /Current context:/);
   assert.doesNotMatch(human.stdout, /Next action:/);
@@ -226,53 +413,13 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   assert.equal(parsed.dashboard, undefined);
   assert.equal(parsed.dailyHome, undefined);
   assert.equal(parsed.diagnostics, undefined);
-  assert.equal(parsed.statusHome.presentation, "dove-project-situation-home");
-  assert.equal(parsed.statusHome.detail, "compact");
-  assert.equal(parsed.statusHome.liveContextFirst, true);
+  assertPublicCompactStatus(parsed);
   assert.match(parsed.summary, /Dove/);
   assert.equal(parsed.headline, parsed.statusHome.headline);
-  assert.ok(parsed.statusHome.headline);
-  assert.ok(parsed.statusHome.nextStep);
   assert.equal(parsed.statusHome.nextStep.copyableCommand, "project:dove.init");
   assert.equal(parsed.nextStep.copyableCommand, "project:dove.init");
   assert.equal(parsed.statusHome.needsAttention.status, "clear");
   assert.equal(parsed.needsAttention.status, "clear");
-  assert.deepEqual(parsed.statusHome.changes, {
-    intent: "none",
-    applied: false,
-    count: 0,
-    rollback: "not-applicable"
-  });
-  assert.deepEqual(parsed.changes, parsed.statusHome.changes);
-  assert.ok(parsed.statusHome.showMore.text);
-  assert.equal(parsed.showMore.noWriteSummary, parsed.statusHome.showMore.noWriteSummary);
-  assert.ok(parsed.statusHome.currentContext);
-  assert.equal(parsed.statusHome.currentContext.stateSource, "filesystem-durable-state");
-  assert.equal(parsed.statusHome.currentContext.durableRoot, ".dove");
-  assert.ok(parsed.statusHome.nextSteps);
-  assert.equal(Array.isArray(parsed.statusHome.nextSteps.ranked), true);
-  assert.equal(parsed.statusHome.gaps.status, "clear");
-  assert.deepEqual(parsed.statusHome.gaps.executionGaps, {
-    missingContract: 0,
-    missingMaterials: 0,
-    verificationGaps: 0,
-    readyBuilder: 0,
-    blocking: 0
-  });
-  assert.deepEqual(parsed.statusHome.requiredEvidence ?? [], []);
-  assert.deepEqual(parsed.statusHome.writes, {
-    applied: false,
-    count: 0,
-    writeIntent: "none",
-    rollbackEligible: "not-applicable"
-  });
-  assert.equal(parsed.statusHome.writeIntent, "none");
-  assert.equal(parsed.statusHome.rollbackEligible, "not-applicable");
-  assert.equal(parsed.statusHome.detailsAvailable, true);
-  assert.equal(parsed.statusHome.fullDetails.args.detail, "full");
-  assert.equal(parsed.statusHome.expansion.fullDetails.args.detail, "full");
-  assert.equal(parsed.statusHome.expansion.missionDetails.args.showMissions, true);
-  assert.equal(parsed.statusHome.expansion.statusAdjustments.args.requestStatusAdjustment, true);
   assert.equal("preActionGuidance" in parsed.statusHome, false);
   assert.equal("projectState" in parsed.statusHome, false);
   assert.equal("blockersAndReconciliation" in parsed.statusHome, false);
@@ -318,10 +465,11 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
     maxBuffer: 5 * 1024 * 1024
   });
   assert.equal(fullHuman.status, 0, fullHuman.stderr || fullHuman.stdout);
-  assert.match(fullHuman.stdout, /^Dove: /);
-  assert.match(fullHuman.stdout, /^Next: /m);
-  assert.match(fullHuman.stdout, /^Why: /m);
-  assert.match(fullHuman.stdout, /^More: /m);
+  assert.match(fullHuman.stdout, /Dove/);
+  assert.doesNotMatch(fullHuman.stdout, /^Dove: /m);
+  assert.doesNotMatch(fullHuman.stdout, /^Next: /m);
+  assert.doesNotMatch(fullHuman.stdout, /^Why: /m);
+  assert.doesNotMatch(fullHuman.stdout, /^More: /m);
   assert.doesNotMatch(fullHuman.stdout, /Boundary\/gap:/);
   assert.doesNotMatch(fullHuman.stdout, /execution gaps:/);
   assert.doesNotMatch(fullHuman.stdout, /Gaps and boundaries:/);
@@ -338,6 +486,82 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   assert.ok(fullParsed.dashboard);
 });
 
+test("CLI status help stays focused on status expansion", () => {
+  const help = spawnSync("node", [CLI, "status", ".", "--help"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(help.status, 0, help.stderr || help.stdout);
+  assert.match(help.stdout, /dove status/);
+  assert.match(help.stdout, /--missions/);
+  assert.doesNotMatch(help.stdout, /dove install/);
+  assert.doesNotMatch(help.stdout, /mutation-mode|patch-plan|direct-process|serve-global-status/u);
+});
+
+test("CLI status hides internal packet ids and expansion commands by default", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  const timestamp = new Date(0).toISOString();
+
+  writeTaskPacket(root, {
+    id: "task-root-status-regression",
+    title: "Root status regression",
+    summary: "Root task for status CLI regression coverage.",
+    status: "completed",
+    lifecycleStatus: "completed",
+    active: false,
+    assignedRole: "planner",
+    level: 0,
+    creatorKind: "init",
+    domain: "paper",
+    stage: "plan",
+    updatedAt: timestamp
+  });
+  writeTaskPacket(root, {
+    id: "task-host-pass-result-regression",
+    title: "Host pass result regression",
+    summary: "Regression packet for CLI status output.",
+    status: "blocked",
+    lifecycleStatus: "active",
+    active: true,
+    assignedRole: "builder",
+    level: 1,
+    creatorKind: "operator",
+    domain: "paper",
+    stage: "execute",
+    currentFocus: "Need real host-side evidence.",
+    nextAction: "project:dove.source",
+    boundary: {
+      id: "boundary-host-pass-result-regression",
+      type: "awaiting-host-pass-result",
+      status: "open",
+      reason: "awaiting-host-pass-result",
+      summary: "需要主机侧真实执行结果。",
+      requiredInputs: ["真实来源 URL", "来源标题", "locator 或可访问出处"],
+      requiredActions: ["provide-host-result"],
+      command: "project:dove.source"
+    },
+    updatedAt: timestamp
+  });
+
+  const human = spawnSync("node", [CLI, "status", root], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(human.status, 0, human.stderr || human.stdout);
+  assert.match(human.stdout, /当前任务|真实执行结果/);
+  assert.doesNotMatch(human.stdout, /\btask-[a-z0-9][a-z0-9-]*\b/iu);
+  assert.doesNotMatch(human.stdout, /--packet-id\b/u);
+  assert.doesNotMatch(human.stdout, /--missions|--full|--json/u);
+
+  const machine = spawnSync("node", [CLI, "status", root, "--json"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(machine.status, 0, machine.stderr || machine.stdout);
+  assertPublicCompactStatus(JSON.parse(machine.stdout));
+});
+
 test("status reports host rollback capture as unverifiable from Dove", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -348,11 +572,8 @@ test("status reports host rollback capture as unverifiable from Dove", () => {
   assert.equal(result.durableContextNotice.hostCheckpointStatus, "not-programmatically-verifiable");
   assert.equal(result.durableContextNotice.hostCheckpoint.kind, "host-file-checkpoint");
   assert.equal(result.durableContextNotice.externalWriteCaptureVerified, false);
-  assert.equal(compactResult.statusHome.currentContext.stateSource, "filesystem-durable-state");
+  assertPublicCompactStatus(compactResult);
   assert.equal("durableContextNotice" in compactResult, false);
-  assert.equal("hostCheckpointDetected" in compactResult.statusHome.currentContext, false);
-  assert.equal("hostCheckpointStatus" in compactResult.statusHome.currentContext, false);
-  assert.equal("externalWriteCaptureVerified" in compactResult.statusHome.currentContext, false);
 });
 
 function seedDoveLaunchGuidance(root) {
@@ -984,30 +1205,14 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.query, true);
   assert.equal(result.proposalOnly, true);
   assert.equal(result.noAutoApply, true);
-  assert.deepEqual(result.writes, {
-    applied: false,
-    count: 0,
-    writeIntent: "none",
-    rollbackEligible: "not-applicable"
-  });
-  assert.equal(result.writeIntent, "none");
-  assert.equal(result.rollbackEligible, "not-applicable");
-  assert.equal(result.detail, "compact");
+  assertPublicCompactStatus(result);
   assert.equal(result.dashboard, undefined);
   assert.equal(result.dailyHome, undefined);
-  assert.equal(result.statusHome.presentation, "dove-project-situation-home");
-  assert.equal(result.statusHome.detail, "compact");
-  assert.equal(result.statusHome.liveContextFirst, true);
-  assert.equal(result.statusHome.fullDetails.args.detail, "full");
-  assert.ok(result.statusHome.currentContext);
-  assert.equal(result.statusHome.currentContext.stateSource, "filesystem-durable-state");
-  assert.equal(result.statusHome.currentContext.durableRoot, ".dove");
   assert.equal("durableContextNotice" in result, false);
   assert.equal("preActionGuidance" in result.statusHome, false);
   assert.equal("projectState" in result.statusHome, false);
   assert.equal("blockersAndReconciliation" in result.statusHome, false);
   assert.equal("optionalMissionDetails" in result.statusHome, false);
-  assert.ok(result.statusHome.nextSteps);
   assert.equal(fullResult.detail, "full");
   assertDurableContextNotice(fullResult.durableContextNotice);
   assert.deepEqual(fullResult.dashboard.project.durableContextNotice, fullResult.durableContextNotice);
@@ -1022,9 +1227,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(fullResult.projectSummary.blockedMissionCount, 1);
   assert.equal(fullResult.projectSummary.archivedMissionCount, 0);
   assert.equal(fullResult.projectSummary.archivedHiddenCount, 1);
-  assert.ok(result.statusHome.nextSteps.ranked.length <= 1);
-  assert.ok(result.statusHome.nextSteps.ranked.every((card) => card.kind && card.title && card.command));
-  assert.ok(result.statusHome.nextSteps.ranked.every((card) => card.proposalOnly === true && card.noAutoApply === true));
+  assert.equal(result.statusHome.nextStep.command, "project:dove.auto");
+  assert.equal(result.statusHome.nextStep.copyableCommand, "project:dove.auto --packet-id runtime-progress");
+  assert.equal(fullResult.dailyHome.nextActions[0].command, "project:dove.auto");
   assert.equal(fullResult.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true), true);
   const collapsedMissionDetails = fullResult.dailyHome.missionList;
   assert.equal(collapsedMissionDetails.presentation, "dove-mission-list");
@@ -1058,7 +1263,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   const archivedMissionDetails = archivedExpandedResult.statusHome.optionalMissionDetails;
   assert.equal(archivedFullResult.projectSummary.archivedMissionCount, 1);
   assert.equal(archivedFullResult.projectSummary.archivedHiddenCount, 0);
-  assert.equal(archivedExpandedResult.statusHome.expansion.fullDetails.args.includeArchived, true);
+  assert.equal(archivedExpandedResult.statusHome.showMore.fullDetails.args.includeArchived, true);
   assert.equal(archivedMissionDetails.groups.archived.itemCount, 1);
   assert.equal(archivedMissionDetails.groups.archived.hiddenCount, 1);
   assert.deepEqual(archivedMissionDetails.groups.archived.items.map((item) => item.packetId), []);
@@ -1081,15 +1286,16 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.deepEqual(fullResult.dashboard.dailyHome, fullResult.dailyHome);
   assert.deepEqual(fullResult.dashboard.tasks.grouped, fullResult.dailyHome.missionList);
   assert.deepEqual(after, before);
-  assert.equal(result.current.domain, "engineering");
-  assert.equal(result.current.stage, "execute");
-  assert.equal(result.current.primaryRole, "builder");
-  assert.equal(result.current.nextCommand, result.statusHome.nextSteps.primary.command);
-  assert.equal(result.current.nextCommand, "project:dove.auto");
-  assert.equal(fullResult.board.nextCommand, result.statusHome.nextSteps.primary.command);
+  assert.equal(result.scope.domain, "engineering");
+  assert.equal(result.scope.stage, "execute");
+  assert.equal(result.scope.primaryRole, "builder");
+  assert.equal(result.currentContext.domain, "engineering");
+  assert.equal(result.currentContext.stage, "execute");
+  assert.equal(result.currentContext.primaryRole, "builder");
+  assert.equal(result.nextStep.command, "project:dove.auto");
+  assert.equal(fullResult.board.nextCommand, result.nextStep.command);
   assert.equal(fullResult.dashboard.project.nextAction, fullResult.dailyHome.nextActions[0].command);
   assert.equal(fullResult.dashboard.nextAction, fullResult.dailyHome.nextActions[0].command);
-  assert.equal(result.suggestedNextCommand, result.statusHome.nextSteps.primary.command);
   assert.equal(fullResult.board.domain, "engineering");
   assert.equal(fullResult.projectSummary.openMissionCount, 4);
   assert.equal(fullResult.projectSummary.todoMissionCount, 2);
@@ -1164,11 +1370,14 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
     encoding: "utf8"
   });
   assert.equal(humanStatus.status, 0, humanStatus.stderr || humanStatus.stdout);
-  assert.match(humanStatus.stdout, /^Dove: /);
-  assert.match(humanStatus.stdout, /^Next: /m);
-  assert.match(humanStatus.stdout, /^Why: /m);
-  assert.match(humanStatus.stdout, /^More: /m);
-  assert.match(humanStatus.stdout, /project:dove.auto/);
+  assert.match(humanStatus.stdout, /Dove/);
+  assert.doesNotMatch(humanStatus.stdout, /^Dove: /m);
+  assert.doesNotMatch(humanStatus.stdout, /^Next: /m);
+  assert.doesNotMatch(humanStatus.stdout, /^Why: /m);
+  assert.doesNotMatch(humanStatus.stdout, /^More: /m);
+  assert.match(humanStatus.stdout, /真实结果|implementation evidence/);
+  assert.doesNotMatch(humanStatus.stdout, /\bruntime-progress\b/);
+  assert.doesNotMatch(humanStatus.stdout, /--packet-id\b/);
   assert.doesNotMatch(humanStatus.stdout, /Dove current situation:/);
   assert.doesNotMatch(humanStatus.stdout, /Current context:/);
   assert.doesNotMatch(humanStatus.stdout, /Boundary\/gap:/);
@@ -1184,10 +1393,11 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
     encoding: "utf8"
   });
   assert.equal(healthStatus.status, 0, healthStatus.stderr || healthStatus.stdout);
-  assert.match(healthStatus.stdout, /^Dove: /);
-  assert.match(healthStatus.stdout, /^Next: /m);
-  assert.match(healthStatus.stdout, /^Why: /m);
-  assert.match(healthStatus.stdout, /^More: /m);
+  assert.match(healthStatus.stdout, /Dove/);
+  assert.doesNotMatch(healthStatus.stdout, /^Dove: /m);
+  assert.doesNotMatch(healthStatus.stdout, /^Next: /m);
+  assert.doesNotMatch(healthStatus.stdout, /^Why: /m);
+  assert.doesNotMatch(healthStatus.stdout, /^More: /m);
   assert.match(healthStatus.stdout, /健康检查|health check/);
   assert.doesNotMatch(healthStatus.stdout, /Intent: health-check/);
   assert.doesNotMatch(healthStatus.stdout, /Health-check required evidence:/);
@@ -1203,8 +1413,8 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.doesNotMatch(humanStatus.stdout, /Gaps and boundaries:/);
   assert.doesNotMatch(humanStatus.stdout, /Project state:/);
   assert.doesNotMatch(humanStatus.stdout, /mission summary:/);
-  assert.doesNotMatch(humanStatus.stdout, /Mission details:/);
-  assert.doesNotMatch(humanStatus.stdout, /Priority lane:/);
+  assert.doesNotMatch(humanStatus.stdout, /Mission details:|任务选择：/);
+  assert.doesNotMatch(humanStatus.stdout, /Priority lane:|优先处理：/);
   assert.doesNotMatch(humanStatus.stdout, /Machine statuses:/);
   assert.doesNotMatch(humanStatus.stdout, /runtime-progress: Runtime progress mission \[doing\]/);
   assert.doesNotMatch(humanStatus.stdout, /deliver:/);
@@ -1215,24 +1425,26 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
     encoding: "utf8"
   });
   assert.equal(humanStatusWithMissions.status, 0, humanStatusWithMissions.stderr || humanStatusWithMissions.stdout);
-  assert.match(humanStatusWithMissions.stdout, /Mission details:/);
-  assert.match(humanStatusWithMissions.stdout, /Priority lane:/);
-  assert.match(humanStatusWithMissions.stdout, /Queue summary: doing 1, blocked 1, todo 2, done 3/);
-  assert.match(humanStatusWithMissions.stdout, /Queue preview:/);
-  assert.match(humanStatusWithMissions.stdout, /runtime-progress: Runtime progress mission \[doing\]/);
-  assert.match(humanStatusWithMissions.stdout, /Need: .*implementation evidence.*provide-host-pass-result/);
-  assert.match(humanStatusWithMissions.stdout, /Next: .*project:dove\.auto --packet-id runtime-progress/);
+  assert.match(humanStatusWithMissions.stdout, /任务选择：/);
+  assert.match(humanStatusWithMissions.stdout, /优先处理：/);
+  assert.match(humanStatusWithMissions.stdout, /队列概览：doing 1，blocked 1，todo 2，done 3/);
+  assert.match(humanStatusWithMissions.stdout, /任务预览：/);
+  assert.match(humanStatusWithMissions.stdout, /Runtime progress mission \[doing\]/);
+  assert.match(humanStatusWithMissions.stdout, /需要：.*implementation evidence.*provide-host-pass-result/);
+  assert.match(humanStatusWithMissions.stdout, /下一步：.*先为当前任务补/);
   assert.match(humanStatusWithMissions.stdout, /doing: 1/);
-  assert.match(humanStatusWithMissions.stdout, /runtime-progress: Runtime progress mission \[doing\]/);
+  assert.match(humanStatusWithMissions.stdout, /Runtime progress mission \[doing\]/);
   assert.match(humanStatusWithMissions.stdout, /blocked: 1/);
-  assert.match(humanStatusWithMissions.stdout, /blocked-dependency: Blocked by unresolved dependency \[blocked\]/);
-  assert.match(humanStatusWithMissions.stdout, /blocked: waiting on missing-dependency/);
+  assert.match(humanStatusWithMissions.stdout, /Blocked by unresolved dependency \[blocked\]/);
+  assert.match(humanStatusWithMissions.stdout, /受阻：等待前置任务/);
   assert.match(humanStatusWithMissions.stdout, /todo: 2/);
-  assert.match(humanStatusWithMissions.stdout, /plain-pending: Plain pending mission \[todo\]/);
-  assert.match(humanStatusWithMissions.stdout, /done: 3 \(\+3 more\)/);
-  assert.match(humanStatusWithMissions.stdout, /More detail: use --full --json for the complete mission list\./);
+  assert.match(humanStatusWithMissions.stdout, /Plain pending mission \[todo\]/);
+  assert.match(humanStatusWithMissions.stdout, /done: 3（另有 3 个）/);
+  assert.match(humanStatusWithMissions.stdout, /如果还要完整治理细节，请明确提出。/);
   assert.doesNotMatch(humanStatusWithMissions.stdout, /boundary: awaiting-host-pass/);
   assert.doesNotMatch(humanStatusWithMissions.stdout, /unresolved-dependencies:/);
+  assert.doesNotMatch(humanStatusWithMissions.stdout, /runtime-progress:|blocked-dependency:|plain-pending:/);
+  assert.doesNotMatch(humanStatusWithMissions.stdout, /--packet-id|--full --json|project:dove/);
 
   for (const extraArgs of [["--include-mission-details"], ["--detail", "missions"], ["--detail", "mission-details"], ["--detail", "mission-list"]]) {
     const expandedHumanStatus = spawnSync("node", [CLI, "status", root, ...extraArgs], {
@@ -1240,8 +1452,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
       encoding: "utf8"
     });
     assert.equal(expandedHumanStatus.status, 0, expandedHumanStatus.stderr || expandedHumanStatus.stdout);
-    assert.match(expandedHumanStatus.stdout, /Mission details:/);
-    assert.match(expandedHumanStatus.stdout, /runtime-progress: Runtime progress mission \[doing\]/);
+    assert.match(expandedHumanStatus.stdout, /任务选择：/);
+    assert.match(expandedHumanStatus.stdout, /Runtime progress mission \[doing\]/);
+    assert.doesNotMatch(expandedHumanStatus.stdout, /runtime-progress:|--packet-id|--full --json|project:dove/);
   }
 
   const beforeStatusline = snapshotArtifacts(root, statusWatchedArtifacts);
@@ -1256,7 +1469,6 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   const afterStatusline = snapshotArtifacts(root, statusWatchedArtifacts);
   assert.equal(humanStatusline.status, 0, humanStatusline.stderr || humanStatusline.stdout);
   assert.match(humanStatusline.stdout, /^Dove: /);
-  assert.match(humanStatusline.stdout, /next /);
   assert.match(humanStatusline.stdout, /gaps /);
   assert.doesNotMatch(humanStatusline.stdout, /missions open/);
   assert.doesNotMatch(humanStatusline.stdout, /receipt/);
@@ -1278,9 +1490,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal("nextActions" in parsedStatusline, false);
   assert.equal("nextActionCount" in parsedStatusline.summary, false);
   assert.equal("activeMissionCount" in parsedStatusline.summary, false);
-  assert.ok(parsedStatusline.summary.nextAction);
   assert.ok(parsedStatusline.summary.gaps);
-  assert.match(parsedStatusline.text, /next /);
   assert.match(parsedStatusline.text, /gaps /);
   assert.doesNotMatch(parsedStatusline.text, /missions open/);
   assert.doesNotMatch(parsedStatusline.text, /receipt/);
@@ -1290,7 +1500,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   const statusAdjustmentItems = Object.fromEntries(archivedFullResult.statusAdjustmentContract.items.map((item) => [item.packetId, item]));
   assert.equal("statusAdjustmentContract" in result, false);
   assert.equal("statusAdjustmentPreview" in result.statusHome, false);
-  assert.equal(result.statusHome.expansion.statusAdjustments.args.requestStatusAdjustment, true);
+  assert.equal(result.statusHome.showMore.statusAdjustments.args.requestStatusAdjustment, true);
   const expandedStatusAdjustmentPreview = expandedResult.statusHome.statusAdjustmentPreview;
   assert.deepEqual(expandedStatusAdjustmentPreview.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
   assert.equal(expandedStatusAdjustmentPreview.statusAdjustmentItemsIncluded, true);
@@ -1418,8 +1628,10 @@ test("queryDoveStatus routes executable workflow gaps before mission details", (
   const fullResult = queryDoveStatus(root, { domain: "engineering", detail: "full" });
 
   assert.equal(fullResult.projectSummary.returnStatus, "blocked");
-  assert.equal(result.statusHome.gaps.status, "blocked");
-  assert.deepEqual(result.statusHome.gaps.executionGaps, {
+  assertPublicCompactStatus(result);
+  assert.equal(result.statusHome.needsAttention.status, "blocked");
+  assert.equal(result.statusHome.needsAttention.needs.includes("executionContract"), true);
+  assert.deepEqual(fullResult.dailyHome.executionGaps.counts, {
     missingContract: 1,
     missingMaterials: 1,
     verificationGaps: 1,
@@ -1444,10 +1656,10 @@ test("queryDoveStatus routes executable workflow gaps before mission details", (
     "bb-missing-material",
     "cc-verification-gap"
   ]);
-  assert.equal(result.statusHome.nextSteps.ranked.length, 1);
-  assert.equal(result.statusHome.nextSteps.primary.command, "project:dove.mission");
-  assert.equal(result.statusHome.nextSteps.primary.nextRole, "planner");
-  assert.deepEqual(result.statusHome.nextSteps.primary.evidenceRequired, ["executionContract"]);
+  assert.equal(result.statusHome.nextStep.command, "project:dove.mission");
+  assert.equal(result.statusHome.nextStep.copyableCommand, "project:dove.mission --packet-id aa-missing-contract");
+  assert.equal("nextRole" in result.statusHome.nextStep, false);
+  assert.equal("evidenceRequired" in result.statusHome.nextStep, false);
   assert.equal(recoveryAction.detail.candidates[1].nextRole, "planner");
   assert.deepEqual(recoveryAction.detail.candidates[1].requiredMaterials, ["sources/cvpr-template.md"]);
   assert.equal(recoveryAction.detail.candidates[2].nextRole, "reviewer");
@@ -1517,8 +1729,10 @@ test("CLI status omits fallback status command for material recovery", () => {
     encoding: "utf8"
   });
   assert.equal(humanStatus.status, 0, humanStatus.stderr || humanStatus.stdout);
-  assert.match(humanStatus.stdout, /^Next: 先为 material-only 补材料：sources\/template\.md$/m);
-  assert.doesNotMatch(humanStatus.stdout, /\[project:dove\.status\]/);
+  assert.match(humanStatus.stdout, /先为当前任务补材料：sources\/template\.md/);
+  assert.doesNotMatch(humanStatus.stdout, /\bmaterial-only\b/);
+  assert.doesNotMatch(humanStatus.stdout, /^Next: /m);
+  assert.doesNotMatch(humanStatus.stdout, /project:dove\.status/);
 });
 
 test("queryDoveMission frames an engineering mission without writing artifacts", () => {
@@ -2077,22 +2291,14 @@ test("CLI Dove orchestrate, mission, status, audit, and return commands expose p
   assert.equal(statusPayload.mode, "dove-status-query");
   assert.equal(statusPayload.detail, "compact");
   assert.equal(statusPayload.proposalOnly, true);
-  assert.deepEqual(statusPayload.writes, {
-    applied: false,
-    count: 0,
-    writeIntent: "none",
-    rollbackEligible: "not-applicable"
-  });
-  assert.equal(statusPayload.writeIntent, "none");
-  assert.equal(statusPayload.rollbackEligible, "not-applicable");
-  assert.equal(statusPayload.current.domain, "engineering");
+  assertPublicCompactStatus(statusPayload);
+  assert.equal(statusPayload.scope.domain, "engineering");
   assert.equal(statusPayload.currentContext.domain, "engineering");
   assert.equal(statusPayload.dashboard, undefined);
   assert.equal(statusPayload.board, undefined);
-  assert.equal(statusPayload.statusHome.presentation, "dove-project-situation-home");
   assert.equal(statusPayload.navigation, undefined);
   assert.equal(statusPayload.diagnostics, undefined);
-  assert.equal(statusPayload.expansion.fullDetails.args.detail, "full");
+  assert.equal(statusPayload.showMore.fullDetails.args.detail, "full");
 
   const removedBoard = spawnSync("node", [CLI, "board", root], {
     cwd: ROOT,

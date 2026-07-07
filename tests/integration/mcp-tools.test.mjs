@@ -107,6 +107,113 @@ function assertDurableContextNotice(notice) {
   assert.equal(notice.recoveryActions[3].confirmationRequired, true);
 }
 
+function assertCompactMcpContract(result, expected = {}) {
+  assert.equal(result.presentation, "dove-mcp-result-contract");
+  if (expected.tool) {
+    assert.equal(result.tool, expected.tool);
+  }
+  assert.equal(result.resultMode, expected.resultMode ?? "compact");
+  assert.ok(result.summary);
+  assert.ok(result.scope && typeof result.scope === "object");
+  assert.ok(result.changes && typeof result.changes === "object");
+  assert.ok(result.showMore && typeof result.showMore === "object");
+  assert.equal(result.detailsAvailable, true);
+  for (const key of [
+    "writesApplied",
+    "writes",
+    "writeIntent",
+    "rollbackEligible",
+    "nextAction",
+    "operatorRoute",
+    "operatorUnblock",
+    "boundary",
+    "boundaryType",
+    "evidencePaths",
+    "resultPath",
+    "requiredEvidence",
+    "mutationPlan",
+    "currentContext",
+    "statusHome",
+    "dashboard",
+    "dailyHome",
+    "fullResult",
+    "diagnostics"
+  ]) {
+    assert.equal(key in result, false, `compact MCP result leaked ${key}`);
+  }
+}
+
+function assertPublicCompactStatus(result) {
+  assert.equal(result.detail, "compact");
+  assert.equal(result.detailsAvailable, true);
+  assert.equal(result.statusHome.presentation, "dove-project-situation-home");
+  assert.equal(result.statusHome.detail, "compact");
+  assert.equal(result.statusHome.liveContextFirst, true);
+  assert.equal(result.statusHome.detailsAvailable, true);
+  assert.ok(result.statusHome.headline);
+  assert.ok(result.statusHome.scope && typeof result.statusHome.scope === "object");
+  assert.equal(result.statusHome.scope.kind, "workspace");
+  assert.ok(result.statusHome.currentContext && typeof result.statusHome.currentContext === "object");
+  assert.ok(result.statusHome.nextStep && typeof result.statusHome.nextStep === "object");
+  assert.ok(result.statusHome.needsAttention && typeof result.statusHome.needsAttention === "object");
+  assert.deepEqual(result.statusHome.changes, {
+    intent: "none",
+    applied: false,
+    count: 0,
+    rollback: "not-applicable"
+  });
+  assert.deepEqual(result.changes, result.statusHome.changes);
+  assert.ok(result.statusHome.showMore?.text);
+  assert.equal(result.statusHome.showMore.fullDetails.args.detail, "full");
+  assert.equal(result.statusHome.showMore.missionDetails.args.showMissions, true);
+  for (const key of [
+    "boundary",
+    "boundaryType",
+    "operatorRoute",
+    "operatorUnblock",
+    "gaps",
+    "executionGaps",
+    "requiredEvidence",
+    "projectBacklogRequiredEvidence",
+    "projectBacklogNextAction",
+    "nextAction",
+    "nextSteps",
+    "writes",
+    "writeIntent",
+    "rollbackEligible",
+    "fullDetails",
+    "expansion",
+    "durableRoot",
+    "stateSource",
+    "runtimeContinuation",
+    "contractHealth"
+  ]) {
+    assert.equal(key in result.statusHome, false, `compact statusHome leaked ${key}`);
+  }
+  for (const key of [
+    "boundary",
+    "boundaryType",
+    "operatorRoute",
+    "operatorUnblock",
+    "gaps",
+    "executionGaps",
+    "requiredEvidence",
+    "nextAction",
+    "writes",
+    "writeIntent",
+    "rollbackEligible",
+    "current",
+    "suggestedNextCommand",
+    "fullDetails",
+    "expansion"
+  ]) {
+    assert.equal(key in result, false, `compact status result leaked ${key}`);
+  }
+  for (const key of ["durableRoot", "stateSource", "hostCheckpointDetected", "hostCheckpointStatus", "externalWriteCaptureVerified"]) {
+    assert.equal(key in result.statusHome.currentContext, false, `compact currentContext leaked ${key}`);
+  }
+}
+
 function assertPreActionGuidanceSummary(summary, expected = {}) {
   assert.ok(summary && typeof summary === "object", "expected pre-action guidance summary");
   assert.equal(summary.presentation, "dove-pre-action-guidance-summary");
@@ -423,12 +530,7 @@ test("MCP results default to compact contracts and expand explicitly", () => {
   const root = createTempRoot("dove-mcp-compact-contract-");
   try {
     const compactStatus = extractMcpEnvelopeJson(dispatchTool(root, "query_dove_status", { domain: "paper" }));
-    assert.equal(compactStatus.presentation, "dove-mcp-result-contract");
-    assert.equal(compactStatus.tool, "query_dove_status");
-    assert.equal(compactStatus.resultMode, "compact");
-    assert.equal(compactStatus.writesApplied, false);
-    assert.ok(compactStatus.summary);
-    assert.ok(compactStatus.nextStep && typeof compactStatus.nextStep === "object");
+    assertCompactMcpContract(compactStatus, { tool: "query_dove_status" });
     assert.equal(compactStatus.nextStep.copyableCommand, "project:dove.init");
     assert.equal(compactStatus.needsAttention.status, "clear");
     assert.deepEqual(compactStatus.changes, {
@@ -437,14 +539,6 @@ test("MCP results default to compact contracts and expand explicitly", () => {
       count: 0,
       rollback: "not-applicable"
     });
-    assert.ok(compactStatus.showMore && typeof compactStatus.showMore === "object");
-    assert.ok(compactStatus.currentContext && typeof compactStatus.currentContext === "object");
-    assert.equal("nextAction" in compactStatus, true);
-    assert.equal(compactStatus.operatorUnblock?.detail, undefined);
-    assert.equal("statusHome" in compactStatus, false);
-    assert.equal("dashboard" in compactStatus, false);
-    assert.equal("dailyHome" in compactStatus, false);
-    assert.equal("fullResult" in compactStatus, false);
 
     const fullStatus = extractMcpEnvelopeJson(dispatchTool(root, "query_dove_status", { domain: "paper", resultMode: "full" }));
     assert.equal(fullStatus.presentation, "dove-mcp-result-contract");
@@ -459,13 +553,11 @@ test("MCP results default to compact contracts and expand explicitly", () => {
       title: "Compact contract init",
       goal: "Keep patch-plan operations out of the default MCP response."
     }));
-    assert.equal(compactPatchPlan.presentation, "dove-mcp-result-contract");
-    assert.equal(compactPatchPlan.tool, "init_dove_goal");
-    assert.equal(compactPatchPlan.resultMode, "compact");
-    assert.equal(compactPatchPlan.writesApplied, false);
-    assert.equal(compactPatchPlan.writes.mutationMode, "patch-plan");
-    assert.equal("mutationPlan" in compactPatchPlan, false);
-    assert.equal("fullResult" in compactPatchPlan, false);
+    assertCompactMcpContract(compactPatchPlan, { tool: "init_dove_goal" });
+    assert.equal(compactPatchPlan.changes.intent, "proposed");
+    assert.equal(compactPatchPlan.changes.applied, false);
+    assert.ok(compactPatchPlan.changes.count > 0);
+    assert.equal(compactPatchPlan.changes.rollback, "host-tracked");
     assert.equal(fs.existsSync(path.join(root, ".dove")), false);
 
     const fullPatchPlan = extractMcpEnvelopeJson(dispatchTool(root, "init_dove_goal", {
@@ -568,27 +660,9 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(status.proposalOnly, true);
     assert.equal(status.noAutoApply, true);
     assert.equal(status.query, true);
-    assert.deepEqual(status.writes, {
-      applied: false,
-      count: 0,
-      writeIntent: "none",
-      rollbackEligible: "not-applicable"
-    });
-    assert.equal(status.writeIntent, "none");
-    assert.equal(status.rollbackEligible, "not-applicable");
-    assert.equal(status.detail, "compact");
-    assert.equal(status.statusHome.presentation, "dove-project-situation-home");
-    assert.equal(status.statusHome.liveContextFirst, true);
-    assert.ok(status.statusHome.currentContext && typeof status.statusHome.currentContext === "object");
-    assert.equal(status.statusHome.currentContext.stateSource, "filesystem-durable-state");
-    assert.equal(status.statusHome.currentContext.durableRoot, ".dove");
-    assert.ok(status.statusHome.nextSteps && typeof status.statusHome.nextSteps === "object");
-    assert.ok(status.statusHome.nextSteps.ranked.length <= 3);
-    assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.kind && card.title && card.command));
-    assert.equal(status.statusHome.detailsAvailable, true);
-    assert.equal(status.statusHome.expansion.fullDetails.args.detail, "full");
-    assert.equal(status.statusHome.expansion.missionDetails.args.showMissions, true);
-    assert.equal(status.statusHome.expansion.statusAdjustments.args.requestStatusAdjustment, true);
+    assertPublicCompactStatus(status);
+    assert.equal(status.statusHome.nextStep.copyableCommand, "project:dove.init");
+    assert.equal(status.statusHome.needsAttention.status, "clear");
     assert.equal("durableContextNotice" in status, false);
     assert.equal("dashboard" in status, false);
     assert.equal("dailyHome" in status, false);
@@ -1305,9 +1379,8 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
       body: "Thin workflow surfaces preserve direct draft evidence for reviewer handoff.",
       summary: "Draft quick path write evidence."
     }));
-    assert.equal(draftEnvelope.writeIntent, "applied");
-    assert.equal(draftEnvelope.rollbackEligible, "unverified");
-    assert.ok(draftEnvelope.writes.paths.includes(".dove/drafts/thin-guidance-draft.md"));
+    assert.equal(draftEnvelope.changes.intent, "applied");
+    assert.equal(draftEnvelope.changes.rollback, "unverified");
     const draft = draftEnvelope.fullResult;
     assert.equal(draft.draftPath, ".dove/drafts/thin-guidance-draft.md");
     assertPreActionGuidanceSummary(draft.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "builder" });
@@ -1766,26 +1839,24 @@ test("status adjustment contract applies confirmed non-terminal mission status c
     const status = extractToolJson(dispatchToolFull(root, "query_dove_status", {}));
     const adjustmentStatus = extractToolJson(dispatchToolFull(root, "query_dove_status", { requestStatusAdjustment: true }));
     const fullStatus = extractToolJson(dispatchToolFull(root, "query_dove_status", { detail: "full" }));
-    assert.equal(status.detail, "compact");
+    assertPublicCompactStatus(status);
     assert.equal(status.dashboard, undefined);
     assert.equal(status.dailyHome, undefined);
     assert.equal("projectSummary" in status, false);
     assert.equal("statusAdjustmentContract" in status, false);
     assert.equal(fullStatus.detail, "full");
     assert.ok(fullStatus.dashboard);
-    assert.equal(status.statusHome.presentation, "dove-project-situation-home");
-    assert.ok(status.statusHome.nextSteps.ranked.length <= 3);
-    assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.kind && card.title));
-    assert.ok(status.statusHome.nextSteps.ranked.every((card) => card.kind === "recover-current-work" || card.command));
-    assert.equal(status.current.nextCommand, status.statusHome.nextSteps.primary.command ?? status.suggestedNextCommand);
+    assert.ok(status.statusHome.nextStep.label);
+    assert.equal("nextSteps" in status.statusHome, false);
     assert.equal(fullStatus.dashboard.nextAction, fullStatus.dailyHome.nextActions[0].command ?? fullStatus.suggestedNextCommand);
     assert.equal(fullStatus.statusAdjustmentContract.mutationTool, "apply_dove_status_adjustments");
     assert.deepEqual(fullStatus.statusAdjustmentContract.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
     assert.equal(fullStatus.statusAdjustmentContract.items.length, 3);
     assert.equal(fullStatus.statusAdjustmentContract.adjustmentCards.length, fullStatus.statusAdjustmentContract.items.length);
     assert.ok(fullStatus.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
+    assertPublicCompactStatus(adjustmentStatus);
     const adjustmentPreview = adjustmentStatus.statusHome.statusAdjustmentPreview;
-    assert.equal(adjustmentStatus.statusHome.expansion.statusAdjustments.args.requestStatusAdjustment, true);
+    assert.equal(adjustmentStatus.statusHome.showMore.statusAdjustments.args.requestStatusAdjustment, true);
     assert.equal(adjustmentPreview.statusAdjustmentItemsIncluded, true);
     assert.equal(adjustmentPreview.adjustmentCards.length, adjustmentPreview.items.length);
     assert.ok(adjustmentPreview.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
@@ -3054,7 +3125,8 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.equal(runReview.resultCard.surface, "dove.review");
     assertPreActionGuidanceSummary(runReview.resultCard.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
     assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-review-output");
-    assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.detail.implementationBoundaryType, "awaiting-audio-review-output");
+    assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.detail?.implementationBoundaryType, undefined);
+    assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.detail?.implementationReason, undefined);
     assert.equal("reason" in runReview.resultCard.nextActions[0].handoffSuggestion, false);
     assert.equal(runReview.resultCard.nextActions[0].nextRole, "reviewer");
     assert.deepEqual(runReview.resultCard.nextActions[0].requiredActions, ["complete-isolated-review-handoff"]);
@@ -3064,7 +3136,8 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.equal(reviewLoop.stopReason, "awaiting-review-output");
     assert.equal(reviewLoop.iterations[0].review.status, "prepared-awaiting-audio");
     assert.equal(reviewLoop.iterations[0].review.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-review-output");
-    assert.equal(reviewLoop.iterations[0].review.resultCard.nextActions[0].handoffSuggestion.detail.implementationBoundaryType, "awaiting-audio-review-output");
+    assert.equal(reviewLoop.iterations[0].review.resultCard.nextActions[0].handoffSuggestion.detail?.implementationBoundaryType, undefined);
+    assert.equal(reviewLoop.iterations[0].review.resultCard.nextActions[0].handoffSuggestion.detail?.implementationReason, undefined);
 
     fs.writeFileSync(path.join(root, runReview.reportPath), "# MCP isolated report\n\nNeeds validation evidence.\n", "utf8");
     fs.writeFileSync(path.join(root, runReview.handoffPath), `${JSON.stringify({
@@ -3084,7 +3157,8 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assertPreActionGuidanceSummary(needsEvidence.resultCard.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
     assert.equal(needsEvidence.resultCard.nextActions[0].command, "project:dove.mission");
     assert.equal(needsEvidence.resultCard.nextActions[0].handoffSuggestion.boundaryType, "verification-failed");
-    assert.equal(needsEvidence.resultCard.nextActions[0].handoffSuggestion.detail.implementationBoundaryType, "audio-review-needs-evidence");
+    assert.equal(needsEvidence.resultCard.nextActions[0].handoffSuggestion.detail?.implementationBoundaryType, undefined);
+    assert.equal(needsEvidence.resultCard.nextActions[0].handoffSuggestion.detail?.implementationReason, undefined);
     assert.deepEqual(needsEvidence.resultCard.nextActions[0].requiredActions, ["Provide validation evidence."]);
     assert.equal(runReview.privacyBoundary.projectContextShared, false);
   } finally {

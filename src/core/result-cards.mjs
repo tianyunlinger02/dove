@@ -36,6 +36,15 @@ function compactPlainObject(fields) {
   }));
 }
 
+function isCompactInternalReference(value) {
+  const text = normalizeString(value, "") ?? "";
+  return text.startsWith(".dove/") || /sourceSvgPath|finalSvgPath|outputManifestPath|svgContent|qaPath|source-svg|output-manifest|figure-qa/u.test(text);
+}
+
+function compactPublicStringArray(value) {
+  return normalizeStringArray(value).filter((item) => !isCompactInternalReference(item));
+}
+
 function publicBoundaryType(value) {
   const boundaryType = normalizeString(value, null);
   if (!boundaryType) {
@@ -61,14 +70,12 @@ function publicOutcome(value) {
   return publicBoundaryType(outcome) ?? outcome;
 }
 
-function boundaryDetailWithImplementation(value, publicType) {
-  const originalType = normalizeString(value?.type ?? value?.boundaryType, null);
-  const existingDetail = normalizePlainObject(value?.detail) ?? {};
-  return compactPlainObject({
-    ...existingDetail,
-    implementationBoundaryType: originalType && publicType && originalType !== publicType ? originalType : existingDetail.implementationBoundaryType,
-    reason: normalizeString(value?.reason, null)
-  });
+function publicBoundaryDetail(value) {
+  const detail = { ...(normalizePlainObject(value?.detail) ?? {}) };
+  for (const key of ["implementationBoundaryType", "implementationReason", "providerStatus", "providerError", "reason"]) {
+    delete detail[key];
+  }
+  return compactPlainObject(detail);
 }
 
 function sanitizeBoundary(value) {
@@ -84,8 +91,20 @@ function sanitizeBoundary(value) {
   if (sanitized.boundaryType) {
     sanitized.boundaryType = publicBoundaryType(sanitized.boundaryType) ?? sanitized.boundaryType;
   }
+  delete sanitized.id;
   delete sanitized.reason;
-  const detail = boundaryDetailWithImplementation(boundary, publicType);
+  for (const key of ["artifactRefs", "artifactPaths", "evidenceLinks", "evidencePaths", "validationEvidencePaths", "validationOutputPaths", "resultPath", "qaPath"]) {
+    delete sanitized[key];
+  }
+  for (const key of ["requiredInputs", "requiredActions", "requires"]) {
+    if (Array.isArray(sanitized[key])) {
+      sanitized[key] = compactPublicStringArray(sanitized[key]);
+      if (sanitized[key].length === 0) {
+        delete sanitized[key];
+      }
+    }
+  }
+  const detail = publicBoundaryDetail(boundary);
   if (Object.keys(detail).length > 0) {
     sanitized.detail = detail;
   } else {
@@ -108,7 +127,7 @@ function sanitizeHandoffSuggestion(value) {
     sanitized.type = publicBoundaryType(sanitized.type) ?? sanitized.type;
   }
   delete sanitized.reason;
-  const detail = boundaryDetailWithImplementation(handoff, publicType);
+  const detail = publicBoundaryDetail(handoff);
   if (Object.keys(detail).length > 0) {
     sanitized.detail = detail;
   } else {
@@ -183,9 +202,9 @@ function resultAction(action, responseLanguage = "zh") {
     why: normalizeString(action.why, null),
     command,
     packetId: normalizeString(action.packetId, null),
-    requires: normalizeStringArray(action.requires),
-    requiredInputs: normalizeStringArray(action.requiredInputs),
-    requiredActions: normalizeStringArray(action.requiredActions),
+    requires: compactPublicStringArray(action.requires),
+    requiredInputs: compactPublicStringArray(action.requiredInputs),
+    requiredActions: compactPublicStringArray(action.requiredActions),
     boundary,
     boundaryId: normalizeString(action.boundaryId, null),
     boundaryType: publicBoundaryType(action.boundaryType) ?? boundary?.type ?? null,
@@ -268,8 +287,8 @@ export function buildCommandResultCard(details = {}, responseLanguage = "zh") {
     artifactConflicts,
     validation: compactResultList(validation, doveText(responseLanguage, "resultCardNoValidation")),
     codeChanges: compactResultList(details.codeChanges, doveText(responseLanguage, "resultCardCodeNotInspected")),
-    stopReason: publicOutcome(stopReason),
     boundary,
+    scope: normalizePlainObject(details.scope),
     taskStatusBefore: normalizeString(details.taskStatusBefore, null),
     taskStatusAfter: normalizeString(details.taskStatusAfter, null),
     nextActions: resultActions(details.nextActions, details.nextAction, responseLanguage),

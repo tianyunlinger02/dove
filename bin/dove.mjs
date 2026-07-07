@@ -7,7 +7,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, refreshDurableSurfaces, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runGlobalStatusServingForeground, runIsolatedReview, runWithMutationContext } from "../src/core/index.mjs";
+import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, refreshDurableSurfaces, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runFigureWorkflow, runGlobalStatusServingForeground, runIsolatedReview, runWithMutationContext } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
 import {
@@ -51,6 +51,7 @@ Usage:
   dove orchestrate [target] [--request <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--allow-autonomy]
   dove mission [target] [--goal <text>] [--domain <id>] [--stage <id>] [--artifact <path>] [--acceptance-check <text>]
   dove status [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived] [--health|--contract-test] [--missions|--show-missions] [--full|--detail full] [--json|--format json]
+  dove figure [target] --intent <text> [--packet-id <id>] [--figure-id <id>] [--provider-id none|gpt-image2] [--source-svg-path <path>|--output-manifest-path <path>|--svg-content <svg>] [--caption <text>] [--mutation-mode <patch-plan|direct-process>] [--json|--format json]
   dove statusline [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived] [--json|--format json]
   dove audit [target] [--scope <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
   dove return [target] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
@@ -61,6 +62,20 @@ Usage:
   dove autonomy-once [target] [--actor-role <role>] [--mutation-mode <patch-plan|direct-process>]
   dove autonomy-foreground [target] [--actor-role <role>] [--max-steps <n>] [--packet-id <id>] [--program-run-id <id>] [--approval-id <id>] [--mutation-mode <patch-plan|direct-process>]
   dove autonomy-operate [target] [--objective <text> | --source-type <type> --source-id <id>] [--actor-role <role>] [--worker-role <role>] [--max-steps <n>] [--mutation-mode <patch-plan|direct-process>]
+`);
+}
+
+function statusUsage() {
+  console.log(`dove status
+
+Use this as the daily project check-in: show the current situation and the next useful action.
+
+Examples:
+  dove status .
+  dove status . --missions
+  dove status . --json
+
+Use --missions only when you need task choices or details. Use --json only when another tool needs structured data.
 `);
 }
 
@@ -130,7 +145,7 @@ function withMutationContext(target, actionId, rawRest, callback, options = {}) 
   const rest = stripMutationModeFlag(rawRest);
   return runWithMutationContext(target, {
     actionId,
-    mutationMode: readMutationMode(rawRest),
+    mutationMode: readMutationMode(rawRest) ?? options.defaultMutationMode,
     hostId: "cli",
     packetId: options.packetId ?? readFirstFlagValue(rest, ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id"])
   }, () => callback(rest));
@@ -362,6 +377,43 @@ function buildDoveStatusArgs(rest = []) {
   };
 }
 
+function buildDoveFigureArgs(rest = []) {
+  return {
+    packetId: readFirstFlagValue(rest, ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id"]),
+    target: readFlagValue(rest, "--target"),
+    packetTarget: readFlagValue(rest, "--packet-target"),
+    taskName: readFlagValue(rest, "--task-name"),
+    intent: readFlagValue(rest, "--intent"),
+    description: readFlagValue(rest, "--description"),
+    name: readFlagValue(rest, "--name"),
+    title: readFlagValue(rest, "--title"),
+    figureId: readFlagValue(rest, "--figure-id"),
+    purpose: readFlagValue(rest, "--purpose"),
+    captionIntent: readFlagValue(rest, "--caption-intent"),
+    targetClaimIds: readFlagValues(rest, ["--target-claim-id", "--claim-id"]),
+    sourceSections: readFlagValues(rest, ["--source-section", "--section-id"]),
+    sourceArtifactPaths: readFlagValues(rest, ["--source-artifact-path", "--artifact-path"]),
+    relatedExperimentIds: readFlagValues(rest, ["--related-experiment-id", "--experiment-id"]),
+    reviewConcernIds: readFlagValues(rest, ["--review-concern-id"]),
+    rebuttalIssueIds: readFlagValues(rest, ["--rebuttal-issue-id"]),
+    requiredVisualElements: readFlagValues(rest, ["--required-visual-element"]),
+    materialHints: readFlagValues(rest, ["--material-hint"]),
+    providerId: readFlagValue(rest, "--provider-id") ?? "none",
+    executeProvider: rest.includes("--execute-provider"),
+    allowMissingMaterials: rest.includes("--allow-missing-materials"),
+    runId: readFlagValue(rest, "--run-id"),
+    outputFormat: readFlagValue(rest, "--output-format"),
+    constraints: readFlagValues(rest, ["--constraint"]),
+    outputManifestPath: readFlagValue(rest, "--output-manifest-path"),
+    sourceSvgPath: readFlagValue(rest, "--source-svg-path"),
+    targetFinalSvgPath: readFlagValue(rest, "--target-final-svg-path"),
+    svgContent: readFlagValue(rest, "--svg-content"),
+    caption: readFlagValue(rest, "--caption"),
+    captionDraft: readFlagValue(rest, "--caption-draft"),
+    captionId: readFlagValue(rest, "--caption-id")
+  };
+}
+
 function wantsDoveStatusMissionDetails(args = {}) {
   const detail = String(args.detail ?? "").trim().toLowerCase();
   return Boolean(args.showMissions || args.includeMissionDetails || ["missions", "mission-details", "mission-list"].includes(detail));
@@ -395,6 +447,32 @@ function compactText(value, maxLength = 180) {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
+function publicStatusText(value, maxLength = 180) {
+  const text = String(value ?? "")
+    .replace(/\btask-[a-z0-9][a-z0-9-]*\b/giu, "当前任务")
+    .replace(/先为\s+[^\s，。:：]+\s+补/gu, "先为当前任务补");
+  return compactText(text.replace(/为\s*当前任务\s*/gu, "为当前任务"), maxLength);
+}
+
+function publicStatusCommand(value, maxLength = 180) {
+  const text = compactText(value, maxLength);
+  if (/\btask-[a-z0-9][a-z0-9-]*\b/iu.test(text) || /--packet-id\b/u.test(text)) {
+    return "";
+  }
+  return text;
+}
+
+function formatExpansionHint(value, responseLanguage = "zh") {
+  const text = publicStatusText(value, 220);
+  if (!text) {
+    return "";
+  }
+  if (/--missions|--full|--json/u.test(text)) {
+    return responseLanguage === "en" ? "If you explicitly want more detail, ask for task details or the full governance state." : "如果你明确要展开，可以再查看任务细节或完整治理状态。";
+  }
+  return text;
+}
+
 function formatEvidencePreview(items = []) {
   const evidence = Array.isArray(items) ? items.map((item) => compactText(item, 90)).filter(Boolean) : [];
   if (evidence.length === 0) {
@@ -417,71 +495,73 @@ function formatBoundarySummaryForCli(boundary, gaps = {}, operatorUnblock = null
   return "needs operator action";
 }
 
-function formatMissionBlockedReasonForCli(value) {
+function formatMissionBlockedReasonForCli(value, responseLanguage = "zh") {
   const text = compactText(value, 140);
   if (!text) {
     return "";
   }
-  if (text.startsWith("unresolved-dependencies:")) {
-    const ids = text.slice("unresolved-dependencies:".length).split(",").map((item) => item.trim()).filter(Boolean).join(", ");
-    return ids ? `waiting on ${ids}` : "waiting on another mission";
-  }
-  if (text.startsWith("blocked-by:")) {
-    const ids = text.slice("blocked-by:".length).split(",").map((item) => item.trim()).filter(Boolean).join(", ");
-    return ids ? `waiting on ${ids}` : "waiting on another mission";
+  if (text.startsWith("unresolved-dependencies:") || text.startsWith("blocked-by:")) {
+    return responseLanguage === "en" ? "waiting on another mission" : "等待前置任务";
   }
   if (/^awaiting-[a-z0-9-]+$/i.test(text)) {
-    return `needs ${text.slice("awaiting-".length).replace(/-/g, " ")}`;
+    const need = text.slice("awaiting-".length).replace(/-/g, " ");
+    return responseLanguage === "en" ? `needs ${need}` : `需要${need}`;
   }
-  return text;
+  return publicStatusText(text, 140);
 }
 
 function missionHumanStatus(item = {}, fallbackGroup = "todo") {
   return ["todo", "doing", "blocked", "done"].includes(item.group) ? item.group : fallbackGroup;
 }
 
+function missionTitleForCli(item = {}, maxLength = 100) {
+  return publicStatusText(item.title ?? item.summary ?? "", maxLength) || "未命名任务";
+}
+
 function formatMissionListGroup(groupName, group = {}, options = {}) {
+  const responseLanguage = options.responseLanguage ?? "zh";
   const items = Array.isArray(group.items) ? group.items : [];
   const itemCount = Number(group.itemCount ?? items.length);
   const limit = Number.isFinite(options.limit) ? Math.max(0, options.limit) : items.length;
   const visibleItems = options.collapsed || group.defaultCollapsed ? [] : items.slice(0, limit);
   const hiddenCount = Math.max(0, itemCount - visibleItems.length);
-  const hiddenSuffix = hiddenCount > 0 ? ` (+${hiddenCount} more)` : "";
+  const hiddenSuffix = hiddenCount > 0 ? (responseLanguage === "en" ? ` (+${hiddenCount} more)` : `（另有 ${hiddenCount} 个）`) : "";
   const lines = [`  ${groupName}: ${itemCount}${hiddenSuffix}`];
   for (const item of visibleItems) {
-    const blockedReason = formatMissionBlockedReasonForCli(item.blockedReason);
-    lines.push(`    - ${item.packetId}: ${compactText(item.title, 100)} [${missionHumanStatus(item, groupName)}]`);
+    const blockedReason = formatMissionBlockedReasonForCli(item.blockedReason, responseLanguage);
+    lines.push(`    - ${missionTitleForCli(item)} [${missionHumanStatus(item, groupName)}]`);
     if (blockedReason && blockedReason !== item.boundaryType) {
-      lines.push(`      blocked: ${blockedReason}`);
+      lines.push(responseLanguage === "en" ? `      blocked: ${blockedReason}` : `      受阻：${blockedReason}`);
     }
     if (item.boundaryType) {
-      lines.push("      boundary: needs operator action");
+      lines.push(responseLanguage === "en" ? "      needs operator action" : "      需要人工处理");
     }
   }
   return lines;
 }
 
-function formatMissionPriorityLaneForCli(priorityLane = {}) {
+function formatMissionPriorityLaneForCli(priorityLane = {}, responseLanguage = "zh") {
   const focus = priorityLane.focus ?? {};
-  if (!focus.packetId) {
+  if (!focus.packetId && !focus.title) {
     return [];
   }
-  const lines = ["Priority lane:", `  - ${focus.packetId}: ${compactText(focus.title, 100)} [${missionHumanStatus(focus)}]`];
-  const actionLabel = compactText(priorityLane.action?.label, 160);
-  const command = compactText(priorityLane.action?.copyableCommand, 160);
+  const lines = [responseLanguage === "en" ? "Priority:" : "优先处理：", `  - ${missionTitleForCli(focus)} [${missionHumanStatus(focus)}]`];
+  const actionLabel = publicStatusText(priorityLane.action?.label, 160);
+  const command = publicStatusCommand(priorityLane.action?.copyableCommand, 160);
   if (actionLabel || command) {
-    lines.push(`    Next: ${actionLabel || command}${command ? ` [${command}]` : ""}`);
+    const nextText = actionLabel || command;
+    lines.push(responseLanguage === "en" ? `    Next: ${nextText}${command ? ` [${command}]` : ""}` : `    下一步：${nextText}${command ? ` [${command}]` : ""}`);
   }
   if (Array.isArray(priorityLane.needs) && priorityLane.needs.length > 0) {
-    lines.push(`    Need: ${formatEvidencePreview(priorityLane.needs)}`);
+    lines.push(responseLanguage === "en" ? `    Need: ${formatEvidencePreview(priorityLane.needs)}` : `    需要：${formatEvidencePreview(priorityLane.needs)}`);
   }
   if (Array.isArray(priorityLane.doneCriteria) && priorityLane.doneCriteria.length > 0) {
-    lines.push(`    Done: ${formatEvidencePreview(priorityLane.doneCriteria)}`);
+    lines.push(responseLanguage === "en" ? `    Done: ${formatEvidencePreview(priorityLane.doneCriteria)}` : `    完成标准：${formatEvidencePreview(priorityLane.doneCriteria)}`);
   }
   if (Array.isArray(priorityLane.unlocks) && priorityLane.unlocks.length > 0) {
-    const unlocked = priorityLane.unlocks.slice(0, 3).map((item) => `${item.packetId}: ${compactText(item.title, 80)}`).join("；");
+    const unlocked = priorityLane.unlocks.slice(0, 3).map((item) => missionTitleForCli(item, 80)).join("；");
     const hidden = priorityLane.unlocks.length > 3 ? `；+${priorityLane.unlocks.length - 3}` : "";
-    lines.push(`    Unlocks: ${unlocked}${hidden}`);
+    lines.push(responseLanguage === "en" ? `    Unlocks: ${unlocked}${hidden}` : `    完成后可推进：${unlocked}${hidden}`);
   }
   return lines;
 }
@@ -490,70 +570,112 @@ function missionGroupCount(group = {}) {
   return Number(group.itemCount ?? group.items?.length ?? 0);
 }
 
-function formatMissionQueueSummaryForCli(groups = {}) {
+function formatMissionQueueSummaryForCli(groups = {}, responseLanguage = "zh") {
   const counts = ["doing", "blocked", "todo", "done"].map((name) => `${name} ${missionGroupCount(groups[name])}`);
   if (missionGroupCount(groups.archived) > 0) {
     counts.push(`archived ${missionGroupCount(groups.archived)}`);
   }
-  return [`Queue summary: ${counts.join(", ")}`];
+  return [responseLanguage === "en" ? `Queue summary: ${counts.join(", ")}` : `队列概览：${counts.join("，")}`];
 }
 
-function formatMissionListForCli(missionList = {}) {
+function formatMissionListForCli(missionList = {}, responseLanguage = "zh") {
   const groups = missionList.groups ?? {};
-  const lines = ["Mission details:"];
-  lines.push(...formatMissionPriorityLaneForCli(missionList.priorityLane));
-  lines.push(...formatMissionQueueSummaryForCli(groups));
-  lines.push("Queue preview:");
-  lines.push(...formatMissionListGroup("doing", groups.doing, { limit: 2 }));
-  lines.push(...formatMissionListGroup("blocked", groups.blocked, { limit: 2 }));
-  lines.push(...formatMissionListGroup("todo", groups.todo, { limit: 2 }));
-  lines.push(...formatMissionListGroup("done", groups.done, { collapsed: true }));
+  const lines = [responseLanguage === "en" ? "Task choices:" : "任务选择："];
+  lines.push(...formatMissionPriorityLaneForCli(missionList.priorityLane, responseLanguage));
+  lines.push(...formatMissionQueueSummaryForCli(groups, responseLanguage));
+  lines.push(responseLanguage === "en" ? "Preview:" : "任务预览：");
+  lines.push(...formatMissionListGroup("doing", groups.doing, { limit: 2, responseLanguage }));
+  lines.push(...formatMissionListGroup("blocked", groups.blocked, { limit: 2, responseLanguage }));
+  lines.push(...formatMissionListGroup("todo", groups.todo, { limit: 2, responseLanguage }));
+  lines.push(...formatMissionListGroup("done", groups.done, { collapsed: true, responseLanguage }));
   if (missionGroupCount(groups.archived) > 0) {
-    lines.push(...formatMissionListGroup("archived", groups.archived, { collapsed: true }));
+    lines.push(...formatMissionListGroup("archived", groups.archived, { collapsed: true, responseLanguage }));
   }
-  lines.push("More detail: use --full --json for the complete mission list.");
+  lines.push(responseLanguage === "en" ? "Ask explicitly if you need the full governance detail." : "如果还要完整治理细节，请明确提出。");
   return lines;
 }
 
 function formatDoveStatusForCli(result, target, options = {}) {
   const statusHome = result.statusHome ?? {};
-  const fallbackAction = statusHome.nextAction ?? result.nextAction ?? statusHome.nextSteps?.primary ?? result.dailyHome?.nextActions?.[0] ?? null;
-  const nextStep = statusHome.nextStep ?? result.nextStep ?? (fallbackAction ? {
-    label: fallbackAction.title ?? fallbackAction.label ?? fallbackAction.kind,
-    why: fallbackAction.why,
-    command: fallbackAction.command,
-    copyableCommand: fallbackAction.copyableCommand ?? null
-  } : null);
-  const needsAttention = statusHome.needsAttention ?? result.needsAttention ?? {};
-  const changes = statusHome.changes ?? result.changes ?? {
-    intent: result.writeIntent ?? statusHome.writeIntent ?? "none",
-    applied: Boolean(result.writesApplied ?? statusHome.writesApplied),
-    count: result.writes?.count ?? statusHome.writes?.count ?? 0,
-    rollback: result.rollbackEligible ?? statusHome.rollbackEligible ?? "not-applicable"
-  };
+  const nextStep = statusHome.nextStep ?? result.nextStep ?? null;
+  const needsAttention = statusHome.needsAttention ?? result.needsAttention ?? null;
   const showMore = statusHome.showMore ?? result.showMore ?? {};
-  const missionList = statusHome.optionalMissionDetails ?? result.dailyHome?.missionList ?? result.dashboard?.tasks?.grouped ?? {};
-  const headline = statusHome.headline
+  const missionList = statusHome.optionalMissionDetails ?? result.optionalMissionDetails ?? result.dailyHome?.missionList ?? result.dashboard?.tasks?.grouped ?? {};
+  const responseLanguage = result.responseLanguage ?? "zh";
+  const headline = publicStatusText(statusHome.headline
     ?? result.headline
     ?? result.summary
-    ?? `Dove current situation: ${compactText(statusHome.currentContext?.title ?? result.projectSummary?.title ?? target ?? "untitled", 120)}`;
-  const command = compactText(nextStep?.copyableCommand, 160);
-  const why = nextStep?.why ?? needsAttention.operatorAction ?? needsAttention.summary ?? showMore.noWriteSummary ?? "No immediate blocker.";
-  const more = [showMore.text, showMore.noWriteSummary]
-    .filter(Boolean)
-    .map((item) => compactText(item, 180))
-    .join(" ") || `Use --missions for task details; use --full --json for full details. This query made no writes: intent ${changes.intent}; rollback ${changes.rollback}.`;
-  const nextLabel = compactText(nextStep?.label ?? "No required action right now", 180);
-  const lines = [
-    `Dove: ${compactText(headline, 220)}`,
-    `Next: ${nextLabel}${command ? ` [${command}]` : ""}`,
-    `Why: ${compactText(why, 220)}`,
-    `More: ${more}`
-  ];
+    ?? (responseLanguage === "en"
+      ? `Dove checked ${statusHome.currentContext?.title ?? result.projectSummary?.title ?? target ?? "this project"}.`
+      : `Dove 已检查${statusHome.currentContext?.title ?? result.projectSummary?.title ?? target ?? "当前项目"}。`), 240);
+  const nextLabel = publicStatusText(nextStep?.label, 200);
+  const command = publicStatusCommand(nextStep?.copyableCommand ?? nextStep?.command, 180);
+  const why = publicStatusText(needsAttention?.why ?? nextStep?.why ?? needsAttention?.summary, 240);
+  const showMoreText = formatExpansionHint(showMore.text, responseLanguage);
+  const lines = [headline].filter(Boolean);
+  if (nextLabel) {
+    lines.push(command
+      ? (responseLanguage === "en" ? `${nextLabel}. You can run: ${command}` : `${nextLabel}。可以直接运行：${command}`)
+      : nextLabel);
+  }
+  if (why && why !== headline && why !== nextLabel) {
+    lines.push(why);
+  }
+  if (showMoreText) {
+    lines.push(showMoreText);
+  }
   if (options.showMissions) {
-    lines.push("", ...formatMissionListForCli(missionList));
+    lines.push("", ...formatMissionListForCli(missionList, responseLanguage));
   }
   return `${lines.join("\n")}\n`;
+}
+
+function formatDoveFigureForCli(result) {
+  const card = result.resultCard ?? {};
+  const action = Array.isArray(card.nextActions) ? card.nextActions[0] : null;
+  const happened = compactText(card.happened ?? result.summary, 260);
+  const next = compactText(action?.title, 220);
+  const lines = [happened || "Dove 已检查这张图的工作流状态。"];
+  if (next && next !== happened) {
+    lines.push(next);
+  }
+  if (result.mutationMode === "patch-plan" || result.mutationPlan) {
+    lines.push("这一步只是待确认方案，还没有直接改项目记录。");
+  } else if (result.writesApplied === true) {
+    lines.push("项目记录已经更新。");
+  }
+  if (card.requiresAction) {
+    lines.push("接下来补齐它要求的材料或 SVG 输出，再让 Dove 继续检查这张图。");
+  }
+  return `${lines.filter(Boolean).join("\n")}\n`;
+}
+
+function formatDoveFigureJsonForCli(result) {
+  return {
+    presentation: "dove-figure-cli-result",
+    status: result.status,
+    figureId: result.figureId,
+    runId: result.runId,
+    resultCard: result.resultCard ?? null,
+    mutationMode: result.mutationMode,
+    writesApplied: result.writesApplied === true,
+    mutationPlan: result.mutationPlan ?? null,
+    detailsAvailable: true
+  };
+}
+
+function formatDoveFigureErrorForCli(error) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/Task target requires confirmation|Task target is ambiguous|could not resolve a durable task packet|requires a durable task packet|No packets exist/u.test(message)) {
+    return "这张图还不能开始：需要先选定一个 Dove 任务。先看当前最该推进的任务，或重新运行时带上明确任务。\n";
+  }
+  if (/follow-through still requires action|cannot override follow-through governance/u.test(message)) {
+    return "这张图还不能继续：当前还有需要先处理的确认或结果回填。先按状态页的下一步补齐，再回到图表工作流。\n";
+  }
+  if (/secret|token|api key|inline/i.test(message)) {
+    return "这张图还不能继续：检测到不安全的密钥或 provider 配置方式。请改用环境变量引用，不要把密钥写进请求或配置。\n";
+  }
+  return `这张图暂时不能继续：${compactText(message.replace(/\btask-[a-z0-9][a-z0-9-]*\b/giu, "当前任务"), 240)}\n`;
 }
 
 function buildDoveStatusline(result, target) {
@@ -2320,8 +2442,32 @@ if (command === "statusline") {
   process.exit(0);
 }
 
+if (command === "figure") {
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  try {
+    const result = withMutationContext(target, "run_figure_workflow", commandRest, (cleanRest) => runFigureWorkflow(target, buildDoveFigureArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    if (wantsJsonOutput(commandRest)) {
+      await printJson(formatDoveFigureJsonForCli(result));
+    } else {
+      await writeStdout(formatDoveFigureForCli(result));
+    }
+    process.exit(0);
+  } catch (error) {
+    if (wantsJsonOutput(commandRest)) {
+      await printJson({ status: "blocked", message: formatDoveFigureErrorForCli(error).trim() });
+    } else {
+      await writeStdout(formatDoveFigureErrorForCli(error));
+    }
+    process.exit(1);
+  }
+}
+
 if (["orchestrate", "mission", "status", "audit", "return", "launch"].includes(command)) {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  if (command === "status" && (commandRest.includes("--help") || commandRest.includes("-h"))) {
+    statusUsage();
+    process.exit(0);
+  }
   const result = runDoveSurface(command, target, commandRest);
   if (command === "status" && !wantsJsonOutput(commandRest)) {
     await writeStdout(formatDoveStatusForCli(result, target, { showMissions: wantsDoveStatusMissionDetails(buildDoveStatusArgs(commandRest)) }));

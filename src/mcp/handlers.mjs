@@ -92,7 +92,7 @@ import {
   currentMutationContext,
   runWithMutationContext
 } from "../core/index.mjs";
-import { buildContractHealth, buildOperatorRoute, buildOperatorUnblock, normalizeStatusIntent } from "../core/operator-ux.mjs";
+import { buildOperatorUnblock } from "../core/operator-ux.mjs";
 import { MUTATING_TOOL_NAMES } from "./tool-definitions.mjs";
 
 function makeTextResult(data) {
@@ -170,47 +170,22 @@ function extractStatus(data) {
   return normalizeString(data.status ?? data.resultStatus ?? data.taskStatus ?? data.mode, "ok");
 }
 
-function extractBoundaryType(data) {
+function extractScope(data) {
   if (!isPlainObject(data)) {
     return null;
   }
-  return normalizeString(data.boundaryType ?? data.boundary?.type ?? data.resultCard?.boundaryType ?? data.resultCard?.boundary?.type);
-}
-
-function extractNextAction(data) {
-  if (!isPlainObject(data)) {
-    return null;
-  }
-  const primary = data.statusHome?.nextSteps?.primary;
-  const resultCardAction = Array.isArray(data.resultCard?.nextActions) ? data.resultCard.nextActions[0] : null;
-  return normalizeString(
-    data.nextAction
-      ?? data.nextCommand
-      ?? data.current?.nextCommand
-      ?? data.board?.nextCommand
-      ?? primary?.command
-      ?? primary?.title
-      ?? resultCardAction?.command
-      ?? resultCardAction?.title
-  );
-}
-
-function extractCurrentContext(data) {
-  if (!isPlainObject(data)) {
-    return null;
-  }
+  const statusScope = isPlainObject(data.statusHome?.scope) ? data.statusHome.scope : {};
   const statusContext = isPlainObject(data.statusHome?.currentContext) ? data.statusHome.currentContext : {};
   return compactObject({
-    stateSource: normalizeString(statusContext.stateSource ?? data.stateSource),
-    surface: normalizeString(data.surface ?? data.resultCard?.surface),
-    command: normalizeString(data.command ?? data.resultCard?.command),
-    mode: normalizeString(data.mode),
+    kind: normalizeString(statusScope.kind ?? (data.figureId ? "figure" : data.packetId || data.taskPacketId || data.missionPacketId ? "task" : "workspace")),
     packetId: normalizeString(data.packetId ?? data.taskPacketId ?? data.missionPacketId ?? data.resultCard?.packetId),
     runId: normalizeString(data.runId ?? data.id ?? data.resultCard?.runId),
-    domain: normalizeString(data.domain ?? data.doveDomain ?? data.missionDomain),
-    stage: normalizeString(data.stage ?? data.missionStage),
-    currentFocus: normalizeString(data.currentFocus ?? data.statusHome?.projectState?.currentFocus),
-    projectTitle: normalizeString(data.projectTitle ?? data.statusHome?.projectState?.title),
+    figureId: normalizeString(data.figureId ?? data.resultCard?.scope?.figureId),
+    domain: normalizeString(statusScope.domain ?? statusContext.domain ?? data.domain ?? data.doveDomain ?? data.missionDomain),
+    stage: normalizeString(statusScope.stage ?? statusContext.stage ?? data.stage ?? data.missionStage),
+    primaryRole: normalizeString(statusScope.primaryRole ?? statusContext.primaryRole),
+    currentFocus: normalizeString(statusContext.currentFocus ?? data.currentFocus),
+    title: normalizeString(statusContext.title ?? data.projectTitle),
     status: extractStatus(data)
   });
 }
@@ -259,38 +234,6 @@ function extractWrites(data, args = {}) {
   });
 }
 
-function extractRequiredEvidence(data) {
-  if (!isPlainObject(data)) {
-    return [];
-  }
-  return uniqueStrings([
-    ...normalizeStringArray(data.requiredEvidence),
-    ...normalizeStringArray(data.evidenceRequired),
-    ...normalizeStringArray(data.executionContract?.convergence?.evidenceRequired),
-    ...normalizeStringArray(data.statusSummary?.executionGaps?.evidenceRequired),
-    ...normalizeStringArray(data.workflowFrame?.executionGuidance?.evidenceRequired)
-  ]).slice(0, 10);
-}
-
-function extractEvidencePaths(data) {
-  if (!isPlainObject(data)) {
-    return [];
-  }
-  return uniqueStrings([
-    ...normalizeStringArray(data.evidencePaths),
-    ...normalizeStringArray(data.validationEvidencePaths),
-    ...normalizeStringArray(data.verificationEvidencePaths),
-    ...normalizeStringArray(data.resultCard?.evidencePaths)
-  ]).slice(0, 10);
-}
-
-function extractResultPath(data) {
-  if (!isPlainObject(data)) {
-    return null;
-  }
-  return normalizeString(data.resultPath ?? data.reportPath ?? data.outputPath ?? data.resultCard?.resultPath);
-}
-
 function extractSummary(data) {
   if (!isPlainObject(data)) {
     return "ok";
@@ -312,29 +255,32 @@ function extractNextStep(data) {
   }
   const statusNextStep = isPlainObject(data.statusHome?.nextStep) ? data.statusHome.nextStep : null;
   if (statusNextStep) {
-    return statusNextStep;
+    return compactObject({
+      label: normalizeString(statusNextStep.label),
+      why: normalizeString(statusNextStep.why),
+      command: normalizeString(statusNextStep.command),
+      copyableCommand: normalizeString(statusNextStep.copyableCommand)
+    });
   }
   const explicitNextStep = isPlainObject(data.nextStep) ? data.nextStep : null;
   if (explicitNextStep) {
-    return explicitNextStep;
+    return compactObject({
+      label: normalizeString(explicitNextStep.label ?? explicitNextStep.title),
+      why: normalizeString(explicitNextStep.why ?? explicitNextStep.summary),
+      command: normalizeString(explicitNextStep.command),
+      copyableCommand: normalizeString(explicitNextStep.copyableCommand ?? explicitNextStep.command)
+    });
   }
-  const primary = isPlainObject(data.statusHome?.nextSteps?.primary) ? data.statusHome.nextSteps.primary : null;
   const resultCardAction = Array.isArray(data.resultCard?.nextActions) ? data.resultCard.nextActions[0] : null;
-  const source = primary ?? resultCardAction;
-  if (!source) {
-    const nextAction = extractNextAction(data);
-    return nextAction ? { label: nextAction, command: nextAction, copyableCommand: nextAction } : null;
+  if (!resultCardAction) {
+    return null;
   }
-  const command = normalizeString(source.copyableCommand ?? source.firstAction ?? source.command);
+  const command = normalizeString(resultCardAction.copyableCommand ?? resultCardAction.command);
   return compactObject({
-    label: normalizeString(source.title ?? source.label ?? source.kind ?? command),
-    why: normalizeString(source.why ?? source.summary),
-    command: normalizeString(source.command ?? command),
-    copyableCommand: command,
-    kind: normalizeString(source.kind),
-    packetId: normalizeString(source.packetId),
-    evidenceRequired: uniqueStrings(normalizeStringArray(source.evidenceRequired)).slice(0, 8),
-    doneCriteria: uniqueStrings(normalizeStringArray(source.doneCriteria)).slice(0, 8)
+    label: normalizeString(resultCardAction.title ?? resultCardAction.label ?? command),
+    why: normalizeString(resultCardAction.why ?? resultCardAction.summary),
+    command: normalizeString(resultCardAction.command ?? command),
+    copyableCommand: command
   });
 }
 
@@ -366,7 +312,6 @@ function extractNeedsAttention(data, operatorUnblock) {
     status: "blocked",
     summary: operatorUnblock.summary ?? operatorUnblock.blockedSummary,
     why: operatorUnblock.why ?? operatorUnblock.cannotContinueBecause,
-    operatorAction: operatorUnblock.operatorAction ?? operatorUnblock.nextOperatorAction,
     needs: uniqueStrings(normalizeStringArray(operatorUnblock.needs ?? operatorUnblock.requiredEvidence)).slice(0, 8)
   });
 }
@@ -387,36 +332,18 @@ function extractShowMore(data) {
 
 function buildMcpResultContract(tool, resultMode, data, args = {}) {
   const writes = extractWrites(data, args);
-  const statusIntent = tool === "query_dove_status" ? normalizeStatusIntent(args?.intent) : null;
-  const operatorRoute = buildOperatorRoute(tool, args, data);
   const operatorUnblock = buildOperatorUnblock(data);
-  const changes = buildChangesContract(writes);
-  const showMore = extractShowMore(data);
   return compactObject({
     presentation: "dove-mcp-result-contract",
     tool,
     resultMode,
     summary: extractSummary(data),
+    scope: extractScope(data),
     nextStep: extractNextStep(data),
     needsAttention: extractNeedsAttention(data, operatorUnblock),
-    changes,
-    showMore,
-    status: extractStatus(data),
-    writes,
-    writesApplied: writes.applied === true,
-    writeIntent: writes.writeIntent,
-    rollbackEligible: writes.rollbackEligible,
-    boundaryType: extractBoundaryType(data),
-    currentContext: extractCurrentContext(data),
-    operatorRoute,
-    operatorUnblock,
-    contractHealth: ["health-check", "contract-test"].includes(statusIntent) ? buildContractHealth(data) : null,
-    nextAction: extractNextAction(data) ?? "none",
-    requiredEvidence: extractRequiredEvidence(data),
-    evidencePaths: extractEvidencePaths(data),
-    resultPath: extractResultPath(data),
-    detailsAvailable: true,
-    fullDetails: "Pass resultMode: full or resultMode: debug to include fullResult."
+    changes: buildChangesContract(writes),
+    showMore: extractShowMore(data),
+    detailsAvailable: true
   });
 }
 

@@ -264,17 +264,31 @@ function packetTextValues(packet) {
   ].filter(Boolean));
 }
 
+function normalizeTextForMatch(value) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[\s\p{P}\p{S}_-]+/gu, "")
+    .trim();
+}
+
 function textScore(packet, targets = []) {
   let score = 0;
   const values = packetTextValues(packet);
   for (const target of targets) {
     const normalizedTarget = slugify(target);
+    const textTarget = normalizeTextForMatch(target);
     for (const value of values) {
       const normalizedValue = slugify(value);
-      if (normalizedValue === normalizedTarget) {
+      const textValue = normalizeTextForMatch(value);
+      if (textTarget && textValue && textValue === textTarget) {
         score = Math.max(score, 1);
-      } else if (normalizedValue.includes(normalizedTarget) || normalizedTarget.includes(normalizedValue)) {
+      } else if (textTarget && textValue && (textValue.includes(textTarget) || textTarget.includes(textValue))) {
         score = Math.max(score, 0.75);
+      } else if (normalizedTarget !== "item" && normalizedValue !== "item" && normalizedValue === normalizedTarget) {
+        score = Math.max(score, normalizedTarget.length >= 12 ? 1 : 0.65);
+      } else if (normalizedTarget !== "item" && normalizedValue !== "item" && (normalizedValue.includes(normalizedTarget) || normalizedTarget.includes(normalizedValue))) {
+        score = Math.max(score, normalizedTarget.length >= 12 ? 0.75 : 0.55);
       } else if (String(value).toLowerCase().includes(String(target).toLowerCase())) {
         score = Math.max(score, 0.6);
       }

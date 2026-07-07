@@ -199,9 +199,12 @@ test("CLI install writes Claude user-level command adapters without project-loca
   assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "dove")), false);
   assert.ok(fs.existsSync(path.join(claudeConfigRoot, "commands", "dove", "status.md")));
   const statusCommand = fs.readFileSync(path.join(claudeConfigRoot, "commands", "dove", "status.md"), "utf8");
-  assert.match(statusCommand, /compact human translation layer/);
-  assert.match(statusCommand, /exactly one statusHome\.nextStep/);
-  assert.match(statusCommand, /Default output is not a mission board or audit report/);
+  assert.match(statusCommand, /Default output should read like a project assistant/);
+  assert.match(statusCommand, /Do not impose a fixed four-line template/);
+  assert.match(statusCommand, /smallest useful action/);
+  assert.match(statusCommand, /Default status is not a mission board or audit report/);
+  assert.match(statusCommand, /collapsed unless the operator asks to expand/);
+  assert.doesNotMatch(statusCommand, /query_dove_status|statusHome|boundaryActionCards|\.dove\//);
   assert.doesNotMatch(statusCommand, /dailyHome\.missionList/);
   assert.doesNotMatch(statusCommand, /Mission 主页/);
 });

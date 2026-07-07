@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { assertNoInlineSecrets } from "./config.mjs";
+import { buildCommandResultCard } from "./result-cards.mjs";
 import { importFigureGeneration, prepareFigureGeneration } from "./figure-generation.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
@@ -313,9 +314,9 @@ function figureBoundaryFor(status, prepared, validation, figureQa, figureId, run
     return {
       id: `${figureId}-${runId}-qa-needs-attention`,
       type: "verification-failed",
-      reason: `Figure ${figureId} has ${figureQa.issueCount} QA issue(s) requiring review.`,
-      requiredInputs: [figureQa.qaPath],
-      requiredActions: ["review-figure-qa", "resolve-figure-qa-issues"],
+      reason: `Figure ${figureId} has ${figureQa.issueCount} review issue(s) to fix before it is ready.`,
+      requiredInputs: ["current-figure-review-findings"],
+      requiredActions: ["review-current-figure", "resolve-current-figure-issues"],
       artifactRefs,
       nextAction: "project:dove.review",
       ownerRole: "builder",
@@ -324,6 +325,93 @@ function figureBoundaryFor(status, prepared, validation, figureQa, figureId, run
     };
   }
   return null;
+}
+
+function figureText(responseLanguage, zh, en) {
+  return responseLanguage === "en" ? en : zh;
+}
+
+function figureResultHappened(status, { prepared, figureQa, imported, responseLanguage }) {
+  const missing = normalizeStringArray(prepared.missingRequirementIds).join("、");
+  const apiKeyEnv = prepared.providerExecution?.apiKeyEnv ?? prepared.providerReadiness?.apiKeyEnv ?? "provider API key";
+  if (status === "validated") {
+    return figureText(responseLanguage, "这张图已经通过当前图检查，可以进入 review。", "This figure passed the current-figure checks and is ready for review.");
+  }
+  if (status === "qa-needs-attention") {
+    return figureText(responseLanguage, `这张图已经导入，但当前图还有 ${figureQa.issueCount} 个需要修的问题。`, `This figure was imported, but it still has ${figureQa.issueCount} review issue(s) to handle first.`);
+  }
+  if (status === "blocked-missing-materials") {
+    return missing
+      ? figureText(responseLanguage, `这张图还缺材料：${missing}。`, `This figure is still missing materials: ${missing}.`)
+      : figureText(responseLanguage, "这张图还缺材料，暂时不能继续生成或导入。", "This figure is missing materials, so generation or import cannot continue yet.");
+  }
+  if (prepared.providerExecution?.status === "missing-secret-env") {
+    return figureText(responseLanguage, `这张图还不能调用画图服务，缺少 ${apiKeyEnv}；也可以先走手工 SVG 导入。`, `This figure cannot call the drawing provider yet because ${apiKeyEnv} is missing; manual SVG import is still available.`);
+  }
+  if (prepared.providerExecution?.status === "failed") {
+    return figureText(responseLanguage, "这张图的画图服务生成失败了；可以修好服务后重试，也可以直接导入手工 SVG。", "Drawing-provider generation failed for this figure; fix the provider and retry, or import a manual SVG.");
+  }
+  if (!imported) {
+    return figureText(responseLanguage, "这张图的计划和材料包已经准备好，还缺 SVG 输出。", "This figure has its plan and material bundle ready, but still needs SVG output.");
+  }
+  return figureText(responseLanguage, "这张图已经更新。", "This figure was updated.");
+}
+
+function figureResultNextTitle(status, { prepared, responseLanguage }) {
+  const missing = normalizeStringArray(prepared.missingRequirementIds).join("、");
+  if (status === "validated") {
+    return figureText(responseLanguage, "把这张图送入 review", "Send this figure to review");
+  }
+  if (status === "qa-needs-attention") {
+    return figureText(responseLanguage, "先处理当前这张图需要修的问题", "Handle this figure's review issues first");
+  }
+  if (status === "blocked-missing-materials") {
+    return missing
+      ? figureText(responseLanguage, `先补这张图的材料：${missing}`, `Provide this figure's missing materials: ${missing}`)
+      : figureText(responseLanguage, "先补这张图缺的材料", "Provide this figure's missing materials first");
+  }
+  if (prepared.providerExecution?.status === "missing-secret-env") {
+    const apiKeyEnv = prepared.providerExecution?.apiKeyEnv ?? prepared.providerReadiness?.apiKeyEnv ?? "provider API key";
+    return figureText(responseLanguage, `配置 ${apiKeyEnv}，或改用手工 SVG 导入`, `Configure ${apiKeyEnv}, or use manual SVG import`);
+  }
+  if (prepared.providerExecution?.status === "failed") {
+    return figureText(responseLanguage, "修好画图服务后重试，或直接导入手工 SVG", "Fix the drawing provider and retry, or import a manual SVG");
+  }
+  return figureText(responseLanguage, "提供 SVG 输出后再导入", "Provide SVG output and import it");
+}
+
+function buildFigureResultCard({ status, figureId, runId, target, boundary, prepared, imported, figureQa, responseLanguage }) {
+  const actionCommand = boundary?.nextAction ?? (status === "validated" ? "project:dove.review" : "project:dove.figure");
+  const card = buildCommandResultCard({
+    surface: "dove.figure",
+    command: "run_figure_workflow",
+    packetId: target.packetId,
+    runId,
+    title: figureText(responseLanguage, "图表工作流结果", "Figure workflow result"),
+    status,
+    outcome: boundary?.type ?? status,
+    happened: figureResultHappened(status, { figureId, prepared, figureQa, imported, responseLanguage }),
+    durableWrites: imported
+      ? [figureText(responseLanguage, "已更新图表计划、caption provenance 和当前图检查状态。", "Updated the figure plan, caption provenance, and this figure's check state.")]
+      : [figureText(responseLanguage, "已更新图表计划和生成材料包。", "Updated the figure plan and generation material bundle.")],
+    boundary,
+    scope: compactObject({ kind: "figure", figureId, packetId: target.packetId }),
+    nextActions: [{
+      title: figureResultNextTitle(status, { prepared, responseLanguage }),
+      why: boundary?.reason,
+      command: actionCommand,
+      boundary,
+      boundaryType: boundary?.type,
+      requiredInputs: boundary?.requiredInputs,
+      requiredActions: boundary?.requiredActions,
+      ownerRole: boundary?.ownerRole,
+      nextRole: boundary?.nextRole
+    }]
+  }, responseLanguage);
+  delete card.evidence;
+  delete card.validation;
+  delete card.codeChanges;
+  return card;
 }
 
 export function runFigureWorkflow(root, args = {}) {
@@ -377,9 +465,11 @@ export function runFigureWorkflow(root, args = {}) {
   const artifactRefs = figureArtifactRefs(validation);
   const validationEvidencePaths = figureValidationEvidencePaths(figureQa);
   const boundary = figureBoundaryFor(status, prepared, validation, figureQa, figureId, prepared.runId);
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const resultCard = buildFigureResultCard({ status, figureId, runId: prepared.runId, target, boundary, prepared, imported, figureQa, responseLanguage });
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.figure",
-    responseLanguage: resolveDoveResponseLanguage(root, args),
+    responseLanguage,
     request: firstText(args.intent, args.description, args.summary, args.purpose, args.captionIntent, args.name, args.title),
     roleId: "builder",
     packet: target.packet,
@@ -406,6 +496,7 @@ export function runFigureWorkflow(root, args = {}) {
   });
   return {
     status,
+    resultCard,
     preActionGuidance,
     figureId,
     runId: prepared.runId,
