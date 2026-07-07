@@ -4,6 +4,7 @@ import {
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
+import { buildCommandResultCard } from "./result-cards.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
 
 function slugify(value) {
@@ -27,6 +28,35 @@ function hasNonEmptyString(value) {
 
 function hasExperienceObjective(rawPlan = {}, args = {}) {
   return [rawPlan.experimentId, rawPlan.id, rawPlan.goal, rawPlan.idea, args.idea, rawPlan.title].some(hasNonEmptyString);
+}
+
+function localizedText(responseLanguage, zh, en) {
+  return responseLanguage === "en" ? en : zh;
+}
+
+function publicIntegrityActions(flags = [], responseLanguage = "zh") {
+  const labels = {
+    "missing-claim-link": localizedText(responseLanguage, "补上要验证的论点。", "Add the claim this result should support."),
+    "missing-evidence-links": localizedText(responseLanguage, "补上可核查的实验结果材料。", "Attach checkable experiment evidence."),
+    "missing-methodology": localizedText(responseLanguage, "说明实验方法。", "Describe the experiment method."),
+    "missing-success-metric": localizedText(responseLanguage, "说明成功指标。", "Describe the success metric."),
+    "missing-result-summary": localizedText(responseLanguage, "补一段结果摘要。", "Add a result summary."),
+    "pending-outcome": localizedText(responseLanguage, "给出明确实验结论。", "Record a concrete experiment outcome.")
+  };
+  return normalizeStringArray(flags.map((flag) => labels[flag] ?? localizedText(responseLanguage, "补齐实验审计指出的缺口。", "Fill the gap raised by experiment review.")));
+}
+
+function publicExperienceBoundary(boundary, audit, responseLanguage = "zh") {
+  if (!boundary) {
+    return null;
+  }
+  return {
+    type: boundary.type,
+    summary: boundary.type === "needs-review"
+      ? localizedText(responseLanguage, "实验结果还需要 review 判断是否能支撑论点。", "The experiment result still needs review before it can support the claim.")
+      : localizedText(responseLanguage, "实验材料还不够，不能直接推进成论点证据。", "The experiment material is not complete enough to promote as claim evidence."),
+    requiredActions: publicIntegrityActions(audit?.integrityFlags ?? boundary.requiredInputs, responseLanguage)
+  };
 }
 
 function renderClaimsMarkdown(claims = []) {
@@ -247,9 +277,10 @@ export function runExperienceWorkflow(root, args = {}) {
   const artifactRefs = [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog];
   const status = result ? (audit?.auditVerdict === "clean" && bridge?.status === "applied" ? "bridged" : audit?.auditVerdict === "clean" ? "recorded" : "needs-review") : "planned";
   const boundary = experienceBoundaryFor({ status, plan, result, audit, bridge, artifactRefs });
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.experience",
-    responseLanguage: resolveDoveResponseLanguage(root, args),
+    responseLanguage,
     request: normalizeString(rawPlan.goal ?? rawPlan.idea ?? rawPlan.title ?? args.idea, null),
     roleId: "builder",
     subagentSpecialty: "experiment-planner",
@@ -274,10 +305,40 @@ export function runExperienceWorkflow(root, args = {}) {
       bridgeStatus: bridge?.status ?? null
     }
   });
+  const resultCard = buildCommandResultCard({
+    surface: "dove.experience",
+    command: "run_experience_workflow",
+    title: localizedText(responseLanguage, "实验记录已更新", "Experience workflow updated"),
+    status,
+    happened: result
+      ? localizedText(responseLanguage, "已记录实验计划、结果，并完成证据完整性检查。", "Recorded the experiment plan and result, then checked evidence readiness.")
+      : localizedText(responseLanguage, "已记录实验计划，等待结果材料。", "Recorded the experiment plan and is waiting for result material."),
+    durableWrites: [localizedText(responseLanguage, "实验计划、结果、审计和论点衔接状态已更新。", "Experiment plan, result, review, and claim-link state were updated.")],
+    evidence: result?.summary ? [localizedText(responseLanguage, "已记录实验结果摘要。", "Experiment result summary recorded.")] : [],
+    validation: audit ? [audit.auditVerdict === "clean" ? localizedText(responseLanguage, "实验材料检查通过。", "Experiment material check passed.") : localizedText(responseLanguage, "实验材料检查发现缺口。", "Experiment material check found gaps.")] : [],
+    boundary: publicExperienceBoundary(boundary, audit, responseLanguage),
+    scope: {
+      goal: plan.goal,
+      outcome: result?.outcome ?? null,
+      review: audit?.auditVerdict ?? null,
+      claimImpact: bridge?.status === "applied" ? localizedText(responseLanguage, "已影响论点状态", "Claim state updated") : null
+    },
+    nextActions: [{
+      title: boundary
+        ? localizedText(responseLanguage, "先补齐实验材料", "Fill the experiment material gaps first")
+        : result
+          ? localizedText(responseLanguage, "进入 review 检查支撑力度", "Review the support strength next")
+          : localizedText(responseLanguage, "补实验结果和证据", "Add experiment result and evidence"),
+      why: boundary
+        ? localizedText(responseLanguage, "当前结果还不能安全支撑论文论点。", "The current result cannot safely support the paper claim yet.")
+        : localizedText(responseLanguage, "实验记录已经可用于下一步判断，但还需要 review 确认不要过度主张。", "The experiment record is ready for the next decision, but review should confirm it is not over-claimed.")
+    }]
+  }, responseLanguage);
 
   return {
     status,
     preActionGuidance,
+    resultCard,
     packetId: target.packetId,
     plan,
     result,

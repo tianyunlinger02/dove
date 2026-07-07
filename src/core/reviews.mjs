@@ -6,11 +6,43 @@ import { refreshDurableSurfaces } from "./navigation.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { assertRoleBoundMutation, loadBoard, normalizeRebuttalIssues, persistRebuttalIssues, upsertOrchestrationBoard } from "./orchestration.mjs";
 import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
+import { buildCommandResultCard } from "./result-cards.mjs";
 import { appendText, assertGovernanceMutationRegistered, assertFollowThroughReady, listDraftFiles, loadState, nowIso, readJson, saveState, writeJson, writeText } from "./workspace.mjs";
 
 const UNRESOLVED_CONCERN_STATUSES = new Set(["open", "awaiting-author-response", "author-response-submitted", "escalated", "contested"]);
 const AUTHOR_RESPONSE_PENDING_STATUSES = new Set(["open", "awaiting-author-response"]);
 const REVIEWER_RULING_PENDING_STATUSES = new Set(["author-response-submitted", "contested"]);
+
+function localizedText(responseLanguage, zh, en) {
+  return responseLanguage === "en" ? en : zh;
+}
+
+function reviewResultCard(root, args = {}, entry, command = "append_review_log") {
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const findingCount = entry.findings?.length ?? 0;
+  const actionItemCount = entry.actionItems?.length ?? 0;
+  return buildCommandResultCard({
+    surface: "dove.review",
+    command,
+    title: localizedText(responseLanguage, "review 结果已记录", "Review result recorded"),
+    status: entry.verdict,
+    happened: entry.verdict === "coherent"
+      ? localizedText(responseLanguage, "Reviewer 认为当前材料基本自洽。", "The reviewer found the current materials coherent.")
+      : localizedText(responseLanguage, "Reviewer 记录了需要处理的问题。", "The reviewer recorded issues that need attention."),
+    durableWrites: [localizedText(responseLanguage, "审核记录、问题状态和修订计划已更新。", "Review log, concern state, and revision plan were updated.")],
+    evidence: [localizedText(responseLanguage, `发现 ${findingCount} 个问题，留下 ${actionItemCount} 个行动项。`, `Found ${findingCount} issues and left ${actionItemCount} action items.`)],
+    validation: [entry.summary],
+    scope: { verdict: entry.verdict, findingCount, actionItemCount },
+    nextActions: [{
+      title: entry.verdict === "coherent"
+        ? localizedText(responseLanguage, "回到状态页决定是否收尾", "Return to status and decide whether to close")
+        : localizedText(responseLanguage, "把最高优先级问题变成修订动作", "Turn the highest-priority issue into revision work"),
+      why: entry.verdict === "coherent"
+        ? localizedText(responseLanguage, "review 已通过，下一步应选择继续写、做版本快照或收尾。", "Review passed; next choose whether to keep drafting, snapshot, or close.")
+        : localizedText(responseLanguage, "review 已指出缺口，下一步要先修材料而不是宣布完成。", "Review found gaps, so the next step is repair rather than claiming completion.")
+    }]
+  }, responseLanguage);
+}
 
 function slugify(value) {
   return String(value)
@@ -405,7 +437,10 @@ export function persistReviewLog(root, args = {}) {
       artifactPaths: [ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.revisionPlan]
     });
   }
-  return entry;
+  return {
+    ...entry,
+    resultCard: reviewResultCard(root, args, entry)
+  };
 }
 
 export function upsertRevisionPlan(root, args = {}) {
@@ -459,7 +494,24 @@ export function upsertRevisionPlan(root, args = {}) {
     summary: `Updated revision plan with ${items.length} items.`,
     artifactPaths: [ARTIFACT_PATHS.revisionPlan, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary]
   });
-  return { updatedAt: timestamp, itemCount: items.length };
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  return {
+    updatedAt: timestamp,
+    itemCount: items.length,
+    resultCard: buildCommandResultCard({
+      surface: "dove.draft",
+      command: "upsert_revision_plan",
+      title: localizedText(responseLanguage, "修订计划已更新", "Revision plan updated"),
+      status: items.length > 0 ? "needs-revision" : "updated",
+      happened: localizedText(responseLanguage, `已整理 ${items.length} 个修订动作。`, `Organized ${items.length} revision actions.`),
+      durableWrites: [localizedText(responseLanguage, "修订计划和任务看板已更新。", "Revision plan and task board were updated.")],
+      scope: { itemCount: items.length, summary },
+      nextActions: [{
+        title: localizedText(responseLanguage, "完成修订后重新 review", "Run review again after revisions"),
+        why: localizedText(responseLanguage, "修订计划只是待办，只有重新 review 通过后才能说材料闭环。", "A revision plan is only pending work; the material is closed only after review passes again.")
+      }]
+    }, responseLanguage)
+  };
 }
 
 export function runReviewLoop(root, args = {}) {
@@ -495,7 +547,11 @@ export function runReviewLoop(root, args = {}) {
       actionItemCount: entry.actionItems?.length ?? 0
     }
   });
-  return { ...entry, preActionGuidance };
+  return {
+    ...entry,
+    preActionGuidance,
+    resultCard: reviewResultCard(root, args, entry, "run_review_loop")
+  };
 }
 
 export function persistReviewLoop(root, args = {}) {

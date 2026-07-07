@@ -33,6 +33,94 @@ function requireTextIncludes(text, needle, label) {
   assert.equal(text.includes(needle), true, `${label} must include ${needle}`);
 }
 
+const COMPACT_DISCOVERY_FORBIDDEN_KEYS = new Set([
+  "packetId",
+  "packetIds",
+  "taskPacketId",
+  "missionPacketId",
+  "taskId",
+  "runId",
+  "receiptId",
+  "boundaryId",
+  "boundaryType",
+  "implementationBoundaryType",
+  "implementationReason",
+  "ownerRole",
+  "nextRole",
+  "handoff",
+  "handoffId",
+  "handoffSuggestion",
+  "actorRole",
+  "providerId",
+  "providerStatus",
+  "providerError",
+  "apiKeyEnv",
+  "sourceSvgPath",
+  "targetFinalSvgPath",
+  "finalSvgPath",
+  "outputManifestPath",
+  "svgContent",
+  "qaPath",
+  "resultPath",
+  "documentPath",
+  "artifactPaths",
+  "sourceArtifactPath",
+  "sourceArtifactPaths",
+  "evidencePaths",
+  "validationEvidencePaths",
+  "verificationEvidencePaths",
+  "reviewEvidencePaths",
+  "reviewedArtifactPaths",
+  "finalPlanPaths",
+  "finalResultPaths",
+  "artifactRefs",
+  "sourceRefs",
+  "sourceIds",
+  "claimIds",
+  "noteIds",
+  "experimentIds",
+  "reviewConcernIds",
+  "rebuttalIssueIds",
+  "mutationMode",
+  "queueSummary",
+  "queuePreview",
+  "preActionGuidance",
+  "preActionGuidanceSummary",
+  "fullDetails",
+  "fullResult",
+  "diagnostics"
+]);
+
+const COMPACT_DISCOVERY_FORBIDDEN_TEXT = /\.dove\/|\bproject:dove\.[a-z0-9.-]+|--packet-id\b|\b(?:packetId|taskPacketId|missionPacketId|taskId|runId|receiptId|boundaryId|boundaryType|mutationMode|patch-plan|direct-process|ownerRole|nextRole|handoff|providerId|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|queueSummary|queuePreview|preActionGuidance|resultCard|fullResult)\b|\b(?:query_dove_status|run_dove_auto|record_dove_mission_pass|run_figure_workflow|run_dove_operator|record_document_evidence|upsert_note|upsert_draft|register_source)\b/u;
+
+function requireCompactDiscoveryPublic(value, pathLabel = "operator tools") {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => requireCompactDiscoveryPublic(item, `${pathLabel}[${index}]`));
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, child] of Object.entries(value)) {
+      assert.equal(COMPACT_DISCOVERY_FORBIDDEN_KEYS.has(key) || /(?:^|[A-Za-z])Ids?$/u.test(key), false, `${pathLabel} leaked internal key ${key}`);
+      requireCompactDiscoveryPublic(child, `${pathLabel}.${key}`);
+    }
+    return;
+  }
+  if (typeof value === "string" && !pathLabel.endsWith(".name")) {
+    assert.doesNotMatch(value, COMPACT_DISCOVERY_FORBIDDEN_TEXT, `${pathLabel} leaked internal text ${value}`);
+  }
+}
+
+function requirePublicResultCard(card, expected = {}) {
+  assert.ok(card && typeof card === "object", "Expected compact public result card");
+  assert.equal(card.presentation, "compact-result-summary-card");
+  if (expected.surface) {
+    assert.equal(card.surface, expected.surface);
+  }
+  assert.equal(card.detailsAvailable, true);
+  const { command, ...publicCard } = card;
+  requireCompactDiscoveryPublic(publicCard, `${expected.surface ?? "result"} result card`);
+}
+
 function requireDoveWorkspaceVisibilityPolicy() {
   const durableStateCheck = spawnSync("git", ["check-ignore", "-v", ".dove/state.json", ".dove/task-packets/index.json"], {
     cwd: ROOT,
@@ -176,6 +264,9 @@ async function main() {
   }
   for (const hiddenByDefaultTool of ["init_dove_goal", "record_dove_mission_pass", "materialize_guidance_packet", "launch_dove_mission"]) {
     assert.equal(operatorToolNames.has(hiddenByDefaultTool), false, `Default MCP operator surface should not expose ${hiddenByDefaultTool}`);
+  }
+  for (const tool of operatorListed.tools) {
+    requireCompactDiscoveryPublic(tool, `operator tool ${tool.name}`);
   }
 
   const listed = await call("tools/list", { surface: "full" });
@@ -334,12 +425,10 @@ async function main() {
   assert.equal(missionPass.result.maxIterations, 1);
   assert.equal(missionPass.result.iterationCount, 1);
   assert.equal(missionPass.result.packetId, packetId);
-  assert.equal(missionPass.resultCard.presentation, "compact-result-summary-card");
-  assert.equal(missionPass.resultCard.surface, "dove.mission");
-  assert.equal(missionPass.resultCard.packetId, packetId);
-  assert.equal(missionPass.resultCard.proposalOnly, false);
+  requirePublicResultCard(missionPass.resultCard, { surface: "dove.mission" });
+  assert.equal("packetId" in missionPass.resultCard, false);
+  assert.equal("proposalOnly" in missionPass.resultCard, false);
   requirePreActionGuidanceSummary(missionPass.preActionGuidanceSummary, { surface: "dove.mission" });
-  requirePreActionGuidanceSummary(missionPass.resultCard.preActionGuidanceSummary, { surface: "dove.mission" });
 
   const internalDocumentEvidence = await callTool("record_document_evidence", {
     packetId,
@@ -354,7 +443,7 @@ async function main() {
   assert.equal(internalDocumentEvidence.entry.publicSafe, false);
   assert.equal(internalDocumentEvidence.entry.evidenceScope, "internal");
   requirePreActionGuidanceSummary(internalDocumentEvidence.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
-  requirePreActionGuidanceSummary(internalDocumentEvidence.resultCard.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
+  requirePublicResultCard(internalDocumentEvidence.resultCard, { surface: "dove.documents" });
 
   const publicDocumentEvidence = await callTool("record_document_evidence", {
     packetId,
@@ -369,7 +458,7 @@ async function main() {
   assert.equal(publicDocumentEvidence.status, "recorded");
   assert.equal(publicDocumentEvidence.entry.publicSafe, true);
   requirePreActionGuidanceSummary(publicDocumentEvidence.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
-  requirePreActionGuidanceSummary(publicDocumentEvidence.resultCard.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
+  requirePublicResultCard(publicDocumentEvidence.resultCard, { surface: "dove.documents" });
 
   const documentLedger = await callTool("query_document_ledger", { packetId });
   assert.equal(documentLedger.proposalOnly, true);
@@ -644,9 +733,7 @@ async function main() {
   assert.equal(review.status, "prepared-awaiting-audio");
   assert.equal(review.privacyBoundary.projectContextShared, false);
   assert.equal(review.privacyBoundary.writerPrivateTranscriptShared, false);
-  assert.equal(review.resultCard.presentation, "compact-result-summary-card");
-  assert.equal(review.resultCard.surface, "dove.review");
-  requirePreActionGuidanceSummary(review.resultCard.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
+  requirePublicResultCard(review.resultCard, { surface: "dove.review" });
 
   const reviewLoop = await callTool("run_dove_review_loop", {
     packetId,
@@ -729,10 +816,8 @@ async function main() {
   assert.equal(autoRun.result.iterations[0].outcome, "awaiting-review-output");
   assert.equal(autoRun.result.stopReason, "awaiting-review-output");
   assert.ok(autoRun.result.allowedInternalCommands.includes("dove.review-loop"));
-  assert.equal(autoRun.resultCard.presentation, "compact-result-summary-card");
-  assert.equal(autoRun.resultCard.surface, "dove.auto");
+  requirePublicResultCard(autoRun.resultCard, { surface: "dove.auto" });
   assert.equal(autoRun.resultCard.requiresAction, true);
-  requirePreActionGuidanceSummary(autoRun.resultCard.preActionGuidanceSummary, { surface: "dove.auto", primaryRole: "builder" });
 
   const secondMission = await callTool("create_dove_task", {
     id: "validator-kill-task",
@@ -777,8 +862,11 @@ async function main() {
   assert.ok(status.statusHome.needsAttention && typeof status.statusHome.needsAttention === "object");
   assert.deepEqual(status.statusHome.changes, status.changes);
   assert.ok(status.statusHome.showMore?.text);
-  assert.equal(status.statusHome.showMore.fullDetails.args.detail, "full");
-  assert.equal(status.statusHome.showMore.missionDetails.args.showMissions, true);
+  assert.equal(status.statusHome.showMore.detailsAvailable, true);
+  assert.equal(typeof status.statusHome.showMore.missionDetailsAvailable, "boolean");
+  assert.equal(typeof status.statusHome.showMore.statusAdjustmentsAvailable, "boolean");
+  assert.equal("fullDetails" in status.statusHome.showMore, false);
+  assert.equal("missionDetails" in status.statusHome.showMore, false);
   for (const hidden of ["stateSource", "durableRoot", "nativeProjectRollbackExpected", "nativeProjectRollbackRequiresProjectCheckpoint", "projectCheckpointDetected", "projectCheckpointStatus", "nativeHostRollbackRequiresFileCheckpoint", "hostCheckpointDetected", "hostCheckpointStatus", "externalWriteCaptureRequired", "externalWriteCaptureVerified", "doveRestoreSupported", "projectVisibilityRequired"]) {
     assert.equal(hidden in status.statusHome.currentContext, false);
   }
@@ -843,7 +931,8 @@ async function main() {
   assert.equal(fullStatus.statusAdjustmentContract.statusAdjustmentItemsIncluded ?? false, false);
   assert.ok(Array.isArray(fullStatus.statusAdjustmentContract.items));
   assert.ok(Array.isArray(fullStatus.statusAdjustmentContract.adjustmentCards));
-  assert.equal(adjustmentStatus.statusHome.showMore.statusAdjustments.args.requestStatusAdjustment, true);
+  assert.equal(typeof adjustmentStatus.statusHome.showMore.statusAdjustmentsAvailable, "boolean");
+  assert.equal("statusAdjustments" in adjustmentStatus.statusHome.showMore, false);
   assert.equal(adjustmentStatus.statusHome.statusAdjustmentPreview.statusAdjustmentItemsIncluded, true);
   assert.ok(adjustmentStatus.statusHome.statusAdjustmentPreview.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
   assert.equal(adjustmentStatus.statusHome.statusAdjustmentPreview.items.some((item) => item.packetId === secondMission.createdTask.id), false);
@@ -891,10 +980,8 @@ async function main() {
   }
 
   const operatorRun = await callTool("run_dove_operator", { confirmed: true, runId: "validator-operator-run" });
-  assert.equal(operatorRun.resultCard.presentation, "compact-result-summary-card");
-  assert.equal(operatorRun.resultCard.surface, "dove.operator");
+  requirePublicResultCard(operatorRun.resultCard, { surface: "dove.operator" });
   requirePreActionGuidanceSummary(operatorRun.preActionGuidanceSummary, { surface: "dove.operator", primaryRole: "planner" });
-  requirePreActionGuidanceSummary(operatorRun.resultCard.preActionGuidanceSummary, { surface: "dove.operator", primaryRole: "planner" });
 
   const recordedLesson = await callTool("record_operator_lesson", {
     title: "Keep MCP validator retrospectives distilled",

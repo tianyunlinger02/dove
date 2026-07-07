@@ -104,28 +104,28 @@ const codeUx = {
     requiredEvidence: [["draft body 或 experience goal"], ["draft body or experience goal"]]
   },
   "awaiting-host-pass-result": {
-    blockedSummary: ["现在卡在：需要主机侧真实执行结果。", "Blocked: host-side execution results are required."],
+    blockedSummary: ["现在卡在：需要真实证据或执行结果。", "Blocked: real evidence or execution results are required."],
     cannotContinueBecause: ["Dove 不会假装外部检索、生成或验证已经完成。", "Dove will not pretend external retrieval, generation, or verification has completed."],
-    nextOperatorAction: ["补充真实执行结果、证据路径或失败原因。", "Provide real execution results, evidence paths, or the failure reason."],
-    requiredEvidence: [["真实执行结果", "证据路径"], ["real execution result", "evidence path"]]
+    nextOperatorAction: ["补充真实执行结果、证据出处或失败原因。", "Provide real execution results, evidence references, or the failure reason."],
+    requiredEvidence: [["真实执行结果", "证据出处"], ["real execution result", "evidence reference"]]
   },
   "host-tool-blocked": {
-    blockedSummary: ["现在卡在：主机侧工具或权限阻止继续。", "Blocked: a host-side tool or permission issue prevents progress."],
-    cannotContinueBecause: ["需要操作者补执行结果或授权可用工具。", "The operator must provide execution results or authorize an available tool."],
+    blockedSummary: ["现在卡在：工具或权限阻止继续。", "Blocked: a tool or permission issue prevents progress."],
+    cannotContinueBecause: ["需要补执行结果，或先让相关工具可用。", "Provide execution results, or make the needed tool available first."],
     nextOperatorAction: ["补真实结果/证据，或修复工具权限后重试。", "Provide real results/evidence, or fix tool permissions and retry."],
-    requiredEvidence: [["主机侧执行结果", "失败日志或证据路径"], ["host execution result", "failure log or evidence path"]]
+    requiredEvidence: [["真实执行结果", "失败日志或证据出处"], ["real execution result", "failure log or evidence reference"]]
   },
   "awaiting-provider-output": {
-    blockedSummary: ["现在卡在：等待外部 provider 输出。", "Blocked: waiting for external provider output."],
-    cannotContinueBecause: ["缺少 provider 生成结果或 provider 凭据/执行失败。", "Provider output is missing, or provider credentials/execution failed."],
-    nextOperatorAction: ["提供生成输出 manifest，或配置环境变量后显式重试。", "Provide the generated output manifest, or configure environment variables and retry explicitly."],
-    requiredEvidence: [["provider 输出", "生成 manifest"], ["provider output", "generation manifest"]]
+    blockedSummary: ["现在卡在：等待生成结果。", "Blocked: generation output is still missing."],
+    cannotContinueBecause: ["缺少生成结果，或生成所需配置还不可用。", "Generation output is missing, or the required generation setup is unavailable."],
+    nextOperatorAction: ["提供生成结果，或配置环境变量后显式重试。", "Provide the generation output, or configure environment variables and retry explicitly."],
+    requiredEvidence: [["生成结果", "生成记录"], ["generation output", "generation record"]]
   },
   "awaiting-review-output": {
-    blockedSummary: ["现在卡在：等待独立 review 输出。", "Blocked: waiting for independent review output."],
-    cannotContinueBecause: ["缺少 reviewer handoff 或 report。", "Reviewer handoff or report is missing."],
-    nextOperatorAction: ["导入 reviewer handoff/report，或重新准备 review bundle。", "Import reviewer handoff/report, or prepare the review bundle again."],
-    requiredEvidence: [["review handoff", "review report"], ["review handoff", "review report"]]
+    blockedSummary: ["现在卡在：等待独立 review 结果。", "Blocked: waiting for independent review results."],
+    cannotContinueBecause: ["缺少 reviewer 输出或报告。", "Reviewer output or report is missing."],
+    nextOperatorAction: ["导入 reviewer 输出/报告，或重新准备 review 材料。", "Import reviewer output/report, or prepare the review materials again."],
+    requiredEvidence: [["reviewer 输出", "review report"], ["reviewer output", "review report"]]
   },
   "missing-required-materials": {
     blockedSummary: ["现在卡在：缺少必需材料。", "Blocked: required materials are missing."],

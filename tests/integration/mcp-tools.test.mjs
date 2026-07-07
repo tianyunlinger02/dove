@@ -8,6 +8,7 @@ import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_R
 import { dispatchTool } from "../../src/mcp/handlers.mjs";
 import { MUTATING_TOOL_NAMES, toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
+import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 
 function extractMcpEnvelopeJson(result) {
   assert.ok(result.content?.[0]?.text, "Expected text content in MCP tool result");
@@ -118,6 +119,7 @@ function assertCompactMcpContract(result, expected = {}) {
   assert.ok(result.changes && typeof result.changes === "object");
   assert.ok(result.showMore && typeof result.showMore === "object");
   assert.equal(result.detailsAvailable, true);
+  assertNoCompactPublicLeaks(result);
   for (const key of [
     "writesApplied",
     "writes",
@@ -128,6 +130,8 @@ function assertCompactMcpContract(result, expected = {}) {
     "operatorUnblock",
     "boundary",
     "boundaryType",
+    "command",
+    "copyableCommand",
     "evidencePaths",
     "resultPath",
     "requiredEvidence",
@@ -141,6 +145,12 @@ function assertCompactMcpContract(result, expected = {}) {
   ]) {
     assert.equal(key in result, false, `compact MCP result leaked ${key}`);
   }
+  if (result.nextStep) {
+    assert.equal("command" in result.nextStep, false);
+    assert.equal("copyableCommand" in result.nextStep, false);
+  }
+  assert.equal("full" in result.showMore, false);
+  assert.equal("debug" in result.showMore, false);
 }
 
 function assertPublicCompactStatus(result) {
@@ -164,8 +174,11 @@ function assertPublicCompactStatus(result) {
   });
   assert.deepEqual(result.changes, result.statusHome.changes);
   assert.ok(result.statusHome.showMore?.text);
-  assert.equal(result.statusHome.showMore.fullDetails.args.detail, "full");
-  assert.equal(result.statusHome.showMore.missionDetails.args.showMissions, true);
+  assert.equal(result.statusHome.showMore.detailsAvailable, true);
+  assert.equal(typeof result.statusHome.showMore.missionDetailsAvailable, "boolean");
+  assert.equal(typeof result.statusHome.showMore.statusAdjustmentsAvailable, "boolean");
+  assert.equal("fullDetails" in result.statusHome.showMore, false);
+  assert.equal("missionDetails" in result.statusHome.showMore, false);
   for (const key of [
     "boundary",
     "boundaryType",
@@ -229,6 +242,16 @@ function assertPreActionGuidanceSummary(summary, expected = {}) {
   assert.equal(summary.noHiddenRuntime, true);
   assert.equal(summary.requiresConfirmationForWrites, true);
   assert.equal(summary.recordingExplicitOnly, true);
+}
+
+function assertPublicResultCard(card, expected = {}) {
+  assert.ok(card && typeof card === "object", "expected compact result card");
+  assert.equal(card.presentation, "compact-result-summary-card");
+  if (expected.surface) {
+    assert.equal(card.surface, expected.surface);
+  }
+  assert.equal(card.detailsAvailable, true);
+  assertNoCompactPublicLeaks(card, { ignoredKeys: ["command"] });
 }
 
 const MCP_EXECUTION_CRITERION = "MCP execution criterion";
@@ -530,8 +553,9 @@ test("MCP results default to compact contracts and expand explicitly", () => {
   const root = createTempRoot("dove-mcp-compact-contract-");
   try {
     const compactStatus = extractMcpEnvelopeJson(dispatchTool(root, "query_dove_status", { domain: "paper" }));
-    assertCompactMcpContract(compactStatus, { tool: "query_dove_status" });
-    assert.equal(compactStatus.nextStep.copyableCommand, "project:dove.init");
+    assertCompactMcpContract(compactStatus, { tool: "status" });
+    assert.ok(compactStatus.nextStep.label);
+    assert.equal("copyableCommand" in compactStatus.nextStep, false);
     assert.equal(compactStatus.needsAttention.status, "clear");
     assert.deepEqual(compactStatus.changes, {
       intent: "none",
@@ -553,7 +577,7 @@ test("MCP results default to compact contracts and expand explicitly", () => {
       title: "Compact contract init",
       goal: "Keep patch-plan operations out of the default MCP response."
     }));
-    assertCompactMcpContract(compactPatchPlan, { tool: "init_dove_goal" });
+    assertCompactMcpContract(compactPatchPlan, { tool: "mission" });
     assert.equal(compactPatchPlan.changes.intent, "proposed");
     assert.equal(compactPatchPlan.changes.applied, false);
     assert.ok(compactPatchPlan.changes.count > 0);
@@ -661,7 +685,7 @@ test("onboarding, status, and paper pipeline MCP queries stay proposal-only", ()
     assert.equal(status.noAutoApply, true);
     assert.equal(status.query, true);
     assertPublicCompactStatus(status);
-    assert.equal(status.statusHome.nextStep.copyableCommand, "project:dove.init");
+    assert.equal(status.statusHome.nextStep.copyableCommand, "dove.init");
     assert.equal(status.statusHome.needsAttention.status, "clear");
     assert.equal("durableContextNotice" in status, false);
     assert.equal("dashboard" in status, false);
@@ -1120,7 +1144,7 @@ test("document evidence ledger stores internal and public-safe entries without p
     assert.equal(internal.entry.evidenceScope, "internal");
     assert.deepEqual(internal.writes, [".dove/documents/ledger.json"]);
     assertPreActionGuidanceSummary(internal.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
-    assertPreActionGuidanceSummary(internal.resultCard.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
+    assertPublicResultCard(internal.resultCard, { surface: "dove.documents" });
 
     const internalQuery = extractToolJson(dispatchToolFull(root, "query_document_ledger", { packetId, publicSafe: false }));
     assert.equal(internalQuery.mode, "document-ledger-query");
@@ -1155,7 +1179,7 @@ test("document evidence ledger stores internal and public-safe entries without p
     assert.equal(publicEntry.entry.documentPath, ".dove/documents/source/public-evidence.md");
     assert.equal(fs.existsSync(path.join(root, publicEntry.entry.documentPath)), true);
     assertPreActionGuidanceSummary(publicEntry.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
-    assertPreActionGuidanceSummary(publicEntry.resultCard.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
+    assertPublicResultCard(publicEntry.resultCard, { surface: "dove.documents" });
 
     const duplicateCreate = extractToolJson(dispatchToolFull(root, "record_document_evidence", {
       packetId,
@@ -1173,7 +1197,7 @@ test("document evidence ledger stores internal and public-safe entries without p
     assert.equal(duplicateCreate.entry.documentPath, ".dove/documents/source/public-evidence-2.md");
     assert.equal(fs.existsSync(path.join(root, duplicateCreate.entry.documentPath)), true);
     assertPreActionGuidanceSummary(duplicateCreate.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
-    assertPreActionGuidanceSummary(duplicateCreate.resultCard.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
+    assertPublicResultCard(duplicateCreate.resultCard, { surface: "dove.documents" });
 
     const appended = extractToolJson(dispatchToolFull(root, "record_document_evidence", {
       packetId,
@@ -1190,7 +1214,7 @@ test("document evidence ledger stores internal and public-safe entries without p
     assert.equal(appended.appendedDocument, true);
     assert.match(fs.readFileSync(path.join(root, publicEntry.entry.documentPath), "utf8"), /Appended archive-only body/);
     assertPreActionGuidanceSummary(appended.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
-    assertPreActionGuidanceSummary(appended.resultCard.preActionGuidanceSummary, { surface: "dove.documents", primaryRole: "builder" });
+    assertPublicResultCard(appended.resultCard, { surface: "dove.documents" });
 
     const publicQuery = extractToolJson(dispatchToolFull(root, "query_document_ledger", { packetId, publicSafe: true }));
     assert.equal(publicQuery.entries.length, 3);
@@ -1572,18 +1596,14 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(pass.result.maxIterations, 1);
     assert.equal(pass.result.iterationCount, 1);
     assert.equal(pass.result.packetId, "mission-confirm-task");
-    assert.equal(pass.resultCard.presentation, "compact-result-summary-card");
-    assert.equal(pass.resultCard.surface, "dove.mission");
-    assert.equal(pass.resultCard.packetId, "mission-confirm-task");
+    assertPublicResultCard(pass.resultCard, { surface: "dove.mission" });
     assertPreActionGuidanceSummary(pass.preActionGuidanceSummary, { surface: "dove.mission" });
-    assertPreActionGuidanceSummary(pass.resultCard.preActionGuidanceSummary, { surface: "dove.mission" });
-    assert.ok(pass.resultCard.evidence.includes(".dove/task-packets/index.json"));
+    assert.deepEqual(pass.resultCard.evidence, ["已记录证据指针；默认摘要隐藏内部路径。"]);
     assert.equal(pass.executionReceipt.packetId, "mission-confirm-task");
     assert.equal(pass.result.executionReceipt.packetId, "mission-confirm-task");
-    assert.equal(pass.resultCard.executionReceipt.packetId, "mission-confirm-task");
     assert.equal(pass.resultCard.executionReceipt.criteriaCoverage.complete, true);
     assert.ok(pass.resultCard.executionReceipt.evidenceCount >= 2);
-    assert.equal(pass.resultCard.proposalOnly, false);
+    assert.equal("proposalOnly" in pass.resultCard, false);
 
     const statusAfterPass = extractToolJson(dispatchToolFull(root, "query_dove_status", { detail: "full" }));
     assert.equal(statusAfterPass.dailyHome.recentExecutionReceipts.length, 1);
@@ -1612,10 +1632,8 @@ test("create_dove_task converts demand before materializing a one-pass mission",
     assert.equal(passRecorded.missionPassRequired, false);
     assert.equal(passRecorded.task.status, "completed");
     assert.equal(passRecorded.result.packetId, "mission-pass-recorded-task");
-    assert.equal(passRecorded.resultCard.presentation, "compact-result-summary-card");
-    assert.equal(passRecorded.resultCard.packetId, passRecorded.missionPass.resultCard.packetId);
+    assertPublicResultCard(passRecorded.resultCard, { surface: "dove.mission" });
     assertPreActionGuidanceSummary(passRecorded.preActionGuidanceSummary, { surface: "dove.mission" });
-    assertPreActionGuidanceSummary(passRecorded.resultCard.preActionGuidanceSummary, { surface: "dove.mission" });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1856,7 +1874,8 @@ test("status adjustment contract applies confirmed non-terminal mission status c
     assert.ok(fullStatus.statusAdjustmentContract.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
     assertPublicCompactStatus(adjustmentStatus);
     const adjustmentPreview = adjustmentStatus.statusHome.statusAdjustmentPreview;
-    assert.equal(adjustmentStatus.statusHome.showMore.statusAdjustments.args.requestStatusAdjustment, true);
+    assert.equal(typeof adjustmentStatus.statusHome.showMore.statusAdjustmentsAvailable, "boolean");
+    assert.equal("statusAdjustments" in adjustmentStatus.statusHome.showMore, false);
     assert.equal(adjustmentPreview.statusAdjustmentItemsIncluded, true);
     assert.equal(adjustmentPreview.adjustmentCards.length, adjustmentPreview.items.length);
     assert.ok(adjustmentPreview.adjustmentCards.every((card) => card.presentation === "compact-status-adjustment-card"));
@@ -1891,9 +1910,8 @@ test("status adjustment contract applies confirmed non-terminal mission status c
     assert.deepEqual(applied.rejected, []);
     assert.equal(applied.applied[0].fromStatus, "ready");
     assert.equal(applied.applied[0].toStatus, "blocked");
-    assert.equal(applied.resultCard.presentation, "compact-result-summary-card");
-    assert.equal(applied.resultCard.surface, "dove.status");
-    assert.equal(applied.resultCard.proposalOnly, false);
+    assertPublicResultCard(applied.resultCard, { surface: "dove.status" });
+    assert.equal("proposalOnly" in applied.resultCard, false);
     const postApplyStatus = extractToolJson(dispatchToolFull(root, "query_dove_status", { requestStatusAdjustment: true }));
     const blockedAdjustedItem = postApplyStatus.statusHome.statusAdjustmentPreview.items.find((candidate) => candidate.packetId === "status-ready-task");
     assert.ok(blockedAdjustedItem);
@@ -1912,7 +1930,7 @@ test("status adjustment contract applies confirmed non-terminal mission status c
     assert.equal(archivedApplied.executionReceipts[0].actionType, "cleanup");
     assert.equal(archivedApplied.executionReceipts[0].lifecycleTransition.previousStatus, "in-progress");
     assert.equal(archivedApplied.executionReceipts[0].lifecycleTransition.nextStatus, "archived");
-    assert.equal(archivedApplied.resultCard.executionReceipt.actionType, "cleanup");
+    assert.equal("actionType" in archivedApplied.resultCard.executionReceipt, false);
 
     const archivedPacket = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "status-progress-task.json"), "utf8"));
     assert.equal(archivedPacket.status, "archived");
@@ -2019,7 +2037,7 @@ test("apply_dove_status_adjustments records execution receipts for verified comp
     assert.equal(applied.applied[0].toStatus, "completed");
     assert.equal(applied.executionReceipts[0].receiptId, "status-adjustment-explicit-receipt");
     assert.equal(applied.executionReceipts[0].packetId, "status-receipt-task");
-    assert.equal(applied.resultCard.executionReceipt.receiptId, "status-adjustment-explicit-receipt");
+    assert.equal("receiptId" in applied.resultCard.executionReceipt, false);
     assert.equal(applied.resultCard.executionReceipt.criteriaCoverage.complete, true);
 
     const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
@@ -2075,8 +2093,8 @@ test("run_dove_operator leaves host-pass-only queues unchanged without taskResul
     assert.deepEqual(run.awaitingResultTaskIds, ["operator-host-only-source"]);
     assert.deepEqual(run.operatorResultSummary.skippedHostPassTaskIds, ["operator-host-only-source"]);
     assert.equal(run.operatorResultSummary.runtimeRecorded, false);
+    assertPublicResultCard(run.resultCard, { surface: "dove.operator" });
     assert.equal(run.resultCard.status, "needs-host-results");
-    assert.deepEqual(run.resultCard.packetIds, []);
     assert.equal(run.resultCard.durableWrites.length, 1);
     assert.ok(run.awaitingRequiredActions.includes("collect-source-provenance"));
     assert.ok(run.awaitingRequiredActions.includes("call-register-source-with-sources-array"));
@@ -2177,14 +2195,11 @@ test("run_dove_operator previews blocker investigations and only creates them wh
     assert.deepEqual(run.operatorResultSummary.autoRunnableTaskIds, ["operator-auto-ready"]);
     assert.deepEqual(run.operatorResultSummary.hostPassRequiredTaskIds.sort(), hostPassRequiredIds.sort());
     assert.deepEqual(run.operatorResultSummary.skippedHostPassTaskIds.sort(), awaitingHostIds.sort());
-    assert.equal(run.resultCard.presentation, "compact-result-summary-card");
-    assert.equal(run.resultCard.surface, "dove.operator");
+    assertPublicResultCard(run.resultCard, { surface: "dove.operator" });
     assertPreActionGuidanceSummary(run.preActionGuidanceSummary, { surface: "dove.operator", primaryRole: "planner" });
-    assertPreActionGuidanceSummary(run.resultCard.preActionGuidanceSummary, { surface: "dove.operator", primaryRole: "planner" });
     assert.equal(run.resultCard.requiresAction, true);
-    assert.equal(run.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-host-pass-result");
-    assert.equal(run.resultCard.nextActions[0].handoffSuggestion.ownerRole, "builder");
-    assert.deepEqual([...run.resultCard.nextActions[0].requires].sort(), [...awaitingHostIds].sort());
+    assert.equal("handoffSuggestion" in run.resultCard.nextActions[0], false);
+    assert.equal("requires" in run.resultCard.nextActions[0], false);
     for (const requiredAction of [
       "provide-host-pass-result",
       "collect-source-provenance",
@@ -2409,7 +2424,8 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
     assert.equal(parentPass.artifactResolution.acceptedMatches[0].packetId, child.id);
     assert.equal(parentPass.artifactResolution.acceptedMatches[0].relation, "descendant");
     assert.equal(parentPass.resultCard.evidenceExplanation.code, "accepted-descendant-artifacts");
-    assert.equal(parentPass.resultCard.evidenceSelection.acceptedMatches[0].packetId, child.id);
+    assert.equal("evidenceSelection" in parentPass.resultCard, false);
+    assertPublicResultCard(parentPass.resultCard, { surface: "dove.mission" });
 
     const persistedParent = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", `${created.createdTask.id}.json`), "utf8"));
     assert.ok(persistedParent.artifactRefs.includes(childArtifact));
@@ -2748,13 +2764,11 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(hostBoundary.boundary.type, "awaiting-host-pass");
     assert.equal(hostBoundary.task.boundary.type, "awaiting-host-pass");
     assert.deepEqual(hostBoundary.task.boundary.requiredActions, ["provide-host-pass-result", "provide-explicit-auto-step"]);
-    assert.equal(hostBoundary.resultCard.presentation, "compact-result-summary-card");
-    assert.equal(hostBoundary.resultCard.surface, "dove.auto");
-    assertPreActionGuidanceSummary(hostBoundary.resultCard.preActionGuidanceSummary, { surface: "dove.auto", primaryRole: "builder" });
+    assertPublicResultCard(hostBoundary.resultCard, { surface: "dove.auto" });
     assert.equal(hostBoundary.resultCard.requiresAction, true);
-    assert.equal(hostBoundary.resultCard.nextActions[0].boundaryType, "awaiting-host-pass");
-    assert.equal(hostBoundary.resultCard.nextActions[0].ownerRole, "builder");
-    assert.equal(hostBoundary.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-host-pass");
+    assert.equal("boundaryType" in hostBoundary.resultCard.nextActions[0], false);
+    assert.equal("ownerRole" in hostBoundary.resultCard.nextActions[0], false);
+    assert.equal("handoffSuggestion" in hostBoundary.resultCard.nextActions[0], false);
     assert.deepEqual(hostBoundary.resultCard.nextActions[0].requiredActions, ["provide-host-pass-result", "provide-explicit-auto-step"]);
 
     extractToolJson(dispatchToolFull(root, "create_dove_task", {
@@ -2777,8 +2791,9 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(hostToolBlocked.status, "blocked");
     assert.equal(hostToolBlocked.task.status, "blocked");
     assert.equal(hostToolBlocked.task.boundary.type, "host-tool-blocked");
+    assertPublicResultCard(hostToolBlocked.resultCard, { surface: "dove.mission" });
     assert.equal(hostToolBlocked.resultCard.requiresAction, true);
-    assert.equal(hostToolBlocked.resultCard.nextActions[0].boundaryType, "host-tool-blocked");
+    assert.equal("boundaryType" in hostToolBlocked.resultCard.nextActions[0], false);
     assert.deepEqual(hostToolBlocked.resultCard.nextActions[0].requiredActions, ["retry-host-search-or-use-authorized-retrieval"]);
     const blockedStatus = extractToolJson(dispatchToolFull(root, "query_dove_status", { detail: "full", showMissions: true }));
     const hostToolCard = blockedStatus.boundaryActionCards.find((card) => card.packetId === "auto-host-tool-blocked-task");
@@ -3006,11 +3021,8 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(autoRun.result.iterations[1].executionReceipt.criteriaCoverage.complete, true);
     assert.equal(autoRun.result.stopReason, "completion-confirmed-by-auto-step");
     assert.equal(autoRun.result.taskStatusAfter, "completed");
-    assert.equal(autoRun.resultCard.presentation, "compact-result-summary-card");
-    assert.equal(autoRun.resultCard.surface, "dove.auto");
-    assert.equal(autoRun.resultCard.executionReceipt.receiptId, "auto-explicit-step-receipt");
+    assertPublicResultCard(autoRun.resultCard, { surface: "dove.auto" });
     assert.equal(autoRun.resultCard.executionReceipt.criteriaCoverage.complete, true);
-    assertPreActionGuidanceSummary(autoRun.resultCard.preActionGuidanceSummary, { surface: "dove.auto", primaryRole: "builder" });
     assert.equal(autoRun.resultCard.completed, true);
 
     const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
@@ -3121,23 +3133,18 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.doesNotMatch(reviewLog, /PRIVATE/);
     const runReview = extractToolJson(dispatchToolFull(root, "run_audio_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-2", scope: "mcp validation" }));
     assert.equal(runReview.status, "prepared-awaiting-audio");
-    assert.equal(runReview.resultCard.presentation, "compact-result-summary-card");
-    assert.equal(runReview.resultCard.surface, "dove.review");
-    assertPreActionGuidanceSummary(runReview.resultCard.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
-    assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-review-output");
-    assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.detail?.implementationBoundaryType, undefined);
-    assert.equal(runReview.resultCard.nextActions[0].handoffSuggestion.detail?.implementationReason, undefined);
-    assert.equal("reason" in runReview.resultCard.nextActions[0].handoffSuggestion, false);
-    assert.equal(runReview.resultCard.nextActions[0].nextRole, "reviewer");
-    assert.deepEqual(runReview.resultCard.nextActions[0].requiredActions, ["complete-isolated-review-handoff"]);
+    assertPublicResultCard(runReview.resultCard, { surface: "dove.review" });
+    assert.equal("handoffSuggestion" in runReview.resultCard.nextActions[0], false);
+    assert.equal("nextRole" in runReview.resultCard.nextActions[0], false);
+    assert.equal("requiredActions" in runReview.resultCard.nextActions[0], false);
 
     const reviewLoop = extractToolJson(dispatchToolFull(root, "run_dove_review_loop", { packetId: "mcp-main-packet", runId: "mcp-review-loop-awaiting-output", maxIterations: 1 }));
     assert.equal(reviewLoop.status, "blocked");
     assert.equal(reviewLoop.stopReason, "awaiting-review-output");
+    assertPublicResultCard(reviewLoop.resultCard, { surface: "dove.review-loop" });
     assert.equal(reviewLoop.iterations[0].review.status, "prepared-awaiting-audio");
-    assert.equal(reviewLoop.iterations[0].review.resultCard.nextActions[0].handoffSuggestion.boundaryType, "awaiting-review-output");
-    assert.equal(reviewLoop.iterations[0].review.resultCard.nextActions[0].handoffSuggestion.detail?.implementationBoundaryType, undefined);
-    assert.equal(reviewLoop.iterations[0].review.resultCard.nextActions[0].handoffSuggestion.detail?.implementationReason, undefined);
+    assertPublicResultCard(reviewLoop.iterations[0].review.resultCard, { surface: "dove.review" });
+    assert.equal("handoffSuggestion" in reviewLoop.iterations[0].review.resultCard.nextActions[0], false);
 
     fs.writeFileSync(path.join(root, runReview.reportPath), "# MCP isolated report\n\nNeeds validation evidence.\n", "utf8");
     fs.writeFileSync(path.join(root, runReview.handoffPath), `${JSON.stringify({
@@ -3154,11 +3161,9 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
       actionItems: ["Provide validation evidence."]
     }, null, 2)}\n`, "utf8");
     const needsEvidence = extractToolJson(dispatchToolFull(root, "import_audio_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-2" }));
-    assertPreActionGuidanceSummary(needsEvidence.resultCard.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
-    assert.equal(needsEvidence.resultCard.nextActions[0].command, "project:dove.mission");
-    assert.equal(needsEvidence.resultCard.nextActions[0].handoffSuggestion.boundaryType, "verification-failed");
-    assert.equal(needsEvidence.resultCard.nextActions[0].handoffSuggestion.detail?.implementationBoundaryType, undefined);
-    assert.equal(needsEvidence.resultCard.nextActions[0].handoffSuggestion.detail?.implementationReason, undefined);
+    assertPublicResultCard(needsEvidence.resultCard, { surface: "dove.review" });
+    assert.equal("command" in needsEvidence.resultCard.nextActions[0], false);
+    assert.equal("handoffSuggestion" in needsEvidence.resultCard.nextActions[0], false);
     assert.deepEqual(needsEvidence.resultCard.nextActions[0].requiredActions, ["Provide validation evidence."]);
     assert.equal(runReview.privacyBoundary.projectContextShared, false);
   } finally {

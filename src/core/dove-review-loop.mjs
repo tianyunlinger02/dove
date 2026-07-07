@@ -4,6 +4,7 @@ import { ARTIFACT_PATHS } from "./schema.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
+import { buildCommandResultCard } from "./result-cards.mjs";
 import { appendText, assertGovernanceMutationRegistered, ensureWorkspace, loadState, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
 import { runAudioReview } from "./audio-review.mjs";
 import { runExperienceWorkflow } from "./experience-workflow.mjs";
@@ -29,6 +30,23 @@ function hasNonEmptyString(value) {
 
 function hasExperienceObjective(args = {}) {
   return [args.experimentId, args.id, args.goal, args.idea, args.title].some(hasNonEmptyString);
+}
+
+function localizedText(responseLanguage, zh, en) {
+  return responseLanguage === "en" ? en : zh;
+}
+
+function reviewLoopStopSummary(status, stopReason, responseLanguage) {
+  if (status === "coherent") {
+    return localizedText(responseLanguage, "review-loop 已确认当前材料基本自洽。", "The review loop found the current materials coherent.");
+  }
+  if (stopReason === "awaiting-review-output") {
+    return localizedText(responseLanguage, "review-loop 已准备审核输入，现在等独立审核结果。", "The review loop prepared review input and is waiting for independent review output.");
+  }
+  if (status === "blocked") {
+    return localizedText(responseLanguage, "review-loop 停在需要修复的问题上。", "The review loop stopped on an issue that needs repair.");
+  }
+  return localizedText(responseLanguage, "review-loop 已用完本轮预算，需要人工决定下一步。", "The review loop used its iteration budget and needs an operator decision.");
 }
 
 function writeDraftPlaceholder(root, args, iteration, packetId) {
@@ -140,9 +158,10 @@ export function runDoveReviewLoop(root, args = {}) {
   stateIndex.lastReviewedAt = timestamp;
   writeJson(root, ARTIFACT_PATHS.reviewState, stateIndex);
   appendText(root, ARTIFACT_PATHS.reviewLog, `## ${timestamp} — dove-review-loop\n\n- Run: ${runId}\n- Packet: ${target.packetId}\n- Status: ${status}\n- Stop reason: ${stopReason}\n- Iterations: ${iterations.length}/${maxIterations}\n\n`);
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.review",
-    responseLanguage: resolveDoveResponseLanguage(root, args),
+    responseLanguage,
     request: args.instructions ?? args.scope ?? args.summary ?? "review loop",
     roleId: "reviewer",
     packet: target.packet,
@@ -160,9 +179,32 @@ export function runDoveReviewLoop(root, args = {}) {
     tags: ["review", "audio", "experience", "iteration"],
     statusSummary: { status, stopReason, iterationCount: iterations.length, maxIterations }
   });
+  const resultCard = buildCommandResultCard({
+    surface: "dove.review-loop",
+    command: "run_dove_review_loop",
+    title: localizedText(responseLanguage, "review-loop 已停止", "Review loop stopped"),
+    status,
+    stopReason,
+    happened: reviewLoopStopSummary(status, stopReason, responseLanguage),
+    durableWrites: [localizedText(responseLanguage, "审核状态和审核日志已更新。", "Review state and review log were updated.")],
+    evidence: iterations.length > 0 ? [localizedText(responseLanguage, `本轮完成 ${iterations.length} 次检查。`, `Completed ${iterations.length} checks in this pass.`)] : [],
+    validation: [reviewLoopStopSummary(status, stopReason, responseLanguage)],
+    scope: { iterations: iterations.length, maxIterations, status },
+    nextActions: [{
+      title: status === "coherent"
+        ? localizedText(responseLanguage, "回到状态页选择下一步", "Return to status for the next step")
+        : stopReason === "awaiting-review-output"
+          ? localizedText(responseLanguage, "导入审核结果", "Import the review result")
+          : localizedText(responseLanguage, "先修复 review 指出的缺口", "Fix the review gaps first"),
+      why: status === "coherent"
+        ? localizedText(responseLanguage, "当前材料已经通过这一轮检查，可以决定继续写作、归档或进入版本快照。", "This pass is coherent, so the next decision can be drafting, closure, or versioning.")
+        : localizedText(responseLanguage, "review-loop 不会隐藏继续跑，卡住时要先补材料或导入审核结果。", "The review loop does not continue in the background; blocked work needs material fixes or review import first.")
+    }]
+  }, responseLanguage);
   return {
     status,
     preActionGuidance,
+    resultCard,
     stopReason,
     packetId: target.packetId,
     runId,

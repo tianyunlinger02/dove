@@ -22,7 +22,7 @@ import {
   normalizeWorkspaceIndex,
   normalizeWorkspaceMetaOptimize
 } from "../src/core/schema.mjs";
-import { CORE_INSTALL_PATHS, DEFAULT_HOST_ADAPTERS, HOST_ADAPTERS, HOST_IDS, USER_HOST_IDS } from "../src/core/command-manifest.mjs";
+import { COMMAND_SURFACES, CORE_INSTALL_PATHS, DEFAULT_HOST_ADAPTERS, HOST_ADAPTERS, HOST_IDS, USER_HOST_IDS } from "../src/core/command-manifest.mjs";
 import { writeClaudeUserCommandAdapters } from "../scripts/generate-command-adapters.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -41,27 +41,16 @@ function usage() {
   console.log(`dove
 
 Usage:
-  dove install [target] [--force] [--host <opencode|codex|cursor|agents|claude|all>]
-  dove sync [target] [--force] [--host <opencode|codex|cursor|agents|claude|all>]
+  dove status [target]
+  dove status [target] --missions
+  dove mission [target] --goal <text>
+  dove figure [target] --intent <text>
+  dove install [target] --host <opencode|codex|cursor|agents|claude|all>
+  dove sync [target] --host <opencode|codex|cursor|agents|claude|all>
   dove doctor [target]
-  dove onboard [target] [--write-map] [--max-depth <n>] [--max-files <n>] [--mutation-mode <patch-plan|direct-process>]
-  dove publish-status [target] [--quiet] [--include-archived] [--mutation-mode <patch-plan|direct-process>]
-  dove publish-global-status [projectRoot ...] [--project <root>] [--output <dir>] [--refresh] [--include-config] [--quiet] [--mutation-mode <patch-plan|direct-process>]
-  dove serve-global-status [projectRoot ...] [--project <root>] [--output <dir>] [--refresh] [--include-config] [--auth|--no-auth] [--auth-password-env <ENV_NAME>] [--cloudflare|--no-cloudflare] [--configure-cloudflare] [--domain <hostname>] [--port <port>] [--host <loopback>] [--dns-resolver-addrs <address:port>] [--dry-run] [--quiet]
-  dove orchestrate [target] [--request <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--allow-autonomy]
-  dove mission [target] [--goal <text>] [--domain <id>] [--stage <id>] [--artifact <path>] [--acceptance-check <text>]
-  dove status [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived] [--health|--contract-test] [--missions|--show-missions] [--full|--detail full] [--json|--format json]
-  dove figure [target] --intent <text> [--packet-id <id>] [--figure-id <id>] [--provider-id none|gpt-image2] [--source-svg-path <path>|--output-manifest-path <path>|--svg-content <svg>] [--caption <text>] [--mutation-mode <patch-plan|direct-process>] [--json|--format json]
-  dove statusline [target] [--domain <id>] [--stage <id>] [--packet-id <id>|--mission-packet-id <id>] [--status <status>] [--include-archived] [--json|--format json]
-  dove audit [target] [--scope <text>] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
-  dove return [target] [--goal <text>] [--domain <id>] [--stage <id>] [--changed-file <path>] [--test-evidence <path>] [--validation-output <path>]
-  dove launch [target] --source-type <type> --source-id <id> --execute-by <iso> --review-after <iso> [--mission-packet-id <id>] [--goal <text>] [--domain <id>] [--stage <id>] [--mutation-mode <patch-plan|direct-process>]
-  dove isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>] [--mutation-mode direct-process]
-  dove isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>] [--mutation-mode <patch-plan|direct-process>]
-  dove isolated-review-import [target] --run-id <id> [--mutation-mode <patch-plan|direct-process>]
-  dove autonomy-once [target] [--actor-role <role>] [--mutation-mode <patch-plan|direct-process>]
-  dove autonomy-foreground [target] [--actor-role <role>] [--max-steps <n>] [--packet-id <id>] [--program-run-id <id>] [--approval-id <id>] [--mutation-mode <patch-plan|direct-process>]
-  dove autonomy-operate [target] [--objective <text> | --source-type <type> --source-id <id>] [--actor-role <role>] [--worker-role <role>] [--max-steps <n>] [--mutation-mode <patch-plan|direct-process>]
+
+Other Dove paper actions are handled by their matching /dove.* request; use status first if you are unsure.
+Use --json only when another tool needs structured details.
 `);
 }
 
@@ -76,6 +65,24 @@ Examples:
   dove status . --json
 
 Use --missions only when you need task choices or details. Use --json only when another tool needs structured data.
+`);
+}
+
+const LOCAL_DOVE_CLI_SURFACES = new Set(["orchestrate", "mission", "status", "figure"]);
+const PUBLIC_DOVE_SURFACES = new Set(COMMAND_SURFACES.map((surface) => surface.id.replace(/^dove\./u, "")));
+
+function isHostOnlyDoveSurface(command) {
+  return PUBLIC_DOVE_SURFACES.has(command) && !LOCAL_DOVE_CLI_SURFACES.has(command);
+}
+
+function hostOnlySurfaceUsage(command) {
+  console.log(`dove.${command}
+
+This shell can only give guidance for this Dove request.
+Next: run /dove.${command} where the selected task can be updated, or provide the completed material/result here.
+
+For a read-only project check, run:
+  dove status .
 `);
 }
 
@@ -627,6 +634,33 @@ function formatDoveStatusForCli(result, target, options = {}) {
   if (options.showMissions) {
     lines.push("", ...formatMissionListForCli(missionList, responseLanguage));
   }
+  return `${lines.join("\n")}\n`;
+}
+
+function publicMissionText(value, maxLength = 220) {
+  const text = publicStatusText(value, maxLength);
+  if (!text || /\.dove\/|\bproject:dove\.|\b(?:packetId|taskPacketId|missionPacketId|packetPath|boundaryType|workContract|executionContract|preActionGuidance|proposalOnly|noAutoApply)\b|Snapshot version-/iu.test(text)) {
+    return "";
+  }
+  return text;
+}
+
+function formatDoveMissionForCli(result) {
+  const responseLanguage = result.responseLanguage ?? "zh";
+  const mission = result.mission ?? {};
+  const goal = publicMissionText(mission.goal, 220);
+  const lines = [responseLanguage === "en"
+    ? "Dove checked this project. Start by turning the user's request into a task proposal; do not write or run anything until approved."
+    : "Dove 已检查当前项目。先把用户需求整理成待确认任务；没有批准前，不写入也不执行。"];
+  if (goal) {
+    lines.push(responseLanguage === "en" ? `Current focus: ${goal}` : `当前关注：${goal}`);
+  }
+  lines.push(responseLanguage === "en"
+    ? "Next: propose the task in plain language, name the evidence it needs, and wait for approval. After approval, run one foreground pass only."
+    : "下一步：用人话给出任务草案，说明需要哪些证据，然后等确认；确认后也只跑一轮。");
+  lines.push(responseLanguage === "en"
+    ? "If materials are missing, stop and say exactly what needs to be supplied. Ask for JSON only when you need the full governance detail."
+    : "如果缺材料，就停下来说明要补什么；只有需要完整治理细节时才要求 JSON。接下来可以直接给任务草案，不要输出内部字段。");
   return `${lines.join("\n")}\n`;
 }
 
@@ -2471,6 +2505,8 @@ if (["orchestrate", "mission", "status", "audit", "return", "launch"].includes(c
   const result = runDoveSurface(command, target, commandRest);
   if (command === "status" && !wantsJsonOutput(commandRest)) {
     await writeStdout(formatDoveStatusForCli(result, target, { showMissions: wantsDoveStatusMissionDetails(buildDoveStatusArgs(commandRest)) }));
+  } else if (command === "mission" && !wantsJsonOutput(commandRest)) {
+    await writeStdout(formatDoveMissionForCli(result));
   } else {
     await printJson(result);
   }
@@ -2566,6 +2602,12 @@ if (command === "autonomy-operate") {
   });
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
+}
+
+if (isHostOnlyDoveSurface(command)) {
+  hostOnlySurfaceUsage(command);
+  const wantsSurfaceHelp = maybeTarget === "--help" || maybeTarget === "-h" || rest.includes("--help") || rest.includes("-h");
+  process.exit(wantsSurfaceHelp ? 0 : 1);
 }
 
 usage();

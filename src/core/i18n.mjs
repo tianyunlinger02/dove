@@ -446,6 +446,22 @@ const TEXT = {
     zh: "本次结果没有声明新的持久写入。",
     en: "This result did not declare new durable writes."
   },
+  resultCardDurableWritesHidden: {
+    zh: "已更新 Dove 记录；完整细节可展开查看。",
+    en: "Dove records were updated; expand for full details."
+  },
+  resultCardEvidenceHidden: {
+    zh: "已记录证据指针；默认摘要隐藏内部路径。",
+    en: "Evidence pointers were recorded; internal paths are hidden in the default summary."
+  },
+  resultCardValidationHidden: {
+    zh: "已记录验证输出；默认摘要隐藏内部路径。",
+    en: "Validation output was recorded; internal paths are hidden in the default summary."
+  },
+  resultCardDetailsAvailable: {
+    zh: "需要完整细节时再展开 full/debug。",
+    en: "Expand full/debug only when full details are needed."
+  },
   resultCardRuntimeResultRecorded: {
     zh: "已记录 runtime result。",
     en: "Runtime result recorded."
@@ -467,8 +483,8 @@ const TEXT = {
     en: "Isolated review input bundle prepared."
   },
   resultCardReviewImported: {
-    zh: "已导入隔离 review handoff。",
-    en: "Isolated review handoff imported."
+    zh: "已导入隔离审核结果。",
+    en: "Isolated review result imported."
   },
   resultCardNextStatus: {
     zh: "查看 Dove status。",
@@ -479,8 +495,8 @@ const TEXT = {
     en: "Provide real result or evidence."
   },
   resultCardNextImportReview: {
-    zh: "导入 review handoff。",
-    en: "Import review handoff."
+    zh: "导入审核结果。",
+    en: "Import the review result."
   },
   resultCardNextAdjustStatus: {
     zh: "通过 status 调整任务状态。",
@@ -519,12 +535,12 @@ const TEXT = {
     en: ({ ownerRole, nextRole }) => `Hand off from ${ownerRole || "the current role"} to ${nextRole || "the next role"} to resolve the current boundary.`
   },
   resultCardHandoffProvideEvidence: {
-    zh: "需要操作者或主机侧补真实执行结果/证据；Dove 不会假装已经完成。",
-    en: "The operator or host must provide real execution results/evidence; Dove will not pretend the work is complete."
+    zh: "需要补真实执行结果或证据；Dove 不会假装已经完成。",
+    en: "Real execution results or evidence are required; Dove will not pretend the work is complete."
   },
   resultCardHandoffImportReview: {
-    zh: "等待 reviewer 产出 handoff/report 后导入；不要导入 reviewer 私有 transcript。",
-    en: "Wait for the reviewer handoff/report, then import it; do not import reviewer private transcript."
+    zh: "等待 reviewer 输出审核结果或报告后导入；不要导入 reviewer 私有记录。",
+    en: "Wait for the reviewer result or report, then import it; do not import reviewer private notes."
   },
   resultCardHandoffAddressReview: {
     zh: "review 已返回需要处理的问题；下一步应创建或推进修复任务。",

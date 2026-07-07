@@ -24,6 +24,7 @@ import {
   upsertOrchestrationBoard,
   upsertPlan
 } from "../../src/core/index.mjs";
+import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -138,6 +139,9 @@ test("single-paper workflow creates durable artifacts", () => {
     sourceIds: [source.id, source2.id],
     summary: "Durable systems reduce context loss."
   });
+  assertNoCompactPublicLeaks(source.resultCard, { ignoredKeys: ["command"] });
+  assertNoCompactPublicLeaks(source2.resultCard, { ignoredKeys: ["command"] });
+  assertNoCompactPublicLeaks(note.resultCard, { ignoredKeys: ["command"] });
 
   upsertClaims(root, {
     packetId,
@@ -153,25 +157,28 @@ test("single-paper workflow creates durable artifacts", () => {
     ]
   });
 
-  upsertPlan(root, {
+  const plan = upsertPlan(root, {
     packetId,
     thesis: "Durable workflows improve academic writing.",
     audience: "conference reviewers",
     sections: ["Abstract", "Introduction", "Method"]
   });
 
-  upsertOutline(root, {
+  const outline = upsertOutline(root, {
     packetId,
     sections: [{ id: "introduction", title: "Introduction", status: "drafting", goal: "Frame the problem." }]
   });
 
-  upsertDraft(root, {
+  const draft = upsertDraft(root, {
     packetId,
     sectionId: "introduction",
     title: "Introduction",
     body: "# Introduction\n\nDurable workflows reduce context loss [cite:lee2026durable].\n",
     status: "drafting"
   });
+  assertNoCompactPublicLeaks(plan.resultCard, { ignoredKeys: ["command"] });
+  assertNoCompactPublicLeaks(outline.resultCard, { ignoredKeys: ["command"] });
+  assertNoCompactPublicLeaks(draft.resultCard, { ignoredKeys: ["command"] });
 
   appendHandoff(root, {
     fromRole: "researcher",

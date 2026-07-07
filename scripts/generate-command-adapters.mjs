@@ -29,21 +29,21 @@ function unique(values) {
 function policyLine(command) {
   switch (command.policy) {
     case "proposal-only":
-      return "Keep this surface proposal-only: inspect, suggest, and wait for an explicitly approved action before any change.";
+      return "Only inspect and suggest; wait for explicit approval before changing anything.";
     case "query":
-      return "Keep this surface read-only unless the command explicitly asks for a governed refresh.";
+      return "Keep this read-only unless the command explicitly asks to refresh a derived report.";
     case "guarded-mutation":
-      return "Only perform the governed change owned by this surface, scoped to the operator request.";
+      return "Only make the specific change requested for this command; do not bundle unrelated work.";
     case "explicit-approval":
-      return "Require explicit operator approval before creating or changing saved workflow records or consuming bounded authority.";
+      return "Ask for approval before making changes or spending the proposed work rounds.";
     case "governed-bookkeeping":
-      return "Record only explicit operator bookkeeping for the governed Dove workflow.";
+      return "Add only the explicit note or lesson the operator asked for.";
     case "guidance":
-      return "Provide workflow guidance only; route to another Dove surface for saved changes.";
+      return "Give workflow guidance only; move real changes through the matching Dove request.";
     case "isolated-handoff":
-      return "Use explicit handoff artifacts for reviewer isolation; do not share hidden session context.";
+      return "Use only the reviewer materials the operator provides; do not share hidden session context.";
     default:
-      return "Stay within the command contract and keep internal bookkeeping out of the default answer.";
+      return "Stay within this command's purpose and keep implementation details out of the default answer.";
   }
 }
 
@@ -57,9 +57,15 @@ function dailyUseBullets(command) {
   ].filter(Boolean);
 }
 
-function exampleBullets(command) {
+function exampleBullets(command, hostId = null) {
   const examples = command.ux?.examples;
-  return Array.isArray(examples) ? examples.map((example) => String(example).trim()).filter(Boolean) : [];
+  if (!Array.isArray(examples)) {
+    return [];
+  }
+  return examples.map((example) => {
+    const text = String(example).trim();
+    return hostId === "opencode" ? text.replace(/^\/dove:/u, "/dove.") : text;
+  }).filter(Boolean);
 }
 
 const LOCAL_CLI_COMMANDS = new Map([
@@ -72,29 +78,32 @@ function localCliBullets(command) {
   const localCli = LOCAL_CLI_COMMANDS.get(command.id);
   if (localCli) {
     return [
-      `When a local Dove CLI is available, run \`${localCli.command}\` from the project root before answering; summarize its compact output instead of inspecting saved records directly.`,
+      `This request has one listed project check: \`${localCli.command}\` from the project root; summarize its practical result instead of inspecting internal files directly.`,
       ...(localCli.note ? [localCli.note] : [])
     ];
   }
-  return ["If neither a matching Dove capability nor a documented local Dove CLI command exists for this surface, do not emulate it by reading saved records with host tools; say the Dove runtime for this command is unavailable and ask for a capability or CLI route."];
+  const terminalProbe = `node ./bin/dove.mjs ${hostCommandSlug(command.id)} --help`;
+  return [`This request has no listed project check. Do not run status, \`${terminalProbe}\`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the task, and the next user choice; do not explain why the tool is unavailable.`];
 }
 
 function guardrailBullets(command) {
   const bullets = [
-    "For daily answers, first use the matching Dove capability or a local Dove CLI command; do not construct default answers by using host Read, Glob, Grep, or file-list tools over saved-record files.",
-    "If the Dove capability or CLI command is unavailable, say the Dove runtime is unavailable or name the skipped live check in ordinary language instead of reading or dumping saved records.",
-    "If the Dove CLI exits non-zero, report that message and stop; do not recover by reading saved records with host file tools.",
+    "For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check below; do not construct default answers by manually reading or listing internal files.",
+    "If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.",
+    "If an explicitly listed project check fails, report that message in ordinary language and stop; do not recover by manually reading internal files.",
     ...localCliBullets(command),
-    "Treat Dove's saved project records as the source of truth through Dove capability or local CLI results; translate those results into practical operator actions instead of repeating storage details.",
+    "Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.",
+    "Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.",
     "Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.",
+    "When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.",
     policyLine(command),
     ...(command.adapterConstraints ?? []),
     "Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended."
   ];
   if (command.domain === "paper") {
-    bullets.push("Use paper workflows through the top-level Dove surfaces for sources, notes, drafting, review, rebuttal, experiences, figures, and version lineage.");
+    bullets.push("Use the top-level Dove requests for sources, notes, drafting, review, rebuttal, experiences, figures, and version lineage.");
   } else {
-    bullets.push("Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.");
+    bullets.push("Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.");
   }
   bullets.push("Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.");
   return bullets;
@@ -108,14 +117,14 @@ function renderNumbered(bullets) {
   return bullets.map((bullet, index) => `${index + 1}. ${bullet}`).join("\n");
 }
 
-function renderExamples(command) {
-  const examples = exampleBullets(command);
+function renderExamples(command, hostId = null) {
+  const examples = exampleBullets(command, hostId);
   return examples.length > 0 ? `\n\n## Examples\n\n${examples.map((example) => `- \`${example}\``).join("\n")}` : "";
 }
 
-function renderBody(command, heading) {
+function renderBody(command, heading, hostId = null) {
   const dailyUse = renderBullets(dailyUseBullets(command));
-  const examples = renderExamples(command);
+  const examples = renderExamples(command, hostId);
   const guardrails = renderNumbered(guardrailBullets(command));
   return `# ${heading}\n\n${command.summary}\n\n## Daily use\n\n${dailyUse}${examples}\n\n## Operating rules\n\n${guardrails}\n`;
 }
@@ -130,22 +139,22 @@ function renderFrontmatter(command, fields = {}) {
   return lines.join("\n");
 }
 
-function renderMarkdownCommand(command, heading) {
-  return `${renderFrontmatter(command)}\n${renderBody(command, heading)}`;
+function renderMarkdownCommand(command, heading, hostId = null) {
+  return `${renderFrontmatter(command)}\n${renderBody(command, heading, hostId)}`;
 }
 
-function renderSkill(command) {
+function renderSkill(command, hostId = null) {
   const name = `dove-${hostCommandSlug(command.id)}`;
-  return `${renderFrontmatter(command, { name })}\n${renderBody(command, markdownTitle(command))}`;
+  return `${renderFrontmatter(command, { name })}\n${renderBody(command, markdownTitle(command), hostId)}`;
 }
 
 export function renderCommandAdapter(hostId, command) {
   switch (hostId) {
     case "opencode":
-    case "claude": return renderMarkdownCommand(command, command.id);
-    case "cursor": return renderMarkdownCommand(command, `dove-${hostCommandSlug(command.id)}`);
+    case "claude": return renderMarkdownCommand(command, command.id, hostId);
+    case "cursor": return renderMarkdownCommand(command, `dove-${hostCommandSlug(command.id)}`, hostId);
     case "codex":
-    case "agents": return renderSkill(command);
+    case "agents": return renderSkill(command, hostId);
     default: throw new Error(`Unknown host adapter: ${hostId}`);
   }
 }

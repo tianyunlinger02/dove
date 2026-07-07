@@ -22,6 +22,7 @@ import {
   upsertNote,
   upsertOrchestrationBoard
 } from "../../src/core/index.mjs";
+import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -134,14 +135,16 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     nextActions: ["Normalize rebuttal issues"]
   });
 
-  normalizeRebuttalIssues(root, {
+  const normalizedIssues = normalizeRebuttalIssues(root, {
     packetId,
     issues: [
       { summary: "Need clearer comparison framing.", severity: "medium", responseDirection: "clarify" }
     ]
   });
+  assertNoCompactPublicLeaks(normalizedIssues.resultCard, { ignoredKeys: ["command"] });
   const strategy = buildRebuttalStrategy(root, { packetId });
   assert.equal(strategy.issueCount, 1);
+  assertNoCompactPublicLeaks(strategy.resultCard, { ignoredKeys: ["command"] });
 
   appendHandoff(root, {
     fromRole: "rebuttal-lead",
@@ -169,8 +172,11 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     nextActions: ["Create the next version snapshot"]
   });
   const v1 = createVersionSnapshot(root, { packetId, versionId: "depth-v1", summary: "First snapshot" });
+  assertNoCompactPublicLeaks(v1.resultCard, { ignoredKeys: ["command"] });
   const v2 = createVersionSnapshot(root, { packetId, versionId: "depth-v2", parentVersionId: v1.id, summary: "Second snapshot" });
+  assertNoCompactPublicLeaks(v2.resultCard, { ignoredKeys: ["command"] });
   const comparison = compareVersions(root, { packetId, fromVersionId: v1.id, toVersionId: v2.id });
+  assertNoCompactPublicLeaks(comparison.resultCard, { ignoredKeys: ["command"] });
 
   const state = readState(root);
   const versionManifest = readRoleContextManifest(root, "version-analyst");

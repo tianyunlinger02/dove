@@ -9,6 +9,7 @@ import {
   runExperienceWorkflow,
   writeJson
 } from "../../src/core/index.mjs";
+import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -83,6 +84,7 @@ test("runExperienceWorkflow returns a material boundary for blocked experiment a
     }
     assert.deepEqual(result.validationEvidencePaths, [ARTIFACT_PATHS.experimentAudits]);
     assert.equal(result.nextAction, "project:dove.experience");
+    assertNoCompactPublicLeaks(result.resultCard, { ignoredKeys: ["command"] });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -120,6 +122,7 @@ test("runExperienceWorkflow returns a material boundary when a clean result refe
     assert.deepEqual(result.requiredActions, ["create-or-link-claim-before-bridge"]);
     assert.equal(result.nextAction, "project:dove.experience");
     assert.ok(result.artifactRefs.includes(ARTIFACT_PATHS.claimBridgeLog));
+    assertNoCompactPublicLeaks(result.resultCard, { ignoredKeys: ["command"] });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

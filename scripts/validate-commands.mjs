@@ -178,7 +178,70 @@ const adapterEntriesForValidation = [
   ...generatedClaudeUserCommandEntries().map((entry) => ({ ...entry, relativePath: `claude-user:${entry.relativePath}`, commandText: entry.content }))
 ];
 
-for (const { command, relativePath, commandText } of adapterEntriesForValidation) {
+const generatedAdapterForbiddenTerms = [
+  "preActionGuidance",
+  "resultCard",
+  "boundaryType",
+  "packetId",
+  "packetIds",
+  "taskPacketId",
+  "missionPacketId",
+  ".dove/",
+  "patch-plan",
+  "mutationMode",
+  "query_dove_status",
+  "apply_dove_status_adjustments",
+  "run_dove_auto",
+  "record_dove_mission_pass",
+  "create_dove_task",
+  "run_figure_workflow",
+  "run_dove_operator",
+  "record_document_evidence",
+  "register_source",
+  "upsert_note",
+  "upsert_draft",
+  "queueSummary",
+  "queuePreview",
+  "ownerRole",
+  "nextRole",
+  "handoff",
+  "project:dove.",
+  "providerId",
+  "sourceSvgPath",
+  "targetFinalSvgPath",
+  "finalSvgPath",
+  "outputManifestPath",
+  "svgContent",
+  "fullResult",
+  "diagnostics",
+  "MCP capability",
+  "local CLI",
+  "Dove runtime",
+  "CLI route",
+  "host command",
+  "host",
+  "bounded",
+  "foreground",
+  "provenance",
+  "terminal check",
+  "terminal or storage",
+  "workflow records",
+  "saved records",
+  "saved-record",
+  "Dove action",
+  "tool limitations",
+  "record was not saved",
+  "cannot save",
+  "save changes"
+];
+
+function requireNoGeneratedAdapterLeaks(commandText, relativePath) {
+  for (const leakedTerm of generatedAdapterForbiddenTerms) {
+    assert.equal(commandText.includes(leakedTerm), false, `${relativePath} leaked internal adapter term ${leakedTerm}`);
+  }
+}
+
+for (const { hostId, command, relativePath, commandText } of adapterEntriesForValidation) {
   const frontmatterEnd = commandText.indexOf("\n---\n\n");
   assert.equal(commandText.startsWith("---\n"), true, `${relativePath} must expose frontmatter for host slash command lists`);
   assert.ok(frontmatterEnd > 0, `${relativePath} must close frontmatter before the command body`);
@@ -198,182 +261,58 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
   assert.equal(commandText.includes("## Workflow"), false, `${relativePath} must not bury daily use inside the old workflow checklist heading`);
   assert.equal(commandText.includes("response language preference"), true, `${relativePath} must instruct hosts to honor Dove language preference`);
   assert.equal(commandText.includes("respond in Chinese by default"), true, `${relativePath} must document Chinese as the default response language`);
+  requireNoGeneratedAdapterLeaks(commandText, relativePath);
+  if (hostId === "opencode") {
+    assert.equal(commandText.includes("/dove:"), false, `${relativePath} must use OpenCode dot command examples`);
+  }
   for (const example of command.ux.examples) {
-    assert.equal(commandText.includes(example), true, `${relativePath} must render example ${example}`);
+    const expectedExample = hostId === "opencode" ? example.replace(/^\/dove:/u, "/dove.") : example;
+    assert.equal(commandText.includes(expectedExample), true, `${relativePath} must render example ${expectedExample}`);
   }
   for (const removedCommandId of removedCommandIds) {
     assert.equal(commandText.includes(removedCommandId), false, `${relativePath} must not mention removed command ${removedCommandId}`);
   }
 
-  assert.equal(commandText.includes("saved project records as the source of truth through Dove capability or local CLI results"), true, `${relativePath} must keep saved records authoritative without direct host reads`);
+  assert.equal(commandText.includes("Dove's returned answer as the source of truth"), true, `${relativePath} must keep Dove answers authoritative without direct file reads`);
   assert.equal(commandText.includes("practical operator actions"), true, `${relativePath} must translate stored facts into operator actions`);
-  assert.equal(commandText.includes("first use the matching Dove capability or a local Dove CLI command"), true, `${relativePath} must route daily answers through Dove capability or local CLI first`);
-  assert.equal(commandText.includes("host Read, Glob, Grep, or file-list tools"), true, `${relativePath} must prohibit visible host file-tool reads for default answers`);
-  assert.equal(commandText.includes("Dove runtime is unavailable"), true, `${relativePath} must report unavailable runtime instead of dumping saved records`);
-  assert.equal(commandText.includes("local Dove CLI is available") || commandText.includes("do not emulate it by reading saved records with host tools"), true, `${relativePath} must give a concrete CLI route or stop instead of host-file emulation`);
-  assert.equal(commandText.includes("CLI exits non-zero"), true, `${relativePath} must stop after local CLI failures instead of host-file recovery`);
+  assert.equal(commandText.includes("ordinary task wording"), true, `${relativePath} must require ordinary user-facing wording instead of implementation mechanics`);
+  assert.equal(commandText.includes("answer the Dove request the operator invoked"), true, `${relativePath} must route daily answers through the invoked Dove request first`);
+  assert.equal(commandText.includes("manually reading or listing internal files"), true, `${relativePath} must prohibit visible internal-file reads for default answers`);
+  assert.equal(commandText.includes("practical result in ordinary language"), true, `${relativePath} must report unavailable work in ordinary language instead of dumping files`);
+  assert.equal(commandText.includes("This request has one listed project check") || commandText.includes("This request has no listed project check"), true, `${relativePath} must give a concrete project check or stop instead of file emulation`);
+  assert.equal(commandText.includes("explicitly listed project check fails"), true, `${relativePath} must stop after project check failures instead of file recovery`);
   assert.equal(commandText.includes("Keep Planner, Builder, and Reviewer responsibilities separate"), true, `${relativePath} must frame the three primary responsibilities`);
   assert.equal(commandText.includes("Return the next action, evidence expectations, and unresolved blockers"), true, `${relativePath} must return actionable outcomes without fake completion`);
 
-  if (command.id === "dove.status") {
-    assert.equal(commandText.includes("node ./bin/dove.mjs status ."), true, `${relativePath} must provide the concrete local status CLI route`);
+  if (command.id === "dove.init") {
+    assert.equal(commandText.includes("one clear Dove goal"), true, `${relativePath} must frame init as goal setup`);
+    assert.equal(commandText.includes("Keep init limited to the project goal"), true, `${relativePath} must keep init out of concrete execution`);
   }
 
   if (command.id === "dove.mission") {
-    assert.equal(commandText.includes("create_dove_task"), true, `${relativePath} must route demand conversion through create_dove_task`);
-    assert.equal(commandText.includes("record_dove_mission_pass"), true, `${relativePath} must record the one-pass mission result`);
-    assert.equal(commandText.includes("Treat the operator input as natural-language demand"), true, `${relativePath} must frame mission as demand-to-task conversion`);
-    assert.equal(commandText.includes("Return a proposal-only mission contract first"), true, `${relativePath} must require proposal-first mission intake`);
-    assert.equal(commandText.includes("use interactive confirmation controls"), true, `${relativePath} must require interactive confirmation when supported`);
-    assert.equal(commandText.includes("AskUserQuestion"), true, `${relativePath} must name Claude Code interactive confirmation support`);
-    assert.equal(commandText.includes("approve conversion and run one pass, adjust conversion, or cancel"), true, `${relativePath} must expose concrete mission conversion choices`);
-    assert.equal(commandText.includes("only pass `confirmed: true` to `create_dove_task` after the operator approves the converted contract"), true, `${relativePath} must require approval before task materialization`);
-    assert.equal(commandText.includes("Classify each task as `plan`, `execute`, or `audit`"), true, `${relativePath} must expose task classification`);
-    assert.equal(commandText.includes("autonomous checklist proposal"), true, `${relativePath} must include checklist proposal in mission intake`);
-    assert.equal(commandText.includes("compact task card"), true, `${relativePath} must surface compact task cards in mission confirmation`);
-    assert.equal(commandText.includes("explicit operator-created levels 1, 2, 3, or deeper"), true, `${relativePath} must state explicit user mission levels`);
-    assert.equal(commandText.includes("Autonomously decide whether a checklist is needed"), true, `${relativePath} must document autonomous checklist selection`);
-    assert.equal(commandText.includes("must have level greater than the parent mission level"), true, `${relativePath} must enforce child checklist depth`);
-    assert.equal(commandText.includes("execute one bounded foreground pass"), true, `${relativePath} must require one-pass mission execution after materialization`);
-    assert.equal(commandText.includes("Do not tell the operator to run `/dove:auto` for the first execution pass"), true, `${relativePath} must distinguish mission from auto`);
-    assert.equal(commandText.includes("stage `plan`"), true, `${relativePath} must convert completed plan passes into missions`);
-    assert.equal(commandText.includes("level 3 and `pending`"), true, `${relativePath} must default converted plan missions to pending level 3`);
-    assert.equal(commandText.includes("level 4, 5, or deeper"), true, `${relativePath} must allow deeper child missions from plan outputs`);
-    assert.equal(commandText.includes("record a first-class boundary"), true, `${relativePath} must record explicit boundaries instead of fake completion`);
-    assert.equal(commandText.includes("`host-tool-blocked`"), true, `${relativePath} must expose host tool/classifier failures as blocked boundaries`);
-    assert.equal(commandText.includes("ownerRole, nextRole, handoff"), true, `${relativePath} must expose role handoff metadata for incomplete mission passes`);
-    assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after mission passes`);
+    assert.equal(commandText.includes("Propose the task first"), true, `${relativePath} must require proposal-first mission intake`);
+    assert.equal(commandText.includes("run exactly one approved work pass"), true, `${relativePath} must require one mission work pass`);
+    assert.equal(commandText.includes("real evidence"), true, `${relativePath} must require evidence before completion`);
+    assert.equal(commandText.includes("blocker"), true, `${relativePath} must report blockers instead of fake completion`);
+    assert.equal(commandText.includes("do not tell the operator to start auto for the first pass"), true, `${relativePath} must distinguish mission from auto`);
   }
 
   if (command.id === "dove.auto") {
-    assert.equal(commandText.includes("same demand-to-task intake and classification model as `/dove:mission`"), true, `${relativePath} must start like mission demand conversion`);
-    assert.equal(commandText.includes("does not require running `/dove:mission` first"), true, `${relativePath} must allow direct auto demand intake`);
-    assert.equal(commandText.includes("Return a proposal-only auto contract first"), true, `${relativePath} must expose the auto confirmation contract`);
-    assert.equal(commandText.includes("`proposedTask`"), true, `${relativePath} must expose converted auto task proposals`);
-    assert.equal(commandText.includes("`selectedTask`"), true, `${relativePath} must expose selected durable task proposals`);
-    assert.equal(commandText.includes("compact task/auto cards"), true, `${relativePath} must surface compact cards in auto confirmation`);
-    assert.equal(commandText.includes("AskUserQuestion"), true, `${relativePath} must name Claude Code interactive confirmation support`);
-    assert.equal(commandText.includes("present indexed packet choices through confirmation UX"), true, `${relativePath} must use confirmation UX for task selection`);
-    assert.equal(commandText.includes("Require explicit operator confirmation"), true, `${relativePath} must require confirmation`);
-    assert.equal(commandText.includes("Run in the current foreground call only"), true, `${relativePath} must document foreground-only execution`);
-    assert.equal(commandText.includes("default is 3"), true, `${relativePath} must document the default auto iteration count`);
-    assert.equal(commandText.includes("Record each foreground iteration"), true, `${relativePath} must document runtime iteration records`);
-    assert.equal(commandText.includes("source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status"), true, `${relativePath} must document internal top-level workflow calls`);
-    assert.equal(commandText.includes("run the foreground host research pass before confirmed execution"), true, `${relativePath} must require host research before confirmed source-research auto`);
-    assert.equal(commandText.includes("explicit `steps` for both `dove.source` and `dove.note`"), true, `${relativePath} must deposit source and note in one explicit auto sequence`);
-    assert.equal(commandText.includes("Do not claim source research succeeded when host search/fetch tools return zero results"), true, `${relativePath} must not claim source research from empty host search results`);
-    assert.equal(commandText.includes("only records a `source-requires-host-provenance` boundary and does not advance the research"), true, `${relativePath} must warn against empty packet-id-only source auto runs`);
-    assert.equal(commandText.includes("call `record_dove_mission_pass` for the packet with `resultStatus: \"blocked\"`, `boundaryType: \"host-tool-blocked\"`"), true, `${relativePath} must require blocked mission pass records for host tool failures`);
-    assert.equal(commandText.includes("do not leave the task in-progress"), true, `${relativePath} must not leave failed host tool work in-progress`);
-    assert.equal(commandText.includes("Stop at completed, blocked, killed"), true, `${relativePath} must document stop conditions`);
-    assert.equal(commandText.includes("persist the first-class boundary"), true, `${relativePath} must persist boundary metadata when auto stops`);
-    assert.equal(commandText.includes("Do not claim host/code/provider/experiment work"), true, `${relativePath} must not claim external work without evidence`);
-    assert.equal(commandText.includes("hidden background work"), true, `${relativePath} must keep auto continuation explicit and foreground-only`);
-    assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after auto runs`);
-  }
-
-  if (command.id === "dove.source") {
-    assert.equal(commandText.includes("Collect and organize external provenance"), true, `${relativePath} must frame source as external provenance intake`);
-    assert.equal(commandText.includes("external information intake, not internal note consolidation"), true, `${relativePath} must keep sources separate from internal synthesis`);
-    assert.equal(commandText.includes("pressure-test summaries and writing-style synthesis belong in note or document evidence"), true, `${relativePath} must route internal synthesis away from sources`);
-    assert.equal(commandText.includes("sources: [...]"), true, `${relativePath} must document batch source intake`);
-    assert.equal(commandText.includes("multiple URLs/templates/guidelines"), true, `${relativePath} must support multi-source provenance capture`);
-    assert.equal(commandText.includes("packetIds"), true, `${relativePath} must require packet-bound source provenance`);
-    assert.equal(commandText.includes("reviewer-guideline or 审稿偏好 research"), true, `${relativePath} must cover reviewer-preference source research`);
-    assert.equal(commandText.includes("Builder/researcher source intake"), true, `${relativePath} must keep reviewer-guideline research in Builder/researcher source intake`);
-    assert.equal(commandText.includes("independent audit of an artifact"), true, `${relativePath} must reserve review workflow for explicit artifact audit`);
-    assert.equal(command.constraints.some((item) => item.includes("record_document_evidence")), true, `${relativePath} must keep the document evidence deposition route in manifest constraints`);
-  }
-
-  if (command.id === "dove.note") {
-    assert.equal(commandText.includes("packet-bound internal synthesis"), true, `${relativePath} must frame notes as packet-bound synthesis`);
-    assert.equal(commandText.includes("pressure-test results"), true, `${relativePath} must include pressure-test results as note material`);
-    assert.equal(commandText.includes("internal information consolidation, not external source discovery"), true, `${relativePath} must separate notes from source discovery`);
-    assert.equal(commandText.includes("external URLs/templates/guidelines must already be registered as sources"), true, `${relativePath} must require registered source provenance before synthesis`);
-    assert.equal(commandText.includes("bind/save/deposit/沉淀 requests"), true, `${relativePath} must handle deposition prompts through note or document evidence`);
-    assert.equal(commandText.includes("record_document_evidence"), true, `${relativePath} must mention the document evidence alternative`);
-    assert.equal(commandText.includes("packetIds"), true, `${relativePath} must require packet-bound notes`);
-    assert.equal(commandText.includes("sourceIds/artifacts"), true, `${relativePath} must preserve note links to sources and artifacts`);
-  }
-
-  if (command.id === "dove.figure") {
-    assert.equal(commandText.includes("node ./bin/dove.mjs figure . --intent"), true, `${relativePath} must provide the concrete local figure CLI route`);
-    assert.equal(commandText.includes("node ./bin/dove.mjs figure . --target \"<confirmed task title>\" --intent"), true, `${relativePath} must rerun figure with a confirmed task title instead of hiding the task in the intent`);
-    assert.equal(commandText.includes("operator explicitly approves"), true, `${relativePath} must forbid applying figure file changes without explicit approval`);
-    assert.equal(commandText.includes("whether this figure is ready now"), true, `${relativePath} must answer current-figure usability`);
-    assert.equal(commandText.includes("hand-drawn SVG plan"), true, `${relativePath} must support default manual SVG figure preparation`);
-    assert.equal(commandText.includes("waiting for SVG output"), true, `${relativePath} must tell operators when SVG output is needed`);
-    assert.equal(commandText.includes("OpenAI image provider"), true, `${relativePath} must document the built-in OpenAI image provider`);
-    assert.equal(commandText.includes("OPENAI_API_KEY"), true, `${relativePath} must require env-var OpenAI credentials for image generation`);
-    assert.equal(commandText.includes("source/target paths or workspace-wide diagnostics"), true, `${relativePath} must keep path and workspace diagnostics out of default figure replies`);
-    assert.equal(command.requiredTools.includes("run_figure_workflow"), true, `${relativePath} must keep run_figure_workflow as the canonical tool binding`);
-    for (const lowLevelTool of ["upsert_figure_plan", "prepare_figure_generation", "import_figure_generation", "validate_figure_pipeline"]) {
-      assert.equal(commandText.includes(lowLevelTool), false, `${relativePath} must not expose low-level figure tool ${lowLevelTool} as the daily slash contract`);
-    }
-    for (const leakedTerm of ["providerId", "mutationMode", "patch-plan", "sourceSvgPath", "finalSvgPath", "qaPath", "figure QA", "workspace QA", ".dove/figures", "target unresolved"]) {
-      assert.equal(commandText.includes(leakedTerm), false, `${relativePath} leaked internal figure term ${leakedTerm}`);
-    }
-  }
-
-  if (command.id === "dove.review") {
-    assert.equal(commandText.includes("audio reviewer may read only"), true, `${relativePath} must document the audio isolation boundary`);
-    assert.equal(commandText.includes("Do not share writer private transcript"), true, `${relativePath} must forbid broad/private context sharing`);
-    assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries for review states`);
-  }
-
-  if (command.id === "dove.review-loop") {
-    assert.equal(commandText.includes("default 3"), true, `${relativePath} must mention the default max iteration count`);
-  }
-
-  if (command.id === "dove.version") {
-    assert.equal(commandText.includes("direction-change point"), true, `${relativePath} must frame version as a direction reset`);
-    assert.equal(commandText.includes("not a `.dove` restore command"), true, `${relativePath} must reject Dove-specific rollback restore semantics`);
-    assert.equal(commandText.includes("host-tracked file edits"), true, `${relativePath} must route rollback eligibility through host-tracked file edits`);
-    assert.equal(commandText.includes("patch-plan operations"), true, `${relativePath} must require patch-plan operations for host rollback eligibility`);
-    assert.equal(commandText.includes("rollbackCheckpointId"), false, `${relativePath} must not expose checkpoint restore targeting`);
-    assert.equal(commandText.includes("confirmed: true"), false, `${relativePath} must not require confirmed rollback restore`);
-    assert.equal(commandText.includes("Preserve the level-0 init goal"), true, `${relativePath} must state init/lesson preservation for direction resets`);
+    assert.equal(commandText.includes("target, work limit, and visible steps"), true, `${relativePath} must expose auto target and work limit`);
+    assert.equal(commandText.includes("current approved interaction"), true, `${relativePath} must keep auto visible-only`);
+    assert.equal(commandText.includes("real sources or materials"), true, `${relativePath} must require material before research success`);
+    assert.equal(commandText.includes("Stop clearly"), true, `${relativePath} must document auto stop conditions`);
+    assert.equal(commandText.includes("hidden background continuation"), true, `${relativePath} must forbid hidden continuation`);
   }
 
   if (command.id === "dove.status") {
+    assert.equal(commandText.includes("node ./bin/dove.mjs status ."), true, `${relativePath} must provide the concrete local status check`);
     assert.equal(commandText.includes("what should I do next?"), true, `${relativePath} must frame status around the ordinary next-action question`);
     assert.equal(commandText.includes("Default output should read like a project assistant"), true, `${relativePath} must describe the default human status output`);
-    assert.equal(commandText.includes("Do not impose a fixed four-line template"), true, `${relativePath} must forbid fixed status templates`);
-    assert.equal(commandText.includes("numbered checklist by default"), true, `${relativePath} must forbid numbered default status checklists`);
+    assert.equal(commandText.includes("fixed four-line template"), true, `${relativePath} must forbid fixed status templates`);
     assert.equal(commandText.includes("smallest useful action"), true, `${relativePath} must guide toward the smallest useful action`);
-    assert.equal(commandText.includes("Default status is not a mission board or audit report"), true, `${relativePath} must not make status a mission board or audit report`);
-    assert.equal(commandText.includes("collapsed unless the operator asks to expand"), true, `${relativePath} must keep details collapsed by default`);
-    assert.equal(commandText.includes("show missions"), true, `${relativePath} must allow ordinary mission expansion`);
-    assert.equal(commandText.includes("one confirmation step"), true, `${relativePath} must use one status confirmation step`);
-    assert.equal(commandText.includes("localized result card"), true, `${relativePath} must surface result cards after status changes`);
-    for (const leakedTerm of [
-      "query_dove_status",
-      "apply_dove_status_adjustments",
-      "statusHome",
-      "preActionGuidance",
-      "actionableBoundaries",
-      "boundaryActionCards",
-      "boundary/gap codes",
-      "packet ids",
-      "phase ids",
-      "role labels",
-      "version ids",
-      "repair-frontier",
-      "sourceSvgPath",
-      "finalSvgPath",
-      "validate_figure_pipeline",
-      "MCP",
-      "schema",
-      "durable context",
-      "durable state",
-      ".dove/",
-      "lessons",
-      "required-evidence blocks",
-      "project:dove.",
-      "[\"pending\", \"ready\", \"in-progress\", \"blocked\", \"completed\", \"killed\", \"archived\"]"
-    ]) {
-      assert.equal(commandText.includes(leakedTerm), false, `${relativePath} leaked internal status term ${leakedTerm}`);
-    }
+    assert.equal(commandText.includes("one clear confirmation step"), true, `${relativePath} must use one status confirmation step`);
+    assert.equal(commandText.includes("raw identifiers"), true, `${relativePath} must keep internal identifiers collapsed`);
     assert.equal(commandText.includes("现在是什么情况"), false, `${relativePath} command prompt should keep canonical instructions in English`);
     assert.equal(command.constraints.some((item) => item.includes("query_dove_status")), true, `${relativePath} must keep internal status tool guidance in manifest constraints`);
     assert.equal(command.requiredTools.includes("query_dove_status"), true, `${relativePath} must keep query_dove_status as the canonical tool binding`);
@@ -381,24 +320,79 @@ for (const { command, relativePath, commandText } of adapterEntriesForValidation
   }
 
   if (command.id === "dove.operator") {
-    assert.equal(commandText.includes("run_dove_operator"), true, `${relativePath} must route through run_dove_operator`);
-    assert.equal(commandText.includes("compact queue summary/cards"), true, `${relativePath} must surface compact operator queue summary/cards`);
-    assert.equal(commandText.includes("planner preActionGuidance"), true, `${relativePath} must surface operator planner guidance`);
-    assert.equal(commandText.includes("read-only lesson recall"), true, `${relativePath} must surface operator lesson recall`);
-    assert.equal(commandText.includes("`queueSummary`"), true, `${relativePath} must include compact queue summary`);
-    assert.equal(commandText.includes("`queuePreview`"), true, `${relativePath} must include compact queue preview`);
-    assert.equal(commandText.includes("`includeQueueDetails: true`"), true, `${relativePath} must gate full queue details behind includeQueueDetails`);
-    assert.equal(commandText.includes("blocked missions"), true, `${relativePath} must include blocked mission handling`);
-    assert.equal(commandText.includes("writes: []"), true, `${relativePath} must expose proposal-only operator preview`);
-    assert.equal(commandText.includes("foreground call only"), true, `${relativePath} must keep operator foreground-only`);
-    assert.equal(commandText.includes("awaiting host results"), true, `${relativePath} must not claim host work without results`);
-    assert.equal(commandText.includes("host-pass-required missions without taskResults must remain unchanged"), true, `${relativePath} must leave missing host-result missions unchanged`);
-    assert.equal(commandText.includes("do not persist an `awaiting-host-pass-result` boundary just to show activity"), true, `${relativePath} must not write fake host-result boundaries`);
-    assert.equal(commandText.includes("boundaryType `host-tool-blocked`"), true, `${relativePath} must record host tool failures as blocked task results`);
-    assert.equal(commandText.includes("leaving the mission in-progress"), true, `${relativePath} must not leave failed host tool work in-progress`);
-    assert.equal(commandText.includes("do not expose planner/builder/reviewer as separate slash commands"), true, `${relativePath} must not add role slash surfaces`);
-    assert.equal(commandText.includes("create pending child investigation plan missions only when"), true, `${relativePath} must create blocker investigation plan missions only after explicit request`);
-    assert.equal(commandText.includes("localized `resultCard` summary"), true, `${relativePath} must surface resultCard summaries after operator runs`);
+    assert.equal(commandText.includes("practical queue situation"), true, `${relativePath} must preview the practical queue situation`);
+    assert.equal(commandText.includes("operator pass only after confirmation"), true, `${relativePath} must keep operator confirmation-only`);
+    assert.equal(commandText.includes("real results"), true, `${relativePath} must not claim work without results`);
+    assert.equal(commandText.includes("blocker-investigation tasks only"), true, `${relativePath} must require explicit blocker investigation creation`);
+  }
+
+  if (command.id === "dove.lessons") {
+    assert.equal(commandText.includes("distilled guidance"), true, `${relativePath} must keep lessons distilled`);
+    assert.equal(commandText.includes("Do not import raw transcripts"), true, `${relativePath} must reject raw lesson imports`);
+  }
+
+  if (command.id === "dove.version") {
+    assert.equal(commandText.includes("direction reset"), true, `${relativePath} must frame version as a direction reset`);
+    assert.equal(commandText.includes("not as a general undo command"), true, `${relativePath} must reject generic undo semantics`);
+    assert.equal(commandText.includes("Require a short reason"), true, `${relativePath} must require a reason before reset`);
+    assert.equal(commandText.includes("rollbackCheckpointId"), false, `${relativePath} must not expose checkpoint restore targeting`);
+    assert.equal(commandText.includes("confirmed: true"), false, `${relativePath} must not expose raw confirmation args`);
+  }
+
+  if (command.id === "dove.source") {
+    assert.equal(commandText.includes("Collect and organize external material"), true, `${relativePath} must frame source as external material intake`);
+    assert.equal(commandText.includes("real title, locator, citation, URL"), true, `${relativePath} must require verifiable source material`);
+    assert.equal(commandText.includes("no source was added"), true, `${relativePath} must not claim source writes after retrieval failure`);
+    assert.equal(commandText.includes("Keep source intake separate from synthesis"), true, `${relativePath} must route synthesis away from sources`);
+    assert.equal(command.constraints.some((item) => item.includes("record_document_evidence")), true, `${relativePath} must keep the document evidence deposition route in manifest constraints`);
+  }
+
+  if (command.id === "dove.note") {
+    assert.equal(commandText.includes("real synthesis content"), true, `${relativePath} must require real note material`);
+    assert.equal(commandText.includes("added through source first"), true, `${relativePath} must require source details before evidence-backed synthesis`);
+    assert.equal(commandText.includes("raw internal identifiers"), true, `${relativePath} must keep identifiers out of note replies`);
+  }
+
+  if (command.id === "dove.figure") {
+    assert.equal(commandText.includes("node ./bin/dove.mjs figure . --intent"), true, `${relativePath} must provide the concrete local figure CLI route`);
+    assert.equal(commandText.includes("node ./bin/dove.mjs figure . --target \"<confirmed task title>\" --intent"), true, `${relativePath} must rerun figure with a confirmed task title instead of hiding the task in the intent`);
+    assert.equal(commandText.includes("operator explicitly approves"), true, `${relativePath} must forbid applying figure file changes without explicit approval`);
+    assert.equal(commandText.includes("whether this figure is usable now"), true, `${relativePath} must answer current-figure usability`);
+    assert.equal(commandText.includes("hand-drawn SVG plan"), true, `${relativePath} must support default manual SVG figure preparation`);
+    assert.equal(commandText.includes("waiting for SVG output"), true, `${relativePath} must tell operators when SVG output is needed`);
+    assert.equal(commandText.includes("OPENAI_API_KEY"), true, `${relativePath} must require env-var OpenAI credentials for image generation`);
+    assert.equal(command.requiredTools.includes("run_figure_workflow"), true, `${relativePath} must keep run_figure_workflow as the canonical tool binding`);
+    for (const lowLevelTool of ["upsert_figure_plan", "prepare_figure_generation", "import_figure_generation", "validate_figure_pipeline"]) {
+      assert.equal(commandText.includes(lowLevelTool), false, `${relativePath} must not expose low-level figure tool ${lowLevelTool} as the daily slash contract`);
+    }
+  }
+
+  if (command.id === "dove.experience") {
+    assert.equal(commandText.includes("experiment and evidence workflow"), true, `${relativePath} must frame experience as experiment evidence work`);
+    assert.equal(commandText.includes("Require a real experiment goal"), true, `${relativePath} must reject placeholder experiments`);
+    assert.equal(commandText.includes("Do not promote unsupported results into claims"), true, `${relativePath} must protect claim promotion`);
+  }
+
+  if (command.id === "dove.draft") {
+    assert.equal(commandText.includes("Write as much as current evidence supports"), true, `${relativePath} must draft within evidence limits`);
+    assert.equal(commandText.includes("explicit placeholders"), true, `${relativePath} must use placeholders for evidence gaps`);
+  }
+
+  if (command.id === "dove.review") {
+    assert.equal(commandText.includes("reviewer only the current task summary"), true, `${relativePath} must document review isolation inputs`);
+    assert.equal(commandText.includes("Do not share private writer transcript"), true, `${relativePath} must forbid broad/private context sharing`);
+    assert.equal(commandText.includes("plain language"), true, `${relativePath} must report review outcomes plainly`);
+  }
+
+  if (command.id === "dove.review-loop") {
+    assert.equal(commandText.includes("three rounds by default"), true, `${relativePath} must mention the default max iteration count`);
+    assert.equal(commandText.includes("Do not start a draft or experiment substep without the needed material"), true, `${relativePath} must require material before loop substeps`);
+  }
+
+  if (command.id === "dove.rebuttal") {
+    assert.equal(commandText.includes("Organize reviewer issues before drafting responses"), true, `${relativePath} must normalize issues before responses`);
+    assert.equal(commandText.includes("Keep rebuttal work on the author side"), true, `${relativePath} must keep rebuttal author-side`);
+    assert.equal(commandText.includes("unresolved gaps"), true, `${relativePath} must preserve unsupported gaps`);
   }
 }
 

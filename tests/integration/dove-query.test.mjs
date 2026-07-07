@@ -19,6 +19,7 @@ import {
   runDoveAuto
 } from "../../src/core/index.mjs";
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
+import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
@@ -159,9 +160,12 @@ function assertPublicCompactStatus(result) {
   assert.deepEqual(result.changes, result.statusHome.changes);
   assert.ok(result.statusHome.showMore?.text);
   assert.doesNotMatch(result.statusHome.showMore.text, /--missions|--full|--json/);
-  assert.equal(result.statusHome.showMore.fullDetails.args.detail, "full");
-  assert.equal(result.statusHome.showMore.missionDetails.args.showMissions, true);
+  assert.equal(result.statusHome.showMore.detailsAvailable, true);
+  assert.equal("fullDetails" in result.statusHome.showMore, false);
+  assert.equal("missionDetails" in result.statusHome.showMore, false);
+  assert.equal("statusAdjustments" in result.statusHome.showMore, false);
   assert.equal(result.showMore.noWriteSummary, result.statusHome.showMore.noWriteSummary);
+  assertNoCompactPublicLeaks(result);
 
   for (const key of [
     "boundary",
@@ -355,13 +359,37 @@ test("CLI figure defaults to a governed patch-plan without writing figure record
     assert.equal(parsed.writesApplied, false);
     assert.ok(parsed.mutationPlan.operations.length > 0);
     assert.equal(parsed.resultCard.presentation, "compact-result-summary-card");
-    assert.equal(parsed.resultCard.scope.figureId, "cli-figure");
+    assertNoCompactPublicLeaks(parsed.resultCard, { ignoredKeys: ["command"] });
     assert.equal("finalSvgPath" in parsed.resultCard, false);
     assert.equal("qaPath" in parsed.resultCard, false);
     assert.equal(fs.readFileSync(figuresIndexPath, "utf8"), beforeFigures);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("CLI mission defaults to a concise human guidance and keeps JSON opt-in", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+
+  const human = spawnSync("node", [CLI, "mission", root, "--goal", "Turn review feedback into an executable task"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(human.status, 0, human.stderr || human.stdout);
+  assert.match(human.stdout, /Dove/);
+  assert.match(human.stdout, /待确认任务|task proposal/u);
+  assert.doesNotMatch(human.stdout, /^\{/);
+  assert.doesNotMatch(human.stdout, /\.dove\/|project:dove\.|packetId|taskPacketId|missionPacketId|boundaryType|workContract|executionContract|preActionGuidance|proposalOnly|noAutoApply|targetArtifacts|domainGuidance/u);
+
+  const machine = spawnSync("node", [CLI, "mission", root, "--goal", "Turn review feedback into an executable task", "--json"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(machine.status, 0, machine.stderr || machine.stdout);
+  const parsed = JSON.parse(machine.stdout);
+  assert.equal(parsed.mode, "dove-mission-query");
+  assert.equal(parsed.proposalOnly, true);
 });
 
 test("CLI status defaults to a concise human summary and keeps JSON opt-in", () => {
@@ -374,7 +402,8 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   });
   assert.equal(human.status, 0, human.stderr || human.stdout);
   assert.match(human.stdout, /Dove/);
-  assert.match(human.stdout, /project:dove\.init/);
+  assert.match(human.stdout, /dove\.init/);
+  assert.doesNotMatch(human.stdout, /project:dove\.init/);
   assert.doesNotMatch(human.stdout, /^Dove: /m);
   assert.doesNotMatch(human.stdout, /^Next: /m);
   assert.doesNotMatch(human.stdout, /^Why: /m);
@@ -416,8 +445,8 @@ test("CLI status defaults to a concise human summary and keeps JSON opt-in", () 
   assertPublicCompactStatus(parsed);
   assert.match(parsed.summary, /Dove/);
   assert.equal(parsed.headline, parsed.statusHome.headline);
-  assert.equal(parsed.statusHome.nextStep.copyableCommand, "project:dove.init");
-  assert.equal(parsed.nextStep.copyableCommand, "project:dove.init");
+  assert.equal(parsed.statusHome.nextStep.copyableCommand, "dove.init");
+  assert.equal(parsed.nextStep.copyableCommand, "dove.init");
   assert.equal(parsed.statusHome.needsAttention.status, "clear");
   assert.equal(parsed.needsAttention.status, "clear");
   assert.equal("preActionGuidance" in parsed.statusHome, false);
@@ -496,6 +525,23 @@ test("CLI status help stays focused on status expansion", () => {
   assert.match(help.stdout, /--missions/);
   assert.doesNotMatch(help.stdout, /dove install/);
   assert.doesNotMatch(help.stdout, /mutation-mode|patch-plan|direct-process|serve-global-status/u);
+});
+
+test("CLI host-only public surface help stays public", () => {
+  for (const surface of ["note", "source"]) {
+    const help = spawnSync("node", [CLI, surface, "--help"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(help.status, 0, help.stderr || help.stdout);
+    assert.match(help.stdout, new RegExp(`dove\\.${surface}`, "u"));
+    assert.match(help.stdout, /This shell can only give guidance for this Dove request/u);
+    assert.match(help.stdout, new RegExp(`Next: run /dove\\.${surface}`, "u"));
+    assert.match(help.stdout, /selected task can be updated/u);
+    assert.match(help.stdout, /dove status \./u);
+    assertNoCompactPublicLeaks(help.stdout);
+    assert.doesNotMatch(help.stdout, /Usage:|cannot save|save changes|--packet-id|mutation-mode|patch-plan|direct-process|source-svg-path|output-manifest-path|svg-content|host command|MCP capability|local CLI|Dove runtime|CLI route|direct subcommand/u);
+  }
 });
 
 test("CLI status hides internal packet ids and expansion commands by default", () => {
@@ -1227,8 +1273,8 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(fullResult.projectSummary.blockedMissionCount, 1);
   assert.equal(fullResult.projectSummary.archivedMissionCount, 0);
   assert.equal(fullResult.projectSummary.archivedHiddenCount, 1);
-  assert.equal(result.statusHome.nextStep.command, "project:dove.auto");
-  assert.equal(result.statusHome.nextStep.copyableCommand, "project:dove.auto --packet-id runtime-progress");
+  assert.equal(result.statusHome.nextStep.command, "dove.auto");
+  assert.equal(result.statusHome.nextStep.copyableCommand, "dove.auto");
   assert.equal(fullResult.dailyHome.nextActions[0].command, "project:dove.auto");
   assert.equal(fullResult.boundaryActionCards.every((card) => card.proposalOnly === true && card.noAutoApply === true), true);
   const collapsedMissionDetails = fullResult.dailyHome.missionList;
@@ -1263,7 +1309,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   const archivedMissionDetails = archivedExpandedResult.statusHome.optionalMissionDetails;
   assert.equal(archivedFullResult.projectSummary.archivedMissionCount, 1);
   assert.equal(archivedFullResult.projectSummary.archivedHiddenCount, 0);
-  assert.equal(archivedExpandedResult.statusHome.showMore.fullDetails.args.includeArchived, true);
+  assert.equal(archivedExpandedResult.statusHome.showMore.missionDetailsAvailable, true);
   assert.equal(archivedMissionDetails.groups.archived.itemCount, 1);
   assert.equal(archivedMissionDetails.groups.archived.hiddenCount, 1);
   assert.deepEqual(archivedMissionDetails.groups.archived.items.map((item) => item.packetId), []);
@@ -1292,8 +1338,8 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(result.currentContext.domain, "engineering");
   assert.equal(result.currentContext.stage, "execute");
   assert.equal(result.currentContext.primaryRole, "builder");
-  assert.equal(result.nextStep.command, "project:dove.auto");
-  assert.equal(fullResult.board.nextCommand, result.nextStep.command);
+  assert.equal(result.nextStep.command, "dove.auto");
+  assert.equal(fullResult.board.nextCommand, "project:dove.auto");
   assert.equal(fullResult.dashboard.project.nextAction, fullResult.dailyHome.nextActions[0].command);
   assert.equal(fullResult.dashboard.nextAction, fullResult.dailyHome.nextActions[0].command);
   assert.equal(fullResult.board.domain, "engineering");
@@ -1351,9 +1397,9 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   assert.equal(runtimeNextAction.recoveryPrimaryKind, "provide-evidence");
   assert.equal(runtimeNextAction.command, "project:dove.auto");
   assert.equal(runtimeNextAction.copyableCommand, "project:dove.auto --packet-id runtime-progress");
-  assert.equal(runtimeNextAction.title, "先为 runtime-progress 补真实结果：implementation evidence、provide-host-pass-result");
-  assert.equal(result.statusHome.nextStep.label, "先为 runtime-progress 补真实结果：implementation evidence、provide-host-pass-result");
-  assert.equal(result.statusHome.nextStep.copyableCommand, "project:dove.auto --packet-id runtime-progress");
+  assert.equal(runtimeNextAction.title, "先为当前任务补真实结果：implementation evidence");
+  assert.equal(result.statusHome.nextStep.label, "先为当前任务补真实结果：implementation evidence");
+  assert.equal(result.statusHome.nextStep.copyableCommand, "dove.auto");
   assert.equal(runtimeNextAction.rank, 1);
   assert.ok(runtimeNextAction.relatedActionCount >= 1);
   const runtimeContinuationAction = fullResult.dailyHome.nextActions.find((card) => card.packetId === "runtime-progress" && card.kind === "continue-task");
@@ -1500,7 +1546,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
   const statusAdjustmentItems = Object.fromEntries(archivedFullResult.statusAdjustmentContract.items.map((item) => [item.packetId, item]));
   assert.equal("statusAdjustmentContract" in result, false);
   assert.equal("statusAdjustmentPreview" in result.statusHome, false);
-  assert.equal(result.statusHome.showMore.statusAdjustments.args.requestStatusAdjustment, true);
+  assert.equal(result.statusHome.showMore.statusAdjustmentsAvailable, true);
   const expandedStatusAdjustmentPreview = expandedResult.statusHome.statusAdjustmentPreview;
   assert.deepEqual(expandedStatusAdjustmentPreview.statusChoices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
   assert.equal(expandedStatusAdjustmentPreview.statusAdjustmentItemsIncluded, true);
@@ -1656,8 +1702,8 @@ test("queryDoveStatus routes executable workflow gaps before mission details", (
     "bb-missing-material",
     "cc-verification-gap"
   ]);
-  assert.equal(result.statusHome.nextStep.command, "project:dove.mission");
-  assert.equal(result.statusHome.nextStep.copyableCommand, "project:dove.mission --packet-id aa-missing-contract");
+  assert.equal(result.statusHome.nextStep.command, "dove.mission");
+  assert.equal(result.statusHome.nextStep.copyableCommand, "dove.mission");
   assert.equal("nextRole" in result.statusHome.nextStep, false);
   assert.equal("evidenceRequired" in result.statusHome.nextStep, false);
   assert.equal(recoveryAction.detail.candidates[1].nextRole, "planner");
@@ -1721,7 +1767,7 @@ test("CLI status omits fallback status command for material recovery", () => {
   assert.equal(recoveryAction.recoveryPrimaryKind, "missing-required-materials");
   assert.equal(recoveryAction.command, null);
   assert.equal(recoveryAction.copyableCommand, null);
-  assert.equal(result.statusHome.nextStep.label, "先为 material-only 补材料：sources/template.md");
+  assert.equal(result.statusHome.nextStep.label, "先为当前任务补材料：sources/template.md");
   assert.equal("copyableCommand" in result.statusHome.nextStep, false);
 
   const humanStatus = spawnSync("node", [CLI, "status", root], {
@@ -2262,7 +2308,8 @@ test("CLI Dove orchestrate, mission, status, audit, and return commands expose p
     "--domain", "engineering",
     "--stage", "execution",
     "--artifact", "bin/dove.mjs",
-    "--acceptance-check", "tests or validation output"
+    "--acceptance-check", "tests or validation output",
+    "--json"
   ], {
     cwd: ROOT,
     encoding: "utf8"
@@ -2298,7 +2345,7 @@ test("CLI Dove orchestrate, mission, status, audit, and return commands expose p
   assert.equal(statusPayload.board, undefined);
   assert.equal(statusPayload.navigation, undefined);
   assert.equal(statusPayload.diagnostics, undefined);
-  assert.equal(statusPayload.showMore.fullDetails.args.detail, "full");
+  assert.equal(statusPayload.showMore.detailsAvailable, true);
 
   const removedBoard = spawnSync("node", [CLI, "board", root], {
     cwd: ROOT,

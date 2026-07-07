@@ -8,31 +8,31 @@ Inspect or record global and task-bound lessons that future Dove work must obey.
 
 ## Daily use
 
-- Use this when a closed task yields reusable guidance that future Dove work should obey; ordinary action surfaces recall lessons automatically as read-only preActionGuidance.
-- Keep lesson recording explicit and short: problem, decision, pitfall, validation, and next-time guidance.
-- Targeting: Can record global lessons or bind a lesson to a resolved task packet.
+- Use this when a closed task yields reusable guidance that future Dove work should obey.
+- Keep lesson entries explicit and short: problem, decision, pitfall, validation, and next-time guidance.
+- Targeting: Can add global lessons or bind a lesson to a selected task.
 - Confirmation: When task binding is ambiguous, show task choices and wait for the operator.
-- Outcome: Applicable lessons are automatically recalled read-only in later status, mission, auto, operator, and professional workflow preActionGuidance without importing raw traces or recording new lessons implicitly.
+- Outcome: Applicable lessons are recalled later as standing guidance without importing raw traces or adding new lessons implicitly.
 
 ## Examples
 
-- `/dove:lessons Record that status should not show completed or killed mission lists`
-- `/dove:lessons Show lessons that apply to the selected task`
+- `/dove.lessons Add that status should not show completed or killed mission lists`
+- `/dove.lessons Show lessons that apply to the selected task`
 
 ## Operating rules
 
-1. For daily answers, first use the matching Dove capability or a local Dove CLI command; do not construct default answers by using host Read, Glob, Grep, or file-list tools over saved-record files.
-2. If the Dove capability or CLI command is unavailable, say the Dove runtime is unavailable or name the skipped live check in ordinary language instead of reading or dumping saved records.
-3. If the Dove CLI exits non-zero, report that message and stop; do not recover by reading saved records with host file tools.
-4. If neither a matching Dove capability nor a documented local Dove CLI command exists for this surface, do not emulate it by reading saved records with host tools; say the Dove runtime for this command is unavailable and ask for a capability or CLI route.
-5. Treat Dove's saved project records as the source of truth through Dove capability or local CLI results; translate those results into practical operator actions instead of repeating storage details.
-6. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
-7. Record only explicit operator bookkeeping for the governed Dove workflow.
-8. Record only distilled lessons with problem, decision, pitfall, validation, and next-time guidance.
-9. When recording a task-specific lesson and multiple tasks exist, return an indexed task list and wait for the operator to choose.
-10. Allow manual global lessons when no task binding is intended.
-11. Surface applicable must-obey lessons before later task mutations.
-12. Do not import or cite ignored raw runtime traces.
+1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check below; do not construct default answers by manually reading or listing internal files.
+2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
+3. If an explicitly listed project check fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
+4. This request has no listed project check. Do not run status, `node ./bin/dove.mjs lessons --help`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the task, and the next user choice; do not explain why the tool is unavailable.
+5. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
+6. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
+7. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
+8. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
+9. Add only the explicit note or lesson the operator asked for.
+10. Add only distilled guidance: problem, decision, pitfall, validation, and next-time behavior.
+11. Do not import raw transcripts or noisy runtime traces as lessons.
+12. When task binding is unclear, ask the operator to choose the task before writing.
 13. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
-14. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
+14. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
 15. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.

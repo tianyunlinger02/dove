@@ -203,7 +203,7 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "explicit-approval",
-    summary: "Convert a user demand into a Dove task contract, then after approval run one bounded foreground mission pass.",
+    summary: "Convert a user demand into a Dove task contract, then after approval run one approved work pass.",
     requiredTools: ["create_dove_task", "record_dove_mission_pass"],
     constraints: ["Require an existing init goal before converting user demand into a mission task contract.", "Treat the operator input as natural-language demand, not as an already-created task.", "Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, autonomous checklist proposal, compact task card, durable `workContract`, and canonical `executionContract` with action, implementation, materials/readFirst requirements, convergence criteria, evidence requirements, and failure routes.", "After returning the proposal, use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) with options: approve conversion and run one pass, adjust conversion, or cancel; only pass `confirmed: true` to `create_dove_task` after the operator approves the converted contract.", "Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.", "User-created mission tasks default to level 3, while explicit operator-created levels 1, 2, 3, or deeper are allowed under the level-0 init goal.", "Autonomously decide whether a checklist is needed; system-created checklist/subtask packets must be children of their mission and must have level greater than the parent mission level.", "After materialization, immediately execute one bounded foreground pass in the same command invocation, using the appropriate host tools or top-level Dove workflow.", "Do not tell the operator to run `/dove:auto` for the first execution pass.", "After the pass, call `record_dove_mission_pass` to persist the mission result, task status, evidence, blockers, next action, localized `resultCard` summary, `verificationEvidencePaths`, and `verifiedCriteria`; completed results must satisfy the task's `executionContract.convergence.criteria`.", "If the bounded pass cannot be completed with real host/provider evidence, record a first-class boundary such as `awaiting-host-pass`, `host-tool-blocked`, `missing-required-materials`, or `needs-review` with ownerRole, nextRole, handoff, and evidence requirements instead of claiming completion.", "When a completed mission pass has stage `plan`, pass explicit child mission outputs to `record_dove_mission_pass` through `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion`; each child must include its own explicit title/goal/objective/summary and executable `executionContract`, otherwise record a planning boundary instead of completing the plan.", "Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`."]
   },
@@ -213,7 +213,7 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "explicit-approval",
-    summary: "Convert demand like mission intake, then after confirmation run multi-round foreground autonomy until completion or a boundary is reached.",
+    summary: "Convert demand like mission intake, then after confirmation run a few approved work rounds until completion or a blocker is reached.",
     requiredTools: ["run_dove_auto"],
     constraints: ["Use the same demand-to-task intake and classification model as `/dove:mission` before autonomous execution starts.", "Allow `/dove:auto` to be invoked directly on a new user demand or an existing durable task; it does not require running `/dove:mission` first.", "Return a proposal-only auto contract first: either a converted `proposedTask` with checklist proposal and executable `executionContract`, or a `selectedTask` from durable packet selection with current contract readiness, plus compact task/auto cards, confirmation args, and max iteration budget.", "Use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) before passing `confirmed: true`; options should approve and run bounded auto, adjust target/contract, or cancel.", "When an existing task target is missing or ambiguous, present indexed packet choices through confirmation UX instead of guessing.", "Require explicit operator confirmation before execution beyond task creation or selection.", "Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.", "Use `.dove/state.json.settings.auto.maxIterations` as the default foreground iteration limit; the default is 3.", "Record each foreground iteration and stop reason in `.dove/runtime/results.json`, and return a localized `resultCard` summary without persisting the UX-only card in runtime results.", "May internally call public Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status as needed.", "For source-research tasks, run the foreground host research pass before confirmed execution: collect concrete URLs/templates/guidelines, extract enough synthesis text, then call confirmed `run_dove_auto` once with explicit `steps` for both `dove.source` and `dove.note` so provenance and synthesis are deposited in the same auto run.", "Do not claim source research succeeded when host search/fetch tools return zero results, safety errors, or no concrete URLs/snippets; switch to another allowed foreground retrieval path or stop at an explicit host boundary." , "If host search/fetch/shell/MCP safety classification or tool availability fails before Dove can perform the intended workflow, call `record_dove_mission_pass` for the packet with `resultStatus: \"blocked\"`, `boundaryType: \"host-tool-blocked\"`, the failed tool in `requiredActions`, and `nextAction: \"project:dove.status\"`; do not leave the task in-progress.", "Do not call confirmed `run_dove_auto` with only a packet id for source-research tasks; that only records a `source-requires-host-provenance` boundary and does not advance the research.", "Do not auto-run source, note, draft, experience, or review-loop steps without the material they need: source needs title/locator provenance, note needs synthesis content, draft needs body content, experience needs a goal/title/idea/experimentId, and review-loop draft/experience substeps need explicit material.", "Stop at completed, blocked, killed, authority/review boundary, missing provider credentials, conflicting packet target, or step-budget exhaustion.", "When a boundary is reached, persist the first-class boundary with required inputs/actions, role handoff, and next command; do not continue through hidden background work.", "Do not claim host/code/provider/experiment work was completed without real evidence, verification evidence, and `verifiedCriteria` coverage for the executable contract; stop at an awaiting-host/provider, missing-materials, or verification-failed boundary instead."]
   },
@@ -233,7 +233,7 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "explicit-approval",
-    summary: "Run one confirmed foreground operator pass over only safe internal steps, explicit host results, and optional blocker-investigation planning.",
+    summary: "Run one approved operator pass over safe built-in steps, explicit results, and optional blocker-investigation planning.",
     requiredTools: ["run_dove_operator"],
     constraints: ["First call `run_dove_operator` without confirmation to return the proposal-only execution contract with compact `queueSummary`, small `queuePreview`, and `writes: []`; do not request full queue arrays unless the operator explicitly asks for `includeQueueDetails: true`.", "Use interactive confirmation controls when the host supports them before passing `confirmed: true`.", "Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.", "For ready and in-progress missions, run one safe internal workflow step when available or collect one real host pass result in order; pass per-task results to `run_dove_operator` with evidence, verificationEvidencePaths, and verifiedCriteria so Dove records lifecycle and runtime state only when the executable contract is covered.", "Do not claim real engineering, paper, or experiment work happened when neither a safe internal step nor an actual host pass result exists; host-pass-required missions without taskResults must remain unchanged, and host results without convergence coverage must become explicit verification/material boundaries with no fake execution.", "When no safe internal step, missing step material, or actual host pass result exists, do not persist an `awaiting-host-pass-result` boundary just to show activity; return the material-specific requiredActions and keep durable writes empty unless another real operator action occurred.", "If a host-side search/fetch/shell/MCP safety classifier or tool-availability failure prevents collecting the pass result, pass a blocked task result with boundaryType `host-tool-blocked` and requiredActions naming the failed host tool instead of leaving the mission in-progress.", "Preserve durable role handoff metadata while running queue passes; do not expose planner/builder/reviewer as separate slash commands.", "For blocked missions, default to proposal-only blocker-investigation guidance and do not write child missions; create pending child investigation plan missions only when the operator explicitly requests `blockerInvestigationMode: \"create\"` or `createBlockedInvestigations: true`, then report created and reused counts separately in the localized `resultCard` summary."]
   },
@@ -263,7 +263,7 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "guarded-mutation",
-    summary: "Collect and organize external provenance such as web, literature, venue templates, reviewer guidelines, rankings, APIs, or operator-provided sources for the selected task.",
+    summary: "Collect and organize external material such as web pages, papers, venue templates, reviewer guidelines, rankings, APIs, or operator-provided sources for the selected task.",
     requiredTools: ["register_source"],
     constraints: ["Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.", "Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.", "Never call `register_source` with only a packet id; every new source must include a real title or locator, and source-research auto runs must collect those URLs/templates/guidelines before writing.", "Treat host search output such as `Did 0 searches`, zero results, empty result sets, or unavailable search as a hard retrieval failure; do not describe it as finding official sources, and do not infer locators from memory or prior transcript context.", "Do not call `register_source` when search/fetch returned zero results, safe-domain verification failed, or retrieval was blocked; record or surface a `host-tool-blocked` boundary until verifiable source evidence exists.", "If the host denies or blocks the boundary-recording mutation, stop and report that no durable source or boundary update was written; do not retry another mutating Dove call such as patch-plan without explicit operator approval.", "Use explicit configured providers or operator-provided material; do not hide network/provider calls.", "Link each source to the resolved durable task packet through packetIds.", "For reviewer-guideline or 审稿偏好 research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact."]
   },
@@ -273,9 +273,9 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "guarded-mutation",
-    summary: "Organize packet-bound internal synthesis from registered sources, `.dove`, existing artifacts, pressure-test results, and operator notes for the selected task.",
+    summary: "Organize task-bound internal synthesis from registered sources, existing materials, pressure-test results, and operator notes for the selected task.",
     requiredTools: ["upsert_note"],
-    constraints: ["Treat note as internal information consolidation, not external source discovery; external URLs/templates/guidelines must already be registered as sources when they are evidence.", "For bind/save/deposit/沉淀 requests, write the synthesized findings here or in `record_document_evidence` after source provenance is registered.", "Do not create a new note without real synthesis content: summary, quote, claim, or open question.", "Link notes to the resolved durable task packet through packetIds and to relevant sourceIds/artifacts."]
+    constraints: ["Treat note as internal information consolidation, not external source discovery; external URLs/templates/guidelines must already be registered as sources when they are evidence.", "For bind/save/deposit/沉淀 requests, write the synthesized findings here or in `record_document_evidence` after source details is registered.", "Do not create a new note without real synthesis content: summary, quote, claim, or open question.", "Link notes to the resolved durable task packet through packetIds and to relevant sourceIds/artifacts."]
   },
   {
     id: "dove.figure",
@@ -283,7 +283,7 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "guarded-mutation",
-    summary: "Turn one user-described figure intent into materials, optional generation/import, caption provenance, checks, and a clear answer about whether this figure is usable now.",
+    summary: "Turn one user-described figure intent into materials, optional generation/import, caption support, checks, and a clear answer about whether this figure is usable now.",
     requiredTools: ["run_figure_workflow"],
     constraints: ["Treat the user request as one figure intent; the default result should say whether this figure is ready, what is missing, or what to do next without exposing the material/import/check pipeline as separate user chores.", "Treat the default figure path as a hand-drawn SVG plan: record the backlog item, material bundle, generation prompt, and waiting-for-output state instead of routing the operator to a separate low-level figure-plan write.", "Use the built-in OpenAI image provider only when the operator explicitly selects it or config sets it as default; require `OPENAI_API_KEY` through env-var secret reference and do not store inline API keys.", "Resolve the durable task packet before any figure workflow write, then analyze linked sections, claims, experiments, sources, notes, review concerns, and material hints automatically.", "Use redacted Dove config and env-var secret references for external drawing providers; never store inline API keys, tokens, or secrets.", "Do not mark a final figure ready unless it comes from a validated generation import with durable provenance and caption.", "Captions must explain the figure purpose and linked evidence."]
   },
@@ -341,136 +341,207 @@ const COMMAND_SURFACES_BASE = [
 
 const COMMAND_UX_DETAILS = {
   "dove.init": {
-    dailyFlow: ["Use this when the workspace needs its one global Dove goal or the goal wording needs an explicit refresh.", "Keep concrete work out of init; after init, route the actual request to mission or auto."],
-    targetingBehavior: "No task target is needed because init owns the unique level-0 root.",
-    confirmationBehavior: "Guarded mutation only; update the existing init instead of creating another root.",
-    expectedOutcome: "The workspace has one level-0 init task and the next practical command is mission or auto.",
+    dailyFlow: ["Use this when the workspace needs one clear Dove goal or that goal needs an explicit refresh.", "Keep concrete work out of init; after the goal is set, move the actual request to mission or auto."],
+    targetingBehavior: "No task target is needed because this updates the project-level goal.",
+    confirmationBehavior: "Update the existing goal rather than creating another root goal.",
+    expectedOutcome: "The workspace has one clear project goal and the next practical step is a mission or auto run.",
     examples: ["/dove:init Make Dove a local-first research and engineering workflow", "/dove:init Refresh the project goal around daily Dove usability"]
   },
   "dove.mission": {
-    dailyFlow: ["Use this for one concrete user demand that should become a durable task and receive one bounded foreground pass.", "Describe the desired outcome in normal language; Dove converts it into title, stage, domain, level, checklist, evidence expectations, compact task card, preActionGuidance with read-only lesson recall, and execution route."],
-    targetingBehavior: "Creates a new mission under the init goal; first-run hosts may propose the init goal and mission together before writing.",
-    confirmationBehavior: "Show the compact task card, role-framed preActionGuidance, and converted contract first, then ask whether to approve and run one pass, adjust, or cancel.",
-    expectedOutcome: "After approval, the task packet exists and the host either records the pass result or persists an explicit boundary with evidence requirements, role handoff, and a localized resultCard summary.",
+    dailyFlow: ["Use this for one concrete user demand that should become a tracked task and receive one approved work pass.", "Describe the desired outcome in normal language; Dove should propose the task, explain the evidence it will need, and wait for approval before doing work."],
+    targetingBehavior: "Creates a new task under the project goal, or helps set the project goal first when the workspace is new.",
+    confirmationBehavior: "Show the proposed task in plain language, then ask whether to run one pass, adjust it, or cancel.",
+    expectedOutcome: "After approval, one work pass either makes real progress with evidence or stops with a clear blocker and next action.",
     examples: ["/dove:mission Fix the status dashboard next-action mismatch", "/dove:mission Turn the latest review feedback into one executable task"]
   },
   "dove.auto": {
-    dailyFlow: ["Use this when the user wants Dove to continue through bounded foreground iterations after the same demand-to-task intake as mission.", "Start from a new demand or an existing durable task; auto should propose compact task/auto cards, preActionGuidance, recalled lessons, role frame, and concrete safe steps before consuming the iteration budget."],
-    targetingBehavior: "Selects an existing packet when the target is clear, otherwise proposes a new task contract.",
-    confirmationBehavior: "Require explicit approval of the compact task/auto cards, selected/proposed task, max iteration budget, and concrete foreground steps.",
-    expectedOutcome: "Each foreground iteration is recorded in runtime results and stops at completion, blocker, review/provider boundary, or budget exhaustion with an explicit boundary and localized resultCard summary.",
-    examples: ["/dove:auto Continue the current Dove UX improvement task for up to three foreground rounds", "/dove:auto Run the selected task until completion or an explicit boundary"]
+    dailyFlow: ["Use this when the user wants Dove to continue through a few approved steps after the task is clear.", "Auto may start from a new demand or an existing task, but it still needs an understandable proposal before spending its work limit."],
+    targetingBehavior: "Use the selected task when it is obvious; otherwise ask the operator to choose or approve a new task.",
+    confirmationBehavior: "Require explicit approval of the target, work limit, and visible steps before running.",
+    expectedOutcome: "Each step either completes useful work with evidence or stops at a clear blocker, review need, missing material, or budget limit.",
+    examples: ["/dove:auto Continue the current Dove UX improvement task for up to three approved rounds", "/dove:auto Run the selected task until completion or an explicit blocker"]
   },
   "dove.status": {
-    dailyFlow: ["Use this to answer the ordinary operator question: what should I do next?", "Default output should read like a project assistant: briefly explain the current situation, name the smallest useful next action, and mention expansion only when it helps. Do not impose a fixed four-line template or a numbered checklist by default.", "If the host has to inspect saved records directly, translate what it finds into user actions instead of repeating file names, ids, route strings, tool names, or storage terms.", "Default prose should avoid storage, tool, and check jargon; describe saved project state, standing guidance, available capabilities, stored records, or current-figure review issues in ordinary language."],
-    targetingBehavior: "Default output is not a mission board or audit report: do not enumerate ids, role names, version markers, mission lists, route names, repair queues, raw counts, low-level fields, evidence blocks, or diagnostics unless the operator explicitly asks to expand.",
-    confirmationBehavior: "Do not ask for status changes during default `/dove:status`; preview or apply status changes only after explicit status-change intent, and require one clear confirmation step before mutation.",
-    expectedOutcome: "The operator gets a short, natural status answer with an actionable next step; confirmed status adjustments still return localized resultCard summaries.",
+    dailyFlow: ["Use this to answer the ordinary operator question: what should I do next?", "Default output should read like a project assistant: briefly explain the current situation, name the smallest useful next action, and mention expansion only when it helps. Do not impose a fixed four-line template or a numbered checklist by default.", "If saved project facts have to be inspected directly, translate them into user actions instead of repeating file names, ids, route names, tool names, or storage terms."],
+    targetingBehavior: "Default output is not a mission board or audit report; keep mission lists, raw counts, and extra details collapsed unless the operator asks to expand.",
+    confirmationBehavior: "Do not ask for status changes during default status; preview or apply changes only after an explicit status-change request and one clear confirmation step.",
+    expectedOutcome: "The operator gets a short, natural status answer with one useful next step and enough context to decide whether to expand.",
     examples: ["/dove:status", "/dove:status Show what is blocked and what the next step is"]
   },
   "dove.operator": {
-    dailyFlow: ["Use this to inspect compact queueSummary/queuePreview cards plus planner preActionGuidance for the ready/in-progress queue, blocked queue, and pending queue, then run one foreground operator pass after confirmation.", "Do not claim real work happened unless the host supplies actual pass results or a safe internal step can run; otherwise leave host work awaiting host results."],
-    targetingBehavior: "Works over the active mission queue rather than one ad hoc target.",
-    confirmationBehavior: "Preview compact queue summary/cards, read-only lesson recall, Planner/Builder/Reviewer role frame, and writes: [] first; require approval before recording results or creating blocker investigation missions.",
-    expectedOutcome: "Runnable work is recorded from real results, blocked work gets pending investigation missions, and unresolved host work remains awaiting evidence through explicit boundaries with a localized resultCard summary.",
-    examples: ["/dove:operator", "/dove:operator Run one confirmed queue pass and record real host pass results"]
+    dailyFlow: ["Use this to see which tracked work can move now and run one approved operator pass.", "Do not claim real work happened unless a safe built-in step ran or real pass results were supplied."],
+    targetingBehavior: "Works over the active work queue rather than one ad hoc target.",
+    confirmationBehavior: "Preview the practical queue situation first; require approval before accepting results or creating blocker-investigation work.",
+    expectedOutcome: "Runnable work moves with evidence, blocked work gets a concrete investigation option, and unresolved work remains waiting for evidence instead of being marked done.",
+    examples: ["/dove:operator", "/dove:operator Run one confirmed queue pass with real results"]
   },
   "dove.lessons": {
-    dailyFlow: ["Use this when a closed task yields reusable guidance that future Dove work should obey; ordinary action surfaces recall lessons automatically as read-only preActionGuidance.", "Keep lesson recording explicit and short: problem, decision, pitfall, validation, and next-time guidance."],
-    targetingBehavior: "Can record global lessons or bind a lesson to a resolved task packet.",
+    dailyFlow: ["Use this when a closed task yields reusable guidance that future Dove work should obey.", "Keep lesson entries explicit and short: problem, decision, pitfall, validation, and next-time guidance."],
+    targetingBehavior: "Can add global lessons or bind a lesson to a selected task.",
     confirmationBehavior: "When task binding is ambiguous, show task choices and wait for the operator.",
-    expectedOutcome: "Applicable lessons are automatically recalled read-only in later status, mission, auto, operator, and professional workflow preActionGuidance without importing raw traces or recording new lessons implicitly.",
-    examples: ["/dove:lessons Record that status should not show completed or killed mission lists", "/dove:lessons Show lessons that apply to the selected task"]
+    expectedOutcome: "Applicable lessons are recalled later as standing guidance without importing raw traces or adding new lessons implicitly.",
+    examples: ["/dove:lessons Add that status should not show completed or killed mission lists", "/dove:lessons Show lessons that apply to the selected task"]
   },
   "dove.version": {
-    dailyFlow: ["Use this when the project direction changes enough that active non-init work should be cleared.", "For host/context rollback, use patch-plan and apply the returned `.dove/` file operations through host-tracked file edits before relying on the host native checkpoint; `/dove:version` is not a `.dove` restore command."],
-    targetingBehavior: "Operates on the workspace task set for direction reset.",
-    confirmationBehavior: "Guarded reset; require a reason before clearing active non-init tasks.",
-    expectedOutcome: "A direction reset stores a version snapshot, clears active non-init tasks, and points the next command at mission.",
+    dailyFlow: ["Use this when the project direction changes enough that active non-root work should be cleared.", "Treat it as a direction reset, not as a general undo command."],
+    targetingBehavior: "Operates on the current workspace direction and active tasks.",
+    confirmationBehavior: "Require a reason before clearing active work.",
+    expectedOutcome: "A direction reset stores the old direction, clears active non-root work, and points the next step at a fresh mission.",
     examples: ["/dove:version Change direction to focus on result-card usability", "/dove:version Reset active tasks after a major project direction change"]
   },
   "dove.source": {
-    dailyFlow: ["Use this to register external information such as papers, web findings, venue templates, reviewer guidelines, rankings, API docs, citations, or operator-provided provenance.", "For bind/save/deposit/沉淀 prompts, register external URLs/templates/guidelines as packet-bound sources first, then use note or document evidence for synthesis.", "Keep source intake separate from internal notes and pressure-test summaries."],
-    targetingBehavior: "Resolve or confirm the durable task packet before recording external source metadata; batch multiple sources with `sources: [...]` when available.",
-    confirmationBehavior: "If no unique task target is available, ask for packet selection instead of guessing.",
-    expectedOutcome: "The selected task has durable packet-bound source metadata when provenance is verified; failed search/fetch returns or surfaces a host-tool-blocked no-write boundary instead of source metadata.",
-    examples: ["/dove:source Register these CVPR author/reviewer guideline URLs for the selected task", "/dove:source Batch-save venue templates and ranking pages as sources before writing the synthesis note"]
+    dailyFlow: ["Use this to add external information such as papers, web findings, venue templates, reviewer guidelines, rankings, API docs, citations, or operator-provided links or material.", "For bind/save/deposit/沉淀 prompts, add external material first, then use note or document evidence for synthesis.", "Keep source intake separate from internal notes and pressure-test summaries."],
+    targetingBehavior: "Resolve or confirm the task before adding external source details; batch multiple sources when the operator provides them together.",
+    confirmationBehavior: "If no unique task target is available, ask for task selection instead of guessing.",
+    expectedOutcome: "The selected task has verified source details, or the request stops clearly because retrieval or verification failed.",
+    examples: ["/dove:source Add these CVPR author/reviewer guideline URLs to the selected task", "/dove:source Add venue templates and ranking pages before writing the synthesis note"]
   },
   "dove.note": {
-    dailyFlow: ["Use this to consolidate internal information from registered sources, existing artifacts, `.dove/`, pressure-test results, or operator notes.", "Use source for external material; use note for project-local synthesis and writing-style/reviewer-preference summaries.", "For bind/save/deposit/沉淀 prompts, write the synthesized result here or in document evidence after source provenance is registered."],
-    targetingBehavior: "Resolve or confirm the durable task packet before writing notes.",
+    dailyFlow: ["Use this to consolidate internal information from added sources, existing materials, pressure-test results, or operator notes.", "Use source for external material; use note for project-local synthesis and writing-style or reviewer-preference summaries.", "For bind/save/deposit/沉淀 prompts, add the synthesized result here or in document evidence after source details are available."],
+    targetingBehavior: "Resolve or confirm the task before writing notes.",
     confirmationBehavior: "If the target is missing or ambiguous, ask for task confirmation before writing.",
-    expectedOutcome: "The selected task has packet-bound internal notes linked to relevant sources and artifacts.",
+    expectedOutcome: "The selected task has internal notes linked to relevant sources and materials.",
     examples: ["/dove:note Summarize what the registered venue sources imply for this task", "/dove:note Capture the pressure-test finding and link it to registered sources"]
   },
   "dove.figure": {
-    dailyFlow: ["Use this when the user describes the figure they want once, including where it should help the paper or task.", "Dove should gather linked materials, prepare generation/import, write caption provenance, validate only the current figure for the compact verdict, and return a resultCard that says whether this figure is ready now.", "By default, prepare a hand-drawn SVG plan and tell the operator when SVG output is needed.", "Use the built-in OpenAI image provider only for explicit foreground image generation with OPENAI_API_KEY supplied through the environment.", "Default figure replies should translate drawing-service state and review records into the current figure's practical state: ready, waiting for an SVG, missing material, provider configuration needed, or current-figure review issues."],
-    targetingBehavior: "Resolve the figure request to one task before any figure write; do not make the user reason about path fields, check files, or workspace-wide diagnostics unless they explicitly ask for full/debug detail.",
-    confirmationBehavior: "Ask for task confirmation when the figure target is unclear; provider calls require explicit safe configuration, while plan-only figure preparation stays inside the same confirmed workflow call.",
-    expectedOutcome: "The operator gets a clear current-figure result: ready for review, missing materials, awaiting SVG/provider output, or current-figure review issues; detailed paths and diagnostics stay in full/debug data.",
-    examples: ["/dove:figure Draw a workflow diagram for the mission-auto-status loop", "/dove:figure Prepare the main results figure and caption provenance"]
+    dailyFlow: ["Use this when the user describes the figure they want once, including where it should help the paper or task.", "Dove should gather linked materials, prepare generation or import, draft caption support, check only the current figure for the compact verdict, and say whether this figure is usable now.", "By default, prepare a hand-drawn SVG plan and tell the operator when SVG output is needed.", "Use OpenAI image generation only for an explicit drawing request with OPENAI_API_KEY supplied through the environment."],
+    targetingBehavior: "Resolve the figure request to one task before writing; do not make the user reason about paths or workspace-wide extra details unless they explicitly ask for details.",
+    confirmationBehavior: "Ask for task confirmation when the figure target is unclear; external drawing calls require explicit safe configuration.",
+    expectedOutcome: "The operator gets a clear current-figure result: ready for review, missing materials, awaiting SVG or drawing output, or needing current-figure fixes.",
+    examples: ["/dove:figure Draw a workflow diagram for the mission-auto-status loop", "/dove:figure Prepare the main results figure and caption support"]
   },
   "dove.experience": {
-    dailyFlow: ["Use this as the experiment/evidence workflow: turn ideas into experiment plans, results, audits, and claim impact.", "Do not treat experience as general retrospectives; use lessons for reusable operator guidance."],
-    targetingBehavior: "Resolve the experiment or evidence work to one durable task packet before writing.",
-    confirmationBehavior: "Ask for task confirmation when experiment/result/claim signals do not identify one packet.",
-    expectedOutcome: "Experiment artifacts, audit state, and claim bridge events are linked to the selected task.",
-    examples: ["/dove:experience Design an experiment to validate retrieval quality", "/dove:experience Import this experiment result and bridge it to the claim"]
+    dailyFlow: ["Use this as the experiment and evidence workflow: turn ideas into experiment plans, results, audits, and claim impact.", "Do not treat experience as general retrospectives; use lessons for reusable operator guidance."],
+    targetingBehavior: "Resolve the experiment or evidence work to one task before writing.",
+    confirmationBehavior: "Ask for task confirmation when the experiment, result, or claim signal does not identify one task.",
+    expectedOutcome: "Experiment plans, reviewed results, and claim impact are connected to the selected task.",
+    examples: ["/dove:experience Design an experiment to validate retrieval quality", "/dove:experience Import this experiment result and connect it to the claim"]
   },
   "dove.draft": {
-    dailyFlow: ["Use this to generate or revise paper sections from the selected task, durable evidence, notes, sources, experiences, figures, and review findings.", "Write as much as current evidence supports and leave explicit placeholders for gaps."],
-    targetingBehavior: "Resolve the draft request to one durable task packet before changing draft artifacts.",
-    confirmationBehavior: "Ask for packet confirmation when the section/task target is ambiguous.",
+    dailyFlow: ["Use this to generate or revise paper sections from the selected task, evidence, notes, sources, experiences, figures, and review findings.", "Write as much as current evidence supports and leave explicit placeholders for gaps."],
+    targetingBehavior: "Resolve the draft request to one task before changing draft content.",
+    confirmationBehavior: "Ask for task confirmation when the section or task target is ambiguous.",
     expectedOutcome: "Draft content or section status is updated with evidence-aware placeholders where needed.",
     examples: ["/dove:draft Draft the methods section from linked evidence", "/dove:draft Revise the introduction using the latest review findings"]
   },
   "dove.review": {
-    dailyFlow: ["Use this for an isolated audio review over final plan/results and explicitly listed artifacts.", "Do not pass broad project context or private writer/reviewer transcripts."],
-    targetingBehavior: "Resolve the review to one durable task packet and explicit artifact paths.",
-    confirmationBehavior: "Reviewer handoff/import remains explicit and artifact-bounded.",
-    expectedOutcome: "Audio review input/output artifacts are recorded without breaking isolation boundaries.",
-    examples: ["/dove:review Review the final plan and result artifacts only", "/dove:review Prepare an isolated reviewer handoff for the current task"]
+    dailyFlow: ["Use this for an isolated audio review over final plans, final results, and explicitly listed materials.", "Do not pass broad project context or private writer/reviewer transcripts."],
+    targetingBehavior: "Resolve the review to one task and the exact materials being reviewed.",
+    confirmationBehavior: "Reviewer input and import stay limited to the supplied materials.",
+    expectedOutcome: "The review preparation or result is ready without breaking isolation boundaries.",
+    examples: ["/dove:review Review the final plan and result materials only", "/dove:review Prepare isolated reviewer input for the current task"]
   },
   "dove.review-loop": {
-    dailyFlow: ["Use this when review, draft revision, and experience planning should iterate together within the configured max rounds.", "Stop when coherent, blocked, at provider/review boundary, or when user input is required."],
-    targetingBehavior: "Resolve the loop to one durable task packet before mutating review/draft/experience artifacts.",
-    confirmationBehavior: "Run only bounded foreground iterations; default max is 3 unless configured otherwise.",
-    expectedOutcome: "Each loop iteration records review, draft, and experience state until the task is coherent or blocked.",
-    examples: ["/dove:review-loop Run up to three review and revision rounds for the current draft", "/dove:review-loop Stop when the task is coherent or reaches an evidence boundary"]
+    dailyFlow: ["Use this when review, draft revision, and experience planning should iterate together within the configured max rounds.", "Stop when coherent, blocked, at a drawing/review boundary, or when user input is required."],
+    targetingBehavior: "Resolve the loop to one task before changing review, draft, or experience state.",
+    confirmationBehavior: "Run only limited visible iterations; default max is 3 unless configured otherwise.",
+    expectedOutcome: "Each loop iteration moves review, draft, and experience progress until the task is coherent or blocked.",
+    examples: ["/dove:review-loop Run up to three review and revision rounds for the current draft", "/dove:review-loop Stop when the task is coherent or reaches an evidence blocker"]
   },
   "dove.rebuttal": {
-    dailyFlow: ["Use this to normalize reviewer issues, build response strategy, and draft evidence-backed rebuttal or revision text.", "Keep rebuttal work author-side and linked to claims, sections, experiments, or explicit gaps."],
-    targetingBehavior: "Resolve the rebuttal work to one durable task packet and linked reviewer issues.",
-    confirmationBehavior: "Do not draft final responses from unnormalized issues or unsupported evidence.",
-    expectedOutcome: "Normalized issues, strategy, and response drafts are stored with durable evidence links.",
+    dailyFlow: ["Use this to organize reviewer issues, build response strategy, and draft evidence-backed rebuttal or revision text.", "Keep rebuttal work author-side and linked to claims, sections, experiments, or explicit gaps."],
+    targetingBehavior: "Resolve the rebuttal work to one task and the reviewer issues being answered.",
+    confirmationBehavior: "Do not draft final responses from unsupported issues or missing evidence.",
+    expectedOutcome: "Reviewer issues, strategy, and response drafts are ready with usable evidence links.",
     examples: ["/dove:rebuttal Normalize reviewer issues and build the response strategy", "/dove:rebuttal Draft an evidence-backed response for the missing-experiment concern"]
   }
 };
 
 const COMMAND_ADAPTER_CONSTRAINTS = {
+  "dove.init": [
+    "Keep init limited to the project goal; do not start concrete research, writing, review, or engineering work here.",
+    "After the goal is set, name the practical next Dove surface in ordinary language instead of exposing storage details."
+  ],
+  "dove.mission": [
+    "Propose the task first, then ask whether to run one pass, adjust it, or cancel.",
+    "After approval, run exactly one approved work pass; do not tell the operator to start auto for the first pass.",
+    "Only report completion when there is real evidence; otherwise report the blocker, what is missing, and the next useful action.",
+    "If the pass is planning work, create follow-up tasks only when each one has a clear title, goal, and evidence expectation."
+  ],
+  "dove.auto": [
+    "Propose the target, work limit, and visible steps before running.",
+    "Run only in the current approved interaction; never schedule hidden background continuation.",
+    "For research work, collect real sources or materials before claiming success.",
+    "Stop clearly at completion, blocker, review need, missing material, or budget limit."
+  ],
   "dove.status": [
-    "Start with the live situation the host can actually see, then fold in saved project state only as background guidance.",
+    "Start with the live situation the current session can actually see, then fold in saved project state only as background guidance.",
     "Answer the operator's ordinary next-step question in short natural prose: the current situation, the smallest useful action, and why it matters when helpful.",
-    "Default status is not a mission board or audit report; keep mission lists, ids, raw counts, route names, low-level fields, and diagnostics collapsed unless the operator asks to expand.",
+    "Default status is not a mission board or audit report; keep mission lists, raw identifiers, raw counts, route names, low-level fields, and extra details collapsed unless the operator asks to expand.",
     "When the operator asks to show missions, expand mission details inside this status surface instead of inventing separate list, board, or mission-board commands.",
     "Only preview or apply status changes after an explicit status-change request, using one confirmation step and a clear no-change path.",
     "For legacy parent/child consistency issues, tell the operator to verify child evidence first, then either mark covered children done through confirmed status adjustment or reopen the parent.",
-    "After confirmed status changes, return the localized result card instead of a raw update log."
+    "After confirmed status changes, return a localized human summary instead of a raw update log."
+  ],
+  "dove.operator": [
+    "Preview the practical queue situation before asking for approval.",
+    "Run one operator pass only after confirmation.",
+    "Do not claim work without real results; leave it waiting for evidence instead.",
+    "Create blocker-investigation tasks only when the operator explicitly asks for them."
+  ],
+  "dove.lessons": [
+    "Add only distilled guidance: problem, decision, pitfall, validation, and next-time behavior.",
+    "Do not import raw transcripts or noisy runtime traces as lessons.",
+    "When task binding is unclear, ask the operator to choose the task before writing."
+  ],
+  "dove.version": [
+    "Treat this as a direction reset, not as a general undo command.",
+    "Require a short reason before clearing active work.",
+    "Preserve the project goal and reusable lessons, then point the operator to the next mission."
+  ],
+  "dove.source": [
+    "Only add external material when it has a real title, locator, citation, URL, or operator-provided links or material.",
+    "If search, fetch, or verification finds no trustworthy material, say no source was added and explain the next retrieval step.",
+    "When the target task is unclear, ask the operator to choose from visible context instead of inspecting project state.",
+    "When source work cannot finish here, say the source material is ready and has not yet been added to the task; the natural Chinese phrasing is `这条来源还没加入任务`.",
+    "Batch multiple sources when the operator provides them together.",
+    "Keep source intake separate from synthesis; use note or document evidence for summaries and conclusions."
+  ],
+  "dove.note": [
+    "Write notes only when there is real synthesis content: summary, quote, claim, or open question.",
+    "External material should be added through source first when it is used as evidence.",
+    "Connect the note to the selected task and relevant materials without showing raw internal identifiers."
   ],
   "dove.figure": [
-    "Treat the user request as one figure intent and answer whether this figure is ready, waiting for SVG output, missing materials, missing provider configuration, or needs current-figure fixes.",
+    "Treat the user request as one figure intent and answer whether this figure is ready, waiting for SVG output, missing materials, missing drawing configuration, or needs current-figure fixes.",
     "Use the hand-drawn SVG plan as the normal default path and tell the operator when SVG output is needed.",
-    "Use the built-in OpenAI image provider only when explicitly selected or configured; the OpenAI key must come from the OPENAI_API_KEY environment variable, never inline text.",
-    "Resolve the target task before writing figure records, then gather linked sections, claims, experiments, sources, notes, review concerns, and material hints automatically.",
-    "Do not mark a figure ready until an imported generation has provenance, caption, and a clean current-figure check.",
-    "Captions must explain the figure purpose and linked evidence; default replies should not make the operator reason about source/target paths or workspace-wide diagnostics."
+    "Use OpenAI image generation only when explicitly selected or configured; the OpenAI key must come from the OPENAI_API_KEY environment variable, never inline text.",
+    "Resolve the target task before updating figure state, then gather linked sections, claims, experiments, sources, notes, review concerns, and material hints automatically.",
+    "Do not mark a figure ready until imported output has source support, caption, and a clean current-figure check.",
+    "Captions must explain the figure purpose and linked evidence; default replies should not make the operator reason about paths or workspace-wide extra details."
+  ],
+  "dove.experience": [
+    "Require a real experiment goal, title, idea, result, or outcome before writing.",
+    "Make success criteria, result evidence, audit state, and claim impact understandable to the operator.",
+    "Do not promote unsupported results into claims."
+  ],
+  "dove.draft": [
+    "Draft or revise only when body content or a clear section-status change is provided.",
+    "Use explicit placeholders for missing evidence or citations instead of fabricating support.",
+    "Use linked sources, notes, experience, figures, and review findings when they are available."
+  ],
+  "dove.review": [
+    "Give the reviewer only the current task summary, final plans, final results, explicit materials, hashes, instructions, and output expectations.",
+    "Do not share private writer transcript, broad project context, or private reviewer transcript.",
+    "Report review preparation or imported review results in plain language."
+  ],
+  "dove.review-loop": [
+    "Run only limited visible review, revision, and experience-planning iterations.",
+    "Use three rounds by default unless the project config says otherwise.",
+    "Do not start a draft or experiment substep without the needed material.",
+    "Stop early when the task is coherent, blocked, waiting on review, or waiting on user input."
+  ],
+  "dove.rebuttal": [
+    "Organize reviewer issues before drafting responses.",
+    "Keep rebuttal work on the author side.",
+    "Link each response to evidence, draft sections, experiments, or explicit unresolved gaps."
   ]
 };
 
 export const COMMAND_SURFACES = COMMAND_SURFACES_BASE.map((surface) => {
   const withUx = {
     ...surface,
-    adapterConstraints: COMMAND_ADAPTER_CONSTRAINTS[surface.id] ?? [...(surface.constraints ?? [])],
+    adapterConstraints: COMMAND_ADAPTER_CONSTRAINTS[surface.id] ?? [],
     constraints: [...AGENT_WORKFLOW_CONSTRAINTS, ...(surface.constraints ?? [])],
     ux: COMMAND_UX_DETAILS[surface.id]
   };

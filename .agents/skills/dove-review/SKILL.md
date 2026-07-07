@@ -9,29 +9,31 @@ Run an isolated audio review over final plan/results and explicitly supplied art
 
 ## Daily use
 
-- Use this for an isolated audio review over final plan/results and explicitly listed artifacts.
+- Use this for an isolated audio review over final plans, final results, and explicitly listed materials.
 - Do not pass broad project context or private writer/reviewer transcripts.
-- Targeting: Resolve the review to one durable task packet and explicit artifact paths.
-- Confirmation: Reviewer handoff/import remains explicit and artifact-bounded.
-- Outcome: Audio review input/output artifacts are recorded without breaking isolation boundaries.
+- Targeting: Resolve the review to one task and the exact materials being reviewed.
+- Confirmation: Reviewer input and import stay limited to the supplied materials.
+- Outcome: The review preparation or result is ready without breaking isolation boundaries.
 
 ## Examples
 
-- `/dove:review Review the final plan and result artifacts only`
-- `/dove:review Prepare an isolated reviewer handoff for the current task`
+- `/dove:review Review the final plan and result materials only`
+- `/dove:review Prepare isolated reviewer input for the current task`
 
 ## Operating rules
 
-1. For daily answers, first use the matching Dove capability or a local Dove CLI command; do not construct default answers by using host Read, Glob, Grep, or file-list tools over saved-record files.
-2. If the Dove capability or CLI command is unavailable, say the Dove runtime is unavailable or name the skipped live check in ordinary language instead of reading or dumping saved records.
-3. If the Dove CLI exits non-zero, report that message and stop; do not recover by reading saved records with host file tools.
-4. If neither a matching Dove capability nor a documented local Dove CLI command exists for this surface, do not emulate it by reading saved records with host tools; say the Dove runtime for this command is unavailable and ask for a capability or CLI route.
-5. Treat Dove's saved project records as the source of truth through Dove capability or local CLI results; translate those results into practical operator actions instead of repeating storage details.
-6. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
-7. Use explicit handoff artifacts for reviewer isolation; do not share hidden session context.
-8. The audio reviewer may read only the current task summary, final plan paths, final result paths, explicit artifact paths, artifact hashes, instructions, and output contract.
-9. Do not share writer private transcript, broad project context, orchestration board context, or reviewer private transcript.
-10. Import only declared handoff/report artifacts back into Dove review ledgers and return a localized `resultCard` summary for prepared/imported review states.
-11. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
-12. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-13. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.
+1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check below; do not construct default answers by manually reading or listing internal files.
+2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
+3. If an explicitly listed project check fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
+4. This request has no listed project check. Do not run status, `node ./bin/dove.mjs review --help`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the task, and the next user choice; do not explain why the tool is unavailable.
+5. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
+6. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
+7. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
+8. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
+9. Use only the reviewer materials the operator provides; do not share hidden session context.
+10. Give the reviewer only the current task summary, final plans, final results, explicit materials, hashes, instructions, and output expectations.
+11. Do not share private writer transcript, broad project context, or private reviewer transcript.
+12. Report review preparation or imported review results in plain language.
+13. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
+14. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
+15. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.

@@ -6,6 +6,7 @@ import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
+import { buildCommandResultCard } from "./result-cards.mjs";
 import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, createMetaOperatorFollowThroughIndex, normalizeMetaOperatorFollowThroughIndex, resolveResumeCommandForPhase, roleCanActAs } from "./schema.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
 
@@ -72,6 +73,10 @@ function normalizeStringArray(value) {
     : [];
 }
 
+function localizedText(responseLanguage, zh, en) {
+  return responseLanguage === "en" ? en : zh;
+}
+
 function workflowGuidanceSummary(root, args = {}, details = {}) {
   const packet = details.packet ?? null;
   const stage = details.stage ?? packet?.stage ?? null;
@@ -97,6 +102,117 @@ function workflowGuidanceSummary(root, args = {}, details = {}) {
     tags: details.tags ?? [],
     statusSummary: details.statusSummary
   }));
+}
+
+function openRebuttalIssueCount(items = []) {
+  return items.filter((issue) => issue.status !== "resolved").length;
+}
+
+function rebuttalIssuesResultCard(root, args = {}, items = []) {
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const openIssues = openRebuttalIssueCount(items);
+  return buildCommandResultCard({
+    surface: "dove.review",
+    command: "normalize_rebuttal_issues",
+    title: localizedText(responseLanguage, "审稿问题已整理", "Review issues organized"),
+    status: openIssues > 0 ? "needs-rebuttal" : "coherent",
+    happened: items.length > 0
+      ? localizedText(responseLanguage, `已把 ${items.length} 条审稿问题整理成回应清单。`, `Organized ${items.length} review issues into a response list.`)
+      : localizedText(responseLanguage, "当前没有可整理的审稿问题。", "No review issues were available to organize."),
+    durableWrites: [localizedText(responseLanguage, "审稿问题清单和下一步工作状态已更新。", "Review issue list and next-step work state were updated.")],
+    evidence: items.length > 0 ? [localizedText(responseLanguage, `其中 ${openIssues} 条还需要回应或修订。`, `${openIssues} still need a response or revision.`)] : [],
+    validation: [openIssues > 0
+      ? localizedText(responseLanguage, "回应前还要逐条绑定证据或明确缺口。", "Each response still needs evidence or an explicit gap before finalizing.")
+      : localizedText(responseLanguage, "没有新的待回应问题。", "There are no new response items.")],
+    scope: { issueCount: items.length, openIssues },
+    nextActions: [{
+      title: openIssues > 0
+        ? localizedText(responseLanguage, "整理回应策略", "Build the response strategy")
+        : localizedText(responseLanguage, "回到状态页选择下一步", "Return to status for the next step"),
+      why: openIssues > 0
+        ? localizedText(responseLanguage, "问题已经归并，下一步要决定哪些改正文、哪些补实验、哪些只澄清。", "The issues are grouped; next decide what needs text changes, experiments, or clarification.")
+        : localizedText(responseLanguage, "没有待回应问题时，应回到整体状态决定继续写作、review 或收尾。", "With no response items, return to the overall status and choose drafting, review, or closure.")
+    }]
+  }, responseLanguage);
+}
+
+function rebuttalStrategyResultCard(root, args = {}, issueCount = 0) {
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  return buildCommandResultCard({
+    surface: "dove.rebuttal",
+    command: "build_rebuttal_strategy",
+    title: localizedText(responseLanguage, "回应策略已形成", "Response strategy drafted"),
+    status: issueCount > 0 ? "drafted" : "waiting-for-issues",
+    happened: issueCount > 0
+      ? localizedText(responseLanguage, `已围绕 ${issueCount} 条问题形成回应策略和回复草稿。`, `Drafted a response strategy and reply text for ${issueCount} issues.`)
+      : localizedText(responseLanguage, "还没有审稿问题，已准备空的回应策略草稿。", "No review issues are recorded yet; prepared an empty response strategy draft."),
+    durableWrites: [localizedText(responseLanguage, "回应策略和回复草稿已更新。", "Response strategy and reply draft were updated.")],
+    evidence: issueCount > 0 ? [localizedText(responseLanguage, "每条回应仍需要最终核对证据和措辞。", "Each response still needs final evidence and wording checks.")] : [],
+    validation: [localizedText(responseLanguage, "最终发送前还需要独立 review。", "An independent review is still needed before finalizing.")],
+    scope: { issueCount },
+    nextActions: [{
+      title: issueCount > 0
+        ? localizedText(responseLanguage, "送去 review 检查回应是否站得住", "Review whether the responses hold up")
+        : localizedText(responseLanguage, "先导入或整理审稿问题", "Import or organize review issues first"),
+      why: issueCount > 0
+        ? localizedText(responseLanguage, "回应草稿已经有了，下一步要确认它没有过度承诺，也没有缺证据。", "The response draft exists; next confirm it does not over-promise or lack evidence.")
+        : localizedText(responseLanguage, "没有问题清单时，回应策略只能是占位，不能当成完成。", "Without an issue list, the response strategy is only a placeholder, not completed work.")
+    }]
+  }, responseLanguage);
+}
+
+function versionSnapshotResultCard(root, args = {}, snapshot = {}, { sectionCount = 0, claimCount = 0, reviewVerdict = "not-reviewed" } = {}) {
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  return buildCommandResultCard({
+    surface: "dove.version",
+    command: "create_version_snapshot",
+    title: localizedText(responseLanguage, "版本快照已创建", "Version snapshot created"),
+    status: "snapshot-created",
+    happened: localizedText(responseLanguage, "已保存当前论文和任务状态，作为后续比较基线。", "Saved the current paper and task state as a comparison baseline."),
+    durableWrites: [localizedText(responseLanguage, "版本记录和项目导航已更新。", "Version records and project navigation were updated.")],
+    evidence: [localizedText(responseLanguage, `当前纳入 ${sectionCount} 个章节和 ${claimCount} 条论点。`, `Captured ${sectionCount} sections and ${claimCount} claims.`)],
+    validation: [reviewVerdict === "coherent"
+      ? localizedText(responseLanguage, "最近 review 状态显示材料基本自洽。", "The latest review state says the material is coherent.")
+      : localizedText(responseLanguage, "快照只是记录当前状态，不代表 review 已通过。", "The snapshot records current state; it does not mean review has passed.")],
+    scope: { label: snapshot.label ?? null, sectionCount, claimCount, review: reviewVerdict },
+    nextActions: [{
+      title: localizedText(responseLanguage, "需要时再比较两个版本", "Compare versions when needed"),
+      why: localizedText(responseLanguage, "快照已经成为基线；只有方向或材料有变化时，比较才有价值。", "The snapshot is now a baseline; comparison matters when direction or material changes.")
+    }]
+  }, responseLanguage);
+}
+
+function versionComparisonResultCard(root, args = {}, comparison = {}) {
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const changedSections = comparison.changedDraftSections?.length ?? 0;
+  const addedClaims = comparison.addedClaimIds?.length ?? 0;
+  const addedEvidence = comparison.addedEvidenceLinks?.length ?? 0;
+  const addedCitations = comparison.addedCitationKeys?.length ?? 0;
+  const concernDelta = (comparison.unresolvedConcernsAdded?.length ?? 0) + (comparison.unresolvedConcernsRemoved?.length ?? 0);
+  const hasMaterialChanges = Boolean(comparison.objectiveChanged || comparison.thesisChanged || comparison.verdictChanged || changedSections > 0 || addedClaims > 0 || addedEvidence > 0 || addedCitations > 0 || concernDelta > 0);
+  return buildCommandResultCard({
+    surface: "dove.version",
+    command: "compare_versions",
+    title: localizedText(responseLanguage, "版本差异已整理", "Version differences summarized"),
+    status: hasMaterialChanges ? "changed" : "no-material-change",
+    happened: hasMaterialChanges
+      ? localizedText(responseLanguage, "已整理两个版本之间的关键变化。", "Summarized the key differences between the two versions.")
+      : localizedText(responseLanguage, "两个版本之间没有发现关键变化。", "No material difference was found between the two versions."),
+    durableWrites: [localizedText(responseLanguage, "版本比较摘要已更新。", "Version comparison summary was updated.")],
+    evidence: [localizedText(responseLanguage, `变化包括 ${changedSections} 个草稿段落、${addedClaims} 条新增论点、${addedEvidence} 条新增证据。`, `Changes include ${changedSections} draft sections, ${addedClaims} new claims, and ${addedEvidence} new evidence items.`)],
+    validation: [comparison.objectiveChanged || comparison.thesisChanged
+      ? localizedText(responseLanguage, "目标或核心论点发生变化，需要人工确认方向。", "The objective or thesis changed, so the direction needs operator confirmation.")
+      : localizedText(responseLanguage, "目标和核心论点没有变化。", "The objective and thesis did not change.")],
+    scope: { changedSections, addedClaims, addedEvidence, addedCitations, concernDelta, reviewChanged: Boolean(comparison.verdictChanged) },
+    nextActions: [{
+      title: hasMaterialChanges
+        ? localizedText(responseLanguage, "把差异转成修订说明", "Turn the differences into a revision note")
+        : localizedText(responseLanguage, "回到状态页选择下一步", "Return to status for the next step"),
+      why: hasMaterialChanges
+        ? localizedText(responseLanguage, "比较已经说明哪里变了，下一步要解释这些变化是否改善了论文。", "The comparison shows what changed; next explain whether those changes improved the paper.")
+        : localizedText(responseLanguage, "没有关键差异时，不需要为版本比较制造额外工作。", "With no material difference, do not create extra versioning work.")
+    }]
+  }, responseLanguage);
 }
 
 function isIsoTimestamp(value) {
@@ -1595,6 +1711,7 @@ export function normalizeRebuttalIssues(root, args = {}) {
   const next = persistRebuttalIssues(root, args);
   return {
     ...next,
+    resultCard: rebuttalIssuesResultCard(root, args, next.items ?? []),
     preActionGuidanceSummary: workflowGuidanceSummary(root, args, {
       surface: "dove.review",
       roleId: "reviewer",
@@ -1715,6 +1832,7 @@ export function buildRebuttalStrategy(root, args = {}) {
     strategyPath: ARTIFACT_PATHS.rebuttalStrategy,
     responseDraftPath: ARTIFACT_PATHS.rebuttalResponseDraft,
     issueCount: issues.items.length,
+    resultCard: rebuttalStrategyResultCard(root, args, issues.items.length),
     preActionGuidanceSummary: workflowGuidanceSummary(root, args, {
       surface: "dove.rebuttal",
       roleId: "builder",
@@ -1866,7 +1984,14 @@ export function createVersionSnapshot(root, args = {}) {
     summary: `Created version snapshot ${versionId}.`,
     artifactPaths: [ARTIFACT_PATHS.versionsIndex, path.join(ARTIFACT_PATHS.versionSnapshotsDir, `${versionId}.json`), ARTIFACT_PATHS.taskPacketsIndex]
   });
-  return snapshot;
+  return {
+    ...snapshot,
+    resultCard: versionSnapshotResultCard(root, args, snapshot, {
+      sectionCount: Object.keys(state.sections).length,
+      claimCount: evidence.claims.length,
+      reviewVerdict: reviews.lastVerdict
+    })
+  };
 }
 
 export function compareVersions(root, args = {}) {
@@ -1989,5 +2114,8 @@ export function compareVersions(root, args = {}) {
     summary: `Compared versions ${fromId} and ${toId}.`,
     artifactPaths: [ARTIFACT_PATHS.versionComparisons, ARTIFACT_PATHS.versionComparisonReport, ARTIFACT_PATHS.navigationReport]
   });
-  return comparison;
+  return {
+    ...comparison,
+    resultCard: versionComparisonResultCard(root, args, comparison)
+  };
 }

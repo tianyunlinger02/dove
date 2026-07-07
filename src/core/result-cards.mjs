@@ -12,9 +12,13 @@ function normalizeStringArray(value) {
   return Array.from(new Set(value.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean)));
 }
 
-function compactResultList(values = [], fallback) {
+function compactResultList(values = [], fallback, internalFallback = fallback) {
   const normalized = normalizeStringArray(values);
-  return normalized.length > 0 ? normalized : [fallback];
+  const publicValues = compactPublicStringArray(normalized);
+  if (publicValues.length > 0) {
+    return publicValues;
+  }
+  return normalized.length > 0 ? [internalFallback] : [fallback];
 }
 
 function normalizePlainObject(value) {
@@ -36,9 +40,54 @@ function compactPlainObject(fields) {
   }));
 }
 
+const COMPACT_INTERNAL_FIELD_PATTERN = /^(?:id|packetId|packetIds|taskPacketId|missionPacketId|runId|receiptId|boundaryId|boundaryType|implementationBoundaryType|implementationReason|ownerRole|nextRole|handoff|handoffSuggestion|providerId|providerStatus|providerError|apiKeyEnv|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|qaPath|resultPath|mutationMode|operatorRoute|queueSummary|queuePreview|preActionGuidance|preActionGuidanceSummary|executionReceipt|fullResult|diagnostics)$/u;
+const COMPACT_INTERNAL_STRING_PATTERN = /\.dove\/|\bproject:dove\.[a-z0-9.-]+|--packet-id\b|\b(?:packetId|taskPacketId|missionPacketId|runId|receiptId|boundaryId|boundaryType|mutationMode|patch-plan|direct-process|ownerRole|nextRole|handoff|providerId|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|queueSummary|queuePreview|preActionGuidance|resultCard)\b|\b(?:query_dove_status|run_dove_auto|record_dove_mission_pass|run_figure_workflow|run_dove_operator|record_document_evidence|upsert_note|upsert_draft|register_source)\b/u;
+
+function isCompactInternalFieldName(value) {
+  const key = String(value ?? "");
+  return COMPACT_INTERNAL_FIELD_PATTERN.test(key) || /(?:^|[A-Za-z])Ids?$/u.test(key);
+}
+
 function isCompactInternalReference(value) {
   const text = normalizeString(value, "") ?? "";
-  return text.startsWith(".dove/") || /sourceSvgPath|finalSvgPath|outputManifestPath|svgContent|qaPath|source-svg|output-manifest|figure-qa/u.test(text);
+  return COMPACT_INTERNAL_STRING_PATTERN.test(text) || /source-svg|output-manifest|figure-qa/u.test(text);
+}
+
+function compactPublicValue(value) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((item) => compactPublicValue(item)).filter((item) => item !== null && item !== undefined && item !== "")));
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value)
+      .filter(([key]) => !isCompactInternalFieldName(key))
+      .map(([key, item]) => [key, compactPublicValue(item)])
+      .filter(([, item]) => {
+        if (item === null || item === undefined || item === "") {
+          return false;
+        }
+        if (Array.isArray(item)) {
+          return item.length > 0;
+        }
+        if (item && typeof item === "object") {
+          return Object.keys(item).length > 0;
+        }
+        return true;
+      });
+    return compactPlainObject(Object.fromEntries(entries));
+  }
+  if (typeof value === "string") {
+    const text = normalizeString(value, null);
+    return text && !isCompactInternalReference(text) ? text : null;
+  }
+  return value === null || value === undefined ? null : value;
+}
+
+function compactPublicObject(value) {
+  const object = normalizePlainObject(value);
+  if (!object) {
+    return null;
+  }
+  return compactPublicValue(object);
 }
 
 function compactPublicStringArray(value) {
@@ -71,11 +120,7 @@ function publicOutcome(value) {
 }
 
 function publicBoundaryDetail(value) {
-  const detail = { ...(normalizePlainObject(value?.detail) ?? {}) };
-  for (const key of ["implementationBoundaryType", "implementationReason", "providerStatus", "providerError", "reason"]) {
-    delete detail[key];
-  }
-  return compactPlainObject(detail);
+  return compactPublicObject(value?.detail) ?? null;
 }
 
 function sanitizeBoundary(value) {
@@ -83,34 +128,19 @@ function sanitizeBoundary(value) {
   if (!boundary) {
     return null;
   }
-  const publicType = publicBoundaryType(boundary.type ?? boundary.boundaryType);
-  const sanitized = { ...boundary };
-  if (publicType) {
-    sanitized.type = publicType;
-  }
-  if (sanitized.boundaryType) {
-    sanitized.boundaryType = publicBoundaryType(sanitized.boundaryType) ?? sanitized.boundaryType;
-  }
-  delete sanitized.id;
-  delete sanitized.reason;
-  for (const key of ["artifactRefs", "artifactPaths", "evidenceLinks", "evidencePaths", "validationEvidencePaths", "validationOutputPaths", "resultPath", "qaPath"]) {
-    delete sanitized[key];
-  }
-  for (const key of ["requiredInputs", "requiredActions", "requires"]) {
-    if (Array.isArray(sanitized[key])) {
-      sanitized[key] = compactPublicStringArray(sanitized[key]);
-      if (sanitized[key].length === 0) {
-        delete sanitized[key];
-      }
-    }
-  }
   const detail = publicBoundaryDetail(boundary);
-  if (Object.keys(detail).length > 0) {
-    sanitized.detail = detail;
-  } else {
-    delete sanitized.detail;
-  }
-  return sanitized;
+  return compactPlainObject({
+    type: publicBoundaryType(boundary.type ?? boundary.boundaryType),
+    title: compactPublicValue(boundary.title ?? boundary.label),
+    summary: compactPublicValue(boundary.summary ?? boundary.message),
+    why: compactPublicValue(boundary.why),
+    nextAction: compactPublicValue(boundary.nextAction ?? boundary.action),
+    requiredInputs: compactPublicStringArray(boundary.requiredInputs),
+    requiredActions: compactPublicStringArray(boundary.requiredActions),
+    requires: compactPublicStringArray(boundary.requires),
+    confirmationRequired: boundary.confirmationRequired === true ? true : undefined,
+    detail
+  });
 }
 
 function sanitizeHandoffSuggestion(value) {
@@ -118,22 +148,15 @@ function sanitizeHandoffSuggestion(value) {
   if (!handoff) {
     return null;
   }
-  const publicType = publicBoundaryType(handoff.boundaryType ?? handoff.type);
-  const sanitized = { ...handoff };
-  if (publicType) {
-    sanitized.boundaryType = publicType;
-  }
-  if (sanitized.type) {
-    sanitized.type = publicBoundaryType(sanitized.type) ?? sanitized.type;
-  }
-  delete sanitized.reason;
-  const detail = publicBoundaryDetail(handoff);
-  if (Object.keys(detail).length > 0) {
-    sanitized.detail = detail;
-  } else {
-    delete sanitized.detail;
-  }
-  return sanitized;
+  return compactPlainObject({
+    title: compactPublicValue(handoff.title ?? handoff.label),
+    summary: compactPublicValue(handoff.summary ?? handoff.message),
+    why: compactPublicValue(handoff.why),
+    type: publicBoundaryType(handoff.type ?? handoff.boundaryType),
+    requiredInputs: compactPublicStringArray(handoff.requiredInputs),
+    requiredActions: compactPublicStringArray(handoff.requiredActions),
+    detail: publicBoundaryDetail(handoff)
+  });
 }
 
 function normalizeMatchArray(value) {
@@ -157,17 +180,10 @@ function compactExecutionReceipt(value) {
   if (!receipt) {
     return null;
   }
-  return {
-    receiptId: receipt.receiptId ?? null,
-    runId: receipt.runId ?? null,
-    packetId: receipt.packetId ?? null,
-    surface: receipt.surface ?? null,
-    command: receipt.command ?? null,
-    actionType: receipt.actionType ?? null,
-    status: receipt.status ?? null,
-    outcome: receipt.outcome ?? null,
-    resultSummary: receipt.publicSafeSummary ?? receipt.resultSummary ?? null,
-    lifecycleTransition: receipt.lifecycleTransition ?? null,
+  return compactPlainObject({
+    status: normalizeString(receipt.status, null),
+    outcome: publicOutcome(receipt.outcome),
+    resultSummary: compactPublicValue(receipt.publicSafeSummary ?? receipt.resultSummary),
     evidenceCount: normalizeStringArray([
       ...normalizeStringArray(receipt.evidenceLinks),
       ...normalizeStringArray(receipt.evidencePaths),
@@ -176,16 +192,22 @@ function compactExecutionReceipt(value) {
       ...normalizeStringArray(receipt.validationEvidencePaths),
       ...normalizeStringArray(receipt.verificationEvidencePaths)
     ]).length,
-    criteriaCoverage: receipt.criteriaCoverage ?? null,
-    nextAction: receipt.nextAction ?? null
-  };
+    criteriaCoverage: compactPublicObject(receipt.criteriaCoverage)
+  });
+}
+
+function publicActionTitle(value, responseLanguage) {
+  const text = normalizeString(value, null);
+  if (!text || isCompactInternalReference(text)) {
+    return doveText(responseLanguage, "resultCardNextStatus");
+  }
+  return text;
 }
 
 function resultAction(action, responseLanguage = "zh") {
   if (typeof action === "string" && action.trim()) {
     return {
-      title: doveText(responseLanguage, "resultCardNextStatus"),
-      command: action.trim(),
+      title: publicActionTitle(action, responseLanguage),
       proposalOnly: true,
       noAutoApply: true
     };
@@ -194,28 +216,16 @@ function resultAction(action, responseLanguage = "zh") {
     return null;
   }
   const command = normalizeString(action.command ?? action.nextAction, null);
-  const boundary = sanitizeBoundary(action.boundary);
-  const handoffSuggestion = sanitizeHandoffSuggestion(action.handoffSuggestion);
-  return {
-    kind: normalizeString(action.kind, null),
-    title: normalizeString(action.title ?? action.label, command ? doveText(responseLanguage, "resultCardNextStatus") : doveText(responseLanguage, "compactCardFirstActionFallback")),
-    why: normalizeString(action.why, null),
-    command,
-    packetId: normalizeString(action.packetId, null),
-    requires: compactPublicStringArray(action.requires),
+  const title = normalizeString(action.title ?? action.label, null) ?? publicActionTitle(command, responseLanguage) ?? doveText(responseLanguage, "compactCardFirstActionFallback");
+  return compactPlainObject({
+    title,
+    why: compactPublicValue(action.why),
     requiredInputs: compactPublicStringArray(action.requiredInputs),
     requiredActions: compactPublicStringArray(action.requiredActions),
-    boundary,
-    boundaryId: normalizeString(action.boundaryId, null),
-    boundaryType: publicBoundaryType(action.boundaryType) ?? boundary?.type ?? null,
-    ownerRole: normalizeString(action.ownerRole, null),
-    nextRole: normalizeString(action.nextRole, null),
-    handoff: normalizePlainObject(action.handoff),
-    handoffSuggestion,
     proposalOnly: true,
     noAutoApply: true,
     confirmationRequired: action.confirmationRequired === true ? true : undefined
-  };
+  });
 }
 
 function resultActions(actions = [], nextAction = null, responseLanguage = "zh") {
@@ -258,48 +268,32 @@ export function buildCommandResultCard(details = {}, responseLanguage = "zh") {
   const status = normalizeString(details.status, null);
   const boundary = sanitizeBoundary(details.boundary);
   const stopReason = normalizeString(details.stopReason, null);
-  const artifactResolution = normalizePlainObject(details.artifactResolution);
-  const evidenceExplanation = normalizePlainObject(details.evidenceExplanation);
-  const evidenceSelection = artifactResolution ? {
-    selectedPacketId: normalizeString(artifactResolution.selectedPacketId, null),
-    requestedArtifacts: normalizeStringArray(artifactResolution.requestedArtifacts),
-    explanationCode: normalizeString(artifactResolution.explanationCode, null),
-    acceptedMatches: normalizeMatchArray(artifactResolution.acceptedMatches),
-    matchingPackets: normalizeMatchArray(artifactResolution.matchingPackets)
-  } : null;
-  const artifactConflicts = normalizeMatchArray(artifactResolution?.conflictingMatches);
-  return {
+  const happened = compactPublicValue(details.happened ?? details.summary) ?? doveText(responseLanguage, "resultCardHappenedFallback");
+  return compactPlainObject({
     presentation: "compact-result-summary-card",
     surface: normalizeString(details.surface, null),
     command: normalizeString(details.command, null),
-    packetId: normalizeString(details.packetId, null),
-    packetIds: normalizeStringArray(details.packetIds),
-    runId: normalizeString(details.runId ?? details.id, null),
     executionReceipt,
-    title: normalizeString(details.title, null),
+    title: compactPublicValue(details.title),
     status,
     outcome: publicOutcome(details.outcome),
-    happened: normalizeString(details.happened ?? details.summary, doveText(responseLanguage, "resultCardHappenedFallback")),
-    durableWrites: compactResultList(details.durableWrites, doveText(responseLanguage, "resultCardNoDurableWrites")),
-    evidence: compactResultList(evidence, doveText(responseLanguage, "resultCardNoEvidence")),
-    evidenceExplanation,
-    evidenceSelection,
-    artifactConflicts,
-    validation: compactResultList(validation, doveText(responseLanguage, "resultCardNoValidation")),
-    codeChanges: compactResultList(details.codeChanges, doveText(responseLanguage, "resultCardCodeNotInspected")),
+    happened,
+    durableWrites: compactResultList(details.durableWrites, doveText(responseLanguage, "resultCardNoDurableWrites"), doveText(responseLanguage, "resultCardDurableWritesHidden")),
+    evidence: compactResultList(evidence, doveText(responseLanguage, "resultCardNoEvidence"), doveText(responseLanguage, "resultCardEvidenceHidden")),
+    evidenceExplanation: compactPublicObject(details.evidenceExplanation),
+    validation: compactResultList(validation, doveText(responseLanguage, "resultCardNoValidation"), doveText(responseLanguage, "resultCardValidationHidden")),
+    codeChanges: compactResultList(details.codeChanges, doveText(responseLanguage, "resultCardCodeNotInspected"), doveText(responseLanguage, "resultCardDetailsAvailable")),
     boundary,
-    scope: normalizePlainObject(details.scope),
+    scope: compactPublicObject(details.scope),
     taskStatusBefore: normalizeString(details.taskStatusBefore, null),
     taskStatusAfter: normalizeString(details.taskStatusAfter, null),
     nextActions: resultActions(details.nextActions, details.nextAction, responseLanguage),
-    preActionGuidanceSummary: normalizePlainObject(details.preActionGuidanceSummary),
-    foreground: details.foreground === undefined ? null : Boolean(details.foreground),
-    background: details.background === undefined ? null : Boolean(details.background),
-    daemon: details.daemon === undefined ? null : Boolean(details.daemon),
     completed: status === "completed",
     stopped: Boolean(stopReason || boundary || ["blocked", "blocked-boundary", "awaiting-host-pass", "awaiting-host-results", "needs-host-results", "needs-completion-evidence", "needs-explicit-progress-step", "needs-review", "prepared-awaiting-output", "step-budget-exhausted", "max-iterations-exhausted", "stopped-killed"].includes(status ?? "")),
     requiresAction: requiresAction(status, boundary, stopReason),
-    proposalOnly: false,
-    confirmationRequired: false
-  };
+    detailsAvailable: true,
+    showMore: {
+      text: doveText(responseLanguage, "resultCardDetailsAvailable")
+    }
+  });
 }

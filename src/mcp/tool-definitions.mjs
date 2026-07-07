@@ -189,7 +189,7 @@ const mutationModeProperty = {
 const operatorSurfaceProperty = {
   type: "string",
   enum: ["operator", "compact", "full", "debug"],
-  description: "Tool discovery surface. operator/compact lists the small everyday Dove operator surface; full/debug lists the canonical registry."
+  description: "Tool discovery surface. Use operator or compact for everyday Dove work; request expanded catalogs only when auditing or diagnosing."
 };
 
 export const OPERATOR_TOOL_NAMES = [
@@ -231,23 +231,76 @@ const OPERATOR_WORKFLOW_AREAS = {
 };
 
 const OPERATOR_SCHEMA_FIELDS = {
-  query_dove_status: ["intent", "domain", "stage", "packetId", "status", "detail", "view", "showMissions", "includeMissionDetails", "requestStatusAdjustment", "includeStatusAdjustmentPreview", "resultMode"],
+  query_dove_status: ["intent", "domain", "stage", "status", "detail", "view", "showMissions", "includeMissionDetails", "requestStatusAdjustment", "includeStatusAdjustmentPreview", "resultMode"],
   query_dove_orchestrate: ["request", "userRequest", "goal", "domain", "stage", "targetArtifacts", "acceptanceChecks", "allowAutonomy", "resultMode"],
-  query_document_ledger: ["packetId", "taskId", "documentKind", "status", "evidenceScope", "publicSafe", "limit", "resultMode"],
-  query_operator_lessons: ["domain", "status", "tag", "actorRole", "limit", "resultMode"],
-  create_dove_task: ["goal", "objective", "prompt", "title", "summary", "domain", "stage", "evidenceExpectations", "artifactPaths", "confirm", "confirmed", "resultMode", "mutationMode"],
-  run_dove_auto: ["packetId", "taskId", "target", "goal", "prompt", "command", "workflow", "steps", "autoSteps", "maxIterations", "maxSteps", "confirm", "confirmed", "completeTask", "completeOnSuccess", "resultMode", "mutationMode"],
-  run_dove_operator: ["confirm", "confirmed", "includeQueueDetails", "blockerInvestigationMode", "taskResults", "results", "resultMode", "mutationMode"],
-  register_source: ["packetId", "taskId", "target", "sourceId", "citationKey", "title", "authors", "year", "locator", "sourceType", "abstract", "origin", "sources", "resultMode", "mutationMode"],
-  upsert_note: ["packetId", "taskId", "target", "noteId", "title", "sectionId", "sourceIds", "summary", "quotes", "claims", "openQuestions", "resultMode", "mutationMode"],
-  upsert_draft: ["packetId", "taskId", "target", "sectionId", "title", "body", "status", "summary", "resultMode", "mutationMode"],
-  record_document_evidence: ["packetId", "taskId", "target", "documentId", "title", "documentKind", "status", "evidenceScope", "summary", "sourceRefs", "artifactRefs", "artifactPaths", "evidencePaths", "createDocument", "appendDocument", "body", "resultMode", "mutationMode"],
-  run_figure_workflow: ["packetId", "taskId", "target", "intent", "description", "figureId", "purpose", "captionIntent", "artifactPaths", "materialHints", "providerId", "executeProvider", "allowMissingMaterials", "outputManifestPath", "sourceSvgPath", "targetFinalSvgPath", "svgContent", "caption", "resultMode", "mutationMode"],
-  run_experience_workflow: ["packetId", "taskId", "target", "experimentId", "goal", "idea", "title", "methodology", "successMetric", "claimId", "result", "resultId", "outcome", "summary", "evidenceLinks", "artifactPaths", "resultMode", "mutationMode"],
-  run_review_loop: ["packetId", "taskId", "target", "scope", "stage", "actorRole", "resultMode", "mutationMode"],
-  build_rebuttal_strategy: ["packetId", "taskId", "target", "actorRole", "resultMode", "mutationMode"],
-  query_dove_return: ["goal", "domain", "stage", "scope", "targetArtifacts", "artifactPaths", "acceptanceChecks", "validationEvidencePaths", "evidencePaths", "reviewEvidencePaths", "resultMode"]
+  query_document_ledger: ["documentKind", "status", "evidenceScope", "publicSafe", "limit", "resultMode"],
+  query_operator_lessons: ["domain", "status", "tag", "limit", "resultMode"],
+  create_dove_task: ["goal", "objective", "prompt", "title", "summary", "domain", "stage", "evidenceExpectations", "confirm", "confirmed", "resultMode"],
+  run_dove_auto: ["target", "goal", "prompt", "steps", "autoSteps", "maxIterations", "maxSteps", "confirm", "confirmed", "completeTask", "completeOnSuccess", "resultMode"],
+  run_dove_operator: ["confirm", "confirmed", "blockerInvestigationMode", "resultMode"],
+  register_source: ["target", "citationKey", "title", "authors", "year", "locator", "sourceType", "abstract", "origin", "sources", "resultMode"],
+  upsert_note: ["target", "title", "summary", "quotes", "claims", "openQuestions", "resultMode"],
+  upsert_draft: ["target", "title", "body", "status", "summary", "resultMode"],
+  record_document_evidence: ["target", "title", "documentKind", "status", "evidenceScope", "publicSafe", "visibility", "summary", "context", "reason", "claims", "createDocument", "appendDocument", "body", "content", "resultMode"],
+  run_figure_workflow: ["target", "intent", "description", "name", "title", "purpose", "captionIntent", "requiredVisualElements", "materialHints", "allowMissingMaterials", "outputFormat", "constraints", "caption", "captionDraft", "resultMode"],
+  run_experience_workflow: ["target", "goal", "idea", "title", "methodology", "method", "successMetric", "metric", "comparisonTargets", "baselines", "result", "outcome", "summary", "resultSummary", "resultMode"],
+  run_review_loop: ["target", "scope", "stage", "resultMode"],
+  build_rebuttal_strategy: ["target", "resultMode"],
+  query_dove_return: ["goal", "domain", "stage", "scope", "targetArtifacts", "acceptanceChecks", "validationEvidence", "reviewEvidence", "resultMode"]
 };
+
+const OPERATOR_PUBLIC_TOOL_DESCRIPTIONS = {
+  query_dove_status: "Show the current Dove situation in everyday language, with the next useful action and a note that detailed audit context can be requested.",
+  query_dove_orchestrate: "Choose the Dove work surface that fits the user's request without changing project state.",
+  query_document_ledger: "List recorded document and evidence summaries without showing document bodies.",
+  query_operator_lessons: "Show reusable Dove lessons that may affect the next action.",
+  create_dove_task: "Turn a user goal into a confirmable Dove mission and, after approval, run one bounded foreground pass.",
+  run_dove_auto: "Run a confirmed multi-step foreground pass until the work completes or needs user-visible input.",
+  run_dove_operator: "Review ready Dove work and move one safe foreground step after explicit confirmation.",
+  register_source: "Record real external source metadata for the current task.",
+  upsert_note: "Save synthesized writing or research notes for the current task.",
+  upsert_draft: "Update a section draft when concrete draft text is provided.",
+  record_document_evidence: "Record a document or evidence summary without exposing raw private material.",
+  run_figure_workflow: "Prepare or update one figure: plan materials, optionally generate or import output, and report what is still missing.",
+  run_experience_workflow: "Plan or record an experiment and connect reviewed results back to the claim they support.",
+  run_review_loop: "Run an evidence-aware review pass and produce revision guidance.",
+  build_rebuttal_strategy: "Organize reviewer concerns into a response strategy and draft language.",
+  query_dove_return: "Check whether a mission has enough evidence to be considered returned."
+};
+
+const COMPACT_DISCOVERY_INTERNAL_KEY_PATTERN = /^(?:id|packetId|packetIds|taskPacketId|missionPacketId|taskId|runId|receiptId|boundary|boundaryId|boundaryType|implementationBoundaryType|implementationReason|ownerRole|nextRole|handoff|handoffId|handoffSuggestion|actorRole|policyOverrideReason|policyOverrideReasonCode|policyOverrideEvidencePaths|policyOverrideTargetArtifact|policyOverrideTargetId|policyOverrideSourceId|policyOverridePhase|policyOverrideExpiresAt|providerId|providerStatus|providerError|apiKeyEnv|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|qaPath|resultPath|documentPath|path|paths|artifactPath|artifactPaths|sourceArtifactPath|sourceArtifactPaths|evidencePaths|validationEvidencePaths|verificationEvidencePaths|reviewEvidencePaths|reviewedArtifactPaths|finalPlanPaths|planPaths|finalResultPaths|resultPaths|artifactRefs|sourceRefs|claimIds|sourceIds|noteIds|experimentIds|reviewConcernIds|rebuttalIssueIds|relatedExperimentIds|targetClaimIds|dependencyIds|blockerIds|lessonIds|command|workflow|preset|nextCommand|copyableCommand|operatorRoute|mutationMode|queueSummary|queuePreview|preActionGuidance|preActionGuidanceSummary|fullResult|diagnostics)$/u;
+
+function isCompactDiscoveryInternalKey(key) {
+  const text = String(key ?? "");
+  return COMPACT_DISCOVERY_INTERNAL_KEY_PATTERN.test(text) || /(?:^|[A-Za-z])Ids?$/u.test(text);
+}
+
+function compactPublicSchema(schema) {
+  if (Array.isArray(schema)) {
+    return schema.map((item) => compactPublicSchema(item));
+  }
+  if (!schema || typeof schema !== "object") {
+    return schema;
+  }
+  const next = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === "properties" && value && typeof value === "object" && !Array.isArray(value)) {
+      const properties = Object.fromEntries(Object.entries(value)
+        .filter(([propertyName]) => !isCompactDiscoveryInternalKey(propertyName))
+        .map(([propertyName, propertySchema]) => [propertyName, compactPublicSchema(propertySchema)]));
+      if (Object.keys(properties).length > 0) {
+        next.properties = properties;
+      }
+      continue;
+    }
+    if (key === "description") {
+      next.description = typeof value === "string" ? value.replace(/fullResult|preActionGuidanceSummary|preActionGuidance|resultCard|boundaryType|patch-plan|direct-process|providerId|\.dove\//gu, "details") : value;
+      continue;
+    }
+    next[key] = compactPublicSchema(value);
+  }
+  return next;
+}
 
 export const toolDiscoveryInputSchema = {
   type: "object",
@@ -560,20 +613,21 @@ function compactOperatorToolSchema(tool) {
   const properties = tool.inputSchema?.properties ?? {};
   const fieldNames = OPERATOR_SCHEMA_FIELDS[tool.name] ?? Object.keys(properties);
   const compactProperties = Object.fromEntries(fieldNames
-    .filter((fieldName) => properties[fieldName])
-    .map((fieldName) => [fieldName, properties[fieldName]]));
-  return {
-    ...tool.inputSchema,
+    .filter((fieldName) => properties[fieldName] && !isCompactDiscoveryInternalKey(fieldName))
+    .map((fieldName) => [fieldName, compactPublicSchema(properties[fieldName])]));
+  return compactPublicSchema({
+    type: tool.inputSchema?.type ?? "object",
     properties: compactProperties
-  };
+  });
 }
 
 function compactOperatorTool(tool) {
   return {
-    ...tool,
+    name: tool.name,
+    description: OPERATOR_PUBLIC_TOOL_DESCRIPTIONS[tool.name] ?? "Use this Dove capability for everyday project work.",
     inputSchema: compactOperatorToolSchema(tool),
     discoverySurface: "operator",
-    fullDetails: "Use tools/list with surface: full or surface: debug to inspect the canonical schema."
+    workflowArea: OPERATOR_WORKFLOW_AREAS[tool.name] ?? "workflow"
   };
 }
 

@@ -87,6 +87,14 @@ function artifactGuidanceSummary(root, args = {}, details = {}) {
   }));
 }
 
+function localizedText(responseLanguage, zh, en) {
+  return responseLanguage === "en" ? en : zh;
+}
+
+function artifactResultCard(root, args = {}, details = {}) {
+  return buildCommandResultCard(details, resolveDoveResponseLanguage(root, args));
+}
+
 function normalizeRelativePath(value, fallback) {
   const normalized = String(value ?? fallback).trim().replace(/\\/g, "/").replace(/^\.\//, "");
   return normalized || fallback;
@@ -2394,11 +2402,28 @@ export function registerSource(root, args = {}) {
     synthesisArtifactPaths: [ARTIFACT_PATHS.bibliography, ARTIFACT_PATHS.citationLog, ARTIFACT_PATHS.queryPack],
     refreshOnlyArtifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionJournal]
   };
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const resultCard = artifactResultCard(root, args, {
+    surface: "dove.source",
+    command: "register_source",
+    title: localizedText(responseLanguage, "来源已登记", "Source registered"),
+    status: "registered",
+    happened: registered.length === 1
+      ? localizedText(responseLanguage, "已登记 1 条可追溯来源。", "Registered one traceable source.")
+      : localizedText(responseLanguage, `已登记 ${registered.length} 条可追溯来源。`, `Registered ${registered.length} traceable sources.`),
+    durableWrites: [localizedText(responseLanguage, "来源索引和引用材料已更新。", "Source index and citation materials were updated.")],
+    evidence: [localizedText(responseLanguage, "已记录来源出处，后续可转成写作笔记。", "Source provenance is recorded and can be turned into writing notes.")],
+    nextActions: [{
+      title: localizedText(responseLanguage, "把来源沉淀成写作要点", "Turn the source into writing notes"),
+      why: localizedText(responseLanguage, "来源只是材料入口，下一步要抽出和当前任务有关的论点、引用或疑问。", "A source is only intake; the next step is extracting task-relevant claims, quotes, or questions.")
+    }]
+  });
   if (!Array.isArray(args.sources)) {
     return {
       ...registered[0],
       artifactWrites,
-      preActionGuidanceSummary: guidanceSummary
+      preActionGuidanceSummary: guidanceSummary,
+      resultCard
     };
   }
   return {
@@ -2409,7 +2434,8 @@ export function registerSource(root, args = {}) {
     items: registered,
     packetId: target.packet?.id ?? null,
     artifactWrites,
-    preActionGuidanceSummary: guidanceSummary
+    preActionGuidanceSummary: guidanceSummary,
+    resultCard
   };
 }
 
@@ -2469,6 +2495,25 @@ export function upsertNote(root, args = {}) {
     summary: `Updated note ${note.id}.`,
     artifactPaths: [ARTIFACT_PATHS.notes, ARTIFACT_PATHS.queryPack, ARTIFACT_PATHS.sessionSummary]
   });
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const resultCard = artifactResultCard(root, args, {
+    surface: "dove.note",
+    command: "upsert_note",
+    title: localizedText(responseLanguage, "笔记已沉淀", "Note captured"),
+    status: "recorded",
+    happened: localizedText(responseLanguage, "已把材料整理成结构化写作笔记。", "Captured the material as a structured writing note."),
+    durableWrites: [localizedText(responseLanguage, "笔记索引和检索材料已更新。", "Note index and retrieval materials were updated.")],
+    evidence: [
+      note.summary ? localizedText(responseLanguage, "已记录摘要。", "Summary recorded.") : null,
+      note.quotes.length > 0 ? localizedText(responseLanguage, "已记录可引用片段。", "Quotable material recorded.") : null,
+      note.claims.length > 0 ? localizedText(responseLanguage, "已记录候选论点。", "Candidate claims recorded.") : null,
+      note.openQuestions.length > 0 ? localizedText(responseLanguage, "已记录待回答问题。", "Open questions recorded.") : null
+    ],
+    nextActions: [{
+      title: localizedText(responseLanguage, "决定是否进入实验、草稿或补证据", "Decide whether to experiment, draft, or add evidence"),
+      why: localizedText(responseLanguage, "笔记已经可用，下一步要看它能支撑论点、实验设计，还是需要继续找材料。", "The note is usable; next decide whether it supports a claim, experiment design, or more evidence gathering.")
+    }]
+  });
   return {
     ...note,
     artifactWrites: {
@@ -2476,6 +2521,7 @@ export function upsertNote(root, args = {}) {
       synthesisArtifactPaths: [ARTIFACT_PATHS.queryPack],
       refreshOnlyArtifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionJournal]
     },
+    resultCard,
     preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
       surface: "dove.note",
       roleId: "builder",
@@ -2521,9 +2567,24 @@ export function upsertPlan(root, args = {}) {
     summary: zh ? "已更新当前 Dove 任务计划。" : "Updated current Dove mission plan.",
     artifactPaths: [ARTIFACT_PATHS.plan, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary]
   });
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const resultCard = artifactResultCard(root, args, {
+    surface: "dove.plan",
+    command: "upsert_plan",
+    title: localizedText(responseLanguage, "任务计划已更新", "Mission plan updated"),
+    status: "updated",
+    happened: localizedText(responseLanguage, "已把当前目标收束成可执行计划。", "Converted the current goal into an actionable plan."),
+    durableWrites: [localizedText(responseLanguage, "当前计划和恢复摘要已更新。", "Current plan and resume summary were updated.")],
+    scope: { thesis: nextState.dove.thesis },
+    nextActions: [{
+      title: localizedText(responseLanguage, "同步检查清单后再执行", "Sync the checklist before execution"),
+      why: localizedText(responseLanguage, "计划只是范围边界，执行前还要确认具体证据和完成条件。", "The plan defines scope; evidence and completion checks still need to be aligned before execution.")
+    }]
+  });
   return {
     planPath: ARTIFACT_PATHS.plan,
     thesis: nextState.dove.thesis,
+    resultCard,
     preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
       surface: "dove.plan",
       roleId: "planner",
@@ -2573,9 +2634,25 @@ export function upsertOutline(root, args = {}) {
     summary: zh ? "已更新当前 outline。" : "Updated current outline.",
     artifactPaths: [ARTIFACT_PATHS.outline, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary]
   });
+  const sectionCount = Object.keys(state.sections).length;
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const resultCard = artifactResultCard(root, args, {
+    surface: "dove.draft",
+    command: "upsert_outline",
+    title: localizedText(responseLanguage, "大纲已更新", "Outline updated"),
+    status: "updated",
+    happened: localizedText(responseLanguage, `已整理 ${sectionCount} 个章节的写作结构。`, `Organized the writing structure for ${sectionCount} sections.`),
+    durableWrites: [localizedText(responseLanguage, "当前大纲和恢复摘要已更新。", "Current outline and resume summary were updated.")],
+    scope: { sectionCount },
+    nextActions: [{
+      title: localizedText(responseLanguage, "选择最高杠杆章节开始起草", "Draft the highest-leverage section next"),
+      why: localizedText(responseLanguage, "大纲已经给出结构，下一步要把最能支撑目标的部分写成正文。", "The outline gives structure; next turn the most important section into draft text.")
+    }]
+  });
   return {
     outlinePath: ARTIFACT_PATHS.outline,
-    sectionCount: Object.keys(state.sections).length,
+    sectionCount,
+    resultCard,
     preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
       surface: "dove.draft",
       roleId: "planner",
@@ -2629,9 +2706,24 @@ export function upsertDraft(root, args = {}) {
     summary: `Updated draft for section ${sectionId}.`,
     artifactPaths: [draftPath, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport]
   });
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const resultCard = artifactResultCard(root, args, {
+    surface: "dove.draft",
+    command: "upsert_draft",
+    title: localizedText(responseLanguage, "草稿已更新", "Draft updated"),
+    status: state.sections[sectionId].status,
+    happened: localizedText(responseLanguage, `已更新“${title}”这一段正文。`, `Updated the draft body for “${title}”.`),
+    durableWrites: [localizedText(responseLanguage, "草稿正文和项目导航已更新。", "Draft body and project navigation were updated.")],
+    scope: { section: title, status: state.sections[sectionId].status },
+    nextActions: [{
+      title: localizedText(responseLanguage, "送去 review 检查证据是否够用", "Send it to review for evidence checking"),
+      why: localizedText(responseLanguage, "草稿已经落地，下一步要确认它的论点、引用和实验支撑是否站得住。", "The draft exists; next verify whether its claims, citations, and experiment support hold up.")
+    }]
+  });
   return {
     draftPath,
     sectionId,
+    resultCard,
     artifactWrites: {
       primaryArtifactPaths: [draftPath],
       refreshOnlyArtifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionJournal]
@@ -2678,8 +2770,24 @@ export function setSectionStatus(root, args = {}) {
     summary: `Set section ${sectionId} to ${state.sections[sectionId].status}.`,
     artifactPaths: [ARTIFACT_PATHS.state, ARTIFACT_PATHS.orchestrationBoard, ARTIFACT_PATHS.sessionSummary]
   });
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const sectionTitle = state.sections[sectionId].title ?? sectionId;
+  const resultCard = artifactResultCard(root, args, {
+    surface: "dove.draft",
+    command: "set_section_status",
+    title: localizedText(responseLanguage, "章节状态已更新", "Section status updated"),
+    status: state.sections[sectionId].status,
+    happened: localizedText(responseLanguage, `已把“${sectionTitle}”标记为 ${state.sections[sectionId].status}。`, `Marked “${sectionTitle}” as ${state.sections[sectionId].status}.`),
+    durableWrites: [localizedText(responseLanguage, "章节状态和任务看板已更新。", "Section status and task board were updated.")],
+    scope: { section: sectionTitle, status: state.sections[sectionId].status },
+    nextActions: [{
+      title: localizedText(responseLanguage, "回到状态页确认下一步", "Return to status for the next step"),
+      why: localizedText(responseLanguage, "状态变化会影响下一步是继续写、补证据，还是进入 review。", "The status change affects whether the next step is drafting, evidence work, or review.")
+    }]
+  });
   return {
     ...state.sections[sectionId],
+    resultCard,
     preActionGuidanceSummary: artifactGuidanceSummary(root, args, {
       surface: "dove.draft",
       roleId: "planner",

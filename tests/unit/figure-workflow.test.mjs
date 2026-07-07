@@ -16,6 +16,7 @@ import {
   upsertNote,
   writeJson
 } from "../../src/core/index.mjs";
+import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -86,10 +87,8 @@ function assertFigureResultCard(result, expected = {}) {
   assert.equal(result.resultCard.command, "run_figure_workflow");
   assert.equal(result.resultCard.status, expected.status ?? result.status);
   assert.equal(result.resultCard.scope.kind, "figure");
-  assert.equal(result.resultCard.scope.figureId, expected.figureId ?? result.figureId);
-  if (expected.packetId) {
-    assert.equal(result.resultCard.scope.packetId, expected.packetId);
-  }
+  assert.equal("figureId" in result.resultCard.scope, false);
+  assert.equal("packetId" in result.resultCard.scope, false);
   if (expected.happened) {
     assert.match(result.resultCard.happened, expected.happened);
   }
@@ -99,27 +98,22 @@ function assertFigureResultCard(result, expected = {}) {
     assert.match(action.title, expected.nextActionTitle);
   }
   if (expected.nextActionCommand) {
-    assert.equal(action.command, expected.nextActionCommand);
+    assert.equal("command" in action, false);
   }
   if (expected.boundaryType) {
     assert.equal(result.resultCard.boundary?.type, expected.boundaryType);
     assert.equal(result.resultCard.boundary?.detail?.implementationBoundaryType, undefined);
     assert.equal(result.resultCard.boundary?.detail?.implementationReason, undefined);
-    assert.equal(action.boundaryType, expected.boundaryType);
-    assert.equal(action.boundary?.type, expected.boundaryType);
-    assert.equal(action.boundary?.detail?.implementationBoundaryType, undefined);
-    assert.equal(action.boundary?.detail?.implementationReason, undefined);
+    assert.equal("boundaryType" in action, false);
+    assert.equal("boundary" in action, false);
   }
-  for (const key of ["sourceSvgPath", "finalSvgPath", "qaPath", "providerExecution", "providerReadiness", "figureQa", "evidence", "validation", "codeChanges", "plan"]) {
+  for (const key of ["sourceSvgPath", "finalSvgPath", "qaPath", "providerExecution", "providerReadiness", "figureQa", "plan"]) {
     assert.equal(key in result.resultCard, false, `figure resultCard leaked ${key}`);
   }
   for (const key of ["artifactRefs", "artifactPaths", "evidencePaths", "validationEvidencePaths", "qaPath", "resultPath"]) {
     assert.equal(key in (result.resultCard.boundary ?? {}), false, `figure resultCard boundary leaked ${key}`);
-    assert.equal(key in (action.boundary ?? {}), false, `figure resultCard action boundary leaked ${key}`);
   }
-  const actionText = JSON.stringify(action);
-  assert.doesNotMatch(actionText, /\.dove\//, "figure resultCard action leaked a Dove artifact path");
-  assert.doesNotMatch(actionText, /sourceSvgPath|finalSvgPath|outputManifestPath|svgContent|qaPath|figure-qa/u, "figure resultCard action leaked internal figure fields");
+  assertNoCompactPublicLeaks(result.resultCard, { ignoredKeys: ["command"] });
 }
 
 test("runFigureWorkflow does not expose generated figure ids in public summaries", () => {

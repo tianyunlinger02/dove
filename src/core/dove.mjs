@@ -1080,6 +1080,20 @@ function toPublicDoveCommand(command, fallback = "project:dove.status") {
   return toolRoutes[normalized] ?? (normalized.startsWith("dove.") ? `project:${normalized}` : fallback);
 }
 
+function statusPublicCommandText(command, fallback = null) {
+  const raw = typeof command === "string" ? command.trim() : "";
+  if (!raw) {
+    return fallback;
+  }
+  const firstToken = raw.split(/\s+/u)[0];
+  const publicCommand = toPublicDoveCommand(firstToken, fallback);
+  const projectMatch = publicCommand?.match(/^project:dove\.([a-z0-9.-]+)$/u);
+  if (projectMatch) {
+    return `dove.${projectMatch[1]}`;
+  }
+  return /^dove\.[a-z0-9.-]+$/u.test(publicCommand ?? "") ? publicCommand : fallback;
+}
+
 function boundaryActionCommand(task, boundary, kind) {
   if (kind === "send-to-review") {
     return "project:dove.review";
@@ -1252,8 +1266,36 @@ function statusShortText(value, maxLength = 90) {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
-function statusRecoverySubject(card) {
-  return statusShortText(card?.packetId ?? card?.title ?? card?.label ?? card?.kind, 72);
+const STATUS_PUBLIC_FORBIDDEN_TEXT = /\.dove\/|\bproject:dove\.[a-z0-9.-]+|--packet-id\b|\b(?:packetId|taskPacketId|missionPacketId|runId|receiptId|boundaryId|boundaryType|mutationMode|patch-plan|direct-process|ownerRole|nextRole|handoff|providerId|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|queueSummary|queuePreview|preActionGuidance|resultCard)\b|\b(?:query_dove_status|run_dove_auto|record_dove_mission_pass|run_figure_workflow|run_dove_operator|record_document_evidence|upsert_note|upsert_draft|register_source)\b/u;
+const STATUS_INTERNAL_ACTION_CODE = /^(?:[a-z]+-){2,}[a-z]+$/u;
+
+function statusPublicText(value, responseLanguage = "zh", maxLength = 90) {
+  let text = statusShortText(value, maxLength);
+  if (!text) {
+    return "";
+  }
+  text = text.replace(/\btask-[a-z0-9][a-z0-9-]*\b/giu, responseLanguage === "en" ? "the current task" : "当前任务");
+  if (STATUS_PUBLIC_FORBIDDEN_TEXT.test(text) || STATUS_INTERNAL_ACTION_CODE.test(text)) {
+    return "";
+  }
+  return text;
+}
+
+function statusFirstPublicText(responseLanguage, maxLength, ...values) {
+  for (const value of values) {
+    const text = statusPublicText(value, responseLanguage, maxLength);
+    if (text) {
+      return text;
+    }
+  }
+  return "";
+}
+
+function statusRecoverySubject(card, responseLanguage = "zh") {
+  if (card?.packetId) {
+    return responseLanguage === "en" ? "the current task" : "当前任务";
+  }
+  return statusFirstPublicText(responseLanguage, 72, card?.title, card?.label, card?.kind);
 }
 
 function statusRecoveryRequirement(card, responseLanguage = "zh") {
@@ -1264,7 +1306,7 @@ function statusRecoveryRequirement(card, responseLanguage = "zh") {
     card?.requires,
     card?.operatorUnblock?.needs,
     card?.operatorUnblock?.requiredEvidence
-  ).map((item) => statusShortText(item, 52)).filter(Boolean).slice(0, 3);
+  ).map((item) => statusPublicText(item, responseLanguage, 52)).filter(Boolean).slice(0, 3);
   if (items.length === 0) {
     return "";
   }
@@ -1276,13 +1318,13 @@ function statusRecoveryLabel(responseLanguage, zhAction, enAction, subject, requ
     const base = subject ? `First ${enAction} for ${subject}` : `First ${enAction}`;
     return requirement ? `${base}: ${requirement}` : base;
   }
-  const base = subject ? `先为 ${subject} ${zhAction}` : `先${zhAction}`;
+  const base = subject ? `先为${subject}${zhAction}` : `先${zhAction}`;
   return requirement ? `${base}：${requirement}` : base;
 }
 
 function recoveryPathTitle(primaryCard, responseLanguage = "zh") {
   const kind = primaryCard?.kind;
-  const subject = statusRecoverySubject(primaryCard);
+  const subject = statusRecoverySubject(primaryCard, responseLanguage);
   const requirement = statusRecoveryRequirement(primaryCard, responseLanguage);
   if (kind === "missing-executable-contract") {
     return statusRecoveryLabel(responseLanguage, "补可执行合同", "add the executable contract", subject, requirement);
@@ -2445,11 +2487,28 @@ function buildHumanNextStep(card, responseLanguage = "zh") {
       why: statusInlineText(responseLanguage, "Dove 没有发现需要立刻处理的阻塞。", "Dove did not find an immediate blocker.")
     });
   }
-  const command = statusCardPublicCommand(card);
-  const copyableCommand = statusCardCopyableCommand(card);
+  const command = statusPublicCommandText(statusCardPublicCommand(card));
+  const copyableCommand = statusPublicCommandText(statusCardCopyableCommand(card));
+  const label = statusFirstPublicText(
+    responseLanguage,
+    90,
+    card.title,
+    card.label,
+    card.operatorUnblock?.operatorAction,
+    card.operatorUnblock?.nextOperatorAction,
+    card.kind
+  ) || statusInlineText(responseLanguage, "处理当前下一步", "Handle the current next step");
+  const why = statusFirstPublicText(
+    responseLanguage,
+    140,
+    card.operatorUnblock?.blockedSummary,
+    card.operatorUnblock?.cannotContinueBecause,
+    card.why,
+    card.operatorUnblock?.summary
+  );
   return compactStatusObject({
-    label: card.title ?? card.label ?? card.operatorUnblock?.operatorAction ?? card.operatorUnblock?.nextOperatorAction ?? card.kind,
-    why: card.operatorUnblock?.blockedSummary ?? card.operatorUnblock?.cannotContinueBecause ?? card.why ?? card.operatorUnblock?.summary,
+    label,
+    why,
     command,
     copyableCommand
   });
@@ -2463,7 +2522,7 @@ function buildHumanNeedsAttention({ gapStatus, primaryStep, boundary, blockers, 
     operatorUnblock?.requiredEvidence,
     boundary?.requiredInputs,
     projectBacklogRequiredEvidence
-  ).slice(0, 8);
+  ).map((item) => statusPublicText(item, responseLanguage, 60)).filter(Boolean).slice(0, 8);
   if (gapStatus !== "blocked") {
     return compactStatusObject({
       status: "clear",
@@ -2471,22 +2530,28 @@ function buildHumanNeedsAttention({ gapStatus, primaryStep, boundary, blockers, 
       needs
     });
   }
-  const summary = operatorUnblock?.summary
-    ?? operatorUnblock?.blockedSummary
-    ?? boundary?.summary
-    ?? (readErrors.length > 0
-      ? statusInlineText(responseLanguage, "Dove 读状态时遇到文件问题。", "Dove hit a file read problem while checking status.")
-      : null)
-    ?? ((executionCounts.blocking ?? 0) > 0
-      ? statusInlineText(responseLanguage, "Dove 需要先补齐一个执行前提。", "Dove needs one execution prerequisite before continuing.")
-      : null)
-    ?? (blockers.length > 0
-      ? statusInlineText(responseLanguage, "Dove 发现当前工作有阻塞。", "Dove found a blocker in the current work.")
-      : statusInlineText(responseLanguage, "Dove 需要你先处理一个阻塞。", "Dove needs one blocker handled first."));
+  const summary = statusFirstPublicText(
+    responseLanguage,
+    140,
+    operatorUnblock?.summary,
+    operatorUnblock?.blockedSummary,
+    boundary?.summary,
+    readErrors.length > 0 ? statusInlineText(responseLanguage, "Dove 读状态时遇到文件问题。", "Dove hit a file read problem while checking status.") : null,
+    (executionCounts.blocking ?? 0) > 0 ? statusInlineText(responseLanguage, "Dove 需要先补齐一个执行前提。", "Dove needs one execution prerequisite before continuing.") : null,
+    blockers.length > 0 ? statusInlineText(responseLanguage, "Dove 发现当前工作有阻塞。", "Dove found a blocker in the current work.") : null,
+    statusInlineText(responseLanguage, "Dove 需要你先处理一个阻塞。", "Dove needs one blocker handled first.")
+  );
+  const why = statusFirstPublicText(
+    responseLanguage,
+    160,
+    operatorUnblock?.why,
+    operatorUnblock?.cannotContinueBecause,
+    primaryStep?.why
+  );
   return compactStatusObject({
     status: "blocked",
     summary,
-    why: operatorUnblock?.why ?? operatorUnblock?.cannotContinueBecause ?? primaryStep?.why,
+    why,
     needs
   });
 }
@@ -2501,14 +2566,13 @@ function buildHumanChanges(writes = statusNoWriteTelemetry()) {
   });
 }
 
-function buildHumanShowMore({ expansions, missionList, statusAdjustmentContract, writes, responseLanguage = "zh" }) {
-  const writeIntent = writes.writeIntent ?? (writes.applied ? "applied" : "none");
+function buildHumanShowMore({ missionList, statusAdjustmentContract, writes, responseLanguage = "zh" }) {
   return compactStatusObject({
     text: statusInlineText(responseLanguage, "如果你明确要展开，可以再查看任务细节或完整治理状态。", "If you explicitly want more detail, ask for task details or the full governance state."),
-    noWriteSummary: statusInlineText(responseLanguage, `本次查询没有写入：intent ${writeIntent}; rollback ${writes.rollbackEligible ?? "not-applicable"}。`, `This query made no writes: intent ${writeIntent}; rollback ${writes.rollbackEligible ?? "not-applicable"}.`),
-    missionDetails: expansions.missionDetails,
-    fullDetails: expansions.fullDetails,
-    statusAdjustments: statusAdjustmentContract.statusAdjustmentItemsIncluded || statusAdjustmentContract.itemCount > 0 ? expansions.statusAdjustments : null,
+    noWriteSummary: writes.applied === true
+      ? statusInlineText(responseLanguage, "这次有状态变更；需要完整记录时再展开审计细节。", "This check included state changes; ask for audit details if needed.")
+      : statusInlineText(responseLanguage, "这次只是读取状态，没有写入。", "This check only read status and made no writes."),
+    detailsAvailable: true,
     missionDetailsAvailable: Boolean(missionList.detailsAvailable ?? missionList.itemCount ?? missionList.missionItemsIncluded),
     statusAdjustmentsAvailable: Boolean(statusAdjustmentContract.detailsAvailable ?? statusAdjustmentContract.itemCount)
   });
@@ -2564,11 +2628,6 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
     ? []
     : compactStatusRequiredEvidence({ primaryStep: projectBacklogNextAction, boundary, boundaryActionCards, executionGaps });
   const writes = statusNoWriteTelemetry();
-  const expansions = compactStatusObject({
-    fullDetails: { tool: "query_dove_status", args: compactStatusDetailArgs(args) },
-    missionDetails: { tool: "query_dove_status", args: compactStatusMissionDetailArgs(args) },
-    statusAdjustments: { tool: "query_dove_status", args: compactStatusAdjustmentPreviewArgs(args) }
-  });
   const nextStep = buildHumanNextStep(primaryStep, responseLanguage);
   const needsAttention = buildHumanNeedsAttention({
     gapStatus,
@@ -2581,7 +2640,7 @@ function buildCompactStatusHome({ result, missionList, nextActions, boundaryActi
     responseLanguage
   });
   const changes = buildHumanChanges(writes);
-  const showMore = buildHumanShowMore({ expansions, missionList, statusAdjustmentContract, writes, responseLanguage });
+  const showMore = buildHumanShowMore({ missionList, statusAdjustmentContract, writes, responseLanguage });
   const headline = buildHumanStatusHeadline({ statusIntent, gapStatus, nextStep, needsAttention, responseLanguage });
   return compactStatusObject({
     presentation: "dove-project-situation-home",
@@ -2650,36 +2709,6 @@ function compactDoveStatusResult(result, args = {}) {
     statusAdjustmentPreview: statusHome.statusAdjustmentPreview,
     statusHome
   });
-}
-
-function compactStatusDetailArgs(args = {}) {
-  return {
-    domain: args.domain ?? args.doveDomain ?? args.missionDomain,
-    stage: args.stage ?? args.missionStage,
-    packetIds: normalizeStringArray(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds),
-    statuses: normalizeStringArray(args.status ?? args.statuses),
-    includeArchived: booleanArg(args.includeArchived),
-    detail: "full"
-  };
-}
-
-function compactStatusExpansionArgs(args = {}, expansion = {}) {
-  return {
-    domain: args.domain ?? args.doveDomain ?? args.missionDomain,
-    stage: args.stage ?? args.missionStage,
-    packetIds: normalizeStringArray(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds),
-    statuses: normalizeStringArray(args.status ?? args.statuses),
-    includeArchived: booleanArg(args.includeArchived),
-    ...expansion
-  };
-}
-
-function compactStatusMissionDetailArgs(args = {}) {
-  return compactStatusExpansionArgs(args, { showMissions: true });
-}
-
-function compactStatusAdjustmentPreviewArgs(args = {}) {
-  return compactStatusExpansionArgs(args, { requestStatusAdjustment: true });
 }
 
 function missionUserGroupForStatus(status) {

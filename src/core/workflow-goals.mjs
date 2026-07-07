@@ -13,7 +13,7 @@ export const WORKFLOW_GOAL_CONTRACTS = [
     acceptanceCriteria: [
       "Preview classifies the task as host-pass-required and does not report auto-runnable work.",
       "Confirmed execution without taskResults returns needs-host-results.",
-      "No task is reported as updated and the result card does not list affected packet ids.",
+      "No task is reported as updated and the result card does not expose affected packet ids.",
       "The task remains ready and has no synthetic boundary.",
       "No runtime result entry is persisted for the run.",
       "The response returns material-specific required actions for the host pass."
@@ -492,7 +492,7 @@ function runOperatorHostPassWithoutResultsGoal(root, dispatch) {
   expect(JSON.stringify(run.skippedHostPassTaskIds ?? []) === JSON.stringify([packetId]), "Confirmed operator run must report skipped host-pass task ids", { skippedHostPassTaskIds: run.skippedHostPassTaskIds });
   expect(run.operatorResultSummary?.runtimeRecorded === false, "Confirmed operator run without actual work must not record a runtime result", { runtimeRecorded: run.operatorResultSummary?.runtimeRecorded });
   expect(run.resultCard?.status === "needs-host-results", "Result card must preserve needs-host-results status", { resultCardStatus: run.resultCard?.status });
-  expect(Array.isArray(run.resultCard?.packetIds) && run.resultCard.packetIds.length === 0, "Result card must not list affected packet ids when nothing changed", { packetIds: run.resultCard?.packetIds });
+  expect(!Object.hasOwn(run.resultCard ?? {}, "packetIds"), "Result card must not expose affected packet ids when nothing changed", { resultCardKeys: Object.keys(run.resultCard ?? {}) });
   expect((run.awaitingRequiredActions ?? []).includes("collect-source-provenance"), "Confirmed operator run must return source provenance required action", { awaitingRequiredActions: run.awaitingRequiredActions });
   expect((run.awaitingRequiredActions ?? []).includes("call-register-source-with-sources-array"), "Confirmed operator run must return register-source required action", { awaitingRequiredActions: run.awaitingRequiredActions });
 

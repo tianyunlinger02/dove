@@ -11,6 +11,7 @@ import {
 } from "./schema.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { buildCommandResultCard } from "./result-cards.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { assertGovernanceMutationRegistered, appendText, ensureWorkspace, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 
@@ -113,24 +114,22 @@ function documentGuidanceSummary(root, args = {}, target = {}, entry = {}) {
   }));
 }
 
-function buildResultCard({ entry, writes, createdDocument, appendedDocument, preActionGuidanceSummary }) {
+function buildResultCard({ entry, writes, createdDocument, appendedDocument, responseLanguage }) {
   const evidence = [...entry.evidenceLinks, ...entry.artifactRefs, ...entry.sourceRefs];
-  return {
-    presentation: "compact-result-summary-card",
+  return buildCommandResultCard({
     surface: "dove.documents",
     command: "record_document_evidence",
-    packetId: entry.packetId,
     title: entry.title,
     status: "recorded",
     happened: createdDocument ? "已新建归档文档并记录文档证据。" : appendedDocument ? "已追加归档文档并记录文档证据。" : "已记录文档证据索引，不覆盖原始文档。",
     durableWrites: writes,
-    evidence: evidence.length > 0 ? evidence : ["未记录额外 evidence/artifact/source 指针。"],
+    evidence,
     validation: ["本次只记录显式传入的文档/证据元数据，未声明额外验证结果。"],
-    nextActions: ["project:dove.status"],
-    proposalOnly: false,
-    confirmationRequired: false,
-    preActionGuidanceSummary
-  };
+    nextActions: [{
+      title: "查看当前 Dove 状态",
+      why: "确认这条文档证据已经进入后续写作或 review 的可用材料。"
+    }]
+  }, responseLanguage);
 }
 
 function filteredEntries(entries, filters) {
@@ -247,6 +246,7 @@ export function recordDocumentEvidence(root, args = {}) {
     updatedAt: timestamp
   });
   writeJson(root, ARTIFACT_PATHS.documentsLedger, nextLedger);
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
   const preActionGuidanceSummary = documentGuidanceSummary(root, args, target, entry);
   return {
     mode: "document-evidence-record",
@@ -268,6 +268,6 @@ export function recordDocumentEvidence(root, args = {}) {
       publicProjectionDerivedOnly: true
     },
     preActionGuidanceSummary,
-    resultCard: buildResultCard({ entry, writes, createdDocument, appendedDocument, preActionGuidanceSummary })
+    resultCard: buildResultCard({ entry, writes, createdDocument, appendedDocument, responseLanguage })
   };
 }

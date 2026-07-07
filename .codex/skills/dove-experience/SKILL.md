@@ -9,30 +9,31 @@ Convert an idea into experiment goals/plans/results and bridge validated outcome
 
 ## Daily use
 
-- Use this as the experiment/evidence workflow: turn ideas into experiment plans, results, audits, and claim impact.
+- Use this as the experiment and evidence workflow: turn ideas into experiment plans, results, audits, and claim impact.
 - Do not treat experience as general retrospectives; use lessons for reusable operator guidance.
-- Targeting: Resolve the experiment or evidence work to one durable task packet before writing.
-- Confirmation: Ask for task confirmation when experiment/result/claim signals do not identify one packet.
-- Outcome: Experiment artifacts, audit state, and claim bridge events are linked to the selected task.
+- Targeting: Resolve the experiment or evidence work to one task before writing.
+- Confirmation: Ask for task confirmation when the experiment, result, or claim signal does not identify one task.
+- Outcome: Experiment plans, reviewed results, and claim impact are connected to the selected task.
 
 ## Examples
 
 - `/dove:experience Design an experiment to validate retrieval quality`
-- `/dove:experience Import this experiment result and bridge it to the claim`
+- `/dove:experience Import this experiment result and connect it to the claim`
 
 ## Operating rules
 
-1. For daily answers, first use the matching Dove capability or a local Dove CLI command; do not construct default answers by using host Read, Glob, Grep, or file-list tools over saved-record files.
-2. If the Dove capability or CLI command is unavailable, say the Dove runtime is unavailable or name the skipped live check in ordinary language instead of reading or dumping saved records.
-3. If the Dove CLI exits non-zero, report that message and stop; do not recover by reading saved records with host file tools.
-4. If neither a matching Dove capability nor a documented local Dove CLI command exists for this surface, do not emulate it by reading saved records with host tools; say the Dove runtime for this command is unavailable and ask for a capability or CLI route.
-5. Treat Dove's saved project records as the source of truth through Dove capability or local CLI results; translate those results into practical operator actions instead of repeating storage details.
-6. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
-7. Only perform the governed change owned by this surface, scoped to the operator request.
-8. Use this as the combined experiment and claim workflow; do not expose separate public experiment or claim-gate slash commands.
-9. Make experiment goals, success criteria, result evidence, audit status, and claim impact explicit.
-10. Do not create a placeholder experience plan without a real goal, title, idea, or experimentId.
-11. Do not promote unsupported results into claims.
-12. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
-13. Use this shared Dove task surface across paper, engineering, experiment, review, and general missions; route concrete work through the top-level preset commands.
-14. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.
+1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check below; do not construct default answers by manually reading or listing internal files.
+2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
+3. If an explicitly listed project check fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
+4. This request has no listed project check. Do not run status, `node ./bin/dove.mjs experience --help`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the task, and the next user choice; do not explain why the tool is unavailable.
+5. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
+6. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
+7. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
+8. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
+9. Only make the specific change requested for this command; do not bundle unrelated work.
+10. Require a real experiment goal, title, idea, result, or outcome before writing.
+11. Make success criteria, result evidence, audit state, and claim impact understandable to the operator.
+12. Do not promote unsupported results into claims.
+13. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
+14. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
+15. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.

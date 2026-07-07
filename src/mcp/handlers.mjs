@@ -146,6 +146,85 @@ function compactObject(fields) {
   }));
 }
 
+const MCP_COMPACT_INTERNAL_KEY_PATTERN = /^(?:id|packetId|packetIds|taskPacketId|missionPacketId|taskId|runId|receiptId|figureId|boundaryId|boundaryType|implementationBoundaryType|implementationReason|command|copyableCommand|operatorRoute|ownerRole|nextRole|handoff|providerId|providerStatus|providerError|apiKeyEnv|artifactRefs|artifactPaths|evidencePaths|validationEvidencePaths|requiredEvidence|resultPath|qaPath|path|paths|documentPath|packetPath|packetContextPath|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|mutationMode|queueSummary|queuePreview|preActionGuidance|preActionGuidanceSummary|fullDetails|fullResult|diagnostics)$/u;
+const MCP_COMPACT_INTERNAL_TEXT_PATTERN = /\.dove\/|\bproject:dove\.[a-z0-9.-]+|--packet-id\b|\b(?:packetId|taskPacketId|missionPacketId|taskId|runId|receiptId|boundaryId|boundaryType|mutationMode|patch-plan|direct-process|ownerRole|nextRole|handoff|providerId|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|queueSummary|queuePreview|preActionGuidance|resultCard)\b|\b(?:missing-secret-env|provider-failed|host-tool-blocked|needs-host-results|awaiting-host-pass|awaiting-host-results|audio-review-[a-z-]+)\b|\b(?:query_dove_status|run_dove_auto|record_dove_mission_pass|run_figure_workflow|run_dove_operator|record_document_evidence|upsert_note|upsert_draft|register_source)\b/u;
+
+function isMcpCompactInternalKey(key) {
+  return MCP_COMPACT_INTERNAL_KEY_PATTERN.test(String(key ?? "")) || /(?:^|[A-Za-z])Ids?$/u.test(String(key ?? ""));
+}
+
+function publicCompactString(value, fallback = null) {
+  const text = normalizeString(value, null);
+  if (!text || MCP_COMPACT_INTERNAL_TEXT_PATTERN.test(text)) {
+    return fallback;
+  }
+  return text;
+}
+
+function publicCompactValue(value) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((item) => publicCompactValue(item)).filter((item) => item !== null && item !== undefined && item !== "")));
+  }
+  if (isPlainObject(value)) {
+    const entries = Object.entries(value)
+      .filter(([key]) => !isMcpCompactInternalKey(key))
+      .map(([key, item]) => [key, publicCompactValue(item)])
+      .filter(([, item]) => {
+        if (item === null || item === undefined || item === "") {
+          return false;
+        }
+        if (Array.isArray(item)) {
+          return item.length > 0;
+        }
+        if (isPlainObject(item)) {
+          return Object.keys(item).length > 0;
+        }
+        return true;
+      });
+    return compactObject(Object.fromEntries(entries));
+  }
+  if (typeof value === "string") {
+    return publicCompactString(value);
+  }
+  return value === null || value === undefined ? null : value;
+}
+
+function publicCompactObject(value) {
+  return isPlainObject(value) ? publicCompactValue(value) : null;
+}
+
+function publicCompactStringArray(values) {
+  return uniqueStrings(values).filter((value) => publicCompactString(value));
+}
+
+function publicMcpToolSurface(tool) {
+  const surfaces = {
+    query_dove_status: "status",
+    query_dove_orchestrate: "routing",
+    query_document_ledger: "evidence",
+    query_operator_lessons: "lessons",
+    create_dove_task: "mission",
+    init_dove_goal: "mission",
+    record_dove_mission_pass: "mission",
+    run_dove_auto: "auto",
+    run_dove_operator: "operator",
+    register_source: "source",
+    upsert_note: "note",
+    upsert_draft: "draft",
+    record_document_evidence: "document",
+    run_figure_workflow: "figure",
+    run_experience_workflow: "experience",
+    run_review_loop: "review",
+    run_dove_review_loop: "review-loop",
+    build_rebuttal_strategy: "rebuttal",
+    build_rebuttal: "rebuttal",
+    create_version_snapshot: "version",
+    compare_versions: "version",
+    query_dove_return: "verification"
+  };
+  return surfaces[tool] ?? (MUTATING_TOOL_NAMES.has(tool) ? "workflow" : "read-only");
+}
+
 function stripMcpControlArgs(args = {}) {
   if (!isPlainObject(args)) {
     return {};
@@ -177,16 +256,12 @@ function extractScope(data) {
   const statusScope = isPlainObject(data.statusHome?.scope) ? data.statusHome.scope : {};
   const statusContext = isPlainObject(data.statusHome?.currentContext) ? data.statusHome.currentContext : {};
   return compactObject({
-    kind: normalizeString(statusScope.kind ?? (data.figureId ? "figure" : data.packetId || data.taskPacketId || data.missionPacketId ? "task" : "workspace")),
-    packetId: normalizeString(data.packetId ?? data.taskPacketId ?? data.missionPacketId ?? data.resultCard?.packetId),
-    runId: normalizeString(data.runId ?? data.id ?? data.resultCard?.runId),
-    figureId: normalizeString(data.figureId ?? data.resultCard?.scope?.figureId),
-    domain: normalizeString(statusScope.domain ?? statusContext.domain ?? data.domain ?? data.doveDomain ?? data.missionDomain),
-    stage: normalizeString(statusScope.stage ?? statusContext.stage ?? data.stage ?? data.missionStage),
-    primaryRole: normalizeString(statusScope.primaryRole ?? statusContext.primaryRole),
-    currentFocus: normalizeString(statusContext.currentFocus ?? data.currentFocus),
-    title: normalizeString(statusContext.title ?? data.projectTitle),
-    status: extractStatus(data)
+    kind: publicCompactString(statusScope.kind ?? (data.figureId ? "figure" : data.packetId || data.taskPacketId || data.missionPacketId ? "task" : "workspace")),
+    domain: publicCompactString(statusScope.domain ?? statusContext.domain ?? data.domain ?? data.doveDomain ?? data.missionDomain),
+    stage: publicCompactString(statusScope.stage ?? statusContext.stage ?? data.stage ?? data.missionStage),
+    currentFocus: publicCompactString(statusContext.currentFocus ?? data.currentFocus),
+    title: publicCompactString(statusContext.title ?? data.projectTitle),
+    status: publicCompactString(extractStatus(data), "ok")
   });
 }
 
@@ -238,7 +313,7 @@ function extractSummary(data) {
   if (!isPlainObject(data)) {
     return "ok";
   }
-  return normalizeString(
+  return publicCompactString(
     data.summary
       ?? data.headline
       ?? data.statusHome?.headline
@@ -249,39 +324,33 @@ function extractSummary(data) {
   );
 }
 
+function publicNextStep(value) {
+  if (!isPlainObject(value)) {
+    return null;
+  }
+  return compactObject({
+    label: publicCompactString(value.label ?? value.title ?? value.summary ?? value.message),
+    why: publicCompactString(value.why ?? value.summary ?? value.reason),
+    requiredInputs: publicCompactStringArray(value.requiredInputs),
+    requiredActions: publicCompactStringArray(value.requiredActions),
+    confirmationRequired: value.confirmationRequired === true ? true : undefined
+  });
+}
+
 function extractNextStep(data) {
   if (!isPlainObject(data)) {
     return null;
   }
   const statusNextStep = isPlainObject(data.statusHome?.nextStep) ? data.statusHome.nextStep : null;
   if (statusNextStep) {
-    return compactObject({
-      label: normalizeString(statusNextStep.label),
-      why: normalizeString(statusNextStep.why),
-      command: normalizeString(statusNextStep.command),
-      copyableCommand: normalizeString(statusNextStep.copyableCommand)
-    });
+    return publicNextStep(statusNextStep);
   }
   const explicitNextStep = isPlainObject(data.nextStep) ? data.nextStep : null;
   if (explicitNextStep) {
-    return compactObject({
-      label: normalizeString(explicitNextStep.label ?? explicitNextStep.title),
-      why: normalizeString(explicitNextStep.why ?? explicitNextStep.summary),
-      command: normalizeString(explicitNextStep.command),
-      copyableCommand: normalizeString(explicitNextStep.copyableCommand ?? explicitNextStep.command)
-    });
+    return publicNextStep(explicitNextStep);
   }
   const resultCardAction = Array.isArray(data.resultCard?.nextActions) ? data.resultCard.nextActions[0] : null;
-  if (!resultCardAction) {
-    return null;
-  }
-  const command = normalizeString(resultCardAction.copyableCommand ?? resultCardAction.command);
-  return compactObject({
-    label: normalizeString(resultCardAction.title ?? resultCardAction.label ?? command),
-    why: normalizeString(resultCardAction.why ?? resultCardAction.summary),
-    command: normalizeString(resultCardAction.command ?? command),
-    copyableCommand: command
-  });
+  return publicNextStep(resultCardAction);
 }
 
 function buildChangesContract(writes) {
@@ -299,34 +368,31 @@ function extractNeedsAttention(data, operatorUnblock) {
   }
   const statusNeedsAttention = isPlainObject(data.statusHome?.needsAttention) ? data.statusHome.needsAttention : null;
   if (statusNeedsAttention) {
-    return statusNeedsAttention;
+    return publicCompactObject(statusNeedsAttention);
   }
   const explicitNeedsAttention = isPlainObject(data.needsAttention) ? data.needsAttention : null;
   if (explicitNeedsAttention) {
-    return explicitNeedsAttention;
+    return publicCompactObject(explicitNeedsAttention);
   }
   if (!operatorUnblock) {
     return null;
   }
   return compactObject({
     status: "blocked",
-    summary: operatorUnblock.summary ?? operatorUnblock.blockedSummary,
-    why: operatorUnblock.why ?? operatorUnblock.cannotContinueBecause,
-    needs: uniqueStrings(normalizeStringArray(operatorUnblock.needs ?? operatorUnblock.requiredEvidence)).slice(0, 8)
+    summary: publicCompactString(operatorUnblock.summary ?? operatorUnblock.blockedSummary),
+    why: publicCompactString(operatorUnblock.why ?? operatorUnblock.cannotContinueBecause),
+    needs: publicCompactStringArray(operatorUnblock.needs ?? operatorUnblock.requiredEvidence).slice(0, 8)
   });
 }
 
 function extractShowMore(data) {
-  if (isPlainObject(data?.statusHome?.showMore)) {
-    return data.statusHome.showMore;
-  }
-  if (isPlainObject(data?.showMore)) {
-    return data.showMore;
-  }
+  const source = isPlainObject(data?.statusHome?.showMore)
+    ? data.statusHome.showMore
+    : isPlainObject(data?.showMore)
+      ? data.showMore
+      : null;
   return {
-    text: "Pass resultMode: full or resultMode: debug to include fullResult.",
-    full: { resultMode: "full" },
-    debug: { resultMode: "debug" }
+    text: publicCompactString(source?.text, "Ask for full details or diagnostics only when you need the audit view.")
   };
 }
 
@@ -335,7 +401,7 @@ function buildMcpResultContract(tool, resultMode, data, args = {}) {
   const operatorUnblock = buildOperatorUnblock(data);
   return compactObject({
     presentation: "dove-mcp-result-contract",
-    tool,
+    tool: publicMcpToolSurface(tool),
     resultMode,
     summary: extractSummary(data),
     scope: extractScope(data),
