@@ -56,6 +56,8 @@ async function main() {
     "query_dove_orchestrate",
     "query_document_ledger",
     "query_operator_lessons",
+    "search_network",
+    "query_network_search_providers",
     "create_dove_task",
     "run_dove_auto",
     "run_dove_operator",
@@ -84,6 +86,8 @@ async function main() {
     "query_workspace_index",
     "query_meta_optimize",
     "query_governance_coverage_report",
+    "search_network",
+    "query_network_search_providers",
     "query_dove_orchestrate",
     "query_dove_mission",
     "query_dove_mission_board",
@@ -127,6 +131,12 @@ async function main() {
   await callReadOnlyTool("read_state");
   await callReadOnlyTool("query_workspace_index");
   await callReadOnlyTool("query_governance_coverage_report");
+  const providerStatus = await callReadOnlyTool("query_network_search_providers");
+  assert.ok(Array.isArray(providerStatus.providers), "Expected network search provider status list");
+  assertNoWrites(providerStatus, "query_network_search_providers");
+  const searchStatus = await callReadOnlyTool("search_network", { query: "dove doctor public web status", kind: "web" });
+  assert.equal(searchStatus.status, "blocked");
+  assertNoWrites(searchStatus, "search_network");
   const parsed = await callReadOnlyTool("query_meta_optimize");
   assert.equal(parsed.proposalOnly, true);
   assert.ok(Array.isArray(parsed.clusters), "Expected grouped optimizer clusters");

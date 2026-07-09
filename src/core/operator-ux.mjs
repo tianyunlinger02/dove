@@ -222,7 +222,7 @@ const routeByTool = {
   query_dove_orchestrate: ["read-only-routing", "query_dove_orchestrate", "把自然语言意图路由到下一步 Dove 工具。", "Route a natural-language intent to the next Dove tool."],
   query_document_ledger: ["read-only-query", "query_document_ledger", "查看已登记 evidence/document ledger。", "Inspect registered evidence/document ledger entries."],
   query_operator_lessons: ["read-only-query", "query_operator_lessons", "查看显式沉淀的 operator lessons。", "Inspect explicitly recorded operator lessons."],
-  create_dove_task: ["one-pass-mission", "create_dove_task", "把较大或模糊请求变成可确认的 mission contract。", "Turn a larger or ambiguous request into a confirmable mission contract."],
+  create_dove_task: ["mission-contract", "create_dove_task", "把较大或模糊请求变成可确认的 mission contract 并交接后续流程。", "Turn a larger or ambiguous request into a confirmable mission contract and hand off the next workflow."],
   run_dove_auto: ["bounded-auto-loop", "run_dove_auto", "确认后运行有预算的前台多步推进。", "Run a confirmed bounded foreground multi-step pass."],
   run_dove_operator: ["operator-queue-pass", "run_dove_operator", "确认后协调 ready/in-progress 队列。", "Coordinate ready/in-progress queue items after confirmation."],
   register_source: ["quick-path", "register_source", "已有可验证来源时，直接登记 source provenance。", "Register source provenance directly when verifiable source material is present."],

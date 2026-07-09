@@ -303,7 +303,7 @@ async function main() {
   const toolByName = new Map(listed.tools.map((tool) => [tool.name, tool]));
   const descriptionChecks = {
     query_dove_status: ["summary/headline", "nextStep", "needsAttention", "changes", "showMore", "one recommended action", "resultMode: full/debug", "statusHome.durableContextNotice", "mutationRollbackModel", "patch-plan plus host-tracked file-edit requirements", "host checkpoint verification limits", "unverified direct-process writes", "not git detection", "not direct-process", "not reset_dove_version", "statusHome.preActionGuidance", "automatic read-only lesson recall", "Planner/Builder/Reviewer role framing", "must not render a Missions panel", "blocked counts", "execution-gap counts", "required-evidence blocks", "requestStatusAdjustment"],
-    create_dove_task: ["preActionGuidance", "mission is a durable work/progress object", "bounded foreground mission pass"],
+    create_dove_task: ["preActionGuidance", "mission is a durable work/progress object", "recommended handoff routes", "without executing or recording a pass"],
     record_dove_mission_pass: ["host-tool-blocked", "visibly blocked"],
     run_dove_auto: ["preActionGuidance", "host-tool-blocked", "no hidden continuation", "scheduler", "daemon"],
     run_dove_operator: ["planner preActionGuidance", "host-tool-blocked", "read-only lesson recall", "no scheduler or hidden runtime"],
@@ -376,7 +376,8 @@ async function main() {
   assert.deepEqual(missionProposal.writes, []);
   assert.equal(missionProposal.confirmationRequired, true);
   assert.equal(missionProposal.demandConversion, true);
-  assert.equal(missionProposal.executionMode, "single-foreground-pass");
+  assert.equal(missionProposal.executionMode, "contract-handoff");
+  assert.equal(missionProposal.workflowMode, "mission-contract");
   assert.equal(missionProposal.proposedTask.level, 3);
   assert.equal(missionProposal.confirmArgs.confirmed, true);
   assert.equal(missionProposal.taskCard.presentation, "compact-task-card");
@@ -393,14 +394,18 @@ async function main() {
   const mission = await callTool("create_dove_task", {
     ...missionProposal.confirmArgs
   });
-  assert.equal(mission.status, "created-awaiting-host-pass");
+  assert.equal(mission.status, "materialized");
   assert.equal(mission.confirmationRequired, false);
   assert.equal(mission.demandConversion, true);
-  assert.equal(mission.executionMode, "single-foreground-pass");
-  assert.equal(mission.missionPassRequired, true);
-  assert.equal(mission.recordMissionPassTool, "record_dove_mission_pass");
-  assert.equal(mission.foreground, true);
+  assert.equal(mission.executionMode, "contract-handoff");
+  assert.equal(mission.workflowMode, "mission-contract");
+  assert.equal(mission.contractMaterialized, true);
+  assert.equal("missionPassRequired" in mission, false);
+  assert.equal("recordMissionPassTool" in mission, false);
+  assert.equal("result" in mission, false);
+  assert.equal(mission.foreground, false);
   assert.equal(mission.background, false);
+  assert.ok(Array.isArray(mission.handoffRoutes) && mission.handoffRoutes.length > 0);
   assert.equal(mission.createdTask.level, 3);
   requirePreActionGuidanceSummary(mission.preActionGuidanceSummary, { surface: "dove.mission", primaryRole: "planner" });
   assert.equal(mission.createdTask.creatorKind, "user");
@@ -415,7 +420,7 @@ async function main() {
     packetId,
     runId: "validator-mission-pass",
     resultStatus: "in-progress",
-    resultSummary: "Validator mission converted demand into a task and completed one foreground pass.",
+    resultSummary: "Explicit validator work happened after mission materialization and now records a result.",
     evidenceLinks: [".dove/task-packets/index.json"],
     artifactRefs: [".dove/task-packets/index.json"],
     nextAction: "project:dove.status"

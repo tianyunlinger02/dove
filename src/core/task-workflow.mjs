@@ -1432,6 +1432,7 @@ function materializeDoveTask(root, contract) {
       nextAction: packet.nextAction
     }
   });
+  const handoffRoutes = packet.workContract?.recommendedRoutes ?? [];
   return {
     createdInit: proposedInit,
     initMaterializationRequired: proposedInit !== null,
@@ -1444,7 +1445,10 @@ function materializeDoveTask(root, contract) {
     workContract: packet.workContract,
     executionContract: packet.executionContract,
     executionReadiness: doveExecutionContractReadiness(packet.executionContract),
+    nextAction: packet.nextAction,
     recommendedNextCommand: packet.nextAction,
+    recommendedRoutes: handoffRoutes,
+    handoffRoutes,
     applicableLessons,
     responseLanguage,
     taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex
@@ -1697,6 +1701,7 @@ export function createDoveTask(root, args = {}) {
   ensureWorkspace(root);
   const contract = buildDoveTaskContract(root, args);
   const { packet, checklistProposal, classification, blockers, applicableLessons, responseLanguage, proposedInit, initMaterializationRequired } = contract;
+  const handoffRoutes = packet.workContract?.recommendedRoutes ?? [];
   if (!hasExplicitConfirmation(args)) {
     const preActionGuidance = preActionGuidanceForTask(root, "dove.mission", packet, {
       request: requestTextFromArgs(args),
@@ -1711,7 +1716,8 @@ export function createDoveTask(root, args = {}) {
       writes: [],
       confirmationRequired: true,
       demandConversion: true,
-      executionMode: "single-foreground-pass",
+      workflowMode: "mission-contract",
+      executionMode: "contract-handoff",
       initMaterializationRequired,
       proposedInit,
       proposedTask: packet,
@@ -1723,7 +1729,10 @@ export function createDoveTask(root, args = {}) {
       classification,
       blockers,
       evidenceExpectations: packet.evidenceExpectations,
+      nextAction: packet.nextAction,
       recommendedNextCommand: packet.nextAction,
+      recommendedRoutes: handoffRoutes,
+      handoffRoutes,
       checklistProposal,
       applicableLessons,
       confirmArgs: {
@@ -1765,41 +1774,20 @@ export function createDoveTask(root, args = {}) {
     nextAction: materialized.createdTask.nextAction,
     workflowKind: "mission"
   }, responseLanguage);
-  const recordMissionPassArgs = {
-    packetId: materialized.createdTask.id,
-    runId: normalizeTaskPacketId(args.runId ?? `mission-${materialized.createdTask.id}-${Date.now().toString(36)}`)
-  };
-  const baseResult = {
+  return {
+    status: "materialized",
     confirmationRequired: false,
     demandConversion: true,
-    executionMode: "single-foreground-pass",
-    foreground: true,
+    workflowMode: "mission-contract",
+    executionMode: "contract-handoff",
+    contractMaterialized: true,
+    foreground: false,
     background: false,
     daemon: false,
-    recordMissionPassTool: "record_dove_mission_pass",
-    recordMissionPassArgs,
     preActionGuidanceSummary,
     message: doveText(responseLanguage, "createTaskMaterializedMessage"),
     responseLanguage,
     ...materialized
-  };
-  if (hasMissionPassEnvelope(args)) {
-    const missionPass = recordDoveMissionPass(root, missionPassArgsForTask(materialized.createdTask, args));
-    return {
-      ...baseResult,
-      status: "pass-recorded",
-      missionPassRequired: false,
-      missionPass,
-      task: missionPass.task,
-      result: missionPass.result,
-      resultCard: missionPass.resultCard,
-      nextAction: missionPass.nextAction
-    };
-  }
-  return {
-    ...baseResult,
-    status: "created-awaiting-host-pass",
-    missionPassRequired: true
   };
 }
 
@@ -1937,21 +1925,6 @@ function missionPassPayload(args = {}) {
 
 function nonEmptyArrayField(value) {
   return Array.isArray(value) && value.length > 0;
-}
-
-function hasMissionPassEnvelope(args = {}) {
-  const payload = missionPassPayload(args);
-  if (Object.keys(plainObject(args.missionPass ?? args.passResult ?? args.result)).length > 0) {
-    return true;
-  }
-  if ([payload.resultStatus, payload.taskStatus, payload.missionStatus, payload.resultSummary, payload.outcome, payload.stopReason].some((value) => typeof value === "string" && value.trim())) {
-    return true;
-  }
-  if (payload.completeTask === true || payload.complete === true || payload.completeOnSuccess === true || payload.blocked === true) {
-    return true;
-  }
-  return [payload.evidenceLinks, payload.evidencePaths, payload.validationEvidencePaths, payload.verificationEvidencePaths, payload.verifiedCriteria, payload.plannedMissions, payload.resultingMissions, payload.missions, payload.childMissions].some(nonEmptyArrayField)
-    || Object.keys(plainObject(payload.planConversion)).length > 0;
 }
 
 function hasPlanMissionOutput(args = {}) {
@@ -2109,15 +2082,6 @@ function buildExecutionReceipt({ payload = {}, taskBefore = {}, taskAfter = {}, 
     criteriaCoverage,
     boundary
   });
-}
-
-function missionPassArgsForTask(task, args = {}) {
-  const payload = missionPassPayload(args);
-  return {
-    ...payload,
-    packetId: task.id,
-    runId: normalizeTaskPacketId(payload.runId ?? args.runId ?? `mission-${task.id}-${Date.now().toString(36)}`)
-  };
 }
 
 export function recordDoveMissionPass(root, args = {}) {
@@ -4361,11 +4325,6 @@ export function runDoveAuto(root, args = {}) {
       safeToRun: autoPlan.safeToRun,
       requiresHostPass: autoPlan.requiresHostPass,
       whyThisStep: autoPlan.whyThisStep,
-      recordMissionPassTool: "record_dove_mission_pass",
-      recordMissionPassArgs: {
-        packetId: task.id,
-        runId: normalizeTaskPacketId(`mission-${task.id}-${Date.now().toString(36)}`)
-      },
       nextAction: task.nextAction
     };
   }

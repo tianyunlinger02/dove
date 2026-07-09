@@ -12,6 +12,8 @@ Dove is a local-first task workflow system for paper, experiment, engineering, r
 - **Runtime events/results** under `.dove/runtime/` append foreground transitions, stop reasons, and resumable continuation hints.
 - **Lessons** under `.dove/meta/operator-lessons.json` preserve explicit reusable experience without importing raw runtime traces.
 
+Dove should advance the work, not replace it with workflow ceremony. A useful pass produces or inspects a substantive artifact such as literature synthesis, experiment execution, baseline comparison, result interpretation, claim-boundary stress testing, draft text, review findings, or verified code/test evidence; task packets, receipts, validators, and evidence ledgers record that progress after it exists.
+
 ## Public commands
 
 Dove exposes one flat public command surface:
@@ -19,7 +21,7 @@ Dove exposes one flat public command surface:
 | Command | Use it for |
 | --- | --- |
 | `project:dove.init` | Create or update the single project-level goal, represented as the unique level-0 task. |
-| `project:dove.mission` | Convert a natural-language demand into a durable work contract with scope, deliverables, evidence, done criteria, and recommended next routes; after approval, materialize it and run one bounded foreground pass. |
+| `project:dove.mission` | Convert a natural-language demand into a durable work contract with scope, deliverables, evidence, done criteria, and recommended next routes; after approval, materialize it and hand off to the recommended next workflow. |
 | `project:dove.auto` | Convert demand or select a task with compact task/auto cards; after approval, run bounded multi-round foreground iterations until completion, a boundary, or the configured limit. |
 | `project:dove.status` | Answer “what should I do next?” with one-sentence state, one recommended action, and explicit mission/full/debug expansion paths. |
 | `project:dove.operator` | Preview compact queue cards, then run one confirmed foreground pass over ready/in-progress work and blocker-investigation planning. |
@@ -40,7 +42,7 @@ Older router, checklist, plan, audit, return, follow-through, onboarding, govern
 
 1. Install Dove and run `dove doctor` to check the package, adapters, MCP entrypoint, and workspace artifacts.
 2. Pick the syntax for your host. The canonical command id is `dove.mission`; Claude Code users should have one user-level `/dove:mission` entrypoint, while OpenCode users commonly see project adapters as `project:dove.mission`.
-3. Start with a real demand, not a command inventory. For engineering work, use `/dove:mission 修复 doctor 报错并运行相关验证`; Dove should propose a task contract, ask for confirmation, then record the foreground pass result or persist a clear boundary for missing host evidence. If no init goal exists, the same confirmation should show the proposed init and task before writing either one.
+3. Start with a real demand, not a command inventory. For engineering work, use `/dove:mission 修复 doctor 报错并运行相关验证`; Dove should propose a task contract, ask for confirmation, then materialize the contract and hand off to the recommended next workflow. If no init goal exists, the same confirmation should show the proposed init and task before writing either one.
 4. Use presets inside a selected or newly created task: `/dove:figure 画 pipeline overview`, `/dove:draft 修改 introduction`, or `/dove:experience 规划并记录 ablation 结果`. Presets should resolve one durable task packet or ask for confirmation instead of silently guessing.
 5. Use `/dove:status` as the default read-only “what next?” surface. The default CLI/human view is intentionally small: `Dove:` says the current state in one sentence, `Next:` gives exactly one recommended action, `Why:` explains why that action matters, and `More:` points to `--missions`, `--json`, or `--full --json` when you want task or governance detail. The terminal `dove status` command prints the same four-line view by default; `dove status --missions` expands mission details with a `Priority lane`, then a compact `Queue summary` and short `Queue preview` instead of dumping the whole backlog. Use `--full --json` when you need the complete machine-readable mission list. `dove status --json` or `dove status --format json` returns compact JSON with `headline`, `nextStep`, `needsAttention`, `changes`, and `showMore`, while `dove status --full --json` or `dove status --detail full --json` returns the full machine-readable dashboard. Use `dove statusline .` for terminal status bars that need a one-line read-only mission summary.
 6. Use `/dove:operator` when you want to preview and run one foreground pass over queued work; it must not claim host work happened without pass results or a safe internal workflow step.
@@ -62,14 +64,14 @@ The output includes `open`, `todo`, `doing`, and `blocked` mission counts. It in
 Dove treats work as a tree rooted at one init task:
 
 - There is exactly one level-0 init task.
-- `/dove:mission` first converts the operator's natural-language demand into a proposal-only durable work contract with a compact task card. The contract names the purpose, in-scope deliverables, out-of-scope boundaries, evidence contract, done criteria, practical impact, and ranked recommended routes with copyable packet-target commands. When the host supports interactive confirmation controls, the operator chooses approve conversion and run one pass, adjust conversion, or cancel before anything is materialized into `.dove/task-packets/`.
+- `/dove:mission` first converts the operator's natural-language demand into a proposal-only durable work contract with a compact task card. The contract names the purpose, in-scope deliverables, out-of-scope boundaries, evidence contract, done criteria, practical impact, and ranked recommended routes with copyable packet-target commands. When the host supports interactive confirmation controls, the operator chooses approve and materialize the contract, adjust conversion, or cancel before anything is materialized into `.dove/task-packets/`.
 - `/dove:init` is the only level-0 creation path; `/dove:mission` creates work under that root.
 - User-created mission tasks default to level 3 and may explicitly use level 1, 2, 3, or deeper when the operator supplies a level.
 - `/dove:mission` can autonomously propose checklist/subtask packets, but they are materialized only after the same conversion approval as the parent mission.
 - System-created checklist/subtask packets are children of their mission and must have `level > parent.level`, so they are always deeper than the user task they serve.
-- After approval, `/dove:mission` immediately performs one bounded foreground pass and records its task status, evidence, blockers, and next action with `record_dove_mission_pass`.
+- After approval, `/dove:mission` only materializes the contract and returns recommended next routes; it does not record execution results.
 - After a packet exists, `/dove:status` should route continuation to `/dove:auto --packet-id <id>` or a domain workflow such as `/dove:draft`, `/dove:source`, `/dove:note`, `/dove:experience`, `/dove:figure`, or `/dove:review`; `/dove:mission` is for converting a new demand into a contract, not for repeatedly continuing an existing packet.
-- When a completed mission pass has stage `plan`, Dove converts only explicit `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion` output into pending durable missions. Every plan-derived mission must include an executable `executionContract` with `action`, `implementation`, `convergence.criteria`, and `failureRoutes`; missing or non-executable child output is rejected as a boundary instead of being inferred from the parent title.
+- When later execution records a completed planning result, Dove converts only explicit `plannedMissions`, `resultingMissions`, `missions`, `childMissions`, or `planConversion` output into pending durable missions. Every plan-derived mission must include an executable `executionContract` with `action`, `implementation`, `convergence.criteria`, and `failureRoutes`; missing or non-executable child output is rejected as a boundary instead of being inferred from the parent title.
 - `/dove:status` uses the default compact `statusHome` result as a human translation layer: `headline`, one `nextStep`, `needsAttention`, `changes`, and `showMore`. It should not make ordinary users read packet ids, mission lists, boundary/gap codes, blocked counts, execution-gap counts, or required-evidence blocks before they know the single next action. Mission details remain optional/collapsed and should be expanded only when the operator explicitly asks to inspect current missions; hosts should not request `detail: "full"` or read a saved full status result file unless the operator explicitly asks to expand/debug details. Hosts should ask at most one confirmation dialog with compact adjustment cards only when status changes are requested or clearly actionable, do nothing when the dialog does not provide clear `packetId -> status` adjustments, then call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
 - Boundary types such as `awaiting-host-pass`, `needs-review`, and `awaiting-provider-output` are first-class metadata, not task statuses. They keep the current machine status coarse while recording required inputs/actions, `ownerRole`, `nextRole`, and optional `handoff` metadata.
 - `/dove:operator` previews compact cards for auto-runnable, host-pass-required, blocked, and pending queues before confirmation. Confirmed runs execute only safe internal steps, record explicit host-supplied task results, or create pending plan missions for blocked-task investigation; host-pass-required tasks without `taskResults` remain unchanged and return the required evidence/actions instead of pretending execution happened.
@@ -95,11 +97,41 @@ Important durable surfaces include:
 - `.dove/runtime/events.json` — append-only lifecycle, boundary, handoff, and workflow events.
 - `.dove/runtime/continuation.json` — explicit next-command hints for later foreground invocations.
 - `.dove/mutations/index.json` — mutation provenance and rollback eligibility metadata; it records patch-plan/direct-process source facts and is not a restore ledger.
-- `.dove/config.json`, `.dove/config.local.json`, `DOVE_CONFIG_PATH`, `DOVE_LANGUAGE`, and `DOVE_FIGURE_*` overrides — response-language, provider, and status-serving configuration; provider/API/tunnel secrets should be referenced through environment-variable names such as `apiKeyEnv`.
+- `.dove/config.json`, `.dove/config.local.json`, `DOVE_CONFIG_PATH`, `DOVE_LANGUAGE`, and `DOVE_FIGURE_*` overrides — response-language, figure provider, public network search, and status-serving configuration. Figure/status provider secrets should be referenced through environment-variable names such as `apiKeyEnv` or `tokenEnv`; `networkSearch` is public no-key only and rejects credential fields such as `apiKey`, `token`, `Authorization`, `headers`, or `apiKeyEnv`.
 
 For OpenAI image generation, explicitly select the built-in provider with `providerId: "gpt-image2"` or `DOVE_FIGURE_PROVIDER_ID=gpt-image2`. Dove uses model `gpt-image-2`, reads the API key from `OPENAI_API_KEY`, writes the returned raster image under `.dove/figures/runs/<runId>/`, wraps it in a local SVG for the existing import/QA pipeline, and never stores inline API keys in `.dove/config*.json`.
 
 Commands and skills provide behavior, but there is no hidden scheduler or swarm runtime. Optional MCP helpers mutate files deterministically; they do not replace `.dove/` as the source of truth.
+
+## Network search
+
+Dove includes read-only MCP search helpers for everyday external checking and scholarly discovery. They are not exposed as a separate slash command: source, note, auto, mission, draft, experience, and review workflows can use them when current outside information matters.
+
+- `search_network` runs a bounded foreground search over public no-key providers and returns candidate materials only.
+- `query_network_search_providers` reports which public no-key providers are available or unavailable.
+- Default scholarly providers are OpenAlex, Crossref, arXiv, and Europe PMC. The generic `public-web` provider is intentionally reported as unavailable until Dove has a stable no-key web search provider; Dove should not pretend a commercial/keyed provider exists.
+- Search does not write `.dove/` and does not make evidence. Verify each useful candidate's title, locator, DOI/URL, source identity, and provenance before calling source workflows.
+- Use source to register verified external material, note or document evidence to synthesize the findings, and claims only after they cite registered sources or reviewed experiment results. A search snippet by itself must not become a claim.
+- Provider failures, unavailable providers, zero results, or blocked retrieval are visible blockers. Dove should change query/retrieval strategy or stop with a clear next action instead of marking the research done.
+
+Workspace config can disable or narrow public search without adding credentials:
+
+```json
+{
+  "networkSearch": {
+    "enabled": true,
+    "defaultProviderIds": ["openalex", "crossref", "arxiv", "europe-pmc"],
+    "disabledProviderIds": [],
+    "timeoutMs": 12000,
+    "maxResults": 8,
+    "providerSettings": {
+      "openalex": { "enabled": true, "timeoutMs": 3000 }
+    }
+  }
+}
+```
+
+Do not put API keys, bearer tokens, Authorization headers, password fields, or `apiKeyEnv` under `networkSearch`; this surface is intentionally limited to directly public providers.
 
 ## Global public status and Cloudflare serving
 
@@ -161,11 +193,11 @@ Set the workspace preference in `.dove/config.json` or `.dove/config.local.json`
 
 ### Source
 
-Use `project:dove.source` to organize external information and provenance. Network/provider calls must be explicit or safely configured; Dove records durable source metadata rather than trusting memory.
+Use `project:dove.source` to organize external information and source details. When current public information or scholarly material is needed, first use public no-key network search or visible retrieval to find candidates, then register only verified material. Network/provider calls must be explicit or safely configured; Dove records durable source metadata rather than trusting memory.
 
 ### Note
 
-Use `project:dove.note` to consolidate internal information from the repository, existing `.dove/` artifacts, notes, drafts, and review outputs.
+Use `project:dove.note` to consolidate internal information from the repository, existing `.dove/` artifacts, notes, drafts, review outputs, verified sources, and explicitly labeled search candidates or open questions.
 
 ### Experience
 
@@ -210,7 +242,7 @@ Lessons may be global or task-bound. When multiple tasks exist, Dove should pres
 
 `project:dove.auto` uses the same demand-to-task intake as `project:dove.mission`: it returns a proposal-only auto contract with compact task/auto cards for either a converted `proposedTask` or a selected durable `selectedTask`, classifies the request, reports applicable lessons, and requires explicit confirmation before task creation/selection proceeds into autonomous execution. When task selection is missing or ambiguous, hosts should present indexed choices through confirmation UX instead of guessing.
 
-After confirmation, auto may internally call top-level Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status. It runs only inside the current foreground call, records each iteration in `.dove/runtime/results.json`, and uses `.dove/state.json.settings.auto.maxIterations` as the default limit; the default is 3.
+After confirmation, auto may internally call top-level Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status. When the work depends on current outside information, provider/tool behavior, papers, or public documents, auto should run a visible public no-key search or retrieval step early, verify candidates, and then deposit verified sources plus synthesis rather than treating candidate snippets as evidence. It runs only inside the current foreground call, records each iteration in `.dove/runtime/results.json`, and uses `.dove/state.json.settings.auto.maxIterations` as the default limit; the default is 3.
 
 It stops at completed, blocked, killed, review/authority boundary, missing provider credentials, conflicting task target, or step-budget exhaustion. When it stops because work cannot safely continue, it writes an explicit boundary instead of pretending host/code/provider work happened. If the response ends before the task is complete, Dove does not secretly continue in the background; the next operator action must invoke another foreground command.
 
@@ -232,6 +264,8 @@ Default `tools/list` discovery returns a compact operator surface rather than ev
 - `query_dove_orchestrate`
 - `query_document_ledger`
 - `query_operator_lessons`
+- `search_network`
+- `query_network_search_providers`
 - `create_dove_task`
 - `run_dove_auto`
 - `run_dove_operator`

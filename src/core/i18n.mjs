@@ -107,12 +107,12 @@ const TEXT = {
     en: "Run project:dove.mission to create the next task under the init goal."
   },
   createTaskConfirmMessage: {
-    zh: "请先批准这份需求到任务的任务契约，然后 Dove 才会将其物化并运行一次有边界的前台执行。",
-    en: "Approve this demand-to-task mission contract before Dove materializes it and runs one bounded foreground pass."
+    zh: "请先批准这份需求到任务的任务契约；批准后 Dove 只会物化合同并交接推荐的后续流程。",
+    en: "Approve this demand-to-task mission contract before Dove materializes it and hands off to the recommended next workflow."
   },
   createTaskMaterializedMessage: {
-    zh: "已批准的需求到任务契约已经物化。现在执行一次有边界的前台任务，然后记录任务执行结果。",
-    en: "The approved demand-to-task mission contract is materialized. Execute one bounded foreground pass now, then record the mission pass result."
+    zh: "已批准的需求到任务契约已经物化。请沿推荐路线继续推进真实工作；mission 本身不记录执行结果。",
+    en: "The approved demand-to-task mission contract is materialized. Continue through the recommended route; mission itself does not record execution results."
   },
   workContractPurpose: {
     zh: ({ title, stage, domain }) => `把“${title}”转成可执行、可验证、可续接的 ${stage}/${domain} 工作合同。`,

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { configureClaudeCodeGatewayDefaults, inspectClaudeCodeGatewayDefaults, resolveClaudeConfigRoot, resolveClaudeShellStartupFile } from "../src/core/claude-code-gateway.mjs";
 import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, refreshDurableSurfaces, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runFigureWorkflow, runGlobalStatusServingForeground, runIsolatedReview, runWithMutationContext } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
@@ -251,10 +251,6 @@ function resolveOptionalTargetAndRest(rawTarget, rest = []) {
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
-}
-
-function resolveClaudeConfigRoot() {
-  return path.resolve(process.env.DOVE_CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"));
 }
 
 function shouldSkipCopy(relativePath) {
@@ -656,8 +652,8 @@ function formatDoveMissionForCli(result) {
     lines.push(responseLanguage === "en" ? `Current focus: ${goal}` : `当前关注：${goal}`);
   }
   lines.push(responseLanguage === "en"
-    ? "Next: propose the task in plain language, name the evidence it needs, and wait for approval. After approval, run one foreground pass only."
-    : "下一步：用人话给出任务草案，说明需要哪些证据，然后等确认；确认后也只跑一轮。");
+    ? "Next: propose the task in plain language, name the evidence it needs, and wait for approval. After approval, materialize the contract and hand off to the recommended workflow."
+    : "下一步：用人话给出任务草案，说明需要哪些证据，然后等确认；确认后只物化合同并交接推荐流程。");
   lines.push(responseLanguage === "en"
     ? "If materials are missing, stop and say exactly what needs to be supplied. Ask for JSON only when you need the full governance detail."
     : "如果缺材料，就停下来说明要补什么；只有需要完整治理细节时才要求 JSON。接下来可以直接给任务草案，不要输出内部字段。");
@@ -881,6 +877,7 @@ function installOrSync(target, force, args = []) {
   const copiedCorePaths = [];
   const copiedHostPaths = [];
   const copiedUserHostPaths = [];
+  let claudeCodeGateway = null;
 
   for (const relativePath of installPaths.corePaths) {
     const source = path.join(PACKAGE_ROOT, relativePath);
@@ -902,19 +899,22 @@ function installOrSync(target, force, args = []) {
 
   if (installPaths.userHosts.includes("claude")) {
     const claudeConfigRoot = resolveClaudeConfigRoot();
+    const shellStartupFile = resolveClaudeShellStartupFile();
     for (const relativePath of writeClaudeUserCommandAdapters(claudeConfigRoot)) {
       copiedUserHostPaths.push({ host: "claude", path: relativePath, root: claudeConfigRoot });
     }
+    claudeCodeGateway = configureClaudeCodeGatewayDefaults({ claudeConfigRoot, shellStartupFile });
   }
 
   ensureWorkspace(target);
-  const copied = [...copiedCorePaths, ...copiedHostPaths.map((item) => item.path), ...copiedUserHostPaths.map((item) => `claude:${item.path}`), ".dove/* (bootstrap only, user-owned state preserved)"];
+  const copied = [...copiedCorePaths, ...copiedHostPaths.map((item) => item.path), ...copiedUserHostPaths.map((item) => `claude:${item.path}`), ...(claudeCodeGateway ? ["claude:code-gateway-defaults"] : []), ".dove/* (bootstrap only, user-owned state preserved)"];
   return {
     target,
     copied,
     copiedCorePaths,
     copiedHostPaths,
     copiedUserHostPaths,
+    claudeCodeGateway,
     skippedUnsafePaths: Array.from(new Set(skippedUnsafePaths)).sort(),
     hosts,
     force,
@@ -2095,6 +2095,10 @@ function detectInstalledHosts(target) {
   return detected.length > 0 ? detected : DEFAULT_HOST_ADAPTERS;
 }
 
+function shouldInspectClaudeCodeGatewayDefaults(preflight) {
+  return Boolean(process.env.DOVE_CLAUDE_CONFIG_DIR || process.env.DOVE_CLAUDE_SHELL_RC || preflight?.shell?.hasManagedBlock);
+}
+
 function doctor(target) {
   const boundariesPath = path.join(target, ".dove", "workflow-pack", "boundaries.json");
   const installedHosts = detectInstalledHosts(target);
@@ -2123,6 +2127,7 @@ function doctor(target) {
     checks: [],
     warnings: [],
     hostAdapters: installedHosts,
+    claudeCodeGateway: null,
     boundaryPolicy: null,
     managedArtifacts: null
   };
@@ -2148,6 +2153,20 @@ function doctor(target) {
       check: `host-adapter:${host}`,
       ok: requiredPaths.every((relativePath) => fs.existsSync(path.join(target, relativePath))),
       requiredPaths
+    });
+  }
+
+  const claudeConfigRoot = resolveClaudeConfigRoot();
+  const shellStartupFile = resolveClaudeShellStartupFile();
+  const claudeGatewayPreflight = inspectClaudeCodeGatewayDefaults({ claudeConfigRoot, shellStartupFile });
+  if (shouldInspectClaudeCodeGatewayDefaults(claudeGatewayPreflight)) {
+    result.claudeCodeGateway = claudeGatewayPreflight;
+    result.checks.push({
+      check: "claude-code-gateway",
+      ok: claudeGatewayPreflight.ok,
+      message: claudeGatewayPreflight.ok
+        ? "Claude Code gateway defaults are configured"
+        : claudeGatewayPreflight.issues.join(" | ")
     });
   }
 

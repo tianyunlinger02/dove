@@ -27,7 +27,7 @@ export function startServer(root = process.cwd()) {
     sendMessage({ jsonrpc: "2.0", id, error: { code, message } });
   }
 
-  function handleMessage(message) {
+  async function handleMessage(message) {
     const { id, method, params } = message ?? {};
 
     if (method === "notifications/initialized") {
@@ -54,7 +54,7 @@ export function startServer(root = process.cwd()) {
     }
 
     if (method === "tools/call") {
-      sendResponse(id, dispatchTool(root, params?.name, params?.arguments ?? {}));
+      sendResponse(id, await dispatchTool(root, params?.name, params?.arguments ?? {}));
       return;
     }
 
@@ -64,11 +64,17 @@ export function startServer(root = process.cwd()) {
   }
 
   function handleJsonText(body) {
+    let message;
     try {
-      handleMessage(JSON.parse(body));
+      message = JSON.parse(body);
     } catch {
-      // ignore malformed inbound messages
+      return;
     }
+    handleMessage(message).catch(() => {
+      if (message?.id !== undefined) {
+        sendError(message.id, -32603, "Internal error");
+      }
+    });
   }
 
   function parseContentLengthMessage() {

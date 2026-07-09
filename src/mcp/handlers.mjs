@@ -46,6 +46,7 @@ import {
   queryPaperPipeline,
   queryProgramApprovals,
   queryCampaigns,
+  queryNetworkSearchProviders,
   queryTaskGraph,
   queryWorkspaceIndex,
   readActionContextBundle,
@@ -62,6 +63,7 @@ import {
   registerSource,
   resetDoveVersion,
   revokeProgramApproval,
+  searchNetwork,
   runAudioReview,
   runDoveAuto,
   runDoveOperator,
@@ -203,9 +205,11 @@ function publicMcpToolSurface(tool) {
     query_dove_orchestrate: "routing",
     query_document_ledger: "evidence",
     query_operator_lessons: "lessons",
+    search_network: "search",
+    query_network_search_providers: "search",
     create_dove_task: "mission",
     init_dove_goal: "mission",
-    record_dove_mission_pass: "mission",
+    record_dove_mission_pass: "result-recording",
     run_dove_auto: "auto",
     run_dove_operator: "operator",
     register_source: "source",
@@ -254,14 +258,15 @@ function extractScope(data) {
     return null;
   }
   const statusScope = isPlainObject(data.statusHome?.scope) ? data.statusHome.scope : {};
+  const explicitScope = isPlainObject(data.scope) ? data.scope : {};
   const statusContext = isPlainObject(data.statusHome?.currentContext) ? data.statusHome.currentContext : {};
   return compactObject({
-    kind: publicCompactString(statusScope.kind ?? (data.figureId ? "figure" : data.packetId || data.taskPacketId || data.missionPacketId ? "task" : "workspace")),
-    domain: publicCompactString(statusScope.domain ?? statusContext.domain ?? data.domain ?? data.doveDomain ?? data.missionDomain),
-    stage: publicCompactString(statusScope.stage ?? statusContext.stage ?? data.stage ?? data.missionStage),
-    currentFocus: publicCompactString(statusContext.currentFocus ?? data.currentFocus),
-    title: publicCompactString(statusContext.title ?? data.projectTitle),
-    status: publicCompactString(extractStatus(data), "ok")
+    kind: publicCompactString(statusScope.kind ?? explicitScope.kind ?? (data.figureId ? "figure" : data.packetId || data.taskPacketId || data.missionPacketId ? "task" : "workspace")),
+    domain: publicCompactString(statusScope.domain ?? explicitScope.domain ?? statusContext.domain ?? data.domain ?? data.doveDomain ?? data.missionDomain),
+    stage: publicCompactString(statusScope.stage ?? explicitScope.stage ?? statusContext.stage ?? data.stage ?? data.missionStage),
+    currentFocus: publicCompactString(statusContext.currentFocus ?? explicitScope.currentFocus ?? data.currentFocus),
+    title: publicCompactString(statusContext.title ?? explicitScope.title ?? data.projectTitle),
+    status: publicCompactString(explicitScope.status ?? extractStatus(data), "ok")
   });
 }
 
@@ -450,6 +455,10 @@ export function dispatchToolData(root, name, args = {}) {
         return result(queryGovernanceCoverageReport(root));
       case "query_operator_lessons":
         return result(queryOperatorLessons(root, args));
+      case "search_network":
+        return result(searchNetwork(root, args));
+      case "query_network_search_providers":
+        return result(queryNetworkSearchProviders(root, args));
       case "query_operator_follow_through":
         return result(queryOperatorFollowThrough(root));
       case "query_paper_audit":
@@ -624,6 +633,11 @@ export function dispatchTool(root, name, args = {}) {
         packetId: extractPacketId(args)
       }, () => dispatchToolData(root, name, cleanArgs))
       : dispatchToolData(root, name, cleanArgs);
+    if (data && typeof data.then === "function") {
+      return data
+        .then((resolved) => makeTextResult(shapeMcpResult(name, args, resolved)))
+        .catch((error) => makeErrorResult(error instanceof Error ? error.message : String(error)));
+    }
     return makeTextResult(shapeMcpResult(name, args, data));
   } catch (error) {
     return makeErrorResult(error instanceof Error ? error.message : String(error));

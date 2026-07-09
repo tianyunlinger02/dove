@@ -225,7 +225,7 @@ function workflowRouteForSurface(surface, command, responseLanguage = "zh") {
   }
   const route = {
     "dove.status": "query_dove_status",
-    "dove.mission": "create_dove_task preview -> confirmed one foreground pass",
+    "dove.mission": "create_dove_task proposal -> materialized contract -> recommended handoff",
     "dove.auto": "run_dove_auto preview -> confirmed bounded foreground pass",
     "dove.operator": "run_dove_operator preview -> confirmed queue pass",
     "dove.review": "review/audit workflow with independent reviewer boundary",
@@ -246,7 +246,7 @@ function foregroundFlowForSurface(surface, responseLanguage = "zh") {
     return text(responseLanguage, "只读 command-center 查询；不写入、不刷新、不执行命令。", "Read-only command-center query; no writes, refresh, or command execution.");
   }
   if (surface === "dove.mission") {
-    return text(responseLanguage, "先 proposal card，确认后才 materialize；最多记录一个前台 pass。", "Show a proposal card first; materialize only after confirmation; record at most one foreground pass.");
+    return text(responseLanguage, "先 proposal card，确认后只物化任务合同并交接推荐路线；mission 本身不执行 pass。", "Show a proposal card first; after confirmation only materialize the task contract and hand off recommended routes; mission itself does not run a pass.");
   }
   if (surface === "dove.auto") {
     return text(responseLanguage, "显式确认后的 bounded foreground loop；到证据、边界或预算即停。", "Explicitly confirmed bounded foreground loop; stop at evidence, boundary, or budget.");

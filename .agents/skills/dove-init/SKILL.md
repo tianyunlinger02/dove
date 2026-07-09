@@ -28,11 +28,12 @@ Create or update the single project-level Dove goal as the unique level-0 task.
 4. This request has no listed project check. Do not run status, `node ./bin/dove.mjs init --help`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the task, and the next user choice; do not explain why the tool is unavailable.
 5. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 6. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
-7. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
-8. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
-9. Only make the specific change requested for this command; do not bundle unrelated work.
-10. Keep init limited to the project goal; do not start concrete research, writing, review, or engineering work here.
-11. After the goal is set, name the practical next Dove surface in ordinary language instead of exposing storage details.
-12. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
-13. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
-14. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.
+7. When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.
+8. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
+9. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
+10. Only make the specific change requested for this command; do not bundle unrelated work.
+11. Keep init limited to the project goal; do not start concrete research, writing, review, or engineering work here.
+12. After the goal is set, name the practical next Dove surface in ordinary language instead of exposing storage details.
+13. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
+14. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
+15. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.

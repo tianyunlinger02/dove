@@ -45,6 +45,18 @@ test("workflow goal validation rejects mission and auto fake completion", () => 
   });
   assert.equal(result.status, "passed");
 
+  const missionHandoffGoal = result.results.find((goal) => goal.id === "mission-contract-materializes-without-execution");
+  assert.ok(missionHandoffGoal);
+  assert.equal(missionHandoffGoal.evidence.proposalStatus, "needs-confirmation");
+  assert.equal(missionHandoffGoal.evidence.materializedStatus, "materialized");
+  assert.equal(missionHandoffGoal.evidence.workflowMode, "mission-contract");
+  assert.equal(missionHandoffGoal.evidence.executionMode, "contract-handoff");
+  assert.equal(missionHandoffGoal.evidence.contractMaterialized, true);
+  assert.equal(missionHandoffGoal.evidence.finalTaskStatus, "ready");
+  assert.equal(missionHandoffGoal.evidence.runtimeEntryPersisted, false);
+  assert.ok(missionHandoffGoal.evidence.handoffRouteCount > 0);
+  assert.equal(missionHandoffGoal.evidence.passRecorderFieldsAbsent, true);
+
   const missionGoal = result.results.find((goal) => goal.id === "mission-completion-requires-evidence");
   assert.ok(missionGoal);
   assert.equal(missionGoal.evidence.rejectedStatus, "needs-completion-evidence");

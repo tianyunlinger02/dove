@@ -266,7 +266,7 @@ export const GOVERNANCE_GUARDED_MUTATIONS = [
   { id: "upsert-orchestration-board", action: "Updating the orchestration board", artifactPath: ".dove/orchestration/board.json", surfaceBindings: { coreFunction: "upsertOrchestrationBoard", mcpTool: "upsert_orchestration_board", commandIds: [] } },
   { id: "init-dove-goal", action: "Creating or updating the unique Dove init goal", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "initDoveGoal", mcpTool: "init_dove_goal", commandIds: ["dove.init"] } },
   { id: "create-dove-task", action: "Converting a user demand into a classified Dove task under the init goal", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "createDoveTask", mcpTool: "create_dove_task", commandIds: ["dove.mission"] } },
-  { id: "record-dove-mission-pass", action: "Recording one foreground Dove mission execution pass", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "recordDoveMissionPass", mcpTool: "record_dove_mission_pass", commandIds: ["dove.mission"] } },
+  { id: "record-dove-mission-pass", action: "Explicitly recording execution results for an existing Dove mission or task", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "recordDoveMissionPass", mcpTool: "record_dove_mission_pass", commandIds: [] } },
   { id: "run-dove-auto", action: "Running demand-to-task intake and bounded autonomous task completion", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "runDoveAuto", mcpTool: "run_dove_auto", commandIds: ["dove.auto"] } },
   { id: "apply-dove-status-adjustments", action: "Applying explicitly confirmed Dove task status adjustments", artifactPath: ".dove/task-packets", surfaceBindings: { coreFunction: "applyDoveStatusAdjustments", mcpTool: "apply_dove_status_adjustments", commandIds: ["dove.status"] } },
   { id: "run-dove-operator", action: "Running one confirmed foreground operator pass over safe internal steps, explicit host results, and blocker planning", artifactPath: ".dove/runtime/results.json", surfaceBindings: { coreFunction: "runDoveOperator", mcpTool: "run_dove_operator", commandIds: ["dove.operator"] } },
@@ -339,6 +339,7 @@ const GOVERNANCE_EXEMPT_MUTATION_SCOPE_METADATA = {
   "publish-dove-status": governanceScopeMetadata("derived-refresh"),
   "publish-dove-global-status": governanceScopeMetadata("derived-refresh"),
   "serve-dove-global-status": governanceScopeMetadata("derived-refresh"),
+  "configure-claude-code-gateway-defaults": governanceScopeMetadata("host-install-bootstrap"),
   "summarize-session-journal": governanceScopeMetadata("governance-bookkeeping")
 };
 
@@ -366,6 +367,7 @@ export const GOVERNANCE_EXEMPT_MUTATIONS = [
   { id: "publish-dove-status", action: "Publishing sanitized public status artifacts remains exempt because it derives a read-only external summary from durable Dove state without approving, materializing, or executing work.", artifactPath: ".dove/public", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-06-16T00:00:00.000Z", lastReviewedAt: "2026-06-16T00:00:00.000Z", reasonCode: "public-derived-status-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "publishDoveStatus", mcpTool: "publish_dove_status", commandIds: [] } },
   { id: "publish-dove-global-status", action: "Publishing the global sanitized public status index remains exempt because it only derives a static aggregate from explicit project .dove/public artifacts without approving, materializing, executing work, scanning the computer, or starting external services.", artifactPath: "xdg:dove/public", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-06-17T00:00:00.000Z", lastReviewedAt: "2026-06-17T00:00:00.000Z", reasonCode: "global-public-derived-status-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "publishDoveGlobalStatus", mcpTool: "publish_dove_global_status", commandIds: [] } },
   { id: "serve-dove-global-status", action: "Serving the global sanitized public status directory remains exempt only as an explicit foreground operator command that publishes the static aggregate once, serves that public directory over loopback, and optionally starts a visible Cloudflare tunnel without scanning the computer, daemonizing, scheduling refreshes, or exposing raw Dove state.", artifactPath: "xdg:dove/public", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-06-17T00:00:00.000Z", lastReviewedAt: "2026-06-17T00:00:00.000Z", reasonCode: "global-public-explicit-foreground-serving", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runGlobalStatusServingForeground", mcpTool: null, commandIds: [], cliCommand: "serve-global-status" } },
+  { id: "configure-claude-code-gateway-defaults", action: "Claude Code gateway default configuration remains exempt because it is an explicit host install/sync bootstrap step that writes only allowlisted non-secret compatibility switches, not Dove task state.", artifactPath: "claude:user-config", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-07-08T00:00:00.000Z", lastReviewedAt: "2026-07-08T00:00:00.000Z", reasonCode: "host-install-bootstrap", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "configureClaudeCodeGatewayDefaults", mcpTool: null, commandIds: [], cliCommand: "install/sync --host claude" } },
   { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".dove/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "query_meta_optimize", commandIds: [] } }
 ].map((entry) => ({
   ...entry,
@@ -385,6 +387,8 @@ export const GOVERNANCE_READONLY_TOOLS = [
   "query_meta_optimize",
   "query_governance_coverage_report",
   "query_operator_lessons",
+  "search_network",
+  "query_network_search_providers",
   "query_operator_follow_through",
   "query_paper_audit",
   "query_dove_onboarding",
@@ -412,10 +416,10 @@ export const GOVERNANCE_NEGATIVE_COVERAGE = [
   { id: "upsert-orchestration-board", level: "dynamic", tests: ["queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt"] },
   { id: "init-dove-goal", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
   { id: "create-dove-task", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
-  { id: "record-dove-mission-pass", level: "dynamic", tests: ["create_dove_task converts demand before materializing a one-pass mission"] },
+  { id: "record-dove-mission-pass", level: "dynamic", tests: ["create_dove_task materializes a mission contract without recording runtime results"] },
   { id: "run-dove-auto", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
-  { id: "apply-dove-status-adjustments", level: "dynamic", tests: ["create_dove_task converts demand before materializing a one-pass mission"] },
-  { id: "run-dove-operator", level: "dynamic", tests: ["create_dove_task converts demand before materializing a one-pass mission"] },
+  { id: "apply-dove-status-adjustments", level: "dynamic", tests: ["create_dove_task materializes a mission contract without recording runtime results"] },
+  { id: "run-dove-operator", level: "dynamic", tests: ["create_dove_task materializes a mission contract without recording runtime results"] },
   { id: "kill-dove-task", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
   { id: "reset-dove-version", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },
   { id: "run-experience-workflow", level: "binding-only", tests: ["governance registry completely binds the expected mutating command and MCP surfaces"] },

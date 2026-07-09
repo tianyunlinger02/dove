@@ -5533,7 +5533,8 @@ test("every governance registry entry binds to real command or MCP surfaces plus
     fs.readFileSync(path.join(process.cwd(), "src/core/dove-review-loop.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/public-status.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/global-status-serving.mjs"), "utf8"),
-    fs.readFileSync(path.join(process.cwd(), "src/core/documents.mjs"), "utf8")
+    fs.readFileSync(path.join(process.cwd(), "src/core/documents.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/claude-code-gateway.mjs"), "utf8")
   ];
 
   for (const entry of registry) {

@@ -1,18 +1,18 @@
 ---
-description: "Convert a user demand into a Dove task contract, then after approval run one approved work pass."
+description: "Convert a user demand into a confirmable Dove task contract, then hand off to the recommended next workflow."
 ---
 
 # dove.mission
 
-Convert a user demand into a Dove task contract, then after approval run one approved work pass.
+Convert a user demand into a confirmable Dove task contract, then hand off to the recommended next workflow.
 
 ## Daily use
 
-- Use this for one concrete user demand that should become a tracked task and receive one approved work pass.
-- Describe the desired outcome in normal language; Dove should propose the task, explain the evidence it will need, and wait for approval before doing work.
-- Targeting: Creates a new task under the project goal, or helps set the project goal first when the workspace is new.
-- Confirmation: Show the proposed task in plain language, then ask whether to run one pass, adjust it, or cancel.
-- Outcome: After approval, one work pass either makes real progress with evidence or stops with a clear blocker and next action.
+- Use this for one concrete user demand that should become a tracked mission/task contract and hand off to the right next workflow.
+- Describe the desired outcome in normal language; Dove should propose the task, explain the evidence it will need, and wait for approval before materializing the contract.
+- Targeting: Creates a new task contract under the project goal, or helps set the project goal first when the workspace is new.
+- Confirmation: Show the proposed task in plain language, then ask whether to materialize the contract, adjust it, or cancel.
+- Outcome: After approval, the contract exists with recommended next routes; real execution belongs to auto, operator, domain workflows, or explicit tools.
 
 ## Examples
 
@@ -27,13 +27,14 @@ Convert a user demand into a Dove task contract, then after approval run one app
 4. This request has one listed project check: `node ./bin/dove.mjs mission .` from the project root; summarize its practical result instead of inspecting internal files directly.
 5. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 6. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
-7. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
-8. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
-9. Ask for approval before making changes or spending the proposed work rounds.
-10. Propose the task first, then ask whether to run one pass, adjust it, or cancel.
-11. After approval, run exactly one approved work pass; do not tell the operator to start auto for the first pass.
-12. Only report completion when there is real evidence; otherwise report the blocker, what is missing, and the next useful action.
-13. If the pass is planning work, create follow-up tasks only when each one has a clear title, goal, and evidence expectation.
-14. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
-15. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
-16. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.
+7. When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.
+8. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
+9. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
+10. Ask for approval before making changes or spending the proposed work rounds.
+11. Propose the task first, then ask whether to materialize the contract, adjust it, or cancel.
+12. After approval, materialize the contract only and hand off to the recommended next workflow; mission itself does not execute source, note, draft, figure, experiment, review, code, or provider work.
+13. Report the created contract and recommended next routes without claiming completion or execution progress.
+14. If the contract is planning work, its done criteria must require explicit executable child mission contracts before any later execution flow can mark it completed.
+15. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
+16. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
+17. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.

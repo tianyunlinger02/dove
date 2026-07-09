@@ -41,7 +41,7 @@ const expectedCommandIds = [
 
 const expectedTools = {
   "dove.init": ["init_dove_goal"],
-  "dove.mission": ["create_dove_task", "record_dove_mission_pass"],
+  "dove.mission": ["create_dove_task"],
   "dove.auto": ["run_dove_auto"],
   "dove.status": ["query_dove_status", "apply_dove_status_adjustments"],
   "dove.operator": ["run_dove_operator"],
@@ -291,16 +291,16 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
 
   if (command.id === "dove.mission") {
     assert.equal(commandText.includes("Propose the task first"), true, `${relativePath} must require proposal-first mission intake`);
-    assert.equal(commandText.includes("run exactly one approved work pass"), true, `${relativePath} must require one mission work pass`);
-    assert.equal(commandText.includes("real evidence"), true, `${relativePath} must require evidence before completion`);
-    assert.equal(commandText.includes("blocker"), true, `${relativePath} must report blockers instead of fake completion`);
-    assert.equal(commandText.includes("do not tell the operator to start auto for the first pass"), true, `${relativePath} must distinguish mission from auto`);
+    assert.equal(commandText.includes("materialize the contract"), true, `${relativePath} must materialize only the contract`);
+    assert.equal(commandText.includes("recommended next workflow"), true, `${relativePath} must hand off to recommended workflow routes`);
+    assert.equal(commandText.includes("does not execute"), true, `${relativePath} must distinguish mission definition from execution`);
+    assert.equal(commandText.includes("record_dove_mission_pass"), false, `${relativePath} must not route public mission through result recording`);
   }
 
   if (command.id === "dove.auto") {
     assert.equal(commandText.includes("target, work limit, and visible steps"), true, `${relativePath} must expose auto target and work limit`);
     assert.equal(commandText.includes("current approved interaction"), true, `${relativePath} must keep auto visible-only`);
-    assert.equal(commandText.includes("real sources or materials"), true, `${relativePath} must require material before research success`);
+    assert.equal(commandText.includes("real sources or materials") || commandText.includes("real verified sources or materials"), true, `${relativePath} must require material before research success`);
     assert.equal(commandText.includes("Stop clearly"), true, `${relativePath} must document auto stop conditions`);
     assert.equal(commandText.includes("hidden background continuation"), true, `${relativePath} must forbid hidden continuation`);
   }

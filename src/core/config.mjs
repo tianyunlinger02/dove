@@ -8,6 +8,8 @@ const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_MAX_PROMPT_CHARS = 20000;
 const DEFAULT_MAX_SVG_BYTES = 1000000;
 const DEFAULT_GLOBAL_STATUS_ORIGIN_PORT = 8787;
+const DEFAULT_NETWORK_SEARCH_TIMEOUT_MS = 12000;
+const DEFAULT_NETWORK_SEARCH_MAX_RESULTS = 8;
 const GPT_IMAGE2_PROVIDER_ID = "gpt-image2";
 const GPT_IMAGE2_MODEL = "gpt-image-2";
 const OPENAI_IMAGE_ENDPOINT = "https://api.openai.com/v1/images/generations";
@@ -17,6 +19,8 @@ const ENV_REF_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 const HOSTNAME_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 const TUNNEL_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
+const NETWORK_SEARCH_CREDENTIAL_KEY_PATTERN = /(?:api[-_]?key|token|secret|password|authorization|bearer|credential|headers?)/i;
+const DEFAULT_NETWORK_SEARCH_PROVIDER_IDS = ["openalex", "crossref", "arxiv", "europe-pmc"];
 
 const DEFAULT_DOVE_CONFIG = {
   version: 1,
@@ -26,6 +30,14 @@ const DEFAULT_DOVE_CONFIG = {
     providers: [],
     maxPromptChars: DEFAULT_MAX_PROMPT_CHARS,
     maxSvgBytes: DEFAULT_MAX_SVG_BYTES
+  },
+  networkSearch: {
+    enabled: true,
+    defaultProviderIds: DEFAULT_NETWORK_SEARCH_PROVIDER_IDS,
+    disabledProviderIds: [],
+    providerSettings: {},
+    timeoutMs: DEFAULT_NETWORK_SEARCH_TIMEOUT_MS,
+    maxResults: DEFAULT_NETWORK_SEARCH_MAX_RESULTS
   },
   globalStatus: {
     outputDir: null,
@@ -85,6 +97,11 @@ function normalizeBoolean(value, fallback = false) {
 
 function normalizeString(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function normalizeStringArray(value) {
+  const rawItems = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return Array.from(new Set(rawItems.map((item) => normalizeString(item)).filter(Boolean)));
 }
 
 function isGptImage2Identifier(value) {
@@ -170,6 +187,23 @@ export function assertNoInlineSecrets(value, configPath = "config") {
       throw new Error(`Dove config must not contain inline secret field ${nextPath}; use an env-var reference such as apiKeyEnv instead.`);
     }
     assertNoInlineSecrets(item, nextPath);
+  }
+}
+
+function assertNoNetworkSearchCredentials(value, configPath = "networkSearch") {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoNetworkSearchCredentials(item, `${configPath}[${index}]`));
+    return;
+  }
+  if (!isPlainObject(value)) {
+    return;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    const nextPath = `${configPath}.${key}`;
+    if (NETWORK_SEARCH_CREDENTIAL_KEY_PATTERN.test(key)) {
+      throw new Error(`Dove networkSearch supports only public no-key providers and must not contain credential field ${nextPath}.`);
+    }
+    assertNoNetworkSearchCredentials(item, nextPath);
   }
 }
 
@@ -336,6 +370,46 @@ export function createGptImage2FigureProvider(overrides = {}) {
     imageSize: "1024x1024",
     ...source
   });
+}
+
+function normalizeNetworkProviderIds(value, fallback = []) {
+  const ids = normalizeStringArray(value).map((item) => item.toLowerCase());
+  return ids.length > 0 ? ids : [...fallback];
+}
+
+function normalizeNetworkProviderSettings(rawSettings = {}) {
+  const source = isPlainObject(rawSettings) ? rawSettings : {};
+  assertNoNetworkSearchCredentials(source, "networkSearch.providerSettings");
+  const settings = {};
+  for (const [rawId, rawValue] of Object.entries(source)) {
+    const id = normalizeString(rawId)?.toLowerCase();
+    if (!id) {
+      continue;
+    }
+    const providerSource = isPlainObject(rawValue) ? rawValue : {};
+    const providerSettings = {};
+    if (providerSource.enabled !== undefined) {
+      providerSettings.enabled = normalizeBoolean(providerSource.enabled, true);
+    }
+    if (providerSource.timeoutMs !== undefined) {
+      providerSettings.timeoutMs = normalizePositiveInteger(providerSource.timeoutMs, DEFAULT_NETWORK_SEARCH_TIMEOUT_MS, 1000, 60000);
+    }
+    settings[id] = providerSettings;
+  }
+  return settings;
+}
+
+export function normalizeNetworkSearchConfig(rawConfig = {}) {
+  const source = isPlainObject(rawConfig) ? rawConfig : {};
+  assertNoNetworkSearchCredentials(source, "networkSearch");
+  return {
+    enabled: normalizeBoolean(source.enabled, true),
+    defaultProviderIds: normalizeNetworkProviderIds(source.defaultProviderIds ?? source.defaultProviders, DEFAULT_NETWORK_SEARCH_PROVIDER_IDS),
+    disabledProviderIds: normalizeNetworkProviderIds(source.disabledProviderIds ?? source.disabledProviders, []),
+    providerSettings: normalizeNetworkProviderSettings(source.providerSettings),
+    timeoutMs: normalizePositiveInteger(source.timeoutMs, DEFAULT_NETWORK_SEARCH_TIMEOUT_MS, 1000, 60000),
+    maxResults: normalizePositiveInteger(source.maxResults ?? source.limit, DEFAULT_NETWORK_SEARCH_MAX_RESULTS, 1, 50)
+  };
 }
 
 function normalizeFigureGenerationConfig(rawConfig = {}) {
@@ -520,6 +594,7 @@ function normalizeDoveConfig(rawConfig) {
     version: 1,
     language: normalizeDoveResponseLanguage(source.language ?? source.responseLanguage, DEFAULT_DOVE_RESPONSE_LANGUAGE, { strict: true }),
     figureGeneration: normalizeFigureGenerationConfig(source.figureGeneration),
+    networkSearch: normalizeNetworkSearchConfig(source.networkSearch),
     globalStatus: normalizeGlobalStatusConfig({
       ...globalStatusSource,
       outputDir: globalStatusOutputDir,
@@ -546,6 +621,10 @@ export function loadDoveConfig(root, env = process.env) {
 
 export function loadFigureGenerationConfig(root, env = process.env) {
   return loadDoveConfig(root, env).figureGeneration;
+}
+
+export function loadNetworkSearchConfig(root, env = process.env) {
+  return loadDoveConfig(root, env).networkSearch;
 }
 
 export function loadExplicitDoveLanguageConfig(root, env = process.env) {

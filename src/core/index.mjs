@@ -24,5 +24,6 @@ export { analyzeArtifactConsistency, readTaskPacketCatalog, readTaskTargetResolu
 export { createMutationContext, currentMutationContext, isPatchPlanMode, jsonContent, runWithMutationContext } from "./mutation-backend.mjs";
 export { validateWorkflowGoalContracts, validateWorkflowGoals, WORKFLOW_GOAL_CONTRACTS, WorkflowGoalValidationError } from "./workflow-goals.mjs";
 export { assertTaskScopedMutationTarget, getGovernanceMutationEntry } from "./mutation-guard.mjs";
-export { assertNoInlineSecrets, loadDoveConfig, loadDoveLanguageConfig, loadExplicitDoveLanguageConfig, loadFigureGenerationConfig, normalizeGlobalStatusAuthConfig, normalizeGlobalStatusCloudflareConfig, normalizeGlobalStatusProjects, redactDoveConfig, resolveDoveGlobalStatusOutputDir } from "./config.mjs";
+export { assertNoInlineSecrets, loadDoveConfig, loadDoveLanguageConfig, loadExplicitDoveLanguageConfig, loadFigureGenerationConfig, loadNetworkSearchConfig, normalizeGlobalStatusAuthConfig, normalizeGlobalStatusCloudflareConfig, normalizeGlobalStatusProjects, normalizeNetworkSearchConfig, redactDoveConfig, resolveDoveGlobalStatusOutputDir } from "./config.mjs";
+export { DEFAULT_NETWORK_SEARCH_PROVIDER_IDS, NETWORK_SEARCH_PROVIDER_REGISTRY, executeNetworkSearch, normalizeNetworkSearchQuery, queryNetworkSearchProviders, searchNetwork } from "./network-search.mjs";
 export { doveText, isDoveChinese, resolveDoveResponseLanguage } from "./i18n.mjs";

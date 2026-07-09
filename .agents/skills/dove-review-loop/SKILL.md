@@ -28,13 +28,14 @@ Loop isolated review, draft revision, and experience planning until coherent or 
 4. This request has no listed project check. Do not run status, `node ./bin/dove.mjs review-loop --help`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the task, and the next user choice; do not explain why the tool is unavailable.
 5. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 6. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
-7. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
-8. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
-9. Only make the specific change requested for this command; do not bundle unrelated work.
-10. Run only limited visible review, revision, and experience-planning iterations.
-11. Use three rounds by default unless the project config says otherwise.
-12. Do not start a draft or experiment substep without the needed material.
-13. Stop early when the task is coherent, blocked, waiting on review, or waiting on user input.
-14. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
-15. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
-16. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.
+7. When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.
+8. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
+9. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
+10. Only make the specific change requested for this command; do not bundle unrelated work.
+11. Run only limited visible review, revision, and experience-planning iterations.
+12. Use three rounds by default unless the project config says otherwise.
+13. Do not start a draft or experiment substep without the needed material.
+14. Stop early when the task is coherent, blocked, waiting on review, or waiting on user input.
+15. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
+16. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
+17. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.

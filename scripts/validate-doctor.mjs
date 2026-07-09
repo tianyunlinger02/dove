@@ -24,10 +24,12 @@ function run(command, args, env = process.env) {
 
 const target = createTempWorkspace("dove-doctor-");
 const claudeConfigRoot = createTempWorkspace("dove-claude-config-");
+const claudeShellRoot = createTempWorkspace("dove-claude-shell-");
+const claudeShellRc = path.join(claudeShellRoot, ".bashrc");
 let exitCode = 0;
 
 try {
-  const env = { ...process.env, DOVE_CLAUDE_CONFIG_DIR: claudeConfigRoot };
+  const env = { ...process.env, DOVE_CLAUDE_CONFIG_DIR: claudeConfigRoot, DOVE_CLAUDE_SHELL_RC: claudeShellRc };
   exitCode = run("node", ["./bin/dove.mjs", "install", target, "--force", "--host", "all"], env);
   if (exitCode === 0) {
     exitCode = run("node", ["./bin/dove.mjs", "doctor", target], env);
@@ -35,6 +37,7 @@ try {
 } finally {
   cleanupTempWorkspace(target);
   cleanupTempWorkspace(claudeConfigRoot);
+  cleanupTempWorkspace(claudeShellRoot);
 }
 
 process.exitCode = exitCode;

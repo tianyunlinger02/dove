@@ -21,18 +21,18 @@ Dove now separates two kinds of cards:
 
 Default human-facing text is Chinese. Machine fields such as `surface`, `command`, `status`, `packetId`, and `presentation` stay in English.
 
-A typical confirmed result card looks like this:
+A typical confirmed execution result card looks like this:
 
 ```json
 {
   "presentation": "compact-result-summary-card",
-  "surface": "dove.mission",
-  "command": "record_dove_mission_pass",
-  "packetId": "sample-mission-pass",
+  "surface": "dove.auto",
+  "command": "run_dove_auto",
+  "packetId": "sample-auto-run",
   "status": "completed",
-  "happened": "已记录一次前台 mission 执行结果。",
+  "happened": "已完成一次有证据的前台执行。",
   "durableWrites": [
-    ".dove/task-packets/packets/sample-mission-pass.json",
+    ".dove/task-packets/packets/sample-auto-run.json",
     ".dove/task-packets/index.json",
     ".dove/runtime/results.json",
     ".dove/runtime/events.json"
@@ -43,7 +43,7 @@ A typical confirmed result card looks like this:
     {
       "title": "查看当前状态和下一步",
       "command": "project:dove.status",
-      "packetId": "sample-mission-pass",
+      "packetId": "sample-auto-run",
       "proposalOnly": true,
       "noAutoApply": true
     }
@@ -108,7 +108,7 @@ Daily effect:
 
 ### `dove.mission`
 
-Purpose: convert a natural-language demand into one durable task, ask for confirmation, materialize it, and run one bounded foreground pass.
+Purpose: convert a natural-language demand into one durable task contract, ask for confirmation, materialize it, and hand off to the recommended next workflow.
 
 Example invocation:
 
@@ -120,7 +120,6 @@ Primary MCP tools:
 
 ```text
 create_dove_task
-record_dove_mission_pass
 ```
 
 Before confirmation, the output is proposal-only:
@@ -145,48 +144,48 @@ Before confirmation, the output is proposal-only:
     "autonomousChecklistProposal": []
   },
   "confirmationChoices": [
-    "approve conversion and run one pass",
+    "approve and materialize the contract",
     "adjust conversion",
     "cancel"
   ]
 }
 ```
 
-After confirmation and the one foreground pass, the output includes a confirmed result card:
+After confirmation, the output reports only materialization and handoff routes:
 
 ```json
 {
   "ok": true,
-  "task": {
+  "status": "materialized",
+  "workflowMode": "mission-contract",
+  "executionMode": "contract-handoff",
+  "contractMaterialized": true,
+  "foreground": false,
+  "background": false,
+  "daemon": false,
+  "createdTask": {
     "id": "sample-mission-pass",
-    "status": "completed"
+    "status": "ready"
   },
-  "missionPass": {
-    "status": "completed",
-    "foreground": true,
-    "background": false,
-    "daemon": false
-  },
-  "resultCard": {
-    "presentation": "compact-result-summary-card",
-    "surface": "dove.mission",
-    "command": "record_dove_mission_pass",
-    "packetId": "sample-mission-pass",
-    "status": "completed",
-    "happened": "已生成 mission 命令输出样本。",
-    "evidence": ["docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"],
-    "validation": ["npm run check: pass 214/214"],
-    "nextActions": [
-      { "command": "project:dove.status", "proposalOnly": true }
-    ]
-  }
+  "recommendedRoutes": [
+    {
+      "command": "project:dove.auto",
+      "copyableCommand": "project:dove.auto --packet-id sample-mission-pass"
+    }
+  ],
+  "handoffRoutes": [
+    {
+      "command": "project:dove.auto",
+      "copyableCommand": "project:dove.auto --packet-id sample-mission-pass"
+    }
+  ]
 }
 ```
 
 Daily effect:
 
-- Mission is not just task creation; it also executes exactly one bounded foreground pass after approval.
-- If the pass stops at a boundary, the result card shows `boundary`, `ownerRole`, `nextRole`, required inputs/actions, and a handoff suggestion instead of pretending completion.
+- Mission defines and materializes the task contract; it does not execute work or record a result during materialization.
+- If later execution stops at a boundary, the execution flow's result card shows `boundary`, `ownerRole`, `nextRole`, required inputs/actions, and a handoff suggestion instead of pretending completion.
 
 ### `dove.auto`
 
@@ -1057,7 +1056,7 @@ Daily effect:
 A normal day now reads like this:
 
 1. Run `dove.status` to understand the live development situation and the top recommended next action.
-2. Use `dove.mission` when you want Dove to convert a demand, ask for confirmation, and execute one foreground pass.
+2. Use `dove.mission` when you want Dove to convert a demand, ask for confirmation, and hand off a materialized task contract.
 3. Use `dove.auto` when you want bounded foreground multi-round continuation.
 4. Use domain commands such as `dove.source`, `dove.note`, `dove.figure`, `dove.experience`, `dove.draft`, `dove.review`, and `dove.rebuttal` for concrete paper/research artifacts.
 5. Use `dove.operator` for a confirmed queue pass across existing durable tasks.

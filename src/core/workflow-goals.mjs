@@ -38,9 +38,28 @@ export const WORKFLOW_GOAL_CONTRACTS = [
     }
   },
   {
-    id: "mission-completion-requires-evidence",
+    id: "mission-contract-materializes-without-execution",
     surface: "dove.mission",
-    objective: "A Dove mission pass must not mark a task completed from a bare completion flag or summary without explicit evidence, artifacts, validation output, or concrete plan-output missions.",
+    objective: "A confirmed Dove mission must materialize only the task contract, return handoff routes, and avoid recording pass/runtime execution results.",
+    pressureTest: "Call create_dove_task first as a proposal, then confirm it with stale pass/result fields supplied.",
+    acceptanceCriteria: [
+      "The proposal returns mission-contract and contract-handoff semantics with no writes.",
+      "The confirmed call returns materialized with contractMaterialized true.",
+      "The task remains ready rather than completed or awaiting a host pass.",
+      "No runtime result entry is persisted for stale pass/result fields.",
+      "The response returns recommended handoff routes and no mission pass recorder fields."
+    ],
+    failureMode: "mission-materialization-pretends-execution",
+    failureReflection: workflowFailureReflection({
+      regressionArtifacts: ["scripts/validate-workflow-goals.mjs", "tests/integration/workflow-goals.test.mjs", "tests/integration/mcp-tools.test.mjs"],
+      remediationTargets: ["src/core/task-workflow.mjs", "src/core/workflow-goals.mjs", "src/core/command-manifest.mjs"],
+      summary: "If mission materialization records runtime results or exposes pass-recorder fields, repair create_dove_task so mission stops at contract handoff."
+    })
+  },
+  {
+    id: "mission-completion-requires-evidence",
+    surface: "dove.result-recording",
+    objective: "An explicit Dove result recording pass must not mark a task completed from a bare completion flag or summary without explicit evidence, artifacts, validation output, or concrete plan-output missions.",
     pressureTest: "Seed a ready mission task, then call record_dove_mission_pass with resultStatus completed and a summary but no evidence or artifacts.",
     acceptanceCriteria: [
       "The mission pass returns needs-completion-evidence and remains proposal-only.",
@@ -129,9 +148,9 @@ export const WORKFLOW_GOAL_CONTRACTS = [
   },
   {
     id: "plan-completion-requires-executable-children",
-    surface: "dove.mission",
-    objective: "A completed planning pass must not complete unless it returns explicit executable child missions with contracts.",
-    pressureTest: "Seed a plan-stage task, then record a completed mission pass with summary and criteria evidence but no child mission output.",
+    surface: "dove.result-recording",
+    objective: "A completed planning result must not complete unless it returns explicit executable child missions with contracts.",
+    pressureTest: "Seed a plan-stage task, then record an explicit completed result with summary and criteria evidence but no child mission output.",
     acceptanceCriteria: [
       "The mission pass returns plan-output-not-executable and remains proposal-only.",
       "The plan task remains ready instead of completed.",
@@ -147,9 +166,9 @@ export const WORKFLOW_GOAL_CONTRACTS = [
   },
   {
     id: "plan-child-contract-requires-criteria",
-    surface: "dove.mission",
-    objective: "A plan-derived child mission must not be materialized from a child contract that lacks convergence criteria.",
-    pressureTest: "Seed a plan-stage task, then record a completed pass with one child mission whose executionContract omits convergence.criteria.",
+    surface: "dove.result-recording",
+    objective: "A plan-derived child mission must not be materialized from an explicit result child contract that lacks convergence criteria.",
+    pressureTest: "Seed a plan-stage task, then record an explicit completed result with one child mission whose executionContract omits convergence.criteria.",
     acceptanceCriteria: [
       "The mission pass returns plan-output-not-executable.",
       "The response identifies the child mission as not executable.",
@@ -390,7 +409,7 @@ export function validateWorkflowGoalContracts(contracts = WORKFLOW_GOAL_CONTRACT
     assertContract(typeof contract.id === "string" && contract.id.trim(), contract, "id is required");
     assertContract(!seen.has(contract.id), contract, "id must be unique");
     seen.add(contract.id);
-    assertContract(typeof contract.surface === "string" && contract.surface.startsWith("dove."), contract, "surface must name a Dove workflow surface");
+    assertContract(typeof contract.surface === "string" && contract.surface.startsWith("dove."), contract, "surface must name a Dove workflow surface or internal result-recording surface");
     assertContract(typeof contract.objective === "string" && contract.objective.trim(), contract, "objective is required");
     assertContract(typeof contract.pressureTest === "string" && contract.pressureTest.trim(), contract, "pressureTest is required");
     assertContract(normalizeArray(contract.acceptanceCriteria).length >= 3, contract, "at least three acceptance criteria are required");
@@ -550,6 +569,82 @@ function seedGoalTask(root, dispatch, packetId, fields = {}) {
     checklist: false,
     confirmed: true
   }), "create_dove_task");
+}
+
+function runMissionContractMaterializesWithoutExecutionGoal(root, dispatch) {
+  const contract = CONTRACT_BY_ID.get("mission-contract-materializes-without-execution");
+  const packetId = "workflow-goal-mission-handoff";
+  const runId = "workflow-goal-mission-handoff-stale-run";
+  seedGoalWorkspace(root, dispatch, "workflow-goal-mission-handoff-init");
+
+  const proposal = parseToolJson(dispatch(root, "create_dove_task", {
+    id: packetId,
+    title: "Workflow goal mission handoff",
+    goal: "Materialize a mission contract and hand off without recording execution.",
+    domain: "engineering",
+    checklist: false
+  }), "create_dove_task mission handoff proposal");
+  expect(proposal.status === "needs-confirmation", "Mission proposal must require confirmation", { status: proposal.status });
+  expect(proposal.workflowMode === "mission-contract", "Mission proposal must use mission-contract workflow mode", { workflowMode: proposal.workflowMode });
+  expect(proposal.executionMode === "contract-handoff", "Mission proposal must use contract-handoff execution mode", { executionMode: proposal.executionMode });
+  expect(proposal.noAutoApply === true && Array.isArray(proposal.writes) && proposal.writes.length === 0, "Mission proposal must remain proposal-only", { noAutoApply: proposal.noAutoApply, writes: proposal.writes });
+  expect(!("missionPassRequired" in proposal), "Mission proposal must not expose missionPassRequired", { keys: Object.keys(proposal) });
+  expect(!("recordMissionPassTool" in proposal), "Mission proposal must not expose recordMissionPassTool", { keys: Object.keys(proposal) });
+
+  const runtimeBefore = readJson(root, ARTIFACT_PATHS.runtimeResults);
+  const created = parseToolJson(dispatch(root, "create_dove_task", {
+    ...proposal.confirmArgs,
+    runId,
+    resultStatus: "completed",
+    resultSummary: "These stale pass fields must not be recorded during mission materialization.",
+    evidenceLinks: [ARTIFACT_PATHS.runtimeResults],
+    artifactRefs: [ARTIFACT_PATHS.runtimeResults],
+    verificationEvidencePaths: [WORKFLOW_GOAL_VERIFICATION_PATH],
+    verifiedCriteria: workflowVerifiedCriteria("Mission materialized without execution")
+  }), "create_dove_task mission handoff confirmed");
+  expect(created.status === "materialized", "Confirmed mission must only materialize the contract", { status: created.status });
+  expect(created.contractMaterialized === true, "Confirmed mission must report contractMaterialized", { contractMaterialized: created.contractMaterialized });
+  expect(created.workflowMode === "mission-contract", "Confirmed mission must keep mission-contract workflow mode", { workflowMode: created.workflowMode });
+  expect(created.executionMode === "contract-handoff", "Confirmed mission must keep contract-handoff execution mode", { executionMode: created.executionMode });
+  expect(created.foreground === false && created.background === false && created.daemon === false, "Confirmed mission must not claim foreground/background/daemon execution", { foreground: created.foreground, background: created.background, daemon: created.daemon });
+  expect(!("missionPassRequired" in created), "Confirmed mission must not expose missionPassRequired", { keys: Object.keys(created) });
+  expect(!("recordMissionPassTool" in created), "Confirmed mission must not expose recordMissionPassTool", { keys: Object.keys(created) });
+  expect(!("recordMissionPassArgs" in created), "Confirmed mission must not expose recordMissionPassArgs", { keys: Object.keys(created) });
+  expect(!("missionPass" in created), "Confirmed mission must not expose missionPass", { keys: Object.keys(created) });
+  expect(!("result" in created), "Confirmed mission must not expose result", { keys: Object.keys(created) });
+  expect(!("resultCard" in created), "Confirmed mission must not expose resultCard", { keys: Object.keys(created) });
+  expect(Array.isArray(created.handoffRoutes) && created.handoffRoutes.length > 0, "Confirmed mission must return handoff routes", { handoffRoutes: created.handoffRoutes });
+  expect(JSON.stringify(created.recommendedRoutes ?? []) === JSON.stringify(created.handoffRoutes ?? []), "Confirmed mission recommended routes must match handoff routes", { recommendedRoutes: created.recommendedRoutes, handoffRoutes: created.handoffRoutes });
+
+  const afterIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex);
+  const afterTask = findTask(afterIndex, packetId);
+  expect(afterTask?.status === "ready", "Materialized mission task must remain ready", { status: afterTask?.status });
+  const runtimeAfter = readJson(root, ARTIFACT_PATHS.runtimeResults);
+  const runtimeEntry = (runtimeAfter.entries ?? []).find((entry) => entry.id === runId || entry.runId === runId);
+  expect(!runtimeEntry, "Mission materialization must not persist stale pass fields as runtime results", { runId, runtimeEntry });
+  expect(JSON.stringify(runtimeAfter.entries ?? []) === JSON.stringify(runtimeBefore.entries ?? []), "Mission materialization must not append runtime result entries", { before: runtimeBefore.entries, after: runtimeAfter.entries });
+
+  return {
+    id: contract.id,
+    status: "passed",
+    surface: contract.surface,
+    objective: contract.objective,
+    acceptanceCriteria: contract.acceptanceCriteria,
+    evidence: {
+      packetId,
+      runId,
+      proposalStatus: proposal.status,
+      materializedStatus: created.status,
+      workflowMode: created.workflowMode,
+      executionMode: created.executionMode,
+      contractMaterialized: created.contractMaterialized,
+      finalTaskStatus: afterTask.status,
+      runtimeEntryPersisted: false,
+      handoffRouteCount: created.handoffRoutes.length,
+      passRecorderFieldsAbsent: true
+    },
+    failureReflection: contract.failureReflection
+  };
 }
 
 function runMissionCompletionRequiresEvidenceGoal(root, dispatch) {
@@ -1006,6 +1101,7 @@ function runPublicSurfacesStayFlatGoal() {
 
 const WORKFLOW_GOAL_RUNNERS = {
   "operator-host-pass-without-results": runOperatorHostPassWithoutResultsGoal,
+  "mission-contract-materializes-without-execution": runMissionContractMaterializesWithoutExecutionGoal,
   "mission-completion-requires-evidence": runMissionCompletionRequiresEvidenceGoal,
   "auto-read-only-step-cannot-complete": runAutoReadOnlyCannotCompleteGoal,
   "experience-blocked-audit-not-bridged": runExperienceBlockedAuditNotBridgedGoal,

@@ -5,12 +5,48 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { checkGeneratedAdapters, writeGeneratedAdapters } from "../../scripts/generate-command-adapters.mjs";
+import { CLAUDE_CODE_GATEWAY_ENV_DEFAULTS, CLAUDE_CODE_GATEWAY_SHELL_BLOCK_END, CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START } from "../../src/core/claude-code-gateway.mjs";
 import { PROJECT_HOST_IDS, commandAdapterPathsForHost } from "../../src/core/command-manifest.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
 const CLI = path.join(ROOT, "bin", "dove.mjs");
 const DOVE_HOST_PATHS = Object.fromEntries(PROJECT_HOST_IDS.map((hostId) => [hostId, commandAdapterPathsForHost(hostId)]));
+const SECRET_VALUE_PATTERN = /(?:ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN)\s*[:=]\s*["']?[^"'\s,}]+|sk-[A-Za-z0-9_-]{16,}/iu;
+
+function assertNoSecretValues(output) {
+  assert.doesNotMatch(output, SECRET_VALUE_PATTERN);
+}
+
+function createClaudeHostTestEnv() {
+  const claudeConfigRoot = createTempRoot("dove-claude-config-");
+  const shellRoot = createTempRoot("dove-claude-shell-");
+  const claudeShellRc = path.join(shellRoot, ".bashrc");
+  return {
+    claudeConfigRoot,
+    claudeShellRc,
+    env: {
+      ...process.env,
+      DOVE_CLAUDE_CONFIG_DIR: claudeConfigRoot,
+      DOVE_CLAUDE_SHELL_RC: claudeShellRc
+    }
+  };
+}
+
+function extractClaudeGatewayShellBlock(content) {
+  const start = content.indexOf(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START);
+  const end = content.indexOf(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_END);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  return content.slice(start, end + CLAUDE_CODE_GATEWAY_SHELL_BLOCK_END.length);
+}
+
+function assertClaudeGatewaySettings(settings) {
+  assert.equal(settings.fastMode, true);
+  for (const [key, value] of Object.entries(CLAUDE_CODE_GATEWAY_ENV_DEFAULTS)) {
+    assert.equal(settings.env?.[key], value, `missing Claude gateway env ${key}`);
+  }
+}
 
 function assertDoveHostPaths(target, hostIds) {
   for (const hostId of hostIds) {
@@ -119,6 +155,9 @@ test("release and maturity checks validate doctor through a clean install", () =
   assert.match(maturityText, /\["npm", \["run", "doctor:validate"\]\]/);
   assert.doesNotMatch(maturityText, /\["node", \["\.\/bin\/dove\.mjs", "doctor", "\."\]\]/);
   assert.match(doctorValidationText, /createTempWorkspace\("dove-doctor-"\)/);
+  assert.match(doctorValidationText, /createTempWorkspace\("dove-claude-config-"\)/);
+  assert.match(doctorValidationText, /createTempWorkspace\("dove-claude-shell-"\)/);
+  assert.match(doctorValidationText, /DOVE_CLAUDE_SHELL_RC/);
   assert.match(doctorValidationText, /"install", target, "--force", "--host", "all"/);
   assert.match(doctorValidationText, /"doctor", target/);
 });
@@ -184,13 +223,16 @@ test("CLI install can install optional host adapters without local unsafe files"
   assert.equal(fs.existsSync(path.join(target, ".opencode", "node_modules")), false);
 });
 
-test("CLI install writes Claude user-level command adapters without project-local .claude files", () => {
+test("CLI install writes Claude user-level command adapters and gateway defaults without project-local .claude files", () => {
   const target = createTempRoot("dove-install-claude-user-");
-  const claudeConfigRoot = createTempRoot("dove-claude-config-");
+  const { claudeConfigRoot, claudeShellRc, env } = createClaudeHostTestEnv();
+  fs.writeFileSync(path.join(claudeConfigRoot, "settings.json"), `${JSON.stringify({ theme: "dark", env: { EXISTING_ENV: "kept" } }, null, 2)}\n`, "utf8");
+  fs.writeFileSync(claudeShellRc, '# user shell\n[ -z "$PS1" ] && return\nexport AFTER_RETURN=1\n', "utf8");
+
   const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude"], {
     cwd: ROOT,
     encoding: "utf8",
-    env: { ...process.env, DOVE_CLAUDE_CONFIG_DIR: claudeConfigRoot }
+    env
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -198,6 +240,36 @@ test("CLI install writes Claude user-level command adapters without project-loca
   assert.deepEqual(payload.hosts, ["claude"]);
   assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "dove")), false);
   assert.ok(fs.existsSync(path.join(claudeConfigRoot, "commands", "dove", "status.md")));
+  assert.equal(payload.claudeCodeGateway.ok, true);
+  assert.equal(payload.claudeCodeGateway.settings.fastMode, true);
+  assert.deepEqual(payload.claudeCodeGateway.settings.ensuredEnvKeys, Object.keys(CLAUDE_CODE_GATEWAY_ENV_DEFAULTS));
+
+  const settings = JSON.parse(fs.readFileSync(path.join(claudeConfigRoot, "settings.json"), "utf8"));
+  assert.equal(settings.theme, "dark");
+  assert.equal(settings.env.EXISTING_ENV, "kept");
+  assertClaudeGatewaySettings(settings);
+
+  const shell = fs.readFileSync(claudeShellRc, "utf8");
+  const block = extractClaudeGatewayShellBlock(shell);
+  assert.ok(shell.indexOf(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START) < shell.indexOf('[ -z "$PS1" ] && return'));
+  for (const [key, value] of Object.entries(CLAUDE_CODE_GATEWAY_ENV_DEFAULTS)) {
+    assert.match(block, new RegExp(`export ${key}=${JSON.stringify(value)}`));
+  }
+  assertNoSecretValues(block);
+  assert.doesNotMatch(block, /password/iu);
+
+  const second = spawnSync("node", [CLI, "sync", target, "--force", "--host", "claude"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env
+  });
+  assert.equal(second.status, 0, second.stderr || second.stdout);
+  const secondPayload = JSON.parse(second.stdout);
+  assert.equal(secondPayload.claudeCodeGateway.settings.written, false);
+  assert.equal(secondPayload.claudeCodeGateway.shell.written, false);
+  const secondShell = fs.readFileSync(claudeShellRc, "utf8");
+  assert.equal(secondShell.split(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START).length - 1, 1);
+
   const statusCommand = fs.readFileSync(path.join(claudeConfigRoot, "commands", "dove", "status.md"), "utf8");
   assert.match(statusCommand, /Default output should read like a project assistant/);
   assert.match(statusCommand, /Do not impose a fixed four-line template/);
@@ -211,11 +283,11 @@ test("CLI install writes Claude user-level command adapters without project-loca
 
 test("CLI install all host adapters skips unsafe local artifacts", () => {
   const target = createTempRoot("dove-install-all-hosts-");
-  const claudeConfigRoot = createTempRoot("dove-claude-config-");
+  const { claudeConfigRoot, claudeShellRc, env } = createClaudeHostTestEnv();
   const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "all"], {
     cwd: ROOT,
     encoding: "utf8",
-    env: { ...process.env, DOVE_CLAUDE_CONFIG_DIR: claudeConfigRoot }
+    env
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -224,6 +296,9 @@ test("CLI install all host adapters skips unsafe local artifacts", () => {
   assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", "dove.status.md")));
   assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "dove")), false);
   assert.ok(fs.existsSync(path.join(claudeConfigRoot, "commands", "dove", "status.md")));
+  assertClaudeGatewaySettings(JSON.parse(fs.readFileSync(path.join(claudeConfigRoot, "settings.json"), "utf8")));
+  assert.match(fs.readFileSync(claudeShellRc, "utf8"), new RegExp(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START));
+  assert.equal(payload.claudeCodeGateway.ok, true);
   assert.equal(fs.existsSync(path.join(target, ".codex", "agents")), false);
   assert.equal(fs.existsSync(path.join(target, ".codex", "config.toml")), false);
   assert.ok(fs.existsSync(path.join(target, ".cursor", "commands")));
@@ -284,6 +359,53 @@ test("CLI doctor reports installed host adapters for multi-host workspaces", () 
   assert.ok(payload.checks.some((check) => check.check === "dove-authority" && check.ok));
   assert.equal(payload.managedArtifacts.doveAuthorityManifest.authoritativeRoot, ".dove");
   assert.equal(payload.managedArtifacts.doveAuthorityManifest.currentWriteAuthority, ".dove");
+});
+
+test("CLI doctor reports missing Claude gateway defaults for explicit Claude config targets", () => {
+  const target = createTempRoot("dove-doctor-claude-missing-");
+  const { env } = createClaudeHostTestEnv();
+  const install = spawnSync("node", [CLI, "install", target, "--force"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env
+  });
+  assert.equal(install.status, 0, install.stderr || install.stdout);
+
+  const result = spawnSync("node", [CLI, "doctor", target], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env
+  });
+
+  assert.equal(result.status, 1, result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.claudeCodeGateway.ok, false);
+  assert.ok(payload.checks.some((check) => check.check === "claude-code-gateway" && !check.ok && /dove sync \. --host claude/.test(check.message)));
+  assertNoSecretValues(result.stdout);
+});
+
+test("CLI doctor passes after Claude host install configures gateway defaults", () => {
+  const target = createTempRoot("dove-doctor-claude-ready-");
+  const { env } = createClaudeHostTestEnv();
+  const install = spawnSync("node", [CLI, "install", target, "--force", "--host", "all"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env
+  });
+  assert.equal(install.status, 0, install.stderr || install.stdout);
+
+  const result = spawnSync("node", [CLI, "doctor", target], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.claudeCodeGateway.ok, true);
+  assert.ok(payload.checks.some((check) => check.check === "claude-code-gateway" && check.ok));
+  assert.deepEqual(payload.claudeCodeGateway.settings.ensuredEnvKeys, Object.keys(CLAUDE_CODE_GATEWAY_ENV_DEFAULTS));
+  assertNoSecretValues(result.stdout);
 });
 
 test("CLI doctor fails when a required Dove adapter is missing", () => {
