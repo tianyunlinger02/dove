@@ -6,6 +6,7 @@ import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
+import { evidencePathProblemFlags } from "./artifact-integrity.mjs";
 
 function slugify(value) {
   return String(value ?? "")
@@ -41,7 +42,14 @@ function publicIntegrityActions(flags = [], responseLanguage = "zh") {
     "missing-methodology": localizedText(responseLanguage, "说明实验方法。", "Describe the experiment method."),
     "missing-success-metric": localizedText(responseLanguage, "说明成功指标。", "Describe the success metric."),
     "missing-result-summary": localizedText(responseLanguage, "补一段结果摘要。", "Add a result summary."),
-    "pending-outcome": localizedText(responseLanguage, "给出明确实验结论。", "Record a concrete experiment outcome.")
+    "pending-outcome": localizedText(responseLanguage, "给出明确实验结论。", "Record a concrete experiment outcome."),
+    "missing-evidence-file": localizedText(responseLanguage, "提供存在的本地实验证据文件。", "Provide an existing local experiment evidence file."),
+    "empty-evidence-file": localizedText(responseLanguage, "把空实验证据文件替换为真实结果材料。", "Replace empty experiment evidence with real result material."),
+    "directory-evidence-file": localizedText(responseLanguage, "引用具体实验证据文件，不要引用目录。", "Reference a concrete evidence file, not a directory."),
+    "unsafe-evidence-path": localizedText(responseLanguage, "使用项目内相对证据路径。", "Use a project-relative evidence path."),
+    "bookkeeping-evidence-file": localizedText(responseLanguage, "改用真实实验结果文件，不要用状态、导航或 ledger 记录。", "Use real result files instead of status, navigation, or ledger records."),
+    "unsupported-evidence-file": localizedText(responseLanguage, "引用普通文件形式的实验证据。", "Reference a regular file as experiment evidence."),
+    "unreadable-evidence-file": localizedText(responseLanguage, "修复不可读取的实验证据文件。", "Fix unreadable experiment evidence.")
   };
   return normalizeStringArray(flags.map((flag) => labels[flag] ?? localizedText(responseLanguage, "补齐实验审计指出的缺口。", "Fill the gap raised by experiment review.")));
 }
@@ -96,7 +104,14 @@ function requiredActionsForIntegrityFlags(flags = []) {
     "missing-methodology": "provide-experiment-methodology",
     "missing-success-metric": "provide-success-metric",
     "missing-result-summary": "provide-result-summary",
-    "pending-outcome": "provide-concrete-outcome"
+    "pending-outcome": "provide-concrete-outcome",
+    "missing-evidence-file": "attach-existing-experiment-evidence-file",
+    "empty-evidence-file": "replace-empty-experiment-evidence",
+    "directory-evidence-file": "attach-file-not-directory",
+    "unsafe-evidence-path": "use-project-relative-evidence-path",
+    "bookkeeping-evidence-file": "attach-substantive-experiment-artifact",
+    "unsupported-evidence-file": "attach-regular-evidence-file",
+    "unreadable-evidence-file": "fix-unreadable-experiment-evidence"
   };
   return normalizeStringArray(flags.map((flag) => actions[flag] ?? `resolve-${flag}`));
 }
@@ -104,7 +119,7 @@ function requiredActionsForIntegrityFlags(flags = []) {
 function experienceBoundaryFor({ status, plan, result, audit, bridge, artifactRefs }) {
   if (audit?.auditVerdict === "blocked") {
     const requiredActions = requiredActionsForIntegrityFlags(audit.integrityFlags);
-    const materialFlags = ["missing-claim-link", "missing-evidence-links", "missing-methodology", "missing-success-metric", "missing-result-summary"];
+    const materialFlags = ["missing-claim-link", "missing-evidence-links", "missing-evidence-file", "empty-evidence-file", "directory-evidence-file", "unsafe-evidence-path", "bookkeeping-evidence-file", "unsupported-evidence-file", "unreadable-evidence-file", "missing-methodology", "missing-success-metric", "missing-result-summary"];
     const hasMissingMaterials = audit.integrityFlags.some((flag) => materialFlags.includes(flag));
     return {
       id: `${result?.id ?? plan.id}-audit-blocked`,
@@ -185,6 +200,50 @@ export function runExperienceWorkflow(root, args = {}) {
     createdAt: rawPlan.createdAt ?? timestamp,
     updatedAt: timestamp
   };
+  if (!resultInput && (!plan.methodology || !plan.successMetric)) {
+    const missing = [!plan.methodology ? "missing-methodology" : null, !plan.successMetric ? "missing-success-metric" : null].filter(Boolean);
+    const responseLanguage = resolveDoveResponseLanguage(root, args);
+    const boundary = {
+      id: `${experimentId}-plan-materials`,
+      type: "missing-required-materials",
+      reason: `Experiment plan ${experimentId} needs methodology and successMetric before it can be recorded as real progress: ${missing.join(", ")}.`,
+      requiredInputs: missing,
+      requiredActions: requiredActionsForIntegrityFlags(missing),
+      artifactRefs: [],
+      nextAction: "project:dove.experience",
+      ownerRole: "builder",
+      nextRole: "builder"
+    };
+    const resultCard = buildCommandResultCard({
+      surface: "dove.experience",
+      command: "run_experience_workflow",
+      title: localizedText(responseLanguage, "实验材料不足", "Experiment material missing"),
+      status: "missing-required-materials",
+      happened: localizedText(responseLanguage, "没有写入实验计划；methodology 和 successMetric 是最低材料边界。", "No experiment plan was written; methodology and successMetric are the minimum material boundary."),
+      durableWrites: [],
+      boundary: publicExperienceBoundary(boundary, { integrityFlags: missing }, responseLanguage),
+      nextActions: [{
+        title: localizedText(responseLanguage, "补实验方法和成功指标", "Add method and success metric"),
+        why: localizedText(responseLanguage, "只有题目或 idea 只是占位，不能算实验推进。", "A title or idea alone is a placeholder, not experiment progress.")
+      }]
+    }, responseLanguage);
+    return {
+      status: "missing-required-materials",
+      packetId: target.packetId,
+      plan,
+      result: null,
+      audit: null,
+      bridge: null,
+      boundary,
+      boundaryType: boundary.type,
+      requiredActions: boundary.requiredActions,
+      artifactRefs: [],
+      validationEvidencePaths: [],
+      nextAction: boundary.nextAction,
+      artifacts: [],
+      resultCard
+    };
+  }
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   plansIndex.items = upsertById(Array.isArray(plansIndex.items) ? plansIndex.items : [], plan);
   plansIndex.updatedAt = timestamp;
@@ -211,23 +270,26 @@ export function runExperienceWorkflow(root, args = {}) {
     resultsIndex.updatedAt = timestamp;
     writeJson(root, ARTIFACT_PATHS.experimentResults, resultsIndex);
 
+    const evidenceIntegrity = evidencePathProblemFlags(root, result.evidenceLinks);
     const integrityFlags = [];
     if (!result.claimId) integrityFlags.push("missing-claim-link");
-    if (result.evidenceLinks.length === 0) integrityFlags.push("missing-evidence-links");
+    integrityFlags.push(...evidenceIntegrity.flags);
     if (!plan.methodology) integrityFlags.push("missing-methodology");
     if (!plan.successMetric) integrityFlags.push("missing-success-metric");
     if (!result.summary) integrityFlags.push("missing-result-summary");
     if (result.outcome === "pending") integrityFlags.push("pending-outcome");
+    const uniqueIntegrityFlags = Array.from(new Set(integrityFlags));
     audit = {
       id: slugify(`${result.id}-audit`),
       packetId: target.packetId,
       experimentId,
       resultId: result.id,
       claimId: result.claimId,
-      auditVerdict: integrityFlags.length === 0 ? "clean" : "blocked",
-      integrityFlags,
-      auditFindings: integrityFlags.map((flag) => `Experience workflow flagged ${flag}.`),
-      bridgeReadiness: integrityFlags.length === 0 ? "ready" : "blocked",
+      auditVerdict: uniqueIntegrityFlags.length === 0 ? "clean" : "blocked",
+      integrityFlags: uniqueIntegrityFlags,
+      auditFindings: uniqueIntegrityFlags.map((flag) => `Experience workflow flagged ${flag}.`),
+      evidencePathIntegrity: evidenceIntegrity.pathEvidence,
+      bridgeReadiness: uniqueIntegrityFlags.length === 0 ? "ready" : "blocked",
       updatedAt: timestamp
     };
     const auditsIndex = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });

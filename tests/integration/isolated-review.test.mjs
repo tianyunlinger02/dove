@@ -151,6 +151,8 @@ test("isolated-review-import rejects mismatched input hashes", () => {
     summary: "Bad hash should fail.",
     inputPath: prepared.inputPath,
     inputSha256: "wrong-hash",
+    reportPath: prepared.reportPath,
+    reviewedArtifactPaths: prepared.reviewedArtifactPaths,
     findings: [],
     actionItems: []
   }, null, 2), "utf8");

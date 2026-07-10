@@ -27,13 +27,13 @@ Dove exposes one flat public command surface:
 | `project:dove.operator` | Preview compact queue cards, then run one confirmed foreground pass over ready/in-progress work and blocker-investigation planning. |
 | `project:dove.lessons` | Query or record global/task-bound lessons that future Dove work must obey. |
 | `project:dove.version` | Snapshot a direction change and clear active non-init tasks while preserving init and required lessons. |
-| `project:dove.source` | Organize external information such as papers, web findings, citations, and provenance. |
-| `project:dove.note` | Organize internal information from the repository, `.dove/`, notes, and existing artifacts. |
+| `project:dove.source` | Register verified external information such as papers, web findings, citations, and provenance. |
+| `project:dove.note` | Synthesize internal findings from repository material, existing artifacts, verified sources, quotes, claims, or open questions. |
 | `project:dove.figure` | Describe the figure once; Dove gathers materials, prepares generation, imports output, captions, and validates QA. |
 | `project:dove.experience` | Plan experiments, record results, audit them, and bridge evidence into claims. |
 | `project:dove.draft` | Generate or revise paper draft sections from prompts, sources, notes, experiences, and review findings. |
-| `project:dove.review` | Prepare/import an isolated audio review over final plan/results and explicit artifacts only. |
-| `project:dove.review-loop` | Run bounded review + draft + experience iterations; the default max is 3 from Dove settings. |
+| `project:dove.review` | Run a local evidence-aware review over selected task materials and return concrete findings or coherence. |
+| `project:dove.review-loop` | Run bounded local review + draft + experience iterations; the default max is 3 from Dove settings. |
 | `project:dove.rebuttal` | Normalize reviewer issues, choose response strategy, and draft rebuttal responses. |
 
 Older router, checklist, plan, audit, return, follow-through, onboarding, governance-audit, and paper-namespaced slash surfaces are not public commands. Their useful low-level capabilities remain internal MCP/core building blocks where needed.
@@ -215,9 +215,11 @@ Use `project:dove.draft` to generate or revise sections from prompts, sources, n
 
 ### Review and review-loop
 
-Use `project:dove.review` to prepare an isolated audio review. Audio receives only the current task summary, final plan paths, final result paths, explicit artifact paths, artifact hashes, instructions, and the output contract. Dove does not share broad project context, writer private transcripts, orchestration board context, or reviewer private transcripts.
+Use `project:dove.review` for the ordinary local evidence-aware review path. It inspects the selected task or paper pipeline materials — claims, sources, notes, drafts, experiments, figures, recorded concerns, and revision state — then returns concrete findings, action items, missing evidence, or a coherent verdict. A verdict string alone is not review progress; the review must be backed by inspected materials or by an explicit material boundary.
 
-Use `project:dove.review-loop` when the task should iterate through review, draft update, and experience planning. The configured max iteration count defaults to 3.
+Use `project:dove.review-loop` when the task should iterate through local review, draft update, and experience planning. Each iteration starts with local evidence-aware review, then updates draft or experience material only when that material is supplied. The configured max iteration count defaults to 3, and the loop stops at coherence, a material boundary, or required user input.
+
+Explicit isolated/audio reviewer handoff remains available only through lower-level handoff tools such as `prepare_audio_review`, `import_audio_review`, `run_audio_review`, `prepare_isolated_review`, and `import_isolated_review`. Those tools receive only the declared task summary, final plan/result paths, explicit artifacts, hashes, instructions, and output contract; they do not share broad project context, writer private transcripts, orchestration board context, or reviewer private transcripts.
 
 ### Rebuttal
 

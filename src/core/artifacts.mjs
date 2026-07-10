@@ -32,6 +32,8 @@ import {
 } from "./workspace.mjs";
 import { queryWorkspaceIndex, refreshDurableSurfaces } from "./navigation.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { inspectDeclaredPath, isBookkeepingArtifactPath } from "./artifact-integrity.mjs";
+import { currentMutationContext } from "./mutation-backend.mjs";
 
 function slugify(value) {
   return String(value)
@@ -58,6 +60,32 @@ function hasStructuredNoteSynthesis(args = {}) {
     || normalizeStringArray(args.quotes).length > 0
     || normalizeStringArray(args.claims).length > 0
     || normalizeStringArray(args.openQuestions).length > 0;
+}
+
+const COMPLETION_LIKE_SECTION_STATUSES = new Set([
+  "ready",
+  "review-ready",
+  "done",
+  "complete",
+  "completed",
+  "final",
+  "approved"
+]);
+
+function isCompletionLikeSectionStatus(value) {
+  return COMPLETION_LIKE_SECTION_STATUSES.has(String(value ?? "").trim().toLowerCase());
+}
+
+function assertSubstantiveDraftForSection(root, section, sectionId) {
+  const draftPath = section?.draftPath ?? `${ARTIFACT_PATHS.draftsDir}/${sectionId}.md`;
+  const inspection = inspectDeclaredPath(root, draftPath, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true
+  });
+  if (inspection.status !== "existing") {
+    throw new Error(`set_section_status cannot mark section ${sectionId} complete without a non-empty draft artifact at ${draftPath}: ${inspection.reason ?? inspection.status}`);
+  }
+  return inspection.normalizedPath;
 }
 
 function artifactGuidanceSummary(root, args = {}, details = {}) {
@@ -336,12 +364,65 @@ function readSafeFigureJson(root, relativePath) {
   return readJson(root, normalizedPath, null);
 }
 
-function readSafeFigureText(root, relativePath) {
+function inspectFigureArtifactPath(root, relativePath, options = {}) {
   const normalizedPath = normalizeFigureArtifactPath(relativePath);
   if (!normalizedPath || !isSafeProjectRelativePath(normalizedPath)) {
-    return "";
+    return {
+      path: relativePath,
+      normalizedPath,
+      status: "unsafe",
+      exists: false,
+      file: false,
+      reason: "missing or unsafe path"
+    };
   }
-  return readText(root, normalizedPath, "");
+  const context = currentMutationContext(root);
+  const overlayOperation = context?.operations().find((operation) => operation.relativePath === normalizedPath) ?? null;
+  if (overlayOperation) {
+    const text = options.readText ? context.readText(normalizedPath, "") : null;
+    const sizeBytes = Buffer.byteLength(text ?? context.readText(normalizedPath, ""), "utf8");
+    if (options.rejectBookkeeping && isBookkeepingArtifactPath(normalizedPath)) {
+      return {
+        path: relativePath,
+        normalizedPath,
+        status: "bookkeeping",
+        exists: true,
+        file: true,
+        sizeBytes,
+        reason: "path is a navigation, status, runtime, task, or ledger record rather than substantive work evidence"
+      };
+    }
+    if (options.requireNonEmpty && sizeBytes <= 0) {
+      return {
+        path: relativePath,
+        normalizedPath,
+        status: "empty",
+        exists: true,
+        file: true,
+        sizeBytes,
+        reason: "path is an empty file"
+      };
+    }
+    return {
+      path: relativePath,
+      normalizedPath,
+      status: "existing",
+      exists: true,
+      file: true,
+      sizeBytes,
+      ...(options.readText ? { text } : {})
+    };
+  }
+  return inspectDeclaredPath(root, normalizedPath, options);
+}
+
+function readSafeFigureText(root, relativePath) {
+  const inspection = inspectFigureArtifactPath(root, relativePath, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true,
+    readText: true
+  });
+  return inspection.status === "existing" ? inspection.text ?? "" : "";
 }
 
 function semanticCoverageStrings(value, field) {
@@ -645,10 +726,13 @@ function buildFigureQa(root) {
 
     for (const pathCheck of stagePathChecks) {
       const normalizedPath = normalizeFigureArtifactPath(pathCheck.value);
-      const exists = Boolean(readSafeFigureText(root, normalizedPath));
-      fileChecks.stagedArtifacts[pathCheck.field] = { path: normalizedPath, exists };
+      const inspection = normalizedPath
+        ? inspectFigureArtifactPath(root, normalizedPath, { requireNonEmpty: true, rejectBookkeeping: true })
+        : { status: "unsafe", reason: "missing path" };
+      const exists = inspection.status === "existing";
+      fileChecks.stagedArtifacts[pathCheck.field] = { path: normalizedPath, exists, status: inspection.status, reason: inspection.reason ?? null };
 
-      if (!normalizedPath || !isSafeProjectRelativePath(normalizedPath)) {
+      if (!normalizedPath || inspection.status === "unsafe") {
         figureIssues.push(buildPathIssue({
           figure,
           code: `malformed-${pathCheck.field}`,
@@ -664,10 +748,10 @@ function buildFigureQa(root) {
       if (!exists) {
         figureIssues.push(buildPathIssue({
           figure,
-          code: `missing-${pathCheck.field}-file`,
+          code: `${inspection.status}-${pathCheck.field}-file`,
           severity: "high",
           stage: pathCheck.stage,
-          summary: `Figure ${figure.id} is missing the ${pathCheck.label.toLowerCase()} file at ${normalizedPath}.`,
+          summary: `Figure ${figure.id} cannot use the ${pathCheck.label.toLowerCase()} file at ${normalizedPath}: ${inspection.reason ?? inspection.status}.`,
           artifactPaths: pathCheck.artifactPaths,
           timestamp
         }));
@@ -709,12 +793,13 @@ function buildFigureQa(root) {
     const normalizedSourceArtifactPaths = sourceArtifactPaths.map(normalizeFigureArtifactPath);
     for (let index = 0; index < normalizedSourceArtifactPaths.length; index += 1) {
       const sourcePath = normalizedSourceArtifactPaths[index];
-      const exists = sourcePath && isSafeProjectRelativePath(sourcePath)
-        ? fs.existsSync(resolvePath(root, sourcePath))
-        : false;
-      fileChecks.sourceArtifacts.push({ path: sourcePath, exists });
+      const inspection = sourcePath
+        ? inspectDeclaredPath(root, sourcePath, { requireNonEmpty: true, rejectBookkeeping: true })
+        : { status: "unsafe", reason: "missing path" };
+      const exists = inspection.status === "existing";
+      fileChecks.sourceArtifacts.push({ path: sourcePath, exists, status: inspection.status, reason: inspection.reason ?? null });
 
-      if (!sourcePath || !isSafeProjectRelativePath(sourcePath)) {
+      if (!sourcePath || inspection.status === "unsafe") {
         figureIssues.push(buildPathIssue({
           figure,
           code: `malformed-source-artifact-${index + 1}`,
@@ -730,10 +815,10 @@ function buildFigureQa(root) {
       if (!exists) {
         figureIssues.push(buildPathIssue({
           figure,
-          code: `missing-source-artifact-${index + 1}`,
+          code: `${inspection.status}-source-artifact-${index + 1}`,
           severity: "medium",
           stage: "brief",
-          summary: `Figure ${figure.id} references a missing source artifact at ${sourcePath}.`,
+          summary: `Figure ${figure.id} cannot use source artifact ${sourcePath}: ${inspection.reason ?? inspection.status}.`,
           artifactPaths: [ARTIFACT_PATHS.figuresIndex, ARTIFACT_PATHS.figureBriefs, ARTIFACT_PATHS.figureQa],
           timestamp
         }));
@@ -2149,7 +2234,7 @@ function sourceInputsFromArgs(args = {}) {
 }
 
 function hasSourceProvenance(input = {}) {
-  return [input.title, input.locator].some((value) => typeof value === "string" && value.trim());
+  return [input.locator, input.doi, input.url, input.arxivId, input.pmid, input.citationKey].some((value) => typeof value === "string" && value.trim());
 }
 
 const UNVERIFIED_SOURCE_EVIDENCE_PATTERNS = [
@@ -2288,7 +2373,7 @@ function assertSourceInputHasProvenance(input = {}, sources, baseId) {
     return;
   }
   if (!hasSourceProvenance(input)) {
-    throw new Error("register_source requires each new source to include a title or locator.");
+    throw new Error("register_source requires each new source to include verifiable provenance such as a locator, DOI, URL, arXiv id, PMID, or citationKey; a title alone is not source provenance.");
   }
 }
 
@@ -2456,15 +2541,19 @@ export function upsertNote(root, args = {}) {
   const noteId = normalizeIdentifier(args.noteId, `${args.sectionId ?? "general"}-${args.title ?? `note-${notes.items.length + 1}`}`);
   const existingIndex = notes.items.findIndex((item) => item.id === noteId);
   const existing = existingIndex >= 0 ? notes.items[existingIndex] : null;
-  if (!existing && !hasStructuredNoteSynthesis(args)) {
-    throw new Error("upsert_note requires each new note to include a summary, quote, claim, or open question.");
+  if (!hasStructuredNoteSynthesis(args)) {
+    throw new Error("upsert_note requires each note write to include a summary, quote, claim, or open question; metadata-only note updates are not research progress.");
+  }
+  const nextSourceIds = sourceIdsProvided ? requestedSourceIds : existing?.sourceIds ?? [];
+  if (nextSourceIds.length === 0) {
+    throw new Error("upsert_note requires sourceIds linking the note to registered source provenance.");
   }
   const note = {
     ...(existing ?? {}),
     id: noteId,
     title: args.title ?? existing?.title ?? noteId.replace(/-/g, " "),
     sectionId: normalizeIdentifier(args.sectionId, existing?.sectionId ?? "introduction"),
-    sourceIds: sourceIdsProvided ? requestedSourceIds : existing?.sourceIds ?? [],
+    sourceIds: nextSourceIds,
     packetIds: mergeIds(existing?.packetIds, args.packetIds, target.packet?.id ? [target.packet.id] : []),
     summary: args.summary ?? existing?.summary ?? "",
     quotes: Array.isArray(args.quotes) ? normalizeStringArray(args.quotes) : existing?.quotes ?? [],
@@ -2748,9 +2837,17 @@ export function setSectionStatus(root, args = {}) {
   assertFollowThroughReady(root, "Updating a section status", args);
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
+  const nextStatus = args.status ?? "planned";
+  if (isCompletionLikeSectionStatus(nextStatus)) {
+    const existingSection = state.sections[sectionId];
+    if (!existingSection) {
+      throw new Error(`set_section_status cannot mark new section ${sectionId} as ${nextStatus}; create a draft with upsert_draft first.`);
+    }
+    assertSubstantiveDraftForSection(root, existingSection, sectionId);
+  }
   state.sections[sectionId] = {
     ...(state.sections[sectionId] ?? { id: sectionId, title: sectionId, draftPath: `.dove/drafts/${sectionId}.md`, claimIds: [] }),
-    status: args.status ?? "planned",
+    status: nextStatus,
     summary: args.summary ?? state.sections[sectionId]?.summary ?? ""
   };
   const board = loadBoard(root);
@@ -2762,7 +2859,7 @@ export function setSectionStatus(root, args = {}) {
     nextAction: board.nextAction,
     tasks: board.tasks.map((task) => {
       if (task.id !== sectionId && task.id !== `${sectionId}-draft`) return task;
-      return { ...task, status: args.status === "ready" ? "done" : task.status, notes: args.summary ?? task.notes };
+      return { ...task, status: isCompletionLikeSectionStatus(nextStatus) ? "done" : task.status, notes: args.summary ?? task.notes };
     })
   });
   refreshDurableSurfaces(root, {

@@ -11,6 +11,7 @@ import { isPatchPlanMode } from "./mutation-backend.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { summarizeFigureQa, validateFigurePipeline } from "./artifacts.mjs";
+import { inspectDeclaredPath } from "./artifact-integrity.mjs";
 import {
   assertFollowThroughReady,
   assertGovernanceMutationRegistered,
@@ -186,18 +187,33 @@ function materialRequirement({ type, refId, label, status, artifactPath = null, 
   };
 }
 
-function sourceArtifactRequirement(root, artifactPath, index) {
+function materialInspection(root, artifactPath) {
   const normalized = normalizeRelativePath(artifactPath);
-  const safe = normalized && isSafeProjectRelativePath(normalized);
-  const exists = safe ? fs.existsSync(resolvePath(root, normalized)) : false;
+  if (!normalized) {
+    return { normalized, inspection: null, available: false, reason: "missing artifact path" };
+  }
+  const inspection = inspectDeclaredPath(root, normalized, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true
+  });
+  return {
+    normalized,
+    inspection,
+    available: inspection.status === "existing",
+    reason: inspection.reason ?? inspection.status
+  };
+}
+
+function sourceArtifactRequirement(root, artifactPath, index) {
+  const inspected = materialInspection(root, artifactPath);
   return materialRequirement({
     type: "source-artifact",
-    refId: normalized ?? `source-artifact-${index + 1}`,
-    label: normalized ?? `Source artifact ${index + 1}`,
-    status: exists ? "available" : "missing",
-    artifactPath: normalized,
-    summary: exists ? "Source artifact is present." : "Source artifact is missing or malformed.",
-    evidence: { safePath: Boolean(safe), exists }
+    refId: inspected.normalized ?? `source-artifact-${index + 1}`,
+    label: inspected.normalized ?? `Source artifact ${index + 1}`,
+    status: inspected.available ? "available" : "missing",
+    artifactPath: inspected.normalized,
+    summary: inspected.available ? "Source artifact is present and non-empty." : `Source artifact is not usable: ${inspected.reason}.`,
+    evidence: { inspection: inspected.inspection }
   });
 }
 
@@ -323,17 +339,16 @@ function buildMaterialRequirements(root, figure, args = {}) {
   }
 
   for (const requirement of Array.isArray(figure.materialRequirements) ? figure.materialRequirements : []) {
-    const artifactPath = normalizeRelativePath(requirement.artifactPath ?? requirement.path);
-    const exists = artifactPath && isSafeProjectRelativePath(artifactPath) ? fs.existsSync(resolvePath(root, artifactPath)) : false;
+    const inspected = materialInspection(root, requirement.artifactPath ?? requirement.path);
     requirements.push(materialRequirement({
       type: requirement.type ?? "operator-material",
       refId: requirement.id ?? requirement.label,
       label: requirement.label ?? requirement.id ?? "Operator material",
-      status: artifactPath ? (exists ? "available" : "missing") : (requirement.status ?? "needs-operator"),
-      artifactPath,
-      summary: requirement.summary ?? "Operator-declared material requirement.",
+      status: inspected.normalized ? (inspected.available ? "available" : "missing") : (requirement.status ?? "needs-operator"),
+      artifactPath: inspected.normalized,
+      summary: requirement.summary ?? (inspected.available ? "Operator-declared material artifact is present and non-empty." : `Operator-declared material is not usable: ${inspected.reason}.`),
       source: "figure-plan",
-      evidence: { exists }
+      evidence: { inspection: inspected.inspection }
     }));
   }
 
@@ -343,17 +358,16 @@ function buildMaterialRequirements(root, figure, args = {}) {
     if (typeof hint === "string") {
       requirements.push(materialRequirement({ type: "operator-hint", refId: `hint-${index + 1}`, label: hint, status: "available", summary: hint, source: "operator" }));
     } else if (hint && typeof hint === "object") {
-      const artifactPath = normalizeRelativePath(hint.artifactPath ?? hint.path);
-      const exists = artifactPath && isSafeProjectRelativePath(artifactPath) ? fs.existsSync(resolvePath(root, artifactPath)) : false;
+      const inspected = materialInspection(root, hint.artifactPath ?? hint.path);
       requirements.push(materialRequirement({
         type: hint.type ?? "operator-hint",
         refId: hint.id ?? `hint-${index + 1}`,
         label: hint.label ?? hint.summary ?? `Hint ${index + 1}`,
-        status: artifactPath ? (exists ? "available" : "missing") : (hint.status ?? "available"),
-        artifactPath,
-        summary: hint.summary ?? hint.label ?? "Operator-provided material hint.",
+        status: inspected.normalized ? (inspected.available ? "available" : "missing") : (hint.status ?? "available"),
+        artifactPath: inspected.normalized,
+        summary: hint.summary ?? hint.label ?? (inspected.available ? "Operator-provided material artifact is present and non-empty." : `Operator-provided material is not usable: ${inspected.reason}.`),
         source: "operator",
-        evidence: { exists }
+        evidence: { inspection: inspected.inspection }
       }));
     }
   }
@@ -523,9 +537,12 @@ function svgSafetyIssues(content, maxSvgBytes) {
 function readOutputManifest(root, runId, outputManifestPath, outputDefaults = {}) {
   const defaultPath = `${generationRunDir(runId)}/output.json`;
   const manifestPath = assertSafeFigurePath(outputManifestPath ?? defaultPath, "outputManifestPath", [generationRunDir(runId), ".dove/figures/"]);
-  const fullPath = resolvePath(root, manifestPath);
-  if (fs.existsSync(fullPath)) {
+  const inspection = inspectDeclaredPath(root, manifestPath, { requireNonEmpty: true });
+  if (inspection.status === "existing") {
     return { manifestPath, manifest: readJson(root, manifestPath, {}) };
+  }
+  if (inspection.status !== "missing") {
+    throw new Error(`Figure output manifest is not a usable file at ${manifestPath}: ${inspection.reason ?? inspection.status}`);
   }
   const manifest = { ...outputDefaults, runId, generatedAt: nowIso() };
   writeJson(root, manifestPath, manifest);
@@ -1002,15 +1019,24 @@ export function importFigureGeneration(root, args = {}) {
   const sourceSvgPath = assertSafeFigureSourcePath(args.sourceSvgPath ?? manifest.sourceSvgPath ?? manifest.svgPath ?? defaultSourceSvgPath, "sourceSvgPath", runId);
   const finalSvgPath = assertSafeFigureFinalTargetPath(figure.finalSvgPath, "figure.finalSvgPath");
 
+  const config = loadFigureGenerationConfig(root, args.env ?? process.env);
+  let svgContent;
   if (rawSvgContent) {
-    writeText(root, sourceSvgPath, rawSvgContent.endsWith("\n") ? rawSvgContent : `${rawSvgContent}\n`);
-  }
-  const svgContent = readText(root, sourceSvgPath, "");
-  if (!svgContent) {
-    throw new Error(`Generated SVG output does not exist: ${sourceSvgPath}`);
+    svgContent = rawSvgContent.endsWith("\n") ? rawSvgContent : `${rawSvgContent}\n`;
+    writeText(root, sourceSvgPath, svgContent);
+  } else {
+    const sourceInspection = inspectDeclaredPath(root, sourceSvgPath, {
+      requireNonEmpty: true,
+      rejectBookkeeping: true,
+      readText: true,
+      maxBytes: config.maxSvgBytes
+    });
+    if (sourceInspection.status !== "existing") {
+      throw new Error(`Generated SVG output is not a usable non-empty file at ${sourceSvgPath}: ${sourceInspection.reason ?? sourceInspection.status}`);
+    }
+    svgContent = sourceInspection.text ?? readText(root, sourceSvgPath, "");
   }
 
-  const config = loadFigureGenerationConfig(root, args.env ?? process.env);
   const provider = existingGeneration.providerId ? config.providers.find((item) => item.id === existingGeneration.providerId) : null;
   const maxSvgBytes = provider?.maxSvgBytes ?? config.maxSvgBytes;
   const safetyIssues = svgSafetyIssues(svgContent, maxSvgBytes);

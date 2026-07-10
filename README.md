@@ -117,13 +117,13 @@ Dove exposes one flat user-facing command set:
 | `project:dove.operator` | Preview compact queue cards, then run one confirmed foreground pass over ready/in-progress work and blocker-investigation planning. |
 | `project:dove.lessons` | Query or record global/task-bound lessons that future work must obey. |
 | `project:dove.version` | Snapshot a direction change and clear active tasks except init. |
-| `project:dove.source` | Organize external information and provenance. |
-| `project:dove.note` | Organize internal repository and `.dove/` information. |
+| `project:dove.source` | Register verified external information and provenance after retrieval/search candidates have been checked. |
+| `project:dove.note` | Synthesize internal findings, verified sources, quotes, claims, or open questions into task-bound notes. |
 | `project:dove.figure` | Turn one figure request into material discovery, generation/import, captioning, and QA. |
 | `project:dove.experience` | Plan experiments, record results, audit them, and bridge evidence into claims. |
 | `project:dove.draft` | Generate or revise paper drafts with explicit placeholders for gaps. |
-| `project:dove.review` | Run an isolated audio review over final plan/results and explicit artifacts. |
-| `project:dove.review-loop` | Iterate review, draft, and experience up to the configured max, default 3. |
+| `project:dove.review` | Run a local evidence-aware review over selected task materials and return concrete findings or coherence. |
+| `project:dove.review-loop` | Iterate local review, draft, and experience up to the configured max, default 3. |
 | `project:dove.rebuttal` | Normalize reviewer issues and draft evidence-backed responses. |
 
 Older router, plan, checklist, audit, return, follow-through, onboarding, governance-audit, and paper-namespaced slash commands are not public surfaces. Useful low-level capabilities remain internal MCP/core building blocks where they are still needed.
@@ -162,13 +162,13 @@ Put that in `.dove/config.json` or `.dove/config.local.json`; `DOVE_LANGUAGE` an
 
 ## Workflow presets
 
-- **Source** records external information and source provenance.
-- **Note** consolidates internal information from the repository and `.dove/`.
+- **Source** records verified external information and source provenance; search results remain candidates until checked.
+- **Note** consolidates substantive synthesis from repository material, verified sources, quotes, claims, or open questions.
 - **Experience** merges experiment planning, result recording, audit, and claim bridging.
 - **Figure** lets the user describe a figure once; Dove gathers materials, prepares generation, imports safe output when present, writes caption/provenance, and validates QA.
 - **Draft** writes or revises paper sections from prompts and durable evidence, with explicit placeholders for missing support.
-- **Review** prepares/imports an isolated audio review without sharing full project context or private transcripts.
-- **Review-loop** runs bounded review + draft + experience iterations.
+- **Review** runs a local evidence-aware pass over selected task materials and returns findings, action items, missing evidence, or coherence.
+- **Review-loop** runs bounded local review + draft + experience iterations without preparing isolated/audio handoff unless explicitly requested through low-level tools.
 - **Rebuttal** handles submission revision and reviewer response drafting.
 
 ## Host adapters

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
@@ -46,6 +47,13 @@ function seedExperienceContext(root) {
   ensureWorkspace(root);
   initProject(root, { title: "Experience Workflow Test", objective: "Validate experiment-to-claim boundaries." });
   return seedTaskPacket(root);
+}
+
+function writeEvidenceFile(root, relativePath, text = "Experiment evidence fixture.\n") {
+  const fullPath = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, text, "utf8");
+  return relativePath;
 }
 
 test("runExperienceWorkflow returns a material boundary for blocked experiment audits", () => {
@@ -110,7 +118,7 @@ test("runExperienceWorkflow returns a material boundary when a clean result refe
       claimId: "missing-claim",
       outcome: "supports",
       summary: "The result supports a claim that has not been created yet.",
-      evidenceLinks: [".dove/experiments/missing-claim-result.json"]
+      evidenceLinks: [writeEvidenceFile(root, ".dove/experiments/missing-claim-result.json", "Result supports the missing claim.\n")]
     });
 
     assert.equal(result.status, "recorded");

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ARTIFACT_PATHS, DOVE_AUDIO_CONTEXT_POLICY } from "./schema.mjs";
+import { inspectDeclaredPath } from "./artifact-integrity.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { appendText, assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 import { readTaskPacketCatalog } from "./task-packets.mjs";
@@ -93,22 +94,61 @@ function safeArtifactPath(root, relativePath) {
 
 function artifactEntry(root, relativePath) {
   const safePath = safeArtifactPath(root, relativePath);
-  const fullPath = resolvePath(root, safePath);
-  const exists = fs.existsSync(fullPath);
+  const inspection = inspectDeclaredPath(root, safePath, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true
+  });
   return {
     path: safePath,
-    exists,
-    sha256: exists && fs.statSync(fullPath).isFile() ? hashFile(fullPath) : null
+    exists: inspection.exists,
+    usable: inspection.status === "existing",
+    status: inspection.status,
+    reason: inspection.reason ?? null,
+    sizeBytes: inspection.sizeBytes ?? null,
+    sha256: inspection.status === "existing" ? hashFile(resolvePath(root, safePath)) : null
   };
+}
+
+function assertSubstantiveArtifactEntries(artifacts, label) {
+  const usable = artifacts.filter((item) => item.usable);
+  if (usable.length === 0) {
+    const reasons = artifacts.map((item) => `${item.path}:${item.reason ?? item.status}`).join(", ") || "no artifact paths provided";
+    throw new Error(`${label} requires at least one existing non-empty non-bookkeeping reviewed artifact (${reasons}).`);
+  }
+  return usable;
+}
+
+function assertUsableArtifactPath(root, relativePath, label) {
+  const entry = artifactEntry(root, relativePath);
+  if (!entry.usable) {
+    throw new Error(`${label} is not a usable file at ${entry.path}: ${entry.reason ?? entry.status}.`);
+  }
+  return entry.path;
+}
+
+function requiredStringField(raw, field, label = field) {
+  if (typeof raw[field] !== "string" || !raw[field].trim()) {
+    throw new Error(`audio review handoff requires ${label}`);
+  }
+  return raw[field].trim();
 }
 
 function normalizeHandoff(root, raw = {}) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("audio review handoff must be a JSON object");
   }
-  const runId = normalizeRunId(raw.runId);
-  const verdict = REVIEW_VERDICTS.has(raw.verdict) ? raw.verdict : "needs-revision";
-  const status = HANDOFF_STATUSES.has(raw.status) ? raw.status : "completed";
+  const runId = normalizeRunId(requiredStringField(raw, "runId"));
+  const verdict = requiredStringField(raw, "verdict");
+  if (!REVIEW_VERDICTS.has(verdict)) {
+    throw new Error(`audio review handoff has unsupported verdict: ${verdict}`);
+  }
+  const status = requiredStringField(raw, "status");
+  if (!HANDOFF_STATUSES.has(status)) {
+    throw new Error(`audio review handoff has unsupported status: ${status}`);
+  }
+  if (status !== "completed" && verdict === "coherent") {
+    throw new Error(`audio review handoff status ${status} cannot import a coherent verdict.`);
+  }
   const findings = Array.isArray(raw.findings) ? raw.findings.map((finding, index) => ({
     id: slugify(finding.id ?? `${finding.severity ?? "medium"}-${finding.summary ?? index}`),
     severity: ["low", "medium", "high"].includes(finding.severity) ? finding.severity : "medium",
@@ -117,17 +157,22 @@ function normalizeHandoff(root, raw = {}) {
     claimIds: normalizeStringArray(finding.claimIds),
     experimentIds: normalizeStringArray(finding.experimentIds)
   })) : [];
+  const reviewedArtifactPaths = normalizeStringArray(raw.reviewedArtifactPaths ?? raw.artifactPaths).map((item) => safeArtifactPath(root, item));
+  if (reviewedArtifactPaths.length === 0) {
+    throw new Error("audio review handoff requires reviewedArtifactPaths.");
+  }
   return {
     version: 1,
     runId,
     status,
     verdict,
-    reviewerId: normalizeString(raw.reviewerId, "audio"),
+    reviewerId: requiredStringField(raw, "reviewerId"),
     timestamp: normalizeString(raw.timestamp, nowIso()),
-    summary: normalizeString(raw.summary, `Audio reviewer returned ${verdict}.`),
-    inputPath: raw.inputPath ? safeArtifactPath(root, raw.inputPath) : null,
-    inputSha256: normalizeString(raw.inputSha256, null),
-    reportPath: raw.reportPath ? safeArtifactPath(root, raw.reportPath) : null,
+    summary: requiredStringField(raw, "summary"),
+    inputPath: safeArtifactPath(root, requiredStringField(raw, "inputPath")),
+    inputSha256: requiredStringField(raw, "inputSha256"),
+    reportPath: safeArtifactPath(root, requiredStringField(raw, "reportPath")),
+    reviewedArtifactPaths,
     findings,
     actionItems: normalizeStringArray(raw.actionItems ?? findings.map((finding) => finding.summary)),
     privateTranscriptImported: false
@@ -292,6 +337,7 @@ export function prepareAudioReview(root, args = {}) {
   const explicitArtifactPaths = normalizeStringArray(args.artifactPaths ?? args.reviewedArtifactPaths).map((item) => safeArtifactPath(root, item));
   const reviewedArtifactPaths = Array.from(new Set([...finalPlanPaths, ...finalResultPaths, ...explicitArtifactPaths]));
   const artifacts = reviewedArtifactPaths.map((relativePath) => artifactEntry(root, relativePath));
+  const usableArtifacts = assertSubstantiveArtifactEntries(artifacts, "prepare_audio_review");
   const timestamp = nowIso();
   const input = {
     version: 1,
@@ -312,12 +358,13 @@ export function prepareAudioReview(root, args = {}) {
     finalPlanPaths,
     finalResultPaths,
     explicitArtifactPaths,
+    reviewedArtifactPaths: usableArtifacts.map((artifact) => artifact.path),
     artifacts,
     instructions: normalizeString(args.instructions, "Review only the supplied final plan, final result, and explicit artifacts. Do not assume access to project context."),
     outputContract: {
       handoffPath: relativeRunPath(runId, "handoff.json"),
       reportPath: relativeRunPath(runId, "report.md"),
-      requiredHandoffFields: ["runId", "status", "verdict", "reviewerId", "summary", "inputPath", "inputSha256", "findings", "actionItems"]
+      requiredHandoffFields: ["runId", "status", "verdict", "reviewerId", "summary", "inputPath", "inputSha256", "reportPath", "reviewedArtifactPaths", "findings", "actionItems"]
     },
     privacyBoundary: {
       writerPrivateTranscriptShared: false,
@@ -344,7 +391,7 @@ export function prepareAudioReview(root, args = {}) {
     finalPlanPaths,
     finalResultPaths,
     explicitArtifactPaths,
-    reviewedArtifactPaths,
+    reviewedArtifactPaths: usableArtifacts.map((artifact) => artifact.path),
     importedAt: null,
     handoffSha256: null,
     reportSha256: null
@@ -359,14 +406,14 @@ export function prepareAudioReview(root, args = {}) {
     inputSha256,
     handoffPath: manifest.handoffPath,
     reportPath: manifest.reportPath,
-    reviewedArtifactPaths,
+    reviewedArtifactPaths: usableArtifacts.map((artifact) => artifact.path),
     privacyBoundary: input.privacyBoundary,
     preActionGuidanceSummary: audioGuidanceSummary(root, args, target, {
       nextAction: "import_audio_review",
       statusSummary: {
         status: "prepared",
         runId,
-        reviewedArtifactCount: reviewedArtifactPaths.length,
+        reviewedArtifactCount: usableArtifacts.length,
         contextPolicy: input.contextPolicy
       }
     })
@@ -403,10 +450,29 @@ export function importAudioReview(root, args = {}) {
     throw new Error(`Audio review input hash mismatch for ${runId}`);
   }
   const reportPath = args.reportPath ? safeArtifactPath(root, args.reportPath) : manifest.reportPath;
+  if (handoff.reportPath !== reportPath) {
+    throw new Error(`Audio review reportPath mismatch: expected ${reportPath}, received ${handoff.reportPath}`);
+  }
+  const manifestReviewed = new Set(normalizeStringArray(manifest.reviewedArtifactPaths));
+  const handoffReviewed = new Set(handoff.reviewedArtifactPaths);
+  const missingReviewed = Array.from(manifestReviewed).filter((artifactPath) => !handoffReviewed.has(artifactPath));
+  if (missingReviewed.length > 0) {
+    throw new Error(`Audio review handoff does not cover prepared reviewed artifacts: ${missingReviewed.join(", ")}`);
+  }
+  for (const artifactPath of handoff.reviewedArtifactPaths) {
+    assertUsableArtifactPath(root, artifactPath, "audio review reviewedArtifactPaths");
+  }
+  const reportInspection = inspectDeclaredPath(root, reportPath, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true
+  });
+  if (reportInspection.status !== "existing") {
+    throw new Error(`Audio review report is not a usable non-empty file at ${reportPath}: ${reportInspection.reason ?? reportInspection.status}`);
+  }
   const reportFullPath = resolvePath(root, reportPath);
   const handoffSha256 = hashFile(handoffFullPath);
-  const reportSha256 = fs.existsSync(reportFullPath) ? hashFile(reportFullPath) : null;
-  appendText(root, ARTIFACT_PATHS.reviewLog, renderReviewLogEntry({ handoff, reportPath: fs.existsSync(reportFullPath) ? reportPath : null, reportSha256 }));
+  const reportSha256 = hashFile(reportFullPath);
+  appendText(root, ARTIFACT_PATHS.reviewLog, renderReviewLogEntry({ handoff, reportPath, reportSha256 }));
   upsertConcerns(root, handoff);
   const updatedManifest = {
     ...manifest,
@@ -414,7 +480,7 @@ export function importAudioReview(root, args = {}) {
     updatedAt: nowIso(),
     importedAt: nowIso(),
     handoffPath,
-    reportPath: fs.existsSync(reportFullPath) ? reportPath : null,
+    reportPath,
     handoffSha256,
     reportSha256,
     verdict: handoff.verdict,

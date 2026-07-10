@@ -846,7 +846,7 @@ Daily effect:
 
 ### `dove.review`
 
-Purpose: prepare an isolated audio review bundle, import a completed handoff if present, and never share writer private transcript or reviewer private transcript.
+Purpose: run a local evidence-aware review over selected task or paper-pipeline materials and return concrete findings, action items, missing evidence, or coherence.
 
 Example invocation:
 
@@ -857,81 +857,73 @@ Example invocation:
 Primary MCP tool:
 
 ```text
-run_audio_review
+run_review_loop
 ```
 
-Prepared-awaiting-review output:
+Local review output:
 
 ```json
 {
   "ok": true,
-  "status": "prepared-awaiting-audio",
-  "inputPath": ".dove/reviews/audio/sample-audio-review/input.json",
-  "handoffPath": ".dove/reviews/audio/sample-audio-review/handoff.json",
-  "reportPath": ".dove/reviews/audio/sample-audio-review/report.md",
-  "privacyBoundary": {
-    "writerPrivateTranscriptShared": false,
-    "reviewerPrivateTranscriptImported": false
-  },
+  "verdict": "needs-revision",
+  "stage": "review-loop",
+  "scope": "command output sample",
+  "summary": "The current paper artifacts need another revision pass.",
+  "findings": [
+    {
+      "severity": "medium",
+      "summary": "Draft section command-output still has a citation TODO.",
+      "responseOwnerRole": "researcher",
+      "methodologicalCategory": "citation"
+    }
+  ],
+  "actionItems": ["Resolve the citation TODO before marking the section review-ready."],
+  "reviewLogPath": ".dove/reviews/log.md",
+  "revisionPlanPath": ".dove/revision-plans/current.md",
   "resultCard": {
     "presentation": "compact-result-summary-card",
     "surface": "dove.review",
-    "command": "run_audio_review",
-    "status": "prepared-awaiting-audio",
-    "outcome": "awaiting-audio-review-output",
-    "evidence": [
-      ".dove/reviews/audio/sample-audio-review/input.json",
-      ".dove/reviews/audio/sample-audio-review/handoff.json",
-      ".dove/reviews/audio/sample-audio-review/report.md"
-    ],
+    "command": "run_review_loop",
+    "status": "needs-revision",
+    "outcome": "needs-revision",
+    "evidence": ["Found 1 issue and left 1 action item."],
     "nextActions": [
       {
-        "command": "import_audio_review",
-        "nextRole": "reviewer",
-        "requiredActions": ["complete-isolated-review-handoff"],
-        "handoffSuggestion": {
-          "presentation": "dove-handoff-suggestion",
-          "boundaryType": "awaiting-review-output"
-        }
+        "title": "Turn the highest-priority issue into revision work",
+        "why": "review found gaps, so the next step is repair rather than claiming completion."
       }
     ]
   }
 }
 ```
 
-Imported non-coherent review output routes back to mission:
+Coherent review output is allowed only after the local materials are inspected:
 
 ```json
 {
   "ok": true,
-  "status": "imported",
-  "verdict": "needs-evidence",
+  "verdict": "coherent",
+  "summary": "The current paper artifacts are internally consistent.",
+  "findings": [],
+  "actionItems": [],
   "resultCard": {
     "surface": "dove.review",
-    "command": "import_audio_review",
-    "outcome": "needs-evidence",
-    "nextActions": [
-      {
-        "command": "project:dove.mission",
-        "boundaryType": "audio-review-needs-evidence",
-        "ownerRole": "builder",
-        "nextRole": "builder",
-        "requiredActions": ["Provide validation evidence."],
-        "proposalOnly": true
-      }
-    ]
+    "command": "run_review_loop",
+    "status": "coherent",
+    "outcome": "coherent"
   }
 }
 ```
 
 Daily effect:
 
-- Review is isolated by explicit artifacts.
-- It shows the handoff path and next import action instead of pretending review completed.
+- Ordinary review is local and evidence-aware; it does not default to isolated/audio handoff.
+- A verdict string by itself is not progress: the output must include inspected-material findings, action items, or a clear material boundary.
+- Explicit isolated/audio handoff remains available only through lower-level handoff tools when the operator asks for that boundary.
 
 ### `dove.review-loop`
 
-Purpose: run bounded review/draft/experience iterations using the configured default of 3 unless overridden.
+Purpose: run bounded local review/draft/experience iterations using the configured default of 3 unless overridden.
 
 Example invocation:
 
@@ -950,31 +942,35 @@ Representative output excerpt:
 ```json
 {
   "ok": true,
+  "status": "blocked",
   "runId": "sample-review-loop",
   "maxIterations": 1,
   "iterations": [
     {
       "iteration": 1,
       "review": {
-        "status": "prepared-awaiting-audio"
+        "verdict": "needs-revision",
+        "findings": [
+          {
+            "severity": "medium",
+            "summary": "Draft section command-output still has a citation TODO."
+          }
+        ],
+        "actionItems": ["Resolve the citation TODO before the next review pass."]
       },
-      "draft": {
-        "sectionId": "command-output",
-        "status": "draft"
-      },
-      "experience": {
-        "experimentId": "sample-loop-exp"
-      }
+      "draft": null,
+      "experience": null
     }
   ],
-  "stopReason": "awaiting-review-output"
+  "stopReason": "review-findings-require-repair"
 }
 ```
 
 Daily effect:
 
 - The loop is bounded and foreground-visible.
-- It stops at review output or evidence boundaries rather than continuing invisibly.
+- Each iteration starts with local evidence-aware review before optional draft or experience substeps.
+- It stops at coherence, repair-required findings, material boundaries, or user input instead of continuing invisibly.
 
 ### `dove.rebuttal`
 

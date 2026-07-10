@@ -21,10 +21,10 @@ Convert a user demand into a confirmable Dove task contract, then hand off to th
 
 ## Operating rules
 
-1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check below; do not construct default answers by manually reading or listing internal files.
+1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check or action below; do not construct default answers by manually reading or listing internal files.
 2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
-3. If an explicitly listed project check fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
-4. This request has one listed project check: `node ./bin/dove.mjs mission .` from the project root; summarize its practical result instead of inspecting internal files directly.
+3. If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
+4. This request has one listed project check: `node ./bin/dove.mjs mission .` from the project root; Summarize its practical result instead of inspecting internal files directly.
 5. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 6. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
 7. When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.

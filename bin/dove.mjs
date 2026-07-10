@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { configureClaudeCodeGatewayDefaults, inspectClaudeCodeGatewayDefaults, resolveClaudeConfigRoot, resolveClaudeShellStartupFile } from "../src/core/claude-code-gateway.mjs";
-import { discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, launchDoveMission, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, refreshDurableSurfaces, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runFigureWorkflow, runGlobalStatusServingForeground, runIsolatedReview, runWithMutationContext } from "../src/core/index.mjs";
+import { buildRebuttal, buildRebuttalStrategy, discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, initDoveGoal, launchDoveMission, normalizeRebuttalIssues, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, queryOperatorLessons, recordOperatorLesson, refreshDurableSurfaces, registerSource, resetDoveVersion, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runDoveAuto, runDoveOperator, runDoveReviewLoop, runExperienceWorkflow, runFigureWorkflow, runGlobalStatusServingForeground, runIsolatedReview, runReviewLoop, runWithMutationContext, setSectionStatus, upsertDraft, upsertNote } from "../src/core/index.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
 import {
@@ -41,15 +41,27 @@ function usage() {
   console.log(`dove
 
 Usage:
+  dove init [target] --goal <text>
   dove status [target]
   dove status [target] --missions
   dove mission [target] --goal <text>
+  dove auto [target] --target <task> --confirmed
+  dove operator [target] --confirmed
+  dove source [target] --target <task> --title <text> --locator <url-or-doi>
+  dove note [target] --target <task> --summary <text>
+  dove draft [target] --target <task> --section-id <id> --body <text>
+  dove experience [target] --target <task> --goal <text> --methodology <text> --success-metric <text>
+  dove review [target] --target <task>
+  dove review-loop [target] --target <task>
+  dove rebuttal [target] --target <task>
+  dove lessons [target] [--title <text> --problem <text>]
+  dove version [target] --reason <text>
   dove figure [target] --intent <text>
   dove install [target] --host <opencode|codex|cursor|agents|claude|all>
   dove sync [target] --host <opencode|codex|cursor|agents|claude|all>
   dove doctor [target]
 
-Other Dove paper actions are handled by their matching /dove.* request; use status first if you are unsure.
+Use status first only for Dove state, task choices, next-step, or blockers. For work requests, use the matching action with real material.
 Use --json only when another tool needs structured details.
 `);
 }
@@ -68,7 +80,7 @@ Use --missions only when you need task choices or details. Use --json only when 
 `);
 }
 
-const LOCAL_DOVE_CLI_SURFACES = new Set(["orchestrate", "mission", "status", "figure"]);
+const LOCAL_DOVE_CLI_SURFACES = new Set(["init", "orchestrate", "mission", "status", "auto", "operator", "lessons", "version", "source", "note", "draft", "experience", "figure", "review", "review-loop", "rebuttal"]);
 const PUBLIC_DOVE_SURFACES = new Set(COMMAND_SURFACES.map((surface) => surface.id.replace(/^dove\./u, "")));
 
 function isHostOnlyDoveSurface(command) {
@@ -380,6 +392,15 @@ function buildDoveStatusArgs(rest = []) {
   };
 }
 
+function buildTaskTargetArgs(rest = []) {
+  return {
+    packetId: readFirstFlagValue(rest, ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id"]),
+    target: readFlagValue(rest, "--target"),
+    packetTarget: readFlagValue(rest, "--packet-target"),
+    taskName: readFlagValue(rest, "--task-name")
+  };
+}
+
 function buildDoveFigureArgs(rest = []) {
   return {
     packetId: readFirstFlagValue(rest, ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id"]),
@@ -414,6 +435,161 @@ function buildDoveFigureArgs(rest = []) {
     caption: readFlagValue(rest, "--caption"),
     captionDraft: readFlagValue(rest, "--caption-draft"),
     captionId: readFlagValue(rest, "--caption-id")
+  };
+}
+
+function buildDoveInitArgs(rest = []) {
+  return {
+    title: readFlagValue(rest, "--title") ?? readFlagValue(rest, "--goal"),
+    goal: readFlagValue(rest, "--goal"),
+    objective: readFlagValue(rest, "--objective") ?? readFlagValue(rest, "--summary"),
+    summary: readFlagValue(rest, "--summary"),
+    domain: readFirstFlagValue(rest, ["--domain", "--dove-domain"])
+  };
+}
+
+function buildDoveAutoArgs(rest = []) {
+  return {
+    ...buildDoveMissionArgs(rest),
+    ...buildTaskTargetArgs(rest),
+    confirmed: rest.includes("--confirmed") || rest.includes("--yes"),
+    prompt: readFlagValue(rest, "--prompt"),
+    objective: readFlagValue(rest, "--objective"),
+    maxIterations: readFlagValue(rest, "--max-iterations") ? Number(readFlagValue(rest, "--max-iterations")) : undefined,
+    maxSteps: readFlagValue(rest, "--max-steps") ? Number(readFlagValue(rest, "--max-steps")) : undefined,
+    steps: collectRepeatedFlagValues(rest, "--step").map((command) => ({ command }))
+  };
+}
+
+function buildDoveOperatorArgs(rest = []) {
+  return {
+    confirmed: rest.includes("--confirmed") || rest.includes("--yes"),
+    includeQueueDetails: rest.includes("--include-queue-details"),
+    blockerInvestigationMode: readFlagValue(rest, "--blocker-investigation-mode"),
+    createBlockedInvestigations: rest.includes("--create-blocked-investigations")
+  };
+}
+
+function buildDoveLessonsArgs(rest = []) {
+  return {
+    ...buildTaskTargetArgs(rest),
+    title: readFlagValue(rest, "--title"),
+    problem: readFlagValue(rest, "--problem"),
+    decisions: readFlagValues(rest, ["--decision"]),
+    pitfalls: readFlagValues(rest, ["--pitfall"]),
+    validation: readFlagValues(rest, ["--validation"]),
+    nextTime: readFlagValues(rest, ["--next-time"]),
+    tags: readFlagValues(rest, ["--tag"]),
+    domain: readFirstFlagValue(rest, ["--domain", "--dove-domain"]),
+    status: readFlagValue(rest, "--status"),
+    limit: readFlagValue(rest, "--limit") ? Number(readFlagValue(rest, "--limit")) : undefined
+  };
+}
+
+function buildDoveVersionArgs(rest = []) {
+  return {
+    title: readFlagValue(rest, "--title"),
+    reason: readFlagValue(rest, "--reason") ?? readFlagValue(rest, "--summary"),
+    summary: readFlagValue(rest, "--summary"),
+    versionId: readFlagValue(rest, "--version-id") ?? readFlagValue(rest, "--id")
+  };
+}
+
+function buildDoveSourceArgs(rest = []) {
+  return {
+    ...buildTaskTargetArgs(rest),
+    sourceId: readFlagValue(rest, "--source-id"),
+    citationKey: readFlagValue(rest, "--citation-key"),
+    title: readFlagValue(rest, "--title"),
+    locator: readFlagValue(rest, "--locator") ?? readFlagValue(rest, "--url") ?? readFlagValue(rest, "--doi"),
+    sourceType: readFlagValue(rest, "--source-type"),
+    origin: readFlagValue(rest, "--origin"),
+    abstract: readFlagValue(rest, "--abstract"),
+    year: readFlagValue(rest, "--year"),
+    authors: readFlagValues(rest, ["--author"])
+  };
+}
+
+function buildDoveNoteArgs(rest = []) {
+  return {
+    ...buildTaskTargetArgs(rest),
+    noteId: readFlagValue(rest, "--note-id"),
+    title: readFlagValue(rest, "--title"),
+    sectionId: readFlagValue(rest, "--section-id"),
+    summary: readFlagValue(rest, "--summary"),
+    quotes: readFlagValues(rest, ["--quote"]),
+    claims: readFlagValues(rest, ["--claim"]),
+    openQuestions: readFlagValues(rest, ["--open-question"]),
+    sourceIds: readFlagValues(rest, ["--source-id"])
+  };
+}
+
+function buildDoveDraftArgs(rest = []) {
+  return {
+    ...buildTaskTargetArgs(rest),
+    sectionId: readFlagValue(rest, "--section-id"),
+    title: readFlagValue(rest, "--title"),
+    body: readFlagValue(rest, "--body"),
+    summary: readFlagValue(rest, "--summary"),
+    status: readFlagValue(rest, "--status")
+  };
+}
+
+function buildDoveExperienceArgs(rest = []) {
+  return {
+    ...buildTaskTargetArgs(rest),
+    id: readFlagValue(rest, "--id"),
+    experimentId: readFlagValue(rest, "--experiment-id"),
+    title: readFlagValue(rest, "--title"),
+    goal: readFlagValue(rest, "--goal"),
+    idea: readFlagValue(rest, "--idea"),
+    methodology: readFlagValue(rest, "--methodology") ?? readFlagValue(rest, "--method"),
+    successMetric: readFlagValue(rest, "--success-metric") ?? readFlagValue(rest, "--metric"),
+    claimId: readFlagValue(rest, "--claim-id"),
+    outcome: readFlagValue(rest, "--outcome"),
+    resultSummary: readFlagValue(rest, "--result-summary"),
+    summary: readFlagValue(rest, "--summary"),
+    evidenceLinks: readFlagValues(rest, ["--evidence", "--evidence-link", "--artifact-path"]),
+    comparisonTargets: readFlagValues(rest, ["--comparison-target", "--baseline"])
+  };
+}
+
+function buildDoveReviewArgs(rest = []) {
+  return {
+    ...buildTaskTargetArgs(rest),
+    scope: readFlagValue(rest, "--scope"),
+    stage: readFlagValue(rest, "--stage"),
+    reviewer: readFlagValue(rest, "--reviewer"),
+    skipBoardUpdate: rest.includes("--skip-board-update"),
+    skipRefreshDurableSurfaces: rest.includes("--skip-refresh")
+  };
+}
+
+function buildDoveReviewLoopArgs(rest = []) {
+  return {
+    ...buildTaskTargetArgs(rest),
+    runId: readFlagValue(rest, "--run-id"),
+    scope: readFlagValue(rest, "--scope"),
+    instructions: readFlagValue(rest, "--instructions"),
+    maxIterations: readFlagValue(rest, "--max-iterations") ? Number(readFlagValue(rest, "--max-iterations")) : undefined,
+    draftBody: readFlagValue(rest, "--draft-body"),
+    sectionId: readFlagValue(rest, "--section-id"),
+    title: readFlagValue(rest, "--title"),
+    summary: readFlagValue(rest, "--summary"),
+    experienceGoal: readFlagValue(rest, "--experience-goal"),
+    artifactPaths: readFlagValues(rest, ["--artifact", "--artifact-path"]),
+    finalPlanPaths: readFlagValues(rest, ["--final-plan", "--final-plan-path"]),
+    finalResultPaths: readFlagValues(rest, ["--final-result", "--final-result-path"])
+  };
+}
+
+function buildDoveRebuttalArgs(rest = []) {
+  const issueSummaries = readFlagValues(rest, ["--issue", "--reviewer-issue"]);
+  return {
+    ...buildTaskTargetArgs(rest),
+    issues: issueSummaries.map((summary, index) => ({ id: `issue-${index + 1}`, summary })),
+    title: readFlagValue(rest, "--title"),
+    summary: readFlagValue(rest, "--summary")
   };
 }
 
@@ -706,6 +882,104 @@ function formatDoveFigureErrorForCli(error) {
     return "这张图还不能继续：检测到不安全的密钥或 provider 配置方式。请改用环境变量引用，不要把密钥写进请求或配置。\n";
   }
   return `这张图暂时不能继续：${compactText(message.replace(/\btask-[a-z0-9][a-z0-9-]*\b/giu, "当前任务"), 240)}\n`;
+}
+
+const WORK_COMMAND_LABELS = {
+  init: "初始化目标",
+  auto: "自动推进",
+  operator: "operator 前台步骤",
+  lessons: "经验记录",
+  version: "版本整理",
+  source: "来源登记",
+  note: "笔记沉淀",
+  draft: "草稿更新",
+  experience: "实验经验",
+  review: "本地审查",
+  "review-loop": "本地审查循环",
+  rebuttal: "回应草稿"
+};
+
+function sanitizeDoveWorkText(value, maxLength = 260) {
+  const replacements = [
+    [/\.dove\/[\w./-]*/gu, "项目记录"],
+    [/\bproject:dove\.[a-z0-9.-]+\b/giu, "Dove"],
+    [/--packet-id\b/giu, "任务选择参数"],
+    [/\btask-[a-z0-9][a-z0-9-]*\b/giu, "当前任务"],
+    [/\b(?:packetId|packetIds|taskPacketId|missionPacketId|runId|receiptId|boundaryId|boundaryType|mutationMode|ownerRole|nextRole|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|queueSummary|queuePreview|preActionGuidance|resultCard)\b/giu, "内部字段"],
+    [/\b(?:patch-plan|direct-process)\b/giu, "待确认写入模式"],
+    [/\b(?:query_dove_status|run_dove_auto|record_dove_mission_pass|run_figure_workflow|run_dove_operator|record_document_evidence|upsert_note|upsert_draft|register_source|run_review_loop|run_dove_review_loop|run_experience_workflow|set_section_status|reset_dove_version|build_rebuttal|build_rebuttal_strategy|normalize_rebuttal_issues|record_operator_lesson|init_dove_goal)\b/giu, "Dove"],
+    [/\b(?:sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|qaPath|providerId|diagnostics|fullResult)\b/giu, "内部字段"]
+  ];
+  let text = String(value ?? "").replace(/\s+/g, " ").trim();
+  for (const [pattern, replacement] of replacements) {
+    text = text.replace(pattern, replacement);
+  }
+  return compactText(text, maxLength);
+}
+
+function formatDoveWorkForCli(commandName, result = {}) {
+  const card = result.resultCard ?? {};
+  const action = Array.isArray(card.nextActions) ? card.nextActions[0] : null;
+  const label = WORK_COMMAND_LABELS[commandName] ?? "Dove 工作";
+  const happened = sanitizeDoveWorkText(card.happened ?? card.summary ?? result.message ?? result.summary, 280);
+  const boundary = sanitizeDoveWorkText(result.boundary?.summary ?? result.boundary?.reason ?? result.stopReason, 220);
+  const next = sanitizeDoveWorkText(action?.title ?? result.nextAction, 220);
+  const lines = [happened || `${label}已经检查完当前材料。`];
+  if (boundary && !lines.includes(boundary)) {
+    lines.push(boundary);
+  }
+  if (commandName === "review" && Array.isArray(result.findings)) {
+    lines.push(result.findings.length > 0 ? `本地审查发现 ${result.findings.length} 个需要处理的问题。` : "本地审查没有发现新的阻塞问题。");
+  }
+  if (commandName === "review-loop" && Array.isArray(result.iterations)) {
+    lines.push(`本轮完成 ${result.iterations.length} 次本地检查。`);
+  }
+  if (next && !lines.includes(next)) {
+    lines.push(next);
+  }
+  if (result.mutationMode === "patch-plan" || result.mutationPlan) {
+    lines.push("这一步只是待确认方案，还没有直接改项目记录。");
+  } else if (result.writesApplied === true) {
+    lines.push("项目记录已经更新。");
+  }
+  if (result.boundary || /blocked|needs|awaiting/u.test(String(result.status ?? ""))) {
+    lines.push("先补齐它指出的材料，再继续推进。");
+  }
+  return `${lines.map((line) => sanitizeDoveWorkText(line, 320)).filter(Boolean).join("\n")}\n`;
+}
+
+function formatDoveWorkErrorForCli(commandName, error) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const label = WORK_COMMAND_LABELS[commandName] ?? "Dove 工作";
+  if (/Task target requires confirmation|Task target is ambiguous|could not resolve a durable task packet|requires a durable task packet|No packets exist/u.test(message)) {
+    return `${label}还不能开始：需要先选定一个明确的 Dove 任务，再带着真实材料继续。\n`;
+  }
+  if (/follow-through still requires action|Cannot advance orchestration|cannot override follow-through governance/i.test(message)) {
+    return `${label}还不能继续：当前还有需要先处理的确认或结果回填。先按状态页的下一步补齐，再回来推进。\n`;
+  }
+  if (/secret|token|api key|inline/i.test(message)) {
+    return `${label}还不能继续：检测到不安全的密钥或 provider 配置方式。请改用环境变量引用，不要把密钥写进请求或配置。\n`;
+  }
+  if (/requires board role|requires role|board owner/i.test(message)) {
+    return `${label}还不能继续：当前角色边界不匹配，需要先明确交接或用显式审查/修订请求继续。\n`;
+  }
+  return `${label}暂时不能继续：${sanitizeDoveWorkText(message, 260)}\n`;
+}
+
+async function printDoveWorkResult(commandName, result, commandRest = []) {
+  if (wantsJsonOutput(commandRest)) {
+    await printJson(result);
+  } else {
+    await writeStdout(formatDoveWorkForCli(commandName, result));
+  }
+}
+
+async function printDoveWorkError(commandName, error, commandRest = []) {
+  if (wantsJsonOutput(commandRest)) {
+    await printJson({ status: "blocked", message: formatDoveWorkErrorForCli(commandName, error).trim() });
+  } else {
+    await writeStdout(formatDoveWorkErrorForCli(commandName, error));
+  }
 }
 
 function buildDoveStatusline(result, target) {
@@ -2380,6 +2654,12 @@ if (!command || command === "help" || command === "--help") {
   process.exit(0);
 }
 
+const wantsCommandHelp = maybeTarget === "--help" || maybeTarget === "-h" || rest.includes("--help") || rest.includes("-h");
+if (wantsCommandHelp && LOCAL_DOVE_CLI_SURFACES.has(command) && command !== "status") {
+  usage();
+  process.exit(0);
+}
+
 if (command === "install" || command === "sync") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
   rejectPatchPlanMode(command, commandRest, "install/sync copies adapter files and may write user-level host configuration, so use direct-process only.");
@@ -2498,7 +2778,7 @@ if (command === "statusline") {
 if (command === "figure") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
   try {
-    const result = withMutationContext(target, "run_figure_workflow", commandRest, (cleanRest) => runFigureWorkflow(target, buildDoveFigureArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    const result = withMutationContext(target, "run-figure-workflow", commandRest, (cleanRest) => runFigureWorkflow(target, buildDoveFigureArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
     if (wantsJsonOutput(commandRest)) {
       await printJson(formatDoveFigureJsonForCli(result));
     } else {
@@ -2511,6 +2791,83 @@ if (command === "figure") {
     } else {
       await writeStdout(formatDoveFigureErrorForCli(error));
     }
+    process.exit(1);
+  }
+}
+
+if (["init", "auto", "operator", "version", "source", "note", "draft", "experience", "review", "review-loop", "rebuttal"].includes(command)) {
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  try {
+    let result;
+    if (command === "init") {
+      result = withMutationContext(target, "init-dove-goal", commandRest, (cleanRest) => initDoveGoal(target, buildDoveInitArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    } else if (command === "auto") {
+      result = withMutationContext(target, "run-dove-auto", commandRest, (cleanRest) => runDoveAuto(target, buildDoveAutoArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    } else if (command === "operator") {
+      result = withMutationContext(target, "run-dove-operator", commandRest, (cleanRest) => runDoveOperator(target, buildDoveOperatorArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    } else if (command === "version") {
+      result = withMutationContext(target, "reset-dove-version", commandRest, (cleanRest) => resetDoveVersion(target, buildDoveVersionArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    } else if (command === "source") {
+      result = withMutationContext(target, "register-source", commandRest, (cleanRest) => registerSource(target, buildDoveSourceArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    } else if (command === "note") {
+      result = withMutationContext(target, "upsert-note", commandRest, (cleanRest) => upsertNote(target, buildDoveNoteArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    } else if (command === "draft") {
+      const draftArgs = buildDoveDraftArgs(commandRest);
+      if (!draftArgs.body && !draftArgs.status) {
+        throw new Error("dove draft requires --body for draft text or --status for an explicit section status update.");
+      }
+      const actionId = draftArgs.body ? "upsert-draft" : "set-section-status";
+      result = withMutationContext(target, actionId, commandRest, (cleanRest) => {
+        const args = buildDoveDraftArgs(cleanRest);
+        if (!args.body && !args.status) {
+          throw new Error("dove draft requires --body for draft text or --status for an explicit section status update.");
+        }
+        return args.body ? upsertDraft(target, args) : setSectionStatus(target, args);
+      }, { defaultMutationMode: "patch-plan" });
+    } else if (command === "experience") {
+      result = withMutationContext(target, "run-experience-workflow", commandRest, (cleanRest) => runExperienceWorkflow(target, buildDoveExperienceArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    } else if (command === "review") {
+      result = withMutationContext(target, "run-review-loop", commandRest, (cleanRest) => runReviewLoop(target, buildDoveReviewArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    } else if (command === "review-loop") {
+      result = withMutationContext(target, "run-dove-review-loop", commandRest, (cleanRest) => runDoveReviewLoop(target, buildDoveReviewLoopArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+    } else if (command === "rebuttal") {
+      result = withMutationContext(target, "build-rebuttal", commandRest, (cleanRest) => {
+        const args = buildDoveRebuttalArgs(cleanRest);
+        if (args.issues.length > 0 && cleanRest.includes("--issues-only")) {
+          return normalizeRebuttalIssues(target, args);
+        }
+        if (cleanRest.includes("--strategy-only")) {
+          if (args.issues.length > 0) {
+            normalizeRebuttalIssues(target, args);
+          }
+          return buildRebuttalStrategy(target, args);
+        }
+        if (args.issues.length > 0) {
+          normalizeRebuttalIssues(target, args);
+        }
+        return buildRebuttal(target, args);
+      }, { defaultMutationMode: "patch-plan" });
+    }
+    await printDoveWorkResult(command, result, commandRest);
+    process.exit(0);
+  } catch (error) {
+    await printDoveWorkError(command, error, commandRest);
+    process.exit(1);
+  }
+}
+
+if (command === "lessons") {
+  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
+  try {
+    const args = buildDoveLessonsArgs(commandRest);
+    const shouldRecordLesson = Boolean(args.title || args.problem || args.decisions.length > 0 || args.pitfalls.length > 0 || args.validation.length > 0 || args.nextTime.length > 0);
+    const result = shouldRecordLesson
+      ? withMutationContext(target, "record-operator-lesson", commandRest, (cleanRest) => recordOperatorLesson(target, buildDoveLessonsArgs(cleanRest)), { defaultMutationMode: "patch-plan" })
+      : queryOperatorLessons(target, args);
+    await printDoveWorkResult(command, result, commandRest);
+    process.exit(0);
+  } catch (error) {
+    await printDoveWorkError(command, error, commandRest);
     process.exit(1);
   }
 }

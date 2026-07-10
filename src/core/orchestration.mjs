@@ -9,6 +9,7 @@ import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action
 import { buildCommandResultCard } from "./result-cards.mjs";
 import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, createMetaOperatorFollowThroughIndex, normalizeMetaOperatorFollowThroughIndex, resolveResumeCommandForPhase, roleCanActAs } from "./schema.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
+import { evidencePathProblemFlags } from "./artifact-integrity.mjs";
 
 const ALLOWED_TRANSITIONS = {
   init: ["init", "sources", "research"],
@@ -1132,6 +1133,7 @@ function normalizeExperimentAudit(audit = {}, index = 0) {
     missingArtifactRefs: normalizeStringArray(audit.missingArtifactRefs),
     auditFindings: Array.isArray(audit.auditFindings) ? audit.auditFindings : [],
     integrityFlags: normalizeStringArray(audit.integrityFlags),
+    evidencePathIntegrity: audit.evidencePathIntegrity ?? null,
     confidence: audit.confidence ?? "medium",
     outcomeMapping: audit.outcomeMapping ?? "inconclusive",
     auditVerdict: audit.auditVerdict ?? "concern",
@@ -1232,9 +1234,27 @@ export function persistExperimentAudit(root, args = {}) {
     integrityFlags.push("missing-claim-link");
     auditFindings.push("Result is missing an explicit claim link.");
   }
-  if ((rawResult.evidenceLinks ?? []).length === 0) {
-    integrityFlags.push("missing-evidence-links");
+  const evidenceIntegrity = evidencePathProblemFlags(root, rawResult.evidenceLinks ?? []);
+  for (const flag of evidenceIntegrity.flags) {
+    integrityFlags.push(flag);
+  }
+  if (evidenceIntegrity.flags.includes("missing-evidence-links")) {
     auditFindings.push("Result has no durable evidence links.");
+  }
+  if (evidenceIntegrity.flags.includes("missing-evidence-file")) {
+    auditFindings.push("Result evidence links do not resolve to an existing local evidence file.");
+  }
+  if (evidenceIntegrity.flags.includes("empty-evidence-file")) {
+    auditFindings.push("Result evidence links include an empty evidence file.");
+  }
+  if (evidenceIntegrity.flags.includes("directory-evidence-file")) {
+    auditFindings.push("Result evidence links include a directory instead of a file.");
+  }
+  if (evidenceIntegrity.flags.includes("unsafe-evidence-path")) {
+    auditFindings.push("Result evidence links include an unsafe path.");
+  }
+  if (evidenceIntegrity.flags.includes("bookkeeping-evidence-file")) {
+    auditFindings.push("Result evidence links cite status, navigation, runtime, task, or ledger bookkeeping rather than experiment output.");
   }
   if (!(rawResult.summary ?? "").trim()) {
     integrityFlags.push("missing-result-summary");
@@ -1280,7 +1300,7 @@ export function persistExperimentAudit(root, args = {}) {
       : "inconclusive";
   const auditVerdict = integrityFlags.length === 0
     ? "clean"
-    : integrityFlags.some((flag) => ["missing-plan", "missing-claim-link", "missing-evidence-links", "missing-methodology", "missing-success-metric", "missing-reviewed-artifact-refs", "pending-outcome"].includes(flag))
+    : integrityFlags.some((flag) => ["missing-plan", "missing-claim-link", "missing-evidence-links", "missing-evidence-file", "empty-evidence-file", "directory-evidence-file", "unsafe-evidence-path", "bookkeeping-evidence-file", "unsupported-evidence-file", "unreadable-evidence-file", "missing-methodology", "missing-success-metric", "missing-reviewed-artifact-refs", "pending-outcome"].includes(flag))
       ? "blocked"
       : "concern";
   const audit = normalizeExperimentAudit({
@@ -1293,6 +1313,7 @@ export function persistExperimentAudit(root, args = {}) {
     missingArtifactRefs,
     auditFindings,
     integrityFlags,
+    evidencePathIntegrity: evidenceIntegrity.pathEvidence,
     confidence,
     outcomeMapping,
     auditVerdict,
@@ -1352,6 +1373,10 @@ export function persistExperimentResultClaimBridge(root, args = {}) {
   }
   if ((result.evidenceLinks ?? []).length === 0) {
     throw new Error(`Claim bridge requires result ${result.id} to include durable evidence links.`);
+  }
+  const evidenceIntegrity = evidencePathProblemFlags(root, result.evidenceLinks ?? []);
+  if (!evidenceIntegrity.satisfied) {
+    throw new Error(`Claim bridge requires substantive local experiment evidence for result ${result.id}; evidence problems: ${evidenceIntegrity.flags.join(", ") || "missing-substantive-evidence"}.`);
   }
   const claimIndex = evidence.claims.findIndex((item) => item.id === result.claimId);
   if (claimIndex === -1) {

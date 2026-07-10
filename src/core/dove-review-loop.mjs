@@ -6,7 +6,7 @@ import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
 import { appendText, assertGovernanceMutationRegistered, ensureWorkspace, loadState, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
-import { runAudioReview } from "./audio-review.mjs";
+import { runReviewLoop } from "./reviews.mjs";
 import { runExperienceWorkflow } from "./experience-workflow.mjs";
 
 function slugify(value) {
@@ -40,8 +40,11 @@ function reviewLoopStopSummary(status, stopReason, responseLanguage) {
   if (status === "coherent") {
     return localizedText(responseLanguage, "review-loop 已确认当前材料基本自洽。", "The review loop found the current materials coherent.");
   }
-  if (stopReason === "awaiting-review-output") {
-    return localizedText(responseLanguage, "review-loop 已准备审核输入，现在等独立审核结果。", "The review loop prepared review input and is waiting for independent review output.");
+  if (stopReason === "review-findings-require-repair") {
+    return localizedText(responseLanguage, "review-loop 已检查材料并停在需要修复的问题上。", "The review loop inspected the materials and stopped on findings that need repair.");
+  }
+  if (stopReason === "material-updated-review-needed") {
+    return localizedText(responseLanguage, "review-loop 已更新提供的材料，需要再次检查。", "The review loop updated the supplied material and needs another check.");
   }
   if (status === "blocked") {
     return localizedText(responseLanguage, "review-loop 停在需要修复的问题上。", "The review loop stopped on an issue that needs repair.");
@@ -105,33 +108,30 @@ export function runDoveReviewLoop(root, args = {}) {
 
   for (let index = 0; index < maxIterations; index += 1) {
     const iterationNumber = index + 1;
-    const review = runAudioReview(root, {
+    const review = runReviewLoop(root, {
       ...args,
       packetId: target.packetId,
-      runId: `${runId}-${iterationNumber}`,
-      artifactPaths: normalizeStringArray(args.artifactPaths),
-      finalPlanPaths: normalizeStringArray(args.finalPlanPaths),
-      finalResultPaths: normalizeStringArray(args.finalResultPaths)
+      scope: args.scope ?? args.instructions ?? "review-loop material check",
+      stage: args.stage ?? target.packet?.stage ?? "audit",
+      skipRefreshDurableSurfaces: true,
+      policyOverrideReason: args.policyOverrideReason ?? "review-loop-local-review-pass"
     });
     const draft = draftRequested ? writeDraftPlaceholder(root, draftArgs, iterationNumber, target.packetId) : null;
     const experience = experienceRequested ? runExperienceWorkflow(root, experienceArgs) : null;
     iterations.push({ iteration: iterationNumber, review, draft, experience });
-    const verdict = review.imported?.verdict;
-    if (verdict === "coherent") {
+    if (review.verdict === "coherent") {
       status = "coherent";
       stopReason = "review-coherent";
       break;
     }
-    if (review.status === "prepared-awaiting-audio") {
-      status = "blocked";
-      stopReason = "awaiting-review-output";
+    if (draft || experience) {
+      status = "needs-review";
+      stopReason = "material-updated-review-needed";
       break;
     }
-    if (verdict === "blocked") {
-      status = "blocked";
-      stopReason = "verification-failed";
-      break;
-    }
+    status = "blocked";
+    stopReason = "review-findings-require-repair";
+    break;
   }
 
   const timestamp = nowIso();
@@ -144,9 +144,11 @@ export function runDoveReviewLoop(root, args = {}) {
     iterationCount: iterations.length,
     iterations: iterations.map((iteration) => ({
       iteration: iteration.iteration,
-      reviewStatus: iteration.review.status,
-      reviewRunId: iteration.review.runId,
-      verdict: iteration.review.imported?.verdict ?? null,
+      reviewStatus: iteration.review.verdict,
+      reviewRunId: iteration.review.timestamp ?? null,
+      verdict: iteration.review.verdict ?? null,
+      findingCount: iteration.review.findings?.length ?? 0,
+      actionItemCount: iteration.review.actionItems?.length ?? 0,
       draftPath: iteration.draft?.draftPath ?? null,
       experiencePlanId: iteration.experience?.plan?.id ?? null
     })),
@@ -176,7 +178,7 @@ export function runDoveReviewLoop(root, args = {}) {
     workflowKind: "review-loop",
     domain: target.packet?.domain ?? null,
     stage: target.packet?.stage ?? "audit",
-    tags: ["review", "audio", "experience", "iteration"],
+    tags: ["review", "evidence", "experience", "iteration"],
     statusSummary: { status, stopReason, iterationCount: iterations.length, maxIterations }
   });
   const resultCard = buildCommandResultCard({
@@ -193,12 +195,12 @@ export function runDoveReviewLoop(root, args = {}) {
     nextActions: [{
       title: status === "coherent"
         ? localizedText(responseLanguage, "回到状态页选择下一步", "Return to status for the next step")
-        : stopReason === "awaiting-review-output"
-          ? localizedText(responseLanguage, "导入审核结果", "Import the review result")
+        : stopReason === "material-updated-review-needed"
+          ? localizedText(responseLanguage, "重新运行本地 review", "Run local review again")
           : localizedText(responseLanguage, "先修复 review 指出的缺口", "Fix the review gaps first"),
       why: status === "coherent"
         ? localizedText(responseLanguage, "当前材料已经通过这一轮检查，可以决定继续写作、归档或进入版本快照。", "This pass is coherent, so the next decision can be drafting, closure, or versioning.")
-        : localizedText(responseLanguage, "review-loop 不会隐藏继续跑，卡住时要先补材料或导入审核结果。", "The review loop does not continue in the background; blocked work needs material fixes or review import first.")
+        : localizedText(responseLanguage, "review-loop 不会隐藏继续跑；卡住时要先补材料或修正文稿，再重新检查。", "The review loop does not continue in the background; blocked work needs material fixes or draft repairs before another check.")
     }]
   }, responseLanguage);
   return {

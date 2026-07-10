@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
+import { inspectDeclaredPath } from "./artifact-integrity.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { appendText, assertFollowThroughReady, assertGovernanceMutationRegistered, ensureDir, ensureWorkspace, listDraftFiles, loadState, nowIso, readJson, readText, resolvePath, writeJson, writeText } from "./workspace.mjs";
 import { appendHandoff, loadBoard } from "./orchestration.mjs";
@@ -11,12 +12,10 @@ import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 
 const DEFAULT_REVIEWED_PATHS = [
-  ARTIFACT_PATHS.orchestrationBoard,
-  ARTIFACT_PATHS.evidence,
-  ARTIFACT_PATHS.claimBridgeLog,
-  ARTIFACT_PATHS.experimentAudits,
-  ARTIFACT_PATHS.reviewConcerns,
-  ARTIFACT_PATHS.revisionPlan,
+  ARTIFACT_PATHS.project,
+  ARTIFACT_PATHS.claims,
+  ARTIFACT_PATHS.experimentLog,
+  ARTIFACT_PATHS.reviewReport,
   ARTIFACT_PATHS.checklist
 ];
 
@@ -102,13 +101,36 @@ function safeArtifactPath(root, relativePath) {
 
 function artifactEntry(root, relativePath) {
   const safePath = safeArtifactPath(root, relativePath);
-  const fullPath = resolvePath(root, safePath);
-  const exists = fs.existsSync(fullPath);
+  const inspection = inspectDeclaredPath(root, safePath, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true
+  });
   return {
     path: safePath,
-    exists,
-    sha256: exists && fs.statSync(fullPath).isFile() ? hashFile(fullPath) : null
+    exists: inspection.exists,
+    usable: inspection.status === "existing",
+    status: inspection.status,
+    reason: inspection.reason ?? null,
+    sizeBytes: inspection.sizeBytes ?? null,
+    sha256: inspection.status === "existing" ? hashFile(resolvePath(root, safePath)) : null
   };
+}
+
+function assertSubstantiveArtifactEntries(artifacts, label) {
+  const usable = artifacts.filter((item) => item.usable);
+  if (usable.length === 0) {
+    const reasons = artifacts.map((item) => `${item.path}:${item.reason ?? item.status}`).join(", ") || "no artifact paths provided";
+    throw new Error(`${label} requires at least one existing non-empty non-bookkeeping reviewed artifact (${reasons}).`);
+  }
+  return usable;
+}
+
+function assertUsableArtifactPath(root, relativePath, label) {
+  const entry = artifactEntry(root, relativePath);
+  if (!entry.usable) {
+    throw new Error(`${label} is not a usable file at ${entry.path}: ${entry.reason ?? entry.status}.`);
+  }
+  return entry.path;
 }
 
 function defaultReviewedArtifactPaths(root) {
@@ -130,28 +152,48 @@ function normalizeFinding(finding = {}, index = 0) {
   };
 }
 
+function requiredStringField(raw, field, label = field) {
+  if (typeof raw[field] !== "string" || !raw[field].trim()) {
+    throw new Error(`isolated review handoff requires ${label}`);
+  }
+  return raw[field].trim();
+}
+
 function normalizeHandoff(root, raw = {}) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("isolated review handoff must be a JSON object");
   }
-  const runId = normalizeRunId(raw.runId);
-  const verdict = REVIEW_VERDICTS.has(raw.verdict) ? raw.verdict : "needs-revision";
-  const status = HANDOFF_STATUSES.has(raw.status) ? raw.status : "completed";
+  const runId = normalizeRunId(requiredStringField(raw, "runId"));
+  const verdict = requiredStringField(raw, "verdict");
+  if (!REVIEW_VERDICTS.has(verdict)) {
+    throw new Error(`isolated review handoff has unsupported verdict: ${verdict}`);
+  }
+  const status = requiredStringField(raw, "status");
+  if (!HANDOFF_STATUSES.has(status)) {
+    throw new Error(`isolated review handoff has unsupported status: ${status}`);
+  }
+  if (status !== "completed" && verdict === "coherent") {
+    throw new Error(`isolated review handoff status ${status} cannot import a coherent verdict.`);
+  }
   const findings = Array.isArray(raw.findings) ? raw.findings.map(normalizeFinding) : [];
   const actionItems = normalizeStringArray(raw.actionItems ?? findings.map((finding) => finding.summary));
+  const reviewedArtifactPaths = normalizeStringArray(raw.reviewedArtifactPaths ?? raw.artifactPaths).map((item) => safeArtifactPath(root, item));
+  if (reviewedArtifactPaths.length === 0) {
+    throw new Error("isolated review handoff requires reviewedArtifactPaths.");
+  }
   return {
     version: 1,
     runId,
     status,
     verdict,
-    reviewerId: typeof raw.reviewerId === "string" && raw.reviewerId.trim() ? raw.reviewerId.trim() : "isolated-reviewer",
+    reviewerId: requiredStringField(raw, "reviewerId"),
     reviewerSessionId: typeof raw.reviewerSessionId === "string" && raw.reviewerSessionId.trim() ? raw.reviewerSessionId.trim() : null,
     timestamp: typeof raw.timestamp === "string" && raw.timestamp.trim() ? raw.timestamp.trim() : nowIso(),
-    summary: typeof raw.summary === "string" && raw.summary.trim() ? raw.summary.trim() : `Isolated reviewer returned ${verdict}.`,
-    inputPath: typeof raw.inputPath === "string" ? safeArtifactPath(root, raw.inputPath) : null,
-    inputSha256: typeof raw.inputSha256 === "string" ? raw.inputSha256 : null,
-    reportPath: typeof raw.reportPath === "string" ? safeArtifactPath(root, raw.reportPath) : null,
-    reviewedArtifactPaths: normalizeStringArray(raw.reviewedArtifactPaths).map((item) => safeArtifactPath(root, item)),
+    summary: requiredStringField(raw, "summary"),
+    inputPath: safeArtifactPath(root, requiredStringField(raw, "inputPath")),
+    inputSha256: requiredStringField(raw, "inputSha256"),
+    reportPath: safeArtifactPath(root, requiredStringField(raw, "reportPath")),
+    reviewedArtifactPaths,
     findings,
     actionItems,
     privateTranscriptImported: false
@@ -220,14 +262,19 @@ export function prepareIsolatedReview(root, args = {}) {
   assertFollowThroughReady(root, "Preparing an isolated reviewer input bundle", args);
   ensureWorkspace(root);
   const runId = normalizeRunId(args.runId);
-  const reviewedArtifactPaths = normalizeStringArray(args.reviewedArtifactPaths).length > 0
-    ? normalizeStringArray(args.reviewedArtifactPaths).map((item) => safeArtifactPath(root, item))
+  const explicitArtifactPaths = normalizeStringArray([
+    ...normalizeStringArray(args.reviewedArtifactPaths),
+    ...normalizeStringArray(args.artifactPaths)
+  ]);
+  const reviewedArtifactPaths = explicitArtifactPaths.length > 0
+    ? explicitArtifactPaths.map((item) => safeArtifactPath(root, item))
     : defaultReviewedArtifactPaths(root);
   const runDir = path.posix.join(ARTIFACT_PATHS.isolatedReviewsDir, runId);
   const timestamp = nowIso();
   const state = loadState(root);
   const board = loadBoard(root);
   const artifacts = reviewedArtifactPaths.map((relativePath) => artifactEntry(root, relativePath));
+  const usableArtifacts = assertSubstantiveArtifactEntries(artifacts, "prepare_isolated_review");
   const input = {
     version: 1,
     runId,
@@ -252,12 +299,12 @@ export function prepareIsolatedReview(root, args = {}) {
       nextAction: board.nextAction,
       reviewRequiredBeforeFinalize: board.reviewRequiredBeforeFinalize
     },
-    reviewedArtifactPaths,
+    reviewedArtifactPaths: usableArtifacts.map((artifact) => artifact.path),
     artifacts,
     outputContract: {
       handoffPath: relativeRunPath(runId, "handoff.json"),
       reportPath: relativeRunPath(runId, "report.md"),
-      requiredHandoffFields: ["runId", "status", "verdict", "reviewerId", "summary", "inputPath", "inputSha256", "findings", "actionItems"]
+      requiredHandoffFields: ["runId", "status", "verdict", "reviewerId", "summary", "inputPath", "inputSha256", "reportPath", "reviewedArtifactPaths", "findings", "actionItems"]
     },
     privacyBoundary: {
       writerPrivateTranscriptShared: false,
@@ -277,7 +324,7 @@ export function prepareIsolatedReview(root, args = {}) {
     inputSha256: inputSha256,
     handoffPath: relativeRunPath(runId, "handoff.json"),
     reportPath: relativeRunPath(runId, "report.md"),
-    reviewedArtifactPaths,
+    reviewedArtifactPaths: usableArtifacts.map((artifact) => artifact.path),
     importedAt: null,
     outputSha256: null,
     reportSha256: null
@@ -293,13 +340,13 @@ export function prepareIsolatedReview(root, args = {}) {
     inputSha256: inputSha256,
     handoffPath: manifest.handoffPath,
     reportPath: manifest.reportPath,
-    reviewedArtifactPaths,
+    reviewedArtifactPaths: usableArtifacts.map((artifact) => artifact.path),
     preActionGuidanceSummary: isolatedGuidanceSummary(root, args, target, {
       nextAction: "import_isolated_review",
       statusSummary: {
         status: "prepared",
         runId,
-        reviewedArtifactCount: reviewedArtifactPaths.length
+        reviewedArtifactCount: usableArtifacts.length
       }
     })
   };
@@ -331,10 +378,29 @@ export function importIsolatedReview(root, args = {}) {
   if (handoff.inputSha256 !== manifest.inputSha256) {
     throw new Error(`Isolated review handoff input hash mismatch for ${runId}`);
   }
+  if (handoff.reportPath !== reportPath) {
+    throw new Error(`Isolated review reportPath mismatch: expected ${reportPath}, received ${handoff.reportPath}`);
+  }
+  const manifestReviewed = new Set(normalizeStringArray(manifest.reviewedArtifactPaths));
+  const handoffReviewed = new Set(handoff.reviewedArtifactPaths);
+  const missingReviewed = Array.from(manifestReviewed).filter((artifactPath) => !handoffReviewed.has(artifactPath));
+  if (missingReviewed.length > 0) {
+    throw new Error(`Isolated review handoff does not cover prepared reviewed artifacts: ${missingReviewed.join(", ")}`);
+  }
+  for (const artifactPath of handoff.reviewedArtifactPaths) {
+    assertUsableArtifactPath(root, artifactPath, "isolated review reviewedArtifactPaths");
+  }
+  const reportInspection = inspectDeclaredPath(root, reportPath, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true
+  });
+  if (reportInspection.status !== "existing") {
+    throw new Error(`Isolated review report is not a usable non-empty file at ${reportPath}: ${reportInspection.reason ?? reportInspection.status}`);
+  }
   const handoffSha256 = hashFile(handoffFullPath);
   const reportFullPath = resolvePath(root, reportPath);
-  const reportSha256 = fs.existsSync(reportFullPath) ? hashFile(reportFullPath) : null;
-  appendText(root, ARTIFACT_PATHS.reviewLog, renderImportedReviewLogEntry({ handoff, reportPath: fs.existsSync(reportFullPath) ? reportPath : null, reportSha256 }));
+  const reportSha256 = hashFile(reportFullPath);
+  appendText(root, ARTIFACT_PATHS.reviewLog, renderImportedReviewLogEntry({ handoff, reportPath, reportSha256 }));
   upsertImportedConcerns(root, handoff);
   appendHandoff(root, {
     fromRole: "reviewer",
@@ -344,7 +410,7 @@ export function importIsolatedReview(root, args = {}) {
     summary: `Isolated reviewer ${handoff.reviewerId} returned ${handoff.verdict} for ${runId}; planner mediation should triage the imported handoff next.`,
     currentFocus: handoff.summary,
     nextAction: handoff.actionItems[0] ?? "Planner should triage isolated review findings.",
-    evidenceLinks: [handoffPath, ...(fs.existsSync(reportFullPath) ? [reportPath] : [])],
+    evidenceLinks: [handoffPath, reportPath, ...handoff.reviewedArtifactPaths],
     actorRole: "planner",
     policyOverrideReason: "Importing an isolated reviewer handoff from a parallel session boundary."
   });
@@ -354,7 +420,7 @@ export function importIsolatedReview(root, args = {}) {
     updatedAt: nowIso(),
     importedAt: nowIso(),
     handoffPath,
-    reportPath: fs.existsSync(reportFullPath) ? reportPath : null,
+    reportPath,
     outputSha256: handoffSha256,
     reportSha256,
     verdict: handoff.verdict,
@@ -364,7 +430,7 @@ export function importIsolatedReview(root, args = {}) {
   refreshDurableSurfaces(root, {
     type: "isolated-review-import",
     summary: `Imported isolated review ${runId} with verdict ${handoff.verdict}.`,
-    artifactPaths: [ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.orchestrationHandoffs, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary]
+    artifactPaths: [ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.orchestrationHandoffs, reportPath, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary]
   });
   return {
     status: "imported",
@@ -375,7 +441,7 @@ export function importIsolatedReview(root, args = {}) {
     topConcerns: handoff.findings.slice(0, 5).map((finding) => finding.summary),
     actionItems: handoff.actionItems,
     handoffPath,
-    reportPath: fs.existsSync(reportFullPath) ? reportPath : null,
+    reportPath,
     inputPath: manifest.inputPath,
     inputSha256: manifest.inputSha256,
     handoffSha256,

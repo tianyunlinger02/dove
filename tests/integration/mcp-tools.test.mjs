@@ -269,6 +269,13 @@ function assertPublicResultCard(card, expected = {}) {
 const MCP_EXECUTION_CRITERION = "MCP execution criterion";
 const MCP_VERIFICATION_PATH = ".dove/evidence/mcp-verification.log";
 
+function writeMcpEvidenceFile(root, relativePath = MCP_VERIFICATION_PATH, text = "MCP verification passed.\n") {
+  const fullPath = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, text, "utf8");
+  return relativePath;
+}
+
 function mcpExecutionContract(overrides = {}) {
   const base = {
     chainType: "engineering-host-pass-verify",
@@ -1292,7 +1299,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
 
     const emptySource = dispatchTool(root, "register_source", { packetId });
     assert.equal(emptySource.isError, true);
-    assert.match(emptySource.content[0].text, /title or locator/);
+    assert.match(emptySource.content[0].text, /verifiable provenance|locator/);
 
     const unverifiedSource = extractToolJson(dispatchToolFull(root, "register_source", {
       packetId,
@@ -1472,6 +1479,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     assertPreActionGuidanceSummary(experimentPlan.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "builder" });
     const experimentPacketId = `experiment-${experimentPlan.id}`;
 
+    writeMcpEvidenceFile(root, MCP_VERIFICATION_PATH, "Thin workflow experiment result inspected substantive evidence.\n");
     const experimentResult = extractToolJson(dispatchToolFull(root, "upsert_experiment_result", {
       packetId: experimentPacketId,
       result: {
@@ -1480,7 +1488,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
         claimId: "thin-guidance-claim",
         outcome: "supports",
         summary: "Thin result supports the guidance summary claim.",
-        evidenceLinks: [".dove/evidence/index.json"],
+        evidenceLinks: [MCP_VERIFICATION_PATH],
         comparisonTargets: ["chat-only"]
       },
       policyOverrideReason: override
@@ -1561,6 +1569,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
 test("create_dove_task materializes a contract and hands off without recording execution", () => {
   const root = createTempRoot("dove-mcp-mission-confirm-");
   try {
+    writeMcpEvidenceFile(root);
     const init = extractToolJson(dispatchToolFull(root, "init_dove_goal", {
       id: "mission-confirm-init",
       goal: "Validate mission confirmation boundaries."
@@ -1654,8 +1663,8 @@ test("create_dove_task materializes a contract and hands off without recording e
       runId: "mission-confirm-pass",
       resultStatus: "completed",
       resultSummary: "Explicit post-handoff work produced verified evidence.",
-      evidenceLinks: [".dove/task-packets/index.json"],
-      artifactRefs: [".dove/task-packets/index.json"],
+      evidenceLinks: [MCP_VERIFICATION_PATH],
+      artifactRefs: [writeMcpEvidenceFile(root, ".dove/evidence/mission-confirm-artifact.md", "Mission confirmation artifact.\n")],
       verificationEvidencePaths: [MCP_VERIFICATION_PATH],
       verifiedCriteria: mcpVerifiedCriteria(missionCriterion)
     }));
@@ -1691,8 +1700,8 @@ test("create_dove_task materializes a contract and hands off without recording e
       runId: "mission-pass-ignored-run",
       resultStatus: "completed",
       resultSummary: "These stale pass fields must not be recorded during mission materialization.",
-      evidenceLinks: [".dove/runtime/results.json"],
-      artifactRefs: [".dove/runtime/results.json"],
+      evidenceLinks: [MCP_VERIFICATION_PATH],
+      artifactRefs: [MCP_VERIFICATION_PATH],
       verificationEvidencePaths: [MCP_VERIFICATION_PATH],
       verifiedCriteria: mcpVerifiedCriteria("Inline pass ignored criterion")
     }));
@@ -1717,6 +1726,7 @@ test("create_dove_task materializes a contract and hands off without recording e
 test("record_dove_mission_pass rejects completion without criteria coverage", () => {
   const root = createTempRoot("dove-mcp-mission-criteria-gate-");
   try {
+    writeMcpEvidenceFile(root);
     extractToolJson(dispatchToolFull(root, "init_dove_goal", {
       id: "mission-criteria-init",
       goal: "Validate mission criteria completion gate."
@@ -1735,7 +1745,7 @@ test("record_dove_mission_pass rejects completion without criteria coverage", ()
       runId: "mission-criteria-pass",
       resultStatus: "completed",
       resultSummary: "This completion has evidence but does not cover the contract criteria.",
-      artifactRefs: [".dove/task-packets/index.json"],
+      artifactRefs: [MCP_VERIFICATION_PATH],
       verificationEvidencePaths: [MCP_VERIFICATION_PATH]
     }));
     assert.equal(rejected.status, "verification-failed");
@@ -1796,6 +1806,7 @@ test("create_dove_task can propose first-run init and mission together", () => {
 test("completed plan mission pass materializes pending executable missions", () => {
   const root = createTempRoot("dove-mcp-plan-conversion-");
   try {
+    writeMcpEvidenceFile(root);
     const init = extractToolJson(dispatchToolFull(root, "init_dove_goal", {
       id: "plan-conversion-init",
       goal: "Validate plan conversion."
@@ -2062,6 +2073,8 @@ test("status adjustment contract applies confirmed non-terminal mission status c
 test("apply_dove_status_adjustments records execution receipts for verified completion", () => {
   const root = createTempRoot("dove-mcp-status-receipt-");
   try {
+    writeMcpEvidenceFile(root);
+    writeMcpEvidenceFile(root, ".dove/drafts/status-receipt.md", "Status receipt draft evidence.\n");
     dispatchTool(root, "init_dove_goal", {
       id: "status-receipt-init",
       goal: "Validate status adjustment execution receipts."
@@ -2144,8 +2157,8 @@ test("run_dove_operator leaves host-pass-only queues unchanged without taskResul
     });
     extractToolJson(dispatchToolFull(root, "create_dove_task", {
       id: "operator-host-only-source",
-      title: "Operator host-only source task",
-      goal: "Collect source provenance through host tools.",
+      title: "Operator source material boundary task",
+      goal: "Collect verified source provenance before recording material progress.",
       status: "ready",
       nextAction: "project:dove.source",
       domain: "paper",
@@ -2193,6 +2206,7 @@ test("run_dove_operator leaves host-pass-only queues unchanged without taskResul
 test("run_dove_operator previews blocker investigations and only creates them when explicit", () => {
   const root = createTempRoot("dove-mcp-operator-");
   try {
+    writeMcpEvidenceFile(root);
     dispatchTool(root, "init_dove_goal", {
       id: "operator-init",
       goal: "Validate operator queue semantics."
@@ -2448,6 +2462,7 @@ test("create_dove_task materializes checklist children below explicit mission le
 test("record_dove_mission_pass accepts descendant evidence for explicit parent packet", () => {
   const root = createTempRoot("dove-mcp-parent-child-evidence-");
   try {
+    writeMcpEvidenceFile(root);
     dispatchTool(root, "init_dove_goal", {
       id: "parent-child-evidence-init",
       goal: "Validate parent mission pass evidence lineage."
@@ -2461,7 +2476,7 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
     }));
     assert.equal(created.createdChecklistTasks.length, 3);
     const child = created.createdChecklistTasks[0];
-    const childArtifact = ".dove/audio/reviews/parent-child-evidence/report.md";
+    const childArtifact = writeMcpEvidenceFile(root, ".dove/audio/reviews/parent-child-evidence/report.md", "Checklist child review evidence.\n");
 
     const childPass = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
       packetId: child.id,
@@ -2477,7 +2492,7 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
     assert.equal(childPass.result.packetId, child.id);
 
     for (const [index, checklistChild] of created.createdChecklistTasks.slice(1).entries()) {
-      const checklistArtifact = `.dove/audio/reviews/parent-child-evidence/checklist-${index + 2}.md`;
+      const checklistArtifact = writeMcpEvidenceFile(root, `.dove/audio/reviews/parent-child-evidence/checklist-${index + 2}.md`, `Checklist ${index + 2} evidence.\n`);
       const checklistPass = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
         packetId: checklistChild.id,
         runId: `parent-child-evidence-child-${index + 2}-pass`,
@@ -2516,7 +2531,7 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
     assert.ok(persistedParent.artifactRefs.includes(childArtifact));
     assert.deepEqual(persistedParent.evidenceLinks, [childArtifact]);
 
-    const siblingArtifact = ".dove/audio/reviews/parent-child-evidence-sibling/report.md";
+    const siblingArtifact = writeMcpEvidenceFile(root, ".dove/audio/reviews/parent-child-evidence-sibling/report.md", "Sibling review evidence.\n");
     const sibling = extractToolJson(dispatchToolFull(root, "create_dove_task", {
       id: "parent-child-evidence-sibling",
       goal: "Produce sibling evidence that should not be accepted by the parent.",
@@ -2560,6 +2575,7 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
 test("record_dove_mission_pass requires checklist children to be done before parent mission", () => {
   const root = createTempRoot("dove-mcp-parent-child-completion-");
   try {
+    writeMcpEvidenceFile(root);
     dispatchTool(root, "init_dove_goal", {
       id: "parent-child-completion-init",
       goal: "Validate parent completion waits for checklist children."
@@ -2573,7 +2589,7 @@ test("record_dove_mission_pass requires checklist children to be done before par
     }));
     assert.equal(created.createdChecklistTasks.length, 3);
 
-    const artifact = ".dove/runtime/parent-child-completion-result.json";
+    const artifact = writeMcpEvidenceFile(root, ".dove/evidence/parent-child-completion-result.md", "Parent completion evidence.\n");
     const blocked = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
       packetId: created.createdTask.id,
       runId: "parent-child-completion-blocked-pass",
@@ -2590,7 +2606,7 @@ test("record_dove_mission_pass requires checklist children to be done before par
     assert.deepEqual(blocked.openChecklistChildIds.sort(), created.createdChecklistTasks.map((child) => child.id).sort());
 
     for (const [index, child] of created.createdChecklistTasks.entries()) {
-      const childArtifact = `.dove/runtime/parent-child-completion-child-${index + 1}.json`;
+      const childArtifact = writeMcpEvidenceFile(root, `.dove/evidence/parent-child-completion-child-${index + 1}.md`, `Checklist child ${index + 1} completion evidence.\n`);
       const childPass = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
         packetId: child.id,
         runId: `${child.id}-pass`,
@@ -2694,6 +2710,7 @@ test("apply_dove_status_adjustments rejects completed parents with open checklis
 test("apply_dove_status_adjustments accepts parent and checklist completion in one unordered batch", () => {
   const root = createTempRoot("dove-mcp-parent-child-batch-completion-");
   try {
+    writeMcpEvidenceFile(root);
     dispatchTool(root, "init_dove_goal", {
       id: "parent-child-batch-completion-init",
       goal: "Validate batch completion order for checklist-backed parents."
@@ -2762,6 +2779,7 @@ test("create_dove_task rejects checklist children that are not deeper than the p
 test("run_dove_auto records bounded foreground iterations", () => {
   const root = createTempRoot("dove-mcp-auto-foreground-");
   try {
+    writeMcpEvidenceFile(root);
     dispatchTool(root, "init_dove_goal", {
       id: "auto-foreground-init",
       goal: "Validate foreground auto iterations."
@@ -2988,7 +3006,7 @@ test("run_dove_auto records bounded foreground iterations", () => {
         {
           command: "dove.note",
           completeTask: true,
-          outputArtifacts: [".dove/notes/index.json"],
+          outputArtifacts: [MCP_VERIFICATION_PATH, ".dove/notes/index.json"],
           verificationEvidencePaths: [MCP_VERIFICATION_PATH],
           verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(sourceNoteTask.createdTask)),
           args: {
@@ -3059,17 +3077,24 @@ test("run_dove_auto records bounded foreground iterations", () => {
       assert.deepEqual(boundary.resultCard.nextActions[0].requiredActions, missingMaterialCase.requiredActions);
     }
 
+    const autoNoteSource = extractToolJson(dispatchToolFull(root, "register_source", {
+      packetId: "auto-foreground-task",
+      citationKey: "autoForegroundSource2026",
+      title: "Auto Foreground Source",
+      locator: "integration-test:auto-foreground-source",
+      sourceType: "test-fixture"
+    }));
     const autoRun = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
       packetId: "auto-foreground-task",
       confirmed: true,
       runId: "auto-foreground-run",
       maxIterations: 3,
       steps: [
-        { command: "dove.note", args: { title: "Auto note", sectionId: "auto", summary: "Auto recorded a foreground note." } },
+        { command: "dove.note", args: { title: "Auto note", sectionId: "auto", sourceIds: [autoNoteSource.id], summary: "Auto recorded a foreground note." } },
         {
           command: "dove.note",
           completeTask: true,
-          outputArtifacts: [".dove/notes/index.json"],
+          outputArtifacts: [MCP_VERIFICATION_PATH, ".dove/notes/index.json"],
           verificationEvidencePaths: [MCP_VERIFICATION_PATH],
           verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(foregroundTask.createdTask)),
           executionReceipt: {
@@ -3090,6 +3115,7 @@ test("run_dove_auto records bounded foreground iterations", () => {
             noteId: "auto-completion-note",
             title: "Auto completion note",
             sectionId: "auto",
+            sourceIds: [autoNoteSource.id],
             summary: "Auto completed the foreground task with a durable note artifact."
           }
         }
@@ -3133,6 +3159,7 @@ test("run_dove_auto records bounded foreground iterations", () => {
 test("run_dove_auto can propose first-run init and materialize after confirmation", () => {
   const root = createTempRoot("dove-mcp-first-run-auto-");
   try {
+    writeMcpEvidenceFile(root);
     const proposal = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
       id: "first-run-auto-task",
       goal: "Start auto from a real demand without a prior init command.",
@@ -3154,24 +3181,37 @@ test("run_dove_auto can propose first-run init and materialize after confirmatio
     const run = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
       ...proposal.confirmArgs,
       runId: "first-run-auto-run",
-      steps: [{
-        command: "dove.note",
-        completeTask: true,
-        outputArtifacts: [".dove/notes/index.json"],
-        verificationEvidencePaths: [MCP_VERIFICATION_PATH],
-        verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(proposal.proposedTask)),
-        args: {
-          noteId: "first-run-auto-note",
-          title: "First-run auto note",
-          sectionId: "first-run",
-          summary: "First-run auto completed with a durable note artifact."
+      steps: [
+        {
+          command: "dove.source",
+          args: {
+            sourceId: "first-run-auto-source",
+            citationKey: "firstRunAutoSource2026",
+            title: "First-run Auto Source",
+            locator: "integration-test:first-run-auto-source",
+            sourceType: "test-fixture"
+          }
+        },
+        {
+          command: "dove.note",
+          completeTask: true,
+          outputArtifacts: [MCP_VERIFICATION_PATH, ".dove/notes/index.json"],
+          verificationEvidencePaths: [MCP_VERIFICATION_PATH],
+          verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(proposal.proposedTask)),
+          args: {
+            noteId: "first-run-auto-note",
+            title: "First-run auto note",
+            sectionId: "first-run",
+            sourceIds: ["first-run-auto-source"],
+            summary: "First-run auto completed with a durable note artifact."
+          }
         }
-      }]
+      ]
     }));
     assert.equal(run.status, "completed");
     assert.equal(run.task.id, "first-run-auto-task");
     assert.equal(run.result.packetId, "first-run-auto-task");
-    assert.equal(run.result.iterationCount, 1);
+    assert.equal(run.result.iterationCount, 2);
 
     const taskIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     assert.deepEqual(taskIndex.items.map((item) => item.id), ["init", "first-run-auto-task"]);
@@ -3216,18 +3256,21 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.equal(imported.verdict, "coherent");
     const reviewLog = fs.readFileSync(path.join(root, ".dove", "reviews", "log.md"), "utf8");
     assert.doesNotMatch(reviewLog, /PRIVATE/);
-    const runReview = extractToolJson(dispatchToolFull(root, "run_audio_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-2", scope: "mcp validation" }));
+    const audioReviewedArtifact = ".dove/drafts/mcp-audio-reviewed.md";
+    fs.mkdirSync(path.join(root, ".dove", "drafts"), { recursive: true });
+    fs.writeFileSync(path.join(root, audioReviewedArtifact), "# MCP audio reviewed artifact\n\nSubstantive draft material for audio reviewer handoff.\n", "utf8");
+    const runReview = extractToolJson(dispatchToolFull(root, "run_audio_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-2", scope: "mcp validation", artifactPaths: [audioReviewedArtifact] }));
     assert.equal(runReview.status, "prepared-awaiting-audio");
     assertPublicResultCard(runReview.resultCard, { surface: "dove.review" });
     assert.equal("handoffSuggestion" in runReview.resultCard.nextActions[0], false);
     assert.equal("nextRole" in runReview.resultCard.nextActions[0], false);
     assert.equal("requiredActions" in runReview.resultCard.nextActions[0], false);
 
-    const reviewLoop = extractToolJson(dispatchToolFull(root, "run_dove_review_loop", { packetId: "mcp-main-packet", runId: "mcp-review-loop-awaiting-output", maxIterations: 1 }));
-    assert.equal(reviewLoop.status, "blocked");
-    assert.equal(reviewLoop.stopReason, "awaiting-review-output");
+    const reviewLoop = extractToolJson(dispatchToolFull(root, "run_dove_review_loop", { packetId: "mcp-main-packet", runId: "mcp-review-loop-local", maxIterations: 1 }));
+    assert.equal(reviewLoop.status, "coherent");
+    assert.equal(reviewLoop.stopReason, "review-coherent");
     assertPublicResultCard(reviewLoop.resultCard, { surface: "dove.review-loop" });
-    assert.equal(reviewLoop.iterations[0].review.status, "prepared-awaiting-audio");
+    assert.equal(reviewLoop.iterations[0].review.verdict, "coherent");
     assertPublicResultCard(reviewLoop.iterations[0].review.resultCard, { surface: "dove.review" });
     assert.equal("handoffSuggestion" in reviewLoop.iterations[0].review.resultCard.nextActions[0], false);
 
@@ -3242,6 +3285,7 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
       inputPath: runReview.inputPath,
       inputSha256: runReview.inputSha256,
       reportPath: runReview.reportPath,
+      reviewedArtifactPaths: runReview.reviewedArtifactPaths,
       findings: [{ id: "missing-validation", severity: "medium", summary: "Provide validation evidence." }],
       actionItems: ["Provide validation evidence."]
     }, null, 2)}\n`, "utf8");

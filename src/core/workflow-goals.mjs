@@ -344,6 +344,18 @@ function writeJson(root, relativePath, value) {
   fs.writeFileSync(path.join(root, relativePath), `${JSON.stringify(value, null, 2)}\n`);
 }
 
+function writeWorkflowGoalEvidenceFile(root, relativePath, text) {
+  const fullPath = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, text, "utf8");
+  return relativePath;
+}
+
+function seedWorkflowGoalEvidence(root) {
+  writeWorkflowGoalEvidenceFile(root, WORKFLOW_GOAL_VERIFICATION_PATH, "Workflow goal verification passed.\n");
+  writeWorkflowGoalEvidenceFile(root, WORKFLOW_GOAL_ARTIFACT_PATH, "# Workflow goal artifact\n\nSubstantive workflow goal evidence.\n");
+}
+
 function patchGoalTask(root, packetId, patch = {}) {
   const packetPath = `${ARTIFACT_PATHS.taskPacketsDir}/packets/${packetId}.json`;
   const packet = readJson(root, packetPath);
@@ -555,6 +567,7 @@ function seedGoalWorkspace(root, dispatch, initId = "workflow-goal-init") {
     id: initId,
     goal: "Validate workflow goal acceptance gates."
   }), "init_dove_goal");
+  seedWorkflowGoalEvidence(root);
 }
 
 function seedGoalTask(root, dispatch, packetId, fields = {}) {
@@ -997,6 +1010,14 @@ function runAutoCompletionRequiresCriteriaGoal(root, dispatch) {
     nextAction: "project:dove.auto",
     executionContract: workflowExecutionContract()
   });
+  parseToolJson(dispatch(root, "register_source", {
+    packetId,
+    sourceId: "workflow-goal-auto-source",
+    citationKey: "workflowGoalAutoSource2026",
+    title: "Workflow Goal Auto Source",
+    locator: "integration-test:workflow-goal-auto-source",
+    sourceType: "test-fixture"
+  }), "register_source auto criteria fixture");
 
   const run = parseToolJson(dispatch(root, "run_dove_auto", {
     packetId,
@@ -1008,6 +1029,7 @@ function runAutoCompletionRequiresCriteriaGoal(root, dispatch) {
       args: {
         noteId: "workflow-goal-auto-note",
         title: "Workflow goal auto note",
+        sourceIds: ["workflow-goal-auto-source"],
         summary: "The auto step produces a real note artifact but no verifiedCriteria coverage.",
         skipFollowThroughReady: true
       }

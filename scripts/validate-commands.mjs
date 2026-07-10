@@ -52,7 +52,7 @@ const expectedTools = {
   "dove.figure": ["run_figure_workflow"],
   "dove.experience": ["run_experience_workflow"],
   "dove.draft": ["upsert_draft", "set_section_status"],
-  "dove.review": ["run_audio_review"],
+  "dove.review": ["run_review_loop"],
   "dove.review-loop": ["run_dove_review_loop"],
   "dove.rebuttal": ["normalize_rebuttal_issues", "build_rebuttal_strategy", "build_rebuttal"]
 };
@@ -121,7 +121,9 @@ assert.doesNotMatch(generatorText, /const\s+(?:BASE_CONTEXT_PATHS|TOOL_CONTEXT_P
 assert.doesNotMatch(generatorText, /dove\.paper\.\*/, "Generated adapters must not route users to removed paper-namespaced slash commands");
 
 const agentsText = readRelative("AGENTS.md");
-assert.equal(agentsText.includes("node ./bin/dove.mjs status ."), true, "AGENTS.md must route ordinary project questions through compact status CLI");
+assert.equal(agentsText.includes("node ./bin/dove.mjs status ."), true, "AGENTS.md must keep compact status available for state questions");
+assert.equal(agentsText.includes("first only when the user asks about Dove state"), true, "AGENTS.md must not route ordinary work prompts through status first");
+assert.equal(agentsText.includes("For requests to fix, implement, research, verify, write, review, experiment, or draw, start with visible substantive work"), true, "AGENTS.md must require substantive work before status/navigation for work prompts");
 assert.equal(agentsText.includes("node ./bin/dove.mjs status . --missions"), true, "AGENTS.md must route task-choice questions through compact mission expansion");
 assert.equal(agentsText.includes("node ./bin/dove.mjs figure . --intent"), true, "AGENTS.md must route figure requests through the compact figure CLI");
 assert.doesNotMatch(agentsText, /--full\s+--json|--json\s+--full/, "AGENTS.md must not recommend full JSON for ordinary answers");
@@ -279,8 +281,8 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
   assert.equal(commandText.includes("answer the Dove request the operator invoked"), true, `${relativePath} must route daily answers through the invoked Dove request first`);
   assert.equal(commandText.includes("manually reading or listing internal files"), true, `${relativePath} must prohibit visible internal-file reads for default answers`);
   assert.equal(commandText.includes("practical result in ordinary language"), true, `${relativePath} must report unavailable work in ordinary language instead of dumping files`);
-  assert.equal(commandText.includes("This request has one listed project check") || commandText.includes("This request has no listed project check"), true, `${relativePath} must give a concrete project check or stop instead of file emulation`);
-  assert.equal(commandText.includes("explicitly listed project check fails"), true, `${relativePath} must stop after project check failures instead of file recovery`);
+  assert.equal(commandText.includes("This request has one listed project check") || commandText.includes("This request has one listed project action") || commandText.includes("This request has no listed project action"), true, `${relativePath} must give a concrete project check/action or stop instead of file emulation`);
+  assert.equal(commandText.includes("explicitly listed project check or action fails"), true, `${relativePath} must stop after project check/action failures instead of file recovery`);
   assert.equal(commandText.includes("Keep Planner, Builder, and Reviewer responsibilities separate"), true, `${relativePath} must frame the three primary responsibilities`);
   assert.equal(commandText.includes("Return the next action, evidence expectations, and unresolved blockers"), true, `${relativePath} must return actionable outcomes without fake completion`);
 
@@ -379,9 +381,11 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
   }
 
   if (command.id === "dove.review") {
-    assert.equal(commandText.includes("reviewer only the current task summary"), true, `${relativePath} must document review isolation inputs`);
-    assert.equal(commandText.includes("Do not share private writer transcript"), true, `${relativePath} must forbid broad/private context sharing`);
+    assert.equal(commandText.includes("local evidence-aware review"), true, `${relativePath} must make ordinary review local and evidence-aware`);
+    assert.equal(commandText.includes("Inspect real project materials"), true, `${relativePath} must inspect materials instead of substituting status/navigation`);
+    assert.equal(commandText.includes("Use separate isolated or audio review only when the operator explicitly asks"), true, `${relativePath} must keep isolated/audio review explicit-only`);
     assert.equal(commandText.includes("plain language"), true, `${relativePath} must report review outcomes plainly`);
+    assert.equal(commandText.includes("Run an isolated audio review"), false, `${relativePath} must not make ordinary review an audio handoff`);
   }
 
   if (command.id === "dove.review-loop") {

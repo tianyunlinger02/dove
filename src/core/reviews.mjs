@@ -1,4 +1,5 @@
 import { ARTIFACT_PATHS } from "./schema.mjs";
+import { inspectDeclaredPath } from "./artifact-integrity.mjs";
 import { evaluateFigurePipeline } from "./artifacts.mjs";
 import { evaluateEvidence } from "./evidence.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
@@ -12,6 +13,88 @@ import { appendText, assertGovernanceMutationRegistered, assertFollowThroughRead
 const UNRESOLVED_CONCERN_STATUSES = new Set(["open", "awaiting-author-response", "author-response-submitted", "escalated", "contested"]);
 const AUTHOR_RESPONSE_PENDING_STATUSES = new Set(["open", "awaiting-author-response"]);
 const REVIEWER_RULING_PENDING_STATUSES = new Set(["author-response-submitted", "contested"]);
+const REVIEW_VERDICTS = new Set(["coherent", "needs-revision", "needs-evidence", "blocked"]);
+
+function normalizeStringArray(value) {
+  const values = Array.isArray(value) ? value : (typeof value === "string" ? [value] : []);
+  return Array.from(new Set(values.map((item) => String(item).trim()).filter(Boolean)));
+}
+
+function normalizeReviewVerdict(value) {
+  const verdict = typeof value === "string" ? value.trim() : "";
+  if (!REVIEW_VERDICTS.has(verdict)) {
+    throw new Error(`append_review_log requires verdict to be one of: ${Array.from(REVIEW_VERDICTS).join(", ")}.`);
+  }
+  return verdict;
+}
+
+function normalizeRequiredReviewSummary(value) {
+  const summary = typeof value === "string" ? value.trim() : "";
+  if (!summary) {
+    throw new Error("append_review_log requires a substantive review summary; default review text is not progress.");
+  }
+  return summary;
+}
+
+function inspectReviewArtifact(root, rawPath, label) {
+  const inspection = inspectDeclaredPath(root, rawPath, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true
+  });
+  if (inspection.status !== "existing") {
+    throw new Error(`${label} must be an existing non-empty non-bookkeeping file: ${inspection.normalizedPath ?? rawPath ?? "<missing>"} (${inspection.reason ?? inspection.status}).`);
+  }
+  return inspection.normalizedPath;
+}
+
+function normalizeReviewedArtifactPaths(root, args = {}) {
+  const reviewedArtifactPaths = normalizeStringArray([
+    ...normalizeStringArray(args.reviewedArtifactPaths),
+    ...normalizeStringArray(args.artifactPaths),
+    ...normalizeStringArray(args.linkedArtifactPaths)
+  ]);
+  return reviewedArtifactPaths.map((artifactPath) => inspectReviewArtifact(root, artifactPath, "reviewedArtifactPaths"));
+}
+
+function normalizeExistingReportPath(root, args = {}) {
+  const reportPath = args.reportPath ?? args.reviewReportPath ?? null;
+  if (!reportPath) {
+    return null;
+  }
+  return inspectReviewArtifact(root, reportPath, "reportPath");
+}
+
+function renderReviewReport(entry) {
+  return [
+    "# Review report",
+    "",
+    `- Timestamp: ${entry.timestamp}`,
+    `- Stage: ${entry.stage}`,
+    `- Scope: ${entry.scope}`,
+    `- Verdict: ${entry.verdict}`,
+    `- Summary: ${entry.summary}`,
+    "",
+    "## Reviewed artifacts",
+    "",
+    ...(entry.reviewedArtifactPaths.length > 0 ? entry.reviewedArtifactPaths.map((artifactPath) => `- ${artifactPath}`) : ["- None"]),
+    "",
+    "## Findings",
+    "",
+    ...(entry.findings.length > 0 ? entry.findings.map((finding) => `- [${finding.severity}] ${finding.summary}`) : ["- None"]),
+    "",
+    "## Action items",
+    "",
+    ...(entry.actionItems.length > 0 ? entry.actionItems.map((item) => `- [ ] ${item}`) : ["- [ ] None"]),
+    ""
+  ].join("\n");
+}
+
+function hasExplicitReviewBoundary(args = {}) {
+  return normalizeStringArray(args.requiredInputs).length > 0
+    || normalizeStringArray(args.requiredActions).length > 0
+    || typeof args.boundaryReason === "string"
+    || typeof args.boundaryType === "string";
+}
 
 function localizedText(responseLanguage, zh, en) {
   return responseLanguage === "en" ? en : zh;
@@ -58,6 +141,8 @@ function renderReviewEntry(entry) {
     `- Scope: ${entry.scope}`,
     `- Verdict: ${entry.verdict}`,
     `- Summary: ${entry.summary}`,
+    `- Report: ${entry.reportPath ?? "none"}`,
+    `- Reviewed artifacts: ${entry.reviewedArtifactPaths.length > 0 ? entry.reviewedArtifactPaths.join(", ") : "none"}`,
     `- Review required before finalize: ${entry.reviewRequiredBeforeFinalize}`,
     "- Findings:",
     ...(entry.findings.length > 0 ? entry.findings.map((item) => `  - [${item.severity}] ${item.summary}${item.responseOwnerRole ? ` (response owner: ${item.responseOwnerRole})` : ""}`) : ["  - None recorded"]),
@@ -292,29 +377,52 @@ export function appendReviewLog(root, args = {}) {
 
 export function persistReviewLog(root, args = {}) {
   const timestamp = args.timestamp ?? nowIso();
+  const verdict = normalizeReviewVerdict(args.verdict);
+  const summary = normalizeRequiredReviewSummary(args.summary);
+  const reviewedArtifactPaths = normalizeReviewedArtifactPaths(root, args);
+  let reportPath = normalizeExistingReportPath(root, args);
+  const findings = Array.isArray(args.findings)
+    ? args.findings.map((item) => ({
+        severity: item.severity ?? "medium",
+        summary: item.summary ?? String(item),
+        claimIds: item.claimIds ?? [],
+        experimentIds: item.experimentIds ?? [],
+        responseOwnerRole: item.responseOwnerRole,
+        reviewerAction: item.reviewerAction,
+        linkedAuditIds: item.linkedAuditIds ?? [],
+        linkedBridgeIds: item.linkedBridgeIds ?? [],
+        linkedArtifactPaths: item.linkedArtifactPaths ?? [],
+        methodologicalCategory: item.methodologicalCategory ?? null
+      }))
+    : [];
+  const actionItems = Array.isArray(args.actionItems) ? args.actionItems : [];
+  if (verdict === "coherent") {
+    if (reviewedArtifactPaths.length === 0) {
+      throw new Error("append_review_log cannot record a coherent review without at least one existing non-empty reviewed artifact.");
+    }
+    if (!reportPath && args.autoGeneratedReviewReport !== true) {
+      throw new Error("append_review_log cannot record a coherent review without an existing non-empty review report file.");
+    }
+  } else if (findings.length === 0 && actionItems.length === 0 && !hasExplicitReviewBoundary(args)) {
+    throw new Error("append_review_log requires findings, actionItems, or an explicit material boundary for non-coherent reviews.");
+  }
   const entry = {
     timestamp,
     stage: args.stage ?? "manual-review",
     scope: args.scope ?? "current paper materials",
-    verdict: args.verdict ?? "needs-work",
-    summary: args.summary ?? "No summary provided.",
+    verdict,
+    summary,
     reviewRequiredBeforeFinalize: Boolean(args.reviewRequiredBeforeFinalize ?? true),
-    findings: Array.isArray(args.findings)
-      ? args.findings.map((item) => ({
-          severity: item.severity ?? "medium",
-          summary: item.summary ?? String(item),
-          claimIds: item.claimIds ?? [],
-          experimentIds: item.experimentIds ?? [],
-          responseOwnerRole: item.responseOwnerRole,
-          reviewerAction: item.reviewerAction,
-          linkedAuditIds: item.linkedAuditIds ?? [],
-          linkedBridgeIds: item.linkedBridgeIds ?? [],
-          linkedArtifactPaths: item.linkedArtifactPaths ?? [],
-          methodologicalCategory: item.methodologicalCategory ?? null
-        }))
-      : [],
-    actionItems: Array.isArray(args.actionItems) ? args.actionItems : []
+    reportPath,
+    reviewedArtifactPaths,
+    resolvedConcernIds: normalizeStringArray(args.resolvedConcernIds),
+    findings,
+    actionItems
   };
+  if (!entry.reportPath && args.autoGeneratedReviewReport === true) {
+    writeText(root, ARTIFACT_PATHS.reviewReport, renderReviewReport(entry));
+    entry.reportPath = ARTIFACT_PATHS.reviewReport;
+  }
 
   appendText(root, ARTIFACT_PATHS.reviewLog, `\n${renderReviewEntry(entry)}`);
   const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, {
@@ -342,13 +450,13 @@ export function persistReviewLog(root, args = {}) {
   const currentConcerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
   const concernInputs = entry.verdict === "coherent"
     ? (currentConcerns.items ?? [])
-      .filter((item) => UNRESOLVED_CONCERN_STATUSES.has(item.status))
+      .filter((item) => entry.resolvedConcernIds.includes(item.id) && UNRESOLVED_CONCERN_STATUSES.has(item.status))
       .map((item) => ({
         ...item,
         status: "resolved",
         rulingOutcome: "accepted",
         reviewerDisposition: "accepted",
-        linkedArtifactPaths: Array.from(new Set([...(item.linkedArtifactPaths ?? []), ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.revisionPlan]))
+        linkedArtifactPaths: Array.from(new Set([...(item.linkedArtifactPaths ?? []), ARTIFACT_PATHS.reviewLog, entry.reportPath, ...entry.reviewedArtifactPaths].filter(Boolean)))
       }))
     : entry.findings.map((finding, index) => ({
         id: concernFingerprint({
@@ -363,7 +471,7 @@ export function persistReviewLog(root, args = {}) {
         reviewerRationale: finding.summary,
         linkedAuditIds: finding.linkedAuditIds,
         linkedBridgeIds: finding.linkedBridgeIds,
-        linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.revisionPlan, ...finding.linkedArtifactPaths],
+        linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.revisionPlan, entry.reportPath, ...entry.reviewedArtifactPaths, ...finding.linkedArtifactPaths].filter(Boolean),
         claimIds: finding.claimIds,
         experimentIds: finding.experimentIds
       }));
@@ -434,7 +542,7 @@ export function persistReviewLog(root, args = {}) {
     refreshDurableSurfaces(root, {
       type: "append-review-log",
       summary: `Recorded review verdict ${entry.verdict}.`,
-      artifactPaths: [ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.revisionPlan]
+      artifactPaths: [ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.adversarialReviewState, ARTIFACT_PATHS.revisionPlan, entry.reportPath].filter(Boolean)
     });
   }
   return {
@@ -549,6 +657,10 @@ export function runReviewLoop(root, args = {}) {
   });
   return {
     ...entry,
+    reviewStatePath: ARTIFACT_PATHS.reviewState,
+    reviewLogPath: ARTIFACT_PATHS.reviewLog,
+    reviewConcernsPath: ARTIFACT_PATHS.reviewConcerns,
+    revisionPlanPath: ARTIFACT_PATHS.revisionPlan,
     preActionGuidance,
     resultCard: reviewResultCard(root, args, entry, "run_review_loop")
   };
@@ -648,6 +760,8 @@ export function persistReviewLoop(root, args = {}) {
       : "The current paper artifacts need another revision pass.",
     findings,
     actionItems,
+    reviewedArtifactPaths: [ARTIFACT_PATHS.claims, ARTIFACT_PATHS.experimentLog, ARTIFACT_PATHS.figuresIndex],
+    autoGeneratedReviewReport: true,
     reviewRequiredBeforeFinalize: true,
     skipBoardUpdate: Boolean(args.skipBoardUpdate),
     skipRefreshDurableSurfaces: Boolean(args.skipRefreshDurableSurfaces)

@@ -73,7 +73,7 @@ export const TOOL_CONTEXT_PATHS = {
   reset_dove_version: [".dove/state.json", ".dove/task-packets/index.json", ".dove/versions", ".dove/meta/operator-lessons.json"],
   run_experience_workflow: [".dove/experiments", ".dove/claims", ".dove/evidence/index.json", ".dove/task-packets/index.json"],
   run_audio_review: [".dove/audio/reviews", ".dove/task-packets/index.json", ".dove/reviews"],
-  run_dove_review_loop: [".dove/audio/reviews", ".dove/reviews", ".dove/drafts", ".dove/experiments", ".dove/task-packets/index.json"],
+  run_dove_review_loop: [".dove/reviews", ".dove/revision-plans", ".dove/drafts", ".dove/experiments", ".dove/task-packets/index.json"],
   query_dove_orchestrate: [".dove/workspace/index.json", ".dove/orchestration/board.json"],
   query_dove_mission: [".dove/workspace/index.json"],
   query_dove_mission_board: [".dove/orchestration/board.json", ".dove/task-packets/index.json"],
@@ -173,7 +173,7 @@ const TASK_SCOPED_WRITE_CONSTRAINTS = [
 ];
 
 const AGENT_WORKFLOW_CONSTRAINTS = [
-  "For ordinary prompts, first use compact `query_dove_status` and `statusHome.preActionGuidance` for intent routing before choosing a mutation command; users should not need to guess slash command names.",
+  "Use status first only for Dove state, next-step, blocker, task-choice, or task-binding questions; for fix, implement, research, verify, write, review, experiment, or figure prompts, start by producing or inspecting substantive material and use status only as supporting context.",
   "For ordinary prompts that ask to bind, save, deposit, archive, or 沉淀 results to a main task, resolve the durable packet first, register external URLs/templates/guidelines as packet-bound sources, then synthesize internal findings through `upsert_note` or `record_document_evidence` instead of treating the synthesis as an external source.",
   "When reporting research or venue results, separate snapshot-backed or registered sources from candidate links, blocked retrieval candidates, and internal notes/documents; do not put unverified candidates under a generic `Sources:` list.",
   "When work depends on current external information, public web material, provider/tool documentation, scholarly discovery, venue policy, or ecosystem behavior, run a visible bounded search or retrieval step first; use Dove's read-only public no-key network search tools when available, and treat returned items as candidates until verified.",
@@ -314,10 +314,10 @@ const COMMAND_SURFACES_BASE = [
     title: "Dove review",
     domain: "generic",
     category: "mutation",
-    policy: "isolated-handoff",
-    summary: "Run an isolated audio review over final plan/results and explicitly supplied artifacts without inheriting full project context.",
-    requiredTools: ["run_audio_review"],
-    constraints: ["The audio reviewer may read only the current task summary, final plan paths, final result paths, explicit artifact paths, artifact hashes, instructions, and output contract.", "Do not share writer private transcript, broad project context, orchestration board context, or reviewer private transcript.", "Import only declared handoff/report artifacts back into Dove review ledgers and return a localized `resultCard` summary for prepared/imported review states."]
+    policy: "guarded-mutation",
+    summary: "Run a local evidence-aware review pass over selected task materials and produce concrete revision guidance.",
+    requiredTools: ["run_review_loop"],
+    constraints: ["Default review is a local evidence-aware pass that inspects claims, sources, notes, drafts, experiments, figures, and recorded concerns for the selected task or paper pipeline.", "Do not treat a verdict string as review progress; return concrete findings, action items, missing evidence, or a clear coherent result backed by inspected materials.", "Use isolated audio or external reviewer mode only when the operator explicitly asks for isolated/audio/parallel reviewer review; ordinary review should not inherit broad private transcripts or pretend an external review ran."]
   },
   {
     id: "dove.review-loop",
@@ -325,9 +325,9 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "guarded-mutation",
-    summary: "Loop isolated review, draft revision, and experience planning until coherent or blocked, with max iterations from global config.",
+    summary: "Run limited local review and optional revision or experience steps until materials are coherent or blocked.",
     requiredTools: ["run_dove_review_loop"],
-    constraints: ["Use default 3 as the max iteration count unless `.dove/state.json.settings.reviewLoop.maxIterations` says otherwise.", "Each iteration should run review, update draft work, and plan missing experience/evidence as needed.", "If a draft substep is requested, provide draftBody or draft.body before the loop starts; if an experience substep is requested, provide a goal, title, idea, or experimentId before the loop starts.", "Stop early when review is coherent, the task is blocked, a provider boundary is reached, or user input is required."]
+    constraints: ["Use default 3 as the max iteration count unless `.dove/state.json.settings.reviewLoop.maxIterations` says otherwise.", "Each iteration must inspect local review evidence first, then update draft work or plan missing experience/evidence only when explicit material for that substep is supplied.", "If a draft substep is requested, provide draftBody or draft.body before the loop starts; if an experience substep is requested, provide a goal, title, idea, or experimentId before the loop starts.", "Stop early when review is coherent, the task is blocked, a provider boundary is reached, or user input is required; do not prepare isolated/audio review unless the operator explicitly asks for that mode."]
   },
   {
     id: "dove.rebuttal",
@@ -427,18 +427,18 @@ const COMMAND_UX_DETAILS = {
     examples: ["/dove:draft Draft the methods section from linked evidence", "/dove:draft Revise the introduction using the latest review findings"]
   },
   "dove.review": {
-    dailyFlow: ["Use this for an isolated audio review over final plans, final results, and explicitly listed materials.", "Do not pass broad project context or private writer/reviewer transcripts."],
+    dailyFlow: ["Use this for a local evidence-aware review pass over the selected task materials.", "Inspect concrete claims, sources, notes, drafts, experiments, figures, and recorded concerns; do not substitute a verdict label for review work.", "Use separate isolated or audio review only when the operator explicitly asks for that mode."],
     targetingBehavior: "Resolve the review to one task and the exact materials being reviewed.",
-    confirmationBehavior: "Reviewer input and import stay limited to the supplied materials.",
-    expectedOutcome: "The review preparation or result is ready without breaking isolation boundaries.",
-    examples: ["/dove:review Review the final plan and result materials only", "/dove:review Prepare isolated reviewer input for the current task"]
+    confirmationBehavior: "If the target or reviewed material is unclear, ask for the material instead of guessing or falling back to a status panel.",
+    expectedOutcome: "The operator gets concrete findings, action items, missing evidence, or a coherent result backed by inspected materials.",
+    examples: ["/dove:review Check whether the current draft is supported by evidence", "/dove:review Review the selected task materials before marking them done"]
   },
   "dove.review-loop": {
-    dailyFlow: ["Use this when review, draft revision, and experience planning should iterate together within the configured max rounds.", "Stop when coherent, blocked, at a drawing/review boundary, or when user input is required."],
+    dailyFlow: ["Use this when local review, draft revision, and experience planning should iterate together within the configured max rounds.", "Start each iteration by inspecting evidence and findings; revise or plan experiments only when the needed material is supplied.", "Stop when coherent, blocked, at a drawing/review boundary, or when user input is required."],
     targetingBehavior: "Resolve the loop to one task before changing review, draft, or experience state.",
     confirmationBehavior: "Run only limited visible iterations; default max is 3 unless configured otherwise.",
-    expectedOutcome: "Each loop iteration moves review, draft, and experience progress until the task is coherent or blocked.",
-    examples: ["/dove:review-loop Run up to three review and revision rounds for the current draft", "/dove:review-loop Stop when the task is coherent or reaches an evidence blocker"]
+    expectedOutcome: "Each loop iteration reports inspected findings or moves a real draft/experience artifact until the task is coherent or blocked.",
+    examples: ["/dove:review-loop Run up to three evidence-aware review and revision rounds", "/dove:review-loop Stop when the task is coherent or reaches an evidence blocker"]
   },
   "dove.rebuttal": {
     dailyFlow: ["Use this to organize reviewer issues, build response strategy, and draft evidence-backed rebuttal or revision text.", "Keep rebuttal work author-side and linked to claims, sections, experiments, or explicit gaps."],
@@ -524,15 +524,16 @@ const COMMAND_ADAPTER_CONSTRAINTS = {
     "Use linked sources, notes, experience, figures, and review findings when they are available."
   ],
   "dove.review": [
-    "Give the reviewer only the current task summary, final plans, final results, explicit materials, hashes, instructions, and output expectations.",
-    "Do not share private writer transcript, broad project context, or private reviewer transcript.",
-    "Report review preparation or imported review results in plain language."
+    "Inspect real project materials and report concrete review findings, action items, missing evidence, or a coherent result.",
+    "Do not substitute a status panel, task list, or verdict string for review work.",
+    "Use separate isolated or audio review only when the operator explicitly asks for that mode, and keep private writer/reviewer transcripts out of ordinary review replies.",
+    "Report review outcomes in plain language."
   ],
   "dove.review-loop": [
-    "Run only limited visible review, revision, and experience-planning iterations.",
+    "Run only limited visible local review, revision, and experience-planning iterations.",
     "Use three rounds by default unless the project config says otherwise.",
     "Do not start a draft or experiment substep without the needed material.",
-    "Stop early when the task is coherent, blocked, waiting on review, or waiting on user input."
+    "Stop early when the task is coherent, blocked, waiting on material, or waiting on user input."
   ],
   "dove.rebuttal": [
     "Organize reviewer issues before drafting responses.",

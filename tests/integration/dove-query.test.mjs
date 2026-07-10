@@ -527,20 +527,126 @@ test("CLI status help stays focused on status expansion", () => {
   assert.doesNotMatch(help.stdout, /mutation-mode|patch-plan|direct-process|serve-global-status/u);
 });
 
-test("CLI host-only public surface help stays public", () => {
-  for (const surface of ["note", "source"]) {
+test("CLI work surface help stays public without executing writes", () => {
+  for (const surface of ["source", "note", "draft", "experience", "review", "review-loop"]) {
     const help = spawnSync("node", [CLI, surface, "--help"], {
       cwd: ROOT,
       encoding: "utf8"
     });
     assert.equal(help.status, 0, help.stderr || help.stdout);
-    assert.match(help.stdout, new RegExp(`dove\\.${surface}`, "u"));
-    assert.match(help.stdout, /This shell can only give guidance for this Dove request/u);
-    assert.match(help.stdout, new RegExp(`Next: run /dove\\.${surface}`, "u"));
-    assert.match(help.stdout, /selected task can be updated/u);
-    assert.match(help.stdout, /dove status \./u);
+    assert.match(help.stdout, /Usage:/u);
+    assert.match(help.stdout, new RegExp(`dove ${surface} \\[target\\]`, "u"));
+    assert.match(help.stdout, /For work requests, use the matching action with real material/u);
+    assert.doesNotMatch(help.stdout, /This shell can only give guidance for this Dove request|Next: run \/dove\.|cannot save|save changes/u);
     assertNoCompactPublicLeaks(help.stdout);
-    assert.doesNotMatch(help.stdout, /Usage:|cannot save|save changes|--packet-id|mutation-mode|patch-plan|direct-process|source-svg-path|output-manifest-path|svg-content|host command|MCP capability|local CLI|Dove runtime|CLI route|direct subcommand/u);
+    assert.doesNotMatch(help.stdout, /--packet-id|mutation-mode|patch-plan|direct-process|source-svg-path|output-manifest-path|svg-content|host command|MCP capability|local CLI|Dove runtime|CLI route|direct subcommand/u);
+  }
+});
+
+test("CLI source and note default to governed patch-plans without writing records", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    const timestamp = new Date(0).toISOString();
+    writeTaskPacket(root, {
+      id: "cli-work-packet",
+      title: "CLI real work packet",
+      summary: "Packet for source and note CLI regression coverage.",
+      status: "pending",
+      lifecycleStatus: "active",
+      active: true,
+      assignedRole: "builder",
+      level: 1,
+      creatorKind: "operator",
+      domain: "paper",
+      stage: "execute",
+      updatedAt: timestamp
+    });
+    writeJson(root, ARTIFACT_PATHS.sources, {
+      version: 1,
+      items: [{ id: "cli-known-source", citationKey: "cliKnownSource", title: "CLI Known Source", locator: "integration-test:cli-known-source", authors: [], year: 2026 }],
+      updatedAt: null
+    });
+    const beforeSources = fs.readFileSync(path.join(root, ARTIFACT_PATHS.sources), "utf8");
+    const beforeNotes = fs.readFileSync(path.join(root, ARTIFACT_PATHS.notes), "utf8");
+
+    const sourceArgs = [CLI, "source", root, "--packet-id", "cli-work-packet", "--title", "Verified source", "--locator", "https://example.com/source"];
+    const sourceHuman = spawnSync("node", sourceArgs, { cwd: ROOT, encoding: "utf8" });
+    assert.equal(sourceHuman.status, 0, sourceHuman.stderr || sourceHuman.stdout);
+    assert.match(sourceHuman.stdout, /来源|source|待确认方案/u);
+    assertNoCompactPublicLeaks(sourceHuman.stdout);
+    assert.doesNotMatch(sourceHuman.stdout, /\.dove\/|packetId|mutationMode|patch-plan|direct-process|register_source/u);
+    assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.sources), "utf8"), beforeSources);
+
+    const sourceMachine = spawnSync("node", [...sourceArgs, "--json"], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(sourceMachine.status, 0, sourceMachine.stderr || sourceMachine.stdout);
+    const sourceParsed = JSON.parse(sourceMachine.stdout);
+    assert.equal(sourceParsed.mutationMode, "patch-plan");
+    assert.equal(sourceParsed.writesApplied, false);
+    assert.ok(sourceParsed.mutationPlan.operations.length > 0);
+    assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.sources), "utf8"), beforeSources);
+
+    const noteArgs = [CLI, "note", root, "--packet-id", "cli-work-packet", "--source-id", "cli-known-source", "--summary", "This is real synthesis from verified material."];
+    const noteHuman = spawnSync("node", noteArgs, { cwd: ROOT, encoding: "utf8" });
+    assert.equal(noteHuman.status, 0, noteHuman.stderr || noteHuman.stdout);
+    assert.match(noteHuman.stdout, /笔记|note|待确认方案/u);
+    assertNoCompactPublicLeaks(noteHuman.stdout);
+    assert.doesNotMatch(noteHuman.stdout, /\.dove\/|packetId|mutationMode|patch-plan|direct-process|upsert_note/u);
+    assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.notes), "utf8"), beforeNotes);
+
+    const noteMachine = spawnSync("node", [...noteArgs, "--json"], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(noteMachine.status, 0, noteMachine.stderr || noteMachine.stdout);
+    const noteParsed = JSON.parse(noteMachine.stdout);
+    assert.equal(noteParsed.mutationMode, "patch-plan");
+    assert.equal(noteParsed.writesApplied, false);
+    assert.ok(noteParsed.mutationPlan.operations.length > 0);
+    assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.notes), "utf8"), beforeNotes);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI draft requires real body or explicit section status", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    writeTaskPacket(root, {
+      id: "cli-draft-packet",
+      title: "CLI draft packet",
+      summary: "Packet for draft CLI regression coverage.",
+      status: "pending",
+      lifecycleStatus: "active",
+      active: true,
+      assignedRole: "builder",
+      level: 1,
+      creatorKind: "operator",
+      domain: "paper",
+      stage: "execute",
+      updatedAt: new Date(0).toISOString()
+    });
+
+    const missingBody = spawnSync("node", [CLI, "draft", root, "--packet-id", "cli-draft-packet", "--section-id", "methods"], { cwd: ROOT, encoding: "utf8" });
+    assert.notEqual(missingBody.status, 0, missingBody.stderr || missingBody.stdout);
+    assert.match(missingBody.stdout, /草稿更新/u);
+    assert.match(missingBody.stdout, /body|status|正文|状态/u);
+    assertNoCompactPublicLeaks(missingBody.stdout);
+
+    const draftPath = path.join(root, ARTIFACT_PATHS.draftsDir, "methods.md");
+    const bodyArgs = [CLI, "draft", root, "--packet-id", "cli-draft-packet", "--section-id", "methods", "--body", "A concrete methods draft paragraph with an explicit evidence placeholder."];
+    const bodyHuman = spawnSync("node", bodyArgs, { cwd: ROOT, encoding: "utf8" });
+    assert.equal(bodyHuman.status, 0, bodyHuman.stderr || bodyHuman.stdout);
+    assertNoCompactPublicLeaks(bodyHuman.stdout);
+    assert.equal(fs.existsSync(draftPath), false);
+
+    const bodyMachine = spawnSync("node", [...bodyArgs, "--json"], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(bodyMachine.status, 0, bodyMachine.stderr || bodyMachine.stdout);
+    const parsed = JSON.parse(bodyMachine.stdout);
+    assert.equal(parsed.mutationMode, "patch-plan");
+    assert.equal(parsed.writesApplied, false);
+    assert.ok(parsed.mutationPlan.operations.length > 0);
+    assert.equal(fs.existsSync(draftPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

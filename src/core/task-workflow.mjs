@@ -24,12 +24,13 @@ import { normalizeTaskPacketId, readTaskPacketCatalog, resolveDurableTaskPacket 
 import { registerSource, upsertNote, upsertDraft, buildRebuttal } from "./artifacts.mjs";
 import { runFigureWorkflow } from "./figure-workflow.mjs";
 import { runExperienceWorkflow } from "./experience-workflow.mjs";
-import { runAudioReview } from "./audio-review.mjs";
 import { runDoveReviewLoop } from "./dove-review-loop.mjs";
+import { runReviewLoop } from "./reviews.mjs";
 import { normalizeRebuttalIssues, buildRebuttalStrategy } from "./orchestration.mjs";
 import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
+import { completionEvidenceIntegrity, isBookkeepingArtifactPath } from "./artifact-integrity.mjs";
 import { appendEvent, appendResult, loadRuntimeArtifacts, saveRuntimeArtifacts } from "./runtime-state.mjs";
 
 function slugify(value) {
@@ -1979,7 +1980,7 @@ function completionEvidenceForPayload(payload = {}) {
   };
 }
 
-function completionVerificationBlock(task, args = {}, responseLanguage = "zh") {
+function completionVerificationBlock(root, task, args = {}, responseLanguage = "zh") {
   const payload = missionPassPayload(args);
   const contract = normalizeDoveExecutionContract(payload.executionContract ?? task.executionContract, null);
   const readiness = doveExecutionContractReadiness(contract);
@@ -2007,12 +2008,14 @@ function completionVerificationBlock(task, args = {}, responseLanguage = "zh") {
   }
   const evidence = completionEvidenceForPayload(payload);
   const hasPlanOutput = task.stage === "plan" && hasPlanMissionOutput(payload);
-  const hasCompletionEvidence = evidence.evidencePaths.length > 0 || hasPlanOutput;
+  const integrity = hasPlanOutput ? null : completionEvidenceIntegrity(root, evidence);
+  const hasCompletionEvidence = hasPlanOutput || integrity?.hasSubstantiveEvidence === true;
   const hasSummary = Boolean(normalizeString(payload.resultSummary ?? payload.summary ?? payload.reason, ""));
   if (!hasSummary || !hasCompletionEvidence) {
     const requiredActions = [
       hasSummary ? null : "provide-result-summary",
-      hasCompletionEvidence ? null : "provide-evidence-links-or-artifact-refs-or-verification-evidence"
+      hasCompletionEvidence ? null : "provide-evidence-links-or-artifact-refs-or-verification-evidence",
+      !hasPlanOutput && evidence.evidencePaths.length > 0 && !hasCompletionEvidence ? "attach-existing-non-empty-non-bookkeeping-evidence" : null
     ].filter(Boolean);
     return {
       status: "needs-completion-evidence",
@@ -2022,9 +2025,10 @@ function completionVerificationBlock(task, args = {}, responseLanguage = "zh") {
       boundaryType: "missing-required-materials",
       requiredActions,
       evidenceRequired: readiness.evidenceRequired,
+      evidenceIntegrity: integrity,
       message: responseLanguage === "en"
-        ? "Completing a Dove task requires a result summary plus evidence, artifact, validation, or verification paths."
-        : "完成 Dove 任务必须提供结果摘要，并附带 evidence、artifact、validation 或 verification 路径。",
+        ? "Completing a Dove task requires a result summary plus existing, non-empty, non-bookkeeping evidence, artifact, validation, or verification paths."
+        : "完成 Dove 任务必须提供结果摘要，并附带已存在、非空、非导航账本类的 evidence、artifact、validation 或 verification 路径。",
       nextAction: "project:dove.status",
       proposalOnly: true,
       noAutoApply: true,
@@ -2040,10 +2044,49 @@ function completionVerificationBlock(task, args = {}, responseLanguage = "zh") {
       title: task.title,
       boundaryType: "verification-failed",
       criteriaCoverage: coverage,
+      evidenceIntegrity: integrity,
       requiredActions: ["provide-verified-criteria", "cover-missing-convergence-criteria", "attach-verification-evidence"],
       message: responseLanguage === "en"
         ? "Completing a Dove task requires verifiedCriteria covering every executionContract.convergence.criteria item."
         : "完成 Dove 任务必须用 verifiedCriteria 覆盖 executionContract.convergence.criteria 中的每一项。",
+      nextAction: "project:dove.status",
+      proposalOnly: true,
+      noAutoApply: true,
+      writes: []
+    };
+  }
+  if (integrity && integrity.problemPaths.length > 0) {
+    return {
+      status: "needs-completion-evidence",
+      requestedStatus: "completed",
+      packetId: task.id,
+      title: task.title,
+      boundaryType: "missing-required-materials",
+      criteriaCoverage: coverage,
+      evidenceIntegrity: integrity,
+      requiredActions: ["attach-existing-non-empty-non-bookkeeping-evidence"],
+      message: responseLanguage === "en"
+        ? "Completing a Dove task cannot cite missing, unsafe, empty, directory, unreadable, or unsupported local evidence paths."
+        : "完成 Dove 任务不能引用缺失、不安全、空文件、目录、不可读或不支持的本地证据路径。",
+      nextAction: "project:dove.status",
+      proposalOnly: true,
+      noAutoApply: true,
+      writes: []
+    };
+  }
+  if (integrity && integrity.missingCriteriaEvidence.length > 0) {
+    return {
+      status: "verification-failed",
+      requestedStatus: "completed",
+      packetId: task.id,
+      title: task.title,
+      boundaryType: "verification-failed",
+      criteriaCoverage: coverage,
+      evidenceIntegrity: integrity,
+      requiredActions: ["attach-verification-evidence", "attach-existing-non-empty-non-bookkeeping-evidence"],
+      message: responseLanguage === "en"
+        ? "Completing a Dove task requires each verified criterion to cite existing, non-empty, non-bookkeeping evidence."
+        : "完成 Dove 任务时，每个 verifiedCriteria 都必须引用已存在、非空、非导航账本类的证据。",
       nextAction: "project:dove.status",
       proposalOnly: true,
       noAutoApply: true,
@@ -2121,7 +2164,7 @@ export function recordDoveMissionPass(root, args = {}) {
       writes: []
     };
   }
-  const verificationBlock = resultStatus === "completed" ? completionVerificationBlock(taskBefore, payload, responseLanguage) : null;
+  const verificationBlock = resultStatus === "completed" ? completionVerificationBlock(root, taskBefore, payload, responseLanguage) : null;
   if (verificationBlock) {
     return {
       ...verificationBlock,
@@ -2464,7 +2507,7 @@ export function applyDoveStatusAdjustments(root, args = {}) {
       rejected.push({ ...adjustment, packetId, reason: completionBlock.message, completionBlock });
       continue;
     }
-    const verificationBlock = adjustment.status === "completed" ? completionVerificationBlock(fullPacket, { ...adjustment, resultSummary: adjustment.summary || adjustment.reason }, responseLanguage) : null;
+    const verificationBlock = adjustment.status === "completed" ? completionVerificationBlock(root, fullPacket, { ...adjustment, resultSummary: adjustment.summary || adjustment.reason }, responseLanguage) : null;
     if (verificationBlock) {
       rejected.push({ ...adjustment, packetId, reason: verificationBlock.message, completionBlock: verificationBlock });
       continue;
@@ -2747,7 +2790,7 @@ function applyOperatorHostResult(root, taskItem, taskResult, timestamp, response
   const task = loadFullTask(root, taskItem);
   const taskStatus = normalizeMissionPassStatus(taskResult);
   const taskResultEvidence = completionEvidenceForPayload(taskResult);
-  const verificationBlock = taskStatus === "completed" ? completionVerificationBlock(task, taskResult, responseLanguage) : null;
+  const verificationBlock = taskStatus === "completed" ? completionVerificationBlock(root, task, taskResult, responseLanguage) : null;
   if (verificationBlock) {
     const updatedTask = updateTaskLifecycle(root, task, "blocked", {
       ...taskResult,
@@ -2846,7 +2889,7 @@ function runOperatorInternalStep(root, taskItem, timestamp, responseLanguage = "
         verifiedCriteria: classified.verifiedCriteria,
         executionReceipt: classified.executionReceipt
       };
-      const verificationBlock = completionVerificationBlock(workingTask, completionArgs, responseLanguage);
+      const verificationBlock = completionVerificationBlock(root, workingTask, completionArgs, responseLanguage);
       if (verificationBlock) {
         updatedTask = updateTaskLifecycle(root, workingTask, "blocked", {
           ...completionArgs,
@@ -3558,7 +3601,10 @@ function executeAutoStep(root, command, stepArgs) {
     case "dove.draft":
       return upsertDraft(root, stepArgs);
     case "dove.review":
-      return runAudioReview(root, stepArgs);
+      return runReviewLoop(root, {
+        ...stepArgs,
+        policyOverrideReason: stepArgs.policyOverrideReason ?? "auto-local-review-pass"
+      });
     case "dove.review-loop":
       return runDoveReviewLoop(root, stepArgs);
     case "dove.rebuttal": {
@@ -3616,10 +3662,10 @@ function autoStepArtifactRefs(command, output = {}) {
     refs.push(...output.artifacts);
   }
   if (command === "dove.source") refs.push(ARTIFACT_PATHS.sources, ARTIFACT_PATHS.citationLog);
-  if (command === "dove.note") refs.push(ARTIFACT_PATHS.notes, ARTIFACT_PATHS.queryPack);
+  if (command === "dove.note") refs.push(ARTIFACT_PATHS.notes);
   if (command === "dove.experience") refs.push(ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits);
   if (command === "dove.figure") refs.push(ARTIFACT_PATHS.figureQa);
-  return normalizeStringArray(refs);
+  return normalizeStringArray(refs).filter((item) => !isBookkeepingArtifactPath(item));
 }
 
 function completedAutoStep(command, output, outcomeStatus, options = {}) {
@@ -3661,9 +3707,6 @@ function classifyAutoStepResult(command, output) {
   const status = typeof output?.status === "string" && output.status.trim() ? output.status.trim() : null;
   if (AUTO_READ_ONLY_COMMANDS.has(command)) {
     return { status: "step-no-progress", outcome: `${command}-read-only`, stopReason: "read-only-auto-step", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
-  }
-  if (status === "prepared-awaiting-audio") {
-    return { status: "blocked-boundary", outcome: "awaiting-review-output", stopReason: "awaiting-review-output", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
   }
   if (status === "prepared-awaiting-output") {
     return { status: "blocked-boundary", outcome: "awaiting-provider-output", stopReason: "awaiting-figure-provider-output", terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
@@ -3719,8 +3762,20 @@ function classifyAutoStepResult(command, output) {
   if (command === "dove.figure" && status === "validated" && output?.imported) {
     return completedAutoStep(command, output, status, { canCompleteTask: true });
   }
-  if (command === "dove.review" && output?.imported) {
-    return completedAutoStep(command, output, "imported", { canCompleteTask: true });
+  if (command === "dove.review" && output?.verdict === "coherent") {
+    return completedAutoStep(command, output, "coherent", { canCompleteTask: true });
+  }
+  if (command === "dove.review" && ["needs-evidence", "needs-revision"].includes(output?.verdict)) {
+    return {
+      status: "blocked-boundary",
+      outcome: output.verdict,
+      stopReason: `dove.review-${output.verdict}`,
+      terminal: true,
+      canCompleteTask: false,
+      artifactRefs: autoStepArtifactRefs(command, output),
+      evidenceLinks: [],
+      requiredActions: normalizeStringArray(output.actionItems)
+    };
   }
   if (command === "dove.review-loop" && status === "coherent") {
     return completedAutoStep(command, output, status, { canCompleteTask: true });
@@ -4429,7 +4484,7 @@ export function runDoveAuto(root, args = {}) {
           executionReceipt,
           executionContract: step.executionContract ?? task.executionContract
         };
-        const verificationBlock = completionVerificationBlock(task, completionArgs, responseLanguage);
+        const verificationBlock = completionVerificationBlock(root, task, completionArgs, responseLanguage);
         const completionEvidence = completionEvidenceForPayload(completionArgs);
         const canCompleteWithEvidence = classified.canCompleteTask === true || completionEvidence.evidencePaths.length > 0 || completionEvidence.verifiedCriteria.length > 0;
         if (!canCompleteWithEvidence || verificationBlock) {

@@ -21,6 +21,7 @@ export { buildGlobalStatusServingPlan, createStaticGlobalStatusServer, runGlobal
 export { queryDocumentLedger, recordDocumentEvidence } from "./documents.mjs";
 export { runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate } from "./runtime.mjs";
 export { analyzeArtifactConsistency, readTaskPacketCatalog, readTaskTargetResolutionSettings, resolveDurableTaskPacket, assertResolvedTaskPacket, normalizeTaskPacketId } from "./task-packets.mjs";
+export { completionEvidenceIntegrity, evidencePathProblemFlags, inspectDeclaredPath, inspectPathEvidence, inspectProjectArtifact, isBookkeepingArtifactPath, normalizeProjectRelativePath, summarizePathInspections } from "./artifact-integrity.mjs";
 export { createMutationContext, currentMutationContext, isPatchPlanMode, jsonContent, runWithMutationContext } from "./mutation-backend.mjs";
 export { validateWorkflowGoalContracts, validateWorkflowGoals, WORKFLOW_GOAL_CONTRACTS, WorkflowGoalValidationError } from "./workflow-goals.mjs";
 export { assertTaskScopedMutationTarget, getGovernanceMutationEntry } from "./mutation-guard.mjs";

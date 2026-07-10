@@ -209,6 +209,43 @@ function hasImportableOutput(args, prepared) {
   );
 }
 
+function hasExplicitFigureMaterialInput(args = {}) {
+  return Boolean(
+    args.svgContent
+    || args.sourceSvgPath
+    || args.outputManifestPath
+    || firstText(args.caption, args.captionDraft, args.captionIntent)
+    || normalizeStringArray(args.requiredVisualElements ?? args.visualElements).length > 0
+    || normalizeStringArray(args.sourceArtifactPaths ?? args.artifactPaths).length > 0
+    || (Array.isArray(args.materialRequirements) && args.materialRequirements.length > 0)
+    || (Array.isArray(args.materialHints) && args.materialHints.length > 0)
+  );
+}
+
+function figureNeedsPrePlanMaterialBoundary(args, item) {
+  if (args.allowMissingMaterials === true) {
+    return false;
+  }
+  const hasEvidenceLinkage = normalizeStringArray(item.targetClaimIds).length > 0
+    || normalizeStringArray(item.relatedExperimentIds).length > 0;
+  return !hasEvidenceLinkage && !hasExplicitFigureMaterialInput(args);
+}
+
+function prePlanFigureBoundary(figureId, runId) {
+  return {
+    id: `${figureId}-${runId}-figure-materials`,
+    type: "missing-required-materials",
+    reason: `Figure ${figureId} needs claim/experiment linkage or explicit visual/caption/material input before Dove can write a figure plan.`,
+    requiredInputs: ["claim-or-experiment-linkage", "visual-elements-or-caption-or-source-material"],
+    requiredActions: ["link-figure-to-claim-or-experiment", "provide-figure-visual-or-caption-material"],
+    artifactRefs: [],
+    nextAction: "project:dove.figure",
+    ownerRole: "builder",
+    nextRole: "builder",
+    detail: { implementationBoundaryType: "missing-figure-materials-before-plan" }
+  };
+}
+
 function statusFor(prepared, imported, figureQa) {
   if (["missing-secret-env", "failed"].includes(prepared.providerExecution?.status)) {
     return "blocked-boundary";
@@ -424,9 +461,52 @@ export function runFigureWorkflow(root, args = {}) {
   assertNoInlineSecrets(safeArgs, "figureWorkflow.args");
 
   const { figureId, item, items } = buildFigureItem(root, args, target);
+  const runId = slugify(args.runId ?? `${figureId}-run`);
+  if (figureNeedsPrePlanMaterialBoundary(args, item)) {
+    const responseLanguage = resolveDoveResponseLanguage(root, args);
+    const boundary = prePlanFigureBoundary(figureId, runId);
+    const prepared = { missingRequirementIds: boundary.requiredInputs, materialStatus: "needs-materials", providerExecution: null };
+    const figureQa = { issueCount: 0, workspaceIssueCount: 0, qaPath: null };
+    const resultCard = buildFigureResultCard({
+      status: "blocked-missing-materials",
+      figureId,
+      runId,
+      target,
+      boundary,
+      prepared,
+      imported: null,
+      figureQa,
+      responseLanguage
+    });
+    return {
+      status: "blocked-missing-materials",
+      resultCard,
+      figureId,
+      runId,
+      packetId: target.packetId,
+      boundary,
+      boundaryType: boundary.type,
+      requiredActions: boundary.requiredActions,
+      artifactRefs: [],
+      validationEvidencePaths: [],
+      nextAction: boundary.nextAction,
+      plan: null,
+      stageFiles: { templateCreated: false, editableCreated: false },
+      materialStatus: "needs-materials",
+      missingRequirementIds: boundary.requiredInputs,
+      imported: null,
+      validation: null,
+      figureQa,
+      diagnostics: { providerReadiness: null, providerExecution: null, prepared: null },
+      captionId: null,
+      finalSvgPath: null,
+      qaIssueCount: 0,
+      workspaceQaIssueCount: 0,
+      qaPath: null
+    };
+  }
   const plan = upsertFigurePlan(root, { packetId: target.packetId, items });
   const stageFiles = ensureStageSvgFiles(root, item);
-  const runId = slugify(args.runId ?? `${figureId}-run`);
   const executeProvider = args.executeProvider === true;
   const prepared = prepareFigureGeneration(root, {
     packetId: target.packetId,

@@ -10,6 +10,14 @@ const ROOT = process.cwd();
 const serverScriptPath = path.join(ROOT, "mcp", "dove-state-server.mjs");
 const tempWorkspace = createTempWorkspace("dove-validate-");
 const { call, notify, kill } = createMcpStdioClient({ args: [serverScriptPath], cwd: tempWorkspace });
+const VALIDATION_EVIDENCE_PATH = ".dove/evidence/mcp-validation.md";
+
+function writeValidationEvidence(text = "MCP validation inspected substantive local evidence.\n") {
+  const fullPath = path.join(tempWorkspace, VALIDATION_EVIDENCE_PATH);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, text, "utf8");
+  return VALIDATION_EVIDENCE_PATH;
+}
 
 function extractJson(result) {
   assert.ok(result.content?.[0]?.text, "Expected text content in MCP tool result");
@@ -91,7 +99,7 @@ const COMPACT_DISCOVERY_FORBIDDEN_KEYS = new Set([
   "diagnostics"
 ]);
 
-const COMPACT_DISCOVERY_FORBIDDEN_TEXT = /\.dove\/|\bproject:dove\.[a-z0-9.-]+|--packet-id\b|\b(?:packetId|taskPacketId|missionPacketId|taskId|runId|receiptId|boundaryId|boundaryType|mutationMode|patch-plan|direct-process|ownerRole|nextRole|handoff|providerId|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|queueSummary|queuePreview|preActionGuidance|resultCard|fullResult)\b|\b(?:query_dove_status|run_dove_auto|record_dove_mission_pass|run_figure_workflow|run_dove_operator|record_document_evidence|upsert_note|upsert_draft|register_source)\b/u;
+const COMPACT_DISCOVERY_FORBIDDEN_TEXT = /\.dove\/|\bproject:dove\.[a-z0-9.-]+|--packet-id\b|\b(?:packetId|taskPacketId|missionPacketId|taskId|runId|receiptId|boundaryId|boundaryType|mutationMode|patch-plan|direct-process|ownerRole|nextRole|handoff|providerId|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|queueSummary|queuePreview|preActionGuidance|resultCard|fullResult)\b|\b(?:query_dove_status|run_dove_auto|record_dove_mission_pass|run_figure_workflow|run_dove_operator|record_document_evidence|upsert_note|upsert_draft|register_source|run_review_loop|run_dove_review_loop|run_experience_workflow|set_section_status|reset_dove_version|build_rebuttal|build_rebuttal_strategy|normalize_rebuttal_issues|record_operator_lesson|init_dove_goal)\b/u;
 
 function requireCompactDiscoveryPublic(value, pathLabel = "operator tools") {
   if (Array.isArray(value)) {
@@ -227,6 +235,7 @@ function requirePreActionGuidanceSummary(summary, expected = {}) {
 
 async function main() {
   requireDoveWorkspaceVisibilityPolicy();
+  writeValidationEvidence();
 
   const init = await call("initialize", {
     protocolVersion: "2024-11-05",
@@ -458,7 +467,7 @@ async function main() {
     evidenceScope: "external",
     publicSafe: true,
     summary: "Validator public-safe document evidence summary.",
-    evidenceLinks: [".dove/evidence/index.json"]
+    evidenceLinks: [VALIDATION_EVIDENCE_PATH]
   });
   assert.equal(publicDocumentEvidence.status, "recorded");
   assert.equal(publicDocumentEvidence.entry.publicSafe, true);
@@ -570,7 +579,7 @@ async function main() {
       sectionId: "introduction",
       sourceIds: [source.id],
       noteIds: [note.id],
-      evidenceLinks: [".dove/notes/index.json"],
+      evidenceLinks: [VALIDATION_EVIDENCE_PATH],
       status: "draft",
       confidence: "medium"
     }],
@@ -602,7 +611,7 @@ async function main() {
       claimId: "validator-direct-claim",
       outcome: "supports",
       summary: "Direct result supports the guidance-summary claim.",
-      evidenceLinks: [".dove/evidence/index.json"],
+      evidenceLinks: [VALIDATION_EVIDENCE_PATH],
       comparisonTargets: ["chat-only"]
     },
     policyOverrideReason: "Validator exercises direct experiment result guidance summary."
@@ -652,7 +661,7 @@ async function main() {
     result: {
       outcome: "supports",
       summary: "Task-centered Dove kept the evidence trail explicit.",
-      evidenceLinks: [".dove/notes/index.json"]
+      evidenceLinks: [VALIDATION_EVIDENCE_PATH]
     }
   });
   assert.equal(experience.status, "bridged");
@@ -749,9 +758,12 @@ async function main() {
     draftBody: "# Introduction\n\nReview-loop placeholder with TODO[evidence].\n",
     experienceGoal: "Plan evidence to resolve the validator review gap."
   });
-  assert.equal(reviewLoop.status, "blocked");
+  assert.equal(reviewLoop.status, "needs-review");
+  assert.equal(reviewLoop.stopReason, "material-updated-review-needed");
   assert.equal(reviewLoop.maxIterations, 3);
   assert.equal(reviewLoop.iterations.length, 1);
+  assert.ok(["coherent", "needs-evidence", "needs-revision"].includes(reviewLoop.iterations[0].review.verdict));
+  assert.notEqual(reviewLoop.iterations[0].review.status, "prepared-awaiting-audio");
   requireFullPreActionGuidance(reviewLoop.preActionGuidance, { surface: "dove.review", primaryRole: "reviewer" });
 
   const needsConfirmation = await callTool("run_dove_auto", {
@@ -807,7 +819,7 @@ async function main() {
         finalPlanPaths: [".dove/plans/current-plan.md"],
         finalResultPaths: [".dove/drafts/introduction.md"],
         artifactPaths: [".dove/figures/validator-figure.final.svg"],
-        instructions: "Auto validator should stop at the isolated audio review boundary."
+        instructions: "Auto validator should stop at local review findings instead of preparing isolated audio handoff."
       }
     }]
   });
@@ -818,8 +830,8 @@ async function main() {
   assert.equal(autoRun.result.maxIterations, 2);
   assert.equal(autoRun.result.iterationCount, 1);
   assert.equal(autoRun.result.iterations[0].command, "dove.review");
-  assert.equal(autoRun.result.iterations[0].outcome, "awaiting-review-output");
-  assert.equal(autoRun.result.stopReason, "awaiting-review-output");
+  assert.ok(["needs-evidence", "needs-revision"].includes(autoRun.result.iterations[0].outcome));
+  assert.equal(autoRun.result.stopReason, `dove.review-${autoRun.result.iterations[0].outcome}`);
   assert.ok(autoRun.result.allowedInternalCommands.includes("dove.review-loop"));
   requirePublicResultCard(autoRun.resultCard, { surface: "dove.auto" });
   assert.equal(autoRun.resultCard.requiresAction, true);

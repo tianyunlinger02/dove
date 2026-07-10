@@ -35,6 +35,7 @@ import {
   updateResearchBrief,
   appendHandoff,
   appendReviewLog,
+  applyDoveStatusAdjustments,
   recordDoveMissionPass,
   runDoveAuto,
   runDoveOperator,
@@ -190,6 +191,35 @@ function hardeningVerifiedCriteria(criterion = HARDENING_CRITERION) {
   return [{ criterion, status: "verified", evidencePaths: [HARDENING_EVIDENCE_PATH] }];
 }
 
+function writeHardeningEvidenceFile(root, relativePath = HARDENING_EVIDENCE_PATH, text = "Hardening verification passed.\n") {
+  const fullPath = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, text, "utf8");
+  return relativePath;
+}
+
+function seedHardeningSource(root, packetId, sourceId = "hardening-source") {
+  return registerSource(root, {
+    packetId,
+    sourceId,
+    citationKey: sourceId,
+    title: "Hardening Source",
+    authors: ["Doe"],
+    year: 2026,
+    sourceType: "paper"
+  }).id;
+}
+
+function seedHardeningTask(root, packetId, overrides = {}) {
+  return seedTaskPacket(root, packetId, {
+    status: "ready",
+    level: 3,
+    stage: "execute",
+    executionContract: hardeningExecutionContract(),
+    ...overrides
+  });
+}
+
 test("workflow completion hardening rejects fake completion signals", () => {
   const missionRoot = tempRoot();
   try {
@@ -247,6 +277,7 @@ test("workflow completion hardening rejects fake completion signals", () => {
       stage: "execute",
       executionContract: hardeningExecutionContract()
     });
+    const hardeningSourceId = seedHardeningSource(autoRoot, "auto-unverified-artifact");
     const autoUnverified = runDoveAuto(autoRoot, {
       packetId: "auto-unverified-artifact",
       confirmed: true,
@@ -258,6 +289,7 @@ test("workflow completion hardening rejects fake completion signals", () => {
           noteId: "auto-unverified-note",
           title: "Auto unverified note",
           sectionId: "hardening",
+          sourceIds: [hardeningSourceId],
           summary: "Artifact output without verified criteria must not complete."
         }
       }]
@@ -328,6 +360,176 @@ test("workflow completion hardening rejects fake completion signals", () => {
     assert.equal(readJson(unknownRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "operator-unknown-status").status, "in-progress");
   } finally {
     fs.rmSync(unknownRoot, { recursive: true, force: true });
+  }
+});
+
+test("completion evidence integrity rejects fake local paths and bookkeeping-only evidence", () => {
+  const missingRoot = tempRoot();
+  try {
+    ensureWorkspace(missingRoot);
+    seedHardeningTask(missingRoot, "missing-evidence-task");
+    const result = recordDoveMissionPass(missingRoot, {
+      packetId: "missing-evidence-task",
+      runId: "missing-evidence-run",
+      resultStatus: "completed",
+      resultSummary: "Completion cites a missing file path.",
+      artifactRefs: [".dove/evidence/does-not-exist.md"],
+      verificationEvidencePaths: [".dove/evidence/also-missing.log"],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [".dove/evidence/also-missing.log"] }]
+    });
+    assert.equal(result.status, "needs-completion-evidence");
+    assert.equal(result.boundaryType, "missing-required-materials");
+    assert.ok(result.evidenceIntegrity.problemPaths.includes(".dove/evidence/does-not-exist.md"));
+    assert.ok(result.evidenceIntegrity.problemPaths.includes(".dove/evidence/also-missing.log"));
+    assert.equal(readJson(missingRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "missing-evidence-task").status, "ready");
+  } finally {
+    fs.rmSync(missingRoot, { recursive: true, force: true });
+  }
+
+  const emptyRoot = tempRoot();
+  try {
+    ensureWorkspace(emptyRoot);
+    seedHardeningTask(emptyRoot, "empty-evidence-task");
+    writeHardeningEvidenceFile(emptyRoot, HARDENING_EVIDENCE_PATH, "");
+    const result = recordDoveMissionPass(emptyRoot, {
+      packetId: "empty-evidence-task",
+      runId: "empty-evidence-run",
+      resultStatus: "completed",
+      resultSummary: "Completion cites an empty verification file.",
+      artifactRefs: [HARDENING_EVIDENCE_PATH],
+      verificationEvidencePaths: [HARDENING_EVIDENCE_PATH],
+      verifiedCriteria: hardeningVerifiedCriteria()
+    });
+    assert.equal(result.status, "needs-completion-evidence");
+    assert.deepEqual(result.evidenceIntegrity.pathEvidence.emptyPaths, [HARDENING_EVIDENCE_PATH]);
+    assert.equal(readJson(emptyRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "empty-evidence-task").status, "ready");
+  } finally {
+    fs.rmSync(emptyRoot, { recursive: true, force: true });
+  }
+
+  const bookkeepingRoot = tempRoot();
+  try {
+    ensureWorkspace(bookkeepingRoot);
+    seedHardeningTask(bookkeepingRoot, "bookkeeping-evidence-task");
+    const result = recordDoveMissionPass(bookkeepingRoot, {
+      packetId: "bookkeeping-evidence-task",
+      runId: "bookkeeping-evidence-run",
+      resultStatus: "completed",
+      resultSummary: "Completion cites only task index bookkeeping.",
+      artifactRefs: [ARTIFACT_PATHS.taskPacketsIndex],
+      evidenceLinks: [ARTIFACT_PATHS.taskPacketsIndex],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [ARTIFACT_PATHS.taskPacketsIndex] }]
+    });
+    assert.equal(result.status, "needs-completion-evidence");
+    assert.deepEqual(result.evidenceIntegrity.pathEvidence.bookkeepingPaths, [ARTIFACT_PATHS.taskPacketsIndex]);
+    assert.equal(result.evidenceIntegrity.hasSubstantiveEvidence, false);
+    assert.equal(readJson(bookkeepingRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "bookkeeping-evidence-task").status, "ready");
+  } finally {
+    fs.rmSync(bookkeepingRoot, { recursive: true, force: true });
+  }
+});
+
+test("completion evidence integrity requires criteria-specific evidence and accepts real files", () => {
+  const criteriaRoot = tempRoot();
+  try {
+    ensureWorkspace(criteriaRoot);
+    seedHardeningTask(criteriaRoot, "criteria-missing-evidence-task");
+    writeHardeningEvidenceFile(criteriaRoot);
+    const result = recordDoveMissionPass(criteriaRoot, {
+      packetId: "criteria-missing-evidence-task",
+      runId: "criteria-missing-evidence-run",
+      resultStatus: "completed",
+      resultSummary: "Completion has global evidence but verified criteria lacks evidence paths.",
+      artifactRefs: [HARDENING_EVIDENCE_PATH],
+      verificationEvidencePaths: [HARDENING_EVIDENCE_PATH],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [] }]
+    });
+    assert.equal(result.status, "verification-failed");
+    assert.equal(result.boundaryType, "verification-failed");
+    assert.equal(result.evidenceIntegrity.missingCriteriaEvidence[0].criterion, HARDENING_CRITERION);
+    assert.equal(readJson(criteriaRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "criteria-missing-evidence-task").status, "ready");
+  } finally {
+    fs.rmSync(criteriaRoot, { recursive: true, force: true });
+  }
+
+  const validRoot = tempRoot();
+  try {
+    ensureWorkspace(validRoot);
+    seedHardeningTask(validRoot, "real-evidence-task");
+    const artifactPath = writeHardeningEvidenceFile(validRoot, ".dove/evidence/real-completion-artifact.md", "# Real completion artifact\n\nSubstantive evidence.\n");
+    writeHardeningEvidenceFile(validRoot);
+    const result = recordDoveMissionPass(validRoot, {
+      packetId: "real-evidence-task",
+      runId: "real-evidence-run",
+      resultStatus: "completed",
+      resultSummary: "Completion cites real artifact and verification files.",
+      artifactRefs: [artifactPath],
+      evidenceLinks: [artifactPath],
+      verificationEvidencePaths: [HARDENING_EVIDENCE_PATH],
+      verifiedCriteria: hardeningVerifiedCriteria()
+    });
+    assert.equal(result.status, "completed");
+    assert.equal(result.executionReceipt.criteriaCoverage.complete, true);
+    assert.equal(readJson(validRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "real-evidence-task").status, "completed");
+  } finally {
+    fs.rmSync(validRoot, { recursive: true, force: true });
+  }
+});
+
+test("completion evidence integrity rejects fake status and auto completion paths", () => {
+  const statusRoot = tempRoot();
+  try {
+    ensureWorkspace(statusRoot);
+    seedHardeningTask(statusRoot, "status-fake-path-task");
+    const result = applyDoveStatusAdjustments(statusRoot, {
+      confirmed: true,
+      adjustments: [{
+        packetId: "status-fake-path-task",
+        status: "completed",
+        reason: "Status adjustment cites a fake artifact path.",
+        artifactRefs: [".dove/evidence/status-fake-path.md"],
+        verificationEvidencePaths: [".dove/evidence/status-fake-path.log"],
+        verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [".dove/evidence/status-fake-path.log"] }]
+      }]
+    });
+    assert.equal(result.status, "rejected");
+    assert.equal(result.rejected[0].completionBlock.status, "needs-completion-evidence");
+    assert.equal(readJson(statusRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "status-fake-path-task").status, "ready");
+  } finally {
+    fs.rmSync(statusRoot, { recursive: true, force: true });
+  }
+
+  const autoRoot = tempRoot();
+  try {
+    ensureWorkspace(autoRoot);
+    seedHardeningTask(autoRoot, "auto-fake-output-task");
+    const hardeningSourceId = seedHardeningSource(autoRoot, "auto-fake-output-task");
+    writeHardeningEvidenceFile(autoRoot);
+    const result = runDoveAuto(autoRoot, {
+      packetId: "auto-fake-output-task",
+      confirmed: true,
+      runId: "auto-fake-output-run",
+      steps: [{
+        command: "dove.note",
+        completeTask: true,
+        outputArtifacts: [".dove/evidence/auto-fake-output.md"],
+        verificationEvidencePaths: [HARDENING_EVIDENCE_PATH],
+        verifiedCriteria: hardeningVerifiedCriteria(),
+        args: {
+          noteId: "auto-fake-output-note",
+          title: "Auto fake output note",
+          sectionId: "hardening",
+          sourceIds: [hardeningSourceId],
+          summary: "Auto output references a fake artifact path."
+        }
+      }]
+    });
+    assert.equal(result.status, "needs-completion-evidence");
+    assert.equal(result.task.status, "blocked");
+    assert.equal(result.boundary.type, "missing-required-materials");
+    assert.equal(readJson(autoRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "auto-fake-output-task").status, "blocked");
+  } finally {
+    fs.rmSync(autoRoot, { recursive: true, force: true });
   }
 });
 
