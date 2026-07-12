@@ -10,12 +10,13 @@ import {
   readJson,
   registerSource,
   runFigureWorkflow,
-  runWithMutationContext,
   upsertClaims,
   upsertFigurePlan,
   upsertNote,
-  writeJson
+  verifySource
 } from "../../src/core/index.mjs";
+import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { writeJson } from "../../src/core/workspace.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
@@ -68,6 +69,14 @@ function seedFigureWorkflowContext(root) {
     }
   });
   const source = registerSource(root, { packetId, citationKey: "figure-workflow-source", title: "Figure Workflow Source", authors: ["Doe"], year: 2026, sourceType: "paper" });
+  verifySource(root, {
+    packetId,
+    sourceId: source.id,
+    decision: "verified",
+    method: "test fixture inspected the canonical publication record",
+    checkedMaterial: "source title, authors, year, and publication metadata",
+    auditEvidence: [`fixture:${source.id}`]
+  });
   const note = upsertNote(root, { packetId, noteId: "figure-workflow-note", title: "Figure workflow note", sectionId: "method", sourceIds: [source.id], summary: "Source-backed material for the figure." });
   upsertClaims(root, {
     packetId,
@@ -367,6 +376,8 @@ test("runFigureWorkflow imports inline SVG as patch-plan operations without writ
     assert.equal(result.mutationMode, "patch-plan");
     assert.equal(result.writesApplied, false);
     assert.equal(result.hostRollbackEligible, true);
+    assert.match(result.resultCard.durableWrites[0], /没有声明新的持久写入|no new durable writes/i);
+    assert.doesNotMatch(result.resultCard.durableWrites[0], /已更新图表计划|Updated the figure plan/i);
     assert.equal(result.finalSvgPath, ".dove/figures/inline-svg-patch-plan.final.svg");
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "inline-svg-patch-plan.final.svg")), false);
     assert.ok(result.mutationPlan.operations.some((operation) => operation.relativePath === ".dove/figures/inline-svg-patch-plan.final.svg"));
@@ -566,6 +577,29 @@ test("runFigureWorkflow treats providerId none as a plan-only figure run", () =>
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "plan-only-provider-none.final.svg")), false);
     const figure = readFigures(root).items.find((item) => item.id === "plan-only-provider-none");
     assert.equal(figure.generationProviderId, "none");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runFigureWorkflow reports no durable writes when blocked before planning", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    initProject(root, { title: "Figure Pre-plan Boundary", objective: "Require real figure materials before planning." });
+    const packetId = seedTaskPacket(root, "pre-plan-no-materials-packet");
+    const result = runWithMutationContext(root, { actionId: "figure-pre-plan-boundary", mutationMode: "direct-process" }, () => runFigureWorkflow(root, {
+      packetId,
+      figureId: "pre-plan-no-materials",
+      runId: "pre-plan-no-materials-run",
+      intent: "Draw a figure without claim, experiment, caption, visual, or source material.",
+      requiredVisualElements: []
+    }));
+    assert.equal(result.status, "blocked-missing-materials");
+    assert.equal(result.writesApplied, false);
+    assert.equal(result.mutationPlan, undefined);
+    assert.match(result.resultCard.durableWrites[0], /没有声明新的持久写入|no new durable writes/i);
+    assert.doesNotMatch(result.resultCard.durableWrites[0], /已更新图表计划|Updated the figure plan/i);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

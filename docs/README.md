@@ -16,11 +16,13 @@ Read these first when installing, using, validating, or packaging Dove:
 - Keep `.dove/` as the only authoritative runtime state root in user-facing docs.
 - Describe ignored stale workspace artifacts as diagnostics only, not as compatibility authority.
 - Describe OpenCode as the default adapter, not the only supported host.
-- Treat generated host command adapters as outputs from `src/core/command-manifest.mjs`; do not document hand-edited per-host command inventories.
+- Treat generated host command adapters as generated outputs; do not document hand-edited per-host command inventories.
 - Keep local development scaffolding separate from Dove product/package surfaces.
 - When command, MCP, package, or governance contracts change, update the relevant docs and run the matching validation commands before release.
 
-## Release documentation checklist
+## Source-checkout release documentation checklist
+
+The commands below are maintainer-only and must be run from a Dove source checkout; they are not shipped into an installed project.
 
 Before publishing or pushing release-oriented changes, run:
 

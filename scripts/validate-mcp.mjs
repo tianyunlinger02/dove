@@ -32,9 +32,50 @@ function unwrapMcpResult(payload) {
   return payload;
 }
 
-async function callTool(name, args = {}) {
+async function callToolResult(name, args = {}) {
   const toolArgs = { ...args, resultMode: args.resultMode ?? "full" };
-  return unwrapMcpResult(extractJson(await call("tools/call", { name, arguments: toolArgs })));
+  return call("tools/call", { name, arguments: toolArgs });
+}
+
+async function callTool(name, args = {}) {
+  return unwrapMcpResult(extractJson(await callToolResult(name, args)));
+}
+
+async function callOperationalFailureTool(
+  name,
+  args = {}
+) {
+  const result = await callToolResult(name, args);
+  assert.equal(
+    result.isError,
+    true,
+    result.content?.[0]?.text
+      ?? `${name} must report an operational failure`
+  );
+  assert.ok(
+    result.content?.[0]?.text,
+    "Expected text content in MCP tool result"
+  );
+  return unwrapMcpResult(
+    JSON.parse(result.content[0].text)
+  );
+}
+
+async function proposeMission(args, label) {
+  const result = await callToolResult("create_dove_task", args);
+  const payload = extractJson(result);
+  const proposal = unwrapMcpResult(payload);
+  assert.equal(proposal.status, "needs-confirmation", `${label} must require confirmation`);
+  assert.ok(payload.confirmation?.confirmArgs, `${label} must expose exact confirmArgs in the MCP confirmation capsule`);
+  assert.match(payload.confirmation.confirmArgs.proposalDigest, /^[0-9a-f]{64}$/u);
+  return { proposal, confirmArgs: structuredClone(payload.confirmation.confirmArgs) };
+}
+
+function requireToolError(result, pattern, label) {
+  const text = result.content?.[0]?.text ?? "";
+  assert.equal(result.isError, true, `${label} must be rejected`);
+  assert.match(text, pattern, `${label} must explain the rejection`);
+  return text;
 }
 
 function requireTextIncludes(text, needle, label) {
@@ -278,8 +319,21 @@ async function main() {
     requireCompactDiscoveryPublic(tool, `operator tool ${tool.name}`);
   }
 
+  const retiredAuthorityTools = [
+    "issue_program_approval",
+    "run_autonomy_once",
+    "run_autonomy_foreground",
+    "run_autonomy_operate"
+  ];
+  for (const retiredTool of retiredAuthorityTools) {
+    assert.equal(operatorToolNames.has(retiredTool), false, `Default MCP operator surface must not register ${retiredTool}`);
+  }
+
   const listed = await call("tools/list", { surface: "full" });
   const toolNames = new Set(listed.tools.map((tool) => tool.name));
+  for (const retiredTool of retiredAuthorityTools) {
+    assert.equal(toolNames.has(retiredTool), false, `Full MCP surface must not register ${retiredTool}`);
+  }
   for (const requiredTool of [
     "init_dove_goal",
     "create_dove_task",
@@ -312,7 +366,7 @@ async function main() {
   const toolByName = new Map(listed.tools.map((tool) => [tool.name, tool]));
   const descriptionChecks = {
     query_dove_status: ["summary/headline", "nextStep", "needsAttention", "changes", "showMore", "one recommended action", "resultMode: full/debug", "statusHome.durableContextNotice", "mutationRollbackModel", "patch-plan plus host-tracked file-edit requirements", "host checkpoint verification limits", "unverified direct-process writes", "not git detection", "not direct-process", "not reset_dove_version", "statusHome.preActionGuidance", "automatic read-only lesson recall", "Planner/Builder/Reviewer role framing", "must not render a Missions panel", "blocked counts", "execution-gap counts", "required-evidence blocks", "requestStatusAdjustment"],
-    create_dove_task: ["preActionGuidance", "mission is a durable work/progress object", "recommended handoff routes", "without executing or recording a pass"],
+    create_dove_task: ["proposal-only mission work contract", "preActionGuidance", "complete returned confirmArgs", "exact id and proposalDigest", "same mutationMode", "recommended handoff routes", "without executing or recording a pass"],
     record_dove_mission_pass: ["host-tool-blocked", "visibly blocked"],
     run_dove_auto: ["preActionGuidance", "host-tool-blocked", "no hidden continuation", "scheduler", "daemon"],
     run_dove_operator: ["planner preActionGuidance", "host-tool-blocked", "read-only lesson recall", "no scheduler or hidden runtime"],
@@ -323,13 +377,14 @@ async function main() {
     prepare_audio_review: ["Reviewer preActionGuidanceSummary", "no-private-transcript boundary"],
     import_audio_review: ["Reviewer preActionGuidanceSummary", "private reviewer transcripts"],
     run_audio_review: ["Reviewer preActionGuidanceSummary", "localized resultCard"],
-    run_dove_review_loop: ["Reviewer preActionGuidance", "foreground stop conditions"],
+    run_dove_review_loop: ["independent local Reviewer", "Builder handoff"],
     reset_dove_version: ["direction-change snapshot", "not a .dove rollback restore entrypoint", "mutationMode: patch-plan", "host-tracked file edits", "host native checkpoint"],
     run_review_loop: ["independent review", "role-framed preActionGuidance"],
     prepare_isolated_review: ["Reviewer preActionGuidanceSummary", "explicit isolation boundaries"],
     import_isolated_review: ["Reviewer preActionGuidanceSummary", "private transcripts"],
     record_document_evidence: ["Builder/researcher preActionGuidanceSummary", "internal summaries, pressure-test reports, and synthesized outputs", "source/artifact provenance", "raw transcripts/private reasoning"],
     register_source: ["Builder/researcher preActionGuidanceSummary", "external source records", "sources: [...]", "verified registered sources", "candidate links", "upsert_note", "record_document_evidence"],
+    verify_source: ["identity fingerprint", "method", "checkedMaterial", "auditable evidence", "caller-minted"],
     upsert_note: ["Builder/researcher preActionGuidanceSummary", "internal synthesis", "pressure-test findings", "writing-style summaries", "reviewer-preference analysis"],
     upsert_plan: ["Planner preActionGuidanceSummary", "scope/gate guardrails"],
     upsert_outline: ["Planner preActionGuidanceSummary", "draft gate guardrails"],
@@ -373,13 +428,14 @@ async function main() {
   assert.equal(initGoal.init.level, 0);
   assert.equal(initGoal.nextAction, "project:dove.mission");
 
-  const missionProposal = await callTool("create_dove_task", {
+  const missionRequest = {
     id: "validator-paper-task",
     goal: "Draft and review the validator paper section with one figure and one experiment.",
     title: "Validator paper task",
     evidenceExpectations: ["draft", "figure", "review"],
     artifactRefs: [".dove/drafts/introduction.md"]
-  });
+  };
+  const { proposal: missionProposal, confirmArgs: approvedMissionConfirmArgs } = await proposeMission(missionRequest, "validator paper mission proposal");
   assert.equal(missionProposal.status, "needs-confirmation");
   assert.equal(missionProposal.proposalOnly, true);
   assert.deepEqual(missionProposal.writes, []);
@@ -388,7 +444,7 @@ async function main() {
   assert.equal(missionProposal.executionMode, "contract-handoff");
   assert.equal(missionProposal.workflowMode, "mission-contract");
   assert.equal(missionProposal.proposedTask.level, 3);
-  assert.equal(missionProposal.confirmArgs.confirmed, true);
+  assert.equal(approvedMissionConfirmArgs.confirmed, true);
   assert.equal(missionProposal.taskCard.presentation, "compact-task-card");
   assert.equal(missionProposal.taskCard.proposalOnly, true);
   assert.equal(missionProposal.taskCard.noAutoApply, true);
@@ -400,9 +456,19 @@ async function main() {
   assert.ok(missionProposal.checklistProposal.items.every((item) => item.creatorKind === "system"));
   assert.ok(missionProposal.checklistProposal.items.every((item) => item.level > missionProposal.proposedTask.level));
 
-  const mission = await callTool("create_dove_task", {
-    ...missionProposal.confirmArgs
+  const bareMissionConfirmation = await callToolResult("create_dove_task", {
+    ...missionRequest,
+    confirmed: true
   });
+  requireToolError(bareMissionConfirmation, /exact proposalDigest/u, "bare create_dove_task confirmation");
+  const staleMissionConfirmation = await callToolResult("create_dove_task", {
+    ...structuredClone(approvedMissionConfirmArgs),
+    title: "Stale validator paper task"
+  });
+  requireToolError(staleMissionConfirmation, /no longer matches the current contract/u, "stale create_dove_task confirmation");
+
+  const { confirmArgs: freshMissionConfirmArgs } = await proposeMission(missionRequest, "fresh validator paper mission proposal");
+  const mission = await callTool("create_dove_task", freshMissionConfirmArgs);
   assert.equal(mission.status, "materialized");
   assert.equal(mission.confirmationRequired, false);
   assert.equal(mission.demandConversion, true);
@@ -490,8 +556,20 @@ async function main() {
     origin: "validator"
   });
   assert.equal(source.citationKey, "smith2026dove");
+  assert.equal(source.lifecycle, "candidate");
   assert.ok(source.packetIds.includes(packetId));
   requirePreActionGuidanceSummary(source.preActionGuidanceSummary, { surface: "dove.source", primaryRole: "builder" });
+  const verifiedSource = await callTool("verify_source", {
+    packetId,
+    sourceId: source.id,
+    decision: "verified",
+    method: "validator inspected the canonical source fixture",
+    checkedMaterial: "title, authors, and publication locator",
+    auditEvidence: [VALIDATION_EVIDENCE_PATH]
+  });
+  assert.equal(verifiedSource.source.lifecycle, "verified");
+  assert.equal(verifiedSource.verification.sourceId, source.id);
+  assert.equal(verifiedSource.verification.fingerprint, verifiedSource.source.fingerprint);
 
   const batchSources = await callTool("register_source", {
     packetId,
@@ -571,6 +649,14 @@ async function main() {
   assert.equal(sectionStatus.status, "drafting");
   requirePreActionGuidanceSummary(sectionStatus.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "planner" });
 
+  const claimOwner = await callTool("append_handoff", {
+    fromRole: "planner",
+    toRole: "researcher",
+    phase: "research",
+    summary: "Transfer validator claim work to its truthful owner."
+  });
+  assert.equal(claimOwner.assignedRole, "researcher");
+
   const directClaims = await callTool("upsert_claims", {
     packetId,
     claims: [{
@@ -582,11 +668,17 @@ async function main() {
       evidenceLinks: [VALIDATION_EVIDENCE_PATH],
       status: "draft",
       confidence: "medium"
-    }],
-    policyOverrideReason: "Validator exercises direct claim guidance summary without changing production governance."
-  });
+    }]  });
   assert.ok(directClaims.claims.some((claim) => claim.id === "validator-direct-claim"));
   requirePreActionGuidanceSummary(directClaims.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "builder" });
+
+  const experimentOwner = await callTool("append_handoff", {
+    fromRole: "planner",
+    toRole: "experiment-planner",
+    phase: "experiments",
+    summary: "Transfer validator experiment work to its truthful owner."
+  });
+  assert.equal(experimentOwner.assignedRole, "experiment-planner");
 
   const directExperimentPlan = await callTool("upsert_experiment_plan", {
     packetId,
@@ -596,9 +688,7 @@ async function main() {
     hypothesis: "Thin direct experiment surfaces keep guidance summaries.",
     methodology: "Record a durable direct result and audit/bridge it.",
     successMetric: "Every returned direct artifact includes guidance summary.",
-    comparisonTargets: ["chat-only"],
-    policyOverrideReason: "Validator exercises direct experiment plan guidance summary."
-  });
+    comparisonTargets: ["chat-only"]  });
   assert.equal(directExperimentPlan.id, "validator-direct-experiment");
   requirePreActionGuidanceSummary(directExperimentPlan.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "builder" });
   const directExperimentPacketId = `experiment-${directExperimentPlan.id}`;
@@ -613,18 +703,14 @@ async function main() {
       summary: "Direct result supports the guidance-summary claim.",
       evidenceLinks: [VALIDATION_EVIDENCE_PATH],
       comparisonTargets: ["chat-only"]
-    },
-    policyOverrideReason: "Validator exercises direct experiment result guidance summary."
-  });
+    }  });
   assert.equal(directExperimentResult.id, "validator-direct-result");
   assert.equal(directExperimentResult.latestAuditId, "validator-direct-experiment-audit-1");
   requirePreActionGuidanceSummary(directExperimentResult.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "builder" });
 
   const directExperimentAudit = await callTool("run_experiment_audit", {
     packetId: directExperimentPacketId,
-    resultId: "validator-direct-result",
-    policyOverrideReason: "Validator exercises direct audit guidance summary."
-  });
+    resultId: "validator-direct-result"  });
   assert.equal(directExperimentAudit.resultId, "validator-direct-result");
   requirePreActionGuidanceSummary(directExperimentAudit.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "reviewer" });
 
@@ -632,9 +718,7 @@ async function main() {
     packetId: directExperimentPacketId,
     resultId: "validator-direct-result",
     auditIds: [directExperimentAudit.id],
-    reason: "Validator exercises direct claim bridge guidance summary.",
-    policyOverrideReason: "Validator exercises direct result-to-claim bridge guidance summary."
-  });
+    reason: "Validator exercises direct claim bridge guidance summary."  });
   assert.equal(directClaimBridge.resultId, "validator-direct-result");
   requirePreActionGuidanceSummary(directClaimBridge.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "builder" });
 
@@ -721,17 +805,24 @@ async function main() {
   assert.equal(importedFigure.finalSvgPath, ".dove/figures/validator-direct-figure.final.svg");
   requirePreActionGuidanceSummary(importedFigure.preActionGuidanceSummary, { surface: "dove.figure", primaryRole: "builder" });
 
-  const figure = await callTool("run_figure_workflow", {
-    packetId,
-    figureId: "validator-figure",
-    runId: "validator-figure-run",
-    intent: "Show init, mission, auto, review, and lessons as a task loop.",
-    sourceSections: ["introduction"],
-    relatedExperimentIds: ["validator-experience"],
-    requiredVisualElements: ["init", "mission", "review", "lesson"],
-    svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Validator workflow</text></svg>",
-    caption: "Validator figure shows the task-centered Dove loop."
-  });
+  const figure = await callOperationalFailureTool(
+    "run_figure_workflow",
+    {
+      packetId,
+      figureId: "validator-figure",
+      runId: "validator-figure-run",
+      intent: "Show init, mission, auto, review, and lessons as a task loop.",
+      sourceSections: ["introduction"],
+      relatedExperimentIds: ["validator-experience"],
+      requiredVisualElements: ["init", "mission", "review", "lesson"],
+      svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Validator workflow</text></svg>",
+      caption: "Validator figure shows the task-centered Dove loop."
+    }
+  );
+  assert.equal(
+    figure.status,
+    "qa-needs-attention"
+  );
   assert.equal(figure.packetId, packetId);
   assert.equal(figure.finalSvgPath, ".dove/figures/validator-figure.final.svg");
   requireFullPreActionGuidance(figure.preActionGuidance, { surface: "dove.figure", primaryRole: "builder" });
@@ -749,26 +840,37 @@ async function main() {
   assert.equal(review.privacyBoundary.writerPrivateTranscriptShared, false);
   requirePublicResultCard(review.resultCard, { surface: "dove.review" });
 
+  const draftBeforeReviewLoop = fs.readFileSync(path.join(tempWorkspace, ".dove/drafts/introduction.md"), "utf8");
   const reviewLoop = await callTool("run_dove_review_loop", {
     packetId,
     runId: "validator-review-loop",
-    finalPlanPaths: [".dove/plans/current-plan.md"],
-    finalResultPaths: [".dove/drafts/introduction.md"],
-    artifactPaths: [".dove/figures/validator-figure.final.svg"],
-    draftBody: "# Introduction\n\nReview-loop placeholder with TODO[evidence].\n",
-    experienceGoal: "Plan evidence to resolve the validator review gap."
+    artifactPaths: [
+      ".dove/plans/current-plan.md",
+      ".dove/drafts/introduction.md",
+      ".dove/figures/validator-figure.final.svg"
+    ]
   });
-  assert.equal(reviewLoop.status, "needs-review");
-  assert.equal(reviewLoop.stopReason, "material-updated-review-needed");
-  assert.equal(reviewLoop.maxIterations, 3);
-  assert.equal(reviewLoop.iterations.length, 1);
-  assert.ok(["coherent", "needs-evidence", "needs-revision"].includes(reviewLoop.iterations[0].review.verdict));
-  assert.notEqual(reviewLoop.iterations[0].review.status, "prepared-awaiting-audio");
+  assert.ok(["coherent", "needs-review"].includes(reviewLoop.status));
+  assert.ok(["review-coherent", "builder-revision-required"].includes(reviewLoop.stopReason));
+  assert.equal(reviewLoop.ownerRole, "reviewer");
+  assert.equal(reviewLoop.pass.review.verdict, reviewLoop.review.verdict);
+  assert.ok(["coherent", "needs-evidence", "needs-revision"].includes(reviewLoop.review.verdict));
+  assert.notEqual(reviewLoop.review.status, "prepared-awaiting-audio");
+  assert.equal(fs.readFileSync(path.join(tempWorkspace, ".dove/drafts/introduction.md"), "utf8"), draftBeforeReviewLoop);
   requireFullPreActionGuidance(reviewLoop.preActionGuidance, { surface: "dove.review", primaryRole: "reviewer" });
 
+  const autoReviewSteps = [{
+    command: "dove.review",
+    args: {
+      scope: "paper",
+      stage: "review"
+    }
+  }];
   const needsConfirmation = await callTool("run_dove_auto", {
     packetId,
-    goal: "Validate auto confirmation behavior."
+    goal: "Validate auto confirmation behavior.",
+    maxIterations: 2,
+    steps: autoReviewSteps
   });
   assert.equal(needsConfirmation.status, "needs-confirmation");
   assert.equal(needsConfirmation.proposalOnly, true);
@@ -808,21 +910,13 @@ async function main() {
   assert.equal(autoProposal.confirmArgs.confirmed, true);
   assert.equal(autoProposal.confirmArgs.checklistItems.length, 3);
 
-  const autoRun = await callTool("run_dove_auto", {
-    packetId,
-    confirmed: true,
-    runId: "validator-auto-run",
-    maxSteps: 2,
-    steps: [{
-      command: "dove.review",
-      args: {
-        finalPlanPaths: [".dove/plans/current-plan.md"],
-        finalResultPaths: [".dove/drafts/introduction.md"],
-        artifactPaths: [".dove/figures/validator-figure.final.svg"],
-        instructions: "Auto validator should stop at local review findings instead of preparing isolated audio handoff."
-      }
-    }]
-  });
+  const autoRun = await callOperationalFailureTool(
+    "run_dove_auto",
+    {
+      ...needsConfirmation.confirmArgs,
+      runId: "validator-auto-run"
+    }
+  );
   assert.equal(autoRun.status, "blocked-boundary");
   assert.equal(autoRun.result.packetId, packetId);
   assert.equal(autoRun.result.foreground, true);
@@ -830,18 +924,22 @@ async function main() {
   assert.equal(autoRun.result.maxIterations, 2);
   assert.equal(autoRun.result.iterationCount, 1);
   assert.equal(autoRun.result.iterations[0].command, "dove.review");
-  assert.ok(["needs-evidence", "needs-revision"].includes(autoRun.result.iterations[0].outcome));
-  assert.equal(autoRun.result.stopReason, `dove.review-${autoRun.result.iterations[0].outcome}`);
+  assert.notEqual(autoRun.result.iterations[0].outcome, "completed");
+  if (autoRun.result.iterations[0].outcome === "workflow-error-boundary") {
+    assert.equal(autoRun.result.stopReason, autoRun.result.iterations[0].stopReason);
+  } else {
+    assert.equal(autoRun.result.stopReason, `dove.review-${autoRun.result.iterations[0].outcome}`);
+  }
   assert.ok(autoRun.result.allowedInternalCommands.includes("dove.review-loop"));
   requirePublicResultCard(autoRun.resultCard, { surface: "dove.auto" });
   assert.equal(autoRun.resultCard.requiresAction, true);
 
-  const secondMission = await callTool("create_dove_task", {
+  const { confirmArgs: secondMissionConfirmArgs } = await proposeMission({
     id: "validator-kill-task",
     goal: "Temporary validator task to kill.",
-    title: "Validator kill task",
-    confirmed: true
-  });
+    title: "Validator kill task"
+  }, "validator kill mission proposal");
+  const secondMission = await callTool("create_dove_task", secondMissionConfirmArgs);
   const killed = await callTool("kill_dove_task", {
     packetId: secondMission.createdTask.id,
     reason: "MCP validator kill path."

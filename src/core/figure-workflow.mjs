@@ -36,6 +36,107 @@ function firstText(...values) {
   return values.find((value) => typeof value === "string" && value.trim().length > 0)?.trim() ?? null;
 }
 
+const FIGURE_MATERIAL_INPUT_KEYS = new Set([
+  "id",
+  "type",
+  "label",
+  "summary",
+  "artifactPath",
+  "path"
+]);
+const FIGURE_SEMANTIC_COVERAGE_INPUT_KEYS = new Set([
+  "observations",
+  "evidencePaths",
+  "artifactPaths"
+]);
+const FIGURE_SEMANTIC_REVIEW_INPUT_KEYS = new Set([
+  "summary",
+  "observations",
+  "evidencePaths",
+  "artifactPaths"
+]);
+
+function assertFigurePlainObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`run_figure_workflow requires an object at ${label}.`);
+  }
+}
+
+function assertFigureString(value, label) {
+  if (typeof value !== "string") {
+    throw new Error(`run_figure_workflow requires a string at ${label}.`);
+  }
+}
+
+function assertFigureStringArray(value, label) {
+  if (!Array.isArray(value)) {
+    throw new Error(`run_figure_workflow requires an array at ${label}.`);
+  }
+  value.forEach((item, index) => assertFigureString(item, `${label}[${index}]`));
+}
+
+function assertFigureObjectKeys(value, allowedKeys, label) {
+  assertFigurePlainObject(value, label);
+  const unknown = Object.keys(value).filter((key) => !allowedKeys.has(key));
+  if (unknown.length > 0) {
+    throw new Error(`run_figure_workflow does not accept unknown input ${unknown.map((key) => `${label}.${key}`).join(", ")}.`);
+  }
+}
+
+function assertFigureMaterialItem(value, label) {
+  assertFigureObjectKeys(value, FIGURE_MATERIAL_INPUT_KEYS, label);
+  for (const key of FIGURE_MATERIAL_INPUT_KEYS) {
+    if (Object.hasOwn(value, key)) {
+      assertFigureString(value[key], `${label}.${key}`);
+    }
+  }
+}
+
+function assertFigureSemanticObservation(value, allowedKeys, label) {
+  assertFigureObjectKeys(value, allowedKeys, label);
+  if (Object.hasOwn(value, "summary")) {
+    assertFigureString(value.summary, `${label}.summary`);
+  }
+  for (const key of ["observations", "evidencePaths", "artifactPaths"]) {
+    if (Object.hasOwn(value, key)) {
+      assertFigureStringArray(value[key], `${label}.${key}`);
+    }
+  }
+}
+
+function assertFigurePublicInput(args = {}) {
+  if (Object.hasOwn(args, "materialRequirements")) {
+    if (!Array.isArray(args.materialRequirements)) {
+      throw new Error("run_figure_workflow requires an array at $.materialRequirements.");
+    }
+    args.materialRequirements.forEach((item, index) => assertFigureMaterialItem(item, `$.materialRequirements[${index}]`));
+  }
+  if (Object.hasOwn(args, "materialHints")) {
+    if (!Array.isArray(args.materialHints)) {
+      throw new Error("run_figure_workflow requires an array at $.materialHints.");
+    }
+    args.materialHints.forEach((item, index) => {
+      if (typeof item !== "string") {
+        assertFigureMaterialItem(item, `$.materialHints[${index}]`);
+      }
+    });
+  }
+  if (Object.hasOwn(args, "semanticCoverage")) {
+    assertFigureSemanticObservation(
+      args.semanticCoverage,
+      FIGURE_SEMANTIC_COVERAGE_INPUT_KEYS,
+      "$.semanticCoverage"
+    );
+  }
+  if (Object.hasOwn(args, "semanticReview")) {
+    assertFigureSemanticObservation(
+      args.semanticReview,
+      FIGURE_SEMANTIC_REVIEW_INPUT_KEYS,
+      "$.semanticReview"
+    );
+  }
+}
+
 function compactObject(fields) {
   return Object.fromEntries(Object.entries(fields).filter(([, value]) => {
     if (value === null || value === undefined) {
@@ -417,7 +518,7 @@ function figureResultNextTitle(status, { prepared, responseLanguage }) {
   return figureText(responseLanguage, "提供 SVG 输出后再导入", "Provide SVG output and import it");
 }
 
-function buildFigureResultCard({ status, figureId, runId, target, boundary, prepared, imported, figureQa, responseLanguage }) {
+function buildFigureResultCard({ status, figureId, runId, target, boundary, prepared, imported, figureQa, responseLanguage, writesApplied = true }) {
   const actionCommand = boundary?.nextAction ?? (status === "validated" ? "project:dove.review" : "project:dove.figure");
   const card = buildCommandResultCard({
     surface: "dove.figure",
@@ -428,9 +529,11 @@ function buildFigureResultCard({ status, figureId, runId, target, boundary, prep
     status,
     outcome: boundary?.type ?? status,
     happened: figureResultHappened(status, { figureId, prepared, figureQa, imported, responseLanguage }),
-    durableWrites: imported
-      ? [figureText(responseLanguage, "已更新图表计划、caption provenance 和当前图检查状态。", "Updated the figure plan, caption provenance, and this figure's check state.")]
-      : [figureText(responseLanguage, "已更新图表计划和生成材料包。", "Updated the figure plan and generation material bundle.")],
+    durableWrites: !writesApplied || (status === "blocked-missing-materials" && boundary?.detail?.implementationBoundaryType === "missing-figure-materials-before-plan")
+      ? []
+      : imported
+        ? [figureText(responseLanguage, "已更新图表计划、caption provenance 和当前图检查状态。", "Updated the figure plan, caption provenance, and this figure's check state.")]
+        : [figureText(responseLanguage, "已更新图表计划和生成材料包。", "Updated the figure plan and generation material bundle.")],
     boundary,
     scope: compactObject({ kind: "figure", figureId, packetId: target.packetId }),
     nextActions: [{
@@ -453,9 +556,8 @@ function buildFigureResultCard({ status, figureId, runId, target, boundary, prep
 
 export function runFigureWorkflow(root, args = {}) {
   assertGovernanceMutationRegistered("run-figure-workflow", "guarded");
+  assertFigurePublicInput(args);
   const target = assertTaskScopedMutationTarget(root, "run-figure-workflow", args);
-  assertFollowThroughReady(root, "Running the figure workflow", args);
-  ensureWorkspace(root);
   assertNoLegacyFinalSvgInput(args, "run_figure_workflow");
   const { env: _env, svgContent: _svgContent, ...safeArgs } = args;
   assertNoInlineSecrets(safeArgs, "figureWorkflow.args");
@@ -505,6 +607,8 @@ export function runFigureWorkflow(root, args = {}) {
       qaPath: null
     };
   }
+  assertFollowThroughReady(root, "Running the figure workflow", args);
+  ensureWorkspace(root);
   const plan = upsertFigurePlan(root, { packetId: target.packetId, items });
   const stageFiles = ensureStageSvgFiles(root, item);
   const executeProvider = args.executeProvider === true;
@@ -515,7 +619,7 @@ export function runFigureWorkflow(root, args = {}) {
     providerId: args.providerId,
     constraints: args.constraints,
     outputFormat: args.outputFormat,
-    materialHints: args.materialHints,
+    ...(Object.hasOwn(args, "materialHints") ? { materialHints: args.materialHints } : {}),
     executeProvider,
     allowMissingMaterials: args.allowMissingMaterials,
     env: args.env
@@ -533,8 +637,8 @@ export function runFigureWorkflow(root, args = {}) {
       captionId: args.captionId,
       sourceSvgPath: args.sourceSvgPath,
       svgContent: args.svgContent,
-      semanticCoverage: args.semanticCoverage,
-      semanticReview: args.semanticReview,
+      ...(Object.hasOwn(args, "semanticCoverage") ? { semanticCoverage: args.semanticCoverage } : {}),
+      ...(Object.hasOwn(args, "semanticReview") ? { semanticReview: args.semanticReview } : {}),
       env: args.env
     });
   }
@@ -546,7 +650,7 @@ export function runFigureWorkflow(root, args = {}) {
   const validationEvidencePaths = figureValidationEvidencePaths(figureQa);
   const boundary = figureBoundaryFor(status, prepared, validation, figureQa, figureId, prepared.runId);
   const responseLanguage = resolveDoveResponseLanguage(root, args);
-  const resultCard = buildFigureResultCard({ status, figureId, runId: prepared.runId, target, boundary, prepared, imported, figureQa, responseLanguage });
+  const resultCard = buildFigureResultCard({ status, figureId, runId: prepared.runId, target, boundary, prepared, imported, figureQa, responseLanguage, writesApplied: !isPatchPlanMode(root) });
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.figure",
     responseLanguage,

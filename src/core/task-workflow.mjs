@@ -1,13 +1,18 @@
+import crypto from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
   DOVE_ARCHIVED_TASK_STATUSES,
   DOVE_AUDIO_CONTEXT_POLICY,
+  DOVE_EXECUTION_CHAIN_TYPES,
+  DOVE_PRIMARY_ROLE_IDS,
   DOVE_TASK_CREATOR_KINDS,
   DOVE_TASK_DOMAINS,
   DOVE_TASK_STAGES,
   DOVE_TASK_STATUSES,
+  createDefaultState,
   createTaskPacketsIndex,
   doveExecutionContractReadiness,
   doveExecutionCriteriaCoverage,
@@ -30,8 +35,10 @@ import { normalizeRebuttalIssues, buildRebuttalStrategy } from "./orchestration.
 import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
-import { completionEvidenceIntegrity, isBookkeepingArtifactPath } from "./artifact-integrity.mjs";
+import { completionEvidenceIntegrity, isBookkeepingArtifactPath, isExternalArtifactReference, normalizeProjectRelativePath } from "./artifact-integrity.mjs";
 import { appendEvent, appendResult, loadRuntimeArtifacts, saveRuntimeArtifacts } from "./runtime-state.mjs";
+import { currentMutationContext, isPatchPlanMode, normalizeMutationMode } from "./mutation-backend.mjs";
+import { evaluateSourceReferences } from "./source-trust.mjs";
 
 function slugify(value) {
   return String(value ?? "")
@@ -46,6 +53,38 @@ function normalizeString(value, fallback = "") {
 
 function normalizeStringArray(value) {
   return Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean))) : [];
+}
+
+function assertNoRetiredAutoControls(value, inputPath = "$", seen = new WeakSet()) {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+  if (seen.has(value)) {
+    return;
+  }
+  seen.add(value);
+  for (const [key, item] of Object.entries(value)) {
+    const itemPath = Array.isArray(value)
+      ? `${inputPath}[${key}]`
+      : `${inputPath}.${key}`;
+    if (key === "executionReceipt") {
+      throw new Error(
+        `run_dove_auto does not accept caller-controlled executionReceipt at ${itemPath}.`
+      );
+    }
+    if (
+      key.startsWith("policyOverride")
+      || key === "skipBoardUpdate"
+      || key === "skipRefreshDurableSurfaces"
+      || key === "skipFollowThroughReady"
+      || key === "skipSyncPhase"
+    ) {
+      throw new Error(
+        `run_dove_auto no longer accepts retired governance input ${key} at ${itemPath}.`
+      );
+    }
+    assertNoRetiredAutoControls(item, itemPath, seen);
+  }
 }
 
 function normalizeAllowed(value, allowed, fallback) {
@@ -96,6 +135,12 @@ function normalizeChildLevel(args = {}, parentLevel) {
 
 function hasExplicitConfirmation(args = {}) {
   return args.confirmed === true || args.confirm === true;
+}
+
+function assertUnambiguousConfirmation(args = {}) {
+  if (args.confirmed === true && args.confirm === true) {
+    throw new Error("Dove mission replay must provide only one confirmation flag: confirmed or confirm.");
+  }
 }
 
 function taskPacketPath(packetId) {
@@ -882,28 +927,6 @@ function latestExecutionReceipt(iterations = [], fallback = null) {
     .find(Boolean) ?? normalizeDoveExecutionReceipt(fallback, null);
 }
 
-function mergeDoveExecutionReceipts(primary, fallback = null) {
-  const primaryReceipt = normalizeDoveExecutionReceipt(primary, null);
-  const fallbackReceipt = normalizeDoveExecutionReceipt(fallback, null);
-  if (!primaryReceipt && !fallbackReceipt) {
-    return null;
-  }
-  return normalizeDoveExecutionReceipt({
-    ...(fallbackReceipt ?? {}),
-    ...(primaryReceipt ?? {}),
-    artifactRefs: normalizeStringArray([...(fallbackReceipt?.artifactRefs ?? []), ...(primaryReceipt?.artifactRefs ?? [])]),
-    artifactPaths: normalizeStringArray([...(fallbackReceipt?.artifactPaths ?? []), ...(primaryReceipt?.artifactPaths ?? [])]),
-    evidenceLinks: normalizeStringArray([...(fallbackReceipt?.evidenceLinks ?? []), ...(primaryReceipt?.evidenceLinks ?? [])]),
-    evidencePaths: normalizeStringArray([...(fallbackReceipt?.evidencePaths ?? []), ...(primaryReceipt?.evidencePaths ?? [])]),
-    validationEvidencePaths: normalizeStringArray([...(fallbackReceipt?.validationEvidencePaths ?? []), ...(primaryReceipt?.validationEvidencePaths ?? [])]),
-    verificationEvidencePaths: normalizeStringArray([...(fallbackReceipt?.verificationEvidencePaths ?? []), ...(primaryReceipt?.verificationEvidencePaths ?? [])]),
-    verifiedCriteria: normalizeDoveVerifiedCriteria([...(fallbackReceipt?.verifiedCriteria ?? []), ...(primaryReceipt?.verifiedCriteria ?? [])]),
-    validationGateResults: objectArray([...(fallbackReceipt?.validationGateResults ?? []), ...(primaryReceipt?.validationGateResults ?? [])]),
-    criteriaCoverage: primaryReceipt?.criteriaCoverage ?? fallbackReceipt?.criteriaCoverage ?? null,
-    boundary: primaryReceipt?.boundary ?? fallbackReceipt?.boundary ?? null
-  }, fallbackReceipt);
-}
-
 function autoResultCard(task = {}, result = {}, context = {}, responseLanguage = "zh") {
   const evidenceLinks = result.iterations?.flatMap((iteration) => normalizeStringArray(iteration.output?.evidenceLinks ?? iteration.evidenceLinks)) ?? [];
   const artifactRefs = result.iterations?.flatMap((iteration) => normalizeStringArray(iteration.output?.artifactRefs ?? iteration.artifactRefs)) ?? [];
@@ -1053,8 +1076,225 @@ function requestTextFromArgs(args = {}) {
   return normalizeString(args.goal ?? args.objective ?? args.prompt ?? args.title ?? args.summary ?? args.request ?? args.userRequest, null);
 }
 
+function readStateForTaskContract(root) {
+  return readJson(root, ARTIFACT_PATHS.state, createDefaultState);
+}
+
+const MISSION_PROPOSAL_VERSION = 1;
+const MISSION_TOP_LEVEL_VOLATILE_FIELDS = new Set(["createdAt", "updatedAt", "completedAt"]);
+const MISSION_REPLAY_CONTROL_FIELDS = new Set(["proposalDigest", "confirm", "confirmed"]);
+const INITIAL_DEMAND_GOVERNANCE_FIELDS = new Set([
+  "creatorKind",
+  "ownerRole",
+  "nextRole",
+  "boundary",
+  "handoff"
+]);
+const CANONICAL_BOUNDARY_KEYS = new Set([
+  "id",
+  "type",
+  "status",
+  "packetId",
+  "runId",
+  "sourceSurface",
+  "command",
+  "reason",
+  "summary",
+  "requiredInputs",
+  "requiredActions",
+  "ownerRole",
+  "nextRole",
+  "createdAt",
+  "resolvedAt",
+  "resolution"
+]);
+const CANONICAL_HANDOFF_KEYS = new Set([
+  "id",
+  "status",
+  "fromRole",
+  "toRole",
+  "reason",
+  "summary",
+  "boundaryId",
+  "sourceRunId",
+  "requestedAt",
+  "acceptedAt",
+  "completedAt"
+]);
+
+function assertInitialDemandDoesNotSetGovernance(args = {}, surface = "Dove mission") {
+  if (hasExplicitConfirmation(args)) {
+    return;
+  }
+  const supplied = [...INITIAL_DEMAND_GOVERNANCE_FIELDS].filter((key) => Object.hasOwn(args, key));
+  if (supplied.length > 0) {
+    throw new Error(`${surface} initial demand cannot set system-owned governance input: ${supplied.join(", ")}.`);
+  }
+}
+
+function assertCanonicalMissionGovernanceReplay(args = {}, surface = "Dove mission") {
+  if (!hasExplicitConfirmation(args)) {
+    return;
+  }
+  for (const [field, allowedKeys] of [["boundary", CANONICAL_BOUNDARY_KEYS], ["handoff", CANONICAL_HANDOFF_KEYS]]) {
+    const value = args[field];
+    if (value === null || value === undefined) {
+      continue;
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`${surface} replay requires ${field} to be a canonical object or null.`);
+    }
+    const unknown = Object.keys(value).filter((key) => !allowedKeys.has(key));
+    if (unknown.length > 0) {
+      throw new Error(`${surface} replay does not accept unknown ${field} input: ${unknown.join(", ")}.`);
+    }
+  }
+}
+
+function stableContractValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(stableContractValue);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => [key, stableContractValue(item)])
+    );
+  }
+  return value;
+}
+
+function stableMissionPacket(packet) {
+  if (!packet || typeof packet !== "object" || Array.isArray(packet)) {
+    return packet;
+  }
+  return Object.fromEntries(
+    Object.entries(packet).filter(([key]) => !MISSION_TOP_LEVEL_VOLATILE_FIELDS.has(key))
+  );
+}
+
+function canonicalMissionWorkspace(root) {
+  return fs.realpathSync.native(path.resolve(root));
+}
+
+function missionProposalMutationMode(root, args = {}) {
+  const explicitMode = Object.prototype.hasOwnProperty.call(args, "mutationMode")
+    ? normalizeMutationMode(args.mutationMode)
+    : null;
+  const currentMode = currentMutationContext(root)?.mutationMode ?? null;
+  if (currentMode && explicitMode && currentMode !== explicitMode) {
+    throw new Error(`Dove mission mutationMode ${explicitMode} does not match the active mutation context mode ${currentMode}.`);
+  }
+  return currentMode ?? explicitMode ?? "direct-process";
+}
+
+function missionProposalEnvelope(root, contract, args = {}) {
+  return {
+    version: MISSION_PROPOSAL_VERSION,
+    action: "create-dove-task",
+    workspace: canonicalMissionWorkspace(root),
+    mutationMode: missionProposalMutationMode(root, args),
+    initMaterializationRequired: contract.proposedInit !== null,
+    proposedInit: stableMissionPacket(contract.proposedInit),
+    proposedTask: stableMissionPacket(contract.packet),
+    checklistTasks: contract.checklistTasks.map(stableMissionPacket)
+  };
+}
+
+function missionReplayFields(args = {}) {
+  const { mutationMode: _mutationMode, proposalToken: _proposalToken, ...replayArgs } = Object.fromEntries(
+    Object.entries(args).filter(([key]) => !MISSION_REPLAY_CONTROL_FIELDS.has(key))
+  );
+  return replayArgs;
+}
+
+function missionProposalDigest(root, contract, args = {}, replayFields = missionReplayFields(args)) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(stableContractValue({
+      envelope: missionProposalEnvelope(root, contract, args),
+      replayFields
+    })))
+    .digest("hex");
+}
+
+function missionContractReplayFields(root, contract, proposalVersion = MISSION_PROPOSAL_VERSION) {
+  const {
+    packet,
+    checklistTasks,
+    proposedInit,
+    responseLanguage
+  } = contract;
+  return {
+    proposalVersion,
+    proposalWorkspace: canonicalMissionWorkspace(root),
+    responseLanguage,
+    ...(proposedInit ? {
+      initId: proposedInit.id,
+      initTitle: proposedInit.title,
+      initObjective: proposedInit.summary,
+      initDomain: proposedInit.domain,
+      initStatus: proposedInit.status,
+      initArtifactRefs: proposedInit.artifactRefs
+    } : {}),
+    id: packet.id,
+    goal: packet.summary,
+    title: packet.title,
+    summary: packet.summary,
+    stage: packet.stage,
+    domain: packet.domain,
+    level: packet.level,
+    creatorKind: packet.creatorKind,
+    status: packet.status,
+    dependencies: packet.dependencies,
+    blockedBy: packet.blockedBy,
+    ownerRole: packet.ownerRole,
+    nextRole: packet.nextRole,
+    boundary: packet.boundary,
+    handoff: packet.handoff,
+    currentFocus: packet.currentFocus,
+    nextAction: packet.nextAction,
+    evidenceExpectations: packet.evidenceExpectations,
+    workContract: packet.workContract,
+    executionContract: packet.executionContract,
+    artifactRefs: packet.artifactRefs,
+    contextPolicy: packet.contextPolicy,
+    lessonIds: packet.lessonIds,
+    checklist: false,
+    autoChecklist: false,
+    createChecklist: false,
+    checklistItems: checklistTasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      summary: task.summary,
+      level: task.level,
+      stage: task.stage,
+      domain: task.domain,
+      status: task.status,
+      dependencies: task.dependencies,
+      blockedBy: task.blockedBy,
+      evidenceExpectations: task.evidenceExpectations,
+      artifactRefs: task.artifactRefs,
+      nextAction: task.nextAction,
+      workContract: task.workContract,
+      executionContract: task.executionContract
+    }))
+  };
+}
+
+function missionConfirmArgs(root, contract, mutationMode) {
+  const replayFields = missionContractReplayFields(root, contract);
+  return {
+    confirmed: true,
+    mutationMode,
+    ...replayFields,
+    proposalDigest: missionProposalDigest(root, contract, { mutationMode }, replayFields)
+  };
+}
+
 function buildPacket(root, args, init, classification, overrides = {}) {
-  const state = loadState(root);
+  const state = readStateForTaskContract(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args, { state });
   const timestamp = nowIso();
   const creatorKind = overrides.creatorKind ?? normalizeAllowed(args.creatorKind, DOVE_TASK_CREATOR_KINDS, "user");
@@ -1114,10 +1354,13 @@ function buildPacket(root, args, init, classification, overrides = {}) {
 function explicitChecklistItems(args = {}) {
   for (const value of [args.checklistItems, args.subtasks, args.systemTasks]) {
     if (Array.isArray(value)) {
-      return value;
+      return { explicit: true, items: value };
     }
   }
-  return Array.isArray(args.checklist) ? args.checklist : [];
+  if (Array.isArray(args.checklist)) {
+    return { explicit: true, items: args.checklist };
+  }
+  return { explicit: false, items: [] };
 }
 
 function normalizeChecklistItem(item, index, responseLanguage = "zh") {
@@ -1157,9 +1400,9 @@ function shouldAutoCreateChecklist(args = {}) {
 }
 
 function generatedChecklistItems(args = {}, classification, responseLanguage = "zh") {
-  const explicit = explicitChecklistItems(args).map((item, index) => normalizeChecklistItem(item, index, responseLanguage));
-  if (explicit.length > 0) {
-    return explicit;
+  const explicit = explicitChecklistItems(args);
+  if (explicit.explicit) {
+    return explicit.items.map((item, index) => normalizeChecklistItem(item, index, responseLanguage));
   }
   if (!shouldAutoCreateChecklist(args)) {
     return [];
@@ -1328,7 +1571,7 @@ export function initDoveGoal(root, args = {}) {
 }
 
 function buildProposedInitPacket(root, args = {}, classification = { domain: "engineering" }, responseLanguage = "zh") {
-  const state = loadState(root);
+  const state = readStateForTaskContract(root);
   const timestamp = nowIso();
   const title = normalizeString(args.initTitle ?? args.projectTitle ?? args.workspaceTitle ?? state.dove.title, state.dove.title);
   const objective = normalizeString(args.initObjective ?? args.initGoal ?? args.projectObjective ?? args.projectGoal ?? state.dove.objective ?? args.goal ?? args.objective ?? args.summary, state.dove.objective ?? doveText(responseLanguage, "projectTitleFallback"));
@@ -1394,6 +1637,24 @@ function buildDoveTaskContract(root, args = {}) {
     applicableLessons: activeLessons(root, packet.id),
     responseLanguage
   };
+}
+
+function assertMissionReplayTargetsAvailable(root, contract) {
+  const targets = [contract.proposedInit, contract.packet, ...contract.checklistTasks].filter(Boolean);
+  const targetIds = targets.map((target) => target.id);
+  const duplicateIds = targetIds.filter((id, index) => targetIds.indexOf(id) !== index);
+  if (duplicateIds.length > 0) {
+    throw new Error(`Dove mission replay contains duplicate target task ids: ${[...new Set(duplicateIds)].join(", ")}.`);
+  }
+  const currentIndex = loadTaskIndex(root);
+  const indexedIds = new Set((currentIndex.items ?? []).map((item) => item.id));
+  for (const target of targets) {
+    const packetExists = fs.existsSync(path.join(root, taskPacketPath(target.id)));
+    const contextExists = fs.existsSync(path.join(root, taskContextPath(target.id)));
+    if (indexedIds.has(target.id) || packetExists || contextExists) {
+      throw new Error(`Dove mission replay target task id already exists or changed: ${target.id}. Request a fresh proposal.`);
+    }
+  }
 }
 
 function materializeDoveTask(root, contract) {
@@ -1573,7 +1834,17 @@ function derivedClassification(source = {}, fallback = {}) {
 }
 
 function deterministicDerivedTaskId(source, prefix, title) {
-  return normalizeTaskPacketId(source.id ?? source.packetId ?? source.taskPacketId ?? `${prefix}-${slugify(title)}`);
+  const explicitId = source.id ?? source.packetId ?? source.taskPacketId;
+  if (explicitId) {
+    return normalizeTaskPacketId(explicitId);
+  }
+  const normalizedPrefix = normalizeTaskPacketId(prefix);
+  const normalizedTitle = slugify(title);
+  const digest = crypto.createHash("sha256").update(`${normalizedPrefix}\0${normalizedTitle}`).digest("hex").slice(0, 12);
+  const maxIdLength = 160;
+  const boundedPrefix = normalizedPrefix.slice(0, 72).replace(/-+$/u, "") || "task";
+  const availableTitleLength = Math.max(1, maxIdLength - boundedPrefix.length - digest.length - 2);
+  return normalizeTaskPacketId(`${boundedPrefix}-${normalizedTitle.slice(0, availableTitleLength)}-${digest}`);
 }
 
 function buildDerivedTask(root, init, parent, source, options = {}) {
@@ -1699,17 +1970,38 @@ function materializePlanResultMissions(root, planTask, args = {}, runId) {
 
 export function createDoveTask(root, args = {}) {
   assertGovernanceMutationRegistered("create-dove-task", "guarded");
-  ensureWorkspace(root);
+  assertUnambiguousConfirmation(args);
+  assertInitialDemandDoesNotSetGovernance(args, "create_dove_task");
+  assertCanonicalMissionGovernanceReplay(args, "create_dove_task");
+  const confirmed = hasExplicitConfirmation(args);
+  const mutationMode = missionProposalMutationMode(root, args);
+  if (confirmed) {
+    const suppliedProposalDigest = normalizeString(args.proposalDigest, "");
+    const suppliedPacketId = normalizeString(args.id ?? args.packetId, "");
+    if (!/^[0-9a-f]{64}$/u.test(suppliedProposalDigest) || !suppliedPacketId) {
+      throw new Error("Confirmed Dove mission materialization requires the exact proposalDigest and task id returned by the selected local proposal replay data.");
+    }
+    if (!currentMutationContext(root)) {
+      throw new Error("Confirmed Dove mission materialization requires an active MutationContext; direct core replay cannot write outside the selected mutation mode.");
+    }
+    if (args.proposalVersion !== MISSION_PROPOSAL_VERSION) {
+      throw new Error("The selected local Dove mission proposal replay version is not supported. Request a fresh proposal.");
+    }
+    if (normalizeString(args.proposalWorkspace, "") !== canonicalMissionWorkspace(root)) {
+      throw new Error("The selected local Dove mission proposal replay belongs to a different canonical workspace. Request a fresh proposal.");
+    }
+  }
   const contract = buildDoveTaskContract(root, args);
   const { packet, checklistProposal, classification, blockers, applicableLessons, responseLanguage, proposedInit, initMaterializationRequired } = contract;
   const handoffRoutes = packet.workContract?.recommendedRoutes ?? [];
-  if (!hasExplicitConfirmation(args)) {
+  if (!confirmed) {
     const preActionGuidance = preActionGuidanceForTask(root, "dove.mission", packet, {
       request: requestTextFromArgs(args),
       roleId: "planner",
       nextAction: packet.nextAction,
       workflowKind: "mission"
     }, responseLanguage);
+    const confirmArgs = missionConfirmArgs(root, contract, mutationMode);
     return {
       status: "needs-confirmation",
       proposalOnly: true,
@@ -1736,39 +2028,30 @@ export function createDoveTask(root, args = {}) {
       handoffRoutes,
       checklistProposal,
       applicableLessons,
-      confirmArgs: {
-        confirmed: true,
-        ...(proposedInit ? {
-          initId: proposedInit.id,
-          initTitle: proposedInit.title,
-          initObjective: proposedInit.summary,
-          initDomain: proposedInit.domain
-        } : {}),
-        id: packet.id,
-        goal: packet.summary,
-        title: packet.title,
-        summary: packet.summary,
-        stage: packet.stage,
-        domain: packet.domain,
-        level: packet.level,
-        creatorKind: packet.creatorKind,
-        status: packet.status,
-        dependencies: packet.dependencies,
-        blockedBy: packet.blockedBy,
-        evidenceExpectations: packet.evidenceExpectations,
-        workContract: packet.workContract,
-        executionContract: packet.executionContract,
-        artifactRefs: packet.artifactRefs,
-        contextPolicy: packet.contextPolicy,
-        lessonIds: packet.lessonIds,
-        checklistItems: checklistProposal.items
+      proposalVersion: MISSION_PROPOSAL_VERSION,
+      proposalDigest: confirmArgs.proposalDigest,
+      proposalWorkspace: confirmArgs.proposalWorkspace,
+      proposalMutationMode: mutationMode,
+      proposalTrust: {
+        boundary: "trusted-local-exact-replay-data",
+        proofOfHumanApproval: false,
+        tamperProof: false
       },
+      confirmArgs,
       taskIndexPath: ARTIFACT_PATHS.taskPacketsIndex,
       responseLanguage,
       message: doveText(responseLanguage, "createTaskConfirmMessage")
     };
   }
+  const suppliedProposalDigest = normalizeString(args.proposalDigest, "");
+  const replayDigest = missionProposalDigest(root, contract, args, missionReplayFields(args));
+  if (suppliedProposalDigest !== replayDigest) {
+    throw new Error("The selected local Dove mission proposal replay no longer matches the current contract or exact replay fields. Request a fresh proposal before materialization.");
+  }
+  assertMissionReplayTargetsAvailable(root, contract);
+  ensureWorkspace(root);
   const materialized = materializeDoveTask(root, contract);
+  const plannedOnly = materialized && typeof materialized === "object" && isPatchPlanMode(root);
   const preActionGuidanceSummary = preActionGuidanceSummaryForTask(root, "dove.mission", materialized.createdTask, {
     request: requestTextFromArgs(args),
     roleId: "planner",
@@ -1776,17 +2059,17 @@ export function createDoveTask(root, args = {}) {
     workflowKind: "mission"
   }, responseLanguage);
   return {
-    status: "materialized",
+    status: plannedOnly ? "materialization-planned" : "materialized",
     confirmationRequired: false,
     demandConversion: true,
     workflowMode: "mission-contract",
     executionMode: "contract-handoff",
-    contractMaterialized: true,
+    contractMaterialized: !plannedOnly,
     foreground: false,
     background: false,
     daemon: false,
     preActionGuidanceSummary,
-    message: doveText(responseLanguage, "createTaskMaterializedMessage"),
+    message: doveText(responseLanguage, plannedOnly ? "createTaskMaterializationPlannedMessage" : "createTaskMaterializedMessage"),
     responseLanguage,
     ...materialized
   };
@@ -1865,6 +2148,44 @@ function normalizeMissionPassStatus(args = {}) {
   return "in-progress";
 }
 
+const SYSTEM_OWNED_MISSION_PASS_FIELDS = new Set([
+  "ownerRole",
+  "nextRole",
+  "handoff",
+  "handoffId"
+]);
+
+function collectSystemOwnedMissionPassFields(args = {}) {
+  const found = [];
+  for (const [envelopeName, value] of [
+    ["missionPass", args.missionPass],
+    ["passResult", args.passResult],
+    ["result", args.result]
+  ]) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      continue;
+    }
+    for (const field of SYSTEM_OWNED_MISSION_PASS_FIELDS) {
+      if (Object.hasOwn(value, field)) {
+        found.push(`${envelopeName}.${field}`);
+      }
+    }
+  }
+  for (const field of SYSTEM_OWNED_MISSION_PASS_FIELDS) {
+    if (Object.hasOwn(args, field)) {
+      found.push(field);
+    }
+  }
+  return found;
+}
+
+function assertNoSystemOwnedMissionPassFields(args = {}) {
+  const forbidden = collectSystemOwnedMissionPassFields(args);
+  if (forbidden.length > 0) {
+    throw new Error(`record_dove_mission_pass does not accept system-owned workflow routing fields: ${forbidden.join(", ")}.`);
+  }
+}
+
 const MISSION_PASS_FIELDS = [
   "runId",
   "resultStatus",
@@ -1885,10 +2206,6 @@ const MISSION_PASS_FIELDS = [
   "boundaryId",
   "requiredInputs",
   "requiredActions",
-  "ownerRole",
-  "nextRole",
-  "handoff",
-  "handoffId",
   "evidenceLinks",
   "evidencePaths",
   "validationEvidencePaths",
@@ -1980,9 +2297,53 @@ function completionEvidenceForPayload(payload = {}) {
   };
 }
 
+function classifyRequiredEvidenceReference(value) {
+  const reference = normalizeString(value, "");
+  if (!reference) {
+    return { reference, kind: "invalid", reason: "empty evidence requirement" };
+  }
+  if (isExternalArtifactReference(reference)) {
+    return { reference, kind: "reference", normalizedReference: reference };
+  }
+  const normalized = normalizeProjectRelativePath(reference);
+  if (!normalized.ok) {
+    return { reference, kind: "invalid", reason: normalized.reason };
+  }
+  const looksNarrative = /\s|[，。；！？：]/u.test(normalized.normalizedPath);
+  const pathLike = normalized.normalizedPath.startsWith(".")
+    || (!looksNarrative && normalized.normalizedPath.includes("/"))
+    || (!looksNarrative && path.posix.extname(normalized.normalizedPath).length > 0);
+  return pathLike
+    ? { reference, kind: "reference", normalizedReference: normalized.normalizedPath }
+    : { reference, kind: "description" };
+}
+
+function contractEvidenceRequirements(contract, evidence = {}) {
+  const classified = normalizeStringArray(contract?.convergence?.evidenceRequired)
+    .map(classifyRequiredEvidenceReference);
+  const submittedPaths = new Set(normalizeStringArray(evidence.evidencePaths)
+    .map((item) => {
+      if (isExternalArtifactReference(item)) {
+        return item;
+      }
+      const normalized = normalizeProjectRelativePath(item);
+      return normalized.ok ? normalized.normalizedPath : item;
+    }));
+  const requiredReferences = classified
+    .filter((item) => item.kind === "reference")
+    .map((item) => item.normalizedReference);
+  return {
+    classified,
+    invalidRequirements: classified.filter((item) => item.kind === "invalid"),
+    descriptiveRequirements: classified.filter((item) => item.kind === "description").map((item) => item.reference),
+    requiredReferences,
+    missingRequiredEvidencePaths: requiredReferences.filter((item) => !submittedPaths.has(item))
+  };
+}
+
 function completionVerificationBlock(root, task, args = {}, responseLanguage = "zh") {
   const payload = missionPassPayload(args);
-  const contract = normalizeDoveExecutionContract(payload.executionContract ?? task.executionContract, null);
+  const contract = normalizeDoveExecutionContract(task.executionContract, null);
   const readiness = doveExecutionContractReadiness(contract);
   if (!readiness.ready) {
     return {
@@ -2007,15 +2368,63 @@ function completionVerificationBlock(root, task, args = {}, responseLanguage = "
     return planBlock;
   }
   const evidence = completionEvidenceForPayload(payload);
+  const sourceReferences = evidence.evidencePaths.filter((item) => item.startsWith("source:")).map((item) => item.slice("source:".length));
+  const sourceEvidence = evaluateSourceReferences(root, sourceReferences);
+  const ineligibleSourceEvidence = sourceEvidence.filter((item) => !item.eligible);
+  if (ineligibleSourceEvidence.length > 0) {
+    return {
+      status: "verification-failed",
+      requestedStatus: "completed",
+      packetId: task.id,
+      title: task.title,
+      boundaryType: "verification-failed",
+      ineligibleSourceEvidence: ineligibleSourceEvidence.map((item) => ({ sourceId: item.reference, reason: item.reason })),
+      requiredActions: ["verify-source-material", "retry-completion-with-verified-source-evidence"],
+      message: responseLanguage === "en"
+        ? "Candidate, rejected, missing, or identity-mutated sources cannot support task completion."
+        : "candidate、rejected、缺失或身份已变化的来源不能支撑任务完成。",
+      nextAction: "project:dove.source",
+      proposalOnly: true,
+      noAutoApply: true,
+      writes: []
+    };
+  }
+  const evidenceRequirements = contractEvidenceRequirements(contract, evidence);
+  if (evidenceRequirements.invalidRequirements.length > 0) {
+    return {
+      status: "verification-failed",
+      requestedStatus: "completed",
+      packetId: task.id,
+      title: task.title,
+      boundaryType: "verification-failed",
+      invalidRequiredEvidence: evidenceRequirements.invalidRequirements,
+      requiredActions: ["repair-invalid-contract-evidence-requirements", "attach-verification-evidence"],
+      message: responseLanguage === "en"
+        ? "The durable execution contract contains an unsafe or invalid convergence.evidenceRequired entry and cannot be completed until the contract is repaired."
+        : "持久化 executionContract 的 convergence.evidenceRequired 含有不安全或无效条目，必须先修正合同才能完成任务。",
+      nextAction: "project:dove.status",
+      proposalOnly: true,
+      noAutoApply: true,
+      writes: []
+    };
+  }
   const hasPlanOutput = task.stage === "plan" && hasPlanMissionOutput(payload);
-  const integrity = hasPlanOutput ? null : completionEvidenceIntegrity(root, evidence);
-  const hasCompletionEvidence = hasPlanOutput || integrity?.hasSubstantiveEvidence === true;
+  const integrity = completionEvidenceIntegrity(root, evidence, {
+    context: {
+      task,
+      executionContract: contract,
+      verifiedCriteria: evidence.verifiedCriteria
+    }
+  });
+  const hasInspectibleEvidence = hasPlanOutput
+    || integrity.hasSubstantiveEvidence === true
+    || integrity.pathEvidence.unlinkedPaths.length > 0;
   const hasSummary = Boolean(normalizeString(payload.resultSummary ?? payload.summary ?? payload.reason, ""));
-  if (!hasSummary || !hasCompletionEvidence) {
+  if (!hasSummary || !hasInspectibleEvidence) {
     const requiredActions = [
       hasSummary ? null : "provide-result-summary",
-      hasCompletionEvidence ? null : "provide-evidence-links-or-artifact-refs-or-verification-evidence",
-      !hasPlanOutput && evidence.evidencePaths.length > 0 && !hasCompletionEvidence ? "attach-existing-non-empty-non-bookkeeping-evidence" : null
+      hasInspectibleEvidence ? null : "provide-evidence-links-or-artifact-refs-or-verification-evidence",
+      evidence.evidencePaths.length > 0 && integrity.problemPaths.length > 0 ? "attach-existing-non-empty-non-bookkeeping-evidence" : null
     ].filter(Boolean);
     return {
       status: "needs-completion-evidence",
@@ -2049,6 +2458,50 @@ function completionVerificationBlock(root, task, args = {}, responseLanguage = "
       message: responseLanguage === "en"
         ? "Completing a Dove task requires verifiedCriteria covering every executionContract.convergence.criteria item."
         : "完成 Dove 任务必须用 verifiedCriteria 覆盖 executionContract.convergence.criteria 中的每一项。",
+      nextAction: "project:dove.status",
+      proposalOnly: true,
+      noAutoApply: true,
+      writes: []
+    };
+  }
+  if (
+    evidenceRequirements.descriptiveRequirements.length > 0
+    && integrity.hasSubstantiveEvidence !== true
+  ) {
+    return {
+      status: "verification-failed",
+      requestedStatus: "completed",
+      packetId: task.id,
+      title: task.title,
+      boundaryType: "verification-failed",
+      criteriaCoverage: coverage,
+      evidenceIntegrity: integrity,
+      descriptiveEvidenceRequirements: evidenceRequirements.descriptiveRequirements,
+      requiredActions: ["satisfy-described-contract-evidence", "attach-existing-non-empty-non-bookkeeping-evidence"],
+      message: responseLanguage === "en"
+        ? "The execution contract includes descriptive evidence requirements; completion must attach substantive evidence that satisfies those descriptions."
+        : "executionContract 包含说明性证据要求；完成任务时必须附上满足这些说明的实质证据。",
+      nextAction: "project:dove.status",
+      proposalOnly: true,
+      noAutoApply: true,
+      writes: []
+    };
+  }
+  const missingRequiredEvidencePaths = evidenceRequirements.missingRequiredEvidencePaths;
+  if (missingRequiredEvidencePaths.length > 0) {
+    return {
+      status: "verification-failed",
+      requestedStatus: "completed",
+      packetId: task.id,
+      title: task.title,
+      boundaryType: "verification-failed",
+      criteriaCoverage: coverage,
+      evidenceIntegrity: integrity,
+      missingRequiredEvidencePaths,
+      requiredActions: ["attach-contract-required-evidence", "attach-verification-evidence"],
+      message: responseLanguage === "en"
+        ? "Completing a Dove task requires every path declared in executionContract.convergence.evidenceRequired to be included in the submitted completion evidence."
+        : "完成 Dove 任务时，必须在提交的完成证据中包含 executionContract.convergence.evidenceRequired 声明的每个证据路径。",
       nextAction: "project:dove.status",
       proposalOnly: true,
       noAutoApply: true,
@@ -2129,6 +2582,7 @@ function buildExecutionReceipt({ payload = {}, taskBefore = {}, taskAfter = {}, 
 
 export function recordDoveMissionPass(root, args = {}) {
   assertGovernanceMutationRegistered("record-dove-mission-pass", "guarded");
+  assertNoSystemOwnedMissionPassFields(args);
   ensureWorkspace(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const index = loadTaskIndex(root);
@@ -3259,6 +3713,129 @@ export function resetDoveVersion(root, args = {}) {
 
 const AUTO_INTERNAL_COMMANDS = ["dove.source", "dove.note", "dove.experience", "dove.figure", "dove.draft", "dove.review", "dove.review-loop", "dove.rebuttal", "dove.lessons", "dove.status"];
 const AUTO_READ_ONLY_COMMANDS = new Set(["dove.lessons", "dove.status"]);
+const RUN_DOVE_AUTO_PUBLIC_KEYS = new Set([
+  "packetId",
+  "taskPacketId",
+  "missionPacketId",
+  "taskId",
+  "target",
+  "packetTarget",
+  "taskName",
+  "index",
+  "proposalVersion",
+  "proposalWorkspace",
+  "proposalKind",
+  "mutationMode",
+  "responseLanguage",
+  "initId",
+  "initTitle",
+  "initObjective",
+  "initGoal",
+  "initDomain",
+  "initStatus",
+  "initArtifactRefs",
+  "projectTitle",
+  "workspaceTitle",
+  "projectObjective",
+  "projectGoal",
+  "projectDomain",
+  "id",
+  "goal",
+  "objective",
+  "prompt",
+  "title",
+  "summary",
+  "stage",
+  "domain",
+  "level",
+  "creatorKind",
+  "status",
+  "dependencies",
+  "blockedBy",
+  "ownerRole",
+  "nextRole",
+  "boundary",
+  "handoff",
+  "currentFocus",
+  "nextAction",
+  "evidenceExpectations",
+  "workContract",
+  "executionContract",
+  "validationEvidencePaths",
+  "verificationEvidencePaths",
+  "verifiedCriteria",
+  "artifactRefs",
+  "contextPolicy",
+  "lessonIds",
+  "checklist",
+  "autoChecklist",
+  "createChecklist",
+  "checklistItems",
+  "proposalDigest",
+  "confirmed",
+  "confirm",
+  "maxIterations",
+  "maxSteps",
+  "completeTask",
+  "completeOnSuccess",
+  "steps",
+  "runId"
+]);
+const RETIRED_AUTO_TOP_LEVEL_KEYS = new Set([
+  "actions",
+  "autoSteps",
+  "command",
+  "complete",
+  "nextCommand",
+  "preset",
+  "workflow"
+]);
+const AUTO_STEP_WRAPPER_KEYS = new Set([
+  "command",
+  "args",
+  "completeTask",
+  "requiredMaterials",
+  "outputArtifacts",
+  "convergenceChecks",
+  "failureRoutes",
+  "executionContract",
+  "validationEvidencePaths",
+  "verificationEvidencePaths",
+  "verifiedCriteria"
+]);
+const AUTO_STEP_ARGS_BY_COMMAND = new Map(Object.entries({
+  "dove.source": ["sourceId", "citationKey", "title", "authors", "year", "locator", "sourceType", "abstract", "origin", "sources"],
+  "dove.note": ["noteId", "title", "sectionId", "sourceIds", "summary", "quotes", "claims", "openQuestions"],
+  "dove.experience": ["id", "experimentId", "goal", "idea", "title", "methodology", "method", "successMetric", "metric", "comparisonTargets", "baselines", "claimId", "result", "resultId", "outcome", "summary", "resultSummary", "evidenceLinks", "artifactPaths", "plan"],
+  "dove.figure": ["intent", "description", "name", "title", "figureId", "id", "purpose", "captionIntent", "targetClaimIds", "claimIds", "sourceSections", "sectionIds", "sourceArtifactPaths", "artifactPaths", "relatedExperimentIds", "experimentIds", "reviewConcernIds", "rebuttalIssueIds", "requiredVisualElements", "materialHints", "materialRequirements", "providerId", "executeProvider", "allowMissingMaterials", "runId", "outputFormat", "constraints", "outputManifestPath", "sourceSvgPath", "targetFinalSvgPath", "svgContent", "caption", "captionDraft", "captionId", "semanticCoverage", "semanticReview"],
+  "dove.draft": ["sectionId", "title", "body", "status", "summary"],
+  "dove.review": ["scope", "stage", "reviewer"],
+  "dove.review-loop": ["runId", "scope", "instructions", "stage", "summary", "artifactPaths", "reviewedArtifactPaths", "responseLanguage", "language"],
+  "dove.rebuttal": ["issues"],
+  "dove.lessons": [],
+  "dove.status": []
+}).map(([command, keys]) => [command, new Set(keys)]));
+
+function assertAllowedAutoKeys(value, allowedKeys, inputPath) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`run_dove_auto requires an object at ${inputPath}.`);
+  }
+  const unknown = Object.keys(value).filter((key) => !allowedKeys.has(key));
+  if (unknown.length > 0) {
+    throw new Error(`run_dove_auto does not accept unknown input ${unknown.map((key) => `${inputPath}.${key}`).join(", ")}.`);
+  }
+}
+
+function assertAllowedAutoTopLevelArgs(args = {}) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    throw new Error("run_dove_auto arguments must be a plain object.");
+  }
+  const retired = Object.keys(args).filter((key) => RETIRED_AUTO_TOP_LEVEL_KEYS.has(key));
+  if (retired.length > 0) {
+    throw new Error(`run_dove_auto no longer accepts retired top-level input: ${retired.join(", ")}. Use steps[].command for explicit work.`);
+  }
+  assertAllowedAutoKeys(args, RUN_DOVE_AUTO_PUBLIC_KEYS, "$");
+}
 
 function hasTaskIntent(args = {}) {
   return [args.goal, args.objective, args.prompt, args.title, args.summary].some((value) => typeof value === "string" && value.trim());
@@ -3298,68 +3875,580 @@ function projectContinuationRoute(value) {
   return ["dove.status", "dove.auto"].includes(raw) ? raw : null;
 }
 
-function stripAutoControlArgs(args = {}) {
-  const {
-    actions: _actions,
-    autoSteps: _autoSteps,
-    command: _command,
-    complete: _complete,
-    completeOnSuccess: _completeOnSuccess,
-    completeTask: _completeTask,
-    confirm: _confirm,
-    confirmed: _confirmed,
-    id: _id,
-    index: _index,
-    maxIterations: _maxIterations,
-    maxSteps: _maxSteps,
-    missionPacketId: _missionPacketId,
-    packetId: _packetId,
-    packetTarget: _packetTarget,
-    preset: _preset,
-    runId: _runId,
-    steps: _steps,
-    target: _target,
-    taskId: _taskId,
-    taskName: _taskName,
-    taskPacketId: _taskPacketId,
-    workflow: _workflow,
-    ...stepArgs
-  } = args;
-  return stepArgs;
+function explicitStepsFrom(args = {}) {
+  const retiredAliases = ["autoSteps", "actions"].filter((key) => Object.hasOwn(args, key));
+  if (retiredAliases.length > 0) {
+    throw new Error(`run_dove_auto no longer accepts retired step aliases: ${retiredAliases.join(", ")}.`);
+  }
+  if (!Object.hasOwn(args, "steps")) {
+    return [];
+  }
+  if (!Array.isArray(args.steps)) {
+    throw new Error("run_dove_auto requires steps to be an array.");
+  }
+  return args.steps;
 }
 
-function explicitStepsFrom(args = {}) {
-  for (const value of [args.steps, args.autoSteps, args.actions]) {
-    if (Array.isArray(value)) {
-      return value;
+const AUTO_SOURCE_ITEM_KEYS = new Set([
+  "sourceId",
+  "citationKey",
+  "title",
+  "authors",
+  "year",
+  "locator",
+  "sourceType",
+  "abstract",
+  "origin"
+]);
+const AUTO_SOURCE_STRING_KEYS = new Set([
+  "sourceId",
+  "citationKey",
+  "title",
+  "locator",
+  "sourceType",
+  "abstract",
+  "origin"
+]);
+const AUTO_EXPERIENCE_PLAN_KEYS = new Set([
+  "id",
+  "experimentId",
+  "goal",
+  "idea",
+  "title",
+  "methodology",
+  "method",
+  "successMetric",
+  "metric",
+  "comparisonTargets",
+  "baselines",
+  "claimId"
+]);
+const AUTO_EXPERIENCE_PLAN_STRING_KEYS = new Set([
+  "id",
+  "experimentId",
+  "goal",
+  "idea",
+  "title",
+  "methodology",
+  "method",
+  "successMetric",
+  "metric",
+  "claimId"
+]);
+const AUTO_EXPERIENCE_RESULT_KEYS = new Set([
+  "id",
+  "resultId",
+  "experimentId",
+  "claimId",
+  "outcome",
+  "summary",
+  "resultSummary",
+  "evidenceLinks",
+  "artifactPaths",
+  "comparisonTargets"
+]);
+const AUTO_EXPERIENCE_RESULT_STRING_KEYS = new Set([
+  "id",
+  "resultId",
+  "experimentId",
+  "claimId",
+  "outcome",
+  "summary",
+  "resultSummary"
+]);
+const AUTO_FIGURE_MATERIAL_KEYS = new Set([
+  "id",
+  "type",
+  "label",
+  "summary",
+  "artifactPath",
+  "path"
+]);
+const AUTO_FIGURE_SEMANTIC_COVERAGE_KEYS = new Set([
+  "observations",
+  "evidencePaths",
+  "artifactPaths"
+]);
+const AUTO_FIGURE_SEMANTIC_REVIEW_KEYS = new Set([
+  "summary",
+  "observations",
+  "evidencePaths",
+  "artifactPaths"
+]);
+const AUTO_WORK_CONTRACT_KEYS = new Set([
+  "purpose",
+  "deliverables",
+  "outOfScope",
+  "outOfScopeItems",
+  "evidenceContract",
+  "doneCriteria",
+  "practicalImpact",
+  "recommendedRoutes"
+]);
+const AUTO_WORK_CONTRACT_STRING_KEYS = new Set([
+  "purpose",
+  "practicalImpact"
+]);
+const AUTO_WORK_CONTRACT_STRING_ARRAY_KEYS = new Set([
+  "deliverables",
+  "outOfScope",
+  "outOfScopeItems",
+  "evidenceContract",
+  "doneCriteria"
+]);
+const AUTO_WORK_CONTRACT_ROUTE_KEYS = new Set([
+  "label",
+  "title",
+  "command",
+  "nextAction",
+  "workflow",
+  "copyableCommand",
+  "copyCommand",
+  "packetId",
+  "taskPacketId",
+  "missionPacketId",
+  "when",
+  "reason",
+  "role",
+  "ownerRole",
+  "evidenceRequired",
+  "evidenceContract",
+  "evidenceExpectations",
+  "doneCriteria",
+  "rank"
+]);
+const AUTO_WORK_CONTRACT_ROUTE_STRING_KEYS = new Set([
+  "label",
+  "title",
+  "command",
+  "nextAction",
+  "workflow",
+  "copyableCommand",
+  "copyCommand",
+  "packetId",
+  "taskPacketId",
+  "missionPacketId",
+  "when",
+  "reason",
+  "role",
+  "ownerRole"
+]);
+const AUTO_WORK_CONTRACT_ROUTE_STRING_ARRAY_KEYS = new Set([
+  "evidenceRequired",
+  "evidenceContract",
+  "evidenceExpectations",
+  "doneCriteria"
+]);
+const AUTO_EXECUTION_CONTRACT_KEYS = new Set([
+  "chainType",
+  "roleSequence",
+  "readFirst",
+  "action",
+  "implementation",
+  "files",
+  "materials",
+  "convergence",
+  "failureRoutes"
+]);
+const AUTO_EXECUTION_FILE_KEYS = new Set([
+  "path",
+  "action",
+  "target",
+  "change"
+]);
+const AUTO_EXECUTION_MATERIALS_KEYS = new Set([
+  "requiredInputs",
+  "requiredArtifacts",
+  "sourceRefs",
+  "artifactRefs"
+]);
+const AUTO_EXECUTION_CONVERGENCE_KEYS = new Set([
+  "criteria",
+  "verificationCommands",
+  "evidenceRequired",
+  "definitionOfDone"
+]);
+const AUTO_FAILURE_ROUTE_KEYS = new Set([
+  "on",
+  "boundaryType",
+  "nextAction",
+  "requiredActions"
+]);
+const AUTO_CHECKLIST_ITEM_KEYS = new Set([
+  "id",
+  "title",
+  "summary",
+  "level",
+  "stage",
+  "domain",
+  "status",
+  "dependencies",
+  "blockedBy",
+  "evidenceExpectations",
+  "artifactRefs",
+  "nextAction",
+  "workContract",
+  "executionContract"
+]);
+const AUTO_CHECKLIST_ITEM_STRING_KEYS = new Set([
+  "id",
+  "title",
+  "summary",
+  "stage",
+  "domain",
+  "status",
+  "nextAction"
+]);
+const AUTO_CHECKLIST_ITEM_STRING_ARRAY_KEYS = new Set([
+  "dependencies",
+  "blockedBy",
+  "evidenceExpectations",
+  "artifactRefs"
+]);
+const AUTO_REVIEW_LOOP_DRAFT_KEYS = new Set(["body"]);
+const AUTO_REVIEW_LOOP_EXPERIENCE_KEYS = new Set([
+  "id",
+  "experimentId",
+  "goal",
+  "idea",
+  "title"
+]);
+const AUTO_REBUTTAL_ISSUE_KEYS = new Set([
+  "id",
+  "reviewer",
+  "summary",
+  "severity",
+  "status",
+  "evidenceLinks",
+  "claimIds",
+  "experimentIds",
+  "responseDirection"
+]);
+const AUTO_REBUTTAL_ISSUE_STRING_KEYS = new Set([
+  "id",
+  "reviewer",
+  "summary",
+  "severity",
+  "status",
+  "responseDirection"
+]);
+function assertAutoString(value, inputPath) {
+  if (typeof value !== "string") {
+    throw new Error(`run_dove_auto requires a string at ${inputPath}.`);
+  }
+}
+
+function assertAutoStringArray(value, inputPath) {
+  if (!Array.isArray(value)) {
+    throw new Error(`run_dove_auto requires an array at ${inputPath}.`);
+  }
+  value.forEach((item, index) => assertAutoString(item, `${inputPath}[${index}]`));
+}
+
+function assertAutoOptionalStringFields(value, keys, inputPath) {
+  for (const key of keys) {
+    if (Object.hasOwn(value, key)) {
+      assertAutoString(value[key], `${inputPath}.${key}`);
     }
   }
-  return [];
+}
+
+function assertAutoOptionalStringArrayFields(value, keys, inputPath) {
+  for (const key of keys) {
+    if (Object.hasOwn(value, key)) {
+      assertAutoStringArray(value[key], `${inputPath}.${key}`);
+    }
+  }
+}
+
+function assertAutoSourceItem(source, inputPath) {
+  assertAllowedAutoKeys(source, AUTO_SOURCE_ITEM_KEYS, inputPath);
+  assertAutoOptionalStringFields(source, AUTO_SOURCE_STRING_KEYS, inputPath);
+  if (Object.hasOwn(source, "year") && typeof source.year !== "string" && typeof source.year !== "number") {
+    throw new Error(`run_dove_auto requires a string or number at ${inputPath}.year.`);
+  }
+  if (Object.hasOwn(source, "authors")) {
+    assertAutoStringArray(source.authors, `${inputPath}.authors`);
+  }
+}
+
+function assertAutoExperiencePlan(plan, inputPath) {
+  assertAllowedAutoKeys(plan, AUTO_EXPERIENCE_PLAN_KEYS, inputPath);
+  assertAutoOptionalStringFields(plan, AUTO_EXPERIENCE_PLAN_STRING_KEYS, inputPath);
+  assertAutoOptionalStringArrayFields(plan, new Set(["comparisonTargets", "baselines"]), inputPath);
+}
+
+function assertAutoExperienceResult(result, inputPath) {
+  assertAllowedAutoKeys(result, AUTO_EXPERIENCE_RESULT_KEYS, inputPath);
+  assertAutoOptionalStringFields(result, AUTO_EXPERIENCE_RESULT_STRING_KEYS, inputPath);
+  assertAutoOptionalStringArrayFields(result, new Set(["evidenceLinks", "artifactPaths", "comparisonTargets"]), inputPath);
+}
+
+function assertAutoFigureMaterialItem(item, inputPath) {
+  assertAllowedAutoKeys(item, AUTO_FIGURE_MATERIAL_KEYS, inputPath);
+  assertAutoOptionalStringFields(item, AUTO_FIGURE_MATERIAL_KEYS, inputPath);
+}
+
+function assertAutoFigureSemanticObservation(value, allowedKeys, inputPath) {
+  assertAllowedAutoKeys(value, allowedKeys, inputPath);
+  if (Object.hasOwn(value, "summary")) {
+    assertAutoString(value.summary, `${inputPath}.summary`);
+  }
+  assertAutoOptionalStringArrayFields(value, new Set(["observations", "evidencePaths", "artifactPaths"]), inputPath);
+}
+
+function assertAutoFailureRoute(route, inputPath) {
+  assertAllowedAutoKeys(route, AUTO_FAILURE_ROUTE_KEYS, inputPath);
+  assertAutoOptionalStringFields(route, new Set(["on", "boundaryType", "nextAction"]), inputPath);
+  assertAutoOptionalStringArrayFields(route, new Set(["requiredActions"]), inputPath);
+}
+
+function assertAutoWorkContractRoute(route, inputPath) {
+  assertAllowedAutoKeys(route, AUTO_WORK_CONTRACT_ROUTE_KEYS, inputPath);
+  assertAutoOptionalStringFields(route, AUTO_WORK_CONTRACT_ROUTE_STRING_KEYS, inputPath);
+  assertAutoOptionalStringArrayFields(route, AUTO_WORK_CONTRACT_ROUTE_STRING_ARRAY_KEYS, inputPath);
+  if (Object.hasOwn(route, "rank") && typeof route.rank !== "number") {
+    throw new Error(`run_dove_auto requires a number at ${inputPath}.rank.`);
+  }
+}
+
+function assertAutoWorkContract(contract, inputPath) {
+  assertAllowedAutoKeys(contract, AUTO_WORK_CONTRACT_KEYS, inputPath);
+  assertAutoOptionalStringFields(contract, AUTO_WORK_CONTRACT_STRING_KEYS, inputPath);
+  assertAutoOptionalStringArrayFields(contract, AUTO_WORK_CONTRACT_STRING_ARRAY_KEYS, inputPath);
+  if (Object.hasOwn(contract, "recommendedRoutes")) {
+    if (!Array.isArray(contract.recommendedRoutes)) {
+      throw new Error(`run_dove_auto requires an array at ${inputPath}.recommendedRoutes.`);
+    }
+    contract.recommendedRoutes.forEach((route, index) => {
+      assertAutoWorkContractRoute(route, `${inputPath}.recommendedRoutes[${index}]`);
+    });
+  }
+}
+
+function assertAutoExecutionContract(contract, inputPath) {
+  assertAllowedAutoKeys(contract, AUTO_EXECUTION_CONTRACT_KEYS, inputPath);
+  assertAutoOptionalStringFields(contract, new Set(["chainType", "action"]), inputPath);
+  assertAutoOptionalStringArrayFields(
+    contract,
+    new Set(["roleSequence", "readFirst", "implementation"]),
+    inputPath
+  );
+  if (
+    Object.hasOwn(contract, "chainType")
+    && !DOVE_EXECUTION_CHAIN_TYPES.includes(contract.chainType)
+  ) {
+    throw new Error(
+      `run_dove_auto requires one of ${DOVE_EXECUTION_CHAIN_TYPES.join(", ")} at ${inputPath}.chainType.`
+    );
+  }
+  if (Object.hasOwn(contract, "roleSequence")) {
+    contract.roleSequence.forEach((role, index) => {
+      if (!DOVE_PRIMARY_ROLE_IDS.includes(role)) {
+        throw new Error(
+          `run_dove_auto requires one of ${DOVE_PRIMARY_ROLE_IDS.join(", ")} at ${inputPath}.roleSequence[${index}].`
+        );
+      }
+    });
+  }
+  if (Object.hasOwn(contract, "files")) {
+    if (!Array.isArray(contract.files)) {
+      throw new Error(`run_dove_auto requires an array at ${inputPath}.files.`);
+    }
+    contract.files.forEach((file, index) => {
+      const filePath = `${inputPath}.files[${index}]`;
+      assertAllowedAutoKeys(file, AUTO_EXECUTION_FILE_KEYS, filePath);
+      assertAutoOptionalStringFields(file, AUTO_EXECUTION_FILE_KEYS, filePath);
+    });
+  }
+  if (Object.hasOwn(contract, "materials")) {
+    assertAllowedAutoKeys(contract.materials, AUTO_EXECUTION_MATERIALS_KEYS, `${inputPath}.materials`);
+    assertAutoOptionalStringArrayFields(
+      contract.materials,
+      AUTO_EXECUTION_MATERIALS_KEYS,
+      `${inputPath}.materials`
+    );
+  }
+  if (Object.hasOwn(contract, "convergence")) {
+    assertAllowedAutoKeys(contract.convergence, AUTO_EXECUTION_CONVERGENCE_KEYS, `${inputPath}.convergence`);
+    assertAutoOptionalStringArrayFields(
+      contract.convergence,
+      new Set(["criteria", "verificationCommands", "evidenceRequired"]),
+      `${inputPath}.convergence`
+    );
+    if (Object.hasOwn(contract.convergence, "definitionOfDone")) {
+      assertAutoString(
+        contract.convergence.definitionOfDone,
+        `${inputPath}.convergence.definitionOfDone`
+      );
+    }
+  }
+  if (Object.hasOwn(contract, "failureRoutes")) {
+    if (!Array.isArray(contract.failureRoutes)) {
+      throw new Error(`run_dove_auto requires an array at ${inputPath}.failureRoutes.`);
+    }
+    contract.failureRoutes.forEach((route, index) => {
+      assertAutoFailureRoute(route, `${inputPath}.failureRoutes[${index}]`);
+    });
+  }
+}
+
+function assertAutoChecklistItem(item, inputPath) {
+  assertAllowedAutoKeys(item, AUTO_CHECKLIST_ITEM_KEYS, inputPath);
+  assertAutoOptionalStringFields(item, AUTO_CHECKLIST_ITEM_STRING_KEYS, inputPath);
+  assertAutoOptionalStringArrayFields(item, AUTO_CHECKLIST_ITEM_STRING_ARRAY_KEYS, inputPath);
+  if (Object.hasOwn(item, "level") && typeof item.level !== "number") {
+    throw new Error(`run_dove_auto requires a number at ${inputPath}.level.`);
+  }
+  if (Object.hasOwn(item, "workContract")) {
+    assertAutoWorkContract(item.workContract, `${inputPath}.workContract`);
+  }
+  if (Object.hasOwn(item, "executionContract")) {
+    assertAutoExecutionContract(item.executionContract, `${inputPath}.executionContract`);
+  }
+}
+
+function assertAutoNestedContracts(args = {}) {
+  if (Object.hasOwn(args, "workContract")) {
+    assertAutoWorkContract(args.workContract, "$.workContract");
+  }
+  if (Object.hasOwn(args, "executionContract")) {
+    assertAutoExecutionContract(args.executionContract, "$.executionContract");
+  }
+  if (Object.hasOwn(args, "checklistItems")) {
+    if (!Array.isArray(args.checklistItems)) {
+      throw new Error("run_dove_auto requires an array at $.checklistItems.");
+    }
+    args.checklistItems.forEach((item, index) => {
+      assertAutoChecklistItem(item, `$.checklistItems[${index}]`);
+    });
+  }
+}
+
+function assertAutoReviewLoopDraft(draft, inputPath) {
+  assertAllowedAutoKeys(draft, AUTO_REVIEW_LOOP_DRAFT_KEYS, inputPath);
+  assertAutoOptionalStringFields(draft, AUTO_REVIEW_LOOP_DRAFT_KEYS, inputPath);
+}
+
+function assertAutoReviewLoopExperience(experience, inputPath) {
+  assertAllowedAutoKeys(experience, AUTO_REVIEW_LOOP_EXPERIENCE_KEYS, inputPath);
+  assertAutoOptionalStringFields(experience, AUTO_REVIEW_LOOP_EXPERIENCE_KEYS, inputPath);
+}
+
+function assertAutoRebuttalIssue(issue, inputPath) {
+  assertAllowedAutoKeys(issue, AUTO_REBUTTAL_ISSUE_KEYS, inputPath);
+  assertAutoOptionalStringFields(issue, AUTO_REBUTTAL_ISSUE_STRING_KEYS, inputPath);
+  assertAutoOptionalStringArrayFields(issue, new Set(["evidenceLinks", "claimIds", "experimentIds"]), inputPath);
+}
+
+function assertAllowedAutoNestedArgs(command, stepArgs, stepPath) {
+  const argsPath = `${stepPath}.args`;
+  if (command === "dove.source") {
+    assertAutoSourceItem(Object.fromEntries(Object.entries(stepArgs).filter(([key]) => key !== "sources")), argsPath);
+    if (Object.hasOwn(stepArgs, "sources")) {
+      if (!Array.isArray(stepArgs.sources)) {
+        throw new Error(`run_dove_auto requires an array at ${argsPath}.sources.`);
+      }
+      stepArgs.sources.forEach((source, sourceIndex) => {
+        assertAutoSourceItem(source, `${argsPath}.sources[${sourceIndex}]`);
+      });
+    }
+  }
+  if (command === "dove.experience") {
+    if (Object.hasOwn(stepArgs, "plan")) {
+      assertAutoExperiencePlan(stepArgs.plan, `${argsPath}.plan`);
+    }
+    if (Object.hasOwn(stepArgs, "result")) {
+      assertAutoExperienceResult(stepArgs.result, `${argsPath}.result`);
+    }
+  }
+  if (command === "dove.figure") {
+    if (Object.hasOwn(stepArgs, "materialRequirements")) {
+      if (!Array.isArray(stepArgs.materialRequirements)) {
+        throw new Error(`run_dove_auto requires an array at ${argsPath}.materialRequirements.`);
+      }
+      stepArgs.materialRequirements.forEach((item, index) => assertAutoFigureMaterialItem(item, `${argsPath}.materialRequirements[${index}]`));
+    }
+    if (Object.hasOwn(stepArgs, "materialHints")) {
+      if (!Array.isArray(stepArgs.materialHints)) {
+        throw new Error(`run_dove_auto requires an array at ${argsPath}.materialHints.`);
+      }
+      stepArgs.materialHints.forEach((item, index) => {
+        if (typeof item !== "string") {
+          assertAutoFigureMaterialItem(item, `${argsPath}.materialHints[${index}]`);
+        }
+      });
+    }
+    if (Object.hasOwn(stepArgs, "semanticCoverage")) {
+      assertAutoFigureSemanticObservation(
+        stepArgs.semanticCoverage,
+        AUTO_FIGURE_SEMANTIC_COVERAGE_KEYS,
+        `${argsPath}.semanticCoverage`
+      );
+    }
+    if (Object.hasOwn(stepArgs, "semanticReview")) {
+      assertAutoFigureSemanticObservation(
+        stepArgs.semanticReview,
+        AUTO_FIGURE_SEMANTIC_REVIEW_KEYS,
+        `${argsPath}.semanticReview`
+      );
+    }
+  }
+  if (command === "dove.review-loop") {
+    if (Object.hasOwn(stepArgs, "draft")) {
+      assertAutoReviewLoopDraft(stepArgs.draft, `${argsPath}.draft`);
+    }
+    if (Object.hasOwn(stepArgs, "experience")) {
+      assertAutoReviewLoopExperience(stepArgs.experience, `${argsPath}.experience`);
+    }
+  }
+  if (command === "dove.rebuttal" && Object.hasOwn(stepArgs, "issues")) {
+    if (!Array.isArray(stepArgs.issues)) {
+      throw new Error(`run_dove_auto requires an array at ${argsPath}.issues.`);
+    }
+    stepArgs.issues.forEach((issue, index) => {
+      assertAutoRebuttalIssue(issue, `${argsPath}.issues[${index}]`);
+    });
+  }
 }
 
 function normalizeExplicitAutoSteps(args = {}) {
-  return explicitStepsFrom(args).map((step) => {
-    if (typeof step === "string") {
-      return { command: normalizeAutoCommandId(step), args: {} };
+  return explicitStepsFrom(args).map((step, index) => {
+    const stepPath = `$.steps[${index}]`;
+    assertAllowedAutoKeys(step, AUTO_STEP_WRAPPER_KEYS, stepPath);
+    const command = normalizeAutoCommandId(step.command);
+    if (!command) {
+      throw new Error(`run_dove_auto requires a supported command at ${stepPath}.command.`);
     }
-    const source = step && typeof step === "object" && !Array.isArray(step) ? step : {};
-    const stepArgs = source.args && typeof source.args === "object" && !Array.isArray(source.args) ? source.args : source;
-    const executionContract = normalizeDoveExecutionContract(source.executionContract ?? stepArgs.executionContract, null);
+    const stepArgs = step.args ?? {};
+    const allowedArgs = AUTO_STEP_ARGS_BY_COMMAND.get(command);
+    assertAllowedAutoKeys(stepArgs, allowedArgs, `${stepPath}.args`);
+    assertAllowedAutoNestedArgs(command, stepArgs, stepPath);
+    if (Object.hasOwn(step, "failureRoutes") && !Array.isArray(step.failureRoutes)) {
+      throw new Error(`run_dove_auto requires an array at ${stepPath}.failureRoutes.`);
+    }
+    const failureRoutes = objectArray(step.failureRoutes);
+    failureRoutes.forEach((route, routeIndex) => {
+      assertAutoFailureRoute(route, `${stepPath}.failureRoutes[${routeIndex}]`);
+    });
+    if (Object.hasOwn(step, "executionContract")) {
+      assertAutoExecutionContract(step.executionContract, `${stepPath}.executionContract`);
+    }
+    const executionContract = normalizeDoveExecutionContract(step.executionContract, null);
     return {
-      command: normalizeAutoCommandId(source.command ?? source.workflow ?? source.preset ?? source.id),
+      command,
       args: stepArgs,
-      completeTask: source.completeTask === true || source.complete === true,
-      requiredMaterials: normalizeStringArray(source.requiredMaterials ?? stepArgs.requiredMaterials),
-      outputArtifacts: normalizeStringArray(source.outputArtifacts ?? stepArgs.outputArtifacts),
-      convergenceChecks: normalizeStringArray(source.convergenceChecks ?? stepArgs.convergenceChecks ?? executionContract?.convergence?.criteria),
-      failureRoutes: objectArray(source.failureRoutes ?? stepArgs.failureRoutes),
+      completeTask: step.completeTask === true,
+      requiredMaterials: normalizeStringArray(step.requiredMaterials),
+      outputArtifacts: normalizeStringArray(step.outputArtifacts),
+      convergenceChecks: normalizeStringArray(step.convergenceChecks ?? executionContract?.convergence?.criteria),
+      failureRoutes,
       executionContract,
-      validationEvidencePaths: normalizeStringArray(source.validationEvidencePaths ?? stepArgs.validationEvidencePaths),
-      verificationEvidencePaths: normalizeStringArray(source.verificationEvidencePaths ?? stepArgs.verificationEvidencePaths),
-      verifiedCriteria: normalizeDoveVerifiedCriteria(source.verifiedCriteria ?? stepArgs.verifiedCriteria),
-      executionReceipt: mergeDoveExecutionReceipts(source.executionReceipt, stepArgs.executionReceipt)
+      validationEvidencePaths: normalizeStringArray(step.validationEvidencePaths),
+      verificationEvidencePaths: normalizeStringArray(step.verificationEvidencePaths),
+      verifiedCriteria: normalizeDoveVerifiedCriteria(step.verifiedCriteria)
     };
-  }).filter((step) => step.command);
+  });
 }
 
 function hasNonEmptyString(value) {
@@ -3393,18 +4482,6 @@ function hasAutoExperienceObjectiveArgs(args = {}) {
   return [plan.experimentId, plan.id, plan.goal, plan.idea, args.idea, plan.title].some(hasNonEmptyString);
 }
 
-function reviewLoopDraftRequestedWithoutContent(args = {}) {
-  return Boolean(args.draft || args.draftBody) && !hasNonEmptyString(args.draftBody ?? args.draft?.body);
-}
-
-function reviewLoopExperienceRequestedWithoutObjective(args = {}) {
-  if (!args.experience && !args.experienceGoal) {
-    return false;
-  }
-  const experience = args.experience && typeof args.experience === "object" && !Array.isArray(args.experience) ? args.experience : {};
-  return ![args.experienceGoal, experience.experimentId, experience.id, experience.goal, experience.idea, experience.title].some(hasNonEmptyString);
-}
-
 function autoStepHostPassReason(command, stepArgs = {}) {
   if (command === "dove.source" && !hasAutoSourceProvenanceArgs(stepArgs)) {
     return "source-requires-host-provenance";
@@ -3417,9 +4494,6 @@ function autoStepHostPassReason(command, stepArgs = {}) {
   }
   if (command === "dove.experience" && !hasAutoExperienceObjectiveArgs(stepArgs)) {
     return "experience-requires-host-objective";
-  }
-  if (command === "dove.review-loop" && (reviewLoopDraftRequestedWithoutContent(stepArgs) || reviewLoopExperienceRequestedWithoutObjective(stepArgs))) {
-    return "review-loop-requires-host-material";
   }
   return null;
 }
@@ -3445,7 +4519,7 @@ function autoPlanFromSteps(steps, whyThisStep) {
 }
 
 function taskIntentText(task = {}, args = {}) {
-  return [args.goal, args.objective, args.prompt, args.title, args.summary, args.intent, args.command, args.workflow, args.preset, args.nextCommand, task.title, task.summary, task.currentFocus, task.nextAction, task.stage, task.domain]
+  return [args.goal, args.objective, args.prompt, args.title, args.summary, task.title, task.summary, task.currentFocus, task.nextAction, task.stage, task.domain]
     .map((value) => String(value ?? "").toLowerCase())
     .join(" ");
 }
@@ -3474,7 +4548,7 @@ function readOnlyAutoBlock(task, autoPlan = {}, args = {}, responseLanguage = "z
   if (steps.length === 0 || !steps.every((step) => AUTO_READ_ONLY_COMMANDS.has(step.command))) {
     return null;
   }
-  const completionRequested = steps.some((step) => step.completeTask === true) || args.completeTask === true || args.complete === true || args.completeOnSuccess === true;
+  const completionRequested = steps.some((step) => step.completeTask === true) || args.completeTask === true || args.completeOnSuccess === true;
   return {
     status: "needs-explicit-progress-step",
     outcome: "auto-read-only-step-no-progress",
@@ -3528,10 +4602,6 @@ function summarizeAutoSteps(steps = []) {
     if (verifiedCriteria.length > 0) {
       summary.verifiedCriteria = verifiedCriteria;
     }
-    const executionReceipt = normalizeDoveExecutionReceipt(step.executionReceipt, null);
-    if (executionReceipt) {
-      summary.executionReceipt = executionReceipt;
-    }
     return summary;
   });
 }
@@ -3541,25 +4611,19 @@ function inferAutoStepsForTask(task = {}, args = {}) {
   if (explicitSteps.length > 0) {
     return autoPlanFromSteps(explicitSteps, "explicit-auto-steps");
   }
-  const explicitCommand = normalizeAutoCommandId(args.command ?? args.workflow ?? args.preset ?? args.nextCommand);
-  if (explicitCommand) {
-    const steps = [{ command: explicitCommand, args: stripAutoControlArgs(args), completeTask: args.completeTask === true || args.complete === true }];
-    return autoPlanFromSteps(steps, `explicit-auto-command:${explicitCommand}`);
-  }
   const taskCommand = normalizeConcreteAutoCommandId(task.nextAction);
   if (taskCommand) {
-    const steps = [{ command: taskCommand, args: stripAutoControlArgs(args), completeTask: args.completeTask === true || args.complete === true }];
+    const steps = [{ command: taskCommand, args: {}, completeTask: args.completeTask === true }];
     return autoPlanFromSteps(steps, `task-next-action:${taskCommand}`);
   }
   const text = taskIntentText(task, args);
-  const stepArgs = stripAutoControlArgs(args);
   const signals = workflowSignals(text);
   const inferredCommand = workflowCommandFromSignals({
     ...signals,
     experiment: task.domain === "experiment" || signals.experiment
   });
   if (inferredCommand) {
-    const steps = [{ command: inferredCommand, args: stepArgs, completeTask: args.completeTask === true || args.complete === true }];
+    const steps = [{ command: inferredCommand, args: {}, completeTask: args.completeTask === true }];
     return autoPlanFromSteps(steps, `inferred-safe-workflow:${inferredCommand}`);
   }
   const continuationRoute = projectContinuationRoute(task.nextAction);
@@ -3578,10 +4642,6 @@ function normalizeAutoSteps(args = {}, task) {
 
 function stepArgsForTask(task, rawStepArgs = {}) {
   const stepArgs = rawStepArgs && typeof rawStepArgs === "object" && !Array.isArray(rawStepArgs) ? rawStepArgs : {};
-  const explicitTarget = normalizeString(stepArgs.packetId ?? stepArgs.taskPacketId ?? stepArgs.missionPacketId ?? stepArgs.taskId, null);
-  if (explicitTarget && normalizeTaskPacketId(explicitTarget) !== task.id) {
-    throw new Error(`/dove:auto step target ${explicitTarget} does not match selected task ${task.id}.`);
-  }
   return {
     ...stepArgs,
     packetId: task.id
@@ -3601,10 +4661,7 @@ function executeAutoStep(root, command, stepArgs) {
     case "dove.draft":
       return upsertDraft(root, stepArgs);
     case "dove.review":
-      return runReviewLoop(root, {
-        ...stepArgs,
-        policyOverrideReason: stepArgs.policyOverrideReason ?? "auto-local-review-pass"
-      });
+      return runReviewLoop(root, stepArgs);
     case "dove.review-loop":
       return runDoveReviewLoop(root, stepArgs);
     case "dove.rebuttal": {
@@ -3748,7 +4805,7 @@ function classifyAutoStepResult(command, output) {
     return { status: "blocked-boundary", outcome: status, stopReason: `${command}-${status}`, terminal: true, canCompleteTask: false, artifactRefs: [], evidenceLinks: [] };
   }
   if (command === "dove.source" && (status === "registered" || Array.isArray(output?.sourceIds) || output?.id)) {
-    return completedAutoStep(command, output, status ?? "registered", { canCompleteTask: true });
+    return completedAutoStep(command, output, status ?? "registered", { canCompleteTask: false });
   }
   if (command === "dove.note" && (output?.id || output?.noteId)) {
     return completedAutoStep(command, output, status ?? "recorded", { canCompleteTask: true });
@@ -4092,17 +5149,105 @@ function taskSelectionChoices(candidates = []) {
   }));
 }
 
-function autoConfirmArgs(args = {}, maxIterations, values = {}) {
+const AUTO_PROPOSAL_VERSION = 1;
+const AUTO_PROPOSAL_KINDS = new Set(["selection", "demand"]);
+const AUTO_REPLAY_CONTROL_FIELDS = new Set([
+  "confirm",
+  "confirmed",
+  "index",
+  "runId",
+  "missionPacketId",
+  "packetId",
+  "packetTarget",
+  "proposalDigest",
+  "proposalKind",
+  "proposalVersion",
+  "proposalWorkspace",
+  "target",
+  "taskId",
+  "taskName",
+  "taskPacketId"
+]);
+
+function autoReplayFields(args = {}) {
+  return Object.fromEntries(
+    Object.entries(args).filter(([key]) => !AUTO_REPLAY_CONTROL_FIELDS.has(key) && key !== "mutationMode")
+  );
+}
+
+function autoProposalEnvelope(root, proposalKind, task, args = {}, contract = null) {
   return {
-    ...args,
+    version: AUTO_PROPOSAL_VERSION,
+    action: "run-dove-auto",
+    proposalKind,
+    workspace: canonicalMissionWorkspace(root),
+    mutationMode: missionProposalMutationMode(root, args),
+    task: stableMissionPacket(task),
+    contract: contract ? {
+      initMaterializationRequired: contract.proposedInit !== null,
+      proposedInit: stableMissionPacket(contract.proposedInit),
+      proposedTask: stableMissionPacket(contract.packet),
+      checklistTasks: contract.checklistTasks.map(stableMissionPacket)
+    } : null
+  };
+}
+
+function autoProposalDigest(root, proposalKind, task, args = {}, replayFields = autoReplayFields(args), contract = null) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(stableContractValue({
+      envelope: autoProposalEnvelope(root, proposalKind, task, args, contract),
+      replayFields
+    })))
+    .digest("hex");
+}
+
+function autoConfirmArgs(root, proposalKind, task, args, maxIterations, mutationMode, values = {}, contract = null) {
+  const returnedFields = {
+    ...autoReplayFields(args),
     ...values,
-    confirmed: true,
     maxIterations
   };
+  const replayFields = autoReplayFields(returnedFields);
+  return {
+    confirmed: true,
+    mutationMode,
+    proposalVersion: AUTO_PROPOSAL_VERSION,
+    proposalWorkspace: canonicalMissionWorkspace(root),
+    proposalKind,
+    ...returnedFields,
+    proposalDigest: autoProposalDigest(
+      root,
+      proposalKind,
+      task,
+      { mutationMode },
+      replayFields,
+      contract
+    )
+  };
+}
+
+function assertAutoReplayHeader(root, args = {}) {
+  if (!currentMutationContext(root)) {
+    throw new Error("Confirmed Dove auto execution requires an active MutationContext; direct core replay cannot write outside the selected mutation mode.");
+  }
+  if (args.proposalVersion !== AUTO_PROPOSAL_VERSION) {
+    throw new Error("The selected local Dove auto proposal replay version is not supported. Request a fresh proposal.");
+  }
+  if (normalizeString(args.proposalWorkspace, "") !== canonicalMissionWorkspace(root)) {
+    throw new Error("The selected local Dove auto proposal replay belongs to a different canonical workspace. Request a fresh proposal.");
+  }
+  if (!AUTO_PROPOSAL_KINDS.has(args.proposalKind)) {
+    throw new Error("Confirmed Dove auto execution requires the exact proposalKind returned by the selected local proposal replay data.");
+  }
+  if (!/^[0-9a-f]{64}$/u.test(normalizeString(args.proposalDigest, ""))) {
+    throw new Error("Confirmed Dove auto execution requires the exact proposalDigest returned by the selected local proposal replay data.");
+  }
 }
 
 function autoSelectionConfirmation(root, args, selected, maxIterations, responseLanguage = "zh") {
   const task = loadFullTask(root, selected);
+  const mutationMode = missionProposalMutationMode(root, args);
   const autoPlan = inferAutoStepsForTask(task, args);
   const preActionGuidance = preActionGuidanceForTask(root, "dove.auto", task, {
     request: requestTextFromArgs(args),
@@ -4135,7 +5280,33 @@ function autoSelectionConfirmation(root, args, selected, maxIterations, response
     safeToRun: autoPlan.safeToRun,
     requiresHostPass: autoPlan.requiresHostPass,
     whyThisStep: autoPlan.whyThisStep,
-    confirmArgs: autoConfirmArgs(args, maxIterations, { packetId: task.id }),
+    proposalVersion: AUTO_PROPOSAL_VERSION,
+    proposalWorkspace: canonicalMissionWorkspace(root),
+    proposalKind: "selection",
+    proposalMutationMode: mutationMode,
+    proposalDigest: autoConfirmArgs(
+      root,
+      "selection",
+      task,
+      args,
+      maxIterations,
+      mutationMode,
+      { packetId: task.id }
+    ).proposalDigest,
+    proposalTrust: {
+      boundary: "trusted-local-exact-replay-data",
+      proofOfHumanApproval: false,
+      tamperProof: false
+    },
+    confirmArgs: autoConfirmArgs(
+      root,
+      "selection",
+      task,
+      args,
+      maxIterations,
+      mutationMode,
+      { packetId: task.id }
+    ),
     foreground: true,
     background: false,
     daemon: false,
@@ -4148,7 +5319,19 @@ function autoSelectionConfirmation(root, args, selected, maxIterations, response
 function autoDemandConfirmation(root, args, maxIterations) {
   const contract = buildDoveTaskContract(root, args);
   const { packet, checklistProposal, classification, blockers, applicableLessons, responseLanguage, proposedInit, initMaterializationRequired } = contract;
+  const mutationMode = missionProposalMutationMode(root, args);
   const autoPlan = inferAutoStepsForTask(packet, args);
+  const contractReplayFields = missionContractReplayFields(root, contract, AUTO_PROPOSAL_VERSION);
+  const confirmArgs = autoConfirmArgs(
+    root,
+    "demand",
+    packet,
+    args,
+    maxIterations,
+    mutationMode,
+    contractReplayFields,
+    contract
+  );
   const preActionGuidance = preActionGuidanceForTask(root, "dove.auto", packet, {
     request: requestTextFromArgs(args),
     roleId: "builder",
@@ -4179,30 +5362,17 @@ function autoDemandConfirmation(root, args, maxIterations) {
     whyThisStep: autoPlan.whyThisStep,
     checklistProposal,
     applicableLessons,
-    confirmArgs: autoConfirmArgs(args, maxIterations, {
-      ...(proposedInit ? {
-        initId: proposedInit.id,
-        initTitle: proposedInit.title,
-        initObjective: proposedInit.summary,
-        initDomain: proposedInit.domain
-      } : {}),
-      id: packet.id,
-      goal: packet.summary,
-      title: packet.title,
-      summary: packet.summary,
-      stage: packet.stage,
-      domain: packet.domain,
-      level: packet.level,
-      creatorKind: packet.creatorKind,
-      status: packet.status,
-      dependencies: packet.dependencies,
-      blockedBy: packet.blockedBy,
-      evidenceExpectations: packet.evidenceExpectations,
-      artifactRefs: packet.artifactRefs,
-      contextPolicy: packet.contextPolicy,
-      lessonIds: packet.lessonIds,
-      checklistItems: checklistProposal.items
-    }),
+    proposalVersion: AUTO_PROPOSAL_VERSION,
+    proposalWorkspace: canonicalMissionWorkspace(root),
+    proposalKind: "demand",
+    proposalMutationMode: mutationMode,
+    proposalDigest: confirmArgs.proposalDigest,
+    proposalTrust: {
+      boundary: "trusted-local-exact-replay-data",
+      proofOfHumanApproval: false,
+      tamperProof: false
+    },
+    confirmArgs,
     foreground: true,
     background: false,
     daemon: false,
@@ -4215,11 +5385,22 @@ function autoDemandConfirmation(root, args, maxIterations) {
 
 export function runDoveAuto(root, args = {}) {
   assertGovernanceMutationRegistered("run-dove-auto", "guarded");
-  ensureWorkspace(root);
-  const state = loadState(root);
+  assertNoRetiredAutoControls(args);
+  assertAllowedAutoTopLevelArgs(args);
+  assertAutoNestedContracts(args);
+  normalizeExplicitAutoSteps(args);
+  assertUnambiguousConfirmation(args);
+  assertInitialDemandDoesNotSetGovernance(args, "run_dove_auto");
+  assertCanonicalMissionGovernanceReplay(args, "run_dove_auto");
+  const confirmed = hasExplicitConfirmation(args);
+  const mutationMode = missionProposalMutationMode(root, args);
+  if (confirmed) {
+    assertAutoReplayHeader(root, args);
+  }
+  const state = readStateForTaskContract(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args, { state });
   const maxIterations = resolveAutoMaxIterations(state, args);
-  if (!hasExplicitConfirmation(args)) {
+  if (!confirmed) {
     const index = loadTaskIndex(root);
     const selection = chooseTask(root, index, args);
     if (selection.selected && hasExplicitTaskSelector(args)) {
@@ -4244,26 +5425,45 @@ export function runDoveAuto(root, args = {}) {
     return autoDemandConfirmation(root, args, maxIterations);
   }
 
-  const index = loadTaskIndex(root);
-  const selection = chooseTask(root, index, args);
-  if (!selection.selected && hasExplicitTaskSelector(args)) {
-    return {
-      status: "needs-task-selection",
-      choices: taskSelectionChoices(selection.candidates),
-      responseLanguage,
-      message: doveText(responseLanguage, "autoSelectExistingConfirmedMessage")
-    };
+  let task;
+  if (args.proposalKind === "selection") {
+    const packetId = normalizeString(args.packetId, "");
+    if (!packetId) {
+      throw new Error("Confirmed Dove auto selection replay requires the canonical packetId returned by the selected local proposal replay data.");
+    }
+    const catalog = readTaskPacketCatalog(root);
+    task = catalog.byId.get(packetId) ?? null;
+    if (!task || !activeStatus(task.status)) {
+      throw new Error(`The selected Dove auto task ${packetId} no longer exists or is not active. Request a fresh proposal.`);
+    }
+    const replayDigest = autoProposalDigest(
+      root,
+      "selection",
+      task,
+      { mutationMode },
+      autoReplayFields(args)
+    );
+    if (normalizeString(args.proposalDigest, "") !== replayDigest) {
+      throw new Error("The selected local Dove auto proposal replay no longer matches the current task snapshot or exact replay fields. Request a fresh proposal.");
+    }
+  } else {
+    const contract = buildDoveTaskContract(root, args);
+    const replayDigest = autoProposalDigest(
+      root,
+      "demand",
+      contract.packet,
+      { mutationMode },
+      autoReplayFields(args),
+      contract
+    );
+    if (normalizeString(args.proposalDigest, "") !== replayDigest) {
+      throw new Error("The selected local Dove auto proposal replay no longer matches the current demand contract or exact replay fields. Request a fresh proposal.");
+    }
+    assertMissionReplayTargetsAvailable(root, contract);
+    ensureWorkspace(root);
+    task = materializeDoveTask(root, contract).createdTask;
   }
-  if (!selection.selected && !hasTaskIntent(args)) {
-    return {
-      status: "needs-task-selection",
-      choices: taskSelectionChoices(selection.candidates),
-      responseLanguage,
-      message: doveText(responseLanguage, "autoProvideTargetMessage")
-    };
-  }
-
-  let task = selection.selected ? loadFullTask(root, selection.selected) : materializeDoveTask(root, buildDoveTaskContract(root, args)).createdTask;
+  ensureWorkspace(root);
   const timestamp = nowIso();
   const resultId = normalizeTaskPacketId(args.runId ?? `auto-${task.id}-${Date.now().toString(36)}`);
   const result = {
@@ -4433,7 +5633,7 @@ export function runDoveAuto(root, args = {}) {
     try {
       const output = executeAutoStep(root, step.command, stepArgsForTask(task, step.args));
       const classified = classifyAutoStepResult(step.command, output);
-      const executionReceipt = mergeDoveExecutionReceipts(step.executionReceipt, classified.executionReceipt);
+      const executionReceipt = normalizeDoveExecutionReceipt(classified.executionReceipt, null);
       const completedAt = nowIso();
       result.iterations.push({
         iteration: iterationNumber,
@@ -4469,7 +5669,7 @@ export function runDoveAuto(root, args = {}) {
         finalTaskStatus = task.status;
         break;
       }
-      if (step.completeTask === true || args.completeTask === true || args.complete === true || args.completeOnSuccess === true) {
+      if (step.completeTask === true || args.completeTask === true || args.completeOnSuccess === true) {
         const completionArgs = {
           runId: resultId,
           surface: "dove.auto",
@@ -4477,7 +5677,12 @@ export function runDoveAuto(root, args = {}) {
           resultSummary: classified.outcome,
           summary: classified.outcome,
           artifactRefs: normalizeStringArray([...(classified.artifactRefs ?? []), ...normalizeStringArray(step.outputArtifacts)]),
-          evidenceLinks: classified.evidenceLinks,
+          evidenceLinks: normalizeStringArray([
+            ...(classified.evidenceLinks ?? []),
+            ...normalizeStringArray(step.outputArtifacts),
+            ...normalizeStringArray(step.validationEvidencePaths),
+            ...normalizeStringArray(step.verificationEvidencePaths)
+          ]),
           validationEvidencePaths: normalizeStringArray(step.validationEvidencePaths),
           verificationEvidencePaths: normalizeStringArray([...(classified.verificationEvidencePaths ?? []), ...normalizeStringArray(step.verificationEvidencePaths)]),
           verifiedCriteria: normalizeDoveVerifiedCriteria([...(classified.verifiedCriteria ?? []), ...normalizeDoveVerifiedCriteria(step.verifiedCriteria)]),

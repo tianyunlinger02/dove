@@ -9,9 +9,7 @@ import {
   createVersionSnapshot,
   ensureWorkspace,
   initProject,
-  queryMetaOptimize,
   registerSource,
-  runAutonomyOperate,
   runReviewLoop,
   syncChecklist,
   updateResearchBrief,
@@ -22,7 +20,8 @@ import {
   upsertNote,
   upsertOutline,
   upsertOrchestrationBoard,
-  upsertPlan
+  upsertPlan,
+  verifySource
 } from "../../src/core/index.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -55,37 +54,6 @@ function seedTaskPacket(root, packetId = "workflow-main-packet") {
   fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
   fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
   return packetId;
-}
-
-function seedExecutionBridgeCandidate(root) {
-  fs.writeFileSync(path.join(root, ".dove", "reviews", "concerns.json"), JSON.stringify({
-    version: 2,
-    items: [{
-      id: "source-first-gap",
-      summary: "Need a reusable proposal source for autonomy operate.",
-      severity: "high",
-      status: "open",
-      responseOwnerRole: "planner",
-      recurrenceCount: 2,
-      linkedArtifactPaths: [".dove/reviews/log.md"],
-      updatedAt: new Date(0).toISOString()
-    }],
-    updatedAt: null
-  }, null, 2));
-  fs.writeFileSync(path.join(root, ".dove", "reviews", "REVIEW_STATE.json"), JSON.stringify({
-    version: 3,
-    lastVerdict: "needs-work",
-    lastReviewedAt: new Date(0).toISOString(),
-    history: [],
-    openItems: ["Close the source-first autonomy gap."],
-    unresolvedConcernIds: ["source-first-gap"],
-    escalatedConcernIds: [],
-    pendingAuthorResponseIds: [],
-    pendingReviewerRulingIds: [],
-    reviewRound: 1,
-    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
-  }, null, 2));
-  return queryMetaOptimize(root).executionBridgeCandidates.candidates.find((candidate) => candidate.candidateType === "packet-candidate");
 }
 
 test("single-paper workflow creates durable artifacts", () => {
@@ -131,6 +99,16 @@ test("single-paper workflow creates durable artifacts", () => {
     authors: ["Kim"],
     year: 2026
   });
+  for (const registeredSource of [source, source2]) {
+    verifySource(root, {
+      packetId,
+      sourceId: registeredSource.id,
+      decision: "verified",
+      method: "test fixture inspected the canonical publication record",
+      checkedMaterial: "source title, authors, year, and publication metadata",
+      auditEvidence: [`fixture:${registeredSource.id}`]
+    });
+  }
 
   const note = upsertNote(root, {
     packetId,
@@ -217,10 +195,10 @@ test("single-paper workflow creates durable artifacts", () => {
 
   const review = runReviewLoop(root, { packetId, scope: "introduction" });
   appendHandoff(root, {
-    fromRole: "rebuttal-lead",
+    fromRole: "reviewer",
     toRole: "version-analyst",
     phase: "versions",
-    summary: "Handing off for durable snapshotting after rebuttal triage.",
+    summary: "Handing off for durable snapshotting after review.",
     nextActions: ["Create the next snapshot", "Compare the new lineage step"]
   });
   const snapshotA = createVersionSnapshot(root, {
@@ -261,87 +239,4 @@ test("single-paper workflow creates durable artifacts", () => {
   assert.ok(fs.existsSync(path.join(root, ".dove", "orchestration", "board.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "rebuttal", "issues.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "versions", "snapshots", `${snapshotA.id}.json`)));
-});
-
-test("autonomy operate composes objective bridge, planning, approval, foreground execution, and durable stop state", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, {
-    title: "Autonomy Operate Workflow",
-    objective: "Validate explicit foreground autonomous research operation."
-  });
-
-  const result = runAutonomyOperate(root, {
-    objective: "Refresh research context and run a bounded review checkpoint",
-    maxSteps: 5,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T01:00:00.000Z"
-  });
-
-  assert.equal(result.inputMode, "objective");
-  assert.equal(result.sourceType, "execution-bridge");
-  assert.deepEqual(result.safeDefaultStepSequence, ["refresh-research-brief", "refresh-wiki", "run-review-loop"]);
-  assert.equal(result.foreground.stepCount >= 2, true);
-  assert.equal(result.stopReason, "executed-program-step");
-
-  const candidates = JSON.parse(fs.readFileSync(path.join(root, ".dove", "meta", "execution-bridge-candidates.json"), "utf8"));
-  const candidate = candidates.candidates.find((item) => item.id === result.sourceId);
-  assert.ok(candidate, "objective-derived bridge candidate should be durable");
-  assert.equal(candidate.proposalOnly, true);
-  assert.equal(candidate.noAutoApply, true);
-  assert.equal(candidate.objectiveDerived, true);
-
-  const run = JSON.parse(fs.readFileSync(path.join(root, ".dove", "programs", "runs.json"), "utf8")).items.find((item) => item.id === result.programRunId);
-  assert.ok(run, "program run should be recorded");
-  assert.deepEqual(run.authorityEnvelope.stepSequence.map((step) => step.allowedStepType), ["refresh-research-brief", "refresh-wiki", "run-review-loop"]);
-  assert.equal(run.authorityEnvelope.stepSequence.some((step) => ["upsert-note", "run-experiment-audit", "bridge-result-to-claim"].includes(step.allowedStepType)), false);
-
-  const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
-  assert.equal(runtimeResults.summary.lastStatus, "completed");
-  assert.equal(runtimeResults.entries.at(-1).packetId, result.packetId);
-});
-
-test("autonomy operate reuses an existing proposal source with exact caller-provided ids", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, {
-    title: "Autonomy Operate Source Reuse",
-    objective: "Validate explicit source-first autonomous operation."
-  });
-
-  const source = seedExecutionBridgeCandidate(root);
-  assert.ok(source, "query_meta_optimize should produce a packet execution bridge candidate");
-
-  const result = runAutonomyOperate(root, {
-    sourceType: "execution-bridge",
-    sourceId: source.id,
-    packetId: "operate-source-packet",
-    programId: "operate-source-program",
-    programRunId: "operate-source-run",
-    approvalId: "operate-source-approval",
-    campaignId: "operate-source-campaign",
-    campaignStepId: "operate-source-step",
-    workerRole: "planner",
-    maxSteps: 2,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T01:00:00.000Z"
-  });
-
-  assert.equal(result.inputMode, "source");
-  assert.equal(result.sourceType, "execution-bridge");
-  assert.equal(result.sourceId, source.id);
-  assert.equal(result.packetId, "operate-source-packet");
-  assert.equal(result.programId, "operate-source-program");
-  assert.equal(result.programRunId, "operate-source-run");
-  assert.equal(result.approvalId, "operate-source-approval");
-  assert.equal(result.campaignId, "operate-source-campaign");
-  assert.equal(result.campaignStepId, "operate-source-step");
-
-  const candidates = JSON.parse(fs.readFileSync(path.join(root, ".dove", "meta", "execution-bridge-candidates.json"), "utf8"));
-  assert.equal(candidates.candidates.some((candidate) => candidate.candidateOrigin === "operator-objective" || candidate.objectiveDerived === true), false);
-
-  const packet = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "operate-source-packet.json"), "utf8"));
-  assert.equal(packet.id, "operate-source-packet");
-  assert.equal(packet.materialization.sourceType, "execution-bridge");
-  assert.equal(packet.materialization.sourceId, source.id);
 });

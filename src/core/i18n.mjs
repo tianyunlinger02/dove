@@ -114,6 +114,10 @@ const TEXT = {
     zh: "已批准的需求到任务契约已经物化。请沿推荐路线继续推进真实工作；mission 本身不记录执行结果。",
     en: "The approved demand-to-task mission contract is materialized. Continue through the recommended route; mission itself does not record execution results."
   },
+  createTaskMaterializationPlannedMessage: {
+    zh: "已生成批准合同的待应用写入计划，但合同尚未物化。请由 host 应用 mutation plan 后再交接后续流程。",
+    en: "A host-applied write plan was prepared for the approved contract, but the contract is not materialized yet. Apply the mutation plan before handing off."
+  },
   workContractPurpose: {
     zh: ({ title, stage, domain }) => `把“${title}”转成可执行、可验证、可续接的 ${stage}/${domain} 工作合同。`,
     en: ({ title, stage, domain }) => `Turn “${title}” into an executable, verifiable, resumable ${stage}/${domain} work contract.`

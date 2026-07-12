@@ -56,7 +56,7 @@ export function readJson(root, relativePath, fallback) {
 }
 ```
 
-MCP schemas should stay explicit about arrays, objects, strings, booleans, and numbers. Role-bound mutation tools should use `withPolicy(...)` to keep override fields consistent.
+MCP schemas should stay explicit about arrays, objects, strings, booleans, and numbers. Board role strings are workflow routing metadata only; mutation schemas must omit retired governance bypass fields and rely on explicit task, artifact, follow-through, review, and completion contracts.
 
 ---
 

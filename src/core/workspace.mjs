@@ -19,11 +19,14 @@ import {
   createWorkspaceBootstrapJsonArtifacts
 } from "./workspace-bootstrap.mjs";
 
-function normalizeStringArrayLocal(value) {
-  if (!Array.isArray(value)) {
-    return [];
+export function assertNoPolicyOverrideArgs(args = {}, actionLabel = "This operation") {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return;
   }
-  return value.filter((item) => typeof item === "string").map((item) => item.trim()).filter(Boolean);
+  const fields = Object.keys(args).filter((key) => key.startsWith("policyOverride"));
+  if (fields.length > 0) {
+    throw new Error(`${actionLabel} does not accept retired policy override fields: ${fields.join(", ")}.`);
+  }
 }
 
 const WORKFLOW_BOUNDARIES = createWorkflowBoundaries();
@@ -278,74 +281,9 @@ function targetArtifactContainsId(root, artifactPath, targetId) {
   return fs.readFileSync(fullPath, "utf8").includes(String(targetId));
 }
 
-function normalizeGuardPolicyOverride(args = {}) {
-  const reason = typeof args.policyOverrideReason === "string" ? args.policyOverrideReason.trim() : "";
-  const reasonCode = typeof args.policyOverrideReasonCode === "string" ? args.policyOverrideReasonCode.trim() : "";
-  return {
-    active: reason.length > 0,
-    reason,
-    reasonCode,
-    actorRole: typeof args.actorRole === "string" && args.actorRole.trim().length > 0 ? args.actorRole : null,
-    evidencePaths: Array.isArray(args.policyOverrideEvidencePaths) ? args.policyOverrideEvidencePaths.filter((item) => typeof item === "string" && item.trim().length > 0) : [],
-    targetArtifact: typeof args.policyOverrideTargetArtifact === "string" && args.policyOverrideTargetArtifact.trim().length > 0 ? args.policyOverrideTargetArtifact : null,
-    targetId: typeof args.policyOverrideTargetId === "string" && args.policyOverrideTargetId.trim().length > 0 ? args.policyOverrideTargetId : null,
-    sourceId: typeof args.policyOverrideSourceId === "string" && args.policyOverrideSourceId.trim().length > 0 ? args.policyOverrideSourceId : null,
-    phase: typeof args.policyOverridePhase === "string" && args.policyOverridePhase.trim().length > 0 ? args.policyOverridePhase : null,
-    expiresAt: typeof args.policyOverrideExpiresAt === "string" && args.policyOverrideExpiresAt.trim().length > 0 ? args.policyOverrideExpiresAt : null
-  };
-}
-
-function artifactPathLocallyRelates(candidatePath, anchorPath) {
-  if (!candidatePath || !anchorPath) {
-    return false;
-  }
-  if (candidatePath === anchorPath) {
-    return true;
-  }
-  const candidateDir = path.dirname(candidatePath);
-  const anchorDir = path.dirname(anchorPath);
-  return candidateDir === anchorDir
-    || candidatePath.startsWith(`${anchorDir}/`)
-    || anchorPath.startsWith(`${candidateDir}/`);
-}
-
-export function isRelevantOverrideEvidencePath(root, item = {}, evidencePath) {
-  if (!evidencePath || !fs.existsSync(resolvePath(root, evidencePath))) {
-    return false;
-  }
-  const anchors = [
-    item.sourceArtifactPath,
-    item.linkedTargetArtifact,
-    ...(item.closureArtifactPaths ?? [])
-  ].filter(Boolean);
-  if (anchors.some((anchorPath) => artifactPathLocallyRelates(evidencePath, anchorPath))) {
-    return true;
-  }
-  const ids = [item.linkedTargetId, item.sourceId].filter(Boolean);
-  return ids.some((targetId) => targetArtifactContainsId(root, evidencePath, targetId));
-}
-
-export function overrideEvidenceRelevantToItems(root, items = [], evidencePaths = []) {
-  const normalizedEvidencePaths = normalizeStringArrayLocal(evidencePaths);
-  if (normalizedEvidencePaths.length === 0) {
-    return { ok: false, unrelatedItemIds: items.map((item) => item.id), relevantEvidencePaths: [] };
-  }
-  const unrelatedItemIds = items
-    .filter((item) => !normalizedEvidencePaths.some((artifactPath) => isRelevantOverrideEvidencePath(root, item, artifactPath)))
-    .map((item) => item.id);
-  return {
-    ok: unrelatedItemIds.length === 0,
-    unrelatedItemIds,
-    relevantEvidencePaths: normalizedEvidencePaths.filter((artifactPath) => items.some((item) => isRelevantOverrideEvidencePath(root, item, artifactPath)))
-  };
-}
-
 export function assertFollowThroughReady(root, actionLabel, args = {}) {
+  assertNoPolicyOverrideArgs(args, actionLabel);
   const ledger = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
-  const override = normalizeGuardPolicyOverride(args);
-  const currentState = loadState(root);
-  const currentOwner = currentState.orchestrationBoard?.assignedRole ?? "planner";
-  const currentPhase = currentState.pipeline?.currentStage ?? currentState.orchestrationBoard?.currentPhase ?? "init";
   const actionRequiredItems = (ledger.items ?? []).filter((item) => {
     const status = item.status;
     const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status);
@@ -357,25 +295,9 @@ export function assertFollowThroughReady(root, actionLabel, args = {}) {
     return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen;
   }).map((item) => item.id);
 
-  if (actionRequiredItems.length === 0) {
-    return;
+  if (actionRequiredItems.length > 0) {
+    throw new Error(`${actionLabel} is blocked while operator follow-through still requires action: ${actionRequiredItems.join(", ")}.`);
   }
-  if (override.active) {
-    const relevance = override.actorRole ? overrideEvidenceRelevantToItems(root, (ledger.items ?? []).filter((item) => actionRequiredItems.includes(item.id)), override.evidencePaths) : { ok: false, unrelatedItemIds: actionRequiredItems };
-    const targetItems = (ledger.items ?? []).filter((item) => actionRequiredItems.includes(item.id));
-    const targetMatch = targetItems.some((item) => item.linkedTargetArtifact === override.targetArtifact && item.linkedTargetId === override.targetId);
-    const sourceMatch = targetItems.some((item) => item.sourceId === override.sourceId);
-    const notExpired = override.expiresAt && String(override.expiresAt) > nowIso();
-    const withinWindow = notExpired && String(override.expiresAt) <= new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    const actorMatches = override.actorRole && override.actorRole === currentOwner;
-    const reasonCodeAllowed = ["emergency-repair", "manual-reconciliation", "operator-acknowledged-exception"].includes(override.reasonCode);
-    const phaseMatches = override.phase === currentPhase;
-    if (relevance.ok && targetMatch && sourceMatch && phaseMatches && withinWindow && actorMatches && reasonCodeAllowed) {
-      return;
-    }
-    throw new Error(`${actionLabel} cannot override follow-through governance without current-owner actorRole, matching policyOverrideSourceId, matching policyOverrideTargetArtifact/policyOverrideTargetId, matching policyOverridePhase, allowed policyOverrideReasonCode, relevant policyOverrideEvidencePaths, and a short future policyOverrideExpiresAt. Action-required records: ${actionRequiredItems.join(", ")}. Unrelated records: ${relevance.unrelatedItemIds.join(", ") || "none"}.`);
-  }
-  throw new Error(`${actionLabel} is blocked while operator follow-through still requires action: ${actionRequiredItems.join(", ")}.`);
 }
 
 export function assertGovernanceMutationRegistered(actionId, expectedMode) {

@@ -1,32 +1,32 @@
 ---
 name: dove-review-loop
-description: "Run limited local review and optional revision or experience steps until materials are coherent or blocked."
+description: "Run one independent local Reviewer pass and return an explicit Builder handoff when revision is required."
 ---
 
 # Dove Review Loop
 
-Run limited local review and optional revision or experience steps until materials are coherent or blocked.
+Run one independent local Reviewer pass and return an explicit Builder handoff when revision is required.
 
 ## Daily use
 
-- Use this when local review, draft revision, and experience planning should iterate together within the configured max rounds.
-- Start each iteration by inspecting evidence and findings; revise or plan experiments only when the needed material is supplied.
-- Stop when coherent, blocked, at a drawing/review boundary, or when user input is required.
-- Targeting: Resolve the loop to one task before changing review, draft, or experience state.
-- Confirmation: Run only limited visible iterations; default max is 3 unless configured otherwise.
-- Outcome: Each loop iteration reports inspected findings or moves a real draft/experience artifact until the task is coherent or blocked.
+- Use this for one independent Reviewer pass over the selected packet materials.
+- The pass records concrete findings or a material-backed coherent verdict, but never edits Builder-owned draft or experience material.
+- When revision is required, hand the requiredActions to a Builder and invoke review again only after that separate revision call.
+- Targeting: Resolve the pass to one task and its packet-owned materials before reviewing.
+- Confirmation: This command performs one visible Reviewer pass only; there is no implicit Reviewer-to-Builder-to-Reviewer cycle.
+- Outcome: One packet-scoped review result plus an explicit Builder handoff when changes are required.
 
 ## Examples
 
-- `/dove:review-loop Run up to three evidence-aware review and revision rounds`
-- `/dove:review-loop Stop when the task is coherent or reaches an evidence blocker`
+- `/dove:review-loop Run one independent evidence-aware review pass`
+- `/dove:review-loop Review this packet and hand required revisions to Builder`
 
 ## Operating rules
 
 1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check or action below; do not construct default answers by manually reading or listing internal files.
 2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
 3. If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
-4. This request has one listed project action: `node ./bin/dove.mjs review-loop . --target "<task title>"` from the project root; Run it only when the needed material is present; then summarize the real artifact state or material boundary instead of inspecting internal files directly.
+4. This request has one listed project action: `node ./bin/dove-package.mjs review-loop . --target "<task title>" --mutation-mode direct-process` from the project root; Run it only when the needed material is present; then summarize the real artifact state or material boundary instead of inspecting internal files directly.
 5. Use this for limited local review iterations; provide draft or experiment material before asking it to revise or plan those substeps.
 6. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 7. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.

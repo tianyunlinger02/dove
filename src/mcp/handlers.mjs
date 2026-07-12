@@ -17,7 +17,6 @@ import {
   killDoveTask,
   listWorkspaceArtifacts,
   materializeGuidancePacket,
-  issueProgramApproval,
   planCampaign,
   prepareAudioReview,
   prepareFigureGeneration,
@@ -70,9 +69,6 @@ import {
   runDoveReviewLoop,
   runExperienceWorkflow,
   runFigureWorkflow,
-  runAutonomyControlPlaneOnce,
-  runAutonomyForeground,
-  runAutonomyOperate,
   runExperimentAudit,
   runReviewLoop,
   setSectionStatus,
@@ -90,17 +86,36 @@ import {
   upsertPlan,
   upsertRevisionPlan,
   validateFigurePipeline,
+  verifySource,
   summarizeSessionJournal,
   currentMutationContext,
-  runWithMutationContext
+  isOperationalFailureOutcome
 } from "../core/index.mjs";
+import { normalizeMutationMode, runWithMutationContext } from "../core/mutation-backend.mjs";
 import { buildOperatorUnblock } from "../core/operator-ux.mjs";
-import { MUTATING_TOOL_NAMES } from "./tool-definitions.mjs";
+import {
+  MUTATING_TOOL_NAMES,
+  TOOL_INPUT_PROPERTY_NAMES,
+  TOOL_INPUT_SCHEMAS
+} from "./tool-definitions.mjs";
+import { assertMcpInputSchema } from "./schema-validation.mjs";
 
-function makeTextResult(data) {
+function makeTextResult(data, { isError = false } = {}) {
   return {
-    content: [{ type: "text", text: JSON.stringify(data, null, 2) }]
+    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    ...(isError ? { isError: true } : {})
   };
+}
+
+function makeStructuredToolResult(name, args, data) {
+  return makeTextResult(
+    shapeMcpResult(name, args, data),
+    {
+      isError: MUTATING_TOOL_NAMES.has(name) && isOperationalFailureOutcome(data, {
+        confirmed: args?.confirmed === true || args?.confirm === true
+      })
+    }
+  );
 }
 
 function makeErrorResult(message) {
@@ -404,6 +419,22 @@ function extractShowMore(data) {
 function buildMcpResultContract(tool, resultMode, data, args = {}) {
   const writes = extractWrites(data, args);
   const operatorUnblock = buildOperatorUnblock(data);
+  const missionConfirmation = ["create_dove_task", "run_dove_auto"].includes(tool)
+    && data?.status === "needs-confirmation"
+    && data?.confirmArgs
+    ? {
+      required: true,
+      proposalVersion: data.proposalVersion,
+      proposalDigest: data.proposalDigest,
+      proposalWorkspace: data.proposalWorkspace,
+      ...(data.proposalKind ? { proposalKind: data.proposalKind } : {}),
+      mutationMode: data.proposalMutationMode,
+      trustBoundary: data.proposalTrust?.boundary ?? "trusted-local-exact-replay-data",
+      proofOfHumanApproval: false,
+      tamperProof: false,
+      confirmArgs: data.confirmArgs
+    }
+    : null;
   return compactObject({
     presentation: "dove-mcp-result-contract",
     tool: publicMcpToolSurface(tool),
@@ -412,6 +443,7 @@ function buildMcpResultContract(tool, resultMode, data, args = {}) {
     scope: extractScope(data),
     nextStep: extractNextStep(data),
     needsAttention: extractNeedsAttention(data, operatorUnblock),
+    confirmation: missionConfirmation,
     changes: buildChangesContract(writes),
     showMore: extractShowMore(data),
     detailsAvailable: true
@@ -430,7 +462,60 @@ function shapeMcpResult(tool, args, data) {
   return compact;
 }
 
+function findRetiredGovernanceInput(value, inputPath = "$", seen = new WeakSet()) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  if (seen.has(value)) {
+    return null;
+  }
+  seen.add(value);
+  for (const [key, item] of Object.entries(value)) {
+    const itemPath = Array.isArray(value)
+      ? `${inputPath}[${key}]`
+      : `${inputPath}.${key}`;
+    if (
+      key.startsWith("policyOverride")
+      || key === "skipBoardUpdate"
+      || key === "skipRefreshDurableSurfaces"
+      || key === "skipFollowThroughReady"
+      || key === "skipSyncPhase"
+    ) {
+      return { key, path: itemPath };
+    }
+    const nested = findRetiredGovernanceInput(item, itemPath, seen);
+    if (nested) {
+      return nested;
+    }
+  }
+  return null;
+}
+
+function assertNoRetiredGovernanceInputs(name, args = {}) {
+  const retired = findRetiredGovernanceInput(args);
+  if (retired) {
+    throw new Error(
+      `${name} no longer accepts retired governance input ${retired.key} at ${retired.path}.`
+    );
+  }
+}
+
+function assertAllowedToolInput(name, args = {}) {
+  if (!isPlainObject(args)) {
+    throw new Error(`${name} arguments must be a plain object.`);
+  }
+  const allowed = TOOL_INPUT_PROPERTY_NAMES.get(name);
+  if (!allowed) {
+    throw new Error(`Unknown tool: ${name}`);
+  }
+  const unknown = Object.keys(args).filter((key) => !allowed.has(key));
+  if (unknown.length > 0) {
+    throw new Error(`${name} does not accept unknown input: ${unknown.map((key) => `$.${key}`).join(", ")}.`);
+  }
+}
+
 export function dispatchToolData(root, name, args = {}) {
+  assertNoRetiredGovernanceInputs(name, args);
   const result = (data) => data;
   switch (name) {
       case "ensure_workspace":
@@ -541,6 +626,8 @@ export function dispatchToolData(root, name, args = {}) {
         return result(updateResearchBrief(root, args));
       case "register_source":
         return result(registerSource(root, args));
+      case "verify_source":
+        return result(verifySource(root, args));
       case "upsert_note":
         return result(upsertNote(root, args));
       case "upsert_claims":
@@ -603,20 +690,12 @@ export function dispatchToolData(root, name, args = {}) {
         return result(recordOperatorFollowThrough(root, args));
       case "record_operator_lesson":
         return result(recordOperatorLesson(root, args));
-      case "issue_program_approval":
-        return result(issueProgramApproval(root, args));
       case "plan_campaign":
         return result(planCampaign(root, args));
       case "revoke_program_approval":
         return result(revokeProgramApproval(root, args));
       case "materialize_guidance_packet":
         return result(materializeGuidancePacket(root, args));
-      case "run_autonomy_once":
-        return result(runAutonomyControlPlaneOnce(root, args));
-      case "run_autonomy_foreground":
-        return result(runAutonomyForeground(root, args));
-      case "run_autonomy_operate":
-        return result(runAutonomyOperate(root, args));
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -624,21 +703,45 @@ export function dispatchToolData(root, name, args = {}) {
 
 export function dispatchTool(root, name, args = {}) {
   try {
+    assertNoRetiredGovernanceInputs(name, args);
+    assertAllowedToolInput(name, args);
+    assertMcpInputSchema(name, args, TOOL_INPUT_SCHEMAS.get(name));
     const cleanArgs = stripMcpControlArgs(args);
-    const data = MUTATING_TOOL_NAMES.has(name) && !currentMutationContext(root)
+    const existingContext = currentMutationContext(root);
+    if (
+      existingContext &&
+      MUTATING_TOOL_NAMES.has(name) &&
+      isPlainObject(args) &&
+      Object.prototype.hasOwnProperty.call(args, "mutationMode")
+    ) {
+      const explicitMode = normalizeMutationMode(args.mutationMode);
+      if (explicitMode !== existingContext.mutationMode) {
+        throw new Error(
+          `MCP mutationMode ${explicitMode} does not match ` +
+          `the active mutation context mode ${existingContext.mutationMode}.`
+        );
+      }
+    }
+    const data = MUTATING_TOOL_NAMES.has(name) && !existingContext
       ? runWithMutationContext(root, {
         actionId: name,
         mutationMode: args?.mutationMode,
         hostId: "mcp",
         packetId: extractPacketId(args)
-      }, () => dispatchToolData(root, name, cleanArgs))
-      : dispatchToolData(root, name, cleanArgs);
+      }, (context) => dispatchToolData(root, name, {
+        ...cleanArgs,
+        ...(["create_dove_task", "run_dove_auto"].includes(name) ? { mutationMode: context.mutationMode } : {})
+      }))
+      : dispatchToolData(root, name, {
+        ...cleanArgs,
+        ...(["create_dove_task", "run_dove_auto"].includes(name) && existingContext ? { mutationMode: existingContext.mutationMode } : {})
+      });
     if (data && typeof data.then === "function") {
       return data
-        .then((resolved) => makeTextResult(shapeMcpResult(name, args, resolved)))
+        .then((resolved) => makeStructuredToolResult(name, args, resolved))
         .catch((error) => makeErrorResult(error instanceof Error ? error.message : String(error)));
     }
-    return makeTextResult(shapeMcpResult(name, args, data));
+    return makeStructuredToolResult(name, args, data);
   } catch (error) {
     return makeErrorResult(error instanceof Error ? error.message : String(error));
   }

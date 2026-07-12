@@ -1,4 +1,15 @@
-export const CORE_INSTALL_PATHS = ["README.md", "bin", "docs", "mcp", "scripts", "src"];
+export const CORE_INSTALL_PATHS = [
+  "README.md",
+  "docs/README.md",
+  "docs/INSTALL.md",
+  "docs/USAGE.md",
+  "docs/PACKAGING.md",
+  "docs/CAPABILITY_MATRIX.md",
+  "dist/index.mjs",
+  "bin/dove-package.mjs",
+  "mcp/dove-state-server-package.mjs",
+  "scripts/doctor-mcp-probe-package.mjs"
+];
 
 export const DEFAULT_HOST_ADAPTERS = ["opencode"];
 
@@ -31,12 +42,7 @@ export const MANAGED_PACKAGE_PATHS = [
   ".cursor/commands/dove-*.md",
   ".agents/skills/dove-*",
   "AGENTS.md",
-  "README.md",
-  "bin",
-  "docs",
-  "mcp",
-  "scripts",
-  "src"
+  ...CORE_INSTALL_PATHS
 ];
 
 export const OPENCODE_ROLE_SKILL_PATHS = [
@@ -80,15 +86,13 @@ export const TOOL_CONTEXT_PATHS = {
   query_dove_status: [".dove/state.json", ".dove/task-packets/index.json", ".dove/workspace/index.json", ".dove/orchestration/board.json", ".dove/meta/operator-lessons.json"],
   query_dove_audit: [".dove/task-packets/index.json", ".dove/runtime/controller-state.json"],
   query_dove_return: [".dove/task-packets/index.json", ".dove/runtime/controller-state.json"],
-  launch_dove_mission: [".dove/meta/operator-follow-through.json", ".dove/task-packets/index.json", ".dove/programs/approvals.json"],
+  launch_dove_mission: [".dove/meta/operator-follow-through.json", ".dove/task-packets/index.json"],
   query_task_graph: [".dove/task-packets/index.json", ".dove/context/packets"],
   sync_checklist: [".dove/checklists/current.md", ".dove/task-packets/index.json"],
   materialize_guidance_packet: [".dove/meta/operator-follow-through.json", ".dove/meta/remediation-packs.json", ".dove/task-packets/index.json"],
-  run_autonomy_operate: [".dove/runtime/controller-state.json", ".dove/programs/approvals.json", ".dove/task-packets/index.json"],
   query_governance_coverage_report: [".dove/meta/governance-coverage.json"],
   upsert_plan: [".dove/plans", ".dove/checklists/current.md"],
   query_program_approvals: [".dove/programs/approvals.json", ".dove/runtime/controller-state.json"],
-  issue_program_approval: [".dove/programs/approvals.json"],
   revoke_program_approval: [".dove/programs/approvals.json"],
   init_project: [".dove/state.json", ".dove/manifest.json"],
   update_research_brief: [".dove/research/brief.md", ".dove/research/agenda.json"],
@@ -207,7 +211,7 @@ const COMMAND_SURFACES_BASE = [
     policy: "explicit-approval",
     summary: "Convert a user demand into a confirmable Dove task contract, then hand off to the recommended next workflow.",
     requiredTools: ["create_dove_task"],
-    constraints: ["Require an existing init goal or make the proposed init goal explicit before converting user demand into a mission task contract.", "Treat the operator input as natural-language demand, not as an already-created task.", "Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, autonomous checklist proposal, compact task card, durable `workContract`, and canonical `executionContract` with action, implementation, materials/readFirst requirements, convergence criteria, evidence requirements, and failure routes.", "After returning the proposal, use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) with options: approve and materialize the contract, adjust the contract, or cancel; only pass `confirmed: true` to `create_dove_task` after the operator approves the converted contract.", "Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.", "User-created mission tasks default to level 3, while explicit operator-created levels 1, 2, 3, or deeper are allowed under the level-0 init goal.", "Autonomously decide whether a checklist is needed; system-created checklist/subtask packets must be children of their mission and must have level greater than the parent mission level.", "After materialization, stop at the contract handoff: return `nextAction`, `recommendedNextCommand`, `recommendedRoutes`, and `handoffRoutes` from the task's work contract instead of executing or recording work.", "Do not claim the mission performed source, note, draft, figure, experiment, review, code, or provider work; execution belongs to `dove.auto`, `dove.operator`, domain workflows, or explicit tool calls after the contract exists.", "Do not call `record_dove_mission_pass` as part of `/dove:mission`; result recording is a separate explicit tool for work that already happened.", "If required materials are missing while defining the contract, keep the contract proposal honest about blockers and evidence expectations instead of inventing results.", "When the converted task is a planning task, its done criteria should require explicit executable child mission contracts before any later execution flow can mark it completed.", "Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`."]
+    constraints: ["Require an existing init goal or make the proposed init goal explicit before converting user demand into a mission task contract.", "Treat the operator input as natural-language demand, not as an already-created task.", "Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, autonomous checklist proposal, compact task card, durable `workContract`, and canonical `executionContract` with action, implementation, materials/readFirst requirements, convergence criteria, evidence requirements, and failure routes.", "After returning the proposal, use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) with options: approve and materialize the contract, adjust the contract, or cancel. Approval must replay the proposal's complete returned `confirmArgs`; when using the listed CLI route, run the exact confirmation command returned by that proposal, including its proposal token and fixed mutation mode. Never reconstruct a fresh `dove mission --goal ... --confirmed` request.", "Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.", "User-created mission tasks default to level 3, while explicit operator-created levels 1, 2, 3, or deeper are allowed under the level-0 init goal.", "Autonomously decide whether a checklist is needed; system-created checklist/subtask packets must be children of their mission and must have level greater than the parent mission level.", "After materialization, stop at the contract handoff: return `nextAction`, `recommendedNextCommand`, `recommendedRoutes`, and `handoffRoutes` from the task's work contract instead of executing or recording work.", "Do not claim the mission performed source, note, draft, figure, experiment, review, code, or provider work; execution belongs to `dove.auto`, `dove.operator`, domain workflows, or explicit tool calls after the contract exists.", "Do not call `record_dove_mission_pass` as part of `/dove:mission`; result recording is a separate explicit tool for work that already happened.", "If required materials are missing while defining the contract, keep the contract proposal honest about blockers and evidence expectations instead of inventing results.", "When the converted task is a planning task, its done criteria should require explicit executable child mission contracts before any later execution flow can mark it completed.", "Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`."]
   },
   {
     id: "dove.auto",
@@ -217,7 +221,7 @@ const COMMAND_SURFACES_BASE = [
     policy: "explicit-approval",
     summary: "Convert demand like mission intake, then after confirmation run a few approved work rounds until completion or a blocker is reached.",
     requiredTools: ["run_dove_auto"],
-    constraints: ["Use the same demand-to-task intake and classification model as `/dove:mission` before autonomous execution starts.", "Allow `/dove:auto` to be invoked directly on a new user demand or an existing durable task; it does not require running `/dove:mission` first.", "Return a proposal-only auto contract first: either a converted `proposedTask` with checklist proposal and executable `executionContract`, or a `selectedTask` from durable packet selection with current contract readiness, plus compact task/auto cards, confirmation args, and max iteration budget.", "Use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) before passing `confirmed: true`; options should approve and run bounded auto, adjust target/contract, or cancel.", "When an existing task target is missing or ambiguous, present indexed packet choices through confirmation UX instead of guessing.", "Require explicit operator confirmation before execution beyond task creation or selection.", "Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.", "Use `.dove/state.json.settings.auto.maxIterations` as the default foreground iteration limit; the default is 3.", "Record each foreground iteration and stop reason in `.dove/runtime/results.json`, and return a localized `resultCard` summary without persisting the UX-only card in runtime results.", "May internally call public Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status as needed.", "For source-research and current-information tasks, run the foreground search or retrieval pass before confirmed execution: use read-only public no-key network search when available, collect concrete URLs/DOIs/templates/guidelines, extract enough synthesis text, then call confirmed `run_dove_auto` once with explicit `steps` for both `dove.source` and `dove.note` so provenance and synthesis are deposited in the same auto run.", "Do not claim source research succeeded when Dove network search, host search, or fetch tools return zero results, unavailable providers, safety errors, or no concrete URLs/snippets; switch to another allowed foreground retrieval path or stop at an explicit host boundary." , "If host search/fetch/shell/MCP safety classification or tool availability fails before Dove can perform the intended workflow, call `record_dove_mission_pass` for the packet with `resultStatus: \"blocked\"`, `boundaryType: \"host-tool-blocked\"`, the failed tool in `requiredActions`, and `nextAction: \"project:dove.status\"`; do not leave the task in-progress.", "Do not call confirmed `run_dove_auto` with only a packet id for source-research tasks; that only records a `source-requires-host-provenance` boundary and does not advance the research.", "Do not auto-run source, note, draft, experience, or review-loop steps without the material they need: source needs title/locator provenance, note needs synthesis content, draft needs body content, experience needs a goal/title/idea/experimentId, and review-loop draft/experience substeps need explicit material.", "Stop at completed, blocked, killed, authority/review boundary, missing provider credentials, conflicting packet target, or step-budget exhaustion.", "When a boundary is reached, persist the first-class boundary with required inputs/actions, role handoff, and next command; do not continue through hidden background work.", "Do not claim host/code/provider/experiment work was completed without real evidence, verification evidence, and `verifiedCriteria` coverage for the executable contract; stop at an awaiting-host/provider, missing-materials, or verification-failed boundary instead."]
+    constraints: ["Use the same demand-to-task intake and classification model as `/dove:mission` before autonomous execution starts.", "Allow `/dove:auto` to be invoked directly on a new user demand or an existing durable task; it does not require running `/dove:mission` first.", "Return a proposal-only auto contract first: either a converted `proposedTask` with checklist proposal and executable `executionContract`, or a `selectedTask` from durable packet selection with current contract readiness, plus compact task/auto cards, confirmation args, and max iteration budget.", "Use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) before passing `confirmed: true`; options should approve and run bounded auto, adjust target/contract, or cancel.", "When an existing task target is missing or ambiguous, present indexed packet choices through confirmation UX instead of guessing.", "Require explicit operator confirmation before execution beyond task creation or selection.", "Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.", "Use `.dove/state.json.settings.auto.maxIterations` as the default foreground iteration limit; the default is 3.", "Record each foreground iteration and stop reason in `.dove/runtime/results.json`, and return a localized `resultCard` summary without persisting the UX-only card in runtime results.", "May internally call public Dove workflows such as source, note, experience, figure, draft, review, review-loop, rebuttal, lessons, and status as needed.", "For source-research and current-information tasks, run the foreground search or retrieval pass before confirmed execution: use read-only public no-key network search when available, collect concrete URLs/DOIs/templates/guidelines, extract enough synthesis text, then call confirmed `run_dove_auto` once with explicit `steps` for both `dove.source` and `dove.note` so provenance and synthesis are deposited in the same auto run.", "Do not claim source research succeeded when Dove network search, host search, or fetch tools return zero results, unavailable providers, safety errors, or no concrete URLs/snippets; switch to another allowed foreground retrieval path or stop at an explicit host boundary." , "If host search/fetch/shell/MCP safety classification or tool availability fails before Dove can perform the intended workflow, call `record_dove_mission_pass` for the packet with `resultStatus: \"blocked\"`, `boundaryType: \"host-tool-blocked\"`, the failed tool in `requiredActions`, and `nextAction: \"project:dove.status\"`; do not leave the task in-progress.", "Do not call confirmed `run_dove_auto` with only a packet id for source-research tasks; that only records a `source-requires-host-provenance` boundary and does not advance the research.", "Do not auto-run source, note, draft, experience, or review-loop steps without the material they need: source needs title/locator provenance, note needs synthesis content, draft needs body content, experience needs a goal/title/idea/experimentId, and review-loop needs packet-owned substantive review artifacts.", "Stop at completed, blocked, killed, authority/review boundary, missing provider credentials, conflicting packet target, or step-budget exhaustion.", "When a boundary is reached, persist the first-class boundary with required inputs/actions, role handoff, and next command; do not continue through hidden background work.", "Do not claim host/code/provider/experiment work was completed without real evidence, verification evidence, and `verifiedCriteria` coverage for the executable contract; stop at an awaiting-host/provider, missing-materials, or verification-failed boundary instead."]
   },
   {
     id: "dove.status",
@@ -325,9 +329,9 @@ const COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "guarded-mutation",
-    summary: "Run limited local review and optional revision or experience steps until materials are coherent or blocked.",
+    summary: "Run one independent local Reviewer pass and return an explicit Builder handoff when revision is required.",
     requiredTools: ["run_dove_review_loop"],
-    constraints: ["Use default 3 as the max iteration count unless `.dove/state.json.settings.reviewLoop.maxIterations` says otherwise.", "Each iteration must inspect local review evidence first, then update draft work or plan missing experience/evidence only when explicit material for that substep is supplied.", "If a draft substep is requested, provide draftBody or draft.body before the loop starts; if an experience substep is requested, provide a goal, title, idea, or experimentId before the loop starts.", "Stop early when review is coherent, the task is blocked, a provider boundary is reached, or user input is required; do not prepare isolated/audio review unless the operator explicitly asks for that mode."]
+    constraints: ["Run exactly one Reviewer pass for the selected packet and descendants.", "Do not modify draft, experience, experiment, or other Builder-owned material in this call.", "If the verdict is non-coherent, return concrete requiredActions and an explicit Builder handoff; revisions and the next Reviewer pass must be separate explicit calls.", "Do not claim iteration counts, configured rounds, or review-until-coherent behavior; do not prepare isolated/audio review unless the operator explicitly asks for that mode."]
   },
   {
     id: "dove.rebuttal",
@@ -352,7 +356,7 @@ const COMMAND_UX_DETAILS = {
   "dove.mission": {
     dailyFlow: ["Use this for one concrete user demand that should become a tracked mission/task contract and hand off to the right next workflow.", "Describe the desired outcome in normal language; Dove should propose the task, explain the evidence it will need, and wait for approval before materializing the contract."],
     targetingBehavior: "Creates a new task contract under the project goal, or helps set the project goal first when the workspace is new.",
-    confirmationBehavior: "Show the proposed task in plain language, then ask whether to materialize the contract, adjust it, or cancel.",
+    confirmationBehavior: "Show the proposed task in plain language, then ask whether to materialize that exact proposal, adjust it, or cancel; confirmation must reuse the returned task id and proposal digest rather than re-infer a new contract.",
     expectedOutcome: "After approval, the contract exists with recommended next routes; real execution belongs to auto, operator, domain workflows, or explicit tools.",
     examples: ["/dove:mission Fix the status dashboard next-action mismatch", "/dove:mission Turn the latest review feedback into one executable task"]
   },
@@ -434,11 +438,11 @@ const COMMAND_UX_DETAILS = {
     examples: ["/dove:review Check whether the current draft is supported by evidence", "/dove:review Review the selected task materials before marking them done"]
   },
   "dove.review-loop": {
-    dailyFlow: ["Use this when local review, draft revision, and experience planning should iterate together within the configured max rounds.", "Start each iteration by inspecting evidence and findings; revise or plan experiments only when the needed material is supplied.", "Stop when coherent, blocked, at a drawing/review boundary, or when user input is required."],
-    targetingBehavior: "Resolve the loop to one task before changing review, draft, or experience state.",
-    confirmationBehavior: "Run only limited visible iterations; default max is 3 unless configured otherwise.",
-    expectedOutcome: "Each loop iteration reports inspected findings or moves a real draft/experience artifact until the task is coherent or blocked.",
-    examples: ["/dove:review-loop Run up to three evidence-aware review and revision rounds", "/dove:review-loop Stop when the task is coherent or reaches an evidence blocker"]
+    dailyFlow: ["Use this for one independent Reviewer pass over the selected packet materials.", "The pass records concrete findings or a material-backed coherent verdict, but never edits Builder-owned draft or experience material.", "When revision is required, hand the requiredActions to a Builder and invoke review again only after that separate revision call."],
+    targetingBehavior: "Resolve the pass to one task and its packet-owned materials before reviewing.",
+    confirmationBehavior: "This command performs one visible Reviewer pass only; there is no implicit Reviewer-to-Builder-to-Reviewer cycle.",
+    expectedOutcome: "One packet-scoped review result plus an explicit Builder handoff when changes are required.",
+    examples: ["/dove:review-loop Run one independent evidence-aware review pass", "/dove:review-loop Review this packet and hand required revisions to Builder"]
   },
   "dove.rebuttal": {
     dailyFlow: ["Use this to organize reviewer issues, build response strategy, and draft evidence-backed rebuttal or revision text.", "Keep rebuttal work author-side and linked to claims, sections, experiments, or explicit gaps."],
@@ -455,7 +459,7 @@ const COMMAND_ADAPTER_CONSTRAINTS = {
     "After the goal is set, name the practical next Dove surface in ordinary language instead of exposing storage details."
   ],
   "dove.mission": [
-    "Propose the task first, then ask whether to materialize the contract, adjust it, or cancel.",
+    "Propose the task first, then ask whether to materialize that exact proposal, adjust it, or cancel; never rebuild a different contract from a bare confirmation.",
     "After approval, materialize the contract only and hand off to the recommended next workflow; mission itself does not execute source, note, draft, figure, experiment, review, code, or provider work.",
     "Report the created contract and recommended next routes without claiming completion or execution progress.",
     "If the contract is planning work, its done criteria must require explicit executable child mission contracts before any later execution flow can mark it completed."
@@ -560,6 +564,10 @@ export const COMMAND_SURFACES = COMMAND_SURFACES_BASE.map((surface) => {
 });
 
 export const COMMAND_SURFACE_BY_ID = Object.fromEntries(COMMAND_SURFACES.map((surface) => [surface.id, surface]));
+
+export const DIRECT_PROCESS_ADAPTER_COMMAND_IDS = COMMAND_SURFACES
+  .filter((surface) => surface.category === "mutation" && surface.id !== "dove.status" && surface.id !== "dove.lessons")
+  .map((surface) => surface.id);
 
 function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));

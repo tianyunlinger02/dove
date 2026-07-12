@@ -343,6 +343,7 @@ function normalizeCandidate(candidate, provider) {
     return null;
   }
   return {
+    lifecycle: "candidate",
     title,
     url,
     snippet: cleanSnippet(candidate.snippet),

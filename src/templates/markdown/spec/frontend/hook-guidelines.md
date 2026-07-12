@@ -24,7 +24,7 @@ Use small, named helper functions for repeated workflow mechanics:
 - `readJson(root, relativePath, fallback)` returns parsed JSON or a cloned fallback and repairs malformed JSON into a backup file.
 - `writeJson(root, relativePath, value)` writes pretty JSON with a trailing newline.
 - `reconcileManagedJsonArtifact(root, relativePath, fallback, normalize)` reads, normalizes, and writes managed JSON artifacts.
-- `withPolicy(...)` in `src/mcp/tool-definitions.mjs` composes policy override fields into role-bound tool schemas.
+- Board role metadata is updated through explicit valid phase transitions or handoffs, but ordinary mutations are governed by task, artifact, follow-through, review, and completion contracts rather than role strings; retired governance bypass inputs are rejected.
 
 When introducing a repeated operation, first search for an existing helper in `src/core/workspace.mjs`, `src/core/schema.mjs`, and the relevant `src/core/*.mjs` module.
 
@@ -46,7 +46,7 @@ Example command pattern: generated `dove.status` adapters read `.dove/context/ac
 
 ## Naming Conventions
 
-- Core functions use verb-first camelCase: `ensureWorkspace`, `queryWorkspaceIndex`, `runAutonomyForeground`, `materializeGuidancePacket`.
+- Core functions use verb-first camelCase: `ensureWorkspace`, `queryWorkspaceIndex`, `runDoveAuto`, `materializeGuidancePacket`.
 - Normalizers use `normalize<Name>`; default object factories use `create<Name>`.
 - Query MCP tools use `query_*` or `read_*`; mutating tools use action verbs like `upsert_*`, `append_*`, `run_*`, `materialize_*`.
 - Context manifests should be named after the role, phase, action, packet, or artifact they represent.

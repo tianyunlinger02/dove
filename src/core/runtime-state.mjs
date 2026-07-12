@@ -2,20 +2,19 @@ import crypto from "node:crypto";
 
 import {
   ARTIFACT_PATHS,
-  createProgramRunsIndex,
   createRuntimeContinuationIndex,
   createRuntimeControllerState,
   createRuntimeEventsIndex,
   createRuntimeLeasesIndex,
   createRuntimeResultsIndex,
   normalizeMetaOperatorFollowThroughIndex,
-  normalizeProgramRunsIndex,
   normalizeRuntimeContinuationIndex,
   normalizeRuntimeControllerState,
   normalizeRuntimeEventsIndex,
   normalizeRuntimeLeasesIndex,
   normalizeRuntimeResultsIndex
 } from "./schema.mjs";
+import { readProgramOperatingState } from "./program-operating-state.mjs";
 import { nowIso, readJson, writeJson } from "./workspace.mjs";
 
 const LEASE_TTL_MS = 10 * 60 * 1000;
@@ -288,18 +287,19 @@ function buildContinuationItems(root, entry) {
   }
   const packet = readJson(root, `${ARTIFACT_PATHS.taskPacketsPacketsDir}/${entry.packetId}.json`, null);
   const programRun = entry.programSnapshot?.programRunId
-    ? (normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex)).items ?? []).find((item) => item.id === entry.programSnapshot.programRunId) ?? null
+    ? (readProgramOperatingState(root).programRuns.items ?? []).find((item) => item.id === entry.programSnapshot.programRunId) ?? null
     : null;
   const commonReadPaths = [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.runtimeResults, ARTIFACT_PATHS.metaOperatorFollowThrough, packet?.packetPath].filter(Boolean);
 
   if (entry.outcome === "materialized-one-packet") {
     return [{
-      kind: "execute-materialized-packet",
-      command: "dove autonomy-once",
+      kind: "trusted-runtime-required",
+      command: null,
+      requiresTrustedRuntime: true,
       packetId: entry.packetId,
       programRunId: entry.programSnapshot?.programRunId ?? null,
       followThroughId: entry.followThroughId ?? null,
-      summary: `A packet was materialized and is ready for the next explicit autonomy pass.`,
+      summary: "A packet was materialized, but no public runtime execution entrypoint is available; execution requires a trusted approval boundary.",
       requiredReadPaths: commonReadPaths,
       readyAt: entry.recordedAt ?? nowIso()
     }];
@@ -320,13 +320,14 @@ function buildContinuationItems(root, entry) {
 
   if (entry.outcome === "executed-program-step" && (programRun?.authorityEnvelope?.remainingStepCount ?? 0) > 0) {
     return [{
-      kind: "continue-program-envelope",
-      command: "dove autonomy-foreground",
+      kind: "trusted-runtime-required",
+      command: null,
+      requiresTrustedRuntime: true,
       packetId: entry.packetId,
       programRunId: programRun.id,
       approvalId: entry.programSnapshot?.approvalId ?? null,
       followThroughId: entry.followThroughId ?? null,
-      summary: `Program-scoped authority envelope still has ${(programRun.authorityEnvelope?.remainingStepCount ?? 0)} bounded approved step(s) available for packet ${entry.packetId}.`,
+      summary: `Program-scoped authority remains, but continuation requires a trusted runtime boundary; no public execution command is available for packet ${entry.packetId}.`,
       requiredReadPaths: [...commonReadPaths, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals],
       readyAt: entry.recordedAt ?? nowIso()
     }];

@@ -1,12 +1,59 @@
 import process from "node:process";
 
-import { ensureWorkspace } from "../core/index.mjs";
 import { dispatchTool } from "./handlers.mjs";
-import { toolDefinitionsForSurface } from "./tool-definitions.mjs";
+import {
+  toolDefinitionsForSurface,
+  toolDiscoveryInputSchema
+} from "./tool-definitions.mjs";
+
+function invalidParams(message) {
+  const error = new Error(message);
+  error.code = -32602;
+  return error;
+}
+
+function normalizeToolDiscoveryParams(params) {
+  if (params === undefined) {
+    return {};
+  }
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    throw invalidParams("tools/list params must be a plain object.");
+  }
+  const allowed = new Set(
+    Object.keys(toolDiscoveryInputSchema.properties ?? {})
+  );
+  const unknown = Object.keys(params)
+    .filter((key) => !allowed.has(key));
+  if (unknown.length > 0) {
+    throw invalidParams(
+      `tools/list does not accept unknown input: ` +
+      `${unknown.map((key) => `$.${key}`).join(", ")}.`
+    );
+  }
+  const surface = params.surface;
+  if (
+    surface !== undefined
+    && !toolDiscoveryInputSchema.properties.surface.enum.includes(surface)
+  ) {
+    throw invalidParams(
+      `tools/list surface must be one of: ` +
+      `${toolDiscoveryInputSchema.properties.surface.enum.join(", ")}.`
+    );
+  }
+  const resultMode = params.resultMode;
+  if (
+    resultMode !== undefined
+    && !toolDiscoveryInputSchema.properties.resultMode.enum.includes(resultMode)
+  ) {
+    throw invalidParams(
+      `tools/list resultMode must be one of: ` +
+      `${toolDiscoveryInputSchema.properties.resultMode.enum.join(", ")}.`
+    );
+  }
+  return params;
+}
 
 export function startServer(root = process.cwd()) {
-  ensureWorkspace(root);
-
   let buffer = Buffer.alloc(0);
   let responseFraming = "content-length";
 
@@ -49,7 +96,10 @@ export function startServer(root = process.cwd()) {
     }
 
     if (method === "tools/list") {
-      sendResponse(id, { tools: toolDefinitionsForSurface(params?.surface ?? params?.detail ?? params?.view) });
+      const discoveryParams = normalizeToolDiscoveryParams(params);
+      sendResponse(id, {
+        tools: toolDefinitionsForSurface(discoveryParams.surface)
+      });
       return;
     }
 
@@ -70,9 +120,18 @@ export function startServer(root = process.cwd()) {
     } catch {
       return;
     }
-    handleMessage(message).catch(() => {
+    handleMessage(message).catch((error) => {
       if (message?.id !== undefined) {
-        sendError(message.id, -32603, "Internal error");
+        const code = Number.isInteger(error?.code)
+          ? error.code
+          : -32603;
+        sendError(
+          message.id,
+          code,
+          code === -32602 && error instanceof Error
+            ? error.message
+            : "Internal error"
+        );
       }
     });
   }

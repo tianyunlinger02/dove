@@ -29,8 +29,9 @@ import {
   upsertExperimentPlan,
   upsertNote,
   upsertOrchestrationBoard,
-  writeJson
+  verifySource
 } from "../../src/core/index.mjs";
+import { writeJson } from "../../src/core/workspace.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -78,6 +79,13 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
     title: "Task Packet Paper",
     authors: ["Ng"],
     year: 2026
+  });
+  verifySource(root, {
+    sourceId: source.id,
+    decision: "verified",
+    method: "test fixture inspected the canonical publication record",
+    checkedMaterial: "source title, authors, year, and publication metadata",
+    auditEvidence: [`fixture:${source.id}`]
   });
   const note = upsertNote(root, {
     title: "Packet note",
@@ -181,7 +189,10 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.equal(workspaceIndex.repairFrontier.governanceIssueCount, 1);
   assert.ok(workspaceIndex.repairFrontier.prioritizedItems.some((item) => item.frontierType === "workflow-governance"));
   assert.equal(workspaceIndex.contextSurfaces.currentActionContextPath, ".dove/context/actions/current.json");
-  assert.ok(workspaceIndex.contextSurfaces.prioritizedArtifactContextPaths.some((item) => item.endsWith("orchestration-board-json.json")));
+  const boardArtifactContextPath = workspaceIndex.contextSurfaces.prioritizedArtifactContextPaths.find(
+    (item) => /\/dove-orchestration-board-json-[a-f0-9]{16}\.json$/.test(item)
+  );
+  assert.ok(boardArtifactContextPath);
   assert.ok(workspaceIndex.behaviorDiscipline.requiredReadOrder.includes(".dove/context/actions/current.json"));
   assert.ok(phaseManifest.queueSummary.handoff.includes("task-packet-review-task"));
   assert.ok(phaseManifest.contextPaths.includes(".dove/context/packets/task-packet-review-task.json"));
@@ -191,11 +202,77 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(fs.existsSync(path.join(root, ".dove", "wiki", "navigation.md")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "task-packets", "packets", "task-packet-review-task.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "context", "packets", "task-packet-review-task.json")));
-  assert.ok(fs.existsSync(path.join(root, ".dove", "context", "artifacts", "dove-orchestration-board-json.json")));
+  assert.ok(fs.existsSync(path.join(root, boardArtifactContextPath)));
   assert.ok(fs.existsSync(path.join(root, ".dove", "context", "actions", "current.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "context", "roles", "reviewer.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "sessions", "journal.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "workflow-pack", "boundaries.json")));
+});
+
+test("artifact context filenames stay bounded and collision-resistant for long paths", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, {
+    title: "Bounded artifact context names",
+    objective: "Keep generated context filenames within filesystem limits.",
+    thesis: "Readable prefixes plus stable hashes preserve identity safely."
+  });
+
+  const sharedPrefix = `.dove/task-packets/packets/${"long-segment-".repeat(30)}`;
+  const firstPath = `${sharedPrefix}first.json`;
+  const secondPath = `${sharedPrefix}second.json`;
+  const packetId = seedTaskPacket(root, "bounded-context-packet");
+  const packetPath = path.join(
+    root,
+    ARTIFACT_PATHS.taskPacketsPacketsDir,
+    `${packetId}.json`
+  );
+  const packet = JSON.parse(fs.readFileSync(packetPath, "utf8"));
+  const packetIndex = JSON.parse(
+    fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex), "utf8")
+  );
+  const packetWithLongOutputs = {
+    ...packet,
+    outputPaths: [firstPath, secondPath]
+  };
+  fs.writeFileSync(packetPath, `${JSON.stringify(packetWithLongOutputs, null, 2)}\n`, "utf8");
+  fs.writeFileSync(
+    path.join(root, ARTIFACT_PATHS.taskPacketsIndex),
+    `${JSON.stringify({
+      ...packetIndex,
+      items: [packetWithLongOutputs]
+    }, null, 2)}\n`,
+    "utf8"
+  );
+
+  const firstManifest = readArtifactContextManifest(root, firstPath);
+  const secondManifest = readArtifactContextManifest(root, secondPath);
+  const actionBundle = readActionContextBundle(root, {
+    scopeType: "artifact",
+    artifactPath: firstPath
+  });
+  const contextFiles = fs.readdirSync(
+    path.join(root, ARTIFACT_PATHS.artifactContextsDir)
+  );
+
+  assert.equal(firstManifest.artifactPath, firstPath);
+  assert.equal(secondManifest.artifactPath, secondPath);
+  assert.equal(contextFiles.length >= 2, true);
+  assert.equal(new Set(contextFiles).size, contextFiles.length);
+  assert.equal(
+    contextFiles.every((file) => Buffer.byteLength(file, "utf8") <= 255),
+    true
+  );
+  assert.equal(
+    contextFiles.filter((file) => /-[a-f0-9]{16}\.json$/.test(file)).length >= 2,
+    true
+  );
+  assert.equal(actionBundle.artifactPath, firstPath);
+  assert.ok(
+    actionBundle.requiredReadPaths.some(
+      (item) => /\/dove-task-packets-packets-long-segment-.+-[a-f0-9]{16}\.json$/.test(item)
+    )
+  );
 });
 
 test("operator lessons persist durable retrospectives without importing raw Trellis traces", () => {

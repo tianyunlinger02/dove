@@ -9,6 +9,7 @@ import {
 import {
   buildRebuttalStrategy,
   loadBoard,
+  missingRebuttalIssuesResult,
   upsertOrchestrationBoard
 } from "./orchestration.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
@@ -34,6 +35,7 @@ import { queryWorkspaceIndex, refreshDurableSurfaces } from "./navigation.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { inspectDeclaredPath, isBookkeepingArtifactPath } from "./artifact-integrity.mjs";
 import { currentMutationContext } from "./mutation-backend.mjs";
+import { prepareSourceVerification, sourceIdentityFingerprint, sourceReferenceMap } from "./source-trust.mjs";
 
 function slugify(value) {
   return String(value)
@@ -60,6 +62,19 @@ function hasStructuredNoteSynthesis(args = {}) {
     || normalizeStringArray(args.quotes).length > 0
     || normalizeStringArray(args.claims).length > 0
     || normalizeStringArray(args.openQuestions).length > 0;
+}
+
+function assertNoRetiredArtifactControls(args = {}, actionLabel) {
+  const forbidden = Object.keys(args).filter(
+    (key) => key.startsWith("policyOverride")
+      || key === "skipBoardUpdate"
+      || key === "skipRefreshDurableSurfaces"
+      || key === "skipFollowThroughReady"
+      || key === "skipSyncPhase"
+  );
+  if (forbidden.length > 0) {
+    throw new Error(`${actionLabel} no longer accepts retired governance input: ${forbidden.join(", ")}.`);
+  }
 }
 
 const COMPLETION_LIKE_SECTION_STATUSES = new Set([
@@ -2226,9 +2241,39 @@ export function readState(root) {
   return { ...state, orchestrationBoard: loadBoard(root), workspaceIndex: queryWorkspaceIndex(root) };
 }
 
+const CALLER_MINTABLE_SOURCE_TRUST_FIELDS = new Set([
+  "verified",
+  "verification",
+  "verificationRecord",
+  "verificationMethod",
+  "checkedMaterial",
+  "auditEvidence",
+  "decision",
+  "role",
+  "actorRole",
+  "capability",
+  "token",
+  "envToken"
+]);
+
+function assertNoCallerMintedSourceTrust(input = {}, label = "register_source") {
+  const forbidden = Object.keys(input).filter((key) => CALLER_MINTABLE_SOURCE_TRUST_FIELDS.has(key));
+  if (forbidden.length > 0) {
+    throw new Error(`${label} does not accept caller-minted trust fields: ${forbidden.join(", ")}. Use verify_source after independently checking durable source material.`);
+  }
+  if (input.lifecycle !== undefined && input.lifecycle !== "candidate") {
+    throw new Error(`${label} can only register lifecycle candidate; use verify_source for verified or rejected decisions.`);
+  }
+}
+
 function sourceInputsFromArgs(args = {}) {
+  assertNoCallerMintedSourceTrust(args);
   if (Array.isArray(args.sources)) {
-    return args.sources.map((item) => item && typeof item === "object" && !Array.isArray(item) ? item : {});
+    return args.sources.map((item) => {
+      const input = item && typeof item === "object" && !Array.isArray(item) ? item : {};
+      assertNoCallerMintedSourceTrust(input);
+      return input;
+    });
   }
   return [args];
 }
@@ -2395,13 +2440,22 @@ function upsertSourceItem(sources, input = {}, context = {}) {
     authors: Array.isArray(input.authors) ? input.authors : existing?.authors ?? [],
     year: input.year ?? existing?.year ?? "",
     locator: input.locator ?? existing?.locator ?? "",
+    doi: input.doi ?? existing?.doi ?? "",
+    url: input.url ?? existing?.url ?? "",
+    arxivId: input.arxivId ?? existing?.arxivId ?? "",
+    pmid: input.pmid ?? existing?.pmid ?? "",
     sourceType: input.sourceType ?? context.sourceType ?? existing?.sourceType ?? "paper",
     abstract: input.abstract ?? existing?.abstract ?? "",
     origin: input.origin ?? context.origin ?? existing?.origin ?? "manual",
+    lifecycle: "candidate",
     packetIds,
     addedAt: existing?.addedAt ?? context.timestamp,
     updatedAt: context.timestamp
   };
+  source.fingerprint = sourceIdentityFingerprint(source);
+  if (existing?.fingerprint === source.fingerprint && ["verified", "rejected"].includes(existing.lifecycle)) {
+    source.lifecycle = existing.lifecycle;
+  }
   if (existingIndex >= 0) sources.items[existingIndex] = source;
   else sources.items.push(source);
   return source;
@@ -2524,12 +2578,41 @@ export function registerSource(root, args = {}) {
   };
 }
 
+export function verifySource(root, args = {}) {
+  assertGovernanceMutationRegistered("verify-source", "guarded");
+  const target = assertTaskScopedMutationTarget(root, "verify-source", args);
+  assertFollowThroughReady(root, "Verifying a source", args);
+  const allowed = new Set(["packetId", "taskPacketId", "missionPacketId", "taskId", "target", "packetTarget", "taskName", "sourceId", "decision", "method", "checkedMaterial", "auditEvidence", "mutationMode", "resultMode"]);
+  const unknown = Object.keys(args).filter((key) => !allowed.has(key));
+  if (unknown.length > 0) throw new Error(`verify_source does not accept unknown input: ${unknown.join(", ")}.`);
+  const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 2, items: [], updatedAt: null });
+  const source = sourceReferenceMap(sources.items ?? []).get(args.sourceId) ?? null;
+  const prepared = prepareSourceVerification(root, source, args);
+  const record = prepared.record;
+  writeJson(root, ARTIFACT_PATHS.sourceVerifications, prepared.index);
+  source.lifecycle = record.decision;
+  source.fingerprint = record.fingerprint;
+  source.updatedAt = record.checkedAt;
+  sources.version = 2;
+  sources.updatedAt = record.checkedAt;
+  writeJson(root, ARTIFACT_PATHS.sources, sources);
+  refreshDurableSurfaces(root, {
+    type: "verify-source",
+    summary: `${record.decision === "verified" ? "Verified" : "Rejected"} source ${source.id}.`,
+    artifactPaths: [ARTIFACT_PATHS.sources, ARTIFACT_PATHS.sourceVerifications]
+  });
+  return { source, verification: record, packetId: target.packet?.id ?? null };
+}
+
 export function upsertNote(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-note", "guarded");
+  assertNoRetiredArtifactControls(args, "upsert_note");
   const target = assertTaskScopedMutationTarget(root, "upsert-note", args);
-  if (!args.skipFollowThroughReady) {
-    assertFollowThroughReady(root, "Recording a structured note", args);
-  }
+  assertFollowThroughReady(root, "Recording a structured note", args);
+  return persistNote(root, args, target, { updatePhase: true });
+}
+
+function persistNote(root, args, target, { updatePhase }) {
   ensureWorkspace(root);
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
@@ -2568,7 +2651,7 @@ export function upsertNote(root, args = {}) {
 
   const agenda = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: loadState(root).dove.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
   writeText(root, ARTIFACT_PATHS.queryPack, renderQueryPack(notes, sources, agenda, queryWorkspaceIndex(root)));
-  if (!args.skipSyncPhase) {
+  if (updatePhase) {
     const state = loadState(root);
     syncPhase(root, state, {
       stage: "notes",
@@ -2934,7 +3017,10 @@ export function upsertFigurePlan(root, args = {}) {
   const target = assertTaskScopedMutationTarget(root, "upsert-figure-plan", args);
   assertFollowThroughReady(root, "Updating the figure plan", args);
   const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: null });
-  const normalizedItems = (Array.isArray(args.items) ? args.items : []).map(normalizeFigureItem);
+  const normalizedItems = (Array.isArray(args.items) ? args.items : []).map((item, index) => ({
+    ...normalizeFigureItem(item, index),
+    packetId: target.packetId
+  }));
   const timestamp = nowIso();
   const stagedArtifacts = normalizedItems.map((item) => buildFigureContractArtifacts(item, timestamp));
   figures.items = normalizedItems.map((item) => ({
@@ -3093,9 +3179,12 @@ export function syncCitations(root, args = {}) {
 
 export function refreshWiki(root, args = {}) {
   assertGovernanceMutationRegistered("refresh-wiki", "guarded");
-  if (!args.skipFollowThroughReady) {
-    assertFollowThroughReady(root, "Refreshing the wiki", {});
-  }
+  assertNoRetiredArtifactControls(args, "refresh_wiki");
+  assertFollowThroughReady(root, "Refreshing the wiki", args);
+  return persistWikiRefresh(root, args);
+}
+
+function persistWikiRefresh(root, args) {
   ensureWorkspace(root);
   const state = loadState(root);
   const board = loadBoard(root);
@@ -3153,6 +3242,10 @@ export function buildRebuttal(root, args = {}) {
   assertGovernanceMutationRegistered("build-rebuttal", "guarded");
   const target = assertTaskScopedMutationTarget(root, "build-rebuttal", args);
   assertFollowThroughReady(root, "Building the rebuttal draft", args);
+  const issues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
+  if (!Array.isArray(issues.items) || issues.items.length === 0) {
+    return missingRebuttalIssuesResult(root, args, "build_rebuttal");
+  }
   ensureWorkspace(root);
   const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 2, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
   const claims = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });

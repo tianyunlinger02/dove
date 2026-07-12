@@ -27,7 +27,7 @@ Collect and organize external material such as web pages, papers, venue template
 1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check or action below; do not construct default answers by manually reading or listing internal files.
 2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
 3. If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
-4. This request has one listed project action: `node ./bin/dove.mjs source . --target "<task title>" --title "<source title>" --locator "<url or doi>"` from the project root; Run it only when the needed material is present; then summarize the real artifact state or material boundary instead of inspecting internal files directly.
+4. This request has one listed project action: `node ./bin/dove-package.mjs source . --target "<task title>" --title "<source title>" --locator "<url or doi>" --mutation-mode direct-process` from the project root; Run it only when the needed material is present; then summarize the real artifact state or material boundary instead of inspecting internal files directly.
 5. Use this only after the source material is verified; if retrieval or verification fails, say no source was added and name the missing material.
 6. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 7. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.

@@ -2,47 +2,45 @@
 
 ## Delivery model
 
-Dove is packaged as a host-neutral mission workflow system with optional host adapters. The public package identity, binary, and MCP server identity are all `dove`.
+Dove is published as a host-neutral npm package with optional generated host adapters. The public package identity, CLI binary, and MCP server identity are all `dove`.
 
-The packaged surface is:
+The npm package uses build-time standalone ESM bundles for Node.js 22:
 
-- neutral CLI/MCP/core files: `bin/`, current public `docs/`, `mcp/`, `scripts/`, `src/`, and `README.md`
-- the `dove` binary at `bin/dove.mjs`
-- the stdio MCP wrapper at `mcp/dove-state-server.mjs`
-- default OpenCode adapter files: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, and `.opencode.json`
-- optional Dove-only project adapter files for Codex, Cursor, and shared agent-skill hosts, generated from `src/core/command-manifest.mjs`; Claude Code uses a manifest-rendered user-level `/dove:*` command set written by `dove install/sync --host claude` instead of packaged project `.claude/commands/dove` files
+- `dist/index.mjs` — the package-root JavaScript API
+- `bin/dove-package.mjs` — the `dove` CLI
+- `mcp/dove-state-server-package.mjs` — the stdio MCP executable
+- `scripts/doctor-mcp-probe-package.mjs` — the installed doctor probe
+- current public docs, `README.md`, `AGENTS.md`, `.opencode.json`, and Dove-only generated adapters
 
-The project-local `.dove/` directory is created or repaired at install time. It is not shipped as a package snapshot. OpenCode is the default adapter, and the canonical command manifest generates the flat Dove adapter set for every supported project-local host.
+The raw `src/` tree, raw source entrypoints, development scripts, tests, source maps, and chunks are not published. The package `exports` map limits legal package specifiers, but exports maps are not filesystem isolation. Omitting raw source from the tarball prevents an installed consumer from resolving sibling internal modules with URLs derived from `import.meta.resolve("dove")`.
+
+## Source-checkout build contract
+
+The following build and release commands are maintainer-only and must be run from a Dove source checkout. Installed projects receive the generated bundles and do not contain the raw build scripts or tests.
+
+```bash
+npm run build
+npm run build:check
+```
+
+`build` uses the esbuild JavaScript API to produce four no-splitting, no-sourcemap Node 22 ESM bundles. Project-relative imports are inlined; only `node:*` imports may remain external. CLI and MCP bundles retain their Node shebangs.
+
+`build:check` builds into a temporary directory, validates the exact output set, rejects maps/chunks and non-`node:*` externals, checks shebangs, and byte-compares the temporary output with the checked-in generated bundles without rewriting them. `prepack` runs this check only, so `npm pack` never regenerates tracked output.
 
 ## Managed vs user-owned boundary
 
-The packaged code surface is managed:
+The installer copies the four bundled runtime artifacts, necessary public docs, and selected host adapters. It does not require or copy shipped raw source. The standard installed MCP path is `mcp/dove-state-server-package.mjs`.
 
-- neutral core: `bin/`, current public `docs/`, `mcp/`, `scripts/`, `src/`, `README.md`
-- host adapters: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.opencode.json`, `.codex/skills/dove-*`, `.cursor/commands/dove-*.md`, `.agents/skills/dove-*`, `AGENTS.md`
+The project-local `.dove/` workspace remains user-owned state. The installer may create missing starter artifacts and `.dove/manifest.json`, but package updates do not overwrite evolving sources, notes, drafts, experiments, reviews, rebuttal issues, task packets, runtime state, role manifests, or snapshots.
 
-The project-local `.dove/` workspace is user-owned state. The installer may create missing starter artifacts and `.dove/manifest.json`, but pack updates should not overwrite evolving sources, notes, drafts, experiments, review logs, rebuttal issues, task packets, runtime state, program approvals, role manifests, or snapshots.
-
-## Runtime claims
-
-Dove is intentionally file-first and portable. Host adapters can expose richer ergonomics, but they do not change the source of truth: CLI, MCP, commands, and skills converge on `.dove/` artifacts.
-
-Dove should not claim hidden runtime powers that only a host-specific harness could provide. Autonomy surfaces are explicit and foreground-bound. Mission launch materializes accepted guidance into `.dove/task-packets`; it does not execute the mission or silently run a background worker.
-
-## Generated adapter and release checks
+## Generated adapters and release checks
 
 ```bash
 npm run commands:generate
 npm run commands:check
+npm run check
 npm run release:check
+npm pack --dry-run --json
 ```
 
-`commands:generate` rewrites checked-in host adapters from the canonical manifest. `commands:check` fails on adapter drift. `workflow-goals:validate` runs executable product-goal pressure scenarios, including no-fake-progress operator semantics. `release:check` is the full package gate: generated adapter drift, command validation, MCP validation, workflow-goal validation, governance audit, maturity audit, clean-install doctor validation, tests, and package dry-run.
-
-## Dry-run packaging
-
-```bash
-npm pack --dry-run
-```
-
-This should include the neutral core, current public docs, Dove-only adapter surfaces, the MCP entrypoint, and the CLI installer. It should not include `.dove/` runtime snapshots, local development scaffolding, historical design notes, local reference repos, `node_modules`, `.env*`, `*.local.json`, or host-local settings.
+Generated adapters route installed projects to `bin/dove-package.mjs`, and generated MCP configuration routes to `mcp/dove-state-server-package.mjs`. `check` and `release:check` include bundle drift validation.

@@ -1,0 +1,111 @@
+#!/usr/bin/env node
+
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+import { build } from "esbuild";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PACKAGE_ROOT = path.resolve(__dirname, "..");
+const CHECK_MODE = process.argv.includes("--check");
+const EXPECTED_OUTPUTS = [
+  { entry: "src/core/index.mjs", output: "dist/index.mjs", shebang: false },
+  { entry: "bin/dove.mjs", output: "bin/dove-package.mjs", shebang: true },
+  { entry: "mcp/dove-state-server.mjs", output: "mcp/dove-state-server-package.mjs", shebang: true },
+  { entry: "scripts/doctor-mcp-probe.mjs", output: "scripts/doctor-mcp-probe-package.mjs", shebang: false }
+];
+
+function projectRelative(filePath) {
+  return path.relative(PACKAGE_ROOT, filePath).split(path.sep).join("/");
+}
+
+function assertExternalImports(metafile, label) {
+  const external = new Set();
+  for (const input of Object.values(metafile.inputs)) {
+    for (const item of input.imports) {
+      if (item.external) {
+        external.add(item.path);
+      }
+    }
+  }
+  for (const specifier of external) {
+    assert.match(specifier, /^node:/u, `${label} has non-node external import ${specifier}`);
+  }
+}
+
+function assertOutputSet(outputFiles, outputRoot) {
+  const actual = outputFiles.map((file) => path.relative(outputRoot, file.path).split(path.sep).join("/")).sort();
+  const expected = EXPECTED_OUTPUTS.map((item) => item.output).sort();
+  assert.deepEqual(actual, expected, "package build produced unexpected files");
+  for (const relativePath of actual) {
+    assert.doesNotMatch(relativePath, /(?:\.map$|\/[^/]*chunk[^/]*\.[cm]?js$)/iu, `unexpected map or chunk ${relativePath}`);
+  }
+}
+
+async function buildAll(outputRoot, write) {
+  const outputFiles = [];
+  for (const item of EXPECTED_OUTPUTS) {
+    const outfile = path.join(outputRoot, item.output);
+    const result = await build({
+      absWorkingDir: PACKAGE_ROOT,
+      entryPoints: [item.entry],
+      outfile,
+      bundle: true,
+      splitting: false,
+      sourcemap: false,
+      platform: "node",
+      target: "node22",
+      format: "esm",
+      packages: "bundle",
+      external: ["node:*"],
+      metafile: true,
+      write,
+      logLevel: "silent"
+    });
+    assertExternalImports(result.metafile, item.output);
+    if (write) {
+      outputFiles.push({ path: outfile, contents: fs.readFileSync(outfile) });
+    } else {
+      assert.equal(result.outputFiles.length, 1, `${item.output} must be one standalone file`);
+      outputFiles.push(...result.outputFiles);
+    }
+  }
+  assertOutputSet(outputFiles, outputRoot);
+  for (const item of EXPECTED_OUTPUTS.filter((entry) => entry.shebang)) {
+    const output = outputFiles.find((file) => projectRelative(file.path).endsWith(item.output) || path.relative(outputRoot, file.path).split(path.sep).join("/") === item.output);
+    assert.ok(output, `missing ${item.output}`);
+    assert.match(Buffer.from(output.contents).toString("utf8"), /^#!\/usr\/bin\/env node\n/u, `${item.output} must keep its shebang`);
+  }
+  return outputFiles;
+}
+
+async function checkBuild() {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dove-package-build-"));
+  try {
+    const outputFiles = await buildAll(tempRoot, false);
+    for (const item of EXPECTED_OUTPUTS) {
+      const trackedPath = path.join(PACKAGE_ROOT, item.output);
+      assert.ok(fs.existsSync(trackedPath), `${item.output} is missing; run npm run build`);
+      const generated = outputFiles.find((file) => path.relative(tempRoot, file.path).split(path.sep).join("/") === item.output);
+      assert.ok(generated, `temporary build missing ${item.output}`);
+      assert.deepEqual(fs.readFileSync(trackedPath), Buffer.from(generated.contents), `${item.output} has build drift; run npm run build`);
+    }
+    console.error("Package bundles are up to date.");
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+}
+
+if (CHECK_MODE) {
+  await checkBuild();
+} else {
+  await buildAll(PACKAGE_ROOT, true);
+  for (const item of EXPECTED_OUTPUTS.filter((entry) => entry.shebang)) {
+    fs.chmodSync(path.join(PACKAGE_ROOT, item.output), 0o755);
+  }
+  console.log(JSON.stringify({ written: EXPECTED_OUTPUTS.map((item) => item.output) }, null, 2));
+}

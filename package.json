@@ -4,7 +4,10 @@
   "description": "Local-first Dove mission workflow pack for papers, engineering work, research, review, and governed autonomy.",
   "type": "module",
   "bin": {
-    "dove": "./bin/dove.mjs"
+    "dove": "bin/dove-package.mjs"
+  },
+  "exports": {
+    ".": "./dist/index.mjs"
   },
   "files": [
     ".agents/skills/dove-*/SKILL.md",
@@ -14,15 +17,15 @@
     ".opencode/skills/dove-*/SKILL.md",
     ".opencode.json",
     "AGENTS.md",
-    "bin",
+    "dist/index.mjs",
+    "bin/dove-package.mjs",
+    "mcp/dove-state-server-package.mjs",
+    "scripts/doctor-mcp-probe-package.mjs",
     "docs/README.md",
     "docs/INSTALL.md",
     "docs/USAGE.md",
     "docs/PACKAGING.md",
     "docs/CAPABILITY_MATRIX.md",
-    "mcp",
-    "scripts",
-    "src",
     "README.md"
   ],
   "scripts": {
@@ -33,18 +36,40 @@
     "mcp:serve": "node ./mcp/dove-state-server.mjs",
     "serve:global-status": "node ./bin/dove.mjs serve-global-status --refresh --cloudflare --configure-cloudflare",
     "mcp:validate": "node ./scripts/validate-mcp.mjs",
-    "commands:generate": "node ./scripts/generate-command-adapters.mjs",
-    "commands:check": "node ./scripts/generate-command-adapters.mjs --check",
+    "commands:generate": "node ./scripts/generate-command-adapters-cli.mjs",
+    "commands:check": "node ./scripts/generate-command-adapters-cli.mjs --check",
     "commands:validate": "node ./scripts/validate-commands.mjs",
     "workflow-goals:validate": "node ./scripts/validate-workflow-goals.mjs",
     "governance:audit": "node ./scripts/audit-governance-coverage.mjs",
     "maturity:audit": "node ./scripts/validate-maturity.mjs",
     "test": "node --test ./tests/**/*.test.mjs",
-    "check": "npm run commands:check && npm run commands:validate && npm run mcp:validate && npm run workflow-goals:validate && npm run governance:audit && npm test",
-    "release:check": "npm run commands:check && npm run maturity:audit && npm run pack:dry-run",
-    "pack:dry-run": "npm pack --dry-run"
+    "check": "npm run build:check && npm run commands:check && npm run commands:validate && npm run mcp:validate && npm run workflow-goals:validate && npm run governance:audit && npm test",
+    "release:check": "npm run build:check && npm run commands:check && npm run maturity:audit && npm run pack:dry-run",
+    "pack:dry-run": "npm pack --dry-run",
+    "build": "node ./scripts/build-package.mjs",
+    "build:check": "node ./scripts/build-package.mjs --check",
+    "prepack": "npm run build:check"
   },
   "engines": {
     "node": ">=22"
+  },
+  "main": "dist/index.mjs",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tianyunlinger02/dove.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "SEE LICENSE IN LICENSE",
+  "bugs": {
+    "url": "https://github.com/tianyunlinger02/dove/issues"
+  },
+  "homepage": "https://github.com/tianyunlinger02/dove#readme",
+  "devDependencies": {
+    "esbuild": "^0.28.1"
   }
 }

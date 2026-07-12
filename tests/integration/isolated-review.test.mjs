@@ -4,7 +4,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-import { ensureWorkspace, initProject, upsertDraft, upsertOrchestrationBoard } from "../../src/core/index.mjs";
+import {
+  ARTIFACT_PATHS,
+  ensureWorkspace,
+  importAudioReview,
+  importIsolatedReview,
+  initProject,
+  loadBoard,
+  prepareAudioReview,
+  prepareIsolatedReview,
+  runAudioReview,
+  upsertDraft,
+  upsertOrchestrationBoard
+} from "../../src/core/index.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
@@ -46,6 +58,74 @@ function writeFakeReviewer(dir) {
   return scriptPath;
 }
 
+function seedReviewedArtifact(root, relativePath = ".dove/drafts/audio-review.md", packetId = null) {
+  const fullPath = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, "# Audio review material\n\nSubstantive material for governed audio review.\n", "utf8");
+  if (packetId) {
+    const packetPath = path.join(root, `.dove/task-packets/packets/${packetId}.json`);
+    const packet = JSON.parse(fs.readFileSync(packetPath, "utf8"));
+    const updated = { ...packet, outputPaths: Array.from(new Set([...(packet.outputPaths ?? []), relativePath])), artifactRefs: Array.from(new Set([...(packet.artifactRefs ?? []), relativePath])) };
+    fs.writeFileSync(packetPath, `${JSON.stringify(updated, null, 2)}\n`, "utf8");
+    const indexPath = path.join(root, ARTIFACT_PATHS.taskPacketsIndex);
+    const index = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+    index.items = index.items.map((item) => item.id === packetId ? updated : item);
+    fs.writeFileSync(indexPath, `${JSON.stringify(index, null, 2)}\n`, "utf8");
+  }
+  return relativePath;
+}
+
+function seedBlockingFollowThrough(root, packetId, id = "review-governance-blocker") {
+  const timestamp = new Date().toISOString();
+  fs.mkdirSync(path.join(root, path.dirname(ARTIFACT_PATHS.metaOperatorFollowThrough)), { recursive: true });
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThrough), `${JSON.stringify({
+    version: 1,
+    proposalOnly: true,
+    explicitOnly: true,
+    items: [{
+      id,
+      sourceType: "remediation-pack",
+      sourceId: `${id}-source`,
+      sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
+      sourceFingerprint: `${id}-fingerprint`,
+      sourceTitle: "Review governance blocker",
+      sourceSummary: "An accepted execution item must block review mutation.",
+      status: "accepted-for-execution",
+      actorRole: "planner",
+      linkedTargetArtifact: `.dove/task-packets/packets/${packetId}.json`,
+      linkedTargetId: packetId,
+      executeBy: "2099-01-01T00:00:00.000Z",
+      reviewAfter: "2099-01-01T12:00:00.000Z",
+      recordedAt: timestamp,
+      updatedAt: timestamp
+    }],
+    updatedAt: timestamp
+  }, null, 2)}\n`, "utf8");
+}
+
+function writeAudioReturn(root, prepared, {
+  verdict = "needs-revision",
+  summary = "Audio review requires revision.",
+  actionItems = ["Revise the reviewed material."],
+  findings = [{ id: "audio-revision", severity: "high", summary: "Revise the reviewed material." }]
+} = {}) {
+  fs.writeFileSync(path.join(root, prepared.reportPath), "# Audio report\n\nThe supplied material needs revision.\n", "utf8");
+  fs.writeFileSync(path.join(root, prepared.handoffPath), `${JSON.stringify({
+    version: 1,
+    runId: prepared.runId,
+    status: "completed",
+    verdict,
+    reviewerId: "audio-reviewer",
+    summary,
+    inputPath: prepared.inputPath,
+    inputSha256: prepared.inputSha256,
+    reportPath: prepared.reportPath,
+    reviewedArtifactPaths: prepared.reviewedArtifactPaths,
+    findings,
+    actionItems
+  }, null, 2)}\n`, "utf8");
+}
+
 test("isolated-review CLI imports only handoff and report from external reviewer", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -56,19 +136,17 @@ test("isolated-review CLI imports only handoff and report from external reviewer
     thesis: "Reviewer isolation improves critique quality.",
     audience: "reviewers"
   });
-  seedTaskPacket(root);
+  const packetId = seedTaskPacket(root);
   upsertOrchestrationBoard(root, {
-    phase: "draft",
-    assignedRole: "planner",
-    actorRole: "planner",
-    policyOverrideReason: "Prepare isolated review test board state."
+    phase: "outline",
+    assignedRole: "planner"
   });
   upsertDraft(root, {
+    packetId: "isolated-review-packet",
     sectionId: "method",
-    body: "# Method\n\nWe claim the isolated reviewer improves rigor. TODO[citation]\n",
-    actorRole: "planner",
-    policyOverrideReason: "Seed draft fixture for isolated review test."
+    body: "# Method\n\nWe claim the isolated reviewer improves rigor. TODO[citation]\n"
   });
+  seedReviewedArtifact(root, ".dove/drafts/method.md", packetId);
 
   const reviewerScript = writeFakeReviewer(root);
   const result = spawnSync("node", [
@@ -114,13 +192,23 @@ test("isolated-review CLI imports only handoff and report from external reviewer
   assert.ok(concerns.items.some((item) => item.id === "isolated-test-review-1-method-needs-source"));
 
   const handoffs = fs.readFileSync(path.join(root, ".dove", "orchestration", "handoffs.md"), "utf8");
+  assert.match(handoffs, /researcher -> reviewer/);
+  assert.match(handoffs, /reviewer -> builder/);
   assert.match(handoffs, /Isolated reviewer fake-isolated-reviewer returned needs-revision/);
+  assert.doesNotMatch(handoffs, /reviewer -> reviewer/);
+  assert.doesNotMatch(handoffs, /Policy override:/);
+
+  const board = loadBoard(root);
+  assert.equal(board.currentPhase, "rebuttal");
+  assert.equal(board.assignedRole, "builder");
+  assert.equal(board.nextAction, "Add direct source support for the method claim.");
 });
 
 test("isolated-review prepare supports flag-first optional target parsing", () => {
   const root = tempRoot();
   ensureWorkspace(root);
-  seedTaskPacket(root);
+  const packetId = seedTaskPacket(root);
+  seedReviewedArtifact(root, ".dove/drafts/flag-first.md", packetId);
 
   const prepare = spawnSync("node", [CLI, "isolated-review-prepare", "--run-id", "flag-first-review"], {
     cwd: root,
@@ -136,7 +224,8 @@ test("isolated-review prepare supports flag-first optional target parsing", () =
 test("isolated-review-import rejects mismatched input hashes", () => {
   const root = tempRoot();
   ensureWorkspace(root);
-  seedTaskPacket(root);
+  const packetId = seedTaskPacket(root);
+  seedReviewedArtifact(root, ".dove/drafts/bad-hash.md", packetId);
   const prepare = spawnSync("node", [CLI, "isolated-review-prepare", root, "--run-id", "bad-hash-review"], {
     cwd: ROOT,
     encoding: "utf8"
@@ -161,6 +250,261 @@ test("isolated-review-import rejects mismatched input hashes", () => {
     cwd: ROOT,
     encoding: "utf8"
   });
-  assert.notEqual(imported.status, 0);
-  assert.match(imported.stderr || imported.stdout, /input hash mismatch/);
+  assert.equal(imported.status, 0, imported.stderr || imported.stdout);
+  const payload = JSON.parse(imported.stdout);
+  assert.equal(payload.status, "verification-failed");
+  assert.ok(payload.boundary.failures.includes("input-hash-mismatch"));
+});
+
+function captureReviewSideEffects(root, manifestPath) {
+  const paths = [ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewConcerns, ARTIFACT_PATHS.orchestrationBoard, ARTIFACT_PATHS.orchestrationHandoffs];
+  return {
+    manifest: fs.readFileSync(manifestPath, "utf8"),
+    files: Object.fromEntries(paths.map((relativePath) => {
+      const fullPath = path.join(root, relativePath);
+      return [relativePath, fs.existsSync(fullPath) ? fs.readFileSync(fullPath, "utf8") : null];
+    }))
+  };
+}
+
+function assertReviewSideEffectsUnchanged(root, manifestPath, before) {
+  assert.equal(fs.readFileSync(manifestPath, "utf8"), before.manifest);
+  for (const [relativePath, contents] of Object.entries(before.files)) {
+    const fullPath = path.join(root, relativePath);
+    assert.equal(fs.existsSync(fullPath) ? fs.readFileSync(fullPath, "utf8") : null, contents, relativePath);
+  }
+}
+
+test("isolated review rejects stale reviewed artifacts and tampered input with zero import side effects", () => {
+  for (const mutation of ["content-size", "same-size", "deleted", "empty", "directory", "input-tamper", "extra-handoff", "missing-handoff"]) {
+    const root = tempRoot(`dove-isolated-snapshot-${mutation}-`);
+    ensureWorkspace(root);
+    const packetId = seedTaskPacket(root, `isolated-${mutation}-packet`);
+    const artifactPath = seedReviewedArtifact(root, `.dove/drafts/isolated-${mutation}.md`, packetId);
+    const prepared = prepareIsolatedReview(root, { packetId, runId: `isolated-${mutation}`, reviewedArtifactPaths: [artifactPath] });
+    fs.writeFileSync(path.join(root, prepared.reportPath), "# Isolated report\n\nReviewed prepared content.\n", "utf8");
+    const handoff = {
+      runId: prepared.runId, status: "completed", verdict: "coherent", reviewerId: "isolated-reviewer",
+      summary: "Prepared artifacts are coherent.", inputPath: prepared.inputPath, inputSha256: prepared.inputSha256,
+      reportPath: prepared.reportPath, reviewedArtifactPaths: [...prepared.reviewedArtifactPaths], findings: [], actionItems: []
+    };
+    const fullArtifactPath = path.join(root, artifactPath);
+    if (mutation === "content-size") fs.appendFileSync(fullArtifactPath, "changed\n");
+    if (mutation === "same-size") {
+      const original = fs.readFileSync(fullArtifactPath, "utf8");
+      fs.writeFileSync(fullArtifactPath, `${original.slice(0, -1)}!`, "utf8");
+    }
+    if (mutation === "deleted") fs.rmSync(fullArtifactPath);
+    if (mutation === "empty") fs.writeFileSync(fullArtifactPath, "", "utf8");
+    if (mutation === "directory") { fs.rmSync(fullArtifactPath); fs.mkdirSync(fullArtifactPath); }
+    if (mutation === "input-tamper") fs.appendFileSync(path.join(root, prepared.inputPath), " ");
+    if (mutation === "extra-handoff") handoff.reviewedArtifactPaths.push(seedReviewedArtifact(root, ".dove/drafts/extra.md", packetId));
+    if (mutation === "missing-handoff") handoff.reviewedArtifactPaths = [];
+    fs.writeFileSync(path.join(root, prepared.handoffPath), `${JSON.stringify(handoff, null, 2)}\n`, "utf8");
+    const manifestPath = path.join(root, ARTIFACT_PATHS.isolatedReviewsDir, prepared.runId, "manifest.json");
+    const before = captureReviewSideEffects(root, manifestPath);
+    const result = importIsolatedReview(root, { packetId, runId: prepared.runId });
+    assert.equal(result.status, "verification-failed", mutation);
+    assert.equal(result.boundaryType, "verification-failed", mutation);
+    assertReviewSideEffectsUnchanged(root, manifestPath, before);
+  }
+});
+
+test("isolated review imports unchanged snapshot successfully", () => {
+  const root = tempRoot("dove-isolated-snapshot-success-");
+  ensureWorkspace(root);
+  const packetId = seedTaskPacket(root, "isolated-snapshot-success-packet");
+  const artifactPath = seedReviewedArtifact(root, ".dove/drafts/isolated-success.md", packetId);
+  const prepared = prepareIsolatedReview(root, { packetId, runId: "isolated-snapshot-success", reviewedArtifactPaths: [artifactPath] });
+  fs.writeFileSync(path.join(root, prepared.reportPath), "# Isolated report\n\nUnchanged content is coherent.\n", "utf8");
+  fs.writeFileSync(path.join(root, prepared.handoffPath), `${JSON.stringify({
+    runId: prepared.runId, status: "completed", verdict: "coherent", reviewerId: "isolated-reviewer",
+    summary: "Unchanged snapshot reviewed.", inputPath: prepared.inputPath, inputSha256: prepared.inputSha256,
+    reportPath: prepared.reportPath, reviewedArtifactPaths: prepared.reviewedArtifactPaths, findings: [], actionItems: []
+  }, null, 2)}\n`, "utf8");
+  const imported = importIsolatedReview(root, { packetId, runId: prepared.runId });
+  assert.equal(imported.status, "imported");
+  assert.throws(
+    () => importIsolatedReview(root, { packetId, runId: prepared.runId }),
+    /not importable from manifest status imported/
+  );
+});
+
+test("audio review rejects changed artifacts and tampered handoff sets with zero side effects", () => {
+  for (const mutation of ["same-size", "deleted", "input-tamper", "extra-handoff", "missing-handoff"]) {
+    const root = tempRoot(`dove-audio-snapshot-${mutation}-`);
+    ensureWorkspace(root);
+    const packetId = seedTaskPacket(root, `audio-${mutation}-packet`);
+    const artifactPath = seedReviewedArtifact(root, `.dove/drafts/audio-${mutation}.md`, packetId);
+    const prepared = prepareAudioReview(root, { packetId, runId: `audio-${mutation}`, artifactPaths: [artifactPath] });
+    writeAudioReturn(root, prepared, { verdict: "coherent", findings: [], actionItems: [] });
+    const handoffPath = path.join(root, prepared.handoffPath);
+    const handoff = JSON.parse(fs.readFileSync(handoffPath, "utf8"));
+    if (mutation === "same-size") {
+      const fullPath = path.join(root, artifactPath);
+      const original = fs.readFileSync(fullPath, "utf8");
+      fs.writeFileSync(fullPath, `${original.slice(0, -1)}!`, "utf8");
+    }
+    if (mutation === "deleted") fs.rmSync(path.join(root, artifactPath));
+    if (mutation === "input-tamper") fs.appendFileSync(path.join(root, prepared.inputPath), " ");
+    if (mutation === "extra-handoff") handoff.reviewedArtifactPaths.push(seedReviewedArtifact(root, ".dove/drafts/audio-extra.md", packetId));
+    if (mutation === "missing-handoff") handoff.reviewedArtifactPaths = [];
+    fs.writeFileSync(handoffPath, `${JSON.stringify(handoff, null, 2)}\n`, "utf8");
+    const manifestPath = path.join(root, ARTIFACT_PATHS.audioReviewsDir, prepared.runId, "manifest.json");
+    const before = captureReviewSideEffects(root, manifestPath);
+    const result = importAudioReview(root, { packetId, runId: prepared.runId });
+    assert.equal(result.status, "verification-failed", mutation);
+    assertReviewSideEffectsUnchanged(root, manifestPath, before);
+  }
+});
+
+test("audio review import is single-use and packet-bound", () => {
+  const root = tempRoot("dove-audio-review-single-use-");
+  ensureWorkspace(root);
+  const packetId = seedTaskPacket(root, "audio-single-use-packet");
+  const firstPacket = JSON.parse(fs.readFileSync(path.join(root, `.dove/task-packets/packets/${packetId}.json`), "utf8"));
+  const otherPacketId = seedTaskPacket(root, "audio-other-packet");
+  const indexPath = path.join(root, ARTIFACT_PATHS.taskPacketsIndex);
+  const packetIndex = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+  packetIndex.items = [firstPacket, ...packetIndex.items];
+  fs.writeFileSync(indexPath, `${JSON.stringify(packetIndex, null, 2)}\n`, "utf8");
+  const artifactPath = seedReviewedArtifact(root, ".dove/drafts/audio-single-use.md", packetId);
+  const prepared = prepareAudioReview(root, { packetId, runId: "audio-single-use", artifactPaths: [artifactPath] });
+  writeAudioReturn(root, prepared, { verdict: "coherent", findings: [], actionItems: [] });
+
+  assert.throws(
+    () => importAudioReview(root, { packetId: otherPacketId, runId: prepared.runId }),
+    /belongs to packet audio-single-use-packet, not audio-other-packet/
+  );
+  const imported = importAudioReview(root, { packetId, runId: prepared.runId });
+  assert.equal(imported.status, "imported");
+  assert.throws(
+    () => importAudioReview(root, { packetId, runId: prepared.runId }),
+    /not importable from manifest status imported/
+  );
+});
+
+test("audio review prepare and import record reviewer routing metadata and return handoff", () => {
+  const root = tempRoot("dove-audio-review-governance-");
+  ensureWorkspace(root);
+  const packetId = seedTaskPacket(root, "audio-review-packet");
+  upsertOrchestrationBoard(root, {
+    phase: "plan",
+    assignedRole: "planner",
+    actorRole: "planner"
+  });
+  const reviewedArtifact = seedReviewedArtifact(root, ".dove/drafts/audio-review.md", packetId);
+
+  const prepared = prepareAudioReview(root, {
+    packetId,
+    runId: "audio-governance",
+    scope: "audio governance regression",
+    artifactPaths: [reviewedArtifact]
+  });
+  const reviewBoard = loadBoard(root);
+  assert.equal(reviewBoard.currentPhase, "review");
+  assert.equal(reviewBoard.assignedRole, "reviewer");
+  writeAudioReturn(root, prepared, {
+    actionItems: ["Add direct validation evidence."]
+  });
+
+  const imported = importAudioReview(root, {
+    packetId,
+    runId: prepared.runId
+  });
+  assert.equal(imported.verdict, "needs-revision");
+  const returnBoard = loadBoard(root);
+  assert.equal(returnBoard.currentPhase, "rebuttal");
+  assert.equal(returnBoard.assignedRole, "builder");
+  assert.equal(returnBoard.nextAction, "Add direct validation evidence.");
+
+  const handoffs = fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationHandoffs), "utf8");
+  assert.match(handoffs, /planner -> reviewer/);
+  assert.match(handoffs, /reviewer -> builder/);
+  assert.match(handoffs, /Audio reviewer audio-reviewer returned needs-revision/);
+  assert.doesNotMatch(handoffs, /reviewer -> reviewer/);
+  assert.doesNotMatch(handoffs, /Policy override:/);
+});
+
+test("audio review prepare and run block before review artifact writes when follow-through is unresolved", () => {
+  for (const [surface, invoke] of [
+    ["prepare", prepareAudioReview],
+    ["run", runAudioReview]
+  ]) {
+    const root = tempRoot(`dove-audio-${surface}-blocked-`);
+    ensureWorkspace(root);
+    const packetId = seedTaskPacket(root, `audio-${surface}-packet`);
+    const reviewedArtifact = seedReviewedArtifact(root, `.dove/drafts/audio-${surface}.md`, packetId);
+    seedBlockingFollowThrough(root, packetId, `audio-${surface}-blocker`);
+    const runId = `audio-${surface}-blocked`;
+
+    assert.throws(() => invoke(root, {
+      packetId,
+      runId,
+      artifactPaths: [reviewedArtifact]
+    }), /blocked while operator follow-through still requires action/);
+    assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.audioReviewsDir, runId)), false);
+  }
+});
+
+test("audio review import blocks before mutating review artifacts or changing return routing", () => {
+  const root = tempRoot("dove-audio-import-blocked-");
+  ensureWorkspace(root);
+  const packetId = seedTaskPacket(root, "audio-import-packet");
+  const reviewedArtifact = seedReviewedArtifact(root, ".dove/drafts/audio-import.md", packetId);
+  const prepared = prepareAudioReview(root, {
+    packetId,
+    runId: "audio-import-blocked",
+    artifactPaths: [reviewedArtifact]
+  });
+  writeAudioReturn(root, prepared);
+  const manifestPath = path.join(root, ARTIFACT_PATHS.audioReviewsDir, prepared.runId, "manifest.json");
+  const manifestBefore = fs.readFileSync(manifestPath, "utf8");
+  const reviewLogPath = path.join(root, ARTIFACT_PATHS.reviewLog);
+  const concernsPath = path.join(root, ARTIFACT_PATHS.reviewConcerns);
+  const reviewLogBefore = fs.existsSync(reviewLogPath) ? fs.readFileSync(reviewLogPath, "utf8") : null;
+  const concernsBefore = fs.existsSync(concernsPath) ? fs.readFileSync(concernsPath, "utf8") : null;
+  const boardBefore = loadBoard(root);
+  seedBlockingFollowThrough(root, packetId, "audio-import-blocker");
+
+  assert.throws(() => importAudioReview(root, {
+    packetId,
+    runId: prepared.runId
+  }), /blocked while operator follow-through still requires action/);
+  assert.equal(fs.readFileSync(manifestPath, "utf8"), manifestBefore);
+  assert.equal(fs.existsSync(reviewLogPath) ? fs.readFileSync(reviewLogPath, "utf8") : null, reviewLogBefore);
+  assert.equal(fs.existsSync(concernsPath) ? fs.readFileSync(concernsPath, "utf8") : null, concernsBefore);
+  assert.deepEqual(loadBoard(root), boardBefore);
+});
+
+test("audio review run validates an existing return before rewriting prepared artifacts", () => {
+  const root = tempRoot("dove-audio-run-existing-return-");
+  ensureWorkspace(root);
+  const packetId = seedTaskPacket(root, "audio-run-existing-packet");
+  const reviewedArtifact = seedReviewedArtifact(root, ".dove/drafts/audio-run-existing.md", packetId);
+  const prepared = prepareAudioReview(root, {
+    packetId,
+    runId: "audio-run-existing",
+    artifactPaths: [reviewedArtifact]
+  });
+  writeAudioReturn(root, prepared);
+  const manifestPath = path.join(root, ARTIFACT_PATHS.audioReviewsDir, prepared.runId, "manifest.json");
+  const inputPath = path.join(root, prepared.inputPath);
+  const manifestBefore = fs.readFileSync(manifestPath, "utf8");
+  const inputBefore = fs.readFileSync(inputPath, "utf8");
+  const invalidHandoff = JSON.parse(fs.readFileSync(path.join(root, prepared.handoffPath), "utf8"));
+  fs.writeFileSync(path.join(root, prepared.handoffPath), `${JSON.stringify({
+    ...invalidHandoff,
+    inputSha256: "invalid-input-hash"
+  }, null, 2)}\n`, "utf8");
+
+  const result = runAudioReview(root, {
+    packetId,
+    runId: prepared.runId,
+    artifactPaths: [reviewedArtifact]
+  });
+  assert.equal(result.status, "verification-failed");
+  assert.ok(result.boundary.failures.includes("input-hash-mismatch"));
+  assert.equal(fs.readFileSync(manifestPath, "utf8"), manifestBefore);
+  assert.equal(fs.readFileSync(inputPath, "utf8"), inputBefore);
 });

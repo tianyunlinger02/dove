@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
   COMMAND_SURFACES,
+  DIRECT_PROCESS_ADAPTER_COMMAND_IDS,
   PROJECT_HOST_IDS,
   adapterPathForCommand,
   hostCommandSlug
@@ -68,22 +68,28 @@ function exampleBullets(command, hostId = null) {
   }).filter(Boolean);
 }
 
+const DIRECT_PROCESS_COMMAND_IDS = new Set(DIRECT_PROCESS_ADAPTER_COMMAND_IDS);
+
+function adapterCliCommand(commandId, command) {
+  return DIRECT_PROCESS_COMMAND_IDS.has(commandId) ? `${command} --mutation-mode direct-process` : command;
+}
+
 const LOCAL_CLI_COMMANDS = new Map([
-  ["dove.init", { command: "node ./bin/dove.mjs init . --goal \"<project goal>\"", kind: "work", note: "Use init only for the project-level goal; concrete research, writing, review, experiment, figure, or code work belongs in mission, auto, or the matching work request." }],
-  ["dove.status", { command: "node ./bin/dove.mjs status .", kind: "check" }],
-  ["dove.mission", { command: "node ./bin/dove.mjs mission .", kind: "check" }],
-  ["dove.auto", { command: "node ./bin/dove.mjs auto . --target \"<task title>\" --confirmed", kind: "work", note: "Run auto only after approval and only when the selected task has real work material or a concrete material boundary to report." }],
-  ["dove.operator", { command: "node ./bin/dove.mjs operator . --confirmed", kind: "work", note: "Run operator only after approval; if no real result or safe built-in step exists, report the required material instead of claiming progress." }],
-  ["dove.lessons", { command: "node ./bin/dove.mjs lessons .", kind: "check", note: "Use lesson writing only for distilled reusable guidance with problem, decision, pitfall, validation, and next-time behavior." }],
-  ["dove.version", { command: "node ./bin/dove.mjs version . --reason \"<direction change reason>\"", kind: "work", note: "Use version only for a deliberate direction reset with a short reason, not as a general undo path." }],
-  ["dove.source", { command: "node ./bin/dove.mjs source . --target \"<task title>\" --title \"<source title>\" --locator \"<url or doi>\"", kind: "work", note: "Use this only after the source material is verified; if retrieval or verification fails, say no source was added and name the missing material." }],
-  ["dove.note", { command: "node ./bin/dove.mjs note . --target \"<task title>\" --summary \"<synthesis>\"", kind: "work", note: "Use this only when there is real synthesis content such as a summary, quote, claim, or open question." }],
-  ["dove.experience", { command: "node ./bin/dove.mjs experience . --target \"<task title>\" --goal \"<experiment goal>\" --methodology \"<method>\" --success-metric \"<metric>\"", kind: "work", note: "Use this for experiment/evidence material; if method, metric, result evidence, or claim linkage is missing, say exactly which material is missing." }],
-  ["dove.draft", { command: "node ./bin/dove.mjs draft . --target \"<task title>\" --section-id \"<section>\" --body \"<draft text>\"", kind: "work", note: "Use draft only for real section text; status-only section changes need an explicit status request." }],
-  ["dove.figure", { command: "node ./bin/dove.mjs figure . --intent \"<figure request>\"", kind: "work", note: "For figure requests, use the CLI result as the source of truth, say the practical figure state in ordinary language, and do not apply returned file changes unless the operator explicitly approves. If the CLI says a task must be selected and the operator confirms one, rerun `node ./bin/dove.mjs figure . --target \"<confirmed task title>\" --intent \"<figure request>\"` instead of putting the task title inside the intent." }],
-  ["dove.review", { command: "node ./bin/dove.mjs review . --target \"<task title>\"", kind: "work", note: "Use this for local evidence-aware review; use separate isolated or audio review only when the operator explicitly asks for that mode." }],
-  ["dove.review-loop", { command: "node ./bin/dove.mjs review-loop . --target \"<task title>\"", kind: "work", note: "Use this for limited local review iterations; provide draft or experiment material before asking it to revise or plan those substeps." }],
-  ["dove.rebuttal", { command: "node ./bin/dove.mjs rebuttal . --target \"<task title>\" --issue \"<reviewer issue>\"", kind: "work", note: "Use rebuttal for reviewer issues and author-side response strategy; keep unsupported gaps explicit instead of drafting around them." }]
+  ["dove.init", { command: adapterCliCommand("dove.init", "node ./bin/dove-package.mjs init . --goal \"<project goal>\""), kind: "work", note: "Use init only for the project-level goal; concrete research, writing, review, experiment, figure, or code work belongs in mission, auto, or the matching work request." }],
+  ["dove.status", { command: "node ./bin/dove-package.mjs status .", kind: "check" }],
+  ["dove.mission", { command: adapterCliCommand("dove.mission", "node ./bin/dove-package.mjs mission . --goal \"<task goal>\""), kind: "check", note: "After approval, run the exact confirmation command returned by the proposal; its proposal token binds the complete approved contract, workspace, and fixed mutation mode, materializes only that contract, and returns the recommended next route." }],
+  ["dove.auto", { command: adapterCliCommand("dove.auto", "node ./bin/dove-package.mjs auto . --target \"<task title>\""), kind: "check", note: "First return the proposal without writing. When real workflow material is supplied, pass the complete structured step array once through `--steps-json '<JSON array>'`; after approval, run the exact confirmation command so the proposal token preserves those step arguments. Run auto only when the selected task has real work material or a concrete material boundary to report." }],
+  ["dove.operator", { command: adapterCliCommand("dove.operator", "node ./bin/dove-package.mjs operator . --confirmed"), kind: "work", note: "Run operator only after approval. Supply real task results once through `--task-results-json '<JSON array>'` and use `--run-id \"<run id>\"` when the pass needs a stable run identifier; if no real result or safe built-in step exists, report the required material instead of claiming progress." }],
+  ["dove.lessons", { command: "node ./bin/dove-package.mjs lessons .", kind: "check", note: "Use lesson writing only for distilled reusable guidance with problem, decision, pitfall, validation, and next-time behavior; add `--mutation-mode direct-process` to the explicit lesson-recording command." }],
+  ["dove.version", { command: adapterCliCommand("dove.version", "node ./bin/dove-package.mjs version . --reason \"<direction change reason>\""), kind: "work", note: "Use version only for a deliberate direction reset with a short reason, not as a general undo path." }],
+  ["dove.source", { command: adapterCliCommand("dove.source", "node ./bin/dove-package.mjs source . --target \"<task title>\" --title \"<source title>\" --locator \"<url or doi>\""), kind: "work", note: "Use this only after the source material is verified; if retrieval or verification fails, say no source was added and name the missing material." }],
+  ["dove.note", { command: adapterCliCommand("dove.note", "node ./bin/dove-package.mjs note . --target \"<task title>\" --summary \"<synthesis>\""), kind: "work", note: "Use this only when there is real synthesis content such as a summary, quote, claim, or open question." }],
+  ["dove.experience", { command: adapterCliCommand("dove.experience", "node ./bin/dove-package.mjs experience . --target \"<task title>\" --goal \"<experiment goal>\" --methodology \"<method>\" --success-metric \"<metric>\""), kind: "work", note: "Use this for experiment/evidence material; if method, metric, result evidence, or claim linkage is missing, say exactly which material is missing." }],
+  ["dove.draft", { command: adapterCliCommand("dove.draft", "node ./bin/dove-package.mjs draft . --target \"<task title>\" --section-id \"<section>\" --body \"<draft text>\""), kind: "work", note: "Use draft only for real section text; status-only section changes need an explicit status request." }],
+  ["dove.figure", { command: adapterCliCommand("dove.figure", "node ./bin/dove-package.mjs figure . --intent \"<figure request>\""), kind: "work", note: "For figure requests, use the CLI result as the source of truth, say the practical figure state in ordinary language, and do not apply returned file changes unless the operator explicitly approves. If the CLI says a task must be selected and the operator confirms one, rerun `node ./bin/dove-package.mjs figure . --target \"<confirmed task title>\" --intent \"<figure request>\" --mutation-mode direct-process` instead of putting the task title inside the intent." }],
+  ["dove.review", { command: adapterCliCommand("dove.review", "node ./bin/dove-package.mjs review . --target \"<task title>\""), kind: "work", note: "Use this for local evidence-aware review; use separate isolated or audio review only when the operator explicitly asks for that mode." }],
+  ["dove.review-loop", { command: adapterCliCommand("dove.review-loop", "node ./bin/dove-package.mjs review-loop . --target \"<task title>\""), kind: "work", note: "Use this for limited local review iterations; provide draft or experiment material before asking it to revise or plan those substeps." }],
+  ["dove.rebuttal", { command: adapterCliCommand("dove.rebuttal", "node ./bin/dove-package.mjs rebuttal . --target \"<task title>\" --issue \"<reviewer issue>\""), kind: "work", note: "Use rebuttal for reviewer issues and author-side response strategy; keep unsupported gaps explicit instead of drafting around them." }]
 ]);
 
 function localCliBullets(command) {
@@ -98,7 +104,7 @@ function localCliBullets(command) {
       ...(localCli.note ? [localCli.note] : [])
     ];
   }
-  const terminalProbe = `node ./bin/dove.mjs ${hostCommandSlug(command.id)} --help`;
+  const terminalProbe = `node ./bin/dove-package.mjs ${hostCommandSlug(command.id)} --help`;
   return [`This request has no listed project action. Do not run status, \`${terminalProbe}\`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the task, and the next user choice; do not explain why the tool is unavailable.`];
 }
 
@@ -269,25 +275,4 @@ export function checkGeneratedAdapters(root = PACKAGE_ROOT) {
     }
   }
   return drift;
-}
-
-function main() {
-  if (process.argv.includes("--check")) {
-    const drift = checkGeneratedAdapters();
-    if (drift.length > 0) {
-      for (const item of drift) {
-        console.error(`${item.relativePath}: ${item.reason}`);
-      }
-      process.exitCode = 1;
-      return;
-    }
-    console.log("Generated command adapters are up to date.");
-    return;
-  }
-  const written = writeGeneratedAdapters();
-  console.log(JSON.stringify({ written }, null, 2));
-}
-
-if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
-  main();
 }

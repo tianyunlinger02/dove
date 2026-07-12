@@ -13,8 +13,14 @@ function sha256(content) {
   return crypto.createHash("sha256").update(content, "utf8").digest("hex");
 }
 
-function normalizeMutationMode(value) {
-  return value === "patch-plan" ? "patch-plan" : "direct-process";
+export function normalizeMutationMode(value) {
+  if (value === undefined) {
+    return "direct-process";
+  }
+  if (value === "patch-plan" || value === "direct-process") {
+    return value;
+  }
+  throw new Error("mutationMode must be either patch-plan or direct-process when explicitly provided.");
 }
 
 function normalizeRelativePath(relativePath) {
@@ -274,6 +280,7 @@ export class MutationContext {
         actionId: this.actionId,
         hostId: this.hostId,
         packetId: this.packetId,
+        workspaceRealpath: fs.realpathSync.native(this.root),
         mutationModeSource: this.mutationModeSource,
         createdAt: this.createdAt,
         writesApplied: false,
@@ -308,8 +315,17 @@ export function currentMutationContext(root) {
   if (!context) {
     return null;
   }
-  if (root && path.resolve(root) !== context.root) {
-    return null;
+  if (root) {
+    const resolvedRoot = path.resolve(root);
+    if (resolvedRoot !== context.root) {
+      try {
+        if (fs.realpathSync.native(resolvedRoot) !== fs.realpathSync.native(context.root)) {
+          return null;
+        }
+      } catch {
+        return null;
+      }
+    }
   }
   return context;
 }

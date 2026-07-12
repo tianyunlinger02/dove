@@ -40,20 +40,20 @@ export const WORKFLOW_GOAL_CONTRACTS = [
   {
     id: "mission-contract-materializes-without-execution",
     surface: "dove.mission",
-    objective: "A confirmed Dove mission must materialize only the task contract, return handoff routes, and avoid recording pass/runtime execution results.",
-    pressureTest: "Call create_dove_task first as a proposal, then confirm it with stale pass/result fields supplied.",
+    objective: "A Dove mission must materialize only an exact approved task contract, reject bare or stale confirmation, and avoid recording pass/runtime execution results.",
+    pressureTest: "Replay one create_dove_task proposal's exact confirmArgs, then use a separate proposal to reject bare confirmation and stale pass/result fields without materialization.",
     acceptanceCriteria: [
       "The proposal returns mission-contract and contract-handoff semantics with no writes.",
-      "The confirmed call returns materialized with contractMaterialized true.",
-      "The task remains ready rather than completed or awaiting a host pass.",
-      "No runtime result entry is persisted for stale pass/result fields.",
-      "The response returns recommended handoff routes and no mission pass recorder fields."
+      "Bare confirmed:true without the proposal digest is rejected without materialization.",
+      "A stale confirmation that changes the approved contract is rejected without materialization.",
+      "Replaying the exact confirmArgs returns materialized with contractMaterialized true.",
+      "The task remains ready, no runtime result is persisted, and no mission pass recorder fields are returned."
     ],
-    failureMode: "mission-materialization-pretends-execution",
+    failureMode: "mission-confirmation-substitution-or-fake-execution",
     failureReflection: workflowFailureReflection({
       regressionArtifacts: ["scripts/validate-workflow-goals.mjs", "tests/integration/workflow-goals.test.mjs", "tests/integration/mcp-tools.test.mjs"],
       remediationTargets: ["src/core/task-workflow.mjs", "src/core/workflow-goals.mjs", "src/core/command-manifest.mjs"],
-      summary: "If mission materialization records runtime results or exposes pass-recorder fields, repair create_dove_task so mission stops at contract handoff."
+      summary: "If mission confirmation accepts a bare or stale contract, or materialization records runtime results, repair create_dove_task so only exact proposal replay reaches contract handoff."
     })
   },
   {
@@ -454,12 +454,64 @@ function parseToolJson(result, action) {
   try {
     const parsed = JSON.parse(text);
     if (parsed?.presentation === "dove-mcp-result-contract" && parsed.fullResult) {
+      return parsed.confirmation
+        ? { ...parsed.fullResult, confirmation: parsed.confirmation }
+        : parsed.fullResult;
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(`${action} returned invalid JSON: ${error.message}`);
+  }
+}
+
+function expectToolError(result, action, pattern) {
+  const text = result?.content?.[0]?.text ?? "";
+  expect(result?.isError === true, `${action} must be rejected`, { result });
+  expect(pattern.test(text), `${action} must explain the confirmation rejection`, { text });
+  return text;
+}
+
+function exactMissionConfirmArgs(proposal, action = "create_dove_task") {
+  const confirmArgs = proposal.confirmation?.confirmArgs;
+  expect(confirmArgs && typeof confirmArgs === "object" && !Array.isArray(confirmArgs), `${action} proposal must expose exact confirmArgs in the MCP confirmation capsule`, { confirmation: proposal.confirmation });
+  expect(/^[0-9a-f]{64}$/u.test(confirmArgs.proposalDigest ?? ""), `${action} confirmArgs must include the proposal digest`, { proposalDigest: confirmArgs.proposalDigest });
+  return structuredClone(confirmArgs);
+}
+
+function exactAutoConfirmArgs(proposal, action = "run_dove_auto") {
+  const confirmArgs = proposal.confirmation?.confirmArgs
+    ?? proposal.confirmArgs;
+  expect(confirmArgs && typeof confirmArgs === "object" && !Array.isArray(confirmArgs), `${action} proposal must expose exact confirmArgs`, { confirmation: proposal.confirmation, confirmArgs: proposal.confirmArgs });
+  expect(/^[0-9a-f]{64}$/u.test(confirmArgs.proposalDigest ?? ""), `${action} confirmArgs must include the proposal digest`, { proposalDigest: confirmArgs.proposalDigest });
+  return structuredClone(confirmArgs);
+}
+
+function parseOperationalToolJson(result, action) {
+  const text = result?.content?.[0]?.text;
+  if (!text) {
+    throw new Error(`${action} returned no text content.`);
+  }
+  expect(
+    result?.isError === true,
+    `${action} must preserve operational failure transport semantics`,
+    { isError: result?.isError }
+  );
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed?.presentation === "dove-mcp-result-contract" && parsed.fullResult) {
       return parsed.fullResult;
     }
     return parsed;
   } catch (error) {
     throw new Error(`${action} returned invalid JSON: ${error.message}`);
   }
+}
+
+function createGoalTask(root, dispatch, args, action = "create_dove_task") {
+  const proposal = parseToolJson(dispatch(root, "create_dove_task", args), `${action} proposal`);
+  expect(proposal.status === "needs-confirmation", `${action} proposal must require confirmation`, { status: proposal.status });
+  const confirmArgs = exactMissionConfirmArgs(proposal, action);
+  return parseToolJson(dispatch(root, "create_dove_task", confirmArgs), `${action} confirmed`);
 }
 
 function readJson(root, relativePath) {
@@ -488,16 +540,15 @@ function runOperatorHostPassWithoutResultsGoal(root, dispatch) {
     goal: "Validate workflow goal acceptance gates."
   }), "init_dove_goal");
 
-  parseToolJson(dispatch(root, "create_dove_task", {
+  createGoalTask(root, dispatch, {
     id: packetId,
     title: "Workflow goal source task",
     goal: "Collect source provenance through host tools.",
     status: "ready",
     nextAction: "project:dove.source",
     domain: "paper",
-    checklist: false,
-    confirmed: true
-  }), "create_dove_task");
+    checklist: false
+  }, "create_dove_task operator source fixture");
 
   const beforeIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex);
   const beforeTask = findTask(beforeIndex, packetId);
@@ -512,7 +563,7 @@ function runOperatorHostPassWithoutResultsGoal(root, dispatch) {
   expect(JSON.stringify(preview.queueSummary?.hostPassRequiredTaskIds ?? []) === JSON.stringify([packetId]), "Operator preview must classify the task as host-pass-required", { queueSummary: preview.queueSummary });
   expect(Array.isArray(preview.writes) && preview.writes.length === 0, "Operator preview must remain proposal-only", { writes: preview.writes });
 
-  const run = parseToolJson(dispatch(root, "run_dove_operator", {
+  const run = parseOperationalToolJson(dispatch(root, "run_dove_operator", {
     confirmed: true,
     runId
   }), "run_dove_operator confirmed");
@@ -571,7 +622,7 @@ function seedGoalWorkspace(root, dispatch, initId = "workflow-goal-init") {
 }
 
 function seedGoalTask(root, dispatch, packetId, fields = {}) {
-  return parseToolJson(dispatch(root, "create_dove_task", {
+  return createGoalTask(root, dispatch, {
     ...fields,
     id: packetId,
     title: fields.title ?? packetId.replace(/-/g, " "),
@@ -579,9 +630,8 @@ function seedGoalTask(root, dispatch, packetId, fields = {}) {
     status: fields.status ?? "ready",
     nextAction: fields.nextAction ?? "project:dove.status",
     domain: fields.domain ?? "engineering",
-    checklist: false,
-    confirmed: true
-  }), "create_dove_task");
+    checklist: false
+  }, `create_dove_task ${packetId} fixture`);
 }
 
 function runMissionContractMaterializesWithoutExecutionGoal(root, dispatch) {
@@ -590,32 +640,50 @@ function runMissionContractMaterializesWithoutExecutionGoal(root, dispatch) {
   const runId = "workflow-goal-mission-handoff-stale-run";
   seedGoalWorkspace(root, dispatch, "workflow-goal-mission-handoff-init");
 
-  const proposal = parseToolJson(dispatch(root, "create_dove_task", {
+  const missionArgs = {
     id: packetId,
     title: "Workflow goal mission handoff",
     goal: "Materialize a mission contract and hand off without recording execution.",
     domain: "engineering",
-    checklist: false
-  }), "create_dove_task mission handoff proposal");
+    checklistItems: []
+  };
+  const proposal = parseToolJson(dispatch(root, "create_dove_task", missionArgs), "create_dove_task mission handoff proposal");
   expect(proposal.status === "needs-confirmation", "Mission proposal must require confirmation", { status: proposal.status });
   expect(proposal.workflowMode === "mission-contract", "Mission proposal must use mission-contract workflow mode", { workflowMode: proposal.workflowMode });
   expect(proposal.executionMode === "contract-handoff", "Mission proposal must use contract-handoff execution mode", { executionMode: proposal.executionMode });
   expect(proposal.noAutoApply === true && Array.isArray(proposal.writes) && proposal.writes.length === 0, "Mission proposal must remain proposal-only", { noAutoApply: proposal.noAutoApply, writes: proposal.writes });
   expect(!("missionPassRequired" in proposal), "Mission proposal must not expose missionPassRequired", { keys: Object.keys(proposal) });
   expect(!("recordMissionPassTool" in proposal), "Mission proposal must not expose recordMissionPassTool", { keys: Object.keys(proposal) });
+  const approvedConfirmArgs = exactMissionConfirmArgs(proposal, "create_dove_task mission handoff");
 
   const runtimeBefore = readJson(root, ARTIFACT_PATHS.runtimeResults);
-  const created = parseToolJson(dispatch(root, "create_dove_task", {
-    ...proposal.confirmArgs,
+  const created = parseToolJson(dispatch(root, "create_dove_task", approvedConfirmArgs), "create_dove_task mission handoff confirmed");
+  expect(created.status === "materialized", "Exact mission confirmation must only materialize the contract", { status: created.status });
+
+  const rejectedPacketId = `${packetId}-rejected`;
+  const rejectedMissionArgs = {
+    ...missionArgs,
+    id: rejectedPacketId,
+    title: "Workflow goal rejected mission confirmation"
+  };
+  const rejectedProposal = parseToolJson(dispatch(root, "create_dove_task", rejectedMissionArgs), "create_dove_task rejected mission proposal");
+  const rejectedConfirmArgs = exactMissionConfirmArgs(rejectedProposal, "create_dove_task rejected mission");
+  const bareConfirmationError = expectToolError(dispatch(root, "create_dove_task", {
+    ...rejectedMissionArgs,
+    confirmed: true
+  }), "create_dove_task bare confirmation", /exact proposalDigest/u);
+  const staleConfirmationError = expectToolError(dispatch(root, "create_dove_task", {
+    ...structuredClone(rejectedConfirmArgs),
     runId,
     resultStatus: "completed",
-    resultSummary: "These stale pass fields must not be recorded during mission materialization.",
+    resultSummary: "These stale pass fields must invalidate mission confirmation.",
     evidenceLinks: [ARTIFACT_PATHS.runtimeResults],
     artifactRefs: [ARTIFACT_PATHS.runtimeResults],
     verificationEvidencePaths: [WORKFLOW_GOAL_VERIFICATION_PATH],
     verifiedCriteria: workflowVerifiedCriteria("Mission materialized without execution")
-  }), "create_dove_task mission handoff confirmed");
-  expect(created.status === "materialized", "Confirmed mission must only materialize the contract", { status: created.status });
+  }), "create_dove_task stale confirmation", /does not accept unknown input/u);
+  const indexAfterRejections = readJson(root, ARTIFACT_PATHS.taskPacketsIndex);
+  expect(!findTask(indexAfterRejections, rejectedPacketId), "Rejected mission confirmations must not materialize the task", { rejectedPacketId });
   expect(created.contractMaterialized === true, "Confirmed mission must report contractMaterialized", { contractMaterialized: created.contractMaterialized });
   expect(created.workflowMode === "mission-contract", "Confirmed mission must keep mission-contract workflow mode", { workflowMode: created.workflowMode });
   expect(created.executionMode === "contract-handoff", "Confirmed mission must keep contract-handoff execution mode", { executionMode: created.executionMode });
@@ -647,6 +715,10 @@ function runMissionContractMaterializesWithoutExecutionGoal(root, dispatch) {
       packetId,
       runId,
       proposalStatus: proposal.status,
+      bareConfirmationRejected: bareConfirmationError.includes("exact proposalDigest"),
+      staleConfirmationRejected: staleConfirmationError.includes("does not accept unknown input"),
+      rejectedPacketId,
+      taskAbsentAfterRejectedConfirmations: true,
       materializedStatus: created.status,
       workflowMode: created.workflowMode,
       executionMode: created.executionMode,
@@ -709,12 +781,27 @@ function runAutoReadOnlyCannotCompleteGoal(root, dispatch) {
   seedGoalWorkspace(root, dispatch, "workflow-goal-auto-init");
   seedGoalTask(root, dispatch, packetId, { title: "Workflow goal auto read-only", nextAction: "project:dove.auto" });
 
-  const run = parseToolJson(dispatch(root, "run_dove_auto", {
-    packetId,
-    confirmed: true,
-    runId,
-    steps: [{ command: "dove.status", completeTask: true }]
-  }), "run_dove_auto read-only completion");
+  const steps = [{
+    command: "dove.status",
+    completeTask: true
+  }];
+  const proposal = parseToolJson(
+    dispatch(root, "run_dove_auto", {
+      packetId,
+      steps
+    }),
+    "run_dove_auto read-only completion proposal"
+  );
+  const run = parseOperationalToolJson(
+    dispatch(root, "run_dove_auto", {
+      ...exactAutoConfirmArgs(
+        proposal,
+        "run_dove_auto read-only completion"
+      ),
+      runId
+    }),
+    "run_dove_auto read-only completion"
+  );
   expect(run.status === "needs-explicit-progress-step", "Read-only auto completion must require an explicit progress step", { status: run.status });
   expect(run.noAutoApply === true && Array.isArray(run.writes) && run.writes.length === 0, "Read-only auto rejection must remain proposal-only", { noAutoApply: run.noAutoApply, writes: run.writes });
   expect(run.result?.iterationCount === 0, "Read-only auto rejection must not record a completed iteration", { iterationCount: run.result?.iterationCount });
@@ -1019,22 +1106,33 @@ function runAutoCompletionRequiresCriteriaGoal(root, dispatch) {
     sourceType: "test-fixture"
   }), "register_source auto criteria fixture");
 
-  const run = parseToolJson(dispatch(root, "run_dove_auto", {
-    packetId,
-    confirmed: true,
-    runId,
-    steps: [{
-      command: "dove.note",
-      completeTask: true,
-      args: {
-        noteId: "workflow-goal-auto-note",
-        title: "Workflow goal auto note",
-        sourceIds: ["workflow-goal-auto-source"],
-        summary: "The auto step produces a real note artifact but no verifiedCriteria coverage.",
-        skipFollowThroughReady: true
-      }
-    }]
-  }), "run_dove_auto artifact completion without criteria");
+  const steps = [{
+    command: "dove.note",
+    completeTask: true,
+    args: {
+      noteId: "workflow-goal-auto-note",
+      title: "Workflow goal auto note",
+      sourceIds: ["workflow-goal-auto-source"],
+      summary: "The auto step produces a real note artifact but no verifiedCriteria coverage."
+    }
+  }];
+  const proposal = parseToolJson(
+    dispatch(root, "run_dove_auto", {
+      packetId,
+      steps
+    }),
+    "run_dove_auto artifact completion proposal"
+  );
+  const run = parseOperationalToolJson(
+    dispatch(root, "run_dove_auto", {
+      ...exactAutoConfirmArgs(
+        proposal,
+        "run_dove_auto artifact completion"
+      ),
+      runId
+    }),
+    "run_dove_auto artifact completion without criteria"
+  );
   expect(run.status === "verification-failed", "Auto artifact completion without criteria must return verification-failed", { status: run.status });
   expect(run.boundary?.type === "verification-failed", "Auto artifact completion must open verification-failed boundary", { boundary: run.boundary });
   expect((run.boundary?.requiredActions ?? []).includes("provide-verified-criteria"), "Auto artifact completion must require verified criteria", { boundary: run.boundary });

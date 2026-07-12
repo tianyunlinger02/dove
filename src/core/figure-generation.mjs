@@ -41,15 +41,135 @@ function normalizePlainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 }
 
+const FIGURE_MATERIAL_INPUT_KEYS = new Set([
+  "id",
+  "type",
+  "label",
+  "summary",
+  "artifactPath",
+  "path"
+]);
+const FIGURE_SEMANTIC_COVERAGE_INPUT_KEYS = new Set([
+  "observations",
+  "evidencePaths",
+  "artifactPaths"
+]);
+const FIGURE_SEMANTIC_REVIEW_INPUT_KEYS = new Set([
+  "summary",
+  "observations",
+  "evidencePaths",
+  "artifactPaths"
+]);
+const FIGURE_MANIFEST_SUCCESS_ASSERTION_FIELDS = new Set([
+  "semanticCoverage",
+  "semanticReview",
+  "visualElements",
+  "coveredVisualElements",
+  "passed",
+  "reviewed",
+  "humanReviewed",
+  "approved",
+  "status",
+  "verdict",
+  "reviewStatus"
+]);
+
+function assertFigurePlainObject(value, label, surface) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${surface} requires an object at ${label}.`);
+  }
+}
+
+function assertFigureObjectKeys(value, allowedKeys, label, surface) {
+  assertFigurePlainObject(value, label, surface);
+  const unknown = Object.keys(value).filter((key) => !allowedKeys.has(key));
+  if (unknown.length > 0) {
+    throw new Error(`${surface} does not accept unknown input ${unknown.map((key) => `${label}.${key}`).join(", ")}.`);
+  }
+}
+
+function assertFigureString(value, label, surface) {
+  if (typeof value !== "string") {
+    throw new Error(`${surface} requires a string at ${label}.`);
+  }
+}
+
+function assertFigureStringArray(value, label, surface) {
+  if (!Array.isArray(value)) {
+    throw new Error(`${surface} requires an array at ${label}.`);
+  }
+  value.forEach((item, index) => assertFigureString(item, `${label}[${index}]`, surface));
+}
+
+function assertFigureMaterialItem(value, label, surface) {
+  assertFigureObjectKeys(value, FIGURE_MATERIAL_INPUT_KEYS, label, surface);
+  for (const key of FIGURE_MATERIAL_INPUT_KEYS) {
+    if (Object.hasOwn(value, key)) {
+      assertFigureString(value[key], `${label}.${key}`, surface);
+    }
+  }
+}
+
+function assertFigureSemanticObservation(value, allowedKeys, label, surface) {
+  assertFigureObjectKeys(value, allowedKeys, label, surface);
+  if (Object.hasOwn(value, "summary")) {
+    assertFigureString(value.summary, `${label}.summary`, surface);
+  }
+  for (const key of ["observations", "evidencePaths", "artifactPaths"]) {
+    if (Object.hasOwn(value, key)) {
+      assertFigureStringArray(value[key], `${label}.${key}`, surface);
+    }
+  }
+}
+
+function assertPrepareFigureGenerationInput(args = {}) {
+  const surface = "prepare_figure_generation";
+  if (Object.hasOwn(args, "materialHints")) {
+    if (!Array.isArray(args.materialHints)) {
+      throw new Error(`${surface} requires an array at $.materialHints.`);
+    }
+    args.materialHints.forEach((item, index) => {
+      if (typeof item !== "string") {
+        assertFigureMaterialItem(item, `$.materialHints[${index}]`, surface);
+      }
+    });
+  }
+}
+
+function assertImportFigureGenerationInput(args = {}) {
+  const surface = "import_figure_generation";
+  if (Object.hasOwn(args, "semanticCoverage")) {
+    assertFigureSemanticObservation(
+      args.semanticCoverage,
+      FIGURE_SEMANTIC_COVERAGE_INPUT_KEYS,
+      "$.semanticCoverage",
+      surface
+    );
+  }
+  if (Object.hasOwn(args, "semanticReview")) {
+    assertFigureSemanticObservation(
+      args.semanticReview,
+      FIGURE_SEMANTIC_REVIEW_INPUT_KEYS,
+      "$.semanticReview",
+      surface
+    );
+  }
+}
+
+function assertManifestDoesNotClaimSemanticSuccess(manifest, label) {
+  const supplied = Object.keys(manifest ?? {}).filter((key) => FIGURE_MANIFEST_SUCCESS_ASSERTION_FIELDS.has(key));
+  if (supplied.length > 0) {
+    throw new Error(`${label} cannot set caller-controlled semantic success input: ${supplied.join(", ")}.`);
+  }
+}
+
 function normalizeSemanticCoverage(value) {
   const source = normalizePlainObject(value);
   if (!source) {
     return null;
   }
   return {
-    ...source,
-    visualElements: normalizeStringArray(source.visualElements),
-    coveredVisualElements: normalizeStringArray(source.coveredVisualElements),
+    observations: normalizeStringArray(source.observations),
     evidencePaths: normalizeStringArray(source.evidencePaths),
     artifactPaths: normalizeStringArray(source.artifactPaths)
   };
@@ -61,8 +181,8 @@ function normalizeSemanticReview(value) {
     return null;
   }
   return {
-    ...source,
-    status: typeof source.status === "string" ? source.status.trim() : source.status,
+    ...(typeof source.summary === "string" ? { summary: source.summary.trim() } : {}),
+    observations: normalizeStringArray(source.observations),
     evidencePaths: normalizeStringArray(source.evidencePaths),
     artifactPaths: normalizeStringArray(source.artifactPaths)
   };
@@ -344,7 +464,7 @@ function buildMaterialRequirements(root, figure, args = {}) {
       type: requirement.type ?? "operator-material",
       refId: requirement.id ?? requirement.label,
       label: requirement.label ?? requirement.id ?? "Operator material",
-      status: inspected.normalized ? (inspected.available ? "available" : "missing") : (requirement.status ?? "needs-operator"),
+      status: inspected.normalized ? (inspected.available ? "available" : "missing") : "needs-operator",
       artifactPath: inspected.normalized,
       summary: requirement.summary ?? (inspected.available ? "Operator-declared material artifact is present and non-empty." : `Operator-declared material is not usable: ${inspected.reason}.`),
       source: "figure-plan",
@@ -356,14 +476,14 @@ function buildMaterialRequirements(root, figure, args = {}) {
   for (let index = 0; index < hints.length; index += 1) {
     const hint = hints[index];
     if (typeof hint === "string") {
-      requirements.push(materialRequirement({ type: "operator-hint", refId: `hint-${index + 1}`, label: hint, status: "available", summary: hint, source: "operator" }));
+      requirements.push(materialRequirement({ type: "operator-hint", refId: `hint-${index + 1}`, label: hint, status: "needs-operator", summary: hint, source: "operator" }));
     } else if (hint && typeof hint === "object") {
       const inspected = materialInspection(root, hint.artifactPath ?? hint.path);
       requirements.push(materialRequirement({
         type: hint.type ?? "operator-hint",
         refId: hint.id ?? `hint-${index + 1}`,
         label: hint.label ?? hint.summary ?? `Hint ${index + 1}`,
-        status: inspected.normalized ? (inspected.available ? "available" : "missing") : (hint.status ?? "available"),
+        status: inspected.normalized ? (inspected.available ? "available" : "missing") : "needs-operator",
         artifactPath: inspected.normalized,
         summary: hint.summary ?? hint.label ?? (inspected.available ? "Operator-provided material artifact is present and non-empty." : `Operator-provided material is not usable: ${inspected.reason}.`),
         source: "operator",
@@ -830,6 +950,7 @@ function buildCaptionText(figure, generation, providedCaption) {
 
 export function prepareFigureGeneration(root, args = {}) {
   assertGovernanceMutationRegistered("prepare-figure-generation", "guarded");
+  assertPrepareFigureGenerationInput(args);
   const target = assertTaskScopedMutationTarget(root, "prepare-figure-generation", args);
   assertFollowThroughReady(root, "Preparing figure generation", args);
   ensureWorkspace(root);
@@ -975,6 +1096,7 @@ export function prepareFigureGeneration(root, args = {}) {
 
 export function importFigureGeneration(root, args = {}) {
   assertGovernanceMutationRegistered("import-figure-generation", "guarded");
+  assertImportFigureGenerationInput(args);
   const target = assertTaskScopedMutationTarget(root, "import-figure-generation", args);
   assertFollowThroughReady(root, "Importing figure generation", args);
   ensureWorkspace(root);
@@ -1006,8 +1128,13 @@ export function importFigureGeneration(root, args = {}) {
   assertManifestHasNoInlineSecrets(root, outputManifestPath, manifest, "figureGeneration.outputManifest");
   assertNoLegacyFinalSvgInput(manifest, "figureGeneration.outputManifest");
   assertNoLegacyProviderOutputFields(manifest, "figureGeneration.outputManifest");
-  const semanticCoverage = normalizeSemanticCoverage(args.semanticCoverage ?? manifest.semanticCoverage ?? existingGeneration.semanticCoverage);
-  const semanticReview = normalizeSemanticReview(args.semanticReview ?? manifest.semanticReview ?? existingGeneration.semanticReview);
+  const providerOwnedManifest = existingGeneration.providerExecution?.status === "completed"
+    && outputManifestPath === existingGeneration.outputManifestPath;
+  if (!providerOwnedManifest) {
+    assertManifestDoesNotClaimSemanticSuccess(manifest, "figureGeneration.outputManifest");
+  }
+  const semanticCoverage = normalizeSemanticCoverage(args.semanticCoverage ?? existingGeneration.semanticCoverage);
+  const semanticReview = normalizeSemanticReview(args.semanticReview ?? existingGeneration.semanticReview);
   if (semanticCoverage || semanticReview) {
     writeJson(root, outputManifestPath, {
       ...manifest,
@@ -1027,7 +1154,6 @@ export function importFigureGeneration(root, args = {}) {
   } else {
     const sourceInspection = inspectDeclaredPath(root, sourceSvgPath, {
       requireNonEmpty: true,
-      rejectBookkeeping: true,
       readText: true,
       maxBytes: config.maxSvgBytes
     });

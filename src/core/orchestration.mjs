@@ -8,7 +8,7 @@ import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
 import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, createMetaOperatorFollowThroughIndex, normalizeMetaOperatorFollowThroughIndex, resolveResumeCommandForPhase, roleCanActAs } from "./schema.mjs";
-import { assertGovernanceMutationRegistered, assertFollowThroughReady, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
+import { assertGovernanceMutationRegistered, assertFollowThroughReady, assertNoPolicyOverrideArgs, loadState, nowIso, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
 import { evidencePathProblemFlags } from "./artifact-integrity.mjs";
 
 const ALLOWED_TRANSITIONS = {
@@ -143,23 +143,56 @@ function rebuttalStrategyResultCard(root, args = {}, issueCount = 0) {
     surface: "dove.rebuttal",
     command: "build_rebuttal_strategy",
     title: localizedText(responseLanguage, "回应策略已形成", "Response strategy drafted"),
-    status: issueCount > 0 ? "drafted" : "waiting-for-issues",
-    happened: issueCount > 0
-      ? localizedText(responseLanguage, `已围绕 ${issueCount} 条问题形成回应策略和回复草稿。`, `Drafted a response strategy and reply text for ${issueCount} issues.`)
-      : localizedText(responseLanguage, "还没有审稿问题，已准备空的回应策略草稿。", "No review issues are recorded yet; prepared an empty response strategy draft."),
+    status: "drafted",
+    happened: localizedText(responseLanguage, `已围绕 ${issueCount} 条问题形成回应策略和回复草稿。`, `Drafted a response strategy and reply text for ${issueCount} issues.`),
     durableWrites: [localizedText(responseLanguage, "回应策略和回复草稿已更新。", "Response strategy and reply draft were updated.")],
-    evidence: issueCount > 0 ? [localizedText(responseLanguage, "每条回应仍需要最终核对证据和措辞。", "Each response still needs final evidence and wording checks.")] : [],
+    evidence: [localizedText(responseLanguage, "每条回应仍需要最终核对证据和措辞。", "Each response still needs final evidence and wording checks.")],
     validation: [localizedText(responseLanguage, "最终发送前还需要独立 review。", "An independent review is still needed before finalizing.")],
     scope: { issueCount },
     nextActions: [{
-      title: issueCount > 0
-        ? localizedText(responseLanguage, "送去 review 检查回应是否站得住", "Review whether the responses hold up")
-        : localizedText(responseLanguage, "先导入或整理审稿问题", "Import or organize review issues first"),
-      why: issueCount > 0
-        ? localizedText(responseLanguage, "回应草稿已经有了，下一步要确认它没有过度承诺，也没有缺证据。", "The response draft exists; next confirm it does not over-promise or lack evidence.")
-        : localizedText(responseLanguage, "没有问题清单时，回应策略只能是占位，不能当成完成。", "Without an issue list, the response strategy is only a placeholder, not completed work.")
+      title: localizedText(responseLanguage, "送去 review 检查回应是否站得住", "Review whether the responses hold up"),
+      why: localizedText(responseLanguage, "回应草稿已经有了，下一步要确认它没有过度承诺，也没有缺证据。", "The response draft exists; next confirm it does not over-promise or lack evidence.")
     }]
   }, responseLanguage);
+}
+
+export function missingRebuttalIssuesResult(root, args = {}, command = "build_rebuttal_strategy") {
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const requiredActions = ["review-or-import-rebuttal-issues", "normalize-rebuttal-issues"];
+  const boundary = {
+    id: "rebuttal-normalized-issues-required",
+    type: "missing-required-materials",
+    reason: "At least one real issue in the canonical normalized rebuttal issues index is required before rebuttal artifacts can be written.",
+    requiredInputs: [ARTIFACT_PATHS.rebuttalIssues],
+    requiredActions,
+    artifactRefs: [],
+    nextAction: "project:dove.review",
+    ownerRole: "reviewer",
+    nextRole: "reviewer"
+  };
+  return {
+    status: "missing-required-materials",
+    issueCount: 0,
+    boundary,
+    boundaryType: boundary.type,
+    requiredActions,
+    artifactRefs: [],
+    nextAction: boundary.nextAction,
+    artifacts: [],
+    resultCard: buildCommandResultCard({
+      surface: "dove.rebuttal",
+      command,
+      title: localizedText(responseLanguage, "缺少规范化审稿问题", "Normalized review issues required"),
+      status: "missing-required-materials",
+      happened: localizedText(responseLanguage, "未写入回应策略、回复草稿或 rebuttal draft。", "No response strategy, response draft, or rebuttal draft was written."),
+      durableWrites: [],
+      boundary,
+      nextActions: [{
+        title: localizedText(responseLanguage, "先 review 并规范化问题", "Review and normalize issues first"),
+        why: localizedText(responseLanguage, "回应必须以 canonical normalized issues index 中的真实问题为前置材料。", "A rebuttal requires real issues from the canonical normalized issues index as prerequisite material.")
+      }]
+    }, responseLanguage)
+  };
 }
 
 function versionSnapshotResultCard(root, args = {}, snapshot = {}, { sectionCount = 0, claimCount = 0, reviewVerdict = "not-reviewed" } = {}) {
@@ -305,23 +338,6 @@ function expectedRoleForPhase(phase) {
   return PHASE_ROLE_OWNERS[phase] ?? "planner";
 }
 
-function normalizePolicyOverride(args = {}) {
-  const reason = typeof args.policyOverrideReason === "string" ? args.policyOverrideReason.trim() : "";
-  const reasonCode = typeof args.policyOverrideReasonCode === "string" ? args.policyOverrideReasonCode.trim() : "";
-  return {
-    active: reason.length > 0,
-    reason,
-    reasonCode,
-    actorRole: ROLE_IDS.includes(args.actorRole) ? args.actorRole : null,
-    evidencePaths: normalizeStringArray(args.policyOverrideEvidencePaths),
-    targetArtifact: typeof args.policyOverrideTargetArtifact === "string" && args.policyOverrideTargetArtifact.trim().length > 0 ? args.policyOverrideTargetArtifact : null,
-    targetId: typeof args.policyOverrideTargetId === "string" && args.policyOverrideTargetId.trim().length > 0 ? args.policyOverrideTargetId : null,
-    sourceId: typeof args.policyOverrideSourceId === "string" && args.policyOverrideSourceId.trim().length > 0 ? args.policyOverrideSourceId : null,
-    phase: typeof args.policyOverridePhase === "string" && args.policyOverridePhase.trim().length > 0 ? args.policyOverridePhase : null,
-    expiresAt: typeof args.policyOverrideExpiresAt === "string" && args.policyOverrideExpiresAt.trim().length > 0 ? args.policyOverrideExpiresAt : null
-  };
-}
-
 function targetArtifactContainsId(root, artifactPath, targetId) {
   if (!artifactPath || !targetId) {
     return false;
@@ -356,7 +372,7 @@ function targetArtifactContainsId(root, artifactPath, targetId) {
   return fs.readFileSync(fullPath, "utf8").includes(String(targetId));
 }
 
-function assertNoBlockingFollowThrough(root, currentPhase, nextPhase, currentAssignedRole, nextAssignedRole, policyOverride) {
+function assertNoBlockingFollowThrough(root, currentPhase, nextPhase, currentAssignedRole, nextAssignedRole) {
   const changingGovernance = currentPhase !== nextPhase || currentAssignedRole !== nextAssignedRole;
   if (!changingGovernance) {
     return;
@@ -378,41 +394,16 @@ function assertNoBlockingFollowThrough(root, currentPhase, nextPhase, currentAss
     linkedTargetArtifact: item.linkedTargetArtifact,
     linkedTargetId: item.linkedTargetId
   }));
-  if (actionRequired.length === 0) {
-    return;
+  if (actionRequired.length > 0) {
+    throw new Error(`Cannot advance orchestration from ${currentPhase} to ${nextPhase} while operator follow-through still requires action: ${actionRequired.map((item) => item.id).join(", ")}.`);
   }
-  if (policyOverride.active) {
-    const relevance = policyOverride.actorRole ? overrideEvidenceRelevantToItems(root, actionRequired, policyOverride.evidencePaths) : { ok: false, unrelatedItemIds: actionRequired.map((item) => item.id) };
-    const targetMatch = actionRequired.some((item) => item.linkedTargetArtifact === policyOverride.targetArtifact && item.linkedTargetId === policyOverride.targetId);
-    const sourceMatch = actionRequired.some((item) => item.sourceId === policyOverride.sourceId);
-    const notExpired = policyOverride.expiresAt && String(policyOverride.expiresAt) > nowIso();
-    const withinWindow = notExpired && String(policyOverride.expiresAt) <= new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    const actorMatches = policyOverride.actorRole && policyOverride.actorRole === currentAssignedRole;
-    const reasonCodeAllowed = ["emergency-repair", "manual-reconciliation", "operator-acknowledged-exception"].includes(policyOverride.reasonCode);
-    const phaseMatches = policyOverride.phase === currentPhase;
-    if (relevance.ok && targetMatch && sourceMatch && phaseMatches && withinWindow && actorMatches && reasonCodeAllowed) {
-      return;
-    }
-    throw new Error(`Cannot override follow-through governance without current-owner actorRole, matching policyOverrideSourceId, matching policyOverrideTargetArtifact/policyOverrideTargetId, matching policyOverridePhase, allowed policyOverrideReasonCode, relevant policyOverrideEvidencePaths, and a short future policyOverrideExpiresAt. Action-required records: ${actionRequired.map((item) => item.id).join(", ")}. Unrelated records: ${relevance.unrelatedItemIds.join(", ") || "none"}.`);
-  }
-  throw new Error(`Cannot advance orchestration from ${currentPhase} to ${nextPhase} while operator follow-through still requires action: ${actionRequired.map((item) => item.id).join(", ")}. Provide policyOverrideReason for traceable manual progression if this is intentional.`);
-}
-
-function policyOverrideSuffix(policyOverride) {
-  if (!policyOverride?.active) {
-    return "";
-  }
-  return ` Policy override: ${policyOverride.reason}.`;
 }
 
 function formatExpectedRoleMessage(actionLabel, phase, role) {
-  return `${actionLabel} requires role ${role} for phase ${phase}. Use appendHandoff or upsertOrchestrationBoard to transfer ownership first, or provide policyOverrideReason for traceable manual maintenance.`;
+  return `${actionLabel} requires routing role ${role} for phase ${phase}. Use appendHandoff or upsertOrchestrationBoard to record a valid workflow state transition.`;
 }
 
-function assertPhaseRoleOwnership(phase, role, actionLabel, policyOverride) {
-  if (policyOverride?.active) {
-    return;
-  }
+function assertPhaseRoleOwnership(phase, role, actionLabel) {
   const expectedRole = expectedRoleForPhase(phase);
   if (!roleCanActAs(role, expectedRole)) {
     throw new Error(formatExpectedRoleMessage(actionLabel, phase, expectedRole));
@@ -428,29 +419,9 @@ function assertLegalTransition(currentPhase, nextPhase, strictMode) {
   }
 }
 
-function validateBoardMutation(currentBoard, nextPhase, nextAssignedRole, policyOverride, strictMode, actionLabel) {
+function validateBoardMutation(currentBoard, nextPhase, nextAssignedRole, strictMode, actionLabel) {
   assertLegalTransition(currentBoard.currentPhase, nextPhase, strictMode);
-  assertPhaseRoleOwnership(nextPhase, nextAssignedRole, actionLabel, policyOverride);
-}
-
-export function assertRoleBoundMutation(root, args = {}, { actionLabel, expectedRole } = {}) {
-  const board = loadBoard(root);
-  const policyOverride = normalizePolicyOverride(args);
-  if (policyOverride.active) {
-    return { board, policyOverride };
-  }
-  const currentPhaseOwner = expectedRoleForPhase(board.currentPhase);
-  if (!roleCanActAs(board.assignedRole, currentPhaseOwner)) {
-    throw new Error(
-      `${actionLabel} requires the board owner to match the current phase contract (${currentPhaseOwner} for phase ${board.currentPhase}). Current board owner is ${board.assignedRole}. Repair the board with appendHandoff or upsertOrchestrationBoard first, or provide policyOverrideReason for traceable manual maintenance.`
-    );
-  }
-  if (!roleCanActAs(board.assignedRole, expectedRole)) {
-    throw new Error(
-      `${actionLabel} requires board role ${expectedRole}, but the current owner is ${board.assignedRole} in phase ${board.currentPhase}. Transfer ownership explicitly with appendHandoff or upsertOrchestrationBoard, or provide policyOverrideReason for traceable manual maintenance.`
-    );
-  }
-  return { board, policyOverride };
+  assertPhaseRoleOwnership(nextPhase, nextAssignedRole, actionLabel);
 }
 
 export function classifyWorkflowIntent({ phase, tasks = [], blockers = [] } = {}) {
@@ -679,7 +650,7 @@ function computeUnresolvedBlockersByRole(blockers = []) {
   return grouped;
 }
 
-function renderHandoffEntry({ timestamp, fromRole, toRole, phase, intentType, summary, currentFocus, nextAction, nextActions, evidenceLinks, blockerIds, policyOverrideReason }) {
+function renderHandoffEntry({ timestamp, fromRole, toRole, phase, intentType, summary, currentFocus, nextAction, nextActions, evidenceLinks, blockerIds }) {
   return [
     `\n## ${timestamp} — ${fromRole} -> ${toRole}`,
     "",
@@ -692,7 +663,6 @@ function renderHandoffEntry({ timestamp, fromRole, toRole, phase, intentType, su
     ...(nextActions.length > 0 ? nextActions.map((item) => `  - ${item}`) : ["  - None recorded"]),
     `- Evidence links: ${evidenceLinks.join(", ") || "none"}`,
     `- Blockers: ${blockerIds.join(", ") || "none"}`,
-    policyOverrideReason ? `- Policy override: ${policyOverrideReason}` : null,
     ""
   ].filter(Boolean).join("\n");
 }
@@ -851,7 +821,7 @@ function syncStateWithBoard(root, board, state = loadState(root)) {
   return nextState;
 }
 
-export function saveBoard(root, board) {
+function persistBoard(root, board) {
   const state = loadState(root);
   const withDefaults = { ...createDefaultBoard(state), ...board };
   const tasks = Array.isArray(withDefaults.tasks) ? withDefaults.tasks.map((task, index) => normalizeTask(task, index, withDefaults.assignedRole)) : [];
@@ -889,7 +859,7 @@ export function saveBoard(root, board) {
   writeJson(root, ARTIFACT_PATHS.orchestrationBoard, normalized);
   syncStateWithBoard(root, normalized);
   refreshDurableSurfaces(root, {
-    type: "save-board",
+    type: "persist-board",
     summary: `Updated board phase ${normalized.currentPhase} for ${normalized.assignedRole}.`,
     artifactPaths: [ARTIFACT_PATHS.orchestrationBoard, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.workspaceIndex]
   });
@@ -897,13 +867,13 @@ export function saveBoard(root, board) {
 }
 
 export function upsertOrchestrationBoard(root, args = {}) {
+  assertNoPolicyOverrideArgs(args, "Updating the orchestration board");
   const state = loadState(root);
   const current = loadBoard(root);
   const nextPhase = args.phase ?? current.currentPhase;
   const nextAssignedRole = args.assignedRole ?? current.assignedRole;
-  const policyOverride = normalizePolicyOverride(args);
-  validateBoardMutation(current, nextPhase, nextAssignedRole, policyOverride, state.settings?.strictMode, "Updating the orchestration board");
-  assertNoBlockingFollowThrough(root, current.currentPhase, nextPhase, current.assignedRole, nextAssignedRole, policyOverride);
+  validateBoardMutation(current, nextPhase, nextAssignedRole, state.settings?.strictMode, "Updating the orchestration board");
+  assertNoBlockingFollowThrough(root, current.currentPhase, nextPhase, current.assignedRole, nextAssignedRole);
   const tasks = Array.isArray(args.tasks) ? args.tasks.map((task, index) => normalizeTask(task, index, nextAssignedRole)) : current.tasks;
   const blockers = Array.isArray(args.blockers) ? args.blockers.map((blocker, index) => normalizeBlocker(blocker, index, nextAssignedRole)) : current.blockers;
   const intentType = args.intentType ?? classifyWorkflowIntent({ phase: nextPhase, tasks, blockers });
@@ -921,17 +891,16 @@ export function upsertOrchestrationBoard(root, args = {}) {
       toRole: nextAssignedRole,
       phase: nextPhase,
       intentType,
-      summary: args.handoffSummary ?? `Role ownership moved from ${current.assignedRole} to ${nextAssignedRole}.`,
+      summary: args.handoffSummary ?? `Workflow routing moved from ${current.assignedRole} to ${nextAssignedRole}.`,
       currentFocus,
       nextAction,
       nextActions: normalizeStringArray(args.nextActions ?? [nextAction]),
       evidenceLinks: normalizeStringArray(args.evidenceLinks ?? current.evidenceLinks),
-      blockerIds: normalizeStringArray(blockers.filter((item) => item.status !== "resolved").map((item) => item.id)),
-      policyOverrideReason: policyOverride.reason || null
+      blockerIds: normalizeStringArray(blockers.filter((item) => item.status !== "resolved").map((item) => item.id))
     });
   }
 
-  return saveBoard(root, {
+  return persistBoard(root, {
     ...current,
     paperObjective: args.doveObjective ?? args.objective ?? current.doveObjective ?? state.dove.objective,
     currentPhase: nextPhase,
@@ -958,16 +927,16 @@ export function upsertOrchestrationBoard(root, args = {}) {
 }
 
 export function appendHandoff(root, args = {}) {
+  assertNoPolicyOverrideArgs(args, "Appending a handoff");
   const board = loadBoard(root);
   const state = loadState(root);
-  const policyOverride = normalizePolicyOverride(args);
   const timestamp = args.timestamp ?? nowIso();
   const fromRole = args.fromRole ?? board.assignedRole;
   const toRole = args.toRole ?? board.assignedRole;
   const phase = args.phase ?? board.currentPhase;
-  validateBoardMutation(board, phase, toRole, policyOverride, state.settings?.strictMode, "Appending a handoff");
-  if (!policyOverride.active && !roleCanActAs(fromRole, board.assignedRole)) {
-    throw new Error(`Appending a handoff requires fromRole ${board.assignedRole}, but received ${fromRole}. Use policyOverrideReason for traceable manual maintenance if you need to repair the handoff log.`);
+  validateBoardMutation(board, phase, toRole, state.settings?.strictMode, "Appending a handoff");
+  if (!roleCanActAs(fromRole, board.assignedRole)) {
+    throw new Error(`Appending a handoff requires fromRole ${board.assignedRole}, but received ${fromRole}.`);
   }
   const intentType = args.intentType ?? board.intentType ?? classifyWorkflowIntent({ phase, tasks: board.tasks, blockers: board.blockers });
   const currentFocus = args.currentFocus ?? board.currentFocus;
@@ -983,8 +952,7 @@ export function appendHandoff(root, args = {}) {
     nextAction,
     nextActions: Array.isArray(args.nextActions) ? args.nextActions : [nextAction],
     evidenceLinks: normalizeStringArray(args.evidenceLinks ?? board.evidenceLinks),
-    blockerIds: normalizeStringArray(args.blockerIds ?? board.blockers.filter((item) => item.status !== "resolved").map((item) => item.id)),
-    policyOverrideReason: policyOverride.reason || null
+    blockerIds: normalizeStringArray(args.blockerIds ?? board.blockers.filter((item) => item.status !== "resolved").map((item) => item.id))
   });
 
   return upsertOrchestrationBoard(root, {
@@ -1152,6 +1120,48 @@ function confidenceAfterSupport(current) {
   return "high";
 }
 
+const SYSTEM_OWNED_EXPERIMENT_PROVENANCE_FIELDS = new Set([
+  "authorizationProvenance",
+  "authorizationProvenanceHistory",
+  "authorizationFingerprint",
+  "authorityStepId",
+  "authorityStepIndex",
+  "executionClaimId",
+  "runtimeRunId",
+  "leaseId"
+]);
+
+function collectForbiddenExperimentProvenancePaths(value, path = "", seen = new WeakSet()) {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  if (seen.has(value)) {
+    return [];
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) =>
+      collectForbiddenExperimentProvenancePaths(item, `${path}[${index}]`, seen)
+    );
+  }
+  return Object.entries(value).flatMap(([key, nestedValue]) => {
+    const fieldPath = path ? `${path}.${key}` : key;
+    return [
+      ...(SYSTEM_OWNED_EXPERIMENT_PROVENANCE_FIELDS.has(key) ? [fieldPath] : []),
+      ...collectForbiddenExperimentProvenancePaths(nestedValue, fieldPath, seen)
+    ];
+  });
+}
+
+function assertNoPublicExperimentProvenance(args = {}, actionLabel) {
+  const forbidden = collectForbiddenExperimentProvenancePaths(args);
+  if (forbidden.length > 0) {
+    throw new Error(
+      `${actionLabel} does not accept system-owned runtime provenance fields: ${forbidden.join(", ")}.`
+    );
+  }
+}
+
 function resolveDurableExperimentResult(resultsIndex, args = {}, actionLabel = "Experiment result lookup") {
   if (args.result) {
     const resultId = args.result.id ?? args.resultId;
@@ -1190,11 +1200,9 @@ function resolveDurableExperimentResult(resultsIndex, args = {}, actionLabel = "
 
 export function runExperimentAudit(root, args = {}) {
   assertGovernanceMutationRegistered("run-experiment-audit", "guarded");
+  assertNoPublicExperimentProvenance(args, "Public experiment audit mutations");
   const target = assertTaskScopedMutationTarget(root, "run-experiment-audit", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Running an experiment audit",
-    expectedRole: "experiment-planner"
-  });
+  assertFollowThroughReady(root, "Running an experiment audit", args);
   const audit = persistExperimentAudit(root, args);
   return {
     ...audit,
@@ -1211,7 +1219,7 @@ export function runExperimentAudit(root, args = {}) {
   };
 }
 
-export function persistExperimentAudit(root, args = {}) {
+function persistExperimentAudit(root, args = {}, runtimeContext = {}) {
   const resultsIndex = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
@@ -1321,10 +1329,20 @@ export function persistExperimentAudit(root, args = {}) {
     resultOutcome: rawResult.outcome,
     evidenceLinkCount: (rawResult.evidenceLinks ?? []).length,
     comparisonTargetCount: (rawResult.comparisonTargets ?? []).length,
-    claimStateBefore: linkedClaim ? { status: linkedClaim.status, confidence: linkedClaim.confidence } : null
+    claimStateBefore: linkedClaim ? { status: linkedClaim.status, confidence: linkedClaim.confidence } : null,
+    ...(runtimeContext.authorizationProvenance ? { authorizationProvenance: runtimeContext.authorizationProvenance } : {})
   }, auditsIndex.items.length);
+  if (runtimeContext.authorizationProvenance) {
+    audit.authorizationProvenance = runtimeContext.authorizationProvenance;
+  }
   const existingIndex = auditsIndex.items.findIndex((item) => item.id === audit.id);
   if (existingIndex >= 0) {
+    const existingAudit = auditsIndex.items[existingIndex];
+    const existingProvenance = existingAudit.authorizationProvenance ?? null;
+    const nextProvenance = runtimeContext.authorizationProvenance ?? null;
+    if ((existingProvenance || nextProvenance) && JSON.stringify(existingProvenance) !== JSON.stringify(nextProvenance)) {
+      throw new Error(`Experiment audit ${audit.id} authorization provenance conflicts with durable state.`);
+    }
     auditsIndex.items[existingIndex] = audit;
   } else {
     auditsIndex.items.push(audit);
@@ -1336,12 +1354,9 @@ export function persistExperimentAudit(root, args = {}) {
 
 export function bridgeExperimentResultToClaim(root, args = {}) {
   assertGovernanceMutationRegistered("bridge-experiment-result-to-claim", "guarded");
+  assertNoPublicExperimentProvenance(args, "Public experiment bridge mutations");
   const target = assertTaskScopedMutationTarget(root, "bridge-experiment-result-to-claim", args);
   assertFollowThroughReady(root, "Bridging an experiment result to a claim", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Bridging an experiment result to a claim",
-    expectedRole: "experiment-planner"
-  });
   const bridge = persistExperimentResultClaimBridge(root, args);
   return {
     ...bridge,
@@ -1359,7 +1374,7 @@ export function bridgeExperimentResultToClaim(root, args = {}) {
   };
 }
 
-export function persistExperimentResultClaimBridge(root, args = {}) {
+function persistExperimentResultClaimBridge(root, args = {}, runtimeContext = {}) {
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const resultsIndex = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
   const auditsIndex = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
@@ -1383,58 +1398,98 @@ export function persistExperimentResultClaimBridge(root, args = {}) {
     throw new Error(`Claim bridge could not find claim ${result.claimId}`);
   }
   const currentClaim = evidence.claims[claimIndex];
-  const before = { status: currentClaim.status, confidence: currentClaim.confidence };
+  const currentClaimState = { status: currentClaim.status, confidence: currentClaim.confidence };
   const requestedAuditIds = normalizeStringArray(args.auditIds);
   const auditById = new Map((auditsIndex.items ?? []).map((item) => [item.id, item]));
   const missingAuditIds = requestedAuditIds.filter((id) => !auditById.has(id));
   if (missingAuditIds.length > 0) {
     throw new Error(`Claim bridge requires durable experiment audit records; missing auditIds: ${missingAuditIds.join(", ")}.`);
   }
-  const audits = requestedAuditIds.length > 0
+  const candidateAudits = requestedAuditIds.length > 0
     ? requestedAuditIds.map((id) => auditById.get(id))
     : (auditsIndex.items ?? []).filter((item) => item.resultId === result.id);
-  if (audits.length === 0) {
+  if (candidateAudits.length === 0) {
     throw new Error(`Claim bridge requires at least one durable experiment audit for result ${result.id}.`);
   }
-  const mismatchedAudits = audits.filter((audit) => audit.resultId !== result.id || audit.claimId !== result.claimId);
+  const mismatchedAudits = candidateAudits.filter((audit) => audit.resultId !== result.id || audit.claimId !== result.claimId);
   if (mismatchedAudits.length > 0) {
     throw new Error(`Claim bridge audit records do not match result ${result.id}: ${mismatchedAudits.map((audit) => audit.id).join(", ")}.`);
+  }
+  const candidateAuditVerdict = candidateAudits.some((audit) => audit.auditVerdict === "blocked")
+    ? "blocked"
+    : candidateAudits.some((audit) => audit.auditVerdict === "concern")
+      ? "concern"
+      : "clean";
+  const candidateMapping = candidateAuditVerdict !== "clean"
+    ? "integrity-hold"
+    : result.outcome === "supports"
+      ? "supports"
+      : result.outcome === "refutes" || result.outcome === "failed"
+        ? "refutes"
+        : "inconclusive";
+  const candidateBridgeId = slugify(args.id ?? `${result.id}-${candidateMapping}-bridge`);
+  const candidateBridge = (bridgeLog.items ?? []).find((item) => item.id === candidateBridgeId) ?? null;
+  const resultLinkedBridge = !args.id && result.latestBridgeId
+    ? (bridgeLog.items ?? []).find(
+        (item) =>
+          item.id === result.latestBridgeId
+          && item.resultId === result.id
+      ) ?? null
+    : null;
+  if (!args.id && result.latestBridgeId && !resultLinkedBridge) {
+    throw new Error(`Claim bridge retry for result ${result.id} cannot find linked bridge ${result.latestBridgeId}.`);
+  }
+  const existingBridge = candidateBridge ?? resultLinkedBridge;
+  const bridgeId = existingBridge?.id ?? candidateBridgeId;
+  const implicitResultRetry = Boolean(
+    existingBridge
+    && !args.id
+    && resultLinkedBridge?.id === existingBridge.id
+  );
+  const existingAuditIds = existingBridge
+    ? normalizeStringArray(existingBridge.auditIds)
+    : [];
+  const audits = implicitResultRetry || (existingBridge && !Object.hasOwn(args, "auditIds"))
+    ? existingAuditIds.map((id) => auditById.get(id)).filter(Boolean)
+    : candidateAudits;
+  if ((implicitResultRetry || (existingBridge && !Object.hasOwn(args, "auditIds"))) && audits.length !== existingAuditIds.length) {
+    throw new Error(`Claim bridge ${existingBridge.id} references missing durable experiment audit records.`);
   }
   const auditIds = audits.map((audit) => audit.id);
   const auditVerdict = audits.some((audit) => audit.auditVerdict === "blocked")
     ? "blocked"
     : audits.some((audit) => audit.auditVerdict === "concern")
       ? "concern"
-      : audits.length > 0
-        ? "clean"
-        : "missing";
+      : "clean";
   const aggregatedIntegrityFlags = Array.from(new Set(audits.flatMap((audit) => audit.integrityFlags ?? [])));
-  let mapping = "inconclusive";
+  const mapping = auditVerdict !== "clean"
+    ? "integrity-hold"
+    : result.outcome === "supports"
+      ? "supports"
+      : result.outcome === "refutes" || result.outcome === "failed"
+        ? "refutes"
+        : "inconclusive";
+  const before = existingBridge?.claimStateBefore ?? currentClaimState;
+  const bridgeStatus = auditVerdict === "clean" ? "applied" : "held-for-review";
   let after = { ...before };
-  let bridgeStatus = auditVerdict === "clean" ? "applied" : "held-for-review";
   let stateChange = "hold";
   if (auditVerdict !== "clean") {
-    mapping = "integrity-hold";
     stateChange = "hold";
   } else if (result.outcome === "supports") {
-    mapping = "supports";
-    after = { status: "supported", confidence: confidenceAfterSupport(currentClaim.confidence) };
+    after = { status: "supported", confidence: confidenceAfterSupport(before.confidence) };
     stateChange = "promote";
   } else if (result.outcome === "refutes") {
-    mapping = "refutes";
     after = { status: "refuted", confidence: "low" };
     stateChange = "downgrade";
   } else if (result.outcome === "failed") {
-    mapping = "refutes";
     after = { status: "challenged", confidence: "low" };
     stateChange = "downgrade";
   } else {
-    mapping = "inconclusive";
     after = { status: "inconclusive", confidence: "low" };
     stateChange = "downgrade";
   }
   const bridgeEvent = {
-    id: slugify(args.id ?? `${result.id}-${mapping}-bridge`),
+    id: bridgeId,
     experimentId: result.experimentId,
     resultId: result.id,
     claimId: result.claimId,
@@ -1451,43 +1506,94 @@ export function persistExperimentResultClaimBridge(root, args = {}) {
     bridgeStatus,
     stateChange,
     reviewRequiredBeforeFinalize: auditVerdict !== "clean" || mapping !== "supports",
-    reason: args.reason ?? (auditVerdict !== "clean"
-      ? `Experiment ${result.experimentId} cannot update claim ${result.claimId} cleanly because audit verdict is ${auditVerdict}.`
-      : result.summary ?? `Experiment ${result.experimentId} returned ${result.outcome}.`),
+    reason: implicitResultRetry
+      ? existingBridge.reason
+      : args.reason ?? (auditVerdict !== "clean"
+        ? `Experiment ${result.experimentId} cannot update claim ${result.claimId} cleanly because audit verdict is ${auditVerdict}.`
+        : result.summary ?? `Experiment ${result.experimentId} returned ${result.outcome}.`),
+    ...(runtimeContext.authorizationProvenance
+      ? { authorizationProvenance: runtimeContext.authorizationProvenance }
+      : {}),
     updatedAt: nowIso()
   };
-  bridgeLog.items.push(bridgeEvent);
-  bridgeLog.updatedAt = nowIso();
-  writeJson(root, ARTIFACT_PATHS.claimBridgeLog, bridgeLog);
+  if (existingBridge) {
+    const stableExisting = {
+      ...existingBridge,
+      updatedAt: null
+    };
+    const stableNext = {
+      ...bridgeEvent,
+      updatedAt: null
+    };
+    if (
+      JSON.stringify(stableExisting)
+      !== JSON.stringify(stableNext)
+    ) {
+      throw new Error(
+        `Claim bridge ${bridgeEvent.id} already exists with different durable content.`
+      );
+    }
+    const claimAtBeforeState =
+      currentClaimState.status === existingBridge.claimStateBefore?.status
+      && currentClaimState.confidence === existingBridge.claimStateBefore?.confidence
+      && (currentClaim.latestBridgeId ?? null) !== existingBridge.id;
+    if (existingBridge.bridgeStatus !== "applied") {
+      if (!claimAtBeforeState) {
+        throw new Error(
+          `Claim bridge ${existingBridge.id} durable claim state conflicts with its recorded held state.`
+        );
+      }
+      return existingBridge;
+    }
+    const expectedLatestAuditId = audits[0]?.id ?? null;
+    const claimAtAppliedState =
+      currentClaimState.status === existingBridge.claimStateAfter?.status
+      && currentClaimState.confidence === existingBridge.claimStateAfter?.confidence
+      && currentClaim.latestBridgeId === existingBridge.id
+      && currentClaim.bridgeStatus === existingBridge.bridgeStatus
+      && currentClaim.latestAuditVerdict === existingBridge.auditVerdict
+      && (currentClaim.latestAuditId ?? null) === expectedLatestAuditId
+      && (currentClaim.experimentIds ?? []).includes(existingBridge.experimentId);
+    if (!claimAtBeforeState && !claimAtAppliedState) {
+      throw new Error(
+        `Claim bridge ${existingBridge.id} durable claim state conflicts with both its recorded before and applied states.`
+      );
+    }
+    if (claimAtAppliedState) {
+      writeText(root, ARTIFACT_PATHS.claims, renderClaimsMarkdown(evidence.claims));
+      return existingBridge;
+    }
+  } else {
+    bridgeLog.items.push(bridgeEvent);
+    bridgeLog.updatedAt = nowIso();
+    writeJson(root, ARTIFACT_PATHS.claimBridgeLog, bridgeLog);
+  }
 
   if (bridgeStatus !== "applied") {
     return bridgeEvent;
   }
 
+  const durableBridge = existingBridge ?? bridgeEvent;
   evidence.claims[claimIndex] = {
     ...currentClaim,
-    status: after.status,
-    confidence: after.confidence,
+    status: durableBridge.claimStateAfter.status,
+    confidence: durableBridge.claimStateAfter.confidence,
     latestAuditId: audits[0]?.id ?? currentClaim.latestAuditId ?? null,
-    latestAuditVerdict: auditVerdict,
-    latestBridgeId: bridgeEvent.id,
-    bridgeStatus,
-    experimentIds: Array.from(new Set([...(currentClaim.experimentIds ?? []), result.experimentId]))
+    latestAuditVerdict: durableBridge.auditVerdict,
+    latestBridgeId: durableBridge.id,
+    bridgeStatus: durableBridge.bridgeStatus,
+    experimentIds: Array.from(new Set([...(currentClaim.experimentIds ?? []), durableBridge.experimentId]))
   };
   evidence.updatedAt = nowIso();
   writeJson(root, ARTIFACT_PATHS.evidence, evidence);
   writeText(root, ARTIFACT_PATHS.claims, renderClaimsMarkdown(evidence.claims));
-  return bridgeEvent;
+  return durableBridge;
 }
 
 export function upsertExperimentPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-experiment-plan", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-experiment-plan", args);
   assertFollowThroughReady(root, "Updating an experiment plan", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Updating an experiment plan",
-    expectedRole: "experiment-planner"
-  });
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   const rawPlan = args.plan ?? args;
@@ -1555,10 +1661,6 @@ export function upsertExperimentResult(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-experiment-result", "guarded");
   const taskTarget = assertTaskScopedMutationTarget(root, "upsert-experiment-result", args);
   assertFollowThroughReady(root, "Updating an experiment result", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Updating an experiment result",
-    expectedRole: "experiment-planner"
-  });
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const resultsIndex = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
@@ -1592,7 +1694,6 @@ export function upsertExperimentResult(root, args = {}) {
   const audit = runExperimentAudit(root, {
     resultId: result.id,
     packetId: taskTarget.packetId ?? args.packetId,
-    policyOverrideReason: args.policyOverrideReason,
     actorRole: args.actorRole
   });
   let bridgeEvent;
@@ -1601,7 +1702,6 @@ export function upsertExperimentResult(root, args = {}) {
       resultId: result.id,
       packetId: taskTarget.packetId ?? args.packetId,
       auditIds: [audit.id],
-      policyOverrideReason: args.policyOverrideReason,
       actorRole: args.actorRole
     });
   } else {
@@ -1721,18 +1821,61 @@ function normalizeIssue(issue = {}, index = 0) {
     claimIds: normalizeStringArray(issue.claimIds),
     experimentIds: normalizeStringArray(issue.experimentIds),
     responseDirection: issue.responseDirection ?? "clarify",
+    ...(issue.authorizationProvenance
+      ? { authorizationProvenance: issue.authorizationProvenance }
+      : {}),
+    authorizationProvenanceHistory:
+      Array.isArray(
+        issue.authorizationProvenanceHistory
+      )
+        ? issue.authorizationProvenanceHistory
+        : [],
+    sourceReviewIds: normalizeStringArray(
+      issue.sourceReviewIds
+    ),
+    sourceReviewExecutionClaimId:
+      issue.sourceReviewExecutionClaimId
+      ?? null,
     updatedAt: nowIso()
   };
 }
 
+function assertNoReservedRebuttalFields(args = {}) {
+  const reservedFields = new Set([
+    "authorizationProvenance",
+    "authorizationProvenanceHistory",
+    "sourceReviewId",
+    "sourceReviewIds",
+    "sourceReviewExecutionClaimId",
+    "executionClaimId",
+    "updateBoard",
+    "refreshDurableSurfaces"
+  ]);
+  const invalid = [
+    ...Object.keys(args ?? {})
+      .filter((key) => reservedFields.has(key)),
+    ...(args.issues ?? []).flatMap(
+      (issue, index) =>
+        Object.keys(issue ?? {})
+          .filter((key) =>
+            reservedFields.has(key)
+          )
+          .map(
+            (key) =>
+              `issues[${index}].${key}`
+          )
+    )
+  ];
+  if (invalid.length > 0) {
+    throw new Error(`Public rebuttal mutations do not accept runtime provenance fields: ${invalid.join(", ")}.`);
+  }
+}
+
 export function normalizeRebuttalIssues(root, args = {}) {
   assertGovernanceMutationRegistered("normalize-rebuttal-issues", "guarded");
+  assertNoReservedRebuttalFields(args);
   const target = assertTaskScopedMutationTarget(root, "normalize-rebuttal-issues", args);
   assertFollowThroughReady(root, "Normalizing rebuttal issues", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Normalizing rebuttal issues",
-    expectedRole: "reviewer"
-  });
   const next = persistRebuttalIssues(root, args);
   return {
     ...next,
@@ -1750,9 +1893,19 @@ export function normalizeRebuttalIssues(root, args = {}) {
   };
 }
 
-export function persistRebuttalIssues(root, args = {}) {
+function persistRebuttalIssues(root, args = {}) {
   const issuesIndex = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
-  const provided = Array.isArray(args.issues) ? args.issues.map(normalizeIssue) : [];
+  const provided = Array.isArray(args.issues)
+    ? args.issues.map((issue, index) => {
+        const existing = (issuesIndex.items ?? []).find(
+          (item) => item.id === issue.id
+        ) ?? null;
+        return normalizeIssue({
+          ...existing,
+          ...issue
+        }, index);
+      })
+    : [];
   const merged = new Map((issuesIndex.items ?? []).map((issue, index) => {
     const normalized = normalizeIssue(issue, index);
     return [normalized.id, normalized];
@@ -1763,7 +1916,7 @@ export function persistRebuttalIssues(root, args = {}) {
   const items = Array.from(merged.values()).sort((left, right) => left.id.localeCompare(right.id));
   const next = { version: 1, items, updatedAt: nowIso() };
   writeJson(root, ARTIFACT_PATHS.rebuttalIssues, next);
-  if (!args.skipBoardUpdate) {
+  if (args.updateBoard !== false) {
     upsertOrchestrationBoard(root, {
       phase: "rebuttal",
       assignedRole: "builder",
@@ -1780,7 +1933,7 @@ export function persistRebuttalIssues(root, args = {}) {
       reviewRequiredBeforeFinalize: true
     });
   }
-  if (!args.skipRefreshDurableSurfaces) {
+  if (args.refreshDurableSurfaces !== false) {
     refreshDurableSurfaces(root, {
       type: "normalize-rebuttal-issues",
       summary: `Normalized ${items.length} rebuttal issues.`,
@@ -1794,11 +1947,10 @@ export function buildRebuttalStrategy(root, args = {}) {
   assertGovernanceMutationRegistered("build-rebuttal-strategy", "guarded");
   const target = assertTaskScopedMutationTarget(root, "build-rebuttal-strategy", args);
   assertFollowThroughReady(root, "Building the rebuttal strategy", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Building the rebuttal strategy",
-    expectedRole: "builder"
-  });
   const issues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
+  if (!Array.isArray(issues.items) || issues.items.length === 0) {
+    return missingRebuttalIssuesResult(root, args);
+  }
   const board = loadBoard(root);
   const strategy = [
     "# Rebuttal strategy",
@@ -1920,10 +2072,6 @@ export function createVersionSnapshot(root, args = {}) {
   assertGovernanceMutationRegistered("create-version-snapshot", "guarded");
   assertTaskScopedMutationTarget(root, "create-version-snapshot", args);
   assertFollowThroughReady(root, "Creating a version snapshot", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Creating a version snapshot",
-    expectedRole: "version-analyst"
-  });
   assertFinalizeReviewGate(root, "Creating a version snapshot");
   const state = loadState(root);
   const board = loadBoard(root);
@@ -2023,10 +2171,6 @@ export function compareVersions(root, args = {}) {
   assertGovernanceMutationRegistered("compare-versions", "guarded");
   assertTaskScopedMutationTarget(root, "compare-versions", args);
   assertFollowThroughReady(root, "Comparing versions", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Comparing versions",
-    expectedRole: "version-analyst"
-  });
   assertFinalizeReviewGate(root, "Comparing versions");
   const fromId = args.fromVersionId;
   const toId = args.toVersionId;

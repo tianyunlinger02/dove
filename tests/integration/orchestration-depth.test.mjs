@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 import {
   appendHandoff,
   appendReviewLog,
+  buildRebuttal,
   buildRebuttalStrategy,
   compareVersions,
   createVersionSnapshot,
@@ -13,6 +15,7 @@ import {
   initProject,
   normalizeRebuttalIssues,
   readRoleContextManifest,
+  registerSource,
   readState,
   runReviewLoop,
   updateResearchBrief,
@@ -20,7 +23,8 @@ import {
   upsertExperimentPlan,
   upsertExperimentResult,
   upsertNote,
-  upsertOrchestrationBoard
+  upsertOrchestrationBoard,
+  verifySource
 } from "../../src/core/index.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -84,11 +88,22 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     evidenceBacklog: ["Need experiment result for baseline-a"]
   });
 
-  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
-    version: 1,
-    items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
-    updatedAt: null
-  }, null, 2));
+  const source = registerSource(root, {
+    packetId,
+    sourceId: "known-source",
+    citationKey: "known-source",
+    title: "Known",
+    authors: [],
+    year: 2026
+  });
+  verifySource(root, {
+    packetId,
+    sourceId: source.id,
+    decision: "verified",
+    method: "test fixture inspected the canonical publication record",
+    checkedMaterial: "source title, authors, year, and publication metadata",
+    auditEvidence: [`fixture:${source.id}`]
+  });
   upsertNote(root, {
     packetId,
     title: "Depth note",
@@ -199,6 +214,101 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   assert.ok(fs.existsSync(path.join(root, ".dove", "versions", "LATEST_COMPARISON.md")));
 });
 
+test("rebuttal builders return a no-write boundary without normalized issues", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, {
+    title: "Empty Rebuttal Boundary",
+    objective: "Reject placeholder rebuttal artifacts.",
+    thesis: "Real normalized issues are required."
+  });
+  const packetId = seedTaskPacket(root, "empty-rebuttal-packet");
+  const artifactPaths = [
+    ".dove/rebuttal/strategy.md",
+    ".dove/rebuttal/response-draft.md",
+    ".dove/drafts/rebuttal.md"
+  ];
+  const beforeState = fs.readFileSync(path.join(root, ".dove", "state.json"), "utf8");
+  const beforeArtifacts = artifactPaths.map((artifactPath) => {
+    const absolutePath = path.join(root, artifactPath);
+    return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : null;
+  });
+
+  const strategy = buildRebuttalStrategy(root, { packetId });
+  assert.equal(strategy.status, "missing-required-materials");
+  assert.deepEqual(strategy.requiredActions, ["review-or-import-rebuttal-issues", "normalize-rebuttal-issues"]);
+  assert.equal(strategy.boundary.type, "missing-required-materials");
+  assert.deepEqual(artifactPaths.map((artifactPath) => {
+    const absolutePath = path.join(root, artifactPath);
+    return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : null;
+  }), beforeArtifacts);
+  assert.equal(fs.readFileSync(path.join(root, ".dove", "state.json"), "utf8"), beforeState);
+
+  const draft = buildRebuttal(root, { packetId });
+  assert.equal(draft.status, "missing-required-materials");
+  assert.deepEqual(draft.requiredActions, ["review-or-import-rebuttal-issues", "normalize-rebuttal-issues"]);
+  assert.deepEqual(artifactPaths.map((artifactPath) => {
+    const absolutePath = path.join(root, artifactPath);
+    return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : null;
+  }), beforeArtifacts);
+  assert.equal(readState(root).sections.rebuttal.status, "planned");
+});
+
+test("CLI rebuttal exits nonzero and writes nothing without normalized issues", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, {
+    title: "CLI Empty Rebuttal Boundary",
+    objective: "Expose empty issues as an operational failure.",
+    thesis: "CLI must preserve the no-write boundary."
+  });
+  const packetId = seedTaskPacket(root, "cli-empty-rebuttal-packet");
+  const artifactPaths = [
+    ".dove/rebuttal/strategy.md",
+    ".dove/rebuttal/response-draft.md",
+    ".dove/drafts/rebuttal.md"
+  ];
+  const beforeState = fs.readFileSync(path.join(root, ".dove", "state.json"), "utf8");
+  const beforeArtifacts = artifactPaths.map((artifactPath) => {
+    const absolutePath = path.join(root, artifactPath);
+    return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : null;
+  });
+  const cli = spawnSync(process.execPath, [path.join(process.cwd(), "bin", "dove.mjs"), "rebuttal", root, "--packet-id", packetId, "--mutation-mode", "direct-process", "--json"], {
+    cwd: process.cwd(),
+    encoding: "utf8"
+  });
+
+  assert.equal(cli.status, 1, cli.stderr || cli.stdout);
+  assert.equal(JSON.parse(cli.stdout).status, "missing-required-materials");
+  assert.deepEqual(artifactPaths.map((artifactPath) => {
+    const absolutePath = path.join(root, artifactPath);
+    return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : null;
+  }), beforeArtifacts);
+  assert.equal(fs.readFileSync(path.join(root, ".dove", "state.json"), "utf8"), beforeState);
+});
+
+test("rebuttal builders still write substantive artifacts for normalized issues", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, {
+    title: "Positive Rebuttal Path",
+    objective: "Preserve the issue-backed rebuttal path.",
+    thesis: "Normalized issues produce durable responses."
+  });
+  const packetId = seedTaskPacket(root, "positive-rebuttal-packet");
+  normalizeRebuttalIssues(root, {
+    packetId,
+    issues: [{ id: "real-issue", summary: "Clarify the comparison baseline.", responseDirection: "clarify" }]
+  });
+
+  const result = buildRebuttal(root, { packetId });
+  assert.equal(result.draftPath, ".dove/drafts/rebuttal.md");
+  for (const artifactPath of [result.draftPath, ".dove/rebuttal/strategy.md", ".dove/rebuttal/response-draft.md"]) {
+    assert.equal(fs.existsSync(path.join(root, artifactPath)), true, artifactPath);
+    assert.match(fs.readFileSync(path.join(root, artifactPath), "utf8"), /real-issue|Rebuttal Notes/u);
+  }
+});
+
 test("version actions are blocked until coherent review clears finalize gate", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -229,37 +339,45 @@ test("version actions are blocked until coherent review clears finalize gate", (
   }, /requires a coherent review/);
 });
 
-test("board role-phase contract rejects mismatches unless an override is explicit and traceable", () => {
+test("board role-phase contract rejects mismatches and retired overrides fail closed", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, {
     title: "Role Contract",
-    objective: "Verify board role enforcement.",
-    thesis: "Explicit handoffs should govern role ownership."
+    objective: "Verify board routing-state validation.",
+    thesis: "Explicit handoffs should validate workflow routing transitions without granting mutation authority."
   });
 
-  appendHandoff(root, {
+  const handedOffBoard = appendHandoff(root, {
     fromRole: "planner",
     toRole: "researcher",
     phase: "research",
     summary: "Move into research."
   });
+  assert.equal(handedOffBoard.currentPhase, "research");
+  assert.equal(handedOffBoard.assignedRole, "researcher");
+
+  const updatedBoard = upsertOrchestrationBoard(root, {
+    phase: "research",
+    assignedRole: "builder",
+    currentFocus: "Continue legal research work."
+  });
+  assert.equal(updatedBoard.currentPhase, "research");
+  assert.equal(updatedBoard.assignedRole, "builder");
 
   assert.throws(() => {
     upsertOrchestrationBoard(root, {
       phase: "review",
       assignedRole: "planner"
     });
-  }, /requires role reviewer for phase review/);
+  }, /requires routing role reviewer for phase review/);
 
-  const overridden = upsertOrchestrationBoard(root, {
+  assert.throws(() => upsertOrchestrationBoard(root, {
     phase: "review",
     assignedRole: "planner",
     policyOverrideReason: "manual board repair after importing an older workspace"
-  });
+  }), /does not accept retired policy override fields/);
 
   const handoffs = fs.readFileSync(path.join(root, ".dove", "orchestration", "handoffs.md"), "utf8");
-  assert.equal(overridden.currentPhase, "review");
-  assert.equal(overridden.assignedRole, "planner");
-  assert.match(handoffs, /Policy override: manual board repair after importing an older workspace/);
+  assert.doesNotMatch(handoffs, /Policy override:/);
 });

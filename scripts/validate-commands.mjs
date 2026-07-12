@@ -11,6 +11,7 @@ import {
 } from "../src/core/schema.mjs";
 import {
   COMMAND_SURFACES,
+  DIRECT_PROCESS_ADAPTER_COMMAND_IDS,
   PROJECT_HOST_IDS,
   OPENCODE_ROLE_SKILL_PATHS,
   TOOL_CONTEXT_PATHS,
@@ -121,11 +122,11 @@ assert.doesNotMatch(generatorText, /const\s+(?:BASE_CONTEXT_PATHS|TOOL_CONTEXT_P
 assert.doesNotMatch(generatorText, /dove\.paper\.\*/, "Generated adapters must not route users to removed paper-namespaced slash commands");
 
 const agentsText = readRelative("AGENTS.md");
-assert.equal(agentsText.includes("node ./bin/dove.mjs status ."), true, "AGENTS.md must keep compact status available for state questions");
+assert.equal(agentsText.includes("node ./bin/dove-package.mjs status ."), true, "AGENTS.md must keep compact status available for state questions");
 assert.equal(agentsText.includes("first only when the user asks about Dove state"), true, "AGENTS.md must not route ordinary work prompts through status first");
 assert.equal(agentsText.includes("For requests to fix, implement, research, verify, write, review, experiment, or draw, start with visible substantive work"), true, "AGENTS.md must require substantive work before status/navigation for work prompts");
-assert.equal(agentsText.includes("node ./bin/dove.mjs status . --missions"), true, "AGENTS.md must route task-choice questions through compact mission expansion");
-assert.equal(agentsText.includes("node ./bin/dove.mjs figure . --intent"), true, "AGENTS.md must route figure requests through the compact figure CLI");
+assert.equal(agentsText.includes("node ./bin/dove-package.mjs status . --missions"), true, "AGENTS.md must route task-choice questions through compact mission expansion");
+assert.equal(agentsText.includes("node ./bin/dove-package.mjs figure . --intent"), true, "AGENTS.md must route figure requests through the compact figure CLI");
 assert.doesNotMatch(agentsText, /--full\s+--json|--json\s+--full/, "AGENTS.md must not recommend full JSON for ordinary answers");
 for (const removedCommandId of removedCommandIds) {
   assert.equal(agentsText.includes(removedCommandId), false, `AGENTS.md must not mention removed command ${removedCommandId}`);
@@ -189,8 +190,6 @@ const generatedAdapterForbiddenTerms = [
   "taskPacketId",
   "missionPacketId",
   ".dove/",
-  "patch-plan",
-  "mutationMode",
   "query_dove_status",
   "apply_dove_status_adjustments",
   "run_dove_auto",
@@ -206,7 +205,6 @@ const generatedAdapterForbiddenTerms = [
   "queuePreview",
   "ownerRole",
   "nextRole",
-  "handoff",
   "project:dove.",
   "providerId",
   "sourceSvgPath",
@@ -282,6 +280,9 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
   assert.equal(commandText.includes("manually reading or listing internal files"), true, `${relativePath} must prohibit visible internal-file reads for default answers`);
   assert.equal(commandText.includes("practical result in ordinary language"), true, `${relativePath} must report unavailable work in ordinary language instead of dumping files`);
   assert.equal(commandText.includes("This request has one listed project check") || commandText.includes("This request has one listed project action") || commandText.includes("This request has no listed project action"), true, `${relativePath} must give a concrete project check/action or stop instead of file emulation`);
+  if (DIRECT_PROCESS_ADAPTER_COMMAND_IDS.includes(command.id)) {
+    assert.equal(commandText.includes("--mutation-mode direct-process"), true, `${relativePath} must explicitly use direct-process because generated host adapters do not apply mutation plans`);
+  }
   assert.equal(commandText.includes("explicitly listed project check or action fails"), true, `${relativePath} must stop after project check/action failures instead of file recovery`);
   assert.equal(commandText.includes("Keep Planner, Builder, and Reviewer responsibilities separate"), true, `${relativePath} must frame the three primary responsibilities`);
   assert.equal(commandText.includes("Return the next action, evidence expectations, and unresolved blockers"), true, `${relativePath} must return actionable outcomes without fake completion`);
@@ -308,7 +309,7 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
   }
 
   if (command.id === "dove.status") {
-    assert.equal(commandText.includes("node ./bin/dove.mjs status ."), true, `${relativePath} must provide the concrete local status check`);
+    assert.equal(commandText.includes("node ./bin/dove-package.mjs status ."), true, `${relativePath} must provide the concrete local status check`);
     assert.equal(commandText.includes("what should I do next?"), true, `${relativePath} must frame status around the ordinary next-action question`);
     assert.equal(commandText.includes("Default output should read like a project assistant"), true, `${relativePath} must describe the default human status output`);
     assert.equal(commandText.includes("fixed four-line template"), true, `${relativePath} must forbid fixed status templates`);
@@ -356,8 +357,8 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
   }
 
   if (command.id === "dove.figure") {
-    assert.equal(commandText.includes("node ./bin/dove.mjs figure . --intent"), true, `${relativePath} must provide the concrete local figure CLI route`);
-    assert.equal(commandText.includes("node ./bin/dove.mjs figure . --target \"<confirmed task title>\" --intent"), true, `${relativePath} must rerun figure with a confirmed task title instead of hiding the task in the intent`);
+    assert.equal(commandText.includes("node ./bin/dove-package.mjs figure . --intent"), true, `${relativePath} must provide the concrete local figure CLI route`);
+    assert.equal(commandText.includes("node ./bin/dove-package.mjs figure . --target \"<confirmed task title>\" --intent"), true, `${relativePath} must rerun figure with a confirmed task title instead of hiding the task in the intent`);
     assert.equal(commandText.includes("operator explicitly approves"), true, `${relativePath} must forbid applying figure file changes without explicit approval`);
     assert.equal(commandText.includes("whether this figure is usable now"), true, `${relativePath} must answer current-figure usability`);
     assert.equal(commandText.includes("hand-drawn SVG plan"), true, `${relativePath} must support default manual SVG figure preparation`);

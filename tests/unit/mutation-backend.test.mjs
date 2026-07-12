@@ -7,11 +7,9 @@ import {
   ARTIFACT_PATHS,
   ensureWorkspace,
   readText,
-  runWithMutationContext,
-  writeJson,
-  writeText,
-  appendText
 } from "../../src/core/index.mjs";
+import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { appendText, writeJson, writeText } from "../../src/core/workspace.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function exists(root, relativePath) {
@@ -35,10 +33,26 @@ test("patch-plan mutations do not write to disk", () => {
   assert.equal(result.hostRollbackIneligibleReason, null);
   assert.equal(result.recommendedMutationMode, null);
   assert.equal(result.mutationPlan.hostTrackedFileEditsRequired, true);
+  assert.equal(result.mutationPlan.workspaceRealpath, fs.realpathSync.native(root));
   assert.deepEqual(result.mutationPlan.operations.filter((operation) => operation.relativePath !== ARTIFACT_PATHS.mutationsIndex).map((operation) => operation.relativePath), [".dove/state.json", ".dove/notes/example.md"]);
   assert.ok(result.mutationPlan.operations.some((operation) => operation.relativePath === ARTIFACT_PATHS.mutationsIndex));
   assert.equal(exists(root, ".dove/state.json"), false);
   assert.equal(exists(root, ".dove/notes/example.md"), false);
+});
+
+test("explicit invalid mutationMode is rejected before callback or writes", () => {
+  const root = createTempRoot("dove-mutation-invalid-mode-");
+  let callbackRan = false;
+
+  assert.throws(
+    () => runWithMutationContext(root, { actionId: "unit-test", mutationMode: "invalid-mode" }, () => {
+      callbackRan = true;
+      writeText(root, ".dove/notes/invalid.md", "must not write\n");
+    }),
+    /mutationMode must be either patch-plan or direct-process/
+  );
+  assert.equal(callbackRan, false);
+  assert.equal(exists(root, ".dove/notes/invalid.md"), false);
 });
 
 test("direct-process mutations write the same final content", () => {

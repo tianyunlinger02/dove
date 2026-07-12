@@ -37,15 +37,17 @@ AI coding and writing sessions are powerful, but they often lose continuity acro
 
 Dove does not rely on hidden chat memory, a daemon, a scheduler, or a host-specific swarm. Raw runtime traces can stay local and ignored; reusable experience is captured deliberately as short `.dove/meta/operator-lessons.json` retrospectives. The files are the contract.
 
-## What ships in this repository
+## Repository and published package layout
 
-- `bin/dove.mjs` — the Dove CLI for install, sync, doctor, and package workflows
-- `mcp/dove-state-server.mjs` — the local stdio MCP server
-- `src/` — core workflow, artifact, governance, command-manifest, MCP, and validation logic
-- `scripts/` — adapter generation, validation, doctor, audit, and packaging checks
-- `.opencode/`, `.codex/`, `.cursor/`, `.agents/` — generated project-local Dove adapter surfaces
-- `docs/` — installation, usage, packaging, and capability documentation
-- `tests/` — Node test coverage for the core package behavior
+The source checkout keeps `src/`, the raw `bin/dove.mjs` and `mcp/dove-state-server.mjs` entrypoints, development scripts, tests, generated host adapters, and documentation. The npm package is intentionally smaller and ships only standalone runtime artifacts:
+
+- `dist/index.mjs` — the public package-root API bundle
+- `bin/dove-package.mjs` — the installed Dove CLI
+- `mcp/dove-state-server-package.mjs` — the installed stdio MCP executable
+- `scripts/doctor-mcp-probe-package.mjs` — the installed doctor probe
+- the necessary public docs, `AGENTS.md`, host adapters, and `.opencode.json`
+
+The installed package does not contain raw `src/` modules or raw development entry scripts. The package `exports` map controls legal package specifiers, but it is not a filesystem isolation boundary; physical omission of raw source is what prevents sibling-URL imports through `import.meta.resolve("dove")`.
 
 The package installs managed code and generated adapter files. A target project's `.dove/` directory is user-owned workspace state: Dove may bootstrap missing starter artifacts, but package updates should not overwrite the user's evolving notes, drafts, claims, reviews, experiments, task packets, lessons, or runtime records.
 
@@ -59,12 +61,15 @@ The CLI and MCP layer remain file-based, so Dove can still be inspected and vali
 
 ## First 10 minutes with Dove
 
-1. Install Dove into the project you want to run from and check the workspace:
+1. Install the published package, then initialize and check the project from the project directory:
 
 ```bash
-node ./bin/dove.mjs install /path/to/project --force
-node ./bin/dove.mjs doctor /path/to/project
+npm install --save-dev dove
+npx dove install . --force
+npx dove doctor .
 ```
+
+If Dove runtime files have already been copied into the project, the equivalent installed-project commands are `node ./bin/dove-package.mjs install . --force` and `node ./bin/dove-package.mjs doctor .`.
 
 2. Use the command syntax for your host. Dove's canonical command id is `dove.mission`; Claude Code should expose a single user-level `/dove:mission` entrypoint, while OpenCode commonly exposes project adapters as `project:dove.mission`. The examples below use Claude Code slash syntax.
 
@@ -94,7 +99,7 @@ Preset workflows should resolve or ask for the durable task packet instead of si
 
 Status is read-only by default and optimized for the ordinary question “what should I do next?” The default human view is a small translation layer: one `Dove:` state line, one `Next:` action, one `Why:` explanation, and one `More:` expansion hint. It does not print packet ids, mission lists, boundary/gap codes, blocked counts, execution-gap counts, required-evidence blocks, mission counts, or completed/killed recaps unless you explicitly ask for missions, JSON, or full/debug detail.
 
-For CLI contract checks, `node ./bin/dove.mjs status /path/to/project --health` and `--contract-test` are read-only intent views. They check the compact contract, default operator surface, and full/debug expansion without treating project backlog work as the primary health-check action.
+For CLI contract checks, `node ./bin/dove-package.mjs status /path/to/project --health` and `--contract-test` are read-only intent views. They check the compact contract, default operator surface, and full/debug expansion without treating project backlog work as the primary health-check action.
 
 6. Close durable learning only when there is a reusable lesson:
 
@@ -123,7 +128,7 @@ Dove exposes one flat user-facing command set:
 | `project:dove.experience` | Plan experiments, record results, audit them, and bridge evidence into claims. |
 | `project:dove.draft` | Generate or revise paper drafts with explicit placeholders for gaps. |
 | `project:dove.review` | Run a local evidence-aware review over selected task materials and return concrete findings or coherence. |
-| `project:dove.review-loop` | Iterate local review, draft, and experience up to the configured max, default 3. |
+| `project:dove.review-loop` | Run one independent Reviewer pass; non-coherent results require a separate explicit Builder handoff and later review call. |
 | `project:dove.rebuttal` | Normalize reviewer issues and draft evidence-backed responses. |
 
 Older router, plan, checklist, audit, return, follow-through, onboarding, governance-audit, and paper-namespaced slash commands are not public surfaces. Useful low-level capabilities remain internal MCP/core building blocks where they are still needed.
@@ -173,7 +178,7 @@ Put that in `.dove/config.json` or `.dove/config.local.json`; `DOVE_LANGUAGE` an
 
 ## Host adapters
 
-The canonical command inventory lives in `src/core/command-manifest.mjs`. Generated project adapters expose the same Dove concepts across supported project-local hosts:
+Generated project adapters expose the same Dove concepts across supported project-local hosts:
 
 - OpenCode commands and skills
 - Codex skills and agent defaults
@@ -182,12 +187,7 @@ The canonical command inventory lives in `src/core/command-manifest.mjs`. Genera
 
 Claude Code uses one user-level `/dove:*` command set instead of project-local `.claude/commands/dove` files; `dove install/sync --host claude` renders that user command set from the same manifest while normal project installs keep Dove state in `.dove/` without creating duplicate Claude command entries.
 
-Regenerate and check adapter drift with:
-
-```bash
-npm run commands:generate
-npm run commands:check
-```
+In a Dove source checkout, maintainers regenerate and check adapter drift with `npm run commands:generate` and `npm run commands:check`. These development scripts are not part of an installed project.
 
 ## MCP
 
@@ -199,7 +199,7 @@ Dove includes a local stdio MCP server named `dove`:
     "dove": {
       "type": "stdio",
       "command": "node",
-      "args": ["./mcp/dove-state-server.mjs"]
+      "args": ["./mcp/dove-state-server-package.mjs"]
     }
   }
 }
@@ -209,7 +209,9 @@ MCP tools provide deterministic access to workspace state, task graphs, open que
 
 MCP `tools/list` defaults to a compact operator surface with the common entry tools and short schemas. Callers that need the complete canonical registry must explicitly request `surface: "full"` or `surface: "debug"`; compact tool results include operator route/unblock guidance plus `writeIntent` and `rollbackEligible` so no-write checks are visibly distinct from proposed or applied mutations.
 
-## Development
+## Source-checkout development
+
+The following commands are maintainer-only and must be run from a Dove source checkout. They are not available in a project that only contains the installed runtime bundle.
 
 Useful scripts:
 

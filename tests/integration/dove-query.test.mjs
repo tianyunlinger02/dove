@@ -16,8 +16,11 @@ import {
   queryDoveReturn,
   queryDoveStatus,
   queryMetaOptimize,
-  runDoveAuto
+  runDoveAuto,
+  runDoveReviewLoop,
+  upsertOrchestrationBoard
 } from "../../src/core/index.mjs";
+import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -77,13 +80,51 @@ function tempRoot() {
 }
 
 function writeJson(root, relativePath, value) {
-  fs.writeFileSync(path.join(root, relativePath), `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  const fullPath = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
 function writeText(root, relativePath, value) {
   const fullPath = path.join(root, relativePath);
   fs.mkdirSync(path.dirname(fullPath), { recursive: true });
   fs.writeFileSync(fullPath, value, "utf8");
+}
+
+function listRelativeFiles(root) {
+  const walk = (directory) => fs.readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const fullPath = path.join(directory, entry.name);
+      return entry.isDirectory() ? walk(fullPath) : [path.relative(root, fullPath)];
+    });
+  return fs.existsSync(root) ? walk(root).sort() : [];
+}
+
+function snapshotRelativeFileContents(root) {
+  return Object.fromEntries(listRelativeFiles(root).map((relativePath) => [
+    relativePath,
+    fs.readFileSync(path.join(root, relativePath)).toString("base64")
+  ]));
+}
+
+function decodeMissionProposalTokenForTest(token) {
+  return JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
+}
+
+function encodeMissionProposalTokenForTest(payload) {
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+}
+
+function withoutProposalTimestamps(value) {
+  if (Array.isArray(value)) {
+    return value.map(withoutProposalTimestamps);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value)
+      .filter(([key]) => !["createdAt", "updatedAt", "completedAt"].includes(key))
+      .map(([key, item]) => [key, withoutProposalTimestamps(item)]));
+  }
+  return value;
 }
 
 function assertDurableContextNotice(notice) {
@@ -258,6 +299,87 @@ function writeTaskPacket(root, packet) {
   return { packetPath, packetContextPath };
 }
 
+function seedReviewLoopPacket(root, {
+  id,
+  title,
+  assignedRole = "builder",
+  stage = "execute",
+  boardPhase = "draft",
+  boardRole = "builder"
+}) {
+  ensureWorkspace(root);
+  upsertOrchestrationBoard(root, {
+    phase: boardPhase,
+    assignedRole: boardRole,
+    currentFocus: "Prepare the current work for review.",
+    nextAction: "Hand the current work to the reviewer."
+  });
+  const timestamp = new Date(0).toISOString();
+  const draftPath = `${ARTIFACT_PATHS.draftsDir}/${id}.md`;
+  const packet = {
+    id,
+    title,
+    summary: "Exercise the ordinary direct-process review-loop transition.",
+    status: "ready",
+    lifecycleStatus: "active",
+    active: true,
+    assignedRole,
+    level: 1,
+    creatorKind: "operator",
+    domain: "paper",
+    stage,
+    artifactRefs: [draftPath],
+    updatedAt: timestamp
+  };
+  writeTaskPacket(root, packet);
+  writeText(root, draftPath, `# ${title}\n\nThis packet-owned draft contains substantive material for independent review.\n`);
+  writeText(root, ARTIFACT_PATHS.claims, "# Claims\n\nNo claims recorded.\n");
+  writeText(root, ARTIFACT_PATHS.experimentLog, "# Experiment log\n\nNo experiments recorded.\n");
+  writeJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: timestamp });
+  return packet;
+}
+
+test("figure CLI returns non-zero for an operational missing-materials boundary", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    writeTaskPacket(root, {
+      id: "cli-figure-blocked",
+      title: "CLI figure blocked boundary",
+      summary: "Require real figure materials before planning.",
+      status: "ready",
+      lifecycleStatus: "active",
+      active: true,
+      assignedRole: "builder",
+      level: 1,
+      creatorKind: "operator",
+      domain: "paper",
+      stage: "execute",
+      updatedAt: new Date(0).toISOString()
+    });
+
+    const blocked = spawnSync("node", [
+      CLI,
+      "figure",
+      root,
+      "--packet-id",
+      "cli-figure-blocked",
+      "--intent",
+      "Draw a figure without any claim, experiment, caption, visual, or source material.",
+      "--mutation-mode",
+      "direct-process",
+      "--json"
+    ], { cwd: ROOT, encoding: "utf8" });
+
+    assert.notEqual(blocked.status, 0, blocked.stderr || blocked.stdout);
+    const result = JSON.parse(blocked.stdout);
+    assert.equal(result.status, "blocked-missing-materials");
+    assert.equal(result.writesApplied, false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("task target resolver prefers full Unicode task titles over short ASCII fragments", () => {
   const root = tempRoot();
   try {
@@ -345,20 +467,26 @@ test("CLI figure defaults to a governed patch-plan without writing figure record
     ];
 
     const human = spawnSync("node", args, { cwd: ROOT, encoding: "utf8" });
-    assert.equal(human.status, 0, human.stderr || human.stdout);
+    assert.equal(human.status, 1, human.stderr || human.stdout);
     assert.match(human.stdout, /SVG|待确认方案/);
     assert.doesNotMatch(human.stdout, /\.dove\//);
     assert.doesNotMatch(human.stdout, /sourceSvgPath|finalSvgPath|outputManifestPath|qaPath|mutationPlan|packetId|providerId|mutationMode|patch-plan/u);
     assert.equal(fs.readFileSync(figuresIndexPath, "utf8"), beforeFigures);
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "cli-figure.template.svg")), false);
 
-    const machine = spawnSync("node", [...args, "--json"], { cwd: ROOT, encoding: "utf8" });
-    assert.equal(machine.status, 0, machine.stderr || machine.stdout);
+    const machine = spawnSync("node", [...args, "--json"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 4 * 1024 * 1024
+    });
+    assert.equal(machine.status, 1, machine.stderr || machine.stdout);
     const parsed = JSON.parse(machine.stdout);
     assert.equal(parsed.mutationMode, "patch-plan");
     assert.equal(parsed.writesApplied, false);
     assert.ok(parsed.mutationPlan.operations.length > 0);
     assert.equal(parsed.resultCard.presentation, "compact-result-summary-card");
+    assert.match(parsed.resultCard.durableWrites[0], /没有声明新的持久写入|no new durable writes/i);
+    assert.doesNotMatch(parsed.resultCard.durableWrites[0], /已更新图表计划|Updated the figure plan/i);
     assertNoCompactPublicLeaks(parsed.resultCard, { ignoredKeys: ["command"] });
     assert.equal("finalSvgPath" in parsed.resultCard, false);
     assert.equal("qaPath" in parsed.resultCard, false);
@@ -368,9 +496,8 @@ test("CLI figure defaults to a governed patch-plan without writing figure record
   }
 });
 
-test("CLI mission defaults to a concise human guidance and keeps JSON opt-in", () => {
+test("CLI mission proposes without writes and materializes the approved contract", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
 
   const human = spawnSync("node", [CLI, "mission", root, "--goal", "Turn review feedback into an executable task"], {
     cwd: ROOT,
@@ -381,6 +508,7 @@ test("CLI mission defaults to a concise human guidance and keeps JSON opt-in", (
   assert.match(human.stdout, /待确认任务|task proposal/u);
   assert.doesNotMatch(human.stdout, /^\{/);
   assert.doesNotMatch(human.stdout, /\.dove\/|project:dove\.|packetId|taskPacketId|missionPacketId|boundaryType|workContract|executionContract|preActionGuidance|proposalOnly|noAutoApply|targetArtifacts|domainGuidance/u);
+  assert.equal(fs.existsSync(path.join(root, ".dove")), false);
 
   const machine = spawnSync("node", [CLI, "mission", root, "--goal", "Turn review feedback into an executable task", "--json"], {
     cwd: ROOT,
@@ -388,8 +516,1052 @@ test("CLI mission defaults to a concise human guidance and keeps JSON opt-in", (
   });
   assert.equal(machine.status, 0, machine.stderr || machine.stdout);
   const parsed = JSON.parse(machine.stdout);
-  assert.equal(parsed.mode, "dove-mission-query");
+  assert.equal(parsed.status, "needs-confirmation");
   assert.equal(parsed.proposalOnly, true);
+  assert.equal(parsed.writes.length, 0);
+  assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+
+  assert.match(parsed.proposalDigest, /^[0-9a-f]{64}$/u);
+  assert.equal(parsed.proposalMutationMode, "direct-process");
+  assert.equal(typeof parsed.proposalToken, "string");
+  assert.match(parsed.exactConfirmationCommand, /--proposal-token/u);
+
+  const bareConfirmed = spawnSync("node", [CLI, "mission", root, "--goal", "Turn review feedback into an executable task", "--confirmed", "--json"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(bareConfirmed.status, 1);
+  assert.match(bareConfirmed.stdout, /exact proposalDigest|精确/u);
+  assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+
+  const confirmed = spawnSync("node", [CLI, "mission", root, "--proposal-token", parsed.proposalToken, "--confirmed", "--mutation-mode", "direct-process", "--json"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+  assert.equal(confirmed.status, 0, confirmed.stderr || confirmed.stdout);
+  const materialized = JSON.parse(confirmed.stdout);
+  assert.equal(materialized.status, "materialized");
+  assert.equal(materialized.executionMode, "contract-handoff");
+  assert.equal(materialized.writesApplied, true);
+  assert.equal(materialized.createdTask.id, parsed.proposedTask.id);
+  assert.deepEqual(materialized.createdTask.workContract, parsed.workContract);
+  assert.deepEqual(materialized.createdTask.executionContract, parsed.executionContract);
+  assert.deepEqual(materialized.createdChecklistTasks.map((item) => item.id), parsed.checklistProposal.items.map((item) => item.id));
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex)), true);
+
+  const reusedElsewhere = tempRoot();
+  try {
+    const crossWorkspace = spawnSync("node", [CLI, "mission", reusedElsewhere, "--proposal-token", parsed.proposalToken, "--confirmed", "--mutation-mode", "direct-process", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(crossWorkspace.status, 1);
+    assert.equal(fs.existsSync(path.join(reusedElsewhere, ".dove")), false);
+  } finally {
+    fs.rmSync(reusedElsewhere, { recursive: true, force: true });
+  }
+
+  const plannedRoot = tempRoot();
+  try {
+    const planProposalProcess = spawnSync("node", [CLI, "mission", plannedRoot, "--goal", "Plan a contract without applying it", "--mutation-mode", "patch-plan", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(planProposalProcess.status, 0, planProposalProcess.stderr || planProposalProcess.stdout);
+    const planProposal = JSON.parse(planProposalProcess.stdout);
+    assert.equal(planProposal.proposalMutationMode, "patch-plan");
+    assert.equal(fs.existsSync(path.join(plannedRoot, ".dove")), false);
+
+    const modeDrift = spawnSync("node", [CLI, "mission", plannedRoot, "--proposal-token", planProposal.proposalToken, "--confirmed", "--mutation-mode", "direct-process", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(modeDrift.status, 1);
+    assert.equal(fs.existsSync(path.join(plannedRoot, ".dove")), false);
+
+    const planned = spawnSync("node", [CLI, "mission", plannedRoot, "--proposal-token", planProposal.proposalToken, "--confirmed", "--mutation-mode", "patch-plan", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(planned.status, 0, planned.stderr || planned.stdout);
+    const plannedResult = JSON.parse(planned.stdout);
+    assert.equal(plannedResult.status, "materialization-planned");
+    assert.equal(plannedResult.contractMaterialized, false);
+    assert.equal(plannedResult.writesApplied, false);
+    assert.ok(plannedResult.mutationPlan.operations.length > 0);
+    assert.equal(fs.existsSync(path.join(plannedRoot, ".dove")), false);
+  } finally {
+    fs.rmSync(plannedRoot, { recursive: true, force: true });
+  }
+});
+
+test("CLI work commands reject retired governance flags before workspace writes", () => {
+  const cases = [
+    ["auto", "--skip-board-update"],
+    ["review", "--skip-refresh"],
+    ["review-loop", "--skip-refresh-durable-surfaces"],
+    ["auto", "--skip-follow-through-ready"],
+    ["review", "--skip-sync-phase"],
+    ["review-loop", "--policy-override-reason=legacy"]
+  ];
+
+  for (const [command, retiredFlag] of cases) {
+    const root = tempRoot();
+    try {
+      const rejected = spawnSync(
+        "node",
+        [CLI, command, root, retiredFlag, "--json"],
+        { cwd: ROOT, encoding: "utf8" }
+      );
+      assert.equal(rejected.status, 1, rejected.stderr || rejected.stdout);
+      assert.match(
+        `${rejected.stdout}\n${rejected.stderr}`,
+        /Dove CLI no longer accepts retired governance flags/u
+      );
+      assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("CLI mission rejects malformed proposal tokens without writing", () => {
+  const root = tempRoot();
+  try {
+    const malformedTokens = [
+      "",
+      "not.a.base64url.token",
+      Buffer.from("{", "utf8").toString("base64url"),
+      encodeMissionProposalTokenForTest({ version: 2, mutationMode: "direct-process", confirmArgs: {} }),
+      encodeMissionProposalTokenForTest({ version: 1, mutationMode: "direct-process", confirmArgs: [] })
+    ];
+
+    for (const proposalToken of malformedTokens) {
+      const before = snapshotRelativeFileContents(root);
+      const rejected = spawnSync("node", [CLI, "mission", root, "--proposal-token", proposalToken, "--confirmed", "--json"], {
+        cwd: ROOT,
+        encoding: "utf8"
+      });
+      assert.equal(rejected.status, 1, rejected.stderr || rejected.stdout);
+      assert.deepEqual(snapshotRelativeFileContents(root), before);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI mission rejects duplicate proposal safety flags without writing", () => {
+  const root = tempRoot();
+  try {
+    const proposalProcess = spawnSync("node", [CLI, "mission", root, "--id", "duplicate-flag-task", "--goal", "Reject ambiguous confirmation flags.", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(proposalProcess.status, 0, proposalProcess.stderr || proposalProcess.stdout);
+    const proposal = JSON.parse(proposalProcess.stdout);
+    const before = snapshotRelativeFileContents(root);
+
+    for (const duplicateArgs of [
+      ["--proposal-token", proposal.proposalToken, "--proposal-token", proposal.proposalToken, "--confirmed"],
+      ["--proposal-token", proposal.proposalToken, "--confirmed", "--mutation-mode", "direct-process", "--mutation-mode", "direct-process"]
+    ]) {
+      const rejected = spawnSync("node", [CLI, "mission", root, ...duplicateArgs, "--json"], {
+        cwd: ROOT,
+        encoding: "utf8"
+      });
+      assert.equal(rejected.status, 1, rejected.stderr || rejected.stdout);
+      assert.match(rejected.stdout, /may be provided only once/u);
+      assert.deepEqual(snapshotRelativeFileContents(root), before);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI mission rejects tampered and semantically altered proposal token replays without writing", () => {
+  const root = tempRoot();
+  try {
+    const proposalProcess = spawnSync("node", [CLI, "mission", root, "--id", "exact-token-task", "--goal", "Preserve the approved mission contract exactly.", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(proposalProcess.status, 0, proposalProcess.stderr || proposalProcess.stdout);
+    const proposal = JSON.parse(proposalProcess.stdout);
+    const tokenPayload = decodeMissionProposalTokenForTest(proposal.proposalToken);
+    assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+
+    const alterations = [
+      (payload) => {
+        payload.confirmArgs.proposalDigest = "0".repeat(64);
+      },
+      (payload) => {
+        payload.confirmArgs.title = "Semantically altered mission title";
+      },
+      (payload) => {
+        payload.confirmArgs.goal = "Semantically altered redundant mission goal";
+      },
+      (payload) => {
+        payload.confirmArgs.boundary = { createdAt: "2040-01-01T00:00:00.000Z" };
+      },
+      (payload) => {
+        payload.confirmArgs.workContract.purpose = "Semantically altered work contract purpose.";
+      },
+      (payload) => {
+        payload.confirmArgs.executionContract.convergence.definitionOfDone = "Semantically altered definition of done.";
+      }
+    ];
+
+    for (const alter of alterations) {
+      const alteredPayload = structuredClone(tokenPayload);
+      alter(alteredPayload);
+      const before = snapshotRelativeFileContents(root);
+      const rejected = spawnSync("node", [
+        CLI,
+        "mission",
+        root,
+        "--proposal-token",
+        encodeMissionProposalTokenForTest(alteredPayload),
+        "--confirmed",
+        "--json"
+      ], {
+        cwd: ROOT,
+        encoding: "utf8"
+      });
+      assert.equal(rejected.status, 1, rejected.stderr || rejected.stdout);
+      assert.match(rejected.stdout, /no longer matches|不再匹配/u);
+      assert.deepEqual(snapshotRelativeFileContents(root), before);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("mission replay preserves explicit false and empty checklist decisions", () => {
+  const root = tempRoot();
+  try {
+    for (const [suffix, checklistArgs] of [
+      ["false", { checklist: false }],
+      ["empty", { checklistItems: [] }]
+    ]) {
+      const request = {
+        id: `explicit-checklist-${suffix}`,
+        goal: "Implement and validate a multi-step workflow with documentation.",
+        ...checklistArgs
+      };
+      const proposal = createDoveTask(root, request);
+      assert.equal(proposal.checklistProposal.itemCount, 0);
+      assert.equal(proposal.confirmArgs.checklist, false);
+      assert.equal(proposal.confirmArgs.autoChecklist, false);
+      assert.deepEqual(proposal.confirmArgs.checklistItems, []);
+      const materialized = runWithMutationContext(root, {
+        actionId: "create-dove-task",
+        mutationMode: proposal.confirmArgs.mutationMode,
+        hostId: "test"
+      }, () => createDoveTask(root, proposal.confirmArgs));
+      assert.equal(materialized.createdChecklistTasks.length, 0);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("mission proposal canonical workspace rejects symlink retarget before writes", () => {
+  const container = tempRoot();
+  const workspaceA = path.join(container, "workspace-a");
+  const workspaceB = path.join(container, "workspace-b");
+  const alias = path.join(container, "workspace-link");
+  fs.mkdirSync(workspaceA);
+  fs.mkdirSync(workspaceB);
+  fs.symlinkSync(workspaceA, alias, "dir");
+  try {
+    const proposal = createDoveTask(alias, {
+      id: "symlink-bound-task",
+      goal: "Bind this proposal to one canonical workspace.",
+      checklist: false
+    });
+    assert.equal(proposal.proposalWorkspace, fs.realpathSync.native(workspaceA));
+    fs.unlinkSync(alias);
+    fs.symlinkSync(workspaceB, alias, "dir");
+    const before = snapshotRelativeFileContents(workspaceB);
+    assert.throws(() => runWithMutationContext(alias, {
+      actionId: "create-dove-task",
+      mutationMode: proposal.confirmArgs.mutationMode,
+      hostId: "test"
+    }, () => createDoveTask(alias, proposal.confirmArgs)), /different canonical workspace/);
+    assert.deepEqual(snapshotRelativeFileContents(workspaceB), before);
+  } finally {
+    fs.rmSync(container, { recursive: true, force: true });
+  }
+});
+
+test("mission replay rejects target id collisions without overwriting", () => {
+  const root = tempRoot();
+  try {
+    const proposal = createDoveTask(root, {
+      id: "collision-task",
+      goal: "Do not overwrite a task created after proposal time.",
+      checklist: false
+    });
+    ensureWorkspace(root);
+    const packetPath = path.join(root, ARTIFACT_PATHS.taskPacketsPacketsDir, "collision-task.json");
+    fs.mkdirSync(path.dirname(packetPath), { recursive: true });
+    fs.writeFileSync(packetPath, '{"id":"collision-task","title":"Concurrent task"}\n', "utf8");
+    const before = snapshotRelativeFileContents(root);
+    assert.throws(() => runWithMutationContext(root, {
+      actionId: "create-dove-task",
+      mutationMode: proposal.confirmArgs.mutationMode,
+      hostId: "test"
+    }, () => createDoveTask(root, proposal.confirmArgs)), /target task id already exists or changed/);
+    assert.deepEqual(snapshotRelativeFileContents(root), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("mission proposal digest ignores timestamp drift without sleeping", (t) => {
+  const root = tempRoot();
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-01-01T00:00:00.000Z") });
+  try {
+    const request = {
+      id: "timestamp-stable-task",
+      title: "Timestamp stable task",
+      goal: "Keep exact mission confirmation stable across timestamp-only drift.",
+      checklist: false
+    };
+    const first = createDoveTask(root, request);
+    t.mock.timers.setTime(new Date("2036-12-31T23:59:59.000Z").getTime());
+    const second = createDoveTask(root, request);
+
+    assert.notEqual(first.proposedInit.createdAt, second.proposedInit.createdAt);
+    assert.notEqual(first.proposedTask.createdAt, second.proposedTask.createdAt);
+    assert.equal(first.proposalDigest, second.proposalDigest);
+    assert.deepEqual(first.confirmArgs, second.confirmArgs);
+    assert.deepEqual(withoutProposalTimestamps(first.proposedInit), withoutProposalTimestamps(second.proposedInit));
+    assert.deepEqual(withoutProposalTimestamps(first.proposedTask), withoutProposalTimestamps(second.proposedTask));
+    assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+  } finally {
+    t.mock.timers.reset();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI mission exact replay materializes its first-run init and rejects live init drift", () => {
+  const exactRoot = tempRoot();
+  const driftRoot = tempRoot();
+  try {
+    const exactProposalProcess = spawnSync("node", [CLI, "mission", exactRoot, "--id", "first-run-exact-task", "--goal", "Materialize the approved first-run init and task.", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(exactProposalProcess.status, 0, exactProposalProcess.stderr || exactProposalProcess.stdout);
+    const exactProposal = JSON.parse(exactProposalProcess.stdout);
+    assert.equal(exactProposal.initMaterializationRequired, true);
+    assert.ok(exactProposal.proposedInit);
+    assert.equal(fs.existsSync(path.join(exactRoot, ".dove")), false);
+
+    const exactReplay = spawnSync("node", [CLI, "mission", exactRoot, "--proposal-token", exactProposal.proposalToken, "--confirmed", "--mutation-mode", "direct-process", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(exactReplay.status, 0, exactReplay.stderr || exactReplay.stdout);
+    const materialized = JSON.parse(exactReplay.stdout);
+    assert.equal(materialized.status, "materialized");
+    assert.equal(materialized.initMaterializationRequired, true);
+    assert.deepEqual(withoutProposalTimestamps(materialized.createdInit), withoutProposalTimestamps(exactProposal.proposedInit));
+    assert.deepEqual(withoutProposalTimestamps(materialized.createdTask), withoutProposalTimestamps(exactProposal.proposedTask));
+
+    const driftProposalProcess = spawnSync("node", [CLI, "mission", driftRoot, "--id", "first-run-drift-task", "--goal", "Reject replay after the live init changes.", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(driftProposalProcess.status, 0, driftProposalProcess.stderr || driftProposalProcess.stdout);
+    const driftProposal = JSON.parse(driftProposalProcess.stdout);
+    assert.equal(driftProposal.initMaterializationRequired, true);
+
+    const liveInit = spawnSync("node", [CLI, "init", driftRoot, "--goal", "A different live init now owns this workspace.", "--mutation-mode", "direct-process", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(liveInit.status, 0, liveInit.stderr || liveInit.stdout);
+    const beforeReplay = snapshotRelativeFileContents(driftRoot);
+    const rejectedReplay = spawnSync("node", [CLI, "mission", driftRoot, "--proposal-token", driftProposal.proposalToken, "--confirmed", "--mutation-mode", "direct-process", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(rejectedReplay.status, 1, rejectedReplay.stderr || rejectedReplay.stdout);
+    assert.match(rejectedReplay.stdout, /no longer matches|不再匹配/u);
+    assert.deepEqual(snapshotRelativeFileContents(driftRoot), beforeReplay);
+  } finally {
+    fs.rmSync(exactRoot, { recursive: true, force: true });
+    fs.rmSync(driftRoot, { recursive: true, force: true });
+  }
+});
+
+test("CLI mission returned confirmation command safely preserves shell-sensitive target and goal text", () => {
+  const runnerRoot = tempRoot();
+  const targetBacktickSentinel = path.join(runnerRoot, "target-backtick-ran");
+  const goalBacktickSentinel = path.join(runnerRoot, "goal-backtick-ran");
+  const target = path.join(runnerRoot, "--target value with spaces ' $DOVE_TARGET_SENTINEL `touch target-backtick-ran`\nsecond target line");
+  const goal = "--goal-looking value with spaces, apostrophe's, $DOVE_GOAL_SENTINEL, `touch goal-backtick-ran`\n--proposal-token\n--mutation-mode";
+  try {
+    fs.mkdirSync(target, { recursive: true });
+    fs.symlinkSync(path.join(ROOT, "bin"), path.join(runnerRoot, "bin"), "dir");
+    const proposalProcess = spawnSync("node", [CLI, "mission", target, "--id", "shell-safe-exact-task", "--goal", goal, "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(proposalProcess.status, 0, proposalProcess.stderr || proposalProcess.stdout);
+    const proposal = JSON.parse(proposalProcess.stdout);
+    assert.equal(proposal.proposedTask.summary, goal);
+    assert.equal(fs.existsSync(path.join(target, ".dove")), false);
+
+    const confirmed = spawnSync("/bin/sh", ["-c", proposal.exactConfirmationCommand], {
+      cwd: runnerRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DOVE_TARGET_SENTINEL: "expanded-target-value",
+        DOVE_GOAL_SENTINEL: "expanded-goal-value"
+      }
+    });
+    assert.equal(confirmed.status, 0, confirmed.stderr || confirmed.stdout);
+    assert.equal(fs.existsSync(targetBacktickSentinel), false);
+    assert.equal(fs.existsSync(goalBacktickSentinel), false);
+    assert.equal(fs.existsSync(path.join(runnerRoot, ".dove")), false);
+    assert.equal(fs.existsSync(path.join(target, ".dove")), true);
+
+    const createdTask = JSON.parse(fs.readFileSync(path.join(target, proposal.proposedTask.packetPath), "utf8"));
+    assert.equal(createdTask.title, goal);
+    assert.equal(createdTask.summary, goal);
+    assert.equal(createdTask.currentFocus, goal);
+    assert.match(createdTask.summary, /\$DOVE_GOAL_SENTINEL/u);
+    assert.match(target, /\$DOVE_TARGET_SENTINEL/u);
+  } finally {
+    fs.rmSync(runnerRoot, { recursive: true, force: true });
+  }
+});
+
+test("CLI auto emits a canonical proposal token and safely replays its exact confirmation", () => {
+  const directRoot = tempRoot();
+  const patchRoot = tempRoot();
+  const selectionRoot = tempRoot();
+  const goal = "Carry out the approved CLI auto replay task through one bounded foreground pass.";
+  try {
+    const directProposalProcess = spawnSync("node", [
+      CLI,
+      "auto",
+      directRoot,
+      "--goal",
+      goal,
+      "--max-iterations",
+      "1",
+      "--mutation-mode",
+      "direct-process",
+      "--json"
+    ], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(directProposalProcess.status, 0, directProposalProcess.stderr || directProposalProcess.stdout);
+    const directProposal = JSON.parse(directProposalProcess.stdout);
+    assert.equal(directProposal.status, "needs-confirmation");
+    assert.equal(directProposal.proposalOnly, true);
+    assert.deepEqual(directProposal.writes, []);
+    assert.equal(directProposal.proposalKind, "demand");
+    assert.equal(directProposal.proposalWorkspace, fs.realpathSync.native(directRoot));
+    assert.equal(directProposal.proposalMutationMode, "direct-process");
+    assert.equal(typeof directProposal.proposalToken, "string");
+    assert.match(directProposal.exactConfirmationCommand, new RegExp(`${path.basename(CLI).replace(/\./g, "\\.")}['\"]? auto`, "u"));
+    assert.match(directProposal.exactConfirmationCommand, /--proposal-token/u);
+    assert.match(directProposal.exactConfirmationCommand, /--confirmed/u);
+    assert.match(directProposal.exactConfirmationCommand, /--mutation-mode 'direct-process'/u);
+    const directTokenPayload = decodeMissionProposalTokenForTest(directProposal.proposalToken);
+    assert.equal(directTokenPayload.version, directProposal.proposalVersion);
+    assert.equal(directTokenPayload.action, "run-dove-auto");
+    assert.equal(directTokenPayload.mutationMode, directProposal.proposalMutationMode);
+    assert.deepEqual(directTokenPayload.confirmArgs, directProposal.confirmArgs);
+    assert.equal(fs.existsSync(path.join(directRoot, ".dove")), false);
+
+    const directReplay = spawnSync("/bin/sh", ["-c", directProposal.exactConfirmationCommand], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(directReplay.status, 1, directReplay.stderr || directReplay.stdout);
+    assert.match(directReplay.stderr || directReplay.stdout, /host-pass-required|补真实结果或证据/u);
+    assert.equal(fs.existsSync(path.join(directRoot, directProposal.proposedTask.packetPath)), true);
+    const directTask = JSON.parse(fs.readFileSync(path.join(directRoot, directProposal.proposedTask.packetPath), "utf8"));
+    assert.equal(directTask.id, directProposal.proposedTask.id);
+
+    const patchProposalProcess = spawnSync("node", [
+      CLI,
+      "auto",
+      patchRoot,
+      "--goal",
+      goal,
+      "--max-iterations",
+      "1",
+      "--json"
+    ], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(patchProposalProcess.status, 0, patchProposalProcess.stderr || patchProposalProcess.stdout);
+    const patchProposal = JSON.parse(patchProposalProcess.stdout);
+    assert.equal(patchProposal.proposalMutationMode, "patch-plan");
+    assert.match(patchProposal.exactConfirmationCommand, /--mutation-mode 'patch-plan'/u);
+    assert.equal(fs.existsSync(path.join(patchRoot, ".dove")), false);
+
+    const patchReplayProcess = spawnSync("node", [
+      CLI,
+      "auto",
+      patchRoot,
+      "--proposal-token",
+      patchProposal.proposalToken,
+      "--confirmed",
+      "--mutation-mode",
+      "patch-plan",
+      "--json"
+    ], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(patchReplayProcess.status, 1, patchReplayProcess.stderr || patchReplayProcess.stdout);
+    assert.match(patchReplayProcess.stderr || patchReplayProcess.stdout, /host-pass-required|补真实结果或证据/u);
+    assert.equal(fs.existsSync(path.join(patchRoot, ".dove")), false);
+
+    ensureWorkspace(selectionRoot);
+    writeTaskPacket(selectionRoot, {
+      id: "cli-auto-selection",
+      title: "CLI auto selection replay",
+      summary: "Exercise the existing-task proposal token path.",
+      status: "ready",
+      lifecycleStatus: "active",
+      active: true,
+      level: 1,
+      creatorKind: "operator",
+      domain: "engineering",
+      stage: "execute",
+      nextAction: "project:dove.auto",
+      updatedAt: new Date(0).toISOString()
+    });
+    const beforeSelectionProposal = snapshotRelativeFileContents(selectionRoot);
+    const selectionProposalProcess = spawnSync("node", [
+      CLI,
+      "auto",
+      selectionRoot,
+      "--target",
+      "cli-auto-selection",
+      "--max-iterations",
+      "1",
+      "--mutation-mode",
+      "direct-process",
+      "--json"
+    ], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(selectionProposalProcess.status, 0, selectionProposalProcess.stderr || selectionProposalProcess.stdout);
+    const selectionProposal = JSON.parse(selectionProposalProcess.stdout);
+    assert.equal(selectionProposal.proposalKind, "selection");
+    assert.equal(selectionProposal.confirmArgs.packetId, "cli-auto-selection");
+    assert.deepEqual(snapshotRelativeFileContents(selectionRoot), beforeSelectionProposal);
+
+    const selectionReplayProcess = spawnSync("node", [
+      CLI,
+      "auto",
+      selectionRoot,
+      "--proposal-token",
+      selectionProposal.proposalToken,
+      "--confirmed",
+      "--mutation-mode",
+      "direct-process",
+      "--json"
+    ], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(selectionReplayProcess.status, 1, selectionReplayProcess.stderr || selectionReplayProcess.stdout);
+    assert.match(selectionReplayProcess.stderr || selectionReplayProcess.stdout, /host-pass-required|补真实结果或证据/u);
+    const selectionTask = JSON.parse(fs.readFileSync(path.join(selectionRoot, ".dove/task-packets/packets/cli-auto-selection.json"), "utf8"));
+    assert.equal(selectionTask.id, "cli-auto-selection");
+  } finally {
+    fs.rmSync(directRoot, { recursive: true, force: true });
+    fs.rmSync(patchRoot, { recursive: true, force: true });
+    fs.rmSync(selectionRoot, { recursive: true, force: true });
+  }
+});
+
+test("CLI auto rejects unknown, malformed, tampered, cross-workspace, and mode-drift proposal tokens without writing", () => {
+  const root = tempRoot();
+  const otherRoot = tempRoot();
+  try {
+    const proposalProcess = spawnSync("node", [
+      CLI,
+      "auto",
+      root,
+      "--goal",
+      "Keep this CLI auto replay bound to its exact local proposal.",
+      "--max-iterations",
+      "1",
+      "--mutation-mode",
+      "direct-process",
+      "--json"
+    ], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(proposalProcess.status, 0, proposalProcess.stderr || proposalProcess.stdout);
+    const proposal = JSON.parse(proposalProcess.stdout);
+    const tokenPayload = decodeMissionProposalTokenForTest(proposal.proposalToken);
+    const before = snapshotRelativeFileContents(root);
+    assert.deepEqual(before, {});
+
+    const unknownReplayFieldPayload = structuredClone(tokenPayload);
+    unknownReplayFieldPayload.confirmArgs.unknownReplayField = "not-canonical";
+    const malformedTokens = [
+      "",
+      "not.a.base64url.token",
+      Buffer.from("{", "utf8").toString("base64url"),
+      encodeMissionProposalTokenForTest({ ...tokenPayload, version: 2 }),
+      encodeMissionProposalTokenForTest({ ...tokenPayload, action: "create-dove-task" }),
+      encodeMissionProposalTokenForTest({ ...tokenPayload, confirmArgs: [] }),
+      encodeMissionProposalTokenForTest({ ...tokenPayload, unknown: true }),
+      encodeMissionProposalTokenForTest(unknownReplayFieldPayload)
+    ];
+    for (const proposalToken of malformedTokens) {
+      const rejected = spawnSync("node", [
+        CLI,
+        "auto",
+        root,
+        "--proposal-token",
+        proposalToken,
+        "--confirmed",
+        "--mutation-mode",
+        "direct-process",
+        "--json"
+      ], {
+        cwd: ROOT,
+        encoding: "utf8",
+        maxBuffer: 8 * 1024 * 1024
+      });
+      assert.equal(rejected.status, 1, rejected.stderr || rejected.stdout);
+      assert.deepEqual(snapshotRelativeFileContents(root), before);
+    }
+
+    for (const duplicateArgs of [
+      ["--proposal-token", proposal.proposalToken, "--proposal-token", proposal.proposalToken, "--confirmed", "--mutation-mode", "direct-process"],
+      ["--proposal-token", proposal.proposalToken, "--confirmed", "--mutation-mode", "direct-process", "--mutation-mode", "direct-process"],
+      ["--proposal-token", proposal.proposalToken, "--confirmed", "--yes", "--mutation-mode", "direct-process"],
+      ["--proposal-token", proposal.proposalToken, "--yes", "--mutation-mode", "direct-process"],
+      ["--proposal-token", proposal.proposalToken, "--confirmed"]
+    ]) {
+      const rejected = spawnSync("node", [CLI, "auto", root, ...duplicateArgs, "--json"], {
+        cwd: ROOT,
+        encoding: "utf8",
+        maxBuffer: 8 * 1024 * 1024
+      });
+      assert.equal(rejected.status, 1, rejected.stderr || rejected.stdout);
+      assert.deepEqual(snapshotRelativeFileContents(root), before);
+    }
+
+    for (const extraArgs of [
+      ["--goal", "Override the approved goal."],
+      ["--max-iterations", "2"],
+      ["--steps-json", JSON.stringify([{ command: "dove.status" }])]
+    ]) {
+      const rejected = spawnSync("node", [
+        CLI,
+        "auto",
+        root,
+        "--proposal-token",
+        proposal.proposalToken,
+        "--confirmed",
+        "--mutation-mode",
+        "direct-process",
+        ...extraArgs,
+        "--json"
+      ], {
+        cwd: ROOT,
+        encoding: "utf8",
+        maxBuffer: 8 * 1024 * 1024
+      });
+      assert.equal(rejected.status, 1, rejected.stderr || rejected.stdout);
+      assert.deepEqual(snapshotRelativeFileContents(root), before);
+    }
+
+    for (const alter of [
+      (payload) => {
+        payload.confirmArgs.proposalDigest = "0".repeat(64);
+      },
+      (payload) => {
+        payload.confirmArgs.goal = "Semantically altered auto replay goal.";
+      }
+    ]) {
+      const tamperedPayload = structuredClone(tokenPayload);
+      alter(tamperedPayload);
+      const tampered = spawnSync("node", [
+        CLI,
+        "auto",
+        root,
+        "--proposal-token",
+        encodeMissionProposalTokenForTest(tamperedPayload),
+        "--confirmed",
+        "--mutation-mode",
+        "direct-process",
+        "--json"
+      ], {
+        cwd: ROOT,
+        encoding: "utf8",
+        maxBuffer: 8 * 1024 * 1024
+      });
+      assert.equal(tampered.status, 1, tampered.stderr || tampered.stdout);
+      assert.deepEqual(snapshotRelativeFileContents(root), before);
+    }
+
+    const modeDrift = spawnSync("node", [
+      CLI,
+      "auto",
+      root,
+      "--proposal-token",
+      proposal.proposalToken,
+      "--confirmed",
+      "--mutation-mode",
+      "patch-plan",
+      "--json"
+    ], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(modeDrift.status, 1, modeDrift.stderr || modeDrift.stdout);
+    assert.deepEqual(snapshotRelativeFileContents(root), before);
+
+    const crossWorkspace = spawnSync("node", [
+      CLI,
+      "auto",
+      otherRoot,
+      "--proposal-token",
+      proposal.proposalToken,
+      "--confirmed",
+      "--mutation-mode",
+      "direct-process",
+      "--json"
+    ], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(crossWorkspace.status, 1, crossWorkspace.stderr || crossWorkspace.stdout);
+    assert.deepEqual(snapshotRelativeFileContents(otherRoot), {});
+    assert.deepEqual(snapshotRelativeFileContents(root), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(otherRoot, { recursive: true, force: true });
+  }
+});
+
+test("CLI auto proposal replay rejects canonical workspace symlink retarget without writing", (t) => {
+  const container = tempRoot();
+  const workspaceA = path.join(container, "workspace-a");
+  const workspaceB = path.join(container, "workspace-b");
+  const alias = path.join(container, "workspace-link");
+  fs.mkdirSync(workspaceA);
+  fs.mkdirSync(workspaceB);
+  try {
+    fs.symlinkSync(workspaceA, alias, "dir");
+  } catch (error) {
+    if (["EPERM", "EACCES", "ENOSYS"].includes(error.code)) {
+      t.skip(`symlinks are unavailable: ${error.code}`);
+      fs.rmSync(container, { recursive: true, force: true });
+      return;
+    }
+    throw error;
+  }
+  try {
+    const proposalProcess = spawnSync("node", [
+      CLI,
+      "auto",
+      alias,
+      "--goal",
+      "Keep this auto replay bound to one canonical workspace.",
+      "--mutation-mode",
+      "direct-process",
+      "--json"
+    ], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(proposalProcess.status, 0, proposalProcess.stderr || proposalProcess.stdout);
+    const proposal = JSON.parse(proposalProcess.stdout);
+    assert.equal(proposal.proposalWorkspace, fs.realpathSync.native(workspaceA));
+    assert.deepEqual(snapshotRelativeFileContents(workspaceA), {});
+
+    fs.unlinkSync(alias);
+    fs.symlinkSync(workspaceB, alias, "dir");
+    const beforeB = snapshotRelativeFileContents(workspaceB);
+    const rejected = spawnSync("node", [
+      CLI,
+      "auto",
+      alias,
+      "--proposal-token",
+      proposal.proposalToken,
+      "--confirmed",
+      "--mutation-mode",
+      "direct-process",
+      "--json"
+    ], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024
+    });
+    assert.equal(rejected.status, 1, rejected.stderr || rejected.stdout);
+    assert.deepEqual(snapshotRelativeFileContents(workspaceA), {});
+    assert.deepEqual(snapshotRelativeFileContents(workspaceB), beforeB);
+  } finally {
+    fs.rmSync(container, { recursive: true, force: true });
+  }
+});
+
+test("CLI review performs the local reviewer pass without requiring a hidden handoff command", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  const timestamp = new Date(0).toISOString();
+  const draftPath = `${ARTIFACT_PATHS.draftsDir}/cli-review.md`;
+  const packet = {
+    id: "cli-review-packet",
+    title: "CLI review packet",
+    summary: "Review real local artifacts.",
+    status: "ready",
+    lifecycleStatus: "active",
+    active: true,
+    assignedRole: "builder",
+    level: 1,
+    creatorKind: "operator",
+    domain: "paper",
+    stage: "execute",
+    artifactRefs: [draftPath],
+    updatedAt: timestamp
+  };
+  writeJson(root, `.dove/task-packets/packets/${packet.id}.json`, packet);
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, { version: 3, items: [packet], updatedAt: timestamp });
+  writeText(root, draftPath, "# Review material\n\nThis packet-owned draft contains substantive content for local review.\n");
+  writeText(root, ARTIFACT_PATHS.claims, "# Claims\n\nNo claims recorded.\n");
+  writeText(root, ARTIFACT_PATHS.experimentLog, "# Experiment log\n\nNo experiments recorded.\n");
+  writeJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: timestamp });
+
+  const review = spawnSync("node", [CLI, "review", root, "--packet-id", packet.id, "--mutation-mode", "patch-plan", "--json"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 5 * 1024 * 1024
+  });
+  assert.equal(review.status, 0, review.stderr || review.stdout);
+  const parsed = JSON.parse(review.stdout);
+  assert.equal(parsed.verdict, "coherent");
+  assert.equal(parsed.writesApplied, false);
+  const boardOperationIndex = parsed.mutationPlan.operations.findIndex((operation) => operation.relativePath === ARTIFACT_PATHS.orchestrationBoard);
+  const handoffOperationIndex = parsed.mutationPlan.operations.findIndex((operation) => operation.relativePath === ARTIFACT_PATHS.orchestrationHandoffs);
+  const reviewOperationIndex = parsed.mutationPlan.operations.findIndex((operation) => operation.relativePath === ARTIFACT_PATHS.reviewState);
+  assert.ok(boardOperationIndex >= 0);
+  assert.ok(handoffOperationIndex >= 0);
+  assert.ok(reviewOperationIndex >= 0);
+  assert.ok(boardOperationIndex < reviewOperationIndex);
+  assert.ok(handoffOperationIndex < reviewOperationIndex);
+});
+
+test("direct-process review-loop transfers ordinary work to one reviewer handoff without a policy override", () => {
+  const root = tempRoot();
+  const packet = seedReviewLoopPacket(root, {
+    id: "direct-review-loop-packet",
+    title: "Direct review-loop packet"
+  });
+  const handoffsBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationHandoffs), "utf8");
+
+  const review = spawnSync("node", [CLI, "review-loop", root, "--packet-id", packet.id, "--mutation-mode", "direct-process", "--json"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 5 * 1024 * 1024
+  });
+
+  assert.equal(review.status, 0, review.stderr || review.stdout);
+  const result = JSON.parse(review.stdout);
+  assert.equal(result.mutationMode, "direct-process");
+  assert.equal(result.writesApplied, true);
+  const board = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationBoard), "utf8"));
+  assert.equal(board.currentPhase, "review");
+  assert.equal(board.assignedRole, "reviewer");
+  const appendedHandoffs = fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationHandoffs), "utf8").slice(handoffsBefore.length);
+  assert.equal((appendedHandoffs.match(/^## /gm) ?? []).length, 1);
+  assert.match(appendedHandoffs, /builder -> reviewer/u);
+  assert.doesNotMatch(appendedHandoffs, /Policy override:/u);
+  const mutationPaths = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.mutationsIndex), "utf8")).entries.at(-1).paths;
+  const boardMutationIndex = mutationPaths.indexOf(ARTIFACT_PATHS.orchestrationBoard);
+  const handoffMutationIndex = mutationPaths.indexOf(ARTIFACT_PATHS.orchestrationHandoffs);
+  const reviewMutationIndex = mutationPaths.indexOf(ARTIFACT_PATHS.reviewState);
+  assert.ok(boardMutationIndex >= 0);
+  assert.ok(handoffMutationIndex >= 0);
+  assert.ok(reviewMutationIndex >= 0);
+  assert.ok(boardMutationIndex < reviewMutationIndex);
+  assert.ok(handoffMutationIndex < reviewMutationIndex);
+});
+
+test("direct-process review-loop does not duplicate a handoff when reviewer already owns the board", () => {
+  const root = tempRoot();
+  const packet = seedReviewLoopPacket(root, {
+    id: "reviewer-owned-loop-packet",
+    title: "Reviewer-owned review-loop packet",
+    assignedRole: "reviewer",
+    stage: "review"
+  });
+  upsertOrchestrationBoard(root, {
+    phase: "review",
+    assignedRole: "reviewer",
+    currentFocus: "Continue the existing reviewer pass.",
+    nextAction: "Run the bounded local review loop."
+  });
+  const handoffsBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationHandoffs), "utf8");
+
+  const review = spawnSync("node", [CLI, "review-loop", root, "--packet-id", packet.id, "--mutation-mode", "direct-process", "--json"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 5 * 1024 * 1024
+  });
+
+  assert.equal(review.status, 0, review.stderr || review.stdout);
+  const result = JSON.parse(review.stdout);
+  assert.equal(result.mutationMode, "direct-process");
+  const board = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationBoard), "utf8"));
+  assert.equal(board.currentPhase, "review");
+  assert.equal(board.assignedRole, "reviewer");
+  assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationHandoffs), "utf8"), handoffsBefore);
+});
+
+test("direct-process review-loop cannot bypass reviewer transition with skipBoardUpdate", () => {
+  const root = tempRoot();
+  const packet = seedReviewLoopPacket(root, {
+    id: "skip-board-review-loop-packet",
+    title: "Skip-board review-loop packet"
+  });
+  const handoffsBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationHandoffs), "utf8");
+
+  assert.throws(() => runWithMutationContext(root, {
+    actionId: "run-dove-review-loop",
+    mutationMode: "direct-process",
+    hostId: "test",
+    packetId: packet.id
+  }, () => runDoveReviewLoop(root, {
+    packetId: packet.id,
+    skipBoardUpdate: true
+  })), /retired governance input skipBoardUpdate at \$\.skipBoardUpdate/u);
+
+  const board = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationBoard), "utf8"));
+  assert.equal(board.currentPhase, "draft");
+  assert.equal(board.assignedRole, "builder");
+  assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationHandoffs), "utf8"), handoffsBefore);
+});
+
+test("direct-process review-loop leaves draft content untouched at the builder revision boundary", () => {
+  const root = tempRoot();
+  const packet = seedReviewLoopPacket(root, {
+    id: "review-loop-no-draft-mutation",
+    title: "Review-loop no draft mutation"
+  });
+  const draftPath = packet.artifactRefs[0];
+  const originalDraft = fs.readFileSync(path.join(root, draftPath), "utf8");
+
+  const result = runWithMutationContext(root, {
+    actionId: "run-dove-review-loop",
+    mutationMode: "direct-process",
+    hostId: "test",
+    packetId: packet.id
+  }, () => runDoveReviewLoop(root, {
+    packetId: packet.id,
+    runId: "review-loop-no-draft-mutation",
+    artifactPaths: [draftPath]
+  }));
+
+  assert.ok(["coherent", "needs-review"].includes(result.status));
+  assert.equal(result.pass.review.verdict, result.review.verdict);
+  assert.equal(fs.readFileSync(path.join(root, draftPath), "utf8"), originalDraft);
+  const board = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationBoard), "utf8"));
+  assert.equal(board.currentPhase, "review");
+  assert.equal(board.assignedRole, "reviewer");
+});
+
+test("direct-process review-loop leaves experience artifacts untouched at the builder revision boundary", () => {
+  const root = tempRoot();
+  const packet = seedReviewLoopPacket(root, {
+    id: "review-loop-no-experience-mutation",
+    title: "Review-loop no experience mutation"
+  });
+  const experiencePaths = [
+    ARTIFACT_PATHS.experimentPlans,
+    ARTIFACT_PATHS.experimentResults,
+    ARTIFACT_PATHS.experimentAudits,
+    ARTIFACT_PATHS.claimBridgeLog
+  ];
+  const snapshotExperienceArtifacts = () => Object.fromEntries(experiencePaths.map((relativePath) => {
+    const fullPath = path.join(root, relativePath);
+    return [relativePath, fs.existsSync(fullPath) ? fs.readFileSync(fullPath).toString("base64") : null];
+  }));
+  const before = snapshotExperienceArtifacts();
+
+  const result = runWithMutationContext(root, {
+    actionId: "run-dove-review-loop",
+    mutationMode: "direct-process",
+    hostId: "test",
+    packetId: packet.id
+  }, () => runDoveReviewLoop(root, {
+    packetId: packet.id,
+    runId: "review-loop-no-experience-mutation",
+    artifactPaths: packet.artifactRefs
+  }));
+
+  assert.ok(["coherent", "needs-review"].includes(result.status));
+  assert.equal(result.pass.review.verdict, result.review.verdict);
+  assert.deepEqual(snapshotExperienceArtifacts(), before);
+  const board = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationBoard), "utf8"));
+  assert.equal(board.currentPhase, "review");
+  assert.equal(board.assignedRole, "reviewer");
+});
+
+test("direct-process review-loop rejects retired governance controls recursively before writes", () => {
+  const cases = [
+    [{ policyOverrideReason: "legacy" }, "$.policyOverrideReason"],
+    [{ skipBoardUpdate: false }, "$.skipBoardUpdate"],
+    [{ draft: { policyOverrideFutureMode: null } }, "$.draft"],
+    [{ experience: { nested: [{ skipRefreshDurableSurfaces: true }] } }, "$.experience"]
+  ];
+
+  for (const [index, [retiredInput, expectedPath]] of cases.entries()) {
+    const root = tempRoot();
+    const packet = seedReviewLoopPacket(root, {
+      id: `review-loop-retired-${index}`,
+      title: "Review-loop retired governance input"
+    });
+    const boardBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationBoard), "utf8");
+    const handoffsBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationHandoffs), "utf8");
+
+    assert.throws(() => runWithMutationContext(root, {
+      actionId: "run-dove-review-loop",
+      mutationMode: "direct-process",
+      hostId: "test",
+      packetId: packet.id
+    }, () => runDoveReviewLoop(root, {
+      packetId: packet.id,
+      ...retiredInput
+    })), (error) => error instanceof Error && error.message.includes(expectedPath));
+
+    assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationBoard), "utf8"), boardBefore);
+    assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationHandoffs), "utf8"), handoffsBefore);
+  }
 });
 
 test("CLI status defaults to a concise human summary and keeps JSON opt-in", () => {
@@ -2422,12 +3594,13 @@ test("CLI Dove orchestrate, mission, status, audit, and return commands expose p
   });
   assert.equal(mission.status, 0, mission.stderr || mission.stdout);
   const missionPayload = JSON.parse(mission.stdout);
-  assert.equal(missionPayload.mode, "dove-mission-query");
+  assert.equal(missionPayload.status, "needs-confirmation");
+  assert.equal(missionPayload.workflowMode, "mission-contract");
   assert.equal(missionPayload.proposalOnly, true);
   assert.deepEqual(missionPayload.writes, []);
-  assert.equal(missionPayload.mission.domain, "engineering");
-  assert.equal(missionPayload.mission.stage, "execution");
-  assert.deepEqual(missionPayload.mission.targetArtifacts, ["bin/dove.mjs"]);
+  assert.equal(missionPayload.proposedTask.domain, "engineering");
+  assert.equal(missionPayload.proposedTask.stage, "execute");
+  assert.deepEqual(missionPayload.proposedTask.artifactRefs, ["bin/dove.mjs"]);
 
   const status = spawnSync("node", [
     CLI,

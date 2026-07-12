@@ -5,10 +5,11 @@ import { evaluateEvidence } from "./evidence.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
-import { assertRoleBoundMutation, loadBoard, normalizeRebuttalIssues, persistRebuttalIssues, upsertOrchestrationBoard } from "./orchestration.mjs";
+import { loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
 import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
-import { appendText, assertGovernanceMutationRegistered, assertFollowThroughReady, listDraftFiles, loadState, nowIso, readJson, saveState, writeJson, writeText } from "./workspace.mjs";
+import { assertReviewMaterials, buildReviewScope } from "./review-scope.mjs";
+import { appendText, assertGovernanceMutationRegistered, assertFollowThroughReady, loadState, nowIso, readJson, saveState, writeJson, writeText } from "./workspace.mjs";
 
 const UNRESOLVED_CONCERN_STATUSES = new Set(["open", "awaiting-author-response", "author-response-submitted", "escalated", "contested"]);
 const AUTHOR_RESPONSE_PENDING_STATUSES = new Set(["open", "awaiting-author-response"]);
@@ -135,6 +136,15 @@ function slugify(value) {
 }
 
 function renderReviewEntry(entry) {
+  const reviewedArtifactPaths = normalizeStringArray(
+    entry.reviewedArtifactPaths
+  );
+  const findings = Array.isArray(entry.findings)
+    ? entry.findings
+    : [];
+  const actionItems = normalizeStringArray(
+    entry.actionItems
+  );
   return [
     `## ${entry.timestamp} — ${entry.stage}`,
     "",
@@ -142,12 +152,12 @@ function renderReviewEntry(entry) {
     `- Verdict: ${entry.verdict}`,
     `- Summary: ${entry.summary}`,
     `- Report: ${entry.reportPath ?? "none"}`,
-    `- Reviewed artifacts: ${entry.reviewedArtifactPaths.length > 0 ? entry.reviewedArtifactPaths.join(", ") : "none"}`,
+    `- Reviewed artifacts: ${reviewedArtifactPaths.length > 0 ? reviewedArtifactPaths.join(", ") : "none"}`,
     `- Review required before finalize: ${entry.reviewRequiredBeforeFinalize}`,
     "- Findings:",
-    ...(entry.findings.length > 0 ? entry.findings.map((item) => `  - [${item.severity}] ${item.summary}${item.responseOwnerRole ? ` (response owner: ${item.responseOwnerRole})` : ""}`) : ["  - None recorded"]),
+    ...(findings.length > 0 ? findings.map((item) => `  - [${item.severity}] ${item.summary}${item.responseOwnerRole ? ` (response owner: ${item.responseOwnerRole})` : ""}`) : ["  - None recorded"]),
     "- Action items:",
-    ...(entry.actionItems.length > 0 ? entry.actionItems.map((item) => `  - ${item}`) : ["  - None recorded"]),
+    ...(actionItems.length > 0 ? actionItems.map((item) => `  - ${item}`) : ["  - None recorded"]),
     ""
   ].join("\n");
 }
@@ -169,7 +179,7 @@ function concernFingerprint(concern = {}, index = 0) {
   const summary = concern.summary ?? `concern-${index + 1}`;
   const claimIds = Array.isArray(concern.claimIds) ? concern.claimIds.join("-") : "";
   const experimentIds = Array.isArray(concern.experimentIds) ? concern.experimentIds.join("-") : "";
-  return slugify(`${summary}-${claimIds}-${experimentIds}`);
+  return slugify(`${concern.packetId ?? "unscoped"}-${summary}-${claimIds}-${experimentIds}`);
 }
 
 function normalizeConcernStatus(status, fallback = "open") {
@@ -247,6 +257,9 @@ function summarizeConcernState(items = []) {
 function normalizeConcern(concern = {}, index = 0) {
   return {
     id: slugify(concern.id ?? concernFingerprint(concern, index)),
+    packetId: concern.packetId ?? null,
+    includedPacketIds: normalizeStringArray(concern.includedPacketIds),
+    reviewedArtifactPaths: normalizeStringArray(concern.reviewedArtifactPaths),
     summary: concern.summary ?? `Concern ${index + 1}`,
     severity: concern.severity ?? "medium",
     status: normalizeConcernStatus(concern.status ?? "open"),
@@ -269,6 +282,8 @@ function normalizeConcern(concern = {}, index = 0) {
     linkedArtifactPaths: Array.isArray(concern.linkedArtifactPaths) ? concern.linkedArtifactPaths : [],
     claimIds: Array.isArray(concern.claimIds) ? concern.claimIds : [],
     experimentIds: Array.isArray(concern.experimentIds) ? concern.experimentIds : [],
+    sourceReviewIds: normalizeStringArray(concern.sourceReviewIds),
+    sourceExecutionClaimIds: normalizeStringArray(concern.sourceExecutionClaimIds),
     updatedAt: nowIso()
   };
 }
@@ -286,11 +301,17 @@ function upsertConcernLedger(root, concerns = [], context = {}) {
   for (const concern of concerns.map(normalizeConcern)) {
     const existing = merged.get(concern.id);
     const status = deriveConcernStatus(existing, concern, { ...context, integrityCriticalConcernIds });
+    const repeatedExecutionClaim = Boolean(
+      context.executionClaimId
+      && existing?.sourceExecutionClaimIds?.includes(context.executionClaimId)
+    );
     const recurrenceCount = concern.status === "resolved"
       ? existing?.recurrenceCount ?? 1
       : status === "resolved"
         ? existing?.recurrenceCount ?? 1
-        : (existing?.recurrenceCount ?? 0) + 1;
+        : repeatedExecutionClaim
+          ? existing?.recurrenceCount ?? 1
+          : (existing?.recurrenceCount ?? 0) + 1;
     const escalationThreshold = concern.escalationThreshold ?? existing?.escalationThreshold ?? escalationThresholdForSeverity(concern.severity);
     const escalationLevel = ["escalated", "contested"].includes(status)
       ? Math.max(existing?.escalationLevel ?? 0, Math.max(1, recurrenceCount - escalationThreshold + 1))
@@ -320,6 +341,8 @@ function upsertConcernLedger(root, concerns = [], context = {}) {
       linkedAuditIds: Array.from(new Set([...(existing?.linkedAuditIds ?? []), ...(concern.linkedAuditIds ?? []), ...(context.auditIds ?? [])])),
       linkedBridgeIds: Array.from(new Set([...(existing?.linkedBridgeIds ?? []), ...(concern.linkedBridgeIds ?? []), ...(context.bridgeIds ?? [])])),
       linkedArtifactPaths: Array.from(new Set([...(existing?.linkedArtifactPaths ?? []), ...(concern.linkedArtifactPaths ?? [])])),
+      sourceReviewIds: Array.from(new Set([...(existing?.sourceReviewIds ?? []), ...(concern.sourceReviewIds ?? []), ...[context.reviewId].filter(Boolean)])),
+      sourceExecutionClaimIds: Array.from(new Set([...(existing?.sourceExecutionClaimIds ?? []), ...(concern.sourceExecutionClaimIds ?? []), ...[context.executionClaimId].filter(Boolean)])),
       updatedAt: nowIso()
     };
     merged.set(next.id, next);
@@ -358,24 +381,77 @@ function upsertConcernLedger(root, concerns = [], context = {}) {
     updatedAt: nowIso()
   });
 
-  if (touched.length > 0) {
+  if (touched.length > 0 && !context.isRetry) {
     appendText(root, ARTIFACT_PATHS.reviewDebateLog, `\n## ${nowIso()} — review round\n\n${touched.map((concern) => `- ${concern.id} [${concern.status}] reviewer=${concern.raisedByRole} response-owner=${concern.responseOwnerRole} recurrence=${concern.recurrenceCount}: ${concern.summary}`).join("\n")}\n`);
   }
   return { items, ...summary };
 }
 
+const SYSTEM_OWNED_REVIEW_FIELDS = new Set([
+  "authorizationProvenance",
+  "authorizationProvenanceHistory",
+  "authorizationFingerprint",
+  "authorityStepId",
+  "authorityStepIndex",
+  "claimId",
+  "executionClaimId",
+  "runtimeRunId",
+  "leaseId",
+  "sourceExecutionClaimId",
+  "sourceExecutionClaimIds",
+  "sourceReviewExecutionClaimId",
+  "sourceReviewId",
+  "sourceReviewIds"
+]);
+
+const INTERNAL_REVIEW_CONTROL_FIELDS = new Set([
+  "skipBoardUpdate",
+  "skipRefreshDurableSurfaces"
+]);
+
+function collectForbiddenPublicReviewPaths(value, path = "", seen = new WeakSet()) {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  if (seen.has(value)) {
+    return [];
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) =>
+      collectForbiddenPublicReviewPaths(item, `${path}[${index}]`, seen)
+    );
+  }
+  return Object.entries(value).flatMap(([key, nestedValue]) => {
+    const fieldPath = path ? `${path}.${key}` : key;
+    const forbidden = key.startsWith("policyOverride")
+      || INTERNAL_REVIEW_CONTROL_FIELDS.has(key)
+      || SYSTEM_OWNED_REVIEW_FIELDS.has(key);
+    return [
+      ...(forbidden ? [fieldPath] : []),
+      ...collectForbiddenPublicReviewPaths(nestedValue, fieldPath, seen)
+    ];
+  });
+}
+
+function assertNoPublicReviewBypassControls(args = {}) {
+  const forbidden = collectForbiddenPublicReviewPaths(args);
+  if (forbidden.length > 0) {
+    throw new Error(
+      `Public review mutations do not accept system-owned provenance or internal control fields: ${forbidden.join(", ")}.`
+    );
+  }
+}
+
 export function appendReviewLog(root, args = {}) {
   assertGovernanceMutationRegistered("append-review-log", "guarded");
+  assertNoPublicReviewBypassControls(args);
   assertTaskScopedMutationTarget(root, "append-review-log", args);
   assertFollowThroughReady(root, "Recording a review log", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Appending a review log entry",
-    expectedRole: "reviewer"
-  });
   return persistReviewLog(root, args);
 }
 
-export function persistReviewLog(root, args = {}) {
+function persistReviewLog(root, args = {}, runtimeContext = {}) {
   const timestamp = args.timestamp ?? nowIso();
   const verdict = normalizeReviewVerdict(args.verdict);
   const summary = normalizeRequiredReviewSummary(args.summary);
@@ -407,6 +483,9 @@ export function persistReviewLog(root, args = {}) {
     throw new Error("append_review_log requires findings, actionItems, or an explicit material boundary for non-coherent reviews.");
   }
   const entry = {
+    id: runtimeContext.executionClaimId ?? args.id ?? `review-${slugify(`${args.packetId ?? "unscoped"}-${args.stage ?? "manual-review"}-${timestamp}`)}`,
+    packetId: args.packetId ?? null,
+    includedPacketIds: normalizeStringArray(args.includedPacketIds ?? [args.packetId].filter(Boolean)),
     timestamp,
     stage: args.stage ?? "manual-review",
     scope: args.scope ?? "current paper materials",
@@ -417,14 +496,14 @@ export function persistReviewLog(root, args = {}) {
     reviewedArtifactPaths,
     resolvedConcernIds: normalizeStringArray(args.resolvedConcernIds),
     findings,
-    actionItems
+    actionItems,
+    ...(runtimeContext.authorizationProvenance ? { authorizationProvenance: runtimeContext.authorizationProvenance } : {})
   };
   if (!entry.reportPath && args.autoGeneratedReviewReport === true) {
     writeText(root, ARTIFACT_PATHS.reviewReport, renderReviewReport(entry));
     entry.reportPath = ARTIFACT_PATHS.reviewReport;
   }
 
-  appendText(root, ARTIFACT_PATHS.reviewLog, `\n${renderReviewEntry(entry)}`);
   const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, {
     version: 3,
     history: [],
@@ -438,11 +517,17 @@ export function persistReviewLog(root, args = {}) {
     reviewRound: 0,
     reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: [], separationMaintained: true }
   });
-  const reviewRound = (reviewState.reviewRound ?? 0) + 1;
+  const existingHistoryIndex = (reviewState.history ?? []).findIndex((item) => item.id === entry.id);
+  const isRetry = existingHistoryIndex >= 0;
+  const reviewRound = isRetry
+    ? reviewState.history[existingHistoryIndex].reviewRound ?? reviewState.reviewRound ?? 1
+    : (reviewState.reviewRound ?? 0) + 1;
+  entry.reviewRound = reviewRound;
   const integrityCriticalConcernIds = entry.findings
     .filter((finding) => finding.severity === "high" || finding.methodologicalCategory === "integrity")
     .map((finding, index) => concernFingerprint({
       id: `review-${entry.stage}-${index + 1}`,
+      packetId: entry.packetId,
       summary: finding.summary,
       claimIds: finding.claimIds,
       experimentIds: finding.experimentIds
@@ -461,10 +546,14 @@ export function persistReviewLog(root, args = {}) {
     : entry.findings.map((finding, index) => ({
         id: concernFingerprint({
           id: `review-${entry.stage}-${index + 1}`,
+          packetId: entry.packetId,
           summary: finding.summary,
           claimIds: finding.claimIds,
           experimentIds: finding.experimentIds
         }),
+        packetId: entry.packetId,
+        includedPacketIds: entry.includedPacketIds,
+        reviewedArtifactPaths: entry.reviewedArtifactPaths,
         summary: finding.summary,
         severity: finding.severity,
         responseOwnerRole: finding.responseOwnerRole,
@@ -475,14 +564,49 @@ export function persistReviewLog(root, args = {}) {
         claimIds: finding.claimIds,
         experimentIds: finding.experimentIds
       }));
-  const concernLedger = upsertConcernLedger(root, concernInputs, { reviewRound, integrityCriticalConcernIds });
+  const concernLedger = upsertConcernLedger(root, concernInputs, {
+    reviewRound,
+    integrityCriticalConcernIds,
+    reviewId: entry.id,
+    executionClaimId: runtimeContext.executionClaimId ?? null,
+    isRetry
+  });
+  const nextHistory = [...(reviewState.history ?? [])];
+  if (existingHistoryIndex >= 0) {
+    nextHistory[existingHistoryIndex] = entry;
+  } else {
+    nextHistory.push(entry);
+  }
+  writeText(root, ARTIFACT_PATHS.reviewLog, [
+    "# Review log",
+    "",
+    ...nextHistory.flatMap((item) => [renderReviewEntry(item), ""])
+  ].join("\n"));
+  const previousPerPacket = reviewState.perPacket && typeof reviewState.perPacket === "object" ? reviewState.perPacket : {};
+  const nextPerPacket = entry.packetId ? {
+    ...previousPerPacket,
+    [entry.packetId]: {
+      packetId: entry.packetId,
+      includedPacketIds: entry.includedPacketIds,
+      verdict: entry.verdict,
+      reviewedAt: timestamp,
+      reviewId: entry.id,
+      reviewedArtifactPaths: entry.reviewedArtifactPaths,
+      unresolvedConcernIds: concernLedger.items.filter((item) => item.packetId === entry.packetId && UNRESOLVED_CONCERN_STATUSES.has(item.status)).map((item) => item.id)
+    }
+  } : previousPerPacket;
+  const workspaceVerdict = Object.values(nextPerPacket).some((item) => item.verdict === "blocked") ? "blocked"
+    : Object.values(nextPerPacket).some((item) => item.verdict === "needs-evidence") ? "needs-evidence"
+      : Object.values(nextPerPacket).some((item) => item.verdict === "needs-revision") ? "needs-revision"
+        : Object.values(nextPerPacket).length > 0 ? "coherent" : "not-reviewed";
   const nextReviewState = {
     ...reviewState,
-    version: 3,
-    lastVerdict: entry.verdict,
+    version: 4,
+    perPacket: nextPerPacket,
+    lastVerdict: workspaceVerdict,
     lastReviewedAt: timestamp,
-    reviewRound,
-    history: [...reviewState.history, entry],
+    reviewRound: Math.max(reviewState.reviewRound ?? 0, reviewRound),
+    history: nextHistory,
     openItems: entry.actionItems,
     unresolvedConcernIds: concernLedger.unresolvedConcernIds,
     escalatedConcernIds: concernLedger.escalatedConcernIds,
@@ -507,13 +631,14 @@ export function persistReviewLog(root, args = {}) {
       updatedAt: timestamp
     },
     reviews: {
-      lastVerdict: entry.verdict,
+      lastVerdict: workspaceVerdict,
+      perPacket: nextPerPacket,
       lastReviewedAt: timestamp,
       openItems: entry.actionItems,
       unresolvedConcernIds: concernLedger.unresolvedConcernIds
     }
   });
-  if (!args.skipBoardUpdate) {
+  if (runtimeContext.skipBoardUpdate !== true) {
     upsertOrchestrationBoard(root, {
       phase: "review",
       assignedRole: "reviewer",
@@ -538,7 +663,7 @@ export function persistReviewLog(root, args = {}) {
       }
     });
   }
-  if (!args.skipRefreshDurableSurfaces) {
+  if (runtimeContext.skipRefreshDurableSurfaces !== true) {
     refreshDurableSurfaces(root, {
       type: "append-review-log",
       summary: `Recorded review verdict ${entry.verdict}.`,
@@ -555,10 +680,6 @@ export function upsertRevisionPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-revision-plan", "guarded");
   assertTaskScopedMutationTarget(root, "upsert-revision-plan", args);
   assertFollowThroughReady(root, "Updating the revision plan", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Updating the revision plan",
-    expectedRole: "planner"
-  });
   const timestamp = args.updatedAt ?? nowIso();
   const summary = args.summary ?? "Manual revision plan update.";
   const items = Array.isArray(args.items) ? args.items : [];
@@ -622,15 +743,101 @@ export function upsertRevisionPlan(root, args = {}) {
   };
 }
 
+function normalizeReviewIssue(issue = {}, index = 0) {
+  return {
+    id: slugify(issue.id ?? issue.summary ?? `review-issue-${index + 1}`),
+    reviewer: issue.reviewer ?? "review-loop",
+    summary: issue.summary ?? `Issue ${index + 1}`,
+    severity: issue.severity ?? "medium",
+    status: issue.status ?? "open",
+    evidenceLinks: normalizeStringArray(issue.evidenceLinks),
+    claimIds: normalizeStringArray(issue.claimIds),
+    experimentIds: normalizeStringArray(issue.experimentIds),
+    responseDirection: issue.responseDirection ?? "clarify",
+    ...(issue.authorizationProvenance
+      ? { authorizationProvenance: issue.authorizationProvenance }
+      : {}),
+    authorizationProvenanceHistory: Array.isArray(issue.authorizationProvenanceHistory)
+      ? issue.authorizationProvenanceHistory
+      : [],
+    sourceReviewIds: normalizeStringArray(issue.sourceReviewIds),
+    sourceReviewExecutionClaimId: issue.sourceReviewExecutionClaimId ?? null,
+    updatedAt: nowIso()
+  };
+}
+
+function persistReviewRebuttalIssues(root, reviewEntry, findings = [], context = {}) {
+  const current = readJson(root, ARTIFACT_PATHS.rebuttalIssues, {
+    version: 1,
+    items: [],
+    updatedAt: null
+  });
+  const merged = new Map((current.items ?? []).map((issue, index) => {
+    const normalized = normalizeReviewIssue(issue, index);
+    return [normalized.id, normalized];
+  }));
+  for (const [index, finding] of findings.entries()) {
+    const id = slugify(`${reviewEntry.id}-${concernFingerprint({
+      summary: finding.summary,
+      claimIds: finding.claimIds,
+      experimentIds: finding.experimentIds
+    }, index)}`);
+    const existing = merged.get(id) ?? null;
+    const provenanceHistory = context.authorizationProvenance
+      ? [...(existing?.authorizationProvenanceHistory ?? []), context.authorizationProvenance]
+        .filter((item, itemIndex, items) => items.findIndex((candidate) => JSON.stringify(candidate) === JSON.stringify(item)) === itemIndex)
+      : existing?.authorizationProvenanceHistory ?? [];
+    merged.set(id, normalizeReviewIssue({
+      ...existing,
+      id,
+      reviewer: context.reviewer,
+      summary: finding.summary,
+      severity: finding.severity,
+      status: reviewEntry.verdict === "coherent" ? "resolved" : "open",
+      evidenceLinks: loadBoard(root).evidenceLinks,
+      claimIds: finding.claimIds,
+      experimentIds: finding.experimentIds,
+      responseDirection: finding.severity === "high" ? "fix" : "clarify",
+      ...(context.authorizationProvenance
+        ? {
+            authorizationProvenance: context.authorizationProvenance,
+            authorizationProvenanceHistory: provenanceHistory
+          }
+        : {}),
+      sourceReviewIds: Array.from(new Set([...(existing?.sourceReviewIds ?? []), reviewEntry.id])),
+      sourceReviewExecutionClaimId: context.executionClaimId ?? existing?.sourceReviewExecutionClaimId ?? null
+    }, index));
+  }
+  const items = Array.from(merged.values()).sort((left, right) => left.id.localeCompare(right.id));
+  const next = { version: 1, items, updatedAt: nowIso() };
+  writeJson(root, ARTIFACT_PATHS.rebuttalIssues, next);
+  return next;
+}
+
+function transitionToLocalReviewer(root, args = {}, target = {}) {
+  const board = loadBoard(root);
+  if (board.currentPhase === "review" && board.assignedRole === "reviewer") {
+    return null;
+  }
+  return upsertOrchestrationBoard(root, {
+    phase: "review",
+    assignedRole: "reviewer",
+    intentType: "review",
+    currentFocus: args.scope ?? target.packet?.title ?? board.currentFocus,
+    nextAction: "Run the local evidence-aware review pass.",
+    handoffSummary: `Handing ${target.packet?.title ?? "the current work"} to the local reviewer for an evidence-aware review.`,
+    evidenceLinks: board.evidenceLinks
+  });
+}
+
 export function runReviewLoop(root, args = {}) {
   assertGovernanceMutationRegistered("run-review-loop", "guarded");
+  assertNoPublicReviewBypassControls(args);
   const target = assertTaskScopedMutationTarget(root, "run-review-loop", args);
-  assertFollowThroughReady(root, "Running the review loop", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Running the review loop",
-    expectedRole: "reviewer"
-  });
-  const entry = persistReviewLoop(root, args);
+  assertFollowThroughReady(root, "Running the review pass", args);
+  const reviewScope = assertReviewMaterials(buildReviewScope(root, target, args), "run_review_loop");
+  transitionToLocalReviewer(root, args, target);
+  const entry = persistReviewLoop(root, args, {}, reviewScope);
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.review",
     responseLanguage: resolveDoveResponseLanguage(root, args),
@@ -666,126 +873,64 @@ export function runReviewLoop(root, args = {}) {
   };
 }
 
-export function persistReviewLoop(root, args = {}) {
-  const state = loadState(root);
-  const board = loadBoard(root);
+function persistReviewLoop(root, args = {}, runtimeContext = {}, reviewScope = null) {
+  const scope = reviewScope ?? assertReviewMaterials(buildReviewScope(root, assertTaskScopedMutationTarget(root, "run-review-loop", args), args), "run_review_loop");
   const evidence = evaluateEvidence(root);
-  const auditIndex = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
-  const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
-  const figureQa = evaluateFigurePipeline(root);
+  const claimIds = new Set(scope.claimIds);
+  const experimentIds = new Set(scope.experimentIds);
+  const resultIds = new Set(scope.resultIds);
+  const auditIds = new Set(scope.auditIds);
+  const reviewedPaths = new Set(scope.substantiveArtifactPaths);
+  const inScopeClaim = (claim) => claimIds.has(claim?.id);
+  const inScopeDraft = (item) => {
+    const fileName = item?.draftFile ?? (item?.claim?.sectionId ? `${item.claim.sectionId}.md` : null);
+    return Boolean(fileName) && reviewedPaths.has(`${ARTIFACT_PATHS.draftsDir}/${fileName}`);
+  };
   const findings = [];
 
-  for (const claim of evidence.unsupportedClaims) {
-    findings.push({ severity: "high", summary: `Claim ${claim.id} has no source support.`, claimIds: [claim.id], responseOwnerRole: "researcher", methodologicalCategory: "evidence" });
-  }
-
-  for (const claim of evidence.weakClaims) {
-    findings.push({ severity: "medium", summary: `Claim ${claim.id} is weakly supported and should be strengthened.`, claimIds: [claim.id], responseOwnerRole: "researcher", methodologicalCategory: "evidence" });
-  }
-
-  for (const item of evidence.missingSourceRefs) {
-    findings.push({ severity: "high", summary: `Claim ${item.claim.id} references missing sources: ${item.missing.join(", ")}.`, claimIds: [item.claim.id], responseOwnerRole: "researcher", methodologicalCategory: "evidence" });
-  }
-
-  for (const item of evidence.missingNoteRefs) {
-    findings.push({ severity: "medium", summary: `Claim ${item.claim.id} references missing notes: ${item.missing.join(", ")}.`, claimIds: [item.claim.id], responseOwnerRole: "researcher", methodologicalCategory: "evidence" });
-  }
-
-  for (const item of evidence.missingCitationRefs) {
-    findings.push({ severity: "high", summary: `${item.draftFile} cites unknown source key ${item.key}.`, responseOwnerRole: "researcher", methodologicalCategory: "citation" });
-  }
+  for (const claim of evidence.unsupportedClaims.filter(inScopeClaim)) findings.push({ severity: "high", summary: `Claim ${claim.id} has no source support.`, claimIds: [claim.id], responseOwnerRole: "researcher", methodologicalCategory: "evidence" });
+  for (const claim of evidence.weakClaims.filter(inScopeClaim)) findings.push({ severity: "medium", summary: `Claim ${claim.id} is weakly supported and should be strengthened.`, claimIds: [claim.id], responseOwnerRole: "researcher", methodologicalCategory: "evidence" });
+  for (const item of evidence.missingSourceRefs.filter((item) => inScopeClaim(item.claim))) findings.push({ severity: "high", summary: `Claim ${item.claim.id} references missing sources: ${item.missing.join(", ")}.`, claimIds: [item.claim.id], responseOwnerRole: "researcher", methodologicalCategory: "evidence" });
+  for (const item of evidence.missingNoteRefs.filter((item) => inScopeClaim(item.claim))) findings.push({ severity: "medium", summary: `Claim ${item.claim.id} references missing notes: ${item.missing.join(", ")}.`, claimIds: [item.claim.id], responseOwnerRole: "researcher", methodologicalCategory: "evidence" });
+  for (const item of evidence.missingCitationRefs.filter(inScopeDraft)) findings.push({ severity: "high", summary: `${item.draftFile} cites unknown source key ${item.key}.`, responseOwnerRole: "researcher", methodologicalCategory: "citation" });
 
   const experimentResults = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
-  for (const result of experimentResults.items) {
-    if (result.outcome === "failed" || result.outcome === "refutes") {
-      findings.push({ severity: "high", summary: `Experiment ${result.experimentId} returned ${result.outcome} and needs claim/rebuttal follow-up.`, experimentIds: [result.experimentId], claimIds: result.claimId ? [result.claimId] : [], responseOwnerRole: "experiment-planner", methodologicalCategory: "integrity", linkedAuditIds: result.latestAuditId ? [result.latestAuditId] : [], linkedBridgeIds: result.latestBridgeId ? [result.latestBridgeId] : [] });
-    }
-    if (result.outcome === "inconclusive") {
-      findings.push({ severity: "medium", summary: `Experiment ${result.experimentId} is inconclusive and weakens claim confidence.`, experimentIds: [result.experimentId], claimIds: result.claimId ? [result.claimId] : [], responseOwnerRole: "experiment-planner", methodologicalCategory: "integrity", linkedAuditIds: result.latestAuditId ? [result.latestAuditId] : [], linkedBridgeIds: result.latestBridgeId ? [result.latestBridgeId] : [] });
-    }
+  for (const result of (experimentResults.items ?? []).filter((item) => resultIds.has(item.id) || experimentIds.has(item.experimentId))) {
+    if (["failed", "refutes"].includes(result.outcome)) findings.push({ severity: "high", summary: `Experiment ${result.experimentId} returned ${result.outcome} and needs claim/rebuttal follow-up.`, experimentIds: [result.experimentId], claimIds: result.claimId ? [result.claimId] : [], responseOwnerRole: "experiment-planner", methodologicalCategory: "integrity", linkedAuditIds: result.latestAuditId ? [result.latestAuditId] : [], linkedBridgeIds: result.latestBridgeId ? [result.latestBridgeId] : [] });
+    if (result.outcome === "inconclusive") findings.push({ severity: "medium", summary: `Experiment ${result.experimentId} is inconclusive and weakens claim confidence.`, experimentIds: [result.experimentId], claimIds: result.claimId ? [result.claimId] : [], responseOwnerRole: "experiment-planner", methodologicalCategory: "integrity", linkedAuditIds: result.latestAuditId ? [result.latestAuditId] : [], linkedBridgeIds: result.latestBridgeId ? [result.latestBridgeId] : [] });
+  }
+  for (const audit of evidence.auditIntegrityFlags.filter((item) => auditIds.has(item.id) || experimentIds.has(item.experimentId))) findings.push({ severity: "high", summary: `Experiment audit ${audit.id} raised integrity flags: ${audit.integrityFlags.join(", ")}.`, experimentIds: audit.experimentId ? [audit.experimentId] : [], claimIds: audit.claimId ? [audit.claimId] : [], responseOwnerRole: "experiment-planner", methodologicalCategory: "integrity", linkedAuditIds: [audit.id], linkedArtifactPaths: [ARTIFACT_PATHS.experimentAudits] });
+  for (const bridgeProblem of evidence.claimBridgeProblems.filter((item) => inScopeClaim(item.claim))) findings.push({ severity: "high", summary: `Claim ${bridgeProblem.claim.id} has a result-to-claim bridge problem (${bridgeProblem.reason}).`, claimIds: [bridgeProblem.claim.id], experimentIds: bridgeProblem.claim.experimentIds ?? [], responseOwnerRole: "experiment-planner", methodologicalCategory: "integrity", linkedBridgeIds: bridgeProblem.bridgeId ? [bridgeProblem.bridgeId] : [], linkedAuditIds: bridgeProblem.auditIds ?? [], linkedArtifactPaths: [ARTIFACT_PATHS.claimBridgeLog] });
+  for (const item of evidence.draftClaimMismatches.filter((candidate) => inScopeClaim(candidate.claim))) findings.push({ severity: "medium", summary: item.reason === "missing-draft" ? `Claim ${item.claim.id} targets section ${item.claim.sectionId} but no draft exists for that section.` : `Draft for ${item.claim.sectionId} does not cite any expected source for claim ${item.claim.id}.`, claimIds: [item.claim.id], responseOwnerRole: "researcher", methodologicalCategory: item.reason === "missing-draft" ? "draft" : "citation" });
+  for (const todo of evidence.citationTodos.filter(inScopeDraft)) findings.push({ severity: "medium", summary: `${todo.draftFile}:${todo.line} still has a citation TODO.`, responseOwnerRole: "researcher", methodologicalCategory: "citation" });
+
+  const figureIds = new Set(scope.figureIds ?? []);
+  const figureQa = evaluateFigurePipeline(root);
+  for (const issue of (figureQa.issues ?? []).filter((item) => figureIds.has(item.figureId) || (item.artifactPaths ?? []).some((artifactPath) => reviewedPaths.has(artifactPath)) || (item.claimIds ?? []).some((id) => claimIds.has(id)) || (item.experimentIds ?? []).some((id) => experimentIds.has(id)))) {
+    findings.push({ severity: issue.severity, summary: issue.summary, claimIds: issue.claimIds, experimentIds: issue.experimentIds, responseOwnerRole: issue.responseOwnerRole, methodologicalCategory: "figure", linkedArtifactPaths: issue.artifactPaths });
   }
 
-  for (const audit of evidence.auditIntegrityFlags) {
-    findings.push({ severity: "high", summary: `Experiment audit ${audit.id} raised integrity flags: ${audit.integrityFlags.join(", ")}.`, experimentIds: audit.experimentId ? [audit.experimentId] : [], claimIds: audit.claimId ? [audit.claimId] : [], responseOwnerRole: "experiment-planner", methodologicalCategory: "integrity", linkedAuditIds: [audit.id], linkedArtifactPaths: [ARTIFACT_PATHS.experimentAudits] });
-  }
-
-  for (const bridgeProblem of evidence.claimBridgeProblems) {
-    findings.push({ severity: "high", summary: `Claim ${bridgeProblem.claim.id} has a result-to-claim bridge problem (${bridgeProblem.reason}).`, claimIds: [bridgeProblem.claim.id], experimentIds: bridgeProblem.claim.experimentIds ?? [], responseOwnerRole: "experiment-planner", methodologicalCategory: "integrity", linkedBridgeIds: bridgeProblem.bridgeId ? [bridgeProblem.bridgeId] : [], linkedAuditIds: bridgeProblem.auditIds ?? [], linkedArtifactPaths: [ARTIFACT_PATHS.claimBridgeLog] });
-  }
-
-  for (const item of evidence.draftClaimMismatches) {
-    if (item.reason === "missing-draft") {
-      findings.push({ severity: "medium", summary: `Claim ${item.claim.id} targets section ${item.claim.sectionId} but no draft exists for that section.`, claimIds: [item.claim.id], responseOwnerRole: "researcher", methodologicalCategory: "draft" });
-      continue;
-    }
-    findings.push({ severity: "medium", summary: `Draft for ${item.claim.sectionId} does not cite any expected source for claim ${item.claim.id}.`, claimIds: [item.claim.id], responseOwnerRole: "researcher", methodologicalCategory: "citation" });
-  }
-
-  for (const todo of evidence.citationTodos) {
-    findings.push({ severity: "medium", summary: `${todo.draftFile}:${todo.line} still has a citation TODO.`, responseOwnerRole: "researcher", methodologicalCategory: "citation" });
-  }
-
-  const draftedSections = new Set(listDraftFiles(root).map((fileName) => fileName.replace(/\.md$/, "")));
-  for (const section of Object.values(state.sections)) {
-    if (section.status !== "planned" && !draftedSections.has(section.id)) {
-      findings.push({ severity: "medium", summary: `Section ${section.title} is marked ${section.status} but has no draft file.`, responseOwnerRole: "planner", methodologicalCategory: "process" });
-    }
-  }
-
-  for (const issue of figureQa.issues) {
-    findings.push({
-      severity: issue.severity,
-      summary: issue.summary,
-      claimIds: issue.claimIds,
-      experimentIds: issue.experimentIds,
-      responseOwnerRole: issue.responseOwnerRole,
-      methodologicalCategory: "figure",
-      linkedArtifactPaths: issue.artifactPaths
-    });
-  }
-
-  const actionItems = findings.map((finding) => finding.summary);
-  const verdict = findings.some((finding) => finding.severity === "high")
-    ? "needs-evidence"
-    : findings.length > 0
-      ? "needs-revision"
-      : "coherent";
-
+  const scopedFindings = findings.map((finding) => ({ ...finding, packetId: scope.packetId, includedPacketIds: scope.includedPacketIds, reviewedArtifactPaths: scope.substantiveArtifactPaths }));
+  const actionItems = scopedFindings.map((finding) => finding.summary);
+  const verdict = scopedFindings.some((finding) => finding.severity === "high") ? "needs-evidence" : scopedFindings.length > 0 ? "needs-revision" : "coherent";
   const entry = persistReviewLog(root, {
-    stage: args.stage ?? "review-loop",
-    scope: args.scope ?? "current paper pipeline",
+    ...args,
+    packetId: scope.packetId,
+    includedPacketIds: scope.includedPacketIds,
+    stage: args.stage ?? "review-pass",
+    scope: args.scope ?? `packet ${scope.packetId} and descendants`,
     verdict,
-    summary: verdict === "coherent"
-      ? "The current paper artifacts are internally consistent."
-      : "The current paper artifacts need another revision pass.",
-    findings,
+    summary: verdict === "coherent" ? "The selected packet scope is internally consistent for this review pass." : "The selected packet scope requires explicit Builder follow-up before another review pass.",
+    findings: scopedFindings,
     actionItems,
-    reviewedArtifactPaths: [ARTIFACT_PATHS.claims, ARTIFACT_PATHS.experimentLog, ARTIFACT_PATHS.figuresIndex],
+    reviewedArtifactPaths: scope.substantiveArtifactPaths,
     autoGeneratedReviewReport: true,
-    reviewRequiredBeforeFinalize: true,
-    skipBoardUpdate: Boolean(args.skipBoardUpdate),
-    skipRefreshDurableSurfaces: Boolean(args.skipRefreshDurableSurfaces)
-  });
-
-  persistRebuttalIssues(root, {
-    issues: findings.map((finding, index) => ({
-      id: `review-issue-${index + 1}`,
-      reviewer: args.reviewer ?? "review-loop",
-      summary: finding.summary,
-      severity: finding.severity,
-      status: verdict === "coherent" ? "resolved" : "open",
-      evidenceLinks: board.evidenceLinks,
-      claimIds: finding.claimIds,
-      experimentIds: finding.experimentIds,
-      responseDirection: finding.severity === "high" ? "fix" : "clarify"
-    })),
-    skipBoardUpdate: Boolean(args.skipRebuttalBoardUpdate),
-    skipRefreshDurableSurfaces: Boolean(args.skipRefreshDurableSurfaces)
-  });
-
-  const latestAuditIds = (auditIndex.items ?? []).slice(-5).map((item) => item.id);
-  const latestBridgeIds = (bridgeLog.items ?? []).slice(-5).map((item) => item.id);
-  upsertConcernLedger(root, [], { auditIds: latestAuditIds, bridgeIds: latestBridgeIds });
-
+    reviewRequiredBeforeFinalize: true
+  }, runtimeContext);
+  entry.packetId = scope.packetId;
+  entry.includedPacketIds = scope.includedPacketIds;
+  entry.reviewedArtifactSet = scope.substantiveArtifactPaths;
+  persistReviewRebuttalIssues(root, entry, scopedFindings, { reviewer: args.reviewer ?? "review-pass", authorizationProvenance: runtimeContext.authorizationProvenance ?? null, executionClaimId: runtimeContext.executionClaimId ?? null });
+  upsertConcernLedger(root, [], { auditIds: scope.auditIds, bridgeIds: [] });
   return entry;
 }

@@ -24,8 +24,8 @@ Inspect or record global and task-bound lessons that future Dove work must obey.
 1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check or action below; do not construct default answers by manually reading or listing internal files.
 2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
 3. If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
-4. This request has one listed project check: `node ./bin/dove.mjs lessons .` from the project root; Summarize its practical result instead of inspecting internal files directly.
-5. Use lesson writing only for distilled reusable guidance with problem, decision, pitfall, validation, and next-time behavior.
+4. This request has one listed project check: `node ./bin/dove-package.mjs lessons .` from the project root; Summarize its practical result instead of inspecting internal files directly.
+5. Use lesson writing only for distilled reusable guidance with problem, decision, pitfall, validation, and next-time behavior; add `--mutation-mode direct-process` to the explicit lesson-recording command.
 6. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 7. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
 8. When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.

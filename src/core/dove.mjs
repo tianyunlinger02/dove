@@ -3758,8 +3758,59 @@ export function queryDoveMission(root, args = {}) {
   };
 }
 
+const DOVE_MISSION_LAUNCH_FIELDS = new Set([
+  "sourceType",
+  "sourceId",
+  "actorRole",
+  "workerRole",
+  "doveWorkerRole",
+  "goal",
+  "domain",
+  "doveDomain",
+  "missionDomain",
+  "stage",
+  "missionStage",
+  "targetArtifacts",
+  "artifacts",
+  "artifactPaths",
+  "acceptanceChecks",
+  "acceptanceCriteria",
+  "returnProtocol",
+  "packetId",
+  "missionPacketId",
+  "followThroughId",
+  "selectedConversionPathKey",
+  "title",
+  "summary",
+  "phase",
+  "assignedRole",
+  "status",
+  "lifecycleStatus",
+  "currentFocus",
+  "nextAction",
+  "nextCommand",
+  "dependencies",
+  "evidenceLinks",
+  "outputPaths",
+  "decisionSummary",
+  "rationale",
+  "executeBy",
+  "reviewAfter"
+]);
+
+function assertMissionLaunchArgs(args) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    throw new Error("launchDoveMission requires a packet-only argument object.");
+  }
+  const unknownFields = Object.keys(args).filter((field) => !DOVE_MISSION_LAUNCH_FIELDS.has(field));
+  if (unknownFields.length > 0) {
+    throw new Error(`launchDoveMission rejects non-mission fields: ${unknownFields.join(", ")}.`);
+  }
+}
+
 export function launchDoveMission(root, args = {}) {
   assertGovernanceMutationRegistered("launch-dove-mission", "guarded");
+  assertMissionLaunchArgs(args);
   const sourceType = String(args.sourceType ?? "").trim();
   const sourceId = String(args.sourceId ?? "").trim();
   if (!sourceType || !sourceId) {
@@ -3773,12 +3824,14 @@ export function launchDoveMission(root, args = {}) {
   const actorRole = normalizeDoveRole(args.actorRole, "planner");
   const workerRole = normalizeDoveRole(args.workerRole ?? args.doveWorkerRole, null);
   const materialized = materializeGuidancePacket(root, {
-    ...args,
     packetId: args.packetId ?? args.missionPacketId,
+    followThroughId: args.followThroughId,
+    selectedConversionPathKey: args.selectedConversionPathKey,
     sourceType,
     sourceId,
     actorRole,
     workerRole: workerRole ?? undefined,
+    assignedRole: args.assignedRole,
     domain: mission.domain,
     doveDomain: mission.domain,
     missionDomain: mission.domain,
@@ -3787,13 +3840,23 @@ export function launchDoveMission(root, args = {}) {
     goal: mission.goal,
     missionGoal: mission.goal,
     targetArtifacts: mission.targetArtifacts,
+    acceptanceCriteria: args.acceptanceCriteria,
     acceptanceChecks: mission.acceptanceChecks,
     returnProtocol: mission.returnProtocol,
     title: args.title ?? mission.goal,
     summary: args.summary ?? `Dove ${mission.domain} mission: ${mission.goal}`,
     phase: args.phase ?? phaseForDoveStage(mission.stage),
+    status: args.status,
+    lifecycleStatus: args.lifecycleStatus,
+    currentFocus: args.currentFocus,
     nextAction: args.nextAction ?? mission.nextCommand,
-    decisionSummary: args.decisionSummary ?? `Launched Dove ${mission.domain} mission from ${sourceType}:${sourceId}.`
+    dependencies: args.dependencies,
+    evidenceLinks: args.evidenceLinks,
+    outputPaths: args.outputPaths,
+    decisionSummary: args.decisionSummary ?? `Launched Dove ${mission.domain} mission from ${sourceType}:${sourceId}.`,
+    rationale: args.rationale,
+    executeBy: args.executeBy,
+    reviewAfter: args.reviewAfter
   });
   const missionPacket = missionPacketAliases(materialized.packet ?? {
     id: materialized.packetId,

@@ -30,9 +30,9 @@ let exitCode = 0;
 
 try {
   const env = { ...process.env, DOVE_CLAUDE_CONFIG_DIR: claudeConfigRoot, DOVE_CLAUDE_SHELL_RC: claudeShellRc };
-  exitCode = run("node", ["./bin/dove.mjs", "install", target, "--force", "--host", "all"], env);
+  exitCode = run("node", ["./bin/dove-package.mjs", "install", target, "--force", "--host", "claude"], env);
   if (exitCode === 0) {
-    exitCode = run("node", ["./bin/dove.mjs", "doctor", target], env);
+    exitCode = run("node", ["./bin/dove-package.mjs", "doctor", target], env);
   }
 } finally {
   cleanupTempWorkspace(target);

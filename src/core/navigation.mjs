@@ -1,5 +1,5 @@
-import fs from "node:fs";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 
 import {
@@ -77,8 +77,10 @@ import {
   resolveResumeCommandForPhase,
   roleCanActAs
 } from "./schema.mjs";
+import { followThroughSourceAuthorityFingerprint } from "./follow-through-authority.mjs";
+import { readProgramOperatingState } from "./program-operating-state.mjs";
 import { resolveDurableTaskPacket } from "./task-packets.mjs";
-import { assertGovernanceMutationRegistered, ensureWorkspace, loadState, nowIso, overrideEvidenceRelevantToItems, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
+import { assertGovernanceMutationRegistered, assertNoPolicyOverrideArgs, ensureWorkspace, loadState, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 
 function normalizeStringArray(value) {
   return Array.isArray(value)
@@ -241,10 +243,15 @@ function describePacketProvenance(packet = {}) {
 }
 
 function slugify(value) {
-  return String(value)
+  const normalized = String(value)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "item";
+  if (normalized.length <= 160) {
+    return normalized;
+  }
+  const digest = crypto.createHash("sha256").update(normalized).digest("hex").slice(0, 12);
+  return `${normalized.slice(0, 147).replace(/-+$/u, "")}-${digest}`;
 }
 
 function isTrellisTaskSourceArtifact(value) {
@@ -431,7 +438,18 @@ function roleContextPaths(roleId) {
 }
 
 function artifactContextPath(relativePath) {
-  return path.join(ARTIFACT_PATHS.artifactContextsDir, `${slugify(relativePath)}.json`);
+  const normalized = normalizeArtifactPath(relativePath);
+  const slug = slugify(normalized);
+  const digest = crypto
+    .createHash("sha256")
+    .update(normalized)
+    .digest("hex")
+    .slice(0, 16);
+  const readablePrefix = slug.slice(0, 120).replace(/-+$/g, "") || "artifact";
+  return path.join(
+    ARTIFACT_PATHS.artifactContextsDir,
+    `${readablePrefix}-${digest}.json`
+  );
 }
 
 function actionContextPath(scopeId) {
@@ -3123,10 +3141,6 @@ function summarizeFigureIssueForPack(issue = {}) {
   };
 }
 
-function hashFollowThroughSource(value) {
-  return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
 function buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, executionBridgeCandidates) {
   const catalog = new Map();
   for (const pack of remediationPacks.packs ?? []) {
@@ -3134,16 +3148,10 @@ function buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, ex
       sourceType: "remediation-pack",
       sourceId: pack.id,
       sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
-      sourceFingerprint: hashFollowThroughSource({
-        id: pack.id,
-        clusterId: pack.clusterId,
-        readiness: pack.readiness,
-        acceptanceCriteria: pack.acceptanceCriteria,
-        rankedConversionPaths: (pack.rankedConversionPaths ?? []).map((item) => [item.targetType, item.targetId, item.rank, item.pathScore]),
-        manualNextActions: pack.manualNextActions,
-        reviewConcerns: (pack.reviewConcerns ?? []).map((item) => [item.id, item.summary, item.status, item.severity]),
-        figureQa: (pack.figureQa ?? []).map((item) => [item.id, item.code, item.summary, item.severity])
-      }),
+      sourceFingerprint: followThroughSourceAuthorityFingerprint(
+        "remediation-pack",
+        pack
+      ),
       allowedActorRoles: uniqueSorted([...(pack.packetPointers ?? []).map((item) => item.assignedRole), ...(pack.conversionHints ?? []).map((item) => item.assignedRole)].filter(Boolean)),
       title: pack.title,
       summary: pack.summary
@@ -3154,14 +3162,10 @@ function buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, ex
       sourceType: "operator-playbook",
       sourceId: playbook.id,
       sourceArtifactPath: ARTIFACT_PATHS.metaOperatorPlaybooks,
-      sourceFingerprint: hashFollowThroughSource({
-        id: playbook.id,
-        taxonomyFamilyId: playbook.taxonomyFamilyId,
-        readiness: playbook.readiness,
-        acceptanceCriteria: playbook.acceptanceCriteria,
-        rankedConversionPaths: (playbook.rankedConversionPaths ?? []).map((item) => [item.targetType, item.targetId, item.rank, item.pathScore]),
-        manualNextActions: playbook.manualNextActions
-      }),
+      sourceFingerprint: followThroughSourceAuthorityFingerprint(
+        "operator-playbook",
+        playbook
+      ),
       allowedActorRoles: uniqueSorted(playbook.responseOwnerRoles ?? []),
       title: playbook.title,
       summary: playbook.summary
@@ -3172,15 +3176,10 @@ function buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, ex
       sourceType: "execution-bridge",
       sourceId: candidate.id,
       sourceArtifactPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates,
-      sourceFingerprint: hashFollowThroughSource({
-        id: candidate.id,
-        candidateType: candidate.candidateType,
-        targetArtifact: candidate.targetArtifact,
-        targetId: candidate.targetId,
-        suggestedAcceptanceCriteria: candidate.suggestedAcceptanceCriteria,
-        sourceRemediationPackIds: candidate.sourceRemediationPackIds,
-        sourcePlaybookIds: candidate.sourcePlaybookIds
-      }),
+      sourceFingerprint: followThroughSourceAuthorityFingerprint(
+        "execution-bridge",
+        candidate
+      ),
       allowedActorRoles: uniqueSorted([candidate.sourceConversionPath?.assignedRole, ...(candidate.context?.linkedPacketPointers ?? []).map((item) => item.assignedRole)].filter(Boolean)),
       title: candidate.suggestedTitle,
       summary: candidate.suggestedSummary
@@ -3207,7 +3206,7 @@ function normalizeFollowThroughRetryState(value = {}) {
   };
 }
 
-function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestamp = nowIso()) {
+function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestamp = nowIso(), targetPreview = null) {
   const items = (existingIndex.items ?? []).map((item, index) => {
     const sourceType = item.sourceType ?? "remediation-pack";
     const sourceId = item.sourceId ?? item.id ?? `unknown-${index + 1}`;
@@ -3235,15 +3234,15 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
       status,
       linkedTargetArtifact: item.linkedTargetArtifact ?? null,
       linkedTargetId: item.linkedTargetId ?? null
-    });
+    }, targetPreview);
     return {
       id: item.id ?? `follow-through-${slugify(`${sourceType}-${sourceId}`)}`,
       sourceType,
       sourceId,
-      sourceArtifactPath: source?.sourceArtifactPath ?? item.sourceArtifactPath ?? null,
+      sourceArtifactPath: item.sourceArtifactPath ?? source?.sourceArtifactPath ?? null,
       sourceFingerprint: item.sourceFingerprint ?? source?.sourceFingerprint ?? null,
-      sourceTitle: source?.title ?? item.sourceTitle ?? sourceId,
-      sourceSummary: source?.summary ?? item.sourceSummary ?? "",
+      sourceTitle: item.sourceTitle ?? source?.title ?? sourceId,
+      sourceSummary: item.sourceSummary ?? source?.summary ?? "",
       status,
       decisionSummary: item.decisionSummary ?? "",
       rationale: item.rationale ?? "",
@@ -3414,7 +3413,7 @@ function buildGovernanceCoverageReport(governanceCoverage, generatedAt = nowIso(
   };
 }
 
-function validateFollowThroughPayload(root, record = {}) {
+function validateFollowThroughPayload(root, record = {}, targetPreview = null) {
   const status = record.status;
   const allowed = new Set(["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"]);
   if (!allowed.has(status)) {
@@ -3429,7 +3428,7 @@ function validateFollowThroughPayload(root, record = {}) {
   if (status === "accepted-for-execution" && (!record.linkedTargetArtifact || !record.linkedTargetId)) {
     throw new Error("Accepted-for-execution follow-through records require linkedTargetArtifact and linkedTargetId.");
   }
-  if (status === "accepted-for-execution" && !record.plannedTarget && !targetArtifactContainsId(root, record.linkedTargetArtifact, record.linkedTargetId)) {
+  if (status === "accepted-for-execution" && !record.plannedTarget && !targetArtifactContainsId(root, record.linkedTargetArtifact, record.linkedTargetId, targetPreview)) {
     throw new Error(`Accepted-for-execution follow-through target ${record.linkedTargetId} was not found in ${record.linkedTargetArtifact}. Use plannedTarget when the target will be materialized later.`);
   }
   if (status === "accepted-for-execution" && !record.executeBy) {
@@ -3467,24 +3466,17 @@ function validateFollowThroughActor(root, record, source) {
   if (record.actorRole === "planner" && record.workerRole && allowedActorRoles.includes(record.workerRole)) {
     return;
   }
-  const evidencePaths = normalizeStringArray(record.policyOverrideEvidencePaths);
-  const relevance = overrideEvidenceRelevantToItems(root, [{
-    id: `${record.sourceType}:${record.sourceId}`,
-    sourceId: record.sourceId,
-    sourceArtifactPath: source?.sourceArtifactPath ?? record.sourceArtifactPath ?? null,
-    linkedTargetArtifact: record.linkedTargetArtifact ?? null,
-    linkedTargetId: record.linkedTargetId ?? null,
-    closureArtifactPaths: normalizeStringArray(record.closureArtifactPaths)
-  }], evidencePaths);
-  const targetEvidencePresent = record.linkedTargetArtifact ? evidencePaths.includes(record.linkedTargetArtifact) : false;
-  const sourceEvidencePresent = [source?.sourceArtifactPath, ...normalizeStringArray(record.closureArtifactPaths)].filter(Boolean).some((artifactPath) => evidencePaths.includes(artifactPath));
-  if (record.policyOverrideReason && record.actorRole && relevance.ok && targetEvidencePresent && sourceEvidencePresent) {
-    return;
-  }
-  throw new Error(`Actor role ${record.actorRole} is not allowed for ${record.sourceType}:${record.sourceId}. Allowed roles: ${allowedActorRoles.join(", ")}. Provide policyOverrideEvidencePaths that cover both the local source and target artifacts if this is intentional.`);
+  throw new Error(`Actor role ${record.actorRole} is not allowed for ${record.sourceType}:${record.sourceId}. Allowed roles: ${allowedActorRoles.join(", ")}.`);
 }
 
-function targetArtifactContainsId(root, artifactPath, targetId) {
+function targetArtifactContainsId(root, artifactPath, targetId, targetPreview = null) {
+  if (
+    targetPreview
+    && targetPreview.artifactPath === artifactPath
+    && targetPreview.targetId === targetId
+  ) {
+    return true;
+  }
   const fullPath = resolvePath(root, artifactPath);
   if (!fs.existsSync(fullPath)) {
     return false;
@@ -3732,6 +3724,84 @@ function buildProgramAuthorityEnvelopeFromArgs(args = {}, fallbackAllowedStepTyp
   return normalizeProgramAuthorityEnvelope(envelope, fallbackAllowedStepType, fallbackStepPayload);
 }
 
+function normalizeExecutionClaim(
+  claim = null
+) {
+  if (claim == null) {
+    return null;
+  }
+  if (
+    typeof claim !== "object"
+    || Array.isArray(claim)
+  ) {
+    throw new Error(
+      "Execution claim state must be a durable object when present."
+    );
+  }
+  const status = [
+    "claimed",
+    "applied",
+    "completed",
+    "indeterminate"
+  ].includes(claim.status)
+    ? claim.status
+    : null;
+  const allowedStepType =
+    normalizeAutonomyAllowedStepType(
+      claim.allowedStepType,
+      null
+    );
+  if (
+    !claim.claimId
+    || !claim.runtimeRunId
+    || !claim.leaseId
+    || !claim.packetId
+    || !claim.actorRole
+    || !Number.isInteger(claim.stepIndex)
+    || !allowedStepType
+    || !claim.authorizationFingerprint
+    || !status
+  ) {
+    throw new Error(
+      "Execution claim state is malformed and cannot be discarded by normalization."
+    );
+  }
+  return {
+    claimId: String(claim.claimId),
+    runtimeRunId: String(claim.runtimeRunId),
+    leaseId: String(claim.leaseId),
+    packetId: String(claim.packetId),
+    actorRole: String(claim.actorRole),
+    stepIndex: claim.stepIndex,
+    allowedStepType,
+    authorizationFingerprint:
+      String(claim.authorizationFingerprint),
+    sourceType: claim.sourceType
+      ? String(claim.sourceType)
+      : null,
+    sourceId: claim.sourceId
+      ? String(claim.sourceId)
+      : null,
+    sourceArtifactPath:
+      claim.sourceArtifactPath
+        ? String(claim.sourceArtifactPath)
+        : null,
+    sourceFingerprint:
+      claim.sourceFingerprint
+        ? String(claim.sourceFingerprint)
+        : null,
+    followThroughId:
+      claim.followThroughId
+        ? String(claim.followThroughId)
+        : null,
+    status,
+    claimedAt: claim.claimedAt ?? null,
+    appliedAt: claim.appliedAt ?? null,
+    completedAt: claim.completedAt ?? null,
+    failureReason: claim.failureReason ?? null
+  };
+}
+
 function normalizeProgramRunItem(programRun = {}, index = 0) {
   const allowedStepType = normalizeAutonomyAllowedStepType(programRun.allowedStepType, null);
   const authorityEnvelope = normalizeProgramAuthorityEnvelope(programRun.authorityEnvelope, allowedStepType ?? "refresh-research-brief", programRun.stepPayload);
@@ -3764,6 +3834,18 @@ function normalizeProgramRunItem(programRun = {}, index = 0) {
     reviewCheckpointRuntimeRunId: programRun.reviewCheckpointRuntimeRunId ?? null,
     reviewCheckpointAllowedStepType: normalizeAutonomyAllowedStepType(programRun.reviewCheckpointAllowedStepType, null),
     reviewRecommendedCommand: programRun.reviewRecommendedCommand ?? null,
+    activeExecutionClaimId:
+      programRun.activeExecutionClaimId
+        ? String(
+            programRun.activeExecutionClaimId
+          )
+        : null,
+    lastExecutionClaimId:
+      programRun.lastExecutionClaimId
+        ? String(
+            programRun.lastExecutionClaimId
+          )
+        : null,
     nextApprovalIntent: programRun.nextApprovalIntent && typeof programRun.nextApprovalIntent === "object" && !Array.isArray(programRun.nextApprovalIntent)
       ? {
           continuationFromRunId: programRun.nextApprovalIntent.continuationFromRunId ?? null,
@@ -3806,6 +3888,14 @@ function normalizeProgramApprovalItem(approval = {}, index = 0) {
     consumedAt: approval.consumedAt ?? null,
     consumedByRuntimeRunId: approval.consumedByRuntimeRunId ?? null,
     consumedByPacketId: approval.consumedByPacketId ?? null,
+    activeExecutionClaim:
+      normalizeExecutionClaim(
+        approval.activeExecutionClaim
+      ),
+    lastExecutionClaim:
+      normalizeExecutionClaim(
+        approval.lastExecutionClaim
+      ),
     updatedAt: approval.updatedAt ?? nowIso()
   };
 }
@@ -4012,7 +4102,7 @@ function reflectCampaignStepOutcome(root, args = {}) {
   }
   const campaignsState = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
   const campaigns = (campaignsState.items ?? []).map(normalizeCampaignItem);
-  const programRunsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
+  const programRunsState = readProgramOperatingState(root).programRuns;
   const programRun = (programRunsState.items ?? []).find((item) => (!programRunId || item.id === programRunId) && (!programId || item.programId === programId)) ?? null;
   if (!programRun) {
     return null;
@@ -4071,230 +4161,68 @@ function reflectCampaignStepOutcome(root, args = {}) {
 }
 
 function writeProgramOperatingState(root, { programsIndex, programRuns, programApprovals }) {
-  writeJson(root, ARTIFACT_PATHS.programsIndex, {
-    ...createProgramsIndex(),
-    items: programsIndex,
-    summary: summarizeProgramsIndex(programsIndex),
-    updatedAt: nowIso()
-  });
+  const timestamp = nowIso();
   writeJson(root, ARTIFACT_PATHS.programRuns, {
     ...createProgramRunsIndex(),
     items: programRuns,
     summary: summarizeProgramRunsIndex(programRuns),
-    updatedAt: nowIso()
+    updatedAt: timestamp
+  });
+  writeJson(root, ARTIFACT_PATHS.programsIndex, {
+    ...createProgramsIndex(),
+    items: programsIndex,
+    summary: summarizeProgramsIndex(programsIndex),
+    updatedAt: timestamp
   });
   writeJson(root, ARTIFACT_PATHS.programApprovals, {
     ...createProgramApprovalsIndex(),
     items: programApprovals,
     summary: summarizeProgramApprovalsIndex(programApprovals),
-    updatedAt: nowIso()
-  });
-}
-
-function upsertProgramOperatingState(root, args = {}) {
-  const programId = args.programId ? slugify(args.programId) : null;
-  const programRunId = args.programRunId ? slugify(args.programRunId) : null;
-  const approvalId = args.approvalId ? slugify(args.approvalId) : null;
-  if (!programId && !programRunId && !approvalId) {
-    return null;
-  }
-  if (!programId || !programRunId || !approvalId) {
-    throw new Error("Program-linked materialization requires programId, programRunId, and approvalId together.");
-  }
-  const timestamp = nowIso();
-  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard);
-  const programsState = normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex));
-  const programRunsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
-  const approvalsState = normalizeProgramApprovalsIndex(readJson(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex));
-  const existingRun = (programRunsState.items ?? []).find((item) => item.id === programRunId) ?? null;
-  const existingApproval = (approvalsState.items ?? []).find((item) => item.id === approvalId) ?? null;
-  if (existingRun && existingRun.reviewCheckpointRequired && existingRun.status === "review-needed" && (args.programRunStatus ?? "approved") === "approved") {
-    throw new Error(`Program run ${programRunId} already has a pending review checkpoint and cannot be silently reused. Create a fresh programRunId and approvalId for the next bounded step.`);
-  }
-  if (existingApproval && existingApproval.status !== "approved" && (args.approvalStatus ?? "approved") === "approved") {
-    throw new Error(`Program approval ${approvalId} is already ${existingApproval.status} and cannot be silently reused.`);
-  }
-
-  const packetId = args.packetId ? slugify(args.packetId) : null;
-  const followThroughId = args.followThroughId ?? null;
-  const workerRole = ROLE_IDS.includes(args.workerRole) ? args.workerRole : "researcher";
-  const allowedStepType = normalizeAutonomyAllowedStepType(args.allowedStepType, null);
-  if (args.allowedStepType && !allowedStepType) {
-    throw new Error(`Unsupported allowedStepType: ${args.allowedStepType}. Supported values: ${AUTONOMY_ALLOWED_STEP_TYPES.join(", ")}.`);
-  }
-  const stepPayload = buildProgramStepPayloadFromArgs(allowedStepType, args) ?? (existingRun?.stepPayload ?? existingApproval?.stepPayload ?? null);
-  const authorityEnvelope = Array.isArray(args.stepSequence) || args.stepBudget != null || args.autonomyPolicy === "objective-aware-default"
-    ? buildProgramAuthorityEnvelopeFromArgs({ ...args, currentPhase: args.currentPhase ?? board.currentPhase ?? "init" }, allowedStepType, stepPayload)
-    : normalizeProgramAuthorityEnvelope(
-        existingRun?.authorityEnvelope ?? existingApproval?.authorityEnvelope,
-        allowedStepType ?? existingRun?.allowedStepType ?? existingApproval?.allowedStepType,
-        stepPayload ?? existingRun?.stepPayload ?? existingApproval?.stepPayload
-      );
-  const firstAuthorityStep = authorityEnvelope.stepSequence[authorityEnvelope.consumedStepCount] ?? null;
-  const effectiveAllowedStepType = firstAuthorityStep?.allowedStepType ?? allowedStepType ?? existingRun?.allowedStepType ?? existingApproval?.allowedStepType ?? "refresh-research-brief";
-  const effectiveStepPayload = firstAuthorityStep?.stepPayload ?? stepPayload;
-  if (effectiveAllowedStepType === "upsert-note" && (!effectiveStepPayload || effectiveStepPayload.sourceIds.length === 0 || !effectiveStepPayload.summary)) {
-    throw new Error("Program-linked upsert-note requires noteSourceIds and noteSummary.");
-  }
-  if (effectiveAllowedStepType === "run-experiment-audit" && (!effectiveStepPayload || !String(effectiveStepPayload.resultId ?? "").trim())) {
-    throw new Error("Program-linked run-experiment-audit requires auditResultId.");
-  }
-  if (effectiveAllowedStepType === "run-review-loop" && !String(effectiveStepPayload?.scope ?? "").trim()) {
-    throw new Error("Program-linked run-review-loop requires reviewScope.");
-  }
-  if (effectiveAllowedStepType === "bridge-result-to-claim" && (!effectiveStepPayload || !String(effectiveStepPayload.resultId ?? "").trim())) {
-    throw new Error("Program-linked bridge-result-to-claim requires bridgeResultId.");
-  }
-
-  const nextPrograms = [...(programsState.items ?? []).filter((item) => item.id !== programId), normalizeProgramItem({
-    ...(programsState.items ?? []).find((item) => item.id === programId),
-    id: programId,
-    title: args.programTitle ?? (programsState.items ?? []).find((item) => item.id === programId)?.title ?? programId,
-    objective: args.programObjective ?? (programsState.items ?? []).find((item) => item.id === programId)?.objective ?? "",
-    agenda: args.programAgenda ?? (programsState.items ?? []).find((item) => item.id === programId)?.agenda ?? [],
-    evidenceBacklog: args.programEvidenceBacklog ?? (programsState.items ?? []).find((item) => item.id === programId)?.evidenceBacklog ?? [],
-    status: args.programStatus ?? (programsState.items ?? []).find((item) => item.id === programId)?.status ?? "active",
-    packetIds: uniqueSorted([...(programsState.items ?? []).find((item) => item.id === programId)?.packetIds ?? [], ...[packetId].filter(Boolean)]),
-    approvalIds: uniqueSorted([...(programsState.items ?? []).find((item) => item.id === programId)?.approvalIds ?? [], approvalId]),
-    activeRunId: programRunId,
-    lastOutcome: args.lastProgramOutcome ?? (programsState.items ?? []).find((item) => item.id === programId)?.lastOutcome ?? "not-started",
-    createdAt: (programsState.items ?? []).find((item) => item.id === programId)?.createdAt ?? timestamp,
-    updatedAt: timestamp
-  })].sort((left, right) => left.id.localeCompare(right.id));
-
-  const nextRuns = [...(programRunsState.items ?? []).filter((item) => item.id !== programRunId), normalizeProgramRunItem({
-    ...(programRunsState.items ?? []).find((item) => item.id === programRunId),
-    id: programRunId,
-    programId,
-    approvalId,
-    controllerRole: args.controllerRole ?? "planner",
-    workerRole,
-    allowedStepType: effectiveAllowedStepType,
-    stepPayload: effectiveStepPayload,
-    authorityEnvelope,
-    packetIds: uniqueSorted([...(programRunsState.items ?? []).find((item) => item.id === programRunId)?.packetIds ?? [], ...[packetId].filter(Boolean)]),
-    status: args.programRunStatus ?? (programRunsState.items ?? []).find((item) => item.id === programRunId)?.status ?? "approved",
-    lastRuntimeRunId: args.lastRuntimeRunId ?? (programRunsState.items ?? []).find((item) => item.id === programRunId)?.lastRuntimeRunId ?? null,
-    lastSelectedPacketId: packetId ?? (programRunsState.items ?? []).find((item) => item.id === programRunId)?.lastSelectedPacketId ?? null,
-    lastOutcome: args.lastProgramOutcome ?? (programRunsState.items ?? []).find((item) => item.id === programRunId)?.lastOutcome ?? "not-started",
-    lastExecutedAt: args.lastExecutedAt ?? (programRunsState.items ?? []).find((item) => item.id === programRunId)?.lastExecutedAt ?? null,
-    createdAt: (programRunsState.items ?? []).find((item) => item.id === programRunId)?.createdAt ?? timestamp,
-    updatedAt: timestamp,
-    linkedFollowThroughIds: uniqueSorted([...(programRunsState.items ?? []).find((item) => item.id === programRunId)?.linkedFollowThroughIds ?? [], ...[followThroughId].filter(Boolean)])
-  })].sort((left, right) => left.id.localeCompare(right.id));
-
-  const nextApprovals = [...(approvalsState.items ?? []).filter((item) => item.id !== approvalId), normalizeProgramApprovalItem({
-    ...(approvalsState.items ?? []).find((item) => item.id === approvalId),
-    id: approvalId,
-    programId,
-    programRunId,
-    status: args.approvalStatus ?? (approvalsState.items ?? []).find((item) => item.id === approvalId)?.status ?? "approved",
-    approvedByRole: args.approvedByRole ?? "planner",
-    summary: args.programApprovalSummary ?? (approvalsState.items ?? []).find((item) => item.id === approvalId)?.summary ?? `Approved ${programRunId} for ${authorityEnvelope.maxStepCount} bounded ${authorityEnvelope.maxStepCount === 1 ? effectiveAllowedStepType : "program-scoped"} step${authorityEnvelope.maxStepCount === 1 ? "" : "s"}.`,
-    allowedStepType: effectiveAllowedStepType,
-    stepPayload: effectiveStepPayload,
-    authorityEnvelope,
-    approvedAt: (approvalsState.items ?? []).find((item) => item.id === approvalId)?.approvedAt ?? timestamp,
-    expiresAt: args.approvalExpiresAt ?? (approvalsState.items ?? []).find((item) => item.id === approvalId)?.expiresAt ?? null,
-    updatedAt: timestamp
-  })].sort((left, right) => left.id.localeCompare(right.id));
-
-  writeProgramOperatingState(root, {
-    programsIndex: nextPrograms,
-    programRuns: nextRuns,
-    programApprovals: nextApprovals
-  });
-  const campaignBinding = bindCampaignStepToProgramApproval(root, {
-    campaignId: args.campaignId,
-    campaignStepId: args.campaignStepId,
-    programId,
-    programRunId,
-    approvalId,
-    packetId,
-    allowedStepType: effectiveAllowedStepType,
-    nextAction: args.campaignStepNextAction
-  });
-
-  return { programId, programRunId, approvalId, campaignBinding };
-}
-
-function persistPacket(root, packet) {
-  writeJson(root, packet.packetPath, packet);
-  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex);
-  const nextItems = [...(packetIndex.items ?? []).filter((item) => item.id !== packet.id), packet];
-  const lifecycleCounts = nextItems.reduce((accumulator, item) => {
-    accumulator[item.lifecycleStatus] = (accumulator[item.lifecycleStatus] ?? 0) + 1;
-    return accumulator;
-  }, {});
-  const lifecycleFamilyCounts = nextItems.reduce((accumulator, item) => {
-    const familyId = item.lifecycleFamily ?? lifecycleFamilyForPacket(item);
-    accumulator[familyId] = (accumulator[familyId] ?? 0) + 1;
-    return accumulator;
-  }, {});
-  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
-    ...packetIndex,
-    items: nextItems,
-    lifecycleCounts,
-    lifecycleFamilyCounts,
-    updatedAt: nowIso()
-  });
-}
-
-function buildApprovalPacket(root, packet, { actorRole, workerRole, programId, programRunId, approvalId, followThroughId, summary }) {
-  const timestamp = nowIso();
-  return normalizePacket({
-    ...packet,
-    active: true,
-    status: "pending",
-    lifecycleStatus: "waiting",
-    assignedRole: workerRole,
-    continuationState: {
-      ...(packet.continuationState ?? {}),
-      status: "ready-to-resume",
-      lastCheckpoint: summary ?? `Program approval ${approvalId} re-armed packet ${packet.id}.`,
-      updatedAt: timestamp
-    },
-    autonomyEnvelope: workerRole !== actorRole
-      ? {
-          controllerRole: actorRole,
-          workerRole,
-          scopeType: "packet-local",
-          explicitOnly: true,
-          requiredReadPaths: packet.autonomyEnvelope?.requiredReadPaths ?? [],
-          localRules: packet.autonomyEnvelope?.localRules ?? [
-            "Planner remains the supervising controller for this bounded autonomous packet step.",
-            "The runtime may advance only this packet and its matched follow-through/runtime audit surfaces in one invocation."
-          ]
-        }
-      : packet.autonomyEnvelope ?? null,
-    lineage: {
-      ...(packet.lineage ?? {}),
-      programId,
-      programRunId,
-      approvalId
-    },
-    materialization: packet.materialization
-      ? {
-          ...packet.materialization,
-          followThroughId,
-          programId,
-          programRunId,
-          approvalId
-        }
-      : null,
     updatedAt: timestamp
   });
 }
 
-export { reflectCampaignStepOutcome };
+export function reconcileCampaignsFromProgramRuns(root) {
+  const operatingState = readProgramOperatingState(root);
+  const reflections = [];
+  for (const programRun of
+    operatingState.programRuns.items ?? []) {
+    if (
+      !programRun.lastRuntimeRunId
+      || programRun.activeExecutionClaimId
+    ) {
+      continue;
+    }
+    const reflected = reflectCampaignStepOutcome(
+      root,
+      {
+        programId: programRun.programId,
+        programRunId: programRun.id,
+        outputPaths: [
+          ARTIFACT_PATHS.programRuns,
+          ARTIFACT_PATHS.runtimeResults
+        ]
+      }
+    );
+    if (reflected) {
+      reflections.push(reflected);
+    }
+  }
+  return {
+    status: "reconciled",
+    reflectedRunCount: reflections.length,
+    reflections
+  };
+}
 
 export function queryCampaigns(root, args = {}) {
   ensureWorkspace(root);
   const campaignId = args.campaignId ? slugify(args.campaignId) : null;
   const status = args.status ? String(args.status).trim().toLowerCase() : null;
   const campaignsState = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
-  const programsState = normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex));
-  const runsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
+  const operatingState = readProgramOperatingState(root);
+  const programsState = operatingState.programs;
+  const runsState = operatingState.programRuns;
   const items = (campaignsState.items ?? [])
     .map(normalizeCampaignItem)
     .filter((item) => !campaignId || item.id === campaignId)
@@ -4370,9 +4298,10 @@ export function queryProgramApprovals(root, args = {}) {
   const programId = args.programId ? slugify(args.programId) : null;
   const programRunId = args.programRunId ? slugify(args.programRunId) : null;
   const status = args.status ? String(args.status).trim().toLowerCase() : null;
-  const approvalsState = normalizeProgramApprovalsIndex(readJson(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex));
-  const programRunsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
-  const programsState = normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex));
+  const operatingState = readProgramOperatingState(root);
+  const approvalsState = operatingState.programApprovals;
+  const programRunsState = operatingState.programRuns;
+  const programsState = operatingState.programs;
   const items = (approvalsState.items ?? [])
     .filter((item) => !programId || item.programId === programId)
     .filter((item) => !programRunId || item.programRunId === programRunId)
@@ -4407,122 +4336,6 @@ export function queryProgramApprovals(root, args = {}) {
   };
 }
 
-export function issueProgramApproval(root, args = {}) {
-  assertGovernanceMutationRegistered("issue-program-approval", "exempt");
-  ensureWorkspace(root);
-  const actorRole = args.actorRole ?? "planner";
-  if (actorRole !== "planner") {
-    throw new Error("issueProgramApproval currently requires actorRole 'planner'.");
-  }
-  const continuationFromRunId = args.continuationFromRunId ? slugify(args.continuationFromRunId) : null;
-  const runsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
-  const priorRun = continuationFromRunId ? (runsState.items ?? []).find((item) => item.id === continuationFromRunId) ?? null : null;
-  if (continuationFromRunId && (!priorRun || !priorRun.reviewCheckpointRequired || !priorRun.nextApprovalIntent)) {
-    throw new Error(`Program run ${continuationFromRunId} does not expose a continuation approval intent.`);
-  }
-  const packetId = slugify(args.packetId ?? priorRun?.nextApprovalIntent?.packetId ?? "");
-  const programId = slugify(args.programId ?? priorRun?.programId ?? "");
-  const programRunId = slugify(args.programRunId ?? priorRun?.nextApprovalIntent?.suggestedProgramRunId ?? "");
-  const approvalId = slugify(args.approvalId ?? priorRun?.nextApprovalIntent?.suggestedApprovalId ?? "");
-  const executeBy = args.executeBy ?? null;
-  const reviewAfter = args.reviewAfter ?? null;
-  if (!packetId || !programId || !programRunId || !approvalId || !executeBy || !reviewAfter) {
-    throw new Error("issueProgramApproval requires packetId, programId, programRunId, approvalId, executeBy, and reviewAfter.");
-  }
-  const packetPath = packetFilePath(packetId);
-  const existingPacket = readJson(root, packetPath, null);
-  if (!existingPacket) {
-    throw new Error(`Packet ${packetId} was not found.`);
-  }
-  const packet = normalizePacket(existingPacket);
-  const workerRole = ROLE_IDS.includes(args.workerRole) ? args.workerRole : priorRun?.nextApprovalIntent?.workerRole ?? packet.autonomyEnvelope?.workerRole ?? packet.assignedRole;
-  const sourceType = args.sourceType ?? packet.materialization?.sourceType;
-  const sourceId = args.sourceId ?? packet.materialization?.sourceId;
-  if (!sourceType || !sourceId) {
-    throw new Error(`issueProgramApproval requires sourceType and sourceId, or a packet with durable materialization provenance.`);
-  }
-  const followThroughId = String(args.followThroughId ?? `follow-through-${slugify(`${programRunId}-${packetId}`)}`).trim();
-  const linkage = upsertProgramOperatingState(root, {
-    programId,
-    programRunId,
-    approvalId,
-    programTitle: args.programTitle,
-    programObjective: args.programObjective,
-    programAgenda: args.programAgenda,
-    programEvidenceBacklog: args.programEvidenceBacklog,
-    noteTitle: args.noteTitle ?? priorRun?.nextApprovalIntent?.stepPayload?.title,
-    noteSectionId: args.noteSectionId ?? priorRun?.nextApprovalIntent?.stepPayload?.sectionId,
-    noteSourceIds: args.noteSourceIds ?? priorRun?.nextApprovalIntent?.stepPayload?.sourceIds,
-    noteSummary: args.noteSummary ?? priorRun?.nextApprovalIntent?.stepPayload?.summary,
-    noteQuotes: args.noteQuotes ?? priorRun?.nextApprovalIntent?.stepPayload?.quotes,
-    noteClaims: args.noteClaims ?? priorRun?.nextApprovalIntent?.stepPayload?.claims,
-    noteOpenQuestions: args.noteOpenQuestions ?? priorRun?.nextApprovalIntent?.stepPayload?.openQuestions,
-    auditResultId: args.auditResultId ?? priorRun?.nextApprovalIntent?.stepPayload?.resultId,
-    auditReviewedArtifactRefs: args.auditReviewedArtifactRefs ?? priorRun?.nextApprovalIntent?.stepPayload?.reviewedArtifactRefs,
-    bridgeResultId: args.bridgeResultId ?? priorRun?.nextApprovalIntent?.stepPayload?.resultId,
-    bridgeAuditIds: args.bridgeAuditIds ?? priorRun?.nextApprovalIntent?.stepPayload?.auditIds,
-    bridgeReason: args.bridgeReason ?? priorRun?.nextApprovalIntent?.stepPayload?.reason,
-    reviewScope: args.reviewScope ?? priorRun?.nextApprovalIntent?.stepPayload?.scope,
-    reviewStage: args.reviewStage ?? priorRun?.nextApprovalIntent?.stepPayload?.stage,
-    autonomyPolicy: args.autonomyPolicy,
-    stepSequence: args.stepSequence ?? priorRun?.nextApprovalIntent?.authorityEnvelope?.stepSequence,
-    stepBudget: args.stepBudget ?? priorRun?.nextApprovalIntent?.authorityEnvelope?.maxStepCount,
-    programApprovalSummary: args.summary,
-    controllerRole: actorRole,
-    workerRole,
-    packetId,
-    followThroughId,
-    approvedByRole: actorRole,
-    approvalStatus: "approved",
-    approvalExpiresAt: args.expiresAt ?? null,
-    campaignId: args.campaignId,
-    campaignStepId: args.campaignStepId,
-    campaignStepNextAction: args.campaignStepNextAction,
-    allowedStepType: args.allowedStepType ?? priorRun?.nextApprovalIntent?.allowedStepType ?? packet.lineage?.allowedStepType ?? packet.materialization?.allowedStepType ?? "refresh-research-brief"
-  });
-  const nextPacket = buildApprovalPacket(root, packet, {
-    actorRole,
-    workerRole,
-    programId: linkage.programId,
-    programRunId: linkage.programRunId,
-    approvalId: linkage.approvalId,
-    followThroughId,
-    summary: args.summary ?? priorRun?.nextApprovalIntent?.summary
-  });
-  persistPacket(root, nextPacket);
-  const followThrough = recordOperatorFollowThrough(root, {
-    id: followThroughId,
-    sourceType,
-    sourceId,
-    status: "accepted-for-execution",
-    actorRole,
-    workerRole,
-    programId: linkage.programId,
-    programRunId: linkage.programRunId,
-    approvalId: linkage.approvalId,
-    decisionSummary: args.summary ?? priorRun?.nextApprovalIntent?.summary ?? `Issued program approval ${approvalId} for packet ${packetId}.`,
-    linkedTargetArtifact: nextPacket.packetPath,
-    linkedTargetId: nextPacket.id,
-    executeBy,
-    reviewAfter,
-    rationale: args.rationale ?? ""
-  });
-  refreshDurableSurfaces(root, {
-    type: "issue-program-approval",
-    summary: args.summary ?? priorRun?.nextApprovalIntent?.summary ?? `Issued program approval ${approvalId} for packet ${packetId}.`,
-    artifactPaths: [nextPacket.packetPath, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.programsIndex, ARTIFACT_PATHS.programRuns, ARTIFACT_PATHS.programApprovals, ARTIFACT_PATHS.campaignsIndex, ARTIFACT_PATHS.metaOperatorFollowThrough]
-  });
-  return {
-    status: "issued",
-    approvalId: linkage.approvalId,
-    programId: linkage.programId,
-    programRunId: linkage.programRunId,
-    packetId: nextPacket.id,
-    followThroughId: (followThrough.items ?? []).find((item) => item.id === followThroughId)?.id ?? followThroughId,
-    campaignBinding: linkage.campaignBinding
-  };
-}
-
 export function revokeProgramApproval(root, args = {}) {
   assertGovernanceMutationRegistered("revoke-program-approval", "exempt");
   ensureWorkspace(root);
@@ -4534,7 +4347,8 @@ export function revokeProgramApproval(root, args = {}) {
   if (!approvalId) {
     throw new Error("revokeProgramApproval requires approvalId.");
   }
-  const approvalsState = normalizeProgramApprovalsIndex(readJson(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex));
+  const operatingState = readProgramOperatingState(root);
+  const approvalsState = operatingState.programApprovals;
   const approval = (approvalsState.items ?? []).find((item) => item.id === approvalId) ?? null;
   if (!approval) {
     throw new Error(`Program approval ${approvalId} was not found.`);
@@ -4543,11 +4357,11 @@ export function revokeProgramApproval(root, args = {}) {
   const nextApprovals = (approvalsState.items ?? []).map((item) => item.id === approvalId
     ? { ...item, status: "revoked", summary: args.summary ?? item.summary, revokedAt: timestamp, revokedByRole: actorRole, revokeReason: args.revokeReason ?? null, updatedAt: timestamp }
     : item);
-  const runsState = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
+  const runsState = operatingState.programRuns;
   const nextRuns = (runsState.items ?? []).map((item) => item.approvalId === approvalId && item.status === "approved"
     ? { ...item, status: "blocked", lastOutcome: "approval-revoked", updatedAt: timestamp }
     : item);
-  const programsState = normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex));
+  const programsState = operatingState.programs;
   const nextPrograms = (programsState.items ?? []).map((item) => item.id === approval.programId && item.activeRunId === approval.programRunId
     ? { ...item, status: item.status === "active" ? "blocked" : item.status, lastOutcome: "approval-revoked", updatedAt: timestamp }
     : item);
@@ -4569,17 +4383,17 @@ export function revokeProgramApproval(root, args = {}) {
   };
 }
 
-function followThroughTargetStillBound(root, item) {
+function followThroughTargetStillBound(root, item, targetPreview = null) {
   if (!["accepted-for-execution", "closed"].includes(item.status)) {
     return true;
   }
   if (!item.linkedTargetArtifact || !item.linkedTargetId) {
     return false;
   }
-  return targetArtifactContainsId(root, item.linkedTargetArtifact, item.linkedTargetId);
+  return targetArtifactContainsId(root, item.linkedTargetArtifact, item.linkedTargetId, targetPreview);
 }
 
-function validateFollowThroughTargetBinding(root, record) {
+function validateFollowThroughTargetBinding(root, record, targetPreview = null) {
   if (!["accepted-for-execution", "closed"].includes(record.status)) {
     return;
   }
@@ -4589,7 +4403,7 @@ function validateFollowThroughTargetBinding(root, record) {
   if (record.status === "accepted-for-execution" && record.plannedTarget) {
     return;
   }
-  if (!targetArtifactContainsId(root, record.linkedTargetArtifact, record.linkedTargetId)) {
+  if (!targetArtifactContainsId(root, record.linkedTargetArtifact, record.linkedTargetId, targetPreview)) {
     throw new Error(`Follow-through target ${record.linkedTargetId} was not found in ${record.linkedTargetArtifact}.`);
   }
   if (record.status === "closed") {
@@ -4630,6 +4444,21 @@ function buildFollowThroughTransitions(existingIndex, nextRecord, previousRecord
     },
     updatedAt: timestamp
   };
+}
+
+function validateFollowThroughRecordIdentity(previousRecord, nextRecord) {
+  if (!previousRecord) {
+    return;
+  }
+  if (previousRecord.sourceType !== nextRecord.sourceType || previousRecord.sourceId !== nextRecord.sourceId) {
+    throw new Error(`Follow-through record ${nextRecord.id} cannot change source from ${previousRecord.sourceType}:${previousRecord.sourceId} to ${nextRecord.sourceType}:${nextRecord.sourceId}.`);
+  }
+  const previousTargetBound = previousRecord.linkedTargetArtifact && previousRecord.linkedTargetId;
+  const nextTargetChanged = previousTargetBound
+    && (previousRecord.linkedTargetArtifact !== nextRecord.linkedTargetArtifact || previousRecord.linkedTargetId !== nextRecord.linkedTargetId);
+  if (nextTargetChanged) {
+    throw new Error(`Follow-through record ${nextRecord.id} cannot change target from ${previousRecord.linkedTargetArtifact}:${previousRecord.linkedTargetId} to ${nextRecord.linkedTargetArtifact}:${nextRecord.linkedTargetId}.`);
+  }
 }
 
 function validateFollowThroughTransition(previousRecord, nextRecord) {
@@ -6686,9 +6515,10 @@ export function refreshDurableSurfaces(root, event = {}) {
   const wikiRelations = readJson(root, ARTIFACT_PATHS.wikiRelations, createWikiRelationsIndex);
   const figureQa = readJson(root, ARTIFACT_PATHS.figureQa, { version: 1, items: [], issues: [], updatedAt: null });
   const campaignsIndex = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
-  const programsIndex = normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex));
-  const programRuns = normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex));
-  const programApprovals = normalizeProgramApprovalsIndex(readJson(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex));
+  const operatingState = readProgramOperatingState(root);
+  const programsIndex = operatingState.programs;
+  const programRuns = operatingState.programRuns;
+  const programApprovals = operatingState.programApprovals;
   const runtimeControllerState = normalizeRuntimeControllerState(readJson(root, ARTIFACT_PATHS.runtimeControllerState, createRuntimeControllerState));
   const runtimeLeases = normalizeRuntimeLeasesIndex(readJson(root, ARTIFACT_PATHS.runtimeLeases, createRuntimeLeasesIndex));
   const runtimeEvents = normalizeRuntimeEventsIndex(readJson(root, ARTIFACT_PATHS.runtimeEvents, createRuntimeEventsIndex));
@@ -6816,9 +6646,6 @@ export function refreshDurableSurfaces(root, event = {}) {
   writeJson(root, ARTIFACT_PATHS.metaRemediationPacks, metaOptimize.remediationPacks);
   writeJson(root, ARTIFACT_PATHS.metaRecommendations, metaOptimize.metaRecommendations);
     writeJson(root, ARTIFACT_PATHS.campaignsIndex, campaignsIndex);
-    writeJson(root, ARTIFACT_PATHS.programsIndex, programsIndex);
-    writeJson(root, ARTIFACT_PATHS.programRuns, programRuns);
-    writeJson(root, ARTIFACT_PATHS.programApprovals, programApprovals);
     writeJson(root, ARTIFACT_PATHS.metaOptimizerState, metaOptimize.metaOptimizerState);
     writeText(root, ARTIFACT_PATHS.metaOptimizerReport, metaOptimize.metaOptimizerReport);
     writeText(root, ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown, metaOptimize.metaGovernanceCoverageReport.markdown);
@@ -6986,6 +6813,37 @@ export function queryWorkspaceIndex(root) {
     artifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary]
   });
   return workspaceIndex;
+}
+
+function readMetaOptimizeState(root) {
+  const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(
+    readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex)
+  );
+  const operatorFollowThroughIndex = normalizeMetaOperatorFollowThroughIndex(
+    readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex)
+  );
+  const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(
+    readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex)
+  );
+  const remediationPacks = normalizeMetaRemediationPacksIndex(
+    readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex)
+  );
+  const sourceCatalog = buildFollowThroughSourceCatalog(
+    remediationPacks,
+    operatorPlaybooks,
+    executionBridgeCandidates
+  );
+  return {
+    executionBridgeCandidates,
+    operatorFollowThrough: buildOperatorFollowThrough(
+      root,
+      operatorFollowThroughIndex,
+      sourceCatalog
+    ),
+    operatorPlaybooks,
+    remediationPacks,
+    sourceCatalog
+  };
 }
 
 export function queryMetaOptimize(root) {
@@ -7340,9 +7198,66 @@ function assertSelectedFollowThroughMatchesMaterialization(root, followThroughIn
   return selected;
 }
 
+const MATERIALIZATION_PACKET_FIELDS = new Set([
+  "sourceType",
+  "sourceId",
+  "actorRole",
+  "workerRole",
+  "selectedConversionPathKey",
+  "packetId",
+  "followThroughId",
+  "title",
+  "summary",
+  "phase",
+  "assignedRole",
+  "status",
+  "lifecycleStatus",
+  "currentFocus",
+  "nextAction",
+  "dependencies",
+  "evidenceLinks",
+  "outputPaths",
+  "decisionSummary",
+  "rationale",
+  "executeBy",
+  "reviewAfter",
+  "domain",
+  "doveDomain",
+  "missionDomain",
+  "stage",
+  "missionStage",
+  "goal",
+  "missionGoal",
+  "objective",
+  "targetArtifacts",
+  "artifacts",
+  "artifactPaths",
+  "acceptanceCriteria",
+  "acceptanceChecks",
+  "returnProtocol"
+]);
+
+function assertPacketOnlyMaterializationArgs(args) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    throw new Error("materializeGuidancePacket requires a packet-only argument object.");
+  }
+  const unknownFields = Object.keys(args).filter(
+    (field) => !MATERIALIZATION_PACKET_FIELDS.has(field)
+  );
+  if (unknownFields.length > 0) {
+    throw new Error(
+      `materializeGuidancePacket rejects non-packet fields: ${unknownFields.join(", ")}.`
+    );
+  }
+}
+
 export function materializeGuidancePacket(root, args = {}) {
   assertGovernanceMutationRegistered("materialize-guidance-packet", "guarded");
-  ensureWorkspace(root);
+  assertNoPolicyOverrideArgs(args, "materialize_guidance_packet");
+  assertPacketOnlyMaterializationArgs(args);
+  if (!fs.existsSync(resolvePath(root, ARTIFACT_PATHS.state))) {
+    ensureWorkspace(root);
+  }
   const sourceType = String(args.sourceType ?? "").trim();
   const sourceId = String(args.sourceId ?? "").trim();
   const actorRole = String(args.actorRole ?? "").trim();
@@ -7356,8 +7271,8 @@ export function materializeGuidancePacket(root, args = {}) {
     throw new Error("materializeGuidancePacket requires executeBy and reviewAfter so accepted guidance has an explicit execution window.");
   }
 
-  const meta = queryMetaOptimize(root);
-  const sourceCatalog = buildFollowThroughSourceCatalog(meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates);
+  const meta = readMetaOptimizeState(root);
+  const sourceCatalog = meta.sourceCatalog;
   const source = sourceCatalog.get(`${sourceType}:${sourceId}`);
   if (!source) {
     throw new Error(`Unknown materialization source: ${sourceType}:${sourceId}`);
@@ -7397,38 +7312,6 @@ export function materializeGuidancePacket(root, args = {}) {
   const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard);
   const timestamp = nowIso();
   const followThroughId = String(args.followThroughId ?? `follow-through-${slugify(`${sourceType}-${sourceId}`)}`).trim() || `follow-through-${slugify(`${sourceType}-${sourceId}`)}`;
-  const programLinkage = upsertProgramOperatingState(root, {
-    programId: args.programId,
-    programRunId: args.programRunId,
-    approvalId: args.approvalId,
-    allowedStepType: args.allowedStepType,
-    noteTitle: args.noteTitle,
-    noteSectionId: args.noteSectionId,
-    noteSourceIds: args.noteSourceIds,
-    noteSummary: args.noteSummary,
-    noteQuotes: args.noteQuotes,
-    noteClaims: args.noteClaims,
-    noteOpenQuestions: args.noteOpenQuestions,
-    auditResultId: args.auditResultId,
-    auditReviewedArtifactRefs: args.auditReviewedArtifactRefs,
-    bridgeResultId: args.bridgeResultId,
-    bridgeAuditIds: args.bridgeAuditIds,
-    bridgeReason: args.bridgeReason,
-    reviewScope: args.reviewScope,
-    reviewStage: args.reviewStage,
-    autonomyPolicy: args.autonomyPolicy,
-    programTitle: args.programTitle,
-    programObjective: args.programObjective,
-    programAgenda: args.programAgenda,
-    programEvidenceBacklog: args.programEvidenceBacklog,
-    programApprovalSummary: args.programApprovalSummary,
-    controllerRole: actorRole,
-    workerRole: args.workerRole,
-    packetId,
-    followThroughId,
-    approvedByRole: actorRole,
-    allowedStepType: args.allowedStepType ?? "refresh-research-brief"
-  });
   const workerRole = ROLE_IDS.includes(args.workerRole) ? args.workerRole : null;
   if (workerRole && args.assignedRole && args.assignedRole !== workerRole) {
     throw new Error(`materializeGuidancePacket requires assignedRole to match workerRole ${workerRole} when a role envelope is provided.`);
@@ -7495,10 +7378,6 @@ export function materializeGuidancePacket(root, args = {}) {
         sourceTitle: source.title,
         selectedConversionPathKey: intent.selectedConversionPathKey
       }
-      ,
-      programId: programLinkage?.programId ?? null,
-      programRunId: programLinkage?.programRunId ?? null,
-      approvalId: programLinkage?.approvalId ?? null
     },
     continuationState: {
       status: "ready-to-resume",
@@ -7533,9 +7412,6 @@ export function materializeGuidancePacket(root, args = {}) {
       selectedConversionPathKey: intent.selectedConversionPathKey,
       acceptanceCriteria,
       workspacePointers: uniqueSorted(intent.workspacePointers ?? []),
-      programId: programLinkage?.programId ?? null,
-      programRunId: programLinkage?.programRunId ?? null,
-      approvalId: programLinkage?.approvalId ?? null,
       createdAt: timestamp,
       createdByRole: actorRole,
       decisionSummary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packetId}.`
@@ -7547,32 +7423,32 @@ export function materializeGuidancePacket(root, args = {}) {
     items: [...(packetIndex.items ?? []).filter((item) => item.id !== packet.id), packet],
     updatedAt: timestamp
   };
-  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, nextPacketIndex);
-  writeJson(root, packet.packetPath, packet);
-
-  const followThrough = recordOperatorFollowThrough(root, {
+  const preparedFollowThrough = prepareOperatorFollowThrough(root, {
     id: followThroughId,
     sourceType,
     sourceId,
     actorRole,
     workerRole,
-    sourceArtifactPath: source.sourceArtifactPath,
-    sourceFingerprint: source.sourceFingerprint,
-    sourceTitle: source.title,
-    sourceSummary: source.summary,
-    sourceAllowedActorRoles: source.allowedActorRoles,
     status: "accepted-for-execution",
     decisionSummary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packet.id}.`,
     rationale: args.rationale ?? "",
     selectedConversionPathKey: intent.selectedConversionPathKey,
     linkedTargetArtifact: packet.packetPath,
     linkedTargetId: packet.id,
-    programId: programLinkage?.programId ?? null,
-    programRunId: programLinkage?.programRunId ?? null,
-    approvalId: programLinkage?.approvalId ?? null,
     executeBy: args.executeBy,
     reviewAfter: args.reviewAfter
+  }, {
+    sourceCatalog,
+    timestamp,
+    targetPreview: {
+      artifactPath: packet.packetPath,
+      targetId: packet.id
+    }
   });
+
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, nextPacketIndex);
+  writeJson(root, packet.packetPath, packet);
+  commitOperatorFollowThrough(root, preparedFollowThrough);
 
   const materializedPacket = readJson(root, packet.packetPath, null);
   return {
@@ -7589,39 +7465,104 @@ export function materializeGuidancePacket(root, args = {}) {
   };
 }
 
-export function recordOperatorFollowThrough(root, args = {}) {
-  assertGovernanceMutationRegistered("record-operator-follow-through", "exempt");
-  const meta = queryMetaOptimize(root);
+const PUBLIC_FOLLOW_THROUGH_STATUSES = new Set([
+  "acknowledged",
+  "accepted-for-execution",
+  "deferred",
+  "accepted-risk"
+]);
+
+const PUBLIC_FOLLOW_THROUGH_FIELDS = new Set([
+  "id",
+  "sourceType",
+  "sourceId",
+  "status",
+  "actorRole",
+  "workerRole",
+  "decisionSummary",
+  "rationale",
+  "selectedConversionPathKey",
+  "linkedTargetArtifact",
+  "linkedTargetId",
+  "plannedTarget",
+  "deferUntil",
+  "executeBy",
+  "reviewAfter"
+]);
+
+function assertPublicFollowThroughInput(root, args = {}) {
+  assertNoPolicyOverrideArgs(args, "record_operator_follow_through");
+  const forbidden = Object.keys(args ?? {}).filter((key) =>
+    !PUBLIC_FOLLOW_THROUGH_FIELDS.has(key)
+  );
+  if (forbidden.length > 0) {
+    throw new Error(
+      `Public follow-through mutations do not accept system-owned or unknown fields: ${forbidden.join(", ")}.`
+    );
+  }
+  if (!PUBLIC_FOLLOW_THROUGH_STATUSES.has(args.status)) {
+    throw new Error(
+      `Public follow-through status must be one of: ${Array.from(PUBLIC_FOLLOW_THROUGH_STATUSES).join(", ")}.`
+    );
+  }
+  const recordId = args.id ?? `follow-through-${slugify(`${args.sourceType}-${args.sourceId}`)}`;
+  const existing = normalizeMetaOperatorFollowThroughIndex(
+    readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex)
+  );
+  const previous = (existing.items ?? []).find((item) => item.id === recordId) ?? null;
+  if (
+    previous
+    && (
+      previous.programId
+      || previous.programRunId
+      || previous.approvalId
+      || previous.executionStartedAt
+      || previous.executionCompletedAt
+      || Number(previous.retryState?.attemptCount ?? 0) > 0
+      || previous.retryState?.lastAttemptAt
+      || previous.retryState?.escalatedAt
+      || ["executing", "closed", "superseded"].includes(previous.status)
+    )
+  ) {
+    throw new Error(
+      `Public follow-through mutations cannot alter runtime- or program-owned record ${recordId}.`
+    );
+  }
+}
+
+function readFollowThroughSourceCatalog(root) {
+  const remediationPacks = normalizeMetaRemediationPacksIndex(
+    readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex)
+  );
+  const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(
+    readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex)
+  );
+  const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(
+    readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex)
+  );
+  return buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, executionBridgeCandidates);
+}
+
+function prepareOperatorFollowThrough(root, args = {}, options = {}) {
   const sourceType = args.sourceType;
   const sourceId = args.sourceId;
-  const existing = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const existing = normalizeMetaOperatorFollowThroughIndex(
+    readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex)
+  );
   const recordId = args.id ?? `follow-through-${slugify(`${sourceType}-${sourceId}`)}`;
   const previousRecord = existing.items.find((item) => item.id === recordId) ?? null;
-  const sourceCatalog = buildFollowThroughSourceCatalog(meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates);
-  let source = sourceCatalog.get(`${sourceType}:${sourceId}`) ?? (previousRecord && previousRecord.sourceType === sourceType && previousRecord.sourceId === sourceId
-    ? {
-        sourceArtifactPath: previousRecord.sourceArtifactPath,
-      sourceFingerprint: previousRecord.sourceFingerprint,
-      title: previousRecord.sourceTitle,
-      summary: previousRecord.sourceSummary,
-      allowedActorRoles: uniqueSorted([previousRecord.actorRole, previousRecord.workerRole, args.actorRole, args.workerRole].filter(Boolean))
-      }
-    : null);
-  if (!source && args.sourceArtifactPath && args.sourceFingerprint) {
-    source = {
-      sourceArtifactPath: args.sourceArtifactPath,
-      sourceFingerprint: args.sourceFingerprint,
-      title: args.sourceTitle ?? sourceId,
-      summary: args.sourceSummary ?? "",
-      allowedActorRoles: uniqueSorted(args.sourceAllowedActorRoles ?? [args.actorRole, args.workerRole].filter(Boolean))
-    };
-  }
+  const sourceCatalog = options.sourceCatalog ?? readFollowThroughSourceCatalog(root);
+  const source = sourceCatalog.get(`${sourceType}:${sourceId}`) ?? null;
   if (!source) {
     throw new Error(`Unknown follow-through source: ${sourceType}:${sourceId}`);
   }
-  const status = validateFollowThroughPayload(root, args);
+  const targetPreview = options.targetPreview ?? null;
+  const status = validateFollowThroughPayload(root, args, targetPreview);
   validateFollowThroughActor(root, args, source);
-  const existingTransitions = normalizeMetaOperatorFollowThroughTransitionsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions, createMetaOperatorFollowThroughTransitionsIndex));
+  const existingTransitions = normalizeMetaOperatorFollowThroughTransitionsIndex(
+    readJson(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions, createMetaOperatorFollowThroughTransitionsIndex)
+  );
+  const timestamp = options.timestamp ?? nowIso();
   const items = existing.items.filter((item) => item.id !== recordId);
   const nextRecord = {
     id: recordId,
@@ -7643,32 +7584,41 @@ export function recordOperatorFollowThrough(root, args = {}) {
     plannedTarget: Boolean(args.plannedTarget),
     deferUntil: args.deferUntil ?? null,
     executeBy: args.executeBy ?? null,
-    executionStartedAt: args.executionStartedAt ?? null,
-    executionCompletedAt: args.executionCompletedAt ?? null,
+    executionStartedAt: args.executionStartedAt ?? previousRecord?.executionStartedAt ?? null,
+    executionCompletedAt: args.executionCompletedAt ?? previousRecord?.executionCompletedAt ?? null,
     reviewAfter: args.reviewAfter ?? null,
     closureReason: args.closureReason ?? null,
     closureArtifactPaths: normalizeStringArray(args.closureArtifactPaths),
     actorRole: args.actorRole,
     workerRole: ROLE_IDS.includes(args.workerRole) ? args.workerRole : previousRecord?.workerRole ?? null,
     retryState: normalizeFollowThroughRetryState(args.retryState ?? previousRecord?.retryState),
-    policyOverrideReason: args.policyOverrideReason ?? "",
-    policyOverrideEvidencePaths: normalizeStringArray(args.policyOverrideEvidencePaths),
-    recordedAt: args.recordedAt ?? nowIso(),
-    updatedAt: nowIso()
+    recordedAt: args.recordedAt ?? previousRecord?.recordedAt ?? timestamp,
+    updatedAt: timestamp
   };
-  validateFollowThroughTargetBinding(root, nextRecord);
+  validateFollowThroughRecordIdentity(previousRecord, nextRecord);
+  validateFollowThroughTargetBinding(root, nextRecord, targetPreview);
   validateFollowThroughTransition(previousRecord, nextRecord);
   items.push(nextRecord);
-  const next = buildOperatorFollowThrough(root, { ...existing, items }, sourceCatalog, nowIso());
-  const nextTransitions = buildFollowThroughTransitions(existingTransitions, nextRecord, previousRecord, nowIso());
-  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, next);
-  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions, nextTransitions);
+  const next = buildOperatorFollowThrough(root, { ...existing, items }, sourceCatalog, timestamp, targetPreview);
+  const nextTransitions = buildFollowThroughTransitions(existingTransitions, nextRecord, previousRecord, timestamp);
+  return { next, nextTransitions, nextRecord, sourceCatalog };
+}
+
+function commitOperatorFollowThrough(root, prepared) {
+  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, prepared.next);
+  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions, prepared.nextTransitions);
   refreshDurableSurfaces(root, {
     type: "record-operator-follow-through",
-    summary: `Recorded operator follow-through for ${sourceType}:${sourceId}.`,
+    summary: `Recorded operator follow-through for ${prepared.nextRecord.sourceType}:${prepared.nextRecord.sourceId}.`,
     artifactPaths: [ARTIFACT_PATHS.metaOperatorFollowThrough, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.metaOptimizerReport]
   });
-  return next;
+  return prepared.next;
+}
+
+export function recordOperatorFollowThrough(root, args = {}) {
+  assertGovernanceMutationRegistered("record-operator-follow-through", "exempt");
+  assertPublicFollowThroughInput(root, args);
+  return commitOperatorFollowThrough(root, prepareOperatorFollowThrough(root, args));
 }
 
 export function readPhaseContextManifest(root, phaseId = null) {

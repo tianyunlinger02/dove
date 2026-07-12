@@ -21,12 +21,23 @@ import {
   upsertExperimentResult,
   upsertFigurePlan,
   upsertNote,
-  upsertOrchestrationBoard
+  upsertOrchestrationBoard,
+  verifySource
 } from "../../src/core/index.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
   return createTempRoot("dove-phase2-");
+}
+
+function verifyFixtureSource(root, sourceId) {
+  return verifySource(root, {
+    sourceId,
+    decision: "verified",
+    method: "test fixture inspected the canonical publication record",
+    checkedMaterial: "source title, authors, year, and publication metadata",
+    auditEvidence: [`fixture:${sourceId}`]
+  });
 }
 
 function seedTaskPacket(root, packetId = "phase2-main-packet") {
@@ -105,6 +116,7 @@ test("experiment audits and claim bridge records persist separately from raw res
   seedTaskPacket(root);
 
   const source = registerSource(root, { citationKey: "audit-source", title: "Audit Source", authors: ["Ng"], year: 2026 });
+  verifyFixtureSource(root, source.id);
   const note = upsertNote(root, { title: "Audit note", sectionId: "method", sourceIds: [source.id], summary: "Method note." });
   upsertClaims(root, {
     claims: [{ id: "claim-audit", text: "Audited experiment improves trust.", sectionId: "method", sourceIds: [source.id], noteIds: [note.id] }]
@@ -150,6 +162,7 @@ test("refreshWiki writes typed wiki indexes and workspace summary surfaces", () 
   seedTaskPacket(root);
 
   const source = registerSource(root, { citationKey: "wiki-source", title: "Wiki Source", authors: ["Lee"], year: 2026 });
+  verifyFixtureSource(root, source.id);
   const note = upsertNote(root, { title: "Wiki note", sectionId: "introduction", sourceIds: [source.id], summary: "Question-bearing note.", openQuestions: ["How should the bridge affect confidence?"] });
   upsertClaims(root, {
     claims: [{ id: "claim-wiki", text: "Typed wiki records improve resumability.", sectionId: "introduction", sourceIds: [source.id], noteIds: [note.id] }]
@@ -189,13 +202,14 @@ test("figure workflow prepares materials, imports generated output, and writes c
   ensureWorkspace(root);
   initProject(root, { title: "Figure Contract Test", objective: "Plan a durable figure contract." });
   const packetId = seedTaskPacket(root);
-  registerSource(root, {
+  const source = registerSource(root, {
     citationKey: "figure-source",
     title: "Figure Source",
     authors: ["Doe"],
     year: 2026,
     sourceType: "paper"
   });
+  verifyFixtureSource(root, source.id);
   upsertNote(root, {
     noteId: "figure-note",
     title: "Figure note",

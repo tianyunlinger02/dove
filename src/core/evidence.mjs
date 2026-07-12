@@ -1,10 +1,11 @@
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
-import { assertRoleBoundMutation, loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
+import { loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, extractCitationKeysFromText, nowIso, readJson, readText, writeJson, writeText, listDraftFiles } from "./workspace.mjs";
+import { assertEligibleSourceReferences, evaluateSourceReferences, sourceReferenceMap } from "./source-trust.mjs";
 
 function slugify(value) {
   return String(value)
@@ -52,7 +53,8 @@ function normalizeClaim(claim, index) {
     latestAuditVerdict: claim.latestAuditVerdict ?? null,
     latestBridgeId: claim.latestBridgeId ?? null,
     bridgeStatus: claim.bridgeStatus ?? null,
-    gap: claim.gap ?? ""
+    gap: claim.gap ?? "",
+    packetIds: Array.isArray(claim.packetIds) ? Array.from(new Set(claim.packetIds.filter(Boolean))) : []
   };
 }
 
@@ -85,10 +87,6 @@ export function upsertClaims(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-claims", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-claims", args);
   assertFollowThroughReady(root, "Updating evidence-backed claims", args);
-  assertRoleBoundMutation(root, args, {
-    actionLabel: "Updating evidence-backed claims",
-    expectedRole: "researcher"
-  });
   const current = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
@@ -101,6 +99,7 @@ export function upsertClaims(root, args = {}) {
   }));
 
   for (const claim of inputClaims) {
+    claim.packetIds = Array.from(new Set([...claim.packetIds, target.packetId]));
     if (!claim.text.trim()) {
       throw new Error(`Claim ${claim.id} must include text.`);
     }
@@ -111,6 +110,7 @@ export function upsertClaims(root, args = {}) {
     if (unknownSources.length > 0) {
       throw new Error(`Claim ${claim.id} references unknown sources: ${unknownSources.join(", ")}`);
     }
+    assertEligibleSourceReferences(root, claim.sourceIds, `Claim ${claim.id}`);
     const unknownNotes = claim.noteIds.filter((id) => !noteIds.has(id));
     if (unknownNotes.length > 0) {
       throw new Error(`Claim ${claim.id} references unknown notes: ${unknownNotes.join(", ")}`);
@@ -161,7 +161,7 @@ export function evaluateEvidence(root) {
   const experimentResults = readJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [], updatedAt: null });
   const audits = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
   const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
-  const sourceById = new Map(sources.items.flatMap((item) => [[item.id, item], item.citationKey ? [item.citationKey, item] : null].filter(Boolean)));
+  const sourceById = sourceReferenceMap(sources.items ?? []);
   const noteIds = new Set(notes.items.map((item) => item.id));
   const auditsById = new Map((audits.items ?? []).map((item) => [item.id, item]));
   const resultsById = new Map((experimentResults.items ?? []).map((item) => [item.id, item]));
@@ -182,9 +182,16 @@ export function evaluateEvidence(root) {
       unsupportedClaims.push(claim);
       continue;
     }
-    const unknownSources = claim.sourceIds.filter((id) => !sourceById.has(id));
+    const sourceEvaluations = evaluateSourceReferences(root, claim.sourceIds);
+    const unknownSources = sourceEvaluations.filter((item) => item.reason === "unknown-source").map((item) => item.reference);
     if (unknownSources.length > 0) {
       missingSourceRefs.push({ claim, missing: unknownSources });
+      unsupportedClaims.push(claim);
+      continue;
+    }
+    const ineligibleSources = sourceEvaluations.filter((item) => !item.eligible);
+    if (ineligibleSources.length > 0) {
+      missingSourceRefs.push({ claim, missing: [], ineligible: ineligibleSources.map((item) => ({ sourceId: item.reference, reason: item.reason })) });
       unsupportedClaims.push(claim);
       continue;
     }
@@ -197,7 +204,7 @@ export function evaluateEvidence(root) {
     }
 
     const latestBridge = claim.latestBridgeId ? bridgeLog.items.find((item) => item.id === claim.latestBridgeId) : null;
-    if (claim.experimentIds.length > 0 && !latestBridge) {
+    if ((claim.experimentIds ?? []).length > 0 && !latestBridge) {
       claimBridgeProblems.push({ claim, reason: "missing-bridge-event" });
     }
     if (latestBridge && latestBridge.statusAfter !== claim.status) {

@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { ARTIFACT_PATHS, createDoveTask, discoverPaperArtifacts, ensureWorkspace, initDoveGoal, queryDoveOnboarding } from "../../src/core/index.mjs";
+import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
@@ -25,6 +26,17 @@ function writeFixturePaper(root) {
   return { manuscriptPath, manuscriptBefore: fs.readFileSync(manuscriptPath, "utf8") };
 }
 
+function materializeProposedDoveTask(root, args) {
+  const proposal = createDoveTask(root, args);
+  assert.equal(proposal.status, "needs-confirmation");
+  assert.match(proposal.proposalDigest, /^[0-9a-f]{64}$/u);
+  return runWithMutationContext(root, {
+    actionId: "create-dove-task",
+    mutationMode: proposal.confirmArgs.mutationMode,
+    hostId: "test"
+  }, () => createDoveTask(root, proposal.confirmArgs));
+}
+
 function seedDoveProject(root, suffix) {
   fs.mkdirSync(root, { recursive: true });
   initDoveGoal(root, {
@@ -32,13 +44,56 @@ function seedDoveProject(root, suffix) {
     title: `CLI Global Project ${suffix}`,
     goal: "Validate CLI global public status publishing."
   });
-  createDoveTask(root, {
+  materializeProposedDoveTask(root, {
     id: `cli-global-task-${suffix}`,
     title: `CLI global task ${suffix}`,
-    goal: "Keep one project available for CLI global status aggregation.",
-    confirmed: true
+    goal: "Keep one project available for CLI global status aggregation."
   });
 }
+
+test("createDoveTask rejects bare and stale confirmations before exact proposal replay", () => {
+  const root = tempRoot("dove-task-confirmation-");
+  initDoveGoal(root, {
+    id: "confirmation-init",
+    title: "Confirmation project",
+    goal: "Validate exact mission proposal confirmation."
+  });
+  const request = {
+    id: "confirmation-task",
+    title: "Confirmation task",
+    goal: "Materialize only the exact approved mission contract.",
+    checklist: false
+  };
+  const proposal = createDoveTask(root, request);
+
+  assert.equal(proposal.status, "needs-confirmation");
+  assert.throws(() => createDoveTask(root, {
+    ...request,
+    confirmed: true
+  }), /exact proposalDigest/);
+  assert.throws(() => runWithMutationContext(root, {
+    actionId: "create-dove-task",
+    mutationMode: proposal.confirmArgs.mutationMode,
+    hostId: "test"
+  }, () => createDoveTask(root, {
+    ...structuredClone(proposal.confirmArgs),
+    title: "Stale confirmation task"
+  })), /no longer matches the current contract|exact replay fields/);
+
+  const rejectedIndex = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex), "utf8"));
+  assert.equal(rejectedIndex.items.some((item) => item.id === request.id), false);
+
+  const freshProposal = createDoveTask(root, request);
+  assert.equal(freshProposal.status, "needs-confirmation");
+  assert.throws(() => createDoveTask(root, freshProposal.confirmArgs), /active MutationContext/);
+  const created = runWithMutationContext(root, {
+    actionId: "create-dove-task",
+    mutationMode: freshProposal.confirmArgs.mutationMode,
+    hostId: "test"
+  }, () => createDoveTask(root, freshProposal.confirmArgs));
+  assert.equal(created.status, "materialized");
+  assert.equal(created.createdTask.id, request.id);
+});
 
 test("discoverPaperArtifacts proposes mappings without writing by default", () => {
   const root = tempRoot();

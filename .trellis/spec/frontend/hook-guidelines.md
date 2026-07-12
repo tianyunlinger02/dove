@@ -46,7 +46,7 @@ Example command pattern: generated `dove.status` adapters read `.dove/context/ac
 
 ## Naming Conventions
 
-- Core functions use verb-first camelCase: `ensureWorkspace`, `queryWorkspaceIndex`, `runAutonomyForeground`, `materializeGuidancePacket`.
+- Core functions use verb-first camelCase: `ensureWorkspace`, `queryWorkspaceIndex`, `runDoveAuto`, `materializeGuidancePacket`.
 - Normalizers use `normalize<Name>`; default object factories use `create<Name>`.
 - Query MCP tools use `query_*` or `read_*`; mutating tools use action verbs like `upsert_*`, `append_*`, `run_*`, `materialize_*`.
 - Context manifests should be named after the role, phase, action, packet, or artifact they represent.

@@ -7,7 +7,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { configureClaudeCodeGatewayDefaults, inspectClaudeCodeGatewayDefaults, resolveClaudeConfigRoot, resolveClaudeShellStartupFile } from "../src/core/claude-code-gateway.mjs";
-import { buildRebuttal, buildRebuttalStrategy, discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, initDoveGoal, launchDoveMission, normalizeRebuttalIssues, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, queryOperatorLessons, recordOperatorLesson, refreshDurableSurfaces, registerSource, resetDoveVersion, runAutonomyControlPlaneOnce, runAutonomyForeground, runAutonomyOperate, runDoveAuto, runDoveOperator, runDoveReviewLoop, runExperienceWorkflow, runFigureWorkflow, runGlobalStatusServingForeground, runIsolatedReview, runReviewLoop, runWithMutationContext, setSectionStatus, upsertDraft, upsertNote } from "../src/core/index.mjs";
+import { buildRebuttal, buildRebuttalStrategy, createDoveTask, discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, initDoveGoal, isOperationalFailureOutcome, launchDoveMission, normalizeRebuttalIssues, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, queryOperatorLessons, recordOperatorLesson, refreshDurableSurfaces, registerSource, resetDoveVersion, runDoveAuto, runDoveOperator, runDoveReviewLoop, runExperienceWorkflow, runFigureWorkflow, runGlobalStatusServingForeground, runIsolatedReview, runReviewLoop, setSectionStatus, upsertDraft, upsertNote } from "../src/core/index.mjs";
+import { runWithMutationContext } from "../src/core/mutation-backend.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
 import {
@@ -45,7 +46,8 @@ Usage:
   dove status [target]
   dove status [target] --missions
   dove mission [target] --goal <text>
-  dove auto [target] --target <task> --confirmed
+  dove auto [target] --goal <text>
+  dove auto [target] --target <task>
   dove operator [target] --confirmed
   dove source [target] --target <task> --title <text> --locator <url-or-doi>
   dove note [target] --target <task> --summary <text>
@@ -106,6 +108,16 @@ function readFlagValue(args, flag) {
   return args[index + 1];
 }
 
+function assertFlagAppearsAtMostOnce(args, flag) {
+  const count = args.reduce(
+    (total, item) => total + (item === flag ? 1 : 0),
+    0
+  );
+  if (count > 1) {
+    throw new Error(`${flag} may be provided only once.`);
+  }
+}
+
 function readFlagValues(args, flags) {
   const values = [];
   for (let index = 0; index < args.length; index += 1) {
@@ -135,6 +147,7 @@ function readPositionalArgs(args, valueFlags = []) {
 }
 
 function readMutationMode(args = []) {
+  assertFlagAppearsAtMostOnce(args, "--mutation-mode");
   const value = readFlagValue(args, "--mutation-mode");
   if (value === null) {
     if (args.includes("--mutation-mode")) {
@@ -329,6 +342,79 @@ function collectRepeatedFlagValues(args, flag) {
   return values;
 }
 
+function parseJsonArrayFlag(args, flag, label, validateItem = null) {
+  assertFlagAppearsAtMostOnce(args, flag);
+  const raw = readFlagValue(args, flag);
+  if (raw === null) {
+    if (args.includes(flag)) {
+      throw new Error(`${flag} requires a JSON array.`);
+    }
+    return undefined;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`${flag} must be valid JSON containing ${label}.`);
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(`${flag} must contain ${label}.`);
+  }
+  if (validateItem) {
+    parsed.forEach((item, index) => validateItem(item, index));
+  }
+  return parsed;
+}
+
+function assertPlainObjectItem(item, index, flag) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) {
+    throw new Error(`${flag}[${index}] must be an object.`);
+  }
+}
+
+function assertAutoStepItem(item, index) {
+  assertPlainObjectItem(item, index, "--steps-json");
+  const allowedKeys = new Set(["command", "args", "requiredMaterials", "outputArtifacts", "convergenceChecks", "failureRoutes", "executionContract", "verifiedCriteria", "completeTask", "completeOnSuccess"]);
+  const unknownKeys = Object.keys(item).filter((key) => !allowedKeys.has(key));
+  if (unknownKeys.length > 0 || typeof item.command !== "string" || !item.command.trim() || (item.args !== undefined && (!item.args || typeof item.args !== "object" || Array.isArray(item.args)))) {
+    throw new Error(`--steps-json[${index}] is not a supported auto step object${unknownKeys.length > 0 ? `; unknown keys: ${unknownKeys.join(", ")}` : ""}.`);
+  }
+}
+
+function assertOperatorTaskResultItem(item, index) {
+  assertPlainObjectItem(item, index, "--task-results-json");
+  const target = item.packetId ?? item.taskPacketId ?? item.missionPacketId ?? item.taskId ?? item.id ?? item.target ?? item.taskName ?? item.title;
+  if (typeof target !== "string" || !target.trim()) {
+    throw new Error(`--task-results-json[${index}] must identify a task.`);
+  }
+}
+
+function assertKnownCommandFlags(args, { valueFlags = [], booleanFlags = [] } = {}) {
+  const valueFlagSet = new Set(valueFlags);
+  const booleanFlagSet = new Set(booleanFlags);
+  const unknown = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = String(args[index] ?? "");
+    if (!arg.startsWith("--")) {
+      unknown.push(arg);
+      continue;
+    }
+    if (valueFlagSet.has(arg)) {
+      if (index + 1 >= args.length || String(args[index + 1]).startsWith("--")) {
+        throw new Error(`${arg} requires a value.`);
+      }
+      index += 1;
+      continue;
+    }
+    if (!booleanFlagSet.has(arg)) {
+      unknown.push(arg);
+    }
+  }
+  if (unknown.length > 0) {
+    throw new Error(`Unknown or unsupported CLI argument(s): ${Array.from(new Set(unknown)).join(", ")}.`);
+  }
+}
+
 function readFirstFlagValue(args, flags) {
   for (const flag of flags) {
     const value = readFlagValue(args, flag);
@@ -339,12 +425,135 @@ function readFirstFlagValue(args, flags) {
   return null;
 }
 
-function buildDoveMissionArgs(rest = []) {
+function decodeProposalTokenPayload(token, label) {
+  const rawToken = String(token ?? "").trim();
+  if (!rawToken || !/^[A-Za-z0-9_-]+$/u.test(rawToken)) {
+    throw new Error(`--proposal-token must be the exact token returned by the approved Dove ${label} proposal.`);
+  }
+  try {
+    return JSON.parse(Buffer.from(rawToken, "base64url").toString("utf8"));
+  } catch {
+    throw new Error(`--proposal-token is malformed. Request a fresh Dove ${label} proposal.`);
+  }
+}
+
+function decodeMissionProposalToken(token) {
+  const payload = decodeProposalTokenPayload(token, "mission");
+  if (
+    payload?.version !== 1
+    || !["patch-plan", "direct-process"].includes(payload.mutationMode)
+    || !payload.confirmArgs
+    || typeof payload.confirmArgs !== "object"
+    || Array.isArray(payload.confirmArgs)
+  ) {
+    throw new Error("--proposal-token is not a supported Dove mission confirmation token.");
+  }
+  return payload;
+}
+
+function missionProposalToken(result) {
+  const confirmArgs = result?.confirmArgs;
+  const mutationMode = result?.proposalMutationMode;
+  if (
+    !confirmArgs
+    || typeof confirmArgs !== "object"
+    || Array.isArray(confirmArgs)
+    || !["patch-plan", "direct-process"].includes(mutationMode)
+  ) {
+    return "";
+  }
+  return Buffer.from(JSON.stringify({
+    version: result.proposalVersion ?? 1,
+    mutationMode,
+    confirmArgs
+  }), "utf8").toString("base64url");
+}
+
+function decodeAutoProposalToken(token) {
+  const payload = decodeProposalTokenPayload(token, "auto");
+  const expectedKeys = ["action", "confirmArgs", "mutationMode", "version"];
+  const payloadKeys = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? Object.keys(payload).sort()
+    : [];
+  if (
+    payload?.version !== 1
+    || payload.action !== "run-dove-auto"
+    || payloadKeys.length !== expectedKeys.length
+    || payloadKeys.some((key, index) => key !== expectedKeys[index])
+    || !["patch-plan", "direct-process"].includes(payload.mutationMode)
+    || !payload.confirmArgs
+    || typeof payload.confirmArgs !== "object"
+    || Array.isArray(payload.confirmArgs)
+    || payload.confirmArgs.mutationMode !== payload.mutationMode
+    || payload.confirmArgs.proposalVersion !== payload.version
+  ) {
+    throw new Error("--proposal-token is not a supported Dove auto confirmation token.");
+  }
+  return payload;
+}
+
+function autoProposalToken(result) {
+  const confirmArgs = result?.confirmArgs;
+  const mutationMode = result?.proposalMutationMode;
+  const version = result?.proposalVersion;
+  if (
+    !confirmArgs
+    || typeof confirmArgs !== "object"
+    || Array.isArray(confirmArgs)
+    || !["patch-plan", "direct-process"].includes(mutationMode)
+    || confirmArgs.mutationMode !== mutationMode
+    || confirmArgs.proposalVersion !== version
+  ) {
+    return "";
+  }
+  return Buffer.from(JSON.stringify({
+    version,
+    action: "run-dove-auto",
+    mutationMode,
+    confirmArgs
+  }), "utf8").toString("base64url");
+}
+
+function missionProposalJson(result, target = ".") {
+  const proposalToken = missionProposalToken(result);
+  if (!proposalToken) {
+    return result;
+  }
   return {
+    ...result,
+    proposalToken,
+    exactConfirmationCommand:
+      missionConfirmationCommand(result, target)
+  };
+}
+
+function buildDoveMissionArgs(rest = []) {
+  assertFlagAppearsAtMostOnce(rest, "--proposal-token");
+  assertFlagAppearsAtMostOnce(rest, "--proposal-digest");
+  const proposalToken = readFlagValue(rest, "--proposal-token");
+  if (proposalToken !== null) {
+    const proposal = decodeMissionProposalToken(proposalToken);
+    const suppliedMutationMode = readMutationMode(rest);
+    if (suppliedMutationMode && suppliedMutationMode !== proposal.mutationMode) {
+      throw new Error("The approved Dove mission proposal is bound to a different mutation mode. Request a fresh proposal.");
+    }
+    return {
+      ...proposal.confirmArgs,
+      confirmed: rest.includes("--confirmed") || rest.includes("--yes"),
+      mutationMode: proposal.mutationMode,
+      proposalToken
+    };
+  }
+  return {
+    confirmed: rest.includes("--confirmed") || rest.includes("--yes"),
+    mutationMode: readMutationMode(rest) ?? "direct-process",
+    proposalDigest: readFlagValue(rest, "--proposal-digest"),
+    id: readFirstFlagValue(rest, ["--id", "--packet-id", "--task-id"]),
     goal: readFlagValue(rest, "--goal"),
     domain: readFirstFlagValue(rest, ["--domain", "--dove-domain", "--mission-domain"]),
     stage: readFirstFlagValue(rest, ["--stage", "--mission-stage"]),
     targetArtifacts: readFlagValues(rest, ["--artifact", "--target-artifact", "--artifact-path", "--target"]),
+    artifactRefs: readFlagValues(rest, ["--artifact", "--target-artifact", "--artifact-path"]),
     acceptanceChecks: readFlagValues(rest, ["--acceptance-check", "--check"]),
     nextCommand: readFlagValue(rest, "--next-command")
   };
@@ -448,25 +657,85 @@ function buildDoveInitArgs(rest = []) {
   };
 }
 
+function assertAutoProposalReplayArgs(rest = []) {
+  for (const flag of ["--proposal-token", "--mutation-mode", "--confirmed", "--yes", "--format"]) {
+    assertFlagAppearsAtMostOnce(rest, flag);
+  }
+  if (!rest.includes("--confirmed") || rest.includes("--yes")) {
+    throw new Error("Dove auto proposal replay requires the canonical --confirmed flag returned by the proposal command.");
+  }
+  if (!rest.includes("--mutation-mode")) {
+    throw new Error("Dove auto proposal replay requires the exact --mutation-mode returned by the proposal command.");
+  }
+  const valueFlags = new Set(["--proposal-token", "--mutation-mode", "--format"]);
+  const booleanFlags = new Set(["--confirmed", "--json"]);
+  const unexpected = [];
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (valueFlags.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (!booleanFlags.has(arg)) {
+      unexpected.push(arg);
+    }
+  }
+  if (unexpected.length > 0) {
+    throw new Error(`Dove auto proposal replay does not accept additional input: ${Array.from(new Set(unexpected)).join(", ")}. Run the exact confirmation command returned by the proposal.`);
+  }
+}
+
 function buildDoveAutoArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--proposal-token", "--mutation-mode", "--format", "--goal", "--prompt", "--objective", "--domain", "--dove-domain", "--mission-domain", "--stage", "--mission-stage", "--artifact", "--artifact-path", "--max-iterations", "--max-steps", "--steps-json", "--run-id"],
+    booleanFlags: ["--confirmed", "--json"]
+  });
+  assertFlagAppearsAtMostOnce(rest, "--proposal-token");
+  const proposalToken = readFlagValue(rest, "--proposal-token");
+  if (proposalToken !== null) {
+    assertAutoProposalReplayArgs(rest);
+    const proposal = decodeAutoProposalToken(proposalToken);
+    const suppliedMutationMode = readMutationMode(rest);
+    if (suppliedMutationMode && suppliedMutationMode !== proposal.mutationMode) {
+      throw new Error("The approved Dove auto proposal is bound to a different mutation mode. Request a fresh proposal.");
+    }
+    return {
+      ...proposal.confirmArgs,
+      confirmed: true,
+      mutationMode: proposal.mutationMode
+    };
+  }
+  if (rest.includes("--proposal-token")) {
+    throw new Error("--proposal-token must be the exact token returned by the approved Dove auto proposal.");
+  }
   return {
-    ...buildDoveMissionArgs(rest),
     ...buildTaskTargetArgs(rest),
     confirmed: rest.includes("--confirmed") || rest.includes("--yes"),
+    goal: readFlagValue(rest, "--goal"),
     prompt: readFlagValue(rest, "--prompt"),
     objective: readFlagValue(rest, "--objective"),
+    domain: readFirstFlagValue(rest, ["--domain", "--dove-domain", "--mission-domain"]),
+    stage: readFirstFlagValue(rest, ["--stage", "--mission-stage"]),
+    artifactRefs: readFlagValues(rest, ["--artifact", "--artifact-path"]),
     maxIterations: readFlagValue(rest, "--max-iterations") ? Number(readFlagValue(rest, "--max-iterations")) : undefined,
     maxSteps: readFlagValue(rest, "--max-steps") ? Number(readFlagValue(rest, "--max-steps")) : undefined,
-    steps: collectRepeatedFlagValues(rest, "--step").map((command) => ({ command }))
+    steps: parseJsonArrayFlag(rest, "--steps-json", "an array of auto step objects", assertAutoStepItem) ?? [],
+    runId: readFlagValue(rest, "--run-id")
   };
 }
 
 function buildDoveOperatorArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--mutation-mode", "--format", "--blocker-investigation-mode", "--task-results-json", "--run-id"],
+    booleanFlags: ["--confirmed", "--include-queue-details", "--create-blocked-investigations", "--json"]
+  });
   return {
-    confirmed: rest.includes("--confirmed") || rest.includes("--yes"),
+    confirmed: rest.includes("--confirmed"),
     includeQueueDetails: rest.includes("--include-queue-details"),
     blockerInvestigationMode: readFlagValue(rest, "--blocker-investigation-mode"),
-    createBlockedInvestigations: rest.includes("--create-blocked-investigations")
+    createBlockedInvestigations: rest.includes("--create-blocked-investigations"),
+    taskResults: parseJsonArrayFlag(rest, "--task-results-json", "an array of operator task result objects", assertOperatorTaskResultItem),
+    runId: readFlagValue(rest, "--run-id")
   };
 }
 
@@ -559,27 +828,24 @@ function buildDoveReviewArgs(rest = []) {
     ...buildTaskTargetArgs(rest),
     scope: readFlagValue(rest, "--scope"),
     stage: readFlagValue(rest, "--stage"),
-    reviewer: readFlagValue(rest, "--reviewer"),
-    skipBoardUpdate: rest.includes("--skip-board-update"),
-    skipRefreshDurableSurfaces: rest.includes("--skip-refresh")
+    reviewer: readFlagValue(rest, "--reviewer")
   };
 }
 
 function buildDoveReviewLoopArgs(rest = []) {
+  const retiredFlags = ["--max-iterations", "--draft-body", "--section-id", "--experience-goal", "--final-plan", "--final-plan-path", "--final-result", "--final-result-path"];
+  const retired = retiredFlags.filter((flag) => rest.includes(flag));
+  if (retired.length > 0) {
+    throw new Error(`dove review-loop no longer accepts ${retired.join(", ")}; it runs one Reviewer pass only. Use an explicit Builder handoff for revisions, then invoke review again.`);
+  }
   return {
     ...buildTaskTargetArgs(rest),
     runId: readFlagValue(rest, "--run-id"),
     scope: readFlagValue(rest, "--scope"),
     instructions: readFlagValue(rest, "--instructions"),
-    maxIterations: readFlagValue(rest, "--max-iterations") ? Number(readFlagValue(rest, "--max-iterations")) : undefined,
-    draftBody: readFlagValue(rest, "--draft-body"),
-    sectionId: readFlagValue(rest, "--section-id"),
-    title: readFlagValue(rest, "--title"),
+    stage: readFlagValue(rest, "--stage"),
     summary: readFlagValue(rest, "--summary"),
-    experienceGoal: readFlagValue(rest, "--experience-goal"),
-    artifactPaths: readFlagValues(rest, ["--artifact", "--artifact-path"]),
-    finalPlanPaths: readFlagValues(rest, ["--final-plan", "--final-plan-path"]),
-    finalResultPaths: readFlagValues(rest, ["--final-result", "--final-result-path"])
+    artifactPaths: readFlagValues(rest, ["--artifact", "--artifact-path"])
   };
 }
 
@@ -817,22 +1083,93 @@ function publicMissionText(value, maxLength = 220) {
   return text;
 }
 
-function formatDoveMissionForCli(result) {
-  const responseLanguage = result.responseLanguage ?? "zh";
-  const mission = result.mission ?? {};
-  const goal = publicMissionText(mission.goal, 220);
-  const lines = [responseLanguage === "en"
-    ? "Dove checked this project. Start by turning the user's request into a task proposal; do not write or run anything until approved."
-    : "Dove 已检查当前项目。先把用户需求整理成待确认任务；没有批准前，不写入也不执行。"];
-  if (goal) {
-    lines.push(responseLanguage === "en" ? `Current focus: ${goal}` : `当前关注：${goal}`);
+function shellQuote(value) {
+  return `'${String(value ?? "").replace(/'/g, `'"'"'`)}'`;
+}
+
+function proposalConfirmationCommand(command, result, target, proposalToken) {
+  const mutationMode = result.proposalMutationMode;
+  if (!proposalToken || !mutationMode) {
+    return "";
   }
+  return [
+    "node",
+    shellQuote(__filename),
+    command,
+    shellQuote(target),
+    "--proposal-token",
+    shellQuote(proposalToken),
+    "--confirmed",
+    "--mutation-mode",
+    shellQuote(mutationMode)
+  ].join(" ");
+}
+
+function missionConfirmationCommand(result, target = ".") {
+  return proposalConfirmationCommand("mission", result, target, missionProposalToken(result));
+}
+
+function autoConfirmationCommand(result, target = ".") {
+  return proposalConfirmationCommand("auto", result, target, autoProposalToken(result));
+}
+
+function autoProposalJson(result, target = ".") {
+  const proposalToken = autoProposalToken(result);
+  if (!proposalToken) {
+    return result;
+  }
+  return {
+    ...result,
+    proposalToken,
+    exactConfirmationCommand: autoConfirmationCommand(result, target)
+  };
+}
+
+function formatDoveMissionForCli(result, target = ".") {
+  const responseLanguage = result.responseLanguage ?? "zh";
+  if (result.status === "materialization-planned") {
+    const title = publicMissionText(result.createdTask?.title, 220);
+    return `${[
+      responseLanguage === "en" ? "Dove prepared a host-applied write plan; the mission contract is not materialized yet." : "Dove 已生成待 host 应用的写入计划；mission 合同尚未物化。",
+      title ? (responseLanguage === "en" ? `Task: ${title}` : `任务：${title}`) : null,
+      responseLanguage === "en" ? "Next: apply the mutation plan, then hand off to the recommended workflow." : "下一步：应用 mutation plan，再交接给推荐流程。"
+    ].filter(Boolean).join("\n")}\n`;
+  }
+  if (result.status === "materialized") {
+    const title = publicMissionText(result.createdTask?.title, 220);
+    const nextAction = publicMissionText(result.createdTask?.workContract?.recommendedRoutes?.[0]?.label, 220);
+    return `${[
+      responseLanguage === "en" ? "The approved mission contract was materialized." : "已物化批准的 mission 合同。",
+      title ? (responseLanguage === "en" ? `Task: ${title}` : `任务：${title}`) : null,
+      nextAction
+        ? (responseLanguage === "en" ? `Next: ${nextAction}` : `下一步：${nextAction}`)
+        : (responseLanguage === "en" ? "Next: hand off to the recommended work workflow." : "下一步：交接给推荐的工作流程。")
+    ].filter(Boolean).join("\n")}\n`;
+  }
+  const proposedTask = result.proposedTask ?? {};
+  const mission = result.mission ?? {};
+  const goal = publicMissionText(proposedTask.title ?? proposedTask.summary ?? mission.goal, 220);
+  const evidenceRequired = Array.isArray(result.executionContract?.convergence?.evidenceRequired)
+    ? result.executionContract.convergence.evidenceRequired.map((item) => publicMissionText(item, 160)).filter(Boolean)
+    : [];
+  const lines = [responseLanguage === "en"
+    ? "Dove prepared a task proposal; nothing has been materialized or executed yet."
+    : "Dove 已整理出待确认任务；目前还没有物化合同，也没有执行工作。"];
+  if (goal) {
+    lines.push(responseLanguage === "en" ? `Proposed task: ${goal}` : `任务草案：${goal}`);
+  }
+  if (evidenceRequired.length > 0) {
+    lines.push(responseLanguage === "en" ? `Evidence needed: ${evidenceRequired.join(", ")}` : `需要的证据：${evidenceRequired.join("、")}`);
+  }
+  const confirmationCommand = missionConfirmationCommand(result, target);
   lines.push(responseLanguage === "en"
-    ? "Next: propose the task in plain language, name the evidence it needs, and wait for approval. After approval, materialize the contract and hand off to the recommended workflow."
-    : "下一步：用人话给出任务草案，说明需要哪些证据，然后等确认；确认后只物化合同并交接推荐流程。");
-  lines.push(responseLanguage === "en"
-    ? "If materials are missing, stop and say exactly what needs to be supplied. Ask for JSON only when you need the full governance detail."
-    : "如果缺材料，就停下来说明要补什么；只有需要完整治理细节时才要求 JSON。接下来可以直接给任务草案，不要输出内部字段。");
+    ? "Approve this exact proposal to materialize only the contract, then hand off to the recommended workflow."
+    : "确认这个精确 proposal 后只物化合同，再交接给推荐流程。");
+  if (confirmationCommand) {
+    lines.push(responseLanguage === "en"
+      ? `Exact confirmation command: ${confirmationCommand}`
+      : `精确确认命令：${confirmationCommand}`);
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -878,7 +1215,7 @@ function formatDoveFigureErrorForCli(error) {
   if (/follow-through still requires action|cannot override follow-through governance/u.test(message)) {
     return "这张图还不能继续：当前还有需要先处理的确认或结果回填。先按状态页的下一步补齐，再回到图表工作流。\n";
   }
-  if (/secret|token|api key|inline/i.test(message)) {
+  if (/secret|token|api key|inline|credential/i.test(message)) {
     return "这张图还不能继续：检测到不安全的密钥或 provider 配置方式。请改用环境变量引用，不要把密钥写进请求或配置。\n";
   }
   return `这张图暂时不能继续：${compactText(message.replace(/\btask-[a-z0-9][a-z0-9-]*\b/giu, "当前任务"), 240)}\n`;
@@ -931,8 +1268,8 @@ function formatDoveWorkForCli(commandName, result = {}) {
   if (commandName === "review" && Array.isArray(result.findings)) {
     lines.push(result.findings.length > 0 ? `本地审查发现 ${result.findings.length} 个需要处理的问题。` : "本地审查没有发现新的阻塞问题。");
   }
-  if (commandName === "review-loop" && Array.isArray(result.iterations)) {
-    lines.push(`本轮完成 ${result.iterations.length} 次本地检查。`);
+  if (commandName === "review-loop" && result.review) {
+    lines.push("本次调用只完成一次独立 Reviewer 检查；修订后需要显式再次调用 review。");
   }
   if (next && !lines.includes(next)) {
     lines.push(next);
@@ -957,20 +1294,27 @@ function formatDoveWorkErrorForCli(commandName, error) {
   if (/follow-through still requires action|Cannot advance orchestration|cannot override follow-through governance/i.test(message)) {
     return `${label}还不能继续：当前还有需要先处理的确认或结果回填。先按状态页的下一步补齐，再回来推进。\n`;
   }
-  if (/secret|token|api key|inline/i.test(message)) {
-    return `${label}还不能继续：检测到不安全的密钥或 provider 配置方式。请改用环境变量引用，不要把密钥写进请求或配置。\n`;
+  if (/may be provided only once|exact proposalDigest|proposal[- ]token|mutation[- ]mode|proposal no longer matches/i.test(message)) {
+    return `${label}暂时不能继续：${sanitizeDoveWorkText(message, 260)}\n`;
   }
-  if (/requires board role|requires role|board owner/i.test(message)) {
-    return `${label}还不能继续：当前角色边界不匹配，需要先明确交接或用显式审查/修订请求继续。\n`;
+  if (/secret|token|api key|inline|credential/i.test(message)) {
+    return `${label}还不能继续：检测到不安全的密钥或 provider 配置方式。请改用环境变量引用，不要把密钥写进请求或配置。\n`;
   }
   return `${label}暂时不能继续：${sanitizeDoveWorkText(message, 260)}\n`;
 }
 
-async function printDoveWorkResult(commandName, result, commandRest = []) {
+async function printDoveWorkResult(commandName, result, commandRest = [], target = ".") {
   if (wantsJsonOutput(commandRest)) {
-    await printJson(result);
+    await printJson(commandName === "auto" ? autoProposalJson(result, target) : result);
   } else {
-    await writeStdout(formatDoveWorkForCli(commandName, result));
+    const summary = formatDoveWorkForCli(commandName, result);
+    const confirmationCommand = commandName === "auto" ? autoConfirmationCommand(result, target) : "";
+    if (confirmationCommand) {
+      const label = result.responseLanguage === "en" ? "Exact confirmation command" : "精确确认命令";
+      await writeStdout(`${summary.trimEnd()}\n${label}: ${confirmationCommand}\n`);
+    } else {
+      await writeStdout(summary);
+    }
   }
 }
 
@@ -2362,11 +2706,26 @@ function inspectGovernanceCoverageSurfaceBindings(target, options = {}) {
   };
 }
 
+function claudeUserCommandPaths() {
+  return COMMAND_SURFACES.map((commandSurface) => path.join(resolveClaudeConfigRoot(), "commands", "dove", `${commandSurface.id.replace(/^dove\./u, "").replace(/\./g, "-")}.md`));
+}
+
 function detectInstalledHosts(target) {
   const detected = Object.entries(HOST_ADAPTERS)
     .filter(([, adapter]) => adapter.paths.some((relativePath) => fs.existsSync(path.join(target, relativePath))))
     .map(([host]) => host);
-  return detected.length > 0 ? detected : DEFAULT_HOST_ADAPTERS;
+  const claudePaths = claudeUserCommandPaths();
+  if (claudePaths.some((absolutePath) => fs.existsSync(absolutePath))) {
+    detected.push("claude");
+  }
+  return detected;
+}
+
+function installedHostRequiredPaths(target, host) {
+  if (host === "claude") {
+    return claudeUserCommandPaths();
+  }
+  return (HOST_ADAPTERS[host]?.requiredPaths ?? []).map((relativePath) => path.join(target, relativePath));
 }
 
 function shouldInspectClaudeCodeGatewayDefaults(preflight) {
@@ -2376,9 +2735,11 @@ function shouldInspectClaudeCodeGatewayDefaults(preflight) {
 function doctor(target) {
   const boundariesPath = path.join(target, ".dove", "workflow-pack", "boundaries.json");
   const installedHosts = detectInstalledHosts(target);
-  const hostRequiredPaths = installedHosts.flatMap((host) => HOST_ADAPTERS[host].requiredPaths ?? []);
+  const projectHostRequiredPaths = installedHosts
+    .filter((host) => host !== "claude")
+    .flatMap((host) => HOST_ADAPTERS[host]?.requiredPaths ?? []);
   const required = [
-    ...hostRequiredPaths,
+    ...projectHostRequiredPaths,
     ".dove/state.json",
     ".dove/wiki/entities.json",
     ".dove/wiki/relations.json",
@@ -2388,8 +2749,7 @@ function doctor(target) {
     ARTIFACT_PATHS.doveRootManifest,
     ".dove/meta/operator-playbooks.json",
     ".dove/meta/operator-lessons.json",
-    "mcp/dove-state-server.mjs",
-    "src/mcp/server.mjs"
+    "mcp/dove-state-server-package.mjs"
    ];
 
   const missing = required.filter((relativePath) => !fs.existsSync(path.join(target, relativePath)));
@@ -2407,7 +2767,7 @@ function doctor(target) {
   };
 
   const jsonChecks = [
-    ...installedHosts.flatMap((host) => HOST_ADAPTERS[host].jsonChecks ?? []),
+    ...installedHosts.flatMap((host) => HOST_ADAPTERS[host]?.jsonChecks ?? []),
     ".dove/state.json"
   ];
 
@@ -2422,11 +2782,13 @@ function doctor(target) {
   }
 
   for (const host of installedHosts) {
-    const requiredPaths = HOST_ADAPTERS[host].requiredPaths ?? [];
+    const requiredPaths = installedHostRequiredPaths(target, host);
     result.checks.push({
       check: `host-adapter:${host}`,
-      ok: requiredPaths.every((relativePath) => fs.existsSync(path.join(target, relativePath))),
-      requiredPaths
+      ok: requiredPaths.every((requiredPath) => fs.existsSync(requiredPath)),
+      requiredPaths: host === "claude"
+        ? requiredPaths.map((requiredPath) => path.relative(resolveClaudeConfigRoot(), requiredPath).split(path.sep).join("/"))
+        : (HOST_ADAPTERS[host]?.requiredPaths ?? [])
     });
   }
 
@@ -2508,7 +2870,7 @@ function doctor(target) {
     result.checks.push({ check: "boundary-policy", ok: false, message: error instanceof Error ? error.message : String(error) });
   }
 
-  const probeScript = path.join(target, "scripts", "doctor-mcp-probe.mjs");
+  const probeScript = path.join(target, "scripts", "doctor-mcp-probe-package.mjs");
   if (fs.existsSync(probeScript)) {
     const probe = spawnSync("node", [probeScript, target], {
       cwd: target,
@@ -2629,13 +2991,41 @@ function doctor(target) {
 
 const [, , command, maybeTarget, ...rest] = process.argv;
 
+function assertNoRetiredCliFlags(rawArgs = []) {
+  const retired = rawArgs.filter((arg) => {
+    const value = String(arg ?? "");
+    const flagName = value.split("=", 1)[0];
+    return flagName.startsWith("--policy-override")
+      || [
+        "--skip-board-update",
+        "--skip-refresh",
+        "--skip-refresh-durable-surfaces",
+        "--skip-follow-through-ready",
+        "--skip-sync-phase"
+      ].includes(flagName);
+  });
+  if (retired.length > 0) {
+    throw new Error(`Dove CLI no longer accepts retired governance flags: ${Array.from(new Set(retired)).join(", ")}.`);
+  }
+}
+
+assertNoRetiredCliFlags([maybeTarget, ...rest].filter(Boolean));
+
 function runDoveSurface(surface, rawTarget, rawRest = []) {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(rawTarget, rawRest);
   if (surface === "orchestrate") {
     return queryDoveOrchestrate(target, buildDoveOrchestrateArgs(commandRest));
   }
   if (surface === "mission") {
-    return queryDoveMission(target, buildDoveMissionArgs(commandRest));
+    const missionArgs = buildDoveMissionArgs(commandRest);
+    if (missionArgs.confirmed) {
+      const proposalToken = missionArgs.proposalToken;
+      return withMutationContext(target, "create-dove-task", commandRest, (cleanRest) => {
+        const cleanArgs = buildDoveMissionArgs(cleanRest);
+        return createDoveTask(target, proposalToken ? missionArgs : cleanArgs);
+      }, { defaultMutationMode: "direct-process" });
+    }
+    return createDoveTask(target, missionArgs);
   }
   if (surface === "status") {
     return queryDoveStatus(target, buildDoveStatusArgs(commandRest));
@@ -2784,7 +3174,7 @@ if (command === "figure") {
     } else {
       await writeStdout(formatDoveFigureForCli(result));
     }
-    process.exit(0);
+    process.exit(isOperationalFailureOutcome(result) ? 1 : 0);
   } catch (error) {
     if (wantsJsonOutput(commandRest)) {
       await printJson({ status: "blocked", message: formatDoveFigureErrorForCli(error).trim() });
@@ -2802,7 +3192,11 @@ if (["init", "auto", "operator", "version", "source", "note", "draft", "experien
     if (command === "init") {
       result = withMutationContext(target, "init-dove-goal", commandRest, (cleanRest) => initDoveGoal(target, buildDoveInitArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
     } else if (command === "auto") {
-      result = withMutationContext(target, "run-dove-auto", commandRest, (cleanRest) => runDoveAuto(target, buildDoveAutoArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+      const autoArgs = buildDoveAutoArgs(commandRest);
+      result = withMutationContext(target, "run-dove-auto", commandRest, (cleanRest) => runDoveAuto(
+        target,
+        autoArgs.confirmed ? autoArgs : buildDoveAutoArgs(cleanRest)
+      ), { defaultMutationMode: "patch-plan" });
     } else if (command === "operator") {
       result = withMutationContext(target, "run-dove-operator", commandRest, (cleanRest) => runDoveOperator(target, buildDoveOperatorArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
     } else if (command === "version") {
@@ -2848,8 +3242,14 @@ if (["init", "auto", "operator", "version", "source", "note", "draft", "experien
         return buildRebuttal(target, args);
       }, { defaultMutationMode: "patch-plan" });
     }
-    await printDoveWorkResult(command, result, commandRest);
-    process.exit(0);
+    await printDoveWorkResult(command, result, commandRest, target);
+    process.exit(isOperationalFailureOutcome(result, {
+      confirmed: command === "auto"
+        ? buildDoveAutoArgs(commandRest).confirmed
+        : command === "operator"
+          ? buildDoveOperatorArgs(commandRest).confirmed
+          : false
+    }) ? 1 : 0);
   } catch (error) {
     await printDoveWorkError(command, error, commandRest);
     process.exit(1);
@@ -2878,15 +3278,22 @@ if (["orchestrate", "mission", "status", "audit", "return", "launch"].includes(c
     statusUsage();
     process.exit(0);
   }
-  const result = runDoveSurface(command, target, commandRest);
-  if (command === "status" && !wantsJsonOutput(commandRest)) {
-    await writeStdout(formatDoveStatusForCli(result, target, { showMissions: wantsDoveStatusMissionDetails(buildDoveStatusArgs(commandRest)) }));
-  } else if (command === "mission" && !wantsJsonOutput(commandRest)) {
-    await writeStdout(formatDoveMissionForCli(result));
-  } else {
-    await printJson(result);
+  try {
+    const result = runDoveSurface(command, target, commandRest);
+    if (command === "status" && !wantsJsonOutput(commandRest)) {
+      await writeStdout(formatDoveStatusForCli(result, target, { showMissions: wantsDoveStatusMissionDetails(buildDoveStatusArgs(commandRest)) }));
+    } else if (command === "mission" && !wantsJsonOutput(commandRest)) {
+      await writeStdout(formatDoveMissionForCli(result, target));
+    } else if (command === "mission") {
+      await printJson(missionProposalJson(result, target));
+    } else {
+      await printJson(result);
+    }
+    process.exit(0);
+  } catch (error) {
+    await printDoveWorkError(command, error, commandRest);
+    process.exit(1);
   }
-  process.exit(0);
 }
 
 if (command === "isolated-review-prepare") {
@@ -2924,57 +3331,6 @@ if (command === "isolated-review") {
       reviewerCommandConfigured: Boolean(reviewerCommand),
       reviewerExitStatus: reviewer.status
     };
-  });
-  console.log(JSON.stringify(result, null, 2));
-  process.exit(0);
-}
-
-if (command === "autonomy-once") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = withMutationContext(target, "run_autonomy_once", commandRest, (cleanRest) => runAutonomyControlPlaneOnce(target, {
-    actorRole: readFlagValue(cleanRest, "--actor-role") ?? "planner"
-  }));
-  console.log(JSON.stringify(result, null, 2));
-  process.exit(0);
-}
-
-if (command === "autonomy-foreground") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = withMutationContext(target, "run_autonomy_foreground", commandRest, (cleanRest) => {
-    const maxSteps = readFlagValue(cleanRest, "--max-steps");
-    return runAutonomyForeground(target, {
-      actorRole: readFlagValue(cleanRest, "--actor-role") ?? "planner",
-      maxSteps: maxSteps ? Number(maxSteps) : undefined,
-      packetId: readFlagValue(cleanRest, "--packet-id"),
-      programRunId: readFlagValue(cleanRest, "--program-run-id"),
-      approvalId: readFlagValue(cleanRest, "--approval-id")
-    });
-  });
-  console.log(JSON.stringify(result, null, 2));
-  process.exit(0);
-}
-
-if (command === "autonomy-operate") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = withMutationContext(target, "run_autonomy_operate", commandRest, (cleanRest) => {
-    const maxSteps = readFlagValue(cleanRest, "--max-steps");
-    return runAutonomyOperate(target, {
-      actorRole: readFlagValue(cleanRest, "--actor-role") ?? "planner",
-      workerRole: readFlagValue(cleanRest, "--worker-role") ?? "researcher",
-      maxSteps: maxSteps ? Number(maxSteps) : undefined,
-      objective: readFlagValue(cleanRest, "--objective"),
-      sourceType: readFlagValue(cleanRest, "--source-type"),
-      sourceId: readFlagValue(cleanRest, "--source-id"),
-      packetId: readFlagValue(cleanRest, "--packet-id"),
-      programId: readFlagValue(cleanRest, "--program-id"),
-      programRunId: readFlagValue(cleanRest, "--program-run-id"),
-      approvalId: readFlagValue(cleanRest, "--approval-id"),
-      campaignId: readFlagValue(cleanRest, "--campaign-id"),
-      campaignStepId: readFlagValue(cleanRest, "--campaign-step-id"),
-      executeBy: readFlagValue(cleanRest, "--execute-by"),
-      reviewAfter: readFlagValue(cleanRest, "--review-after"),
-      expiresAt: readFlagValue(cleanRest, "--expires-at")
-    });
   });
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);

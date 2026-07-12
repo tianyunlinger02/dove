@@ -17,13 +17,14 @@ import {
   readJson,
   registerSource,
   resolveDoveGlobalStatusOutputDir,
-  runWithMutationContext,
   upsertClaims,
   upsertFigurePlan,
   upsertNote,
   validateFigurePipeline,
-  writeJson
+  verifySource
 } from "../../src/core/index.mjs";
+import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { writeJson } from "../../src/core/workspace.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -153,6 +154,14 @@ function seedFigureWorkspace(root) {
   initProject(root, { title: "Figure Generation Test", objective: "Generate a durable evidence-linked figure." });
   const packetId = seedTaskPacket(root);
   const source = registerSource(root, { packetId, citationKey: "figure-source", title: "Figure Source", authors: ["Doe"], year: 2026, sourceType: "paper" });
+  verifySource(root, {
+    packetId,
+    sourceId: source.id,
+    decision: "verified",
+    method: "test fixture inspected the canonical publication record",
+    checkedMaterial: "source title, authors, year, and publication metadata",
+    auditEvidence: [`fixture:${source.id}`]
+  });
   const note = upsertNote(root, { packetId, noteId: "figure-note", title: "Figure note", sectionId: "method", sourceIds: [source.id], summary: "Source-backed material for the figure." });
   upsertClaims(root, {
     packetId,
@@ -513,18 +522,20 @@ test("prepareFigureGeneration invokes gpt-image2 through the OpenAI image provid
       const finalSvg = fs.readFileSync(path.join(root, ".dove", "figures", "workflow.final.svg"), "utf8");
       assert.match(finalSvg, /<image href="runs\/gpt-image2-run\/gpt-image2\.png"/);
 
-      const reviewedImport = importFigureGeneration(root, {
-        packetId,
-        figureId: "workflow",
-        runId: "gpt-image2-run",
-        caption: "Workflow Figure shows source-backed evidence flowing from the evidence node into the claim node.",
-        semanticCoverage: { visualElements: ["evidence node", "claim node"] },
-        semanticReview: { status: "approved", evidencePaths: [ARTIFACT_PATHS.figureQa] },
-        env
-      });
-      assert.equal(reviewedImport.qaIssueCount, 0);
+      assert.throws(
+        () => importFigureGeneration(root, {
+          packetId,
+          figureId: "workflow",
+          runId: "gpt-image2-run",
+          caption: "Workflow Figure shows source-backed evidence flowing from the evidence node into the claim node.",
+          semanticCoverage: { visualElements: ["evidence node", "claim node"] },
+          semanticReview: { status: "approved", evidencePaths: [ARTIFACT_PATHS.figureQa] },
+          env
+        }),
+        /does not accept unknown input/u
+      );
       qa = readJson(root, ARTIFACT_PATHS.figureQa, { version: 1, items: [], issues: [] });
-      assert.equal(qa.items[0].semanticCoverage.rasterSemanticReviewPassed, true);
+      assert.equal(qa.items[0].semanticCoverage.rasterSemanticReviewPassed, false);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

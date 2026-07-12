@@ -62,9 +62,9 @@ case "upsert_orchestration_board":
 
 ## Contract Conventions
 
-- Every user-facing mutation surface should name its target artifact and, when relevant, its role/policy requirements.
+- Every user-facing mutation surface should name its target artifact and the artifact, task, follow-through, review, or completion contracts that govern it.
 - Command IDs, host slugs, and adapter paths come from `src/core/command-manifest.mjs`; MCP tool names are snake_case; core functions are camelCase.
-- Role-bound mutation tools should expose policy/override fields through `withPolicy(...)` in `src/mcp/tool-definitions.mjs`.
+- Board role strings are workflow routing metadata, not mutation authority. Validate role/phase combinations only when recording board transitions, and do not expose bypass fields in MCP schemas.
 - Prompt surfaces should say when MCP is preferred, but must remain useful when MCP is unavailable by naming the file-backed artifacts to read.
 - Read-only/query surfaces should be clearly separate from mutation surfaces.
 

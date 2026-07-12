@@ -15,6 +15,7 @@ import {
   readJson,
   refreshWiki,
   runReviewLoop,
+  sourceIdentityFingerprint,
   syncCitations,
   upsertClaims,
   upsertOrchestrationBoard,
@@ -29,6 +30,29 @@ import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
   return createTempRoot("dove-evidence-");
+}
+
+function writeVerifiedSources(root, items) {
+  const normalized = items.map((item) => {
+    const source = { ...item, lifecycle: "verified" };
+    return { ...source, fingerprint: sourceIdentityFingerprint(source) };
+  });
+  fs.mkdirSync(path.join(root, ".dove", "sources"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({ version: 2, items: normalized, updatedAt: null }, null, 2));
+  fs.writeFileSync(path.join(root, ".dove", "sources", "verifications.json"), JSON.stringify({
+    version: 1,
+    items: normalized.map((source, index) => ({
+      id: `fixture-verification-${index + 1}`,
+      sourceId: source.id,
+      fingerprint: source.fingerprint,
+      decision: "verified",
+      method: "test fixture inspected source metadata",
+      checkedMaterial: "fixture title, authors, locator, and publication metadata",
+      auditEvidence: [`fixture:${source.id}`],
+      checkedAt: new Date(0).toISOString()
+    })),
+    updatedAt: new Date(0).toISOString()
+  }, null, 2));
 }
 
 function seedTaskPacket(root, packetId = "evidence-main-packet") {
@@ -62,11 +86,7 @@ test("upsertClaims rejects claims with unknown sources", () => {
   ensureWorkspace(root);
   seedTaskPacket(root);
   fs.mkdirSync(path.join(root, ".dove", "sources"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), `${JSON.stringify({
-    version: 1,
-    items: [{ id: "known-source", citationKey: "known-source", title: "Known source", authors: [], year: 2026 }],
-    updatedAt: null
-  }, null, 2)}\n`, "utf8");
+  writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known source", authors: [], year: 2026 }]);
   upsertNote(root, {
     title: "note",
     sectionId: "introduction",
@@ -128,14 +148,10 @@ test("upsertClaims merges claims instead of overwriting the full index", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   seedTaskPacket(root);
-  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
-    version: 1,
-    items: [
+  writeVerifiedSources(root, [
       { id: "source-a", citationKey: "source-a", title: "A", authors: [], year: 2024 },
       { id: "source-b", citationKey: "source-b", title: "B", authors: [], year: 2025 }
-    ],
-    updatedAt: null
-  }, null, 2));
+    ]);
 
   upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
 
@@ -146,7 +162,7 @@ test("upsertClaims merges claims instead of overwriting the full index", () => {
     fromRole: "planner",
     toRole: "researcher",
     phase: "research",
-    summary: "Return ownership to the researcher for the next claim update.",
+    summary: "Route the next claim update to the researcher workflow.",
     nextActions: ["Merge the next claim"]
   });
   const merged = upsertClaims(root, {
@@ -157,40 +173,40 @@ test("upsertClaims merges claims instead of overwriting the full index", () => {
   assert.equal(loadBoard(root).currentPhase, "plan");
 });
 
-test("role-bound evidence writes require ownership unless an override reason is supplied", () => {
+test("board role metadata does not authorize evidence writes and retired overrides fail closed", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   seedTaskPacket(root);
-  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
-    version: 1,
-    items: [{ id: "source-a", citationKey: "source-a", title: "A", authors: [], year: 2024 }],
-    updatedAt: null
-  }, null, 2));
+  writeVerifiedSources(root, [{ id: "source-a", citationKey: "source-a", title: "A", authors: [], year: 2024 }]);
 
-  assert.throws(() => {
-    upsertClaims(root, {
-      claims: [{ id: "claim-a", text: "Claim A", sectionId: "introduction", sourceIds: ["source-a"] }]
-    });
-  }, /requires board role researcher/);
-
-  const overridden = upsertClaims(root, {
-    claims: [{ id: "claim-a", text: "Claim A", sectionId: "introduction", sourceIds: ["source-a"] }],
-    policyOverrideReason: "manual evidence maintenance after session recovery"
+  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "builder" });
+  const first = upsertClaims(root, {
+    claims: [{ id: "claim-a", text: "Claim A", sectionId: "introduction", sourceIds: ["source-a"] }]
   });
+  assert.equal(first.claims.length, 1);
 
-  assert.equal(overridden.claims.length, 1);
-  assert.equal(loadBoard(root).assignedRole, "planner");
+  appendHandoff(root, {
+    fromRole: "planner",
+    toRole: "researcher",
+    phase: "research",
+    summary: "Record a different legal research routing role."
+  });
+  const second = upsertClaims(root, {
+    claims: [{ id: "claim-b", text: "Claim B", sectionId: "method", sourceIds: ["source-a"] }]
+  });
+  assert.equal(second.claims.length, 2);
+
+  assert.throws(() => upsertClaims(root, {
+    claims: [{ id: "claim-c", text: "Claim C", sectionId: "results", sourceIds: ["source-a"] }],
+    policyOverrideReason: "manual evidence maintenance after session recovery"
+  }), /does not accept retired policy override fields/);
 });
 
 test("experiment results reject unknown outcomes and mismatched claim links", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   seedTaskPacket(root);
-  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
-    version: 1,
-    items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
-    updatedAt: null
-  }, null, 2));
+  writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove", "notes", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "intro-note", title: "Intro note", sectionId: "introduction", sourceIds: ["known-source"], summary: "summary" }],
@@ -248,11 +264,7 @@ test("review loop flags unknown citations and draft-claim mismatches", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   seedTaskPacket(root);
-  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
-    version: 1,
-    items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
-    updatedAt: null
-  }, null, 2));
+  writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove", "notes", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "intro-note", title: "Intro note", sectionId: "introduction", sourceIds: ["known-source"], summary: "summary" }],
@@ -288,11 +300,7 @@ test("repeated review findings escalate a persistent concern while preserving re
   const root = tempRoot();
   ensureWorkspace(root);
   seedTaskPacket(root);
-  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
-    version: 1,
-    items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
-    updatedAt: null
-  }, null, 2));
+  writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove", "notes", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "intro-note", title: "Intro note", sectionId: "introduction", sourceIds: ["known-source"], summary: "summary" }],
@@ -320,14 +328,6 @@ test("repeated review findings escalate a persistent concern while preserving re
   assert.equal(firstConcern.raisedByRole, "reviewer");
   assert.equal(firstConcern.responseOwnerRole, "researcher");
 
-  appendHandoff(root, {
-    fromRole: "rebuttal-lead",
-    toRole: "reviewer",
-    phase: "review",
-    summary: "Return to reviewer for the next review round.",
-    nextActions: ["Re-run the review loop and escalate persistent concerns"]
-  });
-
   runReviewLoop(root, { scope: "introduction", stage: "round-two" });
   concerns = readJson(root, ".dove/reviews/concerns.json", { items: [] });
   const escalatedConcern = concerns.items.find((item) => item.id === firstConcern.id);
@@ -344,11 +344,7 @@ test("figure QA issues surface through the review loop and durable rebuttal surf
   const root = tempRoot();
   ensureWorkspace(root);
   seedTaskPacket(root);
-  fs.writeFileSync(path.join(root, ".dove/sources/index.json"), JSON.stringify({
-    version: 1,
-    items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
-    updatedAt: null
-  }, null, 2));
+  writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove/notes/index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "intro-note", title: "Intro note", sectionId: "introduction", sourceIds: ["known-source"], summary: "summary" }],
@@ -360,6 +356,7 @@ test("figure QA issues surface through the review loop and durable rebuttal surf
     claims: [{ id: "claim-figure", text: "Claim with figure support", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["intro-note"] }]
   });
   upsertFigurePlan(root, {
+    packetId: "evidence-main-packet",
     items: [{
       id: "broken-figure",
       name: "Broken Figure",
@@ -397,11 +394,7 @@ test("supporting results with blocked audits hold claim promotion for review", (
   const root = tempRoot();
   ensureWorkspace(root);
   seedTaskPacket(root);
-  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
-    version: 1,
-    items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
-    updatedAt: null
-  }, null, 2));
+  writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove", "notes", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "intro-note", title: "Intro note", sectionId: "introduction", sourceIds: ["known-source"], summary: "summary" }],
@@ -456,11 +449,7 @@ test("finalization is blocked while claim bridges remain held for review", () =>
   const root = tempRoot();
   ensureWorkspace(root);
   const packetId = seedTaskPacket(root);
-  fs.writeFileSync(path.join(root, ".dove/sources/index.json"), JSON.stringify({
-    version: 1,
-    items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }],
-    updatedAt: null
-  }, null, 2));
+  writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove/notes/index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "intro-note", title: "Intro note", sectionId: "introduction", sourceIds: ["known-source"], summary: "summary" }],
@@ -530,11 +519,7 @@ test("citation sync writes references and wiki/rebuttal helpers create artifacts
   const root = tempRoot();
   ensureWorkspace(root);
   seedTaskPacket(root);
-  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({
-    version: 1,
-    items: [{ id: "known-source", citationKey: "known-source", title: "Known", authors: ["Doe"], year: 2026, sourceType: "paper" }],
-    updatedAt: null
-  }, null, 2));
+  writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: ["Doe"], year: 2026, sourceType: "paper" }]);
   fs.writeFileSync(path.join(root, ".dove", "notes", "index.json"), JSON.stringify({
     version: 1,
     items: [{ id: "intro-note", title: "Intro note", sectionId: "introduction", sourceIds: ["known-source"], summary: "summary" }],

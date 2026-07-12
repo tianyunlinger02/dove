@@ -4,10 +4,13 @@ import path from "node:path";
 
 import { ARTIFACT_PATHS, DOVE_AUDIO_CONTEXT_POLICY } from "./schema.mjs";
 import { inspectDeclaredPath } from "./artifact-integrity.mjs";
+import { sha256File, snapshotReviewedArtifacts, verifyPreparedReviewSnapshot } from "./review-artifact-snapshot.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
-import { appendText, assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
+import { appendText, assertFollowThroughReady, assertGovernanceMutationRegistered, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
+import { loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
 import { readTaskPacketCatalog } from "./task-packets.mjs";
 import { doveText, resolveDoveResponseLanguage } from "./i18n.mjs";
+import { assertReviewMaterials, buildReviewScope } from "./review-scope.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
 
@@ -158,9 +161,6 @@ function normalizeHandoff(root, raw = {}) {
     experimentIds: normalizeStringArray(finding.experimentIds)
   })) : [];
   const reviewedArtifactPaths = normalizeStringArray(raw.reviewedArtifactPaths ?? raw.artifactPaths).map((item) => safeArtifactPath(root, item));
-  if (reviewedArtifactPaths.length === 0) {
-    throw new Error("audio review handoff requires reviewedArtifactPaths.");
-  }
   return {
     version: 1,
     runId,
@@ -283,6 +283,50 @@ function audioReviewImportedCard(imported = {}, packetId = null, responseLanguag
   }, responseLanguage);
 }
 
+function audioReviewVerificationFailure(runId, failures, manifest, packetId, responseLanguage) {
+  const result = {
+    status: "verification-failed",
+    boundaryType: "verification-failed",
+    boundary: {
+      type: "verification-failed",
+      requiredActions: ["reprepare-review-artifacts", "rerun-audio-review"],
+      failures
+    },
+    requiredActions: ["reprepare-review-artifacts", "rerun-audio-review"],
+    runId,
+    packetId,
+    inputPath: manifest.inputPath,
+    handoffPath: manifest.handoffPath,
+    reportPath: manifest.reportPath,
+    imported: false
+  };
+  return {
+    ...result,
+    resultCard: buildCommandResultCard({
+      surface: "dove.review",
+      command: "import_audio_review",
+      packetId,
+      runId,
+      status: result.status,
+      outcome: "verification-failed",
+      summary: "Prepared review artifacts or input changed; reprepare and rerun the review.",
+      evidenceLinks: [manifest.inputPath, manifest.handoffPath, manifest.reportPath],
+      durableWrites: [],
+      nextActions: [{
+        title: "Reprepare and rerun audio review",
+        command: "run_audio_review",
+        packetId,
+        boundaryType: "verification-failed",
+        requiredActions: result.requiredActions,
+        confirmationRequired: true
+      }],
+      foreground: true,
+      background: false,
+      daemon: false
+    }, responseLanguage)
+  };
+}
+
 function renderReviewLogEntry({ handoff, reportPath, reportSha256 }) {
   return [
     `## ${handoff.timestamp} — audio-review`,
@@ -325,24 +369,77 @@ function upsertConcerns(root, handoff) {
   writeJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: Array.from(existing.values()).sort((left, right) => left.id.localeCompare(right.id)), updatedAt: nowIso() });
 }
 
+function transitionToAudioReviewer(root, args, target, runId, reviewedArtifactPaths) {
+  const board = loadBoard(root);
+  if (board.currentPhase === "review" && board.assignedRole === "reviewer") {
+    return board;
+  }
+  return upsertOrchestrationBoard(root, {
+    ...args,
+    phase: "review",
+    assignedRole: "reviewer",
+    intentType: "review",
+    currentFocus: args.scope ?? target.packet?.title ?? `Audio review ${runId}`,
+    nextAction: `Complete audio review ${runId} and return only the declared handoff and report artifacts.`,
+    handoffSummary: `Handing ${target.packet?.title ?? "the current work"} to the audio reviewer for run ${runId}.`,
+    evidenceLinks: Array.from(new Set([...(board.evidenceLinks ?? []), ...reviewedArtifactPaths]))
+  });
+}
+
+function audioReviewReturnTransition(handoff) {
+  if (handoff.verdict === "coherent") {
+    return {
+      phase: "plan",
+      assignedRole: "planner",
+      intentType: "plan",
+      nextAction: "Inspect Dove status and choose the next governed finalization step."
+    };
+  }
+  return {
+    phase: "rebuttal",
+    assignedRole: "builder",
+    intentType: "respond",
+    nextAction: handoff.actionItems[0] ?? "Address the audio review findings through governed revision work."
+  };
+}
+
+function returnImportedAudioReview(root, args, handoff, handoffPath, reportPath, transition) {
+  const board = loadBoard(root);
+  return upsertOrchestrationBoard(root, {
+    ...args,
+    ...transition,
+    currentFocus: handoff.summary,
+    handoffSummary: `Audio reviewer ${handoff.reviewerId} returned ${handoff.verdict} for ${handoff.runId}; workflow routing now returns to ${transition.assignedRole} for the recorded next action.`,
+    evidenceLinks: Array.from(new Set([...(board.evidenceLinks ?? []), handoffPath, reportPath, ...handoff.reviewedArtifactPaths])),
+    reviewRequiredBeforeFinalize: handoff.verdict !== "coherent"
+  });
+}
+
 export function prepareAudioReview(root, args = {}) {
   assertGovernanceMutationRegistered("prepare-audio-review", "guarded");
   const target = assertTaskScopedMutationTarget(root, "prepare-audio-review", args);
-  ensureWorkspace(root);
+  assertFollowThroughReady(root, "Preparing an isolated audio review input bundle", args);
   const runId = normalizeRunId(args.runId);
   const catalog = readTaskPacketCatalog(root);
   const task = catalog.byId.get(target.packetId) ?? target.packet;
   const finalPlanPaths = normalizeStringArray(args.finalPlanPaths ?? args.planPaths).map((item) => safeArtifactPath(root, item));
   const finalResultPaths = normalizeStringArray(args.finalResultPaths ?? args.resultPaths).map((item) => safeArtifactPath(root, item));
   const explicitArtifactPaths = normalizeStringArray(args.artifactPaths ?? args.reviewedArtifactPaths).map((item) => safeArtifactPath(root, item));
-  const reviewedArtifactPaths = Array.from(new Set([...finalPlanPaths, ...finalResultPaths, ...explicitArtifactPaths]));
+  const reviewScope = assertReviewMaterials(buildReviewScope(root, target, {
+    reviewedArtifactPaths: Array.from(new Set([...finalPlanPaths, ...finalResultPaths, ...explicitArtifactPaths]))
+  }), "prepare_audio_review");
+  const reviewedArtifactPaths = reviewScope.substantiveArtifactPaths;
   const artifacts = reviewedArtifactPaths.map((relativePath) => artifactEntry(root, relativePath));
   const usableArtifacts = assertSubstantiveArtifactEntries(artifacts, "prepare_audio_review");
+  const snapshot = snapshotReviewedArtifacts(root, usableArtifacts.map((artifact) => artifact.path), "prepare_audio_review");
+  transitionToAudioReviewer(root, args, target, runId, snapshot.reviewedArtifacts.map((artifact) => artifact.path));
   const timestamp = nowIso();
   const input = {
     version: 1,
     reviewerKind: "audio",
     runId,
+    packetId: reviewScope.packetId,
+    includedPacketIds: reviewScope.includedPacketIds,
     createdAt: timestamp,
     isolationModel: "audio-final-plan-results-explicit-artifacts",
     contextPolicy: args.contextPolicy ?? DOVE_AUDIO_CONTEXT_POLICY,
@@ -358,7 +455,9 @@ export function prepareAudioReview(root, args = {}) {
     finalPlanPaths,
     finalResultPaths,
     explicitArtifactPaths,
-    reviewedArtifactPaths: usableArtifacts.map((artifact) => artifact.path),
+    reviewedArtifactPaths: snapshot.reviewedArtifacts.map((artifact) => artifact.path),
+    reviewedArtifacts: snapshot.reviewedArtifacts,
+    reviewedArtifactSetSha256: snapshot.reviewedArtifactSetSha256,
     artifacts,
     instructions: normalizeString(args.instructions, "Review only the supplied final plan, final result, and explicit artifacts. Do not assume access to project context."),
     outputContract: {
@@ -391,7 +490,9 @@ export function prepareAudioReview(root, args = {}) {
     finalPlanPaths,
     finalResultPaths,
     explicitArtifactPaths,
-    reviewedArtifactPaths: usableArtifacts.map((artifact) => artifact.path),
+    reviewedArtifactPaths: snapshot.reviewedArtifacts.map((artifact) => artifact.path),
+    reviewedArtifacts: snapshot.reviewedArtifacts,
+    reviewedArtifactSetSha256: snapshot.reviewedArtifactSetSha256,
     importedAt: null,
     handoffSha256: null,
     reportSha256: null
@@ -406,7 +507,9 @@ export function prepareAudioReview(root, args = {}) {
     inputSha256,
     handoffPath: manifest.handoffPath,
     reportPath: manifest.reportPath,
-    reviewedArtifactPaths: usableArtifacts.map((artifact) => artifact.path),
+    reviewedArtifactPaths: snapshot.reviewedArtifacts.map((artifact) => artifact.path),
+    reviewedArtifacts: snapshot.reviewedArtifacts,
+    reviewedArtifactSetSha256: snapshot.reviewedArtifactSetSha256,
     privacyBoundary: input.privacyBoundary,
     preActionGuidanceSummary: audioGuidanceSummary(root, args, target, {
       nextAction: "import_audio_review",
@@ -427,14 +530,24 @@ export function prepareAudioReview(root, args = {}) {
 export function importAudioReview(root, args = {}) {
   assertGovernanceMutationRegistered("import-audio-review", "guarded");
   const target = assertTaskScopedMutationTarget(root, "import-audio-review", args);
-  ensureWorkspace(root);
+  assertFollowThroughReady(root, "Importing an isolated audio review handoff", args);
   const runId = normalizeRunId(args.runId);
   const manifestPath = relativeRunPath(runId, "manifest.json");
   const manifest = readJson(root, manifestPath, null);
   if (!manifest || typeof manifest !== "object") {
     throw new Error(`Missing audio review manifest for ${runId}`);
   }
+  if (manifest.status !== "prepared") {
+    throw new Error(`Audio review ${runId} is not importable from manifest status ${manifest.status ?? "unknown"}; prepare a fresh review run.`);
+  }
+  if (manifest.packetId !== target.packetId) {
+    throw new Error(`Audio review ${runId} belongs to packet ${manifest.packetId ?? "unknown"}, not ${target.packetId}.`);
+  }
   const handoffPath = args.handoffPath ? safeArtifactPath(root, args.handoffPath) : manifest.handoffPath;
+  const reportPath = args.reportPath ? safeArtifactPath(root, args.reportPath) : manifest.reportPath;
+  if (handoffPath !== manifest.handoffPath || reportPath !== manifest.reportPath) {
+    throw new Error(`Audio review ${runId} must import the exact handoff and report paths declared by its prepared manifest.`);
+  }
   const handoffFullPath = resolvePath(root, handoffPath);
   if (!fs.existsSync(handoffFullPath)) {
     throw new Error(`Missing audio review handoff: ${handoffPath}`);
@@ -443,24 +556,30 @@ export function importAudioReview(root, args = {}) {
   if (handoff.runId !== runId) {
     throw new Error(`Audio review handoff runId mismatch: expected ${runId}, received ${handoff.runId}`);
   }
-  if (handoff.inputPath !== manifest.inputPath) {
-    throw new Error(`Audio review handoff inputPath mismatch: expected ${manifest.inputPath}, received ${handoff.inputPath}`);
+  const responseLanguage = resolveDoveResponseLanguage(root, args);
+  const inputFullPath = resolvePath(root, manifest.inputPath);
+  let input;
+  let actualInputSha256;
+  try {
+    actualInputSha256 = sha256File(inputFullPath);
+    input = JSON.parse(fs.readFileSync(inputFullPath, "utf8"));
+  } catch (error) {
+    return audioReviewVerificationFailure(runId, [`input-unreadable:${error instanceof Error ? error.message : String(error)}`], manifest, manifest.packetId, responseLanguage);
   }
-  if (handoff.inputSha256 !== manifest.inputSha256) {
-    throw new Error(`Audio review input hash mismatch for ${runId}`);
+  const verification = verifyPreparedReviewSnapshot(root, {
+    manifest,
+    input,
+    inputPath: manifest.inputPath,
+    actualInputSha256,
+    handoffInputPath: handoff.inputPath,
+    handoffInputSha256: handoff.inputSha256,
+    handoffReviewedArtifactPaths: handoff.reviewedArtifactPaths
+  });
+  if (!verification.ok) {
+    return audioReviewVerificationFailure(runId, verification.failures, manifest, manifest.packetId, responseLanguage);
   }
-  const reportPath = args.reportPath ? safeArtifactPath(root, args.reportPath) : manifest.reportPath;
   if (handoff.reportPath !== reportPath) {
-    throw new Error(`Audio review reportPath mismatch: expected ${reportPath}, received ${handoff.reportPath}`);
-  }
-  const manifestReviewed = new Set(normalizeStringArray(manifest.reviewedArtifactPaths));
-  const handoffReviewed = new Set(handoff.reviewedArtifactPaths);
-  const missingReviewed = Array.from(manifestReviewed).filter((artifactPath) => !handoffReviewed.has(artifactPath));
-  if (missingReviewed.length > 0) {
-    throw new Error(`Audio review handoff does not cover prepared reviewed artifacts: ${missingReviewed.join(", ")}`);
-  }
-  for (const artifactPath of handoff.reviewedArtifactPaths) {
-    assertUsableArtifactPath(root, artifactPath, "audio review reviewedArtifactPaths");
+    return audioReviewVerificationFailure(runId, ["report-path-mismatch"], manifest, manifest.packetId, responseLanguage);
   }
   const reportInspection = inspectDeclaredPath(root, reportPath, {
     requireNonEmpty: true,
@@ -472,6 +591,7 @@ export function importAudioReview(root, args = {}) {
   const reportFullPath = resolvePath(root, reportPath);
   const handoffSha256 = hashFile(handoffFullPath);
   const reportSha256 = hashFile(reportFullPath);
+  const returnTransition = audioReviewReturnTransition(handoff);
   appendText(root, ARTIFACT_PATHS.reviewLog, renderReviewLogEntry({ handoff, reportPath, reportSha256 }));
   upsertConcerns(root, handoff);
   const updatedManifest = {
@@ -487,6 +607,7 @@ export function importAudioReview(root, args = {}) {
     reviewerId: handoff.reviewerId
   };
   writeJson(root, manifestPath, updatedManifest);
+  returnImportedAudioReview(root, args, handoff, handoffPath, reportPath, returnTransition);
   const imported = {
     status: "imported",
     runId,
@@ -521,17 +642,28 @@ export function importAudioReview(root, args = {}) {
 
 export function runAudioReview(root, args = {}) {
   assertGovernanceMutationRegistered("run-audio-review", "guarded");
+  const target = assertTaskScopedMutationTarget(root, "run-audio-review", args);
+  assertFollowThroughReady(root, "Running an isolated audio review", args);
   const responseLanguage = resolveDoveResponseLanguage(root, args);
-  const prepared = prepareAudioReview(root, args);
-  const handoffPath = args.handoffPath ?? prepared.handoffPath;
+  const runId = normalizeRunId(args.runId);
+  const handoffPath = args.handoffPath
+    ? safeArtifactPath(root, args.handoffPath)
+    : relativeRunPath(runId, "handoff.json");
   if (fs.existsSync(resolvePath(root, handoffPath))) {
-    const imported = importAudioReview(root, { ...args, runId: prepared.runId, handoffPath, reportPath: args.reportPath ?? prepared.reportPath });
+    const imported = importAudioReview(root, {
+      ...args,
+      runId,
+      handoffPath,
+      reportPath: args.reportPath
+    });
     return {
-      ...prepared,
+      ...imported,
+      packetId: target.packetId,
       imported,
       resultCard: imported.resultCard
     };
   }
+  const prepared = prepareAudioReview(root, { ...args, runId });
   const awaiting = {
     ...prepared,
     status: "prepared-awaiting-audio",

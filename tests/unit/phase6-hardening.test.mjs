@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -12,9 +13,9 @@ import {
   GOVERNANCE_READONLY_TOOLS,
   ensureWorkspace,
   initProject,
+  createDoveTask,
   launchDoveMission,
   materializeGuidancePacket,
-  issueProgramApproval,
   planCampaign,
   queryCampaigns,
   queryMetaOptimize,
@@ -22,7 +23,6 @@ import {
   queryOperatorLessons,
   queryProgramApprovals,
   queryTaskGraph,
-  runAutonomyForeground,
   readState,
   readJson,
   resolveDurableTaskPacket,
@@ -30,8 +30,6 @@ import {
   recordOperatorLesson,
   refreshWiki,
   registerSource,
-  revokeProgramApproval,
-  runAutonomyControlPlaneOnce,
   updateResearchBrief,
   appendHandoff,
   appendReviewLog,
@@ -39,6 +37,7 @@ import {
   recordDoveMissionPass,
   runDoveAuto,
   runDoveOperator,
+  isOperationalFailureOutcome,
   buildRebuttal,
   buildRebuttalStrategy,
   bridgeExperimentResultToClaim,
@@ -54,17 +53,25 @@ import {
   upsertRevisionPlan,
   upsertNote,
   runExperimentAudit,
+  runExperienceWorkflow,
   runReviewLoop,
   setSectionStatus,
   syncCitations,
   upsertFigurePlan,
   prepareFigureGeneration,
   importFigureGeneration,
+  artifactEvidenceRole,
+  completionEvidenceIntegrity,
+  evidencePathProblemFlags,
+  inspectDeclaredPath,
+  isExternalArtifactReference,
+  normalizeProjectRelativePath,
   queryWorkspaceIndex,
   validateFigurePipeline,
-  upsertOrchestrationBoard,
-  writeJson
+  upsertOrchestrationBoard
 } from "../../src/core/index.mjs";
+import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { writeJson, writeText } from "../../src/core/workspace.mjs";
 import { toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
 import { createMetaExecutionBridgeCandidatesIndex, createMetaLongHorizonMemory, createMetaOperatorLessonsIndex, createMetaOperatorPlaybooksIndex, createMetaOptimizerState, createMetaRemediationPacksIndex } from "../../src/core/schema.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -73,8 +80,9 @@ function tempRoot() {
   return createTempRoot("dove-phase6-");
 }
 
-test("governance audit static detector covers async exports, const exports, and fs writes", () => {
-  const scriptText = fs.readFileSync(path.join(process.cwd(), "scripts", "audit-governance-coverage.mjs"), "utf8");
+test("governance audit static detector covers async exports, const exports, fs writes, and class boundaries", () => {
+  const scriptPath = path.join(process.cwd(), "scripts", "audit-governance-coverage.mjs");
+  const scriptText = fs.readFileSync(scriptPath, "utf8");
   assert.ok(scriptText.includes("(?:async\\s+)?function"));
   assert.ok(scriptText.includes("const\\s+(\\w+)\\s*="));
   assert.ok(scriptText.includes("=>\\s*\\{"));
@@ -85,6 +93,46 @@ test("governance audit static detector covers async exports, const exports, and 
   assert.ok(scriptText.includes("fsPromises"));
   assert.ok(scriptText.includes("discoverCoreFiles"));
   assert.ok(scriptText.includes("src/core"));
+
+  const root = tempRoot();
+  try {
+    fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
+    fs.mkdirSync(path.join(root, "src", "core"), { recursive: true });
+    fs.copyFileSync(scriptPath, path.join(root, "scripts", "audit-governance-coverage.mjs"));
+    fs.writeFileSync(path.join(root, "src", "core", "schema.mjs"), `
+export const GOVERNANCE_GUARDED_MUTATIONS = [
+  { surfaceBindings: { coreFunction: "mutateAfterClass" } }
+];
+export const GOVERNANCE_EXEMPT_MUTATIONS = [];
+`, "utf8");
+    fs.writeFileSync(path.join(root, "src", "core", "class-boundary.mjs"), `
+import fs from "node:fs";
+
+export function inspectBeforeClass() {
+  return "read-only";
+}
+
+export class MutatingClass {
+  mutateInsideClass() {
+    fs.writeFileSync("class-method.txt", "must not be attributed to inspectBeforeClass");
+  }
+}
+
+export function mutateAfterClass() {
+  fs.writeFileSync("after-class.txt", "must remain covered");
+}
+`, "utf8");
+
+    const audit = spawnSync(process.execPath, ["./scripts/audit-governance-coverage.mjs"], {
+      cwd: root,
+      encoding: "utf8"
+    });
+    assert.equal(audit.status, 0, audit.stderr || audit.stdout);
+    const report = JSON.parse(audit.stdout);
+    assert.deepEqual(report.mutatingCoreFunctions, ["mutateAfterClass"]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("governance audit exempt metadata check is not a wall-clock freshness gate", () => {
@@ -126,6 +174,15 @@ function seedTaskPacket(root, packetId = "task-test-main", overrides = {}) {
   });
   return packet.id;
 }
+
+test("operational outcomes distinguish proposals from confirmed execution stalls", () => {
+  assert.equal(isOperationalFailureOutcome({ status: "needs-confirmation" }), false);
+  assert.equal(isOperationalFailureOutcome({ status: "needs-task-selection" }), false);
+  for (const status of ["awaiting-host-pass", "awaiting-host-results", "needs-host-results", "step-budget-exhausted"]) {
+    assert.equal(isOperationalFailureOutcome({ status }, { confirmed: false }), false, `${status} unconfirmed`);
+    assert.equal(isOperationalFailureOutcome({ status }, { confirmed: true }), true, `${status} confirmed`);
+  }
+});
 
 function writeTaskTargetSettings(root, overrides) {
   const state = readState(root);
@@ -198,6 +255,54 @@ function writeHardeningEvidenceFile(root, relativePath = HARDENING_EVIDENCE_PATH
   return relativePath;
 }
 
+function writeHardeningEvidenceBuffer(root, relativePath, buffer) {
+  const fullPath = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, buffer);
+  return relativePath;
+}
+
+function jpegSegment(marker, data) {
+  const length = Buffer.alloc(2);
+  length.writeUInt16BE(data.length + 2);
+  return Buffer.concat([Buffer.from([0xff, marker]), length, data]);
+}
+
+function validCompletionJpegBuffer() {
+  const quantizationTable = Buffer.concat([Buffer.from([0]), Buffer.alloc(64, 1)]);
+  const frame = Buffer.from([8, 0, 1, 0, 1, 1, 1, 0x11, 0]);
+  const huffmanCounts = Buffer.from([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const huffmanTables = Buffer.concat([
+    Buffer.from([0]), huffmanCounts, Buffer.from([0]),
+    Buffer.from([0x10]), huffmanCounts, Buffer.from([0])
+  ]);
+  const scan = Buffer.from([1, 1, 0, 0, 63, 0]);
+  return Buffer.concat([
+    Buffer.from([0xff, 0xd8]),
+    jpegSegment(0xdb, quantizationTable),
+    jpegSegment(0xc0, frame),
+    jpegSegment(0xc4, huffmanTables),
+    jpegSegment(0xda, scan),
+    Buffer.from([0x3f, 0xff, 0xd9])
+  ]);
+}
+
+function validCompletionPdfBuffer() {
+  const prefix = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n";
+  return Buffer.from([
+    prefix,
+    "xref\n",
+    "0 2\n",
+    "0000000000 65535 f \n",
+    "0000000009 00000 n \n",
+    "trailer\n",
+    "<< /Size 2 /Root 1 0 R >>\n",
+    "startxref\n",
+    `${prefix.length}\n`,
+    "%%EOF\n"
+  ].join(""), "latin1");
+}
+
 function seedHardeningSource(root, packetId, sourceId = "hardening-source") {
   return registerSource(root, {
     packetId,
@@ -219,6 +324,481 @@ function seedHardeningTask(root, packetId, overrides = {}) {
     ...overrides
   });
 }
+
+function proposeAndRunHardeningAuto(root, args = {}, replayOverrides = {}) {
+  const proposal = runDoveAuto(root, args);
+  assert.equal(proposal.status, "needs-confirmation");
+  return runWithMutationContext(root, {
+    actionId: replayOverrides.runId ?? "hardening-auto-run",
+    mutationMode: proposal.confirmArgs.mutationMode
+  }, () => runDoveAuto(root, {
+    ...proposal.confirmArgs,
+    ...replayOverrides
+  }));
+}
+
+test("runDoveAuto proposals are zero-write and exact replay fails closed", () => {
+  const emptyRoot = tempRoot();
+  const patchRoot = tempRoot();
+  const selectionRoot = tempRoot();
+  const otherRoot = tempRoot();
+  try {
+    const demandArgs = {
+      id: "auto-exact-demand",
+      goal: "Bind the exact new demand instead of selecting an existing task.",
+      title: "Auto exact demand",
+      checklist: false,
+      maxIterations: 2,
+      steps: [{
+        command: "dove.note",
+        args: {
+          noteId: "auto-exact-note",
+          title: "Auto exact note",
+          sectionId: "hardening",
+          summary: "Approved auto replay fields stay exact."
+        }
+      }]
+    };
+    const proposal = runDoveAuto(emptyRoot, demandArgs);
+    assert.equal(proposal.status, "needs-confirmation");
+    assert.equal(proposal.proposalKind, "demand");
+    assert.equal(proposal.proposalOnly, true);
+    assert.equal(proposal.noAutoApply, true);
+    assert.deepEqual(proposal.writes, []);
+    assert.equal(fs.existsSync(path.join(emptyRoot, ARTIFACT_PATHS.doveRoot)), false);
+
+    const patchProposal = runWithMutationContext(patchRoot, {
+      actionId: "auto-exact-patch-proposal",
+      mutationMode: "patch-plan"
+    }, () => runDoveAuto(patchRoot, demandArgs));
+    assert.equal(patchProposal.proposalMutationMode, "patch-plan");
+    assert.equal(patchProposal.confirmArgs.mutationMode, "patch-plan");
+    assert.equal(patchProposal.writesApplied, false);
+    assert.equal(patchProposal.mutationSummary.operationCount, 0);
+    assert.deepEqual(patchProposal.mutationPlan.operations, []);
+    assert.equal(fs.existsSync(path.join(patchRoot, ARTIFACT_PATHS.doveRoot)), false);
+
+    assert.throws(() => runDoveAuto(emptyRoot, proposal.confirmArgs), /active MutationContext/u);
+    for (const alteredArgs of [
+      {
+        ...structuredClone(proposal.confirmArgs),
+        maxIterations: 3
+      },
+      {
+        ...structuredClone(proposal.confirmArgs),
+        steps: [{
+          command: "dove.note",
+          completeTask: true,
+          args: {
+            noteId: "auto-exact-note",
+            title: "Auto exact note",
+            sectionId: "hardening",
+            summary: "Approved auto replay fields stay exact."
+          }
+        }]
+      },
+      {
+        ...structuredClone(proposal.confirmArgs),
+        mutationMode: "patch-plan"
+      }
+    ]) {
+      assert.throws(() => runWithMutationContext(emptyRoot, {
+        actionId: "auto-exact-rejected-replay",
+        mutationMode: alteredArgs.mutationMode
+      }, () => runDoveAuto(emptyRoot, alteredArgs)), /proposal replay no longer matches|does not match the active mutation context mode/u);
+      assert.equal(fs.existsSync(path.join(emptyRoot, ARTIFACT_PATHS.doveRoot)), false);
+    }
+
+    assert.throws(() => runWithMutationContext(otherRoot, {
+      actionId: "auto-exact-cross-workspace",
+      mutationMode: proposal.confirmArgs.mutationMode
+    }, () => runDoveAuto(otherRoot, proposal.confirmArgs)), /different canonical workspace/u);
+    assert.equal(fs.existsSync(path.join(otherRoot, ARTIFACT_PATHS.doveRoot)), false);
+
+    ensureWorkspace(selectionRoot);
+    seedHardeningTask(selectionRoot, "auto-existing-only");
+    const demandWithExisting = runDoveAuto(selectionRoot, {
+      id: "auto-new-demand",
+      goal: "Create the new approved demand even when one task already exists.",
+      title: "Auto new demand",
+      checklist: false,
+      steps: [{
+        command: "dove.note",
+        args: {
+          noteId: "auto-new-demand-note",
+          title: "Auto new demand note",
+          sectionId: "hardening",
+          summary: "The new demand remains distinct from the existing task."
+        }
+      }]
+    });
+    assert.equal(demandWithExisting.proposalKind, "demand");
+    assert.equal(demandWithExisting.proposedTask.id, "auto-new-demand");
+    const demandRun = runWithMutationContext(selectionRoot, {
+      actionId: "auto-new-demand-run",
+      mutationMode: demandWithExisting.confirmArgs.mutationMode
+    }, () => runDoveAuto(selectionRoot, {
+      ...demandWithExisting.confirmArgs,
+      runId: "auto-new-demand-run"
+    }));
+    assert.equal(demandRun.task.id, "auto-new-demand");
+    assert.equal(readJson(selectionRoot, ARTIFACT_PATHS.taskPacketsIndex).items.some((item) => item.id === "auto-existing-only"), true);
+
+    seedHardeningTask(selectionRoot, "auto-index-first", { title: "Auto index first" });
+    seedHardeningTask(selectionRoot, "auto-index-second", { title: "Auto index second" });
+    const indexProposal = runDoveAuto(selectionRoot, {
+      index: 1,
+      steps: [{ command: "dove.status" }]
+    });
+    assert.equal(indexProposal.proposalKind, "selection");
+    const selectedId = indexProposal.confirmArgs.packetId;
+    seedHardeningTask(selectionRoot, "auto-index-order-drift", { title: "AAA order drift" });
+    const indexRun = runWithMutationContext(selectionRoot, {
+      actionId: "auto-index-replay",
+      mutationMode: indexProposal.confirmArgs.mutationMode
+    }, () => runDoveAuto(selectionRoot, {
+      ...indexProposal.confirmArgs,
+      runId: "auto-index-replay"
+    }));
+    assert.equal(indexRun.task.id, selectedId);
+
+    const staleProposal = runDoveAuto(selectionRoot, {
+      packetId: "auto-index-second",
+      steps: [{ command: "dove.status" }]
+    });
+    const stalePacketPath = `.dove/task-packets/packets/${staleProposal.confirmArgs.packetId}.json`;
+    const stalePacket = readJson(selectionRoot, stalePacketPath);
+    writeJson(selectionRoot, stalePacketPath, {
+      ...stalePacket,
+      status: "completed",
+      lifecycleStatus: "completed",
+      active: false
+    });
+    const staleIndex = readJson(selectionRoot, ARTIFACT_PATHS.taskPacketsIndex);
+    writeJson(selectionRoot, ARTIFACT_PATHS.taskPacketsIndex, {
+      ...staleIndex,
+      items: staleIndex.items.map((item) => item.id === staleProposal.confirmArgs.packetId
+        ? { ...item, status: "completed", lifecycleStatus: "completed", active: false }
+        : item)
+    });
+    assert.throws(() => runWithMutationContext(selectionRoot, {
+      actionId: "auto-stale-replay",
+      mutationMode: staleProposal.confirmArgs.mutationMode
+    }, () => runDoveAuto(selectionRoot, staleProposal.confirmArgs)), /no longer exists or is not active/u);
+  } finally {
+    fs.rmSync(emptyRoot, { recursive: true, force: true });
+    fs.rmSync(patchRoot, { recursive: true, force: true });
+    fs.rmSync(selectionRoot, { recursive: true, force: true });
+    fs.rmSync(otherRoot, { recursive: true, force: true });
+  }
+});
+
+test("runDoveAuto rejects retired governance controls recursively before workspace writes", () => {
+  const root = tempRoot();
+  try {
+    assert.throws(() => runDoveAuto(root, {
+      goal: "Reject legacy nested auto controls.",
+      steps: [{ command: "dove.status" }, { command: "dove.note", args: { policyOverrideFutureMode: null } }]
+    }), /retired governance input policyOverrideFutureMode at \$\.steps\[1\]\.args\.policyOverrideFutureMode/u);
+    assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.doveRoot)), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runDoveAuto rejects retired aliases and unknown input before workspace writes", () => {
+  const cases = [
+    [{ command: "dove.status" }, /retired top-level input: command/u],
+    [{ workflow: "dove.status" }, /retired top-level input: workflow/u],
+    [{ preset: "dove.status" }, /retired top-level input: preset/u],
+    [{ nextCommand: "dove.status" }, /retired top-level input: nextCommand/u],
+    [{ complete: false }, /retired top-level input: complete/u],
+    [{ autoSteps: [] }, /retired top-level input: autoSteps/u],
+    [{ actions: [] }, /retired top-level input: actions/u],
+    [{ unexpected: true }, /unknown input \$\.unexpected/u],
+    [{ steps: ["dove.status"] }, /requires an object at \$\.steps\[0\]/u],
+    [{ steps: [{ command: "dove.note", unexpected: true }] }, /unknown input \$\.steps\[0\]\.unexpected/u],
+    [{ steps: [{ command: "dove.note", args: { unexpected: true } }] }, /unknown input \$\.steps\[0\]\.args\.unexpected/u],
+    [{ steps: [{ command: "dove.status", args: { scope: "paper" } }] }, /unknown input \$\.steps\[0\]\.args\.scope/u]
+  ];
+
+  for (const [args, expected] of cases) {
+    const root = tempRoot();
+    try {
+      assert.throws(() => runDoveAuto(root, args), expected);
+      assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.doveRoot)), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("runDoveAuto rejects nested caller assertions and system metadata before workspace writes", () => {
+  const cases = [
+    [{ goal: "Reject forged figure coverage.", steps: [{ command: "dove.figure", args: { semanticCoverage: { visualElements: ["claim node"] } } }] }, /unknown input \$\.steps\[0\]\.args\.semanticCoverage\.visualElements/u],
+    [{ goal: "Reject semantic coverage self-description.", steps: [{ command: "dove.figure", args: { semanticCoverage: { summary: "claim node" } } }] }, /unknown input \$\.steps\[0\]\.args\.semanticCoverage\.summary/u],
+    [{ goal: "Reject forged figure review.", steps: [{ command: "dove.figure", args: { semanticReview: { reviewed: true } } }] }, /unknown input \$\.steps\[0\]\.args\.semanticReview\.reviewed/u],
+    [{ goal: "Reject forged figure approval.", steps: [{ command: "dove.figure", args: { semanticReview: { status: "approved" } } }] }, /unknown input \$\.steps\[0\]\.args\.semanticReview\.status/u],
+    [{ goal: "Reject forged material availability.", steps: [{ command: "dove.figure", args: { materialRequirements: [{ label: "result plot", status: "available" }] } }] }, /unknown input \$\.steps\[0\]\.args\.materialRequirements\[0\]\.status/u],
+    [{ goal: "Reject material provenance injection.", steps: [{ command: "dove.figure", args: { materialHints: [{ label: "result plot", source: "trusted" }] } }] }, /unknown input \$\.steps\[0\]\.args\.materialHints\[0\]\.source/u],
+    [{ goal: "Reject experience lifecycle injection.", steps: [{ command: "dove.experience", args: { plan: { goal: "Measure quality", status: "completed" } } }] }, /unknown input \$\.steps\[0\]\.args\.plan\.status/u],
+    [{ goal: "Reject experience timestamp injection.", steps: [{ command: "dove.experience", args: { result: { outcome: "supports", createdAt: "2040-01-01T00:00:00.000Z" } } }] }, /unknown input \$\.steps\[0\]\.args\.result\.createdAt/u],
+    [{ goal: "Reject malformed source authors.", steps: [{ command: "dove.source", args: { sources: [{ title: "Typed source", locator: "https://example.test/source", authors: ["Ada", 42] }] } }] }, /requires a string at \$\.steps\[0\]\.args\.sources\[0\]\.authors\[1\]/u],
+    [{ goal: "Reject source type coercion.", steps: [{ command: "dove.source", args: { sources: [{ title: 42, locator: "https://example.test/source" }] } }] }, /requires a string at \$\.steps\[0\]\.args\.sources\[0\]\.title/u],
+    [{ goal: "Reject top-level caller receipt authority.", executionReceipt: { status: "completed" }, steps: [{ command: "dove.status" }] }, /caller-controlled executionReceipt at \$\.executionReceipt/u],
+    [{ goal: "Reject step caller receipt authority.", steps: [{ command: "dove.status", executionReceipt: { status: "completed" } }] }, /caller-controlled executionReceipt at \$\.steps\[0\]\.executionReceipt/u],
+    [{ goal: "Reject nested failure-route receipt authority.", steps: [{ command: "dove.note", failureRoutes: [{ on: "failure", executionReceipt: { status: "completed" } }], args: { summary: "Receipt must not enter a step route." } }] }, /caller-controlled executionReceipt at \$\.steps\[0\]\.failureRoutes\[0\]\.executionReceipt/u],
+    [{ goal: "Reject nested execution-contract receipt authority.", steps: [{ command: "dove.note", executionContract: { failureRoutes: [{ on: "failure", executionReceipt: { status: "completed" } }] }, args: { summary: "Receipt must not enter an execution contract." } }] }, /caller-controlled executionReceipt at \$\.steps\[0\]\.executionContract\.failureRoutes\[0\]\.executionReceipt/u],
+    [{ goal: "Reject nested execution-file receipt authority.", steps: [{ command: "dove.note", executionContract: { files: [{ path: "src/example.mjs", executionReceipt: { status: "completed" } }] }, args: { summary: "Receipt must not enter an execution file." } }] }, /caller-controlled executionReceipt at \$\.steps\[0\]\.executionContract\.files\[0\]\.executionReceipt/u],
+    [{ goal: "Reject nested review draft receipt authority.", steps: [{ command: "dove.review-loop", args: { draft: { body: "Builder revision.", executionReceipt: { status: "completed" } } } }] }, /caller-controlled executionReceipt at \$\.steps\[0\]\.args\.draft\.executionReceipt/u],
+    [{ goal: "Reject nested review experience receipt authority.", steps: [{ command: "dove.review-loop", args: { experience: { goal: "Measure quality.", executionReceipt: { status: "completed" } } } }] }, /caller-controlled executionReceipt at \$\.steps\[0\]\.args\.experience\.executionReceipt/u],
+    [{ goal: "Reject nested rebuttal receipt authority.", steps: [{ command: "dove.rebuttal", args: { issues: [{ summary: "Address concern.", executionReceipt: { status: "completed" } }] } }] }, /caller-controlled executionReceipt at \$\.steps\[0\]\.args\.issues\[0\]\.executionReceipt/u],
+    [{ goal: "Reject recommended-route receipt authority.", workContract: { recommendedRoutes: [{ command: "project:dove.auto", executionReceipt: { status: "completed" } }] }, steps: [{ command: "dove.status" }] }, /caller-controlled executionReceipt at \$\.workContract\.recommendedRoutes\[0\]\.executionReceipt/u],
+    [{ goal: "Reject checklist contract receipt authority.", checklistItems: [{ title: "Nested checklist", executionContract: { failureRoutes: [{ on: "failure", executionReceipt: { status: "completed" } }] } }], steps: [{ command: "dove.status" }] }, /caller-controlled executionReceipt at \$\.checklistItems\[0\]\.executionContract\.failureRoutes\[0\]\.executionReceipt/u],
+    [{ goal: "Reject failure-route metadata.", steps: [{ command: "dove.note", failureRoutes: [{ on: "failure", unexpected: true }], args: { summary: "Reject unknown route fields." } }] }, /unknown input \$\.steps\[0\]\.failureRoutes\[0\]\.unexpected/u],
+    [{ goal: "Reject execution-file metadata.", steps: [{ command: "dove.note", executionContract: { files: [{ path: "src/example.mjs", unexpected: true }] }, args: { summary: "Reject unknown execution file fields." } }] }, /unknown input \$\.steps\[0\]\.executionContract\.files\[0\]\.unexpected/u],
+    [{ goal: "Reject execution-contract metadata.", steps: [{ command: "dove.note", executionContract: { convergence: { criteria: ["Verified"], unexpected: true } }, args: { summary: "Reject unknown convergence fields." } }] }, /unknown input \$\.steps\[0\]\.executionContract\.convergence\.unexpected/u],
+    [{ goal: "Reject invalid execution chain.", steps: [{ command: "dove.note", executionContract: { chainType: "caller-defined-chain" }, args: { summary: "Reject normalized execution chain authority." } }] }, /requires one of .* at \$\.steps\[0\]\.executionContract\.chainType/u],
+    [{ goal: "Reject invalid execution role.", steps: [{ command: "dove.note", executionContract: { roleSequence: ["planner", "caller-role"] }, args: { summary: "Reject normalized execution role authority." } }] }, /requires one of .* at \$\.steps\[0\]\.executionContract\.roleSequence\[1\]/u],
+    [{ goal: "Reject invalid checklist execution role.", checklistItems: [{ title: "Nested checklist", executionContract: { roleSequence: ["system"] } }], steps: [{ command: "dove.status" }] }, /requires one of .* at \$\.checklistItems\[0\]\.executionContract\.roleSequence\[0\]/u],
+    [{ goal: "Reject review draft metadata.", steps: [{ command: "dove.review-loop", args: { draft: { body: "Builder revision.", unexpected: true } } }] }, /unknown input \$\.steps\[0\]\.args\.draft/u],
+    [{ goal: "Reject review experience metadata.", steps: [{ command: "dove.review-loop", args: { experience: { goal: "Measure quality.", unexpected: true } } }] }, /unknown input \$\.steps\[0\]\.args\.experience/u],
+    [{ goal: "Reject rebuttal metadata.", steps: [{ command: "dove.rebuttal", args: { issues: [{ summary: "Address concern.", unexpected: true }] } }] }, /unknown input \$\.steps\[0\]\.args\.issues\[0\]\.unexpected/u],
+    [{ goal: "Reject route metadata.", workContract: { recommendedRoutes: [{ command: "project:dove.auto", unexpected: true }] }, steps: [{ command: "dove.status" }] }, /unknown input \$\.workContract\.recommendedRoutes\[0\]\.unexpected/u],
+    [{ goal: "Reject checklist metadata.", checklistItems: [{ title: "Nested checklist", unexpected: true }], steps: [{ command: "dove.status" }] }, /unknown input \$\.checklistItems\[0\]\.unexpected/u],
+    [{ goal: "Reject initial demand authority.", ownerRole: "reviewer", steps: [{ command: "dove.status" }] }, /initial demand cannot set system-owned governance input: ownerRole/u],
+    [{ goal: "Reject initial demand boundary.", boundary: { type: "needs-review" }, steps: [{ command: "dove.status" }] }, /initial demand cannot set system-owned governance input: boundary/u]
+  ];
+
+  for (const [args, expected] of cases) {
+    const root = tempRoot();
+    try {
+      assert.throws(() => runDoveAuto(root, args), expected);
+      assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.doveRoot)), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("createDoveTask rejects initial governance injection while canonical replay remains valid", () => {
+  for (const [args, expected] of [
+    [{ goal: "Reject creator authority.", creatorKind: "system" }, /initial demand cannot set system-owned governance input: creatorKind/u],
+    [{ goal: "Reject role authority.", nextRole: "reviewer" }, /initial demand cannot set system-owned governance input: nextRole/u],
+    [{ goal: "Reject handoff authority.", handoff: { toRole: "reviewer" } }, /initial demand cannot set system-owned governance input: handoff/u]
+  ]) {
+    const root = tempRoot();
+    try {
+      assert.throws(() => createDoveTask(root, args), expected);
+      assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.doveRoot)), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  const replayRoot = tempRoot();
+  try {
+    const proposal = createDoveTask(replayRoot, {
+      id: "canonical-governance-replay",
+      goal: "Keep system-generated governance replay operational.",
+      checklist: false
+    });
+    const materialized = runWithMutationContext(replayRoot, {
+      actionId: "canonical-governance-replay",
+      mutationMode: proposal.confirmArgs.mutationMode
+    }, () => createDoveTask(replayRoot, proposal.confirmArgs));
+    assert.equal(materialized.createdTask.id, "canonical-governance-replay");
+  } finally {
+    fs.rmSync(replayRoot, { recursive: true, force: true });
+  }
+});
+
+test("nested public MCP schemas are sealed against success and governance injection", () => {
+  const autoTool = toolDefinitions.find((tool) => tool.name === "run_dove_auto");
+  const experienceTool = toolDefinitions.find((tool) => tool.name === "run_experience_workflow");
+  const figureTool = toolDefinitions.find((tool) => tool.name === "run_figure_workflow");
+  const autoStep = autoTool.inputSchema.properties.steps.items;
+  const branchFor = (command) => autoStep.allOf.find((branch) => branch.if.properties.command.const === command).then.properties.args;
+  const figureArgs = branchFor("dove.figure");
+  const experienceArgs = branchFor("dove.experience");
+
+  assert.equal(autoTool.inputSchema.properties.executionReceipt, undefined);
+  assert.equal(autoStep.properties.executionReceipt, undefined);
+
+  for (const schema of [
+    autoTool.inputSchema.properties.boundary,
+    autoTool.inputSchema.properties.handoff,
+    figureArgs.properties.semanticCoverage,
+    figureArgs.properties.semanticReview,
+    figureArgs.properties.materialRequirements.items,
+    experienceArgs.properties.plan,
+    experienceArgs.properties.result,
+    experienceTool.inputSchema.properties.plan,
+    experienceTool.inputSchema.properties.result,
+    figureTool.inputSchema.properties.materialRequirements.items
+  ]) {
+    assert.equal(schema.additionalProperties, false);
+  }
+
+  for (const field of ["summary", "visualElements", "coveredVisualElements", "passed", "reviewed", "humanReviewed", "approved", "status", "verdict"]) {
+    assert.equal(Object.hasOwn(figureArgs.properties.semanticCoverage.properties, field), false);
+  }
+  for (const field of ["visualElements", "coveredVisualElements", "passed", "reviewed", "humanReviewed", "approved", "status", "verdict"]) {
+    assert.equal(Object.hasOwn(figureArgs.properties.semanticReview.properties, field), false);
+  }
+  for (const field of ["status", "source", "evidence", "createdAt", "updatedAt", "packetId", "runId"]) {
+    assert.equal(Object.hasOwn(figureArgs.properties.materialRequirements.items.properties, field), false);
+  }
+  for (const field of ["status", "createdAt", "updatedAt", "packetId"]) {
+    assert.equal(Object.hasOwn(experienceArgs.properties.plan.properties, field), false);
+  }
+  for (const field of ["createdAt", "updatedAt", "packetId", "auditVerdict"]) {
+    assert.equal(Object.hasOwn(experienceArgs.properties.result.properties, field), false);
+  }
+});
+
+test("figure public boundaries reject semantic success and material metadata before writes", () => {
+  for (const [invoke, expected] of [
+    [
+      (root) => prepareFigureGeneration(root, {
+        materialHints: [{ label: "result plot", status: "available" }]
+      }),
+      /unknown input \$\.materialHints\[0\]\.status/u
+    ],
+    [
+      (root) => importFigureGeneration(root, {
+        semanticCoverage: { summary: "claim node" }
+      }),
+      /unknown input \$\.semanticCoverage\.summary/u
+    ],
+    [
+      (root) => importFigureGeneration(root, {
+        semanticReview: { status: "approved" }
+      }),
+      /unknown input \$\.semanticReview\.status/u
+    ]
+  ]) {
+    const root = tempRoot();
+    try {
+      assert.throws(() => invoke(root), expected);
+      assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.doveRoot)), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("caller output manifests cannot assert figure semantic success", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    const packetId = seedTaskPacket(root, "caller-manifest-semantic-success");
+    upsertFigurePlan(root, {
+      packetId,
+      items: [{
+        id: "caller-manifest-figure",
+        sourceSections: ["method"],
+        requiredVisualElements: ["claim node"],
+        templateSvgPath: ".dove/figures/caller-manifest-figure.template.svg",
+        editableSvgPath: ".dove/figures/caller-manifest-figure.editable.svg",
+        finalSvgPath: ".dove/figures/caller-manifest-figure.final.svg"
+      }]
+    });
+    prepareFigureGeneration(root, {
+      packetId,
+      figureId: "caller-manifest-figure",
+      runId: "caller-manifest-run"
+    });
+    const manifestPath = ".dove/figures/runs/caller-manifest-run/caller-output.json";
+    writeJson(root, manifestPath, {
+      sourceSvgPath: ".dove/figures/runs/caller-manifest-run/caller.svg",
+      svgContent: "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Unrelated content</text></svg>",
+      semanticCoverage: { summary: "claim node" },
+      semanticReview: { status: "approved" }
+    });
+
+    assert.throws(() => importFigureGeneration(root, {
+      packetId,
+      figureId: "caller-manifest-figure",
+      runId: "caller-manifest-run",
+      outputManifestPath: manifestPath
+    }), /cannot set caller-controlled semantic success input: semanticCoverage, semanticReview/u);
+
+    assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "caller-manifest-figure.final.svg")), false);
+    const generations = readJson(root, ARTIFACT_PATHS.figureGenerations, { version: 1, items: [] });
+    assert.equal(generations.items.find((item) => item.id === "caller-manifest-run")?.status, "prepared");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runExperienceWorkflow rejects system-owned nested fields before workspace writes", () => {
+  for (const [args, expected] of [
+    [{ plan: { goal: "Measure quality", status: "completed" } }, /unknown input \$\.plan\.status/u],
+    [{ plan: { goal: "Measure quality", createdAt: "2040-01-01T00:00:00.000Z" } }, /unknown input \$\.plan\.createdAt/u],
+    [{ result: { outcome: "supports", updatedAt: "2040-01-01T00:00:00.000Z" } }, /unknown input \$\.result\.updatedAt/u]
+  ]) {
+    const root = tempRoot();
+    try {
+      assert.throws(() => runExperienceWorkflow(root, args), expected);
+      assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.doveRoot)), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("recordDoveMissionPass rejects public workflow routing fields before bootstrap or durable writes", () => {
+  for (const [field, value] of [
+    ["ownerRole", "reviewer"],
+    ["nextRole", "planner"],
+    ["handoff", { reason: "caller-selected route" }],
+    ["handoffId", "caller-handoff"]
+  ]) {
+    const emptyRoot = tempRoot();
+    try {
+      assert.throws(() => recordDoveMissionPass(emptyRoot, { [field]: value }), /does not accept system-owned workflow routing fields/u);
+      assert.equal(fs.existsSync(path.join(emptyRoot, ARTIFACT_PATHS.doveRoot)), false);
+    } finally {
+      fs.rmSync(emptyRoot, { recursive: true, force: true });
+    }
+
+    const root = tempRoot();
+    try {
+      ensureWorkspace(root);
+      seedHardeningTask(root, "routing-field-task", {
+        ownerRole: "builder",
+        nextRole: "reviewer",
+        handoff: { id: "durable-handoff", fromRole: "builder", toRole: "reviewer" },
+        handoffId: "durable-handoff"
+      });
+      const packetPath = path.join(root, ".dove", "task-packets", "packets", "routing-field-task.json");
+      const indexPath = path.join(root, ARTIFACT_PATHS.taskPacketsIndex);
+      const packetBefore = fs.readFileSync(packetPath, "utf8");
+      const indexBefore = fs.readFileSync(indexPath, "utf8");
+
+      assert.throws(() => recordDoveMissionPass(root, {
+        packetId: "routing-field-task",
+        resultStatus: "blocked",
+        [field]: value
+      }), /does not accept system-owned workflow routing fields/u);
+      assert.equal(fs.readFileSync(packetPath, "utf8"), packetBefore);
+      assert.equal(fs.readFileSync(indexPath, "utf8"), indexBefore);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  const envelopeRoot = tempRoot();
+  try {
+    assert.throws(() => recordDoveMissionPass(envelopeRoot, {
+      missionPass: { ownerRole: "reviewer" }
+    }), /missionPass\.ownerRole/u);
+    assert.equal(fs.existsSync(path.join(envelopeRoot, ARTIFACT_PATHS.doveRoot)), false);
+  } finally {
+    fs.rmSync(envelopeRoot, { recursive: true, force: true });
+  }
+});
 
 test("workflow completion hardening rejects fake completion signals", () => {
   const missionRoot = tempRoot();
@@ -253,11 +833,11 @@ test("workflow completion hardening rejects fake completion signals", () => {
       executionContract: hardeningExecutionContract(),
       nextAction: "project:dove.status"
     });
-    const readOnly = runDoveAuto(readOnlyRoot, {
+    const readOnly = proposeAndRunHardeningAuto(readOnlyRoot, {
       packetId: "read-only-auto",
-      confirmed: true,
-      runId: "read-only-auto-run",
       steps: [{ command: "dove.status", completeTask: true }]
+    }, {
+      runId: "read-only-auto-run"
     });
     assert.equal(readOnly.status, "needs-explicit-progress-step");
     assert.equal(readOnly.requestedStatus, "completed");
@@ -278,10 +858,8 @@ test("workflow completion hardening rejects fake completion signals", () => {
       executionContract: hardeningExecutionContract()
     });
     const hardeningSourceId = seedHardeningSource(autoRoot, "auto-unverified-artifact");
-    const autoUnverified = runDoveAuto(autoRoot, {
+    const autoUnverified = proposeAndRunHardeningAuto(autoRoot, {
       packetId: "auto-unverified-artifact",
-      confirmed: true,
-      runId: "auto-unverified-artifact-run",
       steps: [{
         command: "dove.note",
         completeTask: true,
@@ -293,6 +871,8 @@ test("workflow completion hardening rejects fake completion signals", () => {
           summary: "Artifact output without verified criteria must not complete."
         }
       }]
+    }, {
+      runId: "auto-unverified-artifact-run"
     });
     assert.equal(autoUnverified.status, "verification-failed");
     assert.equal(autoUnverified.task.status, "blocked");
@@ -429,6 +1009,638 @@ test("completion evidence integrity rejects fake local paths and bookkeeping-onl
   }
 });
 
+test("completion evidence roles and reference parsing fail closed", () => {
+  const roleCases = [
+    [ARTIFACT_PATHS.taskPacketsIndex, "bookkeeping"],
+    [ARTIFACT_PATHS.runtimeResults, "bookkeeping"],
+    [ARTIFACT_PATHS.metaOperatorFollowThrough, "bookkeeping"],
+    [ARTIFACT_PATHS.programsIndex, "bookkeeping"],
+    [ARTIFACT_PATHS.doveRootManifest, "bookkeeping"],
+    [ARTIFACT_PATHS.workflowBoundaries, "bookkeeping"],
+    [ARTIFACT_PATHS.reviewState, "bookkeeping"],
+    [ARTIFACT_PATHS.figuresIndex, "bookkeeping"],
+    [ARTIFACT_PATHS.plan, "conditional"],
+    [ARTIFACT_PATHS.experimentResults, "conditional"],
+    [".dove/drafts/results.md", "substantive"],
+    [".dove/evidence/workflow-goal-verification.log", "validation"],
+    [".dove/experiments/custom.json", "unsupported"],
+    [".dove/reviews/custom.md", "unsupported"],
+    [".dove/documents/arbitrary.md", "unsupported"],
+    [".dove/figures/example.template.svg", "unsupported"],
+    ["docs/USAGE.md", "external-project"]
+  ];
+  for (const [artifactPath, expectedRole] of roleCases) {
+    assert.equal(artifactEvidenceRole(artifactPath), expectedRole, artifactPath);
+  }
+
+  for (const reference of ["https://example.org/paper", "http://example.org/result", "doi:10.1000/example", "arxiv:2601.01234", "10.1000/example"]) {
+    assert.equal(isExternalArtifactReference(reference), true, reference);
+  }
+  for (const reference of ["file:///etc/passwd", "data:text/plain,done", "javascript:alert(1)", "custom://result", "urn:isbn:1234", "doi:", "arxiv:"]) {
+    assert.equal(isExternalArtifactReference(reference), false, reference);
+    assert.equal(normalizeProjectRelativePath(reference).ok, false, reference);
+  }
+
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    const unknownPath = ".dove/experiments/custom.json";
+    writeHardeningEvidenceFile(root, unknownPath, JSON.stringify({ status: "completed" }));
+    const unknown = completionEvidenceIntegrity(root, {
+      evidencePaths: [unknownPath],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [unknownPath] }]
+    });
+    assert.equal(unknown.satisfied, false);
+    assert.deepEqual(unknown.pathEvidence.unsupportedPaths, [unknownPath]);
+
+    for (const reference of ["file:///etc/passwd", "custom://result"]) {
+      const flags = evidencePathProblemFlags(root, [reference]);
+      assert.equal(flags.satisfied, false);
+      assert.ok(flags.flags.includes("unsafe-evidence-path"), reference);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("completion evidence relevance and dynamic path approval are exact and fail closed", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    const cases = [
+      {
+        label: "unlinked repository file",
+        evidencePath: "docs/unlinked-completion.md",
+        context: { task: { id: "unlinked-repository" } },
+        expectedSatisfied: false,
+        expectedLinkage: null
+      },
+      {
+        label: "task-linked repository file",
+        evidencePath: "docs/task-linked-completion.md",
+        context: { task: { id: "task-linked-repository", outputPaths: ["docs/task-linked-completion.md"] } },
+        expectedSatisfied: true,
+        expectedLinkage: "task"
+      },
+      {
+        label: "contract-linked repository file",
+        evidencePath: "docs/contract-linked-completion.md",
+        context: { executionContract: { files: [{ path: "docs/contract-linked-completion.md" }] } },
+        expectedSatisfied: true,
+        expectedLinkage: "execution-contract"
+      },
+      {
+        label: "unknown dynamic evidence",
+        evidencePath: ".dove/evidence/unlinked-dynamic.log",
+        context: { task: { id: "unlinked-dynamic" } },
+        expectedSatisfied: false,
+        expectedLinkage: null
+      },
+      {
+        label: "task-linked dynamic evidence",
+        evidencePath: ".dove/evidence/task-linked-dynamic.log",
+        context: { task: { id: "task-linked-dynamic", verificationEvidencePaths: [".dove/evidence/task-linked-dynamic.log"] } },
+        expectedSatisfied: true,
+        expectedLinkage: "task"
+      },
+      {
+        label: "contract-linked dynamic evidence",
+        evidencePath: ".dove/evidence/contract-linked-dynamic.log",
+        context: { executionContract: { convergence: { evidenceRequired: [".dove/evidence/contract-linked-dynamic.log"] } } },
+        expectedSatisfied: true,
+        expectedLinkage: "execution-contract"
+      },
+      {
+        label: "workflow-goal fixed evidence",
+        evidencePath: ".dove/evidence/workflow-goal-verification.log",
+        context: {},
+        expectedSatisfied: true,
+        expectedLinkage: "workflow-goal-fixed"
+      }
+    ];
+
+    for (const evidenceCase of cases) {
+      writeHardeningEvidenceFile(root, evidenceCase.evidencePath, `${evidenceCase.label}\n`);
+      const integrity = completionEvidenceIntegrity(root, {
+        evidencePaths: [evidenceCase.evidencePath],
+        verifiedCriteria: [{
+          criterion: `Verify ${evidenceCase.label}`,
+          status: "verified",
+          evidencePaths: [evidenceCase.evidencePath]
+        }]
+      }, { context: evidenceCase.context });
+      assert.equal(integrity.satisfied, evidenceCase.expectedSatisfied, evidenceCase.label);
+      assert.equal(integrity.pathEvidence.items[0].completionLinkage, evidenceCase.expectedLinkage, evidenceCase.label);
+      if (!evidenceCase.expectedSatisfied) {
+        assert.deepEqual(integrity.pathEvidence.unlinkedPaths, [evidenceCase.evidencePath], evidenceCase.label);
+      }
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("completion evidence uses one canonical file per narrative requirement", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    const sharedPath = writeHardeningEvidenceFile(root, ".dove/evidence/shared-validation.log", "Validation status: passed\n");
+    const sharedIntegrity = completionEvidenceIntegrity(root, {
+      evidencePaths: [sharedPath],
+      verifiedCriteria: [{ criterion: "Validation completed", status: "verified", evidencePaths: [sharedPath] }]
+    }, {
+      context: {
+        task: { outputPaths: [sharedPath] },
+        requirements: [
+          { id: "validation-a", requirement: "Provide validation evidence for criterion A.", purpose: "validation" },
+          { id: "validation-b", requirement: "Provide validation evidence for criterion B.", purpose: "validation" }
+        ]
+      }
+    });
+    assert.equal(sharedIntegrity.satisfied, false);
+    assert.equal(sharedIntegrity.coveredRequirements.length, 1);
+    assert.deepEqual(sharedIntegrity.uncoveredRequirements.map((item) => item.id), ["validation-b"]);
+    assert.equal(sharedIntegrity.uncoveredRequirements[0].covered, false);
+    assert.equal(sharedIntegrity.uncoveredRequirements[0].evidencePath, null);
+
+    writeJson(root, ARTIFACT_PATHS.experimentAudits, {
+      version: 1,
+      items: [{ id: "audit-complete", auditVerdict: "clean", integrityFlags: [] }],
+      updatedAt: new Date(0).toISOString()
+    });
+    writeHardeningEvidenceFile(root, ARTIFACT_PATHS.reviewReport, "# Review report\n\nReview verdict: coherent\n");
+    const matchedIntegrity = completionEvidenceIntegrity(root, {
+      evidencePaths: [ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.reviewReport],
+      verifiedCriteria: [{
+        criterion: "Audit and review completed",
+        status: "verified",
+        evidencePaths: [ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.reviewReport]
+      }]
+    }, {
+      context: {
+        task: { outputPaths: [ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.reviewReport] },
+        requirements: [
+          { id: "audit", requirement: "Provide the completed experiment audit.", purpose: "audit" },
+          { id: "review", requirement: "Provide the completed reviewer verdict.", purpose: "review" }
+        ]
+      }
+    });
+    assert.equal(matchedIntegrity.satisfied, true);
+    assert.deepEqual(matchedIntegrity.uncoveredRequirements, []);
+    assert.deepEqual(matchedIntegrity.coveredRequirements.map((item) => item.evidencePurpose), ["audit", "review"]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("positive completion criteria reject explicit negative validation outcomes", () => {
+  const cases = [
+    {
+      label: "blocked audit",
+      evidencePath: ARTIFACT_PATHS.experimentAudits,
+      contents: { version: 1, items: [{ id: "blocked-audit", auditVerdict: "blocked" }] },
+      expectedStatus: "blocked"
+    },
+    {
+      label: "held bridge",
+      evidencePath: ARTIFACT_PATHS.claimBridgeLog,
+      contents: { version: 1, items: [{ id: "held-bridge", bridgeStatus: "held-for-review" }] },
+      expectedStatus: "held-for-review"
+    },
+    {
+      label: "failed QA",
+      evidencePath: ARTIFACT_PATHS.figureQa,
+      contents: { version: 1, items: [{ figureId: "failed-figure", qaStatus: "failed" }], issues: [] },
+      expectedStatus: "failed"
+    },
+    {
+      label: "unresolved review",
+      evidencePath: ARTIFACT_PATHS.reviewConcerns,
+      contents: { version: 2, items: [{ id: "open-review", status: "open" }] },
+      expectedStatus: "open"
+    },
+    {
+      label: "negative review",
+      evidencePath: ARTIFACT_PATHS.reviewReport,
+      contents: "# Review report\n\nReview verdict: needs-revision\n",
+      expectedStatus: "needs-revision"
+    },
+    {
+      label: "incomplete comparison",
+      evidencePath: ARTIFACT_PATHS.versionComparisonReport,
+      contents: "# Version comparison\n\nComparison status: incomplete\n",
+      expectedStatus: "incomplete"
+    }
+  ];
+
+  for (const validationCase of cases) {
+    const root = tempRoot();
+    try {
+      ensureWorkspace(root);
+      if (typeof validationCase.contents === "string") {
+        writeHardeningEvidenceFile(root, validationCase.evidencePath, validationCase.contents);
+      } else {
+        writeJson(root, validationCase.evidencePath, validationCase.contents);
+      }
+      const integrity = completionEvidenceIntegrity(root, {
+        evidencePaths: [validationCase.evidencePath],
+        verifiedCriteria: [{
+          criterion: `Confirm ${validationCase.label} is complete`,
+          status: "verified",
+          evidencePaths: [validationCase.evidencePath]
+        }]
+      }, { context: { task: { outputPaths: [validationCase.evidencePath] } } });
+      assert.equal(integrity.satisfied, false, validationCase.label);
+      assert.equal(integrity.criteria[0].negativeOutcome.contradictory, true, validationCase.label);
+      assert.ok(
+        integrity.criteria[0].negativeOutcome.signals.some((signal) => signal.status === validationCase.expectedStatus),
+        validationCase.label
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  const negativeCriterionRoot = tempRoot();
+  try {
+    ensureWorkspace(negativeCriterionRoot);
+    writeJson(negativeCriterionRoot, ARTIFACT_PATHS.experimentAudits, {
+      version: 1,
+      items: [{ id: "expected-block", auditVerdict: "blocked" }]
+    });
+    const expectedNegative = completionEvidenceIntegrity(negativeCriterionRoot, {
+      evidencePaths: [ARTIFACT_PATHS.experimentAudits],
+      verifiedCriteria: [{
+        criterion: "Audit must remain blocked when required materials are missing",
+        status: "verified",
+        evidencePaths: [ARTIFACT_PATHS.experimentAudits]
+      }]
+    }, { context: { task: { outputPaths: [ARTIFACT_PATHS.experimentAudits] } } });
+    assert.equal(expectedNegative.criteria[0].negativeOutcome.contradictory, false);
+    assert.equal(expectedNegative.satisfied, true);
+  } finally {
+    fs.rmSync(negativeCriterionRoot, { recursive: true, force: true });
+  }
+});
+
+test("completion evidence validates SVG PNG JPEG and PDF structures without changing ordinary inspection", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    const validPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+    const malformedPng = Buffer.from(validPng);
+    malformedPng[malformedPng.length - 1] ^= 0xff;
+    const validJpeg = validCompletionJpegBuffer();
+    const mediaCases = [
+      {
+        format: "svg",
+        valid: Buffer.from("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"><rect width=\"1\" height=\"1\"/></svg>"),
+        malformed: Buffer.from("<svg><g></svg>")
+      },
+      { format: "png", valid: validPng, malformed: malformedPng },
+      { format: "jpg", valid: validJpeg, malformed: validJpeg.subarray(0, validJpeg.length - 2) },
+      { format: "pdf", valid: validCompletionPdfBuffer(), malformed: Buffer.from("%PDF-1.4\nxref\nstartxref\n999\n%%EOF\n", "latin1") }
+    ];
+
+    for (const mediaCase of mediaCases) {
+      const validPath = `.dove/evidence/valid-completion.${mediaCase.format}`;
+      const malformedPath = `.dove/evidence/malformed-completion.${mediaCase.format}`;
+      writeHardeningEvidenceBuffer(root, validPath, mediaCase.valid);
+      writeHardeningEvidenceBuffer(root, malformedPath, mediaCase.malformed);
+
+      const validIntegrity = completionEvidenceIntegrity(root, {
+        evidencePaths: [validPath],
+        verifiedCriteria: [{ criterion: `Validate ${mediaCase.format}`, status: "verified", evidencePaths: [validPath] }]
+      }, { context: { task: { outputPaths: [validPath] } } });
+      assert.equal(validIntegrity.satisfied, true, `${mediaCase.format} valid control`);
+
+      const malformedIntegrity = completionEvidenceIntegrity(root, {
+        evidencePaths: [malformedPath],
+        verifiedCriteria: [{ criterion: `Validate malformed ${mediaCase.format}`, status: "verified", evidencePaths: [malformedPath] }]
+      }, { context: { task: { outputPaths: [malformedPath] } } });
+      assert.equal(malformedIntegrity.satisfied, false, `${mediaCase.format} malformed`);
+      assert.deepEqual(malformedIntegrity.pathEvidence.malformedPaths, [malformedPath], `${mediaCase.format} malformed`);
+      assert.equal(
+        inspectDeclaredPath(root, malformedPath, { requireNonEmpty: true }).status,
+        "existing",
+        `${mediaCase.format} ordinary inspection`
+      );
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("experiment plan and result completion evidence requires concrete workflow semantics", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    const inspect = (artifactPath, contents) => {
+      writeJson(root, artifactPath, contents);
+      return completionEvidenceIntegrity(root, {
+        evidencePaths: [artifactPath],
+        verifiedCriteria: [{ criterion: "Experiment evidence is concrete", status: "verified", evidencePaths: [artifactPath] }]
+      }, { context: { task: { outputPaths: [artifactPath] } } });
+    };
+    for (const [label, item] of [
+      ["pending empty", { outcome: "pending", summary: "" }],
+      ["pending summary", { outcome: "pending", summary: "Still running." }],
+      ["concrete empty", { outcome: "supports", summary: " " }],
+      ["unknown outcome", { outcome: "mystery", summary: "Looks concrete." }]
+    ]) {
+      const integrity = inspect(ARTIFACT_PATHS.experimentResults, { version: 1, items: [item] });
+      assert.equal(integrity.satisfied, false, label);
+      assert.deepEqual(integrity.pathEvidence.placeholderPaths, [ARTIFACT_PATHS.experimentResults], label);
+    }
+    for (const outcome of ["supports", "refutes", "inconclusive", "failed"]) {
+      assert.equal(inspect(ARTIFACT_PATHS.experimentResults, {
+        version: 1, items: [{ outcome, summary: `${outcome} is a concrete experiment result.` }]
+      }).satisfied, true, outcome);
+    }
+    for (const item of [{}, { methodology: "Method", successMetric: "" }, { methodology: "", successMetric: "Metric" }]) {
+      assert.equal(inspect(ARTIFACT_PATHS.experimentPlans, { version: 1, items: [item] }).satisfied, false);
+    }
+    assert.equal(inspect(ARTIFACT_PATHS.experimentPlans, {
+      version: 1,
+      items: [{ methodology: "Run the controlled comparison.", successMetric: "Measure the declared delta." }]
+    }).satisfied, true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("mission completion rejects pending or empty experiment results and accepts concrete summarized outcomes", () => {
+  for (const [outcome, summary, expectedComplete] of [
+    ["pending", "", false],
+    ["pending", "Still running.", false],
+    ["supports", "", false],
+    ["supports", "The experiment supports the criterion.", true],
+    ["refutes", "The experiment refutes the criterion.", true],
+    ["inconclusive", "The experiment was concretely inconclusive.", true],
+    ["failed", "The experiment failed with a recorded result.", true]
+  ]) {
+    const root = tempRoot();
+    try {
+      ensureWorkspace(root);
+      const packetId = `mission-${outcome}-${summary ? "summary" : "empty"}`;
+      seedHardeningTask(root, packetId, {
+        outputPaths: [ARTIFACT_PATHS.experimentResults],
+        executionContract: hardeningExecutionContract({ convergence: { evidenceRequired: [ARTIFACT_PATHS.experimentResults] } })
+      });
+      writeJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [{ outcome, summary }] });
+      const result = recordDoveMissionPass(root, {
+        packetId,
+        resultStatus: "completed",
+        resultSummary: "Experiment completion attempt.",
+        artifactRefs: [ARTIFACT_PATHS.experimentResults],
+        verificationEvidencePaths: [ARTIFACT_PATHS.experimentResults],
+        verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [ARTIFACT_PATHS.experimentResults] }]
+      });
+      const durable = readJson(root, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === packetId);
+      assert.equal(durable.status === "completed", expectedComplete, `${outcome} ${summary}`);
+      assert.equal(result.status === "completed", expectedComplete, `${outcome} ${summary}`);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("auto completion rejects pending experiment results and accepts concrete summarized results", () => {
+  for (const [outcome, summary, expectedComplete] of [
+    ["pending", "Still running.", false],
+    ["supports", "", false],
+    ["failed", "The run failed with a concrete recorded result.", true]
+  ]) {
+    const root = tempRoot();
+    try {
+      ensureWorkspace(root);
+      const packetId = `auto-experiment-${outcome}-${summary ? "summary" : "empty"}`;
+      seedHardeningTask(root, packetId, {
+        outputPaths: [ARTIFACT_PATHS.experimentResults],
+        executionContract: hardeningExecutionContract({ convergence: { evidenceRequired: [ARTIFACT_PATHS.experimentResults] } })
+      });
+      writeJson(root, ARTIFACT_PATHS.experimentResults, { version: 1, items: [{ outcome, summary }] });
+      const sourceId = seedHardeningSource(root, packetId);
+      const result = proposeAndRunHardeningAuto(root, {
+        packetId,
+        steps: [{
+          command: "dove.note",
+          completeTask: true,
+          outputArtifacts: [ARTIFACT_PATHS.experimentResults],
+          verificationEvidencePaths: [ARTIFACT_PATHS.experimentResults],
+          verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [ARTIFACT_PATHS.experimentResults] }],
+          args: { noteId: `${packetId}-note`, title: packetId, sectionId: "results", sourceIds: [sourceId], summary: "Record experiment outcome." }
+        }]
+      }, { runId: `${packetId}-run` });
+      const durable = readJson(root, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === packetId);
+      assert.equal(durable.status === "completed", expectedComplete, outcome);
+      assert.equal(result.status === "completed", expectedComplete, outcome);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("completion evidence rejects bootstrap placeholders and semantically empty indexes", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    for (const artifactPath of [
+      ARTIFACT_PATHS.researchBrief,
+      ARTIFACT_PATHS.plan,
+      ARTIFACT_PATHS.outline,
+      ARTIFACT_PATHS.findings,
+      ARTIFACT_PATHS.experimentLog,
+      ARTIFACT_PATHS.claims,
+      ARTIFACT_PATHS.reviewLog,
+      ARTIFACT_PATHS.revisionPlan,
+      ARTIFACT_PATHS.rebuttalStrategy,
+      ARTIFACT_PATHS.rebuttalResponseDraft,
+      ARTIFACT_PATHS.versionComparisonReport,
+      ARTIFACT_PATHS.sources,
+      ARTIFACT_PATHS.notes,
+      ARTIFACT_PATHS.evidence,
+      ARTIFACT_PATHS.experimentPlans,
+      ARTIFACT_PATHS.experimentResults,
+      ARTIFACT_PATHS.experimentAudits,
+      ARTIFACT_PATHS.figureBriefs,
+      ARTIFACT_PATHS.figureQa,
+      ARTIFACT_PATHS.rebuttalIssues,
+      ARTIFACT_PATHS.versionComparisons
+    ]) {
+      const integrity = completionEvidenceIntegrity(root, {
+        evidencePaths: [artifactPath],
+        verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [artifactPath] }]
+      });
+      assert.equal(integrity.satisfied, false, artifactPath);
+      assert.deepEqual(integrity.pathEvidence.placeholderPaths, [artifactPath], artifactPath);
+    }
+
+    const draftsReadme = completionEvidenceIntegrity(root, {
+      evidencePaths: [path.posix.join(ARTIFACT_PATHS.draftsDir, "README.md")],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [path.posix.join(ARTIFACT_PATHS.draftsDir, "README.md")] }]
+    });
+    assert.equal(draftsReadme.satisfied, false);
+    assert.ok(
+      [...draftsReadme.pathEvidence.missingPaths, ...draftsReadme.pathEvidence.unsupportedPaths]
+        .includes(path.posix.join(ARTIFACT_PATHS.draftsDir, "README.md"))
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("completion evidence integrity rejects symlink escapes, orchestration bookkeeping, and missing contract-required paths", () => {
+  const symlinkRoot = tempRoot();
+  try {
+    ensureWorkspace(symlinkRoot);
+    const outsidePath = path.join(path.dirname(symlinkRoot), `${path.basename(symlinkRoot)}-outside.md`);
+    fs.writeFileSync(outsidePath, "Outside project evidence must not count.\n", "utf8");
+    const symlinkPath = path.join(symlinkRoot, ".dove", "evidence", "outside-link.md");
+    fs.mkdirSync(path.dirname(symlinkPath), { recursive: true });
+    fs.symlinkSync(outsidePath, symlinkPath);
+    const integrity = completionEvidenceIntegrity(symlinkRoot, {
+      evidencePaths: [".dove/evidence/outside-link.md"],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [".dove/evidence/outside-link.md"] }]
+    });
+    assert.equal(integrity.satisfied, false);
+    assert.ok(integrity.pathEvidence.unsafePaths.includes(".dove/evidence/outside-link.md"));
+    fs.rmSync(outsidePath, { force: true });
+  } finally {
+    fs.rmSync(symlinkRoot, { recursive: true, force: true });
+  }
+
+  const boardRoot = tempRoot();
+  try {
+    ensureWorkspace(boardRoot);
+    seedHardeningTask(boardRoot, "board-bookkeeping-task", {
+      executionContract: hardeningExecutionContract({ convergence: { evidenceRequired: [ARTIFACT_PATHS.orchestrationBoard] } })
+    });
+    const result = recordDoveMissionPass(boardRoot, {
+      packetId: "board-bookkeeping-task",
+      resultStatus: "completed",
+      resultSummary: "Completion cites only the orchestration board.",
+      artifactRefs: [ARTIFACT_PATHS.orchestrationBoard],
+      verificationEvidencePaths: [ARTIFACT_PATHS.orchestrationBoard],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [ARTIFACT_PATHS.orchestrationBoard] }]
+    });
+    assert.equal(result.status, "needs-completion-evidence");
+    assert.ok(result.evidenceIntegrity.pathEvidence.bookkeepingPaths.includes(ARTIFACT_PATHS.orchestrationBoard));
+  } finally {
+    fs.rmSync(boardRoot, { recursive: true, force: true });
+  }
+
+  const requiredRoot = tempRoot();
+  try {
+    ensureWorkspace(requiredRoot);
+    seedHardeningTask(requiredRoot, "required-evidence-task");
+    writeHardeningEvidenceFile(requiredRoot, ".dove/evidence/unrelated.log", "Unrelated evidence.\n");
+    const result = recordDoveMissionPass(requiredRoot, {
+      packetId: "required-evidence-task",
+      resultStatus: "completed",
+      resultSummary: "Completion cites a real but contract-unrelated file.",
+      artifactRefs: [".dove/evidence/unrelated.log"],
+      verificationEvidencePaths: [".dove/evidence/unrelated.log"],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [".dove/evidence/unrelated.log"] }]
+    });
+    assert.equal(result.status, "verification-failed");
+    assert.ok(result.missingRequiredEvidencePaths.includes(HARDENING_EVIDENCE_PATH));
+    assert.equal(readJson(requiredRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "required-evidence-task").status, "ready");
+  } finally {
+    fs.rmSync(requiredRoot, { recursive: true, force: true });
+  }
+});
+
+test("completion evidence integrity resolves internal symlinks and rejects broken or bookkeeping aliases", () => {
+  const root = tempRoot();
+  try {
+    ensureWorkspace(root);
+    const substantivePath = writeHardeningEvidenceFile(root, ".dove/evidence/substantive.md", "Substantive implementation evidence.\n");
+    const internalLink = ".dove/evidence/substantive-link.md";
+    fs.symlinkSync("substantive.md", path.join(root, internalLink));
+    const accepted = completionEvidenceIntegrity(root, {
+      evidencePaths: [internalLink],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [internalLink] }]
+    }, { context: { task: { outputPaths: [internalLink] } } });
+    assert.equal(accepted.satisfied, true);
+    assert.equal(accepted.pathEvidence.items[0].canonicalRelativePath, substantivePath);
+
+    const brokenLink = ".dove/evidence/broken-link.md";
+    fs.symlinkSync("missing-target.md", path.join(root, brokenLink));
+    const broken = completionEvidenceIntegrity(root, {
+      evidencePaths: [brokenLink],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [brokenLink] }]
+    });
+    assert.equal(broken.satisfied, false);
+    assert.deepEqual(broken.pathEvidence.missingPaths, [brokenLink]);
+
+    const boardAlias = ".dove/evidence/board-alias.json";
+    fs.symlinkSync("../orchestration/board.json", path.join(root, boardAlias));
+    const bookkeeping = completionEvidenceIntegrity(root, {
+      evidencePaths: [boardAlias],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [boardAlias] }]
+    });
+    assert.equal(bookkeeping.satisfied, false);
+    assert.deepEqual(bookkeeping.pathEvidence.bookkeepingPaths, [boardAlias]);
+    assert.equal(bookkeeping.pathEvidence.items[0].canonicalRelativePath, ARTIFACT_PATHS.orchestrationBoard);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("persistent contracts cannot be weakened and plan output still requires declared evidence paths", () => {
+  const downgradeRoot = tempRoot();
+  try {
+    ensureWorkspace(downgradeRoot);
+    seedHardeningTask(downgradeRoot, "contract-downgrade-task");
+    const unrelatedPath = writeHardeningEvidenceFile(downgradeRoot, ".dove/evidence/unrelated-downgrade.log", "Unrelated verification output.\n");
+    const result = recordDoveMissionPass(downgradeRoot, {
+      packetId: "contract-downgrade-task",
+      resultStatus: "completed",
+      resultSummary: "A payload contract attempts to replace the durable requirement.",
+      executionContract: hardeningExecutionContract({ convergence: { evidenceRequired: [unrelatedPath] } }),
+      artifactRefs: [unrelatedPath],
+      verificationEvidencePaths: [unrelatedPath],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [unrelatedPath] }]
+    });
+    assert.equal(result.status, "verification-failed");
+    assert.deepEqual(result.missingRequiredEvidencePaths, [HARDENING_EVIDENCE_PATH]);
+  } finally {
+    fs.rmSync(downgradeRoot, { recursive: true, force: true });
+  }
+
+  const planRoot = tempRoot();
+  try {
+    ensureWorkspace(planRoot);
+    seedHardeningTask(planRoot, "plan-required-evidence-task", {
+      stage: "plan",
+      executionContract: hardeningExecutionContract({
+        chainType: "plan-to-executable-missions",
+        roleSequence: ["planner", "builder", "reviewer"]
+      })
+    });
+    const unrelatedPath = writeHardeningEvidenceFile(planRoot, ".dove/evidence/plan-unrelated.log", "Plan conversion output.\n");
+    const result = recordDoveMissionPass(planRoot, {
+      packetId: "plan-required-evidence-task",
+      resultStatus: "completed",
+      resultSummary: "The plan returned an executable mission but omitted its required verification path.",
+      verificationEvidencePaths: [unrelatedPath],
+      verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [unrelatedPath] }],
+      plannedMissions: [{
+        id: "derived-plan-mission",
+        title: "Execute derived hardening work",
+        executionContract: hardeningExecutionContract()
+      }]
+    });
+    assert.equal(result.status, "verification-failed");
+    assert.deepEqual(result.missingRequiredEvidencePaths, [HARDENING_EVIDENCE_PATH]);
+    assert.equal(result.evidenceIntegrity.satisfied, true);
+    assert.deepEqual(result.evidenceIntegrity.pathEvidence.unlinkedPaths, []);
+  } finally {
+    fs.rmSync(planRoot, { recursive: true, force: true });
+  }
+});
+
 test("completion evidence integrity requires criteria-specific evidence and accepts real files", () => {
   const criteriaRoot = tempRoot();
   try {
@@ -455,8 +1667,8 @@ test("completion evidence integrity requires criteria-specific evidence and acce
   const validRoot = tempRoot();
   try {
     ensureWorkspace(validRoot);
-    seedHardeningTask(validRoot, "real-evidence-task");
     const artifactPath = writeHardeningEvidenceFile(validRoot, ".dove/evidence/real-completion-artifact.md", "# Real completion artifact\n\nSubstantive evidence.\n");
+    seedHardeningTask(validRoot, "real-evidence-task", { outputPaths: [artifactPath] });
     writeHardeningEvidenceFile(validRoot);
     const result = recordDoveMissionPass(validRoot, {
       packetId: "real-evidence-task",
@@ -505,10 +1717,8 @@ test("completion evidence integrity rejects fake status and auto completion path
     seedHardeningTask(autoRoot, "auto-fake-output-task");
     const hardeningSourceId = seedHardeningSource(autoRoot, "auto-fake-output-task");
     writeHardeningEvidenceFile(autoRoot);
-    const result = runDoveAuto(autoRoot, {
+    const result = proposeAndRunHardeningAuto(autoRoot, {
       packetId: "auto-fake-output-task",
-      confirmed: true,
-      runId: "auto-fake-output-run",
       steps: [{
         command: "dove.note",
         completeTask: true,
@@ -523,6 +1733,8 @@ test("completion evidence integrity rejects fake status and auto completion path
           summary: "Auto output references a fake artifact path."
         }
       }]
+    }, {
+      runId: "auto-fake-output-run"
     });
     assert.equal(result.status, "needs-completion-evidence");
     assert.equal(result.task.status, "blocked");
@@ -712,11 +1924,7 @@ test("governance registry marks task-scoped writes and packet execution with pac
   }
 
   const packetExecution = GOVERNANCE_EXEMPT_MUTATIONS.filter((entry) => entry.mutationScope === "packet-execution");
-  assert.equal(packetExecution.length > 0, true);
-  for (const entry of packetExecution) {
-    assert.equal(entry.requiresPacketTarget, true, `${entry.id} should require a packet target`);
-    assert.equal(entry.targetFields.includes("packetId"), true, `${entry.id} should accept explicit packetId`);
-  }
+  assert.deepEqual(packetExecution, []);
 
   for (const entry of [...GOVERNANCE_GUARDED_MUTATIONS, ...GOVERNANCE_EXEMPT_MUTATIONS].filter((item) => ["derived-refresh", "inspection-only", "bootstrap", "workspace-global", "task-materialization", "governance-bookkeeping"].includes(item.mutationScope))) {
     assert.equal(entry.requiresPacketTarget, false, `${entry.id} should not require a packet target`);
@@ -787,115 +1995,6 @@ function seedRoleScopedAutonomyGuidance(root, responseOwnerRole = "researcher") 
     reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: [responseOwnerRole], separationMaintained: true }
   });
   return queryMetaOptimize(root).remediationPacks.packs[0];
-}
-
-function seedAcceptedAutonomyPacket(root, {
-  packetId,
-  sourceType,
-  sourceId,
-  sourceArtifactPath,
-  title,
-  nextAction,
-  actorRole = "planner",
-  packetAssignedRole = actorRole,
-  workerRole = null,
-  followThroughId = `follow-through-${packetId}`
-}) {
-  const timestamp = new Date(0).toISOString();
-  const packetPath = `.dove/task-packets/packets/${packetId}.json`;
-  const packetContextPath = `.dove/context/packets/${packetId}.json`;
-  const packet = {
-    id: packetId,
-    sourceType: "materialized-guidance",
-    sourceId,
-    title,
-    summary: `${title} should be assessed by the autonomous controller.`,
-    phase: "plan",
-    phaseContextId: "phase-plan",
-    status: "pending",
-    lifecycleStatus: "waiting",
-    active: true,
-    assignedRole: packetAssignedRole,
-    currentFocus: title,
-    nextAction,
-    dependencies: [],
-    evidenceLinks: [sourceArtifactPath],
-    outputPaths: [ARTIFACT_PATHS.taskPacketsIndex],
-    questions: [],
-    decisions: [],
-    lineage: {},
-    continuationState: { status: "ready-to-resume", lastCheckpoint: "Awaiting autonomous control-plane assessment.", updatedAt: timestamp },
-    autonomyEnvelope: workerRole
-      ? {
-          controllerRole: actorRole,
-          workerRole,
-          scopeType: "packet-local",
-          explicitOnly: true,
-          requiredReadPaths: [],
-          localRules: ["Planner remains the supervising controller for this bounded autonomous packet step."]
-        }
-      : null,
-    updatedAt: timestamp,
-    packetPath,
-    packetContextPath,
-    materialization: {
-      sourceType,
-      sourceId,
-      sourceArtifactPath,
-      followThroughId,
-      createdAt: timestamp,
-      createdByRole: actorRole
-    }
-  };
-  writeJson(root, packetPath, packet);
-  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, { version: 3, items: [], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: null });
-  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
-    ...packetIndex,
-    items: [...(packetIndex.items ?? []).filter((item) => item.id !== packetId), packet],
-    updatedAt: timestamp
-  });
-  recordOperatorFollowThrough(root, {
-    id: followThroughId,
-    sourceType,
-    sourceId,
-    status: "accepted-for-execution",
-    actorRole,
-    workerRole,
-    decisionSummary: `Prepared ${packetId} for one bounded autonomous control-plane step.`,
-    linkedTargetArtifact: packetPath,
-    linkedTargetId: packetId,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-  return { packetId, packetPath, packetContextPath, followThroughId };
-}
-
-function seedPlannedAutonomyMaterialization(root, {
-  sourceType = "remediation-pack",
-  sourceId,
-  actorRole = "planner",
-  followThroughId,
-  linkedTargetId,
-  linkedTargetArtifact = `.dove/task-packets/packets/${linkedTargetId}.json`,
-  decisionSummary = `Autonomy may materialize ${sourceType}:${sourceId} into ${linkedTargetId}.`,
-  selectedConversionPathKey = null,
-  executeBy = "2099-01-01T00:00:00.000Z",
-  reviewAfter = "2099-01-01T12:00:00.000Z"
-}) {
-  recordOperatorFollowThrough(root, {
-    id: followThroughId ?? `follow-through-${linkedTargetId}`,
-    sourceType,
-    sourceId,
-    status: "accepted-for-execution",
-    actorRole,
-    decisionSummary,
-    selectedConversionPathKey,
-    linkedTargetArtifact,
-    linkedTargetId,
-    plannedTarget: true,
-    executeBy,
-    reviewAfter
-  });
 }
 
 test("planCampaign records an explicit non-executing multi-cycle campaign", () => {
@@ -1117,8 +2216,9 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   assert.equal(boundaries.managedArtifacts.workflowBoundaries.revisionId, "schema-v6:bootstrap-only");
   assert.equal(boundaries.managedArtifacts.workspaceIndex.path, ".dove/workspace/index.json");
   assert.equal(boundaries.managedArtifacts.doveRootManifest.path, ".dove/manifest.json");
-  assert.deepEqual(boundaries.managedPaths, [".opencode/commands/dove*.md", ".opencode/skills/dove-*", ".opencode.json", ".codex/skills/dove-*", ".cursor/commands/dove-*.md", ".agents/skills/dove-*", "AGENTS.md", "README.md", "bin", "docs", "mcp", "scripts", "src"]);
-  assert.deepEqual(boundaries.neutralCorePaths, ["README.md", "bin", "docs", "mcp", "scripts", "src"]);
+  const packageBundlePaths = ["README.md", "docs/README.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "dist/index.mjs", "bin/dove-package.mjs", "mcp/dove-state-server-package.mjs", "scripts/doctor-mcp-probe-package.mjs"];
+  assert.deepEqual(boundaries.managedPaths, [".opencode/commands/dove*.md", ".opencode/skills/dove-*", ".opencode.json", ".codex/skills/dove-*", ".cursor/commands/dove-*.md", ".agents/skills/dove-*", "AGENTS.md", ...packageBundlePaths]);
+  assert.deepEqual(boundaries.neutralCorePaths, packageBundlePaths);
   assert.deepEqual(boundaries.defaultHostAdapters, ["opencode"]);
   assert.deepEqual(boundaries.availableHostAdapters, ["opencode", "codex", "cursor", "agents", "claude"]);
   assert.equal(Object.hasOwn(boundaries.managedHostAdapterPaths, "claude"), false);
@@ -2143,7 +3243,7 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
       status: "not-a-real-status",
       actorRole: "planner"
     });
-  }, /Invalid follow-through status/);
+  }, /Public follow-through status must be one of/);
 
   assert.throws(() => {
     recordOperatorFollowThrough(root, {
@@ -2171,20 +3271,155 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
     });
   }, /was not found/);
 
-  assert.throws(() => {
-    recordOperatorFollowThrough(root, {
-      sourceType: "remediation-pack",
-      sourceId: topPack.id,
-      status: "executing",
-      actorRole: allowedActorRole,
-      linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through.json",
-      linkedTargetId: "task-follow-through"
-    });
-  }, /executionStartedAt/);
+  const privilegedFieldCases = [
+    { status: "executing" },
+    { status: "closed" },
+    { status: "superseded" },
+    { programId: "spoofed-program" },
+    { programRunId: "spoofed-program-run" },
+    { approvalId: "spoofed-approval" },
+    { retryState: { attemptCount: 2 } },
+    { executionStartedAt: new Date(0).toISOString() },
+    { executionCompletedAt: new Date(0).toISOString() },
+    { recordedAt: new Date(0).toISOString() }
+  ];
+  const ledgerBeforePrivilegedCalls = fs.readFileSync(
+    followThroughPath,
+    "utf8"
+  );
+  for (const privilegedInput of privilegedFieldCases) {
+    assert.throws(() => {
+      recordOperatorFollowThrough(root, {
+        sourceType: "remediation-pack",
+        sourceId: topPack.id,
+        status: "accepted-for-execution",
+        actorRole: allowedActorRole,
+        linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through.json",
+        linkedTargetId: "task-follow-through",
+        executeBy: "2099-01-01T00:00:00.000Z",
+        reviewAfter: "2099-01-01T12:00:00.000Z",
+        ...privilegedInput
+      });
+    }, /Public follow-through status must be one of|do not accept system-owned or unknown fields/);
+    assert.equal(
+      fs.readFileSync(followThroughPath, "utf8"),
+      ledgerBeforePrivilegedCalls
+    );
+  }
 
   fs.rmSync(path.join(root, ".dove/task-packets/packets/task-follow-through.json"), { force: true });
   followThrough = queryOperatorFollowThrough(root);
   assert.equal(followThrough.summary.itemCount > 0, true);
+});
+
+test("follow-through record identity cannot splice source or target across records", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Follow-through Identity", objective: "Keep source and target bound to one durable record." });
+  const { remediationPack, executionBridgeCandidate } = seedAutonomyGuidance(root);
+  seedTaskPacket(root, "task-follow-through-identity-a", { title: "Identity target A", status: "pending" });
+  seedTaskPacket(root, "task-follow-through-identity-b", { title: "Identity target B", status: "pending" });
+
+  const recordId = "follow-through-identity";
+  recordOperatorFollowThrough(root, {
+    id: recordId,
+    sourceType: "remediation-pack",
+    sourceId: remediationPack.id,
+    status: "accepted-for-execution",
+    actorRole: "planner",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through-identity-a.json",
+    linkedTargetId: "task-follow-through-identity-a",
+    executeBy: "2099-01-01T00:00:00.000Z",
+    reviewAfter: "2099-01-01T12:00:00.000Z"
+  });
+
+  assert.throws(() => recordOperatorFollowThrough(root, {
+    id: recordId,
+    sourceType: "remediation-pack",
+    sourceId: remediationPack.id,
+    status: "accepted-for-execution",
+    actorRole: "planner",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through-identity-b.json",
+    linkedTargetId: "task-follow-through-identity-b",
+    executeBy: "2099-01-01T00:00:00.000Z",
+    reviewAfter: "2099-01-01T12:00:00.000Z"
+  }), /cannot change target/);
+
+  assert.ok(executionBridgeCandidate);
+  assert.throws(() => recordOperatorFollowThrough(root, {
+    id: recordId,
+    sourceType: "execution-bridge",
+    sourceId: executionBridgeCandidate.id,
+    status: "accepted-for-execution",
+    actorRole: "planner",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through-identity-a.json",
+    linkedTargetId: "task-follow-through-identity-a",
+    executeBy: "2099-01-01T00:00:00.000Z",
+    reviewAfter: "2099-01-01T12:00:00.000Z"
+  }), /cannot change source/);
+});
+
+test("unverifiable follow-through sources fail closed instead of trusting stale record or caller metadata", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Follow-through Source Trust", objective: "Reject caller-authored source authorization." });
+  seedTaskPacket(root, "task-unverifiable-source", { title: "Unverifiable source target", status: "pending" });
+  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, {
+    version: 1,
+    proposalOnly: true,
+    explicitOnly: true,
+    items: [{
+      id: "follow-through-unverifiable-source",
+      sourceType: "remediation-pack",
+      sourceId: "missing-source",
+      sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
+      sourceFingerprint: "stale-fingerprint",
+      sourceTitle: "Missing source",
+      sourceSummary: "No current catalog entry exists.",
+      status: "accepted-for-execution",
+      actorRole: "planner",
+      workerRole: "researcher",
+      linkedTargetArtifact: ".dove/task-packets/packets/task-unverifiable-source.json",
+      linkedTargetId: "task-unverifiable-source",
+      executeBy: "2099-01-01T00:00:00.000Z",
+      reviewAfter: "2099-01-01T12:00:00.000Z",
+      recordedAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+
+  const before = fs.readFileSync(
+    path.join(
+      root,
+      ARTIFACT_PATHS.metaOperatorFollowThrough
+    ),
+    "utf8"
+  );
+  assert.throws(() => recordOperatorFollowThrough(root, {
+    id: "follow-through-unverifiable-source",
+    sourceType: "remediation-pack",
+    sourceId: "missing-source",
+    sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
+    sourceFingerprint: "caller-fingerprint",
+    sourceAllowedActorRoles: ["planner", "researcher"],
+    status: "executing",
+    actorRole: "planner",
+    workerRole: "researcher",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-unverifiable-source.json",
+    linkedTargetId: "task-unverifiable-source",
+    executionStartedAt: new Date().toISOString()
+  }), /do not accept system-owned or unknown fields/);
+  assert.equal(
+    fs.readFileSync(
+      path.join(
+        root,
+        ARTIFACT_PATHS.metaOperatorFollowThrough
+      ),
+      "utf8"
+    ),
+    before
+  );
 });
 
 test("queryOperatorFollowThrough summarizes combined deferred, stale, and invalid follow-through debt", () => {
@@ -2303,6 +3538,86 @@ test("executing follow-through remains a valid governed state across query and w
   assert.equal(Array.isArray(doctor.items), true);
 });
 
+test("public note and wiki APIs ignore spoofed third-argument governance context", async () => {
+  const publicCore = await import("../../src/core/index.mjs");
+  assert.equal(Object.hasOwn(publicCore, "VALIDATED_RUNTIME_ARTIFACT_CAPABILITY"), false);
+  assert.equal(Object.hasOwn(publicCore, "VALIDATED_RUNTIME_REVIEW_CAPABILITY"), false);
+  assert.equal(Object.hasOwn(publicCore, "upsertNoteFromValidatedRuntime"), false);
+  assert.equal(Object.hasOwn(publicCore, "refreshWikiFromValidatedRuntime"), false);
+
+  const packageRoot = process.cwd();
+  for (const subpath of [
+    "dove/src/core/runtime-artifact-capability.mjs",
+    "dove/src/core/artifacts.mjs",
+    "dove/src/core/reviews.mjs",
+    "dove/src/core/orchestration.mjs"
+  ]) {
+    const imported = spawnSync(
+      process.execPath,
+      ["--input-type=module", "-e", `await import(${JSON.stringify(subpath)})`],
+      { cwd: packageRoot, encoding: "utf8" }
+    );
+    assert.notEqual(imported.status, 0, `${subpath} must remain outside the package export boundary`);
+    assert.match(`${imported.stderr}\n${imported.stdout}`, /ERR_PACKAGE_PATH_NOT_EXPORTED/u);
+  }
+
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, { title: "Public Context Spoof", objective: "Keep public artifact writes behind follow-through governance." });
+  const packetId = seedTaskPacket(root, "task-public-context-spoof");
+  const sourceId = registerSource(root, {
+    packetId,
+    sourceId: "public-context-source",
+    citationKey: "public-context-source",
+    title: "Public context source"
+  }).id;
+  const phaseBefore = readState(root).pipeline.currentStage;
+
+  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, {
+    version: 1,
+    proposalOnly: true,
+    explicitOnly: true,
+    items: [{
+      id: "follow-through-public-context-spoof",
+      sourceType: "remediation-pack",
+      sourceId: "public-context-pack",
+      sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
+      sourceFingerprint: "public-context-fingerprint",
+      sourceTitle: "Public context pack",
+      sourceSummary: "Keep the public APIs gated.",
+      status: "executing",
+      actorRole: "planner",
+      linkedTargetArtifact: `.dove/task-packets/packets/${packetId}.json`,
+      linkedTargetId: packetId,
+      executeBy: "2099-01-01T00:00:00.000Z",
+      reviewAfter: "2099-01-01T12:00:00.000Z",
+      executionStartedAt: new Date(0).toISOString(),
+      recordedAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString()
+    }],
+    summary: { itemCount: 1 },
+    updatedAt: null
+  });
+
+  const spoofedContext = {
+    skipFollowThroughReady: true,
+    skipSyncPhase: true
+  };
+  assert.throws(() => upsertNote(root, {
+    packetId,
+    noteId: "spoofed-public-note",
+    title: "Spoofed public note",
+    sectionId: "introduction",
+    sourceIds: [sourceId],
+    summary: "This public call must remain gated."
+  }, spoofedContext), /blocked while operator follow-through still requires action/);
+  assert.throws(() => refreshWiki(root, {}, spoofedContext), /blocked while operator follow-through still requires action/);
+
+  const notes = readJson(root, ARTIFACT_PATHS.notes, { items: [] });
+  assert.equal((notes.items ?? []).some((item) => item.id === "spoofed-public-note"), false);
+  assert.equal(readState(root).pipeline.currentStage, phaseBefore);
+});
+
 test("queryMetaOptimize exposes governance coverage and guarded write paths respect follow-through debt", () => {
   const root = tempRoot();
   ensureWorkspace(root);
@@ -2397,14 +3712,14 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
   }), /blocked while operator follow-through still requires action/);
   assert.throws(() => updateResearchBrief(root, { objective: "blocked brief" }), /blocked while operator follow-through still requires action/);
   assert.throws(() => upsertExperimentPlan(root, { id: "blocked-exp", title: "Blocked experiment", methodology: "Method" }), /blocked while operator follow-through still requires action/);
-  assert.throws(() => appendReviewLog(root, { actorRole: "reviewer", stage: "blocked", summary: "blocked", findings: [], actionItems: [] }), /blocked while operator follow-through still requires action|requires board role reviewer/);
+  assert.throws(() => appendReviewLog(root, { actorRole: "reviewer", stage: "blocked", summary: "blocked", findings: [], actionItems: [] }), /blocked while operator follow-through still requires action/);
   assert.throws(() => upsertExperimentResult(root, { id: "blocked-result", experimentId: "blocked-exp", outcome: "supports" }), /blocked while operator follow-through still requires action/);
-  assert.throws(() => runExperimentAudit(root, { experimentId: "blocked-exp" }), /blocked while operator follow-through still requires action|requires board role experiment-planner/);
+  assert.throws(() => runExperimentAudit(root, { experimentId: "blocked-exp" }), /blocked while operator follow-through still requires action/);
   assert.throws(() => normalizeRebuttalIssues(root, { issues: [] }), /blocked while operator follow-through still requires action/);
   assert.throws(() => buildRebuttalStrategy(root, {}), /blocked while operator follow-through still requires action/);
   assert.throws(() => createVersionSnapshot(root, { versionId: "guard-v1" }), /blocked while operator follow-through still requires action/);
   assert.throws(() => compareVersions(root, { fromVersionId: "guard-v1", toVersionId: "guard-v2" }), /blocked while operator follow-through still requires action/);
-  assert.throws(() => runReviewLoop(root, { actorRole: "reviewer" }), /blocked while operator follow-through still requires action|requires board role reviewer/);
+  assert.throws(() => runReviewLoop(root, { actorRole: "reviewer" }), /blocked while operator follow-through still requires action/);
   assert.throws(() => bridgeExperimentResultToClaim(root, { resultId: "blocked-result" }), /blocked while operator follow-through still requires action/);
 });
 
@@ -2521,11 +3836,7 @@ test("governance registry completely binds the expected mutating command and MCP
     "plan_campaign",
     "materialize_guidance_packet",
     "launch_dove_mission",
-    "issue_program_approval",
-    "revoke_program_approval",
-    "run_autonomy_once",
-    "run_autonomy_foreground",
-    "run_autonomy_operate"
+    "revoke_program_approval"
   ];
   for (const toolName of expectedMutatingTools) {
     assert.equal(boundTools.has(toolName), true);
@@ -2696,11 +4007,11 @@ test("a broader set of guarded write paths all reject unresolved follow-through 
   ];
 
   for (const call of guardedCalls) {
-    assert.throws(call, /blocked while operator follow-through still requires action|Cannot advance orchestration from|requires board role reviewer|requires board role experiment-planner|requires role planner for phase init/);
+    assert.throws(call, /blocked while operator follow-through still requires action|Cannot advance orchestration from|requires routing role planner for phase init/);
   }
 });
 
-test("follow-through overrides require expiry and exact target binding", () => {
+test("legacy policy override fields fail closed and cannot bypass follow-through governance", () => {
   const root = tempRoot();
   ensureWorkspace(root);
   initProject(root, { title: "Override Guard", objective: "Validate override semantics." });
@@ -2744,7 +4055,6 @@ test("follow-through overrides require expiry and exact target binding", () => {
   const currentState = readState(root);
   const currentBoard = currentState.orchestrationBoard;
   const allowedActorRole = currentBoard?.assignedRole ?? "planner";
-  const currentPhase = currentState.pipeline?.currentStage ?? currentBoard?.currentPhase ?? "init";
   seedTaskPacket(root, "task-override", { title: "Override task", status: "pending" });
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
@@ -2759,57 +4069,24 @@ test("follow-through overrides require expiry and exact target binding", () => {
     reviewAfter: "2099-01-01T12:00:00.000Z"
   });
 
-  assert.throws(() => upsertPlan(root, {
-    thesis: "override without full guard",
-    packetId: "task-override",
-    actorRole: allowedActorRole,
-    policyOverrideReason: "manual",
-    policyOverrideReasonCode: "manual-reconciliation",
-    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".dove/task-packets/packets/task-override.json"],
-    policyOverrideSourceId: topPack.id
-  }), /future policyOverrideExpiresAt/);
-
-  assert.throws(() => upsertPlan(root, {
-    thesis: "override with removed compatibility code",
-    packetId: "task-override",
-    actorRole: allowedActorRole,
-    policyOverrideReason: "manual",
-    policyOverrideReasonCode: "migration-compatibility",
-    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".dove/task-packets/packets/task-override.json"],
-    policyOverrideSourceId: topPack.id,
-    policyOverrideTargetArtifact: ".dove/task-packets/packets/task-override.json",
-    policyOverrideTargetId: "task-override",
-    policyOverridePhase: currentPhase,
-    policyOverrideExpiresAt: "2099-01-02T00:00:00.000Z"
-  }), /allowed policyOverrideReasonCode/);
-
-  assert.throws(() => upsertPlan(root, {
-    thesis: "override with long window",
-    packetId: "task-override",
-    actorRole: allowedActorRole,
-    policyOverrideReason: "manual",
-    policyOverrideReasonCode: "manual-reconciliation",
-    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".dove/task-packets/packets/task-override.json"],
-    policyOverrideSourceId: topPack.id,
-    policyOverrideTargetArtifact: ".dove/task-packets/packets/task-override.json",
-    policyOverrideTargetId: "task-override",
-    policyOverridePhase: currentPhase,
-    policyOverrideExpiresAt: "2099-12-31T00:00:00.000Z"
-  }), /short future policyOverrideExpiresAt/);
-
-  assert.throws(() => upsertPlan(root, {
-    thesis: "override with wrong source",
-    packetId: "task-override",
-    actorRole: allowedActorRole,
-    policyOverrideReason: "manual",
-    policyOverrideReasonCode: "manual-reconciliation",
-    policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks, ".dove/task-packets/packets/task-override.json"],
-    policyOverrideSourceId: "wrong-source",
-    policyOverrideTargetArtifact: ".dove/task-packets/packets/task-override.json",
-    policyOverrideTargetId: "task-override",
-    policyOverridePhase: currentPhase,
-    policyOverrideExpiresAt: "2099-01-02T00:00:00.000Z"
-  }), /matching policyOverrideSourceId/);
+  const overrideAttempts = [
+    { policyOverrideReason: "manual" },
+    { policyOverrideReasonCode: "manual-reconciliation" },
+    { policyOverrideEvidencePaths: [ARTIFACT_PATHS.metaRemediationPacks] },
+    { policyOverrideSourceId: topPack.id },
+    { policyOverrideTargetArtifact: ".dove/task-packets/packets/task-override.json" },
+    { policyOverrideTargetId: "task-override" },
+    { policyOverridePhase: "research" },
+    { policyOverrideExpiresAt: "2099-01-02T00:00:00.000Z" }
+  ];
+  for (const legacyFields of overrideAttempts) {
+    assert.throws(() => upsertPlan(root, {
+      thesis: "legacy override must fail closed",
+      packetId: "task-override",
+      actorRole: allowedActorRole,
+      ...legacyFields
+    }), /does not accept retired policy override fields/);
+  }
 
 });
 
@@ -2887,428 +4164,207 @@ test("materializeGuidancePacket creates a durable packet from accepted remediati
   }), /duplicate work/);
 });
 
-test("materializeGuidancePacket seeds durable program surfaces when program linkage is provided", () => {
+test("materializeGuidancePacket validates follow-through identity before writing packet state", () => {
   const root = tempRoot();
   ensureWorkspace(root);
-  initProject(root, { title: "Program Materialize", objective: "Seed program-level operating surfaces through governed materialization." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
+  initProject(root, {
+    title: "Atomic materialization",
+    objective: "Reject immutable follow-through target conflicts without partial packet writes."
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{
+      id: "atomic-materialization-gap",
+      summary: "Need atomic guidance materialization.",
+      severity: "high",
+      status: "open",
+      responseOwnerRole: "planner",
+      recurrenceCount: 2,
+      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    version: 3,
+    lastVerdict: "needs-work",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close the atomic materialization gap."],
+    unresolvedConcernIds: ["atomic-materialization-gap"],
+    escalatedConcernIds: [],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 1,
+    reviewerIndependence: {
+      reviewerRole: "reviewer",
+      responseOwnerRoles: ["planner"],
+      separationMaintained: true
+    }
+  });
 
-  materializeGuidancePacket(root, {
+  const topPack = queryMetaOptimize(root).remediationPacks.packs[0];
+  const actorRole = topPack.rankedConversionPaths?.find(
+    (item) => item.targetType === "create-new-packet"
+  )?.assignedRole ?? "planner";
+  seedTaskPacket(root, "task-existing-target", {
+    title: "Existing immutable target",
+    status: "pending"
+  });
+  recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-program-packet",
-    title: "Program-linked packet",
-    nextAction: "Refresh the research brief as one approved program step.",
-    programId: "research-program-alpha",
-    programTitle: "Research program alpha",
-    programObjective: "Tighten the research brief around one governed program objective.",
-    programAgenda: ["Clarify the current contribution boundary."],
-    programEvidenceBacklog: ["Need a stronger source-backed motivation note."],
-    programRunId: "research-program-alpha-run-1",
-    approvalId: "research-program-alpha-approval-1",
-    programApprovalSummary: "Approved one bounded research-brief refresh step.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
+    sourceId: topPack.id,
+    status: "acknowledged",
+    actorRole,
+    decisionSummary: "Preserve the original immutable target binding.",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-existing-target.json",
+    linkedTargetId: "task-existing-target"
   });
-
-  const packet = readJson(root, ".dove/task-packets/packets/task-program-packet.json", null);
-  const programs = readJson(root, ARTIFACT_PATHS.programsIndex, null);
-  const runs = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-
-  assert.equal(packet.lineage.programId, "research-program-alpha");
-  assert.equal(packet.lineage.programRunId, "research-program-alpha-run-1");
-  assert.equal(packet.lineage.approvalId, "research-program-alpha-approval-1");
-  assert.equal(packet.materialization.programId, "research-program-alpha");
-  assert.equal((programs.items ?? []).find((item) => item.id === "research-program-alpha").activeRunId, "research-program-alpha-run-1");
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-alpha-run-1").status, "approved");
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-alpha-run-1").allowedStepType, "refresh-research-brief");
-  assert.equal((approvals.items ?? []).find((item) => item.id === "research-program-alpha-approval-1").status, "approved");
-});
-
-test("issueProgramApproval binds an explicit campaign step without executing runtime work", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Campaign Approval", objective: "Bind a campaign step to a fresh explicit approval." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-campaign-approval",
-    title: "Campaign approval packet",
-    nextAction: "Initial campaign program step.",
-    programId: "program-campaign-alpha",
-    programRunId: "program-campaign-alpha-run-1",
-    approvalId: "program-campaign-alpha-approval-1",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-  runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-
-  planCampaign(root, {
-    campaignId: "campaign-approval-alpha",
-    actorRole: "planner",
-    title: "Campaign approval alpha",
-    objective: "Authorize one explicit follow-up step.",
-    status: "active",
-    steps: [{
-      id: "step-approval-2",
-      status: "planned",
-      programId: "program-campaign-alpha",
-      allowedStepType: "refresh-research-brief",
-      nextAction: "Issue fresh approval before execution."
-    }]
-  });
-
-  const runtimeBeforeApproval = readJson(root, ARTIFACT_PATHS.runtimeControllerState, {});
-
-  const issued = issueProgramApproval(root, {
-    packetId: "task-campaign-approval",
-    programId: "program-campaign-alpha",
-    programRunId: "program-campaign-alpha-run-2",
-    approvalId: "program-campaign-alpha-approval-2",
-    campaignId: "campaign-approval-alpha",
-    campaignStepId: "step-approval-2",
-    campaignStepNextAction: "Run explicit foreground autonomy for this approved step.",
-    actorRole: "planner",
-    workerRole: "researcher",
-    executeBy: "2099-01-02T00:00:00.000Z",
-    reviewAfter: "2099-01-02T12:00:00.000Z",
-    summary: "Issued campaign-bound approval for the next step."
-  });
-
-  const campaigns = queryCampaigns(root, { campaignId: "campaign-approval-alpha" });
-  const step = campaigns.items[0].steps.find((item) => item.id === "step-approval-2");
-  const runtime = readJson(root, ARTIFACT_PATHS.runtimeControllerState, {});
-
-  assert.deepEqual(issued.campaignBinding, { campaignId: "campaign-approval-alpha", campaignStepId: "step-approval-2" });
-  assert.equal(step.status, "approved");
-  assert.equal(step.programRunId, "program-campaign-alpha-run-2");
-  assert.equal(step.approvalId, "program-campaign-alpha-approval-2");
-  assert.equal(step.packetId, "task-campaign-approval");
-  assert.equal(step.nextAction, "Run explicit foreground autonomy for this approved step.");
-  assert.equal(campaigns.items[0].programIds.includes("program-campaign-alpha"), true);
-  assert.equal(runtime.summary.lastRunId, runtimeBeforeApproval.summary.lastRunId);
-  assert.equal(runtime.summary.requestCount, runtimeBeforeApproval.summary.requestCount);
-});
-
-test("explicit runtime execution reflects program outcomes into linked campaign steps", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Campaign Runtime", objective: "Reflect explicit runtime outcomes into campaign state." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-campaign-runtime",
-    title: "Campaign runtime packet",
-    nextAction: "Refresh the research brief for the campaign.",
-    programId: "program-campaign-runtime-alpha",
-    programTitle: "Program campaign runtime alpha",
-    programObjective: "Refresh the research brief for the campaign objective.",
-    programRunId: "program-campaign-runtime-alpha-run-1",
-    approvalId: "program-campaign-runtime-alpha-approval-1",
-    allowedStepType: "refresh-research-brief",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-  runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-
-  planCampaign(root, {
-    campaignId: "campaign-runtime-alpha",
-    actorRole: "planner",
-    title: "Campaign runtime alpha",
-    objective: "Track one explicitly executed program step.",
-    status: "active",
-    steps: [{
-      id: "step-runtime-2",
-      status: "planned",
-      programId: "program-campaign-runtime-alpha",
-      allowedStepType: "refresh-research-brief",
-      nextAction: "Await explicit runtime execution."
-    }]
-  });
-  issueProgramApproval(root, {
-    packetId: "task-campaign-runtime",
-    programId: "program-campaign-runtime-alpha",
-    programRunId: "program-campaign-runtime-alpha-run-2",
-    approvalId: "program-campaign-runtime-alpha-approval-2",
-    campaignId: "campaign-runtime-alpha",
-    campaignStepId: "step-runtime-2",
-    campaignStepNextAction: "Run explicit foreground autonomy for this campaign step.",
-    actorRole: "planner",
-    workerRole: "researcher",
-    allowedStepType: "refresh-research-brief",
-    executeBy: "2099-01-02T00:00:00.000Z",
-    reviewAfter: "2099-01-02T12:00:00.000Z",
-    summary: "Issued campaign-bound approval for runtime reflection."
-  });
-
-  const beforeRuntime = queryCampaigns(root, { campaignId: "campaign-runtime-alpha" });
-  const beforeStep = beforeRuntime.items[0].steps.find((item) => item.id === "step-runtime-2");
-  assert.equal(beforeStep.status, "approved");
-
-  const runtime = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  const campaigns = queryCampaigns(root, { campaignId: "campaign-runtime-alpha" });
-  const step = campaigns.items[0].steps.find((item) => item.id === "step-runtime-2");
-
-  assert.equal(runtime.status, "completed");
-  assert.equal(runtime.programSnapshot.campaignReflection.status, "reflected");
-  assert.equal(step.status, "review-needed");
-  assert.equal(step.programRunId, "program-campaign-runtime-alpha-run-2");
-  assert.equal(step.packetId, "task-campaign-runtime");
-  assert.match(step.nextAction, /requires explicit review/);
-  assert.equal(campaigns.items[0].status, "review-needed");
-  assert.equal(campaigns.items[0].runs.some((item) => item.id === "program-campaign-runtime-alpha-run-2" && item.status === "review-needed"), true);
-  assert.equal(runtime.artifactPaths.includes(ARTIFACT_PATHS.campaignsIndex), true);
-});
-
-test("issueProgramApproval re-arms an existing packet and surfaces the approval through queryProgramApprovals", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Issue Approval", objective: "Issue one explicit approval for an existing packet." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-issue-approval",
-    title: "Approval packet",
-    nextAction: "Initial program step.",
-    programId: "program-issue-alpha",
-    programRunId: "program-issue-alpha-run-1",
-    approvalId: "program-issue-alpha-approval-1",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-  runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-
-  const issued = issueProgramApproval(root, {
-    packetId: "task-issue-approval",
-    programId: "program-issue-alpha",
-    programRunId: "program-issue-alpha-run-2",
-    approvalId: "program-issue-alpha-approval-2",
-    actorRole: "planner",
-    workerRole: "researcher",
-    executeBy: "2099-01-02T00:00:00.000Z",
-    reviewAfter: "2099-01-02T12:00:00.000Z",
-    summary: "Issued a fresh approval for the next bounded step."
-  });
-
-  const packet = readJson(root, ".dove/task-packets/packets/task-issue-approval.json", null);
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  const approvalsView = queryProgramApprovals(root, { programId: "program-issue-alpha" });
-
-  assert.equal(issued.status, "issued");
-  assert.equal(packet.lifecycleStatus, "waiting");
-  assert.equal(packet.lineage.programRunId, "program-issue-alpha-run-2");
-  assert.equal(packet.materialization.followThroughId, issued.followThroughId);
-  assert.equal((followThrough.items ?? []).find((item) => item.id === issued.followThroughId).status, "accepted-for-execution");
-  assert.equal(approvalsView.items.some((item) => item.id === "program-issue-alpha-approval-2" && item.status === "approved"), true);
-});
-
-test("materializeGuidancePacket persists approved refresh-wiki program steps", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Wiki Materialize", objective: "Seed a wiki-refresh program step." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-program-wiki-packet",
-    title: "Wiki program packet",
-    nextAction: "Refresh the wiki under one approved program step.",
-    programId: "research-program-wiki",
-    programTitle: "Research program wiki",
-    programObjective: "Refresh wiki surfaces through one approved step.",
-    programAgenda: ["Carry current agenda into wiki surfaces."],
-    programEvidenceBacklog: ["Need a wiki-backed query pack refresh."],
-    programRunId: "research-program-wiki-run-1",
-    approvalId: "research-program-wiki-approval-1",
-    allowedStepType: "refresh-wiki",
-    programApprovalSummary: "Approved one bounded wiki refresh step.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const runs = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-wiki-run-1").allowedStepType, "refresh-wiki");
-  assert.equal((approvals.items ?? []).find((item) => item.id === "research-program-wiki-approval-1").allowedStepType, "refresh-wiki");
-});
-
-test("materializeGuidancePacket persists approved upsert-note program steps and bounded payload", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Note Materialize", objective: "Seed a note-writing program step." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const packetId = seedTaskPacket(root, "program-note-source");
-  const sourceId = registerSource(root, { packetId, title: "A source for notes", citationKey: "note-src" }).id;
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-program-note-packet",
-    title: "Note program packet",
-    nextAction: "Capture one source-linked note under one approved program step.",
-    programId: "research-program-note",
-    programTitle: "Research program note",
-    programObjective: "Capture one durable source-linked note through one approved step.",
-    programRunId: "research-program-note-run-1",
-    approvalId: "research-program-note-approval-1",
-    allowedStepType: "upsert-note",
-    noteTitle: "Program note",
-    noteSectionId: "introduction",
-    noteSourceIds: [sourceId],
-    noteSummary: "A bounded source-linked note.",
-    noteOpenQuestions: ["What evidence remains missing?"],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const runs = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-note-run-1").allowedStepType, "upsert-note");
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-note-run-1").stepPayload.summary, "A bounded source-linked note.");
-  assert.equal((approvals.items ?? []).find((item) => item.id === "research-program-note-approval-1").allowedStepType, "upsert-note");
-});
-
-test("materializeGuidancePacket persists approved run-experiment-audit steps and bounded payload", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Audit Materialize", objective: "Seed an experiment-audit program step." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    packetId: "task-program-audit-packet",
-    title: "Audit program packet",
-    nextAction: "Run one bounded experiment audit.",
-    programId: "research-program-audit",
-    programTitle: "Research program audit",
-    programObjective: "Run one durable experiment audit through one approved step.",
-    programRunId: "research-program-audit-run-1",
-    approvalId: "research-program-audit-approval-1",
-    allowedStepType: "run-experiment-audit",
-    auditResultId: "result-audit-1",
-    auditReviewedArtifactRefs: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentLog],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const runs = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-audit-run-1").allowedStepType, "run-experiment-audit");
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-audit-run-1").stepPayload.resultId, "result-audit-1");
-  assert.equal((approvals.items ?? []).find((item) => item.id === "research-program-audit-approval-1").allowedStepType, "run-experiment-audit");
-});
-
-test("materializeGuidancePacket persists approved bridge-result-to-claim steps and bounded payload", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Bridge Materialize", objective: "Seed a result-bridge program step." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "planner",
-    packetId: "task-program-bridge-packet",
-    title: "Bridge program packet",
-    nextAction: "Bridge one result into claim state through one approved step.",
-    programId: "research-program-bridge",
-    programTitle: "Research program bridge",
-    programObjective: "Bridge one audited result into explicit claim state.",
-    programRunId: "research-program-bridge-run-1",
-    approvalId: "research-program-bridge-approval-1",
-    allowedStepType: "bridge-result-to-claim",
-    bridgeResultId: "result-bridge-1",
-    bridgeAuditIds: ["audit-bridge-1"],
-    bridgeReason: "Promote one audited result into claim state.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const runs = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-bridge-run-1").allowedStepType, "bridge-result-to-claim");
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-bridge-run-1").stepPayload.resultId, "result-bridge-1");
-  assert.deepEqual((runs.items ?? []).find((item) => item.id === "research-program-bridge-run-1").stepPayload.auditIds, ["audit-bridge-1"]);
-  assert.equal((approvals.items ?? []).find((item) => item.id === "research-program-bridge-approval-1").allowedStepType, "bridge-result-to-claim");
-});
-
-test("materializeGuidancePacket persists approved run-review-loop steps and bounded payload", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Review Materialize", objective: "Seed a review-loop program step." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "planner",
-    packetId: "task-program-review-packet",
-    title: "Review program packet",
-    nextAction: "Run one bounded review loop.",
-    programId: "research-program-review",
-    programTitle: "Research program review",
-    programObjective: "Run one durable review loop through one approved step.",
-    programRunId: "research-program-review-run-1",
-    approvalId: "research-program-review-approval-1",
-    allowedStepType: "run-review-loop",
-    reviewScope: "current paper pipeline",
-    reviewStage: "review-loop",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const runs = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-review-run-1").allowedStepType, "run-review-loop");
-  assert.equal((runs.items ?? []).find((item) => item.id === "research-program-review-run-1").stepPayload.scope, "current paper pipeline");
-  assert.equal((approvals.items ?? []).find((item) => item.id === "research-program-review-approval-1").allowedStepType, "run-review-loop");
-});
-
-test("materializeGuidancePacket rejects unsupported program step types", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Step Reject", objective: "Reject unsupported program step types." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
+  const packetId = "task-conflicting-materialization";
+  const packetPath = path.join(root, `.dove/task-packets/packets/${packetId}.json`);
+  const packetIndexBefore = fs.readFileSync(
+    path.join(root, ARTIFACT_PATHS.taskPacketsIndex)
+  );
+  const followThroughBefore = fs.readFileSync(
+    path.join(root, ARTIFACT_PATHS.metaOperatorFollowThrough)
+  );
+  const transitionsBefore = fs.readFileSync(
+    path.join(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions)
+  );
+  const workspaceFilesBefore = new Map(
+    fs.readdirSync(path.join(root, ".dove"), { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => {
+        const fullPath = path.join(entry.parentPath, entry.name);
+        return [path.relative(root, fullPath), fs.readFileSync(fullPath)];
+      })
+  );
 
   assert.throws(() => materializeGuidancePacket(root, {
     sourceType: "remediation-pack",
+    sourceId: topPack.id,
+    actorRole,
+    packetId,
+    executeBy: "2099-01-01T00:00:00.000Z",
+    reviewAfter: "2099-01-01T12:00:00.000Z"
+  }), /cannot change target/);
+
+  assert.deepEqual(
+    fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex)),
+    packetIndexBefore
+  );
+  assert.equal(fs.existsSync(packetPath), false);
+  assert.deepEqual(
+    fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThrough)),
+    followThroughBefore
+  );
+  assert.deepEqual(
+    fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions)),
+    transitionsBefore
+  );
+  const workspaceFilesAfter = new Map(
+    fs.readdirSync(path.join(root, ".dove"), { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => {
+        const fullPath = path.join(entry.parentPath, entry.name);
+        return [path.relative(root, fullPath), fs.readFileSync(fullPath)];
+      })
+  );
+  assert.deepEqual(workspaceFilesAfter, workspaceFilesBefore);
+});
+
+test("materializeGuidancePacket rejects authority fields before workspace bootstrap", () => {
+  const authorityFields = [
+    "programId",
+    "programRunId",
+    "approvalId",
+    "allowedStepType",
+    "autonomyPolicy"
+  ];
+
+  for (const field of authorityFields) {
+    const root = tempRoot();
+    assert.throws(
+      () => materializeGuidancePacket(root, {
+        sourceType: "remediation-pack",
+        sourceId: "caller-controlled",
+        actorRole: "planner",
+        executeBy: "2099-01-01T00:00:00.000Z",
+        reviewAfter: "2099-01-01T12:00:00.000Z",
+        [field]: `forged-${field}`
+      }),
+      new RegExp(`rejects non-packet fields: ${field}`)
+    );
+    assert.equal(
+      fs.existsSync(path.join(root, ".dove")),
+      false,
+      `${field} must fail before workspace bootstrap`
+    );
+  }
+});
+
+test("materializeGuidancePacket remains packet-only and preserves program operating state", () => {
+  const root = tempRoot();
+  ensureWorkspace(root);
+  initProject(root, {
+    title: "Packet-only materialization",
+    objective: "Materialize guidance without minting runtime authority."
+  });
+  const remediationPack = seedRoleScopedAutonomyGuidance(
+    root,
+    "researcher"
+  );
+  const programsBefore = fs.readFileSync(
+    path.join(root, ARTIFACT_PATHS.programsIndex),
+    "utf8"
+  );
+  const runsBefore = fs.readFileSync(
+    path.join(root, ARTIFACT_PATHS.programRuns),
+    "utf8"
+  );
+  const approvalsBefore = fs.readFileSync(
+    path.join(root, ARTIFACT_PATHS.programApprovals),
+    "utf8"
+  );
+
+  const result = materializeGuidancePacket(root, {
+    sourceType: "remediation-pack",
     sourceId: remediationPack.id,
     actorRole: "planner",
     workerRole: "researcher",
-    packetId: "task-program-invalid-step",
-    title: "Invalid program packet",
-    nextAction: "This should be rejected.",
-    programId: "research-program-invalid",
-    programRunId: "research-program-invalid-run-1",
-    approvalId: "research-program-invalid-approval-1",
-    allowedStepType: "unknown-step",
+    packetId: "task-packet-only-materialization",
+    title: "Packet-only materialization",
+    nextAction: "Hand the packet to the normal host workflow.",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /Unsupported allowedStepType/);
+  });
+
+  const packet = readJson(root, result.packetPath, null);
+  assert.equal(result.status, "materialized");
+  assert.equal(packet.id, result.packetId);
+  assert.equal(packet.lineage?.programId, undefined);
+  assert.equal(packet.materialization?.programId, undefined);
+  assert.equal(
+    fs.readFileSync(
+      path.join(root, ARTIFACT_PATHS.programsIndex),
+      "utf8"
+    ),
+    programsBefore
+  );
+  assert.equal(
+    fs.readFileSync(
+      path.join(root, ARTIFACT_PATHS.programRuns),
+      "utf8"
+    ),
+    runsBefore
+  );
+  assert.equal(
+    fs.readFileSync(
+      path.join(root, ARTIFACT_PATHS.programApprovals),
+      "utf8"
+    ),
+    approvalsBefore
+  );
 });
 
 test("materializeGuidancePacket blocks unrelated follow-through debt and superseded guidance", () => {
@@ -3404,10 +4460,31 @@ test("materializeGuidancePacket blocks unrelated follow-through debt and superse
   recordOperatorFollowThrough(supersededRoot, {
     sourceType: "remediation-pack",
     sourceId: supersededPack.id,
-    status: "superseded",
+    status: "acknowledged",
     actorRole: supersededPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner",
-    decisionSummary: "This guidance was superseded by a newer path."
+    decisionSummary: "This guidance was acknowledged before an internal supersession transition."
   });
+  const supersededFollowThrough = readJson(
+    supersededRoot,
+    ARTIFACT_PATHS.metaOperatorFollowThrough,
+    null
+  );
+  writeJson(
+    supersededRoot,
+    ARTIFACT_PATHS.metaOperatorFollowThrough,
+    {
+      ...supersededFollowThrough,
+      items: (supersededFollowThrough.items ?? []).map(
+        (item) => item.sourceId === supersededPack.id
+          ? {
+              ...item,
+              status: "superseded",
+              updatedAt: new Date().toISOString()
+            }
+          : item
+      )
+    }
+  );
 
   assert.throws(() => materializeGuidancePacket(supersededRoot, {
     sourceType: "remediation-pack",
@@ -3418,2256 +4495,29 @@ test("materializeGuidancePacket blocks unrelated follow-through debt and superse
   }), /superseded guidance/);
 });
 
-test("runAutonomyControlPlaneOnce records a deterministic no-op when no safe packet exists", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy No-op", objective: "Exit safely when there is no eligible packet." });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-
-  assert.equal(result.status, "noop");
-  assert.equal(result.outcome, "no-eligible-packet");
-
-  const runtimeResults = readJson(root, ARTIFACT_PATHS.runtimeResults, null);
-  const runtimeEvents = readJson(root, ARTIFACT_PATHS.runtimeEvents, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-
-  assert.equal(runtimeResults.entries.length >= 1, true);
-  assert.equal(runtimeResults.summary.noopCount >= 1, true);
-  assert.equal(runtimeEvents.summary.eventCount >= 2, true);
-  assert.equal(workspaceIndex.runtime.lastStatus, "noop");
-  assert.equal(workspaceIndex.runtime.lastOutcome, "no-eligible-packet");
-  assert.equal(workspaceIndex.runtime.activeLeaseCount, 0);
-});
-
-test("runAutonomyForeground materializes then executes the same packet in one explicit foreground invocation", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Foreground", objective: "Chain materialize then execute in one foreground run." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-
-  recordOperatorFollowThrough(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    status: "accepted-for-execution",
-    actorRole,
-    decisionSummary: "Allow one planned packet to materialize and then execute in the same foreground invocation.",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-queue-discipline.json",
-    linkedTargetId: "task-queue-discipline",
-    plannedTarget: true,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const result = runAutonomyForeground(root, { actorRole: "planner", maxSteps: 2 });
-  assert.equal(result.status, "completed");
-  assert.equal(result.stepCount, 2);
-  assert.equal(result.steps[0].outcome, "materialized-one-packet");
-  assert.equal(result.steps[1].outcome, "executed-one-packet-step");
-  assert.equal(result.finalPacketId, "task-queue-discipline");
-  assert.equal(result.stopReason, "executed-one-packet-step");
-
-  const continuation = readJson(root, ARTIFACT_PATHS.runtimeContinuation, null);
-  assert.equal(continuation.summary.currentKind, "review-follow-through");
-  assert.equal(continuation.summary.currentPacketId, "task-queue-discipline");
-});
-
-test("runAutonomyControlPlaneOnce leaves a multi-step program authority envelope active after a non-final approved step", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Envelope Active", objective: "Keep a bounded authority envelope active across multiple explicit steps." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-envelope-active",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Program envelope packet",
-    nextAction: "Run a bounded multi-step program envelope.",
-    actorRole: "planner",
-    packetAssignedRole: "researcher",
-    workerRole: "researcher",
-    followThroughId: "follow-through-task-program-envelope-active"
-  });
-
-  issueProgramApproval(root, {
-    packetId: seeded.packetId,
-    programId: "program-envelope-active",
-    programTitle: "Program envelope active",
-    programObjective: "Advance two explicit bounded steps before review.",
-    programRunId: "program-envelope-active-run-1",
-    approvalId: "program-envelope-active-approval-1",
-    actorRole: "planner",
-    workerRole: "researcher",
-    stepSequence: [
-      { allowedStepType: "refresh-research-brief", stepPayload: null },
-      { allowedStepType: "refresh-wiki", stepPayload: null }
-    ],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approve two bounded program-scoped steps before review."
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programApprovals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const packet = readJson(root, seeded.packetPath, null);
-  const continuation = readJson(root, ARTIFACT_PATHS.runtimeContinuation, null);
-
-  assert.equal(result.outcome, "executed-program-step");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-envelope-active-run-1").status, "active");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-envelope-active-run-1").authorityEnvelope.remainingStepCount, 1);
-  assert.equal((programApprovals.items ?? []).find((item) => item.id === "program-envelope-active-approval-1").status, "approved");
-  assert.equal((programApprovals.items ?? []).find((item) => item.id === "program-envelope-active-approval-1").authorityEnvelope.remainingStepCount, 1);
-  assert.equal(packet.lifecycleStatus, "waiting");
-  assert.equal(packet.continuationState.status, "ready-to-resume");
-  assert.equal(continuation.summary.currentKind, "continue-program-envelope");
-  assert.equal(continuation.summary.currentProgramRunId, "program-envelope-active-run-1");
-});
-
-test("runAutonomyForeground can exhaust a bounded multi-step program authority envelope in one explicit invocation", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Envelope Foreground", objective: "Drain one bounded program-scoped authority envelope in the foreground." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const evidencePacketId = seedTaskPacket(root, "program-envelope-foreground-evidence");
-  registerSource(root, { packetId: evidencePacketId, title: "Foreground review source", citationKey: "foreground-envelope-src" });
-  upsertNote(root, {
-    packetId: evidencePacketId,
-    title: "Foreground review note",
-    sectionId: "introduction",
-    sourceIds: ["foreground-envelope-src"],
-    summary: "A note that gives the review loop concrete evidence to inspect.",
-    skipFollowThroughReady: true,
-    skipSyncPhase: true
-  });
-
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-envelope-foreground",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Program envelope foreground packet",
-    nextAction: "Run the full bounded program envelope in one foreground invocation.",
-    actorRole: "planner",
-    packetAssignedRole: "researcher",
-    workerRole: "researcher",
-    followThroughId: "follow-through-task-program-envelope-foreground"
-  });
-
-  issueProgramApproval(root, {
-    packetId: seeded.packetId,
-    programId: "program-envelope-foreground",
-    programTitle: "Program envelope foreground",
-    programObjective: "Refresh the brief, refresh the wiki, and finish with one review loop before stopping.",
-    programRunId: "program-envelope-foreground-run-1",
-    approvalId: "program-envelope-foreground-approval-1",
-    actorRole: "planner",
-    workerRole: "researcher",
-    stepSequence: [
-      { allowedStepType: "refresh-research-brief", stepPayload: null },
-      { allowedStepType: "refresh-wiki", stepPayload: null },
-      { allowedStepType: "run-review-loop", stepPayload: { scope: "current paper pipeline", stage: "review-loop" } }
-    ],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approve a three-step foreground program envelope."
-  });
-
-  const result = runAutonomyForeground(root, { actorRole: "planner", maxSteps: 5, packetId: seeded.packetId });
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programApprovals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const continuation = readJson(root, ARTIFACT_PATHS.runtimeContinuation, null);
-  const wiki = fs.readFileSync(path.join(root, ARTIFACT_PATHS.wiki), "utf8");
-  const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, null);
-
-  assert.equal(result.status, "completed");
-  assert.equal(result.stepCount, 3);
-  assert.deepEqual(result.steps.map((item) => item.outcome), ["executed-program-step", "executed-program-step", "executed-program-step"]);
-  assert.equal(result.finalPacketId, seeded.packetId);
-  assert.match(wiki, /Research brief|Objective/);
-  assert.equal(reviewState.lastVerdict != null, true);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-envelope-foreground-run-1").status, "completed");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-envelope-foreground-run-1").closureState, "achieved");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-envelope-foreground-run-1").authorityEnvelope.remainingStepCount, 0);
-  assert.equal((programApprovals.items ?? []).find((item) => item.id === "program-envelope-foreground-approval-1").status, "consumed");
-  assert.equal(continuation.summary.continuationCount, 0);
-});
-
-test("runAutonomyForeground marks a final coherent review-loop closure as achieved", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Closure Achieved", objective: "Reach a coherent final review closure." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "reviewer");
-
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-closure-achieved",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Closure achieved packet",
-    nextAction: "Run one coherent review loop as the final bounded step.",
-    actorRole: "planner",
-    packetAssignedRole: "reviewer",
-    workerRole: "reviewer",
-    followThroughId: "follow-through-task-program-closure-achieved"
-  });
-
-  issueProgramApproval(root, {
-    packetId: seeded.packetId,
-    programId: "program-closure-achieved",
-    programTitle: "Program closure achieved",
-    programObjective: "Close the program with a coherent review verdict.",
-    programRunId: "program-closure-achieved-run-1",
-    approvalId: "program-closure-achieved-approval-1",
-    actorRole: "planner",
-    workerRole: "reviewer",
-    stepSequence: [
-      { allowedStepType: "refresh-wiki", stepPayload: null },
-      { allowedStepType: "run-review-loop", stepPayload: { scope: "current paper pipeline", stage: "review-loop" } }
-    ],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approve one final coherent review step."
-  });
-
-  const result = runAutonomyForeground(root, { actorRole: "planner", maxSteps: 3, packetId: seeded.packetId });
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programs = readJson(root, ARTIFACT_PATHS.programsIndex, null);
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const continuation = readJson(root, ARTIFACT_PATHS.runtimeContinuation, null);
-
-  assert.equal(result.stepCount, 2);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-closure-achieved-run-1").status, "completed");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-closure-achieved-run-1").closureState, "achieved");
-  assert.equal((programs.items ?? []).find((item) => item.id === "program-closure-achieved").status, "achieved");
-  assert.equal((programs.items ?? []).find((item) => item.id === "program-closure-achieved").closureState, "achieved");
-  assert.equal((approvals.items ?? []).find((item) => item.id === "program-closure-achieved-approval-1").status, "consumed");
-  assert.equal(continuation.summary.continuationCount, 0);
-});
-
-test("runAutonomyForeground marks a non-supporting final bridge closure as accepted-risk", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Closure Accepted Risk", objective: "Classify a non-supporting final bridge outcome honestly." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "experiment-planner");
-
-  writeJson(root, ARTIFACT_PATHS.experimentResults, {
-    version: 1,
-    items: [{ id: "result-closure-risk", experimentId: "exp-closure-risk", claimId: "claim-closure-risk", outcome: "refutes", summary: "Refuting result", evidenceLinks: [ARTIFACT_PATHS.experimentLog], comparisonTargets: [], latestAuditId: null, latestBridgeId: null }],
-    updatedAt: null
-  });
-  writeJson(root, ARTIFACT_PATHS.experimentAudits, {
-    version: 1,
-    items: [{ id: "audit-closure-risk", experimentId: "exp-closure-risk", resultId: "result-closure-risk", claimId: "claim-closure-risk", reviewedArtifactRefs: [ARTIFACT_PATHS.experimentResults], requiredArtifactRefs: [ARTIFACT_PATHS.experimentResults], missingArtifactRefs: [], auditFindings: [], integrityFlags: [], confidence: "high", outcomeMapping: "refutes", auditVerdict: "clean", bridgeReadiness: "ready", resultOutcome: "refutes", evidenceLinkCount: 1, comparisonTargetCount: 0, claimStateBefore: { status: "draft", confidence: "medium" }, updatedAt: new Date(0).toISOString() }],
-    updatedAt: null
-  });
-  writeJson(root, ARTIFACT_PATHS.evidence, {
-    version: 3,
-    claims: [{ id: "claim-closure-risk", text: "Claim closure risk", status: "draft", confidence: "medium", sectionId: "results", sourceIds: [], noteIds: [], experimentIds: ["exp-closure-risk"], evidenceLinks: [], gap: "" }],
-    updatedAt: null
-  });
-
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-closure-risk",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Closure accepted-risk packet",
-    nextAction: "Run a final non-supporting bridge step.",
-    actorRole: "planner",
-    packetAssignedRole: "experiment-planner",
-    workerRole: "experiment-planner",
-    followThroughId: "follow-through-task-program-closure-risk"
-  });
-
-  issueProgramApproval(root, {
-    packetId: seeded.packetId,
-    programId: "program-closure-risk",
-    programTitle: "Program closure risk",
-    programObjective: "Stop with an accepted-risk bridge outcome.",
-    programRunId: "program-closure-risk-run-1",
-    approvalId: "program-closure-risk-approval-1",
-    actorRole: "planner",
-    workerRole: "experiment-planner",
-    stepSequence: [
-      { allowedStepType: "refresh-research-brief", stepPayload: null },
-      { allowedStepType: "bridge-result-to-claim", stepPayload: { resultId: "result-closure-risk", auditIds: ["audit-closure-risk"], reason: "Record the non-supporting outcome honestly." } }
-    ],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approve one final bridge step with a non-supporting result."
-  });
-
-  const result = runAutonomyForeground(root, { actorRole: "planner", maxSteps: 3, packetId: seeded.packetId });
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programs = readJson(root, ARTIFACT_PATHS.programsIndex, null);
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const continuation = readJson(root, ARTIFACT_PATHS.runtimeContinuation, null);
-
-  assert.equal(result.stepCount, 2);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-closure-risk-run-1").closureState, "accepted-risk");
-  assert.equal((programs.items ?? []).find((item) => item.id === "program-closure-risk").closureState, "accepted-risk");
-  assert.equal((programs.items ?? []).find((item) => item.id === "program-closure-risk").status, "accepted-risk");
-  assert.equal((approvals.items ?? []).find((item) => item.id === "program-closure-risk-approval-1").status, "consumed");
-  assert.equal(continuation.summary.continuationCount, 0);
-});
-
-test("runAutonomyForeground upgrades a final non-review closure to achieved when the objective is explicitly satisfied", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Objective Achieved", objective: "Finish with an explicit objective-aware achieved closure." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-objective-achieved",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Objective achieved packet",
-    nextAction: "Refresh the wiki as the final goal-bounded step.",
-    actorRole: "planner",
-    packetAssignedRole: "researcher",
-    workerRole: "researcher",
-    followThroughId: "follow-through-task-program-objective-achieved"
-  });
-
-  issueProgramApproval(root, {
-    packetId: seeded.packetId,
-    programId: "program-objective-achieved",
-    programTitle: "Program objective achieved",
-    programObjective: "Refresh wiki surfaces and query pack for this objective-aware closure.",
-    programRunId: "program-objective-achieved-run-1",
-    approvalId: "program-objective-achieved-approval-1",
-    actorRole: "planner",
-    workerRole: "researcher",
-    stepSequence: [
-      { allowedStepType: "refresh-research-brief", stepPayload: null },
-      { allowedStepType: "refresh-wiki", stepPayload: null }
-    ],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approve a final wiki closure that explicitly matches the objective."
-  });
-
-  const result = runAutonomyForeground(root, { actorRole: "planner", maxSteps: 4, packetId: seeded.packetId });
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programs = readJson(root, ARTIFACT_PATHS.programsIndex, null);
-
-  assert.equal(result.stepCount, 2);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-objective-achieved-run-1").closureState, "achieved");
-  assert.equal((programs.items ?? []).find((item) => item.id === "program-objective-achieved").closureState, "achieved");
-});
-
-test("runAutonomyForeground marks a final non-review closure as objective-unsatisfied when the objective is not clearly satisfied", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Objective Unsatisfied", objective: "Stop honestly when the final step does not satisfy the objective." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-objective-unsatisfied",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Objective unsatisfied packet",
-    nextAction: "End on a final step that does not clearly satisfy the objective.",
-    actorRole: "planner",
-    packetAssignedRole: "researcher",
-    workerRole: "researcher",
-    followThroughId: "follow-through-task-program-objective-unsatisfied"
-  });
-
-  issueProgramApproval(root, {
-    packetId: seeded.packetId,
-    programId: "program-objective-unsatisfied",
-    programTitle: "Program objective unsatisfied",
-    programObjective: "Capture one source-linked note before stopping.",
-    programRunId: "program-objective-unsatisfied-run-1",
-    approvalId: "program-objective-unsatisfied-approval-1",
-    actorRole: "planner",
-    workerRole: "researcher",
-    stepSequence: [
-      { allowedStepType: "refresh-research-brief", stepPayload: null },
-      { allowedStepType: "refresh-wiki", stepPayload: null }
-    ],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approve a final step sequence that does not match the objective."
-  });
-
-  const result = runAutonomyForeground(root, { actorRole: "planner", maxSteps: 4, packetId: seeded.packetId });
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programs = readJson(root, ARTIFACT_PATHS.programsIndex, null);
-
-  assert.equal(result.stepCount, 2);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-objective-unsatisfied-run-1").closureState, "objective-unsatisfied");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-objective-unsatisfied-run-1").status, "completed");
-  assert.equal((programs.items ?? []).find((item) => item.id === "program-objective-unsatisfied").closureState, "objective-unsatisfied");
-  assert.equal((programs.items ?? []).find((item) => item.id === "program-objective-unsatisfied").status, "accepted-risk");
-});
-
-test("runAutonomyForeground preserves superseded closure when the durable program state is already superseded", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Superseded Closure", objective: "Keep superseded durable state honest at final closure." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-superseded-closure",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Superseded closure packet",
-    nextAction: "Finish one superseded program envelope honestly.",
-    actorRole: "planner",
-    packetAssignedRole: "researcher",
-    workerRole: "researcher",
-    followThroughId: "follow-through-task-program-superseded-closure"
-  });
-
-  issueProgramApproval(root, {
-    packetId: seeded.packetId,
-    programId: "program-superseded-closure",
-    programTitle: "Program superseded closure",
-    programObjective: "Refresh wiki surfaces for a superseded lineage.",
-    programRunId: "program-superseded-closure-run-1",
-    approvalId: "program-superseded-closure-approval-1",
-    actorRole: "planner",
-    workerRole: "researcher",
-    stepSequence: [
-      { allowedStepType: "refresh-research-brief", stepPayload: null },
-      { allowedStepType: "refresh-wiki", stepPayload: null }
-    ],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approve a superseded program envelope."
-  });
-
-  const programsBefore = readJson(root, ARTIFACT_PATHS.programsIndex, null);
-  writeJson(root, ARTIFACT_PATHS.programsIndex, {
-    ...programsBefore,
-    items: (programsBefore.items ?? []).map((item) => item.id === "program-superseded-closure"
-      ? { ...item, status: "superseded", closureState: "superseded", closureReason: "A newer program replaced this objective." }
-      : item)
-  });
-
-  const result = runAutonomyForeground(root, { actorRole: "planner", maxSteps: 4, packetId: seeded.packetId });
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programs = readJson(root, ARTIFACT_PATHS.programsIndex, null);
-
-  assert.equal(result.stepCount, 2);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-superseded-closure-run-1").closureState, "superseded");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-superseded-closure-run-1").status, "superseded");
-  assert.equal((programs.items ?? []).find((item) => item.id === "program-superseded-closure").closureState, "superseded");
-  assert.equal((programs.items ?? []).find((item) => item.id === "program-superseded-closure").status, "superseded");
-});
-
-test("runAutonomyControlPlaneOnce reports lease conflicts without executing work", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Lease Conflict", objective: "Respect an existing runtime lease." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-autonomy-lease",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Lease conflict packet",
-    nextAction: "Resolve the lease before attempting another run.",
-    actorRole
-  });
-
-  writeJson(root, ARTIFACT_PATHS.runtimeLeases, {
-    version: 1,
-    explicitInvocationOnly: true,
-    items: [{
-      id: "lease-existing",
-      runId: "existing-run",
-      packetId: seeded.packetId,
-      actorRole,
-      status: "active",
-      acquiredAt: "2099-01-01T00:00:00.000Z",
-      expiresAt: "2099-01-01T00:10:00.000Z",
-      releasedAt: null,
-      releaseReason: null
-    }],
-    summary: {
-      activeLeaseCount: 1,
-      activePacketIds: [seeded.packetId],
-      activeLeaseIds: ["lease-existing"],
-      overview: "1 active autonomous control-plane lease.",
-      leasesPath: ARTIFACT_PATHS.runtimeLeases
-    },
-    updatedAt: "2099-01-01T00:00:00.000Z"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-
-  assert.equal(result.status, "noop");
-  assert.equal(result.outcome, "lease-conflict");
-  assert.equal(result.packetId, seeded.packetId);
-
-  const runtimeResults = readJson(root, ARTIFACT_PATHS.runtimeResults, null);
-  assert.equal(runtimeResults.entries.at(-1).outcome, "lease-conflict");
-});
-
-test("runAutonomyControlPlaneOnce executes one bounded packet step and writes durable runtime output", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Single Packet", objective: "Assess one packet and stop." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-autonomy-single",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Single autonomy packet",
-    nextAction: "Review the controller assessment and choose the next manual command.",
-    actorRole
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "executed-one-packet-step");
-  assert.equal(result.packetId, seeded.packetId);
-  assert.equal(result.followThroughId, seeded.followThroughId);
-  assert.equal(result.nextRecommendedCommand, "project:dove.lessons");
-
-  const runtimeResults = readJson(root, ARTIFACT_PATHS.runtimeResults, null);
-  const runtimeEvents = readJson(root, ARTIFACT_PATHS.runtimeEvents, null);
-  const runtimeLeases = readJson(root, ARTIFACT_PATHS.runtimeLeases, null);
-  const runtimeControllerState = readJson(root, ARTIFACT_PATHS.runtimeControllerState, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-  const packet = readJson(root, seeded.packetPath, null);
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  const followThroughItem = (followThrough.items ?? []).find((item) => item.id === seeded.followThroughId);
-
-  assert.equal(runtimeResults.summary.completedCount, 1);
-  assert.equal(runtimeResults.entries.at(-1).packetSnapshot.id, seeded.packetId);
-  assert.equal(runtimeResults.entries.at(-1).checkpointSnapshot.packetId, seeded.packetId);
-  assert.equal(runtimeResults.entries.at(-1).retryState.attemptCount, 1);
-  assert.equal(runtimeEvents.entries.some((entry) => entry.eventType === "lease-acquired" && entry.packetId === seeded.packetId), true);
-  assert.equal(runtimeEvents.entries.some((entry) => entry.eventType === "step-executed" && entry.packetId === seeded.packetId), true);
-  assert.equal(runtimeLeases.items.some((item) => item.packetId === seeded.packetId && item.status === "released"), true);
-  assert.equal(runtimeControllerState.summary.requestCount, 0);
-  assert.equal(runtimeControllerState.summary.checkpointCount, 1);
-  assert.equal(runtimeControllerState.summary.escalationCount, 0);
-  assert.equal(runtimeControllerState.summary.lastCheckpointPacketId, seeded.packetId);
-  assert.equal(runtimeControllerState.summary.continuationCount, 1);
-  assert.equal(runtimeControllerState.summary.currentContinuationKind, "review-follow-through");
-  assert.equal(runtimeControllerState.summary.currentContinuationPacketId, seeded.packetId);
-  assert.equal(runtimeControllerState.summary.currentContinuationCommand, "project:dove.lessons");
-  assert.equal(packet.lifecycleStatus, "review-needed");
-  assert.equal(packet.continuationState.status, "review-needed");
-  assert.equal(packet.decisions.some((item) => item.id === `autonomy-step-${result.runId}`), true);
-  assert.equal(followThroughItem.status, "closed");
-  assert.equal(followThroughItem.retryState.attemptCount, 1);
-  assert.equal(followThroughItem.closureArtifactPaths.includes(seeded.packetPath), true);
-  assert.equal(workspaceIndex.runtime.lastStatus, "completed");
-  assert.equal(workspaceIndex.runtime.lastOutcome, "executed-one-packet-step");
-  assert.equal(workspaceIndex.runtime.lastSelectedPacketId, seeded.packetId);
-  assert.equal(workspaceIndex.runtime.requestCount, 0);
-  assert.equal(workspaceIndex.runtime.checkpointCount, 1);
-  assert.equal(workspaceIndex.runtime.escalationCount, 0);
-  assert.equal(workspaceIndex.runtime.lastCheckpointPacketId, seeded.packetId);
-  assert.equal(workspaceIndex.runtime.continuationCount, 1);
-  assert.equal(workspaceIndex.runtime.currentContinuationKind, "review-follow-through");
-  assert.equal(workspaceIndex.runtime.currentContinuationPacketId, seeded.packetId);
-  assert.equal(workspaceIndex.runtime.activeLeaseCount, 0);
-});
-
-test("runAutonomyControlPlaneOnce executes one bounded researcher envelope under planner supervision", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Researcher Envelope", objective: "Advance one researcher-owned packet under planner supervision." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  const materialized = materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-research-envelope",
-    title: "Researcher envelope packet",
-    nextAction: "Refresh the research brief under bounded autonomy supervision.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "executed-one-packet-step");
-  assert.equal(result.packetId, materialized.packetId);
-  assert.equal(result.envelopeSnapshot.workerRole, "researcher");
-
-  const packet = readJson(root, ".dove/task-packets/packets/task-research-envelope.json", null);
-  const packetContext = readJson(root, ".dove/context/packets/task-research-envelope.json", null);
-  const packetActionBundle = readJson(root, ".dove/context/actions/packet-task-research-envelope.json", null);
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  const followThroughItem = (followThrough.items ?? []).find((item) => item.id === materialized.followThroughId);
-  const workspaceIndex = queryWorkspaceIndex(root);
-
-  assert.equal(packet.assignedRole, "researcher");
-  assert.equal(packet.autonomyEnvelope.workerRole, "researcher");
-  assert.equal(packet.autonomyEnvelope.controllerRole, "planner");
-  assert.equal(packet.lifecycleStatus, "review-needed");
-  assert.equal(packetContext.autonomyEnvelope.workerRole, "researcher");
-  assert.equal(packetActionBundle.autonomyEnvelope.workerRole, "researcher");
-  assert.equal(packetActionBundle.requiredReadPaths.includes(".dove/context/roles/researcher.json"), true);
-  assert.equal(followThroughItem.actorRole, "planner");
-  assert.equal(followThroughItem.workerRole, "researcher");
-  assert.equal(workspaceIndex.runtime.lastEnvelopeWorkerRole, "researcher");
-});
-
-test("unified autonomy loop skeleton is visible through workspace, task graph, navigation, and meta optimize surfaces", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Unified Loop Skeleton", objective: "Expose explicit autonomy loops without hidden execution." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-unified-loop",
-    title: "Unified autonomy loop packet",
-    nextAction: "Review one bounded foreground autonomy step.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-  runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-
-  const workspaceIndex = queryWorkspaceIndex(root);
-  const taskGraph = queryTaskGraph(root);
-  const metaOptimize = queryMetaOptimize(root);
-  const navigation = fs.readFileSync(path.join(root, ARTIFACT_PATHS.navigationReport), "utf8");
-  const optimizerReport = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerReport), "utf8");
-
-  const packetLoop = workspaceIndex.autonomyLoops.loops.find((loop) => loop.id === "packet-approval-run-follow-through");
-
-  assert.equal(workspaceIndex.autonomyLoops.contractVersion, "unified-autonomy-loop-v1");
-  assert.equal(workspaceIndex.autonomyLoops.loopCount, 4);
-  assert.equal(workspaceIndex.autonomyLoops.explicitOnly, true);
-  assert.equal(workspaceIndex.autonomyLoops.noHiddenRuntime, true);
-  assert.equal(packetLoop.currentStage, "runtime-result");
-  assert.equal(packetLoop.lifecycleState, "runtime-result-and-follow-through-closed");
-  assert.equal(packetLoop.approvalState, "approval-missing");
-  assert.equal(packetLoop.runtimeState, "runtime-result-recorded");
-  assert.equal(packetLoop.followThroughState, "follow-through-closed");
-  assert.equal(packetLoop.runtimePointers.includes("task-unified-loop"), true);
-  assert.equal(workspaceIndex.autonomyLoops.lifecycleStates.includes("runtime-result-and-follow-through-closed"), true);
-  assert.equal(workspaceIndex.autonomyLoops.runtimePointers.includes("task-unified-loop"), true);
-  assert.match(workspaceIndex.autonomyLoops.safeExecutionPath, /dove\.mission -> project:dove\.auto/);
-  assert.deepEqual(taskGraph.autonomyLoops.loops.map((loop) => loop.id), workspaceIndex.autonomyLoops.loops.map((loop) => loop.id));
-  assert.equal(metaOptimize.autonomyLoops.currentLoopId, "question-evidence-claim");
-  assert.equal(metaOptimize.autonomyLoops.loops.find((loop) => loop.id === "packet-approval-run-follow-through").lifecycleState, "runtime-result-and-follow-through-closed");
-  assert.match(navigation, /Unified autonomy lifecycle state:/);
-  assert.match(navigation, /runtime-result-and-follow-through-closed/);
-  assert.match(optimizerReport, /Unified autonomy lifecycle state:/);
-  assert.match(optimizerReport, /runtime-result-awaiting-follow-through/);
-});
-
-test("runAutonomyControlPlaneOnce executes one approved program-level research brief step and leaves board ownership unchanged", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Step", objective: "Run one approved research-brief program step." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const boardBefore = readJson(root, ARTIFACT_PATHS.orchestrationBoard, null);
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-program-step",
-    title: "Program step packet",
-    nextAction: "Refresh the research brief under approved program supervision.",
-    programId: "program-step-alpha",
-    programTitle: "Program step alpha",
-    programObjective: "Refresh the research brief through one explicit approved program step.",
-    programAgenda: ["Record the program-level research objective explicitly."],
-    programEvidenceBacklog: ["Need one source-backed note after the refresh."],
-    programRunId: "program-step-alpha-run-1",
-    approvalId: "program-step-alpha-approval-1",
-    programApprovalSummary: "Approved one bounded research brief refresh.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "executed-program-step");
-  assert.equal(result.programSnapshot.programId, "program-step-alpha");
-  assert.equal(result.programSnapshot.programRunId, "program-step-alpha-run-1");
-
-  const researchAgenda = readJson(root, ARTIFACT_PATHS.researchAgenda, null);
-  const researchBrief = fs.readFileSync(path.join(root, ARTIFACT_PATHS.researchBrief), "utf8");
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programApprovals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const approvalsView = queryProgramApprovals(root, { programId: "program-step-alpha" });
-  const packetActionBundle = readJson(root, ".dove/context/actions/packet-task-program-step.json", null);
-  const packetContext = readJson(root, ".dove/context/packets/task-program-step.json", null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-  const boardAfter = readJson(root, ARTIFACT_PATHS.orchestrationBoard, null);
-
-  assert.equal(researchAgenda.objective, "Refresh the research brief through one explicit approved program step.");
-  assert.deepEqual(researchAgenda.agenda, ["Record the program-level research objective explicitly."]);
-  assert.match(researchBrief, /Refresh the research brief through one explicit approved program step\./);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-step-alpha-run-1").status, "review-needed");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-step-alpha-run-1").lastOutcome, "executed-program-step");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-step-alpha-run-1").reviewCheckpointRequired, true);
-  assert.match((programRuns.items ?? []).find((item) => item.id === "program-step-alpha-run-1").reviewCheckpointSummary, /requires explicit review/);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-step-alpha-run-1").nextApprovalIntent.suggestedProgramRunId, "program-step-alpha-run-1-next");
-  assert.equal((programApprovals.items ?? []).find((item) => item.id === "program-step-alpha-approval-1").status, "consumed");
-  assert.equal(packetContext.programLinkage.programId, "program-step-alpha");
-  assert.equal(packetActionBundle.programLinkage.programRunId, "program-step-alpha-run-1");
-  assert.equal(packetActionBundle.requiredReadPaths.includes(ARTIFACT_PATHS.programsIndex), true);
-  assert.equal(workspaceIndex.programs.currentProgramId, "program-step-alpha");
-  assert.equal(workspaceIndex.programs.currentProgramRunId, "program-step-alpha-run-1");
-  assert.equal(workspaceIndex.programs.lastProgramOutcome, "executed-program-step");
-  assert.equal(workspaceIndex.programs.reviewCheckpointRunCount, 1);
-  assert.equal(workspaceIndex.programs.currentReviewCheckpointRunId, "program-step-alpha-run-1");
-  const packetLoop = workspaceIndex.autonomyLoops.loops.find((loop) => loop.id === "packet-approval-run-follow-through");
-  assert.equal(packetLoop.currentStage, "review-checkpoint");
-  assert.equal(packetLoop.lifecycleState, "review-checkpoint-awaiting-fresh-approval");
-  assert.equal(packetLoop.approvalState, "fresh-approval-required");
-  assert.equal(packetLoop.runtimeState, "review-checkpoint-recorded");
-  assert.equal(packetLoop.blockers.includes("program-step-alpha-run-1"), true);
-  assert.equal(workspaceIndex.autonomyLoops.activeLifecycleState, "review-checkpoint-awaiting-fresh-approval");
-  assert.match(workspaceIndex.autonomyLoops.nextSafeAction, /project:dove\.auto/);
-  assert.equal(workspaceIndex.runtime.continuationCount, 1);
-  assert.equal(workspaceIndex.runtime.currentContinuationKind, "issue-fresh-approval");
-  assert.equal(workspaceIndex.runtime.currentContinuationProgramRunId, "program-step-alpha-run-1");
-  assert.equal(workspaceIndex.runtime.currentContinuationCommand, "project:dove.auto");
-  assert.equal(approvalsView.continuationIntents[0].suggestedProgramRunId, "program-step-alpha-run-1-next");
-  assert.equal(boardAfter.assignedRole, boardBefore.assignedRole);
-  assert.equal(boardAfter.currentPhase, boardBefore.currentPhase);
-});
-
-test("issueProgramApproval can consume a review-to-reapproval intent for note capture", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Note Continuation", objective: "Continue a note-capture lineage from a review checkpoint." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const evidencePacketId = seedTaskPacket(root, "program-note-continuation-source");
-  const sourceId = registerSource(root, { packetId: evidencePacketId, title: "A continuation source", citationKey: "note-cont-src" }).id;
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-program-note-continuation",
-    title: "Note continuation packet",
-    nextAction: "Capture one note, then continue from the review checkpoint.",
-    programId: "program-note-continuation",
-    programRunId: "program-note-continuation-run-1",
-    approvalId: "program-note-continuation-approval-1",
-    allowedStepType: "upsert-note",
-    noteTitle: "Continuation note",
-    noteSectionId: "introduction",
-    noteSourceIds: [sourceId],
-    noteSummary: "The first note in a continuation lineage.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-  const first = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(first.outcome, "executed-program-step");
-
-  const issued = issueProgramApproval(root, {
-    continuationFromRunId: "program-note-continuation-run-1",
-    actorRole: "planner",
-    executeBy: "2099-01-02T00:00:00.000Z",
-    reviewAfter: "2099-01-02T12:00:00.000Z"
-  });
-  const approvalsView = queryProgramApprovals(root, { programId: "program-note-continuation" });
-
-  assert.equal(issued.status, "issued");
-  assert.equal(issued.programRunId, "program-note-continuation-run-1-next");
-  assert.equal(approvalsView.continuationIntents[0].allowedStepType, "upsert-note");
-  assert.equal(approvalsView.continuationIntents[0].stepPayload.title, "Continuation note");
-});
-
-test("issueProgramApproval can derive an objective-aware bounded step sequence when no explicit sequence is provided", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Objective Aware Approval", objective: "Derive a bounded program step sequence from the declared objective." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "reviewer");
-
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-objective-aware-approval",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Objective aware approval packet",
-    nextAction: "Let the system infer the bounded sequence.",
-    actorRole: "planner",
-    packetAssignedRole: "reviewer",
-    workerRole: "reviewer",
-    followThroughId: "follow-through-task-objective-aware-approval"
-  });
-
-  const issued = issueProgramApproval(root, {
-    packetId: seeded.packetId,
-    programId: "program-objective-aware-approval",
-    programTitle: "Program objective aware approval",
-    programObjective: "Refresh wiki surfaces and finish with a coherent review loop.",
-    programRunId: "program-objective-aware-approval-run-1",
-    approvalId: "program-objective-aware-approval-1",
-    actorRole: "planner",
-    workerRole: "reviewer",
-    autonomyPolicy: "objective-aware-default",
-    reviewScope: "current paper pipeline",
-    reviewStage: "review-loop",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Derive the sequence automatically from the objective."
-  });
-
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const approval = (approvals.items ?? []).find((item) => item.id === issued.approvalId);
-
-  assert.deepEqual(approval.authorityEnvelope.stepSequence.map((item) => item.allowedStepType), ["refresh-research-brief", "refresh-wiki", "run-review-loop"]);
-});
-
-test("materializeGuidancePacket can persist an objective-aware bounded step sequence without an explicit sequence", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Objective Aware Materialization", objective: "Persist inferred bounded program envelopes during materialization." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const evidencePacketId = seedTaskPacket(root, "objective-aware-note-source-packet");
-  const sourceId = registerSource(root, { packetId: evidencePacketId, title: "Objective aware note source", citationKey: "objective-aware-note-src" }).id;
-
-  const materialized = materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    programId: "program-objective-aware-materialization",
-    programTitle: "Program objective aware materialization",
-    programObjective: "Capture one source-linked note for the introduction.",
-    programRunId: "program-objective-aware-materialization-run-1",
-    approvalId: "program-objective-aware-materialization-approval-1",
-    autonomyPolicy: "objective-aware-default",
-    noteTitle: "Objective aware note",
-    noteSectionId: "introduction",
-    noteSourceIds: [sourceId],
-    noteSummary: "A note payload used by the inferred final step.",
-    packetId: "task-objective-aware-materialization",
-    title: "Objective aware materialized packet",
-    nextAction: "Let the runtime consume the inferred note-capture sequence.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const approval = (approvals.items ?? []).find((item) => item.id === "program-objective-aware-materialization-approval-1");
-
-  assert.equal(materialized.packetId, "task-objective-aware-materialization");
-  assert.deepEqual(approval.authorityEnvelope.stepSequence.map((item) => item.allowedStepType), ["upsert-note"]);
-  assert.equal(approval.authorityEnvelope.stepSequence.at(-1).stepPayload.title, "Objective aware note");
-});
-
-test("issueProgramApproval derives a shorter review sequence when the board is already in review phase", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Phase Aware Review Approval", objective: "Derive a shorter review sequence in late phases." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "reviewer");
-
-  upsertOrchestrationBoard(root, {
-    phase: "review",
-    assignedRole: "reviewer",
-    intentType: "review",
-    currentFocus: "Already in review.",
-    nextAction: "Run the next review step directly."
-  });
-
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-phase-aware-review-approval",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Phase aware review approval packet",
-    nextAction: "Infer a late-phase review sequence.",
-    actorRole: "planner",
-    packetAssignedRole: "reviewer",
-    workerRole: "reviewer",
-    followThroughId: "follow-through-task-phase-aware-review-approval"
-  });
-
-  const issued = issueProgramApproval(root, {
-    packetId: seeded.packetId,
-    programId: "program-phase-aware-review-approval",
-    programTitle: "Program phase aware review approval",
-    programObjective: "Finish with a coherent review loop.",
-    programRunId: "program-phase-aware-review-approval-run-1",
-    approvalId: "program-phase-aware-review-approval-1",
-    actorRole: "planner",
-    workerRole: "reviewer",
-    autonomyPolicy: "objective-aware-default",
-    reviewScope: "current paper pipeline",
-    reviewStage: "review-loop",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Derive a review-phase-aware sequence automatically."
-  });
-
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const approval = (approvals.items ?? []).find((item) => item.id === issued.approvalId);
-
-  assert.deepEqual(approval.authorityEnvelope.stepSequence.map((item) => item.allowedStepType), ["run-review-loop"]);
-});
-
-test("materializeGuidancePacket derives a shorter note sequence when the board is already in research phase", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Phase Aware Note Materialization", objective: "Derive a shorter note sequence in research phase." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const evidencePacketId = seedTaskPacket(root, "phase-aware-note-source-packet");
-  const sourceId = registerSource(root, { packetId: evidencePacketId, title: "Phase aware note source", citationKey: "phase-aware-note-src" }).id;
-
-  upsertOrchestrationBoard(root, {
-    phase: "research",
-    assignedRole: "researcher",
-    intentType: "research",
-    currentFocus: "Already in research.",
-    nextAction: "Capture the next note directly."
-  });
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    programId: "program-phase-aware-note-materialization",
-    programTitle: "Program phase aware note materialization",
-    programObjective: "Capture one source-linked note for the introduction.",
-    programRunId: "program-phase-aware-note-materialization-run-1",
-    approvalId: "program-phase-aware-note-materialization-approval-1",
-    autonomyPolicy: "objective-aware-default",
-    noteTitle: "Phase aware note",
-    noteSectionId: "introduction",
-    noteSourceIds: [sourceId],
-    noteSummary: "A note payload in research phase.",
-    packetId: "task-phase-aware-note-materialization",
-    title: "Phase aware note packet",
-    nextAction: "Run the inferred note step.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const approvals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const approval = (approvals.items ?? []).find((item) => item.id === "program-phase-aware-note-materialization-approval-1");
-
-  assert.deepEqual(approval.authorityEnvelope.stepSequence.map((item) => item.allowedStepType), ["upsert-note"]);
-});
-
-test("runAutonomyControlPlaneOnce executes one approved program-level wiki refresh step", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Wiki Step", objective: "Run one approved wiki-refresh program step." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-program-wiki-step",
-    title: "Wiki step packet",
-    nextAction: "Refresh the wiki through one approved program step.",
-    programId: "program-wiki-alpha",
-    programTitle: "Program wiki alpha",
-    programObjective: "Refresh wiki surfaces through one explicit approved program step.",
-    programAgenda: ["Expose the current objective through wiki and query surfaces."],
-    programEvidenceBacklog: ["Need refreshed query-pack guidance."],
-    programRunId: "program-wiki-alpha-run-1",
-    approvalId: "program-wiki-alpha-approval-1",
-    allowedStepType: "refresh-wiki",
-    programApprovalSummary: "Approved one bounded wiki refresh.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "executed-program-step");
-  assert.equal(result.programSnapshot.programId, "program-wiki-alpha");
-
-  const wiki = fs.readFileSync(path.join(root, ARTIFACT_PATHS.wiki), "utf8");
-  const queryPack = fs.readFileSync(path.join(root, ARTIFACT_PATHS.queryPack), "utf8");
-  const wikiEntities = readJson(root, ARTIFACT_PATHS.wikiEntities, null);
-  const wikiRelations = readJson(root, ARTIFACT_PATHS.wikiRelations, null);
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programApprovals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-
-  assert.match(wiki, /Research brief|Objective/);
-  assert.match(queryPack, /Research agenda|Objective|Agenda/);
-  assert.ok(Array.isArray(wikiEntities.items));
-  assert.ok(Array.isArray(wikiRelations.items));
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-wiki-alpha-run-1").status, "review-needed");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-wiki-alpha-run-1").lastOutcome, "executed-program-step");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-wiki-alpha-run-1").reviewCheckpointRequired, true);
-  assert.equal((programApprovals.items ?? []).find((item) => item.id === "program-wiki-alpha-approval-1").status, "consumed");
-  assert.equal(workspaceIndex.programs.currentProgramId, "program-wiki-alpha");
-  assert.equal(workspaceIndex.programs.lastProgramOutcome, "executed-program-step");
-  assert.equal(workspaceIndex.programs.reviewCheckpointRunCount, 1);
-});
-
-test("runAutonomyControlPlaneOnce executes one approved program-level note capture step", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Note Step", objective: "Run one approved note-capture program step." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-  const evidencePacketId = seedTaskPacket(root, "program-note-step-source");
-  const sourceId = registerSource(root, { packetId: evidencePacketId, title: "A note source", citationKey: "note-step-src" }).id;
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-program-note-step",
-    title: "Note step packet",
-    nextAction: "Capture one source-linked note through one approved program step.",
-    programId: "program-note-alpha",
-    programTitle: "Program note alpha",
-    programObjective: "Capture one durable source-linked note.",
-    programRunId: "program-note-alpha-run-1",
-    approvalId: "program-note-alpha-approval-1",
-    allowedStepType: "upsert-note",
-    noteTitle: "Autonomy note",
-    noteSectionId: "introduction",
-    noteSourceIds: [sourceId],
-    noteSummary: "A source-linked note captured by one approved step.",
-    noteOpenQuestions: ["What claim might this note support next?"],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "executed-program-step");
-  assert.equal(result.programSnapshot.programId, "program-note-alpha");
-
-  const notes = readJson(root, ARTIFACT_PATHS.notes, null);
-  const queryPack = fs.readFileSync(path.join(root, ARTIFACT_PATHS.queryPack), "utf8");
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programApprovals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-
-  assert.equal((notes.items ?? []).some((item) => item.title === "Autonomy note" && item.summary === "A source-linked note captured by one approved step."), true);
-  assert.match(queryPack, /task-program-note-step-program-note/);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-note-alpha-run-1").status, "review-needed");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-note-alpha-run-1").nextApprovalIntent.allowedStepType, "upsert-note");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-note-alpha-run-1").nextApprovalIntent.stepPayload.title, "Autonomy note");
-  assert.equal((programApprovals.items ?? []).find((item) => item.id === "program-note-alpha-approval-1").status, "consumed");
-  assert.equal(workspaceIndex.programs.lastProgramOutcome, "executed-program-step");
-});
-
-test("runAutonomyControlPlaneOnce executes one approved program-level experiment audit step", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Audit Step", objective: "Run one approved experiment-audit program step." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "experiment-planner");
-
-  writeJson(root, ARTIFACT_PATHS.experimentPlans, {
-    version: 1,
-    items: [{ id: "exp-audit-2", title: "Experiment 2", claimId: "claim-2", hypothesis: "H", methodology: "M", successMetric: "S", comparisonTargets: [], status: "planned", owner: "experiment-planner" }],
-    updatedAt: null
-  });
-  writeJson(root, ARTIFACT_PATHS.experimentResults, {
-    version: 1,
-    items: [{ id: "result-audit-2", experimentId: "exp-audit-2", claimId: "claim-2", outcome: "supports", summary: "Audit me", evidenceLinks: [ARTIFACT_PATHS.experimentLog], comparisonTargets: [], latestAuditId: null, latestBridgeId: null }],
-    updatedAt: null
-  });
-  writeJson(root, ARTIFACT_PATHS.evidence, {
-    version: 3,
-    claims: [{ id: "claim-2", text: "Claim 2", status: "draft", confidence: "medium", sectionId: "results", sourceIds: [], noteIds: [], experimentIds: ["exp-audit-2"], evidenceLinks: [], gap: "" }],
-    updatedAt: null
-  });
-  seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-audit-step",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Audit step packet",
-    nextAction: "Run one approved experiment audit.",
-    actorRole: "planner",
-    packetAssignedRole: "experiment-planner",
-    workerRole: "experiment-planner",
-    followThroughId: "follow-through-task-program-audit-step"
-  });
-
-  issueProgramApproval(root, {
-    packetId: "task-program-audit-step",
-    programId: "program-audit-alpha",
-    programTitle: "Program audit alpha",
-    programObjective: "Audit one experiment result through one approved step.",
-    programRunId: "program-audit-alpha-run-1",
-    approvalId: "program-audit-alpha-approval-1",
-    actorRole: "planner",
-    workerRole: "experiment-planner",
-    allowedStepType: "run-experiment-audit",
-    auditResultId: "result-audit-2",
-    auditReviewedArtifactRefs: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentLog],
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approved one bounded experiment audit."
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "executed-program-step");
-  assert.equal(result.programSnapshot.programId, "program-audit-alpha");
-
-  const audits = readJson(root, ARTIFACT_PATHS.experimentAudits, null);
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programApprovals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-
-  assert.equal((audits.items ?? []).some((item) => item.resultId === "result-audit-2"), true);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-audit-alpha-run-1").status, "review-needed");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-audit-alpha-run-1").nextApprovalIntent.allowedStepType, "run-experiment-audit");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-audit-alpha-run-1").nextApprovalIntent.stepPayload.resultId, "result-audit-2");
-  assert.equal((programApprovals.items ?? []).find((item) => item.id === "program-audit-alpha-approval-1").status, "consumed");
-  assert.equal(workspaceIndex.programs.lastProgramOutcome, "executed-program-step");
-});
-
-test("runAutonomyControlPlaneOnce executes one approved program-level result bridge step", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Bridge Step", objective: "Run one approved result-to-claim bridge step." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-
-  writeJson(root, ARTIFACT_PATHS.experimentResults, {
-    version: 1,
-    items: [{ id: "result-bridge-2", experimentId: "exp-bridge-2", claimId: "claim-bridge-2", outcome: "supports", summary: "Bridge me", evidenceLinks: [ARTIFACT_PATHS.experimentLog], comparisonTargets: [], latestAuditId: null, latestBridgeId: null }],
-    updatedAt: null
-  });
-  writeJson(root, ARTIFACT_PATHS.experimentAudits, {
-    version: 1,
-    items: [{ id: "audit-bridge-2", experimentId: "exp-bridge-2", resultId: "result-bridge-2", claimId: "claim-bridge-2", reviewedArtifactRefs: [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults], requiredArtifactRefs: [ARTIFACT_PATHS.experimentResults], missingArtifactRefs: [], auditFindings: [], integrityFlags: [], confidence: "high", outcomeMapping: "supports", auditVerdict: "clean", bridgeReadiness: "ready", resultOutcome: "supports", evidenceLinkCount: 1, comparisonTargetCount: 0, claimStateBefore: { status: "draft", confidence: "medium" }, updatedAt: new Date(0).toISOString() }],
-    updatedAt: null
-  });
-  writeJson(root, ARTIFACT_PATHS.evidence, {
-    version: 3,
-    claims: [{ id: "claim-bridge-2", text: "Claim bridge", status: "draft", confidence: "medium", sectionId: "results", sourceIds: [], noteIds: [], experimentIds: ["exp-bridge-2"], evidenceLinks: [], gap: "" }],
-    updatedAt: null
-  });
-
-  seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-bridge-step",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Bridge step packet",
-    nextAction: "Run one approved result bridge.",
-    actorRole: "planner",
-    packetAssignedRole: "experiment-planner",
-    workerRole: "experiment-planner",
-    followThroughId: "follow-through-task-program-bridge-step"
-  });
-
-  issueProgramApproval(root, {
-    packetId: "task-program-bridge-step",
-    programId: "program-bridge-alpha",
-    programTitle: "Program bridge alpha",
-    programObjective: "Bridge one audited result into explicit claim state.",
-    programRunId: "program-bridge-alpha-run-1",
-    approvalId: "program-bridge-alpha-approval-1",
-    actorRole: "planner",
-    workerRole: "experiment-planner",
-    allowedStepType: "bridge-result-to-claim",
-    bridgeResultId: "result-bridge-2",
-    bridgeAuditIds: ["audit-bridge-2"],
-    bridgeReason: "Promote one audited result into claim state.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approved one bounded result bridge."
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "executed-program-step");
-  assert.equal(result.programSnapshot.programId, "program-bridge-alpha");
-
-  const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, null);
-  const evidence = readJson(root, ARTIFACT_PATHS.evidence, null);
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programApprovals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-
-  assert.equal((bridgeLog.items ?? []).some((item) => item.resultId === "result-bridge-2" && item.claimId === "claim-bridge-2"), true);
-  assert.equal((evidence.claims ?? []).find((item) => item.id === "claim-bridge-2").latestBridgeId != null, true);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-bridge-alpha-run-1").status, "review-needed");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-bridge-alpha-run-1").nextApprovalIntent.allowedStepType, "bridge-result-to-claim");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-bridge-alpha-run-1").nextApprovalIntent.stepPayload.resultId, "result-bridge-2");
-  assert.equal((programApprovals.items ?? []).find((item) => item.id === "program-bridge-alpha-approval-1").status, "consumed");
-  assert.equal(workspaceIndex.programs.lastProgramOutcome, "executed-program-step");
-});
-
-test("runAutonomyControlPlaneOnce holds blocked bridge events without mutating claim state", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Held Bridge", objective: "Record a blocked bridge without applying claim state." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-
-  writeJson(root, ARTIFACT_PATHS.experimentResults, {
-    version: 1,
-    items: [{ id: "result-held-bridge", experimentId: "exp-held-bridge", claimId: "claim-held-bridge", outcome: "supports", summary: "Bridge should wait for review.", evidenceLinks: [ARTIFACT_PATHS.experimentLog], comparisonTargets: [], latestAuditId: null, latestBridgeId: null }],
-    updatedAt: null
-  });
-  writeJson(root, ARTIFACT_PATHS.experimentAudits, {
-    version: 1,
-    items: [{ id: "audit-held-bridge", experimentId: "exp-held-bridge", resultId: "result-held-bridge", claimId: "claim-held-bridge", reviewedArtifactRefs: [ARTIFACT_PATHS.experimentResults], requiredArtifactRefs: [ARTIFACT_PATHS.experimentResults], missingArtifactRefs: [], auditFindings: ["Review found unresolved provenance."], integrityFlags: ["missing-reviewed-artifact-refs"], confidence: "low", outcomeMapping: "supports", auditVerdict: "blocked", bridgeReadiness: "blocked", resultOutcome: "supports", evidenceLinkCount: 1, comparisonTargetCount: 0, claimStateBefore: { status: "draft", confidence: "medium" }, updatedAt: new Date(0).toISOString() }],
-    updatedAt: null
-  });
-  writeJson(root, ARTIFACT_PATHS.evidence, {
-    version: 3,
-    claims: [{ id: "claim-held-bridge", text: "Held bridge claim", status: "draft", confidence: "medium", sectionId: "results", sourceIds: [], noteIds: [], experimentIds: [], evidenceLinks: [], gap: "" }],
-    updatedAt: null
-  });
-
-  seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-held-bridge",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Held bridge packet",
-    nextAction: "Run one blocked result bridge.",
-    actorRole: "planner",
-    packetAssignedRole: "experiment-planner",
-    workerRole: "experiment-planner",
-    followThroughId: "follow-through-task-program-held-bridge"
-  });
-
-  issueProgramApproval(root, {
-    packetId: "task-program-held-bridge",
-    programId: "program-held-bridge",
-    programTitle: "Program held bridge",
-    programObjective: "Do not apply a blocked bridge to claim state.",
-    programRunId: "program-held-bridge-run-1",
-    approvalId: "program-held-bridge-approval-1",
-    actorRole: "planner",
-    workerRole: "experiment-planner",
-    allowedStepType: "bridge-result-to-claim",
-    bridgeResultId: "result-held-bridge",
-    bridgeAuditIds: ["audit-held-bridge"],
-    bridgeReason: "Hold blocked audit for reviewer action.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approved one bounded held bridge."
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, null);
-  const evidence = readJson(root, ARTIFACT_PATHS.evidence, null);
-  const bridge = (bridgeLog.items ?? []).find((item) => item.resultId === "result-held-bridge");
-  const claim = (evidence.claims ?? []).find((item) => item.id === "claim-held-bridge");
-
-  assert.equal(result.status, "completed");
-  assert.equal(bridge.bridgeStatus, "held-for-review");
-  assert.equal(bridge.mapping, "integrity-hold");
-  assert.equal(bridge.claimStateAfter.status, "draft");
-  assert.equal(claim.status, "draft");
-  assert.equal(claim.confidence, "medium");
-  assert.equal(claim.latestBridgeId ?? null, null);
-  assert.equal(claim.bridgeStatus ?? null, null);
-  assert.deepEqual(claim.experimentIds, []);
-});
-
-test("runAutonomyControlPlaneOnce executes one approved program-level review loop step", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Review Step", objective: "Run one approved review-loop program step." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const evidencePacketId = seedTaskPacket(root, "program-review-step-evidence");
-
-  registerSource(root, { packetId: evidencePacketId, title: "Review source", citationKey: "review-src" });
-  upsertNote(root, {
-    packetId: evidencePacketId,
-    title: "Review note",
-    sectionId: "introduction",
-    sourceIds: ["review-src"],
-    summary: "A note that still leaves the paper unsupported enough for review findings.",
-    skipFollowThroughReady: true,
-    skipSyncPhase: true
-  });
-
-  seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-review-step",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Review step packet",
-    nextAction: "Run one approved review loop.",
-    actorRole: "planner",
-    packetAssignedRole: "reviewer",
-    workerRole: "reviewer",
-    followThroughId: "follow-through-task-program-review-step"
-  });
-
-  issueProgramApproval(root, {
-    packetId: "task-program-review-step",
-    programId: "program-review-alpha",
-    programTitle: "Program review alpha",
-    programObjective: "Run one review loop through one approved step.",
-    programRunId: "program-review-alpha-run-1",
-    approvalId: "program-review-alpha-approval-1",
-    actorRole: "planner",
-    workerRole: "reviewer",
-    allowedStepType: "run-review-loop",
-    reviewScope: "current paper pipeline",
-    reviewStage: "review-loop",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    summary: "Approved one bounded review loop."
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "executed-program-step");
-  assert.equal(result.programSnapshot.programId, "program-review-alpha");
-
-  const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, null);
-  const reviewConcerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, null);
-  const revisionPlan = fs.readFileSync(path.join(root, ARTIFACT_PATHS.revisionPlan), "utf8");
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  const programApprovals = readJson(root, ARTIFACT_PATHS.programApprovals, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-
-  assert.equal(reviewState.lastVerdict != null, true);
-  assert.ok(Array.isArray(reviewConcerns.items));
-  assert.match(revisionPlan, /Current revision plan/);
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-review-alpha-run-1").status, "review-needed");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-review-alpha-run-1").nextApprovalIntent.allowedStepType, "run-review-loop");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-review-alpha-run-1").nextApprovalIntent.stepPayload.scope, "current paper pipeline");
-  assert.equal((programApprovals.items ?? []).find((item) => item.id === "program-review-alpha-approval-1").status, "consumed");
-  assert.equal(workspaceIndex.programs.lastProgramOutcome, "executed-program-step");
-});
-
-test("runAutonomyControlPlaneOnce does not reuse a consumed approval after review-needed even if packet state is reset", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Approval Replay", objective: "Reject replay of consumed approvals after review-needed." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  const materialized = materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-program-replay",
-    title: "Replay packet",
-    nextAction: "Run once, then attempt replay with the same approval.",
-    programId: "program-replay-alpha",
-    programRunId: "program-replay-alpha-run-1",
-    approvalId: "program-replay-alpha-approval-1",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const first = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(first.outcome, "executed-program-step");
-
-  const packetPath = ".dove/task-packets/packets/task-program-replay.json";
-  const packet = readJson(root, packetPath, null);
-  writeJson(root, packetPath, {
-    ...packet,
-    lifecycleStatus: "waiting",
-    continuationState: { ...(packet.continuationState ?? {}), status: "ready-to-resume" }
-  });
-  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, null);
-  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
-    ...packetIndex,
-    items: (packetIndex.items ?? []).map((item) => item.id === materialized.packetId
-      ? { ...item, lifecycleStatus: "waiting", continuationState: { ...(item.continuationState ?? {}), status: "ready-to-resume" } }
-      : item)
-  });
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, {
-    ...followThrough,
-    items: (followThrough.items ?? []).map((item) => item.id === materialized.followThroughId
-      ? {
-          ...item,
-          status: "accepted-for-execution",
-          executeBy: "2099-01-01T00:00:00.000Z",
-          reviewAfter: "2099-01-01T12:00:00.000Z"
-        }
-      : item)
-  });
-
-  const replay = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(replay.status, "noop");
-  assert.equal(replay.outcome, "no-eligible-packet");
-});
-
-test("runAutonomyControlPlaneOnce requires a fresh program run and approval after a review-needed checkpoint", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Reapproval", objective: "Require fresh run/approval after review-needed." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-program-reapproval-a",
-    title: "First program packet",
-    nextAction: "Create a review-needed checkpoint.",
-    programId: "program-reauthorize-alpha",
-    programRunId: "program-reauthorize-alpha-run-1",
-    approvalId: "program-reauthorize-alpha-approval-1",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-  const first = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(first.outcome, "executed-program-step");
-
-  const reused = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-program-reapproval-bad",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Reused run packet",
-    nextAction: "This should fail because the run is awaiting review.",
-    actorRole: "planner",
-    packetAssignedRole: "researcher",
-    workerRole: "researcher",
-    followThroughId: "follow-through-task-program-reapproval-bad"
-  });
-
-  const reusedPacket = readJson(root, reused.packetPath, null);
-  writeJson(root, reused.packetPath, {
-    ...reusedPacket,
-    lineage: {
-      ...(reusedPacket.lineage ?? {}),
-      programId: "program-reauthorize-alpha",
-      programRunId: "program-reauthorize-alpha-run-1",
-      approvalId: "program-reauthorize-alpha-approval-1"
-    },
-    materialization: {
-      ...(reusedPacket.materialization ?? {}),
-      programId: "program-reauthorize-alpha",
-      programRunId: "program-reauthorize-alpha-run-1",
-      approvalId: "program-reauthorize-alpha-approval-1"
-    }
-  });
-  const reusedIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, null);
-  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
-    ...reusedIndex,
-    items: (reusedIndex.items ?? []).map((item) => item.id === reused.packetId
-      ? {
-          ...item,
-          lineage: { ...(item.lineage ?? {}), programId: "program-reauthorize-alpha", programRunId: "program-reauthorize-alpha-run-1", approvalId: "program-reauthorize-alpha-approval-1" },
-          materialization: { ...(item.materialization ?? {}), programId: "program-reauthorize-alpha", programRunId: "program-reauthorize-alpha-run-1", approvalId: "program-reauthorize-alpha-approval-1" }
-        }
-      : item)
-  });
-  recordOperatorFollowThrough(root, {
-    id: reused.followThroughId,
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    status: "accepted-for-execution",
-    actorRole: "planner",
-    workerRole: "researcher",
-    programId: "program-reauthorize-alpha",
-    programRunId: "program-reauthorize-alpha-run-1",
-    approvalId: "program-reauthorize-alpha-approval-1",
-    decisionSummary: "Reusing the old consumed approval should fail.",
-    linkedTargetArtifact: reused.packetPath,
-    linkedTargetId: reused.packetId,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const blocked = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(blocked.status, "noop");
-  assert.equal(blocked.outcome, "no-eligible-packet");
-
-  const issued = issueProgramApproval(root, {
-    continuationFromRunId: "program-reauthorize-alpha-run-1",
-    actorRole: "planner",
-    executeBy: "2099-01-02T00:00:00.000Z",
-    reviewAfter: "2099-01-02T12:00:00.000Z"
-  });
-  assert.equal(issued.status, "issued");
-  assert.equal(issued.programRunId, "program-reauthorize-alpha-run-1-next");
-
-  const continued = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(continued.outcome, "executed-program-step");
-  assert.equal(continued.programSnapshot.programRunId, "program-reauthorize-alpha-run-1-next");
-});
-
-test("runAutonomyControlPlaneOnce blocks program-linked execution when approval is revoked", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Program Approval Gate", objective: "Reject revoked program approvals." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-program-revoked",
-    title: "Revoked program packet",
-    nextAction: "This should not run because approval is revoked.",
-    programId: "program-revoked",
-    programTitle: "Program revoked",
-    programObjective: "This objective should never reach the brief.",
-    programAgenda: ["This agenda should stay pending."],
-    programEvidenceBacklog: ["This backlog should stay pending."],
-    programRunId: "program-revoked-run-1",
-    approvalId: "program-revoked-approval-1",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const revoked = revokeProgramApproval(root, {
-    approvalId: "program-revoked-approval-1",
-    actorRole: "planner",
-    summary: "Revoked before the next bounded step.",
-    revokeReason: "manual-stop"
-  });
-  assert.equal(revoked.status, "revoked");
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "noop");
-  assert.equal(result.outcome, "no-eligible-packet");
-
-  const researchAgenda = readJson(root, ARTIFACT_PATHS.researchAgenda, null);
-  const programRuns = readJson(root, ARTIFACT_PATHS.programRuns, null);
-  assert.notEqual(researchAgenda.objective, "This objective should never reach the brief.");
-  assert.equal((programRuns.items ?? []).find((item) => item.id === "program-revoked-run-1").lastOutcome, "approval-revoked");
-});
-
-test("runAutonomyControlPlaneOnce rejects envelope packets whose worker role does not match packet ownership", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Envelope Mismatch", objective: "Reject invalid role-envelope ownership mismatches." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  seedAcceptedAutonomyPacket(root, {
-    packetId: "task-envelope-mismatch",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Envelope mismatch packet",
-    nextAction: "This packet should not execute because the envelope worker role is wrong.",
-    actorRole: "planner",
-    packetAssignedRole: "reviewer",
-    workerRole: "researcher"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "noop");
-  assert.equal(result.outcome, "no-eligible-packet");
-  assert.equal(result.inspectedPacketIds.includes("task-envelope-mismatch"), true);
-
-  const packet = readJson(root, ".dove/task-packets/packets/task-envelope-mismatch.json", null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-  assert.equal(packet.lifecycleStatus, "waiting");
-  assert.equal(workspaceIndex.runtime.lastOutcome, "no-eligible-packet");
-});
-
-test("runAutonomyControlPlaneOnce requires an explicit envelope before planner can supervise a non-planner packet", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Missing Envelope", objective: "Reject non-planner packet execution without an explicit autonomy envelope." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
-    packetId: "task-missing-envelope",
-    title: "Missing envelope packet",
-    nextAction: "This packet should not execute once the explicit envelope is removed.",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const packetPath = ".dove/task-packets/packets/task-missing-envelope.json";
-  const packet = readJson(root, packetPath, null);
-  writeJson(root, packetPath, {
-    ...packet,
-    autonomyEnvelope: null
-  });
-  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, null);
-  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
-    ...packetIndex,
-    items: (packetIndex.items ?? []).map((item) => item.id === "task-missing-envelope"
-      ? { ...item, autonomyEnvelope: null }
-      : item)
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "noop");
-  assert.equal(result.outcome, "no-eligible-packet");
-  assert.equal(result.inspectedPacketIds.includes("task-missing-envelope"), true);
-
-  const refreshedPacket = readJson(root, packetPath, null);
-  assert.equal(refreshedPacket.lifecycleStatus, "waiting");
-});
-
-test("runAutonomyControlPlaneOnce does not adopt a non-planner accepted follow-through without planner authority", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Controller Mismatch", objective: "Reject non-planner accepted follow-through during planner-supervised selection." });
-  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
-
-  seedAcceptedAutonomyPacket(root, {
-    packetId: "task-controller-mismatch",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Controller mismatch packet",
-    nextAction: "This packet should not execute because follow-through authority belongs to researcher.",
-    actorRole: "researcher",
-    packetAssignedRole: "planner"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "noop");
-  assert.equal(result.outcome, "no-eligible-packet");
-  assert.equal(result.inspectedPacketIds.includes("task-controller-mismatch"), true);
-});
-
-test("runAutonomyControlPlaneOnce deterministically selects the stable eligible packet when same-source candidates drift", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Multi Packet", objective: "Select the stable eligible packet when same-source competition drifts." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const remediationActorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-
-  seedAcceptedAutonomyPacket(root, {
-    packetId: "task-autonomy-a",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "First autonomy packet",
-    nextAction: "Inspect the first eligible packet.",
-    actorRole: remediationActorRole
-  });
-  seedAcceptedAutonomyPacket(root, {
-    packetId: "task-autonomy-b",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Second autonomy packet",
-    nextAction: "Inspect the second eligible packet.",
-    actorRole: remediationActorRole,
-    followThroughId: "follow-through-task-autonomy-b"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "executed-one-packet-step");
-  assert.equal(result.packetId, "task-autonomy-b");
-  assert.equal(result.arbitration.candidateFamily, "eligible-packets");
-  assert.equal(result.arbitration.candidateCount, 1);
-  assert.deepEqual(result.arbitration.rankedPacketIds, ["task-autonomy-b"]);
-  assert.equal(result.arbitration.selectedPacketId, "task-autonomy-b");
-
-  const runtimeLeases = readJson(root, ARTIFACT_PATHS.runtimeLeases, null);
-  const runtimeResults = readJson(root, ARTIFACT_PATHS.runtimeResults, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-  assert.equal(runtimeLeases.items.some((item) => item.packetId === "task-autonomy-b" && item.status === "released"), true);
-  assert.equal(runtimeLeases.items.some((item) => item.packetId === "task-autonomy-a"), false);
-  assert.equal(runtimeResults.entries.at(-1).arbitration.selectedPacketId, "task-autonomy-b");
-  assert.equal(workspaceIndex.runtime.lastSelectedPacketId, "task-autonomy-b");
-});
-
-test("runAutonomyControlPlaneOnce keeps retryable worker failures in executing state with durable retry metadata", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Retry Pending", objective: "Keep retryable worker failures open with durable retry metadata." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-autonomy-retry",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Retryable autonomy packet",
-    nextAction: "Refresh stale context before retrying the bounded worker step.",
-    actorRole
-  });
-
-  const packet = readJson(root, seeded.packetPath, null);
-  writeJson(root, seeded.packetPath, {
-    ...packet,
-    lifecycleStatus: "stale"
-  });
-  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, null);
-  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
-    ...packetIndex,
-    items: (packetIndex.items ?? []).map((item) => item.id === seeded.packetId
-      ? { ...item, lifecycleStatus: "stale" }
-      : item)
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "worker-step-retry-pending");
-  assert.equal(result.retryState.attemptCount, 1);
-
-  const updatedPacket = readJson(root, seeded.packetPath, null);
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  const followThroughItem = (followThrough.items ?? []).find((item) => item.id === seeded.followThroughId);
-  const runtimeControllerState = readJson(root, ARTIFACT_PATHS.runtimeControllerState, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-
-  assert.equal(updatedPacket.lifecycleStatus, "stale");
-  assert.equal(updatedPacket.continuationState.status, "retry-pending");
-  assert.equal(followThroughItem.status, "executing");
-  assert.equal(followThroughItem.retryState.attemptCount, 1);
-  assert.match(followThroughItem.retryState.lastError, /stale/);
-  assert.equal(runtimeControllerState.summary.requestCount, 1);
-  assert.equal(runtimeControllerState.summary.executingRequestCount, 1);
-  assert.equal(runtimeControllerState.summary.checkpointCount, 1);
-  assert.equal(runtimeControllerState.summary.escalationCount, 0);
-  assert.equal(workspaceIndex.runtime.executingRequestCount, 1);
-  assert.equal(workspaceIndex.runtime.checkpointCount, 1);
-});
-
-test("runAutonomyControlPlaneOnce escalates bounded worker failures once retry budget is exhausted", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Escalation", objective: "Escalate bounded worker failures after the retry budget is exhausted." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-autonomy-escalate",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Escalating autonomy packet",
-    nextAction: "Escalate after repeated stale retries.",
-    actorRole
-  });
-
-  const packet = readJson(root, seeded.packetPath, null);
-  writeJson(root, seeded.packetPath, {
-    ...packet,
-    lifecycleStatus: "stale"
-  });
-  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, null);
-  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
-    ...packetIndex,
-    items: (packetIndex.items ?? []).map((item) => item.id === seeded.packetId
-      ? { ...item, lifecycleStatus: "stale" }
-      : item)
-  });
-
-  recordOperatorFollowThrough(root, {
-    id: seeded.followThroughId,
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    status: "executing",
-    actorRole,
-    decisionSummary: "Previous bounded worker attempts already started.",
-    linkedTargetArtifact: seeded.packetPath,
-    linkedTargetId: seeded.packetId,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z",
-    executionStartedAt: "2099-01-01T00:00:00.000Z",
-    retryState: {
-      attemptCount: 2,
-      maxAttempts: 3,
-      lastAttemptAt: "2099-01-01T00:30:00.000Z",
-      lastError: "Packet remains stale.",
-      escalatedAt: null
-    }
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "worker-step-escalated");
-  assert.equal(result.retryState.attemptCount, 3);
-
-  const updatedPacket = readJson(root, seeded.packetPath, null);
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  const followThroughItem = (followThrough.items ?? []).find((item) => item.id === seeded.followThroughId);
-  const runtimeControllerState = readJson(root, ARTIFACT_PATHS.runtimeControllerState, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-
-  assert.equal(updatedPacket.continuationState.status, "blocked");
-  assert.equal(followThroughItem.status, "deferred");
-  assert.ok(followThroughItem.deferUntil);
-  assert.ok(followThroughItem.retryState.escalatedAt);
-  assert.equal(followThroughItem.retryState.attemptCount, 3);
-  assert.equal(runtimeControllerState.summary.escalationCount, 1);
-  assert.equal(runtimeControllerState.summary.lastEscalationPacketId, seeded.packetId);
-  assert.equal(workspaceIndex.runtime.escalationCount, 1);
-  assert.equal(workspaceIndex.runtime.lastEscalationPacketId, seeded.packetId);
-});
-
-test("runAutonomyControlPlaneOnce still prioritizes eligible packet assessment over planned materialization", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Eligibility Precedence", objective: "Prefer assessing an eligible packet before materializing a planned target." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-  const seeded = seedAcceptedAutonomyPacket(root, {
-    packetId: "task-autonomy-existing",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    sourceArtifactPath: remediationPack.sourceArtifactPath,
-    title: "Existing autonomy packet",
-    nextAction: "Inspect the already materialized packet first.",
-    actorRole
-  });
-
-  recordOperatorFollowThrough(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    status: "accepted-for-execution",
-    actorRole,
-    decisionSummary: "Autonomy may materialize this pack into one future packet if no eligible packet exists.",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-queue-discipline.json",
-    linkedTargetId: "task-queue-discipline",
-    plannedTarget: true,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "executed-one-packet-step");
-  assert.equal(result.packetId, seeded.packetId);
-  assert.equal(fs.existsSync(path.join(root, ".dove/task-packets/packets/task-queue-discipline.json")), false);
-});
-
-test("runAutonomyControlPlaneOnce materializes one accepted remediation path when no packet exists yet", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Materialize", objective: "Materialize one accepted guidance path autonomously." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-  const defaultPacketId = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.targetId;
-  assert.notEqual(defaultPacketId, "task-queue-discipline");
-  recordOperatorFollowThrough(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    status: "accepted-for-execution",
-    actorRole,
-    decisionSummary: "Autonomy may materialize this pack into one packet.",
-    selectedConversionPathKey: remediationPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-    linkedTargetArtifact: ".dove/task-packets/packets/task-queue-discipline.json",
-    linkedTargetId: "task-queue-discipline",
-    plannedTarget: true,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "materialized-one-packet");
-  assert.equal(result.packetId, "task-queue-discipline");
-  assert.equal(result.requestSnapshot.requestCount, 1);
-  const packet = readJson(root, ".dove/task-packets/packets/task-queue-discipline.json", null);
-  const runtimeControllerState = readJson(root, ARTIFACT_PATHS.runtimeControllerState, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-  assert.equal(packet.id, "task-queue-discipline");
-  assert.equal(packet.materialization.sourceId, remediationPack.id);
-  assert.equal(runtimeControllerState.summary.requestCount, 1);
-  assert.equal(runtimeControllerState.summary.acceptedRequestCount, 1);
-  assert.equal(runtimeControllerState.summary.checkpointCount, 0);
-  assert.equal(workspaceIndex.runtime.requestCount, 1);
-  assert.equal(workspaceIndex.runtime.checkpointCount, 0);
-});
-
-test("runAutonomyControlPlaneOnce preserves the selected planned follow-through id during materialization", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Materialize Follow-Through", objective: "Reuse the selected planned follow-through record during materialization." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-
-  recordOperatorFollowThrough(root, {
-    id: "follow-through-custom-materialization",
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    status: "accepted-for-execution",
-    actorRole,
-    decisionSummary: "Autonomy may materialize this pack into one packet using the existing planned follow-through record.",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-custom-materialization.json",
-    linkedTargetId: "task-custom-materialization",
-    plannedTarget: true,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "materialized-one-packet");
-  assert.equal(result.followThroughId, "follow-through-custom-materialization");
-
-  const packet = readJson(root, ".dove/task-packets/packets/task-custom-materialization.json", null);
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  const matchingItems = (followThrough.items ?? []).filter((item) => item.sourceType === "remediation-pack" && item.sourceId === remediationPack.id);
-
-  assert.equal(packet.materialization.followThroughId, "follow-through-custom-materialization");
-  assert.equal(matchingItems.length, 1);
-  assert.equal(matchingItems[0].id, "follow-through-custom-materialization");
-  assert.equal(matchingItems[0].plannedTarget, false);
-  assert.equal(matchingItems[0].targetBound, true);
-  assert.equal(matchingItems[0].linkedTargetId, "task-custom-materialization");
-});
-
-test("runAutonomyControlPlaneOnce deterministically ranks multiple planned materialization candidates by executeBy and reviewAfter", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Planned Arbitration", objective: "Rank multiple planned materialization candidates deterministically." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-
-  seedPlannedAutonomyMaterialization(root, {
-    sourceId: remediationPack.id,
-    actorRole,
-    followThroughId: "follow-through-planned-late",
-    linkedTargetId: "task-planned-late",
-    executeBy: "2099-01-03T00:00:00.000Z",
-    reviewAfter: "2099-01-03T12:00:00.000Z"
-  });
-  seedPlannedAutonomyMaterialization(root, {
-    sourceId: remediationPack.id,
-    actorRole,
-    followThroughId: "follow-through-planned-review-earlier",
-    linkedTargetId: "task-planned-review-earlier",
-    executeBy: "2099-01-02T00:00:00.000Z",
-    reviewAfter: "2099-01-02T06:00:00.000Z"
-  });
-  seedPlannedAutonomyMaterialization(root, {
-    sourceId: remediationPack.id,
-    actorRole,
-    followThroughId: "follow-through-planned-earliest",
-    linkedTargetId: "task-planned-earliest",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-02T12:00:00.000Z"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "materialized-one-packet");
-  assert.equal(result.packetId, "task-planned-earliest");
-  assert.equal(result.followThroughId, "follow-through-planned-earliest");
-  assert.equal(result.arbitration.candidateFamily, "planned-materializations");
-  assert.equal(result.arbitration.candidateCount, 3);
-  assert.deepEqual(result.arbitration.rankedPacketIds, [
-    "task-planned-earliest",
-    "task-planned-review-earlier",
-    "task-planned-late"
-  ]);
-  assert.equal(result.arbitration.selectedFollowThroughId, "follow-through-planned-earliest");
-
-  const runtimeResults = readJson(root, ARTIFACT_PATHS.runtimeResults, null);
-  assert.equal(runtimeResults.entries.at(-1).arbitration.selectedFollowThroughId, "follow-through-planned-earliest");
-});
-
-test("runAutonomyControlPlaneOnce uses packet id as the planned materialization tie-break when timing matches", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Planned Tie-Break", objective: "Use packet id as the deterministic tie-break for planned materialization." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-
-  seedPlannedAutonomyMaterialization(root, {
-    sourceId: remediationPack.id,
-    actorRole,
-    followThroughId: "follow-through-planned-zeta",
-    linkedTargetId: "task-zeta"
-  });
-  seedPlannedAutonomyMaterialization(root, {
-    sourceId: remediationPack.id,
-    actorRole,
-    followThroughId: "follow-through-planned-alpha",
-    linkedTargetId: "task-alpha"
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "materialized-one-packet");
-  assert.equal(result.packetId, "task-alpha");
-  assert.deepEqual(result.arbitration.rankedPacketIds, ["task-alpha", "task-zeta"]);
-});
-
-test("runAutonomyControlPlaneOnce excludes planned materialization guidance with a non-packet selected conversion path", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Planned Invalid Path", objective: "Reject invalid planned materialization path bindings." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-  const nonPacketPath = remediationPack.rankedConversionPaths?.find((item) => item.targetType !== "create-new-packet");
-  assert.ok(nonPacketPath);
-
-  seedPlannedAutonomyMaterialization(root, {
-    sourceId: remediationPack.id,
-    actorRole,
-    followThroughId: "follow-through-planned-invalid-path",
-    linkedTargetId: "task-planned-invalid-path",
-    selectedConversionPathKey: nonPacketPath.deterministicKey
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "noop");
-  assert.equal(result.outcome, "no-eligible-packet");
-  assert.equal(result.materializationCandidateCount, 0);
-  assert.equal(fs.existsSync(path.join(root, ".dove/task-packets/packets/task-planned-invalid-path.json")), false);
-});
-
-test("runAutonomyControlPlaneOnce excludes stale planned remediation guidance after source drift", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Planned Stale", objective: "Exclude stale planned remediation guidance after source drift." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-
-  seedPlannedAutonomyMaterialization(root, {
-    sourceId: remediationPack.id,
-    actorRole,
-    followThroughId: "follow-through-planned-stale",
-    linkedTargetId: "task-planned-stale"
-  });
-
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, {
-    ...followThrough,
-    items: (followThrough.items ?? []).map((item) => item.id === "follow-through-planned-stale"
-      ? { ...item, sourceFingerprint: "stale-source-fingerprint" }
-      : item)
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "noop");
-  assert.equal(result.outcome, "no-eligible-packet");
-  assert.equal(result.materializationCandidateCount, 0);
-
-  const refreshedFollowThrough = queryMetaOptimize(root).operatorFollowThrough;
-  const item = (refreshedFollowThrough.items ?? []).find((entry) => entry.id === "follow-through-planned-stale");
-  assert.equal(item?.stale, true);
-});
-
-test("materializeGuidancePacket rejects stale planned remediation guidance before writing a packet even without followThroughId", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Direct Remediation Stale Guard", objective: "Reject stale remediation guidance before direct packet writes." });
-  const { remediationPack } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-
-  seedPlannedAutonomyMaterialization(root, {
-    sourceId: remediationPack.id,
-    actorRole,
-    followThroughId: "follow-through-remediation-stale-direct",
-    linkedTargetId: "task-remediation-stale-direct"
-  });
-
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, {
-    ...followThrough,
-    items: (followThrough.items ?? []).map((item) => item.id === "follow-through-remediation-stale-direct"
-      ? { ...item, sourceFingerprint: "stale-remediation-direct-fingerprint" }
-      : item)
-  });
-
-  assert.throws(() => materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    actorRole,
-    packetId: "task-remediation-stale-direct",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /planned follow-through is stale/);
-
-  assert.equal(fs.existsSync(path.join(root, ".dove/task-packets/packets/task-remediation-stale-direct.json")), false);
-});
-
-test("runAutonomyControlPlaneOnce materializes one accepted execution-bridge packet candidate when no eligible packet exists", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Execution Bridge", objective: "Materialize one accepted execution-bridge packet candidate autonomously." });
-  const { executionBridgeCandidate } = seedAutonomyGuidance(root);
-  assert.ok(executionBridgeCandidate);
-  assert.equal(executionBridgeCandidate.candidateType, "packet-candidate");
-  assert.equal(executionBridgeCandidate.sourceConversionPath?.targetType, "create-new-packet");
-
-  seedPlannedAutonomyMaterialization(root, {
-    sourceType: "execution-bridge",
-    sourceId: executionBridgeCandidate.id,
-    actorRole: executionBridgeCandidate.sourceConversionPath?.assignedRole ?? "planner",
-    followThroughId: "follow-through-execution-bridge",
-    linkedTargetId: executionBridgeCandidate.targetId
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "completed");
-  assert.equal(result.outcome, "materialized-one-packet");
-  assert.equal(result.packetId, executionBridgeCandidate.targetId);
-  assert.equal(result.followThroughId, "follow-through-execution-bridge");
-
-  const packet = readJson(root, `.dove/task-packets/packets/${executionBridgeCandidate.targetId}.json`, null);
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  const matchingItems = (followThrough.items ?? []).filter((item) => item.sourceType === "execution-bridge" && item.sourceId === executionBridgeCandidate.id);
-  assert.equal(packet.materialization.sourceType, "execution-bridge");
-  assert.equal(packet.materialization.sourceId, executionBridgeCandidate.id);
-  assert.equal(packet.materialization.followThroughId, "follow-through-execution-bridge");
-  assert.equal(packet.assignedRole, executionBridgeCandidate.sourceConversionPath?.assignedRole ?? "planner");
-  assert.equal(matchingItems.length, 1);
-  assert.equal(matchingItems[0].id, "follow-through-execution-bridge");
-  assert.equal(matchingItems[0].plannedTarget, false);
-  assert.equal(matchingItems[0].targetBound, true);
-  assert.equal(matchingItems[0].linkedTargetId, executionBridgeCandidate.targetId);
-  assert.equal(matchingItems[0].sourceArtifactPath, ARTIFACT_PATHS.metaExecutionBridgeCandidates);
-});
-
-test("materializeGuidancePacket rejects an execution-bridge follow-through id that does not match the planned packet target before writing a packet", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Execution Bridge Rebind Guard", objective: "Reject mismatched execution-bridge follow-through rebinding before packet writes." });
-  const { executionBridgeCandidate } = seedAutonomyGuidance(root);
-  assert.ok(executionBridgeCandidate);
-
-  seedPlannedAutonomyMaterialization(root, {
-    sourceType: "execution-bridge",
-    sourceId: executionBridgeCandidate.id,
-    actorRole: executionBridgeCandidate.sourceConversionPath?.assignedRole ?? "planner",
-    followThroughId: "follow-through-execution-bridge-wrong-target",
-    linkedTargetId: "task-wrong-target"
-  });
-
-  assert.throws(() => materializeGuidancePacket(root, {
-    sourceType: "execution-bridge",
-    sourceId: executionBridgeCandidate.id,
-    actorRole: executionBridgeCandidate.sourceConversionPath?.assignedRole ?? "planner",
-    followThroughId: "follow-through-execution-bridge-wrong-target",
-    packetId: executionBridgeCandidate.targetId,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /does not match intended packet target/);
-
-  assert.equal(fs.existsSync(path.join(root, `.dove/task-packets/packets/${executionBridgeCandidate.targetId}.json`)), false);
-});
-
-test("materializeGuidancePacket rejects stale planned execution-bridge guidance before writing a packet", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Execution Bridge Stale Guard", objective: "Reject stale execution-bridge guidance before packet writes." });
-  const { executionBridgeCandidate } = seedAutonomyGuidance(root);
-  assert.ok(executionBridgeCandidate);
-
-  seedPlannedAutonomyMaterialization(root, {
-    sourceType: "execution-bridge",
-    sourceId: executionBridgeCandidate.id,
-    actorRole: executionBridgeCandidate.sourceConversionPath?.assignedRole ?? "planner",
-    followThroughId: "follow-through-execution-bridge-stale",
-    linkedTargetId: executionBridgeCandidate.targetId
-  });
-
-  const followThrough = readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, null);
-  writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, {
-    ...followThrough,
-    items: (followThrough.items ?? []).map((item) => item.id === "follow-through-execution-bridge-stale"
-      ? { ...item, sourceFingerprint: "stale-execution-bridge-fingerprint" }
-      : item)
-  });
-
-  assert.throws(() => materializeGuidancePacket(root, {
-    sourceType: "execution-bridge",
-    sourceId: executionBridgeCandidate.id,
-    actorRole: executionBridgeCandidate.sourceConversionPath?.assignedRole ?? "planner",
-    packetId: executionBridgeCandidate.targetId,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /planned follow-through is stale/);
-
-  assert.equal(fs.existsSync(path.join(root, `.dove/task-packets/packets/${executionBridgeCandidate.targetId}.json`)), false);
-});
-
-test("runAutonomyControlPlaneOnce ignores planned execution-bridge guidance for non-packet candidates", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Execution Bridge Reject", objective: "Ignore planned execution-bridge guidance that is not a packet candidate." });
-  const meta = seedAutonomyGuidance(root);
-  const nonPacketCandidate = queryMetaOptimize(root).executionBridgeCandidates.candidates.find((item) => item.candidateType !== "packet-candidate");
-  assert.ok(nonPacketCandidate);
-
-  seedPlannedAutonomyMaterialization(root, {
-    sourceType: "execution-bridge",
-    sourceId: nonPacketCandidate.id,
-    actorRole: "planner",
-    followThroughId: "follow-through-execution-bridge-non-packet",
-    linkedTargetId: nonPacketCandidate.targetId,
-    linkedTargetArtifact: `.dove/task-packets/packets/${nonPacketCandidate.targetId}.json`
-  });
-
-  const result = runAutonomyControlPlaneOnce(root, { actorRole: "planner" });
-  assert.equal(result.status, "noop");
-  assert.equal(result.outcome, "no-eligible-packet");
-  assert.equal(result.materializationCandidateCount, 0);
-  assert.equal(fs.existsSync(path.join(root, `.dove/task-packets/packets/${nonPacketCandidate.targetId}.json`)), false);
-});
-
-test("runAutonomyControlPlaneOnce records a durable runtime error when planned materialization fails", () => {
-  const root = tempRoot();
-  ensureWorkspace(root);
-  initProject(root, { title: "Autonomy Materialize Error", objective: "Record runtime errors when a planned materialization fails." });
-  const { remediationPack, executionBridgeCandidate } = seedAutonomyGuidance(root);
-  const actorRole = remediationPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-
-  writeJson(root, ".dove/task-packets/packets/task-blocking-guidance.json", { id: "task-blocking-guidance", title: "Blocking task", status: "pending" });
-  recordOperatorFollowThrough(root, {
-    sourceType: "execution-bridge",
-    sourceId: executionBridgeCandidate.id,
-    status: "accepted-for-execution",
-    actorRole: executionBridgeCandidate.sourceConversionPath?.assignedRole ?? "planner",
-    decisionSummary: "Keep this unrelated guidance open so materialization must fail with a durable runtime error.",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-blocking-guidance.json",
-    linkedTargetId: "task-blocking-guidance",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  recordOperatorFollowThrough(root, {
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    status: "accepted-for-execution",
-    actorRole,
-    decisionSummary: "Autonomy may materialize this pack into one packet.",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-queue-discipline.json",
-    linkedTargetId: "task-queue-discipline",
-    plannedTarget: true,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  assert.throws(() => runAutonomyControlPlaneOnce(root, { actorRole: "planner" }), /unrelated operator follow-through/);
-
-  const runtimeResults = readJson(root, ARTIFACT_PATHS.runtimeResults, null);
-  const runtimeEvents = readJson(root, ARTIFACT_PATHS.runtimeEvents, null);
-  const workspaceIndex = queryWorkspaceIndex(root);
-
-  assert.equal(runtimeResults.entries.at(-1).status, "error");
-  assert.equal(runtimeResults.entries.at(-1).outcome, "materialization-failed");
-  assert.equal(runtimeResults.entries.at(-1).packetId, "task-queue-discipline");
-  assert.match(runtimeResults.entries.at(-1).error, /unrelated operator follow-through/);
-  assert.equal(runtimeEvents.entries.at(-1).eventType, "run-error");
-  assert.equal(workspaceIndex.runtime.lastStatus, "error");
-  assert.equal(workspaceIndex.runtime.lastOutcome, "materialization-failed");
+test("public package bundle exposes no mutation context writer or retired execution authority", async () => {
+  const rootApi = await import("../../dist/index.mjs");
+  for (const name of [
+    "createMutationContext",
+    "runWithMutationContext",
+    "issueProgramApproval",
+    "runAutonomyOperate",
+    "runAutonomyForeground",
+    "runAutonomyControlPlaneOnce",
+    "saveBoard",
+    "appendText",
+    "saveState",
+    "writeJson",
+    "writeText",
+    "assertRoleBoundMutation"
+  ]) {
+    assert.equal(name in rootApi, false, `forbidden root export ${name}`);
+  }
+  assert.equal(
+    [...GOVERNANCE_GUARDED_MUTATIONS, ...GOVERNANCE_EXEMPT_MUTATIONS]
+      .some((entry) => entry.id === "save-board"),
+    false
+  );
 });
 
 test("guarded core mutation implementations explicitly call assertFollowThroughReady", () => {
@@ -5728,7 +4578,6 @@ test("every governance registry entry binds to real command or MCP surfaces plus
     fs.readFileSync(path.join(process.cwd(), "src/core/orchestration.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/navigation.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/dove.mjs"), "utf8"),
-    fs.readFileSync(path.join(process.cwd(), "src/core/runtime.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/task-workflow.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/experience-workflow.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/audio-review.mjs"), "utf8"),
@@ -5746,7 +4595,7 @@ test("every governance registry entry binds to real command or MCP surfaces plus
     if (bindings.mcpTool) {
       assert.equal(typeof bindings.mcpTool, "string");
       assert.equal(toolNames.has(bindings.mcpTool), true, `${entry.id} missing bound MCP tool ${bindings.mcpTool}`);
-    } else {
+    } else if (entry.reasonCode !== "runtime-fixed-semantics-transition") {
       assert.equal(bindings.commandIds.length > 0 || typeof bindings.cliCommand === "string", true, `${entry.id} without MCP tool must bind at least one command or CLI surface`);
     }
     for (const commandId of bindings.commandIds) {

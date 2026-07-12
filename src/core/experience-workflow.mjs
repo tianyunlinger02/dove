@@ -27,6 +27,112 @@ function hasNonEmptyString(value) {
   return typeof value === "string" && value.trim();
 }
 
+const EXPERIENCE_PLAN_INPUT_KEYS = new Set([
+  "id",
+  "experimentId",
+  "goal",
+  "idea",
+  "title",
+  "methodology",
+  "method",
+  "successMetric",
+  "metric",
+  "comparisonTargets",
+  "baselines",
+  "claimId"
+]);
+const EXPERIENCE_PLAN_STRING_KEYS = new Set([
+  "id",
+  "experimentId",
+  "goal",
+  "idea",
+  "title",
+  "methodology",
+  "method",
+  "successMetric",
+  "metric",
+  "claimId"
+]);
+const EXPERIENCE_RESULT_INPUT_KEYS = new Set([
+  "id",
+  "resultId",
+  "experimentId",
+  "claimId",
+  "outcome",
+  "summary",
+  "resultSummary",
+  "evidenceLinks",
+  "artifactPaths",
+  "comparisonTargets"
+]);
+const EXPERIENCE_RESULT_STRING_KEYS = new Set([
+  "id",
+  "resultId",
+  "experimentId",
+  "claimId",
+  "outcome",
+  "summary",
+  "resultSummary"
+]);
+
+function assertExperiencePlainObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`run_experience_workflow requires an object at ${label}.`);
+  }
+}
+
+function assertExperienceString(value, label) {
+  if (typeof value !== "string") {
+    throw new Error(`run_experience_workflow requires a string at ${label}.`);
+  }
+}
+
+function assertExperienceStringArray(value, label) {
+  if (!Array.isArray(value)) {
+    throw new Error(`run_experience_workflow requires an array at ${label}.`);
+  }
+  value.forEach((item, index) => assertExperienceString(item, `${label}[${index}]`));
+}
+
+function assertExperienceNestedInput(value, allowedKeys, stringKeys, arrayKeys, label) {
+  assertExperiencePlainObject(value, label);
+  const unknown = Object.keys(value).filter((key) => !allowedKeys.has(key));
+  if (unknown.length > 0) {
+    throw new Error(`run_experience_workflow does not accept unknown input ${unknown.map((key) => `${label}.${key}`).join(", ")}.`);
+  }
+  for (const key of stringKeys) {
+    if (Object.hasOwn(value, key)) {
+      assertExperienceString(value[key], `${label}.${key}`);
+    }
+  }
+  for (const key of arrayKeys) {
+    if (Object.hasOwn(value, key)) {
+      assertExperienceStringArray(value[key], `${label}.${key}`);
+    }
+  }
+}
+
+function assertExperiencePublicInput(args = {}) {
+  if (Object.hasOwn(args, "plan")) {
+    assertExperienceNestedInput(
+      args.plan,
+      EXPERIENCE_PLAN_INPUT_KEYS,
+      EXPERIENCE_PLAN_STRING_KEYS,
+      new Set(["comparisonTargets", "baselines"]),
+      "$.plan"
+    );
+  }
+  if (Object.hasOwn(args, "result")) {
+    assertExperienceNestedInput(
+      args.result,
+      EXPERIENCE_RESULT_INPUT_KEYS,
+      EXPERIENCE_RESULT_STRING_KEYS,
+      new Set(["evidenceLinks", "artifactPaths", "comparisonTargets"]),
+      "$.result"
+    );
+  }
+}
+
 function hasExperienceObjective(rawPlan = {}, args = {}) {
   return [rawPlan.experimentId, rawPlan.id, rawPlan.goal, rawPlan.idea, args.idea, rawPlan.title].some(hasNonEmptyString);
 }
@@ -58,12 +164,20 @@ function publicExperienceBoundary(boundary, audit, responseLanguage = "zh") {
   if (!boundary) {
     return null;
   }
+  const heldForMissingClaim = normalizeStringArray(boundary.requiredActions).includes("create-or-link-claim-before-bridge");
+  const integrityFlags = Array.isArray(audit?.integrityFlags) && audit.integrityFlags.length > 0
+    ? audit.integrityFlags
+    : boundary.requiredInputs;
   return {
     type: boundary.type,
-    summary: boundary.type === "needs-review"
-      ? localizedText(responseLanguage, "实验结果还需要 review 判断是否能支撑论点。", "The experiment result still needs review before it can support the claim.")
-      : localizedText(responseLanguage, "实验材料还不够，不能直接推进成论点证据。", "The experiment material is not complete enough to promote as claim evidence."),
-    requiredActions: publicIntegrityActions(audit?.integrityFlags ?? boundary.requiredInputs, responseLanguage)
+    summary: heldForMissingClaim
+      ? localizedText(responseLanguage, "实验材料检查已通过，但目标论点不存在，因此结果尚未桥接到论点。", "The experiment material check passed, but the target claim does not exist, so the result has not been bridged to a claim.")
+      : boundary.type === "needs-review"
+        ? localizedText(responseLanguage, "实验结果还需要 review 判断是否能支撑论点。", "The experiment result still needs review before it can support the claim.")
+        : localizedText(responseLanguage, "实验材料还不够，不能直接推进成论点证据。", "The experiment material is not complete enough to promote as claim evidence."),
+    requiredActions: heldForMissingClaim
+      ? [localizedText(responseLanguage, "先创建目标论点，或把结果改链到已有论点，再重试桥接。", "Create the target claim or link the result to an existing claim before retrying the bridge.")]
+      : publicIntegrityActions(integrityFlags, responseLanguage)
   };
 }
 
@@ -177,6 +291,7 @@ function experienceBoundaryFor({ status, plan, result, audit, bridge, artifactRe
 
 export function runExperienceWorkflow(root, args = {}) {
   assertGovernanceMutationRegistered("run-experience-workflow", "guarded");
+  assertExperiencePublicInput(args);
   const target = assertTaskScopedMutationTarget(root, "run-experience-workflow", args);
   ensureWorkspace(root);
   const timestamp = nowIso();
@@ -196,8 +311,8 @@ export function runExperienceWorkflow(root, args = {}) {
     successMetric: normalizeString(rawPlan.successMetric ?? rawPlan.metric, ""),
     comparisonTargets: normalizeStringArray(rawPlan.comparisonTargets ?? rawPlan.baselines),
     claimId,
-    status: normalizeString(rawPlan.status, "planned"),
-    createdAt: rawPlan.createdAt ?? timestamp,
+    status: "planned",
+    createdAt: timestamp,
     updatedAt: timestamp
   };
   if (!resultInput && (!plan.methodology || !plan.successMetric)) {
@@ -263,7 +378,7 @@ export function runExperienceWorkflow(root, args = {}) {
       summary: normalizeString(resultInput.summary ?? resultInput.resultSummary, ""),
       evidenceLinks: normalizeStringArray(resultInput.evidenceLinks ?? resultInput.artifactPaths),
       comparisonTargets: normalizeStringArray(resultInput.comparisonTargets),
-      createdAt: resultInput.createdAt ?? timestamp,
+      createdAt: timestamp,
       updatedAt: timestamp
     };
     resultsIndex.items = upsertById(Array.isArray(resultsIndex.items) ? resultsIndex.items : [], result);
@@ -337,7 +452,15 @@ export function runExperienceWorkflow(root, args = {}) {
   }
 
   const artifactRefs = [ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits, ARTIFACT_PATHS.claimBridgeLog];
-  const status = result ? (audit?.auditVerdict === "clean" && bridge?.status === "applied" ? "bridged" : audit?.auditVerdict === "clean" ? "recorded" : "needs-review") : "planned";
+  const status = result
+    ? audit?.auditVerdict === "clean"
+      && bridge?.status === "applied"
+      ? "bridged"
+      : audit?.auditVerdict === "clean"
+        && !bridge
+        ? "recorded"
+        : "needs-review"
+    : "planned";
   const boundary = experienceBoundaryFor({ status, plan, result, audit, bridge, artifactRefs });
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const preActionGuidance = buildPreActionGuidance({
@@ -386,14 +509,18 @@ export function runExperienceWorkflow(root, args = {}) {
       claimImpact: bridge?.status === "applied" ? localizedText(responseLanguage, "已影响论点状态", "Claim state updated") : null
     },
     nextActions: [{
-      title: boundary
-        ? localizedText(responseLanguage, "先补齐实验材料", "Fill the experiment material gaps first")
-        : result
-          ? localizedText(responseLanguage, "进入 review 检查支撑力度", "Review the support strength next")
-          : localizedText(responseLanguage, "补实验结果和证据", "Add experiment result and evidence"),
-      why: boundary
-        ? localizedText(responseLanguage, "当前结果还不能安全支撑论文论点。", "The current result cannot safely support the paper claim yet.")
-        : localizedText(responseLanguage, "实验记录已经可用于下一步判断，但还需要 review 确认不要过度主张。", "The experiment record is ready for the next decision, but review should confirm it is not over-claimed.")
+      title: bridge?.status === "held-missing-claim"
+        ? localizedText(responseLanguage, "先创建或重链目标论点", "Create or relink the target claim first")
+        : boundary
+          ? localizedText(responseLanguage, "先补齐实验材料", "Fill the experiment material gaps first")
+          : result
+            ? localizedText(responseLanguage, "进入 review 检查支撑力度", "Review the support strength next")
+            : localizedText(responseLanguage, "补实验结果和证据", "Add experiment result and evidence"),
+      why: bridge?.status === "held-missing-claim"
+        ? localizedText(responseLanguage, "材料审计已通过，但缺少可接收该结果的持久论点，当前不能算已桥接完成。", "The material audit passed, but no durable claim exists to receive the result, so the bridge is not complete.")
+        : boundary
+          ? localizedText(responseLanguage, "当前结果还不能安全支撑论文论点。", "The current result cannot safely support the paper claim yet.")
+          : localizedText(responseLanguage, "实验记录已经可用于下一步判断，但还需要 review 确认不要过度主张。", "The experiment record is ready for the next decision, but review should confirm it is not over-claimed.")
     }]
   }, responseLanguage);
 

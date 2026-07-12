@@ -4,7 +4,7 @@
 
 Dove is a local-first task workflow system for paper, experiment, engineering, review, and general research work.
 
-- **Commands** are the user-facing workflow surface and are generated from `src/core/command-manifest.mjs`.
+- **Commands** are the generated user-facing workflow surface shared by installed host adapters.
 - **MCP tools** provide deterministic file-backed queries and mutations.
 - **`.dove/`** is the authoritative durable workspace root.
 - **Task packets** under `.dove/task-packets/` bind every task-scoped write to one durable task before mutation.
@@ -33,7 +33,7 @@ Dove exposes one flat public command surface:
 | `project:dove.experience` | Plan experiments, record results, audit them, and bridge evidence into claims. |
 | `project:dove.draft` | Generate or revise paper draft sections from prompts, sources, notes, experiences, and review findings. |
 | `project:dove.review` | Run a local evidence-aware review over selected task materials and return concrete findings or coherence. |
-| `project:dove.review-loop` | Run bounded local review + draft + experience iterations; the default max is 3 from Dove settings. |
+| `project:dove.review-loop` | Run one independent packet-scoped Reviewer pass and hand required revisions explicitly to Builder. |
 | `project:dove.rebuttal` | Normalize reviewer issues, choose response strategy, and draft rebuttal responses. |
 
 Older router, checklist, plan, audit, return, follow-through, onboarding, governance-audit, and paper-namespaced slash surfaces are not public commands. Their useful low-level capabilities remain internal MCP/core building blocks where needed.
@@ -145,9 +145,9 @@ Configure the global index in `~/.config/dove/config.json`, `DOVE_CONFIG_PATH`, 
     "outputDir": "~/.local/share/dove/public",
     "projects": [
       {
-        "root": "/home/nvme01/paper_factory",
-        "slug": "paper-factory",
-        "title": "paper_factory"
+        "root": "/path/to/your-project",
+        "slug": "your-project",
+        "title": "Your Project"
       }
     ],
     "auth": {
@@ -217,7 +217,7 @@ Use `project:dove.draft` to generate or revise sections from prompts, sources, n
 
 Use `project:dove.review` for the ordinary local evidence-aware review path. It inspects the selected task or paper pipeline materials — claims, sources, notes, drafts, experiments, figures, recorded concerns, and revision state — then returns concrete findings, action items, missing evidence, or a coherent verdict. A verdict string alone is not review progress; the review must be backed by inspected materials or by an explicit material boundary.
 
-Use `project:dove.review-loop` when the task should iterate through local review, draft update, and experience planning. Each iteration starts with local evidence-aware review, then updates draft or experience material only when that material is supplied. The configured max iteration count defaults to 3, and the loop stops at coherence, a material boundary, or required user input.
+Use `project:dove.review-loop` for one independent local Reviewer pass over the selected packet and its descendants. The call does not edit drafts, experiments, or experience material and does not perform an implicit Reviewer→Builder→Reviewer cycle. A non-coherent result returns explicit Builder required actions; after a separate revision handoff, invoke review again with a new call.
 
 Explicit isolated/audio reviewer handoff remains available only through lower-level handoff tools such as `prepare_audio_review`, `import_audio_review`, `run_audio_review`, `prepare_isolated_review`, and `import_isolated_review`. Those tools receive only the declared task summary, final plan/result paths, explicit artifacts, hashes, instructions, and output contract; they do not share broad project context, writer private transcripts, orchestration board context, or reviewer private transcripts.
 
@@ -248,7 +248,9 @@ After confirmation, auto may internally call top-level Dove workflows such as so
 
 It stops at completed, blocked, killed, review/authority boundary, missing provider credentials, conflicting task target, or step-budget exhaustion. When it stops because work cannot safely continue, it writes an explicit boundary instead of pretending host/code/provider work happened. If the response ends before the task is complete, Dove does not secretly continue in the background; the next operator action must invoke another foreground command.
 
-## Workflow goal validation
+## Source-checkout workflow goal validation
+
+This section is for Dove maintainers working in a source checkout; installed projects do not include the raw validation scripts or tests.
 
 `npm run workflow-goals:validate` runs executable product-goal pressure scenarios through the real MCP dispatch path. These scenarios are not just schema checks: they verify that Dove behavior satisfies named workflow objectives, acceptance criteria, and failure-reflection metadata.
 

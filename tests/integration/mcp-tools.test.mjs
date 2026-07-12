@@ -4,9 +4,11 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS } from "../../src/core/index.mjs";
+import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS, ensureWorkspace, initProject, queryMetaOptimize, recordOperatorFollowThrough, upsertOrchestrationBoard } from "../../src/core/index.mjs";
+import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { writeJson } from "../../src/core/workspace.mjs";
 import { dispatchTool } from "../../src/mcp/handlers.mjs";
-import { MUTATING_TOOL_NAMES, toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
+import { MUTATING_TOOL_NAMES, toolDefinitions, toolDefinitionsForSurface } from "../../src/mcp/tool-definitions.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 
@@ -24,8 +26,45 @@ function extractToolJson(result) {
   return parsed;
 }
 
+function extractStructuredToolErrorJson(result) {
+  assert.ok(result.content?.[0]?.text, "Expected text content in MCP tool result");
+  assert.equal(result.isError, true, result.content[0].text);
+  const parsed = JSON.parse(result.content[0].text);
+  if (parsed.presentation === "dove-mcp-result-contract" && parsed.resultMode === "full" && parsed.fullResult) {
+    return parsed.fullResult;
+  }
+  return parsed;
+}
+
 function dispatchToolFull(root, name, args = {}) {
   return dispatchTool(root, name, { ...args, resultMode: "full" });
+}
+
+function proposeAndMaterializeDoveTask(root, args = {}) {
+  assert.equal(args.confirmed, undefined, "proposal inputs must not use bare confirmed");
+  assert.equal(args.confirm, undefined, "proposal inputs must not use bare confirm");
+  const proposal = extractToolJson(dispatchToolFull(root, "create_dove_task", args));
+  assert.equal(proposal.status, "needs-confirmation");
+  assert.equal(proposal.proposalMutationMode, "direct-process");
+  assert.equal(proposal.confirmArgs?.confirmed, true);
+  assert.match(proposal.confirmArgs?.proposalDigest ?? "", /^[0-9a-f]{64}$/u);
+  return extractToolJson(dispatchToolFull(root, "create_dove_task", proposal.confirmArgs));
+}
+
+function proposeAndRunDoveAuto(root, args = {}, replayOverrides = {}, { expectOperationalFailure = false } = {}) {
+  assert.equal(args.confirmed, undefined, "auto proposal inputs must not use bare confirmed");
+  assert.equal(args.confirm, undefined, "auto proposal inputs must not use bare confirm");
+  const proposal = extractToolJson(dispatchToolFull(root, "run_dove_auto", args));
+  assert.equal(proposal.status, "needs-confirmation");
+  assert.equal(proposal.confirmArgs?.confirmed, true);
+  assert.match(proposal.confirmArgs?.proposalDigest ?? "", /^[0-9a-f]{64}$/u);
+  const replay = dispatchToolFull(root, "run_dove_auto", {
+    ...proposal.confirmArgs,
+    ...replayOverrides
+  });
+  return expectOperationalFailure
+    ? extractStructuredToolErrorJson(replay)
+    : extractToolJson(replay);
 }
 
 function listRelativeFiles(root) {
@@ -38,6 +77,59 @@ function listRelativeFiles(root) {
       return [path.relative(root, fullPath)];
     });
   return fs.existsSync(root) ? walk(root).sort() : [];
+}
+
+function snapshotRelativeFileContents(root) {
+  return Object.fromEntries(listRelativeFiles(root).map((relativePath) => [
+    relativePath,
+    fs.readFileSync(path.join(root, relativePath)).toString("base64")
+  ]));
+}
+
+function objectKeyPaths(value, targetKey, inputPath = "$", seen = new WeakSet()) {
+  if (!value || typeof value !== "object" || seen.has(value)) {
+    return [];
+  }
+  seen.add(value);
+  return Object.entries(value).flatMap(([key, item]) => {
+    const itemPath = Array.isArray(value)
+      ? `${inputPath}[${key}]`
+      : `${inputPath}.${key}`;
+    return [
+      ...(key === targetKey ? [itemPath] : []),
+      ...objectKeyPaths(item, targetKey, itemPath, seen)
+    ];
+  });
+}
+
+function assertSchemaObjectsSealed(schema, inputPath = "$", seen = new WeakSet()) {
+  if (!schema || typeof schema !== "object" || seen.has(schema)) {
+    return;
+  }
+  seen.add(schema);
+  const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+  if (types.includes("object") && schema.properties) {
+    assert.equal(
+      schema.additionalProperties,
+      false,
+      `${inputPath} must reject unknown object properties`
+    );
+  }
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === "properties") {
+      for (const [propertyName, propertySchema] of Object.entries(value ?? {})) {
+        assertSchemaObjectsSealed(propertySchema, `${inputPath}.properties.${propertyName}`, seen);
+      }
+      continue;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        assertSchemaObjectsSealed(item, `${inputPath}.${key}[${index}]`, seen);
+      });
+      continue;
+    }
+    assertSchemaObjectsSealed(value, `${inputPath}.${key}`, seen);
+  }
 }
 
 function assertFullPreActionGuidance(guidance, expected = {}) {
@@ -319,8 +411,15 @@ function mcpExecutionContract(overrides = {}) {
   };
 }
 
-function mcpVerifiedCriteria(criterion = MCP_EXECUTION_CRITERION) {
-  return [{ criterion, status: "verified", evidencePaths: [MCP_VERIFICATION_PATH] }];
+function mcpVerifiedCriteria(criterion = MCP_EXECUTION_CRITERION, additionalEvidencePaths = []) {
+  return [{
+    criterion,
+    status: "verified",
+    evidencePaths: Array.from(new Set([
+      MCP_VERIFICATION_PATH,
+      ...additionalEvidencePaths
+    ]))
+  }];
 }
 
 function mcpTaskCriterion(task, fallback = MCP_EXECUTION_CRITERION) {
@@ -410,6 +509,7 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "append_handoff",
     "update_research_brief",
     "register_source",
+    "verify_source",
     "upsert_note",
     "upsert_claims",
     "upsert_plan",
@@ -441,22 +541,67 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "validate_figure_pipeline",
     "record_operator_lesson",
     "record_operator_follow_through",
-    "issue_program_approval",
     "plan_campaign",
     "revoke_program_approval",
-    "materialize_guidance_packet",
+    "materialize_guidance_packet"
+  ]);
+});
+
+test("retired authority MCP tools reject direct calls before creating workspace state", () => {
+  for (const retiredToolName of [
+    "issue_program_approval",
     "run_autonomy_once",
     "run_autonomy_foreground",
     "run_autonomy_operate"
-  ]);
+  ]) {
+    const root = createTempRoot(`dove-mcp-retired-${retiredToolName}-`);
+    try {
+      const result = dispatchTool(root, retiredToolName, {
+        actorRole: "planner",
+        packetId: "caller-selected-packet",
+        programRunId: "caller-selected-run",
+        approvalId: "caller-selected-approval"
+      });
+      assert.equal(result.isError, true);
+      assert.match(result.content[0].text, new RegExp(`Unknown tool: ${retiredToolName}`));
+      assert.deepEqual(listRelativeFiles(root), []);
+      assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("packet-only mission MCP mutations reject authority fields before creating workspace state", () => {
+  for (const name of ["materialize_guidance_packet", "launch_dove_mission"]) {
+    for (const authorityField of ["programId", "programRunId", "approvalId", "allowedStepType", "stepSequence"]) {
+      const root = createTempRoot(`dove-mcp-authority-${name}-${authorityField}-`);
+      try {
+        const result = dispatchTool(root, name, {
+          sourceType: "remediation-pack",
+          sourceId: "caller-selected-source",
+          actorRole: "planner",
+          executeBy: "2099-01-01T00:00:00.000Z",
+          reviewAfter: "2099-01-01T12:00:00.000Z",
+          [authorityField]: authorityField === "stepSequence" ? ["upsert-note"] : "caller-selected-authority"
+        });
+        assert.equal(result.isError, true);
+        assert.match(result.content[0].text, new RegExp(`\\$\\.${authorityField}`));
+        assert.deepEqual(listRelativeFiles(root), []);
+        assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    }
+  }
 });
 
 test("doctor MCP probe requires current Dove tools without calling mutating tools", () => {
   const probeText = fs.readFileSync(path.join(process.cwd(), "scripts", "doctor-mcp-probe.mjs"), "utf8");
-  for (const requiredTool of ["query_dove_status", "publish_dove_status", "publish_dove_global_status", "query_document_ledger", "search_network", "query_network_search_providers", "record_document_evidence", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_operate"]) {
+  for (const requiredTool of ["query_dove_status", "publish_dove_status", "publish_dove_global_status", "query_document_ledger", "search_network", "query_network_search_providers", "record_document_evidence", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "query_program_approvals", "launch_dove_mission", "materialize_guidance_packet"]) {
     assert.match(probeText, new RegExp(`"${requiredTool}"`));
   }
-  for (const mutatingTool of ["publish_dove_status", "publish_dove_global_status", "record_document_evidence", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "launch_dove_mission", "materialize_guidance_packet", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
+  for (const mutatingTool of ["publish_dove_status", "publish_dove_global_status", "record_document_evidence", "init_dove_goal", "create_dove_task", "record_dove_mission_pass", "apply_dove_status_adjustments", "run_dove_auto", "run_dove_operator", "kill_dove_task", "reset_dove_version", "run_experience_workflow", "prepare_audio_review", "import_audio_review", "run_audio_review", "run_dove_review_loop", "launch_dove_mission", "materialize_guidance_packet"]) {
     assert.equal(probeText.includes(`tools/call", { name: "${mutatingTool}"`), false, `doctor probe must not call mutating tool ${mutatingTool}`);
   }
 });
@@ -511,10 +656,11 @@ test("Dove MCP server supports Claude Code JSONL stdio framing", async () => {
   try {
     send(1, "initialize");
     send(2, "tools/list");
+    send(3, "tools/list", { detail: "full" });
     await new Promise((resolve, reject) => {
       const startedAt = Date.now();
       const timer = setInterval(() => {
-        if (responses.length >= 2) {
+        if (responses.length >= 3) {
           clearInterval(timer);
           resolve();
           return;
@@ -528,8 +674,105 @@ test("Dove MCP server supports Claude Code JSONL stdio framing", async () => {
 
     assert.equal(responses[0].result.serverInfo.name, "dove");
     assert.ok(responses[1].result.tools.some((tool) => tool.name === "query_dove_status"));
+    assert.equal(responses[2].error.code, -32602);
+    assert.match(
+      responses[2].error.message,
+      /tools\/list does not accept unknown input: \$\.detail/u
+    );
+    assert.deepEqual(listRelativeFiles(root), []);
+    assert.equal(fs.existsSync(path.join(root, ".dove")), false);
   } finally {
     server.kill();
+  }
+});
+
+test("Dove MCP tools/call rejects schema-invalid auto input before confirmation or writes", async () => {
+  const root = createTempRoot("dove-mcp-jsonl-schema-reject-");
+  const server = spawn(process.execPath, [path.join(process.cwd(), "mcp", "dove-state-server.mjs")], {
+    cwd: root,
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  const responses = new Map();
+  let stdout = "";
+  let stderr = "";
+
+  server.stdout.setEncoding("utf8");
+  server.stdout.on("data", (chunk) => {
+    stdout += chunk;
+    while (stdout.includes("\n")) {
+      const lineEnd = stdout.indexOf("\n");
+      const line = stdout.slice(0, lineEnd).trim();
+      stdout = stdout.slice(lineEnd + 1);
+      if (line) {
+        const response = JSON.parse(line);
+        responses.set(response.id, response);
+      }
+    }
+  });
+  server.stderr.setEncoding("utf8");
+  server.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+
+  function send(id, method, params = {}) {
+    server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+  }
+
+  async function waitForIds(ids) {
+    await new Promise((resolve, reject) => {
+      const startedAt = Date.now();
+      const timer = setInterval(() => {
+        if (ids.every((id) => responses.has(id))) {
+          clearInterval(timer);
+          resolve();
+          return;
+        }
+        if (Date.now() - startedAt > 5000) {
+          clearInterval(timer);
+          reject(new Error(`Timed out waiting for JSONL MCP responses. stderr=${stderr}`));
+        }
+      }, 20);
+    });
+  }
+
+  const cases = [
+    { validationEvidencePaths: [42] },
+    { verificationEvidencePaths: [42] },
+    { verifiedCriteria: ["criterion"] },
+    { verifiedCriteria: [{ criterion: "criterion", status: "verified", evidencePaths: [], unexpected: true }] },
+    { checklist: [{ title: "child", unexpected: true }] }
+  ];
+
+  try {
+    send(1, "initialize");
+    await waitForIds([1]);
+    server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+    for (let index = 0; index < cases.length; index += 1) {
+      send(index + 10, "tools/call", {
+        name: "run_dove_auto",
+        arguments: {
+          goal: `Reject malformed auto input ${index + 1}`,
+          maxIterations: 1,
+          steps: [{ command: "dove.status" }],
+          ...cases[index]
+        }
+      });
+    }
+    const ids = cases.map((_, index) => index + 10);
+    await waitForIds(ids);
+
+    for (const id of ids) {
+      const response = responses.get(id);
+      assert.ok(response.result, `tools/call ${id} must return an MCP tool result`);
+      assert.equal(response.result.isError, true);
+      assert.match(response.result.content[0].text, /run_dove_auto input is invalid:/u);
+      assert.doesNotMatch(response.result.content[0].text, /confirmArgs/u);
+    }
+    assert.deepEqual(listRelativeFiles(root), []);
+    assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+  } finally {
+    server.kill();
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -803,7 +1046,7 @@ test("MCP run_figure_workflow routes gpt-image2 missing key to a secret boundary
       delete process.env[key];
     }
 
-    const result = extractToolJson(dispatchToolFull(root, "run_figure_workflow", {
+    const result = extractStructuredToolErrorJson(dispatchToolFull(root, "run_figure_workflow", {
       packetId: "mcp-figure-packet",
       figureId: "mcp-gpt-image2",
       runId: "mcp-gpt-image2-missing-key-run",
@@ -1005,6 +1248,148 @@ test("MCP default direct-process mutations report rollback limits", () => {
 });
 
 
+test("MCP rejects explicit invalid mutationMode before creating workspace state", () => {
+  const root = createTempRoot("dove-mcp-invalid-mutation-mode-");
+  try {
+    const result = dispatchTool(root, "create_dove_task", {
+      id: "invalid-mode-task",
+      goal: "Reject invalid mutation mode before writes.",
+      mutationMode: "invalid-mode"
+    });
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /\$\.mutationMode must be one of: "patch-plan", "direct-process"/);
+    assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("MCP rejects invalid or conflicting mutationMode inside an active context", () => {
+  for (const [mutationMode, expectedError] of [
+    ["invalid-mode", /\$\.mutationMode must be one of: "patch-plan", "direct-process"/],
+    ["direct-process", /does not match the active mutation context mode patch-plan/]
+  ]) {
+    const root = createTempRoot("dove-mcp-active-context-mode-");
+    try {
+      const result = runWithMutationContext(root, {
+        actionId: "mcp-active-context-test",
+        mutationMode: "patch-plan",
+        hostId: "test"
+      }, () => dispatchTool(root, "create_dove_task", {
+        id: "active-context-mode-task",
+        goal: "Reject invalid or conflicting active-context mutation mode.",
+        mutationMode
+      }));
+      assert.equal(result.isError, true);
+      assert.match(result.content[0].text, expectedError);
+      assert.equal(result.mutationSummary.operationCount, 0);
+      assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("MCP create_dove_task binds materialization to the exact compact proposal", () => {
+  const root = createTempRoot("dove-mcp-exact-proposal-");
+  try {
+    const proposalArgs = {
+      id: "exact-proposal-task",
+      title: "Exact proposal task",
+      goal: "Materialize only the exact task contract returned by the MCP proposal.",
+      checklist: false
+    };
+    const compactProposal = extractMcpEnvelopeJson(dispatchTool(root, "create_dove_task", proposalArgs));
+    const fullProposal = extractToolJson(dispatchToolFull(root, "create_dove_task", proposalArgs));
+
+    assert.equal(compactProposal.presentation, "dove-mcp-result-contract");
+    assert.equal(compactProposal.resultMode, "compact");
+    assert.equal(compactProposal.tool, "mission");
+    assert.equal("fullResult" in compactProposal, false);
+    assert.equal("confirmArgs" in compactProposal, false);
+    assert.deepEqual(compactProposal.confirmation, {
+      required: true,
+      proposalVersion: fullProposal.proposalVersion,
+      proposalDigest: fullProposal.proposalDigest,
+      proposalWorkspace: fullProposal.proposalWorkspace,
+      mutationMode: fullProposal.proposalMutationMode,
+      trustBoundary: "trusted-local-exact-replay-data",
+      proofOfHumanApproval: false,
+      tamperProof: false,
+      confirmArgs: fullProposal.confirmArgs
+    });
+    assert.equal(compactProposal.confirmation.proposalVersion, 1);
+    assert.match(compactProposal.confirmation.proposalDigest, /^[0-9a-f]{64}$/u);
+    assert.equal(compactProposal.confirmation.mutationMode, "direct-process");
+    assert.equal(compactProposal.confirmation.proposalWorkspace, fs.realpathSync.native(root));
+    assert.equal(compactProposal.confirmation.confirmArgs.mutationMode, "direct-process");
+    assert.equal(compactProposal.confirmation.confirmArgs.proposalWorkspace, fs.realpathSync.native(root));
+    assert.equal(compactProposal.confirmation.proofOfHumanApproval, false);
+    assert.equal(compactProposal.confirmation.tamperProof, false);
+    assert.deepEqual(compactProposal.confirmation.confirmArgs, fullProposal.confirmArgs);
+    const fullSchemaProperties = toolDefinitions.find((tool) => tool.name === "create_dove_task")?.inputSchema?.properties ?? {};
+    for (const field of Object.keys(fullProposal.confirmArgs)) {
+      assert.ok(fullSchemaProperties[field], `full create_dove_task schema must represent confirmArgs.${field}`);
+    }
+
+    const beforeRejections = snapshotRelativeFileContents(root);
+    assert.deepEqual(beforeRejections, {});
+
+    const bareConfirmed = dispatchTool(root, "create_dove_task", {
+      ...proposalArgs,
+      confirmed: true
+    });
+    assert.equal(bareConfirmed.isError, true);
+    assert.match(bareConfirmed.content[0].text, /exact proposalDigest and task id/u);
+    assert.deepEqual(snapshotRelativeFileContents(root), beforeRejections);
+
+    const digestMismatch = dispatchTool(root, "create_dove_task", {
+      ...compactProposal.confirmation.confirmArgs,
+      proposalDigest: "0".repeat(64)
+    });
+    assert.equal(digestMismatch.isError, true);
+    assert.match(digestMismatch.content[0].text, /proposal replay no longer matches/u);
+    assert.deepEqual(snapshotRelativeFileContents(root), beforeRejections);
+
+    const mutationModeDrift = dispatchTool(root, "create_dove_task", {
+      ...compactProposal.confirmation.confirmArgs,
+      mutationMode: "patch-plan"
+    });
+    assert.equal(mutationModeDrift.isError, true);
+    assert.match(mutationModeDrift.content[0].text, /proposal replay no longer matches|does not match the active mutation context mode/u);
+    assert.deepEqual(snapshotRelativeFileContents(root), beforeRejections);
+
+    for (const alteredArgs of [
+      { ...structuredClone(compactProposal.confirmation.confirmArgs), goal: "Ignored aliases must still be exact." },
+      { ...structuredClone(compactProposal.confirmation.confirmArgs), boundary: { updatedAt: "2040-01-01T00:00:00.000Z" } }
+    ]) {
+      const altered = dispatchTool(root, "create_dove_task", alteredArgs);
+      assert.equal(altered.isError, true);
+      assert.match(altered.content[0].text, /proposal replay no longer matches|does not accept unknown boundary input|\$\.boundary\.updatedAt is not allowed/u);
+      assert.deepEqual(snapshotRelativeFileContents(root), beforeRejections);
+    }
+
+    const duplicateConfirmation = dispatchTool(root, "create_dove_task", {
+      ...compactProposal.confirmation.confirmArgs,
+      confirm: true
+    });
+    assert.equal(duplicateConfirmation.isError, true);
+    assert.match(duplicateConfirmation.content[0].text, /only one confirmation flag/u);
+    assert.deepEqual(snapshotRelativeFileContents(root), beforeRejections);
+
+    const materialized = extractToolJson(dispatchToolFull(
+      root,
+      "create_dove_task",
+      compactProposal.confirmation.confirmArgs
+    ));
+    assert.equal(materialized.status, "materialized");
+    assert.equal(materialized.createdTask.id, proposalArgs.id);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
 test("publish_dove_status writes sanitized public artifacts", () => {
   const root = createTempRoot("dove-mcp-public-status-");
   try {
@@ -1019,14 +1404,13 @@ test("publish_dove_status writes sanitized public artifacts", () => {
       title: "Public status task api_key=supersecret"
     }));
     extractToolJson(dispatchToolFull(root, "create_dove_task", proposal.confirmArgs));
-    extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    proposeAndMaterializeDoveTask(root, {
       id: "public-status-archived",
       goal: "Archived public status noise should not leak details.",
       title: "Archived public status secret api_key=archivedsecret",
       status: "ready",
-      confirmed: true,
       checklist: false
-    }));
+    });
     const archived = extractToolJson(dispatchToolFull(root, "apply_dove_status_adjustments", {
       confirmed: true,
       adjustments: [{ packetId: "public-status-archived", status: "archived", reason: "Retired public dogfood noise." }]
@@ -1084,12 +1468,11 @@ test("publish_dove_global_status aggregates explicit project public artifacts wi
         title: `Global Status Project ${suffix.toUpperCase()}`,
         goal: "Expose a project-local public status for global aggregation."
       }));
-      extractToolJson(dispatchToolFull(projectRoot, "create_dove_task", {
+      proposeAndMaterializeDoveTask(projectRoot, {
         id: `global-status-task-${suffix}`,
         goal: "Publish project status for the global index.",
-        title: `Global status task ${suffix}`,
-        confirmed: true
-      }));
+        title: `Global status task ${suffix}`
+      });
       extractToolJson(dispatchToolFull(projectRoot, "publish_dove_status", { generatedAt: `2026-06-17T0${suffix === "a" ? "1" : "2"}:00:00.000Z` }));
     }
 
@@ -1171,13 +1554,12 @@ test("document evidence ledger stores internal and public-safe entries without p
       title: "Document ledger init",
       goal: "Validate document evidence archival."
     }));
-    const created = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const created = proposeAndMaterializeDoveTask(root, {
       id: "doc-ledger-task",
-      goal: "Record internal and external document evidence.",
+      goal: "Archive document evidence for the ledger.",
       title: "Document ledger task",
-      checklist: false,
-      confirmed: true
-    }));
+      checklist: false
+    });
     const packetId = created.createdTask.id;
 
     const internal = extractToolJson(dispatchToolFull(root, "record_document_evidence", {
@@ -1295,7 +1677,6 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
   try {
     extractToolJson(dispatchToolFull(root, "ensure_workspace", {}));
     const packetId = seedTaskPacket(root, "thin-summary-packet");
-    const override = "Integration test exercises direct thin-surface guidance summaries.";
 
     const emptySource = dispatchTool(root, "register_source", { packetId });
     assert.equal(emptySource.isError, true);
@@ -1342,10 +1723,10 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
 
     const emptyReviewLoopDraft = dispatchTool(root, "run_dove_review_loop", { packetId, runId: "empty-review-loop-draft", draft: {} });
     assert.equal(emptyReviewLoopDraft.isError, true);
-    assert.match(emptyReviewLoopDraft.content[0].text, /draftBody or draft\.body/);
+    assert.match(emptyReviewLoopDraft.content[0].text, /\$\.draft(?: is not allowed|\.)|no longer accepts retired governance input draft/);
     const emptyReviewLoopExperience = dispatchTool(root, "run_dove_review_loop", { packetId, runId: "empty-review-loop-experience", experience: {} });
     assert.equal(emptyReviewLoopExperience.isError, true);
-    assert.match(emptyReviewLoopExperience.content[0].text, /experienceGoal or an experience goal/);
+    assert.match(emptyReviewLoopExperience.content[0].text, /\$\.experience(?: is not allowed|\.)|no longer accepts retired governance input experience/);
     const reviewArtifactText = [path.join(root, ".dove", "reviews", "REVIEW_STATE.json"), path.join(root, ".dove", "reviews", "log.md")]
       .filter((filePath) => fs.existsSync(filePath))
       .map((filePath) => fs.readFileSync(filePath, "utf8"))
@@ -1367,6 +1748,16 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     assert.ok(source.artifactWrites.synthesisArtifactPaths.includes(".dove/bibliography/citation-log.md"));
     assert.ok(source.artifactWrites.synthesisArtifactPaths.includes(".dove/wiki/query_pack.md"));
     assert.ok(source.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/workspace/index.json"));
+    const verification = extractToolJson(dispatchToolFull(root, "verify_source", {
+      packetId,
+      sourceId: source.id,
+      decision: "verified",
+      method: "integration fixture inspected the canonical publication record",
+      checkedMaterial: "source title, authors, year, and publication metadata",
+      auditEvidence: [`fixture:${source.id}`]
+    }));
+    assert.equal(verification.source.lifecycle, "verified");
+    assert.equal(verification.verification.fingerprint, verification.source.fingerprint);
 
     const batchSources = extractToolJson(dispatchToolFull(root, "register_source", {
       packetId,
@@ -1441,8 +1832,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
         evidenceLinks: [".dove/notes/index.json"],
         status: "draft",
         confidence: "medium"
-      }],
-      policyOverrideReason: override
+      }]
     }));
     assert.ok(claims.claims.some((claim) => claim.id === "thin-guidance-claim"));
     assertPreActionGuidanceSummary(claims.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "builder" });
@@ -1464,6 +1854,14 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     assert.ok(draft.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/workspace/index.json"));
     assert.ok(draft.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/sessions/LATEST_SUMMARY.md"));
 
+    const experimentOwner = extractToolJson(dispatchToolFull(root, "append_handoff", {
+      fromRole: "researcher",
+      toRole: "experiment-planner",
+      phase: "experiments",
+      summary: "Transfer the direct experiment flow to its truthful owner."
+    }));
+    assert.equal(experimentOwner.assignedRole, "experiment-planner");
+
     const experimentPlan = extractToolJson(dispatchToolFull(root, "upsert_experiment_plan", {
       packetId,
       id: "thin-guidance-experiment",
@@ -1472,8 +1870,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
       hypothesis: "Direct thin surfaces preserve guidance summaries.",
       methodology: "Record a direct result and inspect audit and bridge summaries.",
       successMetric: "All direct returns include guidance summaries.",
-      comparisonTargets: ["chat-only"],
-      policyOverrideReason: override
+      comparisonTargets: ["chat-only"]
     }));
     assert.equal(experimentPlan.id, "thin-guidance-experiment");
     assertPreActionGuidanceSummary(experimentPlan.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "builder" });
@@ -1490,16 +1887,14 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
         summary: "Thin result supports the guidance summary claim.",
         evidenceLinks: [MCP_VERIFICATION_PATH],
         comparisonTargets: ["chat-only"]
-      },
-      policyOverrideReason: override
+      }
     }));
     assert.equal(experimentResult.id, "thin-guidance-result");
     assertPreActionGuidanceSummary(experimentResult.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "builder" });
 
     const experimentAudit = extractToolJson(dispatchToolFull(root, "run_experiment_audit", {
       packetId: experimentPacketId,
-      resultId: "thin-guidance-result",
-      policyOverrideReason: override
+      resultId: "thin-guidance-result"
     }));
     assert.equal(experimentAudit.resultId, "thin-guidance-result");
     assertPreActionGuidanceSummary(experimentAudit.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "reviewer" });
@@ -1508,8 +1903,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
       packetId: experimentPacketId,
       resultId: "thin-guidance-result",
       auditIds: [experimentAudit.id],
-      reason: "Bridge thin result into claim state for guidance summary coverage.",
-      policyOverrideReason: override
+      reason: "Bridge thin result into claim state for guidance summary coverage."
     }));
     assert.equal(claimBridge.resultId, "thin-guidance-result");
     assertPreActionGuidanceSummary(claimBridge.preActionGuidanceSummary, { surface: "dove.experience", primaryRole: "builder" });
@@ -1658,15 +2052,16 @@ test("create_dove_task materializes a contract and hands off without recording e
     assert.equal(materializedIndex.items.find((item) => item.id === "mission-confirm-task").status, "ready");
 
     const missionCriterion = created.createdTask.executionContract.convergence.criteria[0];
+    const missionArtifact = writeMcpEvidenceFile(root, ".dove/evidence/mission-confirm-artifact.md", "Mission confirmation artifact.\n");
     const pass = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
       packetId: created.createdTask.id,
       runId: "mission-confirm-pass",
       resultStatus: "completed",
       resultSummary: "Explicit post-handoff work produced verified evidence.",
       evidenceLinks: [MCP_VERIFICATION_PATH],
-      artifactRefs: [writeMcpEvidenceFile(root, ".dove/evidence/mission-confirm-artifact.md", "Mission confirmation artifact.\n")],
+      artifactRefs: [missionArtifact],
       verificationEvidencePaths: [MCP_VERIFICATION_PATH],
-      verifiedCriteria: mcpVerifiedCriteria(missionCriterion)
+      verifiedCriteria: mcpVerifiedCriteria(missionCriterion, [missionArtifact])
     }));
     assert.equal(pass.status, "completed");
     assert.equal(pass.result.surface, "dove.mission");
@@ -1690,21 +2085,14 @@ test("create_dove_task materializes a contract and hands off without recording e
     const completedIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     assert.equal(completedIndex.items.find((item) => item.id === "mission-confirm-task").status, "completed");
 
-    const inlineContract = mcpExecutionContract({ convergence: { criteria: ["Inline pass ignored criterion"] } });
-    const inlineCreated = extractToolJson(dispatchToolFull(root, "create_dove_task", {
-      id: "mission-pass-ignored-task",
-      goal: "Convert a mission contract even when stale pass fields are supplied.",
-      title: "Mission pass ignored task",
-      confirmed: true,
+    const inlineContract = mcpExecutionContract({ convergence: { criteria: ["Inline mission criterion"] } });
+    const inlineCreated = proposeAndMaterializeDoveTask(root, {
+      id: "inline-mission-task",
+      goal: "Convert an inline mission contract without recording execution.",
+      title: "Inline mission task",
       executionContract: inlineContract,
-      runId: "mission-pass-ignored-run",
-      resultStatus: "completed",
-      resultSummary: "These stale pass fields must not be recorded during mission materialization.",
-      evidenceLinks: [MCP_VERIFICATION_PATH],
-      artifactRefs: [MCP_VERIFICATION_PATH],
-      verificationEvidencePaths: [MCP_VERIFICATION_PATH],
-      verifiedCriteria: mcpVerifiedCriteria("Inline pass ignored criterion")
-    }));
+      artifactRefs: [MCP_VERIFICATION_PATH]
+    });
     assert.equal(inlineCreated.status, "materialized");
     assert.equal(inlineCreated.contractMaterialized, true);
     assert.equal("missionPassRequired" in inlineCreated, false);
@@ -1715,9 +2103,55 @@ test("create_dove_task materializes a contract and hands off without recording e
     assert.equal(inlineCreated.createdTask.status, "ready");
     assertPreActionGuidanceSummary(inlineCreated.preActionGuidanceSummary, { surface: "dove.mission", primaryRole: "planner" });
     const inlineIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
-    assert.equal(inlineIndex.items.find((item) => item.id === "mission-pass-ignored-task").status, "ready");
+    assert.equal(inlineIndex.items.find((item) => item.id === "inline-mission-task").status, "ready");
     const runtimeAfterInline = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
-    assert.equal(runtimeAfterInline.entries.some((entry) => entry.runId === "mission-pass-ignored-run" || entry.id === "mission-pass-ignored-run"), false);
+    assert.equal(runtimeAfterInline.entries.length, runtimeAfterMaterialization.entries.length + 1);
+    assert.equal(runtimeAfterInline.entries.at(-1)?.runId, "mission-confirm-pass");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("record_dove_mission_pass rejects system-owned workflow routing fields before writes", () => {
+  const root = createTempRoot("dove-mcp-mission-routing-fields-");
+  try {
+    extractToolJson(dispatchToolFull(root, "init_dove_goal", {
+      id: "mission-routing-init",
+      goal: "Validate public mission-pass routing fields are rejected."
+    }));
+    const created = proposeAndMaterializeDoveTask(root, {
+      id: "mission-routing-task",
+      goal: "Preserve durable mission routing state.",
+      title: "Mission routing task",
+      checklist: false,
+      executionContract: mcpExecutionContract()
+    });
+    const packetPath = path.join(root, ".dove", "task-packets", "packets", `${created.createdTask.id}.json`);
+    const indexPath = path.join(root, ".dove", "task-packets", "index.json");
+
+    for (const [field, value] of [
+      ["ownerRole", "reviewer"],
+      ["nextRole", "planner"],
+      ["handoff", { reason: "caller route" }],
+      ["handoffId", "caller-handoff"]
+    ]) {
+      const before = snapshotRelativeFileContents(root);
+      const response = dispatchToolFull(root, "record_dove_mission_pass", {
+        packetId: created.createdTask.id,
+        resultStatus: "blocked",
+        [field]: value
+      });
+      assert.equal(response.isError, true);
+      assert.match(response.content[0].text, new RegExp(`record_dove_mission_pass (?:does not accept unknown input|input is invalid).*${field}`, "u"));
+      assert.deepEqual(snapshotRelativeFileContents(root), before);
+      const packet = JSON.parse(fs.readFileSync(packetPath, "utf8"));
+      const indexed = JSON.parse(fs.readFileSync(indexPath, "utf8")).items.find((item) => item.id === created.createdTask.id);
+      assert.equal(packet.ownerRole ?? null, created.createdTask.ownerRole ?? null);
+      assert.equal(packet.nextRole ?? null, created.createdTask.nextRole ?? null);
+      assert.deepEqual(packet.handoff ?? null, created.createdTask.handoff ?? null);
+      assert.equal(packet.handoffId ?? null, created.createdTask.handoffId ?? null);
+      assert.equal(indexed.status, "ready");
+    }
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1731,14 +2165,13 @@ test("record_dove_mission_pass rejects completion without criteria coverage", ()
       id: "mission-criteria-init",
       goal: "Validate mission criteria completion gate."
     }));
-    const created = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const created = proposeAndMaterializeDoveTask(root, {
       id: "mission-criteria-task",
       goal: "Require verified criteria before completion.",
       title: "Mission criteria task",
       checklist: false,
-      confirmed: true,
       executionContract: mcpExecutionContract()
-    }));
+    });
 
     const rejected = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
       packetId: created.createdTask.id,
@@ -1780,8 +2213,7 @@ test("create_dove_task can propose first-run init and mission together", () => {
     assert.equal(proposal.confirmArgs.initTitle, "First-run Dove workspace");
     assert.equal(proposal.confirmArgs.initObjective, "Validate inline init creation before task materialization.");
 
-    const previewIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
-    assert.deepEqual(previewIndex.items, []);
+    assert.equal(fs.existsSync(path.join(root, ".dove")), false);
 
     const created = extractToolJson(dispatchToolFull(root, "create_dove_task", proposal.confirmArgs));
     assert.equal(created.status, "materialized");
@@ -1825,16 +2257,15 @@ test("completed plan mission pass materializes pending executable missions", () 
         { on: "plan-output-not-executable", boundaryType: "plan-output-not-executable", nextAction: "record_dove_mission_pass", requiredActions: ["provide-executable-child-missions"] }
       ]
     });
-    const created = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const created = proposeAndMaterializeDoveTask(root, {
       id: "plan-conversion-task",
-      goal: "Plan improvements for Dove status and operator workflows.",
+      goal: "Plan Dove operator workflow improvements.",
       title: "Plan Dove workflow improvements",
       stage: "plan",
       domain: "engineering",
       checklist: false,
-      confirmed: true,
       executionContract: planContract
-    }));
+    });
     assert.equal(created.createdTask.stage, "plan");
 
     const topContract = mcpExecutionContract({
@@ -1937,12 +2368,11 @@ test("status adjustment contract applies confirmed non-terminal mission status c
       { id: "status-completed-task", title: "Status completed task", status: "completed" },
       { id: "status-killed-task", title: "Status killed task", status: "killed" }
     ]) {
-      extractToolJson(dispatchToolFull(root, "create_dove_task", {
+      proposeAndMaterializeDoveTask(root, {
         ...task,
         goal: task.title,
-        checklist: false,
-        confirmed: true
-      }));
+        checklist: false
+      });
     }
 
     const status = extractToolJson(dispatchToolFull(root, "query_dove_status", {}));
@@ -2054,7 +2484,7 @@ test("status adjustment contract applies confirmed non-terminal mission status c
     assert.equal(rejected.status, "rejected");
     assert.match(rejected.rejected[0].reason, /level-0 init (?:task|任务)/);
 
-    const noOp = extractToolJson(dispatchToolFull(root, "apply_dove_status_adjustments", {
+    const noOp = extractStructuredToolErrorJson(dispatchToolFull(root, "apply_dove_status_adjustments", {
       confirmed: true,
       adjustments: []
     }));
@@ -2079,15 +2509,14 @@ test("apply_dove_status_adjustments records execution receipts for verified comp
       id: "status-receipt-init",
       goal: "Validate status adjustment execution receipts."
     });
-    extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    proposeAndMaterializeDoveTask(root, {
       id: "status-receipt-task",
       title: "Status receipt task",
       goal: "Complete through status adjustment only when verification evidence is attached.",
       status: "ready",
       executionContract: mcpExecutionContract(),
-      confirmed: true,
       checklist: false
-    }));
+    });
 
     const rejected = extractToolJson(dispatchToolFull(root, "apply_dove_status_adjustments", {
       confirmed: true,
@@ -2155,16 +2584,15 @@ test("run_dove_operator leaves host-pass-only queues unchanged without taskResul
       id: "operator-host-only-init",
       goal: "Validate host-pass-only operator no-op semantics."
     });
-    extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    proposeAndMaterializeDoveTask(root, {
       id: "operator-host-only-source",
       title: "Operator source material boundary task",
       goal: "Collect verified source provenance before recording material progress.",
       status: "ready",
       nextAction: "project:dove.source",
       domain: "paper",
-      checklist: false,
-      confirmed: true
-    }));
+      checklist: false
+    });
 
     const preview = extractToolJson(dispatchToolFull(root, "run_dove_operator", {}));
     assert.equal(preview.status, "needs-confirmation");
@@ -2175,7 +2603,7 @@ test("run_dove_operator leaves host-pass-only queues unchanged without taskResul
     assert.equal(preview.queueCards, undefined);
     assert.deepEqual(preview.queuePreview.hostPassRequired.map((card) => card.packetId), ["operator-host-only-source"]);
 
-    const run = extractToolJson(dispatchToolFull(root, "run_dove_operator", {
+    const run = extractStructuredToolErrorJson(dispatchToolFull(root, "run_dove_operator", {
       confirmed: true,
       runId: "operator-host-only-run"
     }));
@@ -2223,13 +2651,12 @@ test("run_dove_operator previews blocker investigations and only creates them wh
       { id: "operator-blocked", title: "Operator blocked task", status: "blocked" },
       { id: "operator-pending", title: "Operator pending task", status: "pending" }
     ]) {
-      extractToolJson(dispatchToolFull(root, "create_dove_task", {
+      proposeAndMaterializeDoveTask(root, {
         ...task,
         goal: task.title,
         domain: "engineering",
-        checklist: false,
-        confirmed: true
-      }));
+        checklist: false
+      });
     }
 
     const preview = extractToolJson(dispatchToolFull(root, "run_dove_operator", {}));
@@ -2267,7 +2694,7 @@ test("run_dove_operator previews blocker investigations and only creates them wh
     assertFullPreActionGuidance(detailedPreview.queueCards.blocked[0].preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
     assert.equal(detailedPreview.blockedTasks.find((task) => task.id === "operator-unresolved").unresolvedDependencyIds[0], "missing-dependency");
 
-    const run = extractToolJson(dispatchToolFull(root, "run_dove_operator", {
+    const run = extractStructuredToolErrorJson(dispatchToolFull(root, "run_dove_operator", {
       confirmed: true,
       runId: "operator-run",
       taskResults: [
@@ -2347,7 +2774,7 @@ test("run_dove_operator previews blocker investigations and only creates them wh
     assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.boundary.opened" && entry.packetId === "operator-host-missing"), false);
     assert.equal(runtimeEvents.entries.some((entry) => entry.type === "task.lifecycle.transitioned" && entry.packetId === "operator-host-progress" && entry.toStatus === "completed"), true);
 
-    const createRun = extractToolJson(dispatchToolFull(root, "run_dove_operator", {
+    const createRun = extractStructuredToolErrorJson(dispatchToolFull(root, "run_dove_operator", {
       confirmed: true,
       runId: "operator-create-blockers-run",
       blockerInvestigationMode: "create"
@@ -2372,7 +2799,7 @@ test("run_dove_operator previews blocker investigations and only creates them wh
     assert.equal(unresolvedPlan.stage, "plan");
     assert.equal(unresolvedPlan.level, 4);
 
-    const reuseRun = extractToolJson(dispatchToolFull(root, "run_dove_operator", {
+    const reuseRun = extractStructuredToolErrorJson(dispatchToolFull(root, "run_dove_operator", {
       confirmed: true,
       runId: "operator-reuse-blockers-run",
       createBlockedInvestigations: true
@@ -2439,15 +2866,14 @@ test("create_dove_task materializes checklist children below explicit mission le
       ...created.createdChecklistTasks.map((item) => item.id)
     ]);
 
-    const secondCreated = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const secondCreated = proposeAndMaterializeDoveTask(root, {
       id: "mission-checklist-second-parent",
       goal: "Implement and validate another checklist-backed mission workflow.",
       title: "Second mission checklist parent",
       level: 2,
       autoChecklist: true,
-      evidenceExpectations: ["implementation", "validation"],
-      confirmed: true
-    }));
+      evidenceExpectations: ["implementation", "validation"]
+    });
     assert.equal(secondCreated.createdChecklistTasks.length, 3);
     const firstChildIds = new Set(created.createdChecklistTasks.map((item) => item.id));
     for (const child of secondCreated.createdChecklistTasks) {
@@ -2467,13 +2893,12 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
       id: "parent-child-evidence-init",
       goal: "Validate parent mission pass evidence lineage."
     });
-    const created = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const created = proposeAndMaterializeDoveTask(root, {
       id: "parent-child-evidence-parent",
       goal: "Record parent mission evidence produced by checklist children.",
       title: "Parent child evidence mission",
-      autoChecklist: true,
-      confirmed: true
-    }));
+      autoChecklist: true
+    });
     assert.equal(created.createdChecklistTasks.length, 3);
     const child = created.createdChecklistTasks[0];
     const childArtifact = writeMcpEvidenceFile(root, ".dove/audio/reviews/parent-child-evidence/report.md", "Checklist child review evidence.\n");
@@ -2492,7 +2917,7 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
     assert.equal(childPass.result.packetId, child.id);
 
     for (const [index, checklistChild] of created.createdChecklistTasks.slice(1).entries()) {
-      const checklistArtifact = writeMcpEvidenceFile(root, `.dove/audio/reviews/parent-child-evidence/checklist-${index + 2}.md`, `Checklist ${index + 2} evidence.\n`);
+      const checklistArtifact = writeMcpEvidenceFile(root, `.dove/audio/reviews/parent-child-evidence-${index + 2}/report.md`, `Checklist ${index + 2} evidence.\n`);
       const checklistPass = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
         packetId: checklistChild.id,
         runId: `parent-child-evidence-child-${index + 2}-pass`,
@@ -2532,13 +2957,12 @@ test("record_dove_mission_pass accepts descendant evidence for explicit parent p
     assert.deepEqual(persistedParent.evidenceLinks, [childArtifact]);
 
     const siblingArtifact = writeMcpEvidenceFile(root, ".dove/audio/reviews/parent-child-evidence-sibling/report.md", "Sibling review evidence.\n");
-    const sibling = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const sibling = proposeAndMaterializeDoveTask(root, {
       id: "parent-child-evidence-sibling",
       goal: "Produce sibling evidence that should not be accepted by the parent.",
       title: "Parent child evidence sibling",
-      checklist: false,
-      confirmed: true
-    }));
+      checklist: false
+    });
     const siblingPass = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
       packetId: sibling.createdTask.id,
       runId: "parent-child-evidence-sibling-pass",
@@ -2580,13 +3004,12 @@ test("record_dove_mission_pass requires checklist children to be done before par
       id: "parent-child-completion-init",
       goal: "Validate parent completion waits for checklist children."
     });
-    const created = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const created = proposeAndMaterializeDoveTask(root, {
       id: "parent-child-completion-parent",
       goal: "Complete a checklist-backed parent mission.",
       title: "Parent child completion mission",
-      autoChecklist: true,
-      confirmed: true
-    }));
+      autoChecklist: true
+    });
     assert.equal(created.createdChecklistTasks.length, 3);
 
     const artifact = writeMcpEvidenceFile(root, ".dove/evidence/parent-child-completion-result.md", "Parent completion evidence.\n");
@@ -2615,7 +3038,7 @@ test("record_dove_mission_pass requires checklist children to be done before par
         artifactRefs: [childArtifact],
         evidenceLinks: [childArtifact],
         verificationEvidencePaths: [MCP_VERIFICATION_PATH],
-        verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(child))
+        verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(child), [childArtifact])
       }));
       assert.equal(childPass.status, "completed");
     }
@@ -2628,7 +3051,7 @@ test("record_dove_mission_pass requires checklist children to be done before par
       artifactRefs: [artifact],
       evidenceLinks: [artifact],
       verificationEvidencePaths: [MCP_VERIFICATION_PATH],
-      verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(created.createdTask))
+      verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(created.createdTask), [artifact])
     }));
     assert.equal(pass.status, "completed");
   } finally {
@@ -2643,13 +3066,12 @@ test("apply_dove_status_adjustments rejects completed parents with open checklis
       id: "parent-child-repair-init",
       goal: "Validate completed parent checklist reconciliation."
     });
-    const created = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const created = proposeAndMaterializeDoveTask(root, {
       id: "parent-child-repair-parent",
       goal: "Reject a legacy completed parent with open checklist children.",
       title: "Parent child repair mission",
-      autoChecklist: true,
-      confirmed: true
-    }));
+      autoChecklist: true
+    });
     const timestamp = new Date().toISOString();
     const parentPath = path.join(root, ".dove", "task-packets", "packets", `${created.createdTask.id}.json`);
     const parentPacket = JSON.parse(fs.readFileSync(parentPath, "utf8"));
@@ -2715,13 +3137,12 @@ test("apply_dove_status_adjustments accepts parent and checklist completion in o
       id: "parent-child-batch-completion-init",
       goal: "Validate batch completion order for checklist-backed parents."
     });
-    const created = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const created = proposeAndMaterializeDoveTask(root, {
       id: "parent-child-batch-completion-parent",
       goal: "Complete parent and checklist children in one confirmation.",
       title: "Parent child batch completion mission",
-      autoChecklist: true,
-      confirmed: true
-    }));
+      autoChecklist: true
+    });
 
     const result = extractToolJson(dispatchToolFull(root, "apply_dove_status_adjustments", {
       confirmed: true,
@@ -2784,12 +3205,11 @@ test("run_dove_auto records bounded foreground iterations", () => {
       id: "auto-foreground-init",
       goal: "Validate foreground auto iterations."
     });
-    const foregroundTask = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const foregroundTask = proposeAndMaterializeDoveTask(root, {
       id: "auto-foreground-task",
       goal: "Run two explicit foreground auto steps.",
-      title: "Auto foreground task",
-      confirmed: true
-    }));
+      title: "Auto foreground task"
+    });
 
     const needsConfirmation = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
       packetId: "auto-foreground-task",
@@ -2847,18 +3267,19 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(demandConfirmation.confirmArgs.confirmed, true);
     assert.equal(demandConfirmation.confirmArgs.checklistItems.length, 3);
 
-    extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    proposeAndMaterializeDoveTask(root, {
       id: "auto-host-boundary-task",
       goal: "Require a real host pass instead of pretending generic engineering work ran.",
       title: "Auto host boundary task",
-      confirmed: true,
       checklist: false
-    }));
-    const hostBoundary = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
-      packetId: "auto-host-boundary-task",
-      confirmed: true,
+    });
+    const hostBoundary = proposeAndRunDoveAuto(root, {
+      packetId: "auto-host-boundary-task"
+    }, {
       runId: "auto-host-boundary-run"
-    }));
+    }, {
+      expectOperationalFailure: true
+    });
     assert.equal(hostBoundary.status, "awaiting-host-pass");
     assert.equal(hostBoundary.requiresHostPass, true);
     assert.deepEqual(hostBoundary.proposedSteps, []);
@@ -2874,14 +3295,13 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal("handoffSuggestion" in hostBoundary.resultCard.nextActions[0], false);
     assert.deepEqual(hostBoundary.resultCard.nextActions[0].requiredActions, ["provide-host-pass-result", "provide-explicit-auto-step"]);
 
-    extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    proposeAndMaterializeDoveTask(root, {
       id: "auto-host-tool-blocked-task",
       goal: "Record a host tool classifier failure as a blocked mission.",
       title: "Auto host tool blocked task",
-      confirmed: true,
       checklist: false
-    }));
-    const hostToolBlocked = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
+    });
+    const hostToolBlocked = extractStructuredToolErrorJson(dispatchToolFull(root, "record_dove_mission_pass", {
       packetId: "auto-host-tool-blocked-task",
       runId: "auto-host-tool-blocked-run",
       resultStatus: "blocked",
@@ -2904,13 +3324,12 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(hostToolCard.boundaryType, "host-tool-blocked");
     assert.equal(hostToolCard.kind, "provide-evidence-or-result");
 
-    extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    proposeAndMaterializeDoveTask(root, {
       id: "auto-source-needs-host",
       goal: "Collect CVPR author kit source provenance and register external URLs.",
       title: "Auto source needs host provenance",
-      confirmed: true,
       checklist: false
-    }));
+    });
     const sourceConfirmation = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
       packetId: "auto-source-needs-host"
     }));
@@ -2920,11 +3339,13 @@ test("run_dove_auto records bounded foreground iterations", () => {
     assert.equal(sourceConfirmation.requiresHostPass, true);
     assert.equal(sourceConfirmation.whyThisStep, "source-requires-host-provenance");
 
-    const sourceBoundary = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
-      packetId: "auto-source-needs-host",
-      confirmed: true,
+    const sourceBoundary = proposeAndRunDoveAuto(root, {
+      packetId: "auto-source-needs-host"
+    }, {
       runId: "auto-source-needs-host-run"
-    }));
+    }, {
+      expectOperationalFailure: true
+    });
     assert.equal(sourceBoundary.status, "awaiting-host-pass");
     assert.equal(sourceBoundary.result.iterations[0].command, null);
     assert.equal(sourceBoundary.result.stopReason, "source-requires-host-provenance");
@@ -2933,17 +3354,14 @@ test("run_dove_auto records bounded foreground iterations", () => {
     const sourceIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "sources", "index.json"), "utf8"));
     assert.equal(sourceIndex.items.length, 0);
 
-    extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    proposeAndMaterializeDoveTask(root, {
       id: "auto-source-unverified-provenance",
       goal: "Try to register a source after host search and fetch failed.",
       title: "Auto source unverified provenance",
-      confirmed: true,
       checklist: false
-    }));
-    const unverifiedSourceRun = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
+    });
+    const unverifiedSourceRun = proposeAndRunDoveAuto(root, {
       packetId: "auto-source-unverified-provenance",
-      confirmed: true,
-      runId: "auto-source-unverified-provenance-run",
       steps: [
         {
           command: "dove.source",
@@ -2960,7 +3378,11 @@ test("run_dove_auto records bounded foreground iterations", () => {
           }
         }
       ]
-    }));
+    }, {
+      runId: "auto-source-unverified-provenance-run"
+    }, {
+      expectOperationalFailure: true
+    });
     assert.equal(unverifiedSourceRun.status, "blocked-boundary");
     assert.equal(unverifiedSourceRun.result.stopReason, "source-provenance-unverified");
     assert.equal(unverifiedSourceRun.task.status, "blocked");
@@ -2969,17 +3391,14 @@ test("run_dove_auto records bounded foreground iterations", () => {
     const sourceIndexAfterUnverifiedRun = JSON.parse(fs.readFileSync(path.join(root, ".dove", "sources", "index.json"), "utf8"));
     assert.equal(sourceIndexAfterUnverifiedRun.items.length, 0);
 
-    const sourceNoteTask = extractToolJson(dispatchToolFull(root, "create_dove_task", {
+    const sourceNoteTask = proposeAndMaterializeDoveTask(root, {
       id: "auto-source-note-sequence",
       goal: "Collect CVPR source provenance and synthesize venue writing guidance.",
       title: "Auto source note sequence",
-      confirmed: true,
       checklist: false
-    }));
-    const sourceNoteRun = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
+    });
+    const sourceNoteRun = proposeAndRunDoveAuto(root, {
       packetId: "auto-source-note-sequence",
-      confirmed: true,
-      runId: "auto-source-note-sequence-run",
       maxIterations: 2,
       steps: [
         {
@@ -3019,7 +3438,7 @@ test("run_dove_auto records bounded foreground iterations", () => {
           }
         }
       ]
-    }));
+    });
     assert.equal(sourceNoteRun.status, "completed");
     assert.deepEqual(sourceNoteRun.result.iterations.map((iteration) => iteration.command), ["dove.source", "dove.note"]);
     assert.notEqual(sourceNoteRun.result.stopReason, "source-requires-host-provenance");
@@ -3053,28 +3472,42 @@ test("run_dove_auto records bounded foreground iterations", () => {
       },
       {
         id: "auto-review-loop-needs-material",
-        step: { command: "dove.review-loop", args: { draft: {} } },
-        reason: "review-loop-requires-host-material",
-        requiredActions: ["provide-review-loop-draft-or-experience-material", "provide-explicit-auto-step"]
+        step: { command: "dove.review-loop", args: {} },
+        reasonPattern: /requires at least one existing non-empty non-bookkeeping substantive artifact/u,
+        requiredActions: []
       }
     ]) {
-      extractToolJson(dispatchToolFull(root, "create_dove_task", {
+      proposeAndMaterializeDoveTask(root, {
         id: missingMaterialCase.id,
         goal: `Validate ${missingMaterialCase.reason}.`,
         title: missingMaterialCase.id,
-        confirmed: true,
         checklist: false
-      }));
-      const boundary = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
+      });
+      const boundary = proposeAndRunDoveAuto(root, {
         packetId: missingMaterialCase.id,
-        confirmed: true,
-        runId: `${missingMaterialCase.id}-run`,
         steps: [missingMaterialCase.step]
-      }));
-      assert.equal(boundary.status, "awaiting-host-pass");
-      assert.equal(boundary.result.stopReason, missingMaterialCase.reason);
+      }, {
+        runId: `${missingMaterialCase.id}-run`
+      }, {
+        expectOperationalFailure: true
+      });
+      assert.equal(
+        boundary.status,
+        missingMaterialCase.id === "auto-review-loop-needs-material"
+          ? "blocked-boundary"
+          : "awaiting-host-pass"
+      );
+      if (missingMaterialCase.reasonPattern) {
+        assert.match(boundary.result.stopReason, missingMaterialCase.reasonPattern);
+      } else {
+        assert.equal(boundary.result.stopReason, missingMaterialCase.reason);
+      }
       assert.deepEqual(boundary.task.boundary.requiredActions, missingMaterialCase.requiredActions);
-      assert.deepEqual(boundary.resultCard.nextActions[0].requiredActions, missingMaterialCase.requiredActions);
+      if (missingMaterialCase.requiredActions.length > 0) {
+        assert.deepEqual(boundary.resultCard.nextActions[0].requiredActions, missingMaterialCase.requiredActions);
+      } else {
+        assert.equal(boundary.resultCard.nextActions[0].requiredActions, undefined);
+      }
     }
 
     const autoNoteSource = extractToolJson(dispatchToolFull(root, "register_source", {
@@ -3084,10 +3517,8 @@ test("run_dove_auto records bounded foreground iterations", () => {
       locator: "integration-test:auto-foreground-source",
       sourceType: "test-fixture"
     }));
-    const autoRun = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
+    const autoRun = proposeAndRunDoveAuto(root, {
       packetId: "auto-foreground-task",
-      confirmed: true,
-      runId: "auto-foreground-run",
       maxIterations: 3,
       steps: [
         { command: "dove.note", args: { title: "Auto note", sectionId: "auto", sourceIds: [autoNoteSource.id], summary: "Auto recorded a foreground note." } },
@@ -3097,20 +3528,6 @@ test("run_dove_auto records bounded foreground iterations", () => {
           outputArtifacts: [MCP_VERIFICATION_PATH, ".dove/notes/index.json"],
           verificationEvidencePaths: [MCP_VERIFICATION_PATH],
           verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(foregroundTask.createdTask)),
-          executionReceipt: {
-            receiptId: "auto-explicit-step-receipt",
-            packetId: "auto-foreground-task",
-            actionType: "build",
-            artifactRefs: [".dove/notes/index.json"],
-            verificationEvidencePaths: [MCP_VERIFICATION_PATH],
-            verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(foregroundTask.createdTask)),
-            criteriaCoverage: {
-              complete: true,
-              required: [mcpTaskCriterion(foregroundTask.createdTask)],
-              missing: [],
-              verified: mcpVerifiedCriteria(mcpTaskCriterion(foregroundTask.createdTask))
-            }
-          },
           args: {
             noteId: "auto-completion-note",
             title: "Auto completion note",
@@ -3120,28 +3537,36 @@ test("run_dove_auto records bounded foreground iterations", () => {
           }
         }
       ]
-    }));
+    }, {
+      runId: "auto-foreground-run"
+    });
     assert.equal(autoRun.status, "completed");
+    assert.deepEqual(objectKeyPaths(autoRun, "executionReceipt"), [
+      "$.result.iterations[0].executionReceipt",
+      "$.result.iterations[1].executionReceipt"
+    ]);
     assert.equal(autoRun.result.foreground, true);
     assert.equal(autoRun.result.background, false);
     assert.equal(autoRun.result.daemon, false);
     assert.equal(autoRun.result.maxIterations, 3);
     assert.equal(autoRun.result.iterationCount, 2);
     assert.deepEqual(autoRun.result.iterations.map((iteration) => iteration.command), ["dove.note", "dove.note"]);
-    assert.equal(autoRun.result.iterations[1].executionReceipt.receiptId, "auto-explicit-step-receipt");
-    assert.equal(autoRun.result.iterations[1].executionReceipt.criteriaCoverage.complete, true);
+    assert.equal(autoRun.result.iterations[1].executionReceipt ?? null, null);
     assert.equal(autoRun.result.stopReason, "completion-confirmed-by-auto-step");
     assert.equal(autoRun.result.taskStatusAfter, "completed");
     assertPublicResultCard(autoRun.resultCard, { surface: "dove.auto" });
-    assert.equal(autoRun.resultCard.executionReceipt.criteriaCoverage.complete, true);
+    assert.equal(autoRun.resultCard.executionReceipt ?? null, null);
     assert.equal(autoRun.resultCard.completed, true);
 
     const runtimeResults = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "results.json"), "utf8"));
     const persisted = runtimeResults.entries.find((item) => item.id === "auto-foreground-run");
     assert.ok(persisted, "auto runtime result should be persisted");
+    assert.deepEqual(objectKeyPaths(persisted, "executionReceipt"), [
+      "$.iterations[0].executionReceipt",
+      "$.iterations[1].executionReceipt"
+    ]);
     assert.equal(persisted.iterationCount, 2);
-    assert.equal(persisted.iterations[1].executionReceipt.receiptId, "auto-explicit-step-receipt");
-    assert.equal(persisted.iterations[1].executionReceipt.criteriaCoverage.complete, true);
+    assert.equal(persisted.iterations[1].executionReceipt ?? null, null);
     assert.equal(persisted.background, false);
     assert.equal(persisted.resultCard, undefined);
     const runtimeEvents = JSON.parse(fs.readFileSync(path.join(root, ".dove", "runtime", "events.json"), "utf8"));
@@ -3160,6 +3585,7 @@ test("run_dove_auto can propose first-run init and materialize after confirmatio
   const root = createTempRoot("dove-mcp-first-run-auto-");
   try {
     writeMcpEvidenceFile(root);
+    const firstRunCriterion = "First-run auto produces verified source and note artifacts";
     const proposal = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
       id: "first-run-auto-task",
       goal: "Start auto from a real demand without a prior init command.",
@@ -3167,20 +3593,10 @@ test("run_dove_auto can propose first-run init and materialize after confirmatio
       initTitle: "First-run auto workspace",
       initObjective: "Validate inline init creation before auto execution.",
       checklist: false,
-      maxIterations: 2
-    }));
-    assert.equal(proposal.status, "needs-confirmation");
-    assert.equal(proposal.initMaterializationRequired, true);
-    assert.equal(proposal.proposedInit.id, "init");
-    assert.equal(proposal.proposedInit.level, 0);
-    assert.equal(proposal.proposedTask.parentId, "init");
-    assert.equal(proposal.executionMode, "multi-round-foreground-auto");
-    assert.equal(proposal.confirmArgs.initTitle, "First-run auto workspace");
-    assert.equal(proposal.confirmArgs.maxIterations, 2);
-
-    const run = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
-      ...proposal.confirmArgs,
-      runId: "first-run-auto-run",
+      maxIterations: 2,
+      executionContract: mcpExecutionContract({
+        convergence: { criteria: [firstRunCriterion] }
+      }),
       steps: [
         {
           command: "dove.source",
@@ -3197,7 +3613,7 @@ test("run_dove_auto can propose first-run init and materialize after confirmatio
           completeTask: true,
           outputArtifacts: [MCP_VERIFICATION_PATH, ".dove/notes/index.json"],
           verificationEvidencePaths: [MCP_VERIFICATION_PATH],
-          verifiedCriteria: mcpVerifiedCriteria(mcpTaskCriterion(proposal.proposedTask)),
+          verifiedCriteria: mcpVerifiedCriteria(firstRunCriterion),
           args: {
             noteId: "first-run-auto-note",
             title: "First-run auto note",
@@ -3207,6 +3623,19 @@ test("run_dove_auto can propose first-run init and materialize after confirmatio
           }
         }
       ]
+    }));
+    assert.equal(proposal.status, "needs-confirmation");
+    assert.equal(proposal.initMaterializationRequired, true);
+    assert.equal(proposal.proposedInit.id, "init");
+    assert.equal(proposal.proposedInit.level, 0);
+    assert.equal(proposal.proposedTask.parentId, "init");
+    assert.equal(proposal.executionMode, "multi-round-foreground-auto");
+    assert.equal(proposal.confirmArgs.initTitle, "First-run auto workspace");
+    assert.equal(proposal.confirmArgs.maxIterations, 2);
+
+    const run = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
+      ...proposal.confirmArgs,
+      runId: "first-run-auto-run"
     }));
     assert.equal(run.status, "completed");
     assert.equal(run.task.id, "first-run-auto-task");
@@ -3221,11 +3650,114 @@ test("run_dove_auto can propose first-run init and materialize after confirmatio
   }
 });
 
+test("MCP run_dove_auto compact confirmation is exact and directly replayable", () => {
+  const root = createTempRoot("dove-mcp-auto-exact-proposal-");
+  const otherRoot = createTempRoot("dove-mcp-auto-cross-workspace-");
+  try {
+    const proposalArgs = {
+      id: "mcp-auto-exact-demand",
+      goal: "Replay only the exact compact auto demand contract.",
+      title: "MCP auto exact demand",
+      checklist: false,
+      maxIterations: 1,
+      steps: [{
+        command: "dove.note",
+        args: {
+          noteId: "mcp-auto-exact-note",
+          title: "MCP auto exact note",
+          sectionId: "mcp-auto-exact",
+          summary: "Compact confirmation preserves exact auto replay fields."
+        }
+      }]
+    };
+    const compactProposal = extractMcpEnvelopeJson(dispatchTool(root, "run_dove_auto", proposalArgs));
+    const fullProposal = extractToolJson(dispatchToolFull(root, "run_dove_auto", proposalArgs));
+
+    assert.deepEqual(objectKeyPaths(compactProposal, "executionReceipt"), []);
+    assert.deepEqual(objectKeyPaths(fullProposal, "executionReceipt"), []);
+    assert.deepEqual(objectKeyPaths(fullProposal.confirmArgs, "executionReceipt"), []);
+    assert.deepEqual(objectKeyPaths(fullProposal.proposedSteps, "executionReceipt"), []);
+    assert.equal(compactProposal.confirmation.required, true);
+    assert.equal(compactProposal.confirmation.proposalKind, "demand");
+    assert.equal(compactProposal.confirmation.mutationMode, "direct-process");
+    assert.equal(compactProposal.confirmation.proposalWorkspace, fs.realpathSync.native(root));
+    assert.deepEqual(compactProposal.confirmation.confirmArgs, fullProposal.confirmArgs);
+    assert.equal(compactProposal.confirmation.confirmArgs.proposalKind, "demand");
+    assert.equal(compactProposal.confirmation.confirmArgs.mutationMode, "direct-process");
+    assert.deepEqual(snapshotRelativeFileContents(root), {});
+
+    for (const alteredArgs of [
+      {
+        ...structuredClone(compactProposal.confirmation.confirmArgs),
+        maxIterations: 2
+      },
+      {
+        ...structuredClone(compactProposal.confirmation.confirmArgs),
+        steps: [{
+          command: "dove.note",
+          completeTask: true,
+          args: {
+            noteId: "mcp-auto-exact-note",
+            title: "MCP auto exact note",
+            sectionId: "mcp-auto-exact",
+            summary: "Compact confirmation preserves exact auto replay fields."
+          }
+        }]
+      },
+      {
+        ...structuredClone(compactProposal.confirmation.confirmArgs),
+        mutationMode: "patch-plan"
+      }
+    ]) {
+      const rejected = dispatchTool(root, "run_dove_auto", alteredArgs);
+      assert.equal(rejected.isError, true);
+      assert.match(rejected.content[0].text, /proposal replay no longer matches|does not match the active mutation context mode/u);
+      assert.deepEqual(snapshotRelativeFileContents(root), {});
+    }
+
+    const crossWorkspace = dispatchTool(otherRoot, "run_dove_auto", compactProposal.confirmation.confirmArgs);
+    assert.equal(crossWorkspace.isError, true);
+    assert.match(crossWorkspace.content[0].text, /different canonical workspace/u);
+    assert.deepEqual(snapshotRelativeFileContents(otherRoot), {});
+
+    const replayed = extractStructuredToolErrorJson(dispatchToolFull(root, "run_dove_auto", {
+      ...compactProposal.confirmation.confirmArgs,
+      runId: "mcp-auto-exact-run"
+    }));
+    assert.equal(replayed.status, "blocked-boundary");
+    assert.equal(replayed.task.id, "mcp-auto-exact-demand");
+    assert.equal(replayed.result.packetId, "mcp-auto-exact-demand");
+
+    const patchRoot = createTempRoot("dove-mcp-auto-patch-proposal-");
+    try {
+      const patchProposal = extractToolJson(dispatchToolFull(patchRoot, "run_dove_auto", {
+        ...proposalArgs,
+        id: "mcp-auto-patch-demand",
+        mutationMode: "patch-plan"
+      }));
+      assert.equal(patchProposal.proposalMutationMode, "patch-plan");
+      assert.equal(patchProposal.confirmArgs.mutationMode, "patch-plan");
+      assert.equal(patchProposal.writesApplied, false);
+      assert.equal(patchProposal.mutationSummary.operationCount, 0);
+      assert.deepEqual(patchProposal.mutationPlan.operations, []);
+      assert.deepEqual(snapshotRelativeFileContents(patchRoot), {});
+    } finally {
+      fs.rmSync(patchRoot, { recursive: true, force: true });
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(otherRoot, { recursive: true, force: true });
+  }
+});
+
 test("isolated review MCP tools prepare and import explicit handoff artifacts", () => {
   const root = createTempRoot("dove-mcp-isolated-review-");
   try {
     seedTaskPacket(root);
-    const prepared = extractToolJson(dispatchToolFull(root, "prepare_isolated_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-1", scope: "mcp validation" }));
+    const isolatedReviewedArtifact = ".dove/drafts/mcp-isolated-reviewed.md";
+    fs.mkdirSync(path.join(root, ".dove", "drafts"), { recursive: true });
+    fs.writeFileSync(path.join(root, isolatedReviewedArtifact), "# MCP isolated reviewed artifact\n\nSubstantive packet review material.\n", "utf8");
+    const prepared = extractToolJson(dispatchToolFull(root, "prepare_isolated_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-1", scope: "mcp validation", artifactPaths: [isolatedReviewedArtifact] }));
     assert.equal(prepared.status, "prepared");
     assert.equal(prepared.runId, "mcp-isolated-1");
     assertPreActionGuidanceSummary(prepared.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
@@ -3266,14 +3798,22 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.equal("nextRole" in runReview.resultCard.nextActions[0], false);
     assert.equal("requiredActions" in runReview.resultCard.nextActions[0], false);
 
-    const reviewLoop = extractToolJson(dispatchToolFull(root, "run_dove_review_loop", { packetId: "mcp-main-packet", runId: "mcp-review-loop-local", maxIterations: 1 }));
+    const reviewLoop = extractToolJson(dispatchToolFull(root, "run_dove_review_loop", { packetId: "mcp-main-packet", runId: "mcp-review-loop-local", artifactPaths: [isolatedReviewedArtifact] }));
     assert.equal(reviewLoop.status, "coherent");
     assert.equal(reviewLoop.stopReason, "review-coherent");
     assertPublicResultCard(reviewLoop.resultCard, { surface: "dove.review-loop" });
-    assert.equal(reviewLoop.iterations[0].review.verdict, "coherent");
-    assertPublicResultCard(reviewLoop.iterations[0].review.resultCard, { surface: "dove.review" });
-    assert.equal("handoffSuggestion" in reviewLoop.iterations[0].review.resultCard.nextActions[0], false);
+    assert.equal(reviewLoop.review.verdict, "coherent");
+    assertPublicResultCard(reviewLoop.review.resultCard, { surface: "dove.review" });
+    assert.equal("handoffSuggestion" in reviewLoop.review.resultCard.nextActions[0], false);
 
+    upsertOrchestrationBoard(root, {
+      phase: "review",
+      assignedRole: "reviewer",
+      intentType: "review",
+      currentFocus: "Import the prepared audio reviewer return.",
+      nextAction: `Import audio review ${runReview.runId}.`,
+      handoffSummary: `Returning ownership to the audio reviewer for prepared run ${runReview.runId}.`
+    });
     fs.writeFileSync(path.join(root, runReview.reportPath), "# MCP isolated report\n\nNeeds validation evidence.\n", "utf8");
     fs.writeFileSync(path.join(root, runReview.handoffPath), `${JSON.stringify({
       version: 1,
@@ -3300,8 +3840,186 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
   }
 });
 
-test("role-bound MCP tools expose explicit override fields", () => {
-  const roleBoundTools = [
+test("MCP schemas reject unknown input before mutating workspaces", () => {
+  for (const tool of toolDefinitions) {
+    assert.equal(tool.inputSchema.additionalProperties, false, `${tool.name} must reject unknown top-level input`);
+  }
+
+  const readOnlyRoot = createTempRoot("dove-mcp-unknown-readonly-");
+  try {
+    const rejected = dispatchTool(readOnlyRoot, "query_dove_status", { unexpected: true });
+    assert.equal(rejected.isError, true);
+    assert.match(rejected.content[0].text, /query_dove_status does not accept unknown input: \$\.unexpected/u);
+    assert.deepEqual(listRelativeFiles(readOnlyRoot), []);
+  } finally {
+    fs.rmSync(readOnlyRoot, { recursive: true, force: true });
+  }
+
+  const cases = [
+    [{ workflow: "dove.status" }, /does not accept unknown input: \$\.workflow/u],
+    [{ unexpected: true }, /does not accept unknown input: \$\.unexpected/u],
+    [{ steps: ["dove.status"] }, /\$\.steps\[0\] must be object/u],
+    [{ executionReceipt: { status: "completed" }, steps: [{ command: "dove.status" }] }, /does not accept unknown input: \$\.executionReceipt/u],
+    [{ steps: [{ command: "dove.status", executionReceipt: { status: "completed" } }] }, /\$\.steps\[0\]\.executionReceipt is not allowed/u],
+    [{ steps: [{ command: "dove.note", failureRoutes: [{ on: "failure", executionReceipt: { status: "completed" } }], args: { summary: "Reject nested receipt." } }] }, /\$\.steps\[0\]\.failureRoutes\[0\]\.executionReceipt is not allowed/u],
+    [{ steps: [{ command: "dove.note", executionContract: { failureRoutes: [{ on: "failure", executionReceipt: { status: "completed" } }] }, args: { summary: "Reject contract receipt." } }] }, /\$\.steps\[0\]\.executionContract\.failureRoutes\[0\]\.executionReceipt is not allowed/u],
+    [{ steps: [{ command: "dove.review-loop", args: { draft: { body: "Revision.", executionReceipt: { status: "completed" } } } }] }, /\$\.steps\[0\]\.args\.draft is not allowed/u],
+    [{ steps: [{ command: "dove.review-loop", args: { experience: { goal: "Measure quality.", executionReceipt: { status: "completed" } } } }] }, /\$\.steps\[0\]\.args\.experience is not allowed/u],
+    [{ steps: [{ command: "dove.rebuttal", args: { issues: [{ summary: "Address concern.", executionReceipt: { status: "completed" } }] } }] }, /\$\.steps\[0\]\.args\.issues\[0\]\.executionReceipt is not allowed/u],
+    [{ goal: "Reject route receipt.", workContract: { recommendedRoutes: [{ command: "project:dove.auto", executionReceipt: { status: "completed" } }] }, steps: [{ command: "dove.status" }] }, /\$\.workContract\.recommendedRoutes\[0\]\.executionReceipt is not allowed/u],
+    [{ goal: "Reject checklist receipt.", checklistItems: [{ title: "Nested checklist", executionContract: { failureRoutes: [{ on: "failure", executionReceipt: { status: "completed" } }] } }], steps: [{ command: "dove.status" }] }, /\$\.checklistItems\[0\]\.executionContract\.failureRoutes\[0\]\.executionReceipt is not allowed/u],
+    [{ steps: [{ command: "dove.note", unexpected: true }] }, /\$\.steps\[0\]\.unexpected is not allowed/u],
+    [{ steps: [{ command: "dove.note", args: { unexpected: true } }] }, /\$\.steps\[0\]\.args\.unexpected is not allowed/u],
+    [{ steps: [{ command: "dove.note", failureRoutes: [{ on: "failure", unexpected: true }], args: { summary: "Reject route metadata." } }] }, /\$\.steps\[0\]\.failureRoutes\[0\]\.unexpected is not allowed/u],
+    [{ steps: [{ command: "dove.note", executionContract: { files: [{ path: "src/example.mjs", unexpected: true }] }, args: { summary: "Reject execution metadata." } }] }, /\$\.steps\[0\]\.executionContract\.files\[0\]\.unexpected is not allowed/u],
+    [{ steps: [{ command: "dove.review-loop", args: { draft: { body: "Revision.", unexpected: true } } }] }, /\$\.steps\[0\]\.args\.draft is not allowed/u],
+    [{ steps: [{ command: "dove.review-loop", args: { experience: { goal: "Measure quality.", unexpected: true } } }] }, /\$\.steps\[0\]\.args\.experience is not allowed/u],
+    [{ steps: [{ command: "dove.rebuttal", args: { issues: [{ summary: "Address concern.", unexpected: true }] } }] }, /\$\.steps\[0\]\.args\.issues\[0\]\.unexpected is not allowed/u],
+    [{ validationEvidencePaths: [42], steps: [{ command: "dove.status" }] }, /\$\.validationEvidencePaths\[0\] must be string/u],
+    [{ verificationEvidencePaths: [42], steps: [{ command: "dove.status" }] }, /\$\.verificationEvidencePaths\[0\] must be string/u],
+    [{ verifiedCriteria: ["criterion"], steps: [{ command: "dove.status" }] }, /\$\.verifiedCriteria\[0\] must be object/u],
+    [{ verifiedCriteria: [{ criterion: "criterion", status: "verified", evidencePaths: [], unexpected: true }], steps: [{ command: "dove.status" }] }, /\$\.verifiedCriteria\[0\]\.unexpected is not allowed/u],
+    [{ checklist: [{ title: "child", unexpected: true }], steps: [{ command: "dove.status" }] }, /\$\.checklist\[0\]\.unexpected is not allowed/u]
+  ];
+  for (const [args, expected] of cases) {
+    const root = createTempRoot("dove-mcp-unknown-auto-");
+    try {
+      const rejected = dispatchTool(root, "run_dove_auto", args);
+      assert.equal(rejected.isError, true);
+      assert.match(rejected.content[0].text, expected);
+      assert.deepEqual(listRelativeFiles(root), []);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("full and compact operator auto schemas seal every reachable object", () => {
+  for (const [surface, definitions] of [
+    ["full", toolDefinitions],
+    ["operator", toolDefinitionsForSurface("operator")]
+  ]) {
+    const runDoveAutoTool = definitions.find((tool) => tool.name === "run_dove_auto");
+    assert.ok(runDoveAutoTool);
+    const stepSchema = runDoveAutoTool.inputSchema.properties.steps.items;
+    assert.deepEqual(stepSchema.required, ["command"]);
+    assert.ok(stepSchema.properties.command);
+    assert.equal(runDoveAutoTool.inputSchema.properties.executionReceipt, undefined);
+    assert.equal(stepSchema.properties.executionReceipt, undefined);
+    assert.ok(Array.isArray(stepSchema.allOf));
+    assert.equal(stepSchema.allOf.length, 10);
+    assertSchemaObjectsSealed(runDoveAutoTool.inputSchema, `${surface}.run_dove_auto`);
+    for (const branch of stepSchema.allOf) {
+      assert.ok(branch.if.properties.command.const);
+      assert.equal(branch.then.properties.args.additionalProperties, false);
+    }
+  }
+});
+
+test("materialize_guidance_packet MCP identity conflicts do not write packets", () => {
+  const root = createTempRoot("dove-mcp-materialize-atomic-");
+  ensureWorkspace(root);
+  initProject(root, {
+    title: "MCP atomic materialization",
+    objective: "Preserve packet state when follow-through identity conflicts."
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    version: 2,
+    items: [{
+      id: "mcp-atomic-materialization-gap",
+      summary: "Need atomic MCP guidance materialization.",
+      severity: "high",
+      status: "open",
+      responseOwnerRole: "planner",
+      recurrenceCount: 2,
+      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
+      updatedAt: new Date(0).toISOString()
+    }],
+    updatedAt: null
+  });
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    version: 3,
+    lastVerdict: "needs-work",
+    lastReviewedAt: new Date(0).toISOString(),
+    history: [],
+    openItems: ["Close the MCP atomic materialization gap."],
+    unresolvedConcernIds: ["mcp-atomic-materialization-gap"],
+    escalatedConcernIds: [],
+    pendingAuthorResponseIds: [],
+    pendingReviewerRulingIds: [],
+    reviewRound: 1,
+    reviewerIndependence: {
+      reviewerRole: "reviewer",
+      responseOwnerRoles: ["planner"],
+      separationMaintained: true
+    }
+  });
+  const topPack = queryMetaOptimize(root).remediationPacks.packs[0];
+  const actorRole = topPack.rankedConversionPaths?.find(
+    (item) => item.targetType === "create-new-packet"
+  )?.assignedRole ?? "planner";
+  writeJson(root, ".dove/task-packets/packets/task-mcp-existing-target.json", {
+    id: "task-mcp-existing-target",
+    title: "Existing MCP target",
+    status: "pending"
+  });
+  recordOperatorFollowThrough(root, {
+    sourceType: "remediation-pack",
+    sourceId: topPack.id,
+    status: "acknowledged",
+    actorRole,
+    decisionSummary: "Preserve the original MCP target binding.",
+    linkedTargetArtifact: ".dove/task-packets/packets/task-mcp-existing-target.json",
+    linkedTargetId: "task-mcp-existing-target"
+  });
+
+  const packetId = "task-mcp-conflicting-materialization";
+  const packetPath = path.join(root, `.dove/task-packets/packets/${packetId}.json`);
+  const packetIndexBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex));
+  const followThroughBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThrough));
+  const transitionsBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions));
+  const result = dispatchToolFull(root, "materialize_guidance_packet", {
+    sourceType: "remediation-pack",
+    sourceId: topPack.id,
+    actorRole,
+    packetId,
+    executeBy: "2099-01-01T00:00:00.000Z",
+    reviewAfter: "2099-01-01T12:00:00.000Z"
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content?.[0]?.text ?? "", /cannot change target/);
+  assert.equal(fs.existsSync(packetPath), false);
+  assert.deepEqual(fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex)), packetIndexBefore);
+  assert.deepEqual(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThrough)), followThroughBefore);
+  assert.deepEqual(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions)), transitionsBefore);
+});
+
+test("MCP rebuttal returns an error boundary without normalized issues", () => {
+  const root = createTempRoot("dove-mcp-empty-rebuttal-");
+  ensureWorkspace(root);
+  const packetId = seedTaskPacket(root, "mcp-empty-rebuttal-packet");
+  const artifactPaths = [ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft, `${ARTIFACT_PATHS.draftsDir}/rebuttal.md`];
+  const beforeArtifacts = artifactPaths.map((artifactPath) => {
+    const absolutePath = path.join(root, artifactPath);
+    return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : null;
+  });
+
+  for (const name of ["build_rebuttal_strategy", "build_rebuttal"]) {
+    const response = dispatchToolFull(root, name, { packetId });
+    assert.equal(response.isError, true, response.content?.[0]?.text);
+    const result = extractStructuredToolErrorJson(response);
+    assert.equal(result.status, "missing-required-materials");
+    assert.deepEqual(result.requiredActions, ["review-or-import-rebuttal-issues", "normalize-rebuttal-issues"]);
+  }
+  assert.deepEqual(artifactPaths.map((artifactPath) => {
+    const absolutePath = path.join(root, artifactPath);
+    return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : null;
+  }), beforeArtifacts);
+});
+
+test("mutating MCP tools omit retired override fields", () => {
+  const guardedMutationTools = [
     "upsert_orchestration_board",
     "append_handoff",
     "upsert_claims",
@@ -3324,16 +4042,20 @@ test("role-bound MCP tools expose explicit override fields", () => {
     "launch_dove_mission"
   ];
 
-  for (const name of roleBoundTools) {
+  for (const name of guardedMutationTools) {
     const tool = toolDefinitions.find((item) => item.name === name);
     assert.ok(tool, `missing tool definition for ${name}`);
-    assert.ok(tool.inputSchema.properties.actorRole, `${name} should expose actorRole`);
-    assert.ok(tool.inputSchema.properties.policyOverrideReason, `${name} should expose policyOverrideReason`);
+    assert.equal(
+      Object.keys(tool.inputSchema.properties).some((key) => key.startsWith("policyOverride")),
+      false,
+      `${name} must not expose retired policy override fields`
+    );
   }
 
   const taskScopedTools = [
     "update_research_brief",
     "register_source",
+    "verify_source",
     "upsert_note",
     "upsert_claims",
     "upsert_plan",
@@ -3406,18 +4128,20 @@ test("role-bound MCP tools expose explicit override fields", () => {
   const runFigureTool = toolDefinitions.find((item) => item.name === "run_figure_workflow");
   const prepareFigureTool = toolDefinitions.find((item) => item.name === "prepare_figure_generation");
   const importFigureTool = toolDefinitions.find((item) => item.name === "import_figure_generation");
-  const issueApprovalTool = toolDefinitions.find((item) => item.name === "issue_program_approval");
   const revokeApprovalTool = toolDefinitions.find((item) => item.name === "revoke_program_approval");
   const materializeTool = toolDefinitions.find((item) => item.name === "materialize_guidance_packet");
   const launchDoveTool = toolDefinitions.find((item) => item.name === "launch_dove_mission");
-  const foregroundTool = toolDefinitions.find((item) => item.name === "run_autonomy_foreground");
-  const operateTool = toolDefinitions.find((item) => item.name === "run_autonomy_operate");
   assert.ok(createDoveTaskTool, "create_dove_task should exist");
   assert.match(createDoveTaskTool.description, /compact task card/);
   assert.match(createDoveTaskTool.description, /preActionGuidance/);
-  assert.match(createDoveTaskTool.description, /mission is a durable work\/progress object/);
+  assert.match(createDoveTaskTool.description, /complete returned confirmArgs/);
+  assert.match(createDoveTaskTool.description, /same mutationMode/);
   assert.match(createDoveTaskTool.description, /recommended handoff routes/);
   assert.match(createDoveTaskTool.description, /without executing or recording a pass/);
+  assert.ok(createDoveTaskTool.inputSchema.properties.proposalDigest, "create_dove_task should expose proposalDigest");
+  assert.equal(createDoveTaskTool.inputSchema.properties.proposalDigest.type, "string");
+  assert.equal(createDoveTaskTool.inputSchema.properties.proposalDigest.pattern, "^[0-9a-f]{64}$");
+  assert.match(createDoveTaskTool.inputSchema.properties.proposalDigest.description, /Exact SHA-256 proposal digest/);
   assert.ok(createDoveTaskTool.inputSchema.properties.confirmed, "create_dove_task should expose confirmed");
   assert.ok(createDoveTaskTool.inputSchema.properties.confirm, "create_dove_task should expose confirm");
   assert.ok(createDoveTaskTool.inputSchema.properties.initTitle, "create_dove_task should expose first-run init title");
@@ -3457,6 +4181,9 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(recordMissionPassTool.inputSchema.properties.verificationEvidencePaths, "record_dove_mission_pass should expose verificationEvidencePaths");
   assert.ok(recordMissionPassTool.inputSchema.properties.command, "record_dove_mission_pass should expose command");
   assert.ok(recordMissionPassTool.inputSchema.properties.nextAction, "record_dove_mission_pass should expose nextAction");
+  for (const field of ["ownerRole", "nextRole", "handoff", "handoffId"]) {
+    assert.equal(recordMissionPassTool.inputSchema.properties[field], undefined, `record_dove_mission_pass must not expose system-owned workflow routing field ${field}`);
+  }
   assert.ok(recordMissionPassTool.inputSchema.properties.plannedMissions, "record_dove_mission_pass should expose plannedMissions");
   assert.ok(recordMissionPassTool.inputSchema.properties.plannedMissions.items.properties.executionContract, "plannedMissions should expose executionContract");
   assert.ok(recordMissionPassTool.inputSchema.properties.plannedMissions.items.properties.executionReceipt, "plannedMissions should expose executionReceipt");
@@ -3490,14 +4217,27 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(runDoveAutoTool.inputSchema.properties.initObjective, "run_dove_auto should expose first-run init objective");
   assert.ok(runDoveAutoTool.inputSchema.properties.maxIterations, "run_dove_auto should expose maxIterations");
   assert.ok(runDoveAutoTool.inputSchema.properties.steps, "run_dove_auto should expose foreground steps");
+  assert.equal(runDoveAutoTool.inputSchema.properties.command, undefined, "run_dove_auto must not expose retired top-level command");
+  assert.equal(runDoveAutoTool.inputSchema.properties.workflow, undefined, "run_dove_auto must not expose retired top-level workflow");
+  assert.equal(runDoveAutoTool.inputSchema.properties.executionReceipt, undefined, "run_dove_auto must not expose caller-controlled executionReceipt");
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.requiredMaterials, "run_dove_auto steps should expose requiredMaterials");
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.outputArtifacts, "run_dove_auto steps should expose outputArtifacts");
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.convergenceChecks, "run_dove_auto steps should expose convergenceChecks");
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.failureRoutes, "run_dove_auto steps should expose failureRoutes");
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.executionContract, "run_dove_auto steps should expose executionContract");
-  assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.executionReceipt, "run_dove_auto steps should expose executionReceipt");
+  assert.equal(runDoveAutoTool.inputSchema.properties.steps.items.properties.executionReceipt, undefined, "run_dove_auto steps must not expose caller-controlled executionReceipt");
   assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.verifiedCriteria, "run_dove_auto steps should expose verifiedCriteria");
-  assert.ok(runDoveAutoTool.inputSchema.properties.autoSteps.items.properties.executionReceipt, "run_dove_auto autoSteps should expose executionReceipt");
+  assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.command, "run_dove_auto steps should expose command");
+  assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.args, "run_dove_auto steps should expose args");
+  assert.ok(runDoveAutoTool.inputSchema.properties.steps.items.properties.completeTask, "run_dove_auto steps should expose completeTask");
+  assert.deepEqual(runDoveAutoTool.inputSchema.properties.steps.items.required, ["command"]);
+  assert.equal(runDoveAutoTool.inputSchema.properties.steps.items.additionalProperties, false);
+  assert.ok(Array.isArray(runDoveAutoTool.inputSchema.properties.steps.items.allOf));
+  assert.equal(runDoveAutoTool.inputSchema.properties.steps.items.allOf.length, 10);
+  for (const branch of runDoveAutoTool.inputSchema.properties.steps.items.allOf) {
+    assert.equal(branch.then.properties.args.additionalProperties, false);
+  }
+  assert.equal(runDoveAutoTool.inputSchema.properties.autoSteps, undefined, "run_dove_auto must not expose retired autoSteps");
   assert.ok(runDoveAutoTool.inputSchema.properties.completeTask, "run_dove_auto should expose explicit completion");
   assert.ok(runDoveOperatorTool, "run_dove_operator should exist");
   assert.match(runDoveOperatorTool.description, /compact queue summary\/cards/);
@@ -3610,10 +4350,10 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.match(runAudioReviewTool.description, /resultCard/);
   assert.match(runAudioReviewTool.description, /Reviewer preActionGuidanceSummary/);
   assert.ok(runReviewLoopTool, "run_dove_review_loop should exist");
-  assert.match(runReviewLoopTool.description, /Reviewer preActionGuidance/);
-  assert.match(runReviewLoopTool.description, /draftBody or draft\.body/);
-  assert.match(runReviewLoopTool.description, /experience substeps require/);
-  assert.match(runReviewLoopTool.description, /foreground stop conditions/);
+  assert.match(runReviewLoopTool.description, /one independent local Reviewer pass/);
+  assert.match(runReviewLoopTool.description, /never edits draft or experience material/);
+  assert.match(runReviewLoopTool.description, /explicit Builder handoff/);
+  assert.match(runReviewLoopTool.description, /new explicit calls/);
   assert.ok(runFigureTool, "run_figure_workflow should exist");
   assert.match(runFigureTool.description, /Builder preActionGuidance/);
   assert.match(runFigureTool.description, /artifact-provenance/);
@@ -3625,7 +4365,9 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(importIsolatedReviewTool.inputSchema.properties.handoffPath, "import_isolated_review should expose handoffPath");
   assert.ok(runExperienceTool.inputSchema.properties.experimentId, "run_experience_workflow should expose experimentId");
   assert.ok(runAudioReviewTool.inputSchema.properties.finalPlanPaths, "run_audio_review should expose finalPlanPaths");
-  assert.ok(runReviewLoopTool.inputSchema.properties.maxIterations, "run_dove_review_loop should expose maxIterations");
+  for (const retiredField of ["maxIterations", "draft", "draftBody", "sectionId", "experience", "experienceGoal", "finalPlanPaths", "finalResultPaths"]) {
+    assert.equal(runReviewLoopTool.inputSchema.properties[retiredField], undefined, `run_dove_review_loop must reject retired ${retiredField}`);
+  }
   assert.ok(runFigureTool.inputSchema.properties.intent, "run_figure_workflow should expose intent");
   assert.ok(runFigureTool.inputSchema.properties.description, "run_figure_workflow should expose description");
   assert.ok(runFigureTool.inputSchema.properties.materialHints, "run_figure_workflow should expose materialHints");
@@ -3677,28 +4419,66 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(doveReturnQueryTool.inputSchema.properties.validationOutput, "query_dove_return should expose validationOutput");
   assert.ok(doveReturnQueryTool.inputSchema.properties.reviewEvidencePaths, "query_dove_return should expose reviewEvidencePaths");
   assert.ok(doveReturnQueryTool.inputSchema.properties.scope, "query_dove_return should expose scope");
-  assert.ok(issueApprovalTool.inputSchema.properties.continuationFromRunId, "issue_program_approval should expose continuationFromRunId for review-to-reapproval bridging");
-  assert.ok(issueApprovalTool.inputSchema.properties.noteTitle, "issue_program_approval should expose noteTitle for approved note steps");
-  assert.ok(issueApprovalTool.inputSchema.properties.auditResultId, "issue_program_approval should expose auditResultId for approved experiment audit steps");
-  assert.ok(issueApprovalTool.inputSchema.properties.bridgeResultId, "issue_program_approval should expose bridgeResultId for approved result bridge steps");
-  assert.ok(issueApprovalTool.inputSchema.properties.reviewScope, "issue_program_approval should expose reviewScope for approved review-loop steps");
-  assert.ok(issueApprovalTool.inputSchema.properties.stepSequence, "issue_program_approval should expose stepSequence for multi-step authority envelopes");
-  assert.ok(issueApprovalTool.inputSchema.properties.autonomyPolicy, "issue_program_approval should expose autonomyPolicy for objective-aware step selection");
-  assert.ok(issueApprovalTool.inputSchema.properties.packetId, "issue_program_approval should expose packetId");
-  assert.ok(issueApprovalTool.inputSchema.properties.programRunId, "issue_program_approval should expose programRunId");
-  assert.ok(issueApprovalTool.inputSchema.properties.approvalId, "issue_program_approval should expose approvalId");
+  for (const retiredToolName of [
+    "issue_program_approval",
+    "run_autonomy_once",
+    "run_autonomy_foreground",
+    "run_autonomy_operate"
+  ]) {
+    assert.equal(
+      toolDefinitions.some((item) => item.name === retiredToolName),
+      false,
+      `${retiredToolName} must not be registered on the full MCP surface`
+    );
+    assert.equal(
+      MUTATING_TOOL_NAMES.has(retiredToolName),
+      false,
+      `${retiredToolName} must not remain classified as an MCP mutation`
+    );
+  }
   assert.ok(revokeApprovalTool.inputSchema.properties.approvalId, "revoke_program_approval should expose approvalId");
   assert.ok(followThroughTool.inputSchema.properties.workerRole, "record_operator_follow_through should expose workerRole for planner-supervised envelopes");
   assert.ok(materializeTool.inputSchema.properties.workerRole, "materialize_guidance_packet should expose workerRole for planner-supervised envelopes");
-  assert.ok(followThroughTool.inputSchema.properties.programId, "record_operator_follow_through should expose programId for program-linked execution intent");
-  assert.ok(materializeTool.inputSchema.properties.programId, "materialize_guidance_packet should expose programId for program-linked packets");
-  assert.ok(materializeTool.inputSchema.properties.programRunId, "materialize_guidance_packet should expose programRunId for approved program runs");
-  assert.ok(materializeTool.inputSchema.properties.approvalId, "materialize_guidance_packet should expose approvalId for approved program runs");
-  assert.ok(materializeTool.inputSchema.properties.allowedStepType, "materialize_guidance_packet should expose allowedStepType for approved bounded program steps");
-  assert.ok(materializeTool.inputSchema.properties.noteTitle, "materialize_guidance_packet should expose noteTitle for approved note steps");
-  assert.ok(materializeTool.inputSchema.properties.auditResultId, "materialize_guidance_packet should expose auditResultId for approved experiment audit steps");
-  assert.ok(materializeTool.inputSchema.properties.bridgeResultId, "materialize_guidance_packet should expose bridgeResultId for approved result bridge steps");
-  assert.ok(materializeTool.inputSchema.properties.reviewScope, "materialize_guidance_packet should expose reviewScope for approved review-loop steps");
+  assert.equal(
+    Object.hasOwn(followThroughTool.inputSchema.properties, "programId"),
+    false,
+    "record_operator_follow_through must not expose runtime-owned program linkage"
+  );
+  for (const systemOwnedField of [
+    "programRunId",
+    "approvalId",
+    "closureReason",
+    "closureArtifactPaths"
+  ]) {
+    assert.equal(
+      Object.hasOwn(followThroughTool.inputSchema.properties, systemOwnedField),
+      false,
+      `record_operator_follow_through must not expose ${systemOwnedField}`
+    );
+  }
+  for (const authorityField of [
+    "programId",
+    "programRunId",
+    "approvalId",
+    "allowedStepType",
+    "stepSequence",
+    "autonomyPolicy",
+    "noteTitle",
+    "auditResultId",
+    "bridgeResultId",
+    "reviewScope"
+  ]) {
+    assert.equal(
+      Object.hasOwn(materializeTool.inputSchema.properties, authorityField),
+      false,
+      `materialize_guidance_packet must not expose authority field ${authorityField}`
+    );
+    assert.equal(
+      Object.hasOwn(launchDoveTool.inputSchema.properties, authorityField),
+      false,
+      `launch_dove_mission must not expose authority field ${authorityField}`
+    );
+  }
   assert.ok(launchDoveTool, "launch_dove_mission should exist");
   assert.ok(launchDoveTool.inputSchema.properties.actorRole, "launch_dove_mission should expose actorRole");
   assert.ok(launchDoveTool.inputSchema.properties.sourceType, "launch_dove_mission should expose sourceType");
@@ -3708,16 +4488,9 @@ test("role-bound MCP tools expose explicit override fields", () => {
   assert.ok(launchDoveTool.inputSchema.properties.missionPacketId, "launch_dove_mission should expose missionPacketId");
   assert.ok(launchDoveTool.inputSchema.properties.executeBy, "launch_dove_mission should expose executeBy");
   assert.ok(launchDoveTool.inputSchema.properties.reviewAfter, "launch_dove_mission should expose reviewAfter");
-  assert.ok(launchDoveTool.inputSchema.properties.policyOverrideReason, "launch_dove_mission should expose policy override fields");
-  assert.ok(foregroundTool, "run_autonomy_foreground should exist");
-  assert.ok(foregroundTool.inputSchema.properties.maxSteps, "run_autonomy_foreground should expose maxSteps");
-  assert.ok(foregroundTool.inputSchema.properties.packetId, "run_autonomy_foreground should expose packetId");
-  assert.ok(foregroundTool.inputSchema.properties.programRunId, "run_autonomy_foreground should expose programRunId");
-  assert.ok(foregroundTool.inputSchema.properties.approvalId, "run_autonomy_foreground should expose approvalId");
-  assert.ok(operateTool, "run_autonomy_operate should exist");
-  assert.ok(operateTool.inputSchema.properties.objective, "run_autonomy_operate should expose objective");
-  assert.ok(operateTool.inputSchema.properties.sourceType, "run_autonomy_operate should expose sourceType");
-  assert.ok(operateTool.inputSchema.properties.sourceId, "run_autonomy_operate should expose sourceId");
-  assert.ok(operateTool.inputSchema.properties.stepSequence, "run_autonomy_operate should expose stepSequence");
-  assert.ok(operateTool.inputSchema.properties.campaignId, "run_autonomy_operate should expose campaignId");
+  assert.equal(
+    Object.keys(launchDoveTool.inputSchema.properties).some((key) => key.startsWith("policyOverride")),
+    false,
+    "launch_dove_mission must not expose retired policy override fields"
+  );
 });

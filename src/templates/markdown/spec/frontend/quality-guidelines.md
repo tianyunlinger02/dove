@@ -65,7 +65,7 @@ Choose checks based on what changed:
 Examples of existing quality tests:
 
 - `scripts/validate-commands.mjs` asserts generated adapter files match the canonical manifest, required tools are present, OpenCode role skills exist, and every command surface is classified.
-- `tests/integration/mcp-tools.test.mjs` asserts exact MCP tool names and role-bound policy fields.
+- `tests/integration/mcp-tools.test.mjs` asserts exact MCP tool names, sealed schemas, and that public mission-pass inputs omit system-owned workflow routing fields.
 - `tests/integration/workflow.test.mjs` validates a full durable paper workflow from workspace creation through sources, notes, claims, experiments, review, handoffs, snapshots, and comparisons.
 - `tests/unit/schema.test.mjs` validates migration/default state behavior and exposed artifact paths.
 

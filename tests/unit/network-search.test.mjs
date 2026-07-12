@@ -95,6 +95,7 @@ test("network search deduplicates scholarly candidates and reports partial provi
 
   assert.equal(result.status, "ok");
   assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].lifecycle, "candidate");
   assert.equal(result.candidates[0].doi, "10.1234/gff");
   assert.deepEqual(result.candidates[0].provenance.mergedProviderIds.sort(), ["crossref", "openalex"]);
   assert.equal(result.providerReports.find((report) => report.providerId === "arxiv")?.status, "error");

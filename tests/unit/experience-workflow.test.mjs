@@ -7,9 +7,9 @@ import {
   ARTIFACT_PATHS,
   ensureWorkspace,
   initProject,
-  runExperienceWorkflow,
-  writeJson
+  runExperienceWorkflow
 } from "../../src/core/index.mjs";
+import { writeJson } from "../../src/core/workspace.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
@@ -118,11 +118,26 @@ test("runExperienceWorkflow returns a material boundary when a clean result refe
       claimId: "missing-claim",
       outcome: "supports",
       summary: "The result supports a claim that has not been created yet.",
-      evidenceLinks: [writeEvidenceFile(root, ".dove/experiments/missing-claim-result.json", "Result supports the missing claim.\n")]
+      evidenceLinks: [writeEvidenceFile(root, ARTIFACT_PATHS.experimentLog, [
+        "# Experiment Log",
+        "",
+        "## missing-claim-bridge",
+        "",
+        "- Method: Compared generated evidence with the claim acceptance criteria.",
+        "- Outcome: supports",
+        "- Observation: Every acceptance criterion matched the generated result.",
+        ""
+      ].join("\n"))],
+      responseLanguage: "en"
     });
 
-    assert.equal(result.status, "recorded");
+    assert.equal(result.status, "needs-review");
     assert.equal(result.audit.auditVerdict, "clean");
+    assert.deepEqual(result.audit.integrityFlags, []);
+    assert.deepEqual(result.audit.evidencePathIntegrity.existingPaths, [ARTIFACT_PATHS.experimentLog]);
+    assert.equal(result.audit.evidencePathIntegrity.problemCount, 0);
+    assert.equal(result.audit.evidencePathIntegrity.items[0].evidenceRole, "conditional");
+    assert.equal(result.audit.evidencePathIntegrity.items[0].status, "existing");
     assert.equal(result.bridge.status, "held-missing-claim");
     assert.equal(result.boundaryType, "missing-required-materials");
     assert.equal(result.boundary.type, "missing-required-materials");
@@ -130,6 +145,17 @@ test("runExperienceWorkflow returns a material boundary when a clean result refe
     assert.deepEqual(result.requiredActions, ["create-or-link-claim-before-bridge"]);
     assert.equal(result.nextAction, "project:dove.experience");
     assert.ok(result.artifactRefs.includes(ARTIFACT_PATHS.claimBridgeLog));
+    assert.equal(result.resultCard.status, "needs-review");
+    assert.equal(result.resultCard.completed, false);
+    assert.equal(result.resultCard.stopped, true);
+    assert.equal(result.resultCard.requiresAction, true);
+    assert.equal(result.resultCard.boundary.type, "missing-required-materials");
+    assert.match(result.resultCard.boundary.summary, /target claim does not exist/u);
+    assert.deepEqual(result.resultCard.boundary.requiredActions, [
+      "Create the target claim or link the result to an existing claim before retrying the bridge."
+    ]);
+    assert.equal(result.resultCard.nextActions[0].title, "Create or relink the target claim first");
+    assert.match(result.resultCard.nextActions[0].why, /bridge is not complete/u);
     assertNoCompactPublicLeaks(result.resultCard, { ignoredKeys: ["command"] });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

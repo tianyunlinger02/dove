@@ -5,7 +5,7 @@ import process from "node:process";
 import { createMcpStdioClient } from "./mcp-stdio-client.mjs";
 
 const target = path.resolve(process.argv[2] ?? process.cwd());
-const serverScriptPath = path.join(target, "mcp", "dove-state-server.mjs");
+const serverScriptPath = path.join(target, "mcp", "dove-state-server-package.mjs");
 const { call, notify, kill } = createMcpStdioClient({ args: [serverScriptPath], cwd: target });
 
 function parseToolPayload(result) {
@@ -80,6 +80,9 @@ async function main() {
 
   const listed = await call("tools/list", { surface: "full" });
   const names = new Set(listed.tools.map((tool) => tool.name));
+  for (const retiredTool of ["issue_program_approval", "run_autonomy_once", "run_autonomy_foreground", "run_autonomy_operate"]) {
+    assert.equal(names.has(retiredTool), false, `Full MCP surface must not register ${retiredTool}`);
+  }
   const requiredTools = [
     "ensure_workspace",
     "read_state",
@@ -114,9 +117,6 @@ async function main() {
     "query_program_approvals",
     "launch_dove_mission",
     "materialize_guidance_packet",
-    "run_autonomy_once",
-    "run_autonomy_foreground",
-    "run_autonomy_operate",
     "run_experiment_audit",
     "bridge_result_to_claim",
     "run_review_loop",
