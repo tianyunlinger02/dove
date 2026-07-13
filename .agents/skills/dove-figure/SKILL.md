@@ -10,7 +10,8 @@ Turn one user-described figure intent into materials, optional generation/import
 ## Daily use
 
 - Use this when the user describes the figure they want once, including where it should help the paper or task.
-- Dove should gather linked materials, prepare generation or import, draft caption support, check only the current figure for the compact verdict, and say whether this figure is usable now.
+- Dove should gather linked materials, prepare generation or import, draft caption support, run diagnostic checks on the current figure, and say what remains before validation.
+- Lexical and structural SVG checks are preflight only; validated requires current authorized independent proof for the current final SVG hash.
 - By default, prepare a hand-drawn SVG plan and tell the operator when SVG output is needed.
 - Use OpenAI image generation only for an explicit drawing request with OPENAI_API_KEY supplied through the environment.
 - Targeting: Resolve the figure request to one task before writing; do not make the user reason about paths or workspace-wide extra details unless they explicitly ask for details.
@@ -28,7 +29,7 @@ Turn one user-described figure intent into materials, optional generation/import
 2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
 3. If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
 4. This request has one listed project action: `node ./bin/dove-package.mjs figure . --intent "<figure request>" --mutation-mode direct-process` from the project root; Run it only when the needed material is present; then summarize the real artifact state or material boundary instead of inspecting internal files directly.
-5. For figure requests, use the CLI result as the source of truth, say the practical figure state in ordinary language, and do not apply returned file changes unless the operator explicitly approves. If the CLI says a task must be selected and the operator confirms one, rerun `node ./bin/dove-package.mjs figure . --target "<confirmed task title>" --intent "<figure request>" --mutation-mode direct-process` instead of putting the task title inside the intent.
+5. For figure requests, use the CLI result as the source of truth, say the practical figure state in ordinary language, and do not apply returned file changes unless the operator explicitly approves. Lexical or structural SVG checks are diagnostic only; validated requires current authorized independent proof for the final SVG. If the CLI says a task must be selected and the operator confirms one, rerun `node ./bin/dove-package.mjs figure . --target "<confirmed task title>" --intent "<figure request>" --mutation-mode direct-process` instead of putting the task title inside the intent.
 6. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 7. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
 8. When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.
@@ -39,7 +40,7 @@ Turn one user-described figure intent into materials, optional generation/import
 13. Use the hand-drawn SVG plan as the normal default path and tell the operator when SVG output is needed.
 14. Use OpenAI image generation only when explicitly selected or configured; the OpenAI key must come from the OPENAI_API_KEY environment variable, never inline text.
 15. Resolve the target task before updating figure state, then gather linked sections, claims, experiments, sources, notes, review concerns, and material hints automatically.
-16. Do not mark a figure ready until imported output has source support, caption, and a clean current-figure check.
+16. Describe imported output with source support, caption, and clean preflight checks as ready for independent review, not validated; validated additionally requires current authorized independent Reviewer proof for the exact final SVG path and hash.
 17. Captions must explain the figure purpose and linked evidence; default replies should not make the operator reason about paths or workspace-wide extra details.
 18. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
 19. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.

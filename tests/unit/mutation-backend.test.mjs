@@ -15,6 +15,41 @@ function exists(root, relativePath) {
   return fs.existsSync(path.join(root, relativePath));
 }
 
+function applyMutationPlan(root, operations) {
+  for (const operation of operations) {
+    const fullPath = path.join(root, operation.relativePath);
+    if (operation.kind === "ensure-directory") {
+      fs.mkdirSync(fullPath, { recursive: true });
+      continue;
+    }
+    assert.equal(operation.encoding, "utf8", `Unsupported test operation encoding for ${operation.relativePath}`);
+    fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+    fs.writeFileSync(fullPath, operation.content, "utf8");
+  }
+}
+
+function snapshotWorkspaceTree(root, { exclude = [] } = {}) {
+  const excluded = new Set(exclude);
+  const entries = {};
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const fullPath = path.join(directory, entry.name);
+      const relativePath = path.relative(root, fullPath).split(path.sep).join("/");
+      if (excluded.has(relativePath)) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        entries[relativePath] = { kind: "directory" };
+        walk(fullPath);
+      } else {
+        entries[relativePath] = { kind: "file", content: fs.readFileSync(fullPath).toString("base64") };
+      }
+    }
+  };
+  walk(root);
+  return entries;
+}
+
 test("patch-plan mutations do not write to disk", () => {
   const root = createTempRoot("dove-mutation-patch-");
 
@@ -232,4 +267,38 @@ test("ensureWorkspace can be represented as a patch plan without creating .dove"
   assert.ok(result.created.includes(ARTIFACT_PATHS.state));
   assert.ok(result.mutationPlan.operations.some((operation) => operation.relativePath === ARTIFACT_PATHS.state));
   assert.ok(result.mutationPlan.operations.every((operation) => operation.scope === ".dove"));
+  assert.ok(result.mutationSummary.directoryEffectCount > 0);
+  assert.ok(result.mutationSummary.directoryPaths.includes(ARTIFACT_PATHS.doveRoot));
+});
+
+test("ensureDirectory side effects are counted even without file operations", () => {
+  const root = createTempRoot("dove-mutation-directory-effect-");
+
+  const result = runWithMutationContext(root, { actionId: "unit-directory-effect", mutationMode: "direct-process" }, (context) => {
+    context.ensureDirectory(".dove/empty");
+    return { ok: true };
+  });
+
+  assert.equal(result.writesApplied, true);
+  assert.equal(result.mutationSummary.operationCount, 2);
+  assert.equal(result.mutationSummary.directoryEffectCount, 1);
+  assert.deepEqual(result.mutationSummary.directoryPaths, [".dove/empty"]);
+  assert.equal(fs.statSync(path.join(root, ".dove/empty")).isDirectory(), true);
+  const directoryOperation = result.mutationSummary.paths.indexOf(".dove/empty");
+  assert.notEqual(directoryOperation, -1);
+});
+
+test("ensureWorkspace patch plans apply with direct-process directory semantics", () => {
+  const directRoot = createTempRoot("dove-mutation-workspace-direct-");
+  const patchRoot = createTempRoot("dove-mutation-workspace-patch-");
+
+  runWithMutationContext(directRoot, { actionId: "ensure-workspace", mutationMode: "direct-process" }, () => ensureWorkspace(directRoot));
+  const patchResult = runWithMutationContext(patchRoot, { actionId: "ensure-workspace", mutationMode: "patch-plan" }, () => ensureWorkspace(patchRoot));
+
+  assert.ok(patchResult.mutationPlan.operations.some((operation) => operation.kind === "ensure-directory"));
+  applyMutationPlan(patchRoot, patchResult.mutationPlan.operations);
+  assert.deepEqual(
+    snapshotWorkspaceTree(patchRoot, { exclude: [ARTIFACT_PATHS.mutationsIndex] }),
+    snapshotWorkspaceTree(directRoot, { exclude: [ARTIFACT_PATHS.mutationsIndex] })
+  );
 });

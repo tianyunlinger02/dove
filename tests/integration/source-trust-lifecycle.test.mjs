@@ -11,10 +11,12 @@ import {
   readJson,
   registerSource,
   sourceEligibility,
+  sourceIdentityFingerprint,
   upsertClaims,
   verifySource
 } from "../../src/core/internal-api.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
+import { seedTrustedSourceVerification } from "../helpers/source-verification-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function seedTaskPacket(root, packetId = "source-trust-packet") {
@@ -72,17 +74,17 @@ function registerCandidate(root, packetId, overrides = {}) {
   });
 }
 
-function verifyCandidate(root, packetId, decision = "verified") {
+function rejectCandidate(root, packetId) {
   return verifySource(root, {
     packetId,
     sourceId: "trust-source",
-    decision,
+    decision: "rejected",
     method: "opened canonical publication page and compared metadata",
     checkedMaterial: "publisher page title, author list, and full-text abstract",
     auditEvidence: [{
       reference: "https://example.org/paper",
       kind: "source",
-      observation: "Publisher page title, author list, and abstract matched the registered source identity."
+      observation: "Publisher page metadata did not support trusting the registered source."
     }]
   });
 }
@@ -98,16 +100,15 @@ test("candidate source is registered but claim evidence rejects it with zero wri
   assert.deepEqual(snapshot(root), before);
 }));
 
-test("matching durable verification makes a source claim-eligible", () => setup("matching-durable-verification-makes-a-source-claim-eligible", ({ root, packetId }) => {
+test("trusted durable verification with captured material makes a source claim-eligible", () => setup("matching-durable-verification-makes-a-source-claim-eligible", ({ root, packetId }) => {
   registerCandidate(root, packetId);
-  const result = verifyCandidate(root, packetId);
+  const result = seedTrustedSourceVerification(root, "trust-source", packetId);
   assert.equal(result.source.lifecycle, "verified");
   assert.equal(result.verification.sourceId, "trust-source");
   assert.equal(result.verification.fingerprint, result.source.fingerprint);
-  assert.ok(result.verification.method);
-  assert.ok(result.verification.checkedMaterial);
-  assert.ok(result.verification.checkedAt);
-  assert.ok(result.verification.auditEvidence.length > 0);
+  assert.equal(result.verification.issuerRole, "reviewer");
+  assert.equal(result.verification.provenance, "trusted-internal-transition");
+  assert.match(result.verification.materialHash, /^[a-f0-9]{64}$/u);
 
   const claims = upsertClaims(root, {
     packetId,
@@ -119,7 +120,7 @@ test("matching durable verification makes a source claim-eligible", () => setup(
 
 test("source identity mutation invalidates prior verification", () => setup("source-identity-mutation-invalidates-prior-verification", ({ root, packetId }) => {
   registerCandidate(root, packetId);
-  verifyCandidate(root, packetId);
+  seedTrustedSourceVerification(root, "trust-source", packetId);
   registerCandidate(root, packetId, { title: "Mutated Source Identity" });
   const before = snapshot(root);
   assert.throws(() => upsertClaims(root, {
@@ -131,7 +132,7 @@ test("source identity mutation invalidates prior verification", () => setup("sou
 
 test("rejected source cannot support claims", () => setup("rejected-source-cannot-support-claims", ({ root, packetId }) => {
   registerCandidate(root, packetId);
-  verifyCandidate(root, packetId, "rejected");
+  rejectCandidate(root, packetId);
   const before = snapshot(root);
   assert.throws(() => upsertClaims(root, {
     packetId,
@@ -148,9 +149,23 @@ test("caller-minted verification fields fail before any source write", () => set
   assert.deepEqual(snapshot(root), before);
 }));
 
+test("public positive verification fails closed before any write", () => setup("public-positive-verification-fails-closed", ({ root, packetId }) => {
+  registerCandidate(root, packetId);
+  const before = snapshot(root);
+  assert.throws(() => verifySource(root, {
+    packetId,
+    sourceId: "trust-source",
+    decision: "verified",
+    method: "caller says it checked",
+    checkedMaterial: "caller-described material",
+    auditEvidence: [{ reference: "https://example.org/paper", kind: "source", observation: "Caller self-attestation." }]
+  }), /only records rejection|cannot issue positive verification/);
+  assert.deepEqual(snapshot(root), before);
+}));
+
 test("verification record remains separate from the source index", () => setup("verification-record-remains-separate-from-the-source-index", ({ root, packetId }) => {
   registerCandidate(root, packetId);
-  verifyCandidate(root, packetId);
+  seedTrustedSourceVerification(root, "trust-source", packetId);
   const sourceIndex = readJson(root, ARTIFACT_PATHS.sources, {});
   const verificationIndex = readJson(root, ARTIFACT_PATHS.sourceVerifications, {});
   assert.equal(sourceIndex.items[0].verification, undefined);
@@ -160,21 +175,39 @@ test("verification record remains separate from the source index", () => setup("
 
 test("latest verification decision controls eligibility", () => setup("latest-verification-decision-controls-eligibility", ({ root, packetId }) => {
   registerCandidate(root, packetId);
-  verifyCandidate(root, packetId, "verified");
-  verifyCandidate(root, packetId, "rejected");
+  seedTrustedSourceVerification(root, "trust-source", packetId);
+  rejectCandidate(root, packetId);
   const source = querySources(root, { sourceId: "trust-source" }).items[0];
   assert.equal(source.eligibility.eligible, false);
   assert.equal(source.eligibility.reason, "source-rejected");
   assert.equal(source.eligibility.decision, "rejected");
 }));
 
+test("legacy positive authority without trusted provenance fails closed", () => setup("legacy-positive-authority-without-provenance-fails-closed", ({ root, packetId }) => {
+  registerCandidate(root, packetId);
+  const sourceIndex = readJson(root, ARTIFACT_PATHS.sources, {});
+  const source = sourceIndex.items[0];
+  source.lifecycle = "verified";
+  source.fingerprint = sourceIdentityFingerprint(source);
+  const eligibility = sourceEligibility(source, [{
+    id: "legacy-positive",
+    sourceId: source.id,
+    packetId,
+    fingerprint: source.fingerprint,
+    decision: "verified",
+    checkedAt: new Date(0).toISOString()
+  }], { root });
+  assert.equal(eligibility.eligible, false);
+  assert.equal(eligibility.reason, "source-verification-untrusted-provenance");
+}));
+
 test("source eligibility requires matching verification packet binding", () => setup("source-eligibility-requires-matching-verification-packet-binding", ({ root, packetId }) => {
   registerCandidate(root, packetId);
-  verifyCandidate(root, packetId, "verified");
+  seedTrustedSourceVerification(root, "trust-source", packetId);
   const verificationIndex = readJson(root, ARTIFACT_PATHS.sourceVerifications, {});
   verificationIndex.items[0].packetId = "other-packet";
   const source = readJson(root, ARTIFACT_PATHS.sources, {}).items[0];
-  const eligibility = sourceEligibility(source, verificationIndex.items);
+  const eligibility = sourceEligibility(source, verificationIndex.items, { root });
   assert.equal(eligibility.eligible, false);
   assert.equal(eligibility.reason, "source-packet-binding-mismatch");
 }));

@@ -13,6 +13,7 @@ import { MUTATING_TOOL_NAMES, toolDefinitions, toolDefinitionsForSurface } from 
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
+import { seedTrustedSourceVerification } from "../helpers/source-verification-fixture.mjs";
 
 function extractMcpEnvelopeJson(result) {
   assert.ok(result.content?.[0]?.text, "Expected text content in MCP tool result");
@@ -795,14 +796,106 @@ test("Dove MCP tools/call rejects schema-invalid auto input before confirmation 
   }
 });
 
-test("every MCP tool surface is classified as guarded, exempt, or read-only", () => {
-  const classifiedToolNames = new Set([
-    ...GOVERNANCE_GUARDED_MUTATIONS.map((entry) => entry.surfaceBindings?.mcpTool).filter(Boolean),
-    ...GOVERNANCE_EXEMPT_MUTATIONS.map((entry) => entry.surfaceBindings?.mcpTool).filter(Boolean),
-    ...GOVERNANCE_READONLY_TOOLS
-  ]);
-  for (const tool of toolDefinitions) {
-    assert.equal(classifiedToolNames.has(tool.name), true, `Unclassified MCP tool: ${tool.name}`);
+test("every MCP tool surface has exactly one governance classification", () => {
+  const classifications = new Map(toolDefinitions.map((tool) => [tool.name, []]));
+  for (const [classification, entries] of [["guarded", GOVERNANCE_GUARDED_MUTATIONS], ["exempt", GOVERNANCE_EXEMPT_MUTATIONS]]) {
+    for (const entry of entries) {
+      const toolName = entry.surfaceBindings?.mcpTool;
+      if (toolName) {
+        classifications.get(toolName)?.push(`${classification}:${entry.id}`);
+      }
+    }
+  }
+  for (const toolName of GOVERNANCE_READONLY_TOOLS) {
+    classifications.get(toolName)?.push("read-only");
+  }
+  for (const [toolName, toolClassifications] of classifications) {
+    assert.equal(toolClassifications.length, 1, `${toolName} classifications: ${toolClassifications.join(", ")}`);
+  }
+});
+
+test("18 navigation and context MCP reads preserve fresh and initialized workspace snapshots", () => {
+  const readOnlyCalls = [
+    ["read_state", {}],
+    ["query_task_graph", {}],
+    ["query_open_questions", {}],
+    ["query_decisions", {}],
+    ["query_lineage", {}],
+    ["query_workspace_index", {}],
+    ["query_meta_optimize", {}],
+    ["query_governance_coverage_report", {}],
+    ["query_operator_lessons", {}],
+    ["query_operator_follow_through", {}],
+    ["query_program_approvals", {}],
+    ["query_campaigns", {}],
+    ["read_role_context_manifest", { roleId: "planner" }],
+    ["read_phase_context_manifest", {}],
+    ["read_packet_context_manifest", { packetId: "missing-packet" }],
+    ["read_artifact_context_manifest", { artifactPath: ".dove/state.json" }],
+    ["read_action_context_bundle", {}],
+    ["list_artifacts", {}]
+  ];
+  assert.equal(readOnlyCalls.length, 18);
+
+  for (const workspaceState of ["fresh", "initialized"]) {
+    const root = createTempRoot(`dove-mcp-read-purity-${workspaceState}-`);
+    try {
+      if (workspaceState === "initialized") {
+        extractToolJson(dispatchToolFull(root, "ensure_workspace", {}));
+      }
+      const baseline = snapshotRelativeFileContents(root);
+      for (const [name, args] of readOnlyCalls) {
+        const before = snapshotRelativeFileContents(root);
+        const result = dispatchToolFull(root, name, args);
+        assert.notEqual(result.isError, true, `${workspaceState}/${name}: ${result.content?.[0]?.text ?? ""}`);
+        const data = extractToolJson(result);
+        assert.equal("mutationId" in data, false, `${workspaceState}/${name} must not create a MutationContext`);
+        assert.equal("mutationSummary" in data, false, `${workspaceState}/${name} must not return mutation metadata`);
+        assert.equal("writesApplied" in data, false, `${workspaceState}/${name} must remain a pure read`);
+        assert.deepEqual(snapshotRelativeFileContents(root), before, `${workspaceState}/${name} changed the workspace snapshot`);
+      }
+      assert.deepEqual(snapshotRelativeFileContents(root), baseline);
+      if (workspaceState === "fresh") {
+        assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+      }
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("unconfirmed operator and status proposals are zero-write in direct-process and patch-plan modes", () => {
+  for (const workspaceState of ["fresh", "initialized"]) {
+    for (const mutationMode of ["direct-process", "patch-plan"]) {
+      const root = createTempRoot(`dove-mcp-proposal-purity-${workspaceState}-${mutationMode}-`);
+      try {
+        if (workspaceState === "initialized") {
+          extractToolJson(dispatchToolFull(root, "ensure_workspace", {}));
+        }
+        for (const [name, args] of [
+          ["run_dove_operator", { mutationMode }],
+          ["apply_dove_status_adjustments", { mutationMode, adjustments: [{ packetId: "missing-packet", status: "blocked", reason: "Proposal purity test." }] }]
+        ]) {
+          const before = snapshotRelativeFileContents(root);
+          const proposal = extractToolJson(dispatchToolFull(root, name, args));
+          assert.equal(proposal.status, "needs-confirmation", `${workspaceState}/${mutationMode}/${name}`);
+          assert.equal(proposal.proposalOnly, true, `${workspaceState}/${mutationMode}/${name}`);
+          assert.deepEqual(proposal.writes, [], `${workspaceState}/${mutationMode}/${name}`);
+          assert.equal("mutationId" in proposal, true, `${workspaceState}/${mutationMode}/${name} remains a classified mutation surface`);
+          assert.equal(proposal.writesApplied, false, `${workspaceState}/${mutationMode}/${name}`);
+          assert.equal(proposal.mutationSummary.operationCount, 0, `${workspaceState}/${mutationMode}/${name}`);
+          if (mutationMode === "patch-plan") {
+            assert.deepEqual(proposal.mutationPlan.operations, [], `${workspaceState}/${mutationMode}/${name}`);
+          }
+          assert.deepEqual(snapshotRelativeFileContents(root), before, `${workspaceState}/${mutationMode}/${name} changed the workspace snapshot`);
+        }
+        if (workspaceState === "fresh") {
+          assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+        }
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    }
   }
 });
 
@@ -1691,11 +1784,55 @@ test("document evidence ledger stores internal and public-safe entries without p
   }
 });
 
+test("Dove task classification keeps engineering implementation distinct from real review", () => {
+  const root = createTempRoot("dove-mcp-classification-");
+  try {
+    extractToolJson(dispatchToolFull(root, "init_dove_goal", {
+      id: "classification-init",
+      goal: "Validate mission classification."
+    }));
+    for (const goal of [
+      "Implement the API endpoint and run validation tests.",
+      "Check the endpoint implementation and compile the service.",
+      "Verify the API implementation with integration tests.",
+      "Build the API implementation with typecheck coverage."
+    ]) {
+      const proposal = extractToolJson(dispatchToolFull(root, "create_dove_task", { goal, checklist: false }));
+      assert.equal(proposal.classification.domain, "engineering");
+      assert.equal(proposal.classification.stage, "execute");
+      assert.equal(proposal.proposedTask.nextAction, "project:dove.auto");
+    }
+    for (const goal of [
+      "Perform a code review of the API endpoint implementation and report review findings.",
+      "Review the API endpoint implementation for correctness.",
+      "Run a code-review on the endpoint implementation.",
+      "审查 API 接口实现的正确性。",
+      "对代码实现进行评审并记录问题。"
+    ]) {
+      const reviewProposal = extractToolJson(dispatchToolFull(root, "create_dove_task", { goal, checklist: false }));
+      assert.equal(reviewProposal.classification.stage, "audit");
+      assert.equal(reviewProposal.proposedTask.nextAction, "project:dove.review");
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
   const root = createTempRoot("dove-mcp-thin-guidance-");
   try {
-    extractToolJson(dispatchToolFull(root, "ensure_workspace", {}));
-    const packetId = seedTaskPacket(root, "thin-summary-packet");
+    extractToolJson(dispatchToolFull(root, "init_dove_goal", {
+      id: "thin-summary-init",
+      goal: "Validate packet-bound thin workflow summaries."
+    }));
+    const created = proposeAndMaterializeDoveTask(root, {
+      id: "thin-summary-packet",
+      title: "Thin workflow summary packet",
+      goal: "Exercise packet-bound source, note, draft, experiment, and review surfaces.",
+      domain: "paper",
+      checklist: false
+    });
+    const packetId = created.createdTask.id;
 
     const emptySource = dispatchTool(root, "register_source", { packetId });
     assert.equal(emptySource.isError, true);
@@ -1768,14 +1905,17 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     assert.ok(source.artifactWrites.synthesisArtifactPaths.includes(".dove/bibliography/citation-log.md"));
     assert.ok(source.artifactWrites.synthesisArtifactPaths.includes(".dove/wiki/query_pack.md"));
     assert.ok(source.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/workspace/index.json"));
-    const verification = extractToolJson(dispatchToolFull(root, "verify_source", {
+    const publicPositive = dispatchToolFull(root, "verify_source", {
       packetId,
       sourceId: source.id,
       decision: "verified",
       method: "integration fixture inspected the canonical publication record",
       checkedMaterial: "source title, authors, year, and publication metadata",
       auditEvidence: [{ reference: source.locator, kind: "source", observation: `Verified fixture identity for ${source.id}.` }]
-    }));
+    });
+    assert.equal(publicPositive.isError, true);
+    assert.match(publicPositive.content[0].text, /decision must be one of|positive verification/i);
+    const verification = seedTrustedSourceVerification(root, source.id, packetId);
     assert.equal(verification.source.lifecycle, "verified");
     assert.equal(verification.verification.fingerprint, verification.source.fingerprint);
 
@@ -2495,10 +2635,12 @@ test("status adjustment contract applies confirmed non-terminal mission status c
     assert.ok(item);
     assert.deepEqual(item.choices, ["pending", "ready", "in-progress", "blocked", "completed", "killed", "archived"]);
 
+    const beforePreview = snapshotRelativeFileContents(root);
     const preview = extractToolJson(dispatchToolFull(root, "apply_dove_status_adjustments", {
       adjustments: [{ packetId: "status-ready-task", status: "blocked", reason: "Needs investigation." }]
     }));
     assert.equal(preview.status, "needs-confirmation");
+    assert.deepEqual(snapshotRelativeFileContents(root), beforePreview);
     assert.equal(preview.proposalOnly, true);
     assert.deepEqual(preview.writes, []);
     assert.equal(preview.adjustmentCards.length, 1);
@@ -2677,8 +2819,10 @@ test("run_dove_operator leaves host-pass-only queues unchanged without taskResul
       checklist: false
     });
 
+    const beforePreview = snapshotRelativeFileContents(root);
     const preview = extractToolJson(dispatchToolFull(root, "run_dove_operator", {}));
     assert.equal(preview.status, "needs-confirmation");
+    assert.deepEqual(snapshotRelativeFileContents(root), beforePreview);
     assert.deepEqual(preview.queueSummary.autoRunnableTaskIds, []);
     assert.deepEqual(preview.queueSummary.hostPassRequiredTaskIds, ["operator-host-only-source"]);
     assert.equal(preview.autoRunnableTasks, undefined);
@@ -2733,20 +2877,21 @@ test("run_dove_operator writes successful non-terminal step progress back to the
       checklist: false
     });
 
-    const run = extractToolJson(dispatchToolFull(root, "run_dove_operator", {
+    const run = extractStructuredToolErrorJson(dispatchToolFull(root, "run_dove_operator", {
       confirmed: true,
       runId: "operator-packet-progress-run"
     }));
-    assert.equal(run.status, "foreground-pass-complete");
+    assert.equal(run.status, "blocked-boundary");
     assert.deepEqual(run.updatedTaskIds, ["operator-packet-progress-task"]);
 
     const packet = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "operator-packet-progress-task.json"), "utf8"));
-    assert.equal(packet.status, "in-progress");
-    assert.equal(packet.nextAction, "project:dove.review");
-    assert.equal(packet.currentFocus, "The selected packet scope is internally consistent for this review pass.");
+    assert.equal(packet.status, "blocked");
+    assert.equal(packet.ownerRole, "reviewer");
+    assert.equal(packet.nextRole, "reviewer");
+    assert.match(packet.currentFocus, /Reviewer-owned proof boundary|current isolated Reviewer proof/u);
     assert.ok(packet.artifactRefs.includes(ARTIFACT_PATHS.reviewState));
     assert.ok(packet.artifactRefs.includes(ARTIFACT_PATHS.reviewLog));
-    assert.ok(packet.evidenceLinks.includes(artifactPath));
+    assert.equal(packet.boundary.reason, "dove.review-needs-evidence");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -2801,7 +2946,9 @@ test("run_dove_operator previews blocker investigations and only creates them wh
     assert.equal(preview.queuePreview.hostPassRequired.length, 2);
     assertFullPreActionGuidance(preview.preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
 
+    const beforeDetailedPreview = snapshotRelativeFileContents(root);
     const detailedPreview = extractToolJson(dispatchToolFull(root, "run_dove_operator", { includeQueueDetails: true }));
+    assert.deepEqual(snapshotRelativeFileContents(root), beforeDetailedPreview);
     assert.deepEqual(detailedPreview.autoRunnableTasks.map((task) => task.id), ["operator-auto-ready"]);
     assert.deepEqual(detailedPreview.hostPassRequiredTasks.map((task) => task.id).sort(), hostPassRequiredIds.sort());
     assert.equal(detailedPreview.hostPassRequiredTasks.find((task) => task.id === "operator-source-host-pass").whyThisStep, "source-requires-host-provenance");
@@ -2822,7 +2969,7 @@ test("run_dove_operator previews blocker investigations and only creates them wh
         {
           packetId: "operator-host-progress",
           resultStatus: "completed",
-          summary: "Host progress task completed.",
+          resultSummary: "Host progress task completed.",
           verificationEvidencePaths: [MCP_VERIFICATION_PATH],
           verifiedCriteria: mcpVerifiedCriteria("Operator host progress criterion")
         }
@@ -2923,7 +3070,7 @@ test("run_dove_operator previews blocker investigations and only creates them wh
     const reuseRun = extractStructuredToolErrorJson(dispatchToolFull(root, "run_dove_operator", {
       confirmed: true,
       runId: "operator-reuse-blockers-run",
-      createBlockedInvestigations: true
+      blockerInvestigationMode: "create"
     }));
     assert.equal(reuseRun.blockerInvestigationMode, "create");
     assert.equal(reuseRun.blockerPlanConversion.createdCount, 0);
@@ -3318,6 +3465,110 @@ test("create_dove_task rejects checklist children that are not deeper than the p
   }
 });
 
+test("open review proof concern blocks confirmed auto and operator before lifecycle writes", () => {
+  const root = createTempRoot("dove-review-proof-auto-operator-");
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "review-proof-auto-init",
+      goal: "Validate auto and operator review ownership locks."
+    });
+    proposeAndMaterializeDoveTask(root, {
+      id: "review-proof-auto-task",
+      goal: "Draft substantive work only after Reviewer proof is resolved.",
+      title: "Review proof auto task",
+      checklist: false,
+      nextAction: "project:dove.draft"
+    });
+    const autoProposal = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
+      packetId: "review-proof-auto-task"
+    }));
+    runFixtureMutation(root, "seed-review-proof-auto-operator-boundary", () => {
+      writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+        version: 2,
+        items: [{ id: "auto-operator-review-proof-required", packetId: "review-proof-auto-task", status: "open", summary: "Reviewer proof required.", responseOwnerRole: "reviewer" }],
+        updatedAt: new Date(0).toISOString()
+      });
+      upsertSystemOrchestrationBoard(root, {
+        phase: "review",
+        assignedRole: "reviewer",
+        reviewRequiredBeforeFinalize: true
+      });
+    });
+    const beforeAuto = snapshotRelativeFileContents(root);
+    const autoResult = dispatchToolFull(root, "run_dove_auto", autoProposal.confirmArgs);
+    assert.equal(autoResult.isError, true);
+    assert.match(autoResult.content[0].text, /review-proof-required.*authorized independent Reviewer proof/u);
+    assert.deepEqual(snapshotRelativeFileContents(root), beforeAuto);
+
+    const operatorPreview = extractToolJson(dispatchToolFull(root, "run_dove_operator", {}));
+    assert.equal(operatorPreview.status, "needs-confirmation");
+    const beforeOperator = snapshotRelativeFileContents(root);
+    const operatorResult = dispatchToolFull(root, "run_dove_operator", operatorPreview.confirmArgs);
+    assert.equal(operatorResult.isError, true);
+    assert.match(operatorResult.content[0].text, /review-proof-required.*authorized independent Reviewer proof/u);
+    assert.deepEqual(snapshotRelativeFileContents(root), beforeOperator);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("open review proof concern blocks public task lifecycle and runtime mutations", () => {
+  const root = createTempRoot("dove-review-proof-task-lifecycle-");
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "review-proof-lifecycle-init",
+      goal: "Validate task lifecycle review ownership locks."
+    });
+    proposeAndMaterializeDoveTask(root, {
+      id: "review-proof-lifecycle-task",
+      goal: "Remain unchanged while Reviewer proof is required.",
+      title: "Review proof lifecycle task",
+      checklist: false
+    });
+    runFixtureMutation(root, "seed-review-proof-task-lifecycle-boundary", () => {
+      writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+        version: 2,
+        items: [{ id: "task-lifecycle-review-proof-required", packetId: "review-proof-lifecycle-task", status: "open", summary: "Reviewer proof required.", responseOwnerRole: "reviewer" }],
+        updatedAt: new Date(0).toISOString()
+      });
+      upsertSystemOrchestrationBoard(root, {
+        phase: "review",
+        assignedRole: "reviewer",
+        reviewRequiredBeforeFinalize: true
+      });
+    });
+    const attempts = [
+      ["record_dove_mission_pass", {
+        packetId: "review-proof-lifecycle-task",
+        resultStatus: "blocked",
+        boundaryType: "host-tool-blocked",
+        summary: "Do not record this result."
+      }],
+      ["apply_dove_status_adjustments", {
+        confirmed: true,
+        adjustments: [{ packetId: "review-proof-lifecycle-task", status: "in-progress", reason: "Do not change lifecycle." }]
+      }],
+      ["kill_dove_task", {
+        packetId: "review-proof-lifecycle-task",
+        reason: "Do not kill under Reviewer ownership."
+      }],
+      ["reset_dove_version", {
+        versionId: "review-proof-reset-attempt",
+        reason: "Do not reset under Reviewer ownership."
+      }]
+    ];
+    for (const [toolName, args] of attempts) {
+      const before = snapshotRelativeFileContents(root);
+      const response = dispatchToolFull(root, toolName, args);
+      assert.equal(response.isError, true, toolName);
+      assert.match(response.content[0].text, /review-proof-required.*authorized independent Reviewer proof/u, toolName);
+      assert.deepEqual(snapshotRelativeFileContents(root), before, toolName);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("run_dove_auto records bounded foreground iterations", () => {
   const root = createTempRoot("dove-mcp-auto-foreground-");
   try {
@@ -3562,7 +3813,17 @@ test("run_dove_auto records bounded foreground iterations", () => {
     });
     assert.equal(sourceNoteRun.status, "completed");
     assert.deepEqual(sourceNoteRun.result.iterations.map((iteration) => iteration.command), ["dove.source", "dove.note"]);
+    assert.ok(sourceNoteRun.task.artifactRefs.includes(ARTIFACT_PATHS.sources));
     assert.ok(sourceNoteRun.task.artifactRefs.includes(ARTIFACT_PATHS.notes));
+    assert.deepEqual(sourceNoteRun.task.sourceIds, ["cvpr-author-guidelines", "cvpr-reviewer-guidelines"]);
+    assert.ok(sourceNoteRun.task.noteIds.includes("cvpr-venue-writing-synthesis"));
+    const sourceNotePacket = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "auto-source-note-sequence.json"), "utf8"));
+    const sourceNoteIndexItem = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8")).items.find((item) => item.id === "auto-source-note-sequence");
+    for (const identityField of ["sourceType", "sourceId", "parentId", "rootId", "creatorKind", "ownerRole", "nextRole", "packetPath", "packetContextPath"]) {
+      assert.equal(sourceNoteIndexItem[identityField], sourceNotePacket[identityField], `${identityField} should survive packet index refresh`);
+    }
+    assert.deepEqual(sourceNoteIndexItem.sourceIds, sourceNotePacket.sourceIds);
+    assert.deepEqual(sourceNoteIndexItem.noteIds, sourceNotePacket.noteIds);
     assert.equal(sourceNoteRun.task.currentFocus, "CVPR source research should register official provenance and synthesize writing guidance in the same auto run.");
     assert.equal(sourceNoteRun.task.nextAction, "project:dove.status");
     assert.notEqual(sourceNoteRun.result.stopReason, "source-requires-host-provenance");
@@ -3700,6 +3961,36 @@ test("run_dove_auto records bounded foreground iterations", () => {
     const taskIndex = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
     const task = taskIndex.items.find((item) => item.id === "auto-foreground-task");
     assert.equal(task.status, "completed");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("run_dove_auto patch-plan composes source and note packet progress through the mutation overlay", () => {
+  const root = createTempRoot("dove-mcp-auto-patch-overlay-");
+  try {
+    extractToolJson(dispatchToolFull(root, "init_dove_goal", { id: "auto-patch-overlay-init", goal: "Validate patch-plan packet composition." }));
+    proposeAndMaterializeDoveTask(root, { id: "auto-patch-overlay-task", goal: "Collect one source and synthesize one note.", checklist: false });
+    const sourcePath = path.join(root, ARTIFACT_PATHS.sources);
+    const sourceBefore = fs.readFileSync(sourcePath, "utf8");
+    const proposal = extractToolJson(dispatchToolFull(root, "run_dove_auto", {
+      packetId: "auto-patch-overlay-task",
+      mutationMode: "patch-plan",
+      maxIterations: 2,
+      steps: [
+        { command: "dove.source", args: { sourceType: "paper", sources: [{ sourceId: "auto-patch-overlay-source", title: "Patch overlay source", locator: "https://example.org/patch-overlay" }] } },
+        { command: "dove.note", args: { noteId: "auto-patch-overlay-note", title: "Patch overlay note", sectionId: "method", sourceIds: ["auto-patch-overlay-source"], summary: "Patch-plan must read the source step from the active overlay." } }
+      ]
+    }));
+    const run = extractToolJson(dispatchToolFull(root, "run_dove_auto", proposal.confirmArgs));
+    const packetOperation = run.mutationPlan.operations.find((operation) => operation.relativePath === ".dove/task-packets/packets/auto-patch-overlay-task.json");
+    assert.ok(packetOperation);
+    const packet = JSON.parse(packetOperation.content);
+    assert.ok(packet.sourceIds.includes("auto-patch-overlay-source"));
+    assert.ok(packet.noteIds.includes("auto-patch-overlay-note"));
+    assert.ok(packet.artifactRefs.includes(ARTIFACT_PATHS.sources));
+    assert.ok(packet.artifactRefs.includes(ARTIFACT_PATHS.notes));
+    assert.equal(fs.readFileSync(sourcePath, "utf8"), sourceBefore);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -3910,7 +4201,12 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.equal(imported.status, "imported");
     assertPreActionGuidanceSummary(imported.preActionGuidanceSummary, { surface: "dove.review", primaryRole: "reviewer" });
     assert.equal(imported.privateTranscriptImported, false);
-    assert.equal(imported.verdict, "coherent");
+    assert.equal(imported.verdict, "needs-evidence");
+    assert.equal(imported.importedVerdict, "coherent");
+    assert.equal(imported.authoritative, false);
+    assert.equal(imported.independentReviewProof, null);
+    assert.equal(imported.reviewProofRequired, true);
+    assert.ok(imported.proofFailures.includes("reviewer-runtime-authorization-required"));
     const reviewLog = fs.readFileSync(path.join(root, ".dove", "reviews", "log.md"), "utf8");
     assert.doesNotMatch(reviewLog, /PRIVATE/);
     const audioReviewedArtifact = ".dove/drafts/mcp-audio-reviewed.md";
@@ -3925,18 +4221,23 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.equal("requiredActions" in runReview.resultCard.nextActions[0], false);
 
     const reviewLoop = extractToolJson(dispatchToolFull(root, "run_dove_review_loop", { packetId: "mcp-main-packet", runId: "mcp-review-loop-local", artifactPaths: [isolatedReviewedArtifact] }));
-    assert.equal(reviewLoop.status, "coherent");
-    assert.equal(reviewLoop.stopReason, "review-coherent");
+    assert.equal(reviewLoop.status, "needs-review");
+    assert.equal(reviewLoop.stopReason, "review-proof-required");
     assertPublicResultCard(reviewLoop.resultCard, { surface: "dove.review-loop" });
-    assert.equal(reviewLoop.review.verdict, "coherent");
+    assert.equal(reviewLoop.review.verdict, "needs-evidence");
+    assert.equal(reviewLoop.review.independentReviewProof, null);
+    assert.equal(reviewLoop.boundary.ownerRole, "reviewer");
+    assert.equal(reviewLoop.boundary.nextRole, "reviewer");
+    assert.equal(reviewLoop.boundary.nextAction, "project:dove.review");
+    assert.doesNotMatch(JSON.stringify(reviewLoop.resultCard), /hand off to a Builder|Builder revision/u);
     assertPublicResultCard(reviewLoop.review.resultCard, { surface: "dove.review" });
     assert.equal("handoffSuggestion" in reviewLoop.review.resultCard.nextActions[0], false);
     const coherentPacket = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "mcp-main-packet.json"), "utf8"));
     assert.ok(coherentPacket.artifactRefs.includes(ARTIFACT_PATHS.reviewState));
     assert.ok(coherentPacket.artifactRefs.includes(ARTIFACT_PATHS.reviewLog));
     assert.ok(coherentPacket.evidenceLinks.includes(isolatedReviewedArtifact));
-    assert.equal(coherentPacket.nextAction, "project:dove.status");
-    assert.match(coherentPacket.currentFocus, /internally consistent/u);
+    assert.equal(coherentPacket.nextAction, "project:dove.review");
+    assert.match(coherentPacket.currentFocus, /Reviewer-owned|isolated review proof/u);
 
     const revisionPacket = proposeAndMaterializeDoveTask(root, {
       id: "mcp-review-loop-fix-required",
@@ -3996,11 +4297,12 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
       findings: [{ id: "missing-validation", severity: "medium", summary: "Provide validation evidence." }],
       actionItems: ["Provide validation evidence."]
     }, null, 2)}\n`, "utf8");
-    const needsEvidence = extractToolJson(dispatchToolFull(root, "import_audio_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-2" }));
-    assertPublicResultCard(needsEvidence.resultCard, { surface: "dove.review" });
-    assert.equal("command" in needsEvidence.resultCard.nextActions[0], false);
-    assert.equal("handoffSuggestion" in needsEvidence.resultCard.nextActions[0], false);
-    assert.deepEqual(needsEvidence.resultCard.nextActions[0].requiredActions, ["Provide validation evidence."]);
+    const blockedImport = dispatchToolFull(root, "import_audio_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-2" });
+    assert.equal(blockedImport.isError, true);
+    assert.match(blockedImport.content[0].text, /review-proof-required.*authorized independent Reviewer proof/u);
+    const boardAfterBlockedImport = loadBoard(root);
+    assert.equal(boardAfterBlockedImport.currentPhase, "review");
+    assert.equal(boardAfterBlockedImport.assignedRole, "reviewer");
     assert.equal(runReview.privacyBoundary.projectContextShared, false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -4123,9 +4425,6 @@ test("materialize_guidance_packet MCP identity conflicts do not write packets", 
     }
   });
   const topPack = queryMetaOptimize(root).remediationPacks.packs[0];
-  const actorRole = topPack.rankedConversionPaths?.find(
-    (item) => item.targetType === "create-new-packet"
-  )?.assignedRole ?? "planner";
   writeJson(root, ".dove/task-packets/packets/task-mcp-existing-target.json", {
     id: "task-mcp-existing-target",
     title: "Existing MCP target",
@@ -4135,10 +4434,7 @@ test("materialize_guidance_packet MCP identity conflicts do not write packets", 
     sourceType: "remediation-pack",
     sourceId: topPack.id,
     status: "acknowledged",
-    actorRole,
-    decisionSummary: "Preserve the original MCP target binding.",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-mcp-existing-target.json",
-    linkedTargetId: "task-mcp-existing-target"
+    decisionSummary: "Acknowledge the source without binding an execution target."
   });
 
   const packetId = "task-mcp-conflicting-materialization";
@@ -4149,14 +4445,13 @@ test("materialize_guidance_packet MCP identity conflicts do not write packets", 
   const result = dispatchToolFull(root, "materialize_guidance_packet", {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
-    actorRole,
     packetId,
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
   });
 
   assert.equal(result.isError, true);
-  assert.match(result.content?.[0]?.text ?? "", /cannot change target/);
+  assert.match(result.content?.[0]?.text ?? "", /Public materialize_guidance_packet is disabled|system-owned program approval/i);
   assert.equal(fs.existsSync(packetPath), false);
   assert.deepEqual(fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex)), packetIndexBefore);
   assert.deepEqual(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThrough)), followThroughBefore);
@@ -4187,7 +4482,7 @@ test("verify_source enforces structured audit evidence, safe captures, and sourc
     locator: "https://example.org/audit-source"
   }));
   const capturePath = writeMcpEvidenceFile(root, ".dove/evidence/source-capture.txt", "Captured publisher metadata.\n");
-  const accepted = extractToolJson(dispatchToolFull(root, "verify_source", {
+  const positive = dispatchToolFull(root, "verify_source", {
     packetId,
     sourceId: source.id,
     decision: "verified",
@@ -4197,8 +4492,14 @@ test("verify_source enforces structured audit evidence, safe captures, and sourc
       { reference: source.locator, kind: "source", observation: "Matched the registered source locator." },
       { reference: capturePath, kind: "capture", observation: "Stored the inspected metadata locally." }
     ]
-  }));
-  assert.deepEqual(accepted.verification.auditEvidence.map((item) => item.kind), ["source", "capture"]);
+  });
+  assert.equal(positive.isError, true);
+  assert.match(positive.content[0].text, /decision must be one of|positive verification/i);
+  const trusted = seedTrustedSourceVerification(root, source.id, packetId, {
+    material: "Captured publisher metadata.\n",
+    auditEvidence: [{ reference: capturePath, kind: "capture", observation: "Stored the inspected metadata locally." }]
+  });
+  assert.equal(trusted.verification.provenance, "trusted-internal-transition");
 
   extractToolJson(dispatchToolFull(root, "register_source", {
     packetId,
@@ -4218,7 +4519,7 @@ test("verify_source enforces structured audit evidence, safe captures, and sourc
     const response = dispatchToolFull(root, "verify_source", {
       packetId,
       sourceId: source.id,
-      decision: "verified",
+      decision: "rejected",
       method: "independent metadata check",
       checkedMaterial: "registered metadata",
       auditEvidence
@@ -4546,7 +4847,8 @@ test("mutating MCP tools omit retired override fields", () => {
   assert.match(runDoveOperatorTool.description, /read-only lesson recall/);
   assert.match(runDoveOperatorTool.description, /resultCard/);
   assert.match(runDoveOperatorTool.description, /material-specific host-pass requiredActions/);
-  assert.match(runDoveOperatorTool.description, /host-tool-blocked task results/);
+  assert.match(runDoveOperatorTool.description, /canonical host-supplied taskResults/);
+  assert.match(runDoveOperatorTool.description, /blocked host results use boundaryType host-tool-blocked/);
   assert.match(runDoveOperatorTool.description, /no scheduler or hidden runtime/);
   assert.ok(runDoveOperatorTool.inputSchema.properties.confirmed, "run_dove_operator should expose confirmed");
   assert.ok(runDoveOperatorTool.inputSchema.properties.includeQueueDetails, "run_dove_operator should expose includeQueueDetails");
@@ -4616,6 +4918,7 @@ test("mutating MCP tools omit retired override fields", () => {
   assert.equal(auditEvidenceItem.type, "object");
   assert.deepEqual(auditEvidenceItem.required, ["reference", "kind", "observation"]);
   assert.deepEqual(auditEvidenceItem.properties.kind.enum, ["source", "capture"]);
+  assert.deepEqual(verifySourceTool.inputSchema.properties.decision.enum, ["rejected"]);
   assert.equal(auditEvidenceItem.additionalProperties, false);
   assert.ok(upsertNoteTool, "upsert_note should exist");
   assert.match(upsertNoteTool.description, /internal synthesis/);
@@ -4743,8 +5046,13 @@ test("mutating MCP tools omit retired override fields", () => {
     );
   }
   assert.ok(revokeApprovalTool.inputSchema.properties.approvalId, "revoke_program_approval should expose approvalId");
-  assert.ok(followThroughTool.inputSchema.properties.workerRole, "record_operator_follow_through should expose workerRole for planner-supervised envelopes");
-  assert.ok(materializeTool.inputSchema.properties.workerRole, "materialize_guidance_packet should expose workerRole for planner-supervised envelopes");
+  assert.deepEqual(followThroughTool.inputSchema.properties.status.enum, ["acknowledged", "deferred"]);
+  for (const field of ["actorRole", "workerRole", "linkedTargetArtifact", "linkedTargetId", "plannedTarget", "executeBy"]) {
+    assert.equal(followThroughTool.inputSchema.properties[field], undefined, `record_operator_follow_through must not expose ${field}`);
+  }
+  for (const field of ["actorRole", "workerRole", "phase", "assignedRole", "lifecycleStatus"]) {
+    assert.equal(materializeTool.inputSchema.properties[field], undefined, `materialize_guidance_packet must not expose ${field}`);
+  }
   assert.equal(
     Object.hasOwn(followThroughTool.inputSchema.properties, "programId"),
     false,
@@ -4786,7 +5094,9 @@ test("mutating MCP tools omit retired override fields", () => {
     );
   }
   assert.ok(launchDoveTool, "launch_dove_mission should exist");
-  assert.ok(launchDoveTool.inputSchema.properties.actorRole, "launch_dove_mission should expose actorRole");
+  for (const field of ["actorRole", "workerRole", "doveWorkerRole", "phase", "assignedRole", "lifecycleStatus"]) {
+    assert.equal(launchDoveTool.inputSchema.properties[field], undefined, `launch_dove_mission must not expose ${field}`);
+  }
   assert.ok(launchDoveTool.inputSchema.properties.sourceType, "launch_dove_mission should expose sourceType");
   assert.ok(launchDoveTool.inputSchema.properties.sourceId, "launch_dove_mission should expose sourceId");
   assert.ok(launchDoveTool.inputSchema.properties.domain, "launch_dove_mission should expose domain");

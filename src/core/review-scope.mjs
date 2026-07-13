@@ -93,6 +93,122 @@ function scopeError(message, details = {}) {
   return error;
 }
 
+function sameStringSet(left, right) {
+  return JSON.stringify(normalizeStrings(left).sort())
+    === JSON.stringify(normalizeStrings(right).sort());
+}
+
+export function canonicalReviewExchangePathFailure(root, relativePath, label) {
+  const normalized = normalizeProjectRelativePath(relativePath);
+  if (!normalized.ok) {
+    return `${label}-unsafe-path`;
+  }
+  const inspection = inspectDeclaredPath(root, normalized.normalizedPath, {
+    requireNonEmpty: true
+  });
+  if (inspection.status !== "existing") {
+    return `${label}-${inspection.status}`;
+  }
+  if (inspection.canonicalRelativePath !== normalized.normalizedPath) {
+    return `${label}-noncanonical-realpath`;
+  }
+  return null;
+}
+
+export function verifyCanonicalReviewImportScope(root, target, {
+  runId,
+  manifest,
+  input,
+  handoff,
+  canonicalPaths,
+  isolationModel,
+  contextPolicy
+} = {}) {
+  const failures = [];
+  if (manifest?.runId !== runId || input?.runId !== runId || handoff?.runId !== runId) failures.push("canonical-run-id-mismatch");
+  if (manifest?.inputPath !== canonicalPaths?.inputPath) failures.push("noncanonical-input-path");
+  if (manifest?.handoffPath !== canonicalPaths?.handoffPath) failures.push("noncanonical-handoff-path");
+  if (manifest?.reportPath !== canonicalPaths?.reportPath) failures.push("noncanonical-report-path");
+  if (handoff?.inputPath !== canonicalPaths?.inputPath) failures.push("handoff-input-path-mismatch");
+  if (handoff?.reportPath !== canonicalPaths?.reportPath) failures.push("handoff-report-path-mismatch");
+  if (input?.outputContract?.handoffPath !== canonicalPaths?.handoffPath) failures.push("output-contract-handoff-path-mismatch");
+  if (input?.outputContract?.reportPath !== canonicalPaths?.reportPath) failures.push("output-contract-report-path-mismatch");
+  if (input?.isolationModel !== isolationModel) failures.push("isolation-model-mismatch");
+  if (
+    input?.privacyBoundary?.writerPrivateTranscriptShared !== false
+    || input?.privacyBoundary?.reviewerPrivateTranscriptShouldReturn !== false
+  ) {
+    failures.push("privacy-boundary-mismatch");
+  }
+  if (contextPolicy !== undefined) {
+    if (input?.contextPolicy !== contextPolicy) failures.push("audio-context-policy-mismatch");
+    if (
+      input?.privacyBoundary?.projectContextShared !== false
+      || input?.privacyBoundary?.orchestrationBoardShared !== false
+    ) {
+      failures.push("audio-context-boundary-mismatch");
+    }
+    for (const field of ["finalPlanPaths", "finalResultPaths", "explicitArtifactPaths"]) {
+      if (!sameStringSet(manifest?.[field], input?.[field])) {
+        failures.push(`canonical-audio-${field}-mismatch`);
+      }
+    }
+    const classifiedPaths = normalizeStrings([
+      ...normalizeStrings(input?.finalPlanPaths),
+      ...normalizeStrings(input?.finalResultPaths),
+      ...normalizeStrings(input?.explicitArtifactPaths)
+    ]);
+    if (!sameStringSet(classifiedPaths, manifest?.reviewedArtifactPaths)) {
+      failures.push("canonical-audio-classification-set-mismatch");
+    }
+  }
+
+  let scope = null;
+  try {
+    scope = assertReviewMaterials(buildReviewScope(root, target), "review import");
+  } catch {
+    failures.push("canonical-reviewed-artifact-scope-mismatch");
+  }
+  if (scope) {
+    if (manifest?.packetId !== scope.packetId || input?.packetId !== scope.packetId) {
+      failures.push("canonical-packet-mismatch");
+    }
+    if (
+      !sameStringSet(manifest?.includedPacketIds, scope.includedPacketIds)
+      || !sameStringSet(input?.includedPacketIds, scope.includedPacketIds)
+    ) {
+      failures.push("canonical-included-packet-set-mismatch");
+    }
+    if (
+      !sameStringSet(manifest?.reviewedArtifactPaths, scope.substantiveArtifactPaths)
+      || !sameStringSet(input?.reviewedArtifactPaths, scope.substantiveArtifactPaths)
+      || !sameStringSet(handoff?.reviewedArtifactPaths, scope.substantiveArtifactPaths)
+    ) {
+      failures.push("canonical-reviewed-artifact-set-mismatch");
+    }
+    const allowedArtifactPaths = new Set(scope.reviewedArtifactPaths);
+    const allowedClaimIds = new Set(scope.claimIds);
+    const allowedExperimentIds = new Set(scope.experimentIds);
+    for (const finding of handoff?.findings ?? []) {
+      if (normalizeStrings(finding?.linkedArtifactPaths).some((item) => !allowedArtifactPaths.has(item))) {
+        failures.push("finding-artifact-outside-canonical-scope");
+      }
+      if (normalizeStrings(finding?.claimIds).some((item) => !allowedClaimIds.has(item))) {
+        failures.push("finding-claim-outside-canonical-scope");
+      }
+      if (normalizeStrings(finding?.experimentIds).some((item) => !allowedExperimentIds.has(item))) {
+        failures.push("finding-experiment-outside-canonical-scope");
+      }
+    }
+  }
+
+  return {
+    ok: failures.length === 0,
+    failures: Array.from(new Set(failures)),
+    scope
+  };
+}
+
 export function buildReviewScope(root, target, options = {}) {
   const catalog = options.catalog ?? readTaskPacketCatalog(root);
   const packet = catalog.byId.get(target?.packetId) ?? target?.packet;

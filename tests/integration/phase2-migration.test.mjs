@@ -20,25 +20,19 @@ import {
   upsertExperimentResult,
   upsertFigurePlan,
   upsertNote,
-  verifySource
 } from "../../src/core/internal-api.mjs";
 import { appendSystemHandoff, upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
+import { seedTrustedSourceVerification } from "../helpers/source-verification-fixture.mjs";
 
 function tempRoot() {
   return createTempRoot("dove-phase2-");
 }
 
-function verifyFixtureSource(root, sourceId) {
-  return verifySource(root, {
-    sourceId,
-    decision: "verified",
-    method: "test fixture inspected the canonical publication record",
-    checkedMaterial: "source title, authors, year, and publication metadata",
-    auditEvidence: [{ reference: "https://example.org/paper", kind: "source", observation: `Verified fixture identity for ${sourceId}.` }]
-  });
+function verifyFixtureSource(root, sourceId, packetId = "phase2-main-packet") {
+  return seedTrustedSourceVerification(root, sourceId, packetId);
 }
 
 function seedTaskPacket(root, packetId = "phase2-main-packet") {

@@ -79,9 +79,27 @@ import { dispatchTool } from "../../src/mcp/handlers.mjs";
 import { createMetaExecutionBridgeCandidatesIndex, createMetaLongHorizonMemory, createMetaOperatorLessonsIndex, createMetaOperatorPlaybooksIndex, createMetaOptimizerState, createMetaRemediationPacksIndex } from "../../src/core/schema.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
+import { seedTrustedSourceVerification } from "../helpers/source-verification-fixture.mjs";
 
 function tempRoot() {
   return createTempRoot("dove-phase6-");
+}
+
+function snapshotRelativeFileContents(root) {
+  const snapshot = {};
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const fullPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+      const relativePath = path.relative(root, fullPath).split(path.sep).join("/");
+      snapshot[relativePath] = fs.readFileSync(fullPath).toString("base64");
+    }
+  };
+  walk(root);
+  return snapshot;
 }
 
 test("governance audit static detector covers async exports, const exports, fs writes, and class boundaries", () => {
@@ -104,13 +122,16 @@ test("governance audit static detector covers async exports, const exports, fs w
   try {
     fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
     fs.mkdirSync(path.join(root, "src", "core"), { recursive: true });
+    fs.mkdirSync(path.join(root, "src", "mcp"), { recursive: true });
     fs.copyFileSync(scriptPath, path.join(root, "scripts", "audit-governance-coverage.mjs"));
     fs.writeFileSync(path.join(root, "src", "core", "schema.mjs"), `
 export const GOVERNANCE_GUARDED_MUTATIONS = [
   { surfaceBindings: { coreFunction: "mutateAfterClass" } }
 ];
 export const GOVERNANCE_EXEMPT_MUTATIONS = [];
+export const GOVERNANCE_READONLY_TOOLS = [];
 `, "utf8");
+    fs.writeFileSync(path.join(root, "src", "mcp", "tool-definitions.mjs"), "export const toolDefinitions = [];\n", "utf8");
     fs.writeFileSync(path.join(root, "src", "core", "class-boundary.mjs"), `
 import fs from "node:fs";
 
@@ -977,6 +998,87 @@ test("workflow completion hardening rejects fake completion signals", () => {
     fs.rmSync(autoRoot, { recursive: true, force: true });
   }
 
+  for (const scenario of [
+    {
+      packetId: "auto-review-packet-unrelated-note",
+      packet: {
+        title: "Review current implementation evidence",
+        summary: "Audit the current implementation through Dove review.",
+        stage: "audit",
+        domain: "engineering",
+        nextAction: "project:dove.review"
+      },
+      step: {
+        command: "dove.note",
+        completeTask: true,
+        outputArtifacts: [HARDENING_EVIDENCE_PATH],
+        verificationEvidencePaths: [HARDENING_EVIDENCE_PATH],
+        verifiedCriteria: hardeningVerifiedCriteria(),
+        args: {
+          noteId: "unrelated-review-note",
+          title: "Unrelated review note",
+          sectionId: "review",
+          summary: "This generic note is not an authoritative Dove review result."
+        }
+      },
+      stopReason: "auto-review-packet-requires-current-authoritative-review-result"
+    },
+    {
+      packetId: "auto-figure-packet-unrelated-draft",
+      packet: {
+        title: "Generate the final workflow figure",
+        summary: "Produce and validate the current final SVG through Dove figure.",
+        stage: "execute",
+        domain: "paper",
+        nextAction: "project:dove.figure"
+      },
+      step: {
+        command: "dove.draft",
+        completeTask: true,
+        outputArtifacts: [HARDENING_EVIDENCE_PATH],
+        verificationEvidencePaths: [HARDENING_EVIDENCE_PATH],
+        verifiedCriteria: hardeningVerifiedCriteria(),
+        args: {
+          sectionId: "unrelated-figure-draft",
+          title: "Unrelated figure draft",
+          body: "# Draft\n\nThis draft is not a validated final SVG result.\n"
+        }
+      },
+      stopReason: "auto-figure-packet-requires-current-validated-final-svg-proof"
+    }
+  ]) {
+    const packetRoot = tempRoot();
+    try {
+      const step = structuredClone(scenario.step);
+      runFixtureMutation(packetRoot, `${scenario.packetId}-setup`, () => {
+        ensureTestWorkspace(packetRoot);
+        writeHardeningEvidenceFile(packetRoot);
+        seedHardeningTask(packetRoot, scenario.packetId, scenario.packet);
+        if (step.command === "dove.note") {
+          step.args.sourceIds = [seedHardeningSource(packetRoot, scenario.packetId, `${scenario.packetId}-source`)];
+        }
+      });
+      const result = proposeAndRunHardeningAuto(packetRoot, {
+        packetId: scenario.packetId,
+        steps: [step]
+      }, {
+        runId: `${scenario.packetId}-run`
+      });
+      assert.equal(result.status, "verification-failed");
+      assert.equal(result.result.stopReason, scenario.stopReason);
+      assert.equal(result.task.status, "blocked");
+      assert.equal(result.boundary.type, "verification-failed");
+      const packet = JSON.parse(fs.readFileSync(path.join(packetRoot, `.dove/task-packets/packets/${scenario.packetId}.json`), "utf8"));
+      const indexItem = JSON.parse(fs.readFileSync(path.join(packetRoot, ARTIFACT_PATHS.taskPacketsIndex), "utf8")).items.find((item) => item.id === scenario.packetId);
+      const context = JSON.parse(fs.readFileSync(path.join(packetRoot, `.dove/context/packets/${scenario.packetId}.json`), "utf8"));
+      assert.equal(packet.status, "blocked");
+      assert.equal(indexItem.status, "blocked");
+      assert.equal(context.status, "blocked");
+    } finally {
+      fs.rmSync(packetRoot, { recursive: true, force: true });
+    }
+  }
+
   const operatorRoot = tempRoot();
   try {
     runFixtureMutation(operatorRoot, "operator-root", () => {
@@ -996,7 +1098,7 @@ test("workflow completion hardening rejects fake completion signals", () => {
       taskResults: [{
         packetId: "operator-summary-only",
         resultStatus: "completed",
-        summary: "Host pass says done without evidence."
+        resultSummary: "Host pass says done without evidence."
       }]
     });
     assert.equal(operator.result.iterations[0].status, "needs-completion-evidence");
@@ -1021,24 +1123,122 @@ test("workflow completion hardening rejects fake completion signals", () => {
       nextAction: "project:dove.source",
       executionContract: hardeningExecutionContract()
     });
-    const unknown = runDoveOperator(unknownRoot, {
+    const beforeUnknown = fs.readFileSync(path.join(unknownRoot, ARTIFACT_PATHS.taskPacketsIndex), "utf8");
+    assert.throws(() => runDoveOperator(unknownRoot, {
       confirmed: true,
       includeQueueDetails: true,
       runId: "operator-unknown-status-run",
       taskResults: [{
         packetId: "operator-unknown-status",
         resultStatus: "mystery",
-        summary: "Unknown host result status should not be normalized to completed.",
+        resultSummary: "Unknown host result status must fail closed.",
         verificationEvidencePaths: [HARDENING_EVIDENCE_PATH],
         verifiedCriteria: hardeningVerifiedCriteria()
       }]
-    });
-    assert.equal(unknown.result.iterations[0].status, "in-progress");
-    assert.equal(unknown.updatedTasks[0].status, "in-progress");
-    assert.equal(readJson(unknownRoot, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === "operator-unknown-status").status, "in-progress");
+    }), /resultStatus must be "completed", "blocked", or "in-progress"/u);
+    assert.equal(fs.readFileSync(path.join(unknownRoot, ARTIFACT_PATHS.taskPacketsIndex), "utf8"), beforeUnknown);
     });
   } finally {
     fs.rmSync(unknownRoot, { recursive: true, force: true });
+  }
+
+  for (const [field, value] of [
+    ["results", []],
+    ["passResults", []],
+    ["confirm", true],
+    ["createBlockedInvestigations", true],
+    ["unexpectedOperatorField", true]
+  ]) {
+    const invalidRoot = tempRoot();
+    try {
+      assert.throws(
+        () => runDoveOperator(invalidRoot, { [field]: value }),
+        new RegExp(`run_dove_operator does not accept unknown input: ${field}`, "u")
+      );
+      assert.equal(fs.existsSync(path.join(invalidRoot, ARTIFACT_PATHS.doveRoot)), false);
+    } finally {
+      fs.rmSync(invalidRoot, { recursive: true, force: true });
+    }
+  }
+});
+
+test("runDoveOperator resumes blocked host-pass boundaries through canonical taskResults", () => {
+  for (const boundaryType of ["awaiting-host-pass", "awaiting-host-pass-result"]) {
+    const root = tempRoot();
+    try {
+      runFixtureMutation(root, `operator-resume-${boundaryType}`, () => {
+        ensureTestWorkspace(root);
+        seedHardeningTask(root, `operator-resume-${boundaryType}`, {
+          status: "blocked",
+          goal: "Resume a blocked host pass through the operator.",
+          nextAction: "project:dove.auto",
+          boundary: {
+            id: `boundary-${boundaryType}`,
+            type: boundaryType,
+            status: "open",
+            packetId: `operator-resume-${boundaryType}`,
+            reason: "Host pass result required.",
+            requiredActions: ["provide-host-pass-result"]
+          },
+          blockedReason: "Host pass result required."
+        });
+        writeHardeningEvidenceFile(root);
+
+        const preview = runDoveOperator(root, { includeQueueDetails: true });
+        assert.deepEqual(preview.queueSummary.hostPassRequiredTaskIds, [`operator-resume-${boundaryType}`]);
+        assert.deepEqual(preview.queueSummary.blockedTaskIds, []);
+
+        const run = runDoveOperator(root, {
+          confirmed: true,
+          includeQueueDetails: true,
+          runId: `operator-resume-${boundaryType}-run`,
+          taskResults: [{
+            packetId: `operator-resume-${boundaryType}`,
+            resultStatus: "completed",
+            resultSummary: "Host pass completed with verified evidence.",
+            verificationEvidencePaths: [HARDENING_EVIDENCE_PATH],
+            verifiedCriteria: hardeningVerifiedCriteria()
+          }]
+        });
+        assert.equal(run.updatedTasks[0].status, "completed");
+        assert.equal(readJson(root, ARTIFACT_PATHS.taskPacketsIndex).items.find((item) => item.id === `operator-resume-${boundaryType}`).status, "completed");
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("runDoveAuto resumes both host-pass boundary variants", () => {
+  for (const boundaryType of ["awaiting-host-pass", "awaiting-host-pass-result"]) {
+    const root = tempRoot();
+    try {
+      runFixtureMutation(root, `resume-${boundaryType}`, () => {
+        ensureTestWorkspace(root);
+        seedHardeningTask(root, `resume-${boundaryType}`, {
+          status: "blocked",
+          boundary: {
+            id: `boundary-${boundaryType}`,
+            type: boundaryType,
+            status: "open",
+            packetId: `resume-${boundaryType}`,
+            reason: "Host pass was required.",
+            requiredActions: ["provide-host-pass-result"]
+          },
+          blockedReason: "Host pass was required.",
+          nextAction: "project:dove.status"
+        });
+        const result = proposeAndRunHardeningAuto(root, {
+          packetId: `resume-${boundaryType}`,
+          maxIterations: 1,
+          steps: [{ command: "dove.status" }]
+        }, { runId: `resume-${boundaryType}-run` });
+        assert.notEqual(result.status, "blocked-boundary");
+        assert.notEqual(result.result.outcome, boundaryType);
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   }
 });
 
@@ -1055,7 +1255,7 @@ test("completion evidence accepts eligible typed sources while source ledgers re
   const fingerprint = sourceIdentityFingerprint(source);
   fs.mkdirSync(path.join(root, ".dove/sources"), { recursive: true });
   fs.writeFileSync(path.join(root, ".dove/sources/index.json"), `${JSON.stringify({ version: 2, items: [{ ...source, fingerprint }], updatedAt: new Date(0).toISOString() }, null, 2)}\n`);
-  fs.writeFileSync(path.join(root, ".dove/sources/verifications.json"), `${JSON.stringify({ version: 1, items: [{ id: "verification-1", sourceId: source.id, packetId: "typed-source-packet", fingerprint, decision: "verified", checkedAt: new Date(0).toISOString() }], updatedAt: new Date(0).toISOString() }, null, 2)}\n`);
+  seedTrustedSourceVerification(root, source.id, "typed-source-packet");
 
   const typed = completionEvidenceIntegrity(root, { evidencePaths: ["source:typed-source"] }, {
     context: { eligibleSourceReferences: ["source:typed-source"] }
@@ -2533,7 +2733,7 @@ test("ensureWorkspace reconciles managed artifact metadata and structure for bou
   });
 });
 
-test("queryMetaOptimize carries forward legacy long-horizon history while rewriting normalized meta surfaces", () => {
+test("queryMetaOptimize carries forward legacy long-horizon history in memory without rewriting durable mirrors", () => {
   const root = tempRoot();
   runFixtureMutation(root, "legacy-meta-setup", () => {
   ensureTestWorkspace(root);
@@ -2611,23 +2811,27 @@ test("queryMetaOptimize carries forward legacy long-horizon history while rewrit
     longHorizon: { overview: "Legacy state overview." }
   }, null, 2));
 
-  const result = runFixtureMutation(root, "legacy-meta-query", () => queryMetaOptimize(root));
-  const longHorizonMemory = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory);
-  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 9 });
+  const before = snapshotRelativeFileContents(root);
+  const durableLongHorizonBefore = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory);
+  const durableRecommendationsBefore = readJson(root, ARTIFACT_PATHS.metaRecommendations, {});
+  const durableOptimizerStateBefore = readJson(root, ARTIFACT_PATHS.metaOptimizerState, {});
+  const result = queryMetaOptimize(root);
 
+  assert.deepEqual(snapshotRelativeFileContents(root), before);
   assert.equal(result.proposalOnly, true);
-  assert.equal(longHorizonMemory.history.length >= 2, true);
-  assert.equal(longHorizonMemory.historyWindowSize, 12);
-  assert.equal(longHorizonMemory.history[0].observedAt, "2026-01-01T00:00:00.000Z");
-  assert.equal(longHorizonMemory.summary.topFamilyIds.includes("review-recurrence"), true);
-  assert.equal(longHorizonMemory.summary.snapshotCount, longHorizonMemory.history.length);
-  assert.equal(longHorizonMemory.summary.lastAction, "append");
-  assert.equal(result.longHorizon.history.length, longHorizonMemory.history.length);
-  assert.equal(workspaceIndex.metaOptimize.recommendationCount, result.recommendations.length);
-  assert.equal(workspaceIndex.metaOptimize.clusterCount, result.clusters.length);
-  assert.equal(workspaceIndex.metaOptimize.longHorizonPath, ARTIFACT_PATHS.metaLongHorizonMemory);
-  assert.equal(workspaceIndex.metaOptimize.longHorizon.snapshotCount, longHorizonMemory.summary.snapshotCount);
-  assert.equal(workspaceIndex.metaOptimize.longHorizon.lastAction, longHorizonMemory.summary.lastAction);
+  assert.equal(result.longHorizon.history.length >= 2, true);
+  assert.equal(result.longHorizon.historyWindowSize, 12);
+  assert.equal(result.longHorizon.history[0].observedAt, "2026-01-01T00:00:00.000Z");
+  assert.equal(result.longHorizon.summary.topFamilyIds.includes("review-recurrence"), true);
+  assert.equal(result.longHorizon.summary.snapshotCount, result.longHorizon.history.length);
+  assert.equal(result.longHorizon.summary.lastAction, "append");
+  assert.equal(result.recommendations.length > 0, true);
+  assert.notEqual(result.groupedFrontier.ranking.method, durableRecommendationsBefore.ranking.method);
+  assert.equal(result.state.frontier.recommendationCount, result.recommendations.length);
+  assert.notEqual(result.state.frontier.recommendationCount, durableOptimizerStateBefore.frontier.recommendationCount);
+  assert.deepEqual(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory), durableLongHorizonBefore);
+  assert.deepEqual(readJson(root, ARTIFACT_PATHS.metaRecommendations, {}), durableRecommendationsBefore);
+  assert.deepEqual(readJson(root, ARTIFACT_PATHS.metaOptimizerState, {}), durableOptimizerStateBefore);
 });
 
 test("queryMetaOptimize avoids long-horizon history drift on repeated no-op refreshes", () => {
@@ -2810,16 +3014,34 @@ test("queryMetaOptimize builds proposal-only recommendations from durable review
     updatedAt: null
   });
 
+  const before = snapshotRelativeFileContents(root);
+  const durableMirrorsBefore = Object.fromEntries([
+    ARTIFACT_PATHS.metaLongHorizonMemory,
+    ARTIFACT_PATHS.metaExecutionBridgeCandidates,
+    ARTIFACT_PATHS.metaOperatorPlaybooks,
+    ARTIFACT_PATHS.metaRecommendations,
+    ARTIFACT_PATHS.metaOptimizerState,
+    ARTIFACT_PATHS.metaRemediationPacks,
+    ARTIFACT_PATHS.workspaceIndex
+  ].map((artifactPath) => [artifactPath, fs.readFileSync(path.join(root, artifactPath)).toString("base64")]));
   const result = queryMetaOptimize(root);
-  const longHorizonMemory = readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, { version: 1, summary: {}, history: [], families: [], updatedAt: null });
-  const executionBridgeCandidates = readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex);
-  const operatorPlaybooks = readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex);
-  const recommendations = readJson(root, ARTIFACT_PATHS.metaRecommendations, { version: 1, items: [], summary: {}, updatedAt: null });
-  const optimizerState = readJson(root, ARTIFACT_PATHS.metaOptimizerState, { version: 1, frontier: {}, updatedAt: null });
-  const remediationPacks = readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex);
-  const report = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOptimizerReport), "utf8");
-  const workspaceIndex = readJson(root, ARTIFACT_PATHS.workspaceIndex, { version: 9 });
-  const sessionSummary = fs.readFileSync(path.join(root, ARTIFACT_PATHS.sessionSummary), "utf8");
+  const workspaceIndex = queryWorkspaceIndex(root);
+  const longHorizonMemory = result.longHorizon;
+  const executionBridgeCandidates = result.executionBridgeCandidates;
+  const operatorPlaybooks = result.operatorPlaybooks;
+  const recommendations = {
+    items: result.recommendations,
+    clusters: result.clusters,
+    summary: result.summary,
+    frontier: result.frontier
+  };
+  const optimizerState = result.state;
+  const remediationPacks = result.remediationPacks;
+
+  assert.deepEqual(snapshotRelativeFileContents(root), before);
+  for (const [artifactPath, content] of Object.entries(durableMirrorsBefore)) {
+    assert.equal(fs.readFileSync(path.join(root, artifactPath)).toString("base64"), content, `${artifactPath} must remain unchanged`);
+  }
 
   assert.equal(result.proposalOnly, true);
   assert.equal(result.executionBridgeCandidates.proposalOnly, true);
@@ -2859,18 +3081,6 @@ test("queryMetaOptimize builds proposal-only recommendations from durable review
   assert.equal(longHorizonMemory.history.length >= 1, true);
   assert.equal(longHorizonMemory.families.find((item) => item.id === "review-recurrence")?.trend.status, "rising");
   assert.equal(longHorizonMemory.summary.snapshotCount, longHorizonMemory.history.length);
-  assert.match(report, /Proposal only: true/);
-  assert.match(report, /Optimization frontier/);
-  assert.match(report, /Meta-optimize frontier summary:/);
-  assert.match(report, /Long-horizon workflow memory/);
-  assert.match(report, /Long-horizon snapshots:/);
-  assert.match(report, /Long-horizon last action:/);
-  assert.match(report, /Long-horizon history policy:/);
-  assert.match(report, /Cluster 1: Evidence integrity/);
-  assert.match(report, /Evidence-backed recommendations/);
-  assert.match(report, /Execution bridge candidate scaffolds/);
-  assert.match(report, /Stable tie-break order/);
-  assert.match(report, /Ranking basis:/);
   assert.equal(workspaceIndex.metaOptimize.proposalOnly, true);
   assert.equal(workspaceIndex.metaOptimize.recommendationCount, recommendations.items.length);
   assert.equal(workspaceIndex.metaOptimize.clusterCount, recommendations.clusters.length);
@@ -2924,24 +3134,6 @@ test("queryMetaOptimize builds proposal-only recommendations from durable review
   assert.match(workspaceIndex.metaOptimize.remediationPacks.readinessOverview, /actionable|advisory|partially/i);
   assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.playbookCount, operatorPlaybooks.summary.playbookCount);
   assert.match(workspaceIndex.metaOptimize.operatorPlaybooks.readinessOverview, /actionable|advisory|partially|No proposal-only family-level operator playbooks/i);
-  assert.match(sessionSummary, /Long-horizon memory:/);
-  assert.match(sessionSummary, /Meta-optimize frontier summary:/);
-  assert.match(sessionSummary, /Remediation packs:/);
-  assert.match(sessionSummary, /Remediation pack readiness:/);
-  assert.match(sessionSummary, /Family playbooks:/);
-  assert.match(sessionSummary, /Family playbook readiness:/);
-  assert.match(sessionSummary, /Remediation packs path:/);
-  assert.match(sessionSummary, /Family playbooks path:/);
-  assert.match(sessionSummary, /Long-horizon snapshots:/);
-  assert.match(sessionSummary, /Long-horizon last action:/);
-  assert.match(sessionSummary, /Long-horizon memory path:/);
-  assert.match(report, /Remediation packs/);
-  assert.match(report, /Family-level operator playbooks/);
-  assert.match(report, /Readiness:/);
-  assert.match(report, /Missing ingredients:/);
-  assert.match(report, /Acceptance criteria:/);
-  assert.match(report, /Conversion hints:/);
-  assert.match(report, /Manual next actions:/);
   });
 });
 
@@ -3356,7 +3548,6 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
 
   const meta = queryMetaOptimize(root);
   const topPack = meta.remediationPacks.packs[0];
-  const allowedActorRole = topPack.packetPointers?.[0]?.assignedRole ?? topPack.conversionHints?.[0]?.assignedRole ?? "planner";
   assert.ok(topPack);
 
   writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
@@ -3393,21 +3584,17 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
-    status: "accepted-for-execution",
-    actorRole: "planner",
-    decisionSummary: "Promote top remediation pack into manual execution.",
+    status: "acknowledged",
+    decisionSummary: "Acknowledge the top remediation pack without claiming execution authority.",
     selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-    linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through.json",
-    linkedTargetId: "task-follow-through",
-    executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
   });
 
   let followThrough = queryOperatorFollowThrough(root);
-  assert.equal(followThrough.summary.acceptedForExecutionCount, 1);
+  assert.equal(followThrough.summary.acknowledgedCount, 1);
   assert.equal(followThrough.summary.staleCount, 0);
   assert.equal(followThrough.items[0].sourceType, "remediation-pack");
-  assert.equal(followThrough.items[0].linkedTargetArtifact, ".dove/task-packets/packets/task-follow-through.json");
+  assert.equal(followThrough.items[0].linkedTargetArtifact, null);
 
   writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
     version: 2,
@@ -3442,8 +3629,7 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
     recordOperatorFollowThrough(root, {
       sourceType: "remediation-pack",
       sourceId: topPack.id,
-      status: "not-a-real-status",
-      actorRole: "planner"
+      status: "not-a-real-status"
     });
   }, /Public follow-through status must be one of/);
 
@@ -3451,27 +3637,19 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
     recordOperatorFollowThrough(root, {
       sourceType: "remediation-pack",
       sourceId: topPack.id,
-      status: "accepted-for-execution",
-      actorRole: "reviewer",
-      linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through.json",
-      linkedTargetId: "task-follow-through",
-      executeBy: "2099-01-01T00:00:00.000Z",
-      reviewAfter: "2099-01-01T12:00:00.000Z"
+      status: "acknowledged",
+      actorRole: "reviewer"
     });
-  }, /not allowed/);
+  }, /system-owned or unknown fields/);
 
   assert.throws(() => {
     recordOperatorFollowThrough(root, {
       sourceType: "remediation-pack",
       sourceId: topPack.id,
-      status: "accepted-for-execution",
-      actorRole: "planner",
-      linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through.json",
-      linkedTargetId: "missing-target",
-      executeBy: "2099-01-01T00:00:00.000Z",
-      reviewAfter: "2099-01-01T12:00:00.000Z"
+      status: "acknowledged",
+      linkedTargetId: "missing-target"
     });
-  }, /was not found/);
+  }, /system-owned or unknown fields/);
 
   const privilegedFieldCases = [
     { status: "executing" },
@@ -3494,12 +3672,7 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
       recordOperatorFollowThrough(root, {
         sourceType: "remediation-pack",
         sourceId: topPack.id,
-        status: "accepted-for-execution",
-        actorRole: allowedActorRole,
-        linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through.json",
-        linkedTargetId: "task-follow-through",
-        executeBy: "2099-01-01T00:00:00.000Z",
-        reviewAfter: "2099-01-01T12:00:00.000Z",
+        status: "acknowledged",
         ...privilegedInput
       });
     }, /Public follow-through status must be one of|do not accept system-owned or unknown fields/);
@@ -3515,52 +3688,66 @@ test("queryMetaOptimize surfaces durable operator follow-through and marks stale
   });
 });
 
-test("follow-through record identity cannot splice source or target across records", () => {
+test("public accepted-risk is rejected and cannot clear the governance gate", () => {
   const root = tempRoot();
-  return runFixtureMutation(root, "follow-through-record-identity-cannot-splice-source-or-target-across-rec", () => {
-  ensureTestWorkspace(root);
-  initProject(root, { title: "Follow-through Identity", objective: "Keep source and target bound to one durable record." });
-  const { remediationPack, executionBridgeCandidate } = seedAutonomyGuidance(root);
-  seedTaskPacket(root, "task-follow-through-identity-a", { title: "Identity target A", status: "pending" });
-  seedTaskPacket(root, "task-follow-through-identity-b", { title: "Identity target B", status: "pending" });
+  return runFixtureMutation(root, "public-accepted-risk-cannot-clear-governance-gate", () => {
+    ensureTestWorkspace(root);
+    initProject(root, { title: "Accepted risk gate", objective: "Keep accepted risk non-authoritative." });
+    const { remediationPack } = seedAutonomyGuidance(root);
+    seedTaskPacket(root, "task-accepted-risk-gate", { title: "Accepted risk gate packet", status: "pending" });
+    assert.throws(() => recordOperatorFollowThrough(root, {
+      sourceType: "remediation-pack",
+      sourceId: remediationPack.id,
+      status: "accepted-risk",
+      rationale: "Caller attempts to accept governance debt."
+    }), /Public follow-through status must be one of/);
 
-  const recordId = "follow-through-identity";
-  recordOperatorFollowThrough(root, {
-    id: recordId,
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    status: "accepted-for-execution",
-    actorRole: "planner",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through-identity-a.json",
-    linkedTargetId: "task-follow-through-identity-a",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
+    writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, {
+      version: 1,
+      proposalOnly: true,
+      explicitOnly: true,
+      items: [{
+        id: "legacy-accepted-risk",
+        sourceType: "remediation-pack",
+        sourceId: remediationPack.id,
+        sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
+        sourceFingerprint: "legacy-untrusted-fingerprint",
+        sourceTitle: "Legacy accepted risk",
+        sourceSummary: "This legacy record lacks trusted authority provenance.",
+        status: "accepted-risk",
+        rationale: "Legacy audit record.",
+        actorRole: "planner",
+        recordedAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString()
+      }],
+      updatedAt: null
+    });
+    const followThrough = queryOperatorFollowThrough(root);
+    assert.equal(followThrough.actionRequiredItems.some((item) => item.id === "legacy-accepted-risk"), true);
+    assert.equal(followThrough.items[0].invalidStatus, true);
+    assert.equal(followThrough.items[0].authorityFailureReason, "untrusted-authority-provenance");
+    assert.throws(() => upsertPlan(root, { thesis: "accepted risk must not clear governance" }), /operator follow-through still requires action/);
   });
+});
 
-  assert.throws(() => recordOperatorFollowThrough(root, {
-    id: recordId,
-    sourceType: "remediation-pack",
-    sourceId: remediationPack.id,
-    status: "accepted-for-execution",
-    actorRole: "planner",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through-identity-b.json",
-    linkedTargetId: "task-follow-through-identity-b",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /cannot change target/);
 
-  assert.ok(executionBridgeCandidate);
-  assert.throws(() => recordOperatorFollowThrough(root, {
-    id: recordId,
-    sourceType: "execution-bridge",
-    sourceId: executionBridgeCandidate.id,
-    status: "accepted-for-execution",
-    actorRole: "planner",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through-identity-a.json",
-    linkedTargetId: "task-follow-through-identity-a",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /cannot change source/);
+test("public follow-through cannot bind or splice execution targets", () => {
+  const root = tempRoot();
+  return runFixtureMutation(root, "public-follow-through-cannot-bind-execution-targets", () => {
+    ensureTestWorkspace(root);
+    initProject(root, { title: "Follow-through Identity", objective: "Keep execution authority internal." });
+    const { remediationPack } = seedAutonomyGuidance(root);
+    assert.throws(() => recordOperatorFollowThrough(root, {
+      id: "follow-through-identity",
+      sourceType: "remediation-pack",
+      sourceId: remediationPack.id,
+      status: "acknowledged",
+      actorRole: "planner",
+      workerRole: "builder",
+      linkedTargetArtifact: ".dove/task-packets/packets/task-follow-through-identity-a.json",
+      linkedTargetId: "task-follow-through-identity-a",
+      plannedTarget: true
+    }), /system-owned or unknown fields/);
   });
 });
 
@@ -3692,7 +3879,7 @@ test("queryOperatorFollowThrough summarizes combined deferred, stale, and invali
   assert.equal(followThrough.summary.itemCount, 3);
   assert.equal(followThrough.summary.dueDeferredCount, 1);
   assert.equal(followThrough.summary.dueReviewCount, 1);
-  assert.equal(followThrough.summary.invalidStatusCount, 1);
+  assert.equal(followThrough.summary.invalidStatusCount, 2);
   assert.equal(followThrough.summary.overdueExecutionCount, 1);
   assert.equal(followThrough.summary.criticalOverdueExecutionCount, 1);
   assert.equal(Array.isArray(followThrough.summary.overdueExecutionIds), true);
@@ -3700,7 +3887,7 @@ test("queryOperatorFollowThrough summarizes combined deferred, stale, and invali
   });
 });
 
-test("executing follow-through remains a valid governed state across query and write guards", () => {
+test("legacy executing follow-through without authority provenance fails closed across query and write guards", () => {
   const root = tempRoot();
   return runFixtureMutation(root, "executing-follow-through-remains-a-valid-governed-state-across-query-and", () => {
   ensureTestWorkspace(root);
@@ -3740,7 +3927,8 @@ test("executing follow-through remains a valid governed state across query and w
 
   const followThrough = queryOperatorFollowThrough(root);
   assert.equal(followThrough.items[0].status, "executing");
-  assert.equal(followThrough.items[0].invalidStatus, false);
+  assert.equal(followThrough.items[0].invalidStatus, true);
+  assert.equal(followThrough.items[0].authorityFailureReason, "untrusted-authority-provenance");
 
   assert.throws(() => upsertPlan(root, { thesis: "blocked by executing state" }), /blocked while operator follow-through still requires action/);
   assert.throws(() => upsertOrchestrationBoard(root, { phase: "review" }), /operator follow-through still requires action|Cannot advance orchestration from|requires routing role reviewer for phase review/);
@@ -3905,21 +4093,19 @@ test("queryMetaOptimize exposes governance coverage and guarded write paths resp
   const exemptCoreFunctions = new Set(meta.governanceCoverage.exemptMutations.map((item) => item.surfaceBindings.coreFunction));
   assert.equal(exemptCoreFunctions.has("recordOperatorFollowThrough"), true);
   assert.equal(exemptCoreFunctions.has("recordOperatorLesson"), true);
-  assert.equal(exemptCoreFunctions.has("queryMetaOptimize"), true);
+  assert.equal(exemptCoreFunctions.has("queryMetaOptimize"), false);
+  assert.equal(GOVERNANCE_READONLY_TOOLS.includes("query_meta_optimize"), true);
 
   const topPack = meta.remediationPacks.packs[0];
   seedTaskPacket(root, "task-coverage", { title: "Coverage task", status: "pending" });
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
-    status: "accepted-for-execution",
-    actorRole: "planner",
-    decisionSummary: "Take coverage pack into execution.",
+    status: "deferred",
+    decisionSummary: "Defer the coverage pack so guarded writes remain blocked until review.",
     selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-    linkedTargetArtifact: ".dove/task-packets/packets/task-coverage.json",
-    linkedTargetId: "task-coverage",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
+    deferUntil: "2000-01-01T00:00:00.000Z",
+    reviewAfter: "2000-01-01T12:00:00.000Z"
   });
 
   assert.throws(() => upsertPlan(root, { thesis: "blocked plan" }), /blocked while operator follow-through still requires action/);
@@ -4049,7 +4235,7 @@ test("governance registry completely binds the expected mutating command and MCP
     "validate_figure_pipeline",
     "record_operator_lesson",
     "record_operator_follow_through",
-    "query_meta_optimize",
+    "summarize_session_journal",
     "publish_dove_status",
     "publish_dove_global_status",
     "plan_campaign",
@@ -4187,14 +4373,11 @@ test("a broader set of guarded write paths all reject unresolved follow-through 
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
-    status: "accepted-for-execution",
-    actorRole: "planner",
-    decisionSummary: "Take this remediation pack into execution.",
+    status: "deferred",
+    decisionSummary: "Keep this remediation pack pending explicit follow-through review.",
     selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-    linkedTargetArtifact: ".dove/task-packets/packets/task-guard-matrix.json",
-    linkedTargetId: "task-guard-matrix",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
+    deferUntil: "2000-01-01T00:00:00.000Z",
+    reviewAfter: "2000-01-01T12:00:00.000Z"
   });
 
   const guardedCalls = [
@@ -4281,14 +4464,11 @@ test("legacy policy override fields fail closed and cannot bypass follow-through
   recordOperatorFollowThrough(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
-    status: "accepted-for-execution",
-    actorRole: allowedActorRole,
-    decisionSummary: "Take this remediation pack into execution.",
+    status: "deferred",
+    decisionSummary: "Keep this remediation pack pending while retired override fields are tested.",
     selectedConversionPathKey: topPack.rankedConversionPaths?.[0]?.deterministicKey ?? null,
-    linkedTargetArtifact: ".dove/task-packets/packets/task-override.json",
-    linkedTargetId: "task-override",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
+    deferUntil: "2000-01-01T00:00:00.000Z",
+    reviewAfter: "2000-01-01T12:00:00.000Z"
   });
 
   const overrideAttempts = [
@@ -4313,83 +4493,27 @@ test("legacy policy override fields fail closed and cannot bypass follow-through
   });
 });
 
-test("materializeGuidancePacket creates a durable packet from accepted remediation guidance and binds follow-through", () => {
+test("materializeGuidancePacket rejects zero-approval materialization without writes", () => {
   const root = tempRoot();
-  return runFixtureMutation(root, "materializeguidancepacket-creates-a-durable-packet-from-accepted-remedia", () => {
+  return runFixtureMutation(root, "materializeguidancepacket-rejects-zero-approval-without-writes", () => {
   ensureTestWorkspace(root);
-  initProject(root, { title: "Materialize Guidance", objective: "Convert accepted guidance into a real task packet." });
-  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
-    version: 2,
-    items: [{
-      id: "materialize-gap",
-      summary: "Need an explicit packet materialization bridge.",
-      severity: "high",
-      status: "open",
-      responseOwnerRole: "planner",
-      recurrenceCount: 2,
-      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
-      updatedAt: new Date(0).toISOString()
-    }],
-    updatedAt: null
-  });
-  writeJson(root, ARTIFACT_PATHS.reviewState, {
-    version: 3,
-    lastVerdict: "needs-work",
-    lastReviewedAt: new Date(0).toISOString(),
-    history: [],
-    openItems: ["Close the materialization gap."],
-    unresolvedConcernIds: ["materialize-gap"],
-    escalatedConcernIds: [],
-    pendingAuthorResponseIds: [],
-    pendingReviewerRulingIds: [],
-    reviewRound: 1,
-    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
-  });
-
-  const topPack = queryMetaOptimize(root).remediationPacks.packs[0];
-  const actorRole = topPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-  const result = materializeGuidancePacket(root, {
-    sourceType: "remediation-pack",
-    sourceId: topPack.id,
-    actorRole,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
-
-  assert.equal(result.status, "materialized");
-  const packet = readJson(root, result.packetPath, null);
-  assert.equal(packet.sourceType, "materialized-guidance");
-  assert.equal(packet.materialization.sourceType, "remediation-pack");
-  assert.equal(packet.materialization.sourceId, topPack.id);
-  assert.equal(packet.materialization.followThroughId.startsWith("follow-through-"), true);
-
-  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, null);
-  assert.equal(packetIndex.items.some((item) => item.id === result.packetId), true);
-
-  const followThrough = queryOperatorFollowThrough(root);
-  const record = followThrough.items.find((item) => item.sourceType === "remediation-pack" && item.sourceId === topPack.id);
-  assert.equal(record.status, "accepted-for-execution");
-  assert.equal(record.linkedTargetArtifact, result.packetPath);
-  assert.equal(record.linkedTargetId, result.packetId);
-
-  const workspaceIndex = queryWorkspaceIndex(root);
-  const activePacket = workspaceIndex.activePackets.find((item) => item.id === result.packetId);
-  assert.equal(activePacket.materializedFrom, `remediation-pack:${topPack.id}`);
-
-  const navigation = fs.readFileSync(path.join(root, ARTIFACT_PATHS.navigationReport), "utf8");
-  assert.match(navigation, new RegExp(`materialized-from=remediation-pack:${topPack.id}`));
+  initProject(root, { title: "Materialize Guidance", objective: "Require durable system authority before packet creation." });
+  const filesBefore = snapshotRelativeFileContents(root);
 
   assert.throws(() => materializeGuidancePacket(root, {
     sourceType: "remediation-pack",
-    sourceId: topPack.id,
-    actorRole,
+    sourceId: "caller-selected-source",
+    packetId: "task-zero-approval",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /duplicate work/);
+  }), /Public materialize_guidance_packet is disabled|system-owned program approval/);
+
+  assert.deepEqual(snapshotRelativeFileContents(root), filesBefore);
+  assert.equal(fs.existsSync(path.join(root, ".dove/task-packets/packets/task-zero-approval.json")), false);
   });
 });
 
-test("materializeGuidancePacket validates follow-through identity before writing packet state", () => {
+test("materializeGuidancePacket fails closed before writing packet or follow-through state", () => {
   const root = tempRoot();
   return runFixtureMutation(root, "materializeguidancepacket-validates-follow-through-identity-before-writi", () => {
   ensureTestWorkspace(root);
@@ -4430,9 +4554,6 @@ test("materializeGuidancePacket validates follow-through identity before writing
   });
 
   const topPack = queryMetaOptimize(root).remediationPacks.packs[0];
-  const actorRole = topPack.rankedConversionPaths?.find(
-    (item) => item.targetType === "create-new-packet"
-  )?.assignedRole ?? "planner";
   seedTaskPacket(root, "task-existing-target", {
     title: "Existing immutable target",
     status: "pending"
@@ -4441,10 +4562,7 @@ test("materializeGuidancePacket validates follow-through identity before writing
     sourceType: "remediation-pack",
     sourceId: topPack.id,
     status: "acknowledged",
-    actorRole,
-    decisionSummary: "Preserve the original immutable target binding.",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-existing-target.json",
-    linkedTargetId: "task-existing-target"
+    decisionSummary: "Acknowledge the source without binding an execution target."
   });
   const packetId = "task-conflicting-materialization";
   const packetPath = path.join(root, `.dove/task-packets/packets/${packetId}.json`);
@@ -4469,11 +4587,10 @@ test("materializeGuidancePacket validates follow-through identity before writing
   assert.throws(() => materializeGuidancePacket(root, {
     sourceType: "remediation-pack",
     sourceId: topPack.id,
-    actorRole,
     packetId,
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /cannot change target/);
+  }), /Public materialize_guidance_packet is disabled|system-owned program approval/);
 
   assert.deepEqual(
     fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex)),
@@ -4516,8 +4633,7 @@ test("materializeGuidancePacket rejects authority fields before workspace bootst
       () => materializeGuidancePacket(root, {
         sourceType: "remediation-pack",
         sourceId: "caller-controlled",
-        actorRole: "planner",
-        executeBy: "2099-01-01T00:00:00.000Z",
+            executeBy: "2099-01-01T00:00:00.000Z",
         reviewAfter: "2099-01-01T12:00:00.000Z",
         [field]: `forged-${field}`
       }),
@@ -4538,196 +4654,75 @@ test("materializeGuidancePacket remains packet-only and preserves program operat
   ensureTestWorkspace(root);
   initProject(root, {
     title: "Packet-only materialization",
-    objective: "Materialize guidance without minting runtime authority."
+    objective: "Reject public packet creation without minting runtime authority."
   });
-  const remediationPack = seedRoleScopedAutonomyGuidance(
-    root,
-    "researcher"
-  );
-  const programsBefore = fs.readFileSync(
-    path.join(root, ARTIFACT_PATHS.programsIndex),
-    "utf8"
-  );
-  const runsBefore = fs.readFileSync(
-    path.join(root, ARTIFACT_PATHS.programRuns),
-    "utf8"
-  );
-  const approvalsBefore = fs.readFileSync(
-    path.join(root, ARTIFACT_PATHS.programApprovals),
-    "utf8"
-  );
+  const remediationPack = seedRoleScopedAutonomyGuidance(root, "researcher");
+  const programsBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.programsIndex), "utf8");
+  const runsBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.programRuns), "utf8");
+  const approvalsBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.programApprovals), "utf8");
+  const packetsBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex), "utf8");
 
-  const result = materializeGuidancePacket(root, {
+  assert.throws(() => materializeGuidancePacket(root, {
     sourceType: "remediation-pack",
     sourceId: remediationPack.id,
-    actorRole: "planner",
-    workerRole: "researcher",
     packetId: "task-packet-only-materialization",
     title: "Packet-only materialization",
     nextAction: "Hand the packet to the normal host workflow.",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
+  }), /Public materialize_guidance_packet is disabled|system-owned program approval/);
 
-  const packet = readJson(root, result.packetPath, null);
-  assert.equal(result.status, "materialized");
-  assert.equal(packet.id, result.packetId);
-  assert.equal(packet.lineage?.programId, undefined);
-  assert.equal(packet.materialization?.programId, undefined);
-  assert.equal(
-    fs.readFileSync(
-      path.join(root, ARTIFACT_PATHS.programsIndex),
-      "utf8"
-    ),
-    programsBefore
-  );
-  assert.equal(
-    fs.readFileSync(
-      path.join(root, ARTIFACT_PATHS.programRuns),
-      "utf8"
-    ),
-    runsBefore
-  );
-  assert.equal(
-    fs.readFileSync(
-      path.join(root, ARTIFACT_PATHS.programApprovals),
-      "utf8"
-    ),
-    approvalsBefore
-  );
+  assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.programsIndex), "utf8"), programsBefore);
+  assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.programRuns), "utf8"), runsBefore);
+  assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.programApprovals), "utf8"), approvalsBefore);
+  assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex), "utf8"), packetsBefore);
+  assert.equal(fs.existsSync(path.join(root, ".dove/task-packets/packets/task-packet-only-materialization.json")), false);
   });
 });
 
-test("materializeGuidancePacket blocks unrelated follow-through debt and superseded guidance", () => {
-  const blockedRoot = tempRoot();
-  runFixtureMutation(blockedRoot, "blocked-materialization", () => {
-  ensureTestWorkspace(blockedRoot);
-  initProject(blockedRoot, { title: "Blocked Materialization", objective: "Respect follow-through governance before creating work." });
-  writeJson(blockedRoot, ARTIFACT_PATHS.reviewConcerns, {
-    version: 2,
-    items: [{
-      id: "blocked-materialize-gap",
-      summary: "Need an explicit packet materialization bridge.",
-      severity: "high",
-      status: "open",
-      responseOwnerRole: "planner",
-      recurrenceCount: 2,
-      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
-      updatedAt: new Date(0).toISOString()
-    }],
-    updatedAt: null
-  });
-  writeJson(blockedRoot, ARTIFACT_PATHS.reviewState, {
-    version: 3,
-    lastVerdict: "needs-work",
-    lastReviewedAt: new Date(0).toISOString(),
-    history: [],
-    openItems: ["Close the blocked materialization gap."],
-    unresolvedConcernIds: ["blocked-materialize-gap"],
-    escalatedConcernIds: [],
-    pendingAuthorResponseIds: [],
-    pendingReviewerRulingIds: [],
-    reviewRound: 1,
-    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
-  });
+test("materializeGuidancePacket stays disabled with unrelated debt or superseded guidance", () => {
+  for (const scenario of ["unrelated-debt", "superseded-guidance"]) {
+    const root = tempRoot();
+    runFixtureMutation(root, `disabled-materialization-${scenario}`, () => {
+      ensureTestWorkspace(root);
+      initProject(root, {
+        title: `Disabled materialization ${scenario}`,
+        objective: "Keep public packet materialization fail closed regardless of durable guidance state."
+      });
+      writeJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, {
+        version: 1,
+        proposalOnly: true,
+        explicitOnly: true,
+        items: [{
+          id: `follow-through-${scenario}`,
+          sourceType: "remediation-pack",
+          sourceId: `pack-${scenario}`,
+          sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
+          sourceFingerprint: `fingerprint-${scenario}`,
+          sourceTitle: scenario,
+          sourceSummary: scenario,
+          status: scenario === "superseded-guidance" ? "superseded" : "deferred",
+          deferUntil: scenario === "unrelated-debt" ? "2000-01-01T00:00:00.000Z" : null,
+          actorRole: "planner",
+          recordedAt: new Date(0).toISOString(),
+          updatedAt: new Date(0).toISOString()
+        }],
+        updatedAt: null
+      });
+      const before = snapshotRelativeFileContents(root);
 
-  const blockedMeta = queryMetaOptimize(blockedRoot);
-  const blockedPack = blockedMeta.remediationPacks.packs[0];
-  const blockedCandidate = blockedMeta.executionBridgeCandidates.candidates.find((item) => item.candidateType === "packet-candidate");
-  const candidateActorRole = blockedCandidate.sourceConversionPath?.assignedRole ?? "planner";
-  writeJson(blockedRoot, ".dove/task-packets/packets/task-blocking-guidance.json", { id: "task-blocking-guidance", title: "Blocking task", status: "pending" });
-  recordOperatorFollowThrough(blockedRoot, {
-    sourceType: "execution-bridge",
-    sourceId: blockedCandidate.id,
-    status: "accepted-for-execution",
-    actorRole: candidateActorRole,
-    decisionSummary: "Keep this candidate open as unrelated follow-through debt.",
-    linkedTargetArtifact: ".dove/task-packets/packets/task-blocking-guidance.json",
-    linkedTargetId: "task-blocking-guidance",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
+      assert.throws(() => materializeGuidancePacket(root, {
+        sourceType: "remediation-pack",
+        sourceId: `pack-${scenario}`,
+        packetId: `task-${scenario}`,
+        executeBy: "2099-01-01T00:00:00.000Z",
+        reviewAfter: "2099-01-01T12:00:00.000Z"
+      }), /Public materialize_guidance_packet is disabled|system-owned program approval/);
 
-  const packActorRole = blockedPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner";
-  assert.throws(() => materializeGuidancePacket(blockedRoot, {
-    sourceType: "remediation-pack",
-    sourceId: blockedPack.id,
-    actorRole: packActorRole,
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /unrelated operator follow-through/);
-  });
-
-  const supersededRoot = tempRoot();
-  runFixtureMutation(supersededRoot, "superseded-materialization", () => {
-  ensureTestWorkspace(supersededRoot);
-  initProject(supersededRoot, { title: "Superseded Materialization", objective: "Refuse superseded guidance materialization." });
-  writeJson(supersededRoot, ARTIFACT_PATHS.reviewConcerns, {
-    version: 2,
-    items: [{
-      id: "superseded-materialize-gap",
-      summary: "Need an explicit packet materialization bridge.",
-      severity: "high",
-      status: "open",
-      responseOwnerRole: "planner",
-      recurrenceCount: 2,
-      linkedArtifactPaths: [ARTIFACT_PATHS.reviewLog],
-      updatedAt: new Date(0).toISOString()
-    }],
-    updatedAt: null
-  });
-  writeJson(supersededRoot, ARTIFACT_PATHS.reviewState, {
-    version: 3,
-    lastVerdict: "needs-work",
-    lastReviewedAt: new Date(0).toISOString(),
-    history: [],
-    openItems: ["Close the superseded materialization gap."],
-    unresolvedConcernIds: ["superseded-materialize-gap"],
-    escalatedConcernIds: [],
-    pendingAuthorResponseIds: [],
-    pendingReviewerRulingIds: [],
-    reviewRound: 1,
-    reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
-  });
-
-  const supersededPack = queryMetaOptimize(supersededRoot).remediationPacks.packs[0];
-  recordOperatorFollowThrough(supersededRoot, {
-    sourceType: "remediation-pack",
-    sourceId: supersededPack.id,
-    status: "acknowledged",
-    actorRole: supersededPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner",
-    decisionSummary: "This guidance was acknowledged before an internal supersession transition."
-  });
-  const supersededFollowThrough = readJson(
-    supersededRoot,
-    ARTIFACT_PATHS.metaOperatorFollowThrough,
-    null
-  );
-  writeJson(
-    supersededRoot,
-    ARTIFACT_PATHS.metaOperatorFollowThrough,
-    {
-      ...supersededFollowThrough,
-      items: (supersededFollowThrough.items ?? []).map(
-        (item) => item.sourceId === supersededPack.id
-          ? {
-              ...item,
-              status: "superseded",
-              updatedAt: new Date().toISOString()
-            }
-          : item
-      )
-    }
-  );
-
-  assert.throws(() => materializeGuidancePacket(supersededRoot, {
-    sourceType: "remediation-pack",
-    sourceId: supersededPack.id,
-    actorRole: supersededPack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet")?.assignedRole ?? "planner",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  }), /superseded guidance/);
-  });
+      assert.deepEqual(snapshotRelativeFileContents(root), before);
+      assert.equal(fs.existsSync(path.join(root, `.dove/task-packets/packets/task-${scenario}.json`)), false);
+    });
+  }
 });
 
 test("public package bundle exposes no mutation context writer or retired execution authority", async () => {
@@ -4816,6 +4811,7 @@ test("every governance registry entry binds to real command or MCP surfaces plus
     fs.readFileSync(path.join(process.cwd(), "src/core/navigation.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/dove.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/task-workflow.mjs"), "utf8"),
+    fs.readFileSync(path.join(process.cwd(), "src/core/workspace.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/experience-workflow.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/audio-review.mjs"), "utf8"),
     fs.readFileSync(path.join(process.cwd(), "src/core/dove-review-loop.mjs"), "utf8"),
@@ -4832,7 +4828,7 @@ test("every governance registry entry binds to real command or MCP surfaces plus
     if (bindings.mcpTool) {
       assert.equal(typeof bindings.mcpTool, "string");
       assert.equal(toolNames.has(bindings.mcpTool), true, `${entry.id} missing bound MCP tool ${bindings.mcpTool}`);
-    } else if (entry.reasonCode !== "runtime-fixed-semantics-transition") {
+    } else if (!["runtime-fixed-semantics-transition", "read-helper", "analysis-only"].includes(entry.reasonCode)) {
       assert.equal(bindings.commandIds.length > 0 || typeof bindings.cliCommand === "string", true, `${entry.id} without MCP tool must bind at least one command or CLI surface`);
     }
     for (const commandId of bindings.commandIds) {

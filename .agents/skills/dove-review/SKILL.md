@@ -9,12 +9,13 @@ Run a local evidence-aware review pass over selected task materials and produce 
 
 ## Daily use
 
-- Use this for a local evidence-aware review pass over the selected task materials.
-- Inspect concrete claims, sources, notes, drafts, experiments, figures, and recorded concerns; do not substitute a verdict label for review work.
+- Use this for a local evidence-aware structural preflight over the selected task materials.
+- Inspect concrete claims, sources, notes, drafts, experiments, figures, and recorded concerns; do not substitute a verdict label or a clean local scan for authoritative review work.
+- A coherent result requires current authorized independent Reviewer proof bound to all reviewed artifact hashes.
 - Use separate isolated or audio review only when the operator explicitly asks for that mode.
 - Targeting: Resolve the review to one task and the exact materials being reviewed.
 - Confirmation: If the target or reviewed material is unclear, ask for the material instead of guessing or falling back to a status panel.
-- Outcome: The operator gets concrete findings, action items, missing evidence, or a coherent result backed by inspected materials.
+- Outcome: The operator gets concrete findings, action items, missing evidence, or a Reviewer-owned proof boundary; coherent is authoritative only with current independent proof.
 
 ## Examples
 
@@ -27,15 +28,15 @@ Run a local evidence-aware review pass over selected task materials and produce 
 2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
 3. If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
 4. This request has one listed project action: `node ./bin/dove-package.mjs review . --target "<task title>" --artifact-path "<artifact path>" --mutation-mode direct-process` from the project root; Run it only when the needed material is present; then summarize the real artifact state or material boundary instead of inspecting internal files directly.
-5. Use this for local evidence-aware review; pass one or more `--artifact-path` values when the operator names exact materials, and use separate isolated or audio review only when explicitly requested.
+5. Use this for a local evidence-aware structural preflight; pass one or more `--artifact-path` values when the operator names exact materials. A clean scan cannot issue authoritative coherent without current authorized independent proof.
 6. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 7. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
 8. When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.
 9. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
 10. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
 11. Only make the specific change requested for this command; do not bundle unrelated work.
-12. Inspect real project materials and report concrete review findings, action items, missing evidence, or a coherent result.
-13. Do not substitute a status panel, task list, or verdict string for review work.
+12. Inspect real project materials and report concrete review findings, action items, missing evidence, or a structural preflight result; a coherent result additionally requires current authorized independent Reviewer proof bound to every reviewed artifact hash.
+13. Do not substitute a status panel, task list, verdict string, or clean local scan for authoritative review work.
 14. Use separate isolated or audio review only when the operator explicitly asks for that mode, and keep private writer/reviewer transcripts out of ordinary review replies.
 15. Report review outcomes in plain language.
 16. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.

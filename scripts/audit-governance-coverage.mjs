@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS } from "../src/core/schema.mjs";
+import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS } from "../src/core/schema.mjs";
+import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 
 const ROOT = process.cwd();
 
@@ -27,12 +28,12 @@ const WRITE_SIGNAL_REGEX = /(?:writeJson|writeText|appendText|saveState|refreshD
 const EXEMPT_FUNCTIONS = new Set([
   "appendText",
   "applyPacketStepResult",
+  "recordReviewProofRequiredBoundary",
   "discoverPaperArtifacts",
   "ensureDir",
-  "ensureWorkspace",
-  "queryMetaOptimize",
   "saveRuntimeArtifacts",
   "saveState",
+  "updatePacketLifecycle",
   "writeJson",
   "writeText"
 ]);
@@ -62,6 +63,39 @@ const mutatingCoreFunctions = exports
 const guarded = new Set(GOVERNANCE_GUARDED_MUTATIONS.map((entry) => entry.surfaceBindings.coreFunction));
 const exempt = new Set(GOVERNANCE_EXEMPT_MUTATIONS.map((entry) => entry.surfaceBindings.coreFunction));
 const exportedCoreFunctionNames = new Set(exports.map((entry) => entry.name));
+
+function collectToolBindings(entries, classification) {
+  return entries.flatMap((entry) => {
+    const mcpTool = entry.surfaceBindings?.mcpTool;
+    return mcpTool ? [{ name: mcpTool, classification, entryId: entry.id }] : [];
+  });
+}
+
+const toolBindings = [
+  ...collectToolBindings(GOVERNANCE_GUARDED_MUTATIONS, "guarded"),
+  ...collectToolBindings(GOVERNANCE_EXEMPT_MUTATIONS, "exempt"),
+  ...GOVERNANCE_READONLY_TOOLS.map((name) => ({ name, classification: "readonly", entryId: name }))
+];
+const toolClassifications = new Map();
+for (const binding of toolBindings) {
+  const current = toolClassifications.get(binding.name) ?? [];
+  current.push(binding);
+  toolClassifications.set(binding.name, current);
+}
+const definedToolNames = new Set(toolDefinitions.map((tool) => tool.name));
+const duplicateToolDefinitions = toolDefinitions
+  .map((tool) => tool.name)
+  .filter((name, index, names) => names.indexOf(name) !== index);
+const duplicateMutationToolBindings = [...toolClassifications.entries()]
+  .filter(([, bindings]) => bindings.filter((binding) => binding.classification !== "readonly").length > 1)
+  .map(([name, bindings]) => `${name}:${bindings.map((binding) => `${binding.classification}/${binding.entryId}`).join(",")}`);
+const invalidToolClassifications = toolDefinitions.flatMap((tool) => {
+  const bindings = toolClassifications.get(tool.name) ?? [];
+  return bindings.length === 1
+    ? []
+    : [`${tool.name}:${bindings.length === 0 ? "unclassified" : bindings.map((binding) => `${binding.classification}/${binding.entryId}`).join(",")}`];
+});
+const staleToolBindings = [...toolClassifications.keys()].filter((name) => !definedToolNames.has(name));
 
 const uncovered = mutatingCoreFunctions.filter((name) => !guarded.has(name) && !exempt.has(name) && !EXEMPT_FUNCTIONS.has(name));
 const staleRegistryBindings = [
@@ -95,6 +129,10 @@ const invalidExemptMetadata = GOVERNANCE_EXEMPT_MUTATIONS.filter((entry) => {
 assert.equal(uncovered.length, 0, `Uncovered mutating core functions: ${uncovered.join(", ")}`);
 assert.equal(staleRegistryBindings.length, 0, `Governance registry references non-exported core functions: ${staleRegistryBindings.join(", ")}`);
 assert.equal(invalidExemptMetadata.length, 0, `Invalid exempt governance metadata: ${invalidExemptMetadata.join(", ")}`);
+assert.equal(duplicateToolDefinitions.length, 0, `Duplicate MCP tool definitions: ${duplicateToolDefinitions.join(", ")}`);
+assert.equal(duplicateMutationToolBindings.length, 0, `Duplicate governance mutation MCP bindings: ${duplicateMutationToolBindings.join(", ")}`);
+assert.equal(invalidToolClassifications.length, 0, `Every MCP tool must have exactly one governance classification: ${invalidToolClassifications.join(", ")}`);
+assert.equal(staleToolBindings.length, 0, `Governance classifications reference undefined MCP tools: ${staleToolBindings.join(", ")}`);
 
 console.log(JSON.stringify({
   mutatingCoreFunctions,
@@ -102,5 +140,9 @@ console.log(JSON.stringify({
   exempt: [...exempt],
   uncovered,
   staleRegistryBindings,
-  invalidExemptMetadata
+  invalidExemptMetadata,
+  duplicateToolDefinitions,
+  duplicateMutationToolBindings,
+  invalidToolClassifications,
+  staleToolBindings
 }, null, 2));

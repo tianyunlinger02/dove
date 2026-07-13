@@ -16,6 +16,8 @@ import {
   queryDoveReturn,
   queryDoveStatus,
   queryMetaOptimize,
+  queryTaskGraph,
+  refreshDurableSurfaces,
   runDoveAuto,
   runDoveReviewLoop
 } from "../../src/core/internal-api.mjs";
@@ -1373,7 +1375,9 @@ test("CLI review performs the local reviewer pass without requiring a hidden han
   });
   assert.equal(review.status, 0, review.stderr || review.stdout);
   const parsed = JSON.parse(review.stdout);
-  assert.equal(parsed.verdict, "coherent");
+  assert.equal(parsed.verdict, "needs-evidence");
+  assert.equal(parsed.preflightOnly, true);
+  assert.equal(parsed.findings[0].methodologicalCategory, "review-proof");
   assert.equal(parsed.writesApplied, false);
   const boardOperationIndex = parsed.mutationPlan.operations.findIndex((operation) => operation.relativePath === ARTIFACT_PATHS.orchestrationBoard);
   const handoffOperationIndex = parsed.mutationPlan.operations.findIndex((operation) => operation.relativePath === ARTIFACT_PATHS.orchestrationHandoffs);
@@ -2025,7 +2029,7 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
         lifecycleStatus: "active",
         lifecycleFamily: "work-unit",
         doveDomain: "engineering",
-        assignedRole: "builder",
+        ownerRole: "builder",
         phase: "draft",
         nextAction: "Return changed files and tests.",
         outputPaths: ["src/cache.mjs"],
@@ -2126,6 +2130,55 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
 
   const archivedIncluded = queryDoveMissionBoard(root, { domain: "engineering", includeArchived: true });
   assert.deepEqual(archivedIncluded.missions.map((mission) => mission.id), ["engineering-cache", "old-cache"]);
+});
+
+test("navigation query and refresh inherit assignedRole from packet ownerRole", () => {
+  const root = tempRoot();
+  try {
+    ensureTestWorkspace(root);
+    writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
+      version: 3,
+      items: [{
+        id: "owner-role-only-packet",
+        title: "Owner role projection packet",
+        summary: "Navigation must preserve builder authority when assignedRole is absent.",
+        sourceType: "first-class-mission",
+        sourceId: "owner-role-only-packet",
+        rootId: "dove-global-init",
+        creatorKind: "user",
+        level: 3,
+        status: "ready",
+        lifecycleStatus: "ready",
+        lifecycleFamily: "work-unit",
+        doveDomain: "engineering",
+        ownerRole: "builder",
+        nextRole: "reviewer",
+        currentFocus: "Project the owner role.",
+        nextAction: "project:dove.auto",
+        dependencies: [],
+        evidenceLinks: [],
+        outputPaths: []
+      }],
+      lifecycleCounts: {},
+      lifecycleFamilyCounts: {},
+      dependencyHealth: {},
+      updatedAt: null
+    });
+
+    const queriedPacket = queryTaskGraph(root).nodes.find((packet) => packet.id === "owner-role-only-packet");
+    assert.equal(queriedPacket.assignedRole, "builder");
+    assert.equal(queriedPacket.ownerRole, "builder");
+
+    const refreshed = runFixtureMutation(root, "refresh-owner-role-projection", () => refreshDurableSurfaces(root, {
+      type: "owner-role-projection-regression"
+    }));
+    const refreshedPacket = refreshed.packetIndex.items.find((packet) => packet.id === "owner-role-only-packet");
+    assert.equal(refreshedPacket.assignedRole, "builder");
+    assert.equal(refreshedPacket.ownerRole, "builder");
+    assert.equal(JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex), "utf8")).items.find((packet) => packet.id === "owner-role-only-packet").assignedRole, "builder");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("queryDoveStatus returns an authoritative task dashboard without surfacing stale navigation state", () => {
@@ -3506,15 +3559,15 @@ test("queryDoveReturn treats a malformed Dove root manifest as read-only input",
   assert.equal(fs.readdirSync(path.dirname(malformedPath)).some((fileName) => fileName.includes(".broken-")), false);
 });
 
-test("launchDoveMission materializes accepted guidance through the .dove mission packet store", () => {
+test("launchDoveMission fails closed without system-owned runtime authority and writes nothing", () => {
   const root = tempRoot();
   ensureTestWorkspace(root);
   const { pack, packetPath } = seedDoveLaunchGuidance(root);
+  const before = snapshotRelativeFileContents(root);
 
-  const result = runFixtureMutation(root, "launch-dove-mission", () => launchDoveMission(root, {
+  assert.throws(() => runFixtureMutation(root, "launch-dove-mission", () => launchDoveMission(root, {
     sourceType: "remediation-pack",
     sourceId: pack.id,
-    actorRole: "planner",
     goal: "Ship a governed Dove engineering mission.",
     domain: "engineering",
     stage: "execution",
@@ -3524,63 +3577,24 @@ test("launchDoveMission materializes accepted guidance through the .dove mission
     packetId: packetPath?.targetId ?? "task-dove-launch",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
-  }));
+  })), /Public launch_dove_mission is disabled|system-owned program approval/);
 
-  assert.equal(result.mode, "dove-launch-mission");
-  assert.equal(result.status, "materialized");
-  assert.equal(result.proposalOnly, false);
-  assert.equal(result.noAutoApply, false);
-  assert.equal(result.mission.domain, "engineering");
-  assert.equal(result.mission.stage, "execution");
-  assert.equal(result.mission.launchedMissionPacketId, result.materialization.packetId);
-  assert.equal(result.missionPacket.id, result.materialization.packetId);
-  assert.equal(result.missionPacket.storePath, ARTIFACT_PATHS.taskPacketsIndex);
-  assert.equal(result.materialization.missionPacketId, result.materialization.packetId);
-  assert.equal(result.materialization.missionPacketPath, result.materialization.packetPath);
-  assert.equal(result.materialization.missionPacketContextPath, result.materialization.packetContextPath);
-  assert.equal(result.governance.registeredMutation, "launch-dove-mission");
-  assert.equal(result.governance.delegatedGuardedMutation, "materialize-guidance-packet");
-  assert.equal(result.governance.currentWriteAuthority, ".dove");
-  assert.equal(result.governance.noAutonomyExecution, true);
-  assert.equal(result.workspace.durableRoot, ".dove");
-  assert.equal(result.workspace.authoritativeRoot, ".dove");
-  assert.equal(result.packet.doveDomain, "engineering");
-  assert.equal(result.packet.missionStage, "execution");
-  assert.equal(result.packet.source, "mission-packet");
-  assert.equal(result.packet.missionPacketId, result.materialization.packetId);
-  assert.equal(result.packet.outputPaths.includes("src/cache.mjs"), true);
-  assert.equal(result.packet.materialization.acceptanceCriteria.includes("tests or validation output"), true);
-  assert.equal(result.writes.some((artifactPath) => artifactPath.startsWith(".dove/task-packets/")), true);
-  assert.equal(result.writes.some((artifactPath) => artifactPath.startsWith(".dove/")), true);
-  assert.equal(fs.existsSync(path.join(root, ".dove")), true);
-
-  const board = queryDoveMissionBoard(root, { domain: "engineering", missionPacketId: result.materialization.packetId, includeArchived: true });
-  assert.deepEqual(board.missions.map((mission) => mission.id), [result.materialization.packetId]);
-  assert.deepEqual(result.board.missionPacketIds, [result.materialization.packetId]);
+  assert.deepEqual(snapshotRelativeFileContents(root), before);
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetPath?.targetId ?? "task-dove-launch"}.json`)), false);
 });
 
-test("launchDoveMission reports stale legacy .paper artifacts without importing them", () => {
+test("launchDoveMission rejects caller authority fields before writes", () => {
   const root = tempRoot();
   ensureTestWorkspace(root);
-  const { pack, packetPath } = seedDoveLaunchGuidance(root);
-  fs.mkdirSync(path.join(root, ".paper", "workspace"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".paper", "workspace", "index.json"), "{}\n", "utf8");
+  const { pack } = seedDoveLaunchGuidance(root);
+  const before = snapshotRelativeFileContents(root);
 
-  const result = runFixtureMutation(root, "launch-dove-mission", () => launchDoveMission(root, {
+  assert.throws(() => runFixtureMutation(root, "launch-dove-mission", () => launchDoveMission(root, {
     sourceType: "remediation-pack",
     sourceId: pack.id,
-    actorRole: "planner",
-    domain: "engineering",
-    stage: "execution",
-    selectedConversionPathKey: packetPath?.deterministicKey ?? null,
-    packetId: packetPath?.targetId ?? "task-dove-launch",
-    executeBy: "2099-01-01T00:00:00.000Z",
-    reviewAfter: "2099-01-01T12:00:00.000Z"
-  }));
-
-  assert.equal(result.status, "materialized");
-  assert.deepEqual(result.diagnostics.staleLegacyAuthorityArtifacts, [".paper/workspace/index.json"]);
-  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetPath?.targetId ?? "task-dove-launch"}.json`)), true);
+    actorRole: "planner"
+  })), /rejects non-mission fields: actorRole/);
+  assert.deepEqual(snapshotRelativeFileContents(root), before);
 });
 
 test("CLI Dove orchestrate, mission, status, audit, and return commands expose proposal-only JSON", () => {

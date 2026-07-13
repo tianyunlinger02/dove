@@ -77,7 +77,10 @@ import {
   resolveResumeCommandForPhase,
   roleCanActAs
 } from "./schema.mjs";
-import { followThroughSourceAuthorityFingerprint } from "./follow-through-authority.mjs";
+import {
+  followThroughAuthorityState,
+  followThroughSourceAuthorityFingerprint
+} from "./follow-through-authority.mjs";
 import { readProgramOperatingState } from "./program-operating-state.mjs";
 import { deterministicBoundedTaskPacketId, resolveDurableTaskPacket } from "./task-packets.mjs";
 import { assertGovernanceMutationRegistered, assertNoPolicyOverrideArgs, ensureWorkspace, loadState, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
@@ -352,7 +355,11 @@ function normalizePacket(packet = {}) {
     lifecycleFamily: lifecycleFamilyForPacket(packet),
     doveDomain,
     active: packet.active ?? !GOVERNANCE_TERMINAL_LIFECYCLES.has(lifecycleStatus),
-    assignedRole: ROLE_IDS.includes(packet.assignedRole) ? packet.assignedRole : "planner",
+    assignedRole: ROLE_IDS.includes(packet.assignedRole)
+      ? packet.assignedRole
+      : ROLE_IDS.includes(packet.ownerRole)
+        ? packet.ownerRole
+        : "planner",
     parentPacketId: packet.parentPacketId ? slugify(packet.parentPacketId) : null,
     childPacketIds: normalizeStringArray(packet.childPacketIds),
     currentFocus: packet.currentFocus ?? packet.title ?? packet.id,
@@ -3207,14 +3214,18 @@ function normalizeFollowThroughRetryState(value = {}) {
 }
 
 function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestamp = nowIso(), targetPreview = null) {
+  const operatingState = readProgramOperatingState(root);
   const items = (existingIndex.items ?? []).map((item, index) => {
     const sourceType = item.sourceType ?? "remediation-pack";
     const sourceId = item.sourceId ?? item.id ?? `unknown-${index + 1}`;
     const key = `${sourceType}:${sourceId}`;
     const source = sourceCatalog.get(key);
     const allowed = new Set(["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"]);
-    const invalidStatus = !allowed.has(item.status) || (item.status === "accepted-for-execution" && !item.reviewAfter);
-    const status = invalidStatus ? "acknowledged" : item.status;
+    const authorityState = followThroughAuthorityState(item, operatingState);
+    const invalidStatus = !allowed.has(item.status)
+      || (item.status === "accepted-for-execution" && !item.reviewAfter)
+      || !authorityState.trusted;
+    const status = allowed.has(item.status) ? item.status : "acknowledged";
     const dueDeferred = status === "deferred" && item.deferUntil && String(item.deferUntil) <= timestamp;
     const dueReview = status === "accepted-for-execution" && item.reviewAfter && String(item.reviewAfter) <= timestamp;
     const dueSoonExecution = ["accepted-for-execution", "executing"].includes(status) && item.executeBy && String(item.executeBy) > timestamp && String(item.executeBy) <= new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
@@ -3252,6 +3263,9 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
       programId: item.programId ?? null,
       programRunId: item.programRunId ?? null,
       approvalId: item.approvalId ?? null,
+      authorityProvenance: item.authorityProvenance ?? null,
+      authorityTrusted: authorityState.trusted,
+      authorityFailureReason: authorityState.reason,
       plannedTarget,
       deferUntil: item.deferUntil ?? null,
       executeBy: item.executeBy ?? null,
@@ -3306,7 +3320,7 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
     transitionsPath: ARTIFACT_PATHS.metaOperatorFollowThroughTransitions
   };
 
-  const actionRequiredItems = items.filter((item) => item.invalidStatus || item.stale || item.dueDeferred || item.dueReview || item.overdueExecution || (!item.targetBound && !item.plannedTarget) || item.status === "accepted-for-execution" || item.status === "executing").map((item) => ({
+  const actionRequiredItems = items.filter((item) => item.invalidStatus || item.stale || item.dueDeferred || item.dueReview || item.overdueExecution || (!item.targetBound && !item.plannedTarget) || item.status === "accepted-for-execution" || item.status === "executing" || item.status === "accepted-risk").map((item) => ({
     id: item.id,
     sourceType: item.sourceType,
     sourceId: item.sourceId,
@@ -3314,6 +3328,8 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
     stale: item.stale,
     dueDeferred: item.dueDeferred,
       invalidStatus: item.invalidStatus,
+      authorityTrusted: item.authorityTrusted,
+      authorityFailureReason: item.authorityFailureReason,
       dueReview: item.dueReview,
       overdueExecution: item.overdueExecution,
       overdueExecutionSeverity: item.overdueExecutionSeverity,
@@ -3329,18 +3345,22 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
         ? "Review this accepted-for-execution record now or explicitly defer/close it before the review window drifts further."
       : item.executionWindowState === "due-soon"
         ? "Schedule execution or explicitly defer this accepted-for-execution record before it goes overdue."
+      : item.status === "accepted-risk"
+        ? "Resolve, defer, close, or supersede this risk record; accepted risk remains governance debt and cannot authorize execution."
       : item.status === "executing"
-        ? "Advance this executing record to closure or explicitly defer/accept-risk it."
+        ? "Advance this executing record to closure or explicitly defer it."
       : item.status === "accepted-for-execution" && (!item.linkedTargetArtifact || !item.linkedTargetId)
         ? "Add a durable target artifact/id before keeping this record accepted-for-execution."
       : item.status === "accepted-for-execution"
-        ? "Carry this accepted-for-execution decision through to closure or explicitly defer/accept-risk it."
+        ? "Carry this accepted-for-execution decision through to closure or explicitly defer it."
       : item.dueDeferred
         ? "Review or reschedule this deferred follow-through now."
         : item.stale
           ? "Re-open and reassess this stale follow-through against the updated source."
           : item.invalidStatus
-            ? "Repair the invalid follow-through status in the durable ledger."
+            ? (item.authorityFailureReason
+                ? `Repair or retire this fail-closed follow-through authority record (${item.authorityFailureReason}).`
+                : "Repair the invalid follow-through status in the durable ledger.")
             : "Review this follow-through record."
   }));
 
@@ -4216,7 +4236,6 @@ export function reconcileCampaignsFromProgramRuns(root) {
 }
 
 export function queryCampaigns(root, args = {}) {
-  ensureWorkspace(root);
   const campaignId = args.campaignId ? slugify(args.campaignId) : null;
   const status = args.status ? String(args.status).trim().toLowerCase() : null;
   const campaignsState = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
@@ -4294,7 +4313,6 @@ export function planCampaign(root, args = {}) {
 }
 
 export function queryProgramApprovals(root, args = {}) {
-  ensureWorkspace(root);
   const programId = args.programId ? slugify(args.programId) : null;
   const programRunId = args.programRunId ? slugify(args.programRunId) : null;
   const status = args.status ? String(args.status).trim().toLowerCase() : null;
@@ -6762,39 +6780,117 @@ export function refreshDurableSurfaces(root, event = {}) {
   return { packetIndex, openQuestions, decisions, taskGraph: taskGraphWithLoops, workspaceIndex, metaOptimize: metaOptimize.metaOptimizerState };
 }
 
-export function queryTaskGraph(root) {
-  const { taskGraph } = refreshDurableSurfaces(root, {
-    type: "query-task-graph",
-    summary: "Refreshed task graph query surface.",
-    artifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.workspaceIndex]
+function deriveNavigationQuerySnapshot(root) {
+  const state = loadState(root);
+  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, () => createDefaultBoard(state));
+  const notesIndex = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
+  const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 2, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
+  const reviewConcerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
+  const adversarialState = readJson(root, ARTIFACT_PATHS.adversarialReviewState, { version: 2, unresolvedConcernIds: [], escalatedConcernIds: [], pendingAuthorResponseIds: [], pendingReviewerRulingIds: [], concernStatusCounts: {}, updatedAt: null });
+  const experimentAudits = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
+  const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
+  const existingLongHorizonMemory = normalizeMetaLongHorizonMemory(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory));
+  const versionsIndex = readJson(root, ARTIFACT_PATHS.versionsIndex, createVersionsIndex);
+  const comparisons = readJson(root, ARTIFACT_PATHS.versionComparisons, createVersionComparisonsIndex);
+  const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
+  const issuesIndex = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
+  const taskPacketIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex);
+  const wikiEntities = readJson(root, ARTIFACT_PATHS.wikiEntities, createWikiEntitiesIndex);
+  const existingById = loadExistingPacketMap(root, taskPacketIndex.items ?? []);
+  const derivedPackets = [
+    ...deriveBoardPackets(board, existingById),
+    ...deriveExperimentPackets(plansIndex),
+    ...deriveIssuePackets(issuesIndex),
+    ...deriveVersionPackets(versionsIndex)
+  ].map((packet) => ({
+    ...(existingById.get(packet.id) ?? {}),
+    ...packet,
+    questions: packet.questions,
+    decisions: packet.decisions,
+    lineage: packet.lineage,
+    continuationState: packet.continuationState,
+    updatedAt: packet.updatedAt
+  }));
+  const activeIds = new Set(derivedPackets.map((packet) => packet.id));
+  const preserved = (taskPacketIndex.items ?? []).filter((packet) => !activeIds.has(packet.id) && (isFirstClassDoveTaskPacket(packet) || !["task", "blocker", "experiment", "rebuttal-issue", "version"].includes(packet.sourceType)));
+  const packets = markInactiveLegacyPackets([...derivedPackets, ...preserved].map(normalizePacket), activeIds).sort((left, right) => left.id.localeCompare(right.id));
+  const packetById = new Map(packets.map((packet) => [packet.id, packet]));
+  const packetsWithHealth = packets.map((packet) => ({ ...packet, dependencyHealth: buildPacketDependencyHealth(packet, packetById) }));
+  const wikiRelations = readJson(root, ARTIFACT_PATHS.wikiRelations, createWikiRelationsIndex);
+  const figureQa = readJson(root, ARTIFACT_PATHS.figureQa, { version: 1, items: [], issues: [], updatedAt: null });
+  const journal = readJson(root, ARTIFACT_PATHS.sessionJournal, createSessionJournal);
+  const campaignsIndex = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
+  const operatingState = readProgramOperatingState(root);
+  const runtimeControllerState = normalizeRuntimeControllerState(readJson(root, ARTIFACT_PATHS.runtimeControllerState, createRuntimeControllerState));
+  const runtimeLeases = normalizeRuntimeLeasesIndex(readJson(root, ARTIFACT_PATHS.runtimeLeases, createRuntimeLeasesIndex));
+  const runtimeEvents = normalizeRuntimeEventsIndex(readJson(root, ARTIFACT_PATHS.runtimeEvents, createRuntimeEventsIndex));
+  const runtimeResults = normalizeRuntimeResultsIndex(readJson(root, ARTIFACT_PATHS.runtimeResults, createRuntimeResultsIndex));
+  const runtimeContinuation = normalizeRuntimeContinuationIndex(readJson(root, ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex));
+  const runtimeMirror = buildRuntimeWorkspaceMirror(runtimeControllerState, runtimeContinuation, runtimeLeases, runtimeEvents, runtimeResults);
+  const programsMirror = buildProgramsWorkspaceMirror(operatingState.programs, operatingState.programRuns, operatingState.programApprovals, runtimeControllerState.summary ?? {});
+  const campaignsMirror = buildCampaignsWorkspaceMirror(campaignsIndex, operatingState.programs, operatingState.programRuns);
+  const openQuestions = buildOpenQuestions(notesIndex, packetsWithHealth, reviewState, wikiEntities).sort((left, right) => left.id.localeCompare(right.id));
+  const decisions = buildDecisions(board, versionsIndex, comparisons, packetsWithHealth, wikiEntities);
+  const preliminaryWorkspaceIndex = buildWorkspaceIndex(state, board, packetsWithHealth, reviewState, journal, versionsIndex, comparisons, wikiRelations, figureQa, null, runtimeMirror, programsMirror, campaignsMirror, openQuestions);
+  const metaOptimize = buildMetaOptimizeSurface({
+    root,
+    board,
+    workspaceIndex: preliminaryWorkspaceIndex,
+    journal,
+    reviewConcerns,
+    reviewState,
+    adversarialState,
+    experimentAudits,
+    bridgeLog,
+    figureQa,
+    comparisons,
+    existingLongHorizonMemory
   });
-  return taskGraph;
+  const workspaceIndex = buildWorkspaceIndex(
+    state,
+    board,
+    packetsWithHealth,
+    reviewState,
+    journal,
+    versionsIndex,
+    comparisons,
+    wikiRelations,
+    figureQa,
+    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.governanceCoverage, null, metaOptimize.operatorLessons),
+    runtimeMirror,
+    programsMirror,
+    campaignsMirror,
+    openQuestions
+  );
+  return {
+    state,
+    board,
+    packets: packetsWithHealth,
+    openQuestions,
+    decisions,
+    taskGraph: buildTaskGraph(packetsWithHealth, workspaceIndex.autonomyLoops),
+    workspaceIndex,
+    metaOptimize,
+    versionsIndex,
+    comparisons
+  };
+}
+
+export function queryTaskGraph(root) {
+  return deriveNavigationQuerySnapshot(root).taskGraph;
 }
 
 export function queryOpenQuestions(root) {
-  const { openQuestions } = refreshDurableSurfaces(root, {
-    type: "query-open-questions",
-    summary: "Refreshed open questions query surface.",
-    artifactPaths: [ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionSummary]
-  });
+  const { openQuestions } = deriveNavigationQuerySnapshot(root);
   return { items: openQuestions, count: openQuestions.length, reportPath: ARTIFACT_PATHS.navigationReport };
 }
 
 export function queryDecisions(root) {
-  const { decisions } = refreshDurableSurfaces(root, {
-    type: "query-decisions",
-    summary: "Refreshed decisions query surface.",
-    artifactPaths: [ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionSummary]
-  });
+  const { decisions } = deriveNavigationQuerySnapshot(root);
   return { items: decisions, count: decisions.length, reportPath: ARTIFACT_PATHS.navigationReport };
 }
 
 export function queryLineage(root) {
-  refreshDurableSurfaces(root, {
-    type: "query-lineage",
-    summary: "Refreshed lineage query surface.",
-    artifactPaths: [ARTIFACT_PATHS.versionComparisons, ARTIFACT_PATHS.versionComparisonReport, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.workspaceIndex]
-  });
   const versions = readJson(root, ARTIFACT_PATHS.versionsIndex, createVersionsIndex);
   const comparisons = readJson(root, ARTIFACT_PATHS.versionComparisons, createVersionComparisonsIndex);
   return {
@@ -6807,27 +6903,15 @@ export function queryLineage(root) {
 }
 
 export function queryWorkspaceIndex(root) {
-  const { workspaceIndex } = refreshDurableSurfaces(root, {
-    type: "query-workspace-index",
-    summary: "Refreshed workspace index query surface.",
-    artifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary]
-  });
-  return workspaceIndex;
+  return deriveNavigationQuerySnapshot(root).workspaceIndex;
 }
 
 function readMetaOptimizeState(root) {
-  const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(
-    readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex)
-  );
-  const operatorFollowThroughIndex = normalizeMetaOperatorFollowThroughIndex(
-    readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex)
-  );
-  const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(
-    readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex)
-  );
-  const remediationPacks = normalizeMetaRemediationPacksIndex(
-    readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex)
-  );
+  const meta = queryMetaOptimize(root);
+  const executionBridgeCandidates = meta.executionBridgeCandidates;
+  const operatorFollowThroughIndex = normalizeMetaOperatorFollowThroughIndex(meta.operatorFollowThrough);
+  const operatorPlaybooks = meta.operatorPlaybooks;
+  const remediationPacks = meta.remediationPacks;
   const sourceCatalog = buildFollowThroughSourceCatalog(
     remediationPacks,
     operatorPlaybooks,
@@ -6847,29 +6931,24 @@ function readMetaOptimizeState(root) {
 }
 
 export function queryMetaOptimize(root) {
-  assertGovernanceMutationRegistered("query-meta-optimize", "exempt");
-  refreshDurableSurfaces(root, {
-    type: "query-meta-optimize",
-    summary: "Refreshed proposal-only meta-optimize surfaces.",
-    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaExecutionBridgeCandidates, ARTIFACT_PATHS.metaGovernanceCoverage, ARTIFACT_PATHS.metaOperatorLessons, ARTIFACT_PATHS.metaOperatorPlaybooks, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
-  });
-  const events = readJson(root, ARTIFACT_PATHS.metaEvents, createMetaEventsIndex);
-  const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex));
-  const governanceCoverage = normalizeMetaGovernanceCoverageIndex(readJson(root, ARTIFACT_PATHS.metaGovernanceCoverage, createMetaGovernanceCoverageIndex));
-  const operatorFollowThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
-  const operatorLessons = normalizeMetaOperatorLessonsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorLessons, createMetaOperatorLessonsIndex));
-  const longHorizonMemory = normalizeMetaLongHorizonMemory(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory));
-  const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex));
-  const remediationPacks = normalizeMetaRemediationPacksIndex(readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex));
-  const recommendations = normalizeMetaRecommendationsIndex(readJson(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex));
-  const state = normalizeMetaOptimizerState(readJson(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState));
-  const workspaceIndex = normalizeWorkspaceIndex(readJson(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex));
+  const navigation = deriveNavigationQuerySnapshot(root);
+  const derived = navigation.metaOptimize;
+  const executionBridgeCandidates = derived.executionBridgeCandidates;
+  const governanceCoverage = derived.governanceCoverage;
+  const operatorFollowThrough = derived.operatorFollowThrough;
+  const operatorLessons = derived.operatorLessons;
+  const longHorizonMemory = derived.longHorizonMemory;
+  const operatorPlaybooks = derived.operatorPlaybooks;
+  const remediationPacks = derived.remediationPacks;
+  const recommendations = derived.metaRecommendations;
+  const state = derived.metaOptimizerState;
+  const workspaceIndex = navigation.workspaceIndex;
   return {
     proposalOnly: true,
-    events: events.items ?? [],
+    events: derived.metaEvents.items ?? [],
     executionBridgeCandidates,
     governanceCoverage,
-    governanceCoverageReport: normalizeMetaGovernanceCoverageReport(readJson(root, ARTIFACT_PATHS.metaGovernanceCoverageReport, createMetaGovernanceCoverageReport)),
+    governanceCoverageReport: normalizeMetaGovernanceCoverageReport(derived.metaGovernanceCoverageReport),
     operatorFollowThrough,
     operatorLessons,
     operatorPlaybooks,
@@ -6903,7 +6982,6 @@ export function queryMetaOptimize(root) {
 }
 
 export function queryOperatorLessons(root, args = {}) {
-  ensureWorkspace(root);
   const index = normalizeMetaOperatorLessonsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorLessons, createMetaOperatorLessonsIndex));
   const domain = normalizeOptionalString(args.domain, null);
   const status = normalizeOptionalString(args.status, null);
@@ -7201,17 +7279,12 @@ function assertSelectedFollowThroughMatchesMaterialization(root, followThroughIn
 const MATERIALIZATION_PACKET_FIELDS = new Set([
   "sourceType",
   "sourceId",
-  "actorRole",
-  "workerRole",
   "selectedConversionPathKey",
   "packetId",
   "followThroughId",
   "title",
   "summary",
-  "phase",
-  "assignedRole",
   "status",
-  "lifecycleStatus",
   "currentFocus",
   "nextAction",
   "dependencies",
@@ -7255,221 +7328,14 @@ export function materializeGuidancePacket(root, args = {}) {
   assertGovernanceMutationRegistered("materialize-guidance-packet", "guarded");
   assertNoPolicyOverrideArgs(args, "materialize_guidance_packet");
   assertPacketOnlyMaterializationArgs(args);
-  if (!fs.existsSync(resolvePath(root, ARTIFACT_PATHS.state))) {
-    ensureWorkspace(root);
-  }
-  const sourceType = String(args.sourceType ?? "").trim();
-  const sourceId = String(args.sourceId ?? "").trim();
-  const actorRole = String(args.actorRole ?? "").trim();
-  if (!sourceType || !sourceId) {
-    throw new Error("materializeGuidancePacket requires sourceType and sourceId.");
-  }
-  if (!actorRole) {
-    throw new Error("materializeGuidancePacket requires actorRole.");
-  }
-  if (!args.executeBy || !args.reviewAfter) {
-    throw new Error("materializeGuidancePacket requires executeBy and reviewAfter so accepted guidance has an explicit execution window.");
-  }
-
-  const meta = readMetaOptimizeState(root);
-  const sourceCatalog = meta.sourceCatalog;
-  const source = sourceCatalog.get(`${sourceType}:${sourceId}`);
-  if (!source) {
-    throw new Error(`Unknown materialization source: ${sourceType}:${sourceId}`);
-  }
-  if ((source.allowedActorRoles ?? []).length > 0 && !(source.allowedActorRoles ?? []).includes(actorRole) && !(actorRole === "planner" && args.workerRole && (source.allowedActorRoles ?? []).includes(args.workerRole))) {
-    throw new Error(`Actor role ${actorRole} is not allowed to materialize ${sourceType}:${sourceId}. Allowed roles: ${(source.allowedActorRoles ?? []).join(", ")}.`);
-  }
-  if (args.workerRole && (source.allowedActorRoles ?? []).length > 0 && !(source.allowedActorRoles ?? []).includes(args.workerRole)) {
-    throw new Error(`Worker role ${args.workerRole} is not allowed for ${sourceType}:${sourceId}. Allowed roles: ${(source.allowedActorRoles ?? []).join(", ")}.`);
-  }
-
-  const intent = resolveMaterializationIntent(meta, {
-    sourceType,
-    sourceId,
-    selectedConversionPathKey: args.selectedConversionPathKey ?? null
-  });
-  const packetId = slugify(args.packetId ?? intent.packetId ?? `task-${sourceId}`);
-  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex);
-  const followThroughIndex = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
-  const selectedFollowThrough = assertSelectedFollowThroughMatchesMaterialization(root, followThroughIndex, args, { sourceType, sourceId, packetId, actorRole });
-  const sameSourcePlannedFollowThrough = (meta.operatorFollowThrough.items ?? []).filter((item) => item.sourceType === sourceType && item.sourceId === sourceId && item.status === "accepted-for-execution" && item.plannedTarget && !item.targetBound);
-  if (!selectedFollowThrough && sameSourcePlannedFollowThrough.length > 0) {
-    const stalePlannedIds = sameSourcePlannedFollowThrough.filter((item) => item.stale).map((item) => item.id);
-    if (stalePlannedIds.length > 0) {
-      throw new Error(`Materialization for ${sourceType}:${sourceId} is blocked because planned follow-through is stale: ${stalePlannedIds.join(", ")}.`);
-    }
-    throw new Error(`Materialization for ${sourceType}:${sourceId} requires followThroughId because planned follow-through already exists: ${sameSourcePlannedFollowThrough.map((item) => item.id).join(", ")}.`);
-  }
-  if (selectedFollowThrough) {
-    const computedFollowThrough = (meta.operatorFollowThrough.items ?? []).find((item) => item.id === selectedFollowThrough.id) ?? null;
-    if (computedFollowThrough?.stale) {
-      throw new Error(`Materialization follow-through ${selectedFollowThrough.id} is stale and must be reassessed before materialization.`);
-    }
-  }
-  assertMaterializationAllowed(meta, packetIndex, { sourceType, sourceId, packetId });
-
-  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard);
-  const timestamp = nowIso();
-  const followThroughId = String(args.followThroughId ?? `follow-through-${slugify(`${sourceType}-${sourceId}`)}`).trim() || `follow-through-${slugify(`${sourceType}-${sourceId}`)}`;
-  const workerRole = ROLE_IDS.includes(args.workerRole) ? args.workerRole : null;
-  if (workerRole && args.assignedRole && args.assignedRole !== workerRole) {
-    throw new Error(`materializeGuidancePacket requires assignedRole to match workerRole ${workerRole} when a role envelope is provided.`);
-  }
-  const doveDomain = normalizeDoveDomainId(args.doveDomain ?? args.missionDomain ?? args.domain, null);
-  const missionStage = normalizeDoveMissionLifecycleStage(args.missionStage ?? args.stage, null);
-  const targetArtifacts = uniqueSorted([
-    ...normalizeStringArray(args.targetArtifacts),
-    ...normalizeStringArray(args.artifacts),
-    ...normalizeStringArray(args.artifactPaths)
-  ]);
-  const acceptanceCriteria = uniqueSorted([
-    ...(intent.acceptanceCriteria ?? []),
-    ...normalizeStringArray(args.acceptanceCriteria),
-    ...normalizeStringArray(args.acceptanceChecks)
-  ]);
-  const packet = normalizePacket({
-    id: packetId,
-    sourceType: "materialized-guidance",
-    sourceId,
-    title: args.title ?? intent.title ?? source.title,
-    summary: args.summary ?? intent.summary ?? source.summary ?? "",
-    phase: args.phase ?? board.currentPhase,
-    phaseContextId: `phase-${args.phase ?? board.currentPhase}`,
-    doveDomain,
-    missionStage: missionStage ?? undefined,
-    missionGoal: args.goal ?? args.missionGoal ?? args.objective ?? undefined,
-    returnProtocol: args.returnProtocol ?? undefined,
-    acceptanceCriteria,
-    status: args.status ?? "pending",
-    lifecycleStatus: args.lifecycleStatus ?? "waiting",
-    active: true,
-    assignedRole: workerRole ?? (ROLE_IDS.includes(args.assignedRole) ? args.assignedRole : intent.assignedRole),
-    currentFocus: args.currentFocus ?? args.title ?? intent.title ?? source.title,
-    nextAction: args.nextAction ?? intent.nextAction,
-    dependencies: normalizeStringArray(args.dependencies),
-    evidenceLinks: uniqueSorted([
-      source.sourceArtifactPath,
-      ...(intent.evidenceLinks ?? []),
-      ...normalizeStringArray(args.evidenceLinks)
-    ]),
-    outputPaths: uniqueSorted([
-      ARTIFACT_PATHS.taskPacketsIndex,
-      ...targetArtifacts,
-      ...normalizeStringArray(args.outputPaths)
-    ]),
-    questions: [],
-    decisions: [{
-      id: `materialized-${packetId}`,
-      summary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packetId}.`,
-      rationale: args.rationale ?? source.summary ?? "",
-      origin: source.sourceArtifactPath,
-      recordedAt: timestamp
-    }],
-    lineage: {
-      boardPhase: board.currentPhase,
-      intentType: board.intentType,
-      currentVersionId: board.versionLineage?.currentVersionId ?? null,
-      activeComparisonTargets: normalizeStringArray(board.activeComparisonTargets),
-      materializedFrom: {
-        sourceType,
-        sourceId,
-        sourceArtifactPath: source.sourceArtifactPath,
-        sourceTitle: source.title,
-        selectedConversionPathKey: intent.selectedConversionPathKey
-      }
-    },
-    continuationState: {
-      status: "ready-to-resume",
-      lastCheckpoint: args.decisionSummary ?? `Materialized from ${sourceType}:${sourceId}.`,
-      updatedAt: timestamp
-    },
-    autonomyEnvelope: workerRole
-      ? {
-          controllerRole: actorRole,
-          workerRole,
-          scopeType: "packet-local",
-          explicitOnly: true,
-          requiredReadPaths: [],
-          localRules: [
-            "Planner remains the supervising controller for this bounded autonomous packet step.",
-            "The runtime may advance only this packet and its matched follow-through/runtime audit surfaces in one invocation."
-          ]
-        }
-      : null,
-    updatedAt: timestamp,
-    materialization: {
-      pathType: "guidance-to-packet",
-      sourceType,
-      sourceId,
-      sourceArtifactPath: source.sourceArtifactPath,
-      sourceFingerprint: source.sourceFingerprint,
-      sourceTitle: intent.sourceTitle ?? source.title,
-      sourceSummary: intent.sourceSummary ?? source.summary,
-      remediationPackIds: uniqueSorted(intent.remediationPackIds ?? []),
-      executionBridgeCandidateIds: uniqueSorted(intent.executionBridgeCandidateIds ?? []),
-      followThroughId,
-      selectedConversionPathKey: intent.selectedConversionPathKey,
-      acceptanceCriteria,
-      workspacePointers: uniqueSorted(intent.workspacePointers ?? []),
-      createdAt: timestamp,
-      createdByRole: actorRole,
-      decisionSummary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packetId}.`
-    }
-  });
-
-  const nextPacketIndex = {
-    ...packetIndex,
-    items: [...(packetIndex.items ?? []).filter((item) => item.id !== packet.id), packet],
-    updatedAt: timestamp
-  };
-  const preparedFollowThrough = prepareOperatorFollowThrough(root, {
-    id: followThroughId,
-    sourceType,
-    sourceId,
-    actorRole,
-    workerRole,
-    status: "accepted-for-execution",
-    decisionSummary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packet.id}.`,
-    rationale: args.rationale ?? "",
-    selectedConversionPathKey: intent.selectedConversionPathKey,
-    linkedTargetArtifact: packet.packetPath,
-    linkedTargetId: packet.id,
-    executeBy: args.executeBy,
-    reviewAfter: args.reviewAfter
-  }, {
-    sourceCatalog,
-    timestamp,
-    targetPreview: {
-      artifactPath: packet.packetPath,
-      targetId: packet.id
-    }
-  });
-
-  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, nextPacketIndex);
-  writeJson(root, packet.packetPath, packet);
-  commitOperatorFollowThrough(root, preparedFollowThrough);
-
-  const materializedPacket = readJson(root, packet.packetPath, null);
-  return {
-    status: "materialized",
-    packetId: packet.id,
-    packetPath: packet.packetPath,
-    packetContextPath: packet.packetContextPath,
-    summary: materializedPacket?.summary ?? packet.summary,
-    sourceType,
-    sourceId,
-    followThroughId,
-    artifactPaths: [packet.packetPath, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.metaOperatorFollowThrough, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.navigationReport],
-    packet: materializedPacket
-  };
+  throw new Error(
+    "Public materialize_guidance_packet is disabled: packet materialization requires a pre-existing, dynamically valid system-owned program approval, program run, runtime execution claim, and trusted authority provenance. No public caller field grants that authority."
+  );
 }
 
 const PUBLIC_FOLLOW_THROUGH_STATUSES = new Set([
   "acknowledged",
-  "accepted-for-execution",
-  "deferred",
-  "accepted-risk"
+  "deferred"
 ]);
 
 const PUBLIC_FOLLOW_THROUGH_FIELDS = new Set([
@@ -7477,16 +7343,10 @@ const PUBLIC_FOLLOW_THROUGH_FIELDS = new Set([
   "sourceType",
   "sourceId",
   "status",
-  "actorRole",
-  "workerRole",
   "decisionSummary",
   "rationale",
   "selectedConversionPathKey",
-  "linkedTargetArtifact",
-  "linkedTargetId",
-  "plannedTarget",
   "deferUntil",
-  "executeBy",
   "reviewAfter"
 ]);
 
@@ -7531,16 +7391,8 @@ function assertPublicFollowThroughInput(root, args = {}) {
 }
 
 function readFollowThroughSourceCatalog(root) {
-  const remediationPacks = normalizeMetaRemediationPacksIndex(
-    readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex)
-  );
-  const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(
-    readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex)
-  );
-  const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(
-    readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex)
-  );
-  return buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, executionBridgeCandidates);
+  const meta = queryMetaOptimize(root);
+  return buildFollowThroughSourceCatalog(meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates);
 }
 
 function prepareOperatorFollowThrough(root, args = {}, options = {}) {
@@ -7618,85 +7470,166 @@ function commitOperatorFollowThrough(root, prepared) {
 export function recordOperatorFollowThrough(root, args = {}) {
   assertGovernanceMutationRegistered("record-operator-follow-through", "exempt");
   assertPublicFollowThroughInput(root, args);
-  return commitOperatorFollowThrough(root, prepareOperatorFollowThrough(root, args));
+  const sourceCatalog = readFollowThroughSourceCatalog(root);
+  const source = sourceCatalog.get(`${args.sourceType}:${args.sourceId}`) ?? null;
+  if (!source) {
+    throw new Error(`Unknown follow-through source: ${args.sourceType}:${args.sourceId}`);
+  }
+  const actorRole = normalizeStringArray(source.allowedActorRoles)[0] ?? "planner";
+  const publicRecord = {
+    ...args,
+    actorRole,
+    linkedTargetArtifact: null,
+    linkedTargetId: null,
+    plannedTarget: false,
+    executeBy: null,
+    workerRole: null
+  };
+  return commitOperatorFollowThrough(root, prepareOperatorFollowThrough(root, publicRecord, { sourceCatalog }));
+}
+
+function deriveContextQuerySnapshot(root) {
+  const navigation = deriveNavigationQuerySnapshot(root);
+  const derived = navigation.metaOptimize;
+  const meta = {
+    executionBridgeCandidates: derived.executionBridgeCandidates,
+    governanceCoverage: derived.governanceCoverage,
+    operatorFollowThrough: derived.operatorFollowThrough,
+    operatorLessons: derived.operatorLessons,
+    operatorPlaybooks: derived.operatorPlaybooks,
+    remediationPacks: derived.remediationPacks,
+    longHorizon: derived.longHorizonMemory,
+    recommendations: derived.metaRecommendations.items ?? [],
+    state: derived.metaOptimizerState
+  };
+  const packetById = new Map(navigation.packets.map((packet) => [packet.id, packet]));
+  return { navigation, meta, packetById };
 }
 
 export function readPhaseContextManifest(root, phaseId = null) {
-  refreshDurableSurfaces(root, {
-    type: "read-phase-context-manifest",
-    summary: `Refreshed phase context manifest for ${phaseId ?? "current phase"}.`,
-    artifactPaths: [path.join(ARTIFACT_PATHS.phaseContextsDir, `${phaseId ?? "current"}.json`), ARTIFACT_PATHS.workspaceIndex]
-  });
-  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard);
-  const resolvedPhaseId = phaseId ?? board.currentPhase;
-  return readJson(root, path.join(ARTIFACT_PATHS.phaseContextsDir, `${resolvedPhaseId}.json`), null);
+  const { navigation, meta } = deriveContextQuerySnapshot(root);
+  const resolvedPhaseId = phaseId ?? navigation.board.currentPhase;
+  const board = resolvedPhaseId === navigation.board.currentPhase
+    ? navigation.board
+    : { ...navigation.board, currentPhase: resolvedPhaseId };
+  return buildPhaseManifest(board, navigation.packets, navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons);
 }
 
 export function readRoleContextManifest(root, roleId) {
   if (!ROLE_IDS.includes(roleId)) {
     throw new Error(`Unknown roleId: ${roleId}`);
   }
-  refreshDurableSurfaces(root, {
-    type: "read-role-context-manifest",
-    summary: `Refreshed role context manifest for ${roleId}.`,
-    artifactPaths: [path.join(ARTIFACT_PATHS.roleContextsDir, `${roleId}.json`)]
-  });
-  return readJson(root, path.join(ARTIFACT_PATHS.roleContextsDir, `${roleId}.json`), null);
+  const { navigation, meta } = deriveContextQuerySnapshot(root);
+  const role = navigation.board.roleRoster?.find((item) => item.id === roleId) ?? ROLE_HIERARCHY[roleId];
+  return buildRoleManifest(role, navigation.packets, navigation.openQuestions, navigation.decisions, navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons);
 }
 
 export function readPacketContextManifest(root, packetId) {
   const normalizedPacketId = slugify(packetId);
-  refreshDurableSurfaces(root, {
-    type: "read-packet-context-manifest",
-    summary: `Refreshed packet context manifest for ${normalizedPacketId}.`,
-    artifactPaths: [path.join(ARTIFACT_PATHS.packetContextsDir, `${normalizedPacketId}.json`), ARTIFACT_PATHS.workspaceIndex]
-  });
-  return readJson(root, path.join(ARTIFACT_PATHS.packetContextsDir, `${normalizedPacketId}.json`), null);
+  const { navigation, packetById } = deriveContextQuerySnapshot(root);
+  const packet = packetById.get(normalizedPacketId) ?? null;
+  return packet ? buildPacketContextManifest(root, navigation.board, packet, packetById, navigation.workspaceIndex) : null;
 }
 
 export function readArtifactContextManifest(root, artifactPath) {
   const normalizedArtifactPath = normalizeArtifactPath(artifactPath);
-  refreshDurableSurfaces(root, {
-    type: "read-artifact-context-manifest",
-    summary: `Refreshed artifact context manifest for ${normalizedArtifactPath}.`,
-    artifactPaths: [artifactContextPath(normalizedArtifactPath), ARTIFACT_PATHS.workspaceIndex]
-  });
-  return readJson(root, artifactContextPath(normalizedArtifactPath), null);
+  const navigation = deriveNavigationQuerySnapshot(root);
+  return buildArtifactContextManifest(root, normalizedArtifactPath, navigation.board, navigation.packets, navigation.workspaceIndex);
 }
 
 export function readActionContextBundle(root, args = {}) {
   const scopeType = args.scopeType ?? "current";
-  let scopeId = "current";
+  const { navigation, meta, packetById } = deriveContextQuerySnapshot(root);
   if (scopeType === "role") {
-    scopeId = `role-${args.roleId}`;
-  } else if (scopeType === "packet") {
-    scopeId = `packet-${args.packetId}`;
-  } else if (scopeType === "phase") {
-    scopeId = `phase-${args.phaseId}`;
-  } else if (scopeType === "artifact") {
-    scopeId = `artifact-${normalizeArtifactPath(args.artifactPath)}`;
-  }
-  refreshDurableSurfaces(root, {
-    type: "read-action-context-bundle",
-    summary: `Refreshed action context bundle for ${scopeType}.`,
-    artifactPaths: [actionContextPath(scopeId), ARTIFACT_PATHS.workspaceIndex]
-  });
-
-  if (scopeType === "artifact") {
-    const artifactManifest = readArtifactContextManifest(root, args.artifactPath);
+    if (!ROLE_IDS.includes(args.roleId)) {
+      throw new Error(`Unknown roleId: ${args.roleId}`);
+    }
+    const role = navigation.board.roleRoster?.find((item) => item.id === args.roleId) ?? ROLE_HIERARCHY[args.roleId];
+    const roleManifest = buildRoleManifest(role, navigation.packets, navigation.openQuestions, navigation.decisions, navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons);
     return buildActionContextBundle({
-      scopeType: "artifact",
-      scopeId,
-      summary: `Artifact-scoped pre-action bundle for ${artifactManifest?.artifactPath ?? normalizeArtifactPath(args.artifactPath)}.`,
-      board: readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard),
-      workspaceIndex: readJson(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex),
-      artifactPath: artifactManifest?.artifactPath ?? normalizeArtifactPath(args.artifactPath),
-      requiredReadPaths: [artifactContextPath(artifactManifest?.artifactPath ?? normalizeArtifactPath(args.artifactPath)), ...(artifactManifest?.readBeforeMutating ?? [])],
-      localRules: artifactManifest?.localRules ?? []
+      scopeType: "role",
+      scopeId: args.roleId,
+      summary: `Role-scoped pre-action bundle for ${args.roleId}.`,
+      board: navigation.board,
+      workspaceIndex: navigation.workspaceIndex,
+      roleId: args.roleId,
+      phaseId: navigation.workspaceIndex.boardPhase,
+      requiredReadPaths: roleManifest.preActionReadPaths,
+      localRules: roleManifest.behaviorDiscipline.localRules,
+      operatorGuidance: roleManifest.operatorGuidance
     });
   }
-
-  return readJson(root, actionContextPath(scopeId), null);
+  if (scopeType === "packet") {
+    const packetId = slugify(args.packetId);
+    const packet = packetById.get(packetId) ?? null;
+    if (!packet) {
+      return null;
+    }
+    const manifest = buildPacketContextManifest(root, navigation.board, packet, packetById, navigation.workspaceIndex);
+    return buildActionContextBundle({
+      scopeType: "packet",
+      scopeId: packetId,
+      summary: `Packet-scoped pre-action bundle for ${packetId}.`,
+      board: navigation.board,
+      workspaceIndex: navigation.workspaceIndex,
+      packet,
+      roleId: packet.assignedRole,
+      phaseId: packet.phase,
+      requiredReadPaths: manifest.preActionReadPaths,
+      localRules: manifest.behaviorDiscipline.localRules,
+      operatorGuidance: buildOperatorGuidance(navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons, { roleId: packet.assignedRole, packetId, packet })
+    });
+  }
+  if (scopeType === "phase") {
+    const phaseId = args.phaseId ?? navigation.board.currentPhase;
+    const phaseBoard = phaseId === navigation.board.currentPhase
+      ? navigation.board
+      : { ...navigation.board, currentPhase: phaseId };
+    const phaseManifest = buildPhaseManifest(phaseBoard, navigation.packets, navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons);
+    return buildActionContextBundle({
+      scopeType: "phase",
+      scopeId: phaseManifest.phaseId,
+      summary: `Phase-scoped pre-action bundle for ${phaseManifest.phaseId}.`,
+      board: { ...navigation.board, currentPhase: phaseManifest.phaseId },
+      workspaceIndex: navigation.workspaceIndex,
+      roleId: phaseManifest.assignedRole,
+      phaseId: phaseManifest.phaseId,
+      requiredReadPaths: phaseManifest.preActionReadPaths,
+      localRules: phaseManifest.behaviorDiscipline.localRules,
+      operatorGuidance: phaseManifest.operatorGuidance
+    });
+  }
+  if (scopeType === "artifact") {
+    const normalizedArtifactPath = normalizeArtifactPath(args.artifactPath);
+    const artifactManifest = buildArtifactContextManifest(root, normalizedArtifactPath, navigation.board, navigation.packets, navigation.workspaceIndex);
+    return buildActionContextBundle({
+      scopeType: "artifact",
+      scopeId: `artifact-${normalizedArtifactPath}`,
+      summary: `Artifact-scoped pre-action bundle for ${normalizedArtifactPath}.`,
+      board: navigation.board,
+      workspaceIndex: navigation.workspaceIndex,
+      artifactPath: normalizedArtifactPath,
+      requiredReadPaths: [artifactContextPath(normalizedArtifactPath), ...artifactManifest.readBeforeMutating],
+      localRules: artifactManifest.localRules
+    });
+  }
+  return buildActionContextBundle({
+    scopeType: "current",
+    scopeId: "current",
+    summary: "Current workspace pre-action bundle. Read this before mutating durable workflow state.",
+    board: navigation.board,
+    workspaceIndex: navigation.workspaceIndex,
+    roleId: navigation.board.assignedRole,
+    phaseId: navigation.board.currentPhase,
+    artifactPath: navigation.workspaceIndex.contextSurfaces?.prioritizedArtifactContextPaths?.[0] ?? null,
+    requiredReadPaths: navigation.workspaceIndex.behaviorDiscipline.requiredReadOrder,
+    localRules: [
+      "Start from the current action bundle, then follow the required read order.",
+      "Use packet and artifact-local guidance instead of broad top-level rules when available.",
+      "Do not assume hidden rule loading; read the surfaced files explicitly before acting."
+    ],
+    operatorGuidance: buildOperatorGuidance(navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons, { roleId: navigation.board.assignedRole })
+  });
 }
 
 export function summarizeSessionJournal(root) {

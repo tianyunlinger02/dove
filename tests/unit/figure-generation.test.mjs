@@ -10,6 +10,7 @@ import {
   ensureWorkspace,
   importFigureGeneration,
   initProject,
+  loadBoard,
   loadDoveConfig,
   loadDoveLanguageConfig,
   normalizeGlobalStatusProjects,
@@ -21,12 +22,12 @@ import {
   upsertFigurePlan,
   upsertNote,
   validateFigurePipeline,
-  verifySource
 } from "../../src/core/internal-api.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
+import { seedTrustedSourceVerification } from "../helpers/source-verification-fixture.mjs";
 
 function tempRoot() {
   return createTempRoot("dove-figure-generation-");
@@ -155,14 +156,7 @@ function seedFigureWorkspace(root) {
   initProject(root, { title: "Figure Generation Test", objective: "Generate a durable evidence-linked figure." });
   const packetId = seedTaskPacket(root);
   const source = registerSource(root, { packetId, citationKey: "figure-source", title: "Figure Source", authors: ["Doe"], year: 2026, sourceType: "paper", locator: "https://example.org/test-source" });
-  verifySource(root, {
-    packetId,
-    sourceId: source.id,
-    decision: "verified",
-    method: "test fixture inspected the canonical publication record",
-    checkedMaterial: "source title, authors, year, and publication metadata",
-    auditEvidence: [{ reference: source.locator, kind: "source", observation: `Verified fixture identity for ${source.id}.` }]
-  });
+  seedTrustedSourceVerification(root, source.id, packetId);
   const note = upsertNote(root, { packetId, noteId: "figure-note", title: "Figure note", sectionId: "method", sourceIds: [source.id], summary: "Source-backed material for the figure." });
   upsertClaims(root, {
     packetId,
@@ -214,6 +208,7 @@ test("importFigureGeneration validates SVG, records caption provenance, and clea
   return runFixtureMutation(root, "importfiguregeneration-validates-svg-records-caption-provenance-and-clea", () => {
   const packetId = seedFigureWorkspace(root);
   prepareFigureGeneration(root, { packetId, figureId: "workflow", runId: "workflow-run" });
+  assert.equal(loadBoard(root).reviewRequiredBeforeFinalize, false);
 
   const imported = importFigureGeneration(root, {
     packetId,
@@ -224,6 +219,7 @@ test("importFigureGeneration validates SVG, records caption provenance, and clea
   });
   assert.equal(imported.finalSvgPath, ".dove/figures/workflow.final.svg");
   assert.equal(imported.qaIssueCount, 0);
+  assert.equal(loadBoard(root).reviewRequiredBeforeFinalize, true);
 
   const captions = readJson(root, ARTIFACT_PATHS.figureCaptions, { version: 1, items: [] });
   const generations = readJson(root, ARTIFACT_PATHS.figureGenerations, { version: 1, items: [] });

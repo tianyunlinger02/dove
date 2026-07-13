@@ -5,12 +5,22 @@ import path from "node:path";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { inspectDeclaredPath } from "./artifact-integrity.mjs";
 import { sha256File, snapshotReviewedArtifacts, verifyPreparedReviewSnapshot } from "./review-artifact-snapshot.mjs";
+import {
+  assertReviewProofBoundaryTransition,
+  recordReviewProofRequiredBoundary,
+  verifyImportedIsolatedReviewProof
+} from "./review-proof.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { appendText, assertFollowThroughReady, assertGovernanceMutationRegistered, loadState, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
-import { loadBoard, upsertSystemOrchestrationBoard } from "./orchestration.mjs";
+import { appendSystemHandoff, assertSystemOrchestrationBoardUpdate, loadBoard, upsertSystemOrchestrationBoard } from "./orchestration.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
-import { assertReviewMaterials, buildReviewScope } from "./review-scope.mjs";
+import {
+  assertReviewMaterials,
+  buildReviewScope,
+  canonicalReviewExchangePathFailure,
+  verifyCanonicalReviewImportScope
+} from "./review-scope.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 
 const REVIEW_VERDICTS = new Set(["coherent", "needs-revision", "needs-evidence", "blocked"]);
@@ -223,7 +233,7 @@ function renderImportedReviewLogEntry({ handoff, reportPath, reportSha256 }) {
   ].join("\n");
 }
 
-function upsertImportedConcerns(root, handoff) {
+function upsertImportedConcerns(root, handoff, packetId) {
   const current = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
   const existing = new Map((current.items ?? []).map((item) => [item.id, item]));
   for (const finding of handoff.findings) {
@@ -231,6 +241,7 @@ function upsertImportedConcerns(root, handoff) {
     existing.set(id, {
       ...(existing.get(id) ?? {}),
       id,
+      packetId,
       summary: finding.summary,
       severity: finding.severity,
       status: handoff.verdict === "coherent" ? "resolved" : "awaiting-author-response",
@@ -273,12 +284,22 @@ function transitionToIsolatedReviewer(root, args, target, runId, reviewedArtifac
     currentFocus: args.scope ?? target.packet?.title ?? `Isolated review ${runId}`,
     nextAction: `Complete isolated review ${runId} and return only the declared handoff and report artifacts.`,
     handoffSummary: `Handing ${target.packet?.title ?? "the current work"} to the isolated reviewer for run ${runId}.`,
-    evidenceLinks: Array.from(new Set([...(board.evidenceLinks ?? []), ...reviewedArtifactPaths]))
+    evidenceLinks: Array.from(new Set([...(board.evidenceLinks ?? []), ...reviewedArtifactPaths])),
+    reviewRequiredBeforeFinalize: true
   });
 }
 
-function isolatedReviewReturnTransition(handoff) {
+function isolatedReviewReturnTransition(handoff, independentProof = null) {
   if (handoff.verdict === "coherent") {
+    if (independentProof?.authoritative !== true) {
+      return {
+        phase: "review",
+        assignedRole: "reviewer",
+        intentType: "review",
+        nextAction: "Submit authoritative proof from an approved Reviewer runtime execution claim through the private capability.",
+        proofBoundary: true
+      };
+    }
     return {
       phase: "plan",
       assignedRole: "planner",
@@ -296,13 +317,29 @@ function isolatedReviewReturnTransition(handoff) {
 
 function returnImportedIsolatedReview(root, args, handoff, handoffPath, reportPath, transition) {
   const board = loadBoard(root);
+  const evidenceLinks = Array.from(new Set([...(board.evidenceLinks ?? []), handoffPath, reportPath, ...handoff.reviewedArtifactPaths]));
+  const handoffSummary = transition.proofBoundary
+    ? `Isolated reviewer ${handoff.reviewerId} returned public coherent material for ${handoff.runId}, but authoritative Reviewer runtime proof is still required; Reviewer ownership is retained.`
+    : `Isolated reviewer ${handoff.reviewerId} returned ${handoff.verdict} for ${handoff.runId}; workflow routing now returns to ${transition.assignedRole} for the recorded next action.`;
+  if (transition.proofBoundary && board.currentPhase === "review" && board.assignedRole === "reviewer") {
+    appendSystemHandoff(root, {
+      fromRole: "reviewer",
+      toRole: "reviewer",
+      phase: "review",
+      intentType: "review",
+      summary: handoffSummary,
+      currentFocus: handoff.summary,
+      nextAction: transition.nextAction,
+      evidenceLinks
+    });
+  }
   return upsertSystemOrchestrationBoard(root, {
     ...args,
     ...transition,
     currentFocus: handoff.summary,
-    handoffSummary: `Isolated reviewer ${handoff.reviewerId} returned ${handoff.verdict} for ${handoff.runId}; workflow routing now returns to ${transition.assignedRole} for the recorded next action.`,
-    evidenceLinks: Array.from(new Set([...(board.evidenceLinks ?? []), handoffPath, reportPath, ...handoff.reviewedArtifactPaths])),
-    reviewRequiredBeforeFinalize: handoff.verdict !== "coherent"
+    handoffSummary,
+    evidenceLinks,
+    reviewRequiredBeforeFinalize: true
   });
 }
 
@@ -314,10 +351,14 @@ export function prepareIsolatedReview(root, args = {}) {
   const explicitArtifactPaths = normalizeStringArray([
     ...normalizeStringArray(args.reviewedArtifactPaths),
     ...normalizeStringArray(args.artifactPaths)
-  ]);
-  const reviewScope = assertReviewMaterials(buildReviewScope(root, target, {
-    reviewedArtifactPaths: explicitArtifactPaths.map((item) => safeArtifactPath(root, item))
-  }), "prepare_isolated_review");
+  ]).map((item) => safeArtifactPath(root, item));
+  if (explicitArtifactPaths.length > 0) {
+    buildReviewScope(root, target, { reviewedArtifactPaths: explicitArtifactPaths });
+  }
+  const reviewScope = assertReviewMaterials(
+    buildReviewScope(root, target),
+    "prepare_isolated_review"
+  );
   const reviewedArtifactPaths = reviewScope.substantiveArtifactPaths;
   const runDir = path.posix.join(ARTIFACT_PATHS.isolatedReviewsDir, runId);
   const timestamp = nowIso();
@@ -419,8 +460,13 @@ export function importIsolatedReview(root, args = {}) {
   assertFollowThroughReady(root, "Importing an isolated reviewer handoff", args);
   const runId = normalizeRunId(args.runId);
   const manifestPath = relativeRunPath(runId, "manifest.json");
-  const handoffPath = args.handoffPath ? safeArtifactPath(root, args.handoffPath) : relativeRunPath(runId, "handoff.json");
-  const reportPath = args.reportPath ? safeArtifactPath(root, args.reportPath) : relativeRunPath(runId, "report.md");
+  const canonicalPaths = {
+    inputPath: relativeRunPath(runId, "input.json"),
+    handoffPath: relativeRunPath(runId, "handoff.json"),
+    reportPath: relativeRunPath(runId, "report.md")
+  };
+  const handoffPath = args.handoffPath ? safeArtifactPath(root, args.handoffPath) : canonicalPaths.handoffPath;
+  const reportPath = args.reportPath ? safeArtifactPath(root, args.reportPath) : canonicalPaths.reportPath;
   const manifest = readJson(root, manifestPath, null);
   if (!manifest || typeof manifest !== "object") {
     throw new Error(`Missing isolated review manifest for ${runId}`);
@@ -431,18 +477,31 @@ export function importIsolatedReview(root, args = {}) {
   if (manifest.packetId !== target.packetId) {
     throw new Error(`Isolated review ${runId} belongs to packet ${manifest.packetId ?? "unknown"}, not ${target.packetId}.`);
   }
-  if (handoffPath !== manifest.handoffPath || reportPath !== manifest.reportPath) {
-    throw new Error(`Isolated review ${runId} must import the exact handoff and report paths declared by its prepared manifest.`);
+  if (handoffPath !== canonicalPaths.handoffPath || reportPath !== canonicalPaths.reportPath) {
+    return isolatedReviewVerificationFailure(runId, ["noncanonical-exchange-path"], manifest);
+  }
+  const handoffPathFailure = canonicalReviewExchangePathFailure(
+    root,
+    handoffPath,
+    "handoff"
+  );
+  if (handoffPathFailure) {
+    return isolatedReviewVerificationFailure(runId, [handoffPathFailure], manifest);
   }
   const handoffFullPath = resolvePath(root, handoffPath);
-  if (!fs.existsSync(handoffFullPath)) {
-    throw new Error(`Missing isolated review handoff: ${handoffPath}`);
-  }
   const handoff = normalizeHandoff(root, JSON.parse(fs.readFileSync(handoffFullPath, "utf8")));
   if (handoff.runId !== runId) {
     throw new Error(`Isolated review handoff runId mismatch: expected ${runId}, received ${handoff.runId}`);
   }
-  const inputFullPath = resolvePath(root, manifest.inputPath);
+  const inputPathFailure = canonicalReviewExchangePathFailure(
+    root,
+    canonicalPaths.inputPath,
+    "input"
+  );
+  if (inputPathFailure) {
+    return isolatedReviewVerificationFailure(runId, [inputPathFailure], manifest);
+  }
+  const inputFullPath = resolvePath(root, canonicalPaths.inputPath);
   let input;
   let actualInputSha256;
   try {
@@ -463,8 +522,27 @@ export function importIsolatedReview(root, args = {}) {
   if (!verification.ok) {
     return isolatedReviewVerificationFailure(runId, verification.failures, manifest);
   }
+  const canonicalScopeVerification = verifyCanonicalReviewImportScope(root, target, {
+    runId,
+    manifest,
+    input,
+    handoff,
+    canonicalPaths,
+    isolationModel: "parallel-session-file-handoff"
+  });
+  if (!canonicalScopeVerification.ok) {
+    return isolatedReviewVerificationFailure(runId, canonicalScopeVerification.failures, manifest);
+  }
   if (handoff.reportPath !== reportPath) {
     return isolatedReviewVerificationFailure(runId, ["report-path-mismatch"], manifest);
+  }
+  const reportPathFailure = canonicalReviewExchangePathFailure(
+    root,
+    reportPath,
+    "report"
+  );
+  if (reportPathFailure) {
+    return isolatedReviewVerificationFailure(runId, [reportPathFailure], manifest);
   }
   const reportInspection = inspectDeclaredPath(root, reportPath, {
     requireNonEmpty: true,
@@ -476,22 +554,67 @@ export function importIsolatedReview(root, args = {}) {
   const handoffSha256 = hashFile(handoffFullPath);
   const reportFullPath = resolvePath(root, reportPath);
   const reportSha256 = hashFile(reportFullPath);
-  const returnTransition = isolatedReviewReturnTransition(handoff);
+  const anticipatedTransition = isolatedReviewReturnTransition(handoff);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    anticipatedTransition.phase,
+    anticipatedTransition.assignedRole,
+    "Importing an isolated review"
+  );
+  assertSystemOrchestrationBoardUpdate(root, {
+    ...args,
+    ...anticipatedTransition,
+    currentFocus: handoff.summary,
+    reviewRequiredBeforeFinalize: true
+  });
   appendText(root, ARTIFACT_PATHS.reviewLog, renderImportedReviewLogEntry({ handoff, reportPath, reportSha256 }));
-  upsertImportedConcerns(root, handoff);
+  upsertImportedConcerns(root, handoff, target.packetId);
   const updatedManifest = {
-    ...manifest,
+    version: 1,
+    runId,
+    packetId: target.packetId,
+    includedPacketIds: canonicalScopeVerification.scope.includedPacketIds,
     status: "imported",
+    createdAt: manifest.createdAt,
     updatedAt: nowIso(),
     importedAt: nowIso(),
+    inputPath: canonicalPaths.inputPath,
+    inputSha256: actualInputSha256,
     handoffPath,
     reportPath,
+    reviewedArtifactPaths: canonicalScopeVerification.scope.substantiveArtifactPaths,
+    reviewedArtifacts: verification.reviewedArtifacts,
+    reviewedArtifactSetSha256: verification.reviewedArtifactSetSha256,
     outputSha256: handoffSha256,
     reportSha256,
     verdict: handoff.verdict,
-    reviewerId: handoff.reviewerId
+    importedVerdict: handoff.verdict,
+    reviewerId: handoff.reviewerId,
+    authoritative: false,
+    independentReviewProof: null,
+    reviewProofRequired: handoff.verdict === "coherent"
   };
   writeJson(root, manifestPath, updatedManifest);
+  const independentProof = handoff.verdict === "coherent"
+    ? verifyImportedIsolatedReviewProof(root, resolvePath(root, manifestPath), {
+        packetId: target.packetId,
+        reviewedArtifactPaths: canonicalScopeVerification.scope.substantiveArtifactPaths
+      })
+    : { ok: false, authoritative: false, proof: null, failures: [] };
+  const returnTransition = isolatedReviewReturnTransition(handoff, independentProof);
+  if (returnTransition.proofBoundary) {
+    recordReviewProofRequiredBoundary(root, {
+      reviewKind: "isolated",
+      runId,
+      packetId: target.packetId,
+      includedPacketIds: canonicalScopeVerification.scope.includedPacketIds,
+      timestamp: handoff.timestamp,
+      handoffPath,
+      reportPath,
+      reviewedArtifactPaths: canonicalScopeVerification.scope.substantiveArtifactPaths
+    });
+  }
   returnImportedIsolatedReview(root, args, handoff, handoffPath, reportPath, returnTransition);
   refreshDurableSurfaces(root, {
     type: "isolated-review-import",
@@ -501,7 +624,10 @@ export function importIsolatedReview(root, args = {}) {
   return {
     status: "imported",
     runId,
-    verdict: handoff.verdict,
+    verdict: returnTransition.proofBoundary
+      ? "needs-evidence"
+      : handoff.verdict,
+    importedVerdict: handoff.verdict,
     reviewerId: handoff.reviewerId,
     summary: handoff.summary,
     topConcerns: handoff.findings.slice(0, 5).map((finding) => finding.summary),
@@ -512,13 +638,38 @@ export function importIsolatedReview(root, args = {}) {
     inputSha256: manifest.inputSha256,
     handoffSha256,
     reportSha256,
+    authoritative: independentProof.authoritative === true,
+    independentReviewProof: null,
+    reviewProofRequired: returnTransition.proofBoundary === true,
+    proofFailures: independentProof.failures ?? [],
+    ...(returnTransition.proofBoundary ? {
+      boundary: {
+        type: "review-proof-required",
+        ownerRole: "reviewer",
+        nextRole: "reviewer",
+        nextAction: returnTransition.nextAction,
+        requiredActions: ["submit-authoritative-reviewer-runtime-proof"]
+      },
+      ownerRole: "reviewer",
+      nextRole: "reviewer",
+      nextAction: returnTransition.nextAction
+    } : {}),
     privateTranscriptImported: false,
     preActionGuidanceSummary: isolatedGuidanceSummary(root, args, target, {
-      nextAction: handoff.verdict === "coherent" ? "project:dove.status" : "project:dove.rebuttal",
+      nextAction: returnTransition.proofBoundary
+        ? "project:dove.review"
+        : handoff.verdict === "coherent"
+          ? "project:dove.status"
+          : "project:dove.rebuttal",
       statusSummary: {
         status: "imported",
         runId,
-        verdict: handoff.verdict,
+        verdict: returnTransition.proofBoundary
+          ? "needs-evidence"
+          : handoff.verdict,
+        importedVerdict: handoff.verdict,
+        authoritative: independentProof.authoritative === true,
+        reviewProofRequired: returnTransition.proofBoundary === true,
         findingCount: handoff.findings.length,
         actionItemCount: handoff.actionItems.length
       }

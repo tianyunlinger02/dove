@@ -30,6 +30,25 @@ test("CLI parser fails closed for unknown options", () => {
   );
 });
 
+test("CLI launch parser rejects retired caller authority flags", () => {
+  for (const flag of [
+    "--actor-role",
+    "--worker-role",
+    "--dove-worker-role",
+    "--assigned-role",
+    "--lifecycle-status",
+    "--program-id",
+    "--program-run-id",
+    "--approval-id",
+    "--allowed-step-type"
+  ]) {
+    assert.throws(
+      () => parseDoveCli(["launch", flag, "caller-controlled"]),
+      /Unknown or unsupported CLI argument/
+    );
+  }
+});
+
 test("CLI parser fails closed for duplicate singleton aliases", () => {
   assert.throws(
     () => parseDoveCli(["mission", "--domain", "engineering", "--dove-domain=paper"]),

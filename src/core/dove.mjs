@@ -3774,9 +3774,6 @@ export function queryDoveMission(root, args = {}) {
 const DOVE_MISSION_LAUNCH_FIELDS = new Set([
   "sourceType",
   "sourceId",
-  "actorRole",
-  "workerRole",
-  "doveWorkerRole",
   "goal",
   "domain",
   "doveDomain",
@@ -3795,10 +3792,7 @@ const DOVE_MISSION_LAUNCH_FIELDS = new Set([
   "selectedConversionPathKey",
   "title",
   "summary",
-  "phase",
-  "assignedRole",
   "status",
-  "lifecycleStatus",
   "currentFocus",
   "nextAction",
   "nextCommand",
@@ -3824,130 +3818,9 @@ function assertMissionLaunchArgs(args) {
 export function launchDoveMission(root, args = {}) {
   assertGovernanceMutationRegistered("launch-dove-mission", "guarded");
   assertMissionLaunchArgs(args);
-  const sourceType = String(args.sourceType ?? "").trim();
-  const sourceId = String(args.sourceId ?? "").trim();
-  if (!sourceType || !sourceId) {
-    throw new Error("launchDoveMission requires sourceType and sourceId for an accepted governance source.");
-  }
-  if (!args.executeBy || !args.reviewAfter) {
-    throw new Error("launchDoveMission requires executeBy and reviewAfter so the mission has an explicit execution window.");
-  }
-
-  const { mission, responseLanguage } = buildMissionContract(root, args);
-  const actorRole = normalizeDoveRole(args.actorRole, "planner");
-  const workerRole = normalizeDoveRole(args.workerRole ?? args.doveWorkerRole, null);
-  const materialized = materializeGuidancePacket(root, {
-    packetId: args.packetId ?? args.missionPacketId,
-    followThroughId: args.followThroughId,
-    selectedConversionPathKey: args.selectedConversionPathKey,
-    sourceType,
-    sourceId,
-    actorRole,
-    workerRole: workerRole ?? undefined,
-    assignedRole: args.assignedRole,
-    domain: mission.domain,
-    doveDomain: mission.domain,
-    missionDomain: mission.domain,
-    stage: mission.stage,
-    missionStage: mission.stage,
-    goal: mission.goal,
-    missionGoal: mission.goal,
-    targetArtifacts: mission.targetArtifacts,
-    acceptanceCriteria: args.acceptanceCriteria,
-    acceptanceChecks: mission.acceptanceChecks,
-    returnProtocol: mission.returnProtocol,
-    title: args.title ?? mission.goal,
-    summary: args.summary ?? `Dove ${mission.domain} mission: ${mission.goal}`,
-    phase: args.phase ?? phaseForDoveStage(mission.stage),
-    status: args.status,
-    lifecycleStatus: args.lifecycleStatus,
-    currentFocus: args.currentFocus,
-    nextAction: args.nextAction ?? mission.nextCommand,
-    dependencies: args.dependencies,
-    evidenceLinks: args.evidenceLinks,
-    outputPaths: args.outputPaths,
-    decisionSummary: args.decisionSummary ?? `Launched Dove ${mission.domain} mission from ${sourceType}:${sourceId}.`,
-    rationale: args.rationale,
-    executeBy: args.executeBy,
-    reviewAfter: args.reviewAfter
-  });
-  const missionPacket = missionPacketAliases(materialized.packet ?? {
-    id: materialized.packetId,
-    packetPath: materialized.packetPath,
-    packetContextPath: materialized.packetContextPath
-  });
-  const board = queryDoveMissionBoard(root, {
-    domain: mission.domain,
-    packetId: materialized.packetId,
-    includeArchived: true
-  });
-  return {
-    mode: "dove-launch-mission",
-    status: materialized.status,
-    responseLanguage,
-    proposalOnly: false,
-    noAutoApply: false,
-    writes: materialized.artifactPaths,
-    mission: {
-      ...mission,
-      launchedPacketId: materialized.packetId,
-      launchedMissionPacketId: missionPacket.missionPacketId
-    },
-    missionPacket: {
-      id: missionPacket.missionPacketId,
-      path: missionPacket.missionPacketPath,
-      contextPath: missionPacket.missionPacketContextPath,
-      storePath: missionPacket.missionPacketStorePath,
-      source: missionPacket.source
-    },
-    materialization: {
-      packetId: materialized.packetId,
-      packetPath: materialized.packetPath,
-      packetContextPath: materialized.packetContextPath,
-      missionPacketId: missionPacket.missionPacketId,
-      missionPacketPath: missionPacket.missionPacketPath,
-      missionPacketContextPath: missionPacket.missionPacketContextPath,
-      missionPacketStorePath: missionPacket.missionPacketStorePath,
-      sourceType: materialized.sourceType,
-      sourceId: materialized.sourceId,
-      followThroughId: materialized.followThroughId,
-      delegatedCoreFunction: "materializeGuidancePacket",
-      delegatedMcpTool: "materialize_guidance_packet"
-    },
-    packet: materialized.packet ? { ...materialized.packet, ...missionPacket } : null,
-    board: {
-      mode: board.mode,
-      missionIds: board.missions.map((item) => item.id),
-      missionPacketIds: board.missions.map((item) => item.missionPacketId ?? item.id),
-      queues: board.queues,
-      counts: board.counts
-    },
-    workspace: board.workspace,
-    governance: {
-      registeredMutation: "launch-dove-mission",
-      delegatedGuardedMutation: "materialize-guidance-packet",
-      actorRole,
-      workerRole,
-      roleBoundary: {
-        primaryRole: mission.primaryRole,
-        actorRole,
-        workerRole
-      },
-      explicitExecutionWindow: {
-        executeBy: args.executeBy,
-        reviewAfter: args.reviewAfter
-      },
-      currentWriteAuthority: ARTIFACT_PATHS.doveRoot,
-      noHiddenRuntime: true,
-      noAutonomyExecution: true
-    },
-    diagnostics: {
-      staleLegacyAuthorityArtifacts: staleLegacyAuthorityArtifacts(root),
-      noAutonomyExecution: true,
-      noGitInspection: true,
-      delegatedWrites: materialized.artifactPaths
-    }
-  };
+  throw new Error(
+    "Public launch_dove_mission is disabled: mission packet creation requires a pre-existing, dynamically valid system-owned program approval, program run, runtime execution claim, and trusted authority provenance. No public caller field grants that authority."
+  );
 }
 
 export function queryDoveReturn(root, args = {}) {

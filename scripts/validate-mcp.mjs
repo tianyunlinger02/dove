@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { createMcpStdioClient } from "./mcp-stdio-client.mjs";
 import { cleanupTempWorkspace, createTempWorkspace } from "./temp-workspace.mjs";
+import { seedTrustedSourceVerification } from "../tests/helpers/source-verification-fixture.mjs";
 
 const ROOT = process.cwd();
 const serverScriptPath = path.join(ROOT, "mcp", "dove-state-server.mjs");
@@ -375,8 +376,8 @@ async function main() {
     run_experience_workflow: ["Builder/experiment-planner preActionGuidance", "read-only lesson recall", "claim-bridge boundary"],
     run_figure_workflow: ["Builder preActionGuidance", "artifact-provenance", "QA gates", "providerId none", "plan-only/manual-output", "awaiting-provider-output", "providerId gpt-image2", "OPENAI_API_KEY"],
     prepare_audio_review: ["Reviewer preActionGuidanceSummary", "no-private-transcript boundary"],
-    import_audio_review: ["Reviewer preActionGuidanceSummary", "private reviewer transcripts"],
-    run_audio_review: ["Reviewer preActionGuidanceSummary", "localized resultCard"],
+    import_audio_review: ["Reviewer preActionGuidanceSummary", "private reviewer transcripts", "cannot authenticate Reviewer authority", "reviewRequiredBeforeFinalize"],
+    run_audio_review: ["Reviewer preActionGuidanceSummary", "localized resultCard", "cannot transfer ownership to Planner", "finalization review gate"],
     run_dove_review_loop: ["independent local Reviewer", "Builder handoff"],
     reset_dove_version: ["direction-change snapshot", "not a .dove rollback restore entrypoint", "mutationMode: patch-plan", "host-tracked file edits", "host native checkpoint"],
     run_review_loop: ["independent review", "role-framed preActionGuidance"],
@@ -564,17 +565,19 @@ async function main() {
   assert.equal(source.lifecycle, "candidate");
   assert.ok(source.packetIds.includes(packetId));
   requirePreActionGuidanceSummary(source.preActionGuidanceSummary, { surface: "dove.source", primaryRole: "builder" });
-  const verifiedSource = await callTool("verify_source", {
+  const verifiedSource = seedTrustedSourceVerification(
+    tempWorkspace,
+    source.id,
     packetId,
-    sourceId: source.id,
-    decision: "verified",
-    method: "validator inspected the canonical source fixture",
-    checkedMaterial: "title, authors, and publication locator",
-    auditEvidence: [
-      { reference: source.locator, kind: "source", observation: "Canonical source locator matched the registered source identity." },
-      { reference: VALIDATION_EVIDENCE_PATH, kind: "capture", observation: "Local validation capture records the inspected metadata." }
-    ]
-  });
+    {
+      method: "trusted validator fixture inspected the canonical captured source",
+      checkedMaterial: "captured source material, title, authors, and publication locator",
+      auditEvidence: [
+        { reference: source.locator, kind: "source", observation: "Canonical source locator matched the registered source identity." },
+        { reference: VALIDATION_EVIDENCE_PATH, kind: "capture", observation: "Local validation capture records the inspected metadata." }
+      ]
+    }
+  );
   assert.equal(verifiedSource.source.lifecycle, "verified");
   assert.equal(verifiedSource.verification.sourceId, source.id);
   assert.equal(verifiedSource.verification.fingerprint, verifiedSource.source.fingerprint);
@@ -1091,7 +1094,11 @@ async function main() {
     requireFullPreActionGuidance(queueCard.preActionGuidance, { surface: "dove.operator", primaryRole: "planner" });
   }
 
-  const operatorRun = await callTool("run_dove_operator", { confirmed: true, runId: "validator-operator-run" });
+  const operatorRun = await callOperationalFailureTool(
+    "run_dove_operator",
+    { confirmed: true, runId: "validator-operator-run" }
+  );
+  assert.equal(operatorRun.status, "blocked-boundary");
   requirePublicResultCard(operatorRun.resultCard, { surface: "dove.operator" });
   requirePreActionGuidanceSummary(operatorRun.preActionGuidanceSummary, { surface: "dove.operator", primaryRole: "planner" });
 

@@ -2,6 +2,7 @@ import { ARTIFACT_PATHS } from "./schema.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { loadBoard, upsertSystemOrchestrationBoard } from "./orchestration.mjs";
+import { assertReviewProofBoundaryTransition } from "./review-proof.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, extractCitationKeysFromText, nowIso, readJson, readText, writeJson, writeText, listDraftFiles } from "./workspace.mjs";
@@ -87,6 +88,7 @@ export function upsertClaims(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-claims", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-claims", args);
   assertFollowThroughReady(root, "Updating evidence-backed claims", args);
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "plan", "planner", "Updating evidence-backed claims");
   const current = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });

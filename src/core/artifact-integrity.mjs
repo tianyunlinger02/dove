@@ -315,7 +315,7 @@ function completionPolicyContext(options = {}) {
 export function isExternalArtifactReference(value) {
   const text = String(value ?? "").trim();
   return /^https?:\/\/[^\s]+$/iu.test(text)
-    || /^(?:doi|arxiv|source):[^\s]+$/iu.test(text)
+    || /^(?:doi|arxiv|source|note):[^\s]+$/iu.test(text)
     || /^10\.\d{4,9}\/[^\s]+$/u.test(text);
 }
 
@@ -1510,7 +1510,7 @@ export function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
   const evidencePaths = normalizeStringArray(evidence.evidencePaths);
   const localEvidencePaths = evidencePaths.filter((item) => !isExternalArtifactReference(item));
   const externalEvidenceRefs = evidencePaths.filter(isExternalArtifactReference);
-  const sourceEvidenceRefs = externalEvidenceRefs.filter((item) => item.startsWith("source:"));
+  const sourceEvidenceRefs = externalEvidenceRefs.filter((item) => item.startsWith("source:") || item.startsWith("note:"));
   const eligibleSourceEvidenceRefs = sourceEvidenceRefs.filter((item) => eligibleSourceReferences.has(item));
   const pathEvidence = completionPathEvidence(root, localEvidencePaths, policy, inspectOptions);
   const criteria = (Array.isArray(evidence.verifiedCriteria) ? evidence.verifiedCriteria : []).map((criterion) => {
@@ -1518,7 +1518,7 @@ export function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
     const criterionLocalEvidencePaths = criterionEvidencePaths.filter((item) => !isExternalArtifactReference(item));
     const criterionExternalEvidenceRefs = criterionEvidencePaths.filter(isExternalArtifactReference);
     const criterionEligibleSourceEvidenceRefs = criterionExternalEvidenceRefs
-      .filter((item) => item.startsWith("source:"))
+      .filter((item) => item.startsWith("source:") || item.startsWith("note:"))
       .filter((item) => eligibleSourceReferences.has(item));
     const criterionPathEvidence = completionPathEvidence(root, criterionLocalEvidencePaths, policy, inspectOptions);
     const negativeOutcome = negativeOutcomeInspection(root, criterion, criterionPathEvidence, inspectOptions);

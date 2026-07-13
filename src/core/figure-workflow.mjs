@@ -352,7 +352,7 @@ function statusFor(prepared, imported, figureQa) {
     return "blocked-boundary";
   }
   if (imported) {
-    return figureQa.issueCount === 0 ? "validated" : "qa-needs-attention";
+    return figureQa.issueCount === 0 && imported.independentReviewProof ? "validated" : "qa-needs-attention";
   }
   if ((prepared.missingRequirementIds ?? []).length > 0) {
     return "blocked-missing-materials";
@@ -449,17 +449,22 @@ function figureBoundaryFor(status, prepared, validation, figureQa, figureId, run
     };
   }
   if (status === "qa-needs-attention") {
+    const proofMissing = figureQa.issueCount === 0;
     return {
       id: `${figureId}-${runId}-qa-needs-attention`,
       type: "verification-failed",
-      reason: `Figure ${figureId} has ${figureQa.issueCount} review issue(s) to fix before it is ready.`,
-      requiredInputs: ["current-figure-review-findings"],
-      requiredActions: ["review-current-figure", "resolve-current-figure-issues"],
+      reason: proofMissing
+        ? `Figure ${figureId} has current diagnostics but lacks independent Reviewer proof bound to the current final SVG hash.`
+        : `Figure ${figureId} has ${figureQa.issueCount} diagnostic issue(s) to fix before independent review.`,
+      requiredInputs: proofMissing ? ["current-final-svg-isolated-review-proof"] : ["current-figure-diagnostic-findings"],
+      requiredActions: proofMissing
+        ? ["prepare-isolated-review-for-current-final-svg", "import-coherent-isolated-review"]
+        : ["resolve-current-figure-diagnostics", "rerun-figure-workflow", "obtain-current-final-svg-isolated-review-proof"],
       artifactRefs,
       nextAction: "project:dove.review",
-      ownerRole: "builder",
-      nextRole: "reviewer",
-      detail: { implementationBoundaryType: "needs-review" }
+      ownerRole: proofMissing ? "reviewer" : "builder",
+      nextRole: proofMissing ? null : "reviewer",
+      detail: { implementationBoundaryType: proofMissing ? "missing-review-proof" : "needs-review" }
     };
   }
   return null;

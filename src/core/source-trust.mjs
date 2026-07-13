@@ -1,10 +1,17 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 
 import { inspectDeclaredPath } from "./artifact-integrity.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { nowIso, readJson, writeJson } from "./workspace.mjs";
 
 export const SOURCE_LIFECYCLE_STATES = Object.freeze(["candidate", "verified", "rejected"]);
+
+const TRUSTED_SOURCE_VERIFICATION_ISSUERS = new Map([
+  ["dove-reviewer", "reviewer"],
+  ["dove-system", "system"]
+]);
 
 function normalizeText(value) {
   return typeof value === "string" ? value.trim().replace(/\s+/gu, " ") : "";
@@ -59,6 +66,27 @@ export function sourceIdentityFingerprint(source = {}) {
   return crypto.createHash("sha256").update(JSON.stringify(canonicalSourceIdentity(source))).digest("hex");
 }
 
+function verificationMaterialState(root, materialPath) {
+  const normalizedPath = normalizeText(materialPath);
+  if (!normalizedPath) return { valid: false, reason: "source-verification-material-missing" };
+  const inspection = inspectDeclaredPath(root, normalizedPath, { requireNonEmpty: true });
+  if (inspection.status !== "existing") {
+    return { valid: false, reason: `source-verification-material-${inspection.status}` };
+  }
+  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  const fullPath = path.resolve(root, canonicalPath);
+  const materialHash = crypto.createHash("sha256").update(fs.readFileSync(fullPath)).digest("hex");
+  return { valid: true, materialPath: canonicalPath, materialHash };
+}
+
+function trustedVerificationProvenance(verification = {}) {
+  const issuer = normalizeText(verification.issuer);
+  const issuerRole = normalizeText(verification.issuerRole).toLowerCase();
+  const expectedRole = TRUSTED_SOURCE_VERIFICATION_ISSUERS.get(issuer);
+  if (!expectedRole || issuerRole !== expectedRole) return false;
+  return normalizeText(verification.provenance) === "trusted-internal-transition";
+}
+
 export function readSourceTrustState(root) {
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 2, items: [], updatedAt: null });
   const verifications = readJson(root, ARTIFACT_PATHS.sourceVerifications, { version: 1, items: [], updatedAt: null });
@@ -75,12 +103,15 @@ export function sourceReferenceMap(sources = []) {
   ].filter(Boolean)));
 }
 
-export function sourceEligibility(source, verifications = []) {
+export function sourceEligibility(source, verifications = [], options = {}) {
   if (!source) return { eligible: false, reason: "unknown-source", source: null, verification: null };
   const verification = [...verifications].reverse().find((item) => item.sourceId === source.id) ?? null;
   if (!verification) return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: null };
   if (verification.decision !== "verified") {
     return { eligible: false, reason: `source-${verification.decision ?? source.lifecycle ?? "candidate"}`, source, verification };
+  }
+  if (!trustedVerificationProvenance(verification)) {
+    return { eligible: false, reason: "source-verification-untrusted-provenance", source, verification };
   }
   const fingerprint = sourceIdentityFingerprint(source);
   if (verification.fingerprint !== fingerprint) {
@@ -90,6 +121,17 @@ export function sourceEligibility(source, verifications = []) {
   if (!verification.packetId || !sourcePacketIds.has(verification.packetId)) {
     return { eligible: false, reason: "source-packet-binding-mismatch", source, verification };
   }
+  if (options.root) {
+    const material = verificationMaterialState(options.root, verification.materialPath);
+    if (!material.valid) {
+      return { eligible: false, reason: material.reason, source, verification };
+    }
+    if (!verification.materialHash || verification.materialHash !== material.materialHash) {
+      return { eligible: false, reason: "source-verification-material-changed", source, verification };
+    }
+  } else if (!verification.materialPath || !verification.materialHash) {
+    return { eligible: false, reason: "source-verification-material-unavailable", source, verification };
+  }
   return { eligible: true, reason: "verified-source", source, verification };
 }
 
@@ -98,7 +140,41 @@ export function evaluateSourceReferences(root, references = []) {
   const byReference = sourceReferenceMap(sources.items ?? []);
   return references.map((reference) => {
     const source = byReference.get(reference) ?? null;
-    return { reference, ...sourceEligibility(source, verifications.items ?? []) };
+    return { reference, ...sourceEligibility(source, verifications.items ?? [], { root }) };
+  });
+}
+
+export function evaluateNoteReferences(root, references = [], packetId = null) {
+  const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
+  const { sources, verifications } = readSourceTrustState(root);
+  const bySource = sourceReferenceMap(sources.items ?? []);
+  const normalizedPacketId = normalizeText(packetId);
+  return references.map((reference) => {
+    const note = (notes.items ?? []).find((item) => item.id === reference) ?? null;
+    if (!note) return { reference, eligible: false, reason: "unknown-note", note: null, sources: [] };
+    if (!normalizedPacketId || !(note.packetIds ?? []).includes(normalizedPacketId)) {
+      return { reference, eligible: false, reason: "note-packet-binding-mismatch", note, sources: [] };
+    }
+    const sourceIds = Array.isArray(note.sourceIds) ? note.sourceIds : [];
+    if (sourceIds.length === 0) {
+      return { reference, eligible: false, reason: "note-source-missing", note, sources: [] };
+    }
+    const sourceEvaluations = sourceIds.map((sourceId) => {
+      const source = bySource.get(sourceId) ?? null;
+      const eligibility = sourceEligibility(source, verifications.items ?? [], { root });
+      if (eligibility.eligible && eligibility.verification?.packetId !== normalizedPacketId) {
+        return { reference: sourceId, ...eligibility, eligible: false, reason: "source-verification-packet-mismatch" };
+      }
+      return { reference: sourceId, ...eligibility };
+    });
+    const failure = sourceEvaluations.find((item) => !item.eligible);
+    return {
+      reference,
+      eligible: !failure,
+      reason: failure ? failure.reason : "verified-note",
+      note,
+      sources: sourceEvaluations
+    };
   });
 }
 
@@ -112,7 +188,7 @@ export function querySources(root, args = {}) {
     .filter((source) => !sourceId || [source.id, source.citationKey, source.locator, source.url, source.doi].includes(sourceId))
     .filter((source) => !packetId || (source.packetIds ?? []).includes(packetId))
     .map((source) => {
-      const eligibility = sourceEligibility(source, verifications.items ?? []);
+      const eligibility = sourceEligibility(source, verifications.items ?? [], { root });
       return {
         ...source,
         eligibility: {
@@ -207,8 +283,8 @@ export function prepareSourceVerification(root, source, args = {}, packetId = nu
   if (!auditEvidenceMatchesSource(source, auditEvidence)) {
     throw new Error("verify_source requires at least one auditEvidence source reference matching the registered source identity.");
   }
-  if (!SOURCE_LIFECYCLE_STATES.slice(1).includes(decision)) {
-    throw new Error("verify_source decision must be verified or rejected.");
+  if (decision !== "rejected") {
+    throw new Error("Public verify_source only records rejection. Positive verification requires a trusted internal Reviewer/system transition that is not exposed through this API.");
   }
   const normalizedPacketId = normalizeText(packetId);
   if (!normalizedPacketId || !(Array.isArray(source.packetIds) ? source.packetIds : []).includes(normalizedPacketId)) {

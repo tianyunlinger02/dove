@@ -11,10 +11,11 @@ import {
   evaluateEvidence,
   initProject,
   loadBoard,
+  prepareIsolatedReview,
+  importIsolatedReview,
   readJson,
   refreshWiki,
   runReviewLoop,
-  sourceIdentityFingerprint,
   syncCitations,
   upsertClaims,
   upsertDraft,
@@ -22,10 +23,12 @@ import {
   upsertExperimentResult,
   upsertFigurePlan,
   upsertNote,
-  upsertOutline
+  upsertOutline,
+  writeJson
 } from "../../src/core/internal-api.mjs";
 import { appendSystemHandoff, upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
+import { seedTrustedSourceVerification } from "../helpers/source-verification-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -33,27 +36,25 @@ function tempRoot() {
 }
 
 function writeVerifiedSources(root, items, packetId = "evidence-main-packet") {
-  const normalized = items.map((item) => {
-    const source = { ...item, lifecycle: "verified", packetIds: item.packetIds ?? [packetId] };
-    return { ...source, fingerprint: sourceIdentityFingerprint(source) };
-  });
+  const normalized = items.map((item) => ({
+    ...item,
+    lifecycle: "candidate",
+    packetIds: item.packetIds ?? [packetId]
+  }));
   fs.mkdirSync(path.join(root, ".dove", "sources"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".dove", "sources", "index.json"), JSON.stringify({ version: 2, items: normalized, updatedAt: null }, null, 2));
-  fs.writeFileSync(path.join(root, ".dove", "sources", "verifications.json"), JSON.stringify({
-    version: 1,
-    items: normalized.map((source, index) => ({
-      id: `fixture-verification-${index + 1}`,
-      sourceId: source.id,
-      packetId,
-      fingerprint: source.fingerprint,
-      decision: "verified",
-      method: "test fixture inspected source metadata",
-      checkedMaterial: "fixture title, authors, locator, and publication metadata",
-      auditEvidence: [{ reference: source.locator, kind: "source", observation: `Verified fixture identity for ${source.id}.` }],
-      checkedAt: new Date(0).toISOString()
-    })),
-    updatedAt: new Date(0).toISOString()
-  }, null, 2));
+  fs.writeFileSync(
+    path.join(root, ".dove", "sources", "index.json"),
+    `${JSON.stringify({ version: 2, items: normalized, updatedAt: null }, null, 2)}
+`
+  );
+  fs.writeFileSync(
+    path.join(root, ".dove", "sources", "verifications.json"),
+    `${JSON.stringify({ version: 1, items: [], updatedAt: null }, null, 2)}
+`
+  );
+  for (const source of normalized) {
+    seedTrustedSourceVerification(root, source.id, packetId);
+  }
 }
 
 function seedTaskPacket(root, packetId = "evidence-main-packet") {
@@ -76,9 +77,8 @@ function seedTaskPacket(root, packetId = "evidence-main-packet") {
     packetContextPath: `.dove/context/packets/${packetId}.json`,
     updatedAt: timestamp
   };
-  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
-  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
-  fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  writeJson(root, packet.packetPath, packet);
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, { version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp });
   return packetId;
 }
 
@@ -111,6 +111,7 @@ test("strict mode blocks drafting before evidence exists", () => {
   ensureTestWorkspace(root);
   initProject(root, { strictMode: true });
   seedTaskPacket(root);
+  writeVerifiedSources(root, [{ id: "strict-stage-source", citationKey: "strict-stage-source", title: "Strict stage source", authors: [], year: 2026 }]);
 
   assert.throws(() => {
     upsertDraft(root, {
@@ -127,6 +128,7 @@ test("strict mode requires the real planning stage before outlining", () => {
   ensureTestWorkspace(root);
   initProject(root, { strictMode: true });
   seedTaskPacket(root);
+  writeVerifiedSources(root, [{ id: "strict-stage-source", citationKey: "strict-stage-source", title: "Strict stage source", authors: [], year: 2026 }]);
 
   assert.throws(() => {
     upsertOutline(root, {
@@ -505,6 +507,8 @@ test("finalization is blocked while claim bridges remain held for review", () =>
     claimId: "claim-1",
     outcome: "supports"
   });
+  const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [] });
+  assert.equal(bridgeLog.items[0].bridgeStatus, "held-for-review");
 
   appendSystemHandoff(root, {
     fromRole: "experiment-planner",
@@ -514,29 +518,41 @@ test("finalization is blocked while claim bridges remain held for review", () =>
     nextActions: ["Run a coherent review entry to exercise finalize gate path"]
   });
 
-  appendReviewLog(root, {
+  const preparedReview = prepareIsolatedReview(root, {
     packetId,
-    stage: "integrity-override",
-    scope: "blocked bridge check",
+    runId: "blocked-bridge-isolated-review",
+    reviewedArtifactPaths: [ARTIFACT_PATHS.claims]
+  });
+  fs.writeFileSync(path.join(root, preparedReview.reportPath), "# Isolated review\n\nClaims are coherent; bridge integrity remains separately gated.\n", "utf8");
+  fs.writeFileSync(path.join(root, preparedReview.handoffPath), `${JSON.stringify({
+    runId: preparedReview.runId,
+    status: "completed",
     verdict: "coherent",
-    summary: "Manually recorded coherent verdict to test finalize gating by claim bridges.",
-    reviewedArtifactPaths: [ARTIFACT_PATHS.claims],
-    autoGeneratedReviewReport: true,
+    reviewerId: "bridge-isolated-reviewer",
+    summary: "Claims are coherent; bridge integrity remains separately gated.",
+    inputPath: preparedReview.inputPath,
+    inputSha256: preparedReview.inputSha256,
+    reportPath: preparedReview.reportPath,
+    reviewedArtifactPaths: preparedReview.reviewedArtifactPaths,
     findings: [],
     actionItems: []
-  });
+  }, null, 2)}\n`, "utf8");
+  const importedReview = importIsolatedReview(root, { packetId, runId: preparedReview.runId });
+  assert.equal(importedReview.authoritative, false);
+  assert.equal(importedReview.independentReviewProof, null);
+  assert.equal(importedReview.reviewProofRequired, true);
 
-  appendSystemHandoff(root, {
+  assert.throws(() => appendSystemHandoff(root, {
     fromRole: "reviewer",
     toRole: "version-analyst",
     phase: "versions",
     summary: "Attempt to move to versioning after gated coherent review.",
     nextActions: ["Create blocked-version"]
-  });
+  }), /review-proof-required.*authorized independent Reviewer proof/u);
 
   assert.throws(() => {
     createVersionSnapshot(root, { packetId, versionId: "blocked-version" });
-  }, /held for review|bridge|integrity/);
+  }, /authorized independent Reviewer proof|at least one current final draft or final figure artifact/);
   });
 });
 test("citation sync writes references and wiki/rebuttal helpers create artifacts", () => {

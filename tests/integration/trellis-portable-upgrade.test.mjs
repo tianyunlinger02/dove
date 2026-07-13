@@ -28,15 +28,32 @@ import {
   upsertClaims,
   upsertExperimentPlan,
   upsertNote,
-  verifySource
 } from "../../src/core/internal-api.mjs";
 import { appendSystemHandoff, upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
+import { seedTrustedSourceVerification } from "../helpers/source-verification-fixture.mjs";
 
 function tempRoot() {
   return createTempRoot("dove-trellis-");
+}
+
+function snapshotRelativeFileContents(root) {
+  const snapshot = {};
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const fullPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+      const relativePath = path.relative(root, fullPath).split(path.sep).join("/");
+      snapshot[relativePath] = fs.readFileSync(fullPath).toString("base64");
+    }
+  };
+  walk(root);
+  return snapshot;
 }
 
 function seedTaskPacket(root, packetId = "trellis-main-packet") {
@@ -82,13 +99,7 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
     year: 2026,
     locator: "https://example.org/test-source"
   });
-  verifySource(root, {
-    sourceId: source.id,
-    decision: "verified",
-    method: "test fixture inspected the canonical publication record",
-    checkedMaterial: "source title, authors, year, and publication metadata",
-    auditEvidence: [{ reference: source.locator, kind: "source", observation: `Verified fixture identity for ${source.id}.` }]
-  });
+  seedTrustedSourceVerification(root, source.id, "trellis-main-packet");
   const note = upsertNote(root, {
     title: "Packet note",
     sectionId: "introduction",
@@ -376,7 +387,7 @@ test("operator lessons persist durable retrospectives without importing raw Trel
   });
 });
 
-test("remediation packs stay durable and visible through operator-facing surfaces", () => {
+test("remediation packs derive from authoritative state in memory without rewriting durable mirrors", () => {
   const root = tempRoot();
   return runFixtureMutation(root, "remediation-packs-stay-durable-and-visible-through-operator-facing-surfa", () => {
   ensureTestWorkspace(root);
@@ -427,53 +438,45 @@ test("remediation packs stay durable and visible through operator-facing surface
     updatedAt: null
   });
 
+  const before = snapshotRelativeFileContents(root);
+  const durableRemediationPackBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaRemediationPacks)).toString("base64");
+  const durableOperatorPlaybooksBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorPlaybooks)).toString("base64");
   const metaOptimize = queryMetaOptimize(root);
   const workspaceIndex = queryWorkspaceIndex(root);
-  const navigation = fs.readFileSync(path.join(root, ARTIFACT_PATHS.navigationReport), "utf8");
-  const sessionSummaryText = fs.readFileSync(path.join(root, ARTIFACT_PATHS.sessionSummary), "utf8");
-  const operatorPlaybooksFile = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorPlaybooks), "utf8"));
-  const remediationPackFile = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaRemediationPacks), "utf8"));
   const researcherManifest = readRoleContextManifest(root, "researcher");
   const phaseManifest = readPhaseContextManifest(root, workspaceIndex.boardPhase);
   const currentActionBundle = readActionContextBundle(root);
+  const remediationPacks = metaOptimize.remediationPacks;
+  const operatorPlaybooks = metaOptimize.operatorPlaybooks;
 
-  assert.equal(metaOptimize.remediationPacks.proposalOnly, true);
-  assert.equal(metaOptimize.remediationPacks.summary.packCount >= 1, true);
-  assert.equal(remediationPackFile.summary.packCount, metaOptimize.remediationPacks.summary.packCount);
-  assert.equal(remediationPackFile.packs[0].proposalOnly, true);
-  assert.equal(remediationPackFile.packs[0].noAutoApply, true);
-  assert.equal(remediationPackFile.packs[0].reviewConcerns.some((item) => item.id === "pack-review-gap"), true);
-  assert.equal(remediationPackFile.packs.some((pack) => pack.figureQa.some((item) => item.id === "pack-figure-issue")), true);
-  assert.equal(remediationPackFile.packs[0].workspacePointers.includes(ARTIFACT_PATHS.workspaceIndex), true);
-  assert.equal(remediationPackFile.packs[0].manualNextActions.length > 0, true);
-  assert.equal(operatorPlaybooksFile.summary.playbookCount, 0);
-  assert.equal(workspaceIndex.metaOptimize.remediationPacks.packCount, remediationPackFile.summary.packCount);
+  assert.deepEqual(snapshotRelativeFileContents(root), before);
+  assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaRemediationPacks)).toString("base64"), durableRemediationPackBefore);
+  assert.equal(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorPlaybooks)).toString("base64"), durableOperatorPlaybooksBefore);
+
+  assert.equal(remediationPacks.proposalOnly, true);
+  assert.equal(remediationPacks.summary.packCount >= 1, true);
+  assert.equal(remediationPacks.packs[0].proposalOnly, true);
+  assert.equal(remediationPacks.packs[0].noAutoApply, true);
+  assert.equal(remediationPacks.packs[0].reviewConcerns.some((item) => item.id === "pack-review-gap"), true);
+  assert.equal(remediationPacks.packs.some((pack) => pack.figureQa.some((item) => item.id === "pack-figure-issue")), true);
+  assert.equal(remediationPacks.packs[0].workspacePointers.includes(ARTIFACT_PATHS.workspaceIndex), true);
+  assert.equal(remediationPacks.packs[0].manualNextActions.length > 0, true);
+  assert.equal(operatorPlaybooks.summary.playbookCount, 0);
+  assert.equal(workspaceIndex.metaOptimize.remediationPacks.packCount, remediationPacks.summary.packCount);
   assert.equal(workspaceIndex.metaOptimize.remediationPacks.packsPath, ARTIFACT_PATHS.metaRemediationPacks);
-  assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.playbookCount, operatorPlaybooksFile.summary.playbookCount);
-  assert.equal(researcherManifest.operatorGuidance.remediationPack.id, remediationPackFile.packs[0].id);
+  assert.equal(workspaceIndex.metaOptimize.operatorPlaybooks.playbookCount, operatorPlaybooks.summary.playbookCount);
+  assert.equal(researcherManifest.operatorGuidance.remediationPack.id, remediationPacks.packs[0].id);
   assert.equal(researcherManifest.operatorGuidance.remediationPack.acceptanceCriteria.length > 0, true);
   assert.equal(researcherManifest.operatorGuidance.remediationPack.conversionHints.length > 0, true);
   assert.equal(researcherManifest.operatorGuidance.remediationPack.rankedConversionPaths.length > 0, true);
   assert.equal(["actionable", "partially-actionable", "advisory-only"].includes(researcherManifest.operatorGuidance.remediationPack.readiness.operatorReadiness), true);
   assert.equal(researcherManifest.operatorGuidance.remediationPack.manualNextActions.length > 0, true);
   assert.equal(researcherManifest.operatorGuidance.familyPlaybook, null);
-  assert.equal(phaseManifest.operatorGuidance.remediationPack.id, remediationPackFile.packs[0].id);
+  assert.equal(phaseManifest.operatorGuidance.remediationPack.id, remediationPacks.packs[0].id);
   assert.equal(phaseManifest.operatorGuidance.familyPlaybook, null);
-  assert.equal(currentActionBundle.operatorGuidance.remediationPack.id, remediationPackFile.packs[0].id);
+  assert.equal(currentActionBundle.operatorGuidance.remediationPack.id, remediationPacks.packs[0].id);
   assert.equal(currentActionBundle.operatorGuidance.familyPlaybook, null);
   assert.match(currentActionBundle.operatorGuidance.taxonomyPressure.overview, /typed wiki taxonomy pressure/i);
-  assert.match(navigation, /Remediation packs:/);
-  assert.match(navigation, /Remediation pack readiness:/);
-  assert.match(navigation, /Family playbooks:/);
-  assert.match(navigation, /Family playbook readiness:/);
-  assert.match(navigation, /Remediation packs path:/);
-  assert.match(navigation, /Family playbooks path:/);
-  assert.match(sessionSummaryText, /Remediation packs:/);
-  assert.match(sessionSummaryText, /Remediation pack readiness:/);
-  assert.match(sessionSummaryText, /Family playbooks:/);
-  assert.match(sessionSummaryText, /Family playbook readiness:/);
-  assert.match(sessionSummaryText, /Remediation packs path:/);
-  assert.match(sessionSummaryText, /Family playbooks path:/);
   assert.ok(fs.existsSync(path.join(root, ".dove", "meta", "remediation-packs.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "meta", "operator-playbooks.json")));
   });

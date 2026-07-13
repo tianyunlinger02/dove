@@ -10,11 +10,11 @@ Convert demand like mission intake, then after confirmation run a few approved w
 ## Daily use
 
 - Use this when the user wants Dove to continue through a few approved steps after the task is clear.
-- When the work depends on current outside information, public docs, papers, or provider behavior, run a visible no-key search/retrieval step early and verify candidates before writing evidence.
+- When the work depends on current outside information, public docs, papers, or provider behavior, run a visible no-key search/retrieval step early, register useful material as candidates, and stop at the trust boundary unless current trusted internal verification makes the material eligible as evidence.
 - Auto may start from a new demand or an existing task, but it still needs an understandable proposal before spending its work limit.
 - Targeting: Use the selected task when it is obvious; otherwise ask the operator to choose or approve a new task.
-- Confirmation: Require explicit approval of the target, work limit, and visible steps before running.
-- Outcome: Each step either completes useful work with evidence or stops at a clear blocker, review need, missing material, or budget limit.
+- Confirmation: Require a separate explicit approval of the target, work limit, and visible steps before running; mission confirmation never confirms auto.
+- Outcome: An approved in-session run completes useful work with evidence or stops at a clear blocker, review need, missing material, or work limit.
 
 ## Examples
 
@@ -34,9 +34,9 @@ Convert demand like mission intake, then after confirmation run a few approved w
 9. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
 10. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
 11. Ask for approval before making changes or spending the proposed work rounds.
-12. Propose the target, work limit, and visible steps before running.
+12. Propose the target, work limit, and visible steps before running, and require a separate explicit auto confirmation even if mission materialization was already confirmed.
 13. Run only in the current approved interaction; never schedule hidden background continuation.
-14. For research or current-information work, use visible search/retrieval when needed and collect real verified sources or materials before claiming success.
+14. For research or current-information work, use visible search/retrieval when needed, register real candidate material, and claim evidence-backed success only when current trusted internal verification makes the referenced source eligible; otherwise stop at the trust boundary.
 15. Stop clearly at completion, blocker, review need, missing material, or budget limit.
 16. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
 17. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.

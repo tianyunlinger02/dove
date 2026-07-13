@@ -111,7 +111,9 @@ var AGENT_WORKFLOW_CONSTRAINTS = [
   "Reviewer and audit work may inspect evidence and record explicit review state, but must stay read-only with respect to Builder outputs unless an operator explicitly asks to record review/revision artifacts.",
   "Treat status as the project command center and mission as a durable work contract/progress object; rank missing executable contracts, missing source/material inputs, ready Builder execution, verification gaps, reviewer/audit needs, and reconciliation above optional mission details.",
   'Dove `.dove/` durable state participates in host rollback only through host-tracked file edits: request `mutationMode: "patch-plan"`, inspect the returned operations, and apply them with the host\'s tracked file-edit mechanism. Direct CLI/MCP `direct-process` writes remain functional but rollback-unverified; git presence is not proof, and host rollback must not be routed through `reset_dove_version`.',
-  "Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work."
+  "Every read or query path is strictly zero-write: it must return `writes: []`, must not bootstrap or refresh derived state, and must not be combined with a mutation in the same query call.",
+  "Public follow-through recording is advisory bookkeeping only and never grants execution authority; public `materialize_guidance_packet` and `launch_dove_mission` fail closed because only a trusted system-owned runtime approval can authorize those transitions.",
+  "Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; mission stops after contract materialization and handoff, auto is a separately confirmed bounded foreground run, and operator advances only from canonical supplied `taskResults[]`."
 ];
 var COMMAND_SURFACES_BASE = [
   {
@@ -132,7 +134,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "explicit-approval",
     summary: "Convert a user demand into a confirmable Dove task contract, then hand off to the recommended next workflow.",
     requiredTools: ["create_dove_task"],
-    constraints: ["Require an existing init goal or make the proposed init goal explicit before converting user demand into a mission task contract.", "Treat the operator input as natural-language demand, not as an already-created task.", "Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, autonomous checklist proposal, compact task card, durable `workContract`, and canonical `executionContract` with action, implementation, materials/readFirst requirements, convergence criteria, evidence requirements, and failure routes.", "After returning the proposal, use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) with options: approve and materialize the contract, adjust the contract, or cancel. Approval must replay the proposal's complete returned `confirmArgs`; when using the listed CLI route, run the exact confirmation command returned by that proposal, including its proposal token and fixed mutation mode. Never reconstruct a fresh `dove mission --goal ... --confirmed` request.", "Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.", "User-created mission tasks default to level 3, while explicit operator-created levels 1, 2, 3, or deeper are allowed under the level-0 init goal.", "Autonomously decide whether a checklist is needed; system-created checklist/subtask packets must be children of their mission and must have level greater than the parent mission level.", "After materialization, stop at the contract handoff: return `nextAction`, `recommendedNextCommand`, `recommendedRoutes`, and `handoffRoutes` from the task's work contract instead of executing or recording work.", "Do not claim the mission performed source, note, draft, figure, experiment, review, code, or provider work; execution belongs to `dove.auto`, `dove.operator`, domain workflows, or explicit tool calls after the contract exists.", "Do not call `record_dove_mission_pass` as part of `/dove:mission`; result recording is a separate explicit tool for work that already happened.", "If required materials are missing while defining the contract, keep the contract proposal honest about blockers and evidence expectations instead of inventing results.", "When the converted task is a planning task, its done criteria should require explicit executable child mission contracts before any later execution flow can mark it completed.", "Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`."]
+    constraints: ["Require an existing init goal or make the proposed init goal explicit before converting user demand into a mission task contract.", "Treat the operator input as natural-language demand, not as an already-created task.", "Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, autonomous checklist proposal, compact task card, durable `workContract`, and canonical `executionContract` with action, implementation, materials/readFirst requirements, convergence criteria, evidence requirements, and failure routes.", "After returning the proposal, use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) with options: approve and materialize the contract, adjust the contract, or cancel. Approval must replay the proposal's complete returned `confirmArgs`; when using the listed CLI route, run the exact confirmation command returned by that proposal, including its proposal token and fixed mutation mode. Never reconstruct a fresh `dove mission --goal ... --confirmed` request.", "Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.", "User-created mission tasks default to level 3, while explicit operator-created levels 1, 2, 3, or deeper are allowed under the level-0 init goal.", "Autonomously decide whether a checklist is needed; system-created checklist/subtask packets must be children of their mission and must have level greater than the parent mission level.", "After materialization, stop at the contract handoff: return `nextAction`, `recommendedNextCommand`, `recommendedRoutes`, and `handoffRoutes` from the task's work contract instead of executing or recording work. This natural handoff does not grant execution authority.", "Do not claim the mission performed source, note, draft, figure, experiment, review, code, or provider work; execution belongs to a separately invoked and authorized `dove.auto`, `dove.operator`, domain workflow, or explicit tool call after the contract exists.", "Do not call `record_dove_mission_pass` as part of `/dove:mission`; result recording is a separate explicit tool for work that already happened.", "If required materials are missing while defining the contract, keep the contract proposal honest about blockers and evidence expectations instead of inventing results.", "When the converted task is a planning task, its done criteria should require explicit executable child mission contracts before any later execution flow can mark it completed.", "Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`."]
   },
   {
     id: "dove.auto",
@@ -162,7 +164,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "explicit-approval",
     summary: "Run one approved operator pass over safe built-in steps, explicit results, and optional blocker-investigation planning.",
     requiredTools: ["run_dove_operator"],
-    constraints: ["First call `run_dove_operator` without confirmation to return the proposal-only execution contract with compact `queueSummary`, small `queuePreview`, and `writes: []`; do not request full queue arrays unless the operator explicitly asks for `includeQueueDetails: true`.", "Use interactive confirmation controls when the host supports them before passing `confirmed: true`.", "Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.", "For ready and in-progress missions, run one safe internal workflow step when available or collect one real host pass result in order; pass per-task results to `run_dove_operator` with evidence, verificationEvidencePaths, and verifiedCriteria so Dove records lifecycle and runtime state only when the executable contract is covered.", "Do not claim real engineering, paper, or experiment work happened when neither a safe internal step nor an actual host pass result exists; host-pass-required missions without taskResults must remain unchanged, and host results without convergence coverage must become explicit verification/material boundaries with no fake execution.", "When no safe internal step, missing step material, or actual host pass result exists, do not persist an `awaiting-host-pass-result` boundary just to show activity; return the material-specific requiredActions and keep durable writes empty unless another real operator action occurred.", "If a host-side search/fetch/shell/MCP safety classifier or tool-availability failure prevents collecting the pass result, pass a blocked task result with boundaryType `host-tool-blocked` and requiredActions naming the failed host tool instead of leaving the mission in-progress.", "Preserve durable role handoff metadata while running queue passes; do not expose planner/builder/reviewer as separate slash commands.", 'For blocked missions, default to proposal-only blocker-investigation guidance and do not write child missions; create pending child investigation plan missions only when the operator explicitly requests `blockerInvestigationMode: "create"` or `createBlockedInvestigations: true`, then report created and reused counts separately in the localized `resultCard` summary.']
+    constraints: ["First call `run_dove_operator` without confirmation to return the proposal-only execution contract with compact `queueSummary`, small `queuePreview`, and `writes: []`; do not request full queue arrays unless the operator explicitly asks for `includeQueueDetails: true`.", "Use interactive confirmation controls when the host supports them before passing `confirmed: true`.", "Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.", "Use only canonical `taskResults[]` for host-supplied results; reject aliases, maps, inferred results, and result fields outside each canonical task result object.", "For ready and in-progress missions, run one safe internal workflow step when available or collect one real host pass result in order; pass per-task results to `run_dove_operator` with evidence, verificationEvidencePaths, and verifiedCriteria so Dove records lifecycle and runtime state only when the executable contract is covered.", "Do not advance lifecycle, open a synthetic progress boundary, or persist a runtime result for a host-pass-required mission when its canonical `taskResults[]` entry is missing; leave that mission unchanged and return the required material/actions.", "Do not claim real engineering, paper, or experiment work happened when neither a safe internal step nor an actual host pass result exists; host results without convergence coverage must become explicit verification/material boundaries with no fake execution.", "When no safe internal step, missing step material, or actual host pass result exists, do not persist an `awaiting-host-pass-result` boundary just to show activity; return the material-specific requiredActions and keep durable writes empty unless another real operator action occurred.", "If a host-side search/fetch/shell/MCP safety classifier or tool-availability failure prevents collecting the pass result, pass a blocked task result with boundaryType `host-tool-blocked` and requiredActions naming the failed host tool instead of leaving the mission in-progress.", "Preserve durable role handoff metadata while running queue passes; do not expose planner/builder/reviewer as separate slash commands.", 'For blocked missions, default to proposal-only blocker-investigation guidance and do not write child missions; create pending child investigation plan missions only when the operator explicitly requests canonical `blockerInvestigationMode: "create"`, then report created and reused counts separately in the localized `resultCard` summary.']
   },
   {
     id: "dove.lessons",
@@ -192,7 +194,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "guarded-mutation",
     summary: "Collect and organize external material such as web pages, papers, venue templates, reviewer guidelines, rankings, APIs, or operator-provided sources for the selected task.",
     requiredTools: ["query_sources", "register_source", "verify_source"],
-    constraints: ["Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.", "Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.", "When current public information or scholarly discovery is needed, use read-only public no-key network search or visible retrieval to find candidates first, then verify title, locator, DOI/URL, source identity, and citation details before registration.", "Dove network search results are candidate material, not durable source evidence; snippets alone must not become registered sources or claims.", "Never call `register_source` with only a packet id; every new source must include a real title or locator, and source-research auto runs must collect those URLs/templates/guidelines before writing.", "Treat host search output such as `Did 0 searches`, zero results, empty result sets, or unavailable search as a hard retrieval failure; do not describe it as finding official sources, and do not infer locators from memory or prior transcript context.", "Do not call `register_source` when search/fetch returned zero results, safe-domain verification failed, retrieval was blocked, or a network search provider reports unavailable; record or surface a `host-tool-blocked` boundary until verifiable source evidence exists.", "If the host denies or blocks the boundary-recording mutation, stop and report that no durable source or boundary update was written; do not retry another mutating Dove call such as patch-plan without explicit operator approval.", "Use explicit configured providers or operator-provided material; do not hide network/provider calls.", "Link each source to the resolved durable task packet through packetIds.", "Treat source and source-verification JSON ledgers as bookkeeping, not completion artifacts; use typed source:<id> completion evidence only when the latest verification decision is verified and both fingerprint and packet binding match.", "For reviewer-guideline or \u5BA1\u7A3F\u504F\u597D research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact."]
+    constraints: ["Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.", "Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.", "When current public information or scholarly discovery is needed, use read-only public no-key network search or visible retrieval to find candidate material first, then capture the real title, locator, DOI/URL, source identity, and citation details when registering it.", "Every `register_source` write creates or refreshes a candidate only; registration never issues positive verification and candidate material cannot support claims.", "Public `verify_source` is rejection-only. Positive verification is publicly unavailable and can only come from a trusted internal transition bound to captured material, the current source fingerprint, and the packet.", "Dove network search results are candidate material, not durable source evidence; snippets alone must not become registered sources or claims.", "Never call `register_source` with only a packet id; every new source must include a real title or locator, and source-research auto runs must collect those URLs/templates/guidelines before writing.", "Treat host search output such as `Did 0 searches`, zero results, empty result sets, or unavailable search as a hard retrieval failure; do not describe it as finding official sources, and do not infer locators from memory or prior transcript context.", "Do not call `register_source` when search/fetch returned zero results, safe-domain verification failed, retrieval was blocked, or a network search provider reports unavailable; record or surface a `host-tool-blocked` boundary until verifiable source evidence exists.", "If the host denies or blocks the boundary-recording mutation, stop and report that no durable source or boundary update was written; do not retry another mutating Dove call such as patch-plan without explicit operator approval.", "Use explicit configured providers or operator-provided material; do not hide network/provider calls.", "Link each source to the resolved durable task packet through packetIds.", "Treat source and source-verification JSON ledgers as bookkeeping, not completion artifacts; use typed source:<id> completion evidence only when the latest verification decision is verified and both fingerprint and packet binding match.", "For reviewer-guideline or \u5BA1\u7A3F\u504F\u597D research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact."]
   },
   {
     id: "dove.note",
@@ -202,7 +204,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "guarded-mutation",
     summary: "Organize task-bound internal synthesis from registered sources, existing materials, pressure-test results, and operator notes for the selected task.",
     requiredTools: ["upsert_note"],
-    constraints: ["Treat note as internal information consolidation, not external source discovery; external URLs/templates/guidelines must already be registered as sources when they are evidence.", "Use notes to synthesize verified sources, compare candidates, record open questions, or explain why a candidate could not yet become evidence; keep unverified search snippets labeled as candidates.", "For bind/save/deposit/\u6C89\u6DC0 requests, write the synthesized findings here or in `record_document_evidence` after source details is registered.", "Do not create a new note without real synthesis content: summary, quote, claim, or open question.", "Link notes to the resolved durable task packet through packetIds and to relevant sourceIds/artifacts."]
+    constraints: ["Treat note as internal information consolidation, not external source discovery; external URLs/templates/guidelines must already be registered as sources when they are evidence.", "Use notes to synthesize verified sources, compare candidates, record open questions, or explain why a candidate could not yet become evidence; keep unverified search snippets labeled as candidates.", "For bind, save, deposit, or archive requests, write the synthesized findings here or in `record_document_evidence` after source details is registered.", "Do not create a new note without real synthesis content: summary, quote, claim, or open question.", "Link notes to the resolved durable task packet through packetIds and to relevant sourceIds/artifacts."]
   },
   {
     id: "dove.figure",
@@ -212,7 +214,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "guarded-mutation",
     summary: "Turn one user-described figure intent into materials, optional generation/import, caption support, checks, and a clear answer about whether this figure is usable now.",
     requiredTools: ["run_figure_workflow"],
-    constraints: ["Treat the user request as one figure intent; the default result should say whether this figure is ready, what is missing, or what to do next without exposing the material/import/check pipeline as separate user chores.", "Treat the default figure path as a hand-drawn SVG plan: record the backlog item, material bundle, generation prompt, and waiting-for-output state instead of routing the operator to a separate low-level figure-plan write.", "Use the built-in OpenAI image provider only when the operator explicitly selects it or config sets it as default; require `OPENAI_API_KEY` through env-var secret reference and do not store inline API keys.", "Resolve the durable task packet before any figure workflow write, then analyze linked sections, claims, experiments, sources, notes, review concerns, and material hints automatically.", "Use redacted Dove config and env-var secret references for external drawing providers; never store inline API keys, tokens, or secrets.", "Do not mark a final figure ready unless it comes from a validated generation import with durable provenance and caption.", "Captions must explain the figure purpose and linked evidence."]
+    constraints: ["Treat the user request as one figure intent; the default result should say whether this figure is ready, what is missing, or what to do next without exposing the material/import/check pipeline as separate user chores.", "Treat the default figure path as a hand-drawn SVG plan: record the backlog item, material bundle, generation prompt, and waiting-for-output state instead of routing the operator to a separate low-level figure-plan write.", "Use the built-in OpenAI image provider only when the operator explicitly selects it or config sets it as default; require `OPENAI_API_KEY` through env-var secret reference and do not store inline API keys.", "Resolve the durable task packet before any figure workflow write, then analyze linked sections, claims, experiments, sources, notes, review concerns, and material hints automatically.", "Use redacted Dove config and env-var secret references for external drawing providers; never store inline API keys, tokens, or secrets.", "Treat lexical, XML, safety, caption, provenance, and other structural figure QA as diagnostic preflight only, not authoritative validation.", "Set figure status to `validated` only when the current final SVG hash has current authorized independent Reviewer proof in addition to clean diagnostics, durable provenance, and caption support.", "Captions must explain the figure purpose and linked evidence."]
   },
   {
     id: "dove.experience",
@@ -242,7 +244,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "guarded-mutation",
     summary: "Run a local evidence-aware review pass over selected task materials and produce concrete revision guidance.",
     requiredTools: ["run_review_loop"],
-    constraints: ["Default review is a local evidence-aware pass that inspects claims, sources, notes, drafts, experiments, figures, and recorded concerns for the selected task or paper pipeline.", "Do not treat a verdict string as review progress; return concrete findings, action items, missing evidence, or a clear coherent result backed by inspected materials.", "Use isolated audio or external reviewer mode only when the operator explicitly asks for isolated/audio/parallel reviewer review; ordinary review should not inherit broad private transcripts or pretend an external review ran."]
+    constraints: ["Default review performs a local evidence-aware structural preflight over claims, sources, notes, drafts, experiments, figures, and recorded concerns for the selected task or paper pipeline.", "Do not treat a verdict string or a clean local structural scan as authoritative review progress; return concrete findings, action items, missing evidence, or a preflight result.", "A `coherent` result requires current authorized independent Reviewer proof bound to every reviewed artifact hash; without that proof, stop at the Reviewer-owned proof boundary.", "Use isolated audio or external reviewer mode only when the operator explicitly asks for isolated/audio/parallel reviewer review; ordinary review should not inherit broad private transcripts or pretend an external review ran."]
   },
   {
     id: "dove.review-loop",
@@ -250,9 +252,9 @@ var COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "guarded-mutation",
-    summary: "Run one independent local Reviewer pass and return an explicit Builder handoff when revision is required.",
+    summary: "Run one local Reviewer preflight pass and return an explicit Builder handoff when revision is required.",
     requiredTools: ["run_dove_review_loop"],
-    constraints: ["Run exactly one Reviewer pass for the selected packet and descendants.", "Do not modify draft, experience, experiment, or other Builder-owned material in this call.", "If the verdict is non-coherent, return concrete requiredActions and an explicit Builder handoff; revisions and the next Reviewer pass must be separate explicit calls.", "Do not claim iteration counts, configured rounds, or review-until-coherent behavior; do not prepare isolated/audio review unless the operator explicitly asks for that mode."]
+    constraints: ["Run exactly one Reviewer pass for the selected packet and descendants.", "Treat local structural inspection as preflight only; it cannot issue an authoritative `coherent` result without current authorized independent Reviewer proof bound to the complete reviewed artifact hashes.", "Do not modify draft, experience, experiment, or other Builder-owned material in this call.", "If substantive findings make the result non-coherent, return concrete requiredActions and an explicit Builder handoff; if only authoritative proof is missing, retain Reviewer ownership instead of routing a fake Builder revision.", "Revisions and any later Reviewer pass must be separate explicit calls.", "Do not claim iteration counts, configured rounds, review-until-coherent behavior, or authoritative independent review from a local scan; do not prepare isolated/audio review unless the operator explicitly asks for that mode."]
   },
   {
     id: "dove.rebuttal",
@@ -274,17 +276,17 @@ var COMMAND_UX_DETAILS = {
     examples: ["/dove:init Make Dove a local-first research and engineering workflow", "/dove:init Refresh the project goal around daily Dove usability"]
   },
   "dove.mission": {
-    dailyFlow: ["Use this for one concrete user demand that should become a tracked mission/task contract and hand off to the right next workflow.", "Describe the desired outcome in normal language; Dove should propose the task, explain the evidence it will need, and wait for approval before materializing the contract."],
+    dailyFlow: ["Use this for one concrete user demand that should become a tracked mission/task contract and hand off naturally to the right next workflow.", "Describe the desired outcome in normal language; Dove should propose the task, explain the evidence it will need, and wait for approval before materializing the contract."],
     targetingBehavior: "Creates a new task contract under the project goal, or helps set the project goal first when the workspace is new.",
     confirmationBehavior: "Show the proposed task in plain language, then ask whether to materialize that exact proposal, adjust it, or cancel; confirmation must reuse the returned task id and proposal digest rather than re-infer a new contract.",
-    expectedOutcome: "After approval, the contract exists with recommended next routes; real execution belongs to auto, operator, domain workflows, or explicit tools.",
+    expectedOutcome: "After approval, the contract exists with recommended next routes; mission does not execute work or grant execution authority, so auto, operator, domain workflows, or explicit tools require their own invocation and authority.",
     examples: ["/dove:mission Fix the status dashboard next-action mismatch", "/dove:mission Turn the latest review feedback into one executable task"]
   },
   "dove.auto": {
-    dailyFlow: ["Use this when the user wants Dove to continue through a few approved steps after the task is clear.", "When the work depends on current outside information, public docs, papers, or provider behavior, run a visible no-key search/retrieval step early and verify candidates before writing evidence.", "Auto may start from a new demand or an existing task, but it still needs an understandable proposal before spending its work limit."],
+    dailyFlow: ["Use this when the user wants Dove to continue through a few approved steps after the task is clear.", "When the work depends on current outside information, public docs, papers, or provider behavior, run a visible no-key search/retrieval step early, register useful material as candidates, and stop at the trust boundary unless current trusted internal verification makes the material eligible as evidence.", "Auto may start from a new demand or an existing task, but it still needs an understandable proposal before spending its work limit."],
     targetingBehavior: "Use the selected task when it is obvious; otherwise ask the operator to choose or approve a new task.",
-    confirmationBehavior: "Require explicit approval of the target, work limit, and visible steps before running.",
-    expectedOutcome: "Each step either completes useful work with evidence or stops at a clear blocker, review need, missing material, or budget limit.",
+    confirmationBehavior: "Require a separate explicit approval of the target, work limit, and visible steps before running; mission confirmation never confirms auto.",
+    expectedOutcome: "An approved in-session run completes useful work with evidence or stops at a clear blocker, review need, missing material, or work limit.",
     examples: ["/dove:auto Continue the current Dove UX improvement task for up to three approved rounds", "/dove:auto Run the selected task until completion or an explicit blocker"]
   },
   "dove.status": {
@@ -295,10 +297,10 @@ var COMMAND_UX_DETAILS = {
     examples: ["/dove:status", "/dove:status Show what is blocked and what the next step is"]
   },
   "dove.operator": {
-    dailyFlow: ["Use this to see which tracked work can move now and run one approved operator pass.", "Do not claim real work happened unless a safe built-in step ran or real pass results were supplied."],
+    dailyFlow: ["Use this to see which tracked work can move now and run one approved operator pass.", "Do not claim real work happened unless a safe built-in step ran or a canonical `taskResults[]` entry supplied the real pass result."],
     targetingBehavior: "Works over the active work queue rather than one ad hoc target.",
-    confirmationBehavior: "Preview the practical queue situation first; require approval before accepting results or creating blocker-investigation work.",
-    expectedOutcome: "Runnable work moves with evidence, blocked work gets a concrete investigation option, and unresolved work remains waiting for evidence instead of being marked done.",
+    confirmationBehavior: "Preview the practical queue situation first; require approval before accepting canonical results or creating blocker-investigation work.",
+    expectedOutcome: "Runnable work moves with evidence; a task waiting for an external pass remains unchanged when no canonical result is supplied, and blocked work gets a concrete investigation option only when requested.",
     examples: ["/dove:operator", "/dove:operator Run one confirmed queue pass with real results"]
   },
   "dove.lessons": {
@@ -316,10 +318,10 @@ var COMMAND_UX_DETAILS = {
     examples: ["/dove:version Change direction to focus on result-card usability", "/dove:version Reset active tasks after a major project direction change"]
   },
   "dove.source": {
-    dailyFlow: ["Use this to add external information such as papers, web findings, venue templates, reviewer guidelines, rankings, API docs, citations, or operator-provided links or material.", "When the user asks for current outside information or scholarly material, run read-only public no-key network search or visible retrieval as candidate discovery, then verify useful candidates before registration.", "For bind/save/deposit/\u6C89\u6DC0 prompts, add external material first, then use note or document evidence for synthesis.", "Keep source intake separate from internal notes and pressure-test summaries."],
-    targetingBehavior: "Resolve or confirm the task before adding external source details; batch multiple sources when the operator provides them together.",
+    dailyFlow: ["Use this to add external information such as papers, web findings, venue templates, reviewer guidelines, rankings, API docs, citations, or operator-provided links or material.", "When the user asks for current outside information or scholarly material, run read-only public no-key network search or visible retrieval as candidate discovery, then register useful material as candidates with real identity and locator details.", "For bind, save, deposit, or archive prompts, add external candidate material first, then use note or document evidence for synthesis.", "Keep source intake separate from internal notes and pressure-test summaries."],
+    targetingBehavior: "Resolve or confirm the task before adding external source candidates; batch multiple sources when the operator provides them together.",
     confirmationBehavior: "If no unique task target is available, ask for task selection instead of guessing.",
-    expectedOutcome: "The selected task has verified source details, or the request stops clearly because retrieval or verification failed.",
+    expectedOutcome: "The selected task has candidate source details. Public verification may reject a candidate, but positive verification is unavailable on the public surface.",
     examples: ["/dove:source Add these CVPR author/reviewer guideline URLs to the selected task", "/dove:source Add venue templates and ranking pages before writing the synthesis note"]
   },
   "dove.note": {
@@ -330,7 +332,7 @@ var COMMAND_UX_DETAILS = {
     examples: ["/dove:note Summarize what the registered venue sources imply for this task", "/dove:note Capture the pressure-test finding and link it to registered sources"]
   },
   "dove.figure": {
-    dailyFlow: ["Use this when the user describes the figure they want once, including where it should help the paper or task.", "Dove should gather linked materials, prepare generation or import, draft caption support, check only the current figure for the compact verdict, and say whether this figure is usable now.", "By default, prepare a hand-drawn SVG plan and tell the operator when SVG output is needed.", "Use OpenAI image generation only for an explicit drawing request with OPENAI_API_KEY supplied through the environment."],
+    dailyFlow: ["Use this when the user describes the figure they want once, including where it should help the paper or task.", "Dove should gather linked materials, prepare generation or import, draft caption support, run diagnostic checks on the current figure, and say what remains before validation.", "Lexical and structural SVG checks are preflight only; validated requires current authorized independent proof for the current final SVG hash.", "By default, prepare a hand-drawn SVG plan and tell the operator when SVG output is needed.", "Use OpenAI image generation only for an explicit drawing request with OPENAI_API_KEY supplied through the environment."],
     targetingBehavior: "Resolve the figure request to one task before writing; do not make the user reason about paths or workspace-wide extra details unless they explicitly ask for details.",
     confirmationBehavior: "Ask for task confirmation when the figure target is unclear; external drawing calls require explicit safe configuration.",
     expectedOutcome: "The operator gets a clear current-figure result: ready for review, missing materials, awaiting SVG or drawing output, or needing current-figure fixes.",
@@ -351,17 +353,17 @@ var COMMAND_UX_DETAILS = {
     examples: ["/dove:draft Draft the methods section from linked evidence", "/dove:draft Revise the introduction using the latest review findings"]
   },
   "dove.review": {
-    dailyFlow: ["Use this for a local evidence-aware review pass over the selected task materials.", "Inspect concrete claims, sources, notes, drafts, experiments, figures, and recorded concerns; do not substitute a verdict label for review work.", "Use separate isolated or audio review only when the operator explicitly asks for that mode."],
+    dailyFlow: ["Use this for a local evidence-aware structural preflight over the selected task materials.", "Inspect concrete claims, sources, notes, drafts, experiments, figures, and recorded concerns; do not substitute a verdict label or a clean local scan for authoritative review work.", "A coherent result requires current authorized independent Reviewer proof bound to all reviewed artifact hashes.", "Use separate isolated or audio review only when the operator explicitly asks for that mode."],
     targetingBehavior: "Resolve the review to one task and the exact materials being reviewed.",
     confirmationBehavior: "If the target or reviewed material is unclear, ask for the material instead of guessing or falling back to a status panel.",
-    expectedOutcome: "The operator gets concrete findings, action items, missing evidence, or a coherent result backed by inspected materials.",
+    expectedOutcome: "The operator gets concrete findings, action items, missing evidence, or a Reviewer-owned proof boundary; coherent is authoritative only with current independent proof.",
     examples: ["/dove:review Check whether the current draft is supported by evidence", "/dove:review Review the selected task materials before marking them done"]
   },
   "dove.review-loop": {
-    dailyFlow: ["Use this for one independent Reviewer pass over the selected packet materials.", "The pass records concrete findings or a material-backed coherent verdict, but never edits Builder-owned draft or experience material.", "When revision is required, hand the requiredActions to a Builder and invoke review again only after that separate revision call."],
+    dailyFlow: ["Use this for one Reviewer pass over the selected packet materials.", "Local structural inspection is preflight only; it records concrete findings or stops at the Reviewer-owned proof boundary, but never edits Builder-owned draft or experience material.", "Only current authorized independent proof over all reviewed artifact hashes can support coherent.", "When substantive revision is required, hand the required actions to a Builder and invoke review again only after that separate revision call."],
     targetingBehavior: "Resolve the pass to one task and its packet-owned materials before reviewing.",
     confirmationBehavior: "This command performs one visible Reviewer pass only; there is no implicit Reviewer-to-Builder-to-Reviewer cycle.",
-    expectedOutcome: "One packet-scoped review result plus an explicit Builder handoff when changes are required.",
+    expectedOutcome: "One packet-scoped review result, with a Builder handoff only for substantive findings and retained Reviewer ownership when authoritative proof is the missing requirement.",
     examples: ["/dove:review-loop Run one independent evidence-aware review pass", "/dove:review-loop Review this packet and hand required revisions to Builder"]
   },
   "dove.rebuttal": {
@@ -379,17 +381,18 @@ var COMMAND_ADAPTER_CONSTRAINTS = {
   ],
   "dove.mission": [
     "Propose the task first, then ask whether to materialize that exact proposal, adjust it, or cancel; never rebuild a different contract from a bare confirmation.",
-    "After approval, materialize the contract only and hand off to the recommended next workflow; mission itself does not execute source, note, draft, figure, experiment, review, code, or provider work.",
+    "After approval, materialize the contract only and hand off naturally to the recommended next workflow; mission itself does not execute source, note, draft, figure, experiment, review, code, or provider work and grants no execution authority.",
     "Report the created contract and recommended next routes without claiming completion or execution progress.",
     "If the contract is planning work, its done criteria must require explicit executable child mission contracts before any later execution flow can mark it completed."
   ],
   "dove.auto": [
-    "Propose the target, work limit, and visible steps before running.",
+    "Propose the target, work limit, and visible steps before running, and require a separate explicit auto confirmation even if mission materialization was already confirmed.",
     "Run only in the current approved interaction; never schedule hidden background continuation.",
-    "For research or current-information work, use visible search/retrieval when needed and collect real verified sources or materials before claiming success.",
+    "For research or current-information work, use visible search/retrieval when needed, register real candidate material, and claim evidence-backed success only when current trusted internal verification makes the referenced source eligible; otherwise stop at the trust boundary.",
     "Stop clearly at completion, blocker, review need, missing material, or budget limit."
   ],
   "dove.status": [
+    "Keep the status query strictly zero-write; status adjustments are a separate confirmed mutation and are never part of the query call.",
     "Start with the live situation the current session can actually see, then fold in saved project state only as background guidance.",
     "Answer the operator's ordinary next-step question in short natural prose: the current situation, the smallest useful action, and why it matters when helpful.",
     "Default status is not a mission board or audit report; keep mission lists, raw identifiers, raw counts, route names, low-level fields, and extra details collapsed unless the operator asks to expand.",
@@ -401,6 +404,7 @@ var COMMAND_ADAPTER_CONSTRAINTS = {
   "dove.operator": [
     "Preview the practical queue situation before asking for approval.",
     "Run one operator pass only after confirmation.",
+    "Accept externally performed work results only through canonical taskResults[]; a task awaiting that work remains unchanged when no matching result is supplied.",
     "Do not claim work without real results; leave it waiting for evidence instead.",
     "Create blocker-investigation tasks only when the operator explicitly asks for them."
   ],
@@ -416,8 +420,9 @@ var COMMAND_ADAPTER_CONSTRAINTS = {
   ],
   "dove.source": [
     "Only add external material when it has a real title, locator, citation, URL, or operator-provided links or material.",
-    "Use public no-key network search or visible retrieval for candidate discovery when current outside information is needed, but register only verified candidates.",
-    "If search, fetch, or verification finds no trustworthy material, say no source was added and explain the next retrieval step.",
+    "Use public no-key network search or visible retrieval for candidate discovery when current outside information is needed, then register useful retrieved material as candidates with real identity and locator details.",
+    "Registration creates candidate material only. Public verification may reject a candidate but cannot issue positive verification; do not present a candidate as trusted evidence.",
+    "If search or fetch finds no real material, say no source candidate was added and explain the next retrieval step.",
     "When the target task is unclear, ask the operator to choose from visible context instead of inspecting project state.",
     "When source work cannot finish here, say the source material is ready and has not yet been added to the task; the natural Chinese phrasing is `\u8FD9\u6761\u6765\u6E90\u8FD8\u6CA1\u52A0\u5165\u4EFB\u52A1`.",
     "Batch multiple sources when the operator provides them together.",
@@ -433,7 +438,7 @@ var COMMAND_ADAPTER_CONSTRAINTS = {
     "Use the hand-drawn SVG plan as the normal default path and tell the operator when SVG output is needed.",
     "Use OpenAI image generation only when explicitly selected or configured; the OpenAI key must come from the OPENAI_API_KEY environment variable, never inline text.",
     "Resolve the target task before updating figure state, then gather linked sections, claims, experiments, sources, notes, review concerns, and material hints automatically.",
-    "Do not mark a figure ready until imported output has source support, caption, and a clean current-figure check.",
+    "Describe imported output with source support, caption, and clean preflight checks as ready for independent review, not validated; validated additionally requires current authorized independent Reviewer proof for the exact final SVG path and hash.",
     "Captions must explain the figure purpose and linked evidence; default replies should not make the operator reason about paths or workspace-wide extra details."
   ],
   "dove.experience": [
@@ -447,13 +452,13 @@ var COMMAND_ADAPTER_CONSTRAINTS = {
     "Use linked sources, notes, experience, figures, and review findings when they are available."
   ],
   "dove.review": [
-    "Inspect real project materials and report concrete review findings, action items, missing evidence, or a coherent result.",
-    "Do not substitute a status panel, task list, or verdict string for review work.",
+    "Inspect real project materials and report concrete review findings, action items, missing evidence, or a structural preflight result; a coherent result additionally requires current authorized independent Reviewer proof bound to every reviewed artifact hash.",
+    "Do not substitute a status panel, task list, verdict string, or clean local scan for authoritative review work.",
     "Use separate isolated or audio review only when the operator explicitly asks for that mode, and keep private writer/reviewer transcripts out of ordinary review replies.",
     "Report review outcomes in plain language."
   ],
   "dove.review-loop": [
-    "Run exactly one visible local Reviewer pass over the selected packet materials.",
+    "Run exactly one visible local Reviewer preflight pass over the selected packet materials; do not describe the local scan itself as independent or authoritative.",
     "Do not revise draft, experiment, experience, or other Builder-owned material in this call.",
     "When changes are required, return concrete required actions and an explicit Builder handoff.",
     "Invoke review again only after a separate explicit Builder revision call."
@@ -895,11 +900,11 @@ var GOVERNANCE_GUARDED_MUTATIONS = [
   ...GOVERNANCE_GUARDED_MUTATION_SCOPE_METADATA[entry.id] ?? governanceScopeMetadata("workspace-global")
 }));
 var GOVERNANCE_EXEMPT_MUTATION_SCOPE_METADATA = {
+  "ensure-workspace": governanceScopeMetadata("bootstrap"),
   "record-operator-lesson": governanceScopeMetadata("governance-bookkeeping"),
   "record-operator-follow-through": governanceScopeMetadata("governance-bookkeeping"),
   "plan-campaign": governanceScopeMetadata("governance-bookkeeping"),
   "revoke-program-approval": governanceScopeMetadata("governance-bookkeeping"),
-  "query-meta-optimize": governanceScopeMetadata("derived-refresh"),
   "init-project": governanceScopeMetadata("bootstrap"),
   "sync-checklist": governanceScopeMetadata("derived-refresh"),
   "validate-figure-pipeline": governanceScopeMetadata("inspection-only"),
@@ -913,22 +918,22 @@ var GOVERNANCE_EXEMPT_MUTATION_SCOPE_METADATA = {
   "summarize-session-journal": governanceScopeMetadata("governance-bookkeeping")
 };
 var GOVERNANCE_EXEMPT_MUTATIONS = [
+  { id: "ensure-workspace", action: "Explicitly bootstrapping the canonical Dove workspace and starter artifacts remains exempt because it establishes storage without approving or executing task work.", artifactPath: ".dove/state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-07-13T00:00:00.000Z", lastReviewedAt: "2026-07-13T00:00:00.000Z", reasonCode: "explicit-workspace-bootstrap", reviewCadence: "per-project", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "ensureWorkspace", mcpTool: "ensure_workspace", commandIds: [] } },
   { id: "record-operator-lesson", action: "Recording distilled operator lessons remains explicitly exempt because it is reflective bookkeeping and does not approve, materialize, or execute work.", artifactPath: ".dove/meta/operator-lessons.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-05-07T00:00:00.000Z", lastReviewedAt: "2026-05-07T00:00:00.000Z", reasonCode: "retrospective-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorLesson", mcpTool: "record_operator_lesson", commandIds: ["dove.lessons"] } },
   { id: "record-operator-follow-through", action: "Recording a manual operator follow-through decision remains explicitly exempt; this public surface cannot write program linkage, runtime retry or timing state, or runtime-owned terminal and executing statuses.", artifactPath: ".dove/meta/operator-follow-through.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-07-11T00:00:00.000Z", reasonCode: "governance-ledger-maintenance", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorFollowThrough", mcpTool: "record_operator_follow_through", commandIds: [] } },
   { id: "plan-campaign", action: "Recording a multi-cycle campaign plan remains exempt because it only records planner-supervised campaign intent and does not approve or execute bounded program work.", artifactPath: ".dove/programs/campaigns.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-25T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "campaign-planning-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "planCampaign", mcpTool: "plan_campaign", commandIds: [] } },
   { id: "revoke-program-approval", action: "Revoking a program approval remains exempt because it withdraws authority rather than executing new work.", artifactPath: ".dove/programs/approvals.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "approval-withdrawal", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "revokeProgramApproval", mcpTool: "revoke_program_approval", commandIds: [] } },
-  { id: "query-meta-optimize", action: "Refreshing proposal-only optimizer surfaces remains exempt because it is part of debt detection, not debt execution.", artifactPath: ".dove/meta/LATEST_OPTIMIZER_REPORT.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "proposal-frontier-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "queryMetaOptimize", mcpTool: "query_meta_optimize", commandIds: [] } },
   { id: "init-project", action: "Project initialization bootstraps the workspace and is explicitly exempt from follow-through gating.", artifactPath: ".dove/state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "workspace-bootstrap", reviewCadence: "per-project", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "initProject", mcpTool: "init_project", commandIds: [] } },
   { id: "sync-checklist", action: "Checklist syncing remains exempt because it summarizes debt instead of executing it.", artifactPath: ".dove/checklists/current.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "summary-sync", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "syncChecklist", mcpTool: "sync_checklist", commandIds: [] } },
   { id: "validate-figure-pipeline", action: "Figure validation is an inspection path and remains exempt from follow-through execution gating.", artifactPath: ".dove/figures/qa.json", ownerRole: "researcher", approvedByRole: "researcher", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "inspection-only", reviewCadence: "per-change", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "validateFigurePipeline", mcpTool: "validate_figure_pipeline", commandIds: ["dove.figure"] } },
-  { id: "classify-workflow-intent", action: "Workflow intent classification is analytical and remains exempt.", artifactPath: ".dove/meta/recommendations.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "analysis-only", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "classifyWorkflowIntent", mcpTool: "query_meta_optimize", commandIds: [] } },
-  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".dove/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: "query_workspace_index", commandIds: [] } },
-  { id: "refresh-durable-surfaces", action: "Durable surface refresh is a proposal-only summarization step and remains exempt.", artifactPath: ".dove/workspace/index.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "summary-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "refreshDurableSurfaces", mcpTool: "query_workspace_index", commandIds: ["dove.status"] } },
+  { id: "classify-workflow-intent", action: "Workflow intent classification is analytical and remains exempt.", artifactPath: ".dove/meta/recommendations.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "analysis-only", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "classifyWorkflowIntent", mcpTool: null, commandIds: [] } },
+  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".dove/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: null, commandIds: [] } },
+  { id: "refresh-durable-surfaces", action: "Durable surface refresh is a proposal-only summarization step and remains exempt.", artifactPath: ".dove/workspace/index.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "summary-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "refreshDurableSurfaces", mcpTool: null, commandIds: ["dove.status"] } },
   { id: "publish-dove-status", action: "Publishing sanitized public status artifacts remains exempt because it derives a read-only external summary from durable Dove state without approving, materializing, or executing work.", artifactPath: ".dove/public", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-06-16T00:00:00.000Z", lastReviewedAt: "2026-06-16T00:00:00.000Z", reasonCode: "public-derived-status-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "publishDoveStatus", mcpTool: "publish_dove_status", commandIds: [] } },
   { id: "publish-dove-global-status", action: "Publishing the global sanitized public status index remains exempt because it only derives a static aggregate from explicit project .dove/public artifacts without approving, materializing, executing work, scanning the computer, or starting external services.", artifactPath: "xdg:dove/public", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-06-17T00:00:00.000Z", lastReviewedAt: "2026-06-17T00:00:00.000Z", reasonCode: "global-public-derived-status-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "publishDoveGlobalStatus", mcpTool: "publish_dove_global_status", commandIds: [] } },
   { id: "serve-dove-global-status", action: "Serving the global sanitized public status directory remains exempt only as an explicit foreground operator command that publishes the static aggregate once, serves that public directory over loopback, and optionally starts a visible Cloudflare tunnel without scanning the computer, daemonizing, scheduling refreshes, or exposing raw Dove state.", artifactPath: "xdg:dove/public", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-06-17T00:00:00.000Z", lastReviewedAt: "2026-06-17T00:00:00.000Z", reasonCode: "global-public-explicit-foreground-serving", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runGlobalStatusServingForeground", mcpTool: null, commandIds: [], cliCommand: "serve-global-status" } },
   { id: "configure-claude-code-gateway-defaults", action: "Claude Code gateway default configuration remains exempt because it is an explicit host install/sync bootstrap step that writes only allowlisted non-secret compatibility switches, not Dove task state.", artifactPath: "claude:user-config", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-07-08T00:00:00.000Z", lastReviewedAt: "2026-07-08T00:00:00.000Z", reasonCode: "host-install-bootstrap", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "configureClaudeCodeGatewayDefaults", mcpTool: null, commandIds: [], cliCommand: "install/sync --host claude" } },
-  { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".dove/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "query_meta_optimize", commandIds: [] } }
+  { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".dove/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "summarize_session_journal", commandIds: [] } }
 ].map((entry) => ({
   ...entry,
   ...GOVERNANCE_EXEMPT_MUTATION_SCOPE_METADATA[entry.id] ?? governanceScopeMetadata("governance-bookkeeping")
@@ -4621,9 +4626,215 @@ function createWorkflowBoundaries() {
 import fs3 from "node:fs";
 import path4 from "node:path";
 
+// src/core/follow-through-authority.mjs
+import crypto2 from "node:crypto";
+function normalizeStringArray2(value) {
+  return Array.isArray(value) ? Array.from(
+    new Set(
+      value.map((item) => String(item).trim()).filter(Boolean)
+    )
+  ).sort((left, right) => left.localeCompare(right)) : [];
+}
+function normalizeAuthorityItems(value, project) {
+  return Array.isArray(value) ? value.map(project).sort(
+    (left, right) => stableJson(left).localeCompare(stableJson(right))
+  ) : [];
+}
+function stableJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+function conversionPathAuthority(value) {
+  return normalizeAuthorityItems(
+    value,
+    (item) => ({
+      targetType: item.targetType ?? null,
+      targetId: item.targetId ?? null,
+      assignedRole: item.assignedRole ?? null,
+      priority: item.priority ?? null,
+      suggestedTitle: item.suggestedTitle ?? null,
+      rationale: item.rationale ?? null,
+      nextStep: item.nextStep ?? null
+    })
+  );
+}
+function remediationPackAuthority(source = {}) {
+  return {
+    id: source.id ?? null,
+    clusterId: source.clusterId ?? null,
+    acceptanceCriteria: normalizeStringArray2(
+      source.acceptanceCriteria
+    ),
+    manualNextActions: normalizeStringArray2(
+      source.manualNextActions
+    ),
+    conversionPaths: conversionPathAuthority(
+      source.rankedConversionPaths ?? source.conversionHints
+    ),
+    reviewConcerns: normalizeAuthorityItems(
+      source.reviewConcerns,
+      (item) => ({
+        id: item.id ?? null,
+        summary: item.summary ?? null,
+        status: item.status ?? null,
+        severity: item.severity ?? null,
+        responseOwnerRole: item.responseOwnerRole ?? null,
+        linkedArtifactPaths: normalizeStringArray2(
+          item.linkedArtifactPaths
+        ),
+        linkedAuditIds: normalizeStringArray2(
+          item.linkedAuditIds
+        ),
+        linkedBridgeIds: normalizeStringArray2(
+          item.linkedBridgeIds
+        )
+      })
+    ),
+    figureQa: normalizeAuthorityItems(
+      source.figureQa,
+      (item) => ({
+        id: item.id ?? null,
+        figureId: item.figureId ?? null,
+        code: item.code ?? null,
+        summary: item.summary ?? null,
+        severity: item.severity ?? null,
+        artifactPaths: normalizeStringArray2(
+          item.artifactPaths
+        )
+      })
+    )
+  };
+}
+function operatorPlaybookAuthority(source = {}) {
+  return {
+    id: source.id ?? null,
+    taxonomyFamilyId: source.taxonomyFamilyId ?? null,
+    remediationPackIds: normalizeStringArray2(
+      source.remediationPackIds
+    ),
+    acceptanceCriteria: normalizeStringArray2(
+      source.acceptanceCriteria
+    ),
+    manualNextActions: normalizeStringArray2(
+      source.manualNextActions
+    ),
+    conversionPaths: conversionPathAuthority(
+      source.rankedConversionPaths ?? source.conversionHints
+    )
+  };
+}
+function executionBridgeAuthority(source = {}) {
+  return {
+    id: source.id ?? null,
+    candidateType: source.candidateType ?? null,
+    targetArtifact: source.targetArtifact ?? null,
+    targetId: source.targetId ?? null,
+    suggestedTitle: source.suggestedTitle ?? null,
+    suggestedSummary: source.suggestedSummary ?? null,
+    suggestedNextStep: source.suggestedNextStep ?? null,
+    suggestedAcceptanceCriteria: normalizeStringArray2(
+      source.suggestedAcceptanceCriteria
+    ),
+    sourceRemediationPackIds: normalizeStringArray2(
+      source.sourceRemediationPackIds
+    ),
+    sourcePlaybookIds: normalizeStringArray2(
+      source.sourcePlaybookIds
+    ),
+    sourceConversionPath: source.sourceConversionPath ? {
+      targetType: source.sourceConversionPath.targetType ?? null,
+      targetId: source.sourceConversionPath.targetId ?? null,
+      assignedRole: source.sourceConversionPath.assignedRole ?? null
+    } : null
+  };
+}
+function followThroughAuthorityState(item = {}, operatingState = {}) {
+  const authorityStatuses = /* @__PURE__ */ new Set([
+    "accepted-for-execution",
+    "executing",
+    "accepted-risk"
+  ]);
+  if (!authorityStatuses.has(item.status)) {
+    return { required: false, trusted: true, reason: null };
+  }
+  if (item.authorityProvenance !== "trusted-system-transition") {
+    return {
+      required: true,
+      trusted: false,
+      reason: "untrusted-authority-provenance"
+    };
+  }
+  if (!item.programId || !item.programRunId || !item.approvalId) {
+    return {
+      required: true,
+      trusted: false,
+      reason: "missing-program-authority-lineage"
+    };
+  }
+  const program = (operatingState.programs?.items ?? []).find(
+    (candidate) => candidate.id === item.programId
+  ) ?? null;
+  const programRun = (operatingState.programRuns?.items ?? []).find(
+    (candidate) => candidate.id === item.programRunId
+  ) ?? null;
+  const approval = (operatingState.programApprovals?.items ?? []).find(
+    (candidate) => candidate.id === item.approvalId
+  ) ?? null;
+  if (!program || !programRun || !approval) {
+    return {
+      required: true,
+      trusted: false,
+      reason: "program-authority-not-found"
+    };
+  }
+  if (programRun.programId !== program.id || programRun.approvalId !== approval.id || approval.programId !== program.id || approval.programRunId !== programRun.id || !programRun.linkedFollowThroughIds?.includes(item.id)) {
+    return {
+      required: true,
+      trusted: false,
+      reason: "program-authority-lineage-mismatch"
+    };
+  }
+  if (approval.status !== "approved" || !["approved", "active"].includes(programRun.status) || !["active", "planned"].includes(program.status) || approval.expiresAt && Date.parse(approval.expiresAt) <= Date.now()) {
+    return {
+      required: true,
+      trusted: false,
+      reason: "program-authority-inactive"
+    };
+  }
+  const claim = approval.activeExecutionClaim ?? null;
+  if (!claim || !["claimed", "applied"].includes(claim.status) || claim.followThroughId !== item.id || claim.packetId !== item.linkedTargetId || claim.sourceType !== item.sourceType || claim.sourceId !== item.sourceId || claim.sourceFingerprint !== item.sourceFingerprint || programRun.activeExecutionClaimId !== claim.claimId) {
+    return {
+      required: true,
+      trusted: false,
+      reason: "runtime-authority-claim-mismatch"
+    };
+  }
+  return { required: true, trusted: true, reason: null };
+}
+function followThroughSourceAuthorityFingerprint(sourceType, source) {
+  let authority;
+  if (sourceType === "remediation-pack") {
+    authority = remediationPackAuthority(source);
+  } else if (sourceType === "operator-playbook") {
+    authority = operatorPlaybookAuthority(source);
+  } else if (sourceType === "execution-bridge") {
+    authority = executionBridgeAuthority(source);
+  } else {
+    throw new Error(
+      `Unsupported follow-through authority source type: ${sourceType}.`
+    );
+  }
+  return crypto2.createHash("sha256").update(stableJson({ sourceType, authority })).digest("hex");
+}
+
 // src/core/mutation-backend.mjs
 import { AsyncLocalStorage } from "node:async_hooks";
-import crypto2 from "node:crypto";
+import crypto3 from "node:crypto";
 import fs2 from "node:fs";
 import path2 from "node:path";
 
@@ -4686,7 +4897,7 @@ var mutationStorage = new AsyncLocalStorage();
 var DIRECT_PROCESS_ROLLBACK_REASON = "direct-process writes are performed by the Dove process, not by host-tracked file edits; native programming-terminal rollback cannot be verified for those writes.";
 var PATCH_PLAN_ROLLBACK_ADVICE = "Use mutationMode: patch-plan and apply the returned operations through host-tracked file edits before relying on host rollback.";
 function sha256(content) {
-  return crypto2.createHash("sha256").update(content).digest("hex");
+  return crypto3.createHash("sha256").update(content).digest("hex");
 }
 function normalizeMutationMode(value) {
   if (value === void 0) {
@@ -4738,7 +4949,7 @@ function diskFileState(root, relativePath) {
   return { exists: true, sha256: sha256(fs2.readFileSync(fullPath)) };
 }
 function buildMutationId() {
-  return `mutation-${crypto2.randomUUID()}`;
+  return `mutation-${crypto3.randomUUID()}`;
 }
 var MutationContext = class {
   constructor(root, options = {}) {
@@ -4814,7 +5025,7 @@ var MutationContext = class {
     const existing = this.operationsByPath.get(normalized);
     const initial = existing ? { exists: existing.previousExists, sha256: existing.previousSha256 } : diskFileState(this.root, normalized);
     const operation = {
-      operationId: existing?.operationId ?? `op-${crypto2.randomUUID()}`,
+      operationId: existing?.operationId ?? `op-${crypto3.randomUUID()}`,
       mutationId: this.id,
       actionId: this.actionId,
       packetId: this.packetId,
@@ -4854,10 +5065,31 @@ var MutationContext = class {
     return true;
   }
   ensureDirectory(relativePath) {
-    const { fullPath } = this.resolve(relativePath);
+    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
+    if (fs2.existsSync(fullPath) || this.operationsByPath.has(normalized)) {
+      return false;
+    }
+    const operation = {
+      operationId: `op-${crypto3.randomUUID()}`,
+      mutationId: this.id,
+      actionId: this.actionId,
+      packetId: this.packetId,
+      relativePath: normalized,
+      kind: "ensure-directory",
+      encoding: null,
+      previousExists: false,
+      previousSha256: null,
+      expectedPreviousSha256: null,
+      nextSha256: null,
+      scope: classifyScope(normalized),
+      rollbackEligibility: this.patchPlanMode ? "host-tracked-file-edits-required" : "direct-process-unverified"
+    };
+    this.operationOrder.push(normalized);
+    this.operationsByPath.set(normalized, operation);
     if (!this.patchPlanMode) {
       fs2.mkdirSync(fullPath, { recursive: true });
     }
+    return true;
   }
   operations() {
     return this.operationOrder.map((relativePath) => this.operationsByPath.get(relativePath)).filter(Boolean);
@@ -4889,6 +5121,8 @@ var MutationContext = class {
       rollbackAdvice: this.patchPlanMode ? null : PATCH_PLAN_ROLLBACK_ADVICE,
       operationCount: operations.length,
       paths: operations.map((operation) => operation.relativePath),
+      directoryEffectCount: operations.filter((operation) => operation.kind === "ensure-directory").length,
+      directoryPaths: operations.filter((operation) => operation.kind === "ensure-directory").map((operation) => operation.relativePath),
       createdAt: this.createdAt
     };
     const nextEntries = [...currentIndex.entries.filter((item) => item.id !== this.id), entry];
@@ -4909,6 +5143,8 @@ var MutationContext = class {
       writesApplied,
       operationCount: operations.length,
       paths: operations.map((operation) => operation.relativePath),
+      directoryEffectCount: operations.filter((operation) => operation.kind === "ensure-directory").length,
+      directoryPaths: operations.filter((operation) => operation.kind === "ensure-directory").map((operation) => operation.relativePath),
       hostRollbackEligible: this.patchPlanMode,
       hostRollbackIneligibleReason: this.patchPlanMode ? null : DIRECT_PROCESS_ROLLBACK_REASON,
       recommendedMutationMode: this.patchPlanMode ? null : "patch-plan",
@@ -5693,7 +5929,6 @@ function ensureWorkspace(root) {
   return { root, created };
 }
 function loadState(root) {
-  ensureWorkspace(root);
   return normalizeState(readJson(root, ARTIFACT_PATHS.state, createDefaultState));
 }
 function saveState(root, state) {
@@ -5702,7 +5937,6 @@ function saveState(root, state) {
   return normalized;
 }
 function listArtifacts(root) {
-  ensureWorkspace(root);
   return Object.fromEntries(
     Object.entries(ARTIFACT_PATHS).map(([key, relativePath]) => {
       const fullPath = resolvePath(root, relativePath);
@@ -5711,8 +5945,10 @@ function listArtifacts(root) {
   );
 }
 function listDraftFiles(root) {
-  ensureWorkspace(root);
   const draftsDir = resolvePath(root, ARTIFACT_PATHS.draftsDir);
+  if (!fs3.existsSync(draftsDir)) {
+    return [];
+  }
   return fs3.readdirSync(draftsDir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md").map((entry) => entry.name);
 }
 function extractCitationKeysFromText(content) {
@@ -5763,13 +5999,19 @@ function targetArtifactContainsId(root, artifactPath, targetId) {
 function assertFollowThroughReady(root, actionLabel, args = {}) {
   assertNoPolicyOverrideArgs(args, actionLabel);
   const ledger = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const operatingState = {
+    programs: normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex)),
+    programRuns: normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex)),
+    programApprovals: normalizeProgramApprovalsIndex(readJson(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex))
+  };
   const actionRequiredItems = (ledger.items ?? []).filter((item) => {
     const status = item.status;
-    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status);
+    const authorityState = followThroughAuthorityState(item, operatingState);
+    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status) || !authorityState.trusted;
     const dueDeferred = status === "deferred" && item.deferUntil && String(item.deferUntil) <= nowIso();
     const targetBound = !["accepted-for-execution", "executing", "closed"].includes(status) ? true : targetArtifactContainsId(root, item.linkedTargetArtifact, item.linkedTargetId);
     const acceptedExecutionOpen = status === "accepted-for-execution" || status === "executing";
-    return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen;
+    return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen || status === "accepted-risk";
   }).map((item) => item.id);
   if (actionRequiredItems.length > 0) {
     throw new Error(`${actionLabel} is blocked while operator follow-through still requires action: ${actionRequiredItems.join(", ")}.`);
@@ -5893,7 +6135,7 @@ function normalizeBoolean2(value, fallback = false) {
 function normalizeString2(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
-function normalizeStringArray2(value) {
+function normalizeStringArray3(value) {
   const rawItems = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   return Array.from(new Set(rawItems.map((item) => normalizeString2(item)).filter(Boolean)));
 }
@@ -6148,7 +6390,7 @@ function createGptImage2FigureProvider(overrides = {}) {
   });
 }
 function normalizeNetworkProviderIds(value, fallback = []) {
-  const ids = normalizeStringArray2(value).map((item) => item.toLowerCase());
+  const ids = normalizeStringArray3(value).map((item) => item.toLowerCase());
   return ids.length > 0 ? ids : [...fallback];
 }
 function normalizeNetworkProviderSettings(rawSettings = {}) {
@@ -7030,151 +7272,8 @@ function doveText(language, key, params = {}) {
 
 // src/core/navigation.mjs
 import crypto5 from "node:crypto";
-import fs7 from "node:fs";
+import fs6 from "node:fs";
 import path8 from "node:path";
-
-// src/core/follow-through-authority.mjs
-import crypto3 from "node:crypto";
-function normalizeStringArray3(value) {
-  return Array.isArray(value) ? Array.from(
-    new Set(
-      value.map((item) => String(item).trim()).filter(Boolean)
-    )
-  ).sort((left, right) => left.localeCompare(right)) : [];
-}
-function normalizeAuthorityItems(value, project) {
-  return Array.isArray(value) ? value.map(project).sort(
-    (left, right) => stableJson(left).localeCompare(stableJson(right))
-  ) : [];
-}
-function stableJson(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableJson).join(",")}]`;
-  }
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-function conversionPathAuthority(value) {
-  return normalizeAuthorityItems(
-    value,
-    (item) => ({
-      targetType: item.targetType ?? null,
-      targetId: item.targetId ?? null,
-      assignedRole: item.assignedRole ?? null,
-      priority: item.priority ?? null,
-      suggestedTitle: item.suggestedTitle ?? null,
-      rationale: item.rationale ?? null,
-      nextStep: item.nextStep ?? null
-    })
-  );
-}
-function remediationPackAuthority(source = {}) {
-  return {
-    id: source.id ?? null,
-    clusterId: source.clusterId ?? null,
-    acceptanceCriteria: normalizeStringArray3(
-      source.acceptanceCriteria
-    ),
-    manualNextActions: normalizeStringArray3(
-      source.manualNextActions
-    ),
-    conversionPaths: conversionPathAuthority(
-      source.rankedConversionPaths ?? source.conversionHints
-    ),
-    reviewConcerns: normalizeAuthorityItems(
-      source.reviewConcerns,
-      (item) => ({
-        id: item.id ?? null,
-        summary: item.summary ?? null,
-        status: item.status ?? null,
-        severity: item.severity ?? null,
-        responseOwnerRole: item.responseOwnerRole ?? null,
-        linkedArtifactPaths: normalizeStringArray3(
-          item.linkedArtifactPaths
-        ),
-        linkedAuditIds: normalizeStringArray3(
-          item.linkedAuditIds
-        ),
-        linkedBridgeIds: normalizeStringArray3(
-          item.linkedBridgeIds
-        )
-      })
-    ),
-    figureQa: normalizeAuthorityItems(
-      source.figureQa,
-      (item) => ({
-        id: item.id ?? null,
-        figureId: item.figureId ?? null,
-        code: item.code ?? null,
-        summary: item.summary ?? null,
-        severity: item.severity ?? null,
-        artifactPaths: normalizeStringArray3(
-          item.artifactPaths
-        )
-      })
-    )
-  };
-}
-function operatorPlaybookAuthority(source = {}) {
-  return {
-    id: source.id ?? null,
-    taxonomyFamilyId: source.taxonomyFamilyId ?? null,
-    remediationPackIds: normalizeStringArray3(
-      source.remediationPackIds
-    ),
-    acceptanceCriteria: normalizeStringArray3(
-      source.acceptanceCriteria
-    ),
-    manualNextActions: normalizeStringArray3(
-      source.manualNextActions
-    ),
-    conversionPaths: conversionPathAuthority(
-      source.rankedConversionPaths ?? source.conversionHints
-    )
-  };
-}
-function executionBridgeAuthority(source = {}) {
-  return {
-    id: source.id ?? null,
-    candidateType: source.candidateType ?? null,
-    targetArtifact: source.targetArtifact ?? null,
-    targetId: source.targetId ?? null,
-    suggestedTitle: source.suggestedTitle ?? null,
-    suggestedSummary: source.suggestedSummary ?? null,
-    suggestedNextStep: source.suggestedNextStep ?? null,
-    suggestedAcceptanceCriteria: normalizeStringArray3(
-      source.suggestedAcceptanceCriteria
-    ),
-    sourceRemediationPackIds: normalizeStringArray3(
-      source.sourceRemediationPackIds
-    ),
-    sourcePlaybookIds: normalizeStringArray3(
-      source.sourcePlaybookIds
-    ),
-    sourceConversionPath: source.sourceConversionPath ? {
-      targetType: source.sourceConversionPath.targetType ?? null,
-      targetId: source.sourceConversionPath.targetId ?? null,
-      assignedRole: source.sourceConversionPath.assignedRole ?? null
-    } : null
-  };
-}
-function followThroughSourceAuthorityFingerprint(sourceType, source) {
-  let authority;
-  if (sourceType === "remediation-pack") {
-    authority = remediationPackAuthority(source);
-  } else if (sourceType === "operator-playbook") {
-    authority = operatorPlaybookAuthority(source);
-  } else if (sourceType === "execution-bridge") {
-    authority = executionBridgeAuthority(source);
-  } else {
-    throw new Error(
-      `Unsupported follow-through authority source type: ${sourceType}.`
-    );
-  }
-  return crypto3.createHash("sha256").update(stableJson({ sourceType, authority })).digest("hex");
-}
 
 // src/core/program-operating-state.mjs
 function readProgramOperatingState(root) {
@@ -7205,7 +7304,6 @@ function readProgramOperatingState(root) {
 
 // src/core/task-packets.mjs
 import crypto4 from "node:crypto";
-import fs6 from "node:fs";
 import path7 from "node:path";
 function slugify(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
@@ -7236,11 +7334,7 @@ function normalizePrimaryRole(value, fallback = "builder") {
   return normalizeAllowed(value, DOVE_PRIMARY_ROLE_IDS, fallback);
 }
 function readJsonReadOnly(root, relativePath, fallback = null) {
-  const fullPath = path7.join(root, relativePath);
-  if (!fs6.existsSync(fullPath)) {
-    return typeof fallback === "function" ? fallback() : structuredClone(fallback);
-  }
-  return JSON.parse(fs6.readFileSync(fullPath, "utf8"));
+  return readJson(root, relativePath, fallback);
 }
 function packetFilePath(packetId) {
   return path7.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`);
@@ -7315,6 +7409,7 @@ function normalizePacketCandidate(root, packet = {}) {
     packetPath: merged.packetPath ?? packetFilePath(id),
     packetContextPath: merged.packetContextPath ?? packetContextPath(id),
     claimIds: uniqueStrings([...normalizeStringArray4(merged.claimIds), ...normalizeStringArray4(contextObject.claimIds)]),
+    sourceIds: uniqueStrings([...normalizeStringArray4(merged.sourceIds), ...normalizeStringArray4(contextObject.sourceIds)]),
     noteIds: uniqueStrings([...normalizeStringArray4(merged.noteIds), ...normalizeStringArray4(contextObject.noteIds)]),
     experimentIds: uniqueStrings([...normalizeStringArray4(merged.experimentIds), ...normalizeStringArray4(contextObject.experiments), ...normalizeStringArray4(contextObject.experimentIds)]),
     rebuttalIssueIds: uniqueStrings([...normalizeStringArray4(merged.rebuttalIssueIds), ...normalizeStringArray4(contextObject.rebuttalIssueIds)]),
@@ -7407,6 +7502,7 @@ function packetArtifactSet(packet) {
     ...normalizeStringArray4(packet.lessonIds),
     ...normalizeStringArray4(packet.artifactRefs),
     ...normalizeStringArray4(packet.claimIds),
+    ...normalizeStringArray4(packet.sourceIds),
     ...normalizeStringArray4(packet.noteIds),
     ...normalizeStringArray4(packet.experimentIds),
     ...normalizeStringArray4(packet.rebuttalIssueIds),
@@ -8000,7 +8096,7 @@ function normalizePacket(packet = {}) {
     lifecycleFamily: lifecycleFamilyForPacket(packet),
     doveDomain,
     active: packet.active ?? !GOVERNANCE_TERMINAL_LIFECYCLES.has(lifecycleStatus),
-    assignedRole: ROLE_IDS.includes(packet.assignedRole) ? packet.assignedRole : "planner",
+    assignedRole: ROLE_IDS.includes(packet.assignedRole) ? packet.assignedRole : ROLE_IDS.includes(packet.ownerRole) ? packet.ownerRole : "planner",
     parentPacketId: packet.parentPacketId ? slugify2(packet.parentPacketId) : null,
     childPacketIds: normalizeStringArray5(packet.childPacketIds),
     currentFocus: packet.currentFocus ?? packet.title ?? packet.id,
@@ -8485,7 +8581,7 @@ function buildArtifactContextManifest(root, relativePath, board, packets, worksp
   return {
     version: 1,
     artifactPath: normalized,
-    exists: fs7.existsSync(resolvePath(root, normalized)),
+    exists: fs6.existsSync(resolvePath(root, normalized)),
     category: guidance.category,
     lifecycleFamily,
     doveLifecycle: {
@@ -9133,7 +9229,7 @@ function buildPacketContextManifest(root, board, packet, packetById, workspaceIn
   const dependencyHealth = packet.dependencyHealth ?? buildPacketDependencyHealth(packet, packetById);
   const preferredPhaseContextPath = path8.join(ARTIFACT_PATHS.phaseContextsDir, `${packet.phase}.json`);
   const fallbackPhaseContextPath = path8.join(ARTIFACT_PATHS.phaseContextsDir, `${board.currentPhase}.json`);
-  const phaseContextPath = fs7.existsSync(resolvePath(root, preferredPhaseContextPath)) ? preferredPhaseContextPath : fallbackPhaseContextPath;
+  const phaseContextPath = fs6.existsSync(resolvePath(root, preferredPhaseContextPath)) ? preferredPhaseContextPath : fallbackPhaseContextPath;
   const upstreamPackets = dependencyHealth.dependencyIds.map((dependencyId) => summarizePacket(packetById.get(dependencyId) ?? { id: dependencyId, title: dependencyId, status: "missing", lifecycleStatus: "waiting", assignedRole: "planner", phase: packet.phase, nextAction: "Repair missing dependency reference." }));
   const downstreamPackets = Array.from(packetById.values()).filter((candidate) => (candidate.dependencies ?? []).includes(packet.id)).map(summarizePacket);
   const artifactContextPaths = uniqueSorted([
@@ -10581,14 +10677,16 @@ function normalizeFollowThroughRetryState(value = {}) {
   };
 }
 function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestamp = nowIso(), targetPreview = null) {
+  const operatingState = readProgramOperatingState(root);
   const items = (existingIndex.items ?? []).map((item, index) => {
     const sourceType = item.sourceType ?? "remediation-pack";
     const sourceId = item.sourceId ?? item.id ?? `unknown-${index + 1}`;
     const key = `${sourceType}:${sourceId}`;
     const source = sourceCatalog.get(key);
     const allowed = /* @__PURE__ */ new Set(["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"]);
-    const invalidStatus = !allowed.has(item.status) || item.status === "accepted-for-execution" && !item.reviewAfter;
-    const status = invalidStatus ? "acknowledged" : item.status;
+    const authorityState = followThroughAuthorityState(item, operatingState);
+    const invalidStatus = !allowed.has(item.status) || item.status === "accepted-for-execution" && !item.reviewAfter || !authorityState.trusted;
+    const status = allowed.has(item.status) ? item.status : "acknowledged";
     const dueDeferred = status === "deferred" && item.deferUntil && String(item.deferUntil) <= timestamp;
     const dueReview = status === "accepted-for-execution" && item.reviewAfter && String(item.reviewAfter) <= timestamp;
     const dueSoonExecution = ["accepted-for-execution", "executing"].includes(status) && item.executeBy && String(item.executeBy) > timestamp && String(item.executeBy) <= new Date(Date.now() + 6 * 60 * 60 * 1e3).toISOString();
@@ -10618,6 +10716,9 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
       programId: item.programId ?? null,
       programRunId: item.programRunId ?? null,
       approvalId: item.approvalId ?? null,
+      authorityProvenance: item.authorityProvenance ?? null,
+      authorityTrusted: authorityState.trusted,
+      authorityFailureReason: authorityState.reason,
       plannedTarget,
       deferUntil: item.deferUntil ?? null,
       executeBy: item.executeBy ?? null,
@@ -10668,7 +10769,7 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
     followThroughPath: ARTIFACT_PATHS.metaOperatorFollowThrough,
     transitionsPath: ARTIFACT_PATHS.metaOperatorFollowThroughTransitions
   };
-  const actionRequiredItems = items.filter((item) => item.invalidStatus || item.stale || item.dueDeferred || item.dueReview || item.overdueExecution || !item.targetBound && !item.plannedTarget || item.status === "accepted-for-execution" || item.status === "executing").map((item) => ({
+  const actionRequiredItems = items.filter((item) => item.invalidStatus || item.stale || item.dueDeferred || item.dueReview || item.overdueExecution || !item.targetBound && !item.plannedTarget || item.status === "accepted-for-execution" || item.status === "executing" || item.status === "accepted-risk").map((item) => ({
     id: item.id,
     sourceType: item.sourceType,
     sourceId: item.sourceId,
@@ -10676,6 +10777,8 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
     stale: item.stale,
     dueDeferred: item.dueDeferred,
     invalidStatus: item.invalidStatus,
+    authorityTrusted: item.authorityTrusted,
+    authorityFailureReason: item.authorityFailureReason,
     dueReview: item.dueReview,
     overdueExecution: item.overdueExecution,
     overdueExecutionSeverity: item.overdueExecutionSeverity,
@@ -10683,7 +10786,7 @@ function buildOperatorFollowThrough(root, existingIndex, sourceCatalog, timestam
     linkedTargetArtifact: item.linkedTargetArtifact,
     linkedTargetId: item.linkedTargetId,
     plannedTarget: item.plannedTarget,
-    nextAction: !item.targetBound ? item.plannedTarget ? "Materialize the planned target into a real packet before continuing." : "Re-bind this follow-through record to a live target artifact/id before continuing." : item.overdueExecution ? `Escalate this ${item.overdueExecutionSeverity ?? "warning"} accepted-for-execution record or update/close it immediately.` : item.dueReview ? "Review this accepted-for-execution record now or explicitly defer/close it before the review window drifts further." : item.executionWindowState === "due-soon" ? "Schedule execution or explicitly defer this accepted-for-execution record before it goes overdue." : item.status === "executing" ? "Advance this executing record to closure or explicitly defer/accept-risk it." : item.status === "accepted-for-execution" && (!item.linkedTargetArtifact || !item.linkedTargetId) ? "Add a durable target artifact/id before keeping this record accepted-for-execution." : item.status === "accepted-for-execution" ? "Carry this accepted-for-execution decision through to closure or explicitly defer/accept-risk it." : item.dueDeferred ? "Review or reschedule this deferred follow-through now." : item.stale ? "Re-open and reassess this stale follow-through against the updated source." : item.invalidStatus ? "Repair the invalid follow-through status in the durable ledger." : "Review this follow-through record."
+    nextAction: !item.targetBound ? item.plannedTarget ? "Materialize the planned target into a real packet before continuing." : "Re-bind this follow-through record to a live target artifact/id before continuing." : item.overdueExecution ? `Escalate this ${item.overdueExecutionSeverity ?? "warning"} accepted-for-execution record or update/close it immediately.` : item.dueReview ? "Review this accepted-for-execution record now or explicitly defer/close it before the review window drifts further." : item.executionWindowState === "due-soon" ? "Schedule execution or explicitly defer this accepted-for-execution record before it goes overdue." : item.status === "accepted-risk" ? "Resolve, defer, close, or supersede this risk record; accepted risk remains governance debt and cannot authorize execution." : item.status === "executing" ? "Advance this executing record to closure or explicitly defer it." : item.status === "accepted-for-execution" && (!item.linkedTargetArtifact || !item.linkedTargetId) ? "Add a durable target artifact/id before keeping this record accepted-for-execution." : item.status === "accepted-for-execution" ? "Carry this accepted-for-execution decision through to closure or explicitly defer it." : item.dueDeferred ? "Review or reschedule this deferred follow-through now." : item.stale ? "Re-open and reassess this stale follow-through against the updated source." : item.invalidStatus ? item.authorityFailureReason ? `Repair or retire this fail-closed follow-through authority record (${item.authorityFailureReason}).` : "Repair the invalid follow-through status in the durable ledger." : "Review this follow-through record."
   }));
   return {
     ...createMetaOperatorFollowThroughIndex(),
@@ -10815,13 +10918,13 @@ function targetArtifactContainsId2(root, artifactPath, targetId, targetPreview =
     return true;
   }
   const fullPath = resolvePath(root, artifactPath);
-  if (!fs7.existsSync(fullPath)) {
+  if (!fs6.existsSync(fullPath)) {
     return false;
   }
   const extension = path8.extname(artifactPath).toLowerCase();
   if ([".json"].includes(extension)) {
     try {
-      const value = JSON.parse(fs7.readFileSync(fullPath, "utf8"));
+      const value = JSON.parse(fs6.readFileSync(fullPath, "utf8"));
       const queue = [value];
       while (queue.length > 0) {
         const current = queue.shift();
@@ -10841,7 +10944,7 @@ function targetArtifactContainsId2(root, artifactPath, targetId, targetPreview =
       return false;
     }
   }
-  const text3 = fs7.readFileSync(fullPath, "utf8");
+  const text3 = fs6.readFileSync(fullPath, "utf8");
   return text3.includes(String(targetId));
 }
 function summarizeProgramsIndex(items = []) {
@@ -10964,7 +11067,6 @@ function writeProgramOperatingState(root, { programsIndex, programRuns, programA
   });
 }
 function queryCampaigns(root, args = {}) {
-  ensureWorkspace(root);
   const campaignId = args.campaignId ? slugify2(args.campaignId) : null;
   const status = args.status ? String(args.status).trim().toLowerCase() : null;
   const campaignsState = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
@@ -11036,7 +11138,6 @@ function planCampaign(root, args = {}) {
   };
 }
 function queryProgramApprovals(root, args = {}) {
-  ensureWorkspace(root);
   const programId = args.programId ? slugify2(args.programId) : null;
   const programRunId = args.programRunId ? slugify2(args.programRunId) : null;
   const status = args.status ? String(args.status).trim().toLowerCase() : null;
@@ -11133,7 +11234,7 @@ function validateFollowThroughTargetBinding(root, record, targetPreview = null) 
   }
   if (record.status === "closed") {
     for (const artifactPath of normalizeStringArray5(record.closureArtifactPaths)) {
-      if (!fs7.existsSync(resolvePath(root, artifactPath))) {
+      if (!fs6.existsSync(resolvePath(root, artifactPath))) {
         throw new Error(`Closed follow-through artifact ${artifactPath} does not exist.`);
       }
     }
@@ -11312,8 +11413,8 @@ function buildPlaybookArtifactUpdateMap({ familyId, familyLabel, matchedPacks = 
         priorityScore: 96
       });
     }
-    for (const path25 of pack.workspacePointers ?? []) {
-      pushTarget(path25, {
+    for (const path28 of pack.workspacePointers ?? []) {
+      pushTarget(path28, {
         sourceKind: "workspace-pointer",
         reason: `Workspace pointer from remediation pack ${pack.id} provides update context for ${familyLabel ?? familyId}.`,
         taxonomyFamilyIds: [familyId].filter(Boolean),
@@ -11825,7 +11926,7 @@ function scaffoldCandidateType(targetType, pack = {}) {
   }
   return "revision-plan-candidate";
 }
-function scaffoldTargetArtifact(targetType, targetId, pack = {}, path25 = {}) {
+function scaffoldTargetArtifact(targetType, targetId, pack = {}, path28 = {}) {
   if (targetType === "update-existing-packet") {
     const pointer = (pack.packetPointers ?? []).find((item) => item.id === targetId);
     return pointer?.packetContextPath ?? ARTIFACT_PATHS.taskPacketsIndex;
@@ -11839,9 +11940,9 @@ function scaffoldTargetArtifact(targetType, targetId, pack = {}, path25 = {}) {
   if (targetType === "add-revision-item") {
     return targetId ?? ARTIFACT_PATHS.revisionPlan;
   }
-  return targetId ?? path25.targetId ?? ARTIFACT_PATHS.workspaceIndex;
+  return targetId ?? path28.targetId ?? ARTIFACT_PATHS.workspaceIndex;
 }
-function summarizeCandidateContext(pack = {}, operatorPlaybooks = {}, sourcePlaybookIds = [], path25 = null) {
+function summarizeCandidateContext(pack = {}, operatorPlaybooks = {}, sourcePlaybookIds = [], path28 = null) {
   const playbooksById = new Map((operatorPlaybooks.playbooks ?? []).map((playbook) => [playbook.id, playbook]));
   const linkedPacketPointers = (pack.packetPointers ?? []).slice(0, 3).map((pointer) => ({
     id: pointer.id,
@@ -11883,7 +11984,7 @@ function summarizeCandidateContext(pack = {}, operatorPlaybooks = {}, sourcePlay
     evidenceSummary,
     repairSummary,
     bridgeNotes: uniqueSorted([
-      path25?.rationale ?? null,
+      path28?.rationale ?? null,
       pack.manualNextActions?.[0] ?? null,
       pack.readiness?.overview ?? null
     ]).slice(0, 3)
@@ -11916,30 +12017,30 @@ function buildExecutionBridgeCandidates({ remediationPacks, operatorPlaybooks, e
       taxonomyGroupIds: uniqueSorted(pack.taxonomyAnchors?.groupIds ?? []),
       generatedAt
     };
-    for (const path25 of pack.rankedConversionPaths ?? []) {
-      const candidateType = scaffoldCandidateType(path25.targetType, pack);
-      const targetArtifact = scaffoldTargetArtifact(path25.targetType, path25.targetId, pack, path25);
-      const context = summarizeCandidateContext(pack, operatorPlaybooks, sourcePlaybookIds, path25);
+    for (const path28 of pack.rankedConversionPaths ?? []) {
+      const candidateType = scaffoldCandidateType(path28.targetType, pack);
+      const targetArtifact = scaffoldTargetArtifact(path28.targetType, path28.targetId, pack, path28);
+      const context = summarizeCandidateContext(pack, operatorPlaybooks, sourcePlaybookIds, path28);
       candidates.push({
-        id: `candidate-${slugify2(pack.id)}-${slugify2(path25.targetType)}-${slugify2(path25.targetId)}`,
+        id: `candidate-${slugify2(pack.id)}-${slugify2(path28.targetType)}-${slugify2(path28.targetId)}`,
         candidateType,
-        priority: path25.priority ?? "secondary",
-        rank: path25.rank ?? 1,
-        score: (pack.score ?? 0) + (path25.pathScore ?? 0),
+        priority: path28.priority ?? "secondary",
+        rank: path28.rank ?? 1,
+        score: (pack.score ?? 0) + (path28.pathScore ?? 0),
         targetArtifact,
-        targetId: path25.targetId,
-        suggestedTitle: path25.suggestedTitle ?? `${pack.clusterLabel} candidate`,
+        targetId: path28.targetId,
+        suggestedTitle: path28.suggestedTitle ?? `${pack.clusterLabel} candidate`,
         suggestedSummary: `${pack.summary} Proposed as a ${candidateType} from remediation pack ${pack.id}; review manually before creating any real work item.`,
-        rationale: path25.rationale ?? `Use ${path25.targetType} as a manual execution bridge for ${pack.clusterLabel}.`,
-        suggestedNextStep: path25.nextStep ?? pack.manualNextActions?.[0] ?? `Review ${targetArtifact} before acting.`,
+        rationale: path28.rationale ?? `Use ${path28.targetType} as a manual execution bridge for ${pack.clusterLabel}.`,
+        suggestedNextStep: path28.nextStep ?? pack.manualNextActions?.[0] ?? `Review ${targetArtifact} before acting.`,
         context,
         sourceConversionPath: {
-          targetType: path25.targetType,
-          targetId: path25.targetId,
-          assignedRole: path25.assignedRole ?? "planner",
-          rank: path25.rank ?? 1,
-          pathScore: path25.pathScore ?? 0,
-          rankingBasis: normalizeStringArray5(path25.rankingBasis ?? [])
+          targetType: path28.targetType,
+          targetId: path28.targetId,
+          assignedRole: path28.assignedRole ?? "planner",
+          rank: path28.rank ?? 1,
+          pathScore: path28.pathScore ?? 0,
+          rankingBasis: normalizeStringArray5(path28.rankingBasis ?? [])
         },
         ...commonFields
       });
@@ -13332,36 +13433,113 @@ function refreshDurableSurfaces(root, event = {}) {
   writeText(root, ARTIFACT_PATHS.navigationReport, renderNavigationReport(board, taskGraphWithLoops, openQuestions, decisions, versionsIndex, comparisons, workspaceIndex));
   return { packetIndex, openQuestions, decisions, taskGraph: taskGraphWithLoops, workspaceIndex, metaOptimize: metaOptimize.metaOptimizerState };
 }
-function queryTaskGraph(root) {
-  const { taskGraph } = refreshDurableSurfaces(root, {
-    type: "query-task-graph",
-    summary: "Refreshed task graph query surface.",
-    artifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.workspaceIndex]
+function deriveNavigationQuerySnapshot(root) {
+  const state = loadState(root);
+  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, () => createDefaultBoard(state));
+  const notesIndex = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
+  const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 2, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
+  const reviewConcerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
+  const adversarialState = readJson(root, ARTIFACT_PATHS.adversarialReviewState, { version: 2, unresolvedConcernIds: [], escalatedConcernIds: [], pendingAuthorResponseIds: [], pendingReviewerRulingIds: [], concernStatusCounts: {}, updatedAt: null });
+  const experimentAudits = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
+  const bridgeLog = readJson(root, ARTIFACT_PATHS.claimBridgeLog, { version: 1, items: [], updatedAt: null });
+  const existingLongHorizonMemory = normalizeMetaLongHorizonMemory(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory));
+  const versionsIndex = readJson(root, ARTIFACT_PATHS.versionsIndex, createVersionsIndex);
+  const comparisons = readJson(root, ARTIFACT_PATHS.versionComparisons, createVersionComparisonsIndex);
+  const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
+  const issuesIndex = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
+  const taskPacketIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex);
+  const wikiEntities = readJson(root, ARTIFACT_PATHS.wikiEntities, createWikiEntitiesIndex);
+  const existingById = loadExistingPacketMap(root, taskPacketIndex.items ?? []);
+  const derivedPackets = [
+    ...deriveBoardPackets(board, existingById),
+    ...deriveExperimentPackets(plansIndex),
+    ...deriveIssuePackets(issuesIndex),
+    ...deriveVersionPackets(versionsIndex)
+  ].map((packet) => ({
+    ...existingById.get(packet.id) ?? {},
+    ...packet,
+    questions: packet.questions,
+    decisions: packet.decisions,
+    lineage: packet.lineage,
+    continuationState: packet.continuationState,
+    updatedAt: packet.updatedAt
+  }));
+  const activeIds = new Set(derivedPackets.map((packet) => packet.id));
+  const preserved = (taskPacketIndex.items ?? []).filter((packet) => !activeIds.has(packet.id) && (isFirstClassDoveTaskPacket(packet) || !["task", "blocker", "experiment", "rebuttal-issue", "version"].includes(packet.sourceType)));
+  const packets = markInactiveLegacyPackets([...derivedPackets, ...preserved].map(normalizePacket), activeIds).sort((left, right) => left.id.localeCompare(right.id));
+  const packetById = new Map(packets.map((packet) => [packet.id, packet]));
+  const packetsWithHealth = packets.map((packet) => ({ ...packet, dependencyHealth: buildPacketDependencyHealth(packet, packetById) }));
+  const wikiRelations = readJson(root, ARTIFACT_PATHS.wikiRelations, createWikiRelationsIndex);
+  const figureQa = readJson(root, ARTIFACT_PATHS.figureQa, { version: 1, items: [], issues: [], updatedAt: null });
+  const journal = readJson(root, ARTIFACT_PATHS.sessionJournal, createSessionJournal);
+  const campaignsIndex = normalizeCampaignsIndex(readJson(root, ARTIFACT_PATHS.campaignsIndex, createCampaignsIndex));
+  const operatingState = readProgramOperatingState(root);
+  const runtimeControllerState = normalizeRuntimeControllerState(readJson(root, ARTIFACT_PATHS.runtimeControllerState, createRuntimeControllerState));
+  const runtimeLeases = normalizeRuntimeLeasesIndex(readJson(root, ARTIFACT_PATHS.runtimeLeases, createRuntimeLeasesIndex));
+  const runtimeEvents = normalizeRuntimeEventsIndex(readJson(root, ARTIFACT_PATHS.runtimeEvents, createRuntimeEventsIndex));
+  const runtimeResults = normalizeRuntimeResultsIndex(readJson(root, ARTIFACT_PATHS.runtimeResults, createRuntimeResultsIndex));
+  const runtimeContinuation = normalizeRuntimeContinuationIndex(readJson(root, ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex));
+  const runtimeMirror = buildRuntimeWorkspaceMirror(runtimeControllerState, runtimeContinuation, runtimeLeases, runtimeEvents, runtimeResults);
+  const programsMirror = buildProgramsWorkspaceMirror(operatingState.programs, operatingState.programRuns, operatingState.programApprovals, runtimeControllerState.summary ?? {});
+  const campaignsMirror = buildCampaignsWorkspaceMirror(campaignsIndex, operatingState.programs, operatingState.programRuns);
+  const openQuestions = buildOpenQuestions(notesIndex, packetsWithHealth, reviewState, wikiEntities).sort((left, right) => left.id.localeCompare(right.id));
+  const decisions = buildDecisions(board, versionsIndex, comparisons, packetsWithHealth, wikiEntities);
+  const preliminaryWorkspaceIndex = buildWorkspaceIndex(state, board, packetsWithHealth, reviewState, journal, versionsIndex, comparisons, wikiRelations, figureQa, null, runtimeMirror, programsMirror, campaignsMirror, openQuestions);
+  const metaOptimize = buildMetaOptimizeSurface({
+    root,
+    board,
+    workspaceIndex: preliminaryWorkspaceIndex,
+    journal,
+    reviewConcerns,
+    reviewState,
+    adversarialState,
+    experimentAudits,
+    bridgeLog,
+    figureQa,
+    comparisons,
+    existingLongHorizonMemory
   });
-  return taskGraph;
+  const workspaceIndex = buildWorkspaceIndex(
+    state,
+    board,
+    packetsWithHealth,
+    reviewState,
+    journal,
+    versionsIndex,
+    comparisons,
+    wikiRelations,
+    figureQa,
+    buildMetaOptimizeMirror(metaOptimize.metaRecommendations, metaOptimize.longHorizonMemory, metaOptimize.remediationPacks, metaOptimize.operatorPlaybooks, metaOptimize.executionBridgeCandidates, metaOptimize.operatorFollowThrough, metaOptimize.governanceCoverage, null, metaOptimize.operatorLessons),
+    runtimeMirror,
+    programsMirror,
+    campaignsMirror,
+    openQuestions
+  );
+  return {
+    state,
+    board,
+    packets: packetsWithHealth,
+    openQuestions,
+    decisions,
+    taskGraph: buildTaskGraph(packetsWithHealth, workspaceIndex.autonomyLoops),
+    workspaceIndex,
+    metaOptimize,
+    versionsIndex,
+    comparisons
+  };
+}
+function queryTaskGraph(root) {
+  return deriveNavigationQuerySnapshot(root).taskGraph;
 }
 function queryOpenQuestions(root) {
-  const { openQuestions } = refreshDurableSurfaces(root, {
-    type: "query-open-questions",
-    summary: "Refreshed open questions query surface.",
-    artifactPaths: [ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionSummary]
-  });
+  const { openQuestions } = deriveNavigationQuerySnapshot(root);
   return { items: openQuestions, count: openQuestions.length, reportPath: ARTIFACT_PATHS.navigationReport };
 }
 function queryDecisions(root) {
-  const { decisions } = refreshDurableSurfaces(root, {
-    type: "query-decisions",
-    summary: "Refreshed decisions query surface.",
-    artifactPaths: [ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionSummary]
-  });
+  const { decisions } = deriveNavigationQuerySnapshot(root);
   return { items: decisions, count: decisions.length, reportPath: ARTIFACT_PATHS.navigationReport };
 }
 function queryLineage(root) {
-  refreshDurableSurfaces(root, {
-    type: "query-lineage",
-    summary: "Refreshed lineage query surface.",
-    artifactPaths: [ARTIFACT_PATHS.versionComparisons, ARTIFACT_PATHS.versionComparisonReport, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.workspaceIndex]
-  });
   const versions = readJson(root, ARTIFACT_PATHS.versionsIndex, createVersionsIndex);
   const comparisons = readJson(root, ARTIFACT_PATHS.versionComparisons, createVersionComparisonsIndex);
   return {
@@ -13373,67 +13551,27 @@ function queryLineage(root) {
   };
 }
 function queryWorkspaceIndex(root) {
-  const { workspaceIndex } = refreshDurableSurfaces(root, {
-    type: "query-workspace-index",
-    summary: "Refreshed workspace index query surface.",
-    artifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary]
-  });
-  return workspaceIndex;
-}
-function readMetaOptimizeState(root) {
-  const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(
-    readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex)
-  );
-  const operatorFollowThroughIndex = normalizeMetaOperatorFollowThroughIndex(
-    readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex)
-  );
-  const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(
-    readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex)
-  );
-  const remediationPacks = normalizeMetaRemediationPacksIndex(
-    readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex)
-  );
-  const sourceCatalog = buildFollowThroughSourceCatalog(
-    remediationPacks,
-    operatorPlaybooks,
-    executionBridgeCandidates
-  );
-  return {
-    executionBridgeCandidates,
-    operatorFollowThrough: buildOperatorFollowThrough(
-      root,
-      operatorFollowThroughIndex,
-      sourceCatalog
-    ),
-    operatorPlaybooks,
-    remediationPacks,
-    sourceCatalog
-  };
+  return deriveNavigationQuerySnapshot(root).workspaceIndex;
 }
 function queryMetaOptimize(root) {
-  assertGovernanceMutationRegistered("query-meta-optimize", "exempt");
-  refreshDurableSurfaces(root, {
-    type: "query-meta-optimize",
-    summary: "Refreshed proposal-only meta-optimize surfaces.",
-    artifactPaths: [ARTIFACT_PATHS.metaEvents, ARTIFACT_PATHS.metaExecutionBridgeCandidates, ARTIFACT_PATHS.metaGovernanceCoverage, ARTIFACT_PATHS.metaOperatorLessons, ARTIFACT_PATHS.metaOperatorPlaybooks, ARTIFACT_PATHS.metaRemediationPacks, ARTIFACT_PATHS.metaRecommendations, ARTIFACT_PATHS.metaOptimizerState, ARTIFACT_PATHS.metaOptimizerReport, ARTIFACT_PATHS.workspaceIndex]
-  });
-  const events = readJson(root, ARTIFACT_PATHS.metaEvents, createMetaEventsIndex);
-  const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex));
-  const governanceCoverage = normalizeMetaGovernanceCoverageIndex(readJson(root, ARTIFACT_PATHS.metaGovernanceCoverage, createMetaGovernanceCoverageIndex));
-  const operatorFollowThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
-  const operatorLessons = normalizeMetaOperatorLessonsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorLessons, createMetaOperatorLessonsIndex));
-  const longHorizonMemory = normalizeMetaLongHorizonMemory(readJson(root, ARTIFACT_PATHS.metaLongHorizonMemory, createMetaLongHorizonMemory));
-  const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex));
-  const remediationPacks = normalizeMetaRemediationPacksIndex(readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex));
-  const recommendations = normalizeMetaRecommendationsIndex(readJson(root, ARTIFACT_PATHS.metaRecommendations, createMetaRecommendationsIndex));
-  const state = normalizeMetaOptimizerState(readJson(root, ARTIFACT_PATHS.metaOptimizerState, createMetaOptimizerState));
-  const workspaceIndex = normalizeWorkspaceIndex(readJson(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex));
+  const navigation = deriveNavigationQuerySnapshot(root);
+  const derived = navigation.metaOptimize;
+  const executionBridgeCandidates = derived.executionBridgeCandidates;
+  const governanceCoverage = derived.governanceCoverage;
+  const operatorFollowThrough = derived.operatorFollowThrough;
+  const operatorLessons = derived.operatorLessons;
+  const longHorizonMemory = derived.longHorizonMemory;
+  const operatorPlaybooks = derived.operatorPlaybooks;
+  const remediationPacks = derived.remediationPacks;
+  const recommendations = derived.metaRecommendations;
+  const state = derived.metaOptimizerState;
+  const workspaceIndex = navigation.workspaceIndex;
   return {
     proposalOnly: true,
-    events: events.items ?? [],
+    events: derived.metaEvents.items ?? [],
     executionBridgeCandidates,
     governanceCoverage,
-    governanceCoverageReport: normalizeMetaGovernanceCoverageReport(readJson(root, ARTIFACT_PATHS.metaGovernanceCoverageReport, createMetaGovernanceCoverageReport)),
+    governanceCoverageReport: normalizeMetaGovernanceCoverageReport(derived.metaGovernanceCoverageReport),
     operatorFollowThrough,
     operatorLessons,
     operatorPlaybooks,
@@ -13466,7 +13604,6 @@ function queryMetaOptimize(root) {
   };
 }
 function queryOperatorLessons(root, args = {}) {
-  ensureWorkspace(root);
   const index = normalizeMetaOperatorLessonsIndex(readJson(root, ARTIFACT_PATHS.metaOperatorLessons, createMetaOperatorLessonsIndex));
   const domain = normalizeOptionalString(args.domain, null);
   const status = normalizeOptionalString(args.status, null);
@@ -13628,140 +13765,15 @@ function queryGovernanceCoverageReport(root) {
     markdownPath: ARTIFACT_PATHS.metaGovernanceCoverageReportMarkdown
   };
 }
-function resolveMaterializationIntent(meta, { sourceType, sourceId, selectedConversionPathKey = null } = {}) {
-  if (sourceType === "remediation-pack") {
-    const pack = (meta.remediationPacks.packs ?? []).find((item) => item.id === sourceId);
-    if (!pack) {
-      throw new Error(`Unknown remediation pack: ${sourceId}`);
-    }
-    const selected = selectedConversionPathKey ? (pack.rankedConversionPaths ?? []).find((item) => item.deterministicKey === selectedConversionPathKey) : null;
-    const packetPath = selected ?? (pack.rankedConversionPaths ?? []).find((item) => item.targetType === "create-new-packet") ?? null;
-    if (!packetPath) {
-      const existingPacketPath = (pack.rankedConversionPaths ?? []).find((item) => item.targetType === "update-existing-packet") ?? null;
-      if (existingPacketPath) {
-        throw new Error(`Remediation pack ${sourceId} already points at existing packet ${existingPacketPath.targetId}; refuse to create duplicate work. Update the live packet instead.`);
-      }
-      throw new Error(`Remediation pack ${sourceId} does not offer a create-new-packet conversion path.`);
-    }
-    if (packetPath.targetType !== "create-new-packet") {
-      throw new Error(`Materialization currently supports only create-new-packet remediation paths; got ${packetPath.targetType} for ${sourceId}.`);
-    }
-    return {
-      sourceTitle: pack.title,
-      sourceSummary: pack.summary,
-      sourceArtifactPath: ARTIFACT_PATHS.metaRemediationPacks,
-      selectedConversionPathKey: packetPath.deterministicKey ?? selectedConversionPathKey ?? null,
-      assignedRole: packetPath.assignedRole ?? "planner",
-      title: packetPath.suggestedTitle ?? pack.title,
-      summary: pack.summary,
-      nextAction: packetPath.nextStep ?? pack.manualNextActions?.[0] ?? `Review ${ARTIFACT_PATHS.metaRemediationPacks} and advance ${pack.id}.`,
-      packetId: packetPath.targetId,
-      evidenceLinks: uniqueSorted([ARTIFACT_PATHS.metaRemediationPacks, ...pack.evidence?.artifactPaths ?? []]),
-      remediationPackIds: [pack.id],
-      executionBridgeCandidateIds: [],
-      acceptanceCriteria: uniqueSorted(pack.acceptanceCriteria ?? []),
-      workspacePointers: uniqueSorted(pack.workspacePointers ?? [])
-    };
-  }
-  if (sourceType === "execution-bridge") {
-    const candidate = (meta.executionBridgeCandidates.candidates ?? []).find((item) => item.id === sourceId);
-    if (!candidate) {
-      throw new Error(`Unknown execution bridge candidate: ${sourceId}`);
-    }
-    const targetType = candidate.sourceConversionPath?.targetType ?? null;
-    if (candidate.candidateType !== "packet-candidate" || targetType !== "create-new-packet") {
-      throw new Error(`Execution bridge candidate ${sourceId} is ${candidate.candidateType}/${targetType ?? "unknown"}; materialization currently supports only packet-candidate create-new-packet paths.`);
-    }
-    return {
-      sourceTitle: candidate.suggestedTitle,
-      sourceSummary: candidate.suggestedSummary,
-      sourceArtifactPath: ARTIFACT_PATHS.metaExecutionBridgeCandidates,
-      selectedConversionPathKey: selectedConversionPathKey ?? null,
-      assignedRole: candidate.sourceConversionPath?.assignedRole ?? "planner",
-      title: candidate.suggestedTitle,
-      summary: candidate.suggestedSummary,
-      nextAction: candidate.suggestedNextStep ?? `Review ${ARTIFACT_PATHS.metaExecutionBridgeCandidates} and advance ${candidate.id}.`,
-      packetId: candidate.targetId,
-      evidenceLinks: uniqueSorted([ARTIFACT_PATHS.metaExecutionBridgeCandidates, ...candidate.linkedEvidenceArtifactPaths ?? []]),
-      remediationPackIds: uniqueSorted(candidate.sourceRemediationPackIds ?? []),
-      executionBridgeCandidateIds: [candidate.id],
-      acceptanceCriteria: uniqueSorted(candidate.suggestedAcceptanceCriteria ?? []),
-      workspacePointers: uniqueSorted(candidate.context?.linkedWorkspacePointers ?? [])
-    };
-  }
-  throw new Error(`Unsupported materialization sourceType: ${sourceType}`);
-}
-function assertMaterializationAllowed(meta, packetIndex, { sourceType, sourceId, packetId }) {
-  const unrelatedActionRequired = (meta.operatorFollowThrough.actionRequiredItems ?? []).filter((item) => !(item.sourceType === sourceType && item.sourceId === sourceId));
-  if (unrelatedActionRequired.length > 0) {
-    throw new Error(`Materialization is blocked while unrelated operator follow-through still requires action: ${unrelatedActionRequired.map((item) => item.id).join(", ")}.`);
-  }
-  const existingBySource = (meta.operatorFollowThrough.items ?? []).filter((item) => item.sourceType === sourceType && item.sourceId === sourceId);
-  if (existingBySource.some((item) => item.status === "superseded")) {
-    throw new Error(`Cannot materialize superseded guidance ${sourceType}:${sourceId}.`);
-  }
-  const existingTarget = existingBySource.find((item) => ["accepted-for-execution", "executing", "closed"].includes(item.status) && item.targetBound);
-  if (existingTarget) {
-    throw new Error(`Guidance ${sourceType}:${sourceId} is already bound to ${existingTarget.linkedTargetArtifact}:${existingTarget.linkedTargetId}; refuse to create duplicate work.`);
-  }
-  const duplicatePacket = (packetIndex.items ?? []).find((packet) => packet.id === packetId || packet.materialization?.sourceType === sourceType && packet.materialization?.sourceId === sourceId);
-  if (duplicatePacket) {
-    throw new Error(`A durable packet already exists for ${sourceType}:${sourceId} (${duplicatePacket.id}); refuse to materialize duplicate work.`);
-  }
-}
-function assertSelectedFollowThroughMatchesMaterialization(root, followThroughIndex, args, { sourceType, sourceId, packetId, actorRole }) {
-  const followThroughId = String(args.followThroughId ?? "").trim();
-  if (!followThroughId) {
-    return null;
-  }
-  const selected = (followThroughIndex.items ?? []).find((item) => item.id === followThroughId) ?? null;
-  if (!selected) {
-    throw new Error(`Materialization follow-through ${followThroughId} was not found.`);
-  }
-  if (selected.sourceType !== sourceType || selected.sourceId !== sourceId) {
-    throw new Error(`Materialization follow-through ${followThroughId} does not match ${sourceType}:${sourceId}.`);
-  }
-  if (selected.status !== "accepted-for-execution") {
-    throw new Error(`Materialization follow-through ${followThroughId} is not accepted for execution.`);
-  }
-  if (selected.actorRole && selected.actorRole !== actorRole) {
-    throw new Error(`Materialization follow-through ${followThroughId} belongs to actorRole ${selected.actorRole}, not ${actorRole}.`);
-  }
-  if (args.workerRole && selected.workerRole && selected.workerRole !== args.workerRole) {
-    throw new Error(`Materialization follow-through ${followThroughId} belongs to workerRole ${selected.workerRole}, not ${args.workerRole}.`);
-  }
-  if (!selected.plannedTarget) {
-    throw new Error(`Materialization follow-through ${followThroughId} is not a planned target.`);
-  }
-  if (selected.targetBound) {
-    throw new Error(`Materialization follow-through ${followThroughId} is already target-bound.`);
-  }
-  if (selected.invalidStatus) {
-    throw new Error(`Materialization follow-through ${followThroughId} is invalid for autonomous rebinding.`);
-  }
-  const expectedArtifact = `${ARTIFACT_PATHS.taskPacketsPacketsDir}/${packetId}.json`;
-  if (selected.linkedTargetId !== packetId || selected.linkedTargetArtifact !== expectedArtifact) {
-    throw new Error(`Materialization follow-through ${followThroughId} does not match intended packet target ${expectedArtifact}:${packetId}.`);
-  }
-  if (args.selectedConversionPathKey && selected.selectedConversionPathKey && args.selectedConversionPathKey !== selected.selectedConversionPathKey) {
-    throw new Error(`Materialization follow-through ${followThroughId} does not match selected conversion path ${args.selectedConversionPathKey}.`);
-  }
-  return selected;
-}
 var MATERIALIZATION_PACKET_FIELDS = /* @__PURE__ */ new Set([
   "sourceType",
   "sourceId",
-  "actorRole",
-  "workerRole",
   "selectedConversionPathKey",
   "packetId",
   "followThroughId",
   "title",
   "summary",
-  "phase",
-  "assignedRole",
   "status",
-  "lifecycleStatus",
   "currentFocus",
   "nextAction",
   "dependencies",
@@ -13803,228 +13815,23 @@ function materializeGuidancePacket(root, args = {}) {
   assertGovernanceMutationRegistered("materialize-guidance-packet", "guarded");
   assertNoPolicyOverrideArgs(args, "materialize_guidance_packet");
   assertPacketOnlyMaterializationArgs(args);
-  if (!fs7.existsSync(resolvePath(root, ARTIFACT_PATHS.state))) {
-    ensureWorkspace(root);
-  }
-  const sourceType = String(args.sourceType ?? "").trim();
-  const sourceId = String(args.sourceId ?? "").trim();
-  const actorRole = String(args.actorRole ?? "").trim();
-  if (!sourceType || !sourceId) {
-    throw new Error("materializeGuidancePacket requires sourceType and sourceId.");
-  }
-  if (!actorRole) {
-    throw new Error("materializeGuidancePacket requires actorRole.");
-  }
-  if (!args.executeBy || !args.reviewAfter) {
-    throw new Error("materializeGuidancePacket requires executeBy and reviewAfter so accepted guidance has an explicit execution window.");
-  }
-  const meta = readMetaOptimizeState(root);
-  const sourceCatalog = meta.sourceCatalog;
-  const source = sourceCatalog.get(`${sourceType}:${sourceId}`);
-  if (!source) {
-    throw new Error(`Unknown materialization source: ${sourceType}:${sourceId}`);
-  }
-  if ((source.allowedActorRoles ?? []).length > 0 && !(source.allowedActorRoles ?? []).includes(actorRole) && !(actorRole === "planner" && args.workerRole && (source.allowedActorRoles ?? []).includes(args.workerRole))) {
-    throw new Error(`Actor role ${actorRole} is not allowed to materialize ${sourceType}:${sourceId}. Allowed roles: ${(source.allowedActorRoles ?? []).join(", ")}.`);
-  }
-  if (args.workerRole && (source.allowedActorRoles ?? []).length > 0 && !(source.allowedActorRoles ?? []).includes(args.workerRole)) {
-    throw new Error(`Worker role ${args.workerRole} is not allowed for ${sourceType}:${sourceId}. Allowed roles: ${(source.allowedActorRoles ?? []).join(", ")}.`);
-  }
-  const intent = resolveMaterializationIntent(meta, {
-    sourceType,
-    sourceId,
-    selectedConversionPathKey: args.selectedConversionPathKey ?? null
-  });
-  const packetId = slugify2(args.packetId ?? intent.packetId ?? `task-${sourceId}`);
-  const packetIndex = readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex);
-  const followThroughIndex = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
-  const selectedFollowThrough = assertSelectedFollowThroughMatchesMaterialization(root, followThroughIndex, args, { sourceType, sourceId, packetId, actorRole });
-  const sameSourcePlannedFollowThrough = (meta.operatorFollowThrough.items ?? []).filter((item) => item.sourceType === sourceType && item.sourceId === sourceId && item.status === "accepted-for-execution" && item.plannedTarget && !item.targetBound);
-  if (!selectedFollowThrough && sameSourcePlannedFollowThrough.length > 0) {
-    const stalePlannedIds = sameSourcePlannedFollowThrough.filter((item) => item.stale).map((item) => item.id);
-    if (stalePlannedIds.length > 0) {
-      throw new Error(`Materialization for ${sourceType}:${sourceId} is blocked because planned follow-through is stale: ${stalePlannedIds.join(", ")}.`);
-    }
-    throw new Error(`Materialization for ${sourceType}:${sourceId} requires followThroughId because planned follow-through already exists: ${sameSourcePlannedFollowThrough.map((item) => item.id).join(", ")}.`);
-  }
-  if (selectedFollowThrough) {
-    const computedFollowThrough = (meta.operatorFollowThrough.items ?? []).find((item) => item.id === selectedFollowThrough.id) ?? null;
-    if (computedFollowThrough?.stale) {
-      throw new Error(`Materialization follow-through ${selectedFollowThrough.id} is stale and must be reassessed before materialization.`);
-    }
-  }
-  assertMaterializationAllowed(meta, packetIndex, { sourceType, sourceId, packetId });
-  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard);
-  const timestamp = nowIso();
-  const followThroughId = String(args.followThroughId ?? `follow-through-${slugify2(`${sourceType}-${sourceId}`)}`).trim() || `follow-through-${slugify2(`${sourceType}-${sourceId}`)}`;
-  const workerRole = ROLE_IDS.includes(args.workerRole) ? args.workerRole : null;
-  if (workerRole && args.assignedRole && args.assignedRole !== workerRole) {
-    throw new Error(`materializeGuidancePacket requires assignedRole to match workerRole ${workerRole} when a role envelope is provided.`);
-  }
-  const doveDomain = normalizeDoveDomainId(args.doveDomain ?? args.missionDomain ?? args.domain, null);
-  const missionStage = normalizeDoveMissionLifecycleStage(args.missionStage ?? args.stage, null);
-  const targetArtifacts = uniqueSorted([
-    ...normalizeStringArray5(args.targetArtifacts),
-    ...normalizeStringArray5(args.artifacts),
-    ...normalizeStringArray5(args.artifactPaths)
-  ]);
-  const acceptanceCriteria = uniqueSorted([
-    ...intent.acceptanceCriteria ?? [],
-    ...normalizeStringArray5(args.acceptanceCriteria),
-    ...normalizeStringArray5(args.acceptanceChecks)
-  ]);
-  const packet = normalizePacket({
-    id: packetId,
-    sourceType: "materialized-guidance",
-    sourceId,
-    title: args.title ?? intent.title ?? source.title,
-    summary: args.summary ?? intent.summary ?? source.summary ?? "",
-    phase: args.phase ?? board.currentPhase,
-    phaseContextId: `phase-${args.phase ?? board.currentPhase}`,
-    doveDomain,
-    missionStage: missionStage ?? void 0,
-    missionGoal: args.goal ?? args.missionGoal ?? args.objective ?? void 0,
-    returnProtocol: args.returnProtocol ?? void 0,
-    acceptanceCriteria,
-    status: args.status ?? "pending",
-    lifecycleStatus: args.lifecycleStatus ?? "waiting",
-    active: true,
-    assignedRole: workerRole ?? (ROLE_IDS.includes(args.assignedRole) ? args.assignedRole : intent.assignedRole),
-    currentFocus: args.currentFocus ?? args.title ?? intent.title ?? source.title,
-    nextAction: args.nextAction ?? intent.nextAction,
-    dependencies: normalizeStringArray5(args.dependencies),
-    evidenceLinks: uniqueSorted([
-      source.sourceArtifactPath,
-      ...intent.evidenceLinks ?? [],
-      ...normalizeStringArray5(args.evidenceLinks)
-    ]),
-    outputPaths: uniqueSorted([
-      ARTIFACT_PATHS.taskPacketsIndex,
-      ...targetArtifacts,
-      ...normalizeStringArray5(args.outputPaths)
-    ]),
-    questions: [],
-    decisions: [{
-      id: `materialized-${packetId}`,
-      summary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packetId}.`,
-      rationale: args.rationale ?? source.summary ?? "",
-      origin: source.sourceArtifactPath,
-      recordedAt: timestamp
-    }],
-    lineage: {
-      boardPhase: board.currentPhase,
-      intentType: board.intentType,
-      currentVersionId: board.versionLineage?.currentVersionId ?? null,
-      activeComparisonTargets: normalizeStringArray5(board.activeComparisonTargets),
-      materializedFrom: {
-        sourceType,
-        sourceId,
-        sourceArtifactPath: source.sourceArtifactPath,
-        sourceTitle: source.title,
-        selectedConversionPathKey: intent.selectedConversionPathKey
-      }
-    },
-    continuationState: {
-      status: "ready-to-resume",
-      lastCheckpoint: args.decisionSummary ?? `Materialized from ${sourceType}:${sourceId}.`,
-      updatedAt: timestamp
-    },
-    autonomyEnvelope: workerRole ? {
-      controllerRole: actorRole,
-      workerRole,
-      scopeType: "packet-local",
-      explicitOnly: true,
-      requiredReadPaths: [],
-      localRules: [
-        "Planner remains the supervising controller for this bounded autonomous packet step.",
-        "The runtime may advance only this packet and its matched follow-through/runtime audit surfaces in one invocation."
-      ]
-    } : null,
-    updatedAt: timestamp,
-    materialization: {
-      pathType: "guidance-to-packet",
-      sourceType,
-      sourceId,
-      sourceArtifactPath: source.sourceArtifactPath,
-      sourceFingerprint: source.sourceFingerprint,
-      sourceTitle: intent.sourceTitle ?? source.title,
-      sourceSummary: intent.sourceSummary ?? source.summary,
-      remediationPackIds: uniqueSorted(intent.remediationPackIds ?? []),
-      executionBridgeCandidateIds: uniqueSorted(intent.executionBridgeCandidateIds ?? []),
-      followThroughId,
-      selectedConversionPathKey: intent.selectedConversionPathKey,
-      acceptanceCriteria,
-      workspacePointers: uniqueSorted(intent.workspacePointers ?? []),
-      createdAt: timestamp,
-      createdByRole: actorRole,
-      decisionSummary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packetId}.`
-    }
-  });
-  const nextPacketIndex = {
-    ...packetIndex,
-    items: [...(packetIndex.items ?? []).filter((item) => item.id !== packet.id), packet],
-    updatedAt: timestamp
-  };
-  const preparedFollowThrough = prepareOperatorFollowThrough(root, {
-    id: followThroughId,
-    sourceType,
-    sourceId,
-    actorRole,
-    workerRole,
-    status: "accepted-for-execution",
-    decisionSummary: args.decisionSummary ?? `Materialized ${sourceType}:${sourceId} into task packet ${packet.id}.`,
-    rationale: args.rationale ?? "",
-    selectedConversionPathKey: intent.selectedConversionPathKey,
-    linkedTargetArtifact: packet.packetPath,
-    linkedTargetId: packet.id,
-    executeBy: args.executeBy,
-    reviewAfter: args.reviewAfter
-  }, {
-    sourceCatalog,
-    timestamp,
-    targetPreview: {
-      artifactPath: packet.packetPath,
-      targetId: packet.id
-    }
-  });
-  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, nextPacketIndex);
-  writeJson(root, packet.packetPath, packet);
-  commitOperatorFollowThrough(root, preparedFollowThrough);
-  const materializedPacket = readJson(root, packet.packetPath, null);
-  return {
-    status: "materialized",
-    packetId: packet.id,
-    packetPath: packet.packetPath,
-    packetContextPath: packet.packetContextPath,
-    summary: materializedPacket?.summary ?? packet.summary,
-    sourceType,
-    sourceId,
-    followThroughId,
-    artifactPaths: [packet.packetPath, ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.metaOperatorFollowThrough, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.navigationReport],
-    packet: materializedPacket
-  };
+  throw new Error(
+    "Public materialize_guidance_packet is disabled: packet materialization requires a pre-existing, dynamically valid system-owned program approval, program run, runtime execution claim, and trusted authority provenance. No public caller field grants that authority."
+  );
 }
 var PUBLIC_FOLLOW_THROUGH_STATUSES = /* @__PURE__ */ new Set([
   "acknowledged",
-  "accepted-for-execution",
-  "deferred",
-  "accepted-risk"
+  "deferred"
 ]);
 var PUBLIC_FOLLOW_THROUGH_FIELDS = /* @__PURE__ */ new Set([
   "id",
   "sourceType",
   "sourceId",
   "status",
-  "actorRole",
-  "workerRole",
   "decisionSummary",
   "rationale",
   "selectedConversionPathKey",
-  "linkedTargetArtifact",
-  "linkedTargetId",
-  "plannedTarget",
   "deferUntil",
-  "executeBy",
   "reviewAfter"
 ]);
 function assertPublicFollowThroughInput(root, args = {}) {
@@ -14054,16 +13861,8 @@ function assertPublicFollowThroughInput(root, args = {}) {
   }
 }
 function readFollowThroughSourceCatalog(root) {
-  const remediationPacks = normalizeMetaRemediationPacksIndex(
-    readJson(root, ARTIFACT_PATHS.metaRemediationPacks, createMetaRemediationPacksIndex)
-  );
-  const operatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(
-    readJson(root, ARTIFACT_PATHS.metaOperatorPlaybooks, createMetaOperatorPlaybooksIndex)
-  );
-  const executionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(
-    readJson(root, ARTIFACT_PATHS.metaExecutionBridgeCandidates, createMetaExecutionBridgeCandidatesIndex)
-  );
-  return buildFollowThroughSourceCatalog(remediationPacks, operatorPlaybooks, executionBridgeCandidates);
+  const meta = queryMetaOptimize(root);
+  return buildFollowThroughSourceCatalog(meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates);
 }
 function prepareOperatorFollowThrough(root, args = {}, options = {}) {
   const sourceType = args.sourceType;
@@ -14138,78 +13937,156 @@ function commitOperatorFollowThrough(root, prepared) {
 function recordOperatorFollowThrough(root, args = {}) {
   assertGovernanceMutationRegistered("record-operator-follow-through", "exempt");
   assertPublicFollowThroughInput(root, args);
-  return commitOperatorFollowThrough(root, prepareOperatorFollowThrough(root, args));
+  const sourceCatalog = readFollowThroughSourceCatalog(root);
+  const source = sourceCatalog.get(`${args.sourceType}:${args.sourceId}`) ?? null;
+  if (!source) {
+    throw new Error(`Unknown follow-through source: ${args.sourceType}:${args.sourceId}`);
+  }
+  const actorRole = normalizeStringArray5(source.allowedActorRoles)[0] ?? "planner";
+  const publicRecord = {
+    ...args,
+    actorRole,
+    linkedTargetArtifact: null,
+    linkedTargetId: null,
+    plannedTarget: false,
+    executeBy: null,
+    workerRole: null
+  };
+  return commitOperatorFollowThrough(root, prepareOperatorFollowThrough(root, publicRecord, { sourceCatalog }));
+}
+function deriveContextQuerySnapshot(root) {
+  const navigation = deriveNavigationQuerySnapshot(root);
+  const derived = navigation.metaOptimize;
+  const meta = {
+    executionBridgeCandidates: derived.executionBridgeCandidates,
+    governanceCoverage: derived.governanceCoverage,
+    operatorFollowThrough: derived.operatorFollowThrough,
+    operatorLessons: derived.operatorLessons,
+    operatorPlaybooks: derived.operatorPlaybooks,
+    remediationPacks: derived.remediationPacks,
+    longHorizon: derived.longHorizonMemory,
+    recommendations: derived.metaRecommendations.items ?? [],
+    state: derived.metaOptimizerState
+  };
+  const packetById = new Map(navigation.packets.map((packet) => [packet.id, packet]));
+  return { navigation, meta, packetById };
 }
 function readPhaseContextManifest(root, phaseId = null) {
-  refreshDurableSurfaces(root, {
-    type: "read-phase-context-manifest",
-    summary: `Refreshed phase context manifest for ${phaseId ?? "current phase"}.`,
-    artifactPaths: [path8.join(ARTIFACT_PATHS.phaseContextsDir, `${phaseId ?? "current"}.json`), ARTIFACT_PATHS.workspaceIndex]
-  });
-  const board = readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard);
-  const resolvedPhaseId = phaseId ?? board.currentPhase;
-  return readJson(root, path8.join(ARTIFACT_PATHS.phaseContextsDir, `${resolvedPhaseId}.json`), null);
+  const { navigation, meta } = deriveContextQuerySnapshot(root);
+  const resolvedPhaseId = phaseId ?? navigation.board.currentPhase;
+  const board = resolvedPhaseId === navigation.board.currentPhase ? navigation.board : { ...navigation.board, currentPhase: resolvedPhaseId };
+  return buildPhaseManifest(board, navigation.packets, navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons);
 }
 function readRoleContextManifest(root, roleId) {
   if (!ROLE_IDS.includes(roleId)) {
     throw new Error(`Unknown roleId: ${roleId}`);
   }
-  refreshDurableSurfaces(root, {
-    type: "read-role-context-manifest",
-    summary: `Refreshed role context manifest for ${roleId}.`,
-    artifactPaths: [path8.join(ARTIFACT_PATHS.roleContextsDir, `${roleId}.json`)]
-  });
-  return readJson(root, path8.join(ARTIFACT_PATHS.roleContextsDir, `${roleId}.json`), null);
+  const { navigation, meta } = deriveContextQuerySnapshot(root);
+  const role = navigation.board.roleRoster?.find((item) => item.id === roleId) ?? ROLE_HIERARCHY[roleId];
+  return buildRoleManifest(role, navigation.packets, navigation.openQuestions, navigation.decisions, navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons);
 }
 function readPacketContextManifest(root, packetId) {
   const normalizedPacketId = slugify2(packetId);
-  refreshDurableSurfaces(root, {
-    type: "read-packet-context-manifest",
-    summary: `Refreshed packet context manifest for ${normalizedPacketId}.`,
-    artifactPaths: [path8.join(ARTIFACT_PATHS.packetContextsDir, `${normalizedPacketId}.json`), ARTIFACT_PATHS.workspaceIndex]
-  });
-  return readJson(root, path8.join(ARTIFACT_PATHS.packetContextsDir, `${normalizedPacketId}.json`), null);
+  const { navigation, packetById } = deriveContextQuerySnapshot(root);
+  const packet = packetById.get(normalizedPacketId) ?? null;
+  return packet ? buildPacketContextManifest(root, navigation.board, packet, packetById, navigation.workspaceIndex) : null;
 }
 function readArtifactContextManifest(root, artifactPath) {
   const normalizedArtifactPath = normalizeArtifactPath(artifactPath);
-  refreshDurableSurfaces(root, {
-    type: "read-artifact-context-manifest",
-    summary: `Refreshed artifact context manifest for ${normalizedArtifactPath}.`,
-    artifactPaths: [artifactContextPath(normalizedArtifactPath), ARTIFACT_PATHS.workspaceIndex]
-  });
-  return readJson(root, artifactContextPath(normalizedArtifactPath), null);
+  const navigation = deriveNavigationQuerySnapshot(root);
+  return buildArtifactContextManifest(root, normalizedArtifactPath, navigation.board, navigation.packets, navigation.workspaceIndex);
 }
 function readActionContextBundle(root, args = {}) {
   const scopeType = args.scopeType ?? "current";
-  let scopeId = "current";
+  const { navigation, meta, packetById } = deriveContextQuerySnapshot(root);
   if (scopeType === "role") {
-    scopeId = `role-${args.roleId}`;
-  } else if (scopeType === "packet") {
-    scopeId = `packet-${args.packetId}`;
-  } else if (scopeType === "phase") {
-    scopeId = `phase-${args.phaseId}`;
-  } else if (scopeType === "artifact") {
-    scopeId = `artifact-${normalizeArtifactPath(args.artifactPath)}`;
-  }
-  refreshDurableSurfaces(root, {
-    type: "read-action-context-bundle",
-    summary: `Refreshed action context bundle for ${scopeType}.`,
-    artifactPaths: [actionContextPath(scopeId), ARTIFACT_PATHS.workspaceIndex]
-  });
-  if (scopeType === "artifact") {
-    const artifactManifest = readArtifactContextManifest(root, args.artifactPath);
+    if (!ROLE_IDS.includes(args.roleId)) {
+      throw new Error(`Unknown roleId: ${args.roleId}`);
+    }
+    const role = navigation.board.roleRoster?.find((item) => item.id === args.roleId) ?? ROLE_HIERARCHY[args.roleId];
+    const roleManifest = buildRoleManifest(role, navigation.packets, navigation.openQuestions, navigation.decisions, navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons);
     return buildActionContextBundle({
-      scopeType: "artifact",
-      scopeId,
-      summary: `Artifact-scoped pre-action bundle for ${artifactManifest?.artifactPath ?? normalizeArtifactPath(args.artifactPath)}.`,
-      board: readJson(root, ARTIFACT_PATHS.orchestrationBoard, createDefaultBoard),
-      workspaceIndex: readJson(root, ARTIFACT_PATHS.workspaceIndex, createWorkspaceIndex),
-      artifactPath: artifactManifest?.artifactPath ?? normalizeArtifactPath(args.artifactPath),
-      requiredReadPaths: [artifactContextPath(artifactManifest?.artifactPath ?? normalizeArtifactPath(args.artifactPath)), ...artifactManifest?.readBeforeMutating ?? []],
-      localRules: artifactManifest?.localRules ?? []
+      scopeType: "role",
+      scopeId: args.roleId,
+      summary: `Role-scoped pre-action bundle for ${args.roleId}.`,
+      board: navigation.board,
+      workspaceIndex: navigation.workspaceIndex,
+      roleId: args.roleId,
+      phaseId: navigation.workspaceIndex.boardPhase,
+      requiredReadPaths: roleManifest.preActionReadPaths,
+      localRules: roleManifest.behaviorDiscipline.localRules,
+      operatorGuidance: roleManifest.operatorGuidance
     });
   }
-  return readJson(root, actionContextPath(scopeId), null);
+  if (scopeType === "packet") {
+    const packetId = slugify2(args.packetId);
+    const packet = packetById.get(packetId) ?? null;
+    if (!packet) {
+      return null;
+    }
+    const manifest = buildPacketContextManifest(root, navigation.board, packet, packetById, navigation.workspaceIndex);
+    return buildActionContextBundle({
+      scopeType: "packet",
+      scopeId: packetId,
+      summary: `Packet-scoped pre-action bundle for ${packetId}.`,
+      board: navigation.board,
+      workspaceIndex: navigation.workspaceIndex,
+      packet,
+      roleId: packet.assignedRole,
+      phaseId: packet.phase,
+      requiredReadPaths: manifest.preActionReadPaths,
+      localRules: manifest.behaviorDiscipline.localRules,
+      operatorGuidance: buildOperatorGuidance(navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons, { roleId: packet.assignedRole, packetId, packet })
+    });
+  }
+  if (scopeType === "phase") {
+    const phaseId = args.phaseId ?? navigation.board.currentPhase;
+    const phaseBoard = phaseId === navigation.board.currentPhase ? navigation.board : { ...navigation.board, currentPhase: phaseId };
+    const phaseManifest = buildPhaseManifest(phaseBoard, navigation.packets, navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons);
+    return buildActionContextBundle({
+      scopeType: "phase",
+      scopeId: phaseManifest.phaseId,
+      summary: `Phase-scoped pre-action bundle for ${phaseManifest.phaseId}.`,
+      board: { ...navigation.board, currentPhase: phaseManifest.phaseId },
+      workspaceIndex: navigation.workspaceIndex,
+      roleId: phaseManifest.assignedRole,
+      phaseId: phaseManifest.phaseId,
+      requiredReadPaths: phaseManifest.preActionReadPaths,
+      localRules: phaseManifest.behaviorDiscipline.localRules,
+      operatorGuidance: phaseManifest.operatorGuidance
+    });
+  }
+  if (scopeType === "artifact") {
+    const normalizedArtifactPath = normalizeArtifactPath(args.artifactPath);
+    const artifactManifest = buildArtifactContextManifest(root, normalizedArtifactPath, navigation.board, navigation.packets, navigation.workspaceIndex);
+    return buildActionContextBundle({
+      scopeType: "artifact",
+      scopeId: `artifact-${normalizedArtifactPath}`,
+      summary: `Artifact-scoped pre-action bundle for ${normalizedArtifactPath}.`,
+      board: navigation.board,
+      workspaceIndex: navigation.workspaceIndex,
+      artifactPath: normalizedArtifactPath,
+      requiredReadPaths: [artifactContextPath(normalizedArtifactPath), ...artifactManifest.readBeforeMutating],
+      localRules: artifactManifest.localRules
+    });
+  }
+  return buildActionContextBundle({
+    scopeType: "current",
+    scopeId: "current",
+    summary: "Current workspace pre-action bundle. Read this before mutating durable workflow state.",
+    board: navigation.board,
+    workspaceIndex: navigation.workspaceIndex,
+    roleId: navigation.board.assignedRole,
+    phaseId: navigation.board.currentPhase,
+    artifactPath: navigation.workspaceIndex.contextSurfaces?.prioritizedArtifactContextPaths?.[0] ?? null,
+    requiredReadPaths: navigation.workspaceIndex.behaviorDiscipline.requiredReadOrder,
+    localRules: [
+      "Start from the current action bundle, then follow the required read order.",
+      "Use packet and artifact-local guidance instead of broad top-level rules when available.",
+      "Do not assume hidden rule loading; read the surfaced files explicitly before acting."
+    ],
+    operatorGuidance: buildOperatorGuidance(navigation.workspaceIndex, meta.remediationPacks, meta.operatorPlaybooks, meta.executionBridgeCandidates, meta.operatorFollowThrough, meta.operatorLessons, { roleId: navigation.board.assignedRole })
+  });
 }
 function summarizeSessionJournal(root) {
   assertGovernanceMutationRegistered("summarize-session-journal", "exempt");
@@ -14227,7 +14104,7 @@ function summarizeSessionJournal(root) {
 }
 function readBoundaryReport(root) {
   const boundaryPath = resolvePath(root, ARTIFACT_PATHS.workflowBoundaries);
-  if (!fs7.existsSync(boundaryPath)) {
+  if (!fs6.existsSync(boundaryPath)) {
     return {
       status: "missing",
       error: "Boundary policy file is missing.",
@@ -14238,7 +14115,7 @@ function readBoundaryReport(root) {
   }
   let boundaries;
   try {
-    boundaries = JSON.parse(fs7.readFileSync(boundaryPath, "utf8"));
+    boundaries = JSON.parse(fs6.readFileSync(boundaryPath, "utf8"));
   } catch (error) {
     return {
       status: "invalid",
@@ -14248,19 +14125,19 @@ function readBoundaryReport(root) {
       userOwnedExistingPaths: []
     };
   }
-  const missingBootstrapArtifacts = (boundaries.doveBootstrapOnlyPaths ?? []).filter((relativePath) => !fs7.existsSync(resolvePath(root, relativePath)));
+  const missingBootstrapArtifacts = (boundaries.doveBootstrapOnlyPaths ?? []).filter((relativePath) => !fs6.existsSync(resolvePath(root, relativePath)));
   return {
     status: "ok",
     boundaries,
     missingBootstrapArtifacts,
-    userOwnedExistingPaths: (boundaries.userOwnedPaths ?? []).filter((relativePath) => fs7.existsSync(resolvePath(root, relativePath)))
+    userOwnedExistingPaths: (boundaries.userOwnedPaths ?? []).filter((relativePath) => fs6.existsSync(resolvePath(root, relativePath)))
   };
 }
 
 // src/core/orchestration.mjs
-import fs9 from "node:fs";
-import path10 from "node:path";
-import crypto6 from "node:crypto";
+import fs10 from "node:fs";
+import path12 from "node:path";
+import crypto7 from "node:crypto";
 
 // src/core/mutation-guard.mjs
 var GOVERNANCE_MUTATION_BY_ID = new Map([
@@ -15033,8 +14910,12 @@ function buildCommandResultCard(details = {}, responseLanguage = "zh") {
   });
 }
 
+// src/core/review-proof.mjs
+import fs9 from "node:fs";
+import path11 from "node:path";
+
 // src/core/artifact-integrity.mjs
-import fs8 from "node:fs";
+import fs7 from "node:fs";
 import path9 from "node:path";
 import { inflateSync } from "node:zlib";
 var DEFAULT_READ_LIMIT_BYTES = 24 * 1024;
@@ -15317,7 +15198,7 @@ function completionPolicyContext(options = {}) {
 }
 function isExternalArtifactReference(value) {
   const text3 = String(value ?? "").trim();
-  return /^https?:\/\/[^\s]+$/iu.test(text3) || /^(?:doi|arxiv|source):[^\s]+$/iu.test(text3) || /^10\.\d{4,9}\/[^\s]+$/u.test(text3);
+  return /^https?:\/\/[^\s]+$/iu.test(text3) || /^(?:doi|arxiv|source|note):[^\s]+$/iu.test(text3) || /^10\.\d{4,9}\/[^\s]+$/u.test(text3);
 }
 function normalizeProjectRelativePath(rawPath) {
   const original = typeof rawPath === "string" ? rawPath.trim() : String(rawPath ?? "").trim();
@@ -15340,16 +15221,16 @@ function normalizeProjectRelativePath(rawPath) {
   return { ok: true, path: original, normalizedPath };
 }
 function readBoundedText(fullPath, maxBytes = DEFAULT_READ_LIMIT_BYTES) {
-  const descriptor = fs8.openSync(fullPath, "r");
+  const descriptor = fs7.openSync(fullPath, "r");
   try {
     const buffer = Buffer.alloc(maxBytes);
-    const bytesRead = fs8.readSync(descriptor, buffer, 0, maxBytes, 0);
+    const bytesRead = fs7.readSync(descriptor, buffer, 0, maxBytes, 0);
     return {
       text: buffer.subarray(0, bytesRead).toString("utf8"),
       bytesRead
     };
   } finally {
-    fs8.closeSync(descriptor);
+    fs7.closeSync(descriptor);
   }
 }
 var EXPERIMENT_RESULT_OUTCOMES = /* @__PURE__ */ new Set(["supports", "refutes", "inconclusive", "failed", "pending"]);
@@ -15405,13 +15286,13 @@ function inspectSemanticEvidence(relativePath, text3) {
   };
 }
 function readBoundedBuffer(fullPath, maxBytes = DEFAULT_READ_LIMIT_BYTES) {
-  const descriptor = fs8.openSync(fullPath, "r");
+  const descriptor = fs7.openSync(fullPath, "r");
   try {
     const buffer = Buffer.alloc(maxBytes);
-    const bytesRead = fs8.readSync(descriptor, buffer, 0, maxBytes, 0);
+    const bytesRead = fs7.readSync(descriptor, buffer, 0, maxBytes, 0);
     return buffer.subarray(0, bytesRead);
   } finally {
-    fs8.closeSync(descriptor);
+    fs7.closeSync(descriptor);
   }
 }
 function completionMediaFormat(relativePath) {
@@ -15862,8 +15743,8 @@ function inspectDeclaredPath(root, rawPath, options = {}) {
   let canonicalRelativePath;
   let stat;
   try {
-    realRootPath = fs8.realpathSync(rootPath);
-    realFullPath = fs8.realpathSync(fullPath);
+    realRootPath = fs7.realpathSync(rootPath);
+    realFullPath = fs7.realpathSync(fullPath);
     const relativeToRealRoot = path9.relative(realRootPath, realFullPath);
     if (relativeToRealRoot === ".." || relativeToRealRoot.startsWith(`..${path9.sep}`) || path9.isAbsolute(relativeToRealRoot)) {
       return {
@@ -15876,7 +15757,7 @@ function inspectDeclaredPath(root, rawPath, options = {}) {
       };
     }
     canonicalRelativePath = relativeToRealRoot.split(path9.sep).join("/");
-    stat = fs8.statSync(realFullPath);
+    stat = fs7.statSync(realFullPath);
   } catch (error) {
     if (error?.code === "ENOENT") {
       return {
@@ -16351,14 +16232,14 @@ function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
   const evidencePaths = normalizeStringArray8(evidence.evidencePaths);
   const localEvidencePaths = evidencePaths.filter((item) => !isExternalArtifactReference(item));
   const externalEvidenceRefs = evidencePaths.filter(isExternalArtifactReference);
-  const sourceEvidenceRefs = externalEvidenceRefs.filter((item) => item.startsWith("source:"));
+  const sourceEvidenceRefs = externalEvidenceRefs.filter((item) => item.startsWith("source:") || item.startsWith("note:"));
   const eligibleSourceEvidenceRefs = sourceEvidenceRefs.filter((item) => eligibleSourceReferences.has(item));
   const pathEvidence = completionPathEvidence(root, localEvidencePaths, policy, inspectOptions);
   const criteria = (Array.isArray(evidence.verifiedCriteria) ? evidence.verifiedCriteria : []).map((criterion) => {
     const criterionEvidencePaths = normalizeStringArray8(criterion?.evidencePaths);
     const criterionLocalEvidencePaths = criterionEvidencePaths.filter((item) => !isExternalArtifactReference(item));
     const criterionExternalEvidenceRefs = criterionEvidencePaths.filter(isExternalArtifactReference);
-    const criterionEligibleSourceEvidenceRefs = criterionExternalEvidenceRefs.filter((item) => item.startsWith("source:")).filter((item) => eligibleSourceReferences.has(item));
+    const criterionEligibleSourceEvidenceRefs = criterionExternalEvidenceRefs.filter((item) => item.startsWith("source:") || item.startsWith("note:")).filter((item) => eligibleSourceReferences.has(item));
     const criterionPathEvidence = completionPathEvidence(root, criterionLocalEvidencePaths, policy, inspectOptions);
     const negativeOutcome = negativeOutcomeInspection(root, criterion, criterionPathEvidence, inspectOptions);
     return {
@@ -16402,6 +16283,427 @@ function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
     },
     satisfied: (pathEvidence.satisfied || eligibleSourceEvidenceRefs.length > 0) && missingCriteriaEvidence.length === 0 && problemPaths.length === 0 && uncoveredRequirements.length === 0,
     hasSubstantiveEvidence: substantiveEvidencePaths.length > 0 && problemPaths.length === 0
+  };
+}
+
+// src/core/review-artifact-snapshot.mjs
+import crypto6 from "node:crypto";
+import fs8 from "node:fs";
+import path10 from "node:path";
+function sha256Buffer(value) {
+  return crypto6.createHash("sha256").update(value).digest("hex");
+}
+function sha256File(fullPath) {
+  return sha256Buffer(fs8.readFileSync(fullPath));
+}
+function stableSnapshotSetHash(snapshots = []) {
+  const canonical = [...snapshots].map(({ path: artifactPath, sizeBytes, sha256: sha2563 }) => ({ path: artifactPath, sizeBytes, sha256: sha2563 })).sort((left, right) => left.path.localeCompare(right.path));
+  return sha256Buffer(`${JSON.stringify(canonical)}
+`);
+}
+function canonicalReviewArtifactPath(root, relativePath, label = "review artifact") {
+  const normalized = normalizeProjectRelativePath(relativePath);
+  if (!normalized.ok) {
+    throw new Error(`${label} has an unsafe path ${relativePath}: ${normalized.reason}.`);
+  }
+  const inspection = inspectDeclaredPath(root, normalized.normalizedPath, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true
+  });
+  if (inspection.status !== "existing") {
+    throw new Error(`${label} is not a usable file at ${normalized.normalizedPath}: ${inspection.reason ?? inspection.status}.`);
+  }
+  return inspection.canonicalRelativePath ?? inspection.normalizedPath;
+}
+function snapshotReviewedArtifacts(root, relativePaths, label = "reviewed artifacts") {
+  const snapshots = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const relativePath of relativePaths ?? []) {
+    const canonicalPath = canonicalReviewArtifactPath(root, relativePath, label);
+    if (seen.has(canonicalPath)) {
+      continue;
+    }
+    seen.add(canonicalPath);
+    const inspection = inspectDeclaredPath(root, canonicalPath, {
+      requireNonEmpty: true,
+      rejectBookkeeping: true
+    });
+    snapshots.push({
+      path: canonicalPath,
+      sizeBytes: inspection.sizeBytes,
+      sha256: sha256File(path10.resolve(root, canonicalPath))
+    });
+  }
+  if (snapshots.length === 0) {
+    throw new Error(`${label} requires at least one existing non-empty non-bookkeeping reviewed artifact.`);
+  }
+  snapshots.sort((left, right) => left.path.localeCompare(right.path));
+  return {
+    reviewedArtifacts: snapshots,
+    reviewedArtifactSetSha256: stableSnapshotSetHash(snapshots)
+  };
+}
+function normalizedSnapshot(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const normalized = normalizeProjectRelativePath(value.path);
+  if (!normalized.ok || !Number.isSafeInteger(value.sizeBytes) || value.sizeBytes <= 0 || typeof value.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(value.sha256)) {
+    return null;
+  }
+  return {
+    path: normalized.normalizedPath,
+    sizeBytes: value.sizeBytes,
+    sha256: value.sha256
+  };
+}
+function normalizeSnapshotArray(value) {
+  if (!Array.isArray(value)) {
+    return { ok: false, snapshots: [], reason: "reviewedArtifacts must be an array" };
+  }
+  const snapshots = value.map(normalizedSnapshot);
+  if (snapshots.some((item) => item === null) || snapshots.length === 0) {
+    return { ok: false, snapshots: [], reason: "reviewedArtifacts must contain valid non-empty artifact snapshots" };
+  }
+  const paths = snapshots.map((item) => item.path);
+  if (new Set(paths).size !== paths.length) {
+    return { ok: false, snapshots: [], reason: "reviewedArtifacts contains duplicate canonical paths" };
+  }
+  snapshots.sort((left, right) => left.path.localeCompare(right.path));
+  return { ok: true, snapshots, reason: null };
+}
+function snapshotsEqual(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+function verifyPreparedReviewSnapshot(root, {
+  manifest,
+  input,
+  inputPath,
+  actualInputSha256,
+  handoffInputPath,
+  handoffInputSha256,
+  handoffReviewedArtifactPaths
+}) {
+  const failures = [];
+  if (manifest.inputPath !== inputPath || handoffInputPath !== inputPath) {
+    failures.push("input-path-mismatch");
+  }
+  if (manifest.inputSha256 !== actualInputSha256 || handoffInputSha256 !== actualInputSha256) {
+    failures.push("input-hash-mismatch");
+  }
+  const manifestSnapshots = normalizeSnapshotArray(manifest.reviewedArtifacts);
+  const inputSnapshots = normalizeSnapshotArray(input.reviewedArtifacts);
+  if (!manifestSnapshots.ok) failures.push(`manifest-${manifestSnapshots.reason}`);
+  if (!inputSnapshots.ok) failures.push(`input-${inputSnapshots.reason}`);
+  if (manifestSnapshots.ok && inputSnapshots.ok && !snapshotsEqual(manifestSnapshots.snapshots, inputSnapshots.snapshots)) {
+    failures.push("manifest-input-snapshot-mismatch");
+  }
+  const preparedSnapshots = manifestSnapshots.ok ? manifestSnapshots.snapshots : [];
+  const expectedSetHash = preparedSnapshots.length > 0 ? stableSnapshotSetHash(preparedSnapshots) : null;
+  if (!expectedSetHash || manifest.reviewedArtifactSetSha256 !== expectedSetHash || input.reviewedArtifactSetSha256 !== expectedSetHash) {
+    failures.push("reviewed-artifact-set-hash-mismatch");
+  }
+  const handoffPaths = [];
+  for (const rawPath of Array.isArray(handoffReviewedArtifactPaths) ? handoffReviewedArtifactPaths : []) {
+    const normalized = normalizeProjectRelativePath(rawPath);
+    if (!normalized.ok) {
+      failures.push("handoff-unsafe-reviewed-artifact-path");
+      continue;
+    }
+    let canonicalPath = normalized.normalizedPath;
+    try {
+      canonicalPath = canonicalReviewArtifactPath(root, normalized.normalizedPath, "review handoff artifact");
+    } catch {
+    }
+    handoffPaths.push(canonicalPath);
+  }
+  if (handoffPaths.length === 0) {
+    failures.push("handoff-reviewed-artifacts-missing");
+  }
+  if (new Set(handoffPaths).size !== handoffPaths.length) {
+    failures.push("handoff-duplicate-reviewed-artifact-path");
+  }
+  const preparedPaths = preparedSnapshots.map((item) => item.path).sort();
+  const returnedPaths = [...handoffPaths].sort();
+  if (JSON.stringify(preparedPaths) !== JSON.stringify(returnedPaths)) {
+    failures.push("handoff-reviewed-artifact-set-mismatch");
+  }
+  for (const prepared of preparedSnapshots) {
+    const inspection = inspectDeclaredPath(root, prepared.path, {
+      requireNonEmpty: true,
+      rejectBookkeeping: true
+    });
+    if (inspection.status !== "existing") {
+      failures.push(`reviewed-artifact-${inspection.status}:${prepared.path}`);
+      continue;
+    }
+    const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+    const current = {
+      path: canonicalPath,
+      sizeBytes: inspection.sizeBytes,
+      sha256: sha256File(path10.resolve(root, canonicalPath))
+    };
+    if (!snapshotsEqual([prepared], [current])) {
+      failures.push(`reviewed-artifact-changed:${prepared.path}`);
+    }
+  }
+  return {
+    ok: failures.length === 0,
+    failures: Array.from(new Set(failures)),
+    reviewedArtifacts: preparedSnapshots,
+    reviewedArtifactSetSha256: expectedSetHash
+  };
+}
+
+// src/core/review-proof.mjs
+var UNRESOLVED_CONCERN_STATUSES = /* @__PURE__ */ new Set([
+  "open",
+  "awaiting-author-response",
+  "author-response-submitted",
+  "escalated",
+  "contested"
+]);
+function readJsonFile(fullPath) {
+  try {
+    return JSON.parse(fs9.readFileSync(fullPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+function normalizeExpectedPaths(relativePaths = []) {
+  const paths = [];
+  for (const relativePath of relativePaths) {
+    const normalized = normalizeProjectRelativePath(relativePath);
+    if (!normalized.ok) return { ok: false, paths: [], reason: `unsafe-expected-artifact:${relativePath}` };
+    paths.push(normalized.normalizedPath);
+  }
+  return { ok: true, paths: Array.from(new Set(paths)).sort(), reason: null };
+}
+function normalizeStringArray9(value) {
+  return Array.isArray(value) ? Array.from(new Set(value.filter((item) => typeof item === "string").map((item) => item.trim()).filter(Boolean))) : [];
+}
+function sameStringSet(left, right) {
+  return JSON.stringify(normalizeStringArray9(left).sort()) === JSON.stringify(normalizeStringArray9(right).sort());
+}
+function proofFailure(manifestPath, failures, details = {}) {
+  return {
+    ok: false,
+    authoritative: false,
+    proof: null,
+    manifestPath,
+    failures: Array.from(new Set(failures)),
+    ...details
+  };
+}
+function workspaceReviewVerdict(perPacket = {}) {
+  const packetStates = Object.values(perPacket);
+  if (packetStates.some((item) => item?.verdict === "blocked")) return "blocked";
+  if (packetStates.some((item) => item?.verdict === "needs-evidence")) return "needs-evidence";
+  if (packetStates.some((item) => item?.verdict === "needs-revision")) return "needs-revision";
+  return packetStates.length > 0 ? "coherent" : "not-reviewed";
+}
+function isOpenReviewProofConcern(item) {
+  if (!item || typeof item !== "object" || ["resolved", "retired"].includes(item.status)) {
+    return false;
+  }
+  return String(item.id ?? "").endsWith("-review-proof-required") || item.responseOwnerRole === "reviewer" && /Reviewer runtime execution claim|Reviewer proof/u.test(String(item.summary ?? ""));
+}
+function openReviewProofRequiredBoundaries(root) {
+  const concerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
+  return (concerns.items ?? []).filter(isOpenReviewProofConcern);
+}
+function assertReviewProofBoundaryTransition(root, currentBoard, nextPhase = currentBoard?.currentPhase, nextAssignedRole = currentBoard?.assignedRole, actionLabel = "Updating workflow ownership") {
+  const boundaries = openReviewProofRequiredBoundaries(root);
+  if (boundaries.length > 0 && (nextPhase !== "review" || nextAssignedRole !== "reviewer")) {
+    const boundaryIds = boundaries.map((item) => item.id).filter(Boolean).join(", ");
+    throw new Error(`${actionLabel} cannot leave review/reviewer while review-proof-required remains open (${boundaryIds || "open Reviewer proof boundary"}); only authorized independent Reviewer proof can resolve this boundary.`);
+  }
+  return boundaries;
+}
+function verifyImportedReviewProofIntegrity(root, manifestPath, options = {}) {
+  const manifest = readJsonFile(manifestPath);
+  if (!manifest || typeof manifest !== "object") return proofFailure(manifestPath, ["manifest-unreadable"]);
+  const failures = [];
+  if (manifest.status !== "imported") failures.push("manifest-not-imported");
+  if (manifest.verdict !== "coherent") failures.push("manifest-verdict-not-coherent");
+  if (options.packetId && manifest.packetId !== options.packetId) failures.push("packet-mismatch");
+  if (!options.isolationModel) failures.push("expected-isolation-model-missing");
+  if (!options.handoffSha256Field) failures.push("handoff-hash-field-missing");
+  const inputPath = normalizeProjectRelativePath(manifest.inputPath);
+  const handoffPath = normalizeProjectRelativePath(manifest.handoffPath);
+  const reportPath = normalizeProjectRelativePath(manifest.reportPath);
+  if (!inputPath.ok) failures.push("unsafe-input-path");
+  if (!handoffPath.ok) failures.push("unsafe-handoff-path");
+  if (!reportPath.ok) failures.push("unsafe-report-path");
+  if (failures.length > 0) return proofFailure(manifestPath, failures, { runId: manifest.runId ?? null });
+  const inputFullPath = path11.resolve(root, inputPath.normalizedPath);
+  const handoffFullPath = path11.resolve(root, handoffPath.normalizedPath);
+  const reportFullPath = path11.resolve(root, reportPath.normalizedPath);
+  const input = readJsonFile(inputFullPath);
+  const handoff = readJsonFile(handoffFullPath);
+  if (!input) failures.push("input-unreadable");
+  if (!handoff) failures.push("handoff-unreadable");
+  const reportInspection = inspectDeclaredPath(root, reportPath.normalizedPath, { requireNonEmpty: true, rejectBookkeeping: true });
+  if (reportInspection.status !== "existing") failures.push(`report-${reportInspection.status}`);
+  if (failures.length > 0) return proofFailure(manifestPath, failures, { runId: manifest.runId ?? null });
+  const actualInputSha256 = sha256File(inputFullPath);
+  const verification = verifyPreparedReviewSnapshot(root, {
+    manifest,
+    input,
+    inputPath: inputPath.normalizedPath,
+    actualInputSha256,
+    handoffInputPath: handoff.inputPath,
+    handoffInputSha256: handoff.inputSha256,
+    handoffReviewedArtifactPaths: handoff.reviewedArtifactPaths
+  });
+  failures.push(...verification.failures);
+  if (input.runId !== manifest.runId) failures.push("input-run-id-mismatch");
+  if (input.packetId !== manifest.packetId) failures.push("input-packet-mismatch");
+  if (!sameStringSet(input.includedPacketIds, manifest.includedPacketIds)) failures.push("included-packet-set-mismatch");
+  if (handoff.runId !== manifest.runId) failures.push("handoff-run-id-mismatch");
+  if (handoff.status !== "completed") failures.push("handoff-not-completed");
+  if (handoff.verdict !== "coherent") failures.push("handoff-verdict-not-coherent");
+  if (input.outputContract?.handoffPath !== handoffPath.normalizedPath || manifest.handoffPath !== input.outputContract?.handoffPath) failures.push("output-contract-handoff-path-mismatch");
+  if (input.outputContract?.reportPath !== reportPath.normalizedPath || handoff.reportPath !== reportPath.normalizedPath || manifest.reportPath !== input.outputContract?.reportPath) failures.push("output-contract-report-path-mismatch");
+  if (!sameStringSet(manifest.reviewedArtifactPaths, input.reviewedArtifactPaths)) failures.push("manifest-input-reviewed-path-set-mismatch");
+  if (!sameStringSet(input.reviewedArtifactPaths, verification.reviewedArtifacts.map((item) => item.path))) failures.push("input-snapshot-reviewed-path-set-mismatch");
+  if (input.isolationModel !== options.isolationModel) failures.push("isolation-model-mismatch");
+  if (input.privacyBoundary?.writerPrivateTranscriptShared !== false || input.privacyBoundary?.reviewerPrivateTranscriptShouldReturn !== false) failures.push("privacy-boundary-mismatch");
+  if (options.isolationModel === "audio-final-plan-results-explicit-artifacts") {
+    if (input.contextPolicy !== DOVE_AUDIO_CONTEXT_POLICY) failures.push("audio-context-policy-mismatch");
+    if (input.privacyBoundary?.projectContextShared !== false || input.privacyBoundary?.orchestrationBoardShared !== false) failures.push("audio-context-boundary-mismatch");
+  }
+  const actualHandoffSha256 = sha256File(handoffFullPath);
+  const actualReportSha256 = sha256File(reportFullPath);
+  if (manifest[options.handoffSha256Field] !== actualHandoffSha256) failures.push("handoff-hash-mismatch");
+  if (manifest.reportSha256 !== actualReportSha256) failures.push("report-hash-mismatch");
+  const expected = normalizeExpectedPaths(options.reviewedArtifactPaths ?? []);
+  if (!expected.ok) failures.push(expected.reason);
+  const reviewedPaths = verification.reviewedArtifacts.map((item) => item.path).sort();
+  if (expected.ok && expected.paths.length > 0 && JSON.stringify(expected.paths) !== JSON.stringify(reviewedPaths)) failures.push("expected-artifact-set-mismatch");
+  if (failures.length > 0) return proofFailure(manifestPath, failures, { runId: manifest.runId ?? null });
+  return {
+    ok: false,
+    authoritative: false,
+    proof: null,
+    failures: ["reviewer-runtime-authorization-required"],
+    manifestPath: path11.relative(root, manifestPath).split(path11.sep).join("/"),
+    runId: manifest.runId,
+    packetId: manifest.packetId ?? null,
+    snapshotIntegrityVerified: true,
+    inputSha256: actualInputSha256,
+    handoffSha256: actualHandoffSha256,
+    reportSha256: actualReportSha256,
+    reviewedArtifacts: verification.reviewedArtifacts,
+    reviewedArtifactSetSha256: verification.reviewedArtifactSetSha256
+  };
+}
+function verifyImportedIsolatedReviewProof(root, manifestPath, options = {}) {
+  return verifyImportedReviewProofIntegrity(root, manifestPath, {
+    ...options,
+    isolationModel: "parallel-session-file-handoff",
+    handoffSha256Field: "outputSha256"
+  });
+}
+function recordReviewProofRequiredBoundary(root, {
+  reviewKind,
+  runId,
+  packetId,
+  includedPacketIds = [packetId],
+  timestamp,
+  handoffPath,
+  reportPath,
+  reviewedArtifactPaths = []
+}) {
+  const normalizedKind = String(reviewKind ?? "review").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") || "review";
+  const label = normalizedKind === "audio" ? "audio review" : "isolated review";
+  const recordedAt = timestamp ?? nowIso();
+  const summary = `Imported coherent ${label} material is non-authoritative until an approved Reviewer runtime execution claim submits proof through the private capability.`;
+  const proofBoundary = {
+    id: `${normalizedKind}-${runId}-review-proof-required`,
+    packetId,
+    summary,
+    severity: "high",
+    status: "open",
+    raisedByRole: "reviewer",
+    responseOwnerRole: "reviewer",
+    reviewerRationale: "Public prepare/import, caller-supplied reviewerId, and caller-written report or manifest cannot authenticate Reviewer authority.",
+    rulingOutcome: "pending",
+    reviewerDisposition: "pending",
+    recurrenceCount: 1,
+    firstSeenAt: recordedAt,
+    lastSeenAt: recordedAt,
+    linkedArtifactPaths: Array.from(new Set([handoffPath, reportPath, ...reviewedArtifactPaths].filter(Boolean))),
+    claimIds: [],
+    experimentIds: [],
+    updatedAt: nowIso()
+  };
+  const concerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
+  const concernItems = [...(concerns.items ?? []).filter((item) => item.id !== proofBoundary.id), proofBoundary];
+  writeJson(root, ARTIFACT_PATHS.reviewConcerns, {
+    ...concerns,
+    version: 2,
+    items: concernItems,
+    updatedAt: nowIso()
+  });
+  const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 4, history: [], perPacket: {}, lastVerdict: "not-reviewed", unresolvedConcernIds: [] });
+  const reviewEntry = {
+    id: `${normalizedKind}-${runId}`,
+    packetId,
+    includedPacketIds,
+    timestamp: recordedAt,
+    stage: `${normalizedKind}-review-import`,
+    scope: summary,
+    verdict: "needs-evidence",
+    importedVerdict: "coherent",
+    authoritative: false,
+    summary,
+    reviewRequiredBeforeFinalize: true,
+    reportPath,
+    reviewedArtifactPaths,
+    resolvedConcernIds: [],
+    findings: [{ severity: "high", summary, responseOwnerRole: "reviewer", methodologicalCategory: "review-proof" }],
+    actionItems: ["Submit proof from an approved Reviewer runtime execution claim through the private capability."],
+    independentReviewProof: null
+  };
+  const history = [...(reviewState.history ?? []).filter((item) => item.id !== reviewEntry.id), reviewEntry];
+  const unresolvedConcernIds = concernItems.filter((item) => UNRESOLVED_CONCERN_STATUSES.has(item.status)).map((item) => item.id);
+  const packetUnresolvedConcernIds = concernItems.filter((item) => item.packetId === packetId && UNRESOLVED_CONCERN_STATUSES.has(item.status)).map((item) => item.id);
+  const perPacket = {
+    ...reviewState.perPacket ?? {},
+    [packetId]: {
+      packetId,
+      includedPacketIds,
+      verdict: "needs-evidence",
+      reviewedAt: recordedAt,
+      reviewId: reviewEntry.id,
+      reviewedArtifactPaths,
+      unresolvedConcernIds: packetUnresolvedConcernIds
+    }
+  };
+  const workspaceVerdict = workspaceReviewVerdict(perPacket);
+  const openItems = Array.from(/* @__PURE__ */ new Set([
+    ...normalizeStringArray9(reviewState.openItems),
+    ...reviewEntry.actionItems
+  ]));
+  writeJson(root, ARTIFACT_PATHS.reviewState, {
+    ...reviewState,
+    version: 4,
+    history,
+    perPacket,
+    lastVerdict: workspaceVerdict,
+    lastReviewedAt: recordedAt,
+    openItems,
+    unresolvedConcernIds
+  });
+  return { proofBoundary, reviewEntry };
+}
+function findCurrentIndependentReviewProof() {
+  return {
+    ok: false,
+    authoritative: false,
+    proof: null,
+    failures: ["current-authorized-hash-bound-isolated-review-proof-missing"]
   };
 }
 
@@ -16455,7 +16757,7 @@ var TERMINAL_BLOCKER_STATUSES = /* @__PURE__ */ new Set(["resolved", "retired"])
 function slugify3(value) {
   return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
 }
-function normalizeStringArray9(value) {
+function normalizeStringArray10(value) {
   return Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean))) : [];
 }
 function localizedText(responseLanguage, zh, en) {
@@ -16675,7 +16977,7 @@ function deriveGovernanceLifecycle({
   return "queued";
 }
 function hashText(value) {
-  return crypto6.createHash("sha256").update(value).digest("hex");
+  return crypto7.createHash("sha256").update(value).digest("hex");
 }
 function transitionAllowed(fromPhase, toPhase) {
   const allowed = ALLOWED_TRANSITIONS[fromPhase] ?? [fromPhase];
@@ -16688,14 +16990,14 @@ function targetArtifactContainsId3(root, artifactPath, targetId) {
   if (!artifactPath || !targetId) {
     return false;
   }
-  const fullPath = path10.join(root, artifactPath);
-  if (!fs9.existsSync(fullPath)) {
+  const fullPath = path12.join(root, artifactPath);
+  if (!fs10.existsSync(fullPath)) {
     return false;
   }
-  const extension = path10.extname(artifactPath).toLowerCase();
+  const extension = path12.extname(artifactPath).toLowerCase();
   if (extension === ".json") {
     try {
-      const value = JSON.parse(fs9.readFileSync(fullPath, "utf8"));
+      const value = JSON.parse(fs10.readFileSync(fullPath, "utf8"));
       const queue = [value];
       while (queue.length > 0) {
         const current = queue.shift();
@@ -16715,7 +17017,7 @@ function targetArtifactContainsId3(root, artifactPath, targetId) {
       return false;
     }
   }
-  return fs9.readFileSync(fullPath, "utf8").includes(String(targetId));
+  return fs10.readFileSync(fullPath, "utf8").includes(String(targetId));
 }
 function assertNoBlockingFollowThrough(root, currentPhase, nextPhase, currentAssignedRole, nextAssignedRole) {
   const changingGovernance = currentPhase !== nextPhase || currentAssignedRole !== nextAssignedRole;
@@ -16723,14 +17025,16 @@ function assertNoBlockingFollowThrough(root, currentPhase, nextPhase, currentAss
     return;
   }
   const followThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const operatingState = readProgramOperatingState(root);
   const items = Array.isArray(followThrough.items) ? followThrough.items : [];
   const actionRequired = items.filter((item) => {
     const status = item.status;
-    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status);
+    const authorityState = followThroughAuthorityState(item, operatingState);
+    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status) || !authorityState.trusted;
     const dueDeferred = status === "deferred" && item.deferUntil && String(item.deferUntil) <= nowIso();
     const targetBound = !["accepted-for-execution", "executing", "closed"].includes(status) ? true : targetArtifactContainsId3(root, item.linkedTargetArtifact, item.linkedTargetId);
     const acceptedExecutionOpen = status === "accepted-for-execution" || status === "executing";
-    return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen;
+    return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen || status === "accepted-risk";
   }).map((item) => ({
     id: item.id,
     status: item.status,
@@ -16891,7 +17195,7 @@ function normalizeTask(task = {}, index = 0, boardAssignedRole = null) {
     id,
     packetId: task.packetId ? slugify3(task.packetId) : void 0,
     parentPacketId: task.parentPacketId ? slugify3(task.parentPacketId) : null,
-    childPacketIds: normalizeStringArray9(task.childPacketIds),
+    childPacketIds: normalizeStringArray10(task.childPacketIds),
     phaseContextId: task.phaseContextId ?? null,
     title: task.title ?? `Task ${index + 1}`,
     status: task.status ?? "pending",
@@ -16899,7 +17203,7 @@ function normalizeTask(task = {}, index = 0, boardAssignedRole = null) {
       kind: "task",
       status: task.status,
       explicitLifecycleStatus: task.lifecycleStatus,
-      blockedBy: normalizeStringArray9(task.blockedBy),
+      blockedBy: normalizeStringArray10(task.blockedBy),
       continuationState: task.continuationState,
       updatedAt: task.updatedAt,
       assignedRole: task.assignedRole,
@@ -16913,14 +17217,14 @@ function normalizeTask(task = {}, index = 0, boardAssignedRole = null) {
       status: task.status === "done" ? "completed" : task.status === "blocked" ? "blocked" : "in-progress",
       lastCheckpoint: task.notes || task.title || `Task ${index + 1}`
     }),
-    evidenceLinks: normalizeStringArray9(task.evidenceLinks),
-    claimIds: normalizeStringArray9(task.claimIds),
-    noteIds: normalizeStringArray9(task.noteIds),
-    experimentIds: normalizeStringArray9(task.experimentIds),
-    rebuttalIssueIds: normalizeStringArray9(task.rebuttalIssueIds),
-    versionIds: normalizeStringArray9(task.versionIds),
-    blockedBy: normalizeStringArray9(task.blockedBy),
-    outputPaths: normalizeStringArray9(task.outputPaths),
+    evidenceLinks: normalizeStringArray10(task.evidenceLinks),
+    claimIds: normalizeStringArray10(task.claimIds),
+    noteIds: normalizeStringArray10(task.noteIds),
+    experimentIds: normalizeStringArray10(task.experimentIds),
+    rebuttalIssueIds: normalizeStringArray10(task.rebuttalIssueIds),
+    versionIds: normalizeStringArray10(task.versionIds),
+    blockedBy: normalizeStringArray10(task.blockedBy),
+    outputPaths: normalizeStringArray10(task.outputPaths),
     questions: Array.isArray(task.questions) ? task.questions : [],
     decisions: Array.isArray(task.decisions) ? task.decisions : [],
     notes: task.notes ?? "",
@@ -16935,7 +17239,7 @@ function normalizeBlocker(blocker = {}, index = 0, boardAssignedRole = null) {
     id,
     packetId: blocker.packetId ? slugify3(blocker.packetId) : void 0,
     parentPacketId: blocker.parentPacketId ? slugify3(blocker.parentPacketId) : null,
-    childPacketIds: normalizeStringArray9(blocker.childPacketIds),
+    childPacketIds: normalizeStringArray10(blocker.childPacketIds),
     phaseContextId: blocker.phaseContextId ?? null,
     summary: blocker.summary ?? `Blocker ${index + 1}`,
     status: blocker.status ?? "open",
@@ -16943,7 +17247,7 @@ function normalizeBlocker(blocker = {}, index = 0, boardAssignedRole = null) {
       kind: "blocker",
       status: blocker.status,
       explicitLifecycleStatus: blocker.lifecycleStatus,
-      blockedBy: normalizeStringArray9(blocker.blockedBy),
+      blockedBy: normalizeStringArray10(blocker.blockedBy),
       continuationState: blocker.continuationState,
       updatedAt: blocker.updatedAt,
       assignedRole: blocker.assignedRole,
@@ -16957,14 +17261,14 @@ function normalizeBlocker(blocker = {}, index = 0, boardAssignedRole = null) {
       status: blocker.status === "resolved" ? "completed" : "blocked",
       lastCheckpoint: blocker.summary ?? `Blocker ${index + 1}`
     }),
-    evidenceLinks: normalizeStringArray9(blocker.evidenceLinks),
-    claimIds: normalizeStringArray9(blocker.claimIds),
-    noteIds: normalizeStringArray9(blocker.noteIds),
-    experimentIds: normalizeStringArray9(blocker.experimentIds),
-    rebuttalIssueIds: normalizeStringArray9(blocker.rebuttalIssueIds),
-    versionIds: normalizeStringArray9(blocker.versionIds),
-    blockedBy: normalizeStringArray9(blocker.blockedBy),
-    outputPaths: normalizeStringArray9(blocker.outputPaths),
+    evidenceLinks: normalizeStringArray10(blocker.evidenceLinks),
+    claimIds: normalizeStringArray10(blocker.claimIds),
+    noteIds: normalizeStringArray10(blocker.noteIds),
+    experimentIds: normalizeStringArray10(blocker.experimentIds),
+    rebuttalIssueIds: normalizeStringArray10(blocker.rebuttalIssueIds),
+    versionIds: normalizeStringArray10(blocker.versionIds),
+    blockedBy: normalizeStringArray10(blocker.blockedBy),
+    outputPaths: normalizeStringArray10(blocker.outputPaths),
     questions: Array.isArray(blocker.questions) ? blocker.questions : [],
     decisions: Array.isArray(blocker.decisions) ? blocker.decisions : [],
     updatedAt
@@ -17074,18 +17378,115 @@ function collectFinalizeBlockersFromClaims(root) {
   }
   return Array.from(blockedClaimIds);
 }
+var COMPLETION_LIKE_FINAL_SECTION_STATUSES = /* @__PURE__ */ new Set([
+  "ready",
+  "review-ready",
+  "done",
+  "complete",
+  "completed",
+  "final",
+  "approved"
+]);
+function isCompletionLikeFinalSectionStatus(value) {
+  return COMPLETION_LIKE_FINAL_SECTION_STATUSES.has(
+    String(value ?? "").trim().toLowerCase()
+  );
+}
+function inspectFinalizationArtifact(root, artifactPath) {
+  if (typeof artifactPath !== "string" || !artifactPath.trim()) {
+    return null;
+  }
+  const inspection = inspectDeclaredPath(root, artifactPath, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true
+  });
+  return {
+    inspection,
+    artifactPath: inspection.canonicalRelativePath ?? inspection.normalizedPath ?? artifactPath.trim()
+  };
+}
+function currentFinalizationArtifactPaths(root) {
+  const state = loadState(root);
+  const artifactPaths = [];
+  for (const [sectionId, section] of Object.entries(state.sections ?? {})) {
+    const candidate = inspectFinalizationArtifact(root, section?.draftPath);
+    if (!candidate) {
+      continue;
+    }
+    if (candidate.inspection.status === "existing") {
+      artifactPaths.push(candidate.artifactPath);
+      continue;
+    }
+    if (isCompletionLikeFinalSectionStatus(section?.status)) {
+      throw new Error(
+        `Current final section ${sectionId} has no usable draft artifact at ${candidate.artifactPath}: ${candidate.inspection.reason ?? candidate.inspection.status}`
+      );
+    }
+  }
+  const figureFinals = readJson(root, ARTIFACT_PATHS.figureFinalIndex, {
+    items: []
+  });
+  const figureGenerations = readJson(root, ARTIFACT_PATHS.figureGenerations, {
+    items: []
+  });
+  const importedFinalFigurePaths = new Set(
+    (figureGenerations.items ?? []).filter((item) => item?.status === "imported").map((item) => item?.finalSvgPath).filter((artifactPath) => typeof artifactPath === "string" && artifactPath.trim())
+  );
+  for (const item of figureFinals.items ?? []) {
+    const candidate = inspectFinalizationArtifact(root, item?.finalSvgPath);
+    if (!candidate) {
+      continue;
+    }
+    if (candidate.inspection.status === "existing") {
+      artifactPaths.push(candidate.artifactPath);
+      continue;
+    }
+    const importedArtifactMissing = importedFinalFigurePaths.has(
+      item?.finalSvgPath
+    );
+    if (item?.readinessStatus === "ready-for-finalization" || importedArtifactMissing) {
+      throw new Error(
+        `Current final figure ${item?.figureId ?? item?.id ?? "unknown"} has no usable final artifact at ${candidate.artifactPath}: ${candidate.inspection.reason ?? candidate.inspection.status}`
+      );
+    }
+  }
+  return Array.from(new Set(artifactPaths)).sort();
+}
 function assertFinalizeReviewGate(root, actionLabel) {
   const board = loadBoard(root);
-  if (!board.reviewRequiredBeforeFinalize) {
-    return;
-  }
   const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 3, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
   const concerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
-  const unresolvedConcernIds = new Set((reviewState.unresolvedConcernIds ?? []).concat((concerns.items ?? []).filter((item) => !["resolved", "retired"].includes(item.status)).map((item) => item.id)));
-  const reviewIsClear = reviewState.lastVerdict === "coherent" && unresolvedConcernIds.size === 0;
+  const unresolvedConcerns = (concerns.items ?? []).filter(
+    (item) => !["resolved", "retired"].includes(item.status)
+  );
+  const unresolvedConcernIds = new Set(
+    (reviewState.unresolvedConcernIds ?? []).concat(
+      unresolvedConcerns.map((item) => item.id)
+    )
+  );
+  const canonicalReviewGateRequired = board.reviewRequiredBeforeFinalize || ["needs-revision", "needs-evidence", "blocked"].includes(
+    reviewState.lastVerdict
+  ) || unresolvedConcerns.some(
+    (item) => String(item.id ?? "").endsWith("-review-proof-required") || item.responseOwnerRole === "reviewer" && /Reviewer runtime execution claim|Reviewer proof/u.test(
+      String(item.summary ?? "")
+    )
+  );
+  if (!canonicalReviewGateRequired) return;
+  const finalArtifactPaths = currentFinalizationArtifactPaths(root);
+  if (finalArtifactPaths.length === 0) {
+    throw new Error(`${actionLabel} requires at least one current final draft or final figure artifact before finalization.`);
+  }
+  const currentSnapshot = snapshotReviewedArtifacts(root, finalArtifactPaths, `${actionLabel} final artifact scope`);
+  const independentProof = findCurrentIndependentReviewProof(root, {
+    reviewedArtifactPaths: currentSnapshot.reviewedArtifacts.map((artifact) => artifact.path)
+  });
+  const reviewIsClear = reviewState.lastVerdict === "coherent" && unresolvedConcernIds.size === 0 && independentProof.ok;
   const blockedClaimIds = collectFinalizeBlockersFromClaims(root);
   if (!reviewIsClear) {
-    throw new Error(`${actionLabel} requires a coherent review with no unresolved concerns while reviewRequiredBeforeFinalize is true.`);
+    throw new Error(`${actionLabel} requires a coherent review with no unresolved concerns and authorized independent Reviewer proof covering the exact current final artifact set and hashes while the canonical finalization review gate is active.`);
+  }
+  if (independentProof.proof.reviewedArtifactSetSha256 !== currentSnapshot.reviewedArtifactSetSha256) {
+    throw new Error(`${actionLabel} rejected stale or incomplete Reviewer proof because the current final artifact exact-set hash changed after review.`);
   }
   if (blockedClaimIds.length > 0) {
     throw new Error(`${actionLabel} is blocked by experiment integrity: claim(s) ${blockedClaimIds.join(", ")} are held for review. Resolve bridge/audit issues before finalization.`);
@@ -17115,11 +17516,11 @@ function syncStateWithBoard(root, board, state = loadState(root)) {
       reviewRequiredBeforeFinalize: Boolean(board.reviewRequiredBeforeFinalize),
       activeTaskIds: board.tasks.filter((task) => !["done", "cancelled"].includes(task.status)).map((task) => task.id),
       blockerIds: board.blockers.filter((blocker) => blocker.status !== "resolved").map((blocker) => blocker.id),
-      evidenceLinks: normalizeStringArray9(board.evidenceLinks),
-      experimentIds: normalizeStringArray9(board.experimentIds),
-      rebuttalIssueIds: normalizeStringArray9(board.rebuttalIssueIds),
+      evidenceLinks: normalizeStringArray10(board.evidenceLinks),
+      experimentIds: normalizeStringArray10(board.experimentIds),
+      rebuttalIssueIds: normalizeStringArray10(board.rebuttalIssueIds),
       currentVersionId: board.versionLineage?.currentVersionId ?? null,
-      activeComparisonTargets: normalizeStringArray9(board.activeComparisonTargets)
+      activeComparisonTargets: normalizeStringArray10(board.activeComparisonTargets)
     }
   };
   saveState(root, nextState);
@@ -17148,15 +17549,15 @@ function persistBoard(root, board) {
     reviewRequiredBeforeFinalize: Boolean(withDefaults.reviewRequiredBeforeFinalize),
     tasks,
     blockers,
-    evidenceLinks: normalizeStringArray9(withDefaults.evidenceLinks),
-    experimentIds: normalizeStringArray9(withDefaults.experimentIds),
-    rebuttalIssueIds: normalizeStringArray9(withDefaults.rebuttalIssueIds),
-    activeComparisonTargets: normalizeStringArray9(withDefaults.activeComparisonTargets),
+    evidenceLinks: normalizeStringArray10(withDefaults.evidenceLinks),
+    experimentIds: normalizeStringArray10(withDefaults.experimentIds),
+    rebuttalIssueIds: normalizeStringArray10(withDefaults.rebuttalIssueIds),
+    activeComparisonTargets: normalizeStringArray10(withDefaults.activeComparisonTargets),
     unresolvedBlockersByRole: computeUnresolvedBlockersByRole(blockers),
     versionLineage: {
       currentVersionId: withDefaults.versionLineage?.currentVersionId ?? null,
       parentVersionId: withDefaults.versionLineage?.parentVersionId ?? null,
-      snapshotIds: normalizeStringArray9(withDefaults.versionLineage?.snapshotIds)
+      snapshotIds: normalizeStringArray10(withDefaults.versionLineage?.snapshotIds)
     },
     updatedAt: nowIso()
   };
@@ -17180,6 +17581,13 @@ function persistOrchestrationBoardUpdate(root, args = {}, { authority = null } =
   const current = loadBoard(root);
   const nextPhase = args.phase ?? current.currentPhase;
   const nextAssignedRole = args.assignedRole ?? current.assignedRole;
+  assertReviewProofBoundaryTransition(
+    root,
+    current,
+    nextPhase,
+    nextAssignedRole,
+    "Updating the orchestration board"
+  );
   validateBoardMutation(current, nextPhase, nextAssignedRole, state.settings?.strictMode, "Updating the orchestration board");
   assertNoBlockingFollowThrough(root, current.currentPhase, nextPhase, current.assignedRole, nextAssignedRole);
   const tasks = Array.isArray(args.tasks) ? args.tasks.map((task, index) => normalizeTask(task, index, nextAssignedRole)) : current.tasks;
@@ -17201,9 +17609,9 @@ function persistOrchestrationBoardUpdate(root, args = {}, { authority = null } =
       summary: args.handoffSummary ?? `Workflow routing moved from ${current.assignedRole} to ${nextAssignedRole}.`,
       currentFocus,
       nextAction,
-      nextActions: normalizeStringArray9(args.nextActions ?? [nextAction]),
-      evidenceLinks: normalizeStringArray9(args.evidenceLinks ?? current.evidenceLinks),
-      blockerIds: normalizeStringArray9(blockers.filter((item) => item.status !== "resolved").map((item) => item.id))
+      nextActions: normalizeStringArray10(args.nextActions ?? [nextAction]),
+      evidenceLinks: normalizeStringArray10(args.evidenceLinks ?? current.evidenceLinks),
+      blockerIds: normalizeStringArray10(blockers.filter((item) => item.status !== "resolved").map((item) => item.id))
     });
   }
   return persistBoard(root, {
@@ -17218,14 +17626,14 @@ function persistOrchestrationBoardUpdate(root, args = {}, { authority = null } =
     reviewRequiredBeforeFinalize: Object.hasOwn(args, "reviewRequiredBeforeFinalize") ? Boolean(args.reviewRequiredBeforeFinalize) : current.reviewRequiredBeforeFinalize,
     tasks,
     blockers,
-    evidenceLinks: args.evidenceLinks ? normalizeStringArray9(args.evidenceLinks) : current.evidenceLinks,
-    experimentIds: args.experimentIds ? normalizeStringArray9(args.experimentIds) : current.experimentIds,
-    rebuttalIssueIds: args.rebuttalIssueIds ? normalizeStringArray9(args.rebuttalIssueIds) : current.rebuttalIssueIds,
-    activeComparisonTargets: args.activeComparisonTargets ? normalizeStringArray9(args.activeComparisonTargets) : current.activeComparisonTargets,
+    evidenceLinks: args.evidenceLinks ? normalizeStringArray10(args.evidenceLinks) : current.evidenceLinks,
+    experimentIds: args.experimentIds ? normalizeStringArray10(args.experimentIds) : current.experimentIds,
+    rebuttalIssueIds: args.rebuttalIssueIds ? normalizeStringArray10(args.rebuttalIssueIds) : current.rebuttalIssueIds,
+    activeComparisonTargets: args.activeComparisonTargets ? normalizeStringArray10(args.activeComparisonTargets) : current.activeComparisonTargets,
     versionLineage: {
       currentVersionId: args.versionLineage?.currentVersionId ?? current.versionLineage?.currentVersionId ?? null,
       parentVersionId: args.versionLineage?.parentVersionId ?? current.versionLineage?.parentVersionId ?? null,
-      snapshotIds: args.versionLineage?.snapshotIds ? normalizeStringArray9(args.versionLineage.snapshotIds) : current.versionLineage?.snapshotIds ?? []
+      snapshotIds: args.versionLineage?.snapshotIds ? normalizeStringArray10(args.versionLineage.snapshotIds) : current.versionLineage?.snapshotIds ?? []
     }
   });
 }
@@ -17238,6 +17646,39 @@ function upsertOrchestrationBoard(root, args = {}) {
     ...args,
     assignedRole: board.assignedRole
   });
+}
+function assertSystemOrchestrationBoardUpdate(root, args = {}) {
+  assertNoPolicyOverrideArgs(args, "Updating the orchestration board");
+  const state = loadState(root);
+  const current = loadBoard(root);
+  const nextPhase = args.phase ?? current.currentPhase;
+  const nextAssignedRole = args.assignedRole ?? current.assignedRole;
+  assertReviewProofBoundaryTransition(
+    root,
+    current,
+    nextPhase,
+    nextAssignedRole,
+    "Updating the orchestration board"
+  );
+  validateBoardMutation(
+    current,
+    nextPhase,
+    nextAssignedRole,
+    state.settings?.strictMode,
+    "Updating the orchestration board"
+  );
+  assertNoBlockingFollowThrough(
+    root,
+    current.currentPhase,
+    nextPhase,
+    current.assignedRole,
+    nextAssignedRole
+  );
+  return {
+    current,
+    nextPhase,
+    nextAssignedRole
+  };
 }
 function upsertSystemOrchestrationBoard(root, args = {}) {
   return persistOrchestrationBoardUpdate(root, args, { authority: SYSTEM_BOARD_AUTHORITY });
@@ -17254,6 +17695,13 @@ function persistHandoff(root, args = {}, { authority = null } = {}) {
   const fromRole = systemOwned ? args.fromRole ?? board.assignedRole : board.assignedRole;
   const toRole = systemOwned ? args.toRole ?? board.assignedRole : board.assignedRole;
   const phase = args.phase ?? board.currentPhase;
+  assertReviewProofBoundaryTransition(
+    root,
+    board,
+    phase,
+    toRole,
+    "Appending a handoff"
+  );
   validateBoardMutation(board, phase, toRole, state.settings?.strictMode, "Appending a handoff");
   if (systemOwned && !roleCanActAs(fromRole, board.assignedRole)) {
     throw new Error(`Appending a handoff requires fromRole ${board.assignedRole}, but received ${fromRole}.`);
@@ -17271,8 +17719,8 @@ function persistHandoff(root, args = {}, { authority = null } = {}) {
     currentFocus,
     nextAction,
     nextActions: Array.isArray(args.nextActions) ? args.nextActions : [nextAction],
-    evidenceLinks: normalizeStringArray9(args.evidenceLinks ?? board.evidenceLinks),
-    blockerIds: normalizeStringArray9(args.blockerIds ?? board.blockers.filter((item) => item.status !== "resolved").map((item) => item.id))
+    evidenceLinks: normalizeStringArray10(args.evidenceLinks ?? board.evidenceLinks),
+    blockerIds: normalizeStringArray10(args.blockerIds ?? board.blockers.filter((item) => item.status !== "resolved").map((item) => item.id))
   });
   return upsertSystemOrchestrationBoard(root, {
     phase,
@@ -17288,6 +17736,9 @@ function persistHandoff(root, args = {}, { authority = null } = {}) {
 }
 function appendHandoff(root, args = {}) {
   return persistHandoff(root, args);
+}
+function appendSystemHandoff(root, args = {}) {
+  return persistHandoff(root, args, { authority: SYSTEM_BOARD_AUTHORITY });
 }
 function renderResearchBrief(agenda) {
   return [
@@ -17310,21 +17761,33 @@ function updateResearchBrief(root, args = {}) {
   assertGovernanceMutationRegistered("update-research-brief", "guarded");
   assertTaskScopedMutationTarget(root, "update-research-brief", args);
   assertFollowThroughReady(root, "Updating the research brief", args);
+  const forbiddenAuthorityFields = ["phase", "assignedRole", "ownerRole", "nextRole"].filter((field) => Object.hasOwn(args, field));
+  if (forbiddenAuthorityFields.length > 0) {
+    throw new Error(`update_research_brief does not accept workflow authority fields: ${forbiddenAuthorityFields.join(", ")}.`);
+  }
+  const board = loadBoard(root);
+  assertReviewProofBoundaryTransition(
+    root,
+    board,
+    "research",
+    "researcher",
+    "Updating the research brief"
+  );
   const state = loadState(root);
   const current = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: state.dove.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
   const next = {
     version: 1,
     objective: args.objective ?? current.objective ?? state.dove.objective,
-    agenda: args.agenda ? normalizeStringArray9(args.agenda) : current.agenda,
-    evidenceBacklog: args.evidenceBacklog ? normalizeStringArray9(args.evidenceBacklog) : current.evidenceBacklog,
+    agenda: args.agenda ? normalizeStringArray10(args.agenda) : current.agenda,
+    evidenceBacklog: args.evidenceBacklog ? normalizeStringArray10(args.evidenceBacklog) : current.evidenceBacklog,
     updatedAt: nowIso()
   };
   writeJson(root, ARTIFACT_PATHS.researchAgenda, next);
   writeText(root, ARTIFACT_PATHS.researchBrief, renderResearchBrief(next));
   upsertSystemOrchestrationBoard(root, {
     objective: next.objective,
-    phase: args.phase ?? "research",
-    assignedRole: args.assignedRole ?? "builder",
+    phase: board.currentPhase,
+    assignedRole: board.assignedRole,
     intentType: "research",
     currentFocus: args.currentFocus ?? "Tighten the research agenda and evidence backlog.",
     nextAction: args.nextAction ?? "Turn backlog items into sources, notes, or experiments.",
@@ -17349,7 +17812,7 @@ function normalizeExperimentPlan(plan = {}, index = 0) {
     hypothesis: plan.hypothesis ?? "",
     methodology: plan.methodology ?? "",
     successMetric: plan.successMetric ?? "",
-    comparisonTargets: normalizeStringArray9(plan.comparisonTargets),
+    comparisonTargets: normalizeStringArray10(plan.comparisonTargets),
     status: plan.status ?? "planned",
     owner: ROLE_IDS.includes(plan.owner) ? plan.owner : "builder",
     updatedAt: nowIso()
@@ -17401,8 +17864,8 @@ function normalizeExperimentResult(result = {}, index = 0) {
     claimId: result.claimId ?? "",
     outcome: result.outcome ?? "pending",
     summary: result.summary ?? "",
-    evidenceLinks: normalizeStringArray9(result.evidenceLinks),
-    comparisonTargets: normalizeStringArray9(result.comparisonTargets),
+    evidenceLinks: normalizeStringArray10(result.evidenceLinks),
+    comparisonTargets: normalizeStringArray10(result.comparisonTargets),
     latestAuditId: result.latestAuditId ?? null,
     latestBridgeId: result.latestBridgeId ?? null,
     updatedAt: nowIso()
@@ -17414,11 +17877,11 @@ function normalizeExperimentAudit(audit = {}, index = 0) {
     experimentId: audit.experimentId ?? "",
     resultId: audit.resultId ?? "",
     claimId: audit.claimId ?? "",
-    reviewedArtifactRefs: normalizeStringArray9(audit.reviewedArtifactRefs),
-    requiredArtifactRefs: normalizeStringArray9(audit.requiredArtifactRefs),
-    missingArtifactRefs: normalizeStringArray9(audit.missingArtifactRefs),
+    reviewedArtifactRefs: normalizeStringArray10(audit.reviewedArtifactRefs),
+    requiredArtifactRefs: normalizeStringArray10(audit.requiredArtifactRefs),
+    missingArtifactRefs: normalizeStringArray10(audit.missingArtifactRefs),
     auditFindings: Array.isArray(audit.auditFindings) ? audit.auditFindings : [],
-    integrityFlags: normalizeStringArray9(audit.integrityFlags),
+    integrityFlags: normalizeStringArray10(audit.integrityFlags),
     evidencePathIntegrity: audit.evidencePathIntegrity ?? null,
     confidence: audit.confidence ?? "medium",
     outcomeMapping: audit.outcomeMapping ?? "inconclusive",
@@ -17446,7 +17909,7 @@ var SYSTEM_OWNED_EXPERIMENT_PROVENANCE_FIELDS = /* @__PURE__ */ new Set([
   "runtimeRunId",
   "leaseId"
 ]);
-function collectForbiddenExperimentProvenancePaths(value, path25 = "", seen = /* @__PURE__ */ new WeakSet()) {
+function collectForbiddenExperimentProvenancePaths(value, path28 = "", seen = /* @__PURE__ */ new WeakSet()) {
   if (!value || typeof value !== "object") {
     return [];
   }
@@ -17456,11 +17919,11 @@ function collectForbiddenExperimentProvenancePaths(value, path25 = "", seen = /*
   seen.add(value);
   if (Array.isArray(value)) {
     return value.flatMap(
-      (item, index) => collectForbiddenExperimentProvenancePaths(item, `${path25}[${index}]`, seen)
+      (item, index) => collectForbiddenExperimentProvenancePaths(item, `${path28}[${index}]`, seen)
     );
   }
   return Object.entries(value).flatMap(([key, nestedValue]) => {
-    const fieldPath = path25 ? `${path25}.${key}` : key;
+    const fieldPath = path28 ? `${path28}.${key}` : key;
     return [
       ...SYSTEM_OWNED_EXPERIMENT_PROVENANCE_FIELDS.has(key) ? [fieldPath] : [],
       ...collectForbiddenExperimentProvenancePaths(nestedValue, fieldPath, seen)
@@ -17699,7 +18162,7 @@ function persistExperimentResultClaimBridge(root, args = {}, runtimeContext = {}
   }
   const currentClaim = evidence.claims[claimIndex];
   const currentClaimState = { status: currentClaim.status, confidence: currentClaim.confidence };
-  const requestedAuditIds = normalizeStringArray9(args.auditIds);
+  const requestedAuditIds = normalizeStringArray10(args.auditIds);
   const auditById = new Map((auditsIndex.items ?? []).map((item) => [item.id, item]));
   const missingAuditIds = requestedAuditIds.filter((id) => !auditById.has(id));
   if (missingAuditIds.length > 0) {
@@ -17728,7 +18191,7 @@ function persistExperimentResultClaimBridge(root, args = {}, runtimeContext = {}
   const implicitResultRetry = Boolean(
     existingBridge && !args.id && resultLinkedBridge?.id === existingBridge.id
   );
-  const existingAuditIds = existingBridge ? normalizeStringArray9(existingBridge.auditIds) : [];
+  const existingAuditIds = existingBridge ? normalizeStringArray10(existingBridge.auditIds) : [];
   const audits = implicitResultRetry || existingBridge && !Object.hasOwn(args, "auditIds") ? existingAuditIds.map((id) => auditById.get(id)).filter(Boolean) : candidateAudits;
   if ((implicitResultRetry || existingBridge && !Object.hasOwn(args, "auditIds")) && audits.length !== existingAuditIds.length) {
     throw new Error(`Claim bridge ${existingBridge.id} references missing durable experiment audit records.`);
@@ -17840,6 +18303,7 @@ function upsertExperimentPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-experiment-plan", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-experiment-plan", args);
   assertFollowThroughReady(root, "Updating an experiment plan", args);
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "experiments", "builder", "Updating an experiment plan");
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   const rawPlan = args.plan ?? args;
@@ -17903,6 +18367,7 @@ function upsertExperimentPlan(root, args = {}) {
 }
 function upsertExperimentResult(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-experiment-result", "guarded");
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "experiments", "builder", "Updating an experiment result");
   const taskTarget = assertTaskScopedMutationTarget(root, "upsert-experiment-result", args);
   assertFollowThroughReady(root, "Updating an experiment result", args);
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
@@ -18046,15 +18511,15 @@ function normalizeIssue(issue = {}, index = 0) {
     summary: issue.summary ?? `Issue ${index + 1}`,
     severity: issue.severity ?? "medium",
     status: issue.status ?? "open",
-    evidenceLinks: normalizeStringArray9(issue.evidenceLinks),
-    claimIds: normalizeStringArray9(issue.claimIds),
-    experimentIds: normalizeStringArray9(issue.experimentIds),
+    evidenceLinks: normalizeStringArray10(issue.evidenceLinks),
+    claimIds: normalizeStringArray10(issue.claimIds),
+    experimentIds: normalizeStringArray10(issue.experimentIds),
     responseDirection: issue.responseDirection ?? "clarify",
     ...issue.authorizationProvenance ? { authorizationProvenance: issue.authorizationProvenance } : {},
     authorizationProvenanceHistory: Array.isArray(
       issue.authorizationProvenanceHistory
     ) ? issue.authorizationProvenanceHistory : [],
-    sourceReviewIds: normalizeStringArray9(
+    sourceReviewIds: normalizeStringArray10(
       issue.sourceReviewIds
     ),
     sourceReviewExecutionClaimId: issue.sourceReviewExecutionClaimId ?? null,
@@ -18089,6 +18554,7 @@ function assertNoReservedRebuttalFields(args = {}) {
 function normalizeRebuttalIssues(root, args = {}) {
   assertGovernanceMutationRegistered("normalize-rebuttal-issues", "guarded");
   assertNoReservedRebuttalFields(args);
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "rebuttal", "builder", "Normalizing rebuttal issues");
   const target = assertTaskScopedMutationTarget(root, "normalize-rebuttal-issues", args);
   assertFollowThroughReady(root, "Normalizing rebuttal issues", args);
   const next = persistRebuttalIssues(root, args);
@@ -18158,6 +18624,7 @@ function buildRebuttalStrategy(root, args = {}) {
   assertGovernanceMutationRegistered("build-rebuttal-strategy", "guarded");
   const target = assertTaskScopedMutationTarget(root, "build-rebuttal-strategy", args);
   assertFollowThroughReady(root, "Building the rebuttal strategy", args);
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "rebuttal", "builder", "Building the rebuttal strategy");
   const issues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   if (!Array.isArray(issues.items) || issues.items.length === 0) {
     return missingRebuttalIssuesResult(root, args);
@@ -18235,7 +18702,7 @@ function buildRebuttalStrategy(root, args = {}) {
   };
 }
 function readSnapshot(root, snapshotId) {
-  const snapshotPath = path10.join(ARTIFACT_PATHS.versionSnapshotsDir, `${snapshotId}.json`);
+  const snapshotPath = path12.join(ARTIFACT_PATHS.versionSnapshotsDir, `${snapshotId}.json`);
   const raw = readJson(root, snapshotPath, null);
   if (!raw) {
     return null;
@@ -18322,7 +18789,7 @@ function createVersionSnapshot(root, args = {}) {
     experimentAuditIds: audits.items.map((item) => item.id),
     claimBridgeIds: bridgeLog.items.map((item) => item.id)
   };
-  writeJson(root, path10.join(ARTIFACT_PATHS.versionSnapshotsDir, `${versionId}.json`), snapshot);
+  writeJson(root, path12.join(ARTIFACT_PATHS.versionSnapshotsDir, `${versionId}.json`), snapshot);
   const existingIndex = versions.items.findIndex((item) => item.id === versionId);
   const summaryEntry = {
     id: versionId,
@@ -18361,7 +18828,7 @@ function createVersionSnapshot(root, args = {}) {
   refreshDurableSurfaces(root, {
     type: "create-version-snapshot",
     summary: `Created version snapshot ${versionId}.`,
-    artifactPaths: [ARTIFACT_PATHS.versionsIndex, path10.join(ARTIFACT_PATHS.versionSnapshotsDir, `${versionId}.json`), ARTIFACT_PATHS.taskPacketsIndex]
+    artifactPaths: [ARTIFACT_PATHS.versionsIndex, path12.join(ARTIFACT_PATHS.versionSnapshotsDir, `${versionId}.json`), ARTIFACT_PATHS.taskPacketsIndex]
   });
   return {
     ...snapshot,
@@ -18492,8 +18959,14 @@ function compareVersions(root, args = {}) {
 }
 
 // src/core/source-trust.mjs
-import crypto7 from "node:crypto";
+import crypto8 from "node:crypto";
+import fs11 from "node:fs";
+import path13 from "node:path";
 var SOURCE_LIFECYCLE_STATES = Object.freeze(["candidate", "verified", "rejected"]);
+var TRUSTED_SOURCE_VERIFICATION_ISSUERS = /* @__PURE__ */ new Map([
+  ["dove-reviewer", "reviewer"],
+  ["dove-system", "system"]
+]);
 function normalizeText(value) {
   return typeof value === "string" ? value.trim().replace(/\s+/gu, " ") : "";
 }
@@ -18534,7 +19007,26 @@ function canonicalSourceIdentity(source = {}) {
   };
 }
 function sourceIdentityFingerprint(source = {}) {
-  return crypto7.createHash("sha256").update(JSON.stringify(canonicalSourceIdentity(source))).digest("hex");
+  return crypto8.createHash("sha256").update(JSON.stringify(canonicalSourceIdentity(source))).digest("hex");
+}
+function verificationMaterialState(root, materialPath) {
+  const normalizedPath = normalizeText(materialPath);
+  if (!normalizedPath) return { valid: false, reason: "source-verification-material-missing" };
+  const inspection = inspectDeclaredPath(root, normalizedPath, { requireNonEmpty: true });
+  if (inspection.status !== "existing") {
+    return { valid: false, reason: `source-verification-material-${inspection.status}` };
+  }
+  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  const fullPath = path13.resolve(root, canonicalPath);
+  const materialHash = crypto8.createHash("sha256").update(fs11.readFileSync(fullPath)).digest("hex");
+  return { valid: true, materialPath: canonicalPath, materialHash };
+}
+function trustedVerificationProvenance(verification = {}) {
+  const issuer = normalizeText(verification.issuer);
+  const issuerRole = normalizeText(verification.issuerRole).toLowerCase();
+  const expectedRole = TRUSTED_SOURCE_VERIFICATION_ISSUERS.get(issuer);
+  if (!expectedRole || issuerRole !== expectedRole) return false;
+  return normalizeText(verification.provenance) === "trusted-internal-transition";
 }
 function readSourceTrustState(root) {
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 2, items: [], updatedAt: null });
@@ -18550,12 +19042,15 @@ function sourceReferenceMap(sources = []) {
     source.doi ? [source.doi, source] : null
   ].filter(Boolean)));
 }
-function sourceEligibility(source, verifications = []) {
+function sourceEligibility(source, verifications = [], options = {}) {
   if (!source) return { eligible: false, reason: "unknown-source", source: null, verification: null };
   const verification = [...verifications].reverse().find((item) => item.sourceId === source.id) ?? null;
   if (!verification) return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: null };
   if (verification.decision !== "verified") {
     return { eligible: false, reason: `source-${verification.decision ?? source.lifecycle ?? "candidate"}`, source, verification };
+  }
+  if (!trustedVerificationProvenance(verification)) {
+    return { eligible: false, reason: "source-verification-untrusted-provenance", source, verification };
   }
   const fingerprint = sourceIdentityFingerprint(source);
   if (verification.fingerprint !== fingerprint) {
@@ -18565,6 +19060,17 @@ function sourceEligibility(source, verifications = []) {
   if (!verification.packetId || !sourcePacketIds.has(verification.packetId)) {
     return { eligible: false, reason: "source-packet-binding-mismatch", source, verification };
   }
+  if (options.root) {
+    const material = verificationMaterialState(options.root, verification.materialPath);
+    if (!material.valid) {
+      return { eligible: false, reason: material.reason, source, verification };
+    }
+    if (!verification.materialHash || verification.materialHash !== material.materialHash) {
+      return { eligible: false, reason: "source-verification-material-changed", source, verification };
+    }
+  } else if (!verification.materialPath || !verification.materialHash) {
+    return { eligible: false, reason: "source-verification-material-unavailable", source, verification };
+  }
   return { eligible: true, reason: "verified-source", source, verification };
 }
 function evaluateSourceReferences(root, references = []) {
@@ -18572,7 +19078,40 @@ function evaluateSourceReferences(root, references = []) {
   const byReference = sourceReferenceMap(sources.items ?? []);
   return references.map((reference) => {
     const source = byReference.get(reference) ?? null;
-    return { reference, ...sourceEligibility(source, verifications.items ?? []) };
+    return { reference, ...sourceEligibility(source, verifications.items ?? [], { root }) };
+  });
+}
+function evaluateNoteReferences(root, references = [], packetId = null) {
+  const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
+  const { sources, verifications } = readSourceTrustState(root);
+  const bySource = sourceReferenceMap(sources.items ?? []);
+  const normalizedPacketId = normalizeText(packetId);
+  return references.map((reference) => {
+    const note = (notes.items ?? []).find((item) => item.id === reference) ?? null;
+    if (!note) return { reference, eligible: false, reason: "unknown-note", note: null, sources: [] };
+    if (!normalizedPacketId || !(note.packetIds ?? []).includes(normalizedPacketId)) {
+      return { reference, eligible: false, reason: "note-packet-binding-mismatch", note, sources: [] };
+    }
+    const sourceIds = Array.isArray(note.sourceIds) ? note.sourceIds : [];
+    if (sourceIds.length === 0) {
+      return { reference, eligible: false, reason: "note-source-missing", note, sources: [] };
+    }
+    const sourceEvaluations = sourceIds.map((sourceId) => {
+      const source = bySource.get(sourceId) ?? null;
+      const eligibility = sourceEligibility(source, verifications.items ?? [], { root });
+      if (eligibility.eligible && eligibility.verification?.packetId !== normalizedPacketId) {
+        return { reference: sourceId, ...eligibility, eligible: false, reason: "source-verification-packet-mismatch" };
+      }
+      return { reference: sourceId, ...eligibility };
+    });
+    const failure = sourceEvaluations.find((item) => !item.eligible);
+    return {
+      reference,
+      eligible: !failure,
+      reason: failure ? failure.reason : "verified-note",
+      note,
+      sources: sourceEvaluations
+    };
   });
 }
 function querySources(root, args = {}) {
@@ -18582,7 +19121,7 @@ function querySources(root, args = {}) {
   const lifecycle = normalizeText(args.lifecycle).toLowerCase();
   const limit = Math.min(200, Math.max(1, Number.isFinite(Number(args.limit)) ? Math.trunc(Number(args.limit)) : 50));
   const items = (sources.items ?? []).filter((source) => !sourceId || [source.id, source.citationKey, source.locator, source.url, source.doi].includes(sourceId)).filter((source) => !packetId || (source.packetIds ?? []).includes(packetId)).map((source) => {
-    const eligibility = sourceEligibility(source, verifications.items ?? []);
+    const eligibility = sourceEligibility(source, verifications.items ?? [], { root });
     return {
       ...source,
       eligibility: {
@@ -18669,8 +19208,8 @@ function prepareSourceVerification(root, source, args = {}, packetId = null) {
   if (!auditEvidenceMatchesSource(source, auditEvidence)) {
     throw new Error("verify_source requires at least one auditEvidence source reference matching the registered source identity.");
   }
-  if (!SOURCE_LIFECYCLE_STATES.slice(1).includes(decision)) {
-    throw new Error("verify_source decision must be verified or rejected.");
+  if (decision !== "rejected") {
+    throw new Error("Public verify_source only records rejection. Positive verification requires a trusted internal Reviewer/system transition that is not exposed through this API.");
   }
   const normalizedPacketId = normalizeText(packetId);
   if (!normalizedPacketId || !(Array.isArray(source.packetIds) ? source.packetIds : []).includes(normalizedPacketId)) {
@@ -18768,6 +19307,7 @@ function upsertClaims(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-claims", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-claims", args);
   assertFollowThroughReady(root, "Updating evidence-backed claims", args);
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "plan", "planner", "Updating evidence-backed claims");
   const current = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
@@ -18956,8 +19496,8 @@ function evaluateEvidence(root) {
 }
 
 // src/core/onboarding.mjs
-import fs10 from "node:fs";
-import path11 from "node:path";
+import fs12 from "node:fs";
+import path14 from "node:path";
 var DEFAULT_EXCLUDED_DIRS = /* @__PURE__ */ new Set([
   ".git",
   ".dove",
@@ -18988,16 +19528,16 @@ var TABLE_EXTENSIONS = /* @__PURE__ */ new Set([".csv", ".tsv", ".xlsx"]);
 var RESULT_EXTENSIONS = /* @__PURE__ */ new Set([".json", ".jsonl", ".npy", ".npz", ".pkl", ".parquet"]);
 var NOTE_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".txt"]);
 function normalizeRelativePath2(relativePath) {
-  return relativePath.split(path11.sep).join("/");
+  return relativePath.split(path14.sep).join("/");
 }
 function safeInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 function classifyByName(relativePath) {
-  const baseName = path11.basename(relativePath).toLowerCase();
+  const baseName = path14.basename(relativePath).toLowerCase();
   const stem = baseName.replace(/\.[^.]+$/, "");
-  const extension = path11.extname(baseName);
+  const extension = path14.extname(baseName);
   const pathParts = relativePath.toLowerCase().split("/");
   const parentHints = new Set(pathParts.slice(0, -1));
   if (extension === ".bib") {
@@ -19086,9 +19626,9 @@ function walkFiles(root, options = {}) {
     }
     let entries = [];
     try {
-      entries = fs10.readdirSync(currentDir, { withFileTypes: true });
+      entries = fs12.readdirSync(currentDir, { withFileTypes: true });
     } catch (error) {
-      warnings.push(`Could not read ${normalizeRelativePath2(path11.relative(root, currentDir)) || "."}: ${error instanceof Error ? error.message : String(error)}`);
+      warnings.push(`Could not read ${normalizeRelativePath2(path14.relative(root, currentDir)) || "."}: ${error instanceof Error ? error.message : String(error)}`);
       return;
     }
     for (const entry of entries) {
@@ -19096,8 +19636,8 @@ function walkFiles(root, options = {}) {
         warnings.push(`Scan stopped after ${maxFiles} files.`);
         return;
       }
-      const fullPath = path11.join(currentDir, entry.name);
-      const relativePath = normalizeRelativePath2(path11.relative(root, fullPath));
+      const fullPath = path14.join(currentDir, entry.name);
+      const relativePath = normalizeRelativePath2(path14.relative(root, fullPath));
       if (entry.isDirectory()) {
         if (excludedDirs.has(entry.name) || depth >= maxDepth) {
           continue;
@@ -19159,7 +19699,7 @@ function buildProposal(root, options = {}) {
   for (const sourcePath of files) {
     const classified = classifyByName(sourcePath);
     if (!classified) {
-      const extension = path11.extname(sourcePath).toLowerCase();
+      const extension = path14.extname(sourcePath).toLowerCase();
       if ([".tex", ".md", ".bib", ".pdf", ".png", ".jpg", ".jpeg", ".svg", ".csv", ".tsv", ".json"].includes(extension)) {
         unmapped.push({ sourcePath, reason: "Recognized paper-adjacent extension but no confident lifecycle mapping." });
       }
@@ -19239,22 +19779,22 @@ function queryDoveOnboarding(root, args = {}) {
 }
 
 // src/core/dove.mjs
-import fs12 from "node:fs";
-import path13 from "node:path";
+import fs14 from "node:fs";
+import path16 from "node:path";
 
 // src/core/paper-audit.mjs
-import fs11 from "node:fs";
-import path12 from "node:path";
+import fs13 from "node:fs";
+import path15 from "node:path";
 function cloneFallback2(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
 }
 function safeReadJson(root, relativePath, fallback, readErrors) {
   const fullPath = resolvePath(root, relativePath);
-  if (!fs11.existsSync(fullPath)) {
+  if (!fs13.existsSync(fullPath)) {
     return cloneFallback2(fallback);
   }
   try {
-    return JSON.parse(fs11.readFileSync(fullPath, "utf8"));
+    return JSON.parse(fs13.readFileSync(fullPath, "utf8"));
   } catch (error) {
     readErrors.push({
       path: relativePath,
@@ -19268,12 +19808,12 @@ function safeLoadState(root, readErrors) {
 }
 function safeListDraftFiles(root) {
   const draftsDir = resolvePath(root, ARTIFACT_PATHS.draftsDir);
-  if (!fs11.existsSync(draftsDir)) {
+  if (!fs13.existsSync(draftsDir)) {
     return [];
   }
-  return fs11.readdirSync(draftsDir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md").map((entry) => entry.name);
+  return fs13.readdirSync(draftsDir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md").map((entry) => entry.name);
 }
-function normalizeStringArray10(value) {
+function normalizeStringArray11(value) {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -19287,11 +19827,11 @@ function normalizeFigureArtifactPath(value) {
   return normalized.length > 0 ? normalized : null;
 }
 function isSafeProjectRelativePath(relativePath) {
-  if (!relativePath || path12.isAbsolute(relativePath)) {
+  if (!relativePath || path15.isAbsolute(relativePath)) {
     return false;
   }
-  const normalized = path12.normalize(relativePath);
-  return normalized !== "." && !normalized.startsWith("..") && !normalized.includes(`${path12.sep}..${path12.sep}`);
+  const normalized = path15.normalize(relativePath);
+  return normalized !== "." && !normalized.startsWith("..") && !normalized.includes(`${path15.sep}..${path15.sep}`);
 }
 function figurePathLooksPortable(relativePath) {
   if (!relativePath) {
@@ -19473,7 +20013,7 @@ function safeEvaluateFigurePipeline(root, state, readErrors) {
   const issues = [];
   function normalizeFigureListField(figure, field, stage, artifactPaths) {
     const rawValue = figure[field];
-    const normalized = normalizeStringArray10(rawValue);
+    const normalized = normalizeStringArray11(rawValue);
     if (rawValue !== void 0 && rawValue !== null && !Array.isArray(rawValue)) {
       issues.push(buildFigureIssue({
         figure,
@@ -19659,7 +20199,7 @@ function safeEvaluateFigurePipeline(root, state, readErrors) {
     ];
     for (const pathCheck of stagePathChecks) {
       const normalizedPath = normalizeFigureArtifactPath(pathCheck.value);
-      const exists = normalizedPath && isSafeProjectRelativePath(normalizedPath) ? fs11.existsSync(resolvePath(root, normalizedPath)) : false;
+      const exists = normalizedPath && isSafeProjectRelativePath(normalizedPath) ? fs13.existsSync(resolvePath(root, normalizedPath)) : false;
       fileChecks.stagedArtifacts[pathCheck.field] = { path: normalizedPath, exists };
       if (!normalizedPath || !isSafeProjectRelativePath(normalizedPath)) {
         figureIssues.push(buildFigureIssue({
@@ -19716,7 +20256,7 @@ function safeEvaluateFigurePipeline(root, state, readErrors) {
     const normalizedSourceArtifactPaths = sourceArtifactPaths.map(normalizeFigureArtifactPath);
     for (let index = 0; index < normalizedSourceArtifactPaths.length; index += 1) {
       const sourcePath = normalizedSourceArtifactPaths[index];
-      const exists = sourcePath && isSafeProjectRelativePath(sourcePath) ? fs11.existsSync(resolvePath(root, sourcePath)) : false;
+      const exists = sourcePath && isSafeProjectRelativePath(sourcePath) ? fs13.existsSync(resolvePath(root, sourcePath)) : false;
       fileChecks.sourceArtifacts.push({ path: sourcePath, exists });
       if (!sourcePath || !isSafeProjectRelativePath(sourcePath)) {
         figureIssues.push(buildFigureIssue({
@@ -20119,14 +20659,14 @@ function normalizeString5(value, fallback = null) {
   const trimmed = value.trim();
   return trimmed || fallback;
 }
-function normalizeStringArray11(values) {
+function normalizeStringArray12(values) {
   if (!Array.isArray(values)) {
     return [];
   }
   return values.map((value) => normalizeString5(value)).filter(Boolean);
 }
 function uniqueStrings2(values) {
-  return [...new Set(normalizeStringArray11(values))];
+  return [...new Set(normalizeStringArray12(values))];
 }
 function compactObject(fields) {
   return Object.fromEntries(Object.entries(fields).filter(([, value]) => {
@@ -20279,11 +20819,11 @@ function collectOperatorCodes(data) {
     resultCardAction?.kind,
     resultCardAction?.boundaryType,
     resultCardAction?.reason,
-    ...normalizeStringArray11(data.requiredActions),
-    ...normalizeStringArray11(data.boundary?.requiredActions),
-    ...normalizeStringArray11(data.resultCard?.requiredActions),
-    ...normalizeStringArray11(data.resultCard?.boundary?.requiredActions),
-    ...normalizeStringArray11(resultCardAction?.requiredActions)
+    ...normalizeStringArray12(data.requiredActions),
+    ...normalizeStringArray12(data.boundary?.requiredActions),
+    ...normalizeStringArray12(data.resultCard?.requiredActions),
+    ...normalizeStringArray12(data.resultCard?.boundary?.requiredActions),
+    ...normalizeStringArray12(resultCardAction?.requiredActions)
   ]);
 }
 function buildOperatorUnblock(data, responseLanguage = responseLanguageFrom(data)) {
@@ -20299,8 +20839,8 @@ function buildOperatorUnblock(data, responseLanguage = responseLanguageFrom(data
   const nextOperatorAction = localizedEntry(entry, responseLanguage, "nextOperatorAction") ?? firstString(data?.nextAction, data?.nextCommand, data?.boundary?.command);
   const requiredEvidence = uniqueStrings2([
     ...localizedEntry(entry, responseLanguage, "requiredEvidence") ?? [],
-    ...normalizeStringArray11(data?.requiredEvidence),
-    ...normalizeStringArray11(data?.boundary?.requiredInputs)
+    ...normalizeStringArray12(data?.requiredEvidence),
+    ...normalizeStringArray12(data?.boundary?.requiredInputs)
   ]).slice(0, 8);
   return compactObject({
     summary: blockedSummary,
@@ -20324,15 +20864,15 @@ function cloneFallback3(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
 }
 function resolveProjectPath(root, relativePath) {
-  return path13.join(root, relativePath);
+  return path16.join(root, relativePath);
 }
 function safeReadJson2(root, relativePath, fallback, readErrors) {
   const fullPath = resolveProjectPath(root, relativePath);
-  if (!fs12.existsSync(fullPath)) {
+  if (!fs14.existsSync(fullPath)) {
     return cloneFallback3(fallback);
   }
   try {
-    return JSON.parse(fs12.readFileSync(fullPath, "utf8"));
+    return JSON.parse(fs14.readFileSync(fullPath, "utf8"));
   } catch (error) {
     readErrors.push({
       path: relativePath,
@@ -20343,11 +20883,11 @@ function safeReadJson2(root, relativePath, fallback, readErrors) {
 }
 function safeReadText(root, relativePath, readErrors) {
   const fullPath = resolveProjectPath(root, relativePath);
-  if (!fs12.existsSync(fullPath)) {
+  if (!fs14.existsSync(fullPath)) {
     return null;
   }
   try {
-    return fs12.readFileSync(fullPath, "utf8");
+    return fs14.readFileSync(fullPath, "utf8");
   } catch (error) {
     readErrors.push({
       path: relativePath,
@@ -20367,12 +20907,12 @@ function archivedPacketStatus(value) {
 function isArchivedStatusTask(task) {
   return archivedPacketStatus(task?.status) || archivedPacketStatus(task?.lifecycleStatus);
 }
-function normalizeStringArray12(value) {
+function normalizeStringArray13(value) {
   const values = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
   return Array.from(new Set(values.map((item) => String(item).trim()).filter(Boolean)));
 }
 function mergeStringArrays(...values) {
-  return Array.from(new Set(values.flatMap((value) => normalizeStringArray12(value))));
+  return Array.from(new Set(values.flatMap((value) => normalizeStringArray13(value))));
 }
 function activePackets(packets = []) {
   return packets.filter((packet) => !archivedPacketStatus(packet.status) && !archivedPacketStatus(packet.lifecycleStatus));
@@ -20670,8 +21210,8 @@ function selectDomainGuidance(workspaceIndex, domain) {
 }
 function missionPacketAliases(packet) {
   const packetId = String(packet.id ?? packet.packetId ?? packet.missionPacketId ?? "").trim();
-  const packetPath = packet.packetPath ?? (packetId ? path13.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`) : null);
-  const packetContextPath2 = packet.packetContextPath ?? (packetId ? path13.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`) : null);
+  const packetPath = packet.packetPath ?? (packetId ? path16.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`) : null);
+  const packetContextPath2 = packet.packetContextPath ?? (packetId ? path16.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`) : null);
   return {
     packetId,
     packetPath,
@@ -20696,8 +21236,8 @@ function summarizePacket2(packet) {
     assignedRole: packet.assignedRole ?? null,
     phase: packet.phase ?? null,
     nextAction: packet.nextAction ?? null,
-    outputPaths: normalizeStringArray12(packet.outputPaths),
-    evidenceLinks: normalizeStringArray12(packet.evidenceLinks)
+    outputPaths: normalizeStringArray13(packet.outputPaths),
+    evidenceLinks: normalizeStringArray13(packet.evidenceLinks)
   };
 }
 function safeReadTaskPacketCatalog(root, taskPackets, readErrors) {
@@ -20787,7 +21327,7 @@ function normalizeDoveStatusLevel(packet) {
 }
 function normalizeStatusContractStringArray(value) {
   if (Array.isArray(value)) {
-    return normalizeStringArray12(value);
+    return normalizeStringArray13(value);
   }
   return typeof value === "string" && value.trim() ? [value.trim()] : [];
 }
@@ -20846,7 +21386,7 @@ function summarizeDoveStatusTask(packet, responseLanguage = "zh") {
   const summary = packet.summary ?? packet.currentFocus ?? null;
   const stage = normalizeDoveStatusTaskStage(packet);
   const domain = normalizeDoveStatusTaskDomain(packet);
-  const evidenceExpectations = normalizeStringArray12(packet.evidenceExpectations ?? packet.acceptanceChecks);
+  const evidenceExpectations = normalizeStringArray13(packet.evidenceExpectations ?? packet.acceptanceChecks);
   const ownerRole = packet.ownerRole ?? null;
   const nextRole = packet.nextRole ?? null;
   const nextAction = packet.nextAction ?? null;
@@ -20855,9 +21395,9 @@ function summarizeDoveStatusTask(packet, responseLanguage = "zh") {
   const executionReadiness = doveExecutionContractReadiness(executionContract);
   const verifiedCriteria = normalizeDoveVerifiedCriteria(packet.verifiedCriteria);
   const criteriaCoverage = doveExecutionCriteriaCoverage(executionContract, verifiedCriteria);
-  const validationEvidencePaths = normalizeStringArray12(packet.validationEvidencePaths);
-  const verificationEvidencePaths = normalizeStringArray12(packet.verificationEvidencePaths);
-  const criteriaEvidencePaths = normalizeStringArray12(verifiedCriteria.flatMap((item) => item.evidencePaths ?? []));
+  const validationEvidencePaths = normalizeStringArray13(packet.validationEvidencePaths);
+  const verificationEvidencePaths = normalizeStringArray13(packet.verificationEvidencePaths);
+  const criteriaEvidencePaths = normalizeStringArray13(verifiedCriteria.flatMap((item) => item.evidencePaths ?? []));
   const status = normalizeDoveStatusTaskStatus(packet);
   return {
     id,
@@ -20873,10 +21413,10 @@ function summarizeDoveStatusTask(packet, responseLanguage = "zh") {
     status,
     displayStatus: status === "completed" || status === "killed" ? "done" : status,
     lifecycleStatus: packet.lifecycleStatus ?? packet.status ?? null,
-    dependencies: normalizeStringArray12(packet.dependencies ?? packet.dependencyIds),
-    blockedBy: normalizeStringArray12(packet.blockedBy ?? packet.blockerIds),
+    dependencies: normalizeStringArray13(packet.dependencies ?? packet.dependencyIds),
+    blockedBy: normalizeStringArray13(packet.blockedBy ?? packet.blockerIds),
     blockedReason: packet.blockedReason ?? packet.blockerReason ?? packet.blockingReason ?? null,
-    lessonIds: normalizeStringArray12(packet.lessonIds),
+    lessonIds: normalizeStringArray13(packet.lessonIds),
     sourcePlanTaskId: packet.sourcePlanTaskId ?? null,
     derivedFrom: packet.derivedFrom ?? null,
     evidenceExpectations,
@@ -20888,8 +21428,8 @@ function summarizeDoveStatusTask(packet, responseLanguage = "zh") {
     validationEvidencePaths,
     verificationEvidencePaths,
     artifactRefs: mergeStringArrays(packet.artifactRefs, packet.artifactPaths, packet.outputPaths, packet.evidenceLinks, validationEvidencePaths, verificationEvidencePaths, criteriaEvidencePaths),
-    outputPaths: normalizeStringArray12(packet.outputPaths),
-    evidenceLinks: normalizeStringArray12(packet.evidenceLinks),
+    outputPaths: normalizeStringArray13(packet.outputPaths),
+    evidenceLinks: normalizeStringArray13(packet.evidenceLinks),
     contextPolicy: packet.contextPolicy ?? null,
     currentFocus: packet.currentFocus ?? null,
     nextAction,
@@ -20937,7 +21477,7 @@ function runtimeEntryTouchesPacket(entry, packetId) {
   if (runtimeIterationForPacket(entry, packetId)) {
     return true;
   }
-  return ["updatedTaskIds", "awaitingResultTaskIds", "autoRunnableTaskIds", "hostPassRequiredTaskIds", "runnableTaskIds", "blockedTaskIds", "pendingTaskIds"].some((field) => normalizeStringArray12(entry[field]).includes(packetId));
+  return ["updatedTaskIds", "awaitingResultTaskIds", "autoRunnableTaskIds", "hostPassRequiredTaskIds", "runnableTaskIds", "blockedTaskIds", "pendingTaskIds"].some((field) => normalizeStringArray13(entry[field]).includes(packetId));
 }
 function runtimeTimestamp(entry, iteration = null) {
   return iteration?.completedAt ?? iteration?.startedAt ?? entry.updatedAt ?? entry.recordedAt ?? entry.completedAt ?? entry.createdAt ?? entry.startedAt ?? "";
@@ -21033,7 +21573,7 @@ function continuationForTask(inputs, packetId) {
     programRunId: item.programRunId ?? null,
     followThroughId: item.followThroughId ?? null,
     summary: item.summary ?? null,
-    requiredReadPaths: normalizeStringArray12(item.requiredReadPaths),
+    requiredReadPaths: normalizeStringArray13(item.requiredReadPaths),
     readyAt: item.readyAt ?? null
   };
 }
@@ -21055,8 +21595,8 @@ function summarizeActionableBoundary(task) {
     taskStatus: task.status,
     reason: boundary.reason,
     summary: boundary.summary,
-    requiredInputs: normalizeStringArray12(boundary.requiredInputs),
-    requiredActions: normalizeStringArray12(boundary.requiredActions),
+    requiredInputs: normalizeStringArray13(boundary.requiredInputs),
+    requiredActions: normalizeStringArray13(boundary.requiredActions),
     ownerRole: boundary.ownerRole ?? task.ownerRole ?? null,
     nextRole: boundary.nextRole ?? task.nextRole ?? null,
     createdAt: boundary.createdAt ?? null,
@@ -21161,8 +21701,8 @@ function boundaryActionOption(kind, task, boundary, responseLanguage) {
     boundaryId: boundary.id,
     boundaryType: boundary.type,
     requires: mergeStringArrays(boundary.requiredInputs, boundary.requiredActions),
-    requiredInputs: normalizeStringArray12(boundary.requiredInputs),
-    requiredActions: normalizeStringArray12(boundary.requiredActions)
+    requiredInputs: normalizeStringArray13(boundary.requiredInputs),
+    requiredActions: normalizeStringArray13(boundary.requiredActions)
   });
 }
 function buildBoundaryActionCard(task, responseLanguage = "zh") {
@@ -21191,8 +21731,8 @@ function buildBoundaryActionCard(task, responseLanguage = "zh") {
     boundaryType: boundary.type,
     reason: boundary.reason,
     summary: boundary.summary,
-    requiredInputs: normalizeStringArray12(boundary.requiredInputs),
-    requiredActions: normalizeStringArray12(boundary.requiredActions),
+    requiredInputs: normalizeStringArray13(boundary.requiredInputs),
+    requiredActions: normalizeStringArray13(boundary.requiredActions),
     requires: mergeStringArrays(boundary.requiredInputs, boundary.requiredActions),
     ownerRole: boundary.ownerRole ?? task.ownerRole ?? null,
     nextRole: boundary.nextRole ?? task.nextRole ?? null,
@@ -21232,12 +21772,12 @@ function recoveryCandidateDetail(card) {
     packetId: card.packetId ?? null,
     nextRole: card.nextRole ?? null,
     boundaryType: card.boundaryType ?? card.boundary?.type ?? null,
-    evidenceRequired: normalizeStringArray12(card.evidenceRequired).slice(0, 8),
-    doneCriteria: normalizeStringArray12(card.doneCriteria).slice(0, 8),
-    requiredMaterials: normalizeStringArray12(card.requiredMaterials).slice(0, 8),
+    evidenceRequired: normalizeStringArray13(card.evidenceRequired).slice(0, 8),
+    doneCriteria: normalizeStringArray13(card.doneCriteria).slice(0, 8),
+    requiredMaterials: normalizeStringArray13(card.requiredMaterials).slice(0, 8),
     criteriaCoverage: card.criteriaCoverage ? {
       complete: Boolean(card.criteriaCoverage.complete),
-      missing: normalizeStringArray12(card.criteriaCoverage.missing).slice(0, 8)
+      missing: normalizeStringArray13(card.criteriaCoverage.missing).slice(0, 8)
     } : null
   });
 }
@@ -21397,7 +21937,7 @@ function completionConsistencyFindings(completionConsistency = {}) {
   return Array.isArray(completionConsistency.findings) ? completionConsistency.findings : [];
 }
 function completionConsistencyOpenChecklistChildIds(completionConsistency = {}) {
-  return new Set(completionConsistencyFindings(completionConsistency).flatMap((finding) => normalizeStringArray12(finding.openChecklistChildIds)));
+  return new Set(completionConsistencyFindings(completionConsistency).flatMap((finding) => normalizeStringArray13(finding.openChecklistChildIds)));
 }
 function buildCompletionReconciliationCard(completionConsistency = {}, responseLanguage = "zh") {
   const findings = completionConsistencyFindings(completionConsistency);
@@ -21412,7 +21952,7 @@ function buildCompletionReconciliationCard(completionConsistency = {}, responseL
     why: doveText(responseLanguage, "statusHomeReconcileWhy"),
     command: "project:dove.status",
     firstAction: "project:dove.status",
-    affectedParentIds: normalizeStringArray12(findings.map((finding) => finding.parentId)),
+    affectedParentIds: normalizeStringArray13(findings.map((finding) => finding.parentId)),
     findingCount: findings.length,
     openChecklistChildCount: openChecklistChildIds.length,
     openChecklistChildIds,
@@ -21445,7 +21985,7 @@ function statusTaskEvidenceBundle(task = {}) {
   );
 }
 function missingExecutionMaterials(task = {}) {
-  const required = normalizeStringArray12(task.executionReadiness?.requiredMaterials);
+  const required = normalizeStringArray13(task.executionReadiness?.requiredMaterials);
   if (required.length === 0) {
     return [];
   }
@@ -21467,7 +22007,7 @@ function buildMissingExecutionContractCard(task, responseLanguage = "zh") {
     packetId: task.id,
     command: "project:dove.mission",
     firstAction: statusCopyableCommand("project:dove.mission", task.id),
-    evidenceRequired: normalizeStringArray12(task.executionReadiness?.missing).map((item) => item === "executionContract" ? item : `executionContract.${item}`),
+    evidenceRequired: normalizeStringArray13(task.executionReadiness?.missing).map((item) => item === "executionContract" ? item : `executionContract.${item}`),
     doneCriteria: [statusInlineText(responseLanguage, "\u4EFB\u52A1\u5305\u542B\u53EF\u6267\u884C\u5408\u540C\uFF0C\u5E76\u660E\u786E Builder \u8BC1\u636E\u4E0E Reviewer \u9A8C\u8BC1\u6807\u51C6\u3002", "Task has an executable contract with Builder evidence and Reviewer verification criteria.")],
     executionReadiness: task.executionReadiness,
     nextRole: "planner"
@@ -21541,8 +22081,8 @@ function buildVerificationGapCard(task, responseLanguage = "zh") {
     command: actionableCommand,
     firstAction: route?.copyableCommand ?? statusCopyableCommand(actionableCommand, task.id),
     copyableCommand: route?.copyableCommand ?? statusCopyableCommand(actionableCommand, task.id),
-    evidenceRequired: normalizeStringArray12(task.criteriaCoverage?.missing),
-    doneCriteria: normalizeStringArray12(task.criteriaCoverage?.required),
+    evidenceRequired: normalizeStringArray13(task.criteriaCoverage?.missing),
+    doneCriteria: normalizeStringArray13(task.criteriaCoverage?.required),
     criteriaCoverage: task.criteriaCoverage,
     nextRole: "reviewer"
   });
@@ -21551,7 +22091,7 @@ function taskLooksLikeCleanupNoise(task = {}) {
   if (task.derivedFrom === "blocked-mission-investigation") {
     return true;
   }
-  const searchable = normalizeStringArray12([task.id, task.title, task.summary, task.sourceId, task.sourceType, task.creatorKind]).join(" ").toLowerCase();
+  const searchable = normalizeStringArray13([task.id, task.title, task.summary, task.sourceId, task.sourceType, task.creatorKind]).join(" ").toLowerCase();
   return /\bdogfood\b|visible[-_ ]?test|operator[-_ ]?investigation|blocked[-_ ]?mission[-_ ]?investigation/.test(searchable);
 }
 function cleanupArchiveCandidates(tasks = []) {
@@ -21590,7 +22130,7 @@ function buildStatusExecutionGaps(activeTasks = []) {
     }
     if (!hasExecutableContract(task)) {
       missingContractTasks.push(task);
-      evidenceRequired.push(...normalizeStringArray12(task.executionReadiness?.missing).map((item) => item === "executionContract" ? item : `executionContract.${item}`));
+      evidenceRequired.push(...normalizeStringArray13(task.executionReadiness?.missing).map((item) => item === "executionContract" ? item : `executionContract.${item}`));
       continue;
     }
     const missingMaterials = missingExecutionMaterials(task);
@@ -21602,7 +22142,7 @@ function buildStatusExecutionGaps(activeTasks = []) {
     }
     if (task.criteriaCoverage?.complete === false && statusTaskEvidenceBundle(task).length > 0) {
       verificationGapTasks.push(task);
-      evidenceRequired.push(...normalizeStringArray12(task.criteriaCoverage.missing));
+      evidenceRequired.push(...normalizeStringArray13(task.criteriaCoverage.missing));
       continue;
     }
     if (taskNeedsBuilderExecution(task)) {
@@ -21736,7 +22276,7 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, visib
       command: actionableCommand,
       firstAction: actionableCommand ? route?.copyableCommand ?? statusCopyableCommand(actionableCommand, task.id) : null,
       copyableCommand: actionableCommand ? route?.copyableCommand ?? statusCopyableCommand(actionableCommand, task.id) : null,
-      evidenceRequired: normalizeStringArray12(task.evidenceExpectations),
+      evidenceRequired: normalizeStringArray13(task.evidenceExpectations),
       boundary: task.currentBoundary ?? null,
       handoff: task.handoff ?? null
     });
@@ -21749,7 +22289,7 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, visib
       why: doveText(responseLanguage, "statusHomeReviewWhy"),
       command: "project:dove.review",
       firstAction: "project:dove.review",
-      evidenceRequired: normalizeStringArray12(review.unresolvedConcernIds)
+      evidenceRequired: normalizeStringArray13(review.unresolvedConcernIds)
     });
   }
   for (const task of activeTasks) {
@@ -21802,7 +22342,7 @@ function buildStatusAdjustmentCard(task, recommendedStatus, responseLanguage = "
     scope: doveText(responseLanguage, "compactCardScope", { stage: task.stage, domain: task.domain, status: task.status }),
     why: task.blockedReason ?? task.lastStopReason ?? doveText(responseLanguage, "compactCardFirstActionFallback"),
     firstAction: "apply_dove_status_adjustments",
-    evidenceRequired: normalizeStringArray12(task.evidenceExpectations),
+    evidenceRequired: normalizeStringArray13(task.evidenceExpectations),
     boundaryOrResume: task.actionableBoundary ?? task.currentBoundary ?? null,
     confirmation: doveText(responseLanguage, "compactCardNoAutomaticExecution")
   });
@@ -21853,16 +22393,16 @@ function selectDailyHomeNextCommand(statusHome, fallbackNextCommand) {
 }
 function applicableLessonsForTask(inputs, task) {
   const lessons = Array.isArray(inputs.operatorLessons.lessons) ? inputs.operatorLessons.lessons : [];
-  const linkedLessonIds = new Set(normalizeStringArray12(task.lessonIds));
+  const linkedLessonIds = new Set(normalizeStringArray13(task.lessonIds));
   return lessons.filter((lesson) => {
     const status = String(lesson.status ?? "active").trim().toLowerCase();
-    const packetIds = normalizeStringArray12(lesson.packetIds);
+    const packetIds = normalizeStringArray13(lesson.packetIds);
     return status === "active" && (packetIds.length === 0 || packetIds.includes(task.id) || linkedLessonIds.has(lesson.id));
   }).slice(0, 10).map((lesson) => ({
     id: lesson.id,
     title: lesson.title,
     mustObey: lesson.mustObey ?? true,
-    nextTime: normalizeStringArray12(lesson.nextTime)
+    nextTime: normalizeStringArray13(lesson.nextTime)
   }));
 }
 function unresolvedDependencyIdsForTask(task, byId) {
@@ -21897,7 +22437,7 @@ function enrichStatusTasks(tasks, inputs) {
   });
 }
 function hasTaskBlockerSignal(task) {
-  return task.status === "blocked" || boundaryRecommendsBlocked(task) || Boolean(task.blockedReason) || task.blockedBy.length > 0 || normalizeStringArray12(task.unresolvedDependencyIds).length > 0;
+  return task.status === "blocked" || boundaryRecommendsBlocked(task) || Boolean(task.blockedReason) || task.blockedBy.length > 0 || normalizeStringArray13(task.unresolvedDependencyIds).length > 0;
 }
 function runtimeIndicatesInProgress(task) {
   return [task.lastRun?.status, task.lastRun?.outcome, task.continuationState?.kind].some((value) => String(value ?? "").includes("in-progress") || String(value ?? "").includes("continue"));
@@ -22045,9 +22585,9 @@ function compactWorkContract(contract) {
   }
   return {
     purpose: contract.purpose ?? null,
-    deliverables: normalizeStringArray12(contract.deliverables).slice(0, 3),
-    evidenceContract: normalizeStringArray12(contract.evidenceContract).slice(0, 3),
-    doneCriteria: normalizeStringArray12(contract.doneCriteria).slice(0, 3),
+    deliverables: normalizeStringArray13(contract.deliverables).slice(0, 3),
+    evidenceContract: normalizeStringArray13(contract.evidenceContract).slice(0, 3),
+    doneCriteria: normalizeStringArray13(contract.doneCriteria).slice(0, 3),
     practicalImpact: contract.practicalImpact ?? null
   };
 }
@@ -22101,8 +22641,8 @@ function compactStatusBoundary(boundary, responseLanguage = "zh") {
   }
   const implementationBoundaryType = String(boundary.type ?? boundary.boundaryType ?? "").trim() || null;
   const type = publicStatusBoundaryType(implementationBoundaryType);
-  const requiredInputs = normalizeStringArray12(boundary.requiredInputs);
-  const requiredActions = normalizeStringArray12(boundary.requiredActions);
+  const requiredInputs = normalizeStringArray13(boundary.requiredInputs);
+  const requiredActions = normalizeStringArray13(boundary.requiredActions);
   const command = boundary.command ?? boundary.nextAction ?? null;
   const operatorUnblock = buildStatusOperatorUnblock({
     reason: boundary.reason,
@@ -22115,7 +22655,7 @@ function compactStatusBoundary(boundary, responseLanguage = "zh") {
       command
     },
     requiredActions,
-    requiredEvidence: normalizeStringArray12(boundary.requiredEvidence),
+    requiredEvidence: normalizeStringArray13(boundary.requiredEvidence),
     nextAction: command
   }, responseLanguage);
   return compactStatusObject({
@@ -22142,8 +22682,8 @@ function compactStatusActionCard(card, responseLanguage = "zh") {
   }
   const boundary = compactStatusBoundary(card.boundary, responseLanguage);
   const boundaryType = publicStatusBoundaryType(card.boundaryType ?? card.boundary?.type);
-  const requiredActions = normalizeStringArray12(card.requiredActions ?? card.boundary?.requiredActions);
-  const requires = normalizeStringArray12(card.requires);
+  const requiredActions = normalizeStringArray13(card.requiredActions ?? card.boundary?.requiredActions);
+  const requires = normalizeStringArray13(card.requires);
   const operatorUnblock = buildStatusOperatorUnblock({
     kind: card.kind,
     reason: card.reason,
@@ -22162,33 +22702,33 @@ function compactStatusActionCard(card, responseLanguage = "zh") {
     kind: card.kind,
     recoveryPrimaryKind: card.recoveryPrimaryKind,
     relatedActionCount: card.relatedActionCount,
-    relatedActionKinds: normalizeStringArray12(card.relatedActionKinds).slice(0, 8),
+    relatedActionKinds: normalizeStringArray13(card.relatedActionKinds).slice(0, 8),
     title: card.title,
     why: card.why,
     packetId: card.packetId,
-    affectedParentIds: normalizeStringArray12(card.affectedParentIds),
+    affectedParentIds: normalizeStringArray13(card.affectedParentIds),
     findingCount: card.findingCount,
     openChecklistChildCount: card.openChecklistChildCount,
-    openChecklistChildIds: normalizeStringArray12(card.openChecklistChildIds).slice(0, 20),
+    openChecklistChildIds: normalizeStringArray13(card.openChecklistChildIds).slice(0, 20),
     command: card.command,
     firstAction: card.firstAction,
     copyableCommand: card.copyableCommand,
-    evidenceRequired: normalizeStringArray12(card.evidenceRequired).slice(0, 5),
-    doneCriteria: normalizeStringArray12(card.doneCriteria).slice(0, 5),
+    evidenceRequired: normalizeStringArray13(card.evidenceRequired).slice(0, 5),
+    doneCriteria: normalizeStringArray13(card.doneCriteria).slice(0, 5),
     workContract: compactWorkContract(card.workContract),
     executionReadiness: card.executionReadiness ? {
       ready: Boolean(card.executionReadiness.ready),
       status: card.executionReadiness.status ?? null,
-      missing: normalizeStringArray12(card.executionReadiness.missing).slice(0, 5)
+      missing: normalizeStringArray13(card.executionReadiness.missing).slice(0, 5)
     } : void 0,
-    requiredMaterials: normalizeStringArray12(card.requiredMaterials).slice(0, 5),
+    requiredMaterials: normalizeStringArray13(card.requiredMaterials).slice(0, 5),
     criteriaCoverage: card.criteriaCoverage ? {
       complete: Boolean(card.criteriaCoverage.complete),
-      missing: normalizeStringArray12(card.criteriaCoverage.missing).slice(0, 5)
+      missing: normalizeStringArray13(card.criteriaCoverage.missing).slice(0, 5)
     } : void 0,
     boundaryId: card.boundaryId ?? card.boundary?.id ?? null,
     summary: card.summary ?? card.boundary?.summary ?? null,
-    requiredInputs: normalizeStringArray12(card.requiredInputs ?? card.boundary?.requiredInputs).slice(0, 5),
+    requiredInputs: normalizeStringArray13(card.requiredInputs ?? card.boundary?.requiredInputs).slice(0, 5),
     ownerRole: card.ownerRole ?? card.boundary?.ownerRole ?? null,
     nextRole: card.nextRole ?? card.boundary?.nextRole ?? null,
     boundaryType,
@@ -22274,9 +22814,9 @@ function buildHostFileCheckpointNotice() {
 function buildMutationRollbackModel(root) {
   const indexPath = resolveProjectPath(root, ARTIFACT_PATHS.mutationsIndex);
   let index = createMutationProvenanceIndex();
-  if (fs12.existsSync(indexPath)) {
+  if (fs14.existsSync(indexPath)) {
     try {
-      index = normalizeMutationProvenanceIndex(JSON.parse(fs12.readFileSync(indexPath, "utf8")));
+      index = normalizeMutationProvenanceIndex(JSON.parse(fs14.readFileSync(indexPath, "utf8")));
     } catch {
       index = createMutationProvenanceIndex();
     }
@@ -22632,8 +23172,8 @@ function summarizeStatusMissionListItem(task, index) {
     blockedReason: task.blockedReason ?? null,
     lastStopReason: task.lastStopReason ?? null,
     boundaryType: task.currentBoundary?.type ?? null,
-    evidenceRequired: normalizeStringArray12(task.evidenceExpectations),
-    artifactRefs: normalizeStringArray12(task.artifactRefs)
+    evidenceRequired: normalizeStringArray13(task.evidenceExpectations),
+    artifactRefs: normalizeStringArray13(task.artifactRefs)
   };
 }
 function missionPriorityNeeds(task, item, action) {
@@ -22863,7 +23403,7 @@ function buildStatusBlockers(inputs, blockedTasks, responseLanguage = "zh") {
     severity: "blocking",
     taskId: task.id,
     blockedBy: task.blockedBy,
-    unresolvedDependencyIds: normalizeStringArray12(task.unresolvedDependencyIds)
+    unresolvedDependencyIds: normalizeStringArray13(task.unresolvedDependencyIds)
   }));
   return [...boardBlockers, ...taskBlockers];
 }
@@ -22889,7 +23429,7 @@ function selectStatusNextCommand({ initTask, activeTasks, blockedTasks, review }
 function summarizeStatusReview(inputs) {
   const concerns = Array.isArray(inputs.reviewConcerns.items) ? inputs.reviewConcerns.items : [];
   const openConcerns = concerns.filter((concern) => !["closed", "resolved", "accepted"].includes(String(concern.status ?? "open").trim().toLowerCase()));
-  const unresolvedConcernIds = normalizeStringArray12(inputs.reviewState.unresolvedConcernIds);
+  const unresolvedConcernIds = normalizeStringArray13(inputs.reviewState.unresolvedConcernIds);
   return {
     verdict: inputs.reviewState.lastVerdict ?? "not-reviewed",
     reviewedAt: inputs.reviewState.lastReviewedAt ?? null,
@@ -22911,7 +23451,7 @@ function summarizeStatusLessons(inputs) {
     lessonCount: summary.lessonCount ?? lessons.length,
     activeLessonCount: summary.activeLessonCount ?? activeLessons2.length,
     mustObeyLessonCount: mustObeyLessons.length,
-    topLessonIds: normalizeStringArray12(summary.topLessonIds).slice(0, 10),
+    topLessonIds: normalizeStringArray13(summary.topLessonIds).slice(0, 10),
     lessonsPath: summary.lessonsPath ?? ARTIFACT_PATHS.metaOperatorLessons
   };
 }
@@ -22924,7 +23464,7 @@ function summarizeStatusVersions(inputs) {
     versionCount: versions.length,
     lineageCount: lineage.length,
     comparisonCount: comparisons.length,
-    activeComparisonTargets: normalizeStringArray12(inputs.comparisons.activeTargets),
+    activeComparisonTargets: normalizeStringArray13(inputs.comparisons.activeTargets),
     versionsPath: ARTIFACT_PATHS.versionsIndex
   };
 }
@@ -22974,7 +23514,7 @@ function inferGoal(args, inputs, responseLanguage = "zh") {
   return inputs.board.currentFocus ?? inputs.board.objective ?? inputs.state.dove?.thesis ?? inputs.state.dove?.objective ?? inputs.state.dove?.title ?? doveText(responseLanguage, "queryFallbackGoal");
 }
 function collectTargetArtifacts(args, packets) {
-  const explicit = normalizeStringArray12(args.targetArtifacts ?? args.artifacts ?? args.artifactPaths);
+  const explicit = normalizeStringArray13(args.targetArtifacts ?? args.artifacts ?? args.artifactPaths);
   if (explicit.length > 0) {
     return explicit;
   }
@@ -22988,7 +23528,7 @@ function buildMissionContract(root, args = {}) {
   const domainGuidance = selectDomainGuidance(inputs.workspaceIndex, domain);
   const primaryRole = primaryRoleForStage(stage);
   const targetArtifacts = collectTargetArtifacts(args, inputs.packets);
-  const acceptanceChecks = normalizeStringArray12(args.acceptanceChecks).length > 0 ? normalizeStringArray12(args.acceptanceChecks) : domainGuidance.returnEvidence;
+  const acceptanceChecks = normalizeStringArray13(args.acceptanceChecks).length > 0 ? normalizeStringArray13(args.acceptanceChecks) : domainGuidance.returnEvidence;
   const nextCommand = args.nextCommand ?? domainGuidance.stageRoutes?.[stage] ?? "project:dove.status";
   return {
     inputs,
@@ -23052,7 +23592,7 @@ var PAPER_PIPELINE_STAGE_METADATA = {
 function inspectPipelineArtifact(root, relativePath) {
   return {
     path: relativePath,
-    exists: fs12.existsSync(path13.join(root, relativePath))
+    exists: fs14.existsSync(path16.join(root, relativePath))
   };
 }
 function buildPaperPipelineStage(root, stageId, index) {
@@ -23083,35 +23623,6 @@ function booleanArg(value) {
   }
   return false;
 }
-function normalizeDoveRole(role, fallback = null) {
-  const normalized = String(role ?? "").trim();
-  return ROLE_IDS.includes(normalized) ? normalized : fallback;
-}
-function phaseForDoveStage(stage) {
-  switch (stage) {
-    case "goal":
-    case "design":
-      return "plan";
-    case "checklist":
-      return "checklist";
-    case "execution":
-      return "draft";
-    case "audit":
-      return "review";
-    case "return":
-      return "versions";
-    default:
-      return "plan";
-  }
-}
-function staleLegacyAuthorityArtifacts(root) {
-  return [
-    ".paper/state.json",
-    ".paper/workspace/index.json",
-    ".paper/orchestration/board.json",
-    ".paper/task-packets/index.json"
-  ].filter((relativePath) => fs12.existsSync(path13.join(root, relativePath)));
-}
 function buildMissionBoardMission(packet) {
   const missionStage = missionStageForPhase(packet.phase);
   const primaryRole = primaryRoleForStage(missionStage);
@@ -23132,11 +23643,11 @@ function matchesMissionBoardFilters(mission, args = {}) {
   if (stage && mission.missionStage !== stage) {
     return false;
   }
-  const packetIds = normalizeStringArray12(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds);
+  const packetIds = normalizeStringArray13(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds);
   if (packetIds.length > 0 && !packetIds.includes(mission.id) && !packetIds.includes(mission.packetId) && !packetIds.includes(mission.missionPacketId)) {
     return false;
   }
-  const statuses = normalizeStringArray12(args.status ?? args.statuses);
+  const statuses = normalizeStringArray13(args.status ?? args.statuses);
   if (statuses.length > 0 && !statuses.includes(mission.lifecycleStatus) && !statuses.includes(mission.status)) {
     return false;
   }
@@ -23257,7 +23768,7 @@ function nextCommandForReturnStatus(status, domain) {
   return "project:dove.version";
 }
 function routeRequestText(args, mission) {
-  return normalizeStringArray12([args.request, args.userRequest, args.goal, mission.goal]).join(" ").toLowerCase();
+  return normalizeStringArray13([args.request, args.userRequest, args.goal, mission.goal]).join(" ").toLowerCase();
 }
 function selectRouteCommand(mission, args = {}) {
   const route = mission.domainGuidance.stageRoutes?.[mission.stage] ?? mission.nextCommand;
@@ -23376,8 +23887,8 @@ function queryDoveStatus(root, args = {}) {
   const consistencyTasks = allTasks.filter((task) => !isArchivedStatusTask(task));
   const requestedDomain = normalizeDoveDomainId(args.domain ?? args.doveDomain ?? args.missionDomain, null);
   const requestedStage = normalizeStatusStageArg(args.stage ?? args.missionStage);
-  const requestedStatuses = normalizeStringArray12(args.status ?? args.statuses);
-  const requestedPacketIds = normalizeStringArray12(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds);
+  const requestedStatuses = normalizeStringArray13(args.status ?? args.statuses);
+  const requestedPacketIds = normalizeStringArray13(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds);
   const visibleTasks = tasks.filter((task) => {
     if (requestedDomain && task.domain !== requestedDomain) {
       return false;
@@ -23536,7 +24047,7 @@ function queryDoveStatus(root, args = {}) {
           path: ARTIFACT_PATHS.taskPacketsIndex,
           version: inputs.taskPackets.version ?? null,
           activeInitId: inputs.taskPackets.taskModel?.activeInitId ?? initTask?.id ?? null,
-          activeTaskIds: normalizeStringArray12(inputs.taskPackets.taskModel?.activeTaskIds).length > 0 ? normalizeStringArray12(inputs.taskPackets.taskModel?.activeTaskIds) : activeTasks.map((task) => task.id)
+          activeTaskIds: normalizeStringArray13(inputs.taskPackets.taskModel?.activeTaskIds).length > 0 ? normalizeStringArray13(inputs.taskPackets.taskModel?.activeTaskIds) : activeTasks.map((task) => task.id)
         }
       },
       blockers,
@@ -23698,8 +24209,8 @@ function queryDoveMissionBoard(root, args = {}) {
     filters: {
       domain: normalizeDoveDomainId(args.domain ?? args.doveDomain ?? args.missionDomain, null),
       stage: normalizeDoveMissionLifecycleStage(args.stage ?? args.missionStage, null),
-      packetIds: normalizeStringArray12(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds),
-      statuses: normalizeStringArray12(args.status ?? args.statuses),
+      packetIds: normalizeStringArray13(args.packetId ?? args.packetIds ?? args.missionPacketId ?? args.missionPacketIds),
+      statuses: normalizeStringArray13(args.status ?? args.statuses),
       includeArchived: booleanArg(args.includeArchived)
     },
     diagnostics: {
@@ -23731,9 +24242,6 @@ function queryDoveMission(root, args = {}) {
 var DOVE_MISSION_LAUNCH_FIELDS = /* @__PURE__ */ new Set([
   "sourceType",
   "sourceId",
-  "actorRole",
-  "workerRole",
-  "doveWorkerRole",
   "goal",
   "domain",
   "doveDomain",
@@ -23752,10 +24260,7 @@ var DOVE_MISSION_LAUNCH_FIELDS = /* @__PURE__ */ new Set([
   "selectedConversionPathKey",
   "title",
   "summary",
-  "phase",
-  "assignedRole",
   "status",
-  "lifecycleStatus",
   "currentFocus",
   "nextAction",
   "nextCommand",
@@ -23779,129 +24284,9 @@ function assertMissionLaunchArgs(args) {
 function launchDoveMission(root, args = {}) {
   assertGovernanceMutationRegistered("launch-dove-mission", "guarded");
   assertMissionLaunchArgs(args);
-  const sourceType = String(args.sourceType ?? "").trim();
-  const sourceId = String(args.sourceId ?? "").trim();
-  if (!sourceType || !sourceId) {
-    throw new Error("launchDoveMission requires sourceType and sourceId for an accepted governance source.");
-  }
-  if (!args.executeBy || !args.reviewAfter) {
-    throw new Error("launchDoveMission requires executeBy and reviewAfter so the mission has an explicit execution window.");
-  }
-  const { mission, responseLanguage } = buildMissionContract(root, args);
-  const actorRole = normalizeDoveRole(args.actorRole, "planner");
-  const workerRole = normalizeDoveRole(args.workerRole ?? args.doveWorkerRole, null);
-  const materialized = materializeGuidancePacket(root, {
-    packetId: args.packetId ?? args.missionPacketId,
-    followThroughId: args.followThroughId,
-    selectedConversionPathKey: args.selectedConversionPathKey,
-    sourceType,
-    sourceId,
-    actorRole,
-    workerRole: workerRole ?? void 0,
-    assignedRole: args.assignedRole,
-    domain: mission.domain,
-    doveDomain: mission.domain,
-    missionDomain: mission.domain,
-    stage: mission.stage,
-    missionStage: mission.stage,
-    goal: mission.goal,
-    missionGoal: mission.goal,
-    targetArtifacts: mission.targetArtifacts,
-    acceptanceCriteria: args.acceptanceCriteria,
-    acceptanceChecks: mission.acceptanceChecks,
-    returnProtocol: mission.returnProtocol,
-    title: args.title ?? mission.goal,
-    summary: args.summary ?? `Dove ${mission.domain} mission: ${mission.goal}`,
-    phase: args.phase ?? phaseForDoveStage(mission.stage),
-    status: args.status,
-    lifecycleStatus: args.lifecycleStatus,
-    currentFocus: args.currentFocus,
-    nextAction: args.nextAction ?? mission.nextCommand,
-    dependencies: args.dependencies,
-    evidenceLinks: args.evidenceLinks,
-    outputPaths: args.outputPaths,
-    decisionSummary: args.decisionSummary ?? `Launched Dove ${mission.domain} mission from ${sourceType}:${sourceId}.`,
-    rationale: args.rationale,
-    executeBy: args.executeBy,
-    reviewAfter: args.reviewAfter
-  });
-  const missionPacket = missionPacketAliases(materialized.packet ?? {
-    id: materialized.packetId,
-    packetPath: materialized.packetPath,
-    packetContextPath: materialized.packetContextPath
-  });
-  const board = queryDoveMissionBoard(root, {
-    domain: mission.domain,
-    packetId: materialized.packetId,
-    includeArchived: true
-  });
-  return {
-    mode: "dove-launch-mission",
-    status: materialized.status,
-    responseLanguage,
-    proposalOnly: false,
-    noAutoApply: false,
-    writes: materialized.artifactPaths,
-    mission: {
-      ...mission,
-      launchedPacketId: materialized.packetId,
-      launchedMissionPacketId: missionPacket.missionPacketId
-    },
-    missionPacket: {
-      id: missionPacket.missionPacketId,
-      path: missionPacket.missionPacketPath,
-      contextPath: missionPacket.missionPacketContextPath,
-      storePath: missionPacket.missionPacketStorePath,
-      source: missionPacket.source
-    },
-    materialization: {
-      packetId: materialized.packetId,
-      packetPath: materialized.packetPath,
-      packetContextPath: materialized.packetContextPath,
-      missionPacketId: missionPacket.missionPacketId,
-      missionPacketPath: missionPacket.missionPacketPath,
-      missionPacketContextPath: missionPacket.missionPacketContextPath,
-      missionPacketStorePath: missionPacket.missionPacketStorePath,
-      sourceType: materialized.sourceType,
-      sourceId: materialized.sourceId,
-      followThroughId: materialized.followThroughId,
-      delegatedCoreFunction: "materializeGuidancePacket",
-      delegatedMcpTool: "materialize_guidance_packet"
-    },
-    packet: materialized.packet ? { ...materialized.packet, ...missionPacket } : null,
-    board: {
-      mode: board.mode,
-      missionIds: board.missions.map((item) => item.id),
-      missionPacketIds: board.missions.map((item) => item.missionPacketId ?? item.id),
-      queues: board.queues,
-      counts: board.counts
-    },
-    workspace: board.workspace,
-    governance: {
-      registeredMutation: "launch-dove-mission",
-      delegatedGuardedMutation: "materialize-guidance-packet",
-      actorRole,
-      workerRole,
-      roleBoundary: {
-        primaryRole: mission.primaryRole,
-        actorRole,
-        workerRole
-      },
-      explicitExecutionWindow: {
-        executeBy: args.executeBy,
-        reviewAfter: args.reviewAfter
-      },
-      currentWriteAuthority: ARTIFACT_PATHS.doveRoot,
-      noHiddenRuntime: true,
-      noAutonomyExecution: true
-    },
-    diagnostics: {
-      staleLegacyAuthorityArtifacts: staleLegacyAuthorityArtifacts(root),
-      noAutonomyExecution: true,
-      noGitInspection: true,
-      delegatedWrites: materialized.artifactPaths
-    }
-  };
+  throw new Error(
+    "Public launch_dove_mission is disabled: mission packet creation requires a pre-existing, dynamically valid system-owned program approval, program run, runtime execution claim, and trusted authority provenance. No public caller field grants that authority."
+  );
 }
 function queryDoveReturn(root, args = {}) {
   const { inputs, mission, responseLanguage } = buildMissionContract(root, args);
@@ -23974,8 +24359,8 @@ function queryDoveReturn(root, args = {}) {
     },
     review: {
       lastVerdict: inputs.reviewState.lastVerdict ?? "not-reviewed",
-      unresolvedConcernIds: normalizeStringArray12(inputs.reviewState.unresolvedConcernIds),
-      openItems: normalizeStringArray12(inputs.reviewState.openItems)
+      unresolvedConcernIds: normalizeStringArray13(inputs.reviewState.unresolvedConcernIds),
+      openItems: normalizeStringArray13(inputs.reviewState.openItems)
     },
     packets: inputs.packets,
     engineeringEvidence,
@@ -23996,8 +24381,8 @@ function queryDoveReturn(root, args = {}) {
 }
 
 // src/core/public-status.mjs
-import fs13 from "node:fs";
-import path14 from "node:path";
+import fs15 from "node:fs";
+import path17 from "node:path";
 var PUBLIC_STATUS_VERSION = 1;
 var GLOBAL_PUBLIC_STATUS_VERSION = 1;
 var PUBLIC_TASK_LIMIT = 12;
@@ -24322,7 +24707,7 @@ function dedupeProjects(projects) {
 function withCollisionSafeSlugs(projects) {
   const used = /* @__PURE__ */ new Map();
   return projects.map((project, index) => {
-    const base = slugify5(project.slug ?? project.id ?? project.title ?? path14.basename(project.root), `project-${index + 1}`);
+    const base = slugify5(project.slug ?? project.id ?? project.title ?? path17.basename(project.root), `project-${index + 1}`);
     const count = used.get(base) ?? 0;
     used.set(base, count + 1);
     const slug = count === 0 ? base : `${base}-${count + 1}`;
@@ -24330,7 +24715,7 @@ function withCollisionSafeSlugs(projects) {
       ...project,
       id: project.id ?? slug,
       slug,
-      title: project.title ?? path14.basename(project.root)
+      title: project.title ?? path17.basename(project.root)
     };
   });
 }
@@ -24352,12 +24737,12 @@ function resolveGlobalStatusSelection(root, options = {}) {
   };
 }
 function readProjectPublicStatus(project) {
-  const jsonPath = path14.join(project.root, ARTIFACT_PATHS.publicStatusJson);
-  if (!fs13.existsSync(jsonPath)) {
+  const jsonPath = path17.join(project.root, ARTIFACT_PATHS.publicStatusJson);
+  if (!fs15.existsSync(jsonPath)) {
     return { status: "missing", project, snapshot: null, reason: `${ARTIFACT_PATHS.publicStatusJson} is missing` };
   }
   try {
-    const snapshot = JSON.parse(fs13.readFileSync(jsonPath, "utf8"));
+    const snapshot = JSON.parse(fs15.readFileSync(jsonPath, "utf8"));
     if (!isPlainObject4(snapshot) || snapshot.mode !== "dove-public-status") {
       return { status: "invalid", project, snapshot: null, reason: "status.json is not a Dove public status snapshot" };
     }
@@ -24539,23 +24924,23 @@ function projectPlaceholderHtml(project, status, reason) {
 `;
 }
 function ensureAbsoluteDir(dirPath) {
-  fs13.mkdirSync(dirPath, { recursive: true });
+  fs15.mkdirSync(dirPath, { recursive: true });
 }
 function writeAbsoluteJson(filePath, value) {
-  ensureAbsoluteDir(path14.dirname(filePath));
-  fs13.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}
+  ensureAbsoluteDir(path17.dirname(filePath));
+  fs15.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}
 `, "utf8");
 }
 function writeAbsoluteText(filePath, value) {
-  ensureAbsoluteDir(path14.dirname(filePath));
-  fs13.writeFileSync(filePath, value, "utf8");
+  ensureAbsoluteDir(path17.dirname(filePath));
+  fs15.writeFileSync(filePath, value, "utf8");
 }
 function projectRelativeOutputPath(root, filePath) {
-  const relativePath = path14.relative(path14.resolve(root), path14.resolve(filePath));
-  if (!relativePath || relativePath.startsWith("..") || path14.isAbsolute(relativePath)) {
+  const relativePath = path17.relative(path17.resolve(root), path17.resolve(filePath));
+  if (!relativePath || relativePath.startsWith("..") || path17.isAbsolute(relativePath)) {
     return null;
   }
-  return relativePath.split(path14.sep).join("/");
+  return relativePath.split(path17.sep).join("/");
 }
 function writeOutputJson(root, filePath, value) {
   const relativePath = projectRelativeOutputPath(root, filePath);
@@ -24580,16 +24965,16 @@ function writeOutputText(root, filePath, value) {
   writeAbsoluteText(filePath, value);
 }
 function readPublicText(project, relativePath, fallback) {
-  const fullPath = path14.join(project.root, relativePath);
+  const fullPath = path17.join(project.root, relativePath);
   try {
-    return fs13.existsSync(fullPath) ? fs13.readFileSync(fullPath, "utf8") : fallback;
+    return fs15.existsSync(fullPath) ? fs15.readFileSync(fullPath, "utf8") : fallback;
   } catch {
     return fallback;
   }
 }
 function writeGlobalProjectArtifacts(root, outputDir, readResult) {
   const { project, snapshot, status, reason } = readResult;
-  const projectDir = path14.join(outputDir, "projects", project.slug);
+  const projectDir = path17.join(outputDir, "projects", project.slug);
   const projectSnapshot = snapshot ?? {
     version: 1,
     mode: "dove-global-project-placeholder",
@@ -24606,18 +24991,18 @@ function writeGlobalProjectArtifacts(root, outputDir, readResult) {
   };
   const markdown = snapshot ? readPublicText(project, ARTIFACT_PATHS.publicStatusMarkdown, projectPlaceholderMarkdown(project, status, reason)) : projectPlaceholderMarkdown(project, status, reason);
   const html = snapshot ? readPublicText(project, ARTIFACT_PATHS.publicStatusHtml, projectPlaceholderHtml(project, status, reason)) : projectPlaceholderHtml(project, status, reason);
-  writeOutputJson(root, path14.join(projectDir, "status.json"), projectSnapshot);
-  writeOutputText(root, path14.join(projectDir, "status.md"), markdown);
-  writeOutputText(root, path14.join(projectDir, "index.html"), html);
+  writeOutputJson(root, path17.join(projectDir, "status.json"), projectSnapshot);
+  writeOutputText(root, path17.join(projectDir, "status.md"), markdown);
+  writeOutputText(root, path17.join(projectDir, "index.html"), html);
   return [
-    path14.join(projectDir, "status.json"),
-    path14.join(projectDir, "status.md"),
-    path14.join(projectDir, "index.html")
-  ].map((filePath) => path14.relative(outputDir, filePath).split(path14.sep).join("/"));
+    path17.join(projectDir, "status.json"),
+    path17.join(projectDir, "status.md"),
+    path17.join(projectDir, "index.html")
+  ].map((filePath) => path17.relative(outputDir, filePath).split(path17.sep).join("/"));
 }
 function refreshGlobalProjectPublicStatus(project, options = {}) {
   try {
-    if (!fs13.existsSync(project.root) || !fs13.statSync(project.root).isDirectory()) {
+    if (!fs15.existsSync(project.root) || !fs15.statSync(project.root).isDirectory()) {
       return { status: "skipped", project, snapshot: null, reason: "project root is missing" };
     }
     publishDoveStatus(project.root, {
@@ -24652,11 +25037,11 @@ function publishDoveGlobalStatus(root, options = {}) {
   const markdown = renderGlobalMarkdown(snapshot);
   const html = renderGlobalHtml(snapshot);
   const writes = [];
-  writeOutputJson(root, path14.join(selection.outputDir, "status.json"), snapshot);
+  writeOutputJson(root, path17.join(selection.outputDir, "status.json"), snapshot);
   writes.push("status.json");
-  writeOutputText(root, path14.join(selection.outputDir, "status.md"), markdown);
+  writeOutputText(root, path17.join(selection.outputDir, "status.md"), markdown);
   writes.push("status.md");
-  writeOutputText(root, path14.join(selection.outputDir, "index.html"), html);
+  writeOutputText(root, path17.join(selection.outputDir, "index.html"), html);
   writes.push("index.html");
   for (const readResult of readResults) {
     writes.push(...writeGlobalProjectArtifacts(root, selection.outputDir, readResult));
@@ -24791,23 +25176,23 @@ function publishDoveStatus(root, options = {}) {
 
 // src/core/global-status-serving.mjs
 import { spawn, spawnSync } from "node:child_process";
-import crypto8 from "node:crypto";
-import fs14 from "node:fs";
+import crypto9 from "node:crypto";
+import fs16 from "node:fs";
 import http from "node:http";
 import os2 from "node:os";
-import path15 from "node:path";
+import path18 from "node:path";
 var AUTH_COOKIE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 // src/core/documents.mjs
-import fs15 from "node:fs";
-import path16 from "node:path";
+import fs17 from "node:fs";
+import path19 from "node:path";
 function slugify6(value, fallback = "document") {
   return String(value ?? fallback).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || fallback;
 }
 function normalizeString6(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
-function normalizeStringArray13(value) {
+function normalizeStringArray14(value) {
   const source = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
   return Array.from(new Set(source.map((item) => String(item).trim()).filter(Boolean)));
 }
@@ -24832,18 +25217,18 @@ function assertWritableDocumentPath(relativePath) {
   }
 }
 function uniqueRelativePath(root, relativePath) {
-  const parsed = path16.posix.parse(relativePath);
+  const parsed = path19.posix.parse(relativePath);
   let candidate = relativePath;
   let suffix = 2;
-  while (fs15.existsSync(resolvePath(root, candidate))) {
-    candidate = path16.posix.join(parsed.dir, `${parsed.name}-${suffix}${parsed.ext || ".md"}`);
+  while (fs17.existsSync(resolvePath(root, candidate))) {
+    candidate = path19.posix.join(parsed.dir, `${parsed.name}-${suffix}${parsed.ext || ".md"}`);
     suffix += 1;
   }
   return candidate;
 }
 function generatedDocumentPath(timestamp, documentKind, title) {
   const safeTime = timestamp.replace(/[:.]/g, "-");
-  return path16.posix.join(ARTIFACT_PATHS.documentsDir, documentKind, `${safeTime}-${slugify6(title)}.md`);
+  return path19.posix.join(ARTIFACT_PATHS.documentsDir, documentKind, `${safeTime}-${slugify6(title)}.md`);
 }
 function uniqueEntryId(entries, seed) {
   const existing = new Set(entries.map((entry) => entry.id));
@@ -24943,6 +25328,13 @@ function queryDocumentLedger(root, args = {}) {
 function recordDocumentEvidence(root, args = {}) {
   assertGovernanceMutationRegistered("record-document-evidence", "guarded");
   const target = assertTaskScopedMutationTarget(root, "record-document-evidence", args);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "draft",
+    "researcher",
+    "Recording document evidence"
+  );
   ensureWorkspace(root);
   const timestamp = nowIso();
   const documentKind = normalizeAllowed2(args.documentKind ?? args.kind, DOVE_DOCUMENT_KINDS, "other");
@@ -24996,10 +25388,10 @@ ${body.endsWith("\n") ? body : `${body}
     publicSafe: publicSafeFromArgs(args),
     summary: normalizeString6(args.summary, ""),
     context: normalizeString6(args.context ?? args.reason, ""),
-    sourceRefs: normalizeStringArray13(args.sourceRefs ?? args.sourceIds),
-    artifactRefs: normalizeStringArray13(args.artifactRefs ?? args.artifactPaths),
-    evidenceLinks: normalizeStringArray13(args.evidenceLinks ?? args.evidencePaths),
-    claimIds: normalizeStringArray13(args.claimIds ?? args.claims),
+    sourceRefs: normalizeStringArray14(args.sourceRefs ?? args.sourceIds),
+    artifactRefs: normalizeStringArray14(args.artifactRefs ?? args.artifactPaths),
+    evidenceLinks: normalizeStringArray14(args.evidenceLinks ?? args.evidencePaths),
+    claimIds: normalizeStringArray14(args.claimIds ?? args.claims),
     createdAt: timestamp,
     updatedAt: timestamp,
     createdBy: normalizeString6(args.createdBy ?? args.actorRole, "operator"),
@@ -25094,8 +25486,8 @@ function isOperationalFailureOutcome(result, { confirmed = false } = {}) {
 }
 
 // src/core/workflow-goals.mjs
-import fs16 from "node:fs";
-import path17 from "node:path";
+import fs18 from "node:fs";
+import path20 from "node:path";
 var WORKFLOW_GOAL_CONTRACTS = [
   {
     id: "operator-host-pass-without-results",
@@ -25428,7 +25820,7 @@ function normalizePositiveInteger2(value, fallback, min, max) {
   }
   return Math.min(max, Math.max(min, Math.trunc(numeric)));
 }
-function normalizeStringArray14(value) {
+function normalizeStringArray15(value) {
   const rawItems = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   return Array.from(new Set(rawItems.map((item) => normalizeString7(item)).filter(Boolean)));
 }
@@ -25436,7 +25828,7 @@ function normalizeProviderId(value) {
   return normalizeString7(value)?.toLowerCase() ?? null;
 }
 function normalizeProviderIds(value) {
-  const ids = normalizeStringArray14(value).map(normalizeProviderId).filter(Boolean);
+  const ids = normalizeStringArray15(value).map(normalizeProviderId).filter(Boolean);
   for (const id of ids) {
     if (!PROVIDER_BY_ID.has(id)) {
       throw new Error(`Unsupported Dove network search provider: ${id}`);
@@ -25445,7 +25837,7 @@ function normalizeProviderIds(value) {
   return ids;
 }
 function normalizeDomains(value) {
-  const domains = normalizeStringArray14(value).map((domain) => domain.toLowerCase());
+  const domains = normalizeStringArray15(value).map((domain) => domain.toLowerCase());
   for (const domain of domains) {
     if (domain.includes("://") || domain.includes("/") || domain.length > 253 || !/^[a-z0-9.-]+$/iu.test(domain)) {
       throw new Error(`Dove network search domain filters must be bare hostnames: ${domain}`);
@@ -25504,7 +25896,7 @@ function normalizeNetworkSearchQuery(rawArgs = {}, config = {}) {
     limit: normalizePositiveInteger2(args.limit ?? args.maxResults, normalizedConfig.maxResults, 1, Math.min(MAX_LIMIT, normalizedConfig.maxResults || MAX_LIMIT)),
     year: normalizeYear(args.year),
     domains: normalizeDomains(args.domains),
-    fieldsOfStudy: normalizeStringArray14(args.fieldsOfStudy),
+    fieldsOfStudy: normalizeStringArray15(args.fieldsOfStudy),
     openAccessOnly: normalizeBoolean3(args.openAccessOnly, false),
     providerIds: normalizeProviderIds(args.providerIds ?? args.providers),
     locale: normalizeLocale(args.locale)
@@ -25681,11 +26073,11 @@ function normalizedLocaleBase(value) {
   return normalizeString7(value)?.toLowerCase().replace("_", "-").split("-")[0] ?? null;
 }
 function candidateMatchesDomain(candidate, domains) {
-  const candidateDomains = normalizeStringArray14(candidate.domains).map((domain) => domain.toLowerCase());
+  const candidateDomains = normalizeStringArray15(candidate.domains).map((domain) => domain.toLowerCase());
   return domains.some((requested) => candidateDomains.some((candidateDomain) => candidateDomain === requested || candidateDomain.endsWith(`.${requested}`)));
 }
 function candidateMatchesFields(candidate, fieldsOfStudy) {
-  const candidateFields = normalizeStringArray14(candidate.fieldsOfStudy).map(normalizeComparableText).filter(Boolean);
+  const candidateFields = normalizeStringArray15(candidate.fieldsOfStudy).map(normalizeComparableText).filter(Boolean);
   return fieldsOfStudy.some((requested) => {
     const normalized = normalizeComparableText(requested);
     return candidateFields.some((candidateField) => candidateField === normalized || candidateField.includes(normalized) || normalized.includes(candidateField));
@@ -25727,7 +26119,7 @@ function normalizeCandidate(candidate, provider) {
   }
   const doi = normalizeDoi2(candidate.doi);
   const url = safeUrl(candidate.url) ?? doiUrl(doi);
-  const candidateDomains = normalizeStringArray14(candidate.domains).map((domain) => domain.toLowerCase());
+  const candidateDomains = normalizeStringArray15(candidate.domains).map((domain) => domain.toLowerCase());
   const urlHostname = hostnameFromUrl(url);
   if (urlHostname) {
     candidateDomains.push(urlHostname);
@@ -25744,7 +26136,7 @@ function normalizeCandidate(candidate, provider) {
     publishedAt: normalizeString7(candidate.publishedAt),
     authors: normalizeAuthors(candidate.authors),
     domains: Array.from(new Set(candidateDomains)),
-    fieldsOfStudy: normalizeStringArray14(candidate.fieldsOfStudy),
+    fieldsOfStudy: normalizeStringArray15(candidate.fieldsOfStudy),
     locale: normalizedLocaleBase(candidate.locale),
     doi,
     arxivId: normalizeString7(candidate.arxivId),
@@ -25759,7 +26151,7 @@ function normalizeCandidate(candidate, provider) {
       retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
     },
     score: Number.isFinite(candidate.score) ? candidate.score : 0,
-    warnings: normalizeStringArray14(candidate.warnings)
+    warnings: normalizeStringArray15(candidate.warnings)
   };
 }
 function canonicalUrlKey(value) {
@@ -26196,15 +26588,369 @@ function queryNetworkSearchProviders(root, args = {}, env = process.env) {
 }
 
 // src/core/artifacts.mjs
-import fs17 from "node:fs";
-import path18 from "node:path";
+import fs19 from "node:fs";
+import path22 from "node:path";
+
+// src/core/packet-step-result.mjs
+import path21 from "node:path";
+
+// src/core/runtime-state.mjs
+import crypto10 from "node:crypto";
+var LEASE_TTL_MS = 10 * 60 * 1e3;
+function summarizeEvents(entries = []) {
+  const last = entries.at(-1) ?? null;
+  const lastEventType = last?.eventType ?? last?.type ?? null;
+  return {
+    eventCount: entries.length,
+    lastEventType,
+    lastRunId: last?.runId ?? null,
+    overview: entries.length > 0 ? `${entries.length} autonomous control-plane event(s) recorded. Latest event: ${lastEventType}.` : "No autonomous control-plane events have been recorded yet.",
+    eventsPath: ARTIFACT_PATHS.runtimeEvents
+  };
+}
+function summarizeResults(entries = []) {
+  const last = entries.at(-1) ?? null;
+  const lastCheckpointEntry = [...entries].reverse().find((entry) => entry?.checkpointSnapshot) ?? null;
+  const lastEscalationEntry = [...entries].reverse().find((entry) => entry?.escalationSnapshot) ?? null;
+  return {
+    runCount: entries.length,
+    completedCount: entries.filter((entry) => entry.status === "completed").length,
+    noopCount: entries.filter((entry) => entry.status === "noop").length,
+    errorCount: entries.filter((entry) => entry.status === "error").length,
+    checkpointCount: entries.filter((entry) => entry?.checkpointSnapshot).length,
+    escalationCount: entries.filter((entry) => entry?.escalationSnapshot).length,
+    lastRunId: last?.runId ?? null,
+    lastStatus: last?.status ?? "never-run",
+    lastOutcome: last?.outcome ?? "not-started",
+    lastCheckpointPacketId: lastCheckpointEntry?.checkpointSnapshot?.packetId ?? null,
+    lastCheckpointSummary: lastCheckpointEntry?.checkpointSnapshot?.summary ?? null,
+    lastCheckpointAt: lastCheckpointEntry?.checkpointSnapshot?.recordedAt ?? null,
+    lastEscalationPacketId: lastEscalationEntry?.escalationSnapshot?.packetId ?? null,
+    lastEscalationFollowThroughId: lastEscalationEntry?.escalationSnapshot?.followThroughId ?? null,
+    lastEscalationAt: lastEscalationEntry?.escalationSnapshot?.recordedAt ?? null,
+    overview: entries.length > 0 ? `Autonomous control-plane runs: ${entries.length} total, ${entries.filter((entry) => entry.status === "completed").length} completed, ${entries.filter((entry) => entry.status === "noop").length} no-op, ${entries.filter((entry) => entry.status === "error").length} error.` : "No autonomous control-plane results have been recorded yet.",
+    resultsPath: ARTIFACT_PATHS.runtimeResults
+  };
+}
+function loadRuntimeArtifacts(root) {
+  return {
+    controllerState: normalizeRuntimeControllerState(readJson(root, ARTIFACT_PATHS.runtimeControllerState, createRuntimeControllerState)),
+    continuation: normalizeRuntimeContinuationIndex(readJson(root, ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex)),
+    leases: normalizeRuntimeLeasesIndex(readJson(root, ARTIFACT_PATHS.runtimeLeases, createRuntimeLeasesIndex)),
+    events: normalizeRuntimeEventsIndex(readJson(root, ARTIFACT_PATHS.runtimeEvents, createRuntimeEventsIndex)),
+    results: normalizeRuntimeResultsIndex(readJson(root, ARTIFACT_PATHS.runtimeResults, createRuntimeResultsIndex))
+  };
+}
+function saveRuntimeArtifacts(root, artifacts) {
+  writeJson(root, ARTIFACT_PATHS.runtimeControllerState, artifacts.controllerState);
+  writeJson(root, ARTIFACT_PATHS.runtimeContinuation, artifacts.continuation);
+  writeJson(root, ARTIFACT_PATHS.runtimeLeases, artifacts.leases);
+  writeJson(root, ARTIFACT_PATHS.runtimeEvents, artifacts.events);
+  writeJson(root, ARTIFACT_PATHS.runtimeResults, artifacts.results);
+}
+function appendEvent(artifacts, entry) {
+  const entries = [...artifacts.events.entries ?? [], entry];
+  artifacts.events = {
+    ...artifacts.events,
+    entries,
+    summary: summarizeEvents(entries),
+    updatedAt: entry.recordedAt
+  };
+}
+function appendResult(artifacts, entry) {
+  const entries = [...artifacts.results.entries ?? [], entry];
+  artifacts.results = {
+    ...artifacts.results,
+    entries,
+    summary: summarizeResults(entries),
+    updatedAt: entry.recordedAt
+  };
+}
+
+// src/core/packet-step-result.mjs
+function normalizeString8(value, fallback = "") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+function normalizeStringArray16(value) {
+  return Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean))) : [];
+}
+function plainObject2(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function activeStatus(status) {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  return !["completed", "killed", ...DOVE_ARCHIVED_TASK_STATUSES].includes(normalized);
+}
+function normalizeStatus2(value, fallback = "pending") {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase().replace(/_/g, "-") : "";
+  return DOVE_TASK_STATUSES.includes(normalized) ? normalized : fallback;
+}
+function archivedTaskStatus(task) {
+  return [task?.status, task?.lifecycleStatus].some((status) => DOVE_ARCHIVED_TASK_STATUSES.includes(String(status ?? "").trim().toLowerCase()));
+}
+function normalizeIndex(index = createTaskPacketsIndex()) {
+  const base = createTaskPacketsIndex();
+  const items = Array.isArray(index.items) ? index.items.filter((item) => item && typeof item === "object" && !Array.isArray(item)) : [];
+  const activeInit = items.find((item) => item.level === 0 && activeStatus(item.status)) ?? null;
+  const activeItems = items.filter((item) => item.level !== 0 && activeStatus(item.status));
+  const lifecycleCounts = {};
+  const stageCounts = Object.fromEntries(DOVE_TASK_STAGES.map((stage) => [stage, 0]));
+  const domainCounts = Object.fromEntries(DOVE_TASK_DOMAINS.map((domain) => [domain, 0]));
+  const levelCounts = {};
+  for (const item of items) {
+    const status = archivedTaskStatus(item) ? "archived" : normalizeStatus2(item.status ?? item.lifecycleStatus, "pending");
+    lifecycleCounts[status] = (lifecycleCounts[status] ?? 0) + 1;
+    if (DOVE_TASK_STAGES.includes(item.stage)) stageCounts[item.stage] += 1;
+    if (DOVE_TASK_DOMAINS.includes(item.domain)) domainCounts[item.domain] += 1;
+    const levelKey = String(Number.isFinite(item.level) ? item.level : 3);
+    levelCounts[levelKey] = (levelCounts[levelKey] ?? 0) + 1;
+  }
+  return {
+    ...base,
+    ...index,
+    version: base.version,
+    items,
+    taskModel: {
+      ...base.taskModel,
+      ...index.taskModel && typeof index.taskModel === "object" && !Array.isArray(index.taskModel) ? index.taskModel : {},
+      activeInitId: activeInit?.id ?? null,
+      activeTaskIds: activeItems.map((item) => item.id)
+    },
+    lifecycleCounts,
+    stageCounts,
+    domainCounts,
+    levelCounts,
+    updatedAt: index.updatedAt ?? null
+  };
+}
+function taskPacketPath(packetId) {
+  return path21.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`);
+}
+function taskContextPath(packetId) {
+  return path21.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`);
+}
+function writePacket(root, packet) {
+  const { context: _derivedContext, ...packetRecord } = packet;
+  writeJson(root, taskPacketPath(packet.id), packetRecord);
+  writeJson(root, taskContextPath(packet.id), {
+    id: packet.id,
+    parentId: packet.parentId,
+    rootId: packet.rootId,
+    level: packet.level,
+    creatorKind: packet.creatorKind,
+    stage: packet.stage,
+    domain: packet.domain,
+    status: packet.status,
+    dependencies: packet.dependencies,
+    blockedBy: packet.blockedBy,
+    lessonIds: packet.lessonIds,
+    artifactRefs: packet.artifactRefs,
+    evidenceLinks: packet.evidenceLinks,
+    sourceIds: packet.sourceIds,
+    noteIds: packet.noteIds,
+    claimIds: packet.claimIds,
+    outputPaths: packet.outputPaths,
+    validationEvidencePaths: packet.validationEvidencePaths,
+    verificationEvidencePaths: packet.verificationEvidencePaths,
+    verifiedCriteria: packet.verifiedCriteria,
+    contextPolicy: packet.contextPolicy,
+    executionContract: normalizeDoveExecutionContract(packet.executionContract, null),
+    currentFocus: packet.currentFocus,
+    nextAction: packet.nextAction,
+    completedAt: packet.completedAt ?? null,
+    blockedReason: packet.blockedReason ?? null,
+    killedAt: packet.killedAt ?? null,
+    killReason: packet.killReason ?? null,
+    ownerRole: packet.ownerRole ?? null,
+    nextRole: packet.nextRole ?? null,
+    boundary: packet.boundary ?? null,
+    boundaryHistory: Array.isArray(packet.boundaryHistory) ? packet.boundaryHistory : [],
+    handoff: packet.handoff ?? null,
+    lastTransition: packet.lastTransition ?? null,
+    updatedAt: packet.updatedAt
+  });
+}
+function indexItem(packet) {
+  const { context: _derivedContext, ...item } = packet;
+  return {
+    ...item,
+    completedAt: packet.completedAt ?? null,
+    blockedReason: packet.blockedReason ?? null,
+    killedAt: packet.killedAt ?? null,
+    killReason: packet.killReason ?? null,
+    ownerRole: packet.ownerRole ?? null,
+    nextRole: packet.nextRole ?? null,
+    boundary: packet.boundary ?? null,
+    boundaryHistory: Array.isArray(packet.boundaryHistory) ? packet.boundaryHistory : [],
+    handoff: packet.handoff ?? null,
+    lastTransition: packet.lastTransition ?? null,
+    executionContract: normalizeDoveExecutionContract(packet.executionContract, null)
+  };
+}
+function ownerRoleFor(task = {}) {
+  if (task.stage === "audit") return "reviewer";
+  if (task.stage === "plan") return "planner";
+  return "builder";
+}
+function transitionBoundaryFor(task, status, fields, timestamp) {
+  const explicit = normalizeDoveBoundary(fields.boundary, null);
+  if (explicit) return { ...explicit, packetId: explicit.packetId ?? task.id, createdAt: explicit.createdAt ?? timestamp };
+  const type = normalizeString8(fields.boundaryType, status === "blocked" ? "blocked-boundary" : null);
+  if (!type) return null;
+  return normalizeDoveBoundary({
+    id: normalizeTaskPacketId(fields.boundaryId ?? `boundary-${task.id}-${type}-${Date.now().toString(36)}`),
+    type,
+    status: "open",
+    packetId: task.id,
+    runId: fields.runId ?? null,
+    sourceSurface: fields.sourceSurface ?? fields.surface ?? null,
+    command: fields.command ?? null,
+    reason: fields.reason ?? fields.blockedReason ?? fields.stopReason ?? "",
+    summary: fields.summary ?? fields.blockedReason ?? fields.reason ?? fields.stopReason ?? "",
+    requiredInputs: fields.requiredInputs ?? [],
+    requiredActions: fields.requiredActions ?? [],
+    ownerRole: fields.ownerRole ?? task.ownerRole ?? ownerRoleFor(task),
+    nextRole: fields.nextRole ?? task.nextRole ?? task.ownerRole ?? ownerRoleFor(task),
+    createdAt: timestamp
+  }, null);
+}
+function transitionHandoffFor(task, fields, boundary, timestamp) {
+  const ownerRole = normalizeDovePrimaryRoleId(fields.ownerRole ?? task.ownerRole, ownerRoleFor(task));
+  const nextRole = normalizeDovePrimaryRoleId(fields.nextRole ?? boundary?.nextRole, ownerRole);
+  if (nextRole === ownerRole) return null;
+  return {
+    id: normalizeTaskPacketId(fields.handoffId ?? `handoff-${task.id}-${ownerRole}-to-${nextRole}-${Date.now().toString(36)}`),
+    status: "pending",
+    fromRole: ownerRole,
+    toRole: nextRole,
+    reason: fields.reason ?? boundary?.reason ?? "",
+    summary: fields.summary ?? boundary?.summary ?? "",
+    boundaryId: boundary?.id ?? null,
+    sourceRunId: fields.runId ?? null,
+    requestedAt: timestamp
+  };
+}
+function persistentLifecycleFields(fields = {}) {
+  const allowedKeys = ["currentFocus", "nextAction", "lessonIds", "artifactRefs", "evidenceLinks", "validationEvidencePaths", "verificationEvidencePaths", "verifiedCriteria", "executionContract", "outputPaths", "claimIds", "noteIds", "experimentIds", "resultIds", "auditIds", "versionIds", "rebuttalIssueIds", "sourceIds", "archivedAt", "archiveReason"];
+  return Object.fromEntries(allowedKeys.filter((key) => fields[key] !== void 0).map((key) => [key, fields[key]]));
+}
+function runtimeEventId(packetId, type, count) {
+  return normalizeTaskPacketId(`event-${packetId}-${type}-${Date.now().toString(36)}-${count}`);
+}
+function recordLifecycleEvents(root, packet, transition, openedBoundary, resolvedBoundary, handoff) {
+  const artifacts = loadRuntimeArtifacts(root);
+  const baseCount = artifacts.events.entries?.length ?? 0;
+  const base = {
+    packetId: packet.id,
+    runId: transition.runId ?? null,
+    surface: transition.surface ?? transition.sourceSurface ?? null,
+    command: transition.command ?? null,
+    fromStatus: transition.fromStatus,
+    toStatus: transition.toStatus,
+    summary: transition.summary ?? "",
+    evidenceLinks: normalizeStringArray16(transition.evidenceLinks),
+    artifactRefs: normalizeStringArray16(transition.artifactRefs),
+    timestamp: transition.timestamp,
+    recordedAt: transition.timestamp
+  };
+  const events = [{ ...base, id: runtimeEventId(packet.id, "task-lifecycle-transitioned", baseCount + 1), type: "task.lifecycle.transitioned", eventType: "task.lifecycle.transitioned", boundaryId: openedBoundary?.id ?? resolvedBoundary?.id ?? null, handoffId: handoff?.id ?? null }];
+  if (resolvedBoundary) events.push({ ...base, id: runtimeEventId(packet.id, "task-boundary-resolved", baseCount + events.length + 1), type: "task.boundary.resolved", eventType: "task.boundary.resolved", boundaryId: resolvedBoundary.id, boundary: resolvedBoundary, handoffId: null });
+  if (openedBoundary) events.push({ ...base, id: runtimeEventId(packet.id, "task-boundary-opened", baseCount + events.length + 1), type: "task.boundary.opened", eventType: "task.boundary.opened", boundaryId: openedBoundary.id, boundary: openedBoundary, handoffId: handoff?.id ?? null });
+  if (handoff) events.push({ ...base, id: runtimeEventId(packet.id, "task-handoff-requested", baseCount + events.length + 1), type: "task.handoff.requested", eventType: "task.handoff.requested", boundaryId: openedBoundary?.id ?? resolvedBoundary?.id ?? null, handoffId: handoff.id, handoff });
+  for (const event of events) appendEvent(artifacts, event);
+  saveRuntimeArtifacts(root, artifacts);
+}
+function updatePacketLifecycle(root, task, status, fields = {}, options = {}) {
+  const timestamp = nowIso();
+  const fullTask = readTaskPacketCatalog(root).byId.get(task.id) ?? task;
+  options.assertCompletionReady?.(root, fullTask, status, resolveDoveResponseLanguage(root, fields));
+  const fromStatus = fullTask.status;
+  const artifactRefs = fields.artifactRefs !== void 0 ? normalizeStringArray16(fields.artifactRefs) : fullTask.artifactRefs;
+  const evidenceLinks = fields.evidenceLinks !== void 0 ? normalizeStringArray16(fields.evidenceLinks) : fullTask.evidenceLinks;
+  const statusFields = {};
+  if (status === "in-progress" && !fullTask.startedAt) statusFields.startedAt = fields.startedAt ?? timestamp;
+  if (status === "completed") {
+    statusFields.completedAt = fields.completedAt ?? timestamp;
+    statusFields.blockedReason = null;
+  }
+  if (status === "blocked") statusFields.blockedReason = normalizeString8(fields.blockedReason ?? fields.reason ?? fields.stopReason, fullTask.blockedReason ?? "");
+  if (status !== "blocked" && fullTask.status === "blocked") statusFields.blockedReason = null;
+  if (status === "killed") {
+    statusFields.killedAt = fields.killedAt ?? timestamp;
+    statusFields.killReason = normalizeString8(fields.killReason ?? fields.reason, fullTask.killReason ?? "");
+  }
+  if (status === "archived") {
+    statusFields.archivedAt = fields.archivedAt ?? timestamp;
+    statusFields.archiveReason = normalizeString8(fields.archiveReason ?? fields.reason, fullTask.archiveReason ?? "");
+    statusFields.blockedReason = null;
+  }
+  const openedBoundary = status === "blocked" || fields.boundary || fields.boundaryType ? transitionBoundaryFor(fullTask, status, { ...fields, artifactRefs }, timestamp) : null;
+  const resolvedBoundary = fullTask.boundary?.status === "open" && !openedBoundary && status !== "blocked" ? normalizeDoveBoundary({ ...fullTask.boundary, status: "resolved", resolvedAt: timestamp, resolution: fields.reason ?? `status:${status}` }, null) : null;
+  const ownerRole = normalizeDovePrimaryRoleId(fields.ownerRole ?? fullTask.ownerRole, ownerRoleFor(fullTask));
+  const nextRole = normalizeDovePrimaryRoleId(fields.nextRole ?? openedBoundary?.nextRole ?? fullTask.nextRole, ownerRole);
+  const handoff = transitionHandoffFor(fullTask, { ...fields, ownerRole, nextRole }, openedBoundary, timestamp);
+  const lastTransition = { fromStatus, toStatus: status, reason: normalizeString8(fields.reason ?? fields.stopReason ?? fields.blockedReason, ""), summary: normalizeString8(fields.summary, ""), surface: normalizeString8(fields.surface ?? fields.sourceSurface, null), command: normalizeString8(fields.command, null), runId: normalizeString8(fields.runId, null), boundaryId: openedBoundary?.id ?? resolvedBoundary?.id ?? null, handoffId: handoff?.id ?? null, transitionedAt: timestamp };
+  const packet = { ...fullTask, ...persistentLifecycleFields(fields), ...statusFields, artifactRefs, evidenceLinks, status, lifecycleStatus: status, ownerRole, nextRole, boundary: openedBoundary, boundaryHistory: [...Array.isArray(fullTask.boundaryHistory) ? fullTask.boundaryHistory : [], ...resolvedBoundary ? [resolvedBoundary] : [], ...openedBoundary ? [openedBoundary] : []].slice(-20), handoff: handoff ?? (resolvedBoundary ? null : fullTask.handoff ?? null), lastTransition, updatedAt: timestamp };
+  writePacket(root, packet);
+  const currentIndex = normalizeIndex(readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex));
+  const item = indexItem(packet);
+  const nextIndex = normalizeIndex({ ...currentIndex, items: [...currentIndex.items.filter((existing) => existing.id !== item.id), item].sort((left, right) => (left.level ?? 3) - (right.level ?? 3) || String(left.createdAt ?? "").localeCompare(String(right.createdAt ?? "")) || left.id.localeCompare(right.id)), updatedAt: packet.updatedAt });
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, nextIndex);
+  const state = loadState(root);
+  saveState(root, { ...state, orchestration: { ...state.orchestration, activeTaskIds: nextIndex.taskModel.activeTaskIds, currentFocus: packet.currentFocus ?? state.orchestration.currentFocus, nextAction: packet.nextAction ?? state.orchestration.nextAction } });
+  recordLifecycleEvents(root, packet, { ...lastTransition, timestamp, evidenceLinks: fields.evidenceLinks, artifactRefs }, openedBoundary, resolvedBoundary, handoff);
+  return packet;
+}
+function packetContinuationAction(task = {}, output = {}) {
+  const outputAction = normalizeString8(output?.nextAction ?? output?.boundary?.nextAction, null);
+  if (outputAction && outputAction !== "project:dove.mission") return outputAction;
+  const packetAction = normalizeString8(task.nextAction, null);
+  return packetAction && packetAction !== "project:dove.mission" ? packetAction : "project:dove.auto";
+}
+function applyPacketStepResult(root, task, options = {}) {
+  const fullTask = readTaskPacketCatalog(root).byId.get(task.id) ?? task;
+  const output = plainObject2(options.output);
+  if (output.packetLifecycleApplied === true && output.task?.id === fullTask.id) return readTaskPacketCatalog(root).byId.get(fullTask.id) ?? output.task;
+  const classified = options.classified;
+  if (!classified) throw new Error("applyPacketStepResult requires a classified step result.");
+  const artifactRefs = normalizeStringArray16([...normalizeStringArray16(fullTask.artifactRefs), ...normalizeStringArray16(classified.artifactRefs), ...normalizeStringArray16(output.artifactRefs ?? output.artifactPaths)]);
+  const evidenceLinks = normalizeStringArray16([...normalizeStringArray16(fullTask.evidenceLinks), ...normalizeStringArray16(classified.evidenceLinks), ...normalizeStringArray16(output.evidenceLinks ?? output.evidencePaths)]);
+  const fields = {
+    runId: options.runId ?? output.runId ?? null,
+    surface: options.surface ?? "dove.auto",
+    command: options.command ?? null,
+    summary: normalizeString8(options.summary ?? output.summary ?? classified.outcome, classified.outcome),
+    reason: normalizeString8(options.reason ?? classified.stopReason, ""),
+    stopReason: classified.stopReason,
+    currentFocus: normalizeString8(options.currentFocus ?? output.summary ?? output.review?.summary ?? classified.outcome, fullTask.currentFocus ?? fullTask.title),
+    nextAction: normalizeString8(options.nextAction, packetContinuationAction(fullTask, output)),
+    artifactRefs,
+    evidenceLinks,
+    validationEvidencePaths: normalizeStringArray16(output.validationEvidencePaths),
+    verificationEvidencePaths: normalizeStringArray16(classified.verificationEvidencePaths),
+    verifiedCriteria: normalizeDoveVerifiedCriteria(classified.verifiedCriteria),
+    executionContract: output.executionContract ?? fullTask.executionContract,
+    sourceIds: normalizeStringArray16(output.sourceIds ?? fullTask.sourceIds),
+    noteIds: normalizeStringArray16(output.noteIds ?? fullTask.noteIds),
+    claimIds: normalizeStringArray16(output.claimIds ?? fullTask.claimIds),
+    outputPaths: normalizeStringArray16(output.outputPaths ?? fullTask.outputPaths)
+  };
+  if (classified.terminal) {
+    const boundary = normalizeDoveBoundary(output.boundary, null);
+    return updatePacketLifecycle(root, fullTask, "blocked", { ...fields, boundary, boundaryType: boundary?.type ?? normalizeDoveBoundaryType(classified.outcome, "blocked-boundary"), requiredInputs: boundary?.requiredInputs ?? output.requiredInputs ?? [], requiredActions: boundary?.requiredActions ?? classified.requiredActions ?? output.requiredActions ?? [], ownerRole: boundary?.ownerRole ?? output.ownerRole, nextRole: boundary?.nextRole ?? output.nextRole });
+  }
+  const nextStatus = ["ready", "blocked"].includes(fullTask.status) ? "in-progress" : fullTask.status;
+  return updatePacketLifecycle(root, fullTask, nextStatus, fields);
+}
+
+// src/core/artifacts.mjs
 function slugify7(value) {
   return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
 }
 function normalizeIdentifier(value, fallback) {
   return slugify7(value ?? fallback);
 }
-function normalizeStringArray15(values, fallback = []) {
+function normalizeStringArray17(values, fallback = []) {
   const source = Array.isArray(values) ? values : fallback;
   return Array.from(new Set(source.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim())));
 }
@@ -26212,7 +26958,17 @@ function hasNonEmptyString(value) {
   return typeof value === "string" && value.trim();
 }
 function hasStructuredNoteSynthesis(args = {}) {
-  return hasNonEmptyString(args.summary) || normalizeStringArray15(args.quotes).length > 0 || normalizeStringArray15(args.claims).length > 0 || normalizeStringArray15(args.openQuestions).length > 0;
+  return hasNonEmptyString(args.summary) || normalizeStringArray17(args.quotes).length > 0 || normalizeStringArray17(args.claims).length > 0 || normalizeStringArray17(args.openQuestions).length > 0;
+}
+function artifactPacketResult(root, target, { command, output, classified, nextAction, currentFocus }) {
+  return applyPacketStepResult(root, target.packet, {
+    surface: command,
+    command,
+    output,
+    classified,
+    nextAction,
+    currentFocus
+  });
 }
 function assertNoRetiredArtifactControls(args = {}, actionLabel) {
   const forbidden = Object.keys(args).filter(
@@ -26304,8 +27060,8 @@ function placeholderSegmentsForFigure(item) {
       id: normalizeIdentifier(segment?.id, `${item.id}-segment-${index + 1}`),
       label: segment?.label ?? segment?.title ?? `Segment ${index + 1}`,
       stageStatus: segment?.stageStatus ?? "placeholder",
-      sourceSectionIds: normalizeStringArray15(segment?.sourceSectionIds, item.sourceSections),
-      targetClaimIds: normalizeStringArray15(segment?.targetClaimIds, item.targetClaimIds),
+      sourceSectionIds: normalizeStringArray17(segment?.sourceSectionIds, item.sourceSections),
+      targetClaimIds: normalizeStringArray17(segment?.targetClaimIds, item.targetClaimIds),
       notes: Array.isArray(segment?.notes) ? segment.notes : []
     };
   });
@@ -26420,10 +27176,10 @@ function normalizeFigureArtifactPath2(value) {
   return normalized || null;
 }
 function isSafeProjectRelativePath2(relativePath) {
-  if (!relativePath || path18.posix.isAbsolute(relativePath)) {
+  if (!relativePath || path22.posix.isAbsolute(relativePath)) {
     return false;
   }
-  const normalized = path18.posix.normalize(relativePath);
+  const normalized = path22.posix.normalize(relativePath);
   return normalized !== ".." && !normalized.startsWith("../");
 }
 function arraysEqual(left = [], right = []) {
@@ -26556,7 +27312,7 @@ function semanticCoverageStrings(value, field) {
   if (!value || typeof value !== "object") {
     return [];
   }
-  return normalizeStringArray15(value[field]);
+  return normalizeStringArray17(value[field]);
 }
 function semanticReviewPassed(value) {
   if (!value || typeof value !== "object") {
@@ -26566,7 +27322,7 @@ function semanticReviewPassed(value) {
   return value.reviewed === true || value.humanReviewed === true || ["passed", "verified", "approved"].includes(status);
 }
 function claimHasMaterialProvenance(claim) {
-  return normalizeStringArray15(claim?.sourceIds).length > 0 || normalizeStringArray15(claim?.noteIds).length > 0 || normalizeStringArray15(claim?.experimentIds).length > 0 || normalizeStringArray15(claim?.evidenceLinks).length > 0;
+  return normalizeStringArray17(claim?.sourceIds).length > 0 || normalizeStringArray17(claim?.noteIds).length > 0 || normalizeStringArray17(claim?.experimentIds).length > 0 || normalizeStringArray17(claim?.evidenceLinks).length > 0;
 }
 function buildFigureQa(root) {
   const state = loadState(root);
@@ -26611,7 +27367,7 @@ function buildFigureQa(root) {
   const issues = [];
   function normalizeFigureListField(figure, field, stage, artifactPaths) {
     const rawValue = figure[field];
-    const normalized = normalizeStringArray15(rawValue);
+    const normalized = normalizeStringArray17(rawValue);
     const malformed = rawValue !== void 0 && rawValue !== null && !Array.isArray(rawValue);
     if (malformed) {
       issues.push(buildPathIssue({
@@ -26997,10 +27753,10 @@ function buildFigureQa(root) {
     const finalSvgContent = readSafeFigureText(root, figure.finalSvgPath);
     const semanticCoverage = outputManifest?.semanticCoverage ?? importedGeneration?.semanticCoverage ?? {};
     const semanticReview = outputManifest?.semanticReview ?? importedGeneration?.semanticReview ?? semanticCoverage;
-    const declaredVisualCoverage = normalizeStringArray15([
+    const declaredVisualCoverage = normalizeStringArray17([
       ...semanticCoverageStrings(semanticCoverage, "visualElements"),
       ...semanticCoverageStrings(semanticCoverage, "coveredVisualElements"),
-      ...normalizeStringArray15(outputManifest?.visualElements)
+      ...normalizeStringArray17(outputManifest?.visualElements)
     ]);
     const semanticText = [
       caption?.text,
@@ -27010,7 +27766,7 @@ function buildFigureQa(root) {
       outputManifest?.revisedPrompt,
       semanticCoverage.summary
     ].filter(Boolean).join("\n");
-    const requiredVisualElements = normalizeStringArray15(figure.requiredVisualElements);
+    const requiredVisualElements = normalizeStringArray17(figure.requiredVisualElements);
     const coveredVisualElements = requiredVisualElements.filter((item) => declaredVisualCoverage.some((covered) => textCoversQaLabel(covered, item)) || textCoversQaLabel(semanticText, item));
     const missingVisualElements = requiredVisualElements.filter((item) => !coveredVisualElements.includes(item));
     const linkedClaims = targetClaimIds.map((claimId) => (evidence.claims ?? []).find((claim) => claim.id === claimId)).filter(Boolean);
@@ -27092,17 +27848,6 @@ function buildFigureQa(root) {
         timestamp
       }));
     }
-    if (missingVisualElements.length > 0 && importedGeneration) {
-      figureIssues.push(buildPathIssue({
-        figure,
-        code: "missing-visual-element-coverage",
-        severity: "high",
-        stage: "generation",
-        summary: `Figure ${figure.id} imported output does not cover required visual elements: ${missingVisualElements.join(", ")}.`,
-        artifactPaths: [ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureCaptions, ARTIFACT_PATHS.figureQa, figure.finalSvgPath].filter(Boolean),
-        timestamp
-      }));
-    }
     if (rasterWrapper && !rasterReviewPassed) {
       figureIssues.push(buildPathIssue({
         figure,
@@ -27180,6 +27925,13 @@ function buildFigureQa(root) {
       generationStatus: importedGeneration?.status ?? (figureGenerations[0]?.status ?? "missing"),
       captionStatus: caption?.text ? "ready" : "missing",
       semanticCoverage: figureSemanticCoverage,
+      diagnostics: {
+        lexicalVisualCoverage: {
+          coveredVisualElements,
+          missingVisualElements,
+          authoritative: false
+        }
+      },
       latestGenerationRunId: importedGeneration?.id ?? figureGenerations[0]?.id ?? null,
       latestOutputManifestPath: importedGeneration?.outputManifestPath ?? figureGenerations[0]?.outputManifestPath ?? null,
       captionId: caption?.id ?? null,
@@ -27250,7 +28002,17 @@ function updatePipeline(state, currentStage, resumeCommand) {
     }
   };
 }
+function assertPhaseMutationAllowed(root, stage, role, actionLabel = "Updating the workflow phase") {
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    stage,
+    role,
+    actionLabel
+  );
+}
 function syncPhase(root, state, { stage, resumeCommand, role, objective, evidenceLinks, experimentIds, rebuttalIssueIds, activeComparisonTargets, intentType, currentFocus, nextAction, reviewRequiredBeforeFinalize } = {}) {
+  assertPhaseMutationAllowed(root, stage, role);
   const nextState = updatePipeline(state, stage, resumeCommand);
   saveState(root, nextState);
   upsertSystemOrchestrationBoard(root, {
@@ -27264,7 +28026,7 @@ function syncPhase(root, state, { stage, resumeCommand, role, objective, evidenc
     intentType,
     currentFocus,
     nextAction,
-    reviewRequiredBeforeFinalize
+    ...typeof reviewRequiredBeforeFinalize === "boolean" ? { reviewRequiredBeforeFinalize } : {}
   });
   return nextState;
 }
@@ -27893,7 +28655,7 @@ function buildWikiRelation(root, relation, entityById, relationIdCounts) {
     });
   }
   const sourceArtifactChecks = sourceArtifactPaths.map((artifactPath) => {
-    const exists = fs17.existsSync(resolvePath(root, artifactPath));
+    const exists = fs19.existsSync(resolvePath(root, artifactPath));
     if (!exists) {
       reasons.push({
         code: "missing-source-artifact-file",
@@ -28176,20 +28938,20 @@ function normalizeFigureItem(item = {}, index = 0) {
     id,
     name: item.name ?? item.id ?? `Figure ${index + 1}`,
     purpose: item.purpose ?? item.narrativeIntent ?? "TBD",
-    sourceSections: normalizeStringArray15(item.sourceSections, item.sourceSection ? [item.sourceSection] : []),
-    sourceArtifactPaths: normalizeStringArray15(item.sourceArtifactPaths, item.sourceArtifactPath ? [item.sourceArtifactPath] : []),
-    targetClaimIds: normalizeStringArray15(item.targetClaimIds, item.targetClaimId ? [item.targetClaimId] : []),
-    relatedExperimentIds: normalizeStringArray15(item.relatedExperimentIds, item.experimentIds),
-    reviewConcernIds: normalizeStringArray15(item.reviewConcernIds, item.reviewConcernId ? [item.reviewConcernId] : []),
-    rebuttalIssueIds: normalizeStringArray15(item.rebuttalIssueIds, item.rebuttalIssueId ? [item.rebuttalIssueId] : []),
+    sourceSections: normalizeStringArray17(item.sourceSections, item.sourceSection ? [item.sourceSection] : []),
+    sourceArtifactPaths: normalizeStringArray17(item.sourceArtifactPaths, item.sourceArtifactPath ? [item.sourceArtifactPath] : []),
+    targetClaimIds: normalizeStringArray17(item.targetClaimIds, item.targetClaimId ? [item.targetClaimId] : []),
+    relatedExperimentIds: normalizeStringArray17(item.relatedExperimentIds, item.experimentIds),
+    reviewConcernIds: normalizeStringArray17(item.reviewConcernIds, item.reviewConcernId ? [item.reviewConcernId] : []),
+    rebuttalIssueIds: normalizeStringArray17(item.rebuttalIssueIds, item.rebuttalIssueId ? [item.rebuttalIssueId] : []),
     narrativeIntent: item.narrativeIntent ?? item.purpose ?? "Explain the linked method/result clearly.",
-    requiredVisualElements: normalizeStringArray15(item.requiredVisualElements, Array.isArray(item.inputs) ? item.inputs : []),
+    requiredVisualElements: normalizeStringArray17(item.requiredVisualElements, Array.isArray(item.inputs) ? item.inputs : []),
     materialRequirements: normalizeMaterialRequirements(item.materialRequirements),
     generationProviderId: typeof item.generationProviderId === "string" && item.generationProviderId.trim() ? item.generationProviderId.trim() : null,
     generationMode: typeof item.generationMode === "string" && item.generationMode.trim() ? item.generationMode.trim() : "prepare-import",
     captionIntent: item.captionIntent ?? item.narrativeIntent ?? item.purpose ?? "Explain what the figure shows and why it matters.",
     outputFormat: typeof item.outputFormat === "string" && item.outputFormat.trim() ? item.outputFormat.trim().toLowerCase() : "svg",
-    generationConstraints: normalizeStringArray15(item.generationConstraints),
+    generationConstraints: normalizeStringArray17(item.generationConstraints),
     latestGenerationRunId: typeof item.latestGenerationRunId === "string" && item.latestGenerationRunId.trim() ? item.latestGenerationRunId.trim() : null,
     captionId: typeof item.captionId === "string" && item.captionId.trim() ? item.captionId.trim() : null,
     owner: item.owner ?? "manual",
@@ -28207,13 +28969,14 @@ function normalizeFigureItem(item = {}, index = 0) {
     segmentPlaceholders: placeholderSegmentsForFigure({
       ...item,
       id,
-      sourceSections: normalizeStringArray15(item.sourceSections, item.sourceSection ? [item.sourceSection] : []),
-      targetClaimIds: normalizeStringArray15(item.targetClaimIds, item.targetClaimId ? [item.targetClaimId] : []),
-      requiredVisualElements: normalizeStringArray15(item.requiredVisualElements, Array.isArray(item.inputs) ? item.inputs : [])
+      sourceSections: normalizeStringArray17(item.sourceSections, item.sourceSection ? [item.sourceSection] : []),
+      targetClaimIds: normalizeStringArray17(item.targetClaimIds, item.targetClaimId ? [item.targetClaimId] : []),
+      requiredVisualElements: normalizeStringArray17(item.requiredVisualElements, Array.isArray(item.inputs) ? item.inputs : [])
     })
   };
 }
 function initProject(root, args = {}) {
+  assertPhaseMutationAllowed(root, "init", "planner", "Initializing the project workflow");
   ensureWorkspace(root);
   const defaults = createDefaultState();
   let state = loadState(root);
@@ -28521,7 +29284,7 @@ function assertSourceInputHasProvenance(input = {}, sources, baseId) {
   }
 }
 function mergeIds(...values) {
-  return Array.from(new Set(values.flatMap((value) => normalizeStringArray15(value))));
+  return Array.from(new Set(values.flatMap((value) => normalizeStringArray17(value))));
 }
 function upsertSourceItem(sources, input = {}, context = {}) {
   const sourceIndex = context.initialCount + context.itemOffset + 1;
@@ -28577,6 +29340,7 @@ function registerSource(root, args = {}) {
   assertGovernanceMutationRegistered("register-source", "guarded");
   const target = assertTaskScopedMutationTarget(root, "register-source", args);
   assertFollowThroughReady(root, "Registering a source", args);
+  assertPhaseMutationAllowed(root, "sources", "researcher", "Registering a source");
   ensureWorkspace(root);
   const timestamp = nowIso();
   const sourceInputs = sourceInputsFromArgs(args);
@@ -28635,6 +29399,30 @@ function registerSource(root, args = {}) {
     synthesisArtifactPaths: [ARTIFACT_PATHS.bibliography, ARTIFACT_PATHS.citationLog, ARTIFACT_PATHS.queryPack],
     refreshOnlyArtifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionJournal]
   };
+  const packetArtifactRefs = mergeIds(target.packet?.artifactRefs, [ARTIFACT_PATHS.sources]);
+  const packetEvidenceLinks = mergeIds(target.packet?.evidenceLinks);
+  const task = artifactPacketResult(root, target, {
+    command: "dove.source",
+    output: {
+      status: "registered",
+      summary: registered.length === 1 ? `Registered source ${registered[0].id}.` : `Registered ${registered.length} sources.`,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks,
+      sourceIds: mergeIds(target.packet?.sourceIds, registered.map((source) => source.id)),
+      nextAction: "project:dove.note"
+    },
+    classified: {
+      status: "step-completed",
+      outcome: "dove.source-registered",
+      stopReason: null,
+      terminal: false,
+      canCompleteTask: false,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks
+    },
+    nextAction: "project:dove.note",
+    currentFocus: registered.length === 1 ? `Registered source ${registered[0].title}.` : `Registered ${registered.length} source materials.`
+  });
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const resultCard = artifactResultCard(root, args, {
     surface: "dove.source",
@@ -28652,6 +29440,8 @@ function registerSource(root, args = {}) {
   if (!Array.isArray(args.sources)) {
     return {
       ...registered[0],
+      task,
+      packetLifecycleApplied: true,
       artifactWrites,
       preActionGuidanceSummary: guidanceSummary,
       resultCard
@@ -28664,6 +29454,8 @@ function registerSource(root, args = {}) {
     citationKeys: registered.map((source) => source.citationKey),
     items: registered,
     packetId: target.packet?.id ?? null,
+    task,
+    packetLifecycleApplied: true,
     artifactWrites,
     preActionGuidanceSummary: guidanceSummary,
     resultCard
@@ -28702,12 +29494,15 @@ function upsertNote(root, args = {}) {
   return persistNote(root, args, target, { updatePhase: true });
 }
 function persistNote(root, args, target, { updatePhase }) {
+  if (updatePhase) {
+    assertPhaseMutationAllowed(root, "notes", "researcher", "Recording a structured note");
+  }
   ensureWorkspace(root);
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
   const knownSourceIds = new Set(sources.items.flatMap((item) => [item.id, item.citationKey].filter(Boolean)));
   const sourceIdsProvided = Array.isArray(args.sourceIds);
-  const requestedSourceIds = sourceIdsProvided ? normalizeStringArray15(args.sourceIds) : [];
+  const requestedSourceIds = sourceIdsProvided ? normalizeStringArray17(args.sourceIds) : [];
   const unknownSourceIds = requestedSourceIds.filter((id) => !knownSourceIds.has(id));
   if (unknownSourceIds.length > 0) throw new Error(`Note references unknown sources: ${unknownSourceIds.join(", ")}`);
   const noteId = normalizeIdentifier(args.noteId, `${args.sectionId ?? "general"}-${args.title ?? `note-${notes.items.length + 1}`}`);
@@ -28728,9 +29523,9 @@ function persistNote(root, args, target, { updatePhase }) {
     sourceIds: nextSourceIds,
     packetIds: mergeIds(existing?.packetIds, args.packetIds, target.packet?.id ? [target.packet.id] : []),
     summary: args.summary ?? existing?.summary ?? "",
-    quotes: Array.isArray(args.quotes) ? normalizeStringArray15(args.quotes) : existing?.quotes ?? [],
-    claims: Array.isArray(args.claims) ? normalizeStringArray15(args.claims) : existing?.claims ?? [],
-    openQuestions: Array.isArray(args.openQuestions) ? normalizeStringArray15(args.openQuestions) : existing?.openQuestions ?? [],
+    quotes: Array.isArray(args.quotes) ? normalizeStringArray17(args.quotes) : existing?.quotes ?? [],
+    claims: Array.isArray(args.claims) ? normalizeStringArray17(args.claims) : existing?.claims ?? [],
+    openQuestions: Array.isArray(args.openQuestions) ? normalizeStringArray17(args.openQuestions) : existing?.openQuestions ?? [],
     updatedAt: nowIso()
   };
   if (existingIndex >= 0) notes.items[existingIndex] = note;
@@ -28755,6 +29550,30 @@ function persistNote(root, args, target, { updatePhase }) {
     summary: `Updated note ${note.id}.`,
     artifactPaths: [ARTIFACT_PATHS.notes, ARTIFACT_PATHS.queryPack, ARTIFACT_PATHS.sessionSummary]
   });
+  const packetArtifactRefs = mergeIds(target.packet?.artifactRefs, [ARTIFACT_PATHS.notes]);
+  const packetEvidenceLinks = mergeIds(target.packet?.evidenceLinks);
+  const task = artifactPacketResult(root, target, {
+    command: "dove.note",
+    output: {
+      status: "recorded",
+      summary: note.summary || `Updated note ${note.id}.`,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks,
+      noteIds: mergeIds(target.packet?.noteIds, [note.id]),
+      nextAction: "project:dove.experience"
+    },
+    classified: {
+      status: "step-completed",
+      outcome: "dove.note-recorded",
+      stopReason: null,
+      terminal: false,
+      canCompleteTask: true,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks
+    },
+    nextAction: "project:dove.experience",
+    currentFocus: note.summary || note.title
+  });
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const resultCard = artifactResultCard(root, args, {
     surface: "dove.note",
@@ -28776,6 +29595,8 @@ function persistNote(root, args, target, { updatePhase }) {
   });
   return {
     ...note,
+    task,
+    packetLifecycleApplied: true,
     artifactWrites: {
       primaryArtifactPaths: [ARTIFACT_PATHS.notes],
       synthesisArtifactPaths: [ARTIFACT_PATHS.queryPack],
@@ -28860,6 +29681,7 @@ function upsertOutline(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-outline", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-outline", args);
   assertFollowThroughReady(root, "Updating the paper outline", args);
+  assertPhaseMutationAllowed(root, "outline", "planner", "Updating the paper outline");
   let state = loadState(root);
   const zh = state.settings?.responseLanguage !== "en";
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
@@ -28927,6 +29749,7 @@ function upsertDraft(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-draft", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-draft", args);
   assertFollowThroughReady(root, "Updating a draft section", args);
+  assertPhaseMutationAllowed(root, "draft", "researcher", "Updating a draft section");
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
@@ -28962,6 +29785,29 @@ function upsertDraft(root, args = {}) {
     summary: `Updated draft for section ${sectionId}.`,
     artifactPaths: [draftPath, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport]
   });
+  const packetArtifactRefs = mergeIds(target.packet?.artifactRefs, [draftPath]);
+  const task = artifactPacketResult(root, target, {
+    command: "dove.draft",
+    output: {
+      status: state.sections[sectionId].status,
+      summary: args.summary ?? `Updated draft for section ${sectionId}.`,
+      draftPath,
+      sectionId,
+      artifactRefs: packetArtifactRefs,
+      nextAction: "project:dove.review"
+    },
+    classified: {
+      status: "step-completed",
+      outcome: "dove.draft-updated",
+      stopReason: null,
+      terminal: false,
+      canCompleteTask: true,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: []
+    },
+    nextAction: "project:dove.review",
+    currentFocus: args.summary ?? `Draft ${title}.`
+  });
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const resultCard = artifactResultCard(root, args, {
     surface: "dove.draft",
@@ -28979,6 +29825,8 @@ function upsertDraft(root, args = {}) {
   return {
     draftPath,
     sectionId,
+    task,
+    packetLifecycleApplied: true,
     resultCard,
     artifactWrites: {
       primaryArtifactPaths: [draftPath],
@@ -29001,6 +29849,8 @@ function setSectionStatus(root, args = {}) {
   assertGovernanceMutationRegistered("set-section-status", "guarded");
   const target = assertTaskScopedMutationTarget(root, "set-section-status", args);
   assertFollowThroughReady(root, "Updating a section status", args);
+  const board = loadBoard(root);
+  assertPhaseMutationAllowed(root, "draft", "researcher", "Updating a section status");
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
   const nextStatus = args.status ?? "planned";
@@ -29016,7 +29866,6 @@ function setSectionStatus(root, args = {}) {
     status: nextStatus,
     summary: args.summary ?? state.sections[sectionId]?.summary ?? ""
   };
-  const board = loadBoard(root);
   saveState(root, state);
   upsertSystemOrchestrationBoard(root, {
     phase: state.pipeline.currentStage,
@@ -29097,6 +29946,12 @@ function upsertFigurePlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-figure-plan", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-figure-plan", args);
   assertFollowThroughReady(root, "Updating the figure plan", args);
+  assertPhaseMutationAllowed(
+    root,
+    "experiments",
+    "builder",
+    "Updating the figure plan"
+  );
   const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: null });
   const normalizedItems = (Array.isArray(args.items) ? args.items : []).map((item, index) => ({
     ...normalizeFigureItem(item, index),
@@ -29211,6 +30066,14 @@ function upsertFigurePlan(root, args = {}) {
 function syncCitations(root, args = {}) {
   assertGovernanceMutationRegistered("sync-citations", "guarded");
   assertFollowThroughReady(root, "Updating citation artifacts", args);
+  const currentState = loadState(root);
+  const currentBoard = loadBoard(root);
+  assertPhaseMutationAllowed(
+    root,
+    args.preservePhase ? currentState.pipeline.currentStage : "citations",
+    args.preservePhase ? currentBoard.assignedRole : "researcher",
+    "Updating citation artifacts"
+  );
   ensureWorkspace(root);
   const { sources, citedKeys, missingKeys } = syncCitationArtifacts(root, args);
   const state = loadState(root);
@@ -29314,6 +30177,7 @@ function buildRebuttal(root, args = {}) {
   assertGovernanceMutationRegistered("build-rebuttal", "guarded");
   const target = assertTaskScopedMutationTarget(root, "build-rebuttal", args);
   assertFollowThroughReady(root, "Building the rebuttal draft", args);
+  assertPhaseMutationAllowed(root, "rebuttal", "builder", "Building the rebuttal draft");
   const issues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   if (!Array.isArray(issues.items) || issues.items.length === 0) {
     return missingRebuttalIssuesResult(root, args, "build_rebuttal");
@@ -29442,6 +30306,103 @@ function scopeError(message, details = {}) {
   Object.assign(error, details);
   return error;
 }
+function sameStringSet2(left, right) {
+  return JSON.stringify(normalizeStrings(left).sort()) === JSON.stringify(normalizeStrings(right).sort());
+}
+function canonicalReviewExchangePathFailure(root, relativePath, label) {
+  const normalized = normalizeProjectRelativePath(relativePath);
+  if (!normalized.ok) {
+    return `${label}-unsafe-path`;
+  }
+  const inspection = inspectDeclaredPath(root, normalized.normalizedPath, {
+    requireNonEmpty: true
+  });
+  if (inspection.status !== "existing") {
+    return `${label}-${inspection.status}`;
+  }
+  if (inspection.canonicalRelativePath !== normalized.normalizedPath) {
+    return `${label}-noncanonical-realpath`;
+  }
+  return null;
+}
+function verifyCanonicalReviewImportScope(root, target, {
+  runId,
+  manifest,
+  input,
+  handoff,
+  canonicalPaths,
+  isolationModel,
+  contextPolicy
+} = {}) {
+  const failures = [];
+  if (manifest?.runId !== runId || input?.runId !== runId || handoff?.runId !== runId) failures.push("canonical-run-id-mismatch");
+  if (manifest?.inputPath !== canonicalPaths?.inputPath) failures.push("noncanonical-input-path");
+  if (manifest?.handoffPath !== canonicalPaths?.handoffPath) failures.push("noncanonical-handoff-path");
+  if (manifest?.reportPath !== canonicalPaths?.reportPath) failures.push("noncanonical-report-path");
+  if (handoff?.inputPath !== canonicalPaths?.inputPath) failures.push("handoff-input-path-mismatch");
+  if (handoff?.reportPath !== canonicalPaths?.reportPath) failures.push("handoff-report-path-mismatch");
+  if (input?.outputContract?.handoffPath !== canonicalPaths?.handoffPath) failures.push("output-contract-handoff-path-mismatch");
+  if (input?.outputContract?.reportPath !== canonicalPaths?.reportPath) failures.push("output-contract-report-path-mismatch");
+  if (input?.isolationModel !== isolationModel) failures.push("isolation-model-mismatch");
+  if (input?.privacyBoundary?.writerPrivateTranscriptShared !== false || input?.privacyBoundary?.reviewerPrivateTranscriptShouldReturn !== false) {
+    failures.push("privacy-boundary-mismatch");
+  }
+  if (contextPolicy !== void 0) {
+    if (input?.contextPolicy !== contextPolicy) failures.push("audio-context-policy-mismatch");
+    if (input?.privacyBoundary?.projectContextShared !== false || input?.privacyBoundary?.orchestrationBoardShared !== false) {
+      failures.push("audio-context-boundary-mismatch");
+    }
+    for (const field of ["finalPlanPaths", "finalResultPaths", "explicitArtifactPaths"]) {
+      if (!sameStringSet2(manifest?.[field], input?.[field])) {
+        failures.push(`canonical-audio-${field}-mismatch`);
+      }
+    }
+    const classifiedPaths = normalizeStrings([
+      ...normalizeStrings(input?.finalPlanPaths),
+      ...normalizeStrings(input?.finalResultPaths),
+      ...normalizeStrings(input?.explicitArtifactPaths)
+    ]);
+    if (!sameStringSet2(classifiedPaths, manifest?.reviewedArtifactPaths)) {
+      failures.push("canonical-audio-classification-set-mismatch");
+    }
+  }
+  let scope = null;
+  try {
+    scope = assertReviewMaterials(buildReviewScope(root, target), "review import");
+  } catch {
+    failures.push("canonical-reviewed-artifact-scope-mismatch");
+  }
+  if (scope) {
+    if (manifest?.packetId !== scope.packetId || input?.packetId !== scope.packetId) {
+      failures.push("canonical-packet-mismatch");
+    }
+    if (!sameStringSet2(manifest?.includedPacketIds, scope.includedPacketIds) || !sameStringSet2(input?.includedPacketIds, scope.includedPacketIds)) {
+      failures.push("canonical-included-packet-set-mismatch");
+    }
+    if (!sameStringSet2(manifest?.reviewedArtifactPaths, scope.substantiveArtifactPaths) || !sameStringSet2(input?.reviewedArtifactPaths, scope.substantiveArtifactPaths) || !sameStringSet2(handoff?.reviewedArtifactPaths, scope.substantiveArtifactPaths)) {
+      failures.push("canonical-reviewed-artifact-set-mismatch");
+    }
+    const allowedArtifactPaths = new Set(scope.reviewedArtifactPaths);
+    const allowedClaimIds = new Set(scope.claimIds);
+    const allowedExperimentIds = new Set(scope.experimentIds);
+    for (const finding of handoff?.findings ?? []) {
+      if (normalizeStrings(finding?.linkedArtifactPaths).some((item) => !allowedArtifactPaths.has(item))) {
+        failures.push("finding-artifact-outside-canonical-scope");
+      }
+      if (normalizeStrings(finding?.claimIds).some((item) => !allowedClaimIds.has(item))) {
+        failures.push("finding-claim-outside-canonical-scope");
+      }
+      if (normalizeStrings(finding?.experimentIds).some((item) => !allowedExperimentIds.has(item))) {
+        failures.push("finding-experiment-outside-canonical-scope");
+      }
+    }
+  }
+  return {
+    ok: failures.length === 0,
+    failures: Array.from(new Set(failures)),
+    scope
+  };
+}
 function buildReviewScope(root, target, options = {}) {
   const catalog = options.catalog ?? readTaskPacketCatalog(root);
   const packet = catalog.byId.get(target?.packetId) ?? target?.packet;
@@ -29508,11 +30469,11 @@ function assertReviewMaterials(scope, label = "review") {
 }
 
 // src/core/reviews.mjs
-var UNRESOLVED_CONCERN_STATUSES = /* @__PURE__ */ new Set(["open", "awaiting-author-response", "author-response-submitted", "escalated", "contested"]);
+var UNRESOLVED_CONCERN_STATUSES2 = /* @__PURE__ */ new Set(["open", "awaiting-author-response", "author-response-submitted", "escalated", "contested"]);
 var AUTHOR_RESPONSE_PENDING_STATUSES = /* @__PURE__ */ new Set(["open", "awaiting-author-response"]);
 var REVIEWER_RULING_PENDING_STATUSES = /* @__PURE__ */ new Set(["author-response-submitted", "contested"]);
 var REVIEW_VERDICTS = /* @__PURE__ */ new Set(["coherent", "needs-revision", "needs-evidence", "blocked"]);
-function normalizeStringArray16(value) {
+function normalizeStringArray18(value) {
   const values = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
   return Array.from(new Set(values.map((item) => String(item).trim()).filter(Boolean)));
 }
@@ -29541,10 +30502,10 @@ function inspectReviewArtifact(root, rawPath, label) {
   return inspection.normalizedPath;
 }
 function normalizeReviewedArtifactPaths(root, args = {}) {
-  const reviewedArtifactPaths = normalizeStringArray16([
-    ...normalizeStringArray16(args.reviewedArtifactPaths),
-    ...normalizeStringArray16(args.artifactPaths),
-    ...normalizeStringArray16(args.linkedArtifactPaths)
+  const reviewedArtifactPaths = normalizeStringArray18([
+    ...normalizeStringArray18(args.reviewedArtifactPaths),
+    ...normalizeStringArray18(args.artifactPaths),
+    ...normalizeStringArray18(args.linkedArtifactPaths)
   ]);
   return reviewedArtifactPaths.map((artifactPath) => inspectReviewArtifact(root, artifactPath, "reviewedArtifactPaths"));
 }
@@ -29580,15 +30541,20 @@ function renderReviewReport(entry) {
   ].join("\n");
 }
 function hasExplicitReviewBoundary(args = {}) {
-  return normalizeStringArray16(args.requiredInputs).length > 0 || normalizeStringArray16(args.requiredActions).length > 0 || typeof args.boundaryReason === "string" || typeof args.boundaryType === "string";
+  return normalizeStringArray18(args.requiredInputs).length > 0 || normalizeStringArray18(args.requiredActions).length > 0 || typeof args.boundaryReason === "string" || typeof args.boundaryType === "string";
 }
 function localizedText3(responseLanguage, zh, en) {
   return responseLanguage === "en" ? en : zh;
+}
+function isProofOnlyReview(entry = {}) {
+  const findings = Array.isArray(entry.findings) ? entry.findings : [];
+  return findings.length > 0 && findings.every((finding) => finding?.methodologicalCategory === "review-proof");
 }
 function reviewResultCard(root, args = {}, entry, command = "append_review_log") {
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const findingCount = entry.findings?.length ?? 0;
   const actionItemCount = entry.actionItems?.length ?? 0;
+  const proofOnly = isProofOnlyReview(entry);
   return buildCommandResultCard({
     surface: "dove.review",
     command,
@@ -29600,8 +30566,8 @@ function reviewResultCard(root, args = {}, entry, command = "append_review_log")
     validation: [entry.summary],
     scope: { verdict: entry.verdict, findingCount, actionItemCount },
     nextActions: [{
-      title: entry.verdict === "coherent" ? localizedText3(responseLanguage, "\u56DE\u5230\u72B6\u6001\u9875\u51B3\u5B9A\u662F\u5426\u6536\u5C3E", "Return to status and decide whether to close") : localizedText3(responseLanguage, "\u628A\u6700\u9AD8\u4F18\u5148\u7EA7\u95EE\u9898\u53D8\u6210\u4FEE\u8BA2\u52A8\u4F5C", "Turn the highest-priority issue into revision work"),
-      why: entry.verdict === "coherent" ? localizedText3(responseLanguage, "review \u5DF2\u901A\u8FC7\uFF0C\u4E0B\u4E00\u6B65\u5E94\u9009\u62E9\u7EE7\u7EED\u5199\u3001\u505A\u7248\u672C\u5FEB\u7167\u6216\u6536\u5C3E\u3002", "Review passed; next choose whether to keep drafting, snapshot, or close.") : localizedText3(responseLanguage, "review \u5DF2\u6307\u51FA\u7F3A\u53E3\uFF0C\u4E0B\u4E00\u6B65\u8981\u5148\u4FEE\u6750\u6599\u800C\u4E0D\u662F\u5BA3\u5E03\u5B8C\u6210\u3002", "Review found gaps, so the next step is repair rather than claiming completion.")
+      title: entry.verdict === "coherent" ? localizedText3(responseLanguage, "\u56DE\u5230\u72B6\u6001\u9875\u51B3\u5B9A\u662F\u5426\u6536\u5C3E", "Return to status and decide whether to close") : proofOnly ? localizedText3(responseLanguage, "\u4FDD\u6301 Reviewer ownership \u5E76\u63D0\u4EA4\u6743\u5A01 proof", "Keep Reviewer ownership and submit authoritative proof") : localizedText3(responseLanguage, "\u628A\u6700\u9AD8\u4F18\u5148\u7EA7\u95EE\u9898\u53D8\u6210\u4FEE\u8BA2\u52A8\u4F5C", "Turn the highest-priority issue into revision work"),
+      why: entry.verdict === "coherent" ? localizedText3(responseLanguage, "review \u5DF2\u901A\u8FC7\uFF0C\u4E0B\u4E00\u6B65\u5E94\u9009\u62E9\u7EE7\u7EED\u5199\u3001\u505A\u7248\u672C\u5FEB\u7167\u6216\u6536\u5C3E\u3002", "Review passed; next choose whether to keep drafting, snapshot, or close.") : proofOnly ? localizedText3(responseLanguage, "\u5F53\u524D\u6CA1\u6709 substantive finding\uFF0C\u53EA\u6709 Reviewer proof \u7F3A\u5931\uFF0C\u4E0D\u80FD\u8DEF\u7531\u4E3A Builder \u4FEE\u8BA2\u3002", "There is no substantive finding; only Reviewer proof is missing, so this must not route to Builder revision.") : localizedText3(responseLanguage, "review \u5DF2\u6307\u51FA\u7F3A\u53E3\uFF0C\u4E0B\u4E00\u6B65\u8981\u5148\u4FEE\u6750\u6599\u800C\u4E0D\u662F\u5BA3\u5E03\u5B8C\u6210\u3002", "Review found gaps, so the next step is repair rather than claiming completion.")
     }]
   }, responseLanguage);
 }
@@ -29609,11 +30575,11 @@ function slugify8(value) {
   return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
 }
 function renderReviewEntry(entry) {
-  const reviewedArtifactPaths = normalizeStringArray16(
+  const reviewedArtifactPaths = normalizeStringArray18(
     entry.reviewedArtifactPaths
   );
   const findings = Array.isArray(entry.findings) ? entry.findings : [];
-  const actionItems = normalizeStringArray16(
+  const actionItems = normalizeStringArray18(
     entry.actionItems
   );
   return [
@@ -29694,7 +30660,7 @@ function summarizeConcernState(items = []) {
   const pendingReviewerRulingIds = [];
   for (const item of items) {
     concernStatusCounts[item.status] = (concernStatusCounts[item.status] ?? 0) + 1;
-    if (UNRESOLVED_CONCERN_STATUSES.has(item.status)) {
+    if (UNRESOLVED_CONCERN_STATUSES2.has(item.status)) {
       unresolvedConcernIds.push(item.id);
     }
     if (item.status === "escalated") {
@@ -29719,8 +30685,8 @@ function normalizeConcern(concern = {}, index = 0) {
   return {
     id: slugify8(concern.id ?? concernFingerprint(concern, index)),
     packetId: concern.packetId ?? null,
-    includedPacketIds: normalizeStringArray16(concern.includedPacketIds),
-    reviewedArtifactPaths: normalizeStringArray16(concern.reviewedArtifactPaths),
+    includedPacketIds: normalizeStringArray18(concern.includedPacketIds),
+    reviewedArtifactPaths: normalizeStringArray18(concern.reviewedArtifactPaths),
     summary: concern.summary ?? `Concern ${index + 1}`,
     severity: concern.severity ?? "medium",
     status: normalizeConcernStatus(concern.status ?? "open"),
@@ -29743,8 +30709,8 @@ function normalizeConcern(concern = {}, index = 0) {
     linkedArtifactPaths: Array.isArray(concern.linkedArtifactPaths) ? concern.linkedArtifactPaths : [],
     claimIds: Array.isArray(concern.claimIds) ? concern.claimIds : [],
     experimentIds: Array.isArray(concern.experimentIds) ? concern.experimentIds : [],
-    sourceReviewIds: normalizeStringArray16(concern.sourceReviewIds),
-    sourceExecutionClaimIds: normalizeStringArray16(concern.sourceExecutionClaimIds),
+    sourceReviewIds: normalizeStringArray18(concern.sourceReviewIds),
+    sourceExecutionClaimIds: normalizeStringArray18(concern.sourceExecutionClaimIds),
     updatedAt: nowIso()
   };
 }
@@ -29852,7 +30818,7 @@ var INTERNAL_REVIEW_CONTROL_FIELDS = /* @__PURE__ */ new Set([
   "skipBoardUpdate",
   "skipRefreshDurableSurfaces"
 ]);
-function collectForbiddenPublicReviewPaths(value, path25 = "", seen = /* @__PURE__ */ new WeakSet()) {
+function collectForbiddenPublicReviewPaths(value, path28 = "", seen = /* @__PURE__ */ new WeakSet()) {
   if (!value || typeof value !== "object") {
     return [];
   }
@@ -29862,11 +30828,11 @@ function collectForbiddenPublicReviewPaths(value, path25 = "", seen = /* @__PURE
   seen.add(value);
   if (Array.isArray(value)) {
     return value.flatMap(
-      (item, index) => collectForbiddenPublicReviewPaths(item, `${path25}[${index}]`, seen)
+      (item, index) => collectForbiddenPublicReviewPaths(item, `${path28}[${index}]`, seen)
     );
   }
   return Object.entries(value).flatMap(([key, nestedValue]) => {
-    const fieldPath = path25 ? `${path25}.${key}` : key;
+    const fieldPath = path28 ? `${path28}.${key}` : key;
     const forbidden = key.startsWith("policyOverride") || INTERNAL_REVIEW_CONTROL_FIELDS.has(key) || SYSTEM_OWNED_REVIEW_FIELDS.has(key);
     return [
       ...forbidden ? [fieldPath] : [],
@@ -29908,6 +30874,10 @@ function persistReviewLog(root, args = {}, runtimeContext = {}) {
     methodologicalCategory: item.methodologicalCategory ?? null
   })) : [];
   const actionItems = Array.isArray(args.actionItems) ? args.actionItems : [];
+  const independentReviewProof = verdict === "coherent" ? findCurrentIndependentReviewProof(root, {
+    packetId: args.packetId ?? void 0,
+    reviewedArtifactPaths
+  }) : { ok: false, proof: null };
   if (verdict === "coherent") {
     if (reviewedArtifactPaths.length === 0) {
       throw new Error("append_review_log cannot record a coherent review without at least one existing non-empty reviewed artifact.");
@@ -29915,13 +30885,16 @@ function persistReviewLog(root, args = {}, runtimeContext = {}) {
     if (!reportPath && args.autoGeneratedReviewReport !== true) {
       throw new Error("append_review_log cannot record a coherent review without an existing non-empty review report file.");
     }
+    if (!independentReviewProof.ok) {
+      throw new Error("append_review_log cannot record a coherent review without current-hash-bound independent isolated Reviewer proof for every reviewed artifact.");
+    }
   } else if (findings.length === 0 && actionItems.length === 0 && !hasExplicitReviewBoundary(args)) {
     throw new Error("append_review_log requires findings, actionItems, or an explicit material boundary for non-coherent reviews.");
   }
   const entry = {
     id: runtimeContext.executionClaimId ?? args.id ?? `review-${slugify8(`${args.packetId ?? "unscoped"}-${args.stage ?? "manual-review"}-${timestamp}`)}`,
     packetId: args.packetId ?? null,
-    includedPacketIds: normalizeStringArray16(args.includedPacketIds ?? [args.packetId].filter(Boolean)),
+    includedPacketIds: normalizeStringArray18(args.includedPacketIds ?? [args.packetId].filter(Boolean)),
     timestamp,
     stage: args.stage ?? "manual-review",
     scope: args.scope ?? "current paper materials",
@@ -29930,9 +30903,10 @@ function persistReviewLog(root, args = {}, runtimeContext = {}) {
     reviewRequiredBeforeFinalize: Boolean(args.reviewRequiredBeforeFinalize ?? true),
     reportPath,
     reviewedArtifactPaths,
-    resolvedConcernIds: normalizeStringArray16(args.resolvedConcernIds),
+    resolvedConcernIds: normalizeStringArray18(args.resolvedConcernIds),
     findings,
     actionItems,
+    ...independentReviewProof.ok ? { independentReviewProof: independentReviewProof.proof } : {},
     ...runtimeContext.authorizationProvenance ? { authorizationProvenance: runtimeContext.authorizationProvenance } : {}
   };
   if (!entry.reportPath && args.autoGeneratedReviewReport === true) {
@@ -29964,7 +30938,7 @@ function persistReviewLog(root, args = {}, runtimeContext = {}) {
     experimentIds: finding.experimentIds
   }));
   const currentConcerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
-  const concernInputs = entry.verdict === "coherent" ? (currentConcerns.items ?? []).filter((item) => entry.resolvedConcernIds.includes(item.id) && UNRESOLVED_CONCERN_STATUSES.has(item.status)).map((item) => ({
+  const concernInputs = entry.verdict === "coherent" ? (currentConcerns.items ?? []).filter((item) => entry.resolvedConcernIds.includes(item.id) && UNRESOLVED_CONCERN_STATUSES2.has(item.status)).map((item) => ({
     ...item,
     status: "resolved",
     rulingOutcome: "accepted",
@@ -30019,7 +30993,7 @@ function persistReviewLog(root, args = {}, runtimeContext = {}) {
       reviewedAt: timestamp,
       reviewId: entry.id,
       reviewedArtifactPaths: entry.reviewedArtifactPaths,
-      unresolvedConcernIds: concernLedger.items.filter((item) => item.packetId === entry.packetId && UNRESOLVED_CONCERN_STATUSES.has(item.status)).map((item) => item.id)
+      unresolvedConcernIds: concernLedger.items.filter((item) => item.packetId === entry.packetId && UNRESOLVED_CONCERN_STATUSES2.has(item.status)).map((item) => item.id)
     }
   } : previousPerPacket;
   const workspaceVerdict = Object.values(nextPerPacket).some((item) => item.verdict === "blocked") ? "blocked" : Object.values(nextPerPacket).some((item) => item.verdict === "needs-evidence") ? "needs-evidence" : Object.values(nextPerPacket).some((item) => item.verdict === "needs-revision") ? "needs-revision" : Object.values(nextPerPacket).length > 0 ? "coherent" : "not-reviewed";
@@ -30038,7 +31012,7 @@ function persistReviewLog(root, args = {}, runtimeContext = {}) {
     pendingReviewerRulingIds: concernLedger.pendingReviewerRulingIds,
     reviewerIndependence: {
       reviewerRole: "reviewer",
-      responseOwnerRoles: Array.from(new Set(concernLedger.items.filter((item) => UNRESOLVED_CONCERN_STATUSES.has(item.status)).map((item) => item.responseOwnerRole))),
+      responseOwnerRoles: Array.from(new Set(concernLedger.items.filter((item) => UNRESOLVED_CONCERN_STATUSES2.has(item.status)).map((item) => item.responseOwnerRole))),
       separationMaintained: concernLedger.items.every((item) => item.raisedByRole === "reviewer" && item.responseOwnerRole !== "reviewer")
     }
   };
@@ -30101,6 +31075,7 @@ function upsertRevisionPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-revision-plan", "guarded");
   assertTaskScopedMutationTarget(root, "upsert-revision-plan", args);
   assertFollowThroughReady(root, "Updating the revision plan", args);
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "review", "planner", "Updating the revision plan");
   const timestamp = args.updatedAt ?? nowIso();
   const summary = args.summary ?? "Manual revision plan update.";
   const items = Array.isArray(args.items) ? args.items : [];
@@ -30170,13 +31145,13 @@ function normalizeReviewIssue(issue = {}, index = 0) {
     summary: issue.summary ?? `Issue ${index + 1}`,
     severity: issue.severity ?? "medium",
     status: issue.status ?? "open",
-    evidenceLinks: normalizeStringArray16(issue.evidenceLinks),
-    claimIds: normalizeStringArray16(issue.claimIds),
-    experimentIds: normalizeStringArray16(issue.experimentIds),
+    evidenceLinks: normalizeStringArray18(issue.evidenceLinks),
+    claimIds: normalizeStringArray18(issue.claimIds),
+    experimentIds: normalizeStringArray18(issue.experimentIds),
     responseDirection: issue.responseDirection ?? "clarify",
     ...issue.authorizationProvenance ? { authorizationProvenance: issue.authorizationProvenance } : {},
     authorizationProvenanceHistory: Array.isArray(issue.authorizationProvenanceHistory) ? issue.authorizationProvenanceHistory : [],
-    sourceReviewIds: normalizeStringArray16(issue.sourceReviewIds),
+    sourceReviewIds: normalizeStringArray18(issue.sourceReviewIds),
     sourceReviewExecutionClaimId: issue.sourceReviewExecutionClaimId ?? null,
     updatedAt: nowIso()
   };
@@ -30246,6 +31221,7 @@ function runReviewLoop(root, args = {}) {
   const reviewScope = assertReviewMaterials(buildReviewScope(root, target, args), "run_review_loop");
   transitionToLocalReviewer(root, args, target);
   const entry = persistReviewLoop(root, args, {}, reviewScope);
+  const proofOnly = isProofOnlyReview(entry);
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.review",
     responseLanguage: resolveDoveResponseLanguage(root, args),
@@ -30258,7 +31234,7 @@ function runReviewLoop(root, args = {}) {
       primaryRole: "reviewer"
     },
     operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
-    nextAction: entry.verdict === "coherent" ? "project:dove.status" : "project:dove.rebuttal",
+    nextAction: entry.verdict === "coherent" ? "project:dove.status" : proofOnly ? "project:dove.review" : "project:dove.rebuttal",
     routeHint: "project:dove.review",
     workflowKind: "review",
     domain: target.packet?.domain ?? null,
@@ -30314,6 +31290,25 @@ function persistReviewLoop(root, args = {}, runtimeContext = {}, reviewScope = n
     findings.push({ severity: issue.severity, summary: issue.summary, claimIds: issue.claimIds, experimentIds: issue.experimentIds, responseOwnerRole: issue.responseOwnerRole, methodologicalCategory: "figure", linkedArtifactPaths: issue.artifactPaths });
   }
   const scopedFindings = findings.map((finding) => ({ ...finding, packetId: scope.packetId, includedPacketIds: scope.includedPacketIds, reviewedArtifactPaths: scope.substantiveArtifactPaths }));
+  const independentProof = findCurrentIndependentReviewProof(root, {
+    packetId: scope.packetId,
+    reviewedArtifactPaths: scope.substantiveArtifactPaths
+  });
+  if (scopedFindings.length === 0 && !independentProof.ok) {
+    scopedFindings.push({
+      packetId: scope.packetId,
+      includedPacketIds: scope.includedPacketIds,
+      reviewedArtifactPaths: scope.substantiveArtifactPaths,
+      severity: "high",
+      summary: "Current reviewed artifacts lack current-hash-bound independent isolated Reviewer proof.",
+      claimIds: [],
+      experimentIds: [],
+      responseOwnerRole: "reviewer",
+      methodologicalCategory: "review-proof",
+      linkedArtifactPaths: scope.substantiveArtifactPaths
+    });
+  }
+  const proofOnly = scopedFindings.length > 0 && scopedFindings.every((finding) => finding.methodologicalCategory === "review-proof");
   const actionItems = scopedFindings.map((finding) => finding.summary);
   const verdict = scopedFindings.some((finding) => finding.severity === "high") ? "needs-evidence" : scopedFindings.length > 0 ? "needs-revision" : "coherent";
   const entry = persistReviewLog(root, {
@@ -30323,7 +31318,7 @@ function persistReviewLoop(root, args = {}, runtimeContext = {}, reviewScope = n
     stage: args.stage ?? "review-pass",
     scope: args.scope ?? `packet ${scope.packetId} and descendants`,
     verdict,
-    summary: verdict === "coherent" ? "The selected packet scope is internally consistent for this review pass." : "The selected packet scope requires explicit Builder follow-up before another review pass.",
+    summary: verdict === "coherent" ? "The selected packet scope is internally consistent and backed by current isolated Reviewer proof." : independentProof.ok ? "The selected packet scope requires explicit Builder follow-up before another review pass." : "The selected packet scope reached the Reviewer-owned proof boundary; current isolated Reviewer proof is required before coherence.",
     findings: scopedFindings,
     actionItems,
     reviewedArtifactPaths: scope.substantiveArtifactPaths,
@@ -30333,192 +31328,23 @@ function persistReviewLoop(root, args = {}, runtimeContext = {}, reviewScope = n
   entry.packetId = scope.packetId;
   entry.includedPacketIds = scope.includedPacketIds;
   entry.reviewedArtifactSet = scope.substantiveArtifactPaths;
+  entry.independentReviewProof = independentProof.ok ? independentProof.proof : null;
+  entry.preflightOnly = !independentProof.ok;
   persistReviewRebuttalIssues(root, entry, scopedFindings, { reviewer: args.reviewer ?? "review-pass", authorizationProvenance: runtimeContext.authorizationProvenance ?? null, executionClaimId: runtimeContext.executionClaimId ?? null });
   upsertConcernLedger(root, [], { auditIds: scope.auditIds, bridgeIds: [] });
   return entry;
 }
 
 // src/core/isolated-review.mjs
-import crypto10 from "node:crypto";
-import fs19 from "node:fs";
-import path20 from "node:path";
-
-// src/core/review-artifact-snapshot.mjs
-import crypto9 from "node:crypto";
-import fs18 from "node:fs";
-import path19 from "node:path";
-function sha256Buffer(value) {
-  return crypto9.createHash("sha256").update(value).digest("hex");
-}
-function sha256File(fullPath) {
-  return sha256Buffer(fs18.readFileSync(fullPath));
-}
-function stableSnapshotSetHash(snapshots = []) {
-  const canonical = [...snapshots].map(({ path: artifactPath, sizeBytes, sha256: sha2563 }) => ({ path: artifactPath, sizeBytes, sha256: sha2563 })).sort((left, right) => left.path.localeCompare(right.path));
-  return sha256Buffer(`${JSON.stringify(canonical)}
-`);
-}
-function canonicalReviewArtifactPath(root, relativePath, label = "review artifact") {
-  const normalized = normalizeProjectRelativePath(relativePath);
-  if (!normalized.ok) {
-    throw new Error(`${label} has an unsafe path ${relativePath}: ${normalized.reason}.`);
-  }
-  const inspection = inspectDeclaredPath(root, normalized.normalizedPath, {
-    requireNonEmpty: true,
-    rejectBookkeeping: true
-  });
-  if (inspection.status !== "existing") {
-    throw new Error(`${label} is not a usable file at ${normalized.normalizedPath}: ${inspection.reason ?? inspection.status}.`);
-  }
-  return inspection.canonicalRelativePath ?? inspection.normalizedPath;
-}
-function snapshotReviewedArtifacts(root, relativePaths, label = "reviewed artifacts") {
-  const snapshots = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const relativePath of relativePaths ?? []) {
-    const canonicalPath = canonicalReviewArtifactPath(root, relativePath, label);
-    if (seen.has(canonicalPath)) {
-      continue;
-    }
-    seen.add(canonicalPath);
-    const inspection = inspectDeclaredPath(root, canonicalPath, {
-      requireNonEmpty: true,
-      rejectBookkeeping: true
-    });
-    snapshots.push({
-      path: canonicalPath,
-      sizeBytes: inspection.sizeBytes,
-      sha256: sha256File(path19.resolve(root, canonicalPath))
-    });
-  }
-  if (snapshots.length === 0) {
-    throw new Error(`${label} requires at least one existing non-empty non-bookkeeping reviewed artifact.`);
-  }
-  snapshots.sort((left, right) => left.path.localeCompare(right.path));
-  return {
-    reviewedArtifacts: snapshots,
-    reviewedArtifactSetSha256: stableSnapshotSetHash(snapshots)
-  };
-}
-function normalizedSnapshot(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  const normalized = normalizeProjectRelativePath(value.path);
-  if (!normalized.ok || !Number.isSafeInteger(value.sizeBytes) || value.sizeBytes <= 0 || typeof value.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(value.sha256)) {
-    return null;
-  }
-  return {
-    path: normalized.normalizedPath,
-    sizeBytes: value.sizeBytes,
-    sha256: value.sha256
-  };
-}
-function normalizeSnapshotArray(value) {
-  if (!Array.isArray(value)) {
-    return { ok: false, snapshots: [], reason: "reviewedArtifacts must be an array" };
-  }
-  const snapshots = value.map(normalizedSnapshot);
-  if (snapshots.some((item) => item === null) || snapshots.length === 0) {
-    return { ok: false, snapshots: [], reason: "reviewedArtifacts must contain valid non-empty artifact snapshots" };
-  }
-  const paths = snapshots.map((item) => item.path);
-  if (new Set(paths).size !== paths.length) {
-    return { ok: false, snapshots: [], reason: "reviewedArtifacts contains duplicate canonical paths" };
-  }
-  snapshots.sort((left, right) => left.path.localeCompare(right.path));
-  return { ok: true, snapshots, reason: null };
-}
-function snapshotsEqual(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-function verifyPreparedReviewSnapshot(root, {
-  manifest,
-  input,
-  inputPath,
-  actualInputSha256,
-  handoffInputPath,
-  handoffInputSha256,
-  handoffReviewedArtifactPaths
-}) {
-  const failures = [];
-  if (manifest.inputPath !== inputPath || handoffInputPath !== inputPath) {
-    failures.push("input-path-mismatch");
-  }
-  if (manifest.inputSha256 !== actualInputSha256 || handoffInputSha256 !== actualInputSha256) {
-    failures.push("input-hash-mismatch");
-  }
-  const manifestSnapshots = normalizeSnapshotArray(manifest.reviewedArtifacts);
-  const inputSnapshots = normalizeSnapshotArray(input.reviewedArtifacts);
-  if (!manifestSnapshots.ok) failures.push(`manifest-${manifestSnapshots.reason}`);
-  if (!inputSnapshots.ok) failures.push(`input-${inputSnapshots.reason}`);
-  if (manifestSnapshots.ok && inputSnapshots.ok && !snapshotsEqual(manifestSnapshots.snapshots, inputSnapshots.snapshots)) {
-    failures.push("manifest-input-snapshot-mismatch");
-  }
-  const preparedSnapshots = manifestSnapshots.ok ? manifestSnapshots.snapshots : [];
-  const expectedSetHash = preparedSnapshots.length > 0 ? stableSnapshotSetHash(preparedSnapshots) : null;
-  if (!expectedSetHash || manifest.reviewedArtifactSetSha256 !== expectedSetHash || input.reviewedArtifactSetSha256 !== expectedSetHash) {
-    failures.push("reviewed-artifact-set-hash-mismatch");
-  }
-  const handoffPaths = [];
-  for (const rawPath of Array.isArray(handoffReviewedArtifactPaths) ? handoffReviewedArtifactPaths : []) {
-    const normalized = normalizeProjectRelativePath(rawPath);
-    if (!normalized.ok) {
-      failures.push("handoff-unsafe-reviewed-artifact-path");
-      continue;
-    }
-    let canonicalPath = normalized.normalizedPath;
-    try {
-      canonicalPath = canonicalReviewArtifactPath(root, normalized.normalizedPath, "review handoff artifact");
-    } catch {
-    }
-    handoffPaths.push(canonicalPath);
-  }
-  if (handoffPaths.length === 0) {
-    failures.push("handoff-reviewed-artifacts-missing");
-  }
-  if (new Set(handoffPaths).size !== handoffPaths.length) {
-    failures.push("handoff-duplicate-reviewed-artifact-path");
-  }
-  const preparedPaths = preparedSnapshots.map((item) => item.path).sort();
-  const returnedPaths = [...handoffPaths].sort();
-  if (JSON.stringify(preparedPaths) !== JSON.stringify(returnedPaths)) {
-    failures.push("handoff-reviewed-artifact-set-mismatch");
-  }
-  for (const prepared of preparedSnapshots) {
-    const inspection = inspectDeclaredPath(root, prepared.path, {
-      requireNonEmpty: true,
-      rejectBookkeeping: true
-    });
-    if (inspection.status !== "existing") {
-      failures.push(`reviewed-artifact-${inspection.status}:${prepared.path}`);
-      continue;
-    }
-    const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-    const current = {
-      path: canonicalPath,
-      sizeBytes: inspection.sizeBytes,
-      sha256: sha256File(path19.resolve(root, canonicalPath))
-    };
-    if (!snapshotsEqual([prepared], [current])) {
-      failures.push(`reviewed-artifact-changed:${prepared.path}`);
-    }
-  }
-  return {
-    ok: failures.length === 0,
-    failures: Array.from(new Set(failures)),
-    reviewedArtifacts: preparedSnapshots,
-    reviewedArtifactSetSha256: expectedSetHash
-  };
-}
-
-// src/core/isolated-review.mjs
+import crypto11 from "node:crypto";
+import fs20 from "node:fs";
+import path23 from "node:path";
 var REVIEW_VERDICTS2 = /* @__PURE__ */ new Set(["coherent", "needs-revision", "needs-evidence", "blocked"]);
 var HANDOFF_STATUSES = /* @__PURE__ */ new Set(["completed", "blocked", "failed"]);
 function slugify9(value) {
   return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "isolated-review";
 }
-function normalizeStringArray17(value) {
+function normalizeStringArray19(value) {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -30551,16 +31377,16 @@ function stableJson2(value) {
 `;
 }
 function sha256Text(value) {
-  return crypto10.createHash("sha256").update(value).digest("hex");
+  return crypto11.createHash("sha256").update(value).digest("hex");
 }
 function hashFile(fullPath) {
-  if (!fs19.existsSync(fullPath)) {
+  if (!fs20.existsSync(fullPath)) {
     return null;
   }
-  return crypto10.createHash("sha256").update(fs19.readFileSync(fullPath)).digest("hex");
+  return crypto11.createHash("sha256").update(fs20.readFileSync(fullPath)).digest("hex");
 }
 function relativeRunPath(runId, leaf) {
-  return path20.posix.join(ARTIFACT_PATHS.isolatedReviewsDir, runId, leaf);
+  return path23.posix.join(ARTIFACT_PATHS.isolatedReviewsDir, runId, leaf);
 }
 function normalizeRunId(value) {
   const candidate = slugify9(value ?? `review-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}`);
@@ -30570,13 +31396,13 @@ function normalizeRunId(value) {
   return candidate;
 }
 function safeArtifactPath(root, relativePath) {
-  const normalized = path20.posix.normalize(String(relativePath).replaceAll(path20.sep, "/"));
-  if (normalized.startsWith("../") || normalized === ".." || path20.isAbsolute(normalized)) {
+  const normalized = path23.posix.normalize(String(relativePath).replaceAll(path23.sep, "/"));
+  if (normalized.startsWith("../") || normalized === ".." || path23.isAbsolute(normalized)) {
     throw new Error(`Refusing unsafe isolated review artifact path: ${relativePath}`);
   }
-  const fullPath = path20.resolve(root, normalized);
-  const rootPath = path20.resolve(root);
-  if (fullPath !== rootPath && !fullPath.startsWith(`${rootPath}${path20.sep}`)) {
+  const fullPath = path23.resolve(root, normalized);
+  const rootPath = path23.resolve(root);
+  if (fullPath !== rootPath && !fullPath.startsWith(`${rootPath}${path23.sep}`)) {
     throw new Error(`Refusing isolated review artifact outside workspace: ${relativePath}`);
   }
   return normalized;
@@ -30613,9 +31439,9 @@ function normalizeFinding(finding = {}, index = 0) {
     severity,
     summary,
     responseOwnerRole: typeof finding.responseOwnerRole === "string" && finding.responseOwnerRole.trim() ? finding.responseOwnerRole.trim() : "planner",
-    claimIds: normalizeStringArray17(finding.claimIds),
-    experimentIds: normalizeStringArray17(finding.experimentIds),
-    linkedArtifactPaths: normalizeStringArray17(finding.linkedArtifactPaths)
+    claimIds: normalizeStringArray19(finding.claimIds),
+    experimentIds: normalizeStringArray19(finding.experimentIds),
+    linkedArtifactPaths: normalizeStringArray19(finding.linkedArtifactPaths)
   };
 }
 function requiredStringField(raw, field, label = field) {
@@ -30641,8 +31467,8 @@ function normalizeHandoff(root, raw = {}) {
     throw new Error(`isolated review handoff status ${status} cannot import a coherent verdict.`);
   }
   const findings = Array.isArray(raw.findings) ? raw.findings.map(normalizeFinding) : [];
-  const actionItems = normalizeStringArray17(raw.actionItems ?? findings.map((finding) => finding.summary));
-  const reviewedArtifactPaths = normalizeStringArray17(raw.reviewedArtifactPaths ?? raw.artifactPaths).map((item) => safeArtifactPath(root, item));
+  const actionItems = normalizeStringArray19(raw.actionItems ?? findings.map((finding) => finding.summary));
+  const reviewedArtifactPaths = normalizeStringArray19(raw.reviewedArtifactPaths ?? raw.artifactPaths).map((item) => safeArtifactPath(root, item));
   return {
     version: 1,
     runId,
@@ -30696,7 +31522,7 @@ function renderImportedReviewLogEntry({ handoff, reportPath, reportSha256 }) {
     ""
   ].join("\n");
 }
-function upsertImportedConcerns(root, handoff) {
+function upsertImportedConcerns(root, handoff, packetId) {
   const current = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
   const existing = new Map((current.items ?? []).map((item) => [item.id, item]));
   for (const finding of handoff.findings) {
@@ -30704,6 +31530,7 @@ function upsertImportedConcerns(root, handoff) {
     existing.set(id, {
       ...existing.get(id) ?? {},
       id,
+      packetId,
       summary: finding.summary,
       severity: finding.severity,
       status: handoff.verdict === "coherent" ? "resolved" : "awaiting-author-response",
@@ -30745,11 +31572,21 @@ function transitionToIsolatedReviewer(root, args, target, runId, reviewedArtifac
     currentFocus: args.scope ?? target.packet?.title ?? `Isolated review ${runId}`,
     nextAction: `Complete isolated review ${runId} and return only the declared handoff and report artifacts.`,
     handoffSummary: `Handing ${target.packet?.title ?? "the current work"} to the isolated reviewer for run ${runId}.`,
-    evidenceLinks: Array.from(/* @__PURE__ */ new Set([...board.evidenceLinks ?? [], ...reviewedArtifactPaths]))
+    evidenceLinks: Array.from(/* @__PURE__ */ new Set([...board.evidenceLinks ?? [], ...reviewedArtifactPaths])),
+    reviewRequiredBeforeFinalize: true
   });
 }
-function isolatedReviewReturnTransition(handoff) {
+function isolatedReviewReturnTransition(handoff, independentProof = null) {
   if (handoff.verdict === "coherent") {
+    if (independentProof?.authoritative !== true) {
+      return {
+        phase: "review",
+        assignedRole: "reviewer",
+        intentType: "review",
+        nextAction: "Submit authoritative proof from an approved Reviewer runtime execution claim through the private capability.",
+        proofBoundary: true
+      };
+    }
     return {
       phase: "plan",
       assignedRole: "planner",
@@ -30766,13 +31603,27 @@ function isolatedReviewReturnTransition(handoff) {
 }
 function returnImportedIsolatedReview(root, args, handoff, handoffPath, reportPath, transition) {
   const board = loadBoard(root);
+  const evidenceLinks = Array.from(/* @__PURE__ */ new Set([...board.evidenceLinks ?? [], handoffPath, reportPath, ...handoff.reviewedArtifactPaths]));
+  const handoffSummary = transition.proofBoundary ? `Isolated reviewer ${handoff.reviewerId} returned public coherent material for ${handoff.runId}, but authoritative Reviewer runtime proof is still required; Reviewer ownership is retained.` : `Isolated reviewer ${handoff.reviewerId} returned ${handoff.verdict} for ${handoff.runId}; workflow routing now returns to ${transition.assignedRole} for the recorded next action.`;
+  if (transition.proofBoundary && board.currentPhase === "review" && board.assignedRole === "reviewer") {
+    appendSystemHandoff(root, {
+      fromRole: "reviewer",
+      toRole: "reviewer",
+      phase: "review",
+      intentType: "review",
+      summary: handoffSummary,
+      currentFocus: handoff.summary,
+      nextAction: transition.nextAction,
+      evidenceLinks
+    });
+  }
   return upsertSystemOrchestrationBoard(root, {
     ...args,
     ...transition,
     currentFocus: handoff.summary,
-    handoffSummary: `Isolated reviewer ${handoff.reviewerId} returned ${handoff.verdict} for ${handoff.runId}; workflow routing now returns to ${transition.assignedRole} for the recorded next action.`,
-    evidenceLinks: Array.from(/* @__PURE__ */ new Set([...board.evidenceLinks ?? [], handoffPath, reportPath, ...handoff.reviewedArtifactPaths])),
-    reviewRequiredBeforeFinalize: handoff.verdict !== "coherent"
+    handoffSummary,
+    evidenceLinks,
+    reviewRequiredBeforeFinalize: true
   });
 }
 function prepareIsolatedReview(root, args = {}) {
@@ -30780,15 +31631,19 @@ function prepareIsolatedReview(root, args = {}) {
   const target = assertTaskScopedMutationTarget(root, "prepare-isolated-review", args);
   assertFollowThroughReady(root, "Preparing an isolated reviewer input bundle", args);
   const runId = normalizeRunId(args.runId);
-  const explicitArtifactPaths = normalizeStringArray17([
-    ...normalizeStringArray17(args.reviewedArtifactPaths),
-    ...normalizeStringArray17(args.artifactPaths)
-  ]);
-  const reviewScope = assertReviewMaterials(buildReviewScope(root, target, {
-    reviewedArtifactPaths: explicitArtifactPaths.map((item) => safeArtifactPath(root, item))
-  }), "prepare_isolated_review");
+  const explicitArtifactPaths = normalizeStringArray19([
+    ...normalizeStringArray19(args.reviewedArtifactPaths),
+    ...normalizeStringArray19(args.artifactPaths)
+  ]).map((item) => safeArtifactPath(root, item));
+  if (explicitArtifactPaths.length > 0) {
+    buildReviewScope(root, target, { reviewedArtifactPaths: explicitArtifactPaths });
+  }
+  const reviewScope = assertReviewMaterials(
+    buildReviewScope(root, target),
+    "prepare_isolated_review"
+  );
   const reviewedArtifactPaths = reviewScope.substantiveArtifactPaths;
-  const runDir = path20.posix.join(ARTIFACT_PATHS.isolatedReviewsDir, runId);
+  const runDir = path23.posix.join(ARTIFACT_PATHS.isolatedReviewsDir, runId);
   const timestamp = nowIso();
   const state = loadState(root);
   const artifacts = reviewedArtifactPaths.map((relativePath) => artifactEntry(root, relativePath));
@@ -30887,8 +31742,13 @@ function importIsolatedReview(root, args = {}) {
   assertFollowThroughReady(root, "Importing an isolated reviewer handoff", args);
   const runId = normalizeRunId(args.runId);
   const manifestPath = relativeRunPath(runId, "manifest.json");
-  const handoffPath = args.handoffPath ? safeArtifactPath(root, args.handoffPath) : relativeRunPath(runId, "handoff.json");
-  const reportPath = args.reportPath ? safeArtifactPath(root, args.reportPath) : relativeRunPath(runId, "report.md");
+  const canonicalPaths = {
+    inputPath: relativeRunPath(runId, "input.json"),
+    handoffPath: relativeRunPath(runId, "handoff.json"),
+    reportPath: relativeRunPath(runId, "report.md")
+  };
+  const handoffPath = args.handoffPath ? safeArtifactPath(root, args.handoffPath) : canonicalPaths.handoffPath;
+  const reportPath = args.reportPath ? safeArtifactPath(root, args.reportPath) : canonicalPaths.reportPath;
   const manifest = readJson(root, manifestPath, null);
   if (!manifest || typeof manifest !== "object") {
     throw new Error(`Missing isolated review manifest for ${runId}`);
@@ -30899,23 +31759,36 @@ function importIsolatedReview(root, args = {}) {
   if (manifest.packetId !== target.packetId) {
     throw new Error(`Isolated review ${runId} belongs to packet ${manifest.packetId ?? "unknown"}, not ${target.packetId}.`);
   }
-  if (handoffPath !== manifest.handoffPath || reportPath !== manifest.reportPath) {
-    throw new Error(`Isolated review ${runId} must import the exact handoff and report paths declared by its prepared manifest.`);
+  if (handoffPath !== canonicalPaths.handoffPath || reportPath !== canonicalPaths.reportPath) {
+    return isolatedReviewVerificationFailure(runId, ["noncanonical-exchange-path"], manifest);
+  }
+  const handoffPathFailure = canonicalReviewExchangePathFailure(
+    root,
+    handoffPath,
+    "handoff"
+  );
+  if (handoffPathFailure) {
+    return isolatedReviewVerificationFailure(runId, [handoffPathFailure], manifest);
   }
   const handoffFullPath = resolvePath(root, handoffPath);
-  if (!fs19.existsSync(handoffFullPath)) {
-    throw new Error(`Missing isolated review handoff: ${handoffPath}`);
-  }
-  const handoff = normalizeHandoff(root, JSON.parse(fs19.readFileSync(handoffFullPath, "utf8")));
+  const handoff = normalizeHandoff(root, JSON.parse(fs20.readFileSync(handoffFullPath, "utf8")));
   if (handoff.runId !== runId) {
     throw new Error(`Isolated review handoff runId mismatch: expected ${runId}, received ${handoff.runId}`);
   }
-  const inputFullPath = resolvePath(root, manifest.inputPath);
+  const inputPathFailure = canonicalReviewExchangePathFailure(
+    root,
+    canonicalPaths.inputPath,
+    "input"
+  );
+  if (inputPathFailure) {
+    return isolatedReviewVerificationFailure(runId, [inputPathFailure], manifest);
+  }
+  const inputFullPath = resolvePath(root, canonicalPaths.inputPath);
   let input;
   let actualInputSha256;
   try {
     actualInputSha256 = sha256File(inputFullPath);
-    input = JSON.parse(fs19.readFileSync(inputFullPath, "utf8"));
+    input = JSON.parse(fs20.readFileSync(inputFullPath, "utf8"));
   } catch (error) {
     return isolatedReviewVerificationFailure(runId, [`input-unreadable:${error instanceof Error ? error.message : String(error)}`], manifest);
   }
@@ -30931,8 +31804,27 @@ function importIsolatedReview(root, args = {}) {
   if (!verification.ok) {
     return isolatedReviewVerificationFailure(runId, verification.failures, manifest);
   }
+  const canonicalScopeVerification = verifyCanonicalReviewImportScope(root, target, {
+    runId,
+    manifest,
+    input,
+    handoff,
+    canonicalPaths,
+    isolationModel: "parallel-session-file-handoff"
+  });
+  if (!canonicalScopeVerification.ok) {
+    return isolatedReviewVerificationFailure(runId, canonicalScopeVerification.failures, manifest);
+  }
   if (handoff.reportPath !== reportPath) {
     return isolatedReviewVerificationFailure(runId, ["report-path-mismatch"], manifest);
+  }
+  const reportPathFailure = canonicalReviewExchangePathFailure(
+    root,
+    reportPath,
+    "report"
+  );
+  if (reportPathFailure) {
+    return isolatedReviewVerificationFailure(runId, [reportPathFailure], manifest);
   }
   const reportInspection = inspectDeclaredPath(root, reportPath, {
     requireNonEmpty: true,
@@ -30944,22 +31836,65 @@ function importIsolatedReview(root, args = {}) {
   const handoffSha256 = hashFile(handoffFullPath);
   const reportFullPath = resolvePath(root, reportPath);
   const reportSha256 = hashFile(reportFullPath);
-  const returnTransition = isolatedReviewReturnTransition(handoff);
+  const anticipatedTransition = isolatedReviewReturnTransition(handoff);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    anticipatedTransition.phase,
+    anticipatedTransition.assignedRole,
+    "Importing an isolated review"
+  );
+  assertSystemOrchestrationBoardUpdate(root, {
+    ...args,
+    ...anticipatedTransition,
+    currentFocus: handoff.summary,
+    reviewRequiredBeforeFinalize: true
+  });
   appendText(root, ARTIFACT_PATHS.reviewLog, renderImportedReviewLogEntry({ handoff, reportPath, reportSha256 }));
-  upsertImportedConcerns(root, handoff);
+  upsertImportedConcerns(root, handoff, target.packetId);
   const updatedManifest = {
-    ...manifest,
+    version: 1,
+    runId,
+    packetId: target.packetId,
+    includedPacketIds: canonicalScopeVerification.scope.includedPacketIds,
     status: "imported",
+    createdAt: manifest.createdAt,
     updatedAt: nowIso(),
     importedAt: nowIso(),
+    inputPath: canonicalPaths.inputPath,
+    inputSha256: actualInputSha256,
     handoffPath,
     reportPath,
+    reviewedArtifactPaths: canonicalScopeVerification.scope.substantiveArtifactPaths,
+    reviewedArtifacts: verification.reviewedArtifacts,
+    reviewedArtifactSetSha256: verification.reviewedArtifactSetSha256,
     outputSha256: handoffSha256,
     reportSha256,
     verdict: handoff.verdict,
-    reviewerId: handoff.reviewerId
+    importedVerdict: handoff.verdict,
+    reviewerId: handoff.reviewerId,
+    authoritative: false,
+    independentReviewProof: null,
+    reviewProofRequired: handoff.verdict === "coherent"
   };
   writeJson(root, manifestPath, updatedManifest);
+  const independentProof = handoff.verdict === "coherent" ? verifyImportedIsolatedReviewProof(root, resolvePath(root, manifestPath), {
+    packetId: target.packetId,
+    reviewedArtifactPaths: canonicalScopeVerification.scope.substantiveArtifactPaths
+  }) : { ok: false, authoritative: false, proof: null, failures: [] };
+  const returnTransition = isolatedReviewReturnTransition(handoff, independentProof);
+  if (returnTransition.proofBoundary) {
+    recordReviewProofRequiredBoundary(root, {
+      reviewKind: "isolated",
+      runId,
+      packetId: target.packetId,
+      includedPacketIds: canonicalScopeVerification.scope.includedPacketIds,
+      timestamp: handoff.timestamp,
+      handoffPath,
+      reportPath,
+      reviewedArtifactPaths: canonicalScopeVerification.scope.substantiveArtifactPaths
+    });
+  }
   returnImportedIsolatedReview(root, args, handoff, handoffPath, reportPath, returnTransition);
   refreshDurableSurfaces(root, {
     type: "isolated-review-import",
@@ -30969,7 +31904,8 @@ function importIsolatedReview(root, args = {}) {
   return {
     status: "imported",
     runId,
-    verdict: handoff.verdict,
+    verdict: returnTransition.proofBoundary ? "needs-evidence" : handoff.verdict,
+    importedVerdict: handoff.verdict,
     reviewerId: handoff.reviewerId,
     summary: handoff.summary,
     topConcerns: handoff.findings.slice(0, 5).map((finding) => finding.summary),
@@ -30980,13 +31916,32 @@ function importIsolatedReview(root, args = {}) {
     inputSha256: manifest.inputSha256,
     handoffSha256,
     reportSha256,
+    authoritative: independentProof.authoritative === true,
+    independentReviewProof: null,
+    reviewProofRequired: returnTransition.proofBoundary === true,
+    proofFailures: independentProof.failures ?? [],
+    ...returnTransition.proofBoundary ? {
+      boundary: {
+        type: "review-proof-required",
+        ownerRole: "reviewer",
+        nextRole: "reviewer",
+        nextAction: returnTransition.nextAction,
+        requiredActions: ["submit-authoritative-reviewer-runtime-proof"]
+      },
+      ownerRole: "reviewer",
+      nextRole: "reviewer",
+      nextAction: returnTransition.nextAction
+    } : {},
     privateTranscriptImported: false,
     preActionGuidanceSummary: isolatedGuidanceSummary(root, args, target, {
-      nextAction: handoff.verdict === "coherent" ? "project:dove.status" : "project:dove.rebuttal",
+      nextAction: returnTransition.proofBoundary ? "project:dove.review" : handoff.verdict === "coherent" ? "project:dove.status" : "project:dove.rebuttal",
       statusSummary: {
         status: "imported",
         runId,
-        verdict: handoff.verdict,
+        verdict: returnTransition.proofBoundary ? "needs-evidence" : handoff.verdict,
+        importedVerdict: handoff.verdict,
+        authoritative: independentProof.authoritative === true,
+        reviewProofRequired: returnTransition.proofBoundary === true,
         findingCount: handoff.findings.length,
         actionItemCount: handoff.actionItems.length
       }
@@ -30996,13 +31951,13 @@ function importIsolatedReview(root, args = {}) {
 
 // src/core/figure-generation.mjs
 import { spawnSync as spawnSync2 } from "node:child_process";
-import crypto11 from "node:crypto";
-import fs20 from "node:fs";
-import path21 from "node:path";
+import crypto12 from "node:crypto";
+import fs21 from "node:fs";
+import path24 from "node:path";
 function slugify10(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
 }
-function normalizeStringArray18(value, fallback = []) {
+function normalizeStringArray20(value, fallback = []) {
   const source = Array.isArray(value) ? value : fallback;
   return Array.from(new Set(source.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim())));
 }
@@ -31127,9 +32082,9 @@ function normalizeSemanticCoverage(value) {
     return null;
   }
   return {
-    observations: normalizeStringArray18(source.observations),
-    evidencePaths: normalizeStringArray18(source.evidencePaths),
-    artifactPaths: normalizeStringArray18(source.artifactPaths)
+    observations: normalizeStringArray20(source.observations),
+    evidencePaths: normalizeStringArray20(source.evidencePaths),
+    artifactPaths: normalizeStringArray20(source.artifactPaths)
   };
 }
 function normalizeSemanticReview(value) {
@@ -31139,9 +32094,9 @@ function normalizeSemanticReview(value) {
   }
   return {
     ...typeof source.summary === "string" ? { summary: source.summary.trim() } : {},
-    observations: normalizeStringArray18(source.observations),
-    evidencePaths: normalizeStringArray18(source.evidencePaths),
-    artifactPaths: normalizeStringArray18(source.artifactPaths)
+    observations: normalizeStringArray20(source.observations),
+    evidencePaths: normalizeStringArray20(source.evidencePaths),
+    artifactPaths: normalizeStringArray20(source.artifactPaths)
   };
 }
 function figureGenerationGuidanceSummary(root, args = {}, target = {}, details = {}) {
@@ -31171,13 +32126,13 @@ function normalizeRelativePath5(value, fallback = null) {
   if (!source) {
     return null;
   }
-  return path21.posix.normalize(String(source).replace(/\\/g, "/").replace(/^\.\//, ""));
+  return path24.posix.normalize(String(source).replace(/\\/g, "/").replace(/^\.\//, ""));
 }
 function isSafeProjectRelativePath3(relativePath) {
-  if (!relativePath || path21.posix.isAbsolute(relativePath)) {
+  if (!relativePath || path24.posix.isAbsolute(relativePath)) {
     return false;
   }
-  const normalized = path21.posix.normalize(relativePath);
+  const normalized = path24.posix.normalize(relativePath);
   return normalized !== ".." && !normalized.startsWith("../");
 }
 function assertSafeFigurePath(relativePath, label, allowedPrefixes = [".dove/figures/"]) {
@@ -31285,12 +32240,12 @@ function buildMaterialRequirements(root, figure, args = {}) {
   const reviewConcerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
   const rebuttalIssues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   const requirements = [];
-  const linkedClaimIds = normalizeStringArray18(figure.targetClaimIds);
+  const linkedClaimIds = normalizeStringArray20(figure.targetClaimIds);
   const linkedClaims = linkedClaimIds.map((claimId) => findById(evidence.claims ?? [], claimId));
-  const sourceIds = normalizeStringArray18(linkedClaims.flatMap((claim) => claim?.sourceIds ?? []));
-  const noteIds = normalizeStringArray18(linkedClaims.flatMap((claim) => claim?.noteIds ?? []));
-  const experimentIds = normalizeStringArray18([...figure.relatedExperimentIds ?? [], ...linkedClaims.flatMap((claim) => claim?.experimentIds ?? [])]);
-  for (const sectionId of normalizeStringArray18(figure.sourceSections)) {
+  const sourceIds = normalizeStringArray20(linkedClaims.flatMap((claim) => claim?.sourceIds ?? []));
+  const noteIds = normalizeStringArray20(linkedClaims.flatMap((claim) => claim?.noteIds ?? []));
+  const experimentIds = normalizeStringArray20([...figure.relatedExperimentIds ?? [], ...linkedClaims.flatMap((claim) => claim?.experimentIds ?? [])]);
+  for (const sectionId of normalizeStringArray20(figure.sourceSections)) {
     const section = state.sections?.[sectionId];
     requirements.push(materialRequirement({
       type: "section",
@@ -31302,7 +32257,7 @@ function buildMaterialRequirements(root, figure, args = {}) {
       evidence: { sectionStatus: section?.status ?? null }
     }));
   }
-  for (const [index, artifactPath] of normalizeStringArray18(figure.sourceArtifactPaths).entries()) {
+  for (const [index, artifactPath] of normalizeStringArray20(figure.sourceArtifactPaths).entries()) {
     requirements.push(sourceArtifactRequirement(root, artifactPath, index));
   }
   for (const claimId of linkedClaimIds) {
@@ -31354,7 +32309,7 @@ function buildMaterialRequirements(root, figure, args = {}) {
       evidence: { planId: plan?.id ?? null, resultIds: results.map((result) => result.id) }
     }));
   }
-  for (const concernId of normalizeStringArray18(figure.reviewConcernIds)) {
+  for (const concernId of normalizeStringArray20(figure.reviewConcernIds)) {
     const concern = findById(reviewConcerns.items ?? [], concernId);
     requirements.push(materialRequirement({
       type: "review-concern",
@@ -31365,7 +32320,7 @@ function buildMaterialRequirements(root, figure, args = {}) {
       summary: concern?.reviewerRationale ?? (concern ? "Review concern is available." : "Linked review concern is missing.")
     }));
   }
-  for (const issueId of normalizeStringArray18(figure.rebuttalIssueIds)) {
+  for (const issueId of normalizeStringArray20(figure.rebuttalIssueIds)) {
     const issue = findById(rebuttalIssues.items ?? [], issueId);
     requirements.push(materialRequirement({
       type: "rebuttal-issue",
@@ -31376,7 +32331,7 @@ function buildMaterialRequirements(root, figure, args = {}) {
       summary: issue?.responseDirection ?? (issue ? "Rebuttal issue is available." : "Linked rebuttal issue is missing.")
     }));
   }
-  for (const visualElement of normalizeStringArray18(figure.requiredVisualElements)) {
+  for (const visualElement of normalizeStringArray20(figure.requiredVisualElements)) {
     requirements.push(materialRequirement({
       type: "visual-element",
       refId: visualElement,
@@ -31514,7 +32469,7 @@ function buildGenerationPrompt({ figure, packet, requirements, constraints, outp
     "- Return an output manifest with sourceSvgPath and caption, or return svgContent so Dove can import it into the final artifact target.",
     "",
     "## Visual elements",
-    ...normalizeStringArray18(figure.requiredVisualElements).length > 0 ? normalizeStringArray18(figure.requiredVisualElements).map((item) => `- ${item}`) : ["- No visual elements declared yet; infer a minimal evidence-linked figure from the materials."],
+    ...normalizeStringArray20(figure.requiredVisualElements).length > 0 ? normalizeStringArray20(figure.requiredVisualElements).map((item) => `- ${item}`) : ["- No visual elements declared yet; infer a minimal evidence-linked figure from the materials."],
     "",
     "## Materials",
     ...requirements.map((item) => `- [${item.status}] ${item.type}:${item.refId ?? item.id} \u2014 ${item.label}${item.artifactPath ? ` (${item.artifactPath})` : ""}. ${item.summary}`),
@@ -31546,7 +32501,7 @@ function updateIndexItem(index, item) {
   };
 }
 function sha2562(content) {
-  return crypto11.createHash("sha256").update(content).digest("hex");
+  return crypto12.createHash("sha256").update(content).digest("hex");
 }
 function svgSafetyIssues(content, maxSvgBytes) {
   const issues = [];
@@ -31612,7 +32567,7 @@ function writeProviderOutput(root, runId, providerOutput, timestamp) {
   const output = parseProviderOutput(providerOutput);
   if (!output) {
     const defaultManifestPath = `${generationRunDir(runId)}/output.json`;
-    if (fs20.existsSync(resolvePath(root, defaultManifestPath))) {
+    if (fs21.existsSync(resolvePath(root, defaultManifestPath))) {
       const manifest2 = readJson(root, defaultManifestPath, {});
       assertManifestHasNoInlineSecrets(root, defaultManifestPath, manifest2, "figureGeneration.providerOutputManifest");
       return { outputManifestPath: defaultManifestPath, manifest: manifest2 };
@@ -31759,7 +32714,7 @@ function invokeOpenAiImageProvider(root, provider, input, prompt, env, runId, ti
   writeBinary(root, imagePath, Buffer.from(image.b64, "base64"));
   const sourceSvgPath = assertSafeFigureSourcePath(`${generationRunDir(runId)}/gpt-image2.svg`, "OpenAI image sourceSvgPath", runId);
   const targetFinalSvgPath = assertSafeFigureFinalTargetPath(input.figure?.finalSvgPath, "OpenAI image final artifact target");
-  const href = path21.posix.relative(path21.posix.dirname(targetFinalSvgPath), imagePath) || path21.posix.basename(imagePath);
+  const href = path24.posix.relative(path24.posix.dirname(targetFinalSvgPath), imagePath) || path24.posix.basename(imagePath);
   const { width, height } = dimensionsFromImageSize(provider.imageSize);
   const title = xmlEscape(input.figure?.name ?? input.figureId ?? "Generated figure");
   const desc = xmlEscape(input.figure?.purpose ?? "Generated by an OpenAI image provider and wrapped as a local SVG artifact.");
@@ -31836,7 +32791,7 @@ function updateFigureIndexesForImport(root, figure, generation, caption, timesta
   writeJson(root, ARTIFACT_PATHS.figureEditableIndex, editable);
 }
 function buildCaptionText(figure, generation, providedCaption) {
-  const base = typeof providedCaption === "string" && providedCaption.trim().length > 0 ? providedCaption.trim() : `${figure.name ?? figure.id} shows ${figure.narrativeIntent ?? figure.purpose ?? "the linked paper evidence"} for ${normalizeStringArray18(figure.targetClaimIds).join(", ") || "the current paper argument"}.`;
+  const base = typeof providedCaption === "string" && providedCaption.trim().length > 0 ? providedCaption.trim() : `${figure.name ?? figure.id} shows ${figure.narrativeIntent ?? figure.purpose ?? "the linked paper evidence"} for ${normalizeStringArray20(figure.targetClaimIds).join(", ") || "the current paper argument"}.`;
   const provenance = `Generated/imported through run ${generation.id}${generation.providerId ? ` using provider ${generation.providerId}` : ""}.`;
   return base.includes(generation.id) ? base : `${base} ${provenance}`;
 }
@@ -31845,6 +32800,13 @@ function prepareFigureGeneration(root, args = {}) {
   assertPrepareFigureGenerationInput(args);
   const target = assertTaskScopedMutationTarget(root, "prepare-figure-generation", args);
   assertFollowThroughReady(root, "Preparing figure generation", args);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Preparing figure generation"
+  );
   ensureWorkspace(root);
   const { env: _env, ...safeArgs } = args;
   assertNoInlineSecrets(safeArgs, "figureGeneration.args");
@@ -31859,7 +32821,7 @@ function prepareFigureGeneration(root, args = {}) {
   const outputManifestPath = `${runDir}/output.json`;
   const manifestPath = `${runDir}/manifest.json`;
   const outputFormat = args.outputFormat ?? figure.outputFormat ?? "svg";
-  const constraints = normalizeStringArray18(args.constraints, Array.isArray(figure.generationConstraints) ? figure.generationConstraints : []);
+  const constraints = normalizeStringArray20(args.constraints, Array.isArray(figure.generationConstraints) ? figure.generationConstraints : []);
   const requirements = buildMaterialRequirements(root, figure, args);
   const missingRequirementIds = requirements.filter((item) => item.status !== "available").map((item) => item.id);
   const materialRecord = {
@@ -31988,6 +32950,13 @@ function importFigureGeneration(root, args = {}) {
   assertImportFigureGenerationInput(args);
   const target = assertTaskScopedMutationTarget(root, "import-figure-generation", args);
   assertFollowThroughReady(root, "Importing figure generation", args);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Importing figure generation"
+  );
   ensureWorkspace(root);
   assertNoLegacyFinalSvgInput(args, "import_figure_generation");
   const { env: _env, svgContent: _svgContent, ...safeArgs } = args;
@@ -32055,6 +33024,9 @@ function importFigureGeneration(root, args = {}) {
   if (safetyIssues.length > 0) {
     throw new Error(`Generated SVG failed safety validation: ${safetyIssues.join(" ")}`);
   }
+  upsertSystemOrchestrationBoard(root, {
+    reviewRequiredBeforeFinalize: true
+  });
   if (sourceSvgPath !== finalSvgPath) {
     writeText(root, finalSvgPath, svgContent);
   }
@@ -32079,8 +33051,8 @@ function importFigureGeneration(root, args = {}) {
     packetId: target.packetId,
     text: buildCaptionText(figure, generation, args.caption ?? args.captionDraft ?? manifest.caption),
     purpose: figure.purpose ?? figure.narrativeIntent ?? "Explain the linked paper evidence.",
-    targetClaimIds: normalizeStringArray18(figure.targetClaimIds),
-    relatedExperimentIds: normalizeStringArray18(figure.relatedExperimentIds),
+    targetClaimIds: normalizeStringArray20(figure.targetClaimIds),
+    relatedExperimentIds: normalizeStringArray20(figure.relatedExperimentIds),
     provenance: {
       providerId: generation.providerId,
       providerType: generation.providerType,
@@ -32097,6 +33069,10 @@ function importFigureGeneration(root, args = {}) {
   updateFigureIndexesForImport(root, figure, { ...generation, captionId: caption.id }, caption, timestamp);
   const validation = validateFigurePipeline(root);
   const figureQa = summarizeFigureQa(root, figure.id, validation);
+  const independentReviewProof = findCurrentIndependentReviewProof(root, {
+    packetId: target.packetId,
+    reviewedArtifactPaths: [finalSvgPath]
+  });
   refreshDurableSurfaces(root, {
     type: "import-figure-generation",
     summary: `Imported figure generation run ${runId} for ${figure.id}.`,
@@ -32110,6 +33086,7 @@ function importFigureGeneration(root, args = {}) {
     sourceSvgPath,
     finalSvgPath,
     finalSha256: generation.finalSha256,
+    independentReviewProof: independentReviewProof.ok ? independentReviewProof.proof : null,
     qaIssueCount: figureQa.issueCount,
     workspaceQaIssueCount: figureQa.workspaceIssueCount,
     qaPath: figureQa.qaPath,
@@ -32130,12 +33107,12 @@ function importFigureGeneration(root, args = {}) {
 }
 
 // src/core/figure-workflow.mjs
-import fs21 from "node:fs";
-import path22 from "node:path";
+import fs22 from "node:fs";
+import path25 from "node:path";
 function slugify11(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "figure";
 }
-function normalizeStringArray19(value, fallback = []) {
+function normalizeStringArray21(value, fallback = []) {
   const source = Array.isArray(value) ? value : fallback;
   return Array.from(new Set(source.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim())));
 }
@@ -32250,10 +33227,10 @@ function compactObject2(fields) {
   }));
 }
 function normalizeRelativePath6(value) {
-  return path22.posix.normalize(String(value ?? "").trim().replace(/\\/g, "/").replace(/^\.\//, ""));
+  return path25.posix.normalize(String(value ?? "").trim().replace(/\\/g, "/").replace(/^\.\//, ""));
 }
 function isSafeProjectRelativePath4(relativePath) {
-  return Boolean(relativePath) && !path22.posix.isAbsolute(relativePath) && relativePath !== ".." && !relativePath.startsWith("../");
+  return Boolean(relativePath) && !path25.posix.isAbsolute(relativePath) && relativePath !== ".." && !relativePath.startsWith("../");
 }
 function assertSafeFinalTargetPath(relativePath, label) {
   const normalized = normalizeRelativePath6(relativePath);
@@ -32282,7 +33259,7 @@ function readInferenceContext(root) {
   return { state, evidence, experimentPlans, experimentResults };
 }
 function inferClaimIds(args, existing, context) {
-  const explicit = normalizeStringArray19(args.targetClaimIds ?? args.claimIds, existing?.targetClaimIds ?? []);
+  const explicit = normalizeStringArray21(args.targetClaimIds ?? args.claimIds, existing?.targetClaimIds ?? []);
   if (explicit.length > 0) {
     return explicit;
   }
@@ -32290,30 +33267,30 @@ function inferClaimIds(args, existing, context) {
   return claims.length === 1 ? [claims[0].id] : [];
 }
 function inferSourceSections(args, existing, context, targetClaimIds) {
-  const explicit = normalizeStringArray19(args.sourceSections ?? args.sectionIds, existing?.sourceSections ?? []);
+  const explicit = normalizeStringArray21(args.sourceSections ?? args.sectionIds, existing?.sourceSections ?? []);
   if (explicit.length > 0) {
     return explicit;
   }
   const claimSections = targetClaimIds.map((claimId) => (context.evidence.claims ?? []).find((claim) => claim.id === claimId)?.sectionId).filter(Boolean);
   if (claimSections.length > 0) {
-    return normalizeStringArray19(claimSections);
+    return normalizeStringArray21(claimSections);
   }
   const sectionIds = Object.keys(context.state.sections ?? {});
   return sectionIds.length === 1 ? sectionIds : [];
 }
 function inferExperimentIds(args, existing, context, targetClaimIds) {
-  const explicit = normalizeStringArray19(args.relatedExperimentIds ?? args.experimentIds, existing?.relatedExperimentIds ?? []);
+  const explicit = normalizeStringArray21(args.relatedExperimentIds ?? args.experimentIds, existing?.relatedExperimentIds ?? []);
   if (explicit.length > 0) {
     return explicit;
   }
   const claimExperimentIds = targetClaimIds.flatMap((claimId) => {
     const claim = (context.evidence.claims ?? []).find((item) => item.id === claimId);
-    return normalizeStringArray19(claim?.experimentIds);
+    return normalizeStringArray21(claim?.experimentIds);
   });
   if (claimExperimentIds.length > 0) {
-    return normalizeStringArray19(claimExperimentIds);
+    return normalizeStringArray21(claimExperimentIds);
   }
-  const ids = normalizeStringArray19([
+  const ids = normalizeStringArray21([
     ...(context.experimentPlans.items ?? []).map((item) => item.id),
     ...(context.experimentResults.items ?? []).map((item) => item.experimentId)
   ]);
@@ -32328,9 +33305,9 @@ function buildFigureItem(root, args, target) {
   const targetClaimIds = inferClaimIds(args, existing, context);
   const sourceSections = inferSourceSections(args, existing, context, targetClaimIds);
   const relatedExperimentIds = inferExperimentIds(args, existing, context, targetClaimIds);
-  const requiredVisualElements = normalizeStringArray19(
+  const requiredVisualElements = normalizeStringArray21(
     args.requiredVisualElements ?? args.visualElements,
-    normalizeStringArray19(existing?.requiredVisualElements, [intent])
+    normalizeStringArray21(existing?.requiredVisualElements, [intent])
   );
   const item = {
     ...existing ?? {},
@@ -32338,17 +33315,17 @@ function buildFigureItem(root, args, target) {
     name: firstText(args.name, args.title, existing?.name, intent) ?? figureId,
     purpose: firstText(args.purpose, args.intent, args.description, existing?.purpose, intent) ?? intent,
     sourceSections,
-    sourceArtifactPaths: normalizeStringArray19(args.sourceArtifactPaths ?? args.artifactPaths, existing?.sourceArtifactPaths ?? []),
+    sourceArtifactPaths: normalizeStringArray21(args.sourceArtifactPaths ?? args.artifactPaths, existing?.sourceArtifactPaths ?? []),
     targetClaimIds,
     relatedExperimentIds,
-    reviewConcernIds: normalizeStringArray19(args.reviewConcernIds ?? args.concernIds, existing?.reviewConcernIds ?? []),
-    rebuttalIssueIds: normalizeStringArray19(args.rebuttalIssueIds ?? args.issueIds, existing?.rebuttalIssueIds ?? []),
+    reviewConcernIds: normalizeStringArray21(args.reviewConcernIds ?? args.concernIds, existing?.reviewConcernIds ?? []),
+    rebuttalIssueIds: normalizeStringArray21(args.rebuttalIssueIds ?? args.issueIds, existing?.rebuttalIssueIds ?? []),
     narrativeIntent: firstText(args.narrativeIntent, args.intent, args.description, existing?.narrativeIntent, intent) ?? intent,
     requiredVisualElements,
     materialRequirements: Array.isArray(args.materialRequirements) ? args.materialRequirements : existing?.materialRequirements ?? [],
     generationProviderId: args.providerId ?? args.generationProviderId ?? existing?.generationProviderId ?? null,
     generationMode: args.generationMode ?? existing?.generationMode ?? "workflow",
-    generationConstraints: normalizeStringArray19(args.constraints, existing?.generationConstraints ?? []),
+    generationConstraints: normalizeStringArray21(args.constraints, existing?.generationConstraints ?? []),
     outputFormat: args.outputFormat ?? existing?.outputFormat ?? "svg",
     captionIntent: firstText(args.captionIntent, args.caption, args.captionDraft, existing?.captionIntent, intent) ?? intent,
     templateSvgPath: args.templateSvgPath ?? existing?.templateSvgPath ?? `.dove/figures/${figureId}.template.svg`,
@@ -32357,7 +33334,7 @@ function buildFigureItem(root, args, target) {
     owner: args.owner ?? existing?.owner ?? target.packet.assignedRole ?? "builder",
     mode: args.mode ?? existing?.mode ?? "generated",
     status: existing?.status ?? "planned",
-    reviewNotes: normalizeStringArray19(args.reviewNotes, existing?.reviewNotes ?? [])
+    reviewNotes: normalizeStringArray21(args.reviewNotes, existing?.reviewNotes ?? [])
   };
   const items = [...(figures.items ?? []).filter((figure) => figure.id !== figureId), item];
   return { figureId, item, items };
@@ -32368,11 +33345,11 @@ function placeholderSvg(figure) {
 `;
 }
 function ensureSvgFile(root, relativePath, content) {
-  if (!relativePath || fs21.existsSync(resolvePath(root, relativePath))) {
+  if (!relativePath || fs22.existsSync(resolvePath(root, relativePath))) {
     return false;
   }
   if (!isPatchPlanMode(root)) {
-    ensureDir(path22.dirname(resolvePath(root, relativePath)));
+    ensureDir(path25.dirname(resolvePath(root, relativePath)));
   }
   writeText(root, relativePath, content);
   return true;
@@ -32391,14 +33368,14 @@ function hasImportableOutput(args, prepared) {
 }
 function hasExplicitFigureMaterialInput(args = {}) {
   return Boolean(
-    args.svgContent || args.sourceSvgPath || args.outputManifestPath || firstText(args.caption, args.captionDraft, args.captionIntent) || normalizeStringArray19(args.requiredVisualElements ?? args.visualElements).length > 0 || normalizeStringArray19(args.sourceArtifactPaths ?? args.artifactPaths).length > 0 || Array.isArray(args.materialRequirements) && args.materialRequirements.length > 0 || Array.isArray(args.materialHints) && args.materialHints.length > 0
+    args.svgContent || args.sourceSvgPath || args.outputManifestPath || firstText(args.caption, args.captionDraft, args.captionIntent) || normalizeStringArray21(args.requiredVisualElements ?? args.visualElements).length > 0 || normalizeStringArray21(args.sourceArtifactPaths ?? args.artifactPaths).length > 0 || Array.isArray(args.materialRequirements) && args.materialRequirements.length > 0 || Array.isArray(args.materialHints) && args.materialHints.length > 0
   );
 }
 function figureNeedsPrePlanMaterialBoundary(args, item) {
   if (args.allowMissingMaterials === true) {
     return false;
   }
-  const hasEvidenceLinkage = normalizeStringArray19(item.targetClaimIds).length > 0 || normalizeStringArray19(item.relatedExperimentIds).length > 0;
+  const hasEvidenceLinkage = normalizeStringArray21(item.targetClaimIds).length > 0 || normalizeStringArray21(item.relatedExperimentIds).length > 0;
   return !hasEvidenceLinkage && !hasExplicitFigureMaterialInput(args);
 }
 function prePlanFigureBoundary(figureId, runId) {
@@ -32420,7 +33397,7 @@ function statusFor(prepared, imported, figureQa) {
     return "blocked-boundary";
   }
   if (imported) {
-    return figureQa.issueCount === 0 ? "validated" : "qa-needs-attention";
+    return figureQa.issueCount === 0 && imported.independentReviewProof ? "validated" : "qa-needs-attention";
   }
   if ((prepared.missingRequirementIds ?? []).length > 0) {
     return "blocked-missing-materials";
@@ -32428,7 +33405,7 @@ function statusFor(prepared, imported, figureQa) {
   return "prepared-awaiting-output";
 }
 function figureArtifactRefs(validation) {
-  return normalizeStringArray19([
+  return normalizeStringArray21([
     ARTIFACT_PATHS.figuresIndex,
     ARTIFACT_PATHS.figureGenerations,
     ARTIFACT_PATHS.figureMaterials,
@@ -32437,7 +33414,7 @@ function figureArtifactRefs(validation) {
   ]);
 }
 function figureValidationEvidencePaths(validation) {
-  return normalizeStringArray19([validation?.qaPath]);
+  return normalizeStringArray21([validation?.qaPath]);
 }
 function figureBoundaryFor(status, prepared, validation, figureQa, figureId, runId) {
   const artifactRefs = figureArtifactRefs(validation);
@@ -32494,14 +33471,14 @@ function figureBoundaryFor(status, prepared, validation, figureQa, figureId, run
     };
   }
   if (status === "prepared-awaiting-output") {
-    const providerRequiredActions = normalizeStringArray19(prepared.providerExecution?.requiredActions);
+    const providerRequiredActions = normalizeStringArray21(prepared.providerExecution?.requiredActions);
     const providerRequiredInputs = prepared.providerExecution?.requiredMutationMode ? [`mutationMode: ${prepared.providerExecution.requiredMutationMode}`] : [];
     return {
       id: `${figureId}-${runId}-awaiting-provider-output`,
       type: "awaiting-provider-output",
       reason: `Figure ${figureId} is awaiting provider output or manual output import.`,
-      requiredInputs: normalizeStringArray19([...providerRequiredInputs, "sourceSvgPath-or-outputManifestPath-or-svgContent"]),
-      requiredActions: normalizeStringArray19([...providerRequiredActions, "run-provider-or-import-output", "provide-source-svg-or-output-manifest"]),
+      requiredInputs: normalizeStringArray21([...providerRequiredInputs, "sourceSvgPath-or-outputManifestPath-or-svgContent"]),
+      requiredActions: normalizeStringArray21([...providerRequiredActions, "run-provider-or-import-output", "provide-source-svg-or-output-manifest"]),
       artifactRefs,
       nextAction: "project:dove.figure",
       ownerRole: "builder",
@@ -32514,17 +33491,18 @@ function figureBoundaryFor(status, prepared, validation, figureQa, figureId, run
     };
   }
   if (status === "qa-needs-attention") {
+    const proofMissing = figureQa.issueCount === 0;
     return {
       id: `${figureId}-${runId}-qa-needs-attention`,
       type: "verification-failed",
-      reason: `Figure ${figureId} has ${figureQa.issueCount} review issue(s) to fix before it is ready.`,
-      requiredInputs: ["current-figure-review-findings"],
-      requiredActions: ["review-current-figure", "resolve-current-figure-issues"],
+      reason: proofMissing ? `Figure ${figureId} has current diagnostics but lacks independent Reviewer proof bound to the current final SVG hash.` : `Figure ${figureId} has ${figureQa.issueCount} diagnostic issue(s) to fix before independent review.`,
+      requiredInputs: proofMissing ? ["current-final-svg-isolated-review-proof"] : ["current-figure-diagnostic-findings"],
+      requiredActions: proofMissing ? ["prepare-isolated-review-for-current-final-svg", "import-coherent-isolated-review"] : ["resolve-current-figure-diagnostics", "rerun-figure-workflow", "obtain-current-final-svg-isolated-review-proof"],
       artifactRefs,
       nextAction: "project:dove.review",
-      ownerRole: "builder",
-      nextRole: "reviewer",
-      detail: { implementationBoundaryType: "needs-review" }
+      ownerRole: proofMissing ? "reviewer" : "builder",
+      nextRole: proofMissing ? null : "reviewer",
+      detail: { implementationBoundaryType: proofMissing ? "missing-review-proof" : "needs-review" }
     };
   }
   return null;
@@ -32533,7 +33511,7 @@ function figureText(responseLanguage, zh, en) {
   return responseLanguage === "en" ? en : zh;
 }
 function figureResultHappened(status, { prepared, figureQa, imported, responseLanguage }) {
-  const missing = normalizeStringArray19(prepared.missingRequirementIds).join("\u3001");
+  const missing = normalizeStringArray21(prepared.missingRequirementIds).join("\u3001");
   const apiKeyEnv = prepared.providerExecution?.apiKeyEnv ?? prepared.providerReadiness?.apiKeyEnv ?? "provider API key";
   if (status === "validated") {
     return figureText(responseLanguage, "\u8FD9\u5F20\u56FE\u5DF2\u7ECF\u901A\u8FC7\u5F53\u524D\u56FE\u68C0\u67E5\uFF0C\u53EF\u4EE5\u8FDB\u5165 review\u3002", "This figure passed the current-figure checks and is ready for review.");
@@ -32556,7 +33534,7 @@ function figureResultHappened(status, { prepared, figureQa, imported, responseLa
   return figureText(responseLanguage, "\u8FD9\u5F20\u56FE\u5DF2\u7ECF\u66F4\u65B0\u3002", "This figure was updated.");
 }
 function figureResultNextTitle(status, { prepared, responseLanguage }) {
-  const missing = normalizeStringArray19(prepared.missingRequirementIds).join("\u3001");
+  const missing = normalizeStringArray21(prepared.missingRequirementIds).join("\u3001");
   if (status === "validated") {
     return figureText(responseLanguage, "\u628A\u8FD9\u5F20\u56FE\u9001\u5165 review", "Send this figure to review");
   }
@@ -32762,17 +33740,17 @@ function runFigureWorkflow(root, args = {}) {
 
 // src/core/task-workflow.mjs
 import crypto13 from "node:crypto";
-import fs22 from "node:fs";
-import path23 from "node:path";
+import fs23 from "node:fs";
+import path26 from "node:path";
 
 // src/core/experience-workflow.mjs
 function slugify12(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "experience";
 }
-function normalizeString8(value, fallback = "") {
+function normalizeString9(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
-function normalizeStringArray20(value) {
+function normalizeStringArray22(value) {
   return Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean))) : [];
 }
 function hasNonEmptyString2(value) {
@@ -32900,13 +33878,13 @@ function publicIntegrityActions(flags = [], responseLanguage = "zh") {
     "unsupported-evidence-file": localizedText4(responseLanguage, "\u5F15\u7528\u666E\u901A\u6587\u4EF6\u5F62\u5F0F\u7684\u5B9E\u9A8C\u8BC1\u636E\u3002", "Reference a regular file as experiment evidence."),
     "unreadable-evidence-file": localizedText4(responseLanguage, "\u4FEE\u590D\u4E0D\u53EF\u8BFB\u53D6\u7684\u5B9E\u9A8C\u8BC1\u636E\u6587\u4EF6\u3002", "Fix unreadable experiment evidence.")
   };
-  return normalizeStringArray20(flags.map((flag) => labels[flag] ?? localizedText4(responseLanguage, "\u8865\u9F50\u5B9E\u9A8C\u5BA1\u8BA1\u6307\u51FA\u7684\u7F3A\u53E3\u3002", "Fill the gap raised by experiment review.")));
+  return normalizeStringArray22(flags.map((flag) => labels[flag] ?? localizedText4(responseLanguage, "\u8865\u9F50\u5B9E\u9A8C\u5BA1\u8BA1\u6307\u51FA\u7684\u7F3A\u53E3\u3002", "Fill the gap raised by experiment review.")));
 }
 function publicExperienceBoundary(boundary, audit, responseLanguage = "zh") {
   if (!boundary) {
     return null;
   }
-  const heldForMissingClaim = normalizeStringArray20(boundary.requiredActions).includes("create-or-link-claim-before-bridge");
+  const heldForMissingClaim = normalizeStringArray22(boundary.requiredActions).includes("create-or-link-claim-before-bridge");
   const integrityFlags = Array.isArray(audit?.integrityFlags) && audit.integrityFlags.length > 0 ? audit.integrityFlags : boundary.requiredInputs;
   return {
     type: boundary.type,
@@ -32957,7 +33935,7 @@ function requiredActionsForIntegrityFlags(flags = []) {
     "unsupported-evidence-file": "attach-regular-evidence-file",
     "unreadable-evidence-file": "fix-unreadable-experiment-evidence"
   };
-  return normalizeStringArray20(flags.map((flag) => actions[flag] ?? `resolve-${flag}`));
+  return normalizeStringArray22(flags.map((flag) => actions[flag] ?? `resolve-${flag}`));
 }
 function experienceBoundaryFor({ status, plan, result, audit, bridge, artifactRefs }) {
   if (audit?.auditVerdict === "blocked") {
@@ -33021,23 +33999,30 @@ function runExperienceWorkflow(root, args = {}) {
   assertGovernanceMutationRegistered("run-experience-workflow", "guarded");
   assertExperiencePublicInput(args);
   const target = assertTaskScopedMutationTarget(root, "run-experience-workflow", args);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Running the experience workflow"
+  );
   ensureWorkspace(root);
   const timestamp = nowIso();
   const rawPlan = args.plan && typeof args.plan === "object" ? args.plan : args;
-  const resultInput = args.result && typeof args.result === "object" ? args.result : args.outcome || args.resultSummary || args.summary || normalizeStringArray20(args.evidenceLinks ?? args.artifactPaths).length > 0 ? args : null;
+  const resultInput = args.result && typeof args.result === "object" ? args.result : args.outcome || args.resultSummary || args.summary || normalizeStringArray22(args.evidenceLinks ?? args.artifactPaths).length > 0 ? args : null;
   if (!hasExperienceObjective(rawPlan, args)) {
     throw new Error("run_experience_workflow requires an experiment goal, title, idea, or experimentId.");
   }
   const experimentId = slugify12(rawPlan.experimentId ?? rawPlan.id ?? rawPlan.goal ?? rawPlan.title);
-  const claimId = normalizeString8(rawPlan.claimId ?? args.claimId, null);
+  const claimId = normalizeString9(rawPlan.claimId ?? args.claimId, null);
   const plan = {
     id: experimentId,
     packetId: target.packetId,
-    title: normalizeString8(rawPlan.title ?? rawPlan.goal, experimentId.replace(/-/g, " ")),
-    goal: normalizeString8(rawPlan.goal ?? rawPlan.idea ?? args.idea ?? rawPlan.title, ""),
-    methodology: normalizeString8(rawPlan.methodology ?? rawPlan.method, ""),
-    successMetric: normalizeString8(rawPlan.successMetric ?? rawPlan.metric, ""),
-    comparisonTargets: normalizeStringArray20(rawPlan.comparisonTargets ?? rawPlan.baselines),
+    title: normalizeString9(rawPlan.title ?? rawPlan.goal, experimentId.replace(/-/g, " ")),
+    goal: normalizeString9(rawPlan.goal ?? rawPlan.idea ?? args.idea ?? rawPlan.title, ""),
+    methodology: normalizeString9(rawPlan.methodology ?? rawPlan.method, ""),
+    successMetric: normalizeString9(rawPlan.successMetric ?? rawPlan.metric, ""),
+    comparisonTargets: normalizeStringArray22(rawPlan.comparisonTargets ?? rawPlan.baselines),
     claimId,
     status: "planned",
     createdAt: timestamp,
@@ -33100,11 +34085,11 @@ function runExperienceWorkflow(root, args = {}) {
       id: slugify12(resultInput.resultId ?? resultInput.id ?? `${experimentId}-result`),
       packetId: target.packetId,
       experimentId,
-      claimId: normalizeString8(resultInput.claimId ?? claimId, null),
+      claimId: normalizeString9(resultInput.claimId ?? claimId, null),
       outcome: normalizeOutcome(resultInput.outcome),
-      summary: normalizeString8(resultInput.summary ?? resultInput.resultSummary, ""),
-      evidenceLinks: normalizeStringArray20(resultInput.evidenceLinks ?? resultInput.artifactPaths),
-      comparisonTargets: normalizeStringArray20(resultInput.comparisonTargets),
+      summary: normalizeString9(resultInput.summary ?? resultInput.resultSummary, ""),
+      evidenceLinks: normalizeStringArray22(resultInput.evidenceLinks ?? resultInput.artifactPaths),
+      comparisonTargets: normalizeStringArray22(resultInput.comparisonTargets),
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -33182,7 +34167,7 @@ function runExperienceWorkflow(root, args = {}) {
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.experience",
     responseLanguage,
-    request: normalizeString8(rawPlan.goal ?? rawPlan.idea ?? rawPlan.title ?? args.idea, null),
+    request: normalizeString9(rawPlan.goal ?? rawPlan.idea ?? rawPlan.title ?? args.idea, null),
     roleId: "builder",
     subagentSpecialty: "experiment-planner",
     packet: target.packet,
@@ -33250,7 +34235,7 @@ function runExperienceWorkflow(root, args = {}) {
 function slugify13(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "review-loop";
 }
-function normalizeStringArray21(value) {
+function normalizeStringArray23(value) {
   return Array.isArray(value) ? Array.from(new Set(value.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean))) : [];
 }
 function hasNonEmptyString3(value) {
@@ -33282,6 +34267,9 @@ function reviewLoopStopSummary(status, stopReason, responseLanguage) {
   if (status === "coherent") {
     return localizedText5(responseLanguage, "review-loop \u5DF2\u786E\u8BA4\u5F53\u524D\u6750\u6599\u57FA\u672C\u81EA\u6D3D\u3002", "The review loop found the current materials coherent.");
   }
+  if (stopReason === "review-proof-required") {
+    return localizedText5(responseLanguage, "review-loop \u505C\u5728 Reviewer-owned proof \u8FB9\u754C\uFF1B\u5C1A\u672A\u6388\u6743 Builder \u4FEE\u8BA2\u3002", "The review loop stopped at a Reviewer-owned proof boundary; no Builder revision is authorized.");
+  }
   if (stopReason === "builder-revision-required") {
     return localizedText5(responseLanguage, "review-loop \u5DF2\u5B8C\u6210 Reviewer \u68C0\u67E5\uFF0C\u5E76\u505C\u5728\u663E\u5F0F Builder \u4FEE\u8BA2\u8FB9\u754C\uFF1B\u6CA1\u6709\u6539\u5199\u8349\u7A3F\u6216\u5B9E\u9A8C\u6750\u6599\u3002", "The review loop completed the Reviewer pass and stopped at an explicit Builder revision boundary without changing draft or experiment material.");
   }
@@ -33298,8 +34286,9 @@ function buildBuilderRevisionBoundary({ runId, packetId, packet, review, draftRe
   if (review.verdict === "coherent" && !draftRequested && !experienceRequested) {
     return null;
   }
-  const reviewActions = review.verdict === "coherent" ? [] : normalizeStringArray21(review.actionItems);
-  const requiredActions = normalizeStringArray21([
+  const reviewActions = review.verdict === "coherent" ? [] : normalizeStringArray23(review.actionItems);
+  const proofBoundary = (review.findings ?? []).some((finding) => finding.methodologicalCategory === "review-proof");
+  const requiredActions = proofBoundary ? ["prepare-current-artifacts-for-isolated-review", "import-current-hash-bound-isolated-review-proof"] : normalizeStringArray23([
     "transfer-reviewer-owned-board-to-builder-before-revision",
     ...reviewActions,
     draftRequested ? "apply-supplied-draft-in-builder-owned-pass" : "",
@@ -33317,12 +34306,12 @@ function buildBuilderRevisionBoundary({ runId, packetId, packet, review, draftRe
     sourceSurface: "dove.review-loop",
     command: "run_dove_review_loop",
     reason,
-    summary: "Explicitly transfer ownership to a Builder revision pass, apply the required changes there, and return the revised material for another Reviewer pass.",
-    requiredInputs: [],
+    summary: proofBoundary ? "Keep the boundary Reviewer-owned and obtain an isolated review proof for the current artifact hashes." : "Explicitly transfer ownership to a Builder revision pass, apply the required changes there, and return the revised material for another Reviewer pass.",
+    requiredInputs: proofBoundary ? ["current-hash-bound-isolated-review-proof"] : [],
     requiredActions,
     ownerRole: "reviewer",
-    nextRole: "builder",
-    nextAction: packetBuilderRoute(packet),
+    nextRole: proofBoundary ? "reviewer" : "builder",
+    nextAction: proofBoundary ? "project:dove.review" : packetBuilderRoute(packet),
     requestedWork,
     writes: []
   };
@@ -33334,6 +34323,13 @@ function publicBuilderRevisionActions({ draftRequested, experienceRequested }, r
     experienceRequested ? localizedText5(responseLanguage, "\u5728 Builder/experiment pass \u4E2D\u8FD0\u884C\u63D0\u4F9B\u7684\u5B9E\u9A8C\u5DE5\u4F5C\u3002", "Run the supplied experiment work in the Builder/experiment pass.") : null,
     localizedText5(responseLanguage, "\u4FEE\u8BA2\u5B8C\u6210\u540E\u628A\u6750\u6599\u4EA4\u56DE Reviewer \u518D\u68C0\u67E5\u3002", "Return the revised material to the Reviewer for another pass.")
   ].filter(Boolean);
+}
+function publicReviewerProofActions(responseLanguage) {
+  return [localizedText5(
+    responseLanguage,
+    "\u4FDD\u6301 Reviewer ownership\uFF1B\u901A\u8FC7\u53D7\u4FE1 Reviewer runtime capability \u63D0\u4EA4\u5F53\u524D\u5B8C\u6574 artifact hashes \u7684\u6743\u5A01 proof\u3002",
+    "Keep Reviewer ownership and submit authoritative proof for the current complete artifact hashes through the trusted Reviewer runtime capability."
+  )];
 }
 function runDoveReviewLoop(root, args = {}) {
   assertGovernanceMutationRegistered("run-dove-review-loop", "guarded");
@@ -33349,8 +34345,8 @@ function runDoveReviewLoop(root, args = {}) {
     packetId: target.packetId,
     scope: args.scope ?? args.instructions ?? "review-loop material check",
     stage: args.stage ?? target.packet?.stage ?? "audit",
-    artifactPaths: normalizeStringArray21(args.artifactPaths),
-    reviewedArtifactPaths: normalizeStringArray21(args.reviewedArtifactPaths)
+    artifactPaths: normalizeStringArray23(args.artifactPaths),
+    reviewedArtifactPaths: normalizeStringArray23(args.reviewedArtifactPaths)
   };
   if (hasNonEmptyString3(args.responseLanguage)) {
     reviewArgs.responseLanguage = args.responseLanguage;
@@ -33366,8 +34362,9 @@ function runDoveReviewLoop(root, args = {}) {
     draftRequested,
     experienceRequested
   });
+  const proofBoundary = boundary?.nextRole === "reviewer";
   const status = boundary ? "needs-review" : "coherent";
-  const stopReason = boundary ? "builder-revision-required" : "review-coherent";
+  const stopReason = boundary ? proofBoundary ? "review-proof-required" : "builder-revision-required" : "review-coherent";
   const review = {
     ...reviewEntry,
     preActionGuidance: buildPreActionGuidance({
@@ -33384,11 +34381,11 @@ function runDoveReviewLoop(root, args = {}) {
       operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
       nextAction: boundary?.nextAction ?? "project:dove.status",
       routeHint: boundary?.nextAction ?? "project:dove.status",
-      nextHumanAction: boundary ? localizedText5(responseLanguage, "\u663E\u5F0F\u4EA4\u63A5\u7ED9 Builder \u5B8C\u6210\u4FEE\u8BA2\uFF0C\u518D\u4EA4\u56DE Reviewer\u3002", "Explicitly hand off to a Builder for revision, then return to the Reviewer.") : localizedText5(responseLanguage, "\u56DE\u5230\u72B6\u6001\u9875\u9009\u62E9\u4E0B\u4E00\u6B65\u3002", "Return to status and choose the next step."),
+      nextHumanAction: boundary ? proofBoundary ? localizedText5(responseLanguage, "\u4FDD\u6301 Reviewer ownership \u5E76\u63D0\u4EA4\u53D7\u4FE1 runtime proof\u3002", "Keep Reviewer ownership and submit trusted runtime proof.") : localizedText5(responseLanguage, "\u663E\u5F0F\u4EA4\u63A5\u7ED9 Builder \u5B8C\u6210\u4FEE\u8BA2\uFF0C\u518D\u4EA4\u56DE Reviewer\u3002", "Explicitly hand off to a Builder for revision, then return to the Reviewer.") : localizedText5(responseLanguage, "\u56DE\u5230\u72B6\u6001\u9875\u9009\u62E9\u4E0B\u4E00\u6B65\u3002", "Return to status and choose the next step."),
       workflowKind: "review",
       domain: target.packet?.domain ?? null,
       stage: target.packet?.stage ?? "audit",
-      tags: ["review", "independent-audit", "evidence", "builder-boundary"],
+      tags: ["review", "independent-audit", "evidence", proofBoundary ? "reviewer-proof-boundary" : "builder-boundary"],
       statusSummary: {
         verdict: reviewEntry.verdict,
         findingCount: reviewEntry.findings?.length ?? 0,
@@ -33435,19 +34432,19 @@ function runDoveReviewLoop(root, args = {}) {
 - Builder mutation: none; revision requires a new explicit handoff call
 
 `);
-  const packetArtifactRefs = normalizeStringArray21([
+  const packetArtifactRefs = normalizeStringArray23([
     ...target.packet?.artifactRefs ?? [],
     reviewEntry.reviewStatePath,
     reviewEntry.reviewLogPath,
     ARTIFACT_PATHS.reviewState,
     ARTIFACT_PATHS.reviewLog
   ]);
-  const packetEvidenceLinks = normalizeStringArray21([
+  const packetEvidenceLinks = normalizeStringArray23([
     ...target.packet?.evidenceLinks ?? [],
     ...reviewEntry.reviewedArtifactPaths ?? [],
     ...reviewEntry.reviewedArtifactSet ?? []
   ]);
-  const task = applyPacketStepResult(root, target.packet, {
+  const task = applyPacketStepResult2(root, target.packet, {
     runId,
     surface: "dove.review-loop",
     command: "dove.review-loop",
@@ -33498,11 +34495,11 @@ function runDoveReviewLoop(root, args = {}) {
     operatorLessons: readJson(root, ARTIFACT_PATHS.metaOperatorLessons, { lessons: [] }),
     nextAction: boundary?.nextAction ?? "project:dove.status",
     routeHint: boundary?.nextAction ?? "project:dove.status",
-    nextHumanAction: boundary ? localizedText5(responseLanguage, "\u663E\u5F0F\u4EA4\u63A5\u7ED9 Builder \u5B8C\u6210\u4FEE\u8BA2\uFF0C\u518D\u4EA4\u56DE Reviewer\u3002", "Explicitly hand off to a Builder for revision, then return to the Reviewer.") : localizedText5(responseLanguage, "\u56DE\u5230\u72B6\u6001\u9875\u9009\u62E9\u4E0B\u4E00\u6B65\u3002", "Return to status and choose the next step."),
+    nextHumanAction: boundary ? proofBoundary ? localizedText5(responseLanguage, "\u4FDD\u6301 Reviewer ownership \u5E76\u63D0\u4EA4\u53D7\u4FE1 runtime proof\u3002", "Keep Reviewer ownership and submit trusted runtime proof.") : localizedText5(responseLanguage, "\u663E\u5F0F\u4EA4\u63A5\u7ED9 Builder \u5B8C\u6210\u4FEE\u8BA2\uFF0C\u518D\u4EA4\u56DE Reviewer\u3002", "Explicitly hand off to a Builder for revision, then return to the Reviewer.") : localizedText5(responseLanguage, "\u56DE\u5230\u72B6\u6001\u9875\u9009\u62E9\u4E0B\u4E00\u6B65\u3002", "Return to status and choose the next step."),
     workflowKind: "review-loop",
     domain: target.packet?.domain ?? null,
     stage: target.packet?.stage ?? "audit",
-    tags: ["review", "evidence", "builder-boundary", "iteration"],
+    tags: ["review", "evidence", proofBoundary ? "reviewer-proof-boundary" : "builder-boundary", "iteration"],
     statusSummary: {
       status,
       stopReason,
@@ -33511,11 +34508,11 @@ function runDoveReviewLoop(root, args = {}) {
       requiredActions: boundary?.requiredActions ?? []
     }
   });
-  const publicRequiredActions = boundary ? publicBuilderRevisionActions({ draftRequested, experienceRequested }, responseLanguage) : [];
+  const publicRequiredActions = boundary ? proofBoundary ? publicReviewerProofActions(responseLanguage) : publicBuilderRevisionActions({ draftRequested, experienceRequested }, responseLanguage) : [];
   const resultCard = buildCommandResultCard({
     surface: "dove.review-loop",
     command: "run_dove_review_loop",
-    title: boundary ? localizedText5(responseLanguage, "review-loop \u5DF2\u505C\u5728 Builder \u4FEE\u8BA2\u8FB9\u754C", "Review loop stopped at the Builder revision boundary") : localizedText5(responseLanguage, "review-loop \u5DF2\u505C\u6B62", "Review loop stopped"),
+    title: boundary ? proofBoundary ? localizedText5(responseLanguage, "review-loop \u5DF2\u505C\u5728 Reviewer proof \u8FB9\u754C", "Review loop stopped at the Reviewer proof boundary") : localizedText5(responseLanguage, "review-loop \u5DF2\u505C\u5728 Builder \u4FEE\u8BA2\u8FB9\u754C", "Review loop stopped at the Builder revision boundary") : localizedText5(responseLanguage, "review-loop \u5DF2\u505C\u6B62", "Review loop stopped"),
     status,
     stopReason,
     happened: reviewLoopStopSummary(status, stopReason, responseLanguage),
@@ -33524,7 +34521,7 @@ function runDoveReviewLoop(root, args = {}) {
     validation: [reviewLoopStopSummary(status, stopReason, responseLanguage)],
     boundary: boundary ? {
       type: boundary.type,
-      summary: localizedText5(responseLanguage, "\u5F53\u524D board \u4ECD\u7531 Reviewer \u6301\u6709\uFF1B\u5FC5\u987B\u663E\u5F0F\u4EA4\u63A5\u7ED9 Builder \u540E\u624D\u80FD\u4FEE\u8BA2\u3002", "The board remains Reviewer-owned; revision requires an explicit handoff to a Builder."),
+      summary: proofBoundary ? localizedText5(responseLanguage, "\u5F53\u524D board \u4FDD\u6301 Reviewer-owned\uFF1B\u8FD9\u4E0D\u662F Builder \u4FEE\u8BA2\u8BF7\u6C42\u3002", "The board remains Reviewer-owned; this is not a Builder revision request.") : localizedText5(responseLanguage, "\u5F53\u524D board \u4ECD\u7531 Reviewer \u6301\u6709\uFF1B\u5FC5\u987B\u663E\u5F0F\u4EA4\u63A5\u7ED9 Builder \u540E\u624D\u80FD\u4FEE\u8BA2\u3002", "The board remains Reviewer-owned; revision requires an explicit handoff to a Builder."),
       nextAction: boundary.nextAction,
       requiredActions: publicRequiredActions
     } : null,
@@ -33534,8 +34531,8 @@ function runDoveReviewLoop(root, args = {}) {
       builderMutationApplied: false
     },
     nextActions: [{
-      title: boundary ? localizedText5(responseLanguage, "\u663E\u5F0F\u4EA4\u63A5\u7ED9 Builder \u4FEE\u8BA2", "Explicitly hand off to a Builder for revision") : localizedText5(responseLanguage, "\u56DE\u5230\u72B6\u6001\u9875\u9009\u62E9\u4E0B\u4E00\u6B65", "Return to status for the next step"),
-      why: boundary ? localizedText5(responseLanguage, "\u8FD9\u6B21\u8C03\u7528\u53EA\u5B8C\u6210 Reviewer pass\uFF0C\u4E0D\u4F1A\u542F\u52A8 mission\u3001auto\u3001rebuttal\uFF0C\u4E5F\u4E0D\u4F1A\u5728 Reviewer ownership \u4E0B\u5199\u8349\u7A3F\u6216\u5B9E\u9A8C\u3002", "This call completes only the Reviewer pass; it does not start mission, auto, or rebuttal, and it does not write draft or experiment material under Reviewer ownership.") : localizedText5(responseLanguage, "\u5F53\u524D\u6750\u6599\u5DF2\u7ECF\u901A\u8FC7\u8FD9\u4E00\u8F6E\u68C0\u67E5\uFF0C\u53EF\u4EE5\u51B3\u5B9A\u7EE7\u7EED\u5199\u4F5C\u3001\u5F52\u6863\u6216\u8FDB\u5165\u7248\u672C\u5FEB\u7167\u3002", "This pass is coherent, so the next decision can be drafting, closure, or versioning."),
+      title: boundary ? proofBoundary ? localizedText5(responseLanguage, "\u7531 Reviewer runtime \u63D0\u4EA4\u6743\u5A01 proof", "Submit authoritative proof through the Reviewer runtime") : localizedText5(responseLanguage, "\u663E\u5F0F\u4EA4\u63A5\u7ED9 Builder \u4FEE\u8BA2", "Explicitly hand off to a Builder for revision") : localizedText5(responseLanguage, "\u56DE\u5230\u72B6\u6001\u9875\u9009\u62E9\u4E0B\u4E00\u6B65", "Return to status for the next step"),
+      why: boundary ? proofBoundary ? localizedText5(responseLanguage, "\u5F53\u524D\u53EA\u6709 proof \u7F3A\u5931\uFF0C\u6CA1\u6709 substantive finding\uFF0C\u56E0\u6B64\u4E0D\u80FD\u8DEF\u7531\u4E3A Builder \u4FEE\u8BA2\u3002", "Only proof is missing; there is no substantive finding, so this must not route to Builder revision.") : localizedText5(responseLanguage, "\u8FD9\u6B21\u8C03\u7528\u53EA\u5B8C\u6210 Reviewer pass\uFF0C\u4E0D\u4F1A\u542F\u52A8 mission\u3001auto\u3001rebuttal\uFF0C\u4E5F\u4E0D\u4F1A\u5728 Reviewer ownership \u4E0B\u5199\u8349\u7A3F\u6216\u5B9E\u9A8C\u3002", "This call completes only the Reviewer pass; it does not start mission, auto, or rebuttal, and it does not write draft or experiment material under Reviewer ownership.") : localizedText5(responseLanguage, "\u5F53\u524D\u6750\u6599\u5DF2\u7ECF\u901A\u8FC7\u8FD9\u4E00\u8F6E\u68C0\u67E5\uFF0C\u53EF\u4EE5\u51B3\u5B9A\u7EE7\u7EED\u5199\u4F5C\u3001\u5F52\u6863\u6216\u8FDB\u5165\u7248\u672C\u5FEB\u7167\u3002", "This pass is coherent, so the next decision can be drafting, closure, or versioning."),
       requiredActions: publicRequiredActions
     }]
   }, responseLanguage);
@@ -33567,87 +34564,14 @@ function runDoveReviewLoop(root, args = {}) {
   };
 }
 
-// src/core/runtime-state.mjs
-import crypto12 from "node:crypto";
-var LEASE_TTL_MS = 10 * 60 * 1e3;
-function summarizeEvents(entries = []) {
-  const last = entries.at(-1) ?? null;
-  const lastEventType = last?.eventType ?? last?.type ?? null;
-  return {
-    eventCount: entries.length,
-    lastEventType,
-    lastRunId: last?.runId ?? null,
-    overview: entries.length > 0 ? `${entries.length} autonomous control-plane event(s) recorded. Latest event: ${lastEventType}.` : "No autonomous control-plane events have been recorded yet.",
-    eventsPath: ARTIFACT_PATHS.runtimeEvents
-  };
-}
-function summarizeResults(entries = []) {
-  const last = entries.at(-1) ?? null;
-  const lastCheckpointEntry = [...entries].reverse().find((entry) => entry?.checkpointSnapshot) ?? null;
-  const lastEscalationEntry = [...entries].reverse().find((entry) => entry?.escalationSnapshot) ?? null;
-  return {
-    runCount: entries.length,
-    completedCount: entries.filter((entry) => entry.status === "completed").length,
-    noopCount: entries.filter((entry) => entry.status === "noop").length,
-    errorCount: entries.filter((entry) => entry.status === "error").length,
-    checkpointCount: entries.filter((entry) => entry?.checkpointSnapshot).length,
-    escalationCount: entries.filter((entry) => entry?.escalationSnapshot).length,
-    lastRunId: last?.runId ?? null,
-    lastStatus: last?.status ?? "never-run",
-    lastOutcome: last?.outcome ?? "not-started",
-    lastCheckpointPacketId: lastCheckpointEntry?.checkpointSnapshot?.packetId ?? null,
-    lastCheckpointSummary: lastCheckpointEntry?.checkpointSnapshot?.summary ?? null,
-    lastCheckpointAt: lastCheckpointEntry?.checkpointSnapshot?.recordedAt ?? null,
-    lastEscalationPacketId: lastEscalationEntry?.escalationSnapshot?.packetId ?? null,
-    lastEscalationFollowThroughId: lastEscalationEntry?.escalationSnapshot?.followThroughId ?? null,
-    lastEscalationAt: lastEscalationEntry?.escalationSnapshot?.recordedAt ?? null,
-    overview: entries.length > 0 ? `Autonomous control-plane runs: ${entries.length} total, ${entries.filter((entry) => entry.status === "completed").length} completed, ${entries.filter((entry) => entry.status === "noop").length} no-op, ${entries.filter((entry) => entry.status === "error").length} error.` : "No autonomous control-plane results have been recorded yet.",
-    resultsPath: ARTIFACT_PATHS.runtimeResults
-  };
-}
-function loadRuntimeArtifacts(root) {
-  return {
-    controllerState: normalizeRuntimeControllerState(readJson(root, ARTIFACT_PATHS.runtimeControllerState, createRuntimeControllerState)),
-    continuation: normalizeRuntimeContinuationIndex(readJson(root, ARTIFACT_PATHS.runtimeContinuation, createRuntimeContinuationIndex)),
-    leases: normalizeRuntimeLeasesIndex(readJson(root, ARTIFACT_PATHS.runtimeLeases, createRuntimeLeasesIndex)),
-    events: normalizeRuntimeEventsIndex(readJson(root, ARTIFACT_PATHS.runtimeEvents, createRuntimeEventsIndex)),
-    results: normalizeRuntimeResultsIndex(readJson(root, ARTIFACT_PATHS.runtimeResults, createRuntimeResultsIndex))
-  };
-}
-function saveRuntimeArtifacts(root, artifacts) {
-  writeJson(root, ARTIFACT_PATHS.runtimeControllerState, artifacts.controllerState);
-  writeJson(root, ARTIFACT_PATHS.runtimeContinuation, artifacts.continuation);
-  writeJson(root, ARTIFACT_PATHS.runtimeLeases, artifacts.leases);
-  writeJson(root, ARTIFACT_PATHS.runtimeEvents, artifacts.events);
-  writeJson(root, ARTIFACT_PATHS.runtimeResults, artifacts.results);
-}
-function appendEvent(artifacts, entry) {
-  const entries = [...artifacts.events.entries ?? [], entry];
-  artifacts.events = {
-    ...artifacts.events,
-    entries,
-    summary: summarizeEvents(entries),
-    updatedAt: entry.recordedAt
-  };
-}
-function appendResult(artifacts, entry) {
-  const entries = [...artifacts.results.entries ?? [], entry];
-  artifacts.results = {
-    ...artifacts.results,
-    entries,
-    summary: summarizeResults(entries),
-    updatedAt: entry.recordedAt
-  };
-}
-
 // src/core/task-workflow.mjs
 function slugify14(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "task";
 }
-function normalizeString9(value, fallback = "") {
+function normalizeString10(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
-function normalizeStringArray22(value) {
+function normalizeStringArray24(value) {
   return Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean))) : [];
 }
 function assertNoRetiredAutoControls(value, inputPath = "$", seen = /* @__PURE__ */ new WeakSet()) {
@@ -33677,7 +34601,7 @@ function normalizeAllowed3(value, allowed, fallback) {
   const normalized = typeof value === "string" ? value.trim().toLowerCase().replace(/_/g, "-") : "";
   return allowed.includes(normalized) ? normalized : fallback;
 }
-function normalizeStatus2(value, fallback = "pending") {
+function normalizeStatus3(value, fallback = "pending") {
   return normalizeAllowed3(value, DOVE_TASK_STATUSES, fallback);
 }
 function normalizeLevel2(value, fallback) {
@@ -33721,22 +34645,22 @@ function assertUnambiguousConfirmation(args = {}) {
     throw new Error("Dove mission replay must provide only one confirmation flag: confirmed or confirm.");
   }
 }
-function taskPacketPath(packetId) {
-  return path23.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`);
+function taskPacketPath2(packetId) {
+  return path26.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`);
 }
-function taskContextPath(packetId) {
-  return path23.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`);
+function taskContextPath2(packetId) {
+  return path26.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`);
 }
 var ARCHIVED_TASK_STATUSES = new Set(DOVE_ARCHIVED_TASK_STATUSES);
-function activeStatus(status) {
+function activeStatus2(status) {
   const normalized = String(status ?? "").trim().toLowerCase();
   return !["completed", "killed"].includes(normalized) && !ARCHIVED_TASK_STATUSES.has(normalized);
 }
-function archivedTaskStatus(task) {
+function archivedTaskStatus2(task) {
   return [task?.status, task?.lifecycleStatus].some((status) => ARCHIVED_TASK_STATUSES.has(String(status ?? "").trim().toLowerCase()));
 }
 function openChecklistChildForParent(task, parentId) {
-  return task?.parentId === parentId && task.creatorKind === "system" && !task.derivedFrom && !task.sourcePlanTaskId && !archivedTaskStatus(task) && activeStatus(normalizeStatus2(task.status ?? task.lifecycleStatus, "pending"));
+  return task?.parentId === parentId && task.creatorKind === "system" && !task.derivedFrom && !task.sourcePlanTaskId && !archivedTaskStatus2(task) && activeStatus2(normalizeStatus3(task.status ?? task.lifecycleStatus, "pending"));
 }
 function openChecklistChildrenForParent(root, parent) {
   const catalog = readTaskPacketCatalog(root);
@@ -33770,17 +34694,17 @@ function checklistCompletionBlock(root, task, status, responseLanguage = "zh") {
     message
   };
 }
-function normalizeIndex(index = createTaskPacketsIndex()) {
+function normalizeIndex2(index = createTaskPacketsIndex()) {
   const base = createTaskPacketsIndex();
   const items = Array.isArray(index.items) ? index.items.filter((item) => item && typeof item === "object" && !Array.isArray(item)) : [];
-  const activeInit = items.find((item) => item.level === 0 && activeStatus(item.status)) ?? null;
-  const activeItems = items.filter((item) => item.level !== 0 && activeStatus(item.status));
+  const activeInit = items.find((item) => item.level === 0 && activeStatus2(item.status)) ?? null;
+  const activeItems = items.filter((item) => item.level !== 0 && activeStatus2(item.status));
   const lifecycleCounts = {};
   const stageCounts = Object.fromEntries(DOVE_TASK_STAGES.map((stage) => [stage, 0]));
   const domainCounts = Object.fromEntries(DOVE_TASK_DOMAINS.map((domain) => [domain, 0]));
   const levelCounts = {};
   for (const item of items) {
-    const status = archivedTaskStatus(item) ? "archived" : normalizeStatus2(item.status ?? item.lifecycleStatus, "pending");
+    const status = archivedTaskStatus2(item) ? "archived" : normalizeStatus3(item.status ?? item.lifecycleStatus, "pending");
     lifecycleCounts[status] = (lifecycleCounts[status] ?? 0) + 1;
     if (DOVE_TASK_STAGES.includes(item.stage)) {
       stageCounts[item.stage] += 1;
@@ -33809,10 +34733,10 @@ function normalizeIndex(index = createTaskPacketsIndex()) {
     updatedAt: index.updatedAt ?? null
   };
 }
-function writePacket(root, packet) {
+function writePacket2(root, packet) {
   const { context: _derivedContext, ...packetRecord } = packet;
-  writeJson(root, taskPacketPath(packet.id), packetRecord);
-  writeJson(root, taskContextPath(packet.id), {
+  writeJson(root, taskPacketPath2(packet.id), packetRecord);
+  writeJson(root, taskContextPath2(packet.id), {
     id: packet.id,
     parentId: packet.parentId,
     rootId: packet.rootId,
@@ -33881,13 +34805,13 @@ function upsertIndexItem(index, packet) {
     nextAction: packet.nextAction
   };
   const items = [...(index.items ?? []).filter((existing) => existing.id !== item.id), item].sort((left, right) => (left.level ?? 3) - (right.level ?? 3) || String(left.createdAt ?? "").localeCompare(String(right.createdAt ?? "")) || left.id.localeCompare(right.id));
-  return normalizeIndex({ ...index, items, updatedAt: packet.updatedAt });
+  return normalizeIndex2({ ...index, items, updatedAt: packet.updatedAt });
 }
 function loadTaskIndex(root) {
-  return normalizeIndex(readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex));
+  return normalizeIndex2(readJson(root, ARTIFACT_PATHS.taskPacketsIndex, createTaskPacketsIndex));
 }
 function saveTaskIndex(root, index) {
-  const normalized = normalizeIndex(index);
+  const normalized = normalizeIndex2(index);
   writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, normalized);
   return normalized;
 }
@@ -33898,7 +34822,11 @@ function workflowSignals(text3) {
   const value = String(text3 ?? "").toLowerCase();
   const source = /\b(source|sources|citation|citations|literature|paper search|reference|references|bibliography|template|templates|author kit|latex|overleaf|venue|venues|guideline|guidelines|style file|style files|call for papers|cfp|ranking|rankings|journal|journals|conference|conferences|evidence[-_ ]?urls?|provenance|deposit|bind|archive)\b|来源|引用|文献|模板|作者包|会议|期刊|一区|高水平|写作风格|审稿偏好|证据链接|沉淀|绑定|归档/u.test(value);
   const reviewLoop = /\b(review-loop|revision loop)\b|审稿循环|评审循环/u.test(value);
-  const review = /\b(review|audit|audio|verify|check|integrity)\b|审查|审核|复审|检查|完整性/u.test(value);
+  const engineeringSubject = /\b(engineer(?:ing)?|code|api|endpoint|implementation|implement|build|compile|lint|typecheck|test|tests|testing|ci)\b/u.test(value);
+  const engineeringAction = /\b(implement|implementation|build|compile|lint|typecheck|test|tests|testing|validate|validation|verify|check|fix|ship)\b/u.test(value);
+  const explicitReview = /\b(?:code[- ]review|peer[- ]review|reviewer|review findings|review feedback|audit report|review\b[^.!?。！？\n]{0,120}\b(?:api|endpoint|implementation|code))\b|(?:代码|api|接口|端点|实现)[^。！？\n]{0,40}(?:审查|评审)|(?:审查|评审)[^。！？\n]{0,40}(?:代码|api|接口|端点|实现)|同行评审|审稿意见|审查报告/u.test(value);
+  const engineeringValidation = engineeringSubject && engineeringAction && !explicitReview;
+  const review = explicitReview || !engineeringValidation && /\b(review|audit|audio|verify|check|integrity)\b|审查|审核|复审|检查|完整性/u.test(value);
   const figure = /\b(figure|diagram|pipeline overview)\b|示意图|流程图|图表/u.test(value);
   const draft = /\b(draft|revise|section|introduction|abstract)\b|草稿|修改|章节|引言|摘要/u.test(value);
   const experiment = /\b(experiment|ablation|baseline|metric|result)\b|实验|消融|指标|结果/u.test(value);
@@ -33962,7 +34890,7 @@ function nextCommandFor(classification) {
   return "project:dove.auto";
 }
 function publicMissionCommand(command, fallback = "project:dove.auto") {
-  const normalized = normalizeString9(command, "");
+  const normalized = normalizeString10(command, "");
   if (!normalized) {
     return fallback;
   }
@@ -33991,7 +34919,7 @@ function copyableMissionCommand(command, packetId) {
 }
 function normalizeContractStringArray(value) {
   if (Array.isArray(value)) {
-    return normalizeStringArray22(value);
+    return normalizeStringArray24(value);
   }
   return typeof value === "string" && value.trim() ? [value.trim()] : [];
 }
@@ -34064,18 +34992,18 @@ function routeWhenFor(command, responseLanguage = "zh") {
 }
 function normalizeContractRoutes(routes, task = {}, responseLanguage = "zh") {
   return (Array.isArray(routes) ? routes : []).map((route, index) => {
-    const source = typeof route === "string" ? { command: route } : plainObject2(route);
+    const source = typeof route === "string" ? { command: route } : plainObject3(route);
     const command = publicMissionCommand(source.command ?? source.nextAction ?? source.workflow, publicMissionCommand(task.nextAction ?? nextCommandFor(task)));
     if (!command) {
       return null;
     }
     return {
-      label: normalizeString9(source.label ?? source.title, routeLabelFor(command, responseLanguage)),
+      label: normalizeString10(source.label ?? source.title, routeLabelFor(command, responseLanguage)),
       command,
-      copyableCommand: normalizeString9(source.copyableCommand ?? source.copyCommand, copyableMissionCommand(command, task.id)),
-      packetId: normalizeString9(source.packetId ?? source.taskPacketId ?? source.missionPacketId, task.id ?? null),
-      when: normalizeString9(source.when ?? source.reason, routeWhenFor(command, responseLanguage)),
-      role: normalizeDovePrimaryRoleId(source.role ?? source.ownerRole ?? task.nextRole ?? task.ownerRole, ownerRoleFor(task)),
+      copyableCommand: normalizeString10(source.copyableCommand ?? source.copyCommand, copyableMissionCommand(command, task.id)),
+      packetId: normalizeString10(source.packetId ?? source.taskPacketId ?? source.missionPacketId, task.id ?? null),
+      when: normalizeString10(source.when ?? source.reason, routeWhenFor(command, responseLanguage)),
+      role: normalizeDovePrimaryRoleId(source.role ?? source.ownerRole ?? task.nextRole ?? task.ownerRole, ownerRoleFor2(task)),
       evidenceRequired: firstContractStringArray(source.evidenceRequired, source.evidenceContract, source.evidenceExpectations, task.evidenceExpectations),
       doneCriteria: firstContractStringArray(source.doneCriteria, task.workContract?.doneCriteria),
       rank: Number.isFinite(source.rank) ? source.rank : index + 1
@@ -34096,20 +35024,20 @@ function normalizeWorkContract(task = {}, args = {}, classification = {}, respon
     stage: task.stage ?? classification.stage ?? "execute",
     domain: task.domain ?? classification.domain ?? "engineering"
   };
-  const explicit = plainObject2(args.workContract ?? task.workContract);
+  const explicit = plainObject3(args.workContract ?? task.workContract);
   const deliverables = firstContractStringArray(explicit.deliverables, args.deliverables, defaultContractDeliverables(classifiedTask, responseLanguage));
   const evidenceContract = firstContractStringArray(explicit.evidenceContract, args.evidenceContract, args.evidenceExpectations, args.acceptanceChecks, defaultContractEvidence(classifiedTask, responseLanguage));
   const doneCriteria = firstContractStringArray(explicit.doneCriteria, args.doneCriteria, args.acceptanceChecks, defaultContractDoneCriteria(classifiedTask, responseLanguage));
   const outOfScope = firstContractStringArray(explicit.outOfScope, explicit.outOfScopeItems, args.outOfScope, args.outOfScopeItems, defaultContractOutOfScope(responseLanguage));
   const recommendedRoutes = normalizeContractRoutes(explicit.recommendedRoutes ?? args.recommendedRoutes, { ...classifiedTask, workContract: { doneCriteria } }, responseLanguage);
   return {
-    purpose: normalizeString9(explicit.purpose ?? args.purpose, doveText(responseLanguage, "workContractPurpose", { title: classifiedTask.title, stage: classifiedTask.stage, domain: classifiedTask.domain })),
+    purpose: normalizeString10(explicit.purpose ?? args.purpose, doveText(responseLanguage, "workContractPurpose", { title: classifiedTask.title, stage: classifiedTask.stage, domain: classifiedTask.domain })),
     deliverables,
     outOfScope,
     evidenceContract,
     doneCriteria,
     recommendedRoutes: recommendedRoutes.length > 0 ? recommendedRoutes : defaultContractRoutes({ ...classifiedTask, workContract: { doneCriteria } }, responseLanguage),
-    practicalImpact: normalizeString9(explicit.practicalImpact ?? args.practicalImpact, defaultContractImpact(classifiedTask, responseLanguage))
+    practicalImpact: normalizeString10(explicit.practicalImpact ?? args.practicalImpact, defaultContractImpact(classifiedTask, responseLanguage))
   };
 }
 function executionChainTypeFor(task = {}, classification = {}) {
@@ -34158,25 +35086,25 @@ function defaultExecutionImplementation(task = {}, workContract = {}, responseLa
   return [doveText(responseLanguage, "executePlannedWork")];
 }
 function defaultExecutionContract(task = {}, args = {}, classification = {}, workContract = {}, responseLanguage = "zh") {
-  const nextAction = normalizeString9(task.nextAction ?? args.nextAction, nextCommandFor(classification));
+  const nextAction = normalizeString10(task.nextAction ?? args.nextAction, nextCommandFor(classification));
   return {
     chainType: executionChainTypeFor(task, classification),
     roleSequence: roleSequenceForExecutionContract(task, classification),
-    readFirst: normalizeStringArray22(args.readFirst),
+    readFirst: normalizeStringArray24(args.readFirst),
     action: nextAction,
     implementation: defaultExecutionImplementation(task, workContract, responseLanguage),
     files: [],
     materials: {
-      requiredInputs: normalizeStringArray22(args.requiredInputs),
-      requiredArtifacts: normalizeStringArray22(args.requiredArtifacts),
-      sourceRefs: normalizeStringArray22(args.sourceRefs),
-      artifactRefs: normalizeStringArray22(task.artifactRefs)
+      requiredInputs: normalizeStringArray24(args.requiredInputs),
+      requiredArtifacts: normalizeStringArray24(args.requiredArtifacts),
+      sourceRefs: normalizeStringArray24(args.sourceRefs),
+      artifactRefs: normalizeStringArray24(task.artifactRefs)
     },
     convergence: {
       criteria: firstContractStringArray(workContract.doneCriteria, args.acceptanceChecks),
-      verificationCommands: normalizeStringArray22(args.verificationCommands),
+      verificationCommands: normalizeStringArray24(args.verificationCommands),
       evidenceRequired: firstContractStringArray(workContract.evidenceContract, task.evidenceExpectations),
-      definitionOfDone: normalizeString9(workContract.practicalImpact, "")
+      definitionOfDone: normalizeString10(workContract.practicalImpact, "")
     },
     failureRoutes: defaultExecutionFailureRoutes(task, responseLanguage)
   };
@@ -34184,7 +35112,7 @@ function defaultExecutionContract(task = {}, args = {}, classification = {}, wor
 function mergeExecutionContract(task = {}, args = {}, classification = {}, workContract = {}, responseLanguage = "zh") {
   return normalizeDoveExecutionContract(args.executionContract ?? task.executionContract, defaultExecutionContract(task, args, classification, workContract, responseLanguage));
 }
-function ownerRoleFor(classification = {}) {
+function ownerRoleFor2(classification = {}) {
   if (classification.stage === "audit") {
     return "reviewer";
   }
@@ -34201,7 +35129,7 @@ function compactScope(task = {}, responseLanguage = "zh") {
   });
 }
 function compactEvidence(task = {}, responseLanguage = "zh") {
-  const evidence = normalizeStringArray22(task.evidenceExpectations);
+  const evidence = normalizeStringArray24(task.evidenceExpectations);
   return evidence.length > 0 ? evidence : [doveText(responseLanguage, "compactCardNoEvidence")];
 }
 function compactStepLabels(steps = []) {
@@ -34311,9 +35239,9 @@ function buildWorkflowHandoffSuggestion(task = {}, result = {}, responseLanguage
   }
   const ownerRole = boundary?.ownerRole ?? task.ownerRole ?? null;
   const nextRole = boundary?.nextRole ?? task.nextRole ?? ownerRole;
-  const requiredInputs = normalizeStringArray22(boundary?.requiredInputs);
-  const requiredActions = normalizeStringArray22(boundary?.requiredActions);
-  const requires = normalizeStringArray22([...requiredInputs, ...requiredActions]);
+  const requiredInputs = normalizeStringArray24(boundary?.requiredInputs);
+  const requiredActions = normalizeStringArray24(boundary?.requiredActions);
+  const requires = normalizeStringArray24([...requiredInputs, ...requiredActions]);
   const reason = boundary?.reason ?? result.stopReason ?? null;
   const roleTransfer = ownerRole && nextRole && ownerRole !== nextRole;
   return {
@@ -34333,8 +35261,8 @@ function buildWorkflowHandoffSuggestion(task = {}, result = {}, responseLanguage
 function workflowActionMetadata(task = {}, result = {}, handoffSuggestion = null) {
   const boundary = result.boundary ?? task.boundary ?? null;
   const hasHandoffContext = Boolean(boundary || handoffSuggestion);
-  const requiredInputs = hasHandoffContext ? normalizeStringArray22(boundary?.requiredInputs ?? handoffSuggestion?.requiredInputs) : [];
-  const requiredActions = hasHandoffContext ? normalizeStringArray22(boundary?.requiredActions ?? handoffSuggestion?.requiredActions) : [];
+  const requiredInputs = hasHandoffContext ? normalizeStringArray24(boundary?.requiredInputs ?? handoffSuggestion?.requiredInputs) : [];
+  const requiredActions = hasHandoffContext ? normalizeStringArray24(boundary?.requiredActions ?? handoffSuggestion?.requiredActions) : [];
   return {
     boundary,
     boundaryId: boundary?.id ?? handoffSuggestion?.boundaryId ?? null,
@@ -34344,7 +35272,7 @@ function workflowActionMetadata(task = {}, result = {}, handoffSuggestion = null
     handoff: hasHandoffContext ? boundary?.handoff ?? task.handoff ?? handoffSuggestion?.handoff ?? null : null,
     requiredInputs,
     requiredActions,
-    requires: normalizeStringArray22([...requiredInputs, ...requiredActions]),
+    requires: normalizeStringArray24([...requiredInputs, ...requiredActions]),
     handoffSuggestion
   };
 }
@@ -34368,7 +35296,7 @@ function withWorkflowActionMetadata(actions = [], task = {}, result = {}, respon
 }
 function operatorHandoffSuggestion(result = {}, responseLanguage = "zh") {
   if (result.awaitingResultTaskIds?.length > 0) {
-    const requiredActions = normalizeStringArray22(result.awaitingRequiredActions);
+    const requiredActions = normalizeStringArray24(result.awaitingRequiredActions);
     return {
       presentation: "dove-handoff-suggestion",
       boundaryType: "awaiting-host-pass-result",
@@ -34390,7 +35318,7 @@ function operatorHandoffSuggestion(result = {}, responseLanguage = "zh") {
       summary: doveText(responseLanguage, "resultCardHandoffResolveBoundary", { ownerRole: "planner" })
     };
   }
-  const proposedBlockedTaskIds = normalizeStringArray22(result.blockerPlanConversion?.proposedBlockedTaskIds);
+  const proposedBlockedTaskIds = normalizeStringArray24(result.blockerPlanConversion?.proposedBlockedTaskIds);
   if (proposedBlockedTaskIds.length > 0) {
     return {
       presentation: "dove-handoff-suggestion",
@@ -34441,8 +35369,8 @@ function latestExecutionReceipt(iterations = [], fallback = null) {
   return [...Array.isArray(iterations) ? iterations : []].reverse().map((iteration) => normalizeDoveExecutionReceipt(iteration.output?.executionReceipt ?? iteration.executionReceipt, null)).find(Boolean) ?? normalizeDoveExecutionReceipt(fallback, null);
 }
 function autoResultCard(task = {}, result = {}, context = {}, responseLanguage = "zh") {
-  const evidenceLinks = result.iterations?.flatMap((iteration) => normalizeStringArray22(iteration.output?.evidenceLinks ?? iteration.evidenceLinks)) ?? [];
-  const artifactRefs = result.iterations?.flatMap((iteration) => normalizeStringArray22(iteration.output?.artifactRefs ?? iteration.artifactRefs)) ?? [];
+  const evidenceLinks = result.iterations?.flatMap((iteration) => normalizeStringArray24(iteration.output?.evidenceLinks ?? iteration.evidenceLinks)) ?? [];
+  const artifactRefs = result.iterations?.flatMap((iteration) => normalizeStringArray24(iteration.output?.artifactRefs ?? iteration.artifactRefs)) ?? [];
   const executionReceipt = latestExecutionReceipt(result.iterations, result.executionReceipt);
   const handoffSuggestion = buildWorkflowHandoffSuggestion(task, result, responseLanguage);
   const baseNextActions = context.nextActions ?? (result.status === "awaiting-host-pass" ? [{ title: doveText(responseLanguage, "resultCardNextProvideEvidence"), command: "record_dove_mission_pass", packetId: task.id, confirmationRequired: true }] : [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: context.nextAction ?? task.nextAction ?? "project:dove.status", packetId: task.id }]);
@@ -34472,8 +35400,8 @@ function autoResultCard(task = {}, result = {}, context = {}, responseLanguage =
   }, responseLanguage);
 }
 function operatorResultCard(result = {}, context = {}, responseLanguage = "zh") {
-  const evidenceLinks = result.iterations?.flatMap((iteration) => normalizeStringArray22(iteration.evidenceLinks ?? iteration.output?.evidenceLinks)) ?? [];
-  const artifactRefs = result.iterations?.flatMap((iteration) => normalizeStringArray22(iteration.artifactRefs ?? iteration.output?.artifactRefs)) ?? [];
+  const evidenceLinks = result.iterations?.flatMap((iteration) => normalizeStringArray24(iteration.evidenceLinks ?? iteration.output?.evidenceLinks)) ?? [];
+  const artifactRefs = result.iterations?.flatMap((iteration) => normalizeStringArray24(iteration.artifactRefs ?? iteration.output?.artifactRefs)) ?? [];
   const executionReceipt = latestExecutionReceipt(result.iterations, result.executionReceipt);
   const createdBlockerCount = result.blockerPlanConversion?.createdCount ?? result.blockerPlanConversion?.createdMissions?.length ?? 0;
   const reusedBlockerCount = result.blockerPlanConversion?.reusedCount ?? result.blockerPlanConversion?.reusedMissions?.length ?? 0;
@@ -34481,7 +35409,11 @@ function operatorResultCard(result = {}, context = {}, responseLanguage = "zh") 
   const skippedHostPassCount = result.skippedHostPassTaskIds?.length ?? 0;
   const runtimeRecorded = result.runtimeRecorded !== false;
   const handoffSuggestion = operatorHandoffSuggestion(result, responseLanguage);
-  const baseNextActions = result.awaitingResultTaskIds?.length > 0 ? [{ title: doveText(responseLanguage, "resultCardNextProvideEvidence"), command: "project:dove.status", requires: result.awaitingResultTaskIds }] : [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: context.nextAction ?? "project:dove.status" }];
+  const requiredActions = normalizeStringArray24([
+    ...normalizeStringArray24(result.awaitingRequiredActions),
+    ...normalizeStringArray24(result.boundaryRequiredActions)
+  ]);
+  const baseNextActions = result.awaitingResultTaskIds?.length > 0 || result.actionRequired === true ? [{ title: doveText(responseLanguage, "resultCardNextProvideEvidence"), command: "project:dove.status", requires: result.awaitingResultTaskIds, requiredActions }] : [{ title: doveText(responseLanguage, "resultCardNextStatus"), command: context.nextAction ?? "project:dove.status" }];
   const nextActions = baseNextActions.map((action) => handoffSuggestion ? {
     ...action,
     boundaryId: handoffSuggestion.boundaryId,
@@ -34545,7 +35477,7 @@ function activeLessons(root, packetId = null) {
   const lessons = readOperatorLessonsIndex(root);
   return (Array.isArray(lessons.lessons) ? lessons.lessons : []).filter((lesson) => {
     const status = lesson.status ?? "active";
-    const packetIds = normalizeStringArray22(lesson.packetIds);
+    const packetIds = normalizeStringArray24(lesson.packetIds);
     return status === "active" && (!packetId || packetIds.length === 0 || packetIds.includes(packetId));
   }).map((lesson) => ({ id: lesson.id, title: lesson.title, mustObey: lesson.mustObey ?? true, nextTime: lesson.nextTime ?? [] }));
 }
@@ -34575,7 +35507,7 @@ function preActionGuidanceSummaryForTask(root, surface, task = {}, context = {},
   return summarizePreActionGuidance(preActionGuidanceForTask(root, surface, task, context, responseLanguage));
 }
 function requestTextFromArgs(args = {}) {
-  return normalizeString9(args.goal ?? args.objective ?? args.prompt ?? args.title ?? args.summary ?? args.request ?? args.userRequest, null);
+  return normalizeString10(args.goal ?? args.objective ?? args.prompt ?? args.title ?? args.summary ?? args.request ?? args.userRequest, null);
 }
 function readStateForTaskContract(root) {
   return readJson(root, ARTIFACT_PATHS.state, createDefaultState);
@@ -34668,7 +35600,7 @@ function stableMissionPacket(packet) {
   );
 }
 function canonicalMissionWorkspace(root) {
-  return fs22.realpathSync.native(path23.resolve(root));
+  return fs23.realpathSync.native(path26.resolve(root));
 }
 function missionProposalMutationMode(root, args = {}) {
   const explicitMode = Object.prototype.hasOwnProperty.call(args, "mutationMode") ? normalizeMutationMode(args.mutationMode) : null;
@@ -34779,16 +35711,16 @@ function buildPacket(root, args, init, classification, overrides = {}) {
   const responseLanguage = resolveDoveResponseLanguage(root, args, { state });
   const timestamp = nowIso();
   const creatorKind = overrides.creatorKind ?? normalizeAllowed3(args.creatorKind, DOVE_TASK_CREATOR_KINDS, "user");
-  const dependencies = normalizeStringArray22(args.dependencies ?? args.dependencyIds);
-  const blockedBy = normalizeStringArray22(args.blockedBy ?? args.blockerIds);
-  const requestedTitle = normalizeString9(overrides.title ?? args.title ?? args.goal ?? args.objective ?? args.prompt, doveText(responseLanguage, "taskFallbackTitle"));
+  const dependencies = normalizeStringArray24(args.dependencies ?? args.dependencyIds);
+  const blockedBy = normalizeStringArray24(args.blockedBy ?? args.blockerIds);
+  const requestedTitle = normalizeString10(overrides.title ?? args.title ?? args.goal ?? args.objective ?? args.prompt, doveText(responseLanguage, "taskFallbackTitle"));
   const id = normalizeTaskPacketId(overrides.id ?? args.id ?? args.packetId ?? `task-${slugify14(requestedTitle)}-${Date.now().toString(36)}`);
   const level = overrides.level ?? normalizeMissionLevel(args, state.settings.taskModel.userDefaultLevel);
-  const status = normalizeStatus2(overrides.status ?? args.status, dependencies.length > 0 || blockedBy.length > 0 ? "blocked" : "ready");
+  const status = normalizeStatus3(overrides.status ?? args.status, dependencies.length > 0 || blockedBy.length > 0 ? "blocked" : "ready");
   const basePacket = {
     id,
     title: requestedTitle,
-    summary: normalizeString9(overrides.summary ?? args.summary ?? args.goal ?? args.objective ?? args.prompt, requestedTitle),
+    summary: normalizeString10(overrides.summary ?? args.summary ?? args.goal ?? args.objective ?? args.prompt, requestedTitle),
     parentId: overrides.parentId ?? init.id,
     rootId: overrides.rootId ?? init.rootId ?? init.id,
     level,
@@ -34805,22 +35737,22 @@ function buildPacket(root, args, init, classification, overrides = {}) {
     blockedReason: null,
     killedAt: null,
     killReason: null,
-    ownerRole: normalizeDovePrimaryRoleId(overrides.ownerRole ?? args.ownerRole, ownerRoleFor(classification)),
-    nextRole: normalizeDovePrimaryRoleId(overrides.nextRole ?? args.nextRole, overrides.ownerRole ?? args.ownerRole ?? ownerRoleFor(classification)),
+    ownerRole: normalizeDovePrimaryRoleId(overrides.ownerRole ?? args.ownerRole, ownerRoleFor2(classification)),
+    nextRole: normalizeDovePrimaryRoleId(overrides.nextRole ?? args.nextRole, overrides.ownerRole ?? args.ownerRole ?? ownerRoleFor2(classification)),
     boundary: normalizeDoveBoundary(overrides.boundary ?? args.boundary, null),
     boundaryHistory: [],
     handoff: normalizeDoveHandoff(overrides.handoff ?? args.handoff, null),
     lastTransition: null,
-    lessonIds: normalizeStringArray22(args.lessonIds),
-    artifactRefs: normalizeStringArray22(args.artifactRefs ?? args.artifactPaths),
-    contextPolicy: normalizeString9(args.contextPolicy, DOVE_AUDIO_CONTEXT_POLICY),
-    packetPath: taskPacketPath(id),
-    packetContextPath: taskContextPath(id),
-    currentFocus: normalizeString9(overrides.currentFocus ?? args.currentFocus ?? args.goal ?? args.objective ?? args.prompt, requestedTitle),
-    nextAction: normalizeString9(overrides.nextAction ?? args.nextAction, nextCommandFor(classification)),
-    evidenceExpectations: normalizeStringArray22([
-      ...normalizeStringArray22(args.evidenceExpectations),
-      ...normalizeStringArray22(args.acceptanceChecks)
+    lessonIds: normalizeStringArray24(args.lessonIds),
+    artifactRefs: normalizeStringArray24(args.artifactRefs ?? args.artifactPaths),
+    contextPolicy: normalizeString10(args.contextPolicy, DOVE_AUDIO_CONTEXT_POLICY),
+    packetPath: taskPacketPath2(id),
+    packetContextPath: taskContextPath2(id),
+    currentFocus: normalizeString10(overrides.currentFocus ?? args.currentFocus ?? args.goal ?? args.objective ?? args.prompt, requestedTitle),
+    nextAction: normalizeString10(overrides.nextAction ?? args.nextAction, nextCommandFor(classification)),
+    evidenceExpectations: normalizeStringArray24([
+      ...normalizeStringArray24(args.evidenceExpectations),
+      ...normalizeStringArray24(args.acceptanceChecks)
     ]),
     ...overrides.extraFields && typeof overrides.extraFields === "object" && !Array.isArray(overrides.extraFields) ? overrides.extraFields : {}
   };
@@ -34849,16 +35781,16 @@ function normalizeChecklistItem(item, index, responseLanguage = "zh") {
   const source = item && typeof item === "object" && !Array.isArray(item) ? item : {};
   return {
     id: source.id,
-    title: normalizeString9(source.title ?? source.goal ?? source.summary, doveText(responseLanguage, "checklistItem", { index: index + 1 })),
-    summary: normalizeString9(source.summary ?? source.goal ?? source.title, ""),
+    title: normalizeString10(source.title ?? source.goal ?? source.summary, doveText(responseLanguage, "checklistItem", { index: index + 1 })),
+    summary: normalizeString10(source.summary ?? source.goal ?? source.title, ""),
     level: requestedLevel(source),
     stage: source.stage ?? source.missionStage,
     domain: source.domain ?? source.doveDomain ?? source.missionDomain,
     status: source.status,
-    dependencies: normalizeStringArray22(source.dependencies ?? source.dependencyIds),
-    blockedBy: normalizeStringArray22(source.blockedBy ?? source.blockerIds),
-    evidenceExpectations: normalizeStringArray22(source.evidenceExpectations),
-    artifactRefs: normalizeStringArray22(source.artifactRefs ?? source.artifactPaths),
+    dependencies: normalizeStringArray24(source.dependencies ?? source.dependencyIds),
+    blockedBy: normalizeStringArray24(source.blockedBy ?? source.blockerIds),
+    evidenceExpectations: normalizeStringArray24(source.evidenceExpectations),
+    artifactRefs: normalizeStringArray24(source.artifactRefs ?? source.artifactPaths),
     nextAction: source.nextAction
   };
 }
@@ -34869,8 +35801,8 @@ function shouldAutoCreateChecklist(args = {}) {
   if (args.autoChecklist === true || args.createChecklist === true || args.checklist === true) {
     return true;
   }
-  const evidenceCount = normalizeStringArray22(args.evidenceExpectations).length;
-  const artifactCount = normalizeStringArray22(args.artifactRefs ?? args.artifactPaths).length;
+  const evidenceCount = normalizeStringArray24(args.evidenceExpectations).length;
+  const artifactCount = normalizeStringArray24(args.artifactRefs ?? args.artifactPaths).length;
   const text3 = [args.goal, args.objective, args.prompt, args.title, args.summary].map((value) => String(value ?? "")).join(" ");
   const hasComplexVerb = /(implement|refactor|validate|verify|test|document|workflow|pipeline|loop|review|实现|重构|验证|测试|文档|流程|闭环|审查)/iu.test(text3);
   const hasComposition = /(\band\b|\bthen\b|\bwith\b|,|，|、|并|和|以及|同时|然后)/iu.test(text3);
@@ -34898,11 +35830,11 @@ function buildChecklistTasks(root, args, parent, classification, responseLanguag
     const title = normalized.title;
     const id = normalizeTaskPacketId(normalized.id ?? `${parent.id}-checklist-${index + 1}-${slugify14(title)}`);
     const level = normalizeChildLevel(normalized, parent.level);
-    const status = normalizeStatus2(normalized.status, normalized.dependencies.length > 0 || normalized.blockedBy.length > 0 ? "blocked" : "ready");
+    const status = normalizeStatus3(normalized.status, normalized.dependencies.length > 0 || normalized.blockedBy.length > 0 ? "blocked" : "ready");
     const baseTask = {
       id,
       title,
-      summary: normalizeString9(normalized.summary, title),
+      summary: normalizeString10(normalized.summary, title),
       parentId: parent.id,
       rootId: parent.rootId,
       level,
@@ -34919,8 +35851,8 @@ function buildChecklistTasks(root, args, parent, classification, responseLanguag
       blockedReason: null,
       killedAt: null,
       killReason: null,
-      ownerRole: normalizeDovePrimaryRoleId(parent.ownerRole, ownerRoleFor(parent)),
-      nextRole: normalizeDovePrimaryRoleId(parent.nextRole, parent.ownerRole ?? ownerRoleFor(parent)),
+      ownerRole: normalizeDovePrimaryRoleId(parent.ownerRole, ownerRoleFor2(parent)),
+      nextRole: normalizeDovePrimaryRoleId(parent.nextRole, parent.ownerRole ?? ownerRoleFor2(parent)),
       boundary: null,
       boundaryHistory: [],
       handoff: null,
@@ -34928,10 +35860,10 @@ function buildChecklistTasks(root, args, parent, classification, responseLanguag
       lessonIds: [],
       artifactRefs: normalized.artifactRefs,
       contextPolicy: parent.contextPolicy,
-      packetPath: taskPacketPath(id),
-      packetContextPath: taskContextPath(id),
-      currentFocus: normalizeString9(normalized.summary, title),
-      nextAction: normalizeString9(normalized.nextAction, parent.nextAction),
+      packetPath: taskPacketPath2(id),
+      packetContextPath: taskContextPath2(id),
+      currentFocus: normalizeString10(normalized.summary, title),
+      nextAction: normalizeString10(normalized.nextAction, parent.nextAction),
       evidenceExpectations: normalized.evidenceExpectations
     };
     const taskClassification = { stage: baseTask.stage, domain: baseTask.domain };
@@ -34974,8 +35906,8 @@ function initDoveGoal(root, args = {}) {
   const responseLanguage = resolveDoveResponseLanguage(root, args, { state });
   const index = loadTaskIndex(root);
   const existing = initPacket(index);
-  const title = normalizeString9(args.title ?? args.goal ?? state.dove.title, state.dove.title);
-  const objective = normalizeString9(args.objective ?? args.goal ?? args.summary, state.dove.objective);
+  const title = normalizeString10(args.title ?? args.goal ?? state.dove.title, state.dove.title);
+  const objective = normalizeString10(args.objective ?? args.goal ?? args.summary, state.dove.objective);
   const packetId = existing?.id ?? normalizeTaskPacketId(args.id ?? "init");
   const packet = {
     ...existing ?? {},
@@ -34988,8 +35920,8 @@ function initDoveGoal(root, args = {}) {
     creatorKind: "user",
     stage: "plan",
     domain: normalizeAllowed3(args.domain ?? args.doveDomain, DOVE_TASK_DOMAINS, "engineering"),
-    status: normalizeStatus2(args.status, "ready"),
-    lifecycleStatus: normalizeStatus2(args.status, "ready"),
+    status: normalizeStatus3(args.status, "ready"),
+    lifecycleStatus: normalizeStatus3(args.status, "ready"),
     dependencies: [],
     blockedBy: [],
     createdAt: existing?.createdAt ?? timestamp,
@@ -35004,15 +35936,15 @@ function initDoveGoal(root, args = {}) {
     boundaryHistory: [],
     handoff: null,
     lastTransition: null,
-    lessonIds: normalizeStringArray22(existing?.lessonIds),
-    artifactRefs: normalizeStringArray22(args.artifactRefs ?? existing?.artifactRefs),
+    lessonIds: normalizeStringArray24(existing?.lessonIds),
+    artifactRefs: normalizeStringArray24(args.artifactRefs ?? existing?.artifactRefs),
     contextPolicy: DOVE_AUDIO_CONTEXT_POLICY,
-    packetPath: taskPacketPath(packetId),
-    packetContextPath: taskContextPath(packetId),
+    packetPath: taskPacketPath2(packetId),
+    packetContextPath: taskContextPath2(packetId),
     currentFocus: objective,
     nextAction: "project:dove.mission"
   };
-  writePacket(root, packet);
+  writePacket2(root, packet);
   const nextIndex = saveTaskIndex(root, upsertIndexItem(index, packet));
   saveState(root, {
     ...state,
@@ -35046,8 +35978,8 @@ function initDoveGoal(root, args = {}) {
 function buildProposedInitPacket(root, args = {}, classification = { domain: "engineering" }, responseLanguage = "zh") {
   const state = readStateForTaskContract(root);
   const timestamp = nowIso();
-  const title = normalizeString9(args.initTitle ?? args.projectTitle ?? args.workspaceTitle ?? state.dove.title, state.dove.title);
-  const objective = normalizeString9(args.initObjective ?? args.initGoal ?? args.projectObjective ?? args.projectGoal ?? state.dove.objective ?? args.goal ?? args.objective ?? args.summary, state.dove.objective ?? doveText(responseLanguage, "projectTitleFallback"));
+  const title = normalizeString10(args.initTitle ?? args.projectTitle ?? args.workspaceTitle ?? state.dove.title, state.dove.title);
+  const objective = normalizeString10(args.initObjective ?? args.initGoal ?? args.projectObjective ?? args.projectGoal ?? state.dove.objective ?? args.goal ?? args.objective ?? args.summary, state.dove.objective ?? doveText(responseLanguage, "projectTitleFallback"));
   const packetId = normalizeTaskPacketId(args.initId ?? "init");
   return {
     id: packetId,
@@ -35059,8 +35991,8 @@ function buildProposedInitPacket(root, args = {}, classification = { domain: "en
     creatorKind: "user",
     stage: "plan",
     domain: normalizeAllowed3(args.initDomain ?? args.projectDomain ?? classification.domain, DOVE_TASK_DOMAINS, "engineering"),
-    status: normalizeStatus2(args.initStatus, "ready"),
-    lifecycleStatus: normalizeStatus2(args.initStatus, "ready"),
+    status: normalizeStatus3(args.initStatus, "ready"),
+    lifecycleStatus: normalizeStatus3(args.initStatus, "ready"),
     dependencies: [],
     blockedBy: [],
     createdAt: timestamp,
@@ -35076,10 +36008,10 @@ function buildProposedInitPacket(root, args = {}, classification = { domain: "en
     handoff: null,
     lastTransition: null,
     lessonIds: [],
-    artifactRefs: normalizeStringArray22(args.initArtifactRefs),
+    artifactRefs: normalizeStringArray24(args.initArtifactRefs),
     contextPolicy: DOVE_AUDIO_CONTEXT_POLICY,
-    packetPath: taskPacketPath(packetId),
-    packetContextPath: taskContextPath(packetId),
+    packetPath: taskPacketPath2(packetId),
+    packetContextPath: taskContextPath2(packetId),
     currentFocus: objective,
     nextAction: "project:dove.mission"
   };
@@ -35120,8 +36052,8 @@ function assertMissionReplayTargetsAvailable(root, contract) {
   const currentIndex = loadTaskIndex(root);
   const indexedIds = new Set((currentIndex.items ?? []).map((item) => item.id));
   for (const target of targets) {
-    const packetExists = fs22.existsSync(path23.join(root, taskPacketPath(target.id)));
-    const contextExists = fs22.existsSync(path23.join(root, taskContextPath(target.id)));
+    const packetExists = fs23.existsSync(path26.join(root, taskPacketPath2(target.id)));
+    const contextExists = fs23.existsSync(path26.join(root, taskContextPath2(target.id)));
     if (indexedIds.has(target.id) || packetExists || contextExists) {
       throw new Error(`Dove mission replay target task id already exists or changed: ${target.id}. Request a fresh proposal.`);
     }
@@ -35131,13 +36063,13 @@ function materializeDoveTask(root, contract) {
   const { index, packet, checklistTasks, checklistProposal, classification, blockers, applicableLessons, responseLanguage, proposedInit } = contract;
   let nextIndex = index;
   if (proposedInit) {
-    writePacket(root, proposedInit);
+    writePacket2(root, proposedInit);
     nextIndex = upsertIndexItem(nextIndex, proposedInit);
   }
-  writePacket(root, packet);
+  writePacket2(root, packet);
   nextIndex = upsertIndexItem(nextIndex, packet);
   for (const checklistTask of checklistTasks) {
-    writePacket(root, checklistTask);
+    writePacket2(root, checklistTask);
     nextIndex = upsertIndexItem(nextIndex, checklistTask);
   }
   nextIndex = saveTaskIndex(root, nextIndex);
@@ -35189,23 +36121,23 @@ function materializeDoveTask(root, contract) {
 function objectArray(value) {
   return Array.isArray(value) ? value.filter((item) => item !== null && item !== void 0) : [];
 }
-function plainObject2(value) {
+function plainObject3(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 function normalizePlanMissionSource(item) {
   if (typeof item === "string") {
     return { title: item, summary: item };
   }
-  const source = plainObject2(item);
-  const title = normalizeString9(source.title ?? source.goal ?? source.objective ?? source.summary, null);
+  const source = plainObject3(item);
+  const title = normalizeString10(source.title ?? source.goal ?? source.objective ?? source.summary, null);
   return {
     ...source,
     title,
-    summary: normalizeString9(source.summary ?? source.goal ?? source.objective, title)
+    summary: normalizeString10(source.summary ?? source.goal ?? source.objective, title)
   };
 }
 function planMissionSources(args = {}, planTask, responseLanguage = "zh") {
-  const planConversion = plainObject2(args.planConversion);
+  const planConversion = plainObject3(args.planConversion);
   const missionInputs = [
     ...objectArray(planConversion.plannedMissions),
     ...objectArray(planConversion.resultingMissions),
@@ -35254,8 +36186,8 @@ function planOutputExecutionBlock(task, args = {}, responseLanguage = "zh") {
     };
   }
   const notExecutable = flattenPlanMissionSources(sources).map((source, index) => {
-    const hasTitle = Boolean(normalizeString9(source.title ?? source.goal ?? source.objective ?? source.summary, null));
-    const hasExplicitContract = Object.keys(plainObject2(source.executionContract)).length > 0;
+    const hasTitle = Boolean(normalizeString10(source.title ?? source.goal ?? source.objective ?? source.summary, null));
+    const hasExplicitContract = Object.keys(plainObject3(source.executionContract)).length > 0;
     const readiness = doveExecutionContractReadiness(hasExplicitContract ? source.executionContract : null);
     const missing = [hasTitle ? null : "title", ...readiness.missing].filter(Boolean);
     return hasExplicitContract && readiness.ready && hasTitle ? null : {
@@ -35298,7 +36230,7 @@ function deterministicDerivedTaskId(source, prefix, title) {
 }
 function buildDerivedTask(root, init, parent, source, options = {}) {
   const responseLanguage = options.responseLanguage ?? resolveDoveResponseLanguage(root, source);
-  const title = normalizeString9(source.title ?? source.goal ?? source.objective ?? source.summary, null);
+  const title = normalizeString10(source.title ?? source.goal ?? source.objective ?? source.summary, null);
   if (!title) {
     throw new Error("Derived mission requires an explicit title, goal, objective, or summary.");
   }
@@ -35308,14 +36240,14 @@ function buildDerivedTask(root, init, parent, source, options = {}) {
   if (options.minimumLevel !== void 0 && level < options.minimumLevel) {
     throw new Error(`Derived mission ${title} level ${level} must be at least ${options.minimumLevel}.`);
   }
-  const artifactRefs = normalizeStringArray22([
-    ...normalizeStringArray22(source.artifactRefs ?? source.artifactPaths),
-    ...options.sourcePlanTaskId ? [taskPacketPath(options.sourcePlanTaskId)] : []
+  const artifactRefs = normalizeStringArray24([
+    ...normalizeStringArray24(source.artifactRefs ?? source.artifactPaths),
+    ...options.sourcePlanTaskId ? [taskPacketPath2(options.sourcePlanTaskId)] : []
   ]);
   return buildPacket(root, {
     ...source,
     title,
-    summary: normalizeString9(source.summary ?? source.goal ?? source.objective, title),
+    summary: normalizeString10(source.summary ?? source.goal ?? source.objective, title),
     stage: classification.stage,
     domain: classification.domain,
     status: "pending",
@@ -35355,7 +36287,7 @@ function materializeOneDerivedTask(root, index, packet, catalog) {
   if (existing) {
     return { index, packet: existing, created: false };
   }
-  writePacket(root, packet);
+  writePacket2(root, packet);
   catalog.byId.set(packet.id, packet);
   return { index: upsertIndexItem(index, packet), packet, created: true };
 }
@@ -35421,8 +36353,8 @@ function createDoveTask(root, args = {}) {
   const confirmed = hasExplicitConfirmation(args);
   const mutationMode = missionProposalMutationMode(root, args);
   if (confirmed) {
-    const suppliedProposalDigest2 = normalizeString9(args.proposalDigest, "");
-    const suppliedPacketId = normalizeString9(args.id ?? args.packetId, "");
+    const suppliedProposalDigest2 = normalizeString10(args.proposalDigest, "");
+    const suppliedPacketId = normalizeString10(args.id ?? args.packetId, "");
     if (!/^[0-9a-f]{64}$/u.test(suppliedProposalDigest2) || !suppliedPacketId) {
       throw new Error("Confirmed Dove mission materialization requires the exact proposalDigest and task id returned by the selected local proposal replay data.");
     }
@@ -35432,7 +36364,7 @@ function createDoveTask(root, args = {}) {
     if (args.proposalVersion !== MISSION_PROPOSAL_VERSION) {
       throw new Error("The selected local Dove mission proposal replay version is not supported. Request a fresh proposal.");
     }
-    if (normalizeString9(args.proposalWorkspace, "") !== canonicalMissionWorkspace(root)) {
+    if (normalizeString10(args.proposalWorkspace, "") !== canonicalMissionWorkspace(root)) {
       throw new Error("The selected local Dove mission proposal replay belongs to a different canonical workspace. Request a fresh proposal.");
     }
   }
@@ -35488,7 +36420,7 @@ function createDoveTask(root, args = {}) {
       message: doveText(responseLanguage, "createTaskConfirmMessage")
     };
   }
-  const suppliedProposalDigest = normalizeString9(args.proposalDigest, "");
+  const suppliedProposalDigest = normalizeString10(args.proposalDigest, "");
   const replayDigest = missionProposalDigest(root, contract, args, missionReplayFields(args));
   if (suppliedProposalDigest !== replayDigest) {
     throw new Error("The selected local Dove mission proposal replay no longer matches the current contract or exact replay fields. Request a fresh proposal before materialization.");
@@ -35520,7 +36452,7 @@ function createDoveTask(root, args = {}) {
   };
 }
 function candidateTasks(index) {
-  return (index.items ?? []).filter((item) => item.level !== 0 && activeStatus(item.status));
+  return (index.items ?? []).filter((item) => item.level !== 0 && activeStatus2(item.status));
 }
 function workflowTargetOptions() {
   return {
@@ -35540,12 +36472,12 @@ function evidenceExplanationForResolution(artifactResolution, responseLanguage =
     "no-existing-artifact-owner": "evidenceResolutionNoExistingOwner",
     "artifact-conflict": "evidenceResolutionConflict"
   };
-  const code = normalizeString9(artifactResolution.explanationCode, "no-artifacts");
+  const code = normalizeString10(artifactResolution.explanationCode, "no-artifacts");
   return {
     code,
     message: doveText(responseLanguage, keyByCode[code] ?? "evidenceResolutionNoArtifacts"),
-    selectedPacketId: normalizeString9(artifactResolution.selectedPacketId, null),
-    requestedArtifacts: normalizeStringArray22(artifactResolution.requestedArtifacts),
+    selectedPacketId: normalizeString10(artifactResolution.selectedPacketId, null),
+    requestedArtifacts: normalizeStringArray24(artifactResolution.requestedArtifacts),
     acceptedPacketIds: Array.isArray(artifactResolution.acceptedMatches) ? artifactResolution.acceptedMatches.map((match) => match.packetId).filter(Boolean) : [],
     conflictingPacketIds: Array.isArray(artifactResolution.conflictingMatches) ? artifactResolution.conflictingMatches.map((match) => match.packetId).filter(Boolean) : []
   };
@@ -35574,7 +36506,7 @@ function chooseTask(root, index, args = {}) {
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
 }
 function normalizeMissionPassStatus(args = {}) {
-  const envelope = plainObject2(args.missionPass ?? args.passResult ?? args.result);
+  const envelope = plainObject3(args.missionPass ?? args.passResult ?? args.result);
   const explicit = normalizeAllowed3(args.resultStatus ?? args.taskStatus ?? args.missionStatus ?? envelope.resultStatus ?? envelope.taskStatus ?? envelope.missionStatus, ["completed", "blocked", "in-progress"], null);
   if (explicit) {
     return explicit;
@@ -35679,7 +36611,7 @@ var MISSION_PASS_FIELDS = [
   "childMissions"
 ];
 function missionPassPayload(args = {}) {
-  const envelope = plainObject2(args.missionPass ?? args.passResult ?? args.result);
+  const envelope = plainObject3(args.missionPass ?? args.passResult ?? args.result);
   const payload = { ...envelope };
   for (const field of MISSION_PASS_FIELDS) {
     if (args[field] !== void 0) {
@@ -35693,7 +36625,7 @@ function nonEmptyArrayField(value) {
 }
 function hasPlanMissionOutput(args = {}) {
   const payload = missionPassPayload(args);
-  return [payload.plannedMissions, payload.resultingMissions, payload.missions, payload.childMissions].some(nonEmptyArrayField) || Object.keys(plainObject2(payload.planConversion)).length > 0;
+  return [payload.plannedMissions, payload.resultingMissions, payload.missions, payload.childMissions].some(nonEmptyArrayField) || Object.keys(plainObject3(payload.planConversion)).length > 0;
 }
 function completionEvidenceForPayload(payload = {}) {
   const receipt = normalizeDoveExecutionReceipt(payload.executionReceipt, null);
@@ -35701,28 +36633,28 @@ function completionEvidenceForPayload(payload = {}) {
     ...normalizeDoveVerifiedCriteria(payload.verifiedCriteria),
     ...normalizeDoveVerifiedCriteria(receipt?.verifiedCriteria)
   ]);
-  const verificationEvidencePaths = normalizeStringArray22([
-    ...normalizeStringArray22(payload.verificationEvidencePaths),
-    ...normalizeStringArray22(receipt?.verificationEvidencePaths)
+  const verificationEvidencePaths = normalizeStringArray24([
+    ...normalizeStringArray24(payload.verificationEvidencePaths),
+    ...normalizeStringArray24(receipt?.verificationEvidencePaths)
   ]);
-  const validationEvidencePaths = normalizeStringArray22([
-    ...normalizeStringArray22(payload.validationEvidencePaths),
-    ...normalizeStringArray22(receipt?.validationEvidencePaths)
+  const validationEvidencePaths = normalizeStringArray24([
+    ...normalizeStringArray24(payload.validationEvidencePaths),
+    ...normalizeStringArray24(receipt?.validationEvidencePaths)
   ]);
-  const evidenceLinks = normalizeStringArray22([
-    ...normalizeStringArray22(payload.evidenceLinks),
-    ...normalizeStringArray22(payload.evidencePaths),
-    ...normalizeStringArray22(receipt?.evidenceLinks),
-    ...normalizeStringArray22(receipt?.evidencePaths)
+  const evidenceLinks = normalizeStringArray24([
+    ...normalizeStringArray24(payload.evidenceLinks),
+    ...normalizeStringArray24(payload.evidencePaths),
+    ...normalizeStringArray24(receipt?.evidenceLinks),
+    ...normalizeStringArray24(receipt?.evidencePaths)
   ]);
-  const artifactRefs = normalizeStringArray22([
-    ...normalizeStringArray22(payload.artifactRefs),
-    ...normalizeStringArray22(payload.artifactPaths),
-    ...normalizeStringArray22(receipt?.artifactRefs),
-    ...normalizeStringArray22(receipt?.artifactPaths)
+  const artifactRefs = normalizeStringArray24([
+    ...normalizeStringArray24(payload.artifactRefs),
+    ...normalizeStringArray24(payload.artifactPaths),
+    ...normalizeStringArray24(receipt?.artifactRefs),
+    ...normalizeStringArray24(receipt?.artifactPaths)
   ]);
-  const criteriaEvidencePaths = normalizeStringArray22(verifiedCriteria.flatMap((item) => item.evidencePaths ?? []));
-  const evidencePaths = normalizeStringArray22([
+  const criteriaEvidencePaths = normalizeStringArray24(verifiedCriteria.flatMap((item) => item.evidencePaths ?? []));
+  const evidencePaths = normalizeStringArray24([
     ...evidenceLinks,
     ...artifactRefs,
     ...validationEvidencePaths,
@@ -35741,7 +36673,7 @@ function completionEvidenceForPayload(payload = {}) {
   };
 }
 function classifyRequiredEvidenceReference(value) {
-  const reference = normalizeString9(value, "");
+  const reference = normalizeString10(value, "");
   if (!reference) {
     return { reference, kind: "invalid", reason: "empty evidence requirement" };
   }
@@ -35753,12 +36685,12 @@ function classifyRequiredEvidenceReference(value) {
     return { reference, kind: "invalid", reason: normalized.reason };
   }
   const looksNarrative = /\s|[，。；！？：]/u.test(normalized.normalizedPath);
-  const pathLike = normalized.normalizedPath.startsWith(".") || !looksNarrative && normalized.normalizedPath.includes("/") || !looksNarrative && path23.posix.extname(normalized.normalizedPath).length > 0;
+  const pathLike = normalized.normalizedPath.startsWith(".") || !looksNarrative && normalized.normalizedPath.includes("/") || !looksNarrative && path26.posix.extname(normalized.normalizedPath).length > 0;
   return pathLike ? { reference, kind: "reference", normalizedReference: normalized.normalizedPath } : { reference, kind: "description" };
 }
 function contractEvidenceRequirements(contract, evidence = {}) {
-  const classified = normalizeStringArray22(contract?.convergence?.evidenceRequired).map(classifyRequiredEvidenceReference);
-  const submittedPaths = new Set(normalizeStringArray22(evidence.evidencePaths).map((item) => {
+  const classified = normalizeStringArray24(contract?.convergence?.evidenceRequired).map(classifyRequiredEvidenceReference);
+  const submittedPaths = new Set(normalizeStringArray24(evidence.evidencePaths).map((item) => {
     if (isExternalArtifactReference(item)) {
       return item;
     }
@@ -35802,7 +36734,10 @@ function completionVerificationBlock(root, task, args = {}, responseLanguage = "
   const sourceReferences = evidence.evidencePaths.filter((item) => item.startsWith("source:")).map((item) => item.slice("source:".length));
   const sourceEvidence = evaluateSourceReferences(root, sourceReferences);
   const ineligibleSourceEvidence = sourceEvidence.filter((item) => !item.eligible);
-  if (ineligibleSourceEvidence.length > 0) {
+  const noteReferences = evidence.evidencePaths.filter((item) => item.startsWith("note:")).map((item) => item.slice("note:".length));
+  const noteEvidence = evaluateNoteReferences(root, noteReferences, task.id);
+  const ineligibleNoteEvidence = noteEvidence.filter((item) => !item.eligible);
+  if (ineligibleSourceEvidence.length > 0 || ineligibleNoteEvidence.length > 0) {
     return {
       status: "verification-failed",
       requestedStatus: "completed",
@@ -35810,8 +36745,9 @@ function completionVerificationBlock(root, task, args = {}, responseLanguage = "
       title: task.title,
       boundaryType: "verification-failed",
       ineligibleSourceEvidence: ineligibleSourceEvidence.map((item) => ({ sourceId: item.reference, reason: item.reason })),
-      requiredActions: ["verify-source-material", "retry-completion-with-verified-source-evidence"],
-      message: responseLanguage === "en" ? "Candidate, rejected, missing, or identity-mutated sources cannot support task completion." : "candidate\u3001rejected\u3001\u7F3A\u5931\u6216\u8EAB\u4EFD\u5DF2\u53D8\u5316\u7684\u6765\u6E90\u4E0D\u80FD\u652F\u6491\u4EFB\u52A1\u5B8C\u6210\u3002",
+      ineligibleNoteEvidence: ineligibleNoteEvidence.map((item) => ({ noteId: item.reference, reason: item.reason })),
+      requiredActions: ["verify-source-material", "bind-note-and-source-to-completion-packet", "retry-completion-with-verified-evidence"],
+      message: responseLanguage === "en" ? "Candidate-backed, rejected, missing, identity-mutated, untrusted, material-changed, or packet-mismatched source/note evidence cannot support task completion." : "candidate-backed\u3001rejected\u3001\u7F3A\u5931\u3001\u8EAB\u4EFD\u53D8\u5316\u3001\u6765\u6E90\u4E0D\u53EF\u4FE1\u3001\u6750\u6599\u53D8\u5316\u6216 packet \u4E0D\u5339\u914D\u7684 source/note \u8BC1\u636E\u4E0D\u80FD\u652F\u6491\u4EFB\u52A1\u5B8C\u6210\u3002",
       nextAction: "project:dove.source",
       proposalOnly: true,
       noAutoApply: true,
@@ -35841,11 +36777,14 @@ function completionVerificationBlock(root, task, args = {}, responseLanguage = "
       task,
       executionContract: contract,
       verifiedCriteria: evidence.verifiedCriteria,
-      eligibleSourceReferences: sourceEvidence.filter((item) => item.eligible).map((item) => `source:${item.reference}`)
+      eligibleSourceReferences: [
+        ...sourceEvidence.filter((item) => item.eligible).map((item) => `source:${item.reference}`),
+        ...noteEvidence.filter((item) => item.eligible).map((item) => `note:${item.reference}`)
+      ]
     }
   });
   const hasInspectibleEvidence = hasPlanOutput || integrity.hasSubstantiveEvidence === true;
-  const hasSummary = Boolean(normalizeString9(payload.resultSummary ?? payload.summary ?? payload.reason, ""));
+  const hasSummary = Boolean(normalizeString10(payload.resultSummary ?? payload.summary ?? payload.reason, ""));
   if (!hasSummary || !hasInspectibleEvidence) {
     const requiredActions = [
       hasSummary ? null : "provide-result-summary",
@@ -35993,7 +36932,6 @@ function buildExecutionReceipt({ payload = {}, taskBefore = {}, taskAfter = {}, 
 function recordDoveMissionPass(root, args = {}) {
   assertGovernanceMutationRegistered("record-dove-mission-pass", "guarded");
   assertNoSystemOwnedMissionPassFields(args);
-  ensureWorkspace(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const index = loadTaskIndex(root);
   const selection = chooseTask(root, index, args);
@@ -36016,6 +36954,13 @@ function recordDoveMissionPass(root, args = {}) {
     throw new Error("The level-0 init task cannot receive a mission pass result. Convert a user demand into a non-init mission first.");
   }
   const taskBefore = loadFullTask(root, selected);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Recording a Dove mission pass"
+  );
   const payload = missionPassPayload(args);
   const resultStatus = normalizeMissionPassStatus(payload);
   const completionBlock = checklistCompletionBlock(root, taskBefore, resultStatus, responseLanguage);
@@ -36037,31 +36982,32 @@ function recordDoveMissionPass(root, args = {}) {
       evidenceExplanation: selectionEvidenceExplanation
     };
   }
+  ensureWorkspace(root);
   const timestamp = nowIso();
   const runId = normalizeTaskPacketId(payload.runId ?? `mission-${taskBefore.id}-${Date.now().toString(36)}`);
-  const nextAction = normalizeString9(payload.nextAction, resultStatus === "completed" ? "project:dove.status" : taskBefore.nextAction ?? "project:dove.status");
+  const nextAction = normalizeString10(payload.nextAction, resultStatus === "completed" ? "project:dove.status" : taskBefore.nextAction ?? "project:dove.status");
   const payloadEvidence = completionEvidenceForPayload(payload);
-  const artifactRefs = normalizeStringArray22([...Array.isArray(taskBefore.artifactRefs) ? taskBefore.artifactRefs : [], ...payloadEvidence.artifactRefs]);
+  const artifactRefs = normalizeStringArray24([...Array.isArray(taskBefore.artifactRefs) ? taskBefore.artifactRefs : [], ...payloadEvidence.artifactRefs]);
   const lifecycleFields = lifecycleFieldsForStatus(resultStatus, payload, timestamp, responseLanguage);
   const task = updateTaskLifecycle(root, taskBefore, resultStatus, {
     ...lifecycleFields,
     runId,
     surface: "dove.mission",
     command: normalizeAutoCommandId(payload.command ?? payload.workflow ?? payload.preset ?? payload.nextCommand),
-    summary: normalizeString9(payload.resultSummary ?? payload.summary, ""),
-    reason: normalizeString9(payload.reason ?? payload.stopReason, ""),
+    summary: normalizeString10(payload.resultSummary ?? payload.summary, ""),
+    reason: normalizeString10(payload.reason ?? payload.stopReason, ""),
     nextAction,
     artifactRefs,
     evidenceLinks: payloadEvidence.evidenceLinks
   });
   const evidenceLinks = payloadEvidence.evidenceLinks;
-  const summary = normalizeString9(payload.resultSummary ?? payload.summary, resultStatus === "completed" ? doveText(responseLanguage, "missionPassCompletedSummary") : resultStatus === "blocked" ? doveText(responseLanguage, "missionPassBlockedSummary") : doveText(responseLanguage, "missionPassProgressSummary"));
+  const summary = normalizeString10(payload.resultSummary ?? payload.summary, resultStatus === "completed" ? doveText(responseLanguage, "missionPassCompletedSummary") : resultStatus === "blocked" ? doveText(responseLanguage, "missionPassBlockedSummary") : doveText(responseLanguage, "missionPassProgressSummary"));
   const command = normalizeAutoCommandId(payload.command ?? payload.workflow ?? payload.preset ?? payload.nextCommand);
-  const outcome = normalizeString9(payload.outcome, resultStatus === "completed" ? "task-completed" : resultStatus === "blocked" ? "mission-pass-blocked" : "single-pass-progress-recorded");
-  const stopReason = normalizeString9(payload.stopReason, resultStatus === "blocked" ? "mission-pass-blocked" : null);
+  const outcome = normalizeString10(payload.outcome, resultStatus === "completed" ? "task-completed" : resultStatus === "blocked" ? "mission-pass-blocked" : "single-pass-progress-recorded");
+  const stopReason = normalizeString10(payload.stopReason, resultStatus === "blocked" ? "mission-pass-blocked" : null);
   const planConversion = taskBefore.stage === "plan" && resultStatus === "completed" && payload.convertPlanToMissions !== false ? materializePlanResultMissions(root, taskBefore, payload, runId) : null;
-  const startedAt = normalizeString9(args.startedAt, timestamp);
-  const completedAt = normalizeString9(args.completedAt, timestamp);
+  const startedAt = normalizeString10(args.startedAt, timestamp);
+  const completedAt = normalizeString10(args.completedAt, timestamp);
   const executionReceipt = buildExecutionReceipt({
     payload,
     taskBefore,
@@ -36169,6 +37115,13 @@ function recordDoveMissionPass(root, args = {}) {
 }
 function killDoveTask(root, args = {}) {
   assertGovernanceMutationRegistered("kill-dove-task", "guarded");
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Killing a Dove task"
+  );
   ensureWorkspace(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const index = loadTaskIndex(root);
@@ -36187,7 +37140,7 @@ function killDoveTask(root, args = {}) {
   const fullPacket = loadFullTask(root, selected);
   const packet = updateTaskLifecycle(root, fullPacket, "killed", lifecycleFieldsForStatus("killed", {
     ...args,
-    reason: normalizeString9(args.reason ?? args.killReason, doveText(responseLanguage, "killReason")),
+    reason: normalizeString10(args.reason ?? args.killReason, doveText(responseLanguage, "killReason")),
     surface: "dove.status",
     command: "kill_dove_task"
   }, nowIso(), responseLanguage));
@@ -36200,13 +37153,13 @@ function killDoveTask(root, args = {}) {
 }
 function lifecycleFieldsForStatus(status, args = {}, timestamp = nowIso(), responseLanguage = "zh") {
   const fields = {};
-  const nextAction = normalizeString9(args.nextAction, null);
+  const nextAction = normalizeString10(args.nextAction, null);
   if (nextAction) {
     fields.nextAction = nextAction;
   }
-  const artifactRefs = normalizeStringArray22([
-    ...normalizeStringArray22(args.artifactRefs),
-    ...normalizeStringArray22(args.artifactPaths)
+  const artifactRefs = normalizeStringArray24([
+    ...normalizeStringArray24(args.artifactRefs),
+    ...normalizeStringArray24(args.artifactPaths)
   ]);
   if (artifactRefs.length > 0) {
     fields.artifactRefs = artifactRefs;
@@ -36235,7 +37188,7 @@ function lifecycleFieldsForStatus(status, args = {}, timestamp = nowIso(), respo
   }
   if (status === "killed") {
     fields.killedAt = timestamp;
-    fields.killReason = normalizeString9(args.reason ?? args.killReason, doveText(responseLanguage, "lifecycleKillReason"));
+    fields.killReason = normalizeString10(args.reason ?? args.killReason, doveText(responseLanguage, "lifecycleKillReason"));
     fields.nextAction = fields.nextAction ?? "project:dove.status";
   }
   if (status === "completed") {
@@ -36243,32 +37196,32 @@ function lifecycleFieldsForStatus(status, args = {}, timestamp = nowIso(), respo
     fields.nextAction = fields.nextAction ?? "project:dove.status";
   }
   if (status === "blocked") {
-    fields.blockedReason = normalizeString9(args.reason ?? args.blockReason ?? args.blockedReason, "");
+    fields.blockedReason = normalizeString10(args.reason ?? args.blockReason ?? args.blockedReason, "");
     fields.nextAction = fields.nextAction ?? "project:dove.status";
   }
   if (status === "archived") {
     fields.archivedAt = timestamp;
-    fields.archiveReason = normalizeString9(args.reason ?? args.archiveReason, "archived through status adjustment");
+    fields.archiveReason = normalizeString10(args.reason ?? args.archiveReason, "archived through status adjustment");
     fields.nextAction = fields.nextAction ?? "project:dove.status";
   }
   return fields;
 }
 function normalizeStatusAdjustment(item, index) {
-  const source = plainObject2(item);
+  const source = plainObject3(item);
   return {
     index: index + 1,
-    packetId: normalizeString9(source.packetId ?? source.taskPacketId ?? source.taskId ?? source.id, null),
+    packetId: normalizeString10(source.packetId ?? source.taskPacketId ?? source.taskId ?? source.id, null),
     status: normalizeAllowed3(source.status ?? source.taskStatus ?? source.missionStatus, DOVE_TASK_STATUSES, null),
-    reason: normalizeString9(source.reason ?? source.summary ?? source.resultSummary, ""),
-    summary: normalizeString9(source.summary ?? source.resultSummary ?? source.reason, ""),
-    nextAction: normalizeString9(source.nextAction, null),
-    evidenceLinks: normalizeStringArray22(source.evidenceLinks ?? source.evidencePaths),
-    validationEvidencePaths: normalizeStringArray22(source.validationEvidencePaths),
-    verificationEvidencePaths: normalizeStringArray22(source.verificationEvidencePaths),
+    reason: normalizeString10(source.reason ?? source.summary ?? source.resultSummary, ""),
+    summary: normalizeString10(source.summary ?? source.resultSummary ?? source.reason, ""),
+    nextAction: normalizeString10(source.nextAction, null),
+    evidenceLinks: normalizeStringArray24(source.evidenceLinks ?? source.evidencePaths),
+    validationEvidencePaths: normalizeStringArray24(source.validationEvidencePaths),
+    verificationEvidencePaths: normalizeStringArray24(source.verificationEvidencePaths),
     verifiedCriteria: normalizeDoveVerifiedCriteria(source.verifiedCriteria),
     executionReceipt: normalizeDoveExecutionReceipt(source.executionReceipt, null),
     executionContract: normalizeDoveExecutionContract(source.executionContract, null),
-    artifactRefs: normalizeStringArray22(source.artifactRefs ?? source.artifactPaths)
+    artifactRefs: normalizeStringArray24(source.artifactRefs ?? source.artifactPaths)
   };
 }
 function buildStatusAdjustmentPreviewCard(adjustment, responseLanguage = "zh") {
@@ -36289,7 +37242,6 @@ function buildStatusAdjustmentPreviewCard(adjustment, responseLanguage = "zh") {
 }
 function applyDoveStatusAdjustments(root, args = {}) {
   assertGovernanceMutationRegistered("apply-dove-status-adjustments", "guarded");
-  ensureWorkspace(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const adjustments = objectArray(args.adjustments ?? args.statusAdjustments ?? args.items).map(normalizeStatusAdjustment);
   if (!hasExplicitConfirmation(args)) {
@@ -36311,6 +37263,14 @@ function applyDoveStatusAdjustments(root, args = {}) {
       message: doveText(responseLanguage, "statusAdjustConfirmMessage")
     };
   }
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Applying Dove status adjustments"
+  );
+  ensureWorkspace(root);
   if (adjustments.length === 0) {
     const result2 = {
       status: "no-op",
@@ -36455,7 +37415,7 @@ function applyDoveStatusAdjustments(root, args = {}) {
 }
 function unresolvedTaskDependencies(index, task) {
   const byId = new Map((index.items ?? []).map((item) => [item.id, item]));
-  return Array.from(/* @__PURE__ */ new Set([...normalizeStringArray22(task.dependencies), ...normalizeStringArray22(task.blockedBy)])).filter((dependencyId) => {
+  return Array.from(/* @__PURE__ */ new Set([...normalizeStringArray24(task.dependencies), ...normalizeStringArray24(task.blockedBy)])).filter((dependencyId) => {
     const dependency = byId.get(dependencyId);
     return !dependency || dependency.status !== "completed";
   });
@@ -36473,25 +37433,31 @@ function operatorQueue(index) {
     };
   });
   const runnableCandidates = tasks.filter((task) => ["ready", "in-progress"].includes(task.status) && task.unresolvedDependencyIds.length === 0);
+  const resumableHostPassTasks = tasks.filter(
+    (task) => task.status === "blocked" && task.unresolvedDependencyIds.length === 0 && ["awaiting-host-pass", "awaiting-host-pass-result"].includes(task.boundary?.type)
+  );
   const autoRunnable = runnableCandidates.filter((task) => task.safeToRun);
-  const hostPassRequired = runnableCandidates.filter((task) => !task.safeToRun);
+  const hostPassRequired = [
+    ...runnableCandidates.filter((task) => !task.safeToRun),
+    ...resumableHostPassTasks
+  ];
   return {
     autoRunnable,
     hostPassRequired,
     runnable: [...autoRunnable, ...hostPassRequired],
-    blocked: tasks.filter((task) => task.status === "blocked" || task.unresolvedDependencyIds.length > 0),
+    blocked: tasks.filter((task) => task.status === "blocked" && !resumableHostPassTasks.some((resumable) => resumable.id === task.id) || task.unresolvedDependencyIds.length > 0),
     pending: tasks.filter((task) => task.status === "pending")
   };
 }
 function blockerInvestigationTargetTasks(blockedTasks = []) {
   return blockedTasks.filter((task) => {
-    if (normalizeStringArray22(task.unresolvedDependencyIds).length > 0) {
+    if (normalizeStringArray24(task.unresolvedDependencyIds).length > 0) {
       return true;
     }
     if (task.status !== "blocked" || task.derivedFrom === "blocked-mission-investigation") {
       return false;
     }
-    return Object.keys(plainObject2(task.boundary)).length === 0;
+    return Object.keys(plainObject3(task.boundary)).length === 0;
   });
 }
 function sortOperatorTasks(tasks = []) {
@@ -36553,15 +37519,11 @@ function operatorQueuePreview(queue = {}, responseLanguage = "zh") {
   return Object.fromEntries(Object.entries(cards).map(([key, value]) => [key, value.slice(0, 2)]));
 }
 function normalizeBlockerInvestigationMode(args = {}) {
-  const explicit = normalizeString9(args.blockerInvestigationMode, null);
-  if (explicit) {
-    const mode = explicit.toLowerCase();
-    if (!["none", "propose", "create"].includes(mode)) {
-      throw new Error('blockerInvestigationMode must be "none", "propose", or "create".');
-    }
-    return mode;
+  const explicit = normalizeString10(args.blockerInvestigationMode, "propose").toLowerCase();
+  if (!["none", "propose", "create"].includes(explicit)) {
+    throw new Error('blockerInvestigationMode must be "none", "propose", or "create".');
   }
-  return args.createBlockedInvestigations === true ? "create" : "propose";
+  return explicit;
 }
 function emptyOperatorBlockerPlanConversion(blockedTasks = [], mode = "propose") {
   const blockedTaskIds = operatorTaskIds(blockedTasks);
@@ -36581,15 +37543,15 @@ function emptyOperatorBlockerPlanConversion(blockedTasks = [], mode = "propose")
   };
 }
 function compactOperatorBlockerPlanConversion(conversion = {}) {
-  const createdMissionIds = normalizeStringArray22(conversion.createdMissionIds ?? operatorTaskIds(conversion.createdMissions ?? []));
-  const reusedMissionIds = normalizeStringArray22(conversion.reusedMissionIds ?? operatorTaskIds(conversion.reusedMissions ?? []));
+  const createdMissionIds = normalizeStringArray24(conversion.createdMissionIds ?? operatorTaskIds(conversion.createdMissions ?? []));
+  const reusedMissionIds = normalizeStringArray24(conversion.reusedMissionIds ?? operatorTaskIds(conversion.reusedMissions ?? []));
   const createdCount = conversion.createdCount ?? createdMissionIds.length;
   const reusedCount = conversion.reusedCount ?? reusedMissionIds.length;
   return {
     mode: conversion.mode ?? "propose",
     proposalOnly: conversion.proposalOnly !== false,
-    blockedTaskIds: normalizeStringArray22(conversion.blockedTaskIds),
-    proposedBlockedTaskIds: normalizeStringArray22(conversion.proposedBlockedTaskIds),
+    blockedTaskIds: normalizeStringArray24(conversion.blockedTaskIds),
+    proposedBlockedTaskIds: normalizeStringArray24(conversion.proposedBlockedTaskIds),
     createdCount,
     reusedCount,
     missionCount: conversion.missionCount ?? createdCount,
@@ -36605,13 +37567,61 @@ function compactOperatorResult(result = {}) {
     blockerPlanConversion: compactOperatorBlockerPlanConversion(blockerPlanConversion)
   };
 }
+var OPERATOR_TOP_LEVEL_FIELDS = /* @__PURE__ */ new Set([
+  "confirmed",
+  "includeQueueDetails",
+  "blockerInvestigationMode",
+  "runId",
+  "taskResults"
+]);
+function assertAllowedOperatorTopLevelArgs(args = {}) {
+  const unknownFields = Object.keys(plainObject3(args)).filter((field) => !OPERATOR_TOP_LEVEL_FIELDS.has(field));
+  if (unknownFields.length > 0) {
+    throw new Error(`run_dove_operator does not accept unknown input: ${unknownFields.join(", ")}.`);
+  }
+  if (args.taskResults !== void 0 && !Array.isArray(args.taskResults)) {
+    throw new Error("run_dove_operator taskResults must be an array.");
+  }
+}
+var OPERATOR_TASK_RESULT_FIELDS = /* @__PURE__ */ new Set([
+  "packetId",
+  "resultStatus",
+  "resultSummary",
+  "outcome",
+  "reason",
+  "stopReason",
+  "nextAction",
+  "evidenceLinks",
+  "artifactRefs",
+  "validationEvidencePaths",
+  "verificationEvidencePaths",
+  "verifiedCriteria",
+  "executionContract",
+  "executionReceipt",
+  "boundaryType",
+  "boundaryId",
+  "requiredInputs",
+  "requiredActions",
+  "startedAt",
+  "completedAt"
+]);
 function operatorResultMap(args = {}) {
-  const results = objectArray(args.taskResults ?? args.results ?? args.passResults);
-  const entries = results.map((result) => {
-    const source = plainObject2(result);
-    const id = normalizeString9(source.packetId ?? source.taskPacketId ?? source.taskId ?? source.id, null);
-    return id ? [normalizeTaskPacketId(id), source] : null;
-  }).filter(Boolean);
+  const results = objectArray(args.taskResults);
+  const entries = results.map((result, index) => {
+    const source = plainObject3(result);
+    const unknownFields = Object.keys(source).filter((field) => !OPERATOR_TASK_RESULT_FIELDS.has(field));
+    if (unknownFields.length > 0) {
+      throw new Error(`taskResults[${index}] contains unknown fields: ${unknownFields.join(", ")}.`);
+    }
+    const id = normalizeString10(source.packetId, null);
+    if (!id) {
+      throw new Error(`taskResults[${index}].packetId is required.`);
+    }
+    if (!normalizeAllowed3(source.resultStatus, ["completed", "blocked", "in-progress"], null)) {
+      throw new Error(`taskResults[${index}].resultStatus must be "completed", "blocked", or "in-progress".`);
+    }
+    return [normalizeTaskPacketId(id), source];
+  });
   return new Map(entries);
 }
 function operatorAwaitingHostIteration(task, timestamp, responseLanguage = "zh") {
@@ -36627,65 +37637,56 @@ function operatorAwaitingHostIteration(task, timestamp, responseLanguage = "zh")
 }
 function applyOperatorHostResult(root, taskItem, taskResult, timestamp, responseLanguage = "zh", runId = null) {
   const task = loadFullTask(root, taskItem);
-  const taskStatus = normalizeMissionPassStatus(taskResult);
+  const recorded = recordDoveMissionPass(root, {
+    ...taskResult,
+    packetId: task.id,
+    runId: taskResult.runId ?? `${runId ?? "operator"}-${task.id}`,
+    command: "host-pass-result"
+  });
+  const updatedTask = recorded.task ?? (recorded.boundaryType ? updateTaskLifecycle(root, task, "blocked", {
+    runId,
+    surface: "dove.operator",
+    command: "host-pass-result",
+    boundaryType: normalizeDoveBoundaryType(recorded.boundaryType ?? recorded.status, "blocked-boundary"),
+    reason: recorded.message ?? recorded.status,
+    stopReason: recorded.status,
+    summary: recorded.message ?? recorded.status,
+    requiredActions: recorded.requiredActions ?? [],
+    nextAction: recorded.nextAction ?? "project:dove.status"
+  }) : loadFullTask(root, task));
   const taskResultEvidence = completionEvidenceForPayload(taskResult);
-  const verificationBlock = taskStatus === "completed" ? completionVerificationBlock(root, task, taskResult, responseLanguage) : null;
-  if (verificationBlock) {
-    const updatedTask2 = updateTaskLifecycle(root, task, "blocked", {
-      ...taskResult,
-      runId,
-      surface: "dove.operator",
-      command: "host-pass-result",
-      boundaryType: normalizeDoveBoundaryType(verificationBlock.boundaryType ?? verificationBlock.status, "blocked-boundary"),
-      reason: verificationBlock.message,
-      stopReason: verificationBlock.status,
-      summary: verificationBlock.message,
-      requiredActions: verificationBlock.requiredActions ?? [],
-      nextAction: "project:dove.status"
-    });
-    return {
-      updatedTask: updatedTask2,
-      iteration: {
-        packetId: task.id,
-        title: task.title,
-        status: verificationBlock.status,
-        outcome: verificationBlock.status,
-        stopReason: verificationBlock.message,
-        boundary: updatedTask2.boundary,
-        requiredActions: verificationBlock.requiredActions ?? [],
-        evidenceLinks: taskResultEvidence.evidenceLinks,
-        artifactRefs: taskResultEvidence.artifactRefs,
-        verificationEvidencePaths: taskResultEvidence.verificationEvidencePaths,
-        verifiedCriteria: taskResultEvidence.verifiedCriteria,
-        executionReceipt: taskResultEvidence.executionReceipt,
-        startedAt: normalizeString9(taskResult.startedAt, timestamp),
-        completedAt: normalizeString9(taskResult.completedAt, timestamp)
-      }
-    };
-  }
-  const fields = lifecycleFieldsForStatus(taskStatus, { ...taskResult, runId, surface: "dove.operator", command: "host-pass-result" }, timestamp, responseLanguage);
-  fields.artifactRefs = normalizeStringArray22([...Array.isArray(task.artifactRefs) ? task.artifactRefs : [], ...taskResultEvidence.artifactRefs]);
-  const updatedTask = updateTaskLifecycle(root, task, taskStatus, fields);
+  const status = recorded.status ?? normalizeMissionPassStatus(taskResult);
+  const outcome = recorded.result?.outcome ?? normalizeString10(taskResult.outcome, status === "completed" ? "operator-task-completed" : status === "blocked" ? "operator-task-blocked" : "operator-task-progress");
   return {
     updatedTask,
     iteration: {
       packetId: task.id,
       title: task.title,
-      status: taskStatus,
-      outcome: normalizeString9(taskResult.outcome, taskStatus === "completed" ? "operator-task-completed" : taskStatus === "blocked" ? "operator-task-blocked" : "operator-task-progress"),
-      summary: normalizeString9(taskResult.summary ?? taskResult.resultSummary, doveText(responseLanguage, "operatorResultSummary")),
-      evidenceLinks: taskResultEvidence.evidenceLinks,
-      artifactRefs: fields.artifactRefs,
-      verificationEvidencePaths: taskResultEvidence.verificationEvidencePaths,
-      verifiedCriteria: taskResultEvidence.verifiedCriteria,
-      executionReceipt: taskResultEvidence.executionReceipt,
-      startedAt: normalizeString9(taskResult.startedAt, timestamp),
-      completedAt: normalizeString9(taskResult.completedAt, timestamp)
+      status,
+      outcome,
+      summary: normalizeString10(taskResult.summary ?? taskResult.resultSummary, doveText(responseLanguage, "operatorResultSummary")),
+      stopReason: recorded.result?.stopReason ?? updatedTask.boundary?.reason ?? null,
+      boundary: updatedTask.boundary ?? null,
+      requiredActions: recorded.requiredActions ?? updatedTask.boundary?.requiredActions ?? [],
+      evidenceLinks: recorded.evidenceLinks ?? taskResultEvidence.evidenceLinks,
+      artifactRefs: recorded.artifactRefs ?? taskResultEvidence.artifactRefs,
+      verificationEvidencePaths: recorded.verificationEvidencePaths ?? taskResultEvidence.verificationEvidencePaths,
+      verifiedCriteria: recorded.verifiedCriteria ?? taskResultEvidence.verifiedCriteria,
+      executionReceipt: recorded.executionReceipt ?? taskResultEvidence.executionReceipt,
+      startedAt: normalizeString10(taskResult.startedAt, timestamp),
+      completedAt: normalizeString10(taskResult.completedAt, timestamp)
     }
   };
 }
 function runOperatorInternalStep(root, taskItem, timestamp, responseLanguage = "zh", runId = null) {
   const task = loadFullTask(root, taskItem);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Running a Dove operator work step"
+  );
   const autoPlan = inferAutoStepsForTask(task, {});
   const step = autoPlan.steps[0] ?? null;
   if (!step) {
@@ -36742,7 +37743,7 @@ function runOperatorInternalStep(root, taskItem, timestamp, responseLanguage = "
         updatedTask = updateTaskLifecycle(root, workingTask, "completed", { ...completionArgs, nextAction: "project:dove.status" });
       }
     } else {
-      updatedTask = applyPacketStepResult(root, workingTask, {
+      updatedTask = applyPacketStepResult2(root, workingTask, {
         runId,
         surface: "dove.operator",
         command: step.command,
@@ -36809,7 +37810,7 @@ function materializeBlockedInvestigationMissions(root, blockedTasks, runId, resp
     const source = {
       id: `task-investigate-blocker-for-${fullTask.id}`,
       title: doveText(responseLanguage, "blockerTitle", { title: taskLabel }),
-      summary: normalizeString9(fullTask.blockedReason, doveText(responseLanguage, "blockerSummary", { title: taskLabel })),
+      summary: normalizeString10(fullTask.blockedReason, doveText(responseLanguage, "blockerSummary", { title: taskLabel })),
       stage: "plan",
       domain: fullTask.domain,
       level: (Number.isFinite(fullTask.level) ? fullTask.level : 3) + 1,
@@ -36850,7 +37851,7 @@ function materializeBlockedInvestigationMissions(root, blockedTasks, runId, resp
 }
 function runDoveOperator(root, args = {}) {
   assertGovernanceMutationRegistered("run-dove-operator", "guarded");
-  ensureWorkspace(root);
+  assertAllowedOperatorTopLevelArgs(args);
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const index = loadTaskIndex(root);
   const queue = operatorQueue(index);
@@ -36912,9 +37913,17 @@ function runDoveOperator(root, args = {}) {
     }
     return response2;
   }
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Running Dove operator"
+  );
+  const resultMap = operatorResultMap(args);
+  ensureWorkspace(root);
   const timestamp = nowIso();
   const runId = normalizeTaskPacketId(args.runId ?? `operator-${Date.now().toString(36)}`);
-  const resultMap = operatorResultMap(args);
   const iterations = [];
   const updatedTasks = [];
   const awaitingResults = [];
@@ -36947,13 +37956,16 @@ function runDoveOperator(root, args = {}) {
   const blockerPlanConversion = blockerInvestigationMode === "create" ? materializeBlockedInvestigationMissions(root, blockerInvestigationTargets, runId, responseLanguage) : emptyOperatorBlockerPlanConversion(blockerInvestigationTargets, blockerInvestigationMode);
   const awaitingResultSet = new Set(awaitingResults);
   const awaitingRequiredActions = Array.from(/* @__PURE__ */ new Set([
-    ...updatedTasks.filter((task) => awaitingResultSet.has(task.id)).flatMap((task) => normalizeStringArray22(task.boundary?.requiredActions ?? task.requiredActions)),
+    ...updatedTasks.filter((task) => awaitingResultSet.has(task.id)).flatMap((task) => normalizeStringArray24(task.boundary?.requiredActions ?? task.requiredActions)),
     ...skippedHostPassRequiredActions
   ]));
   const durableWorkHappened = iterations.length > 0 || updatedTasks.length > 0 || (blockerPlanConversion.createdCount ?? 0) > 0;
   const blockerProposalPending = blockerPlanConversion.proposedBlockedTaskIds?.length > 0;
-  const resultStatus = awaitingResults.length > 0 ? durableWorkHappened ? "awaiting-host-results" : "needs-host-results" : blockerProposalPending ? "blocked-investigation-proposed" : "foreground-pass-complete";
-  const resultOutcome = awaitingResults.length > 0 ? durableWorkHappened ? "operator-pass-results-required" : "operator-pass-needs-host-results" : blockerProposalPending ? "operator-blocker-investigation-proposed" : durableWorkHappened ? "operator-pass-recorded" : "operator-queue-has-no-runnable-work";
+  const boundaryIterations = iterations.filter((iteration) => iteration.boundary || iteration.requiredActions?.length > 0 || ["blocked", "blocked-boundary", "verification-failed", "needs-completion-evidence", "missing-required-materials", "workflow-error-boundary"].includes(String(iteration.status ?? "")));
+  const boundaryRequiredActions = Array.from(new Set(boundaryIterations.flatMap((iteration) => normalizeStringArray24(iteration.requiredActions ?? iteration.boundary?.requiredActions))));
+  const actionRequired = awaitingResults.length > 0 || blockerProposalPending || boundaryIterations.length > 0;
+  const resultStatus = awaitingResults.length > 0 ? durableWorkHappened ? "awaiting-host-results" : "needs-host-results" : boundaryIterations.length > 0 ? "blocked-boundary" : blockerProposalPending ? "blocked-investigation-proposed" : "foreground-pass-complete";
+  const resultOutcome = awaitingResults.length > 0 ? durableWorkHappened ? "operator-pass-results-required" : "operator-pass-needs-host-results" : boundaryIterations.length > 0 ? "operator-pass-action-required" : blockerProposalPending ? "operator-blocker-investigation-proposed" : durableWorkHappened ? "operator-pass-recorded" : "operator-queue-has-no-runnable-work";
   const result = {
     id: runId,
     surface: "dove.operator",
@@ -36972,12 +37984,14 @@ function runDoveOperator(root, args = {}) {
     awaitingResultTaskIds: awaitingResults,
     skippedHostPassTaskIds,
     awaitingRequiredActions,
+    boundaryRequiredActions,
+    actionRequired,
     blockedTaskIds: queue.blocked.map((task) => task.id),
     pendingTaskIds: queue.pending.map((task) => task.id),
     blockerInvestigationMode,
     blockerPlanConversion,
     iterations,
-    stopReason: awaitingResults.length > 0 ? "host-pass-results-required" : blockerProposalPending ? "blocked-investigation-requires-explicit-create" : "foreground-pass-complete",
+    stopReason: awaitingResults.length > 0 ? "host-pass-results-required" : boundaryIterations.length > 0 ? "operator-task-boundary-requires-action" : blockerProposalPending ? "blocked-investigation-requires-explicit-create" : "foreground-pass-complete",
     responseLanguage,
     createdAt: timestamp,
     updatedAt: nowIso()
@@ -37014,6 +38028,8 @@ function runDoveOperator(root, args = {}) {
     awaitingResultTaskIds: awaitingResults,
     skippedHostPassTaskIds,
     awaitingRequiredActions,
+    boundaryRequiredActions,
+    actionRequired,
     blockerInvestigationMode,
     blockerPlanConversion: compactOperatorBlockerPlanConversion(blockerPlanConversion),
     includeQueueDetails,
@@ -37033,6 +38049,13 @@ function runDoveOperator(root, args = {}) {
 }
 function resetDoveVersion(root, args = {}) {
   assertGovernanceMutationRegistered("reset-dove-version", "guarded");
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "versions",
+    "planner",
+    "Resetting the Dove version"
+  );
   ensureWorkspace(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const timestamp = nowIso();
@@ -37042,8 +38065,8 @@ function resetDoveVersion(root, args = {}) {
     throw new Error("/dove:version requires an init task to preserve. Run /dove:init first.");
   }
   const versionId = normalizeTaskPacketId(args.versionId ?? args.id ?? `version-${slugify14(args.reason ?? args.title ?? timestamp)}`);
-  const snapshotPath = path23.join(ARTIFACT_PATHS.versionSnapshotsDir, `${versionId}-task-index.json`);
-  writeJson(root, snapshotPath, { versionId, createdAt: timestamp, reason: normalizeString9(args.reason ?? args.summary, doveText(responseLanguage, "versionReason")), taskIndex: index });
+  const snapshotPath = path26.join(ARTIFACT_PATHS.versionSnapshotsDir, `${versionId}-task-index.json`);
+  writeJson(root, snapshotPath, { versionId, createdAt: timestamp, reason: normalizeString10(args.reason ?? args.summary, doveText(responseLanguage, "versionReason")), taskIndex: index });
   const resetIndex = saveTaskIndex(root, {
     ...index,
     items: [init],
@@ -37052,8 +38075,8 @@ function resetDoveVersion(root, args = {}) {
   const versions = readJson(root, ARTIFACT_PATHS.versionsIndex, { version: 1, items: [], updatedAt: null });
   const item = {
     id: versionId,
-    title: normalizeString9(args.title, doveText(responseLanguage, "versionTitle")),
-    reason: normalizeString9(args.reason ?? args.summary, doveText(responseLanguage, "versionReason")),
+    title: normalizeString10(args.title, doveText(responseLanguage, "versionTitle")),
+    reason: normalizeString10(args.reason ?? args.summary, doveText(responseLanguage, "versionReason")),
     preservedInitId: init.id,
     clearedTaskIds: (index.items ?? []).filter((task) => task.level !== 0).map((task) => task.id),
     preservedLessonIds: activeLessons(root).map((lesson) => lesson.id),
@@ -37784,13 +38807,13 @@ function normalizeExplicitAutoSteps(args = {}) {
       command,
       args: stepArgs,
       completeTask: step.completeTask === true,
-      requiredMaterials: normalizeStringArray22(step.requiredMaterials),
-      outputArtifacts: normalizeStringArray22(step.outputArtifacts),
-      convergenceChecks: normalizeStringArray22(step.convergenceChecks ?? executionContract?.convergence?.criteria),
+      requiredMaterials: normalizeStringArray24(step.requiredMaterials),
+      outputArtifacts: normalizeStringArray24(step.outputArtifacts),
+      convergenceChecks: normalizeStringArray24(step.convergenceChecks ?? executionContract?.convergence?.criteria),
       failureRoutes,
       executionContract,
-      validationEvidencePaths: normalizeStringArray22(step.validationEvidencePaths),
-      verificationEvidencePaths: normalizeStringArray22(step.verificationEvidencePaths),
+      validationEvidencePaths: normalizeStringArray24(step.validationEvidencePaths),
+      verificationEvidencePaths: normalizeStringArray24(step.verificationEvidencePaths),
       verifiedCriteria: normalizeDoveVerifiedCriteria(step.verifiedCriteria)
     };
   });
@@ -37808,7 +38831,7 @@ function hasAutoSourceProvenanceArgs(args = {}) {
   return hasNonEmptyString4(args.locator) || hasNonEmptyString4(args.title) && [args.sourceId, args.citationKey].some(hasNonEmptyString4);
 }
 function hasAutoNoteSynthesisArgs(args = {}) {
-  return hasNonEmptyString4(args.summary) || normalizeStringArray22(args.quotes).length > 0 || normalizeStringArray22(args.claims).length > 0 || normalizeStringArray22(args.openQuestions).length > 0;
+  return hasNonEmptyString4(args.summary) || normalizeStringArray24(args.quotes).length > 0 || normalizeStringArray24(args.claims).length > 0 || normalizeStringArray24(args.openQuestions).length > 0;
 }
 function hasAutoDraftContentArgs(args = {}) {
   return hasNonEmptyString4(args.body);
@@ -37903,14 +38926,14 @@ function summarizeAutoSteps(steps = []) {
       command: step.command,
       completeTask: step.completeTask === true
     };
-    if (normalizeStringArray22(step.requiredMaterials).length > 0) {
-      summary.requiredMaterials = normalizeStringArray22(step.requiredMaterials);
+    if (normalizeStringArray24(step.requiredMaterials).length > 0) {
+      summary.requiredMaterials = normalizeStringArray24(step.requiredMaterials);
     }
-    if (normalizeStringArray22(step.outputArtifacts).length > 0) {
-      summary.outputArtifacts = normalizeStringArray22(step.outputArtifacts);
+    if (normalizeStringArray24(step.outputArtifacts).length > 0) {
+      summary.outputArtifacts = normalizeStringArray24(step.outputArtifacts);
     }
-    if (normalizeStringArray22(step.convergenceChecks).length > 0) {
-      summary.convergenceChecks = normalizeStringArray22(step.convergenceChecks);
+    if (normalizeStringArray24(step.convergenceChecks).length > 0) {
+      summary.convergenceChecks = normalizeStringArray24(step.convergenceChecks);
     }
     if (objectArray(step.failureRoutes).length > 0) {
       summary.failureRoutes = objectArray(step.failureRoutes);
@@ -37918,11 +38941,11 @@ function summarizeAutoSteps(steps = []) {
     if (step.executionContract) {
       summary.executionContract = step.executionContract;
     }
-    if (normalizeStringArray22(step.validationEvidencePaths).length > 0) {
-      summary.validationEvidencePaths = normalizeStringArray22(step.validationEvidencePaths);
+    if (normalizeStringArray24(step.validationEvidencePaths).length > 0) {
+      summary.validationEvidencePaths = normalizeStringArray24(step.validationEvidencePaths);
     }
-    if (normalizeStringArray22(step.verificationEvidencePaths).length > 0) {
-      summary.verificationEvidencePaths = normalizeStringArray22(step.verificationEvidencePaths);
+    if (normalizeStringArray24(step.verificationEvidencePaths).length > 0) {
+      summary.verificationEvidencePaths = normalizeStringArray24(step.verificationEvidencePaths);
     }
     const verifiedCriteria = normalizeDoveVerifiedCriteria(step.verifiedCriteria);
     if (verifiedCriteria.length > 0) {
@@ -38035,34 +39058,91 @@ function autoStepArtifactRefs(command, output = {}) {
   if (Array.isArray(output?.artifacts)) {
     refs.push(...output.artifacts);
   }
-  refs.push(...normalizeStringArray22(output?.reviewedArtifactPaths ?? output?.reviewedArtifactSet));
+  refs.push(...normalizeStringArray24(output?.reviewedArtifactPaths ?? output?.reviewedArtifactSet));
   if (command === "dove.source") refs.push(ARTIFACT_PATHS.sources, ARTIFACT_PATHS.citationLog);
   if (command === "dove.note") refs.push(ARTIFACT_PATHS.notes);
   if (command === "dove.experience") refs.push(ARTIFACT_PATHS.experimentPlans, ARTIFACT_PATHS.experimentResults, ARTIFACT_PATHS.experimentAudits);
   if (command === "dove.figure") refs.push(ARTIFACT_PATHS.figureQa);
   if (command === "dove.review" || command === "dove.review-loop") {
     refs.push(ARTIFACT_PATHS.reviewState, ARTIFACT_PATHS.reviewLog);
-    return normalizeStringArray22(refs);
+    return normalizeStringArray24(refs);
   }
-  return normalizeStringArray22(refs).filter((item) => !isBookkeepingArtifactPath(item));
+  return normalizeStringArray24(refs).filter((item) => !isBookkeepingArtifactPath(item));
+}
+function authoritativeIndependentReviewProof(proof) {
+  return Boolean(proof?.verified === true && proof?.authoritative === true);
+}
+function proofReviewedArtifactPaths(proof = {}) {
+  return normalizeStringArray24([
+    ...normalizeStringArray24(proof.reviewedArtifactPaths),
+    ...Array.isArray(proof.reviewedArtifacts) ? proof.reviewedArtifacts.map((artifact) => typeof artifact === "string" ? artifact : artifact?.path) : []
+  ]);
+}
+function reviewProofCoversFinalSvg(proof, finalSvgPath, finalSha256) {
+  if (!authoritativeIndependentReviewProof(proof) || typeof finalSvgPath !== "string" || !finalSvgPath.trim()) {
+    return false;
+  }
+  const reviewedArtifact = Array.isArray(proof.reviewedArtifacts) ? proof.reviewedArtifacts.find((artifact) => artifact?.path === finalSvgPath) : null;
+  if (reviewedArtifact) {
+    return typeof finalSha256 === "string" && finalSha256.length > 0 && reviewedArtifact.sha256 === finalSha256;
+  }
+  return proofReviewedArtifactPaths(proof).includes(finalSvgPath) && typeof finalSha256 === "string" && finalSha256.length > 0 && proof.finalSha256 === finalSha256;
+}
+function reviewProofFromAutoOutput(command, output = {}) {
+  if (command === "dove.review-loop") {
+    return output?.review?.independentReviewProof ?? null;
+  }
+  return output?.independentReviewProof ?? null;
+}
+function autoCompletionPacketGate(task, command, output, classified) {
+  const intendedCommand = normalizeConcreteAutoCommandId(task.nextAction);
+  const signals = workflowSignals(taskIntentText(task));
+  const figurePacket = intendedCommand === "dove.figure" || !intendedCommand && task.stage !== "audit" && signals.figure;
+  const reviewPacket = !figurePacket && (task.stage === "audit" || ["dove.review", "dove.review-loop"].includes(intendedCommand) || signals.review || signals.reviewLoop);
+  if (reviewPacket) {
+    const proof = reviewProofFromAutoOutput(command, output);
+    const validReviewResult = ["dove.review", "dove.review-loop"].includes(command) && classified.canCompleteTask === true && authoritativeIndependentReviewProof(proof);
+    if (!validReviewResult) {
+      return {
+        status: "verification-failed",
+        boundaryType: "verification-failed",
+        message: "auto-review-packet-requires-current-authoritative-review-result",
+        requiredActions: ["run-dove-review-or-review-loop", "provide-current-authoritative-reviewer-proof"]
+      };
+    }
+  }
+  if (figurePacket) {
+    const finalSvgPath = output?.imported?.finalSvgPath ?? output?.finalSvgPath ?? null;
+    const proof = output?.imported?.independentReviewProof ?? null;
+    const validFigureResult = command === "dove.figure" && output?.status === "validated" && classified.canCompleteTask === true && reviewProofCoversFinalSvg(proof, finalSvgPath, output?.imported?.finalSha256 ?? output?.finalSha256);
+    if (!validFigureResult) {
+      return {
+        status: "verification-failed",
+        boundaryType: "verification-failed",
+        message: "auto-figure-packet-requires-current-validated-final-svg-proof",
+        requiredActions: ["run-dove-figure", "validate-current-final-svg", "provide-current-authoritative-reviewer-proof"]
+      };
+    }
+  }
+  return null;
 }
 function completedAutoStep(command, output, outcomeStatus, options = {}) {
   const executionReceipt = normalizeDoveExecutionReceipt(output?.executionReceipt, null);
-  const artifactRefs = normalizeStringArray22([
+  const artifactRefs = normalizeStringArray24([
     ...autoStepArtifactRefs(command, output),
-    ...normalizeStringArray22(executionReceipt?.artifactRefs),
-    ...normalizeStringArray22(executionReceipt?.artifactPaths)
+    ...normalizeStringArray24(executionReceipt?.artifactRefs),
+    ...normalizeStringArray24(executionReceipt?.artifactPaths)
   ]);
-  const evidenceLinks = normalizeStringArray22([
-    ...normalizeStringArray22(output?.evidenceLinks ?? output?.evidencePaths),
-    ...normalizeStringArray22(output?.reviewedArtifactPaths ?? output?.reviewedArtifactSet),
-    ...normalizeStringArray22(executionReceipt?.evidenceLinks),
-    ...normalizeStringArray22(executionReceipt?.evidencePaths)
+  const evidenceLinks = normalizeStringArray24([
+    ...normalizeStringArray24(output?.evidenceLinks ?? output?.evidencePaths),
+    ...normalizeStringArray24(output?.reviewedArtifactPaths ?? output?.reviewedArtifactSet),
+    ...normalizeStringArray24(executionReceipt?.evidenceLinks),
+    ...normalizeStringArray24(executionReceipt?.evidencePaths)
   ]);
-  const verificationEvidencePaths = normalizeStringArray22([
-    ...normalizeStringArray22(output?.verificationEvidencePaths),
-    ...normalizeStringArray22(executionReceipt?.verificationEvidencePaths),
-    ...normalizeStringArray22(executionReceipt?.validationEvidencePaths)
+  const verificationEvidencePaths = normalizeStringArray24([
+    ...normalizeStringArray24(output?.verificationEvidencePaths),
+    ...normalizeStringArray24(executionReceipt?.verificationEvidencePaths),
+    ...normalizeStringArray24(executionReceipt?.validationEvidencePaths)
   ]);
   const verifiedCriteria = normalizeDoveVerifiedCriteria([
     ...normalizeDoveVerifiedCriteria(output?.verifiedCriteria),
@@ -38107,7 +39187,7 @@ function classifyAutoStepResult(command, output) {
       canCompleteTask: false,
       artifactRefs: [],
       evidenceLinks: [],
-      requiredActions: normalizeStringArray22(output.requiredActions ?? output.boundary.requiredActions)
+      requiredActions: normalizeStringArray24(output.requiredActions ?? output.boundary.requiredActions)
     };
   }
   if (command === "dove.source" && (status === "needs-source-verification" || output?.outcome === "source-provenance-unverified")) {
@@ -38119,7 +39199,7 @@ function classifyAutoStepResult(command, output) {
       canCompleteTask: false,
       artifactRefs: [],
       evidenceLinks: [],
-      requiredActions: normalizeStringArray22(output?.requiredActions ?? output?.boundary?.requiredActions)
+      requiredActions: normalizeStringArray24(output?.requiredActions ?? output?.boundary?.requiredActions)
     };
   }
   if (status === "qa-needs-attention" || status === "blocked" || status === "needs-review" || status === "max-iterations-exhausted" || status?.startsWith("blocked-")) {
@@ -38137,10 +39217,10 @@ function classifyAutoStepResult(command, output) {
   if (command === "dove.experience" && ["planned", "recorded", "bridged"].includes(status)) {
     return completedAutoStep(command, output, status, { canCompleteTask: status === "bridged" });
   }
-  if (command === "dove.figure" && status === "validated" && output?.imported) {
+  if (command === "dove.figure" && status === "validated" && output?.imported?.finalSvgPath && authoritativeIndependentReviewProof(output.imported.independentReviewProof)) {
     return completedAutoStep(command, output, status, { canCompleteTask: true });
   }
-  if (command === "dove.review" && output?.verdict === "coherent") {
+  if (command === "dove.review" && output?.verdict === "coherent" && authoritativeIndependentReviewProof(output?.independentReviewProof)) {
     return completedAutoStep(command, output, "coherent", { canCompleteTask: true });
   }
   if (command === "dove.review" && ["needs-evidence", "needs-revision"].includes(output?.verdict)) {
@@ -38152,10 +39232,10 @@ function classifyAutoStepResult(command, output) {
       canCompleteTask: false,
       artifactRefs: autoStepArtifactRefs(command, output),
       evidenceLinks: [],
-      requiredActions: normalizeStringArray22(output.actionItems)
+      requiredActions: normalizeStringArray24(output.actionItems)
     };
   }
-  if (command === "dove.review-loop" && status === "coherent") {
+  if (command === "dove.review-loop" && status === "coherent" && authoritativeIndependentReviewProof(output?.review?.independentReviewProof)) {
     return completedAutoStep(command, output, status, { canCompleteTask: true });
   }
   if (command === "dove.rebuttal" && status === "drafted") {
@@ -38175,103 +39255,6 @@ function loadFullTask(root, task) {
   const catalog = readTaskPacketCatalog(root);
   return catalog.byId.get(task.id) ?? task;
 }
-function boundaryTypeFor(fields = {}, status = "blocked") {
-  const explicitType = normalizeString9(fields.boundaryType, null);
-  if (explicitType) {
-    return explicitType;
-  }
-  return status === "blocked" ? "blocked-boundary" : null;
-}
-function transitionBoundaryFor(task, status, fields, timestamp) {
-  const explicit = normalizeDoveBoundary(fields.boundary, null);
-  if (explicit) {
-    return {
-      ...explicit,
-      packetId: explicit.packetId ?? task.id,
-      createdAt: explicit.createdAt ?? timestamp
-    };
-  }
-  const type = boundaryTypeFor(fields, status);
-  if (!type) {
-    return null;
-  }
-  return normalizeDoveBoundary({
-    id: normalizeTaskPacketId(fields.boundaryId ?? `boundary-${task.id}-${type}-${Date.now().toString(36)}`),
-    type,
-    status: "open",
-    packetId: task.id,
-    runId: fields.runId ?? null,
-    sourceSurface: fields.sourceSurface ?? fields.surface ?? null,
-    command: fields.command ?? null,
-    reason: fields.reason ?? fields.blockedReason ?? fields.stopReason ?? "",
-    summary: fields.summary ?? fields.blockedReason ?? fields.reason ?? fields.stopReason ?? "",
-    requiredInputs: fields.requiredInputs ?? [],
-    requiredActions: fields.requiredActions ?? [],
-    ownerRole: fields.ownerRole ?? task.ownerRole ?? ownerRoleFor(task),
-    nextRole: fields.nextRole ?? task.nextRole ?? task.ownerRole ?? ownerRoleFor(task),
-    createdAt: timestamp
-  }, null);
-}
-function transitionHandoffFor(task, fields, boundary, timestamp) {
-  const explicit = normalizeDoveHandoff(fields.handoff, null);
-  if (explicit) {
-    return {
-      ...explicit,
-      boundaryId: explicit.boundaryId ?? boundary?.id ?? null,
-      requestedAt: explicit.requestedAt ?? timestamp
-    };
-  }
-  const ownerRole = normalizeDovePrimaryRoleId(fields.ownerRole ?? task.ownerRole, ownerRoleFor(task));
-  const nextRole = normalizeDovePrimaryRoleId(fields.nextRole ?? boundary?.nextRole, ownerRole);
-  if (nextRole === ownerRole) {
-    return null;
-  }
-  return normalizeDoveHandoff({
-    id: normalizeTaskPacketId(fields.handoffId ?? `handoff-${task.id}-${ownerRole}-to-${nextRole}-${Date.now().toString(36)}`),
-    status: "pending",
-    fromRole: ownerRole,
-    toRole: nextRole,
-    reason: fields.reason ?? boundary?.reason ?? "",
-    summary: fields.summary ?? boundary?.summary ?? "",
-    boundaryId: boundary?.id ?? null,
-    sourceRunId: fields.runId ?? null,
-    requestedAt: timestamp
-  }, null);
-}
-function appendBoundaryHistory(task, boundary, resolvedBoundary) {
-  return [
-    ...Array.isArray(task.boundaryHistory) ? task.boundaryHistory : [],
-    ...resolvedBoundary ? [resolvedBoundary] : [],
-    ...boundary ? [boundary] : []
-  ].slice(-20);
-}
-function runtimeEventId(packetId, type, count) {
-  return normalizeTaskPacketId(`event-${packetId}-${type}-${Date.now().toString(36)}-${count}`);
-}
-function persistentLifecycleFields(fields = {}) {
-  const allowedKeys = [
-    "currentFocus",
-    "nextAction",
-    "lessonIds",
-    "artifactRefs",
-    "evidenceLinks",
-    "validationEvidencePaths",
-    "verificationEvidencePaths",
-    "verifiedCriteria",
-    "executionContract",
-    "outputPaths",
-    "claimIds",
-    "noteIds",
-    "experimentIds",
-    "resultIds",
-    "auditIds",
-    "versionIds",
-    "rebuttalIssueIds",
-    "archivedAt",
-    "archiveReason"
-  ];
-  return Object.fromEntries(allowedKeys.filter((key) => fields[key] !== void 0).map((key) => [key, fields[key]]));
-}
 function assertChecklistCompletionReady(root, task, status, responseLanguage = "zh") {
   const block = checklistCompletionBlock(root, task, status, responseLanguage);
   if (block) {
@@ -38281,212 +39264,16 @@ function assertChecklistCompletionReady(root, task, status, responseLanguage = "
     throw error;
   }
 }
-function recordLifecycleEvents(root, packet, transition, openedBoundary, resolvedBoundary, handoff) {
-  const artifacts = loadRuntimeArtifacts(root);
-  const baseCount = artifacts.events.entries?.length ?? 0;
-  const base = {
-    packetId: packet.id,
-    runId: transition.runId ?? null,
-    surface: transition.surface ?? transition.sourceSurface ?? null,
-    command: transition.command ?? null,
-    fromStatus: transition.fromStatus,
-    toStatus: transition.toStatus,
-    summary: transition.summary ?? "",
-    evidenceLinks: normalizeStringArray22(transition.evidenceLinks),
-    artifactRefs: normalizeStringArray22(transition.artifactRefs),
-    timestamp: transition.timestamp,
-    recordedAt: transition.timestamp
-  };
-  const events = [{
-    ...base,
-    id: runtimeEventId(packet.id, "task-lifecycle-transitioned", baseCount + 1),
-    type: "task.lifecycle.transitioned",
-    eventType: "task.lifecycle.transitioned",
-    boundaryId: openedBoundary?.id ?? resolvedBoundary?.id ?? null,
-    handoffId: handoff?.id ?? null
-  }];
-  if (resolvedBoundary) {
-    events.push({
-      ...base,
-      id: runtimeEventId(packet.id, "task-boundary-resolved", baseCount + events.length + 1),
-      type: "task.boundary.resolved",
-      eventType: "task.boundary.resolved",
-      boundaryId: resolvedBoundary.id,
-      boundary: resolvedBoundary,
-      handoffId: null
-    });
-  }
-  if (openedBoundary) {
-    events.push({
-      ...base,
-      id: runtimeEventId(packet.id, "task-boundary-opened", baseCount + events.length + 1),
-      type: "task.boundary.opened",
-      eventType: "task.boundary.opened",
-      boundaryId: openedBoundary.id,
-      boundary: openedBoundary,
-      handoffId: handoff?.id ?? null
-    });
-  }
-  if (handoff) {
-    events.push({
-      ...base,
-      id: runtimeEventId(packet.id, "task-handoff-requested", baseCount + events.length + 1),
-      type: "task.handoff.requested",
-      eventType: "task.handoff.requested",
-      boundaryId: openedBoundary?.id ?? resolvedBoundary?.id ?? null,
-      handoffId: handoff.id,
-      handoff
-    });
-  }
-  for (const event of events) {
-    appendEvent(artifacts, event);
-  }
-  saveRuntimeArtifacts(root, artifacts);
-}
-function updateTaskLifecycle(root, task, status, fields = {}) {
-  const timestamp = nowIso();
-  const fullTask = loadFullTask(root, task);
-  assertChecklistCompletionReady(root, fullTask, status, resolveDoveResponseLanguage(root, fields));
-  const fromStatus = fullTask.status;
-  const artifactRefs = fields.artifactRefs !== void 0 ? normalizeStringArray22(fields.artifactRefs) : fullTask.artifactRefs;
-  const evidenceLinks = fields.evidenceLinks !== void 0 ? normalizeStringArray22(fields.evidenceLinks) : fullTask.evidenceLinks;
-  const persistedFields = persistentLifecycleFields(fields);
-  const statusFields = {};
-  if (status === "in-progress" && !fullTask.startedAt) {
-    statusFields.startedAt = fields.startedAt ?? timestamp;
-  }
-  if (status === "completed") {
-    statusFields.completedAt = fields.completedAt ?? timestamp;
-    statusFields.blockedReason = null;
-  }
-  if (status === "blocked") {
-    statusFields.blockedReason = normalizeString9(fields.blockedReason ?? fields.reason ?? fields.stopReason, fullTask.blockedReason ?? "");
-  }
-  if (!["blocked"].includes(status) && fullTask.status === "blocked") {
-    statusFields.blockedReason = null;
-  }
-  if (status === "killed") {
-    statusFields.killedAt = fields.killedAt ?? timestamp;
-    statusFields.killReason = normalizeString9(fields.killReason ?? fields.reason, fullTask.killReason ?? "");
-  }
-  if (status === "archived") {
-    statusFields.archivedAt = fields.archivedAt ?? timestamp;
-    statusFields.archiveReason = normalizeString9(fields.archiveReason ?? fields.reason, fullTask.archiveReason ?? "");
-    statusFields.blockedReason = null;
-  }
-  const openedBoundary = status === "blocked" || fields.boundary || fields.boundaryType ? transitionBoundaryFor(fullTask, status, { ...fields, artifactRefs }, timestamp) : null;
-  const resolvedBoundary = fullTask.boundary?.status === "open" && !openedBoundary && status !== "blocked" ? normalizeDoveBoundary({ ...fullTask.boundary, status: "resolved", resolvedAt: timestamp, resolution: fields.reason ?? `status:${status}` }, null) : null;
-  const ownerRole = normalizeDovePrimaryRoleId(fields.ownerRole ?? fullTask.ownerRole, ownerRoleFor(fullTask));
-  const nextRole = normalizeDovePrimaryRoleId(fields.nextRole ?? openedBoundary?.nextRole ?? fullTask.nextRole, ownerRole);
-  const handoff = transitionHandoffFor(fullTask, { ...fields, ownerRole, nextRole }, openedBoundary, timestamp);
-  const lastTransition = {
-    fromStatus,
-    toStatus: status,
-    reason: normalizeString9(fields.reason ?? fields.stopReason ?? fields.blockedReason, ""),
-    summary: normalizeString9(fields.summary, ""),
-    surface: normalizeString9(fields.surface ?? fields.sourceSurface, null),
-    command: normalizeString9(fields.command, null),
-    runId: normalizeString9(fields.runId, null),
-    boundaryId: openedBoundary?.id ?? resolvedBoundary?.id ?? null,
-    handoffId: handoff?.id ?? null,
-    transitionedAt: timestamp
-  };
-  const packet = {
-    ...fullTask,
-    ...persistedFields,
-    ...statusFields,
-    artifactRefs,
-    evidenceLinks,
-    status,
-    lifecycleStatus: status,
-    ownerRole,
-    nextRole,
-    boundary: openedBoundary,
-    boundaryHistory: appendBoundaryHistory(fullTask, openedBoundary, resolvedBoundary),
-    handoff: handoff ?? (resolvedBoundary ? null : fullTask.handoff ?? null),
-    lastTransition,
-    updatedAt: timestamp
-  };
-  writePacket(root, packet);
-  const nextIndex = saveTaskIndex(root, upsertIndexItem(loadTaskIndex(root), packet));
-  const state = loadState(root);
-  saveState(root, {
-    ...state,
-    orchestration: {
-      ...state.orchestration,
-      activeTaskIds: nextIndex.taskModel.activeTaskIds,
-      currentFocus: packet.currentFocus ?? state.orchestration.currentFocus,
-      nextAction: packet.nextAction ?? state.orchestration.nextAction
-    }
-  });
-  recordLifecycleEvents(root, packet, {
-    ...lastTransition,
-    timestamp,
-    evidenceLinks: fields.evidenceLinks,
-    artifactRefs
-  }, openedBoundary, resolvedBoundary, handoff);
-  return packet;
-}
-function packetContinuationAction(task = {}, output = {}) {
-  const outputAction = normalizeString9(output?.nextAction ?? output?.boundary?.nextAction, null);
-  if (outputAction && outputAction !== "project:dove.mission") {
-    return outputAction;
-  }
-  const packetAction = normalizeString9(task.nextAction, null);
-  return packetAction && packetAction !== "project:dove.mission" ? packetAction : "project:dove.auto";
-}
-function applyPacketStepResult(root, task, options = {}) {
-  const fullTask = loadFullTask(root, task);
-  const output = plainObject2(options.output);
-  if (output.packetLifecycleApplied === true && output.task?.id === fullTask.id) {
-    return loadFullTask(root, output.task);
-  }
+var updateTaskLifecycle = (root, task, status, fields = {}) => updatePacketLifecycle(root, task, status, fields, {
+  assertCompletionReady: assertChecklistCompletionReady
+});
+function applyPacketStepResult2(root, task, options = {}) {
   const command = normalizeAutoCommandId(options.command);
-  const classified = options.classified ?? classifyAutoStepResult(command, output);
-  const artifactRefs = normalizeStringArray22([
-    ...normalizeStringArray22(fullTask.artifactRefs),
-    ...normalizeStringArray22(classified.artifactRefs),
-    ...normalizeStringArray22(output.artifactRefs ?? output.artifactPaths)
-  ]);
-  const evidenceLinks = normalizeStringArray22([
-    ...normalizeStringArray22(fullTask.evidenceLinks),
-    ...normalizeStringArray22(classified.evidenceLinks),
-    ...normalizeStringArray22(output.evidenceLinks ?? output.evidencePaths)
-  ]);
-  const nextAction = normalizeString9(options.nextAction, packetContinuationAction(fullTask, output));
-  const currentFocus = normalizeString9(
-    options.currentFocus ?? output.summary ?? output.review?.summary ?? classified.outcome,
-    fullTask.currentFocus ?? fullTask.title
-  );
-  const commonFields = {
-    runId: options.runId ?? output.runId ?? null,
-    surface: options.surface ?? "dove.auto",
+  return applyPacketStepResult(root, task, {
+    ...options,
     command,
-    summary: normalizeString9(options.summary ?? output.summary ?? classified.outcome, classified.outcome),
-    reason: normalizeString9(options.reason ?? classified.stopReason, ""),
-    stopReason: classified.stopReason,
-    currentFocus,
-    nextAction,
-    artifactRefs,
-    evidenceLinks,
-    validationEvidencePaths: normalizeStringArray22(output.validationEvidencePaths),
-    verificationEvidencePaths: normalizeStringArray22(classified.verificationEvidencePaths),
-    verifiedCriteria: normalizeDoveVerifiedCriteria(classified.verifiedCriteria),
-    executionContract: output.executionContract ?? fullTask.executionContract
-  };
-  if (classified.terminal) {
-    const boundary = normalizeDoveBoundary(output.boundary, null);
-    return updateTaskLifecycle(root, fullTask, "blocked", {
-      ...commonFields,
-      boundary,
-      boundaryType: boundary?.type ?? normalizeDoveBoundaryType(classified.outcome, "blocked-boundary"),
-      requiredInputs: boundary?.requiredInputs ?? output.requiredInputs ?? [],
-      requiredActions: boundary?.requiredActions ?? classified.requiredActions ?? output.requiredActions ?? [],
-      ownerRole: boundary?.ownerRole ?? output.ownerRole,
-      nextRole: boundary?.nextRole ?? output.nextRole
-    });
-  }
-  return updateTaskLifecycle(root, fullTask, fullTask.status, commonFields);
+    classified: options.classified ?? classifyAutoStepResult(command, plainObject3(options.output))
+  });
 }
 function persistAutoResult(root, result) {
   const artifacts = loadRuntimeArtifacts(root);
@@ -38590,13 +39377,13 @@ function assertAutoReplayHeader(root, args = {}) {
   if (args.proposalVersion !== AUTO_PROPOSAL_VERSION) {
     throw new Error("The selected local Dove auto proposal replay version is not supported. Request a fresh proposal.");
   }
-  if (normalizeString9(args.proposalWorkspace, "") !== canonicalMissionWorkspace(root)) {
+  if (normalizeString10(args.proposalWorkspace, "") !== canonicalMissionWorkspace(root)) {
     throw new Error("The selected local Dove auto proposal replay belongs to a different canonical workspace. Request a fresh proposal.");
   }
   if (!AUTO_PROPOSAL_KINDS.has(args.proposalKind)) {
     throw new Error("Confirmed Dove auto execution requires the exact proposalKind returned by the selected local proposal replay data.");
   }
-  if (!/^[0-9a-f]{64}$/u.test(normalizeString9(args.proposalDigest, ""))) {
+  if (!/^[0-9a-f]{64}$/u.test(normalizeString10(args.proposalDigest, ""))) {
     throw new Error("Confirmed Dove auto execution requires the exact proposalDigest returned by the selected local proposal replay data.");
   }
 }
@@ -38628,9 +39415,9 @@ function autoSelectionConfirmation(root, args, selected, maxIterations, response
     taskCard: buildTaskConfirmationCard(task, { firstAction: task.nextAction ?? nextCommandFor(classification), preActionGuidance }, responseLanguage),
     autoCard: buildAutoConfirmationCard(task, autoPlan, { maxIterations, preActionGuidance }, responseLanguage),
     classification,
-    blockers: [...normalizeStringArray22(task.dependencies), ...normalizeStringArray22(task.blockedBy)],
-    evidenceExpectations: normalizeStringArray22(task.evidenceExpectations),
-    proposedNextCommand: normalizeString9(task.nextAction, nextCommandFor(classification)),
+    blockers: [...normalizeStringArray24(task.dependencies), ...normalizeStringArray24(task.blockedBy)],
+    evidenceExpectations: normalizeStringArray24(task.evidenceExpectations),
+    proposedNextCommand: normalizeString10(task.nextAction, nextCommandFor(classification)),
     proposedSteps: autoPlan.proposedSteps,
     safeToRun: autoPlan.safeToRun,
     requiresHostPass: autoPlan.requiresHostPass,
@@ -38749,6 +39536,13 @@ function runDoveAuto(root, args = {}) {
   const mutationMode = missionProposalMutationMode(root, args);
   if (confirmed) {
     assertAutoReplayHeader(root, args);
+    assertReviewProofBoundaryTransition(
+      root,
+      loadBoard(root),
+      "experiments",
+      "builder",
+      "Running Dove auto"
+    );
   }
   const state = readStateForTaskContract(root);
   const responseLanguage = resolveDoveResponseLanguage(root, args, { state });
@@ -38779,13 +39573,13 @@ function runDoveAuto(root, args = {}) {
   }
   let task;
   if (args.proposalKind === "selection") {
-    const packetId = normalizeString9(args.packetId, "");
+    const packetId = normalizeString10(args.packetId, "");
     if (!packetId) {
       throw new Error("Confirmed Dove auto selection replay requires the canonical packetId returned by the selected local proposal replay data.");
     }
     const catalog = readTaskPacketCatalog(root);
     task = catalog.byId.get(packetId) ?? null;
-    if (!task || !activeStatus(task.status)) {
+    if (!task || !activeStatus2(task.status)) {
       throw new Error(`The selected Dove auto task ${packetId} no longer exists or is not active. Request a fresh proposal.`);
     }
     const replayDigest = autoProposalDigest(
@@ -38795,7 +39589,7 @@ function runDoveAuto(root, args = {}) {
       { mutationMode },
       autoReplayFields(args)
     );
-    if (normalizeString9(args.proposalDigest, "") !== replayDigest) {
+    if (normalizeString10(args.proposalDigest, "") !== replayDigest) {
       throw new Error("The selected local Dove auto proposal replay no longer matches the current task snapshot or exact replay fields. Request a fresh proposal.");
     }
   } else {
@@ -38808,7 +39602,7 @@ function runDoveAuto(root, args = {}) {
       autoReplayFields(args),
       contract
     );
-    if (normalizeString9(args.proposalDigest, "") !== replayDigest) {
+    if (normalizeString10(args.proposalDigest, "") !== replayDigest) {
       throw new Error("The selected local Dove auto proposal replay no longer matches the current demand contract or exact replay fields. Request a fresh proposal.");
     }
     assertMissionReplayTargetsAvailable(root, contract);
@@ -38857,7 +39651,7 @@ function runDoveAuto(root, args = {}) {
     persistAutoResult(root, result);
     return { status: result.status, task, result, resultCard: autoResultCard(task, result, { nextAction: task.nextAction, preActionGuidanceSummary }, responseLanguage), applicableLessons: activeLessons(root, task.id), responseLanguage, nextAction: task.nextAction };
   }
-  if (task.status === "blocked") {
+  if (task.status === "blocked" && !["awaiting-host-pass", "awaiting-host-pass-result"].includes(task.boundary?.type)) {
     result.status = "blocked-boundary";
     result.outcome = task.boundary?.type ?? "task-already-blocked";
     result.stopReason = task.boundary?.reason ?? "task-blocked";
@@ -38956,6 +39750,7 @@ function runDoveAuto(root, args = {}) {
       break;
     }
     try {
+      const taskBeforeStep = task;
       const output = executeAutoStep(root, step.command, stepArgsForTask(task, step.args));
       const classified = classifyAutoStepResult(step.command, output);
       const executionReceipt = normalizeDoveExecutionReceipt(classified.executionReceipt, null);
@@ -38975,7 +39770,7 @@ function runDoveAuto(root, args = {}) {
         startedAt,
         completedAt
       });
-      task = applyPacketStepResult(root, task, {
+      task = applyPacketStepResult2(root, task, {
         runId: resultId,
         surface: "dove.auto",
         command: step.command,
@@ -38997,21 +39792,22 @@ function runDoveAuto(root, args = {}) {
           command: step.command,
           resultSummary: classified.outcome,
           summary: classified.outcome,
-          artifactRefs: normalizeStringArray22([...normalizeStringArray22(task.artifactRefs), ...classified.artifactRefs ?? [], ...normalizeStringArray22(step.outputArtifacts)]),
-          evidenceLinks: normalizeStringArray22([
-            ...normalizeStringArray22(task.evidenceLinks),
+          artifactRefs: normalizeStringArray24([...normalizeStringArray24(task.artifactRefs), ...classified.artifactRefs ?? [], ...normalizeStringArray24(step.outputArtifacts)]).filter((item) => !isBookkeepingArtifactPath(item)),
+          evidenceLinks: normalizeStringArray24([
+            ...normalizeStringArray24(task.evidenceLinks),
             ...classified.evidenceLinks ?? [],
-            ...normalizeStringArray22(step.outputArtifacts),
-            ...normalizeStringArray22(step.validationEvidencePaths),
-            ...normalizeStringArray22(step.verificationEvidencePaths)
-          ]),
-          validationEvidencePaths: normalizeStringArray22(step.validationEvidencePaths),
-          verificationEvidencePaths: normalizeStringArray22([...classified.verificationEvidencePaths ?? [], ...normalizeStringArray22(step.verificationEvidencePaths)]),
+            ...normalizeStringArray24(step.outputArtifacts),
+            ...normalizeStringArray24(step.validationEvidencePaths),
+            ...normalizeStringArray24(step.verificationEvidencePaths)
+          ]).filter((item) => !isBookkeepingArtifactPath(item)),
+          validationEvidencePaths: normalizeStringArray24(step.validationEvidencePaths),
+          verificationEvidencePaths: normalizeStringArray24([...classified.verificationEvidencePaths ?? [], ...normalizeStringArray24(step.verificationEvidencePaths)]),
           verifiedCriteria: normalizeDoveVerifiedCriteria([...classified.verifiedCriteria ?? [], ...normalizeDoveVerifiedCriteria(step.verifiedCriteria)]),
           executionReceipt,
           executionContract: step.executionContract ?? task.executionContract
         };
-        const verificationBlock = completionVerificationBlock(root, task, completionArgs, responseLanguage);
+        const packetGateBlock = autoCompletionPacketGate(taskBeforeStep, step.command, output, classified);
+        const verificationBlock = packetGateBlock ?? completionVerificationBlock(root, task, completionArgs, responseLanguage);
         const completionEvidence = completionEvidenceForPayload(completionArgs);
         const canCompleteWithEvidence = classified.canCompleteTask === true || completionEvidence.evidencePaths.length > 0 || completionEvidence.verifiedCriteria.length > 0;
         if (!canCompleteWithEvidence || verificationBlock) {
@@ -39039,6 +39835,8 @@ function runDoveAuto(root, args = {}) {
         }
         task = updateTaskLifecycle(root, task, "completed", {
           ...completionArgs,
+          artifactRefs: normalizeStringArray24(task.artifactRefs),
+          evidenceLinks: normalizeStringArray24(task.evidenceLinks),
           reason: "completion-confirmed-by-auto-step",
           nextAction: "project:dove.status"
         });
@@ -39116,17 +39914,17 @@ function runDoveAuto(root, args = {}) {
 
 // src/core/audio-review.mjs
 import crypto14 from "node:crypto";
-import fs23 from "node:fs";
-import path24 from "node:path";
+import fs24 from "node:fs";
+import path27 from "node:path";
 var REVIEW_VERDICTS3 = /* @__PURE__ */ new Set(["coherent", "needs-revision", "needs-evidence", "blocked"]);
 var HANDOFF_STATUSES2 = /* @__PURE__ */ new Set(["completed", "blocked", "failed"]);
 function slugify15(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "audio-review";
 }
-function normalizeString10(value, fallback = "") {
+function normalizeString11(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
-function normalizeStringArray23(value) {
+function normalizeStringArray25(value) {
   return Array.isArray(value) ? Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean))) : [];
 }
 function audioGuidanceSummary(root, args = {}, target = {}, details = {}) {
@@ -39159,13 +39957,13 @@ function sha256Text2(value) {
   return crypto14.createHash("sha256").update(value).digest("hex");
 }
 function hashFile2(fullPath) {
-  if (!fs23.existsSync(fullPath)) {
+  if (!fs24.existsSync(fullPath)) {
     return null;
   }
-  return crypto14.createHash("sha256").update(fs23.readFileSync(fullPath)).digest("hex");
+  return crypto14.createHash("sha256").update(fs24.readFileSync(fullPath)).digest("hex");
 }
 function relativeRunPath2(runId, leaf) {
-  return path24.posix.join(ARTIFACT_PATHS.audioReviewsDir, runId, leaf);
+  return path27.posix.join(ARTIFACT_PATHS.audioReviewsDir, runId, leaf);
 }
 function normalizeRunId2(value) {
   const candidate = slugify15(value ?? `audio-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}`);
@@ -39175,13 +39973,13 @@ function normalizeRunId2(value) {
   return candidate;
 }
 function safeArtifactPath2(root, relativePath) {
-  const normalized = path24.posix.normalize(String(relativePath).replaceAll(path24.sep, "/"));
-  if (normalized.startsWith("../") || normalized === ".." || path24.isAbsolute(normalized)) {
+  const normalized = path27.posix.normalize(String(relativePath).replaceAll(path27.sep, "/"));
+  if (normalized.startsWith("../") || normalized === ".." || path27.isAbsolute(normalized)) {
     throw new Error(`Refusing unsafe audio review artifact path: ${relativePath}`);
   }
-  const fullPath = path24.resolve(root, normalized);
-  const rootPath = path24.resolve(root);
-  if (fullPath !== rootPath && !fullPath.startsWith(`${rootPath}${path24.sep}`)) {
+  const fullPath = path27.resolve(root, normalized);
+  const rootPath = path27.resolve(root);
+  if (fullPath !== rootPath && !fullPath.startsWith(`${rootPath}${path27.sep}`)) {
     throw new Error(`Refusing audio review artifact outside workspace: ${relativePath}`);
   }
   return normalized;
@@ -39235,31 +40033,31 @@ function normalizeHandoff2(root, raw = {}) {
   const findings = Array.isArray(raw.findings) ? raw.findings.map((finding, index) => ({
     id: slugify15(finding.id ?? `${finding.severity ?? "medium"}-${finding.summary ?? index}`),
     severity: ["low", "medium", "high"].includes(finding.severity) ? finding.severity : "medium",
-    summary: normalizeString10(finding.summary, `Audio review finding ${index + 1}`),
-    linkedArtifactPaths: normalizeStringArray23(finding.linkedArtifactPaths).map((item) => safeArtifactPath2(root, item)),
-    claimIds: normalizeStringArray23(finding.claimIds),
-    experimentIds: normalizeStringArray23(finding.experimentIds)
+    summary: normalizeString11(finding.summary, `Audio review finding ${index + 1}`),
+    linkedArtifactPaths: normalizeStringArray25(finding.linkedArtifactPaths).map((item) => safeArtifactPath2(root, item)),
+    claimIds: normalizeStringArray25(finding.claimIds),
+    experimentIds: normalizeStringArray25(finding.experimentIds)
   })) : [];
-  const reviewedArtifactPaths = normalizeStringArray23(raw.reviewedArtifactPaths ?? raw.artifactPaths).map((item) => safeArtifactPath2(root, item));
+  const reviewedArtifactPaths = normalizeStringArray25(raw.reviewedArtifactPaths ?? raw.artifactPaths).map((item) => safeArtifactPath2(root, item));
   return {
     version: 1,
     runId,
     status,
     verdict,
     reviewerId: requiredStringField2(raw, "reviewerId"),
-    timestamp: normalizeString10(raw.timestamp, nowIso()),
+    timestamp: normalizeString11(raw.timestamp, nowIso()),
     summary: requiredStringField2(raw, "summary"),
     inputPath: safeArtifactPath2(root, requiredStringField2(raw, "inputPath")),
     inputSha256: requiredStringField2(raw, "inputSha256"),
     reportPath: safeArtifactPath2(root, requiredStringField2(raw, "reportPath")),
     reviewedArtifactPaths,
     findings,
-    actionItems: normalizeStringArray23(raw.actionItems ?? findings.map((finding) => finding.summary)),
+    actionItems: normalizeStringArray25(raw.actionItems ?? findings.map((finding) => finding.summary)),
     privateTranscriptImported: false
   };
 }
 function audioReviewPreparedHandoffSuggestion(prepared = {}, responseLanguage = "zh") {
-  const requiredInputs = normalizeStringArray23([prepared.inputPath, prepared.handoffPath, prepared.reportPath]);
+  const requiredInputs = normalizeStringArray25([prepared.inputPath, prepared.handoffPath, prepared.reportPath]);
   return {
     presentation: "dove-handoff-suggestion",
     boundaryType: "awaiting-review-output",
@@ -39273,10 +40071,27 @@ function audioReviewPreparedHandoffSuggestion(prepared = {}, responseLanguage = 
   };
 }
 function audioReviewImportedHandoffSuggestion(imported = {}, responseLanguage = "zh") {
+  if (imported.reviewProofRequired) {
+    const requiredActions2 = ["submit-authoritative-reviewer-runtime-proof"];
+    return {
+      presentation: "dove-handoff-suggestion",
+      boundaryType: "review-proof-required",
+      ownerRole: "reviewer",
+      nextRole: "reviewer",
+      requiredActions: requiredActions2,
+      requires: requiredActions2,
+      detail: {
+        implementationBoundaryType: "audio-review-proof-required",
+        reviewVerdict: imported.importedVerdict ?? imported.verdict ?? null,
+        reviewSummary: imported.summary ?? null
+      },
+      summary: "Authoritative Reviewer proof is still required for the imported audio review."
+    };
+  }
   if (imported.verdict === "coherent") {
     return null;
   }
-  const requiredActions = normalizeStringArray23(imported.actionItems).length > 0 ? normalizeStringArray23(imported.actionItems) : ["address-audio-review-findings"];
+  const requiredActions = normalizeStringArray25(imported.actionItems).length > 0 ? normalizeStringArray25(imported.actionItems) : ["address-audio-review-findings"];
   const implementationBoundaryType = `audio-review-${imported.verdict ?? "needs-revision"}`;
   return {
     presentation: "dove-handoff-suggestion",
@@ -39303,7 +40118,7 @@ function audioReviewPreparedCard(prepared = {}, responseLanguage = "zh") {
     status: prepared.status,
     outcome: "awaiting-review-output",
     summary: doveText(responseLanguage, "resultCardReviewInputPrepared"),
-    evidenceLinks: [prepared.inputPath, prepared.handoffPath, prepared.reportPath, ...normalizeStringArray23(prepared.reviewedArtifactPaths)],
+    evidenceLinks: [prepared.inputPath, prepared.handoffPath, prepared.reportPath, ...normalizeStringArray25(prepared.reviewedArtifactPaths)],
     durableWrites: [doveText(responseLanguage, "resultCardReviewInputPrepared"), prepared.inputPath, relativeRunPath2(prepared.runId, "manifest.json")],
     nextActions: [{
       title: doveText(responseLanguage, "resultCardNextImportReview"),
@@ -39326,9 +40141,10 @@ function audioReviewPreparedCard(prepared = {}, responseLanguage = "zh") {
 }
 function audioReviewImportedCard(imported = {}, packetId = null, responseLanguage = "zh") {
   const handoffSuggestion = audioReviewImportedHandoffSuggestion(imported, responseLanguage);
+  const proofBoundary = handoffSuggestion?.boundaryType === "review-proof-required";
   const nextActions = handoffSuggestion ? [{
-    title: doveText(responseLanguage, "resultCardNextCreateFixMission"),
-    command: "project:dove.mission",
+    title: proofBoundary ? "Submit authoritative Reviewer proof" : doveText(responseLanguage, "resultCardNextCreateFixMission"),
+    command: proofBoundary ? "project:dove.review" : "project:dove.mission",
     packetId,
     boundaryType: handoffSuggestion.boundaryType,
     ownerRole: handoffSuggestion.ownerRole,
@@ -39346,6 +40162,7 @@ function audioReviewImportedCard(imported = {}, packetId = null, responseLanguag
     status: imported.status,
     outcome: imported.verdict,
     summary: imported.summary ?? doveText(responseLanguage, "resultCardReviewImported"),
+    boundary: imported.boundary,
     evidenceLinks: [imported.handoffPath, imported.reportPath, imported.inputPath].filter(Boolean),
     validationEvidence: [imported.verdict].filter(Boolean),
     durableWrites: [doveText(responseLanguage, "resultCardReviewImported"), ARTIFACT_PATHS.reviewLog, ARTIFACT_PATHS.reviewConcerns, relativeRunPath2(imported.runId, "manifest.json")],
@@ -39452,11 +40269,21 @@ function transitionToAudioReviewer(root, args, target, runId, reviewedArtifactPa
     currentFocus: args.scope ?? target.packet?.title ?? `Audio review ${runId}`,
     nextAction: `Complete audio review ${runId} and return only the declared handoff and report artifacts.`,
     handoffSummary: `Handing ${target.packet?.title ?? "the current work"} to the audio reviewer for run ${runId}.`,
-    evidenceLinks: Array.from(/* @__PURE__ */ new Set([...board.evidenceLinks ?? [], ...reviewedArtifactPaths]))
+    evidenceLinks: Array.from(/* @__PURE__ */ new Set([...board.evidenceLinks ?? [], ...reviewedArtifactPaths])),
+    reviewRequiredBeforeFinalize: true
   });
 }
-function audioReviewReturnTransition(handoff) {
+function audioReviewReturnTransition(handoff, independentProof = null) {
   if (handoff.verdict === "coherent") {
+    if (independentProof?.authoritative !== true) {
+      return {
+        phase: "review",
+        assignedRole: "reviewer",
+        intentType: "review",
+        nextAction: "Submit authoritative proof from an approved Reviewer runtime execution claim through the private capability.",
+        proofBoundary: true
+      };
+    }
     return {
       phase: "plan",
       assignedRole: "planner",
@@ -39473,13 +40300,32 @@ function audioReviewReturnTransition(handoff) {
 }
 function returnImportedAudioReview(root, args, handoff, handoffPath, reportPath, transition) {
   const board = loadBoard(root);
+  const evidenceLinks = Array.from(/* @__PURE__ */ new Set([
+    ...board.evidenceLinks ?? [],
+    handoffPath,
+    reportPath,
+    ...handoff.reviewedArtifactPaths
+  ]));
+  const handoffSummary = transition.proofBoundary ? `Audio reviewer ${handoff.reviewerId} returned public coherent material for ${handoff.runId}, but authoritative Reviewer runtime proof is still required; Reviewer ownership is retained.` : `Audio reviewer ${handoff.reviewerId} returned ${handoff.verdict} for ${handoff.runId}; workflow routing now returns to ${transition.assignedRole} for the recorded next action.`;
+  if (transition.proofBoundary && board.currentPhase === "review" && board.assignedRole === "reviewer") {
+    appendSystemHandoff(root, {
+      fromRole: "reviewer",
+      toRole: "reviewer",
+      phase: "review",
+      intentType: "review",
+      summary: handoffSummary,
+      currentFocus: handoff.summary,
+      nextAction: transition.nextAction,
+      evidenceLinks
+    });
+  }
   return upsertSystemOrchestrationBoard(root, {
     ...args,
     ...transition,
     currentFocus: handoff.summary,
-    handoffSummary: `Audio reviewer ${handoff.reviewerId} returned ${handoff.verdict} for ${handoff.runId}; workflow routing now returns to ${transition.assignedRole} for the recorded next action.`,
-    evidenceLinks: Array.from(/* @__PURE__ */ new Set([...board.evidenceLinks ?? [], handoffPath, reportPath, ...handoff.reviewedArtifactPaths])),
-    reviewRequiredBeforeFinalize: handoff.verdict !== "coherent"
+    handoffSummary,
+    evidenceLinks,
+    reviewRequiredBeforeFinalize: transition.proofBoundary ? true : handoff.verdict !== "coherent"
   });
 }
 function prepareAudioReview(root, args = {}) {
@@ -39489,13 +40335,26 @@ function prepareAudioReview(root, args = {}) {
   const runId = normalizeRunId2(args.runId);
   const catalog = readTaskPacketCatalog(root);
   const task = catalog.byId.get(target.packetId) ?? target.packet;
-  const finalPlanPaths = normalizeStringArray23(args.finalPlanPaths ?? args.planPaths).map((item) => safeArtifactPath2(root, item));
-  const finalResultPaths = normalizeStringArray23(args.finalResultPaths ?? args.resultPaths).map((item) => safeArtifactPath2(root, item));
-  const explicitArtifactPaths = normalizeStringArray23(args.artifactPaths ?? args.reviewedArtifactPaths).map((item) => safeArtifactPath2(root, item));
-  const reviewScope = assertReviewMaterials(buildReviewScope(root, target, {
-    reviewedArtifactPaths: Array.from(/* @__PURE__ */ new Set([...finalPlanPaths, ...finalResultPaths, ...explicitArtifactPaths]))
-  }), "prepare_audio_review");
+  const finalPlanPaths = normalizeStringArray25(args.finalPlanPaths ?? args.planPaths).map((item) => safeArtifactPath2(root, item));
+  const finalResultPaths = normalizeStringArray25(args.finalResultPaths ?? args.resultPaths).map((item) => safeArtifactPath2(root, item));
+  const explicitArtifactPaths = normalizeStringArray25(args.artifactPaths ?? args.reviewedArtifactPaths).map((item) => safeArtifactPath2(root, item));
+  const classifiedArtifactPaths = Array.from(/* @__PURE__ */ new Set([
+    ...finalPlanPaths,
+    ...finalResultPaths,
+    ...explicitArtifactPaths
+  ]));
+  if (classifiedArtifactPaths.length > 0) {
+    buildReviewScope(root, target, {
+      reviewedArtifactPaths: classifiedArtifactPaths
+    });
+  }
+  const reviewScope = assertReviewMaterials(
+    buildReviewScope(root, target),
+    "prepare_audio_review"
+  );
   const reviewedArtifactPaths = reviewScope.substantiveArtifactPaths;
+  const classifiedArtifactSet = new Set(classifiedArtifactPaths);
+  const canonicalExplicitArtifactPaths = reviewedArtifactPaths.filter((artifactPath) => !classifiedArtifactSet.has(artifactPath));
   const artifacts = reviewedArtifactPaths.map((relativePath) => artifactEntry2(root, relativePath));
   const usableArtifacts = assertSubstantiveArtifactEntries2(artifacts, "prepare_audio_review");
   const snapshot = snapshotReviewedArtifacts(root, usableArtifacts.map((artifact) => artifact.path), "prepare_audio_review");
@@ -39521,12 +40380,15 @@ function prepareAudioReview(root, args = {}) {
     },
     finalPlanPaths,
     finalResultPaths,
-    explicitArtifactPaths,
+    explicitArtifactPaths: Array.from(/* @__PURE__ */ new Set([
+      ...explicitArtifactPaths,
+      ...canonicalExplicitArtifactPaths
+    ])),
     reviewedArtifactPaths: snapshot.reviewedArtifacts.map((artifact) => artifact.path),
     reviewedArtifacts: snapshot.reviewedArtifacts,
     reviewedArtifactSetSha256: snapshot.reviewedArtifactSetSha256,
     artifacts,
-    instructions: normalizeString10(args.instructions, "Review only the supplied final plan, final result, and explicit artifacts. Do not assume access to project context."),
+    instructions: normalizeString11(args.instructions, "Review only the supplied final plan, final result, and explicit artifacts. Do not assume access to project context."),
     outputContract: {
       handoffPath: relativeRunPath2(runId, "handoff.json"),
       reportPath: relativeRunPath2(runId, "report.md"),
@@ -39547,6 +40409,7 @@ function prepareAudioReview(root, args = {}) {
     reviewerKind: "audio",
     runId,
     packetId: target.packetId,
+    includedPacketIds: reviewScope.includedPacketIds,
     status: "prepared",
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -39556,7 +40419,10 @@ function prepareAudioReview(root, args = {}) {
     reportPath: relativeRunPath2(runId, "report.md"),
     finalPlanPaths,
     finalResultPaths,
-    explicitArtifactPaths,
+    explicitArtifactPaths: Array.from(/* @__PURE__ */ new Set([
+      ...explicitArtifactPaths,
+      ...canonicalExplicitArtifactPaths
+    ])),
     reviewedArtifactPaths: snapshot.reviewedArtifacts.map((artifact) => artifact.path),
     reviewedArtifacts: snapshot.reviewedArtifacts,
     reviewedArtifactSetSha256: snapshot.reviewedArtifactSetSha256,
@@ -39599,6 +40465,11 @@ function importAudioReview(root, args = {}) {
   assertFollowThroughReady(root, "Importing an isolated audio review handoff", args);
   const runId = normalizeRunId2(args.runId);
   const manifestPath = relativeRunPath2(runId, "manifest.json");
+  const canonicalPaths = {
+    inputPath: relativeRunPath2(runId, "input.json"),
+    handoffPath: relativeRunPath2(runId, "handoff.json"),
+    reportPath: relativeRunPath2(runId, "report.md")
+  };
   const manifest = readJson(root, manifestPath, null);
   if (!manifest || typeof manifest !== "object") {
     throw new Error(`Missing audio review manifest for ${runId}`);
@@ -39609,26 +40480,51 @@ function importAudioReview(root, args = {}) {
   if (manifest.packetId !== target.packetId) {
     throw new Error(`Audio review ${runId} belongs to packet ${manifest.packetId ?? "unknown"}, not ${target.packetId}.`);
   }
-  const handoffPath = args.handoffPath ? safeArtifactPath2(root, args.handoffPath) : manifest.handoffPath;
-  const reportPath = args.reportPath ? safeArtifactPath2(root, args.reportPath) : manifest.reportPath;
-  if (handoffPath !== manifest.handoffPath || reportPath !== manifest.reportPath) {
-    throw new Error(`Audio review ${runId} must import the exact handoff and report paths declared by its prepared manifest.`);
+  const handoffPath = args.handoffPath ? safeArtifactPath2(root, args.handoffPath) : canonicalPaths.handoffPath;
+  const reportPath = args.reportPath ? safeArtifactPath2(root, args.reportPath) : canonicalPaths.reportPath;
+  if (handoffPath !== canonicalPaths.handoffPath || reportPath !== canonicalPaths.reportPath) {
+    return audioReviewVerificationFailure(runId, ["noncanonical-exchange-path"], manifest, manifest.packetId, resolveDoveResponseLanguage(root, args));
+  }
+  const handoffPathFailure = canonicalReviewExchangePathFailure(
+    root,
+    handoffPath,
+    "handoff"
+  );
+  if (handoffPathFailure) {
+    return audioReviewVerificationFailure(
+      runId,
+      [handoffPathFailure],
+      manifest,
+      manifest.packetId,
+      resolveDoveResponseLanguage(root, args)
+    );
   }
   const handoffFullPath = resolvePath(root, handoffPath);
-  if (!fs23.existsSync(handoffFullPath)) {
-    throw new Error(`Missing audio review handoff: ${handoffPath}`);
-  }
-  const handoff = normalizeHandoff2(root, JSON.parse(fs23.readFileSync(handoffFullPath, "utf8")));
+  const handoff = normalizeHandoff2(root, JSON.parse(fs24.readFileSync(handoffFullPath, "utf8")));
   if (handoff.runId !== runId) {
     throw new Error(`Audio review handoff runId mismatch: expected ${runId}, received ${handoff.runId}`);
   }
   const responseLanguage = resolveDoveResponseLanguage(root, args);
-  const inputFullPath = resolvePath(root, manifest.inputPath);
+  const inputPathFailure = canonicalReviewExchangePathFailure(
+    root,
+    canonicalPaths.inputPath,
+    "input"
+  );
+  if (inputPathFailure) {
+    return audioReviewVerificationFailure(
+      runId,
+      [inputPathFailure],
+      manifest,
+      manifest.packetId,
+      responseLanguage
+    );
+  }
+  const inputFullPath = resolvePath(root, canonicalPaths.inputPath);
   let input;
   let actualInputSha256;
   try {
     actualInputSha256 = sha256File(inputFullPath);
-    input = JSON.parse(fs23.readFileSync(inputFullPath, "utf8"));
+    input = JSON.parse(fs24.readFileSync(inputFullPath, "utf8"));
   } catch (error) {
     return audioReviewVerificationFailure(runId, [`input-unreadable:${error instanceof Error ? error.message : String(error)}`], manifest, manifest.packetId, responseLanguage);
   }
@@ -39644,8 +40540,34 @@ function importAudioReview(root, args = {}) {
   if (!verification.ok) {
     return audioReviewVerificationFailure(runId, verification.failures, manifest, manifest.packetId, responseLanguage);
   }
+  const canonicalScopeVerification = verifyCanonicalReviewImportScope(root, target, {
+    runId,
+    manifest,
+    input,
+    handoff,
+    canonicalPaths,
+    isolationModel: "audio-final-plan-results-explicit-artifacts",
+    contextPolicy: DOVE_AUDIO_CONTEXT_POLICY
+  });
+  if (!canonicalScopeVerification.ok) {
+    return audioReviewVerificationFailure(runId, canonicalScopeVerification.failures, manifest, manifest.packetId, responseLanguage);
+  }
   if (handoff.reportPath !== reportPath) {
     return audioReviewVerificationFailure(runId, ["report-path-mismatch"], manifest, manifest.packetId, responseLanguage);
+  }
+  const reportPathFailure = canonicalReviewExchangePathFailure(
+    root,
+    reportPath,
+    "report"
+  );
+  if (reportPathFailure) {
+    return audioReviewVerificationFailure(
+      runId,
+      [reportPathFailure],
+      manifest,
+      manifest.packetId,
+      responseLanguage
+    );
   }
   const reportInspection = inspectDeclaredPath(root, reportPath, {
     requireNonEmpty: true,
@@ -39657,27 +40579,101 @@ function importAudioReview(root, args = {}) {
   const reportFullPath = resolvePath(root, reportPath);
   const handoffSha256 = hashFile2(handoffFullPath);
   const reportSha256 = hashFile2(reportFullPath);
-  const returnTransition = audioReviewReturnTransition(handoff);
+  const anticipatedTransition = audioReviewReturnTransition(handoff);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    anticipatedTransition.phase,
+    anticipatedTransition.assignedRole,
+    "Importing an audio review"
+  );
+  assertSystemOrchestrationBoardUpdate(root, {
+    ...args,
+    ...anticipatedTransition,
+    currentFocus: handoff.summary,
+    reviewRequiredBeforeFinalize: true
+  });
   appendText(root, ARTIFACT_PATHS.reviewLog, renderReviewLogEntry({ handoff, reportPath, reportSha256 }));
   upsertConcerns(root, handoff);
   const updatedManifest = {
-    ...manifest,
+    version: 1,
+    reviewerKind: "audio",
+    runId,
+    packetId: target.packetId,
+    includedPacketIds: canonicalScopeVerification.scope.includedPacketIds,
     status: "imported",
+    createdAt: manifest.createdAt,
     updatedAt: nowIso(),
     importedAt: nowIso(),
+    inputPath: canonicalPaths.inputPath,
+    inputSha256: actualInputSha256,
     handoffPath,
     reportPath,
+    finalPlanPaths: normalizeStringArray25(input.finalPlanPaths),
+    finalResultPaths: normalizeStringArray25(input.finalResultPaths),
+    explicitArtifactPaths: normalizeStringArray25(input.explicitArtifactPaths),
+    reviewedArtifactPaths: canonicalScopeVerification.scope.substantiveArtifactPaths,
+    reviewedArtifacts: verification.reviewedArtifacts,
+    reviewedArtifactSetSha256: verification.reviewedArtifactSetSha256,
     handoffSha256,
     reportSha256,
     verdict: handoff.verdict,
-    reviewerId: handoff.reviewerId
+    importedVerdict: handoff.verdict,
+    reviewerId: handoff.reviewerId,
+    authoritative: false,
+    independentReviewProof: null,
+    reviewProofRequired: handoff.verdict === "coherent"
   };
   writeJson(root, manifestPath, updatedManifest);
-  returnImportedAudioReview(root, args, handoff, handoffPath, reportPath, returnTransition);
+  const reviewedArtifactPaths = canonicalScopeVerification.scope.substantiveArtifactPaths;
+  const independentProof = handoff.verdict === "coherent" ? verifyImportedReviewProofIntegrity(
+    root,
+    resolvePath(root, manifestPath),
+    {
+      packetId: target.packetId,
+      reviewedArtifactPaths,
+      isolationModel: "audio-final-plan-results-explicit-artifacts",
+      handoffSha256Field: "handoffSha256"
+    }
+  ) : {
+    ok: false,
+    authoritative: false,
+    proof: null,
+    failures: []
+  };
+  const returnTransition = audioReviewReturnTransition(
+    handoff,
+    independentProof
+  );
+  if (returnTransition.proofBoundary) {
+    recordReviewProofRequiredBoundary(root, {
+      reviewKind: "audio",
+      runId,
+      packetId: target.packetId,
+      includedPacketIds: canonicalScopeVerification.scope.includedPacketIds,
+      timestamp: handoff.timestamp,
+      handoffPath,
+      reportPath,
+      reviewedArtifactPaths
+    });
+  }
+  returnImportedAudioReview(
+    root,
+    args,
+    handoff,
+    handoffPath,
+    reportPath,
+    returnTransition
+  );
   const imported = {
     status: "imported",
     runId,
-    verdict: handoff.verdict,
+    verdict: returnTransition.proofBoundary ? "needs-evidence" : handoff.verdict,
+    importedVerdict: handoff.verdict,
+    authoritative: independentProof.authoritative === true,
+    independentReviewProof: null,
+    reviewProofRequired: handoff.verdict === "coherent" && independentProof.authoritative !== true,
+    proofFailures: independentProof.failures ?? [],
     reviewerId: handoff.reviewerId,
     summary: handoff.summary,
     topConcerns: handoff.findings.slice(0, 5).map((finding) => finding.summary),
@@ -39688,13 +40684,30 @@ function importAudioReview(root, args = {}) {
     inputSha256: manifest.inputSha256,
     handoffSha256,
     reportSha256,
+    ...returnTransition.proofBoundary ? {
+      boundary: {
+        type: "review-proof-required",
+        ownerRole: "reviewer",
+        nextRole: "reviewer",
+        nextAction: returnTransition.nextAction,
+        requiredActions: [
+          "submit-authoritative-reviewer-runtime-proof"
+        ]
+      },
+      ownerRole: "reviewer",
+      nextRole: "reviewer",
+      nextAction: returnTransition.nextAction
+    } : {},
     privateTranscriptImported: false,
     preActionGuidanceSummary: audioGuidanceSummary(root, args, target, {
-      nextAction: handoff.verdict === "coherent" ? "project:dove.status" : "project:dove.mission",
+      nextAction: returnTransition.proofBoundary ? "project:dove.review" : handoff.verdict === "coherent" ? "project:dove.status" : "project:dove.mission",
       statusSummary: {
         status: "imported",
         runId,
-        verdict: handoff.verdict,
+        verdict: returnTransition.proofBoundary ? "needs-evidence" : handoff.verdict,
+        importedVerdict: handoff.verdict,
+        authoritative: independentProof.authoritative === true,
+        reviewProofRequired: returnTransition.proofBoundary === true,
         findingCount: handoff.findings.length,
         actionItemCount: handoff.actionItems.length
       }
@@ -39712,7 +40725,7 @@ function runAudioReview(root, args = {}) {
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const runId = normalizeRunId2(args.runId);
   const handoffPath = args.handoffPath ? safeArtifactPath2(root, args.handoffPath) : relativeRunPath2(runId, "handoff.json");
-  if (fs23.existsSync(resolvePath(root, handoffPath))) {
+  if (fs24.existsSync(resolvePath(root, handoffPath))) {
     const imported = importAudioReview(root, {
       ...args,
       runId,
@@ -40401,28 +41414,24 @@ var planMissionProps = {
   children: { type: "array", items: { type: ["object", "string"] } }
 };
 var operatorTaskResultProps = {
-  id: { type: "string" },
   packetId: { type: "string" },
-  taskPacketId: { type: "string" },
-  taskId: { type: "string" },
-  resultStatus: { type: "string" },
-  taskStatus: { type: "string" },
-  missionStatus: { type: "string" },
-  completeTask: { type: "boolean" },
-  complete: { type: "boolean" },
-  completeOnSuccess: { type: "boolean" },
-  blocked: { type: "boolean" },
-  outcome: { type: "string" },
-  summary: { type: "string" },
+  resultStatus: { type: "string", enum: ["completed", "blocked", "in-progress"] },
   resultSummary: { type: "string" },
+  outcome: { type: "string" },
   reason: { type: "string" },
+  stopReason: { type: "string" },
   nextAction: { type: "string" },
   evidenceLinks: { type: "array", items: { type: "string" } },
-  evidencePaths: { type: "array", items: { type: "string" } },
   artifactRefs: { type: "array", items: { type: "string" } },
-  artifactPaths: { type: "array", items: { type: "string" } },
-  ...executionVerificationProps,
-  ...boundaryProps,
+  validationEvidencePaths: { type: "array", items: { type: "string" } },
+  verificationEvidencePaths: { type: "array", items: { type: "string" } },
+  verifiedCriteria: executionVerificationProps.verifiedCriteria,
+  executionContract: executionVerificationProps.executionContract,
+  executionReceipt: executionVerificationProps.executionReceipt,
+  boundaryType: { type: "string" },
+  boundaryId: { type: "string" },
+  requiredInputs: { type: "array", items: { type: "string" } },
+  requiredActions: { type: "array", items: { type: "string" } },
   startedAt: { type: "string" },
   completedAt: { type: "string" }
 };
@@ -40492,7 +41501,7 @@ var OPERATOR_SCHEMA_FIELDS = {
   query_network_search_providers: ["kind", "providerIds", "resultMode"],
   create_dove_task: [...Object.keys(missionReplayProps), "objective", "prompt", "resultMode"],
   run_dove_auto: ["target", "goal", "prompt", "steps", "maxIterations", "maxSteps", "confirm", "confirmed", "completeTask", "completeOnSuccess", "resultMode"],
-  run_dove_operator: ["confirm", "confirmed", "blockerInvestigationMode", "resultMode"],
+  run_dove_operator: ["confirmed", "includeQueueDetails", "blockerInvestigationMode", "runId", "resultMode"],
   register_source: ["target", "citationKey", "title", "authors", "year", "locator", "sourceType", "abstract", "origin", "sources", "resultMode"],
   verify_source: ["target", "sourceId", "decision", "method", "checkedMaterial", "auditEvidence", "resultMode"],
   upsert_note: ["target", "title", "summary", "quotes", "claims", "openQuestions", "resultMode"],
@@ -40515,7 +41524,7 @@ var OPERATOR_PUBLIC_TOOL_DESCRIPTIONS = {
   run_dove_auto: "Run confirmed foreground work that produces or inspects real materials; status/task panels alone are not progress, and missing materials return a clear boundary.",
   run_dove_operator: "Preview concrete required actions, then after explicit confirmation move one safe step only when real results or material are present.",
   register_source: "Record external source metadata as a candidate for the current task; registration alone never makes it claim-eligible.",
-  verify_source: "Create an auditable independent verification or rejection record after checking the source material.",
+  verify_source: "Record a source rejection after checking durable material; public positive verification is disabled.",
   upsert_note: "Save synthesized writing or research notes for the current task.",
   upsert_draft: "Update a section draft when concrete draft text is provided.",
   record_document_evidence: "Record a document or evidence summary without exposing raw private material.",
@@ -40717,15 +41726,15 @@ var baseToolDefinitions = [
       })
     }
   },
-  { name: "run_dove_operator", description: "Preview compact queue summary/cards with planner preActionGuidance and read-only lesson recall by default, optionally returning full queue details only when includeQueueDetails is true; after explicit confirmation run one foreground operator pass across safe internal steps and explicit host-supplied task results. Queue previews, task lists, and status panels are not progress. Host-pass work without taskResults remains unchanged and is returned with material-specific host-pass requiredActions, host-tool-blocked task results record host-side safety classifier or tool-availability failures, blocked work is proposal-only by default, and pending blocker-investigation plan missions are created only when blockerInvestigationMode is create or createBlockedInvestigations is true. Returns created/reused blocker counts and a localized resultCard; no scheduler or hidden runtime.", inputSchema: { type: "object", properties: { confirmed: { type: "boolean" }, confirm: { type: "boolean" }, includeQueueDetails: { type: "boolean" }, blockerInvestigationMode: { type: "string", enum: ["none", "propose", "create"] }, createBlockedInvestigations: { type: "boolean" }, runId: { type: "string" }, taskResults: { type: "array", items: { type: "object", properties: operatorTaskResultProps } }, results: { type: "array", items: { type: "object", properties: operatorTaskResultProps } }, passResults: { type: "array", items: { type: "object", properties: operatorTaskResultProps } } } } },
+  { name: "run_dove_operator", description: "Preview compact queue summary/cards with planner preActionGuidance and read-only lesson recall by default, optionally returning full queue details only when includeQueueDetails is true; after explicit confirmation run one foreground operator pass across safe internal steps and canonical host-supplied taskResults. Queue previews, task lists, and status panels are not progress. Host-pass work without taskResults remains unchanged and is returned with material-specific host-pass requiredActions; blocked host results use boundaryType host-tool-blocked when appropriate. Blocked work is proposal-only by default, and pending blocker-investigation plan missions are created only when blockerInvestigationMode is create. Returns created/reused blocker counts and a localized resultCard; no scheduler or hidden runtime.", inputSchema: { type: "object", properties: { confirmed: { type: "boolean" }, includeQueueDetails: { type: "boolean" }, blockerInvestigationMode: { type: "string", enum: ["none", "propose", "create"] }, runId: { type: "string" }, taskResults: { type: "array", items: { type: "object", properties: operatorTaskResultProps, required: ["packetId", "resultStatus"], additionalProperties: false } } } } },
   { name: "kill_dove_task", description: "Internal guarded capability to kill a non-init Dove task; public operators normally choose killed through /dove:status status adjustment UX.", inputSchema: { type: "object", properties: { packetId: { type: "string" }, taskPacketId: { type: "string" }, taskId: { type: "string" }, id: { type: "string" }, target: { type: "string" }, taskName: { type: "string" }, title: { type: "string" }, index: { type: "number" }, reason: { type: "string" }, killReason: { type: "string" } } } },
   { name: "reset_dove_version", description: "Create a direction-change snapshot and clear active tasks except the level-0 init task. This is not a .dove rollback restore entrypoint; host/context rollback should use mutationMode: patch-plan applied through host-tracked file edits before relying on the host native checkpoint.", inputSchema: { type: "object", properties: { id: { type: "string" }, versionId: { type: "string" }, title: { type: "string" }, reason: { type: "string" }, summary: { type: "string" } } } },
   { name: "run_experience_workflow", description: "Plan, record, audit, and bridge experiment experience into claim state after resolving the durable task packet; every new experience requires a real experiment goal, title, idea, or experimentId, and missing objectives should become an explicit host-pass boundary instead of a placeholder plan. Returns Builder/experiment-planner preActionGuidance with read-only lesson recall, audit gate, and claim-bridge boundary.", inputSchema: { type: "object", properties: withTaskTarget({ id: { type: "string" }, experimentId: { type: "string" }, goal: { type: "string" }, idea: { type: "string" }, title: { type: "string" }, methodology: { type: "string" }, method: { type: "string" }, successMetric: { type: "string" }, metric: { type: "string" }, comparisonTargets: { type: "array", items: { type: "string" } }, baselines: { type: "array", items: { type: "string" } }, claimId: { type: "string" }, plan: { type: "object", properties: experiencePlanProps, additionalProperties: false }, result: { type: "object", properties: experienceResultProps, additionalProperties: false }, resultId: { type: "string" }, outcome: { type: "string" }, summary: { type: "string" }, resultSummary: { type: "string" }, evidenceLinks: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } } }) } },
   { name: "prepare_audio_review", description: "Prepare an isolated audio review input bundle containing only task summary, final plan/result paths, explicit artifacts, canonical reviewed-artifact snapshots (path, sizeBytes, sha256), an exact-set hash, instructions, and output contract; result cards include Reviewer preActionGuidanceSummary and preserve the no-private-transcript boundary.", inputSchema: { type: "object", properties: withTaskTarget({ runId: { type: "string" }, instructions: { type: "string" }, finalPlanPaths: { type: "array", items: { type: "string" } }, planPaths: { type: "array", items: { type: "string" } }, finalResultPaths: { type: "array", items: { type: "string" } }, resultPaths: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } }, reviewedArtifactPaths: { type: "array", items: { type: "string" } }, contextPolicy: { type: "string" } }) } },
-  { name: "import_audio_review", description: "Import only a declared audio review handoff and report after verifying the prepared input hash, exact reviewed-artifact path set, and every current artifact size/hash before any review-state write; verification failure requires reprepare/review, the result returns Reviewer preActionGuidanceSummary, and private reviewer transcripts are never imported.", inputSchema: { type: "object", properties: withTaskTarget({ runId: { type: "string" }, handoffPath: { type: "string" }, reportPath: { type: "string" } }) } },
-  { name: "run_audio_review", description: "Prepare an isolated audio review and import a handoff if one is already present; otherwise return import instructions plus a localized resultCard with Reviewer preActionGuidanceSummary and explicit handoff boundary.", inputSchema: { type: "object", properties: withTaskTarget({ runId: { type: "string" }, scope: { type: "string" }, instructions: { type: "string" }, finalPlanPaths: { type: "array", items: { type: "string" } }, finalResultPaths: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } }, reviewedArtifactPaths: { type: "array", items: { type: "string" } }, handoffPath: { type: "string" }, reportPath: { type: "string" } }) } },
+  { name: "import_audio_review", description: "Import only a declared audio review handoff and report after verifying the prepared input hash, exact reviewed-artifact path set, and every current artifact size/hash before any review-state write. Public handoff fields, reviewerId, verdict, report, and manifest prove snapshot/report integrity only and cannot authenticate Reviewer authority; a public coherent import remains Reviewer-owned with reviewRequiredBeforeFinalize until current authorized independent proof is submitted through the private capability. Verification failure requires reprepare/review, the result returns Reviewer preActionGuidanceSummary, and private reviewer transcripts are never imported.", inputSchema: { type: "object", properties: withTaskTarget({ runId: { type: "string" }, handoffPath: { type: "string" }, reportPath: { type: "string" } }) } },
+  { name: "run_audio_review", description: "Prepare an isolated audio review and import a handoff if one is already present; otherwise return import instructions plus a localized resultCard with Reviewer preActionGuidanceSummary and explicit handoff boundary. An existing caller-authored coherent return cannot transfer ownership to Planner or clear the finalization review gate without current authorized independent Reviewer proof.", inputSchema: { type: "object", properties: withTaskTarget({ runId: { type: "string" }, scope: { type: "string" }, instructions: { type: "string" }, finalPlanPaths: { type: "array", items: { type: "string" } }, finalResultPaths: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } }, reviewedArtifactPaths: { type: "array", items: { type: "string" } }, handoffPath: { type: "string" }, reportPath: { type: "string" } }) } },
   { name: "run_dove_review_loop", description: "Run one independent local Reviewer pass over the resolved packet and its descendants. The call never edits draft or experience material and never performs an implicit Reviewer-to-Builder-to-Reviewer cycle. A non-coherent verdict returns an explicit Builder handoff; revisions and any later review require new explicit calls.", inputSchema: { type: "object", properties: withTaskTarget({ runId: { type: "string" }, scope: { type: "string" }, instructions: { type: "string" }, stage: { type: "string" }, summary: { type: "string" }, artifactPaths: { type: "array", items: { type: "string" } }, reviewedArtifactPaths: { type: "array", items: { type: "string" } }, responseLanguage: { type: "string" }, language: { type: "string" } }), additionalProperties: false } },
-  { name: "launch_dove_mission", description: "Launch one governed Dove mission by materializing accepted proposal guidance into authoritative .dove mission packets without creating program authority or executing autonomy.", inputSchema: { type: "object", properties: { sourceType: { type: "string" }, sourceId: { type: "string" }, actorRole: { type: "string" }, workerRole: { type: "string" }, doveWorkerRole: { type: "string" }, goal: { type: "string" }, domain: { type: "string" }, doveDomain: { type: "string" }, missionDomain: { type: "string" }, stage: { type: "string" }, missionStage: { type: "string" }, targetArtifacts: { type: "array", items: { type: "string" } }, artifacts: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } }, acceptanceChecks: { type: "array", items: { type: "string" } }, acceptanceCriteria: { type: "array", items: { type: "string" } }, returnProtocol: { type: "string" }, packetId: { type: "string" }, missionPacketId: { type: "string" }, followThroughId: { type: "string" }, selectedConversionPathKey: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, phase: { type: "string" }, assignedRole: { type: "string" }, lifecycleStatus: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, dependencies: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, outputPaths: { type: "array", items: { type: "string" } }, status: { type: "string" }, nextCommand: { type: "string" }, decisionSummary: { type: "string" }, rationale: { type: "string" }, executeBy: { type: "string" }, reviewAfter: { type: "string" } } } },
+  { name: "launch_dove_mission", description: "Fail-closed public mission launch boundary. Mission packet creation requires a pre-existing, dynamically valid system-owned program approval, program run, runtime execution claim, and trusted authority provenance; caller-supplied roles never grant authority.", inputSchema: { type: "object", properties: { sourceType: { type: "string" }, sourceId: { type: "string" }, goal: { type: "string" }, domain: { type: "string" }, doveDomain: { type: "string" }, missionDomain: { type: "string" }, stage: { type: "string" }, missionStage: { type: "string" }, targetArtifacts: { type: "array", items: { type: "string" } }, artifacts: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } }, acceptanceChecks: { type: "array", items: { type: "string" } }, acceptanceCriteria: { type: "array", items: { type: "string" } }, returnProtocol: { type: "string" }, packetId: { type: "string" }, missionPacketId: { type: "string" }, followThroughId: { type: "string" }, selectedConversionPathKey: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, dependencies: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, outputPaths: { type: "array", items: { type: "string" } }, status: { type: "string" }, nextCommand: { type: "string" }, decisionSummary: { type: "string" }, rationale: { type: "string" }, executeBy: { type: "string" }, reviewAfter: { type: "string" } } } },
   { name: "query_program_approvals", description: "Read durable program approvals, runs, and review checkpoints.", inputSchema: { type: "object", properties: { programId: { type: "string" }, programRunId: { type: "string" }, status: { type: "string" } } } },
   { name: "query_campaigns", description: "Read durable multi-cycle campaign plans and their linked program/run state without executing work.", inputSchema: { type: "object", properties: { campaignId: { type: "string" }, status: { type: "string" } } } },
   { name: "query_boundary_report", description: "Read the workflow-pack boundary report for managed versus user-owned state.", inputSchema: { type: "object", properties: {} } },
@@ -40747,8 +41756,8 @@ var baseToolDefinitions = [
   },
   {
     name: "update_research_brief",
-    description: "Update the durable research brief and agenda artifacts. Task-scoped writes resolve to a durable packet first; missing or ambiguous targets require explicit packet confirmation unless there is one unique high-confidence autoSelect candidate.",
-    inputSchema: { type: "object", properties: withTaskTarget({ objective: { type: "string" }, agenda: { type: "array", items: { type: "string" } }, evidenceBacklog: { type: "array", items: { type: "string" } }, phase: { type: "string" }, assignedRole: { type: "string" } }) }
+    description: "Update only the durable research objective, agenda, and evidence backlog. This public write cannot change workflow phase or role ownership. Task-scoped writes resolve to a durable packet first; missing or ambiguous targets require explicit packet confirmation unless there is one unique high-confidence autoSelect candidate.",
+    inputSchema: { type: "object", properties: withTaskTarget({ objective: { type: "string" }, agenda: { type: "array", items: { type: "string" } }, evidenceBacklog: { type: "array", items: { type: "string" } } }) }
   },
   {
     name: "register_source",
@@ -40757,8 +41766,8 @@ var baseToolDefinitions = [
   },
   {
     name: "verify_source",
-    description: "Independently verify or reject one registered candidate source. This explicit operation writes a durable audit record bound to the resolved packet and source identity fingerprint; eligibility always follows the latest decision, so a later rejection supersedes an earlier verification. Changing locator, DOI, URL, title, authors, or packet binding invalidates prior verification. Requires method, checkedMaterial, and auditable evidence references. It does not accept caller-minted verified booleans, role strings, tokens, capabilities, or embedded verification records.",
-    inputSchema: { type: "object", properties: withTaskTarget({ sourceId: { type: "string" }, decision: { type: "string", enum: ["verified", "rejected"] }, method: { type: "string" }, checkedMaterial: { type: "string" }, auditEvidence: { type: "array", minItems: 1, items: { type: "object", properties: { reference: { type: "string", minLength: 1 }, kind: { type: "string", enum: ["source", "capture"] }, observation: { type: "string", minLength: 1 } }, required: ["reference", "kind", "observation"], additionalProperties: false } } }), required: ["sourceId", "decision", "method", "checkedMaterial", "auditEvidence"] }
+    description: "Reject one registered candidate source after checking durable evidence. A public rejection must record its method, checkedMaterial, and auditable evidence. Public positive verification is disabled because caller-minted fields cannot self-attest Reviewer/system provenance. A verified source is eligible only when a trusted internal transition records real captured material, its SHA-256 hash, source identity fingerprint, and matching packet binding; legacy positive records without that provenance fail closed and are never backfilled.",
+    inputSchema: { type: "object", properties: withTaskTarget({ sourceId: { type: "string" }, decision: { type: "string", enum: ["rejected"] }, method: { type: "string" }, checkedMaterial: { type: "string" }, auditEvidence: { type: "array", minItems: 1, items: { type: "object", properties: { reference: { type: "string", minLength: 1 }, kind: { type: "string", enum: ["source", "capture"] }, observation: { type: "string", minLength: 1 } }, required: ["reference", "kind", "observation"], additionalProperties: false } } }), required: ["sourceId", "decision", "method", "checkedMaterial", "auditEvidence"] }
   },
   {
     name: "upsert_note",
@@ -40846,10 +41855,10 @@ var baseToolDefinitions = [
   { name: "import_figure_generation", description: "Import a declared generated figure output, validate SVG safety, write caption/provenance, refresh figure QA, and return Builder preActionGuidanceSummary with the artifact-provenance gate after resolving the durable task packet target.", inputSchema: { type: "object", properties: withTaskTarget({ figureId: { type: "string" }, id: { type: "string" }, runId: { type: "string" }, outputManifestPath: { type: "string" }, caption: { type: "string" }, captionDraft: { type: "string" }, captionId: { type: "string" }, sourceSvgPath: { type: "string" }, svgContent: { type: "string" } }) } },
   { name: "validate_figure_pipeline", description: "Regenerate durable figure material, generation, caption, and stage-validation QA outputs.", inputSchema: { type: "object", properties: {} } },
   { name: "record_operator_lesson", description: "Record one explicit distilled operator lesson with problem, decisions, pitfalls, validation, and next-time guidance; action surfaces auto-recall lessons read-only, but recording never happens implicitly and raw runtime traces are rejected.", inputSchema: { type: "object", properties: withTaskTarget({ id: { type: "string" }, title: { type: "string" }, problem: { type: "string" }, decisions: { type: "array", items: { type: "string" } }, pitfalls: { type: "array", items: { type: "string" } }, validation: { type: "array", items: { type: "string" } }, nextTime: { type: "array", items: { type: "string" } }, domain: { type: "string" }, doveDomain: { type: "string" }, missionDomain: { type: "string" }, stage: { type: "string" }, missionStage: { type: "string" }, actorRole: { type: "string" }, tags: { type: "array", items: { type: "string" } }, sourceType: { type: "string" }, sourceId: { type: "string" }, sourceArtifacts: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } }, sourceArtifactPath: { type: "string" }, relatedPacketIds: { type: "array", items: { type: "string" } }, packetIds: { type: "array", items: { type: "string" } }, taskPacketIds: { type: "array", items: { type: "string" } }, missionPacketIds: { type: "array", items: { type: "string" } }, taskIds: { type: "array", items: { type: "string" } }, recommendationIds: { type: "array", items: { type: "string" } }, playbookIds: { type: "array", items: { type: "string" } }, remediationPackIds: { type: "array", items: { type: "string" } }, status: { type: "string" } }) } },
-  { name: "record_operator_follow_through", description: "Record a manual operator follow-through decision for a remediation pack, family playbook, or execution-bridge candidate; runtime/program linkage, retry/timing state, and runtime-owned statuses are never caller-controlled.", inputSchema: { type: "object", properties: { id: { type: "string" }, sourceType: { type: "string" }, sourceId: { type: "string" }, status: { type: "string", enum: ["acknowledged", "accepted-for-execution", "deferred", "accepted-risk"] }, actorRole: { type: "string" }, workerRole: { type: "string" }, decisionSummary: { type: "string" }, rationale: { type: "string" }, selectedConversionPathKey: { type: "string" }, linkedTargetArtifact: { type: "string" }, linkedTargetId: { type: "string" }, plannedTarget: { type: "boolean" }, deferUntil: { type: "string" }, executeBy: { type: "string" }, reviewAfter: { type: "string" } } } },
+  { name: "record_operator_follow_through", description: "Record a non-executing manual operator acknowledgement or deferral for a remediation pack, family playbook, or execution-bridge candidate. Public callers cannot self-assign roles, accept execution or risk, plan or bind targets, or control runtime/program state.", inputSchema: { type: "object", properties: { id: { type: "string" }, sourceType: { type: "string" }, sourceId: { type: "string" }, status: { type: "string", enum: ["acknowledged", "deferred"] }, decisionSummary: { type: "string" }, rationale: { type: "string" }, selectedConversionPathKey: { type: "string" }, deferUntil: { type: "string" }, reviewAfter: { type: "string" } } } },
   { name: "plan_campaign", description: "Record or update a planner-supervised multi-cycle campaign plan without approving or executing work.", inputSchema: { type: "object", properties: { campaignId: { type: "string" }, title: { type: "string" }, objective: { type: "string" }, status: { type: "string" }, phase: { type: "string" }, actorRole: { type: "string" }, programIds: { type: "array", items: { type: "string" } }, steps: { type: "array", items: { type: "object", properties: { id: { type: "string" }, title: { type: "string" }, status: { type: "string" }, programId: { type: "string" }, programRunId: { type: "string" }, approvalId: { type: "string" }, packetId: { type: "string" }, allowedStepType: { type: "string" }, objective: { type: "string" }, nextAction: { type: "string" }, evidenceLinks: { type: "array", items: { type: "string" } }, outputPaths: { type: "array", items: { type: "string" } }, executeBy: { type: "string" }, reviewAfter: { type: "string" } } } }, nextAction: { type: "string" }, reviewPolicy: { type: "string" }, explicitApprovalRequired: { type: "boolean" }, noHiddenRuntime: { type: "boolean" } } } },
   { name: "revoke_program_approval", description: "Revoke one explicit program approval without executing work.", inputSchema: { type: "object", properties: { approvalId: { type: "string" }, actorRole: { type: "string" }, summary: { type: "string" }, revokeReason: { type: "string" } } } },
-  { name: "materialize_guidance_packet", description: "Create a durable task packet and follow-through record from accepted packet guidance without creating program authority or executing work.", inputSchema: { type: "object", properties: { sourceType: { type: "string" }, sourceId: { type: "string" }, actorRole: { type: "string" }, workerRole: { type: "string" }, selectedConversionPathKey: { type: "string" }, packetId: { type: "string" }, followThroughId: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, phase: { type: "string" }, assignedRole: { type: "string" }, status: { type: "string" }, lifecycleStatus: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, dependencies: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, outputPaths: { type: "array", items: { type: "string" } }, decisionSummary: { type: "string" }, rationale: { type: "string" }, executeBy: { type: "string" }, reviewAfter: { type: "string" }, domain: { type: "string" }, doveDomain: { type: "string" }, missionDomain: { type: "string" }, stage: { type: "string" }, missionStage: { type: "string" }, goal: { type: "string" }, missionGoal: { type: "string" }, objective: { type: "string" }, targetArtifacts: { type: "array", items: { type: "string" } }, artifacts: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } }, acceptanceCriteria: { type: "array", items: { type: "string" } }, acceptanceChecks: { type: "array", items: { type: "string" } }, returnProtocol: { type: "string" } } } }
+  { name: "materialize_guidance_packet", description: "Fail-closed public packet materialization boundary. Durable packet creation requires a pre-existing, dynamically valid system-owned program approval, program run, runtime execution claim, and trusted authority provenance; caller-supplied roles never grant authority.", inputSchema: { type: "object", properties: { sourceType: { type: "string" }, sourceId: { type: "string" }, selectedConversionPathKey: { type: "string" }, packetId: { type: "string" }, followThroughId: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, status: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, dependencies: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, outputPaths: { type: "array", items: { type: "string" } }, decisionSummary: { type: "string" }, rationale: { type: "string" }, executeBy: { type: "string" }, reviewAfter: { type: "string" }, domain: { type: "string" }, doveDomain: { type: "string" }, missionDomain: { type: "string" }, stage: { type: "string" }, missionStage: { type: "string" }, goal: { type: "string" }, missionGoal: { type: "string" }, objective: { type: "string" }, targetArtifacts: { type: "array", items: { type: "string" } }, artifacts: { type: "array", items: { type: "string" } }, artifactPaths: { type: "array", items: { type: "string" } }, acceptanceCriteria: { type: "array", items: { type: "string" } }, acceptanceChecks: { type: "array", items: { type: "string" } }, returnProtocol: { type: "string" } } } }
 ];
 var toolDefinitions = baseToolDefinitions.map(addMcpControlFields).map((tool) => ({
   ...tool,
@@ -41062,21 +42071,21 @@ function makeErrorResult(message) {
 function isPlainObject7(value) {
   return value && typeof value === "object" && !Array.isArray(value);
 }
-function normalizeString11(value, fallback = null) {
+function normalizeString12(value, fallback = null) {
   if (typeof value !== "string") {
     return fallback;
   }
   const trimmed = value.trim();
   return trimmed || fallback;
 }
-function normalizeStringArray24(values) {
+function normalizeStringArray26(values) {
   if (!Array.isArray(values)) {
     return [];
   }
-  return values.map((value) => normalizeString11(value)).filter(Boolean);
+  return values.map((value) => normalizeString12(value)).filter(Boolean);
 }
 function uniqueStrings3(values) {
-  return [...new Set(normalizeStringArray24(values))];
+  return [...new Set(normalizeStringArray26(values))];
 }
 function compactObject3(fields) {
   return Object.fromEntries(Object.entries(fields).filter(([, value]) => {
@@ -41098,7 +42107,7 @@ function isMcpCompactInternalKey(key) {
   return MCP_COMPACT_INTERNAL_KEY_PATTERN.test(String(key ?? "")) || /(?:^|[A-Za-z])Ids?$/u.test(String(key ?? ""));
 }
 function publicCompactString(value, fallback = null) {
-  const text3 = normalizeString11(value, null);
+  const text3 = normalizeString12(value, null);
   if (!text3 || MCP_COMPACT_INTERNAL_TEXT_PATTERN.test(text3)) {
     return fallback;
   }
@@ -41171,7 +42180,7 @@ function stripMcpControlArgs(args = {}) {
   return rest;
 }
 function normalizeMcpResultMode(args = {}) {
-  const mode = normalizeString11(args?.resultMode, "compact").toLowerCase();
+  const mode = normalizeString12(args?.resultMode, "compact").toLowerCase();
   return ["compact", "full", "debug"].includes(mode) ? mode : "compact";
 }
 function extractPacketId(args = {}) {
@@ -41181,7 +42190,7 @@ function extractStatus(data) {
   if (!isPlainObject7(data)) {
     return "ok";
   }
-  return normalizeString11(data.status ?? data.resultStatus ?? data.taskStatus ?? data.mode, "ok");
+  return normalizeString12(data.status ?? data.resultStatus ?? data.taskStatus ?? data.mode, "ok");
 }
 function extractScope(data) {
   if (!isPlainObject7(data)) {
@@ -41204,11 +42213,11 @@ function extractArtifactWritePaths(artifactWrites) {
     return [];
   }
   return uniqueStrings3([
-    ...normalizeStringArray24(artifactWrites.primaryArtifactPaths),
-    ...normalizeStringArray24(artifactWrites.synthesisArtifactPaths),
-    ...normalizeStringArray24(artifactWrites.refreshOnlyArtifactPaths),
-    ...normalizeStringArray24(artifactWrites.artifactPaths),
-    ...normalizeStringArray24(artifactWrites.paths)
+    ...normalizeStringArray26(artifactWrites.primaryArtifactPaths),
+    ...normalizeStringArray26(artifactWrites.synthesisArtifactPaths),
+    ...normalizeStringArray26(artifactWrites.refreshOnlyArtifactPaths),
+    ...normalizeStringArray26(artifactWrites.artifactPaths),
+    ...normalizeStringArray26(artifactWrites.paths)
   ]);
 }
 function extractWrites(data, args = {}) {
@@ -41217,19 +42226,19 @@ function extractWrites(data, args = {}) {
   }
   const mutationSummaryPaths = isPlainObject7(data.mutationSummary) ? data.mutationSummary.paths : null;
   const paths = uniqueStrings3([
-    ...normalizeStringArray24(data.writes),
-    ...normalizeStringArray24(data.durableWrites),
-    ...normalizeStringArray24(data.outputPaths),
-    ...normalizeStringArray24(mutationSummaryPaths),
+    ...normalizeStringArray26(data.writes),
+    ...normalizeStringArray26(data.durableWrites),
+    ...normalizeStringArray26(data.outputPaths),
+    ...normalizeStringArray26(mutationSummaryPaths),
     ...extractArtifactWritePaths(data.artifactWrites),
     ...extractArtifactWritePaths(data.resultCard?.artifactWrites)
   ]);
   const operationCount = Array.isArray(data.mutationPlan?.operations) ? data.mutationPlan.operations.length : 0;
-  const mutationMode = normalizeString11(data.mutationMode ?? args?.mutationMode);
+  const mutationMode = normalizeString12(data.mutationMode ?? args?.mutationMode);
   const writesApplied = typeof data.writesApplied === "boolean" ? data.writesApplied : paths.length > 0;
   const hasProposedPatch = !writesApplied && (operationCount > 0 || mutationMode === "patch-plan" && paths.length > 0);
   const writeIntent = writesApplied ? "applied" : hasProposedPatch ? "proposed" : "none";
-  const rollbackEligible = writeIntent === "none" ? "not-applicable" : normalizeString11(data.rollbackEligible ?? data.mutationSummary?.rollbackEligible, mutationMode === "patch-plan" ? "host-tracked" : "unverified");
+  const rollbackEligible = writeIntent === "none" ? "not-applicable" : normalizeString12(data.rollbackEligible ?? data.mutationSummary?.rollbackEligible, mutationMode === "patch-plan" ? "host-tracked" : "unverified");
   return compactObject3({
     applied: writesApplied,
     count: paths.length || operationCount,
@@ -41595,10 +42604,11 @@ function dispatchTool(root, name, args = {}) {
         );
       }
     }
-    const needsContext = !existingContext;
+    const mutatingTool = MUTATING_TOOL_NAMES.has(name);
+    const needsContext = !existingContext && mutatingTool;
     const data = needsContext ? runWithMutationContext(root, {
       actionId: name,
-      mutationMode: MUTATING_TOOL_NAMES.has(name) ? args?.mutationMode : "direct-process",
+      mutationMode: args?.mutationMode,
       hostId: "mcp",
       packetId: extractPacketId(args)
     }, (context) => dispatchToolData(root, name, {
@@ -41606,7 +42616,7 @@ function dispatchTool(root, name, args = {}) {
       ...["create_dove_task", "run_dove_auto"].includes(name) ? { mutationMode: context.mutationMode } : {}
     })) : dispatchToolData(root, name, {
       ...cleanArgs,
-      ...["create_dove_task", "run_dove_auto"].includes(name) ? { mutationMode: existingContext.mutationMode } : {}
+      ...["create_dove_task", "run_dove_auto"].includes(name) && existingContext ? { mutationMode: existingContext.mutationMode } : {}
     });
     if (data && typeof data.then === "function") {
       return data.then((resolved) => makeStructuredToolResult(name, args, resolved)).catch((error) => makeErrorResult(error instanceof Error ? error.message : String(error)));

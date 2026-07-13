@@ -303,7 +303,8 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
   if (command.id === "dove.auto") {
     assert.equal(commandText.includes("target, work limit, and visible steps"), true, `${relativePath} must expose auto target and work limit`);
     assert.equal(commandText.includes("current approved interaction"), true, `${relativePath} must keep auto visible-only`);
-    assert.equal(commandText.includes("real sources or materials") || commandText.includes("real verified sources or materials"), true, `${relativePath} must require material before research success`);
+    assert.equal(commandText.includes("register real candidate material"), true, `${relativePath} must require retrieved candidate material before research success`);
+    assert.equal(commandText.includes("trusted internal verification"), true, `${relativePath} must keep source evidence behind the trust boundary`);
     assert.equal(commandText.includes("Stop clearly"), true, `${relativePath} must document auto stop conditions`);
     assert.equal(commandText.includes("hidden background continuation"), true, `${relativePath} must forbid hidden continuation`);
   }
@@ -345,7 +346,8 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
   if (command.id === "dove.source") {
     assert.equal(commandText.includes("Collect and organize external material"), true, `${relativePath} must frame source as external material intake`);
     assert.equal(commandText.includes("real title, locator, citation, URL"), true, `${relativePath} must require verifiable source material`);
-    assert.equal(commandText.includes("no source was added"), true, `${relativePath} must not claim source writes after retrieval failure`);
+    assert.equal(commandText.includes("no source candidate was added"), true, `${relativePath} must not claim source writes after retrieval failure`);
+    assert.equal(commandText.includes("Public verification may reject a candidate but cannot issue positive verification"), true, `${relativePath} must preserve the public source trust boundary`);
     assert.equal(commandText.includes("Keep source intake separate from synthesis"), true, `${relativePath} must route synthesis away from sources`);
     assert.equal(command.constraints.some((item) => item.includes("record_document_evidence")), true, `${relativePath} must keep the document evidence deposition route in manifest constraints`);
   }
@@ -382,7 +384,8 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
   }
 
   if (command.id === "dove.review") {
-    assert.equal(commandText.includes("local evidence-aware review"), true, `${relativePath} must make ordinary review local and evidence-aware`);
+    assert.equal(commandText.includes("local evidence-aware structural preflight"), true, `${relativePath} must make ordinary review a local evidence-aware preflight`);
+    assert.equal(commandText.includes("current authorized independent Reviewer proof"), true, `${relativePath} must preserve the authoritative review proof gate`);
     assert.equal(commandText.includes("Inspect real project materials"), true, `${relativePath} must inspect materials instead of substituting status/navigation`);
     assert.equal(commandText.includes("Use separate isolated or audio review only when the operator explicitly asks"), true, `${relativePath} must keep isolated/audio review explicit-only`);
     assert.equal(commandText.includes("plain language"), true, `${relativePath} must report review outcomes plainly`);
@@ -390,7 +393,8 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
   }
 
   if (command.id === "dove.review-loop") {
-    assert.equal(commandText.includes("exactly one visible local Reviewer pass"), true, `${relativePath} must define one Reviewer pass`);
+    assert.equal(commandText.includes("exactly one visible local Reviewer preflight pass"), true, `${relativePath} must define one Reviewer preflight pass`);
+    assert.equal(commandText.includes("do not describe the local scan itself as independent or authoritative"), true, `${relativePath} must not promote local review preflight to authoritative review`);
     assert.equal(commandText.includes("does not revise Builder-owned material"), true, `${relativePath} must keep revision out of the Reviewer call`);
     assert.equal(commandText.includes("separate explicit Builder revision call"), true, `${relativePath} must require an explicit Builder handoff before another review`);
     assert.equal(commandText.includes("three rounds by default"), false, `${relativePath} must not advertise a three-round loop`);

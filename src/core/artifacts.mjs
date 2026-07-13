@@ -33,9 +33,11 @@ import {
 } from "./workspace.mjs";
 import { queryWorkspaceIndex, refreshDurableSurfaces } from "./navigation.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
+import { assertReviewProofBoundaryTransition } from "./review-proof.mjs";
 import { inspectDeclaredPath, isBookkeepingArtifactPath } from "./artifact-integrity.mjs";
 import { currentMutationContext } from "./mutation-backend.mjs";
 import { prepareSourceVerification, sourceIdentityFingerprint, sourceReferenceMap } from "./source-trust.mjs";
+import { applyPacketStepResult } from "./packet-step-result.mjs";
 
 function slugify(value) {
   return String(value)
@@ -62,6 +64,17 @@ function hasStructuredNoteSynthesis(args = {}) {
     || normalizeStringArray(args.quotes).length > 0
     || normalizeStringArray(args.claims).length > 0
     || normalizeStringArray(args.openQuestions).length > 0;
+}
+
+function artifactPacketResult(root, target, { command, output, classified, nextAction, currentFocus }) {
+  return applyPacketStepResult(root, target.packet, {
+    surface: command,
+    command,
+    output,
+    classified,
+    nextAction,
+    currentFocus
+  });
 }
 
 function assertNoRetiredArtifactControls(args = {}, actionLabel) {
@@ -1027,18 +1040,6 @@ function buildFigureQa(root) {
       }));
     }
 
-    if (missingVisualElements.length > 0 && importedGeneration) {
-      figureIssues.push(buildPathIssue({
-        figure,
-        code: "missing-visual-element-coverage",
-        severity: "high",
-        stage: "generation",
-        summary: `Figure ${figure.id} imported output does not cover required visual elements: ${missingVisualElements.join(", ")}.`,
-        artifactPaths: [ARTIFACT_PATHS.figureGenerations, ARTIFACT_PATHS.figureCaptions, ARTIFACT_PATHS.figureQa, figure.finalSvgPath].filter(Boolean),
-        timestamp
-      }));
-    }
-
     if (rasterWrapper && !rasterReviewPassed) {
       figureIssues.push(buildPathIssue({
         figure,
@@ -1119,6 +1120,13 @@ function buildFigureQa(root) {
       generationStatus: importedGeneration?.status ?? (figureGenerations[0]?.status ?? "missing"),
       captionStatus: caption?.text ? "ready" : "missing",
       semanticCoverage: figureSemanticCoverage,
+      diagnostics: {
+        lexicalVisualCoverage: {
+          coveredVisualElements,
+          missingVisualElements,
+          authoritative: false
+        }
+      },
       latestGenerationRunId: importedGeneration?.id ?? figureGenerations[0]?.id ?? null,
       latestOutputManifestPath: importedGeneration?.outputManifestPath ?? figureGenerations[0]?.outputManifestPath ?? null,
       captionId: caption?.id ?? null,
@@ -1201,7 +1209,18 @@ function updatePipeline(state, currentStage, resumeCommand) {
   };
 }
 
+function assertPhaseMutationAllowed(root, stage, role, actionLabel = "Updating the workflow phase") {
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    stage,
+    role,
+    actionLabel
+  );
+}
+
 function syncPhase(root, state, { stage, resumeCommand, role, objective, evidenceLinks, experimentIds, rebuttalIssueIds, activeComparisonTargets, intentType, currentFocus, nextAction, reviewRequiredBeforeFinalize } = {}) {
+  assertPhaseMutationAllowed(root, stage, role);
   const nextState = updatePipeline(state, stage, resumeCommand);
   saveState(root, nextState);
   upsertSystemOrchestrationBoard(root, {
@@ -1215,7 +1234,9 @@ function syncPhase(root, state, { stage, resumeCommand, role, objective, evidenc
     intentType,
     currentFocus,
     nextAction,
-    reviewRequiredBeforeFinalize
+    ...(typeof reviewRequiredBeforeFinalize === "boolean"
+      ? { reviewRequiredBeforeFinalize }
+      : {})
   });
   return nextState;
 }
@@ -2179,6 +2200,7 @@ function normalizeFigureItem(item = {}, index = 0) {
 }
 
 export function initProject(root, args = {}) {
+  assertPhaseMutationAllowed(root, "init", "planner", "Initializing the project workflow");
   ensureWorkspace(root);
   const defaults = createDefaultState();
   let state = loadState(root);
@@ -2483,6 +2505,7 @@ export function registerSource(root, args = {}) {
   assertGovernanceMutationRegistered("register-source", "guarded");
   const target = assertTaskScopedMutationTarget(root, "register-source", args);
   assertFollowThroughReady(root, "Registering a source", args);
+  assertPhaseMutationAllowed(root, "sources", "researcher", "Registering a source");
   ensureWorkspace(root);
   const timestamp = nowIso();
   const sourceInputs = sourceInputsFromArgs(args);
@@ -2541,6 +2564,30 @@ export function registerSource(root, args = {}) {
     synthesisArtifactPaths: [ARTIFACT_PATHS.bibliography, ARTIFACT_PATHS.citationLog, ARTIFACT_PATHS.queryPack],
     refreshOnlyArtifactPaths: [ARTIFACT_PATHS.taskPacketsIndex, ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport, ARTIFACT_PATHS.sessionJournal]
   };
+  const packetArtifactRefs = mergeIds(target.packet?.artifactRefs, [ARTIFACT_PATHS.sources]);
+  const packetEvidenceLinks = mergeIds(target.packet?.evidenceLinks);
+  const task = artifactPacketResult(root, target, {
+    command: "dove.source",
+    output: {
+      status: "registered",
+      summary: registered.length === 1 ? `Registered source ${registered[0].id}.` : `Registered ${registered.length} sources.`,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks,
+      sourceIds: mergeIds(target.packet?.sourceIds, registered.map((source) => source.id)),
+      nextAction: "project:dove.note"
+    },
+    classified: {
+      status: "step-completed",
+      outcome: "dove.source-registered",
+      stopReason: null,
+      terminal: false,
+      canCompleteTask: false,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks
+    },
+    nextAction: "project:dove.note",
+    currentFocus: registered.length === 1 ? `Registered source ${registered[0].title}.` : `Registered ${registered.length} source materials.`
+  });
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const resultCard = artifactResultCard(root, args, {
     surface: "dove.source",
@@ -2560,6 +2607,8 @@ export function registerSource(root, args = {}) {
   if (!Array.isArray(args.sources)) {
     return {
       ...registered[0],
+      task,
+      packetLifecycleApplied: true,
       artifactWrites,
       preActionGuidanceSummary: guidanceSummary,
       resultCard
@@ -2572,6 +2621,8 @@ export function registerSource(root, args = {}) {
     citationKeys: registered.map((source) => source.citationKey),
     items: registered,
     packetId: target.packet?.id ?? null,
+    task,
+    packetLifecycleApplied: true,
     artifactWrites,
     preActionGuidanceSummary: guidanceSummary,
     resultCard
@@ -2613,6 +2664,9 @@ export function upsertNote(root, args = {}) {
 }
 
 function persistNote(root, args, target, { updatePhase }) {
+  if (updatePhase) {
+    assertPhaseMutationAllowed(root, "notes", "researcher", "Recording a structured note");
+  }
   ensureWorkspace(root);
   const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 1, items: [], updatedAt: null });
@@ -2667,6 +2721,30 @@ function persistNote(root, args, target, { updatePhase }) {
     summary: `Updated note ${note.id}.`,
     artifactPaths: [ARTIFACT_PATHS.notes, ARTIFACT_PATHS.queryPack, ARTIFACT_PATHS.sessionSummary]
   });
+  const packetArtifactRefs = mergeIds(target.packet?.artifactRefs, [ARTIFACT_PATHS.notes]);
+  const packetEvidenceLinks = mergeIds(target.packet?.evidenceLinks);
+  const task = artifactPacketResult(root, target, {
+    command: "dove.note",
+    output: {
+      status: "recorded",
+      summary: note.summary || `Updated note ${note.id}.`,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks,
+      noteIds: mergeIds(target.packet?.noteIds, [note.id]),
+      nextAction: "project:dove.experience"
+    },
+    classified: {
+      status: "step-completed",
+      outcome: "dove.note-recorded",
+      stopReason: null,
+      terminal: false,
+      canCompleteTask: true,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks
+    },
+    nextAction: "project:dove.experience",
+    currentFocus: note.summary || note.title
+  });
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const resultCard = artifactResultCard(root, args, {
     surface: "dove.note",
@@ -2688,6 +2766,8 @@ function persistNote(root, args, target, { updatePhase }) {
   });
   return {
     ...note,
+    task,
+    packetLifecycleApplied: true,
     artifactWrites: {
       primaryArtifactPaths: [ARTIFACT_PATHS.notes],
       synthesisArtifactPaths: [ARTIFACT_PATHS.queryPack],
@@ -2774,6 +2854,7 @@ export function upsertOutline(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-outline", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-outline", args);
   assertFollowThroughReady(root, "Updating the paper outline", args);
+  assertPhaseMutationAllowed(root, "outline", "planner", "Updating the paper outline");
   let state = loadState(root);
   const zh = state.settings?.responseLanguage !== "en";
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
@@ -2842,6 +2923,7 @@ export function upsertDraft(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-draft", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-draft", args);
   assertFollowThroughReady(root, "Updating a draft section", args);
+  assertPhaseMutationAllowed(root, "draft", "researcher", "Updating a draft section");
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
@@ -2878,6 +2960,29 @@ export function upsertDraft(root, args = {}) {
     summary: `Updated draft for section ${sectionId}.`,
     artifactPaths: [draftPath, ARTIFACT_PATHS.sessionSummary, ARTIFACT_PATHS.navigationReport]
   });
+  const packetArtifactRefs = mergeIds(target.packet?.artifactRefs, [draftPath]);
+  const task = artifactPacketResult(root, target, {
+    command: "dove.draft",
+    output: {
+      status: state.sections[sectionId].status,
+      summary: args.summary ?? `Updated draft for section ${sectionId}.`,
+      draftPath,
+      sectionId,
+      artifactRefs: packetArtifactRefs,
+      nextAction: "project:dove.review"
+    },
+    classified: {
+      status: "step-completed",
+      outcome: "dove.draft-updated",
+      stopReason: null,
+      terminal: false,
+      canCompleteTask: true,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: []
+    },
+    nextAction: "project:dove.review",
+    currentFocus: args.summary ?? `Draft ${title}.`
+  });
   const responseLanguage = resolveDoveResponseLanguage(root, args);
   const resultCard = artifactResultCard(root, args, {
     surface: "dove.draft",
@@ -2895,6 +3000,8 @@ export function upsertDraft(root, args = {}) {
   return {
     draftPath,
     sectionId,
+    task,
+    packetLifecycleApplied: true,
     resultCard,
     artifactWrites: {
       primaryArtifactPaths: [draftPath],
@@ -2918,6 +3025,8 @@ export function setSectionStatus(root, args = {}) {
   assertGovernanceMutationRegistered("set-section-status", "guarded");
   const target = assertTaskScopedMutationTarget(root, "set-section-status", args);
   assertFollowThroughReady(root, "Updating a section status", args);
+  const board = loadBoard(root);
+  assertPhaseMutationAllowed(root, "draft", "researcher", "Updating a section status");
   const sectionId = normalizeIdentifier(args.sectionId, "introduction");
   const state = loadState(root);
   const nextStatus = args.status ?? "planned";
@@ -2933,7 +3042,6 @@ export function setSectionStatus(root, args = {}) {
     status: nextStatus,
     summary: args.summary ?? state.sections[sectionId]?.summary ?? ""
   };
-  const board = loadBoard(root);
   saveState(root, state);
   upsertSystemOrchestrationBoard(root, {
     phase: state.pipeline.currentStage,
@@ -3016,6 +3124,12 @@ export function upsertFigurePlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-figure-plan", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-figure-plan", args);
   assertFollowThroughReady(root, "Updating the figure plan", args);
+  assertPhaseMutationAllowed(
+    root,
+    "experiments",
+    "builder",
+    "Updating the figure plan"
+  );
   const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [], updatedAt: null });
   const normalizedItems = (Array.isArray(args.items) ? args.items : []).map((item, index) => ({
     ...normalizeFigureItem(item, index),
@@ -3136,6 +3250,14 @@ export function upsertFigurePlan(root, args = {}) {
 export function syncCitations(root, args = {}) {
   assertGovernanceMutationRegistered("sync-citations", "guarded");
   assertFollowThroughReady(root, "Updating citation artifacts", args);
+  const currentState = loadState(root);
+  const currentBoard = loadBoard(root);
+  assertPhaseMutationAllowed(
+    root,
+    args.preservePhase ? currentState.pipeline.currentStage : "citations",
+    args.preservePhase ? currentBoard.assignedRole : "researcher",
+    "Updating citation artifacts"
+  );
   ensureWorkspace(root);
   const { sources, citedKeys, missingKeys } = syncCitationArtifacts(root, args);
   const state = loadState(root);
@@ -3242,6 +3364,7 @@ export function buildRebuttal(root, args = {}) {
   assertGovernanceMutationRegistered("build-rebuttal", "guarded");
   const target = assertTaskScopedMutationTarget(root, "build-rebuttal", args);
   assertFollowThroughReady(root, "Building the rebuttal draft", args);
+  assertPhaseMutationAllowed(root, "rebuttal", "builder", "Building the rebuttal draft");
   const issues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   if (!Array.isArray(issues.items) || issues.items.length === 0) {
     return missingRebuttalIssuesResult(root, args, "build_rebuttal");

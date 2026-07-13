@@ -5,10 +5,11 @@ import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
-  compareVersions,
   createVersionSnapshot,
   ensureWorkspace,
   initProject,
+  prepareIsolatedReview,
+  importIsolatedReview,
   registerSource,
   runReviewLoop,
   syncChecklist,
@@ -20,13 +21,13 @@ import {
   upsertNote,
   upsertOutline,
   upsertPlan,
-  verifySource
 } from "../../src/core/internal-api.mjs";
 import { appendSystemHandoff, upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
+import { seedTrustedSourceVerification } from "../helpers/source-verification-fixture.mjs";
 
 function tempRoot() {
   return createTempRoot("dove-workflow-");
@@ -104,14 +105,7 @@ test("single-paper workflow creates durable artifacts", () => {
     locator: "https://example.org/workflow-reliability"
   });
   for (const registeredSource of [source, source2]) {
-    verifySource(root, {
-      packetId,
-      sourceId: registeredSource.id,
-      decision: "verified",
-      method: "test fixture inspected the canonical publication record",
-      checkedMaterial: "source title, authors, year, and publication metadata",
-      auditEvidence: [{ reference: registeredSource.locator, kind: "source", observation: `Verified fixture identity for ${registeredSource.id}.` }]
-    });
+    seedTrustedSourceVerification(root, registeredSource.id, packetId);
   }
 
   const note = upsertNote(root, {
@@ -197,51 +191,68 @@ test("single-paper workflow creates durable artifacts", () => {
     nextActions: ["Run the review loop", "Triage rebuttal issues"]
   });
 
-  const review = runReviewLoop(root, { packetId, scope: "introduction" });
-  appendSystemHandoff(root, {
+  const reviewPreflight = runReviewLoop(root, { packetId, scope: "introduction" });
+  assert.equal(reviewPreflight.preflightOnly, true);
+  const preparedReview = prepareIsolatedReview(root, {
+    packetId,
+    runId: "workflow-isolated-review",
+    reviewedArtifactPaths: reviewPreflight.reviewedArtifactPaths
+  });
+  fs.writeFileSync(path.join(root, preparedReview.reportPath), "# Isolated review\n\nThe current introduction scope is coherent.\n", "utf8");
+  fs.writeFileSync(path.join(root, preparedReview.handoffPath), `${JSON.stringify({
+    runId: preparedReview.runId,
+    status: "completed",
+    verdict: "coherent",
+    reviewerId: "workflow-isolated-reviewer",
+    summary: "The current introduction scope is coherent.",
+    inputPath: preparedReview.inputPath,
+    inputSha256: preparedReview.inputSha256,
+    reportPath: preparedReview.reportPath,
+    reviewedArtifactPaths: preparedReview.reviewedArtifactPaths,
+    findings: [],
+    actionItems: []
+  }, null, 2)}\n`, "utf8");
+  const review = importIsolatedReview(root, { packetId, runId: preparedReview.runId });
+  assert.throws(() => appendSystemHandoff(root, {
     fromRole: "reviewer",
     toRole: "version-analyst",
     phase: "versions",
     summary: "Handing off for durable snapshotting after review.",
     nextActions: ["Create the next snapshot", "Compare the new lineage step"]
-  });
-  const snapshotA = createVersionSnapshot(root, {
+  }), /review-proof-required.*authorized independent Reviewer proof/u);
+  assert.equal(review.authoritative, false);
+  assert.equal(review.independentReviewProof, null);
+  assert.equal(review.reviewProofRequired, true);
+  assert.throws(() => createVersionSnapshot(root, {
     packetId,
     versionId: "v1-initial",
     label: "Initial draft",
     summary: "Before post-review edits."
-  });
-  upsertDraft(root, {
+  }), /authorized independent Reviewer proof|final artifact scope|not a usable file/u);
+  const snapshotA = { id: "v1-initial" };
+  assert.throws(() => upsertDraft(root, {
     packetId,
     sectionId: "introduction",
     title: "Introduction",
     body: "# Introduction\n\nDurable workflows reduce context loss [cite:lee2026durable] and improve review traceability [cite:kim2026workflow].\n",
     status: "drafting"
-  });
-  appendSystemHandoff(root, {
-    fromRole: "researcher",
-    toRole: "version-analyst",
-    phase: "versions",
-    summary: "Handing off again after draft edits so versioning stays explicit.",
-    nextActions: ["Create the revised snapshot"]
-  });
-  const snapshotB = createVersionSnapshot(root, {
+  }), /review-proof-required.*authorized independent Reviewer proof/u);
+  assert.throws(() => createVersionSnapshot(root, {
     packetId,
     versionId: "v2-revised",
     label: "Revised draft",
     parentVersionId: snapshotA.id,
     summary: "After review-driven revision."
-  });
-  const comparison = compareVersions(root, { packetId, fromVersionId: snapshotA.id, toVersionId: snapshotB.id });
+  }), /authorized independent Reviewer proof|final artifact scope|not a usable file/u);
   const checklist = syncChecklist(root);
 
-  assert.equal(review.verdict, "coherent");
+  assert.equal(review.verdict, "needs-evidence");
+  assert.equal(review.importedVerdict, "coherent");
   assert.equal(checklist.checklistPath, ".dove/checklists/current.md");
-  assert.equal(comparison.fromVersionId, snapshotA.id);
   assert.ok(fs.existsSync(path.join(root, ".dove", "revision-plans", "current-plan.md")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "sources", "index.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "orchestration", "board.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "rebuttal", "issues.json")));
-  assert.ok(fs.existsSync(path.join(root, ".dove", "versions", "snapshots", `${snapshotA.id}.json`)));
+  assert.equal(fs.existsSync(path.join(root, ".dove", "versions", "snapshots", `${snapshotA.id}.json`)), false);
   });
 });

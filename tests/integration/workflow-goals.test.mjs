@@ -112,6 +112,8 @@ test("workflow goal validation rejects completion without criteria coverage", ()
 
   const operatorGoal = result.results.find((goal) => goal.id === "operator-host-result-requires-criteria");
   assert.ok(operatorGoal);
+  assert.equal(operatorGoal.evidence.runStatus, "blocked-boundary");
+  assert.equal(operatorGoal.evidence.requiresAction, true);
   assert.equal(operatorGoal.evidence.iterationStatus, "verification-failed");
   assert.equal(operatorGoal.evidence.finalTaskStatus, "blocked");
   assert.equal(operatorGoal.evidence.boundaryType, "verification-failed");

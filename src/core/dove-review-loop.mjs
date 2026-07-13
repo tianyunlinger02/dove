@@ -62,6 +62,9 @@ function reviewLoopStopSummary(status, stopReason, responseLanguage) {
   if (status === "coherent") {
     return localizedText(responseLanguage, "review-loop 已确认当前材料基本自洽。", "The review loop found the current materials coherent.");
   }
+  if (stopReason === "review-proof-required") {
+    return localizedText(responseLanguage, "review-loop 停在 Reviewer-owned proof 边界；尚未授权 Builder 修订。", "The review loop stopped at a Reviewer-owned proof boundary; no Builder revision is authorized.");
+  }
   if (stopReason === "builder-revision-required") {
     return localizedText(responseLanguage, "review-loop 已完成 Reviewer 检查，并停在显式 Builder 修订边界；没有改写草稿或实验材料。", "The review loop completed the Reviewer pass and stopped at an explicit Builder revision boundary without changing draft or experiment material.");
   }
@@ -81,13 +84,16 @@ function buildBuilderRevisionBoundary({ runId, packetId, packet, review, draftRe
     return null;
   }
   const reviewActions = review.verdict === "coherent" ? [] : normalizeStringArray(review.actionItems);
-  const requiredActions = normalizeStringArray([
-    "transfer-reviewer-owned-board-to-builder-before-revision",
-    ...reviewActions,
-    draftRequested ? "apply-supplied-draft-in-builder-owned-pass" : "",
-    experienceRequested ? "run-supplied-experience-in-builder-owned-pass" : "",
-    "return-revised-material-for-review"
-  ]);
+  const proofBoundary = (review.findings ?? []).some((finding) => finding.methodologicalCategory === "review-proof");
+  const requiredActions = proofBoundary
+    ? ["prepare-current-artifacts-for-isolated-review", "import-current-hash-bound-isolated-review-proof"]
+    : normalizeStringArray([
+        "transfer-reviewer-owned-board-to-builder-before-revision",
+        ...reviewActions,
+        draftRequested ? "apply-supplied-draft-in-builder-owned-pass" : "",
+        experienceRequested ? "run-supplied-experience-in-builder-owned-pass" : "",
+        "return-revised-material-for-review"
+      ]);
   const requestedWork = [draftRequested ? "draft" : null, experienceRequested ? "experience" : null].filter(Boolean);
   const reason = requestedWork.length > 0
     ? `Reviewer pass completed before the requested ${requestedWork.join(" and ")} work. No builder-owned material was changed while the board remained reviewer-owned.`
@@ -101,12 +107,14 @@ function buildBuilderRevisionBoundary({ runId, packetId, packet, review, draftRe
     sourceSurface: "dove.review-loop",
     command: "run_dove_review_loop",
     reason,
-    summary: "Explicitly transfer ownership to a Builder revision pass, apply the required changes there, and return the revised material for another Reviewer pass.",
-    requiredInputs: [],
+    summary: proofBoundary
+      ? "Keep the boundary Reviewer-owned and obtain an isolated review proof for the current artifact hashes."
+      : "Explicitly transfer ownership to a Builder revision pass, apply the required changes there, and return the revised material for another Reviewer pass.",
+    requiredInputs: proofBoundary ? ["current-hash-bound-isolated-review-proof"] : [],
     requiredActions,
     ownerRole: "reviewer",
-    nextRole: "builder",
-    nextAction: packetBuilderRoute(packet),
+    nextRole: proofBoundary ? "reviewer" : "builder",
+    nextAction: proofBoundary ? "project:dove.review" : packetBuilderRoute(packet),
     requestedWork,
     writes: []
   };
@@ -119,6 +127,14 @@ function publicBuilderRevisionActions({ draftRequested, experienceRequested }, r
     experienceRequested ? localizedText(responseLanguage, "在 Builder/experiment pass 中运行提供的实验工作。", "Run the supplied experiment work in the Builder/experiment pass.") : null,
     localizedText(responseLanguage, "修订完成后把材料交回 Reviewer 再检查。", "Return the revised material to the Reviewer for another pass.")
   ].filter(Boolean);
+}
+
+function publicReviewerProofActions(responseLanguage) {
+  return [localizedText(
+    responseLanguage,
+    "保持 Reviewer ownership；通过受信 Reviewer runtime capability 提交当前完整 artifact hashes 的权威 proof。",
+    "Keep Reviewer ownership and submit authoritative proof for the current complete artifact hashes through the trusted Reviewer runtime capability."
+  )];
 }
 
 export function runDoveReviewLoop(root, args = {}) {
@@ -153,8 +169,9 @@ export function runDoveReviewLoop(root, args = {}) {
     draftRequested,
     experienceRequested
   });
+  const proofBoundary = boundary?.nextRole === "reviewer";
   const status = boundary ? "needs-review" : "coherent";
-  const stopReason = boundary ? "builder-revision-required" : "review-coherent";
+  const stopReason = boundary ? (proofBoundary ? "review-proof-required" : "builder-revision-required") : "review-coherent";
   const review = {
     ...reviewEntry,
     preActionGuidance: buildPreActionGuidance({
@@ -172,12 +189,14 @@ export function runDoveReviewLoop(root, args = {}) {
       nextAction: boundary?.nextAction ?? "project:dove.status",
       routeHint: boundary?.nextAction ?? "project:dove.status",
       nextHumanAction: boundary
-        ? localizedText(responseLanguage, "显式交接给 Builder 完成修订，再交回 Reviewer。", "Explicitly hand off to a Builder for revision, then return to the Reviewer.")
+        ? proofBoundary
+          ? localizedText(responseLanguage, "保持 Reviewer ownership 并提交受信 runtime proof。", "Keep Reviewer ownership and submit trusted runtime proof.")
+          : localizedText(responseLanguage, "显式交接给 Builder 完成修订，再交回 Reviewer。", "Explicitly hand off to a Builder for revision, then return to the Reviewer.")
         : localizedText(responseLanguage, "回到状态页选择下一步。", "Return to status and choose the next step."),
       workflowKind: "review",
       domain: target.packet?.domain ?? null,
       stage: target.packet?.stage ?? "audit",
-      tags: ["review", "independent-audit", "evidence", "builder-boundary"],
+      tags: ["review", "independent-audit", "evidence", proofBoundary ? "reviewer-proof-boundary" : "builder-boundary"],
       statusSummary: {
         verdict: reviewEntry.verdict,
         findingCount: reviewEntry.findings?.length ?? 0,
@@ -279,12 +298,14 @@ export function runDoveReviewLoop(root, args = {}) {
     nextAction: boundary?.nextAction ?? "project:dove.status",
     routeHint: boundary?.nextAction ?? "project:dove.status",
     nextHumanAction: boundary
-      ? localizedText(responseLanguage, "显式交接给 Builder 完成修订，再交回 Reviewer。", "Explicitly hand off to a Builder for revision, then return to the Reviewer.")
+      ? proofBoundary
+        ? localizedText(responseLanguage, "保持 Reviewer ownership 并提交受信 runtime proof。", "Keep Reviewer ownership and submit trusted runtime proof.")
+        : localizedText(responseLanguage, "显式交接给 Builder 完成修订，再交回 Reviewer。", "Explicitly hand off to a Builder for revision, then return to the Reviewer.")
       : localizedText(responseLanguage, "回到状态页选择下一步。", "Return to status and choose the next step."),
     workflowKind: "review-loop",
     domain: target.packet?.domain ?? null,
     stage: target.packet?.stage ?? "audit",
-    tags: ["review", "evidence", "builder-boundary", "iteration"],
+    tags: ["review", "evidence", proofBoundary ? "reviewer-proof-boundary" : "builder-boundary", "iteration"],
     statusSummary: {
       status,
       stopReason,
@@ -294,13 +315,17 @@ export function runDoveReviewLoop(root, args = {}) {
     }
   });
   const publicRequiredActions = boundary
-    ? publicBuilderRevisionActions({ draftRequested, experienceRequested }, responseLanguage)
+    ? proofBoundary
+      ? publicReviewerProofActions(responseLanguage)
+      : publicBuilderRevisionActions({ draftRequested, experienceRequested }, responseLanguage)
     : [];
   const resultCard = buildCommandResultCard({
     surface: "dove.review-loop",
     command: "run_dove_review_loop",
     title: boundary
-      ? localizedText(responseLanguage, "review-loop 已停在 Builder 修订边界", "Review loop stopped at the Builder revision boundary")
+      ? proofBoundary
+        ? localizedText(responseLanguage, "review-loop 已停在 Reviewer proof 边界", "Review loop stopped at the Reviewer proof boundary")
+        : localizedText(responseLanguage, "review-loop 已停在 Builder 修订边界", "Review loop stopped at the Builder revision boundary")
       : localizedText(responseLanguage, "review-loop 已停止", "Review loop stopped"),
     status,
     stopReason,
@@ -310,7 +335,9 @@ export function runDoveReviewLoop(root, args = {}) {
     validation: [reviewLoopStopSummary(status, stopReason, responseLanguage)],
     boundary: boundary ? {
       type: boundary.type,
-      summary: localizedText(responseLanguage, "当前 board 仍由 Reviewer 持有；必须显式交接给 Builder 后才能修订。", "The board remains Reviewer-owned; revision requires an explicit handoff to a Builder."),
+      summary: proofBoundary
+        ? localizedText(responseLanguage, "当前 board 保持 Reviewer-owned；这不是 Builder 修订请求。", "The board remains Reviewer-owned; this is not a Builder revision request.")
+        : localizedText(responseLanguage, "当前 board 仍由 Reviewer 持有；必须显式交接给 Builder 后才能修订。", "The board remains Reviewer-owned; revision requires an explicit handoff to a Builder."),
       nextAction: boundary.nextAction,
       requiredActions: publicRequiredActions
     } : null,
@@ -321,10 +348,14 @@ export function runDoveReviewLoop(root, args = {}) {
     },
     nextActions: [{
       title: boundary
-        ? localizedText(responseLanguage, "显式交接给 Builder 修订", "Explicitly hand off to a Builder for revision")
+        ? proofBoundary
+          ? localizedText(responseLanguage, "由 Reviewer runtime 提交权威 proof", "Submit authoritative proof through the Reviewer runtime")
+          : localizedText(responseLanguage, "显式交接给 Builder 修订", "Explicitly hand off to a Builder for revision")
         : localizedText(responseLanguage, "回到状态页选择下一步", "Return to status for the next step"),
       why: boundary
-        ? localizedText(responseLanguage, "这次调用只完成 Reviewer pass，不会启动 mission、auto、rebuttal，也不会在 Reviewer ownership 下写草稿或实验。", "This call completes only the Reviewer pass; it does not start mission, auto, or rebuttal, and it does not write draft or experiment material under Reviewer ownership.")
+        ? proofBoundary
+          ? localizedText(responseLanguage, "当前只有 proof 缺失，没有 substantive finding，因此不能路由为 Builder 修订。", "Only proof is missing; there is no substantive finding, so this must not route to Builder revision.")
+          : localizedText(responseLanguage, "这次调用只完成 Reviewer pass，不会启动 mission、auto、rebuttal，也不会在 Reviewer ownership 下写草稿或实验。", "This call completes only the Reviewer pass; it does not start mission, auto, or rebuttal, and it does not write draft or experiment material under Reviewer ownership.")
         : localizedText(responseLanguage, "当前材料已经通过这一轮检查，可以决定继续写作、归档或进入版本快照。", "This pass is coherent, so the next decision can be drafting, closure, or versioning."),
       requiredActions: publicRequiredActions
     }]

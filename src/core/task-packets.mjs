@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
 import path from "node:path";
 
 import {
@@ -18,6 +17,7 @@ import {
   normalizeDoveVerifiedCriteria,
   normalizeSettings
 } from "./schema.mjs";
+import { readJson } from "./workspace.mjs";
 
 function slugify(value) {
   return String(value ?? "")
@@ -59,11 +59,7 @@ function normalizePrimaryRole(value, fallback = "builder") {
 }
 
 function readJsonReadOnly(root, relativePath, fallback = null) {
-  const fullPath = path.join(root, relativePath);
-  if (!fs.existsSync(fullPath)) {
-    return typeof fallback === "function" ? fallback() : structuredClone(fallback);
-  }
-  return JSON.parse(fs.readFileSync(fullPath, "utf8"));
+  return readJson(root, relativePath, fallback);
 }
 
 function packetFilePath(packetId) {
@@ -145,6 +141,7 @@ function normalizePacketCandidate(root, packet = {}) {
     packetPath: merged.packetPath ?? packetFilePath(id),
     packetContextPath: merged.packetContextPath ?? packetContextPath(id),
     claimIds: uniqueStrings([...normalizeStringArray(merged.claimIds), ...normalizeStringArray(contextObject.claimIds)]),
+    sourceIds: uniqueStrings([...normalizeStringArray(merged.sourceIds), ...normalizeStringArray(contextObject.sourceIds)]),
     noteIds: uniqueStrings([...normalizeStringArray(merged.noteIds), ...normalizeStringArray(contextObject.noteIds)]),
     experimentIds: uniqueStrings([...normalizeStringArray(merged.experimentIds), ...normalizeStringArray(contextObject.experiments), ...normalizeStringArray(contextObject.experimentIds)]),
     rebuttalIssueIds: uniqueStrings([...normalizeStringArray(merged.rebuttalIssueIds), ...normalizeStringArray(contextObject.rebuttalIssueIds)]),
@@ -245,6 +242,7 @@ function packetArtifactSet(packet) {
     ...normalizeStringArray(packet.lessonIds),
     ...normalizeStringArray(packet.artifactRefs),
     ...normalizeStringArray(packet.claimIds),
+    ...normalizeStringArray(packet.sourceIds),
     ...normalizeStringArray(packet.noteIds),
     ...normalizeStringArray(packet.experimentIds),
     ...normalizeStringArray(packet.rebuttalIssueIds),

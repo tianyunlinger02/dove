@@ -76,7 +76,7 @@ If Dove runtime files have already been copied into the project, the equivalent 
 3. Start with a real demand instead of a command inventory:
 
 ```text
-/dove:mission 修复 doctor 报错并运行相关验证
+/dove:mission Fix the doctor failure and run the relevant validation
 ```
 
 Dove should convert the demand into a task contract, ask for confirmation, then materialize the contract and return the recommended next workflow route. If the workspace has no init goal yet, the confirmation should make the proposed init goal explicit before anything is written.
@@ -97,7 +97,7 @@ Preset workflows should resolve or ask for the durable task packet instead of si
 /dove:status
 ```
 
-Status is read-only by default and optimized for the ordinary question “what should I do next?” The default human view is a small translation layer: one `Dove:` state line, one `Next:` action, one `Why:` explanation, and one `More:` expansion hint. It does not print packet ids, mission lists, boundary/gap codes, blocked counts, execution-gap counts, required-evidence blocks, mission counts, or completed/killed recaps unless you explicitly ask for missions, JSON, or full/debug detail.
+Status is always read-only and optimized for the ordinary question “what should I do next?” It never bootstraps, refreshes, stages, or writes workspace state. The default human view is a small translation layer: one `Dove:` state line, one `Next:` action, one `Why:` explanation, and one `More:` expansion hint. It does not print packet ids, mission lists, boundary/gap codes, blocked counts, execution-gap counts, required-evidence blocks, mission counts, or completed/killed recaps unless you explicitly ask for missions, JSON, or full/debug detail. Status changes use the separate confirmed adjustment surface; a status query itself cannot apply them.
 
 For CLI contract checks, `node ./bin/dove-package.mjs status /path/to/project --health` and `--contract-test` are read-only intent views. They check the compact contract, default operator surface, and full/debug expansion without treating project backlog work as the primary health-check action.
 
@@ -116,19 +116,19 @@ Dove exposes one flat user-facing command set:
 | Command | Purpose |
 | --- | --- |
 | `project:dove.init` | Create/update the unique level-0 project goal. |
-| `project:dove.mission` | Convert a natural-language demand into a compact task-card contract; after approval, materialize it and hand off to the recommended next workflow. |
-| `project:dove.auto` | Convert demand or select a task with compact task/auto cards; after approval, run bounded multi-round foreground iterations until completion or a boundary. |
-| `project:dove.status` | Answer “what should I do next?” with one-sentence state, one recommended action, and explicit mission/full/debug expansion paths. |
-| `project:dove.operator` | Preview compact queue cards, then run one confirmed foreground pass over ready/in-progress work and blocker-investigation planning. |
+| `project:dove.mission` | Convert a natural-language demand into a compact task-card contract; after approval, materialize only that contract and hand off without executing work or granting execution authority. |
+| `project:dove.auto` | Convert demand or select a task with compact task/auto cards; after separate approval, run bounded foreground iterations until completion or a boundary. |
+| `project:dove.status` | Answer “what should I do next?” through an always-read-only, zero-write query with explicit mission/full/debug expansion paths. |
+| `project:dove.operator` | Preview compact queue cards, then run one confirmed foreground pass; host work advances only from canonical `taskResults[]`. |
 | `project:dove.lessons` | Query or record global/task-bound lessons that future work must obey. |
 | `project:dove.version` | Snapshot a direction change and clear active tasks except init. |
-| `project:dove.source` | Register verified external information and provenance after retrieval/search candidates have been checked. |
-| `project:dove.note` | Synthesize internal findings, verified sources, quotes, claims, or open questions into task-bound notes. |
-| `project:dove.figure` | Turn one figure request into material discovery, generation/import, captioning, and QA. |
+| `project:dove.source` | Register external material as a packet-bound candidate; public source verification can reject but cannot issue positive verification. |
+| `project:dove.note` | Synthesize internal findings, eligible verified sources, quotes, claims, or explicitly labeled open questions into task-bound notes. |
+| `project:dove.figure` | Turn one figure request into material discovery, generation/import, captioning, and diagnostic QA; `validated` requires current final-SVG Reviewer proof. |
 | `project:dove.experience` | Plan experiments, record results, audit them, and bridge evidence into claims. |
 | `project:dove.draft` | Generate or revise paper drafts with explicit placeholders for gaps. |
-| `project:dove.review` | Run a local evidence-aware review over selected task materials and return concrete findings or coherence. |
-| `project:dove.review-loop` | Run one independent Reviewer pass; non-coherent results require a separate explicit Builder handoff and later review call. |
+| `project:dove.review` | Run an evidence-aware structural preflight; authoritative `coherent` requires current hash-bound independent Reviewer proof. |
+| `project:dove.review-loop` | Run exactly one Reviewer pass; substantive findings require a separate Builder revision and any later review is another explicit call. |
 | `project:dove.rebuttal` | Normalize reviewer issues and draft evidence-backed responses. |
 
 Older router, plan, checklist, audit, return, follow-through, onboarding, governance-audit, and paper-namespaced slash commands are not public surfaces. Useful low-level capabilities remain internal MCP/core building blocks where they are still needed.
@@ -147,9 +147,9 @@ Dove uses one task tree across paper, experiment, and engineering work:
 - Task-scoped writes must resolve to one durable `.dove/task-packets` packet before mutation.
 - After approval, `/dove:mission` only materializes the task contract and returns recommended next routes; execution continues through `/dove:auto`, `/dove:operator`, domain workflows, or explicit tools.
 - When later execution records a completed planning result, Dove converts supplied plan outputs into pending durable missions: the default follow-up mission is level 3, and optional child missions can be level 4, 5, or deeper.
-- `/dove:status` uses the default compact `statusHome` result as a human translation layer: `headline`, one `nextStep`, `needsAttention`, `changes`, and `showMore`. It should not make ordinary users read packet ids, mission lists, boundary/gap codes, blocked counts, execution-gap counts, or required-evidence blocks before they know the single next action. Mission details stay optional/collapsed unless the operator explicitly asks for missions, JSON, or full/debug detail; expanded mission details start with a `Priority lane`, then show a compact `Queue summary` and short `Queue preview` instead of dumping the whole backlog. Complete mission lists remain available through full/debug JSON. Hosts should ask at most one confirmation dialog with compact adjustment cards only when status changes are requested, do nothing when the dialog does not provide clear `packetId -> status` adjustments, and call `apply_dove_status_adjustments` only after explicit confirmation. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
+- `/dove:status` uses the default compact `statusHome` result as a human translation layer: `headline`, one `nextStep`, `needsAttention`, `changes`, and `showMore`. Every status query is zero-write: it does not bootstrap, refresh, stage, or apply changes. Mission details stay optional/collapsed unless the operator explicitly asks for missions, JSON, or full/debug detail; expanded mission details start with a `Priority lane`, then show a compact `Queue summary` and short `Queue preview` instead of dumping the whole backlog. Complete mission lists remain available through full/debug JSON. Status changes use the separate `apply_dove_status_adjustments` mutation and require explicit confirmation with clear `packetId -> status` adjustments. Status choices remain `pending`, `ready`, `in-progress`, `blocked`, `completed`, and `killed`.
 - Boundaries are first-class task/runtime metadata, not extra statuses. An open boundary records why work stopped, required inputs/actions, `ownerRole`, `nextRole`, and optional `handoff` so the next foreground command knows who should resume.
-- `/dove:operator` previews compact cards for auto-runnable, host-pass-required, blocked, and pending queues; after confirmation it runs one safe internal step when available, otherwise waits for real host pass results, records an awaiting boundary, and turns `blocked` missions into pending plan missions that investigate the blocker reason.
+- `/dove:operator` previews compact cards for auto-runnable, host-pass-required, blocked, and pending queues. Confirmed host work advances only through canonical `taskResults[]`; a host-pass task with no matching result remains unchanged rather than gaining synthetic progress.
 - `/dove:auto` can start directly from a new demand or an existing task, confirms compact task/auto cards before execution, runs only in the foreground call, records each iteration in `.dove/runtime/results.json`, appends lifecycle/boundary events in `.dove/runtime/events.json`, and uses `.dove/state.json.settings.auto.maxIterations` with default 3.
 - Ambiguous natural-language task targeting follows `.dove/state.json.settings.taskTargetResolution.autoSelect`, but missing targets or tied top candidates must stop for explicit task confirmation instead of guessing.
 
@@ -167,13 +167,13 @@ Put that in `.dove/config.json` or `.dove/config.local.json`; `DOVE_LANGUAGE` an
 
 ## Workflow presets
 
-- **Source** records verified external information and source provenance; search results remain candidates until checked.
-- **Note** consolidates substantive synthesis from repository material, verified sources, quotes, claims, or open questions.
+- **Source** registers retrieved external material as a candidate. Public `verify_source` can record rejection only; positive verification requires a trusted internal transition bound to captured material, source identity, and packet.
+- **Note** consolidates substantive synthesis from repository material, eligible verified sources, quotes, claims, or explicitly labeled open questions. A candidate-backed note is context, not completion authority.
 - **Experience** merges experiment planning, result recording, audit, and claim bridging.
-- **Figure** lets the user describe a figure once; Dove gathers materials, prepares generation, imports safe output when present, writes caption/provenance, and validates QA.
+- **Figure** lets the user describe a figure once; Dove gathers materials, prepares generation, imports safe output when present, and writes caption/provenance. Lexical and structural QA are diagnostics only; `validated` requires current authorized independent proof covering the final SVG hash.
 - **Draft** writes or revises paper sections from prompts and durable evidence, with explicit placeholders for missing support.
-- **Review** runs a local evidence-aware pass over selected task materials and returns findings, action items, missing evidence, or coherence.
-- **Review-loop** runs bounded local review + draft + experience iterations without preparing isolated/audio handoff unless explicitly requested through low-level tools.
+- **Review** performs evidence-aware structural preflight over selected task materials. A clean scan is not authoritative `coherent`; current hash-bound independent Reviewer proof is required.
+- **Review-loop** runs exactly one Reviewer pass. It never performs an implicit Reviewer → Builder → Reviewer cycle; Builder revision and any later review are separate explicit calls.
 - **Rebuttal** handles submission revision and reviewer response drafting.
 
 ## Host adapters

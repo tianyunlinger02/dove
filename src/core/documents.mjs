@@ -13,6 +13,8 @@ import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
+import { assertReviewProofBoundaryTransition } from "./review-proof.mjs";
+import { loadBoard } from "./orchestration.mjs";
 import { assertGovernanceMutationRegistered, appendText, ensureWorkspace, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 
 function slugify(value, fallback = "document") {
@@ -174,6 +176,13 @@ export function queryDocumentLedger(root, args = {}) {
 export function recordDocumentEvidence(root, args = {}) {
   assertGovernanceMutationRegistered("record-document-evidence", "guarded");
   const target = assertTaskScopedMutationTarget(root, "record-document-evidence", args);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "draft",
+    "researcher",
+    "Recording document evidence"
+  );
   ensureWorkspace(root);
   const timestamp = nowIso();
   const documentKind = normalizeAllowed(args.documentKind ?? args.kind, DOVE_DOCUMENT_KINDS, "other");

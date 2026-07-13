@@ -62,12 +62,12 @@ export const CLI_COMMAND_SPECS = {
   audit: command([...missionOptions, value("--scope"), ...evidenceOptions]),
   return: command([...missionOptions, value("--scope"), ...evidenceOptions]),
   launch: command([
-    ...missionOptions, value("--source-type"), value("--source-id"), value("--actor-role"), value("--worker-role"), value("--dove-worker-role"),
+    ...missionOptions, value("--source-type"), value("--source-id"),
     value("--follow-through-id"), value("--conversion-path"), value("--title"),
-    value("--summary"), value("--assigned-role"), value("--lifecycle-status"), value("--current-focus"), value("--next-action"),
+    value("--summary"), value("--current-focus"), value("--next-action"),
     value("--dependency", { repeatable: true }), ...aliases("evidence-link", ["--evidence", "--evidence-link"], { repeatable: true }),
-    ...aliases("output-path", ["--output", "--output-path"], { repeatable: true }), value("--program-id"), value("--program-run-id"),
-    value("--approval-id"), value("--allowed-step-type"), value("--decision-summary"), value("--rationale"), value("--execute-by"), value("--review-after")
+    ...aliases("output-path", ["--output", "--output-path"], { repeatable: true }),
+    value("--decision-summary"), value("--rationale"), value("--execute-by"), value("--review-after")
   ]),
   auto: command([
     ...taskTargetOptions, value("--proposal-token"), value("--mutation-mode"), ...outputOptions, value("--goal"), value("--prompt"), value("--objective"),
@@ -75,7 +75,7 @@ export const CLI_COMMAND_SPECS = {
     ...aliases("artifact", ["--artifact", "--artifact-path"], { repeatable: true }), value("--max-iterations"), value("--max-steps"), value("--steps-json"),
     value("--run-id"), boolean("--confirmed")
   ]),
-  operator: command([value("--mutation-mode"), ...outputOptions, value("--blocker-investigation-mode"), value("--task-results-json"), value("--run-id"), boolean("--confirmed"), boolean("--include-queue-details"), boolean("--create-blocked-investigations")]),
+  operator: command([value("--mutation-mode"), ...outputOptions, value("--blocker-investigation-mode"), value("--task-results-json"), value("--run-id"), boolean("--confirmed"), boolean("--include-queue-details")]),
   lessons: command([...taskTargetOptions, value("--title"), value("--problem"), value("--decision", { repeatable: true }), value("--pitfall", { repeatable: true }), value("--validation", { repeatable: true }), value("--next-time", { repeatable: true }), value("--tag", { repeatable: true }), ...aliases("domain", ["--domain", "--dove-domain"]), value("--status"), value("--limit"), ...mutationOptions]),
   version: command([value("--title"), value("--reason"), value("--summary"), ...aliases("version-id", ["--version-id", "--id"]), ...mutationOptions]),
   source: command([

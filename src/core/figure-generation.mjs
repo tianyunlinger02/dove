@@ -13,6 +13,11 @@ import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action
 import { summarizeFigureQa, validateFigurePipeline } from "./artifacts.mjs";
 import { inspectDeclaredPath } from "./artifact-integrity.mjs";
 import {
+  assertReviewProofBoundaryTransition,
+  findCurrentIndependentReviewProof
+} from "./review-proof.mjs";
+import { loadBoard, upsertSystemOrchestrationBoard } from "./orchestration.mjs";
+import {
   assertFollowThroughReady,
   assertGovernanceMutationRegistered,
   ensureDir,
@@ -953,6 +958,13 @@ export function prepareFigureGeneration(root, args = {}) {
   assertPrepareFigureGenerationInput(args);
   const target = assertTaskScopedMutationTarget(root, "prepare-figure-generation", args);
   assertFollowThroughReady(root, "Preparing figure generation", args);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Preparing figure generation"
+  );
   ensureWorkspace(root);
   const { env: _env, ...safeArgs } = args;
   assertNoInlineSecrets(safeArgs, "figureGeneration.args");
@@ -1099,6 +1111,13 @@ export function importFigureGeneration(root, args = {}) {
   assertImportFigureGenerationInput(args);
   const target = assertTaskScopedMutationTarget(root, "import-figure-generation", args);
   assertFollowThroughReady(root, "Importing figure generation", args);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Importing figure generation"
+  );
   ensureWorkspace(root);
   assertNoLegacyFinalSvgInput(args, "import_figure_generation");
   const { env: _env, svgContent: _svgContent, ...safeArgs } = args;
@@ -1170,6 +1189,9 @@ export function importFigureGeneration(root, args = {}) {
     throw new Error(`Generated SVG failed safety validation: ${safetyIssues.join(" ")}`);
   }
 
+  upsertSystemOrchestrationBoard(root, {
+    reviewRequiredBeforeFinalize: true
+  });
   if (sourceSvgPath !== finalSvgPath) {
     writeText(root, finalSvgPath, svgContent);
   }
@@ -1214,6 +1236,10 @@ export function importFigureGeneration(root, args = {}) {
   updateFigureIndexesForImport(root, figure, { ...generation, captionId: caption.id }, caption, timestamp);
   const validation = validateFigurePipeline(root);
   const figureQa = summarizeFigureQa(root, figure.id, validation);
+  const independentReviewProof = findCurrentIndependentReviewProof(root, {
+    packetId: target.packetId,
+    reviewedArtifactPaths: [finalSvgPath]
+  });
   refreshDurableSurfaces(root, {
     type: "import-figure-generation",
     summary: `Imported figure generation run ${runId} for ${figure.id}.`,
@@ -1227,6 +1253,7 @@ export function importFigureGeneration(root, args = {}) {
     sourceSvgPath,
     finalSvgPath,
     finalSha256: generation.finalSha256,
+    independentReviewProof: independentReviewProof.ok ? independentReviewProof.proof : null,
     qaIssueCount: figureQa.issueCount,
     workspaceQaIssueCount: figureQa.workspaceIssueCount,
     qaPath: figureQa.qaPath,

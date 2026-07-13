@@ -1048,19 +1048,21 @@ function runOperatorHostResultRequiresCriteriaGoal(root, dispatch) {
     executionContract: workflowExecutionContract()
   });
 
-  const run = parseToolJson(dispatch(root, "run_dove_operator", {
+  const run = parseOperationalToolJson(dispatch(root, "run_dove_operator", {
     confirmed: true,
     includeQueueDetails: true,
     runId,
     taskResults: [{
       packetId,
       resultStatus: "completed",
-      summary: "The host pass claims completion with evidence but no criteria coverage.",
+      resultSummary: "The host pass claims completion with evidence but no criteria coverage.",
       artifactRefs: [WORKFLOW_GOAL_ARTIFACT_PATH],
       verificationEvidencePaths: [WORKFLOW_GOAL_VERIFICATION_PATH]
     }]
   }), "run_dove_operator host result without criteria");
   const iteration = run.result?.iterations?.find((item) => item.packetId === packetId);
+  expect(run.status === "blocked-boundary", "Operator host result boundary must keep the top-level operator result action-required", { status: run.status });
+  expect(run.resultCard?.requiresAction === true, "Operator host result boundary must require action in the result card", { resultCard: run.resultCard });
   expect(iteration?.status === "verification-failed", "Operator host result without criteria must record verification-failed iteration", { iteration });
   expect((iteration?.requiredActions ?? []).includes("provide-verified-criteria"), "Operator host result must require verified criteria", { iteration });
 
@@ -1078,6 +1080,7 @@ function runOperatorHostResultRequiresCriteriaGoal(root, dispatch) {
     evidence: {
       packetId,
       runStatus: run.status,
+      requiresAction: run.resultCard?.requiresAction === true,
       iterationStatus: iteration?.status,
       finalTaskStatus: afterTask.status,
       boundaryType: afterTask.boundary?.type,

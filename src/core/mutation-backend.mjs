@@ -203,10 +203,31 @@ export class MutationContext {
   }
 
   ensureDirectory(relativePath) {
-    const { fullPath } = this.resolve(relativePath);
+    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
+    if (fs.existsSync(fullPath) || this.operationsByPath.has(normalized)) {
+      return false;
+    }
+    const operation = {
+      operationId: `op-${crypto.randomUUID()}`,
+      mutationId: this.id,
+      actionId: this.actionId,
+      packetId: this.packetId,
+      relativePath: normalized,
+      kind: "ensure-directory",
+      encoding: null,
+      previousExists: false,
+      previousSha256: null,
+      expectedPreviousSha256: null,
+      nextSha256: null,
+      scope: classifyScope(normalized),
+      rollbackEligibility: this.patchPlanMode ? "host-tracked-file-edits-required" : "direct-process-unverified"
+    };
+    this.operationOrder.push(normalized);
+    this.operationsByPath.set(normalized, operation);
     if (!this.patchPlanMode) {
       fs.mkdirSync(fullPath, { recursive: true });
     }
+    return true;
   }
 
   operations() {
@@ -240,6 +261,8 @@ export class MutationContext {
       rollbackAdvice: this.patchPlanMode ? null : PATCH_PLAN_ROLLBACK_ADVICE,
       operationCount: operations.length,
       paths: operations.map((operation) => operation.relativePath),
+      directoryEffectCount: operations.filter((operation) => operation.kind === "ensure-directory").length,
+      directoryPaths: operations.filter((operation) => operation.kind === "ensure-directory").map((operation) => operation.relativePath),
       createdAt: this.createdAt
     };
     const nextEntries = [...currentIndex.entries.filter((item) => item.id !== this.id), entry];
@@ -261,6 +284,8 @@ export class MutationContext {
       writesApplied,
       operationCount: operations.length,
       paths: operations.map((operation) => operation.relativePath),
+      directoryEffectCount: operations.filter((operation) => operation.kind === "ensure-directory").length,
+      directoryPaths: operations.filter((operation) => operation.kind === "ensure-directory").map((operation) => operation.relativePath),
       hostRollbackEligible: this.patchPlanMode,
       hostRollbackIneligibleReason: this.patchPlanMode ? null : DIRECT_PROCESS_ROLLBACK_REASON,
       recommendedMutationMode: this.patchPlanMode ? null : "patch-plan",

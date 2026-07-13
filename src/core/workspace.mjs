@@ -7,10 +7,17 @@ import {
   GOVERNANCE_GUARDED_MUTATIONS,
   createDefaultState,
   createMetaOperatorFollowThroughIndex,
+  createProgramApprovalsIndex,
+  createProgramRunsIndex,
+  createProgramsIndex,
   createWorkflowBoundaries,
   normalizeMetaOperatorFollowThroughIndex,
+  normalizeProgramApprovalsIndex,
+  normalizeProgramRunsIndex,
+  normalizeProgramsIndex,
   normalizeState
 } from "./schema.mjs";
+import { followThroughAuthorityState } from "./follow-through-authority.mjs";
 import { currentMutationContext } from "./mutation-backend.mjs";
 import {
   WORKSPACE_BOOTSTRAP_DIRECTORIES,
@@ -160,7 +167,6 @@ export function ensureWorkspace(root) {
 }
 
 export function loadState(root) {
-  ensureWorkspace(root);
   return normalizeState(readJson(root, ARTIFACT_PATHS.state, createDefaultState));
 }
 
@@ -171,7 +177,6 @@ export function saveState(root, state) {
 }
 
 export function listArtifacts(root) {
-  ensureWorkspace(root);
   return Object.fromEntries(
     Object.entries(ARTIFACT_PATHS).map(([key, relativePath]) => {
       const fullPath = resolvePath(root, relativePath);
@@ -181,8 +186,10 @@ export function listArtifacts(root) {
 }
 
 export function listDraftFiles(root) {
-  ensureWorkspace(root);
   const draftsDir = resolvePath(root, ARTIFACT_PATHS.draftsDir);
+  if (!fs.existsSync(draftsDir)) {
+    return [];
+  }
   return fs.readdirSync(draftsDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md")
     .map((entry) => entry.name);
@@ -250,15 +257,23 @@ function targetArtifactContainsId(root, artifactPath, targetId) {
 export function assertFollowThroughReady(root, actionLabel, args = {}) {
   assertNoPolicyOverrideArgs(args, actionLabel);
   const ledger = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const operatingState = {
+    programs: normalizeProgramsIndex(readJson(root, ARTIFACT_PATHS.programsIndex, createProgramsIndex)),
+    programRuns: normalizeProgramRunsIndex(readJson(root, ARTIFACT_PATHS.programRuns, createProgramRunsIndex)),
+    programApprovals: normalizeProgramApprovalsIndex(readJson(root, ARTIFACT_PATHS.programApprovals, createProgramApprovalsIndex))
+  };
   const actionRequiredItems = (ledger.items ?? []).filter((item) => {
     const status = item.status;
-    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status);
+    const authorityState = followThroughAuthorityState(item, operatingState);
+    const invalidStatus = Boolean(item.invalidStatus)
+      || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status)
+      || !authorityState.trusted;
     const dueDeferred = status === "deferred" && item.deferUntil && String(item.deferUntil) <= nowIso();
     const targetBound = !["accepted-for-execution", "executing", "closed"].includes(status)
       ? true
       : targetArtifactContainsId(root, item.linkedTargetArtifact, item.linkedTargetId);
     const acceptedExecutionOpen = status === "accepted-for-execution" || status === "executing";
-    return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen;
+    return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen || status === "accepted-risk";
   }).map((item) => item.id);
 
   if (actionRequiredItems.length > 0) {

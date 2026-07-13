@@ -414,9 +414,16 @@ function assertAutoStepItem(item, index) {
 
 function assertOperatorTaskResultItem(item, index) {
   assertPlainObjectItem(item, index, "--task-results-json");
-  const target = item.packetId ?? item.taskPacketId ?? item.missionPacketId ?? item.taskId ?? item.id ?? item.target ?? item.taskName ?? item.title;
-  if (typeof target !== "string" || !target.trim()) {
-    throw new Error(`--task-results-json[${index}] must identify a task.`);
+  const allowedKeys = new Set(["packetId", "resultStatus", "resultSummary", "outcome", "reason", "stopReason", "nextAction", "evidenceLinks", "artifactRefs", "validationEvidencePaths", "verificationEvidencePaths", "verifiedCriteria", "executionContract", "executionReceipt", "boundaryType", "boundaryId", "requiredInputs", "requiredActions", "startedAt", "completedAt"]);
+  const unknownKeys = Object.keys(item).filter((key) => !allowedKeys.has(key));
+  if (unknownKeys.length > 0) {
+    throw new Error(`--task-results-json[${index}] contains unsupported fields: ${unknownKeys.join(", ")}.`);
+  }
+  if (typeof item.packetId !== "string" || !item.packetId.trim()) {
+    throw new Error(`--task-results-json[${index}] must include packetId.`);
+  }
+  if (!["completed", "blocked", "in-progress"].includes(item.resultStatus)) {
+    throw new Error(`--task-results-json[${index}] must include resultStatus as completed, blocked, or in-progress.`);
   }
 }
 
@@ -776,13 +783,12 @@ function buildDoveAutoArgs(rest = []) {
 function buildDoveOperatorArgs(rest = []) {
   assertKnownCommandFlags(rest, {
     valueFlags: ["--mutation-mode", "--format", "--blocker-investigation-mode", "--task-results-json", "--run-id"],
-    booleanFlags: ["--confirmed", "--include-queue-details", "--create-blocked-investigations", "--json"]
+    booleanFlags: ["--confirmed", "--include-queue-details", "--json"]
   });
   return {
     confirmed: rest.includes("--confirmed"),
     includeQueueDetails: rest.includes("--include-queue-details"),
     blockerInvestigationMode: readFlagValue(rest, "--blocker-investigation-mode"),
-    createBlockedInvestigations: rest.includes("--create-blocked-investigations"),
     taskResults: parseJsonArrayFlag(rest, "--task-results-json", "an array of operator task result objects", assertOperatorTaskResultItem),
     runId: readFlagValue(rest, "--run-id")
   };
@@ -1507,26 +1513,17 @@ function buildDoveLaunchArgs(rest = []) {
     ...buildDoveMissionArgs(rest),
     sourceType: readFlagValue(rest, "--source-type"),
     sourceId: readFlagValue(rest, "--source-id"),
-    actorRole: readFlagValue(rest, "--actor-role"),
-    workerRole: readFlagValue(rest, "--worker-role"),
-    doveWorkerRole: readFlagValue(rest, "--dove-worker-role"),
     packetId: readFirstFlagValue(rest, ["--packet-id", "--mission-packet-id"]),
     missionPacketId: readFlagValue(rest, "--mission-packet-id"),
     followThroughId: readFlagValue(rest, "--follow-through-id"),
     selectedConversionPathKey: readFlagValue(rest, "--conversion-path"),
     title: readFlagValue(rest, "--title"),
     summary: readFlagValue(rest, "--summary"),
-    assignedRole: readFlagValue(rest, "--assigned-role"),
-    lifecycleStatus: readFlagValue(rest, "--lifecycle-status"),
     currentFocus: readFlagValue(rest, "--current-focus"),
     nextAction: readFlagValue(rest, "--next-action"),
     dependencies: readFlagValues(rest, ["--dependency"]),
     evidenceLinks: readFlagValues(rest, ["--evidence", "--evidence-link"]),
     outputPaths: readFlagValues(rest, ["--output", "--output-path"]),
-    programId: readFlagValue(rest, "--program-id"),
-    programRunId: readFlagValue(rest, "--program-run-id"),
-    approvalId: readFlagValue(rest, "--approval-id"),
-    allowedStepType: readFlagValue(rest, "--allowed-step-type"),
     decisionSummary: readFlagValue(rest, "--decision-summary"),
     rationale: readFlagValue(rest, "--rationale"),
     executeBy: readFlagValue(rest, "--execute-by"),
@@ -3462,7 +3459,9 @@ if (command === "isolated-review") {
     const imported = importIsolatedReview(target, prepared.importArgs);
     return {
       ...imported,
-      status: "completed",
+      status: imported.reviewProofRequired
+        ? "imported"
+        : "completed",
       runId: prepared.runId,
       reviewerCommandConfigured: Boolean(reviewerCommand),
       reviewerExitStatus: reviewer.status

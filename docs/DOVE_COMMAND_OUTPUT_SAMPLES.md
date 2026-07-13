@@ -224,7 +224,7 @@ Before confirmation, direct demand intake is proposal-only:
 }
 ```
 
-After confirmation, a normal completion looks like this:
+After a separate explicit confirmation, a normal evidence-backed completion may look like this. Mission handoff never starts or authorizes this run:
 
 ```json
 {
@@ -322,11 +322,14 @@ query_dove_status
 apply_dove_status_adjustments
 ```
 
-Status query excerpt:
+Status query excerpt. Every query returns `writes: []` and cannot bootstrap, refresh, stage, or apply changes:
 
 ```json
 {
   "ok": true,
+  "proposalOnly": true,
+  "noAutoApply": true,
+  "writes": [],
   "dailyHome": {
     "presentation": "dove-daily-home",
     "headline": "现在是什么情况",
@@ -418,7 +421,7 @@ Daily effect:
 
 ### `dove.operator`
 
-Purpose: preview the queue, then run one confirmed foreground operator pass over safe internal steps, explicit host results, and blocker planning; host-result-required tasks without supplied results stay unchanged.
+Purpose: preview the queue, then run one confirmed foreground operator pass over safe internal steps and host results supplied only through canonical `taskResults[]`; host-result-required tasks without a matching result stay unchanged.
 
 Example invocation:
 
@@ -616,7 +619,7 @@ Daily effect:
 
 ### `dove.source`
 
-Purpose: register a provenance-aware source bound to one resolved task packet.
+Purpose: register provenance-aware external material as a candidate bound to one resolved task packet. Registration cannot issue positive verification.
 
 Example invocation:
 
@@ -640,7 +643,8 @@ Representative output excerpt:
     "citationKey": "sample2026",
     "title": "Dove UX sample source",
     "sourceType": "internal-doc",
-    "locator": "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"
+    "locator": "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md",
+    "lifecycleStatus": "candidate"
   },
   "taskTarget": {
     "packetId": "sample-mission-pass",
@@ -657,6 +661,7 @@ Daily effect:
 
 - Natural-language targets must resolve to one durable packet before writing.
 - If the target is ambiguous, the command returns candidates rather than writing.
+- Public `verify_source` can append a rejection decision only. Positive verification requires a trusted internal transition over captured material, hashes, source identity, and packet binding.
 
 ### `dove.note`
 
@@ -697,12 +702,13 @@ Representative output excerpt:
 
 Daily effect:
 
-- Notes are reusable evidence objects, not chat-only summaries.
-- They can feed later draft, claim, review, and rebuttal work.
+- Notes are durable synthesis objects, not chat-only summaries.
+- A note backed only by candidate, rejected, stale, or cross-packet sources remains research context and cannot authorize completion.
+- Only packet-bound notes whose sources remain dynamically eligible can support later completion or claims.
 
 ### `dove.figure`
 
-Purpose: run the composite figure workflow: figure intent, material discovery, optional provider handoff/import, caption/provenance, and QA status.
+Purpose: run the composite figure workflow: figure intent, material discovery, optional provider handoff/import, caption/provenance, and diagnostic QA. `validated` is reserved for current final-SVG proof from an authorized independent Reviewer.
 
 Example invocation:
 
@@ -747,6 +753,7 @@ Daily effect:
 
 - The public command hides low-level figure tools from daily use.
 - Provider output is never claimed unless an explicit generated artifact is imported.
+- Lexical coverage, SVG structure, caption checks, and provider self-approval are non-authoritative diagnostics. Importing a new final SVG reopens the review gate; `validated` requires proof covering its exact current hash.
 
 ### `dove.experience`
 
@@ -846,7 +853,7 @@ Daily effect:
 
 ### `dove.review`
 
-Purpose: run a local evidence-aware review over selected task or paper-pipeline materials and return concrete findings, action items, missing evidence, or coherence.
+Purpose: run an evidence-aware structural preflight over selected task or paper-pipeline materials and return concrete findings, action items, missing evidence, or a Reviewer-owned proof boundary.
 
 Example invocation:
 
@@ -897,33 +904,37 @@ Local review output:
 }
 ```
 
-Coherent review output is allowed only after the local materials are inspected:
+A clean structural scan without authorized proof stops at a Reviewer-owned boundary instead of claiming `coherent`:
 
 ```json
 {
   "ok": true,
-  "verdict": "coherent",
-  "summary": "The current paper artifacts are internally consistent.",
-  "findings": [],
-  "actionItems": [],
-  "resultCard": {
-    "surface": "dove.review",
-    "command": "run_review_loop",
-    "status": "coherent",
-    "outcome": "coherent"
+  "verdict": "needs-evidence",
+  "authoritative": false,
+  "preflight": {
+    "status": "clear",
+    "authoritative": false
+  },
+  "boundary": {
+    "type": "review-proof-required",
+    "ownerRole": "reviewer",
+    "nextRole": "reviewer",
+    "requiredActions": ["submit-authoritative-reviewer-runtime-proof"]
   }
 }
 ```
 
+Authoritative `coherent` is allowed only when current independent Reviewer proof covers the exact reviewed artifact set and hashes.
+
 Daily effect:
 
-- Ordinary review is local and evidence-aware; it does not default to isolated/audio handoff.
-- A verdict string by itself is not progress: the output must include inspected-material findings, action items, or a clear material boundary.
-- Explicit isolated/audio handoff remains available only through lower-level handoff tools when the operator asks for that boundary.
+- Ordinary review performs local evidence-aware preflight; it does not default to isolated/audio handoff.
+- A verdict string or clean scan is not authority. Current hash-bound independent Reviewer proof is required for `coherent`.
+- Explicit isolated/audio handoff remains available only through lower-level handoff tools when the operator asks for that boundary, and public import proves snapshot integrity but cannot self-issue Reviewer authority.
 
 ### `dove.review-loop`
 
-Purpose: run bounded local review/draft/experience iterations using the configured default of 3 unless overridden.
+Purpose: run exactly one Reviewer pass over the selected packet. It does not execute Builder revision or a second Reviewer pass.
 
 Example invocation:
 
@@ -968,9 +979,9 @@ Representative output excerpt:
 
 Daily effect:
 
-- The loop is bounded and foreground-visible.
-- Each iteration starts with local evidence-aware review before optional draft or experience substeps.
-- It stops at coherence, repair-required findings, material boundaries, or user input instead of continuing invisibly.
+- The call is foreground-visible and contains exactly one Reviewer pass.
+- It never performs draft or experience repair inside the same call.
+- Substantive findings hand work to Builder; a proof-only boundary retains Reviewer ownership. Builder revision and any later review require new explicit calls.
 
 ### `dove.rebuttal`
 

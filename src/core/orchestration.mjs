@@ -7,9 +7,16 @@ import { refreshDurableSurfaces } from "./navigation.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
+import {
+  assertReviewProofBoundaryTransition,
+  findCurrentIndependentReviewProof
+} from "./review-proof.mjs";
+import { snapshotReviewedArtifacts } from "./review-artifact-snapshot.mjs";
 import { ARTIFACT_PATHS, PACKAGE_VERSION, ROLE_IDS, createContinuationState, createDefaultBoard, createMetaOperatorFollowThroughIndex, normalizeMetaOperatorFollowThroughIndex, resolveResumeCommandForPhase, roleCanActAs } from "./schema.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, assertNoPolicyOverrideArgs, loadState, nowIso, readJson, readText, saveState, writeJson, writeText, appendText } from "./workspace.mjs";
-import { evidencePathProblemFlags } from "./artifact-integrity.mjs";
+import { evidencePathProblemFlags, inspectDeclaredPath } from "./artifact-integrity.mjs";
+import { followThroughAuthorityState } from "./follow-through-authority.mjs";
+import { readProgramOperatingState } from "./program-operating-state.mjs";
 
 const ALLOWED_TRANSITIONS = {
   init: ["init", "sources", "research"],
@@ -378,16 +385,20 @@ function assertNoBlockingFollowThrough(root, currentPhase, nextPhase, currentAss
     return;
   }
   const followThrough = normalizeMetaOperatorFollowThroughIndex(readJson(root, ARTIFACT_PATHS.metaOperatorFollowThrough, createMetaOperatorFollowThroughIndex));
+  const operatingState = readProgramOperatingState(root);
   const items = Array.isArray(followThrough.items) ? followThrough.items : [];
   const actionRequired = items.filter((item) => {
     const status = item.status;
-    const invalidStatus = Boolean(item.invalidStatus) || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status);
+    const authorityState = followThroughAuthorityState(item, operatingState);
+    const invalidStatus = Boolean(item.invalidStatus)
+      || !["acknowledged", "accepted-for-execution", "executing", "deferred", "accepted-risk", "closed", "superseded"].includes(status)
+      || !authorityState.trusted;
     const dueDeferred = status === "deferred" && item.deferUntil && String(item.deferUntil) <= nowIso();
     const targetBound = !["accepted-for-execution", "executing", "closed"].includes(status)
       ? true
       : targetArtifactContainsId(root, item.linkedTargetArtifact, item.linkedTargetId);
     const acceptedExecutionOpen = status === "accepted-for-execution" || status === "executing";
-    return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen;
+    return invalidStatus || Boolean(item.stale) || dueDeferred || !targetBound || acceptedExecutionOpen || status === "accepted-risk";
   }).map((item) => ({
     id: item.id,
     status: item.status,
@@ -767,18 +778,135 @@ function collectFinalizeBlockersFromClaims(root) {
   return Array.from(blockedClaimIds);
 }
 
+const COMPLETION_LIKE_FINAL_SECTION_STATUSES = new Set([
+  "ready",
+  "review-ready",
+  "done",
+  "complete",
+  "completed",
+  "final",
+  "approved"
+]);
+
+function isCompletionLikeFinalSectionStatus(value) {
+  return COMPLETION_LIKE_FINAL_SECTION_STATUSES.has(
+    String(value ?? "").trim().toLowerCase()
+  );
+}
+
+function inspectFinalizationArtifact(root, artifactPath) {
+  if (typeof artifactPath !== "string" || !artifactPath.trim()) {
+    return null;
+  }
+  const inspection = inspectDeclaredPath(root, artifactPath, {
+    requireNonEmpty: true,
+    rejectBookkeeping: true
+  });
+  return {
+    inspection,
+    artifactPath:
+      inspection.canonicalRelativePath
+      ?? inspection.normalizedPath
+      ?? artifactPath.trim()
+  };
+}
+
+export function currentFinalizationArtifactPaths(root) {
+  const state = loadState(root);
+  const artifactPaths = [];
+
+  for (const [sectionId, section] of Object.entries(state.sections ?? {})) {
+    const candidate = inspectFinalizationArtifact(root, section?.draftPath);
+    if (!candidate) {
+      continue;
+    }
+    if (candidate.inspection.status === "existing") {
+      artifactPaths.push(candidate.artifactPath);
+      continue;
+    }
+    if (isCompletionLikeFinalSectionStatus(section?.status)) {
+      throw new Error(
+        `Current final section ${sectionId} has no usable draft artifact at ${candidate.artifactPath}: ${candidate.inspection.reason ?? candidate.inspection.status}`
+      );
+    }
+  }
+
+  const figureFinals = readJson(root, ARTIFACT_PATHS.figureFinalIndex, {
+    items: []
+  });
+  const figureGenerations = readJson(root, ARTIFACT_PATHS.figureGenerations, {
+    items: []
+  });
+  const importedFinalFigurePaths = new Set(
+    (figureGenerations.items ?? [])
+      .filter((item) => item?.status === "imported")
+      .map((item) => item?.finalSvgPath)
+      .filter((artifactPath) => typeof artifactPath === "string" && artifactPath.trim())
+  );
+  for (const item of figureFinals.items ?? []) {
+    const candidate = inspectFinalizationArtifact(root, item?.finalSvgPath);
+    if (!candidate) {
+      continue;
+    }
+    if (candidate.inspection.status === "existing") {
+      artifactPaths.push(candidate.artifactPath);
+      continue;
+    }
+    const importedArtifactMissing = importedFinalFigurePaths.has(
+      item?.finalSvgPath
+    );
+    if (
+      item?.readinessStatus === "ready-for-finalization"
+      || importedArtifactMissing
+    ) {
+      throw new Error(
+        `Current final figure ${item?.figureId ?? item?.id ?? "unknown"} has no usable final artifact at ${candidate.artifactPath}: ${candidate.inspection.reason ?? candidate.inspection.status}`
+      );
+    }
+  }
+
+  return Array.from(new Set(artifactPaths)).sort();
+}
+
 function assertFinalizeReviewGate(root, actionLabel) {
   const board = loadBoard(root);
-  if (!board.reviewRequiredBeforeFinalize) {
-    return;
-  }
   const reviewState = readJson(root, ARTIFACT_PATHS.reviewState, { version: 3, history: [], openItems: [], lastVerdict: "not-reviewed", lastReviewedAt: null, unresolvedConcernIds: [] });
   const concerns = readJson(root, ARTIFACT_PATHS.reviewConcerns, { version: 2, items: [], updatedAt: null });
-  const unresolvedConcernIds = new Set((reviewState.unresolvedConcernIds ?? []).concat((concerns.items ?? []).filter((item) => !["resolved", "retired"].includes(item.status)).map((item) => item.id)));
-  const reviewIsClear = reviewState.lastVerdict === "coherent" && unresolvedConcernIds.size === 0;
+  const unresolvedConcerns = (concerns.items ?? []).filter(
+    (item) => !["resolved", "retired"].includes(item.status)
+  );
+  const unresolvedConcernIds = new Set(
+    (reviewState.unresolvedConcernIds ?? []).concat(
+      unresolvedConcerns.map((item) => item.id)
+    )
+  );
+  const canonicalReviewGateRequired = board.reviewRequiredBeforeFinalize
+    || ["needs-revision", "needs-evidence", "blocked"].includes(
+      reviewState.lastVerdict
+    )
+    || unresolvedConcerns.some(
+      (item) => String(item.id ?? "").endsWith("-review-proof-required")
+        || item.responseOwnerRole === "reviewer"
+          && /Reviewer runtime execution claim|Reviewer proof/u.test(
+            String(item.summary ?? "")
+          )
+    );
+  if (!canonicalReviewGateRequired) return;
+  const finalArtifactPaths = currentFinalizationArtifactPaths(root);
+  if (finalArtifactPaths.length === 0) {
+    throw new Error(`${actionLabel} requires at least one current final draft or final figure artifact before finalization.`);
+  }
+  const currentSnapshot = snapshotReviewedArtifacts(root, finalArtifactPaths, `${actionLabel} final artifact scope`);
+  const independentProof = findCurrentIndependentReviewProof(root, {
+    reviewedArtifactPaths: currentSnapshot.reviewedArtifacts.map((artifact) => artifact.path)
+  });
+  const reviewIsClear = reviewState.lastVerdict === "coherent" && unresolvedConcernIds.size === 0 && independentProof.ok;
   const blockedClaimIds = collectFinalizeBlockersFromClaims(root);
   if (!reviewIsClear) {
-    throw new Error(`${actionLabel} requires a coherent review with no unresolved concerns while reviewRequiredBeforeFinalize is true.`);
+    throw new Error(`${actionLabel} requires a coherent review with no unresolved concerns and authorized independent Reviewer proof covering the exact current final artifact set and hashes while the canonical finalization review gate is active.`);
+  }
+  if (independentProof.proof.reviewedArtifactSetSha256 !== currentSnapshot.reviewedArtifactSetSha256) {
+    throw new Error(`${actionLabel} rejected stale or incomplete Reviewer proof because the current final artifact exact-set hash changed after review.`);
   }
   if (blockedClaimIds.length > 0) {
     throw new Error(`${actionLabel} is blocked by experiment integrity: claim(s) ${blockedClaimIds.join(", ")} are held for review. Resolve bridge/audit issues before finalization.`);
@@ -878,6 +1006,13 @@ function persistOrchestrationBoardUpdate(root, args = {}, { authority = null } =
   const current = loadBoard(root);
   const nextPhase = args.phase ?? current.currentPhase;
   const nextAssignedRole = args.assignedRole ?? current.assignedRole;
+  assertReviewProofBoundaryTransition(
+    root,
+    current,
+    nextPhase,
+    nextAssignedRole,
+    "Updating the orchestration board"
+  );
   validateBoardMutation(current, nextPhase, nextAssignedRole, state.settings?.strictMode, "Updating the orchestration board");
   assertNoBlockingFollowThrough(root, current.currentPhase, nextPhase, current.assignedRole, nextAssignedRole);
   const tasks = Array.isArray(args.tasks) ? args.tasks.map((task, index) => normalizeTask(task, index, nextAssignedRole)) : current.tasks;
@@ -943,6 +1078,40 @@ export function upsertOrchestrationBoard(root, args = {}) {
   });
 }
 
+export function assertSystemOrchestrationBoardUpdate(root, args = {}) {
+  assertNoPolicyOverrideArgs(args, "Updating the orchestration board");
+  const state = loadState(root);
+  const current = loadBoard(root);
+  const nextPhase = args.phase ?? current.currentPhase;
+  const nextAssignedRole = args.assignedRole ?? current.assignedRole;
+  assertReviewProofBoundaryTransition(
+    root,
+    current,
+    nextPhase,
+    nextAssignedRole,
+    "Updating the orchestration board"
+  );
+  validateBoardMutation(
+    current,
+    nextPhase,
+    nextAssignedRole,
+    state.settings?.strictMode,
+    "Updating the orchestration board"
+  );
+  assertNoBlockingFollowThrough(
+    root,
+    current.currentPhase,
+    nextPhase,
+    current.assignedRole,
+    nextAssignedRole
+  );
+  return {
+    current,
+    nextPhase,
+    nextAssignedRole
+  };
+}
+
 export function upsertSystemOrchestrationBoard(root, args = {}) {
   return persistOrchestrationBoardUpdate(root, args, { authority: SYSTEM_BOARD_AUTHORITY });
 }
@@ -959,6 +1128,13 @@ function persistHandoff(root, args = {}, { authority = null } = {}) {
   const fromRole = systemOwned ? args.fromRole ?? board.assignedRole : board.assignedRole;
   const toRole = systemOwned ? args.toRole ?? board.assignedRole : board.assignedRole;
   const phase = args.phase ?? board.currentPhase;
+  assertReviewProofBoundaryTransition(
+    root,
+    board,
+    phase,
+    toRole,
+    "Appending a handoff"
+  );
   validateBoardMutation(board, phase, toRole, state.settings?.strictMode, "Appending a handoff");
   if (systemOwned && !roleCanActAs(fromRole, board.assignedRole)) {
     throw new Error(`Appending a handoff requires fromRole ${board.assignedRole}, but received ${fromRole}.`);
@@ -1021,6 +1197,18 @@ export function updateResearchBrief(root, args = {}) {
   assertGovernanceMutationRegistered("update-research-brief", "guarded");
   assertTaskScopedMutationTarget(root, "update-research-brief", args);
   assertFollowThroughReady(root, "Updating the research brief", args);
+  const forbiddenAuthorityFields = ["phase", "assignedRole", "ownerRole", "nextRole"].filter((field) => Object.hasOwn(args, field));
+  if (forbiddenAuthorityFields.length > 0) {
+    throw new Error(`update_research_brief does not accept workflow authority fields: ${forbiddenAuthorityFields.join(", ")}.`);
+  }
+  const board = loadBoard(root);
+  assertReviewProofBoundaryTransition(
+    root,
+    board,
+    "research",
+    "researcher",
+    "Updating the research brief"
+  );
   const state = loadState(root);
   const current = readJson(root, ARTIFACT_PATHS.researchAgenda, { version: 1, objective: state.dove.objective, agenda: [], evidenceBacklog: [], updatedAt: null });
   const next = {
@@ -1034,8 +1222,8 @@ export function updateResearchBrief(root, args = {}) {
   writeText(root, ARTIFACT_PATHS.researchBrief, renderResearchBrief(next));
   upsertSystemOrchestrationBoard(root, {
     objective: next.objective,
-    phase: args.phase ?? "research",
-    assignedRole: args.assignedRole ?? "builder",
+    phase: board.currentPhase,
+    assignedRole: board.assignedRole,
     intentType: "research",
     currentFocus: args.currentFocus ?? "Tighten the research agenda and evidence backlog.",
     nextAction: args.nextAction ?? "Turn backlog items into sources, notes, or experiments.",
@@ -1627,6 +1815,7 @@ export function upsertExperimentPlan(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-experiment-plan", "guarded");
   const target = assertTaskScopedMutationTarget(root, "upsert-experiment-plan", args);
   assertFollowThroughReady(root, "Updating an experiment plan", args);
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "experiments", "builder", "Updating an experiment plan");
   const evidence = readJson(root, ARTIFACT_PATHS.evidence, { version: 3, claims: [], updatedAt: null });
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
   const rawPlan = args.plan ?? args;
@@ -1692,6 +1881,7 @@ export function upsertExperimentPlan(root, args = {}) {
 
 export function upsertExperimentResult(root, args = {}) {
   assertGovernanceMutationRegistered("upsert-experiment-result", "guarded");
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "experiments", "builder", "Updating an experiment result");
   const taskTarget = assertTaskScopedMutationTarget(root, "upsert-experiment-result", args);
   assertFollowThroughReady(root, "Updating an experiment result", args);
   const plansIndex = readJson(root, ARTIFACT_PATHS.experimentPlans, { version: 1, items: [], updatedAt: null });
@@ -1907,6 +2097,7 @@ function assertNoReservedRebuttalFields(args = {}) {
 export function normalizeRebuttalIssues(root, args = {}) {
   assertGovernanceMutationRegistered("normalize-rebuttal-issues", "guarded");
   assertNoReservedRebuttalFields(args);
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "rebuttal", "builder", "Normalizing rebuttal issues");
   const target = assertTaskScopedMutationTarget(root, "normalize-rebuttal-issues", args);
   assertFollowThroughReady(root, "Normalizing rebuttal issues", args);
   const next = persistRebuttalIssues(root, args);
@@ -1980,6 +2171,7 @@ export function buildRebuttalStrategy(root, args = {}) {
   assertGovernanceMutationRegistered("build-rebuttal-strategy", "guarded");
   const target = assertTaskScopedMutationTarget(root, "build-rebuttal-strategy", args);
   assertFollowThroughReady(root, "Building the rebuttal strategy", args);
+  assertReviewProofBoundaryTransition(root, loadBoard(root), "rebuttal", "builder", "Building the rebuttal strategy");
   const issues = readJson(root, ARTIFACT_PATHS.rebuttalIssues, { version: 1, items: [], updatedAt: null });
   if (!Array.isArray(issues.items) || issues.items.length === 0) {
     return missingRebuttalIssuesResult(root, args);

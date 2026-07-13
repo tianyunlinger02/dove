@@ -13,13 +13,13 @@ import {
   upsertClaims,
   upsertFigurePlan,
   upsertNote,
-  verifySource
 } from "../../src/core/internal-api.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
+import { seedTrustedSourceVerification } from "../helpers/source-verification-fixture.mjs";
 
 function tempRoot() {
   return createTempRoot("dove-figure-workflow-");
@@ -70,14 +70,7 @@ function seedFigureWorkflowContext(root) {
     }
   });
   const source = registerSource(root, { packetId, citationKey: "figure-workflow-source", title: "Figure Workflow Source", authors: ["Doe"], year: 2026, sourceType: "paper", locator: "https://example.org/test-source" });
-  verifySource(root, {
-    packetId,
-    sourceId: source.id,
-    decision: "verified",
-    method: "test fixture inspected the canonical publication record",
-    checkedMaterial: "source title, authors, year, and publication metadata",
-    auditEvidence: [{ reference: source.locator, kind: "source", observation: `Verified fixture identity for ${source.id}.` }]
-  });
+  seedTrustedSourceVerification(root, source.id, packetId);
   const note = upsertNote(root, { packetId, noteId: "figure-workflow-note", title: "Figure workflow note", sectionId: "method", sourceIds: [source.id], summary: "Source-backed material for the figure." });
   upsertClaims(root, {
     packetId,
@@ -148,9 +141,9 @@ test("runFigureWorkflow does not expose generated figure ids in public summaries
   });
 });
 
-test("runFigureWorkflow turns one SVG-backed intent into a validated figure", () => {
+test("runFigureWorkflow keeps one SVG-backed intent review-required without authoritative proof", () => {
   const root = tempRoot();
-  return runFixtureMutation(root, "runfigureworkflow-turns-one-svg-backed-intent-into-a-validated-figure", () => {
+  return runFixtureMutation(root, "runfigureworkflow-keeps-one-svg-backed-intent-review-required", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -166,22 +159,25 @@ test("runFigureWorkflow turns one SVG-backed intent into a validated figure", ()
       caption: "The figure explains how source-backed evidence flows through a review gate into a paper claim."
     });
 
-    assert.equal(result.status, "validated");
+    assert.equal(result.status, "qa-needs-attention");
     assert.equal(result.materialStatus, "ready");
     assert.equal(result.qaIssueCount, 0);
     assert.equal(result.captionId, "single-intent-single-intent-run-caption");
     assert.equal(result.finalSvgPath, ".dove/figures/single-intent.final.svg");
     assert.equal(result.stageFiles.templateCreated, true);
     assert.equal(result.stageFiles.editableCreated, true);
-    assert.equal(result.boundary, null);
-    assert.equal(result.boundaryType, null);
+    assert.equal(result.boundary.type, "verification-failed");
+    assert.equal(result.boundary.ownerRole, "reviewer");
+    assert.equal(result.boundary.detail.implementationBoundaryType, "missing-review-proof");
+    assert.equal(result.boundaryType, "verification-failed");
     assertFigureResultCard(result, {
-      status: "validated",
+      status: "qa-needs-attention",
       figureId: "single-intent",
       packetId,
-      happened: /通过当前图检查|ready for review/,
-      nextActionTitle: /review/,
-      nextActionCommand: "project:dove.review"
+      happened: /当前图还有|still has/,
+      nextActionTitle: /需要修|review issues/,
+      nextActionCommand: "project:dove.review",
+      boundaryType: "verification-failed"
     });
     assert.ok(result.artifactRefs.includes(ARTIFACT_PATHS.figureQa));
     assert.deepEqual(result.validationEvidencePaths, [ARTIFACT_PATHS.figureQa]);
@@ -217,7 +213,9 @@ test("runFigureWorkflow result card focuses current-figure QA issues", () => {
     });
 
     assert.equal(result.status, "qa-needs-attention");
-    assert.ok(result.qaIssueCount > 0);
+    assert.equal(result.qaIssueCount, 0);
+    assert.deepEqual(result.figureQa.item.diagnostics.lexicalVisualCoverage.missingVisualElements, ["review gate"]);
+    assert.equal(result.figureQa.item.diagnostics.lexicalVisualCoverage.authoritative, false);
     assertFigureResultCard(result, {
       status: "qa-needs-attention",
       figureId: "qa-needs-attention",
@@ -268,17 +266,18 @@ test("runFigureWorkflow validates current figure despite unrelated workspace QA 
       caption: "Scoped node figure for the evidence workflow."
     });
 
-    assert.equal(result.status, "validated");
+    assert.equal(result.status, "qa-needs-attention");
     assert.equal(result.qaIssueCount, 0);
     assert.ok(result.workspaceQaIssueCount > 0);
-    assert.equal(result.boundary, null);
+    assert.equal(result.boundary.detail.implementationBoundaryType, "missing-review-proof");
     assert.equal(result.nextAction, "project:dove.review");
     assertFigureResultCard(result, {
-      status: "validated",
+      status: "qa-needs-attention",
       figureId: "scoped-clean",
       packetId,
-      happened: /通过当前图检查|ready for review/,
-      nextActionCommand: "project:dove.review"
+      happened: /当前图还有|still has/,
+      nextActionCommand: "project:dove.review",
+      boundaryType: "verification-failed"
     });
     assert.doesNotMatch(result.resultCard.happened, /workspace|全工作区|全局|unrelated|12/);
   } finally {
@@ -308,7 +307,7 @@ test("runFigureWorkflow imports sourceSvgPath into the canonical final target", 
       caption: "Manual source node figure for the evidence workflow."
     });
 
-    assert.equal(result.status, "validated");
+    assert.equal(result.status, "qa-needs-attention");
     assert.equal(result.imported.sourceSvgPath, sourceSvgPath);
     assert.equal(result.finalSvgPath, ".dove/figures/source-path.final.svg");
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "source-path.final.svg")), true);
@@ -337,7 +336,7 @@ test("runFigureWorkflow accepts targetFinalSvgPath as the canonical final artifa
       caption: "Target node figure for the evidence workflow."
     });
 
-    assert.equal(result.status, "validated");
+    assert.equal(result.status, "qa-needs-attention");
     assert.equal(result.finalSvgPath, ".dove/figures/custom-target.final.svg");
     const figure = readFigures(root).items.find((item) => item.id === "target-final");
     assert.equal(figure.finalSvgPath, ".dove/figures/custom-target.final.svg");
@@ -388,7 +387,7 @@ test("runFigureWorkflow imports inline SVG as patch-plan operations without writ
       caption: "The figure explains how source-backed evidence flows through a review gate into a paper claim."
     }));
 
-    assert.equal(result.status, "validated");
+    assert.equal(result.status, "qa-needs-attention");
     assert.equal(result.mutationMode, "patch-plan");
     assert.equal(result.writesApplied, false);
     assert.equal(result.hostRollbackEligible, true);
@@ -438,16 +437,18 @@ process.stdout.write(JSON.stringify({
       }
     });
 
-    assert.equal(result.status, "validated");
+    assert.equal(result.status, "qa-needs-attention");
     assert.equal(result.diagnostics.providerExecution.status, "completed");
     assert.equal(result.imported.finalSvgPath, ".dove/figures/provider-intent.final.svg");
     assertFigureResultCard(result, {
-      status: "validated",
+      status: "qa-needs-attention",
       figureId: "provider-intent",
       packetId,
-      happened: /通过当前图检查|ready for review/,
-      nextActionCommand: "project:dove.review"
+      happened: /当前图还有|still has/,
+      nextActionCommand: "project:dove.review",
+      boundaryType: "verification-failed"
     });
+    assert.equal(result.imported.independentReviewProof, null);
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "provider-intent.final.svg")), true);
   } finally {
     // The mutation fixture records provenance after this callback returns.

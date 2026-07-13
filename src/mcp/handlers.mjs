@@ -724,11 +724,12 @@ export function dispatchTool(root, name, args = {}) {
         );
       }
     }
-    const needsContext = !existingContext;
+    const mutatingTool = MUTATING_TOOL_NAMES.has(name);
+    const needsContext = !existingContext && mutatingTool;
     const data = needsContext
       ? runWithMutationContext(root, {
         actionId: name,
-        mutationMode: MUTATING_TOOL_NAMES.has(name) ? args?.mutationMode : "direct-process",
+        mutationMode: args?.mutationMode,
         hostId: "mcp",
         packetId: extractPacketId(args)
       }, (context) => dispatchToolData(root, name, {
@@ -737,7 +738,7 @@ export function dispatchTool(root, name, args = {}) {
       }))
       : dispatchToolData(root, name, {
         ...cleanArgs,
-        ...(["create_dove_task", "run_dove_auto"].includes(name) ? { mutationMode: existingContext.mutationMode } : {})
+        ...(["create_dove_task", "run_dove_auto"].includes(name) && existingContext ? { mutationMode: existingContext.mutationMode } : {})
       });
     if (data && typeof data.then === "function") {
       return data

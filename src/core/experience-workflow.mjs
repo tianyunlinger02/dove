@@ -7,6 +7,8 @@ import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, nowIso, readJson, writeJson, writeText } from "./workspace.mjs";
 import { evidencePathProblemFlags } from "./artifact-integrity.mjs";
+import { assertReviewProofBoundaryTransition } from "./review-proof.mjs";
+import { loadBoard } from "./orchestration.mjs";
 
 function slugify(value) {
   return String(value ?? "")
@@ -293,6 +295,13 @@ export function runExperienceWorkflow(root, args = {}) {
   assertGovernanceMutationRegistered("run-experience-workflow", "guarded");
   assertExperiencePublicInput(args);
   const target = assertTaskScopedMutationTarget(root, "run-experience-workflow", args);
+  assertReviewProofBoundaryTransition(
+    root,
+    loadBoard(root),
+    "experiments",
+    "builder",
+    "Running the experience workflow"
+  );
   ensureWorkspace(root);
   const timestamp = nowIso();
   const rawPlan = args.plan && typeof args.plan === "object" ? args.plan : args;

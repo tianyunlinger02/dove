@@ -106,7 +106,9 @@ var AGENT_WORKFLOW_CONSTRAINTS = [
   "Reviewer and audit work may inspect evidence and record explicit review state, but must stay read-only with respect to Builder outputs unless an operator explicitly asks to record review/revision artifacts.",
   "Treat status as the project command center and mission as a durable work contract/progress object; rank missing executable contracts, missing source/material inputs, ready Builder execution, verification gaps, reviewer/audit needs, and reconciliation above optional mission details.",
   'Dove `.dove/` durable state participates in host rollback only through host-tracked file edits: request `mutationMode: "patch-plan"`, inspect the returned operations, and apply them with the host\'s tracked file-edit mechanism. Direct CLI/MCP `direct-process` writes remain functional but rollback-unverified; git presence is not proof, and host rollback must not be routed through `reset_dove_version`.',
-  "Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; auto/operator/mission execution remains explicit bounded foreground work."
+  "Every read or query path is strictly zero-write: it must return `writes: []`, must not bootstrap or refresh derived state, and must not be combined with a mutation in the same query call.",
+  "Public follow-through recording is advisory bookkeeping only and never grants execution authority; public `materialize_guidance_packet` and `launch_dove_mission` fail closed because only a trusted system-owned runtime approval can authorize those transitions.",
+  "Never create hidden runtime, scheduler, daemon, background continuation, or unconfirmed writes; mission stops after contract materialization and handoff, auto is a separately confirmed bounded foreground run, and operator advances only from canonical supplied `taskResults[]`."
 ];
 var COMMAND_SURFACES_BASE = [
   {
@@ -127,7 +129,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "explicit-approval",
     summary: "Convert a user demand into a confirmable Dove task contract, then hand off to the recommended next workflow.",
     requiredTools: ["create_dove_task"],
-    constraints: ["Require an existing init goal or make the proposed init goal explicit before converting user demand into a mission task contract.", "Treat the operator input as natural-language demand, not as an already-created task.", "Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, autonomous checklist proposal, compact task card, durable `workContract`, and canonical `executionContract` with action, implementation, materials/readFirst requirements, convergence criteria, evidence requirements, and failure routes.", "After returning the proposal, use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) with options: approve and materialize the contract, adjust the contract, or cancel. Approval must replay the proposal's complete returned `confirmArgs`; when using the listed CLI route, run the exact confirmation command returned by that proposal, including its proposal token and fixed mutation mode. Never reconstruct a fresh `dove mission --goal ... --confirmed` request.", "Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.", "User-created mission tasks default to level 3, while explicit operator-created levels 1, 2, 3, or deeper are allowed under the level-0 init goal.", "Autonomously decide whether a checklist is needed; system-created checklist/subtask packets must be children of their mission and must have level greater than the parent mission level.", "After materialization, stop at the contract handoff: return `nextAction`, `recommendedNextCommand`, `recommendedRoutes`, and `handoffRoutes` from the task's work contract instead of executing or recording work.", "Do not claim the mission performed source, note, draft, figure, experiment, review, code, or provider work; execution belongs to `dove.auto`, `dove.operator`, domain workflows, or explicit tool calls after the contract exists.", "Do not call `record_dove_mission_pass` as part of `/dove:mission`; result recording is a separate explicit tool for work that already happened.", "If required materials are missing while defining the contract, keep the contract proposal honest about blockers and evidence expectations instead of inventing results.", "When the converted task is a planning task, its done criteria should require explicit executable child mission contracts before any later execution flow can mark it completed.", "Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`."]
+    constraints: ["Require an existing init goal or make the proposed init goal explicit before converting user demand into a mission task contract.", "Treat the operator input as natural-language demand, not as an already-created task.", "Return a proposal-only mission contract first: title, stage, domain, level, dependencies, blockers, autonomous checklist proposal, compact task card, durable `workContract`, and canonical `executionContract` with action, implementation, materials/readFirst requirements, convergence criteria, evidence requirements, and failure routes.", "After returning the proposal, use interactive confirmation controls when the host supports them (for example Claude Code AskUserQuestion) with options: approve and materialize the contract, adjust the contract, or cancel. Approval must replay the proposal's complete returned `confirmArgs`; when using the listed CLI route, run the exact confirmation command returned by that proposal, including its proposal token and fixed mutation mode. Never reconstruct a fresh `dove mission --goal ... --confirmed` request.", "Classify each task as `plan`, `execute`, or `audit` and as `paper`, `experiment`, or `engineering` before writing.", "User-created mission tasks default to level 3, while explicit operator-created levels 1, 2, 3, or deeper are allowed under the level-0 init goal.", "Autonomously decide whether a checklist is needed; system-created checklist/subtask packets must be children of their mission and must have level greater than the parent mission level.", "After materialization, stop at the contract handoff: return `nextAction`, `recommendedNextCommand`, `recommendedRoutes`, and `handoffRoutes` from the task's work contract instead of executing or recording work. This natural handoff does not grant execution authority.", "Do not claim the mission performed source, note, draft, figure, experiment, review, code, or provider work; execution belongs to a separately invoked and authorized `dove.auto`, `dove.operator`, domain workflow, or explicit tool call after the contract exists.", "Do not call `record_dove_mission_pass` as part of `/dove:mission`; result recording is a separate explicit tool for work that already happened.", "If required materials are missing while defining the contract, keep the contract proposal honest about blockers and evidence expectations instead of inventing results.", "When the converted task is a planning task, its done criteria should require explicit executable child mission contracts before any later execution flow can mark it completed.", "Default the converted user-level mission to level 3 and `pending`; any converted child missions may be level 4, 5, or deeper and must also default to `pending`."]
   },
   {
     id: "dove.auto",
@@ -157,7 +159,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "explicit-approval",
     summary: "Run one approved operator pass over safe built-in steps, explicit results, and optional blocker-investigation planning.",
     requiredTools: ["run_dove_operator"],
-    constraints: ["First call `run_dove_operator` without confirmation to return the proposal-only execution contract with compact `queueSummary`, small `queuePreview`, and `writes: []`; do not request full queue arrays unless the operator explicitly asks for `includeQueueDetails: true`.", "Use interactive confirmation controls when the host supports them before passing `confirmed: true`.", "Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.", "For ready and in-progress missions, run one safe internal workflow step when available or collect one real host pass result in order; pass per-task results to `run_dove_operator` with evidence, verificationEvidencePaths, and verifiedCriteria so Dove records lifecycle and runtime state only when the executable contract is covered.", "Do not claim real engineering, paper, or experiment work happened when neither a safe internal step nor an actual host pass result exists; host-pass-required missions without taskResults must remain unchanged, and host results without convergence coverage must become explicit verification/material boundaries with no fake execution.", "When no safe internal step, missing step material, or actual host pass result exists, do not persist an `awaiting-host-pass-result` boundary just to show activity; return the material-specific requiredActions and keep durable writes empty unless another real operator action occurred.", "If a host-side search/fetch/shell/MCP safety classifier or tool-availability failure prevents collecting the pass result, pass a blocked task result with boundaryType `host-tool-blocked` and requiredActions naming the failed host tool instead of leaving the mission in-progress.", "Preserve durable role handoff metadata while running queue passes; do not expose planner/builder/reviewer as separate slash commands.", 'For blocked missions, default to proposal-only blocker-investigation guidance and do not write child missions; create pending child investigation plan missions only when the operator explicitly requests `blockerInvestigationMode: "create"` or `createBlockedInvestigations: true`, then report created and reused counts separately in the localized `resultCard` summary.']
+    constraints: ["First call `run_dove_operator` without confirmation to return the proposal-only execution contract with compact `queueSummary`, small `queuePreview`, and `writes: []`; do not request full queue arrays unless the operator explicitly asks for `includeQueueDetails: true`.", "Use interactive confirmation controls when the host supports them before passing `confirmed: true`.", "Run in the current foreground call only; do not schedule background or daemon continuation after the response ends.", "Use only canonical `taskResults[]` for host-supplied results; reject aliases, maps, inferred results, and result fields outside each canonical task result object.", "For ready and in-progress missions, run one safe internal workflow step when available or collect one real host pass result in order; pass per-task results to `run_dove_operator` with evidence, verificationEvidencePaths, and verifiedCriteria so Dove records lifecycle and runtime state only when the executable contract is covered.", "Do not advance lifecycle, open a synthetic progress boundary, or persist a runtime result for a host-pass-required mission when its canonical `taskResults[]` entry is missing; leave that mission unchanged and return the required material/actions.", "Do not claim real engineering, paper, or experiment work happened when neither a safe internal step nor an actual host pass result exists; host results without convergence coverage must become explicit verification/material boundaries with no fake execution.", "When no safe internal step, missing step material, or actual host pass result exists, do not persist an `awaiting-host-pass-result` boundary just to show activity; return the material-specific requiredActions and keep durable writes empty unless another real operator action occurred.", "If a host-side search/fetch/shell/MCP safety classifier or tool-availability failure prevents collecting the pass result, pass a blocked task result with boundaryType `host-tool-blocked` and requiredActions naming the failed host tool instead of leaving the mission in-progress.", "Preserve durable role handoff metadata while running queue passes; do not expose planner/builder/reviewer as separate slash commands.", 'For blocked missions, default to proposal-only blocker-investigation guidance and do not write child missions; create pending child investigation plan missions only when the operator explicitly requests canonical `blockerInvestigationMode: "create"`, then report created and reused counts separately in the localized `resultCard` summary.']
   },
   {
     id: "dove.lessons",
@@ -187,7 +189,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "guarded-mutation",
     summary: "Collect and organize external material such as web pages, papers, venue templates, reviewer guidelines, rankings, APIs, or operator-provided sources for the selected task.",
     requiredTools: ["query_sources", "register_source", "verify_source"],
-    constraints: ["Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.", "Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.", "When current public information or scholarly discovery is needed, use read-only public no-key network search or visible retrieval to find candidates first, then verify title, locator, DOI/URL, source identity, and citation details before registration.", "Dove network search results are candidate material, not durable source evidence; snippets alone must not become registered sources or claims.", "Never call `register_source` with only a packet id; every new source must include a real title or locator, and source-research auto runs must collect those URLs/templates/guidelines before writing.", "Treat host search output such as `Did 0 searches`, zero results, empty result sets, or unavailable search as a hard retrieval failure; do not describe it as finding official sources, and do not infer locators from memory or prior transcript context.", "Do not call `register_source` when search/fetch returned zero results, safe-domain verification failed, retrieval was blocked, or a network search provider reports unavailable; record or surface a `host-tool-blocked` boundary until verifiable source evidence exists.", "If the host denies or blocks the boundary-recording mutation, stop and report that no durable source or boundary update was written; do not retry another mutating Dove call such as patch-plan without explicit operator approval.", "Use explicit configured providers or operator-provided material; do not hide network/provider calls.", "Link each source to the resolved durable task packet through packetIds.", "Treat source and source-verification JSON ledgers as bookkeeping, not completion artifacts; use typed source:<id> completion evidence only when the latest verification decision is verified and both fingerprint and packet binding match.", "For reviewer-guideline or \u5BA1\u7A3F\u504F\u597D research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact."]
+    constraints: ["Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.", "Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.", "When current public information or scholarly discovery is needed, use read-only public no-key network search or visible retrieval to find candidate material first, then capture the real title, locator, DOI/URL, source identity, and citation details when registering it.", "Every `register_source` write creates or refreshes a candidate only; registration never issues positive verification and candidate material cannot support claims.", "Public `verify_source` is rejection-only. Positive verification is publicly unavailable and can only come from a trusted internal transition bound to captured material, the current source fingerprint, and the packet.", "Dove network search results are candidate material, not durable source evidence; snippets alone must not become registered sources or claims.", "Never call `register_source` with only a packet id; every new source must include a real title or locator, and source-research auto runs must collect those URLs/templates/guidelines before writing.", "Treat host search output such as `Did 0 searches`, zero results, empty result sets, or unavailable search as a hard retrieval failure; do not describe it as finding official sources, and do not infer locators from memory or prior transcript context.", "Do not call `register_source` when search/fetch returned zero results, safe-domain verification failed, retrieval was blocked, or a network search provider reports unavailable; record or surface a `host-tool-blocked` boundary until verifiable source evidence exists.", "If the host denies or blocks the boundary-recording mutation, stop and report that no durable source or boundary update was written; do not retry another mutating Dove call such as patch-plan without explicit operator approval.", "Use explicit configured providers or operator-provided material; do not hide network/provider calls.", "Link each source to the resolved durable task packet through packetIds.", "Treat source and source-verification JSON ledgers as bookkeeping, not completion artifacts; use typed source:<id> completion evidence only when the latest verification decision is verified and both fingerprint and packet binding match.", "For reviewer-guideline or \u5BA1\u7A3F\u504F\u597D research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact."]
   },
   {
     id: "dove.note",
@@ -197,7 +199,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "guarded-mutation",
     summary: "Organize task-bound internal synthesis from registered sources, existing materials, pressure-test results, and operator notes for the selected task.",
     requiredTools: ["upsert_note"],
-    constraints: ["Treat note as internal information consolidation, not external source discovery; external URLs/templates/guidelines must already be registered as sources when they are evidence.", "Use notes to synthesize verified sources, compare candidates, record open questions, or explain why a candidate could not yet become evidence; keep unverified search snippets labeled as candidates.", "For bind/save/deposit/\u6C89\u6DC0 requests, write the synthesized findings here or in `record_document_evidence` after source details is registered.", "Do not create a new note without real synthesis content: summary, quote, claim, or open question.", "Link notes to the resolved durable task packet through packetIds and to relevant sourceIds/artifacts."]
+    constraints: ["Treat note as internal information consolidation, not external source discovery; external URLs/templates/guidelines must already be registered as sources when they are evidence.", "Use notes to synthesize verified sources, compare candidates, record open questions, or explain why a candidate could not yet become evidence; keep unverified search snippets labeled as candidates.", "For bind, save, deposit, or archive requests, write the synthesized findings here or in `record_document_evidence` after source details is registered.", "Do not create a new note without real synthesis content: summary, quote, claim, or open question.", "Link notes to the resolved durable task packet through packetIds and to relevant sourceIds/artifacts."]
   },
   {
     id: "dove.figure",
@@ -207,7 +209,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "guarded-mutation",
     summary: "Turn one user-described figure intent into materials, optional generation/import, caption support, checks, and a clear answer about whether this figure is usable now.",
     requiredTools: ["run_figure_workflow"],
-    constraints: ["Treat the user request as one figure intent; the default result should say whether this figure is ready, what is missing, or what to do next without exposing the material/import/check pipeline as separate user chores.", "Treat the default figure path as a hand-drawn SVG plan: record the backlog item, material bundle, generation prompt, and waiting-for-output state instead of routing the operator to a separate low-level figure-plan write.", "Use the built-in OpenAI image provider only when the operator explicitly selects it or config sets it as default; require `OPENAI_API_KEY` through env-var secret reference and do not store inline API keys.", "Resolve the durable task packet before any figure workflow write, then analyze linked sections, claims, experiments, sources, notes, review concerns, and material hints automatically.", "Use redacted Dove config and env-var secret references for external drawing providers; never store inline API keys, tokens, or secrets.", "Do not mark a final figure ready unless it comes from a validated generation import with durable provenance and caption.", "Captions must explain the figure purpose and linked evidence."]
+    constraints: ["Treat the user request as one figure intent; the default result should say whether this figure is ready, what is missing, or what to do next without exposing the material/import/check pipeline as separate user chores.", "Treat the default figure path as a hand-drawn SVG plan: record the backlog item, material bundle, generation prompt, and waiting-for-output state instead of routing the operator to a separate low-level figure-plan write.", "Use the built-in OpenAI image provider only when the operator explicitly selects it or config sets it as default; require `OPENAI_API_KEY` through env-var secret reference and do not store inline API keys.", "Resolve the durable task packet before any figure workflow write, then analyze linked sections, claims, experiments, sources, notes, review concerns, and material hints automatically.", "Use redacted Dove config and env-var secret references for external drawing providers; never store inline API keys, tokens, or secrets.", "Treat lexical, XML, safety, caption, provenance, and other structural figure QA as diagnostic preflight only, not authoritative validation.", "Set figure status to `validated` only when the current final SVG hash has current authorized independent Reviewer proof in addition to clean diagnostics, durable provenance, and caption support.", "Captions must explain the figure purpose and linked evidence."]
   },
   {
     id: "dove.experience",
@@ -237,7 +239,7 @@ var COMMAND_SURFACES_BASE = [
     policy: "guarded-mutation",
     summary: "Run a local evidence-aware review pass over selected task materials and produce concrete revision guidance.",
     requiredTools: ["run_review_loop"],
-    constraints: ["Default review is a local evidence-aware pass that inspects claims, sources, notes, drafts, experiments, figures, and recorded concerns for the selected task or paper pipeline.", "Do not treat a verdict string as review progress; return concrete findings, action items, missing evidence, or a clear coherent result backed by inspected materials.", "Use isolated audio or external reviewer mode only when the operator explicitly asks for isolated/audio/parallel reviewer review; ordinary review should not inherit broad private transcripts or pretend an external review ran."]
+    constraints: ["Default review performs a local evidence-aware structural preflight over claims, sources, notes, drafts, experiments, figures, and recorded concerns for the selected task or paper pipeline.", "Do not treat a verdict string or a clean local structural scan as authoritative review progress; return concrete findings, action items, missing evidence, or a preflight result.", "A `coherent` result requires current authorized independent Reviewer proof bound to every reviewed artifact hash; without that proof, stop at the Reviewer-owned proof boundary.", "Use isolated audio or external reviewer mode only when the operator explicitly asks for isolated/audio/parallel reviewer review; ordinary review should not inherit broad private transcripts or pretend an external review ran."]
   },
   {
     id: "dove.review-loop",
@@ -245,9 +247,9 @@ var COMMAND_SURFACES_BASE = [
     domain: "generic",
     category: "mutation",
     policy: "guarded-mutation",
-    summary: "Run one independent local Reviewer pass and return an explicit Builder handoff when revision is required.",
+    summary: "Run one local Reviewer preflight pass and return an explicit Builder handoff when revision is required.",
     requiredTools: ["run_dove_review_loop"],
-    constraints: ["Run exactly one Reviewer pass for the selected packet and descendants.", "Do not modify draft, experience, experiment, or other Builder-owned material in this call.", "If the verdict is non-coherent, return concrete requiredActions and an explicit Builder handoff; revisions and the next Reviewer pass must be separate explicit calls.", "Do not claim iteration counts, configured rounds, or review-until-coherent behavior; do not prepare isolated/audio review unless the operator explicitly asks for that mode."]
+    constraints: ["Run exactly one Reviewer pass for the selected packet and descendants.", "Treat local structural inspection as preflight only; it cannot issue an authoritative `coherent` result without current authorized independent Reviewer proof bound to the complete reviewed artifact hashes.", "Do not modify draft, experience, experiment, or other Builder-owned material in this call.", "If substantive findings make the result non-coherent, return concrete requiredActions and an explicit Builder handoff; if only authoritative proof is missing, retain Reviewer ownership instead of routing a fake Builder revision.", "Revisions and any later Reviewer pass must be separate explicit calls.", "Do not claim iteration counts, configured rounds, review-until-coherent behavior, or authoritative independent review from a local scan; do not prepare isolated/audio review unless the operator explicitly asks for that mode."]
   },
   {
     id: "dove.rebuttal",
@@ -269,17 +271,17 @@ var COMMAND_UX_DETAILS = {
     examples: ["/dove:init Make Dove a local-first research and engineering workflow", "/dove:init Refresh the project goal around daily Dove usability"]
   },
   "dove.mission": {
-    dailyFlow: ["Use this for one concrete user demand that should become a tracked mission/task contract and hand off to the right next workflow.", "Describe the desired outcome in normal language; Dove should propose the task, explain the evidence it will need, and wait for approval before materializing the contract."],
+    dailyFlow: ["Use this for one concrete user demand that should become a tracked mission/task contract and hand off naturally to the right next workflow.", "Describe the desired outcome in normal language; Dove should propose the task, explain the evidence it will need, and wait for approval before materializing the contract."],
     targetingBehavior: "Creates a new task contract under the project goal, or helps set the project goal first when the workspace is new.",
     confirmationBehavior: "Show the proposed task in plain language, then ask whether to materialize that exact proposal, adjust it, or cancel; confirmation must reuse the returned task id and proposal digest rather than re-infer a new contract.",
-    expectedOutcome: "After approval, the contract exists with recommended next routes; real execution belongs to auto, operator, domain workflows, or explicit tools.",
+    expectedOutcome: "After approval, the contract exists with recommended next routes; mission does not execute work or grant execution authority, so auto, operator, domain workflows, or explicit tools require their own invocation and authority.",
     examples: ["/dove:mission Fix the status dashboard next-action mismatch", "/dove:mission Turn the latest review feedback into one executable task"]
   },
   "dove.auto": {
-    dailyFlow: ["Use this when the user wants Dove to continue through a few approved steps after the task is clear.", "When the work depends on current outside information, public docs, papers, or provider behavior, run a visible no-key search/retrieval step early and verify candidates before writing evidence.", "Auto may start from a new demand or an existing task, but it still needs an understandable proposal before spending its work limit."],
+    dailyFlow: ["Use this when the user wants Dove to continue through a few approved steps after the task is clear.", "When the work depends on current outside information, public docs, papers, or provider behavior, run a visible no-key search/retrieval step early, register useful material as candidates, and stop at the trust boundary unless current trusted internal verification makes the material eligible as evidence.", "Auto may start from a new demand or an existing task, but it still needs an understandable proposal before spending its work limit."],
     targetingBehavior: "Use the selected task when it is obvious; otherwise ask the operator to choose or approve a new task.",
-    confirmationBehavior: "Require explicit approval of the target, work limit, and visible steps before running.",
-    expectedOutcome: "Each step either completes useful work with evidence or stops at a clear blocker, review need, missing material, or budget limit.",
+    confirmationBehavior: "Require a separate explicit approval of the target, work limit, and visible steps before running; mission confirmation never confirms auto.",
+    expectedOutcome: "An approved in-session run completes useful work with evidence or stops at a clear blocker, review need, missing material, or work limit.",
     examples: ["/dove:auto Continue the current Dove UX improvement task for up to three approved rounds", "/dove:auto Run the selected task until completion or an explicit blocker"]
   },
   "dove.status": {
@@ -290,10 +292,10 @@ var COMMAND_UX_DETAILS = {
     examples: ["/dove:status", "/dove:status Show what is blocked and what the next step is"]
   },
   "dove.operator": {
-    dailyFlow: ["Use this to see which tracked work can move now and run one approved operator pass.", "Do not claim real work happened unless a safe built-in step ran or real pass results were supplied."],
+    dailyFlow: ["Use this to see which tracked work can move now and run one approved operator pass.", "Do not claim real work happened unless a safe built-in step ran or a canonical `taskResults[]` entry supplied the real pass result."],
     targetingBehavior: "Works over the active work queue rather than one ad hoc target.",
-    confirmationBehavior: "Preview the practical queue situation first; require approval before accepting results or creating blocker-investigation work.",
-    expectedOutcome: "Runnable work moves with evidence, blocked work gets a concrete investigation option, and unresolved work remains waiting for evidence instead of being marked done.",
+    confirmationBehavior: "Preview the practical queue situation first; require approval before accepting canonical results or creating blocker-investigation work.",
+    expectedOutcome: "Runnable work moves with evidence; a task waiting for an external pass remains unchanged when no canonical result is supplied, and blocked work gets a concrete investigation option only when requested.",
     examples: ["/dove:operator", "/dove:operator Run one confirmed queue pass with real results"]
   },
   "dove.lessons": {
@@ -311,10 +313,10 @@ var COMMAND_UX_DETAILS = {
     examples: ["/dove:version Change direction to focus on result-card usability", "/dove:version Reset active tasks after a major project direction change"]
   },
   "dove.source": {
-    dailyFlow: ["Use this to add external information such as papers, web findings, venue templates, reviewer guidelines, rankings, API docs, citations, or operator-provided links or material.", "When the user asks for current outside information or scholarly material, run read-only public no-key network search or visible retrieval as candidate discovery, then verify useful candidates before registration.", "For bind/save/deposit/\u6C89\u6DC0 prompts, add external material first, then use note or document evidence for synthesis.", "Keep source intake separate from internal notes and pressure-test summaries."],
-    targetingBehavior: "Resolve or confirm the task before adding external source details; batch multiple sources when the operator provides them together.",
+    dailyFlow: ["Use this to add external information such as papers, web findings, venue templates, reviewer guidelines, rankings, API docs, citations, or operator-provided links or material.", "When the user asks for current outside information or scholarly material, run read-only public no-key network search or visible retrieval as candidate discovery, then register useful material as candidates with real identity and locator details.", "For bind, save, deposit, or archive prompts, add external candidate material first, then use note or document evidence for synthesis.", "Keep source intake separate from internal notes and pressure-test summaries."],
+    targetingBehavior: "Resolve or confirm the task before adding external source candidates; batch multiple sources when the operator provides them together.",
     confirmationBehavior: "If no unique task target is available, ask for task selection instead of guessing.",
-    expectedOutcome: "The selected task has verified source details, or the request stops clearly because retrieval or verification failed.",
+    expectedOutcome: "The selected task has candidate source details. Public verification may reject a candidate, but positive verification is unavailable on the public surface.",
     examples: ["/dove:source Add these CVPR author/reviewer guideline URLs to the selected task", "/dove:source Add venue templates and ranking pages before writing the synthesis note"]
   },
   "dove.note": {
@@ -325,7 +327,7 @@ var COMMAND_UX_DETAILS = {
     examples: ["/dove:note Summarize what the registered venue sources imply for this task", "/dove:note Capture the pressure-test finding and link it to registered sources"]
   },
   "dove.figure": {
-    dailyFlow: ["Use this when the user describes the figure they want once, including where it should help the paper or task.", "Dove should gather linked materials, prepare generation or import, draft caption support, check only the current figure for the compact verdict, and say whether this figure is usable now.", "By default, prepare a hand-drawn SVG plan and tell the operator when SVG output is needed.", "Use OpenAI image generation only for an explicit drawing request with OPENAI_API_KEY supplied through the environment."],
+    dailyFlow: ["Use this when the user describes the figure they want once, including where it should help the paper or task.", "Dove should gather linked materials, prepare generation or import, draft caption support, run diagnostic checks on the current figure, and say what remains before validation.", "Lexical and structural SVG checks are preflight only; validated requires current authorized independent proof for the current final SVG hash.", "By default, prepare a hand-drawn SVG plan and tell the operator when SVG output is needed.", "Use OpenAI image generation only for an explicit drawing request with OPENAI_API_KEY supplied through the environment."],
     targetingBehavior: "Resolve the figure request to one task before writing; do not make the user reason about paths or workspace-wide extra details unless they explicitly ask for details.",
     confirmationBehavior: "Ask for task confirmation when the figure target is unclear; external drawing calls require explicit safe configuration.",
     expectedOutcome: "The operator gets a clear current-figure result: ready for review, missing materials, awaiting SVG or drawing output, or needing current-figure fixes.",
@@ -346,17 +348,17 @@ var COMMAND_UX_DETAILS = {
     examples: ["/dove:draft Draft the methods section from linked evidence", "/dove:draft Revise the introduction using the latest review findings"]
   },
   "dove.review": {
-    dailyFlow: ["Use this for a local evidence-aware review pass over the selected task materials.", "Inspect concrete claims, sources, notes, drafts, experiments, figures, and recorded concerns; do not substitute a verdict label for review work.", "Use separate isolated or audio review only when the operator explicitly asks for that mode."],
+    dailyFlow: ["Use this for a local evidence-aware structural preflight over the selected task materials.", "Inspect concrete claims, sources, notes, drafts, experiments, figures, and recorded concerns; do not substitute a verdict label or a clean local scan for authoritative review work.", "A coherent result requires current authorized independent Reviewer proof bound to all reviewed artifact hashes.", "Use separate isolated or audio review only when the operator explicitly asks for that mode."],
     targetingBehavior: "Resolve the review to one task and the exact materials being reviewed.",
     confirmationBehavior: "If the target or reviewed material is unclear, ask for the material instead of guessing or falling back to a status panel.",
-    expectedOutcome: "The operator gets concrete findings, action items, missing evidence, or a coherent result backed by inspected materials.",
+    expectedOutcome: "The operator gets concrete findings, action items, missing evidence, or a Reviewer-owned proof boundary; coherent is authoritative only with current independent proof.",
     examples: ["/dove:review Check whether the current draft is supported by evidence", "/dove:review Review the selected task materials before marking them done"]
   },
   "dove.review-loop": {
-    dailyFlow: ["Use this for one independent Reviewer pass over the selected packet materials.", "The pass records concrete findings or a material-backed coherent verdict, but never edits Builder-owned draft or experience material.", "When revision is required, hand the requiredActions to a Builder and invoke review again only after that separate revision call."],
+    dailyFlow: ["Use this for one Reviewer pass over the selected packet materials.", "Local structural inspection is preflight only; it records concrete findings or stops at the Reviewer-owned proof boundary, but never edits Builder-owned draft or experience material.", "Only current authorized independent proof over all reviewed artifact hashes can support coherent.", "When substantive revision is required, hand the required actions to a Builder and invoke review again only after that separate revision call."],
     targetingBehavior: "Resolve the pass to one task and its packet-owned materials before reviewing.",
     confirmationBehavior: "This command performs one visible Reviewer pass only; there is no implicit Reviewer-to-Builder-to-Reviewer cycle.",
-    expectedOutcome: "One packet-scoped review result plus an explicit Builder handoff when changes are required.",
+    expectedOutcome: "One packet-scoped review result, with a Builder handoff only for substantive findings and retained Reviewer ownership when authoritative proof is the missing requirement.",
     examples: ["/dove:review-loop Run one independent evidence-aware review pass", "/dove:review-loop Review this packet and hand required revisions to Builder"]
   },
   "dove.rebuttal": {
@@ -374,17 +376,18 @@ var COMMAND_ADAPTER_CONSTRAINTS = {
   ],
   "dove.mission": [
     "Propose the task first, then ask whether to materialize that exact proposal, adjust it, or cancel; never rebuild a different contract from a bare confirmation.",
-    "After approval, materialize the contract only and hand off to the recommended next workflow; mission itself does not execute source, note, draft, figure, experiment, review, code, or provider work.",
+    "After approval, materialize the contract only and hand off naturally to the recommended next workflow; mission itself does not execute source, note, draft, figure, experiment, review, code, or provider work and grants no execution authority.",
     "Report the created contract and recommended next routes without claiming completion or execution progress.",
     "If the contract is planning work, its done criteria must require explicit executable child mission contracts before any later execution flow can mark it completed."
   ],
   "dove.auto": [
-    "Propose the target, work limit, and visible steps before running.",
+    "Propose the target, work limit, and visible steps before running, and require a separate explicit auto confirmation even if mission materialization was already confirmed.",
     "Run only in the current approved interaction; never schedule hidden background continuation.",
-    "For research or current-information work, use visible search/retrieval when needed and collect real verified sources or materials before claiming success.",
+    "For research or current-information work, use visible search/retrieval when needed, register real candidate material, and claim evidence-backed success only when current trusted internal verification makes the referenced source eligible; otherwise stop at the trust boundary.",
     "Stop clearly at completion, blocker, review need, missing material, or budget limit."
   ],
   "dove.status": [
+    "Keep the status query strictly zero-write; status adjustments are a separate confirmed mutation and are never part of the query call.",
     "Start with the live situation the current session can actually see, then fold in saved project state only as background guidance.",
     "Answer the operator's ordinary next-step question in short natural prose: the current situation, the smallest useful action, and why it matters when helpful.",
     "Default status is not a mission board or audit report; keep mission lists, raw identifiers, raw counts, route names, low-level fields, and extra details collapsed unless the operator asks to expand.",
@@ -396,6 +399,7 @@ var COMMAND_ADAPTER_CONSTRAINTS = {
   "dove.operator": [
     "Preview the practical queue situation before asking for approval.",
     "Run one operator pass only after confirmation.",
+    "Accept externally performed work results only through canonical taskResults[]; a task awaiting that work remains unchanged when no matching result is supplied.",
     "Do not claim work without real results; leave it waiting for evidence instead.",
     "Create blocker-investigation tasks only when the operator explicitly asks for them."
   ],
@@ -411,8 +415,9 @@ var COMMAND_ADAPTER_CONSTRAINTS = {
   ],
   "dove.source": [
     "Only add external material when it has a real title, locator, citation, URL, or operator-provided links or material.",
-    "Use public no-key network search or visible retrieval for candidate discovery when current outside information is needed, but register only verified candidates.",
-    "If search, fetch, or verification finds no trustworthy material, say no source was added and explain the next retrieval step.",
+    "Use public no-key network search or visible retrieval for candidate discovery when current outside information is needed, then register useful retrieved material as candidates with real identity and locator details.",
+    "Registration creates candidate material only. Public verification may reject a candidate but cannot issue positive verification; do not present a candidate as trusted evidence.",
+    "If search or fetch finds no real material, say no source candidate was added and explain the next retrieval step.",
     "When the target task is unclear, ask the operator to choose from visible context instead of inspecting project state.",
     "When source work cannot finish here, say the source material is ready and has not yet been added to the task; the natural Chinese phrasing is `\u8FD9\u6761\u6765\u6E90\u8FD8\u6CA1\u52A0\u5165\u4EFB\u52A1`.",
     "Batch multiple sources when the operator provides them together.",
@@ -428,7 +433,7 @@ var COMMAND_ADAPTER_CONSTRAINTS = {
     "Use the hand-drawn SVG plan as the normal default path and tell the operator when SVG output is needed.",
     "Use OpenAI image generation only when explicitly selected or configured; the OpenAI key must come from the OPENAI_API_KEY environment variable, never inline text.",
     "Resolve the target task before updating figure state, then gather linked sections, claims, experiments, sources, notes, review concerns, and material hints automatically.",
-    "Do not mark a figure ready until imported output has source support, caption, and a clean current-figure check.",
+    "Describe imported output with source support, caption, and clean preflight checks as ready for independent review, not validated; validated additionally requires current authorized independent Reviewer proof for the exact final SVG path and hash.",
     "Captions must explain the figure purpose and linked evidence; default replies should not make the operator reason about paths or workspace-wide extra details."
   ],
   "dove.experience": [
@@ -442,13 +447,13 @@ var COMMAND_ADAPTER_CONSTRAINTS = {
     "Use linked sources, notes, experience, figures, and review findings when they are available."
   ],
   "dove.review": [
-    "Inspect real project materials and report concrete review findings, action items, missing evidence, or a coherent result.",
-    "Do not substitute a status panel, task list, or verdict string for review work.",
+    "Inspect real project materials and report concrete review findings, action items, missing evidence, or a structural preflight result; a coherent result additionally requires current authorized independent Reviewer proof bound to every reviewed artifact hash.",
+    "Do not substitute a status panel, task list, verdict string, or clean local scan for authoritative review work.",
     "Use separate isolated or audio review only when the operator explicitly asks for that mode, and keep private writer/reviewer transcripts out of ordinary review replies.",
     "Report review outcomes in plain language."
   ],
   "dove.review-loop": [
-    "Run exactly one visible local Reviewer pass over the selected packet materials.",
+    "Run exactly one visible local Reviewer preflight pass over the selected packet materials; do not describe the local scan itself as independent or authoritative.",
     "Do not revise draft, experiment, experience, or other Builder-owned material in this call.",
     "When changes are required, return concrete required actions and an explicit Builder handoff.",
     "Invoke review again only after a separate explicit Builder revision call."
@@ -890,11 +895,11 @@ var GOVERNANCE_GUARDED_MUTATIONS = [
   ...GOVERNANCE_GUARDED_MUTATION_SCOPE_METADATA[entry.id] ?? governanceScopeMetadata("workspace-global")
 }));
 var GOVERNANCE_EXEMPT_MUTATION_SCOPE_METADATA = {
+  "ensure-workspace": governanceScopeMetadata("bootstrap"),
   "record-operator-lesson": governanceScopeMetadata("governance-bookkeeping"),
   "record-operator-follow-through": governanceScopeMetadata("governance-bookkeeping"),
   "plan-campaign": governanceScopeMetadata("governance-bookkeeping"),
   "revoke-program-approval": governanceScopeMetadata("governance-bookkeeping"),
-  "query-meta-optimize": governanceScopeMetadata("derived-refresh"),
   "init-project": governanceScopeMetadata("bootstrap"),
   "sync-checklist": governanceScopeMetadata("derived-refresh"),
   "validate-figure-pipeline": governanceScopeMetadata("inspection-only"),
@@ -908,29 +913,28 @@ var GOVERNANCE_EXEMPT_MUTATION_SCOPE_METADATA = {
   "summarize-session-journal": governanceScopeMetadata("governance-bookkeeping")
 };
 var GOVERNANCE_EXEMPT_MUTATIONS = [
+  { id: "ensure-workspace", action: "Explicitly bootstrapping the canonical Dove workspace and starter artifacts remains exempt because it establishes storage without approving or executing task work.", artifactPath: ".dove/state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-07-13T00:00:00.000Z", lastReviewedAt: "2026-07-13T00:00:00.000Z", reasonCode: "explicit-workspace-bootstrap", reviewCadence: "per-project", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "ensureWorkspace", mcpTool: "ensure_workspace", commandIds: [] } },
   { id: "record-operator-lesson", action: "Recording distilled operator lessons remains explicitly exempt because it is reflective bookkeeping and does not approve, materialize, or execute work.", artifactPath: ".dove/meta/operator-lessons.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-05-07T00:00:00.000Z", lastReviewedAt: "2026-05-07T00:00:00.000Z", reasonCode: "retrospective-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorLesson", mcpTool: "record_operator_lesson", commandIds: ["dove.lessons"] } },
   { id: "record-operator-follow-through", action: "Recording a manual operator follow-through decision remains explicitly exempt; this public surface cannot write program linkage, runtime retry or timing state, or runtime-owned terminal and executing statuses.", artifactPath: ".dove/meta/operator-follow-through.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-07-11T00:00:00.000Z", reasonCode: "governance-ledger-maintenance", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "recordOperatorFollowThrough", mcpTool: "record_operator_follow_through", commandIds: [] } },
   { id: "plan-campaign", action: "Recording a multi-cycle campaign plan remains exempt because it only records planner-supervised campaign intent and does not approve or execute bounded program work.", artifactPath: ".dove/programs/campaigns.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-25T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "campaign-planning-bookkeeping", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "planCampaign", mcpTool: "plan_campaign", commandIds: [] } },
   { id: "revoke-program-approval", action: "Revoking a program approval remains exempt because it withdraws authority rather than executing new work.", artifactPath: ".dove/programs/approvals.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "approval-withdrawal", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "revokeProgramApproval", mcpTool: "revoke_program_approval", commandIds: [] } },
-  { id: "query-meta-optimize", action: "Refreshing proposal-only optimizer surfaces remains exempt because it is part of debt detection, not debt execution.", artifactPath: ".dove/meta/LATEST_OPTIMIZER_REPORT.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "proposal-frontier-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "queryMetaOptimize", mcpTool: "query_meta_optimize", commandIds: [] } },
   { id: "init-project", action: "Project initialization bootstraps the workspace and is explicitly exempt from follow-through gating.", artifactPath: ".dove/state.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "workspace-bootstrap", reviewCadence: "per-project", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "initProject", mcpTool: "init_project", commandIds: [] } },
   { id: "sync-checklist", action: "Checklist syncing remains exempt because it summarizes debt instead of executing it.", artifactPath: ".dove/checklists/current.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "summary-sync", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "syncChecklist", mcpTool: "sync_checklist", commandIds: [] } },
   { id: "validate-figure-pipeline", action: "Figure validation is an inspection path and remains exempt from follow-through execution gating.", artifactPath: ".dove/figures/qa.json", ownerRole: "researcher", approvedByRole: "researcher", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "inspection-only", reviewCadence: "per-change", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "validateFigurePipeline", mcpTool: "validate_figure_pipeline", commandIds: ["dove.figure"] } },
-  { id: "classify-workflow-intent", action: "Workflow intent classification is analytical and remains exempt.", artifactPath: ".dove/meta/recommendations.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "analysis-only", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "classifyWorkflowIntent", mcpTool: "query_meta_optimize", commandIds: [] } },
-  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".dove/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: "query_workspace_index", commandIds: [] } },
-  { id: "refresh-durable-surfaces", action: "Durable surface refresh is a proposal-only summarization step and remains exempt.", artifactPath: ".dove/workspace/index.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "summary-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "refreshDurableSurfaces", mcpTool: "query_workspace_index", commandIds: ["dove.status"] } },
+  { id: "classify-workflow-intent", action: "Workflow intent classification is analytical and remains exempt.", artifactPath: ".dove/meta/recommendations.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "analysis-only", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "classifyWorkflowIntent", mcpTool: null, commandIds: [] } },
+  { id: "load-board", action: "Board loading is a read helper and is explicitly exempt.", artifactPath: ".dove/orchestration/board.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-04-17T00:00:00.000Z", reasonCode: "read-helper", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "loadBoard", mcpTool: null, commandIds: [] } },
+  { id: "refresh-durable-surfaces", action: "Durable surface refresh is a proposal-only summarization step and remains exempt.", artifactPath: ".dove/workspace/index.json", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "summary-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "refreshDurableSurfaces", mcpTool: null, commandIds: ["dove.status"] } },
   { id: "publish-dove-status", action: "Publishing sanitized public status artifacts remains exempt because it derives a read-only external summary from durable Dove state without approving, materializing, or executing work.", artifactPath: ".dove/public", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-06-16T00:00:00.000Z", lastReviewedAt: "2026-06-16T00:00:00.000Z", reasonCode: "public-derived-status-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "publishDoveStatus", mcpTool: "publish_dove_status", commandIds: [] } },
   { id: "publish-dove-global-status", action: "Publishing the global sanitized public status index remains exempt because it only derives a static aggregate from explicit project .dove/public artifacts without approving, materializing, executing work, scanning the computer, or starting external services.", artifactPath: "xdg:dove/public", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-06-17T00:00:00.000Z", lastReviewedAt: "2026-06-17T00:00:00.000Z", reasonCode: "global-public-derived-status-refresh", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "publishDoveGlobalStatus", mcpTool: "publish_dove_global_status", commandIds: [] } },
   { id: "serve-dove-global-status", action: "Serving the global sanitized public status directory remains exempt only as an explicit foreground operator command that publishes the static aggregate once, serves that public directory over loopback, and optionally starts a visible Cloudflare tunnel without scanning the computer, daemonizing, scheduling refreshes, or exposing raw Dove state.", artifactPath: "xdg:dove/public", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-06-17T00:00:00.000Z", lastReviewedAt: "2026-06-17T00:00:00.000Z", reasonCode: "global-public-explicit-foreground-serving", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "runGlobalStatusServingForeground", mcpTool: null, commandIds: [], cliCommand: "serve-global-status" } },
   { id: "configure-claude-code-gateway-defaults", action: "Claude Code gateway default configuration remains exempt because it is an explicit host install/sync bootstrap step that writes only allowlisted non-secret compatibility switches, not Dove task state.", artifactPath: "claude:user-config", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-07-08T00:00:00.000Z", lastReviewedAt: "2026-07-08T00:00:00.000Z", reasonCode: "host-install-bootstrap", reviewCadence: "per-release", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "configureClaudeCodeGatewayDefaults", mcpTool: null, commandIds: [], cliCommand: "install/sync --host claude" } },
-  { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".dove/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "query_meta_optimize", commandIds: [] } }
+  { id: "summarize-session-journal", action: "Session summarization is reflective and remains exempt from execution gating.", artifactPath: ".dove/sessions/LATEST_SUMMARY.md", ownerRole: "planner", approvedByRole: "planner", approvedAt: "2026-04-15T00:00:00.000Z", lastReviewedAt: "2026-05-05T00:00:00.000Z", reasonCode: "reflective-summary", reviewCadence: "per-session", sunsetAt: "2099-12-31T00:00:00.000Z", surfaceBindings: { coreFunction: "summarizeSessionJournal", mcpTool: "summarize_session_journal", commandIds: [] } }
 ].map((entry) => ({
   ...entry,
   ...GOVERNANCE_EXEMPT_MUTATION_SCOPE_METADATA[entry.id] ?? governanceScopeMetadata("governance-bookkeeping")
 }));
 var GOVERNANCE_READONLY_COMMANDS = [];
 var GOVERNANCE_READONLY_TOOLS = [
-  "ensure_workspace",
   "read_state",
   "query_task_graph",
   "query_open_questions",
@@ -962,7 +966,6 @@ var GOVERNANCE_READONLY_TOOLS = [
   "read_packet_context_manifest",
   "read_artifact_context_manifest",
   "read_action_context_bundle",
-  "summarize_session_journal",
   "list_artifacts"
 ];
 var GOVERNANCE_NEGATIVE_COVERAGE = [
@@ -4669,9 +4672,12 @@ function createWorkflowBoundaries() {
 import fs3 from "node:fs";
 import path4 from "node:path";
 
+// src/core/follow-through-authority.mjs
+import crypto2 from "node:crypto";
+
 // src/core/mutation-backend.mjs
 import { AsyncLocalStorage } from "node:async_hooks";
-import crypto2 from "node:crypto";
+import crypto3 from "node:crypto";
 import fs2 from "node:fs";
 import path2 from "node:path";
 
@@ -5365,8 +5371,10 @@ function ensureWorkspace(root) {
   return { root, created };
 }
 function listDraftFiles(root) {
-  ensureWorkspace(root);
   const draftsDir = resolvePath(root, ARTIFACT_PATHS.draftsDir);
+  if (!fs3.existsSync(draftsDir)) {
+    return [];
+  }
   return fs3.readdirSync(draftsDir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md").map((entry) => entry.name);
 }
 function extractCitationKeysFromText(content) {
@@ -6627,15 +6635,11 @@ function doveText(language, key, params = {}) {
 
 // src/core/navigation.mjs
 import crypto5 from "node:crypto";
-import fs7 from "node:fs";
+import fs6 from "node:fs";
 import path8 from "node:path";
-
-// src/core/follow-through-authority.mjs
-import crypto3 from "node:crypto";
 
 // src/core/task-packets.mjs
 import crypto4 from "node:crypto";
-import fs6 from "node:fs";
 import path7 from "node:path";
 function slugify(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
@@ -6666,11 +6670,7 @@ function normalizePrimaryRole(value, fallback = "builder") {
   return normalizeAllowed(value, DOVE_PRIMARY_ROLE_IDS, fallback);
 }
 function readJsonReadOnly(root, relativePath, fallback = null) {
-  const fullPath = path7.join(root, relativePath);
-  if (!fs6.existsSync(fullPath)) {
-    return typeof fallback === "function" ? fallback() : structuredClone(fallback);
-  }
-  return JSON.parse(fs6.readFileSync(fullPath, "utf8"));
+  return readJson(root, relativePath, fallback);
 }
 function packetFilePath(packetId) {
   return path7.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`);
@@ -6737,6 +6737,7 @@ function normalizePacketCandidate(root, packet = {}) {
     packetPath: merged.packetPath ?? packetFilePath(id),
     packetContextPath: merged.packetContextPath ?? packetContextPath(id),
     claimIds: uniqueStrings([...normalizeStringArray3(merged.claimIds), ...normalizeStringArray3(contextObject.claimIds)]),
+    sourceIds: uniqueStrings([...normalizeStringArray3(merged.sourceIds), ...normalizeStringArray3(contextObject.sourceIds)]),
     noteIds: uniqueStrings([...normalizeStringArray3(merged.noteIds), ...normalizeStringArray3(contextObject.noteIds)]),
     experimentIds: uniqueStrings([...normalizeStringArray3(merged.experimentIds), ...normalizeStringArray3(contextObject.experiments), ...normalizeStringArray3(contextObject.experimentIds)]),
     rebuttalIssueIds: uniqueStrings([...normalizeStringArray3(merged.rebuttalIssueIds), ...normalizeStringArray3(contextObject.rebuttalIssueIds)]),
@@ -6829,6 +6830,7 @@ function packetArtifactSet(packet) {
     ...normalizeStringArray3(packet.lessonIds),
     ...normalizeStringArray3(packet.artifactRefs),
     ...normalizeStringArray3(packet.claimIds),
+    ...normalizeStringArray3(packet.sourceIds),
     ...normalizeStringArray3(packet.noteIds),
     ...normalizeStringArray3(packet.experimentIds),
     ...normalizeStringArray3(packet.rebuttalIssueIds),
@@ -7190,9 +7192,9 @@ function assertResolvedTaskPacket(root, args = {}, options = {}) {
 }
 
 // src/core/orchestration.mjs
-import fs9 from "node:fs";
-import path10 from "node:path";
-import crypto6 from "node:crypto";
+import fs10 from "node:fs";
+import path12 from "node:path";
+import crypto7 from "node:crypto";
 
 // src/core/mutation-guard.mjs
 var GOVERNANCE_MUTATION_BY_ID = new Map([
@@ -7726,8 +7728,12 @@ function summarizePreActionGuidance(guidance = {}) {
   };
 }
 
+// src/core/review-proof.mjs
+import fs9 from "node:fs";
+import path11 from "node:path";
+
 // src/core/artifact-integrity.mjs
-import fs8 from "node:fs";
+import fs7 from "node:fs";
 import path9 from "node:path";
 import { inflateSync } from "node:zlib";
 var DEFAULT_READ_LIMIT_BYTES = 24 * 1024;
@@ -8010,7 +8016,7 @@ function completionPolicyContext(options = {}) {
 }
 function isExternalArtifactReference(value) {
   const text3 = String(value ?? "").trim();
-  return /^https?:\/\/[^\s]+$/iu.test(text3) || /^(?:doi|arxiv|source):[^\s]+$/iu.test(text3) || /^10\.\d{4,9}\/[^\s]+$/u.test(text3);
+  return /^https?:\/\/[^\s]+$/iu.test(text3) || /^(?:doi|arxiv|source|note):[^\s]+$/iu.test(text3) || /^10\.\d{4,9}\/[^\s]+$/u.test(text3);
 }
 function normalizeProjectRelativePath(rawPath) {
   const original = typeof rawPath === "string" ? rawPath.trim() : String(rawPath ?? "").trim();
@@ -8033,16 +8039,16 @@ function normalizeProjectRelativePath(rawPath) {
   return { ok: true, path: original, normalizedPath };
 }
 function readBoundedText(fullPath, maxBytes = DEFAULT_READ_LIMIT_BYTES) {
-  const descriptor = fs8.openSync(fullPath, "r");
+  const descriptor = fs7.openSync(fullPath, "r");
   try {
     const buffer = Buffer.alloc(maxBytes);
-    const bytesRead = fs8.readSync(descriptor, buffer, 0, maxBytes, 0);
+    const bytesRead = fs7.readSync(descriptor, buffer, 0, maxBytes, 0);
     return {
       text: buffer.subarray(0, bytesRead).toString("utf8"),
       bytesRead
     };
   } finally {
-    fs8.closeSync(descriptor);
+    fs7.closeSync(descriptor);
   }
 }
 var EXPERIMENT_RESULT_OUTCOMES = /* @__PURE__ */ new Set(["supports", "refutes", "inconclusive", "failed", "pending"]);
@@ -8098,13 +8104,13 @@ function inspectSemanticEvidence(relativePath, text3) {
   };
 }
 function readBoundedBuffer(fullPath, maxBytes = DEFAULT_READ_LIMIT_BYTES) {
-  const descriptor = fs8.openSync(fullPath, "r");
+  const descriptor = fs7.openSync(fullPath, "r");
   try {
     const buffer = Buffer.alloc(maxBytes);
-    const bytesRead = fs8.readSync(descriptor, buffer, 0, maxBytes, 0);
+    const bytesRead = fs7.readSync(descriptor, buffer, 0, maxBytes, 0);
     return buffer.subarray(0, bytesRead);
   } finally {
-    fs8.closeSync(descriptor);
+    fs7.closeSync(descriptor);
   }
 }
 function completionMediaFormat(relativePath) {
@@ -8555,8 +8561,8 @@ function inspectDeclaredPath(root, rawPath, options = {}) {
   let canonicalRelativePath;
   let stat;
   try {
-    realRootPath = fs8.realpathSync(rootPath);
-    realFullPath = fs8.realpathSync(fullPath);
+    realRootPath = fs7.realpathSync(rootPath);
+    realFullPath = fs7.realpathSync(fullPath);
     const relativeToRealRoot = path9.relative(realRootPath, realFullPath);
     if (relativeToRealRoot === ".." || relativeToRealRoot.startsWith(`..${path9.sep}`) || path9.isAbsolute(relativeToRealRoot)) {
       return {
@@ -8569,7 +8575,7 @@ function inspectDeclaredPath(root, rawPath, options = {}) {
       };
     }
     canonicalRelativePath = relativeToRealRoot.split(path9.sep).join("/");
-    stat = fs8.statSync(realFullPath);
+    stat = fs7.statSync(realFullPath);
   } catch (error) {
     if (error?.code === "ENOENT") {
       return {
@@ -9047,14 +9053,14 @@ function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
   const evidencePaths = normalizeStringArray5(evidence.evidencePaths);
   const localEvidencePaths = evidencePaths.filter((item) => !isExternalArtifactReference(item));
   const externalEvidenceRefs = evidencePaths.filter(isExternalArtifactReference);
-  const sourceEvidenceRefs = externalEvidenceRefs.filter((item) => item.startsWith("source:"));
+  const sourceEvidenceRefs = externalEvidenceRefs.filter((item) => item.startsWith("source:") || item.startsWith("note:"));
   const eligibleSourceEvidenceRefs = sourceEvidenceRefs.filter((item) => eligibleSourceReferences.has(item));
   const pathEvidence = completionPathEvidence(root, localEvidencePaths, policy, inspectOptions);
   const criteria = (Array.isArray(evidence.verifiedCriteria) ? evidence.verifiedCriteria : []).map((criterion) => {
     const criterionEvidencePaths = normalizeStringArray5(criterion?.evidencePaths);
     const criterionLocalEvidencePaths = criterionEvidencePaths.filter((item) => !isExternalArtifactReference(item));
     const criterionExternalEvidenceRefs = criterionEvidencePaths.filter(isExternalArtifactReference);
-    const criterionEligibleSourceEvidenceRefs = criterionExternalEvidenceRefs.filter((item) => item.startsWith("source:")).filter((item) => eligibleSourceReferences.has(item));
+    const criterionEligibleSourceEvidenceRefs = criterionExternalEvidenceRefs.filter((item) => item.startsWith("source:") || item.startsWith("note:")).filter((item) => eligibleSourceReferences.has(item));
     const criterionPathEvidence = completionPathEvidence(root, criterionLocalEvidencePaths, policy, inspectOptions);
     const negativeOutcome = negativeOutcomeInspection(root, criterion, criterionPathEvidence, inspectOptions);
     return {
@@ -9101,6 +9107,11 @@ function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
   };
 }
 
+// src/core/review-artifact-snapshot.mjs
+import crypto6 from "node:crypto";
+import fs8 from "node:fs";
+import path10 from "node:path";
+
 // src/core/orchestration.mjs
 function classifyWorkflowIntent({ phase, tasks = [], blockers = [] } = {}) {
   const hasOpenBlockers = blockers.some((blocker) => blocker.status !== "resolved" && blocker.status !== "retired");
@@ -9133,8 +9144,14 @@ function classifyWorkflowIntent({ phase, tasks = [], blockers = [] } = {}) {
 }
 
 // src/core/source-trust.mjs
-import crypto7 from "node:crypto";
+import crypto8 from "node:crypto";
+import fs11 from "node:fs";
+import path13 from "node:path";
 var SOURCE_LIFECYCLE_STATES = Object.freeze(["candidate", "verified", "rejected"]);
+var TRUSTED_SOURCE_VERIFICATION_ISSUERS = /* @__PURE__ */ new Map([
+  ["dove-reviewer", "reviewer"],
+  ["dove-system", "system"]
+]);
 function normalizeText(value) {
   return typeof value === "string" ? value.trim().replace(/\s+/gu, " ") : "";
 }
@@ -9175,7 +9192,26 @@ function canonicalSourceIdentity(source = {}) {
   };
 }
 function sourceIdentityFingerprint(source = {}) {
-  return crypto7.createHash("sha256").update(JSON.stringify(canonicalSourceIdentity(source))).digest("hex");
+  return crypto8.createHash("sha256").update(JSON.stringify(canonicalSourceIdentity(source))).digest("hex");
+}
+function verificationMaterialState(root, materialPath) {
+  const normalizedPath = normalizeText(materialPath);
+  if (!normalizedPath) return { valid: false, reason: "source-verification-material-missing" };
+  const inspection = inspectDeclaredPath(root, normalizedPath, { requireNonEmpty: true });
+  if (inspection.status !== "existing") {
+    return { valid: false, reason: `source-verification-material-${inspection.status}` };
+  }
+  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  const fullPath = path13.resolve(root, canonicalPath);
+  const materialHash = crypto8.createHash("sha256").update(fs11.readFileSync(fullPath)).digest("hex");
+  return { valid: true, materialPath: canonicalPath, materialHash };
+}
+function trustedVerificationProvenance(verification = {}) {
+  const issuer = normalizeText(verification.issuer);
+  const issuerRole = normalizeText(verification.issuerRole).toLowerCase();
+  const expectedRole = TRUSTED_SOURCE_VERIFICATION_ISSUERS.get(issuer);
+  if (!expectedRole || issuerRole !== expectedRole) return false;
+  return normalizeText(verification.provenance) === "trusted-internal-transition";
 }
 function readSourceTrustState(root) {
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 2, items: [], updatedAt: null });
@@ -9191,12 +9227,15 @@ function sourceReferenceMap(sources = []) {
     source.doi ? [source.doi, source] : null
   ].filter(Boolean)));
 }
-function sourceEligibility(source, verifications = []) {
+function sourceEligibility(source, verifications = [], options = {}) {
   if (!source) return { eligible: false, reason: "unknown-source", source: null, verification: null };
   const verification = [...verifications].reverse().find((item) => item.sourceId === source.id) ?? null;
   if (!verification) return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: null };
   if (verification.decision !== "verified") {
     return { eligible: false, reason: `source-${verification.decision ?? source.lifecycle ?? "candidate"}`, source, verification };
+  }
+  if (!trustedVerificationProvenance(verification)) {
+    return { eligible: false, reason: "source-verification-untrusted-provenance", source, verification };
   }
   const fingerprint = sourceIdentityFingerprint(source);
   if (verification.fingerprint !== fingerprint) {
@@ -9206,6 +9245,17 @@ function sourceEligibility(source, verifications = []) {
   if (!verification.packetId || !sourcePacketIds.has(verification.packetId)) {
     return { eligible: false, reason: "source-packet-binding-mismatch", source, verification };
   }
+  if (options.root) {
+    const material = verificationMaterialState(options.root, verification.materialPath);
+    if (!material.valid) {
+      return { eligible: false, reason: material.reason, source, verification };
+    }
+    if (!verification.materialHash || verification.materialHash !== material.materialHash) {
+      return { eligible: false, reason: "source-verification-material-changed", source, verification };
+    }
+  } else if (!verification.materialPath || !verification.materialHash) {
+    return { eligible: false, reason: "source-verification-material-unavailable", source, verification };
+  }
   return { eligible: true, reason: "verified-source", source, verification };
 }
 function evaluateSourceReferences(root, references = []) {
@@ -9213,7 +9263,40 @@ function evaluateSourceReferences(root, references = []) {
   const byReference = sourceReferenceMap(sources.items ?? []);
   return references.map((reference) => {
     const source = byReference.get(reference) ?? null;
-    return { reference, ...sourceEligibility(source, verifications.items ?? []) };
+    return { reference, ...sourceEligibility(source, verifications.items ?? [], { root }) };
+  });
+}
+function evaluateNoteReferences(root, references = [], packetId = null) {
+  const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
+  const { sources, verifications } = readSourceTrustState(root);
+  const bySource = sourceReferenceMap(sources.items ?? []);
+  const normalizedPacketId = normalizeText(packetId);
+  return references.map((reference) => {
+    const note = (notes.items ?? []).find((item) => item.id === reference) ?? null;
+    if (!note) return { reference, eligible: false, reason: "unknown-note", note: null, sources: [] };
+    if (!normalizedPacketId || !(note.packetIds ?? []).includes(normalizedPacketId)) {
+      return { reference, eligible: false, reason: "note-packet-binding-mismatch", note, sources: [] };
+    }
+    const sourceIds = Array.isArray(note.sourceIds) ? note.sourceIds : [];
+    if (sourceIds.length === 0) {
+      return { reference, eligible: false, reason: "note-source-missing", note, sources: [] };
+    }
+    const sourceEvaluations = sourceIds.map((sourceId) => {
+      const source = bySource.get(sourceId) ?? null;
+      const eligibility = sourceEligibility(source, verifications.items ?? [], { root });
+      if (eligibility.eligible && eligibility.verification?.packetId !== normalizedPacketId) {
+        return { reference: sourceId, ...eligibility, eligible: false, reason: "source-verification-packet-mismatch" };
+      }
+      return { reference: sourceId, ...eligibility };
+    });
+    const failure = sourceEvaluations.find((item) => !item.eligible);
+    return {
+      reference,
+      eligible: !failure,
+      reason: failure ? failure.reason : "verified-note",
+      note,
+      sources: sourceEvaluations
+    };
   });
 }
 function querySources(root, args = {}) {
@@ -9223,7 +9306,7 @@ function querySources(root, args = {}) {
   const lifecycle = normalizeText(args.lifecycle).toLowerCase();
   const limit = Math.min(200, Math.max(1, Number.isFinite(Number(args.limit)) ? Math.trunc(Number(args.limit)) : 50));
   const items = (sources.items ?? []).filter((source) => !sourceId || [source.id, source.citationKey, source.locator, source.url, source.doi].includes(sourceId)).filter((source) => !packetId || (source.packetIds ?? []).includes(packetId)).map((source) => {
-    const eligibility = sourceEligibility(source, verifications.items ?? []);
+    const eligibility = sourceEligibility(source, verifications.items ?? [], { root });
     return {
       ...source,
       eligibility: {
@@ -9377,8 +9460,8 @@ function evaluateEvidence(root) {
 }
 
 // src/core/onboarding.mjs
-import fs10 from "node:fs";
-import path11 from "node:path";
+import fs12 from "node:fs";
+import path14 from "node:path";
 var DEFAULT_EXCLUDED_DIRS = /* @__PURE__ */ new Set([
   ".git",
   ".dove",
@@ -9409,16 +9492,16 @@ var TABLE_EXTENSIONS = /* @__PURE__ */ new Set([".csv", ".tsv", ".xlsx"]);
 var RESULT_EXTENSIONS = /* @__PURE__ */ new Set([".json", ".jsonl", ".npy", ".npz", ".pkl", ".parquet"]);
 var NOTE_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".txt"]);
 function normalizeRelativePath(relativePath) {
-  return relativePath.split(path11.sep).join("/");
+  return relativePath.split(path14.sep).join("/");
 }
 function safeInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 function classifyByName(relativePath) {
-  const baseName = path11.basename(relativePath).toLowerCase();
+  const baseName = path14.basename(relativePath).toLowerCase();
   const stem = baseName.replace(/\.[^.]+$/, "");
-  const extension = path11.extname(baseName);
+  const extension = path14.extname(baseName);
   const pathParts = relativePath.toLowerCase().split("/");
   const parentHints = new Set(pathParts.slice(0, -1));
   if (extension === ".bib") {
@@ -9507,9 +9590,9 @@ function walkFiles(root, options = {}) {
     }
     let entries = [];
     try {
-      entries = fs10.readdirSync(currentDir, { withFileTypes: true });
+      entries = fs12.readdirSync(currentDir, { withFileTypes: true });
     } catch (error) {
-      warnings.push(`Could not read ${normalizeRelativePath(path11.relative(root, currentDir)) || "."}: ${error instanceof Error ? error.message : String(error)}`);
+      warnings.push(`Could not read ${normalizeRelativePath(path14.relative(root, currentDir)) || "."}: ${error instanceof Error ? error.message : String(error)}`);
       return;
     }
     for (const entry of entries) {
@@ -9517,8 +9600,8 @@ function walkFiles(root, options = {}) {
         warnings.push(`Scan stopped after ${maxFiles} files.`);
         return;
       }
-      const fullPath = path11.join(currentDir, entry.name);
-      const relativePath = normalizeRelativePath(path11.relative(root, fullPath));
+      const fullPath = path14.join(currentDir, entry.name);
+      const relativePath = normalizeRelativePath(path14.relative(root, fullPath));
       if (entry.isDirectory()) {
         if (excludedDirs.has(entry.name) || depth >= maxDepth) {
           continue;
@@ -9580,7 +9663,7 @@ function buildProposal(root, options = {}) {
   for (const sourcePath of files) {
     const classified = classifyByName(sourcePath);
     if (!classified) {
-      const extension = path11.extname(sourcePath).toLowerCase();
+      const extension = path14.extname(sourcePath).toLowerCase();
       if ([".tex", ".md", ".bib", ".pdf", ".png", ".jpg", ".jpeg", ".svg", ".csv", ".tsv", ".json"].includes(extension)) {
         unmapped.push({ sourcePath, reason: "Recognized paper-adjacent extension but no confident lifecycle mapping." });
       }
@@ -9660,22 +9743,22 @@ function queryDoveOnboarding(root, args = {}) {
 }
 
 // src/core/dove.mjs
-import fs12 from "node:fs";
-import path13 from "node:path";
+import fs14 from "node:fs";
+import path16 from "node:path";
 
 // src/core/paper-audit.mjs
-import fs11 from "node:fs";
-import path12 from "node:path";
+import fs13 from "node:fs";
+import path15 from "node:path";
 function cloneFallback2(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
 }
 function safeReadJson(root, relativePath, fallback, readErrors) {
   const fullPath = resolvePath(root, relativePath);
-  if (!fs11.existsSync(fullPath)) {
+  if (!fs13.existsSync(fullPath)) {
     return cloneFallback2(fallback);
   }
   try {
-    return JSON.parse(fs11.readFileSync(fullPath, "utf8"));
+    return JSON.parse(fs13.readFileSync(fullPath, "utf8"));
   } catch (error) {
     readErrors.push({
       path: relativePath,
@@ -9689,10 +9772,10 @@ function safeLoadState(root, readErrors) {
 }
 function safeListDraftFiles(root) {
   const draftsDir = resolvePath(root, ARTIFACT_PATHS.draftsDir);
-  if (!fs11.existsSync(draftsDir)) {
+  if (!fs13.existsSync(draftsDir)) {
     return [];
   }
-  return fs11.readdirSync(draftsDir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md").map((entry) => entry.name);
+  return fs13.readdirSync(draftsDir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md").map((entry) => entry.name);
 }
 function normalizeStringArray6(value) {
   if (!Array.isArray(value)) {
@@ -9708,11 +9791,11 @@ function normalizeFigureArtifactPath(value) {
   return normalized.length > 0 ? normalized : null;
 }
 function isSafeProjectRelativePath(relativePath) {
-  if (!relativePath || path12.isAbsolute(relativePath)) {
+  if (!relativePath || path15.isAbsolute(relativePath)) {
     return false;
   }
-  const normalized = path12.normalize(relativePath);
-  return normalized !== "." && !normalized.startsWith("..") && !normalized.includes(`${path12.sep}..${path12.sep}`);
+  const normalized = path15.normalize(relativePath);
+  return normalized !== "." && !normalized.startsWith("..") && !normalized.includes(`${path15.sep}..${path15.sep}`);
 }
 function figurePathLooksPortable(relativePath) {
   if (!relativePath) {
@@ -10080,7 +10163,7 @@ function safeEvaluateFigurePipeline(root, state, readErrors) {
     ];
     for (const pathCheck of stagePathChecks) {
       const normalizedPath = normalizeFigureArtifactPath(pathCheck.value);
-      const exists = normalizedPath && isSafeProjectRelativePath(normalizedPath) ? fs11.existsSync(resolvePath(root, normalizedPath)) : false;
+      const exists = normalizedPath && isSafeProjectRelativePath(normalizedPath) ? fs13.existsSync(resolvePath(root, normalizedPath)) : false;
       fileChecks.stagedArtifacts[pathCheck.field] = { path: normalizedPath, exists };
       if (!normalizedPath || !isSafeProjectRelativePath(normalizedPath)) {
         figureIssues.push(buildFigureIssue({
@@ -10137,7 +10220,7 @@ function safeEvaluateFigurePipeline(root, state, readErrors) {
     const normalizedSourceArtifactPaths = sourceArtifactPaths.map(normalizeFigureArtifactPath);
     for (let index = 0; index < normalizedSourceArtifactPaths.length; index += 1) {
       const sourcePath = normalizedSourceArtifactPaths[index];
-      const exists = sourcePath && isSafeProjectRelativePath(sourcePath) ? fs11.existsSync(resolvePath(root, sourcePath)) : false;
+      const exists = sourcePath && isSafeProjectRelativePath(sourcePath) ? fs13.existsSync(resolvePath(root, sourcePath)) : false;
       fileChecks.sourceArtifacts.push({ path: sourcePath, exists });
       if (!sourcePath || !isSafeProjectRelativePath(sourcePath)) {
         figureIssues.push(buildFigureIssue({
@@ -10745,15 +10828,15 @@ function cloneFallback3(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
 }
 function resolveProjectPath(root, relativePath) {
-  return path13.join(root, relativePath);
+  return path16.join(root, relativePath);
 }
 function safeReadJson2(root, relativePath, fallback, readErrors) {
   const fullPath = resolveProjectPath(root, relativePath);
-  if (!fs12.existsSync(fullPath)) {
+  if (!fs14.existsSync(fullPath)) {
     return cloneFallback3(fallback);
   }
   try {
-    return JSON.parse(fs12.readFileSync(fullPath, "utf8"));
+    return JSON.parse(fs14.readFileSync(fullPath, "utf8"));
   } catch (error) {
     readErrors.push({
       path: relativePath,
@@ -10764,11 +10847,11 @@ function safeReadJson2(root, relativePath, fallback, readErrors) {
 }
 function safeReadText(root, relativePath, readErrors) {
   const fullPath = resolveProjectPath(root, relativePath);
-  if (!fs12.existsSync(fullPath)) {
+  if (!fs14.existsSync(fullPath)) {
     return null;
   }
   try {
-    return fs12.readFileSync(fullPath, "utf8");
+    return fs14.readFileSync(fullPath, "utf8");
   } catch (error) {
     readErrors.push({
       path: relativePath,
@@ -11091,8 +11174,8 @@ function selectDomainGuidance(workspaceIndex, domain) {
 }
 function missionPacketAliases(packet) {
   const packetId = String(packet.id ?? packet.packetId ?? packet.missionPacketId ?? "").trim();
-  const packetPath = packet.packetPath ?? (packetId ? path13.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`) : null);
-  const packetContextPath2 = packet.packetContextPath ?? (packetId ? path13.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`) : null);
+  const packetPath = packet.packetPath ?? (packetId ? path16.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`) : null);
+  const packetContextPath2 = packet.packetContextPath ?? (packetId ? path16.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`) : null);
   return {
     packetId,
     packetPath,
@@ -12695,9 +12778,9 @@ function buildHostFileCheckpointNotice() {
 function buildMutationRollbackModel(root) {
   const indexPath = resolveProjectPath(root, ARTIFACT_PATHS.mutationsIndex);
   let index = createMutationProvenanceIndex();
-  if (fs12.existsSync(indexPath)) {
+  if (fs14.existsSync(indexPath)) {
     try {
-      index = normalizeMutationProvenanceIndex(JSON.parse(fs12.readFileSync(indexPath, "utf8")));
+      index = normalizeMutationProvenanceIndex(JSON.parse(fs14.readFileSync(indexPath, "utf8")));
     } catch {
       index = createMutationProvenanceIndex();
     }
@@ -13473,7 +13556,7 @@ var PAPER_PIPELINE_STAGE_METADATA = {
 function inspectPipelineArtifact(root, relativePath) {
   return {
     path: relativePath,
-    exists: fs12.existsSync(path13.join(root, relativePath))
+    exists: fs14.existsSync(path16.join(root, relativePath))
   };
 }
 function buildPaperPipelineStage(root, stageId, index) {
@@ -14213,8 +14296,8 @@ function queryDoveReturn(root, args = {}) {
 }
 
 // src/core/public-status.mjs
-import fs13 from "node:fs";
-import path14 from "node:path";
+import fs15 from "node:fs";
+import path17 from "node:path";
 var PUBLIC_STATUS_VERSION = 1;
 var GLOBAL_PUBLIC_STATUS_VERSION = 1;
 var PUBLIC_TASK_LIMIT = 12;
@@ -14539,7 +14622,7 @@ function dedupeProjects(projects) {
 function withCollisionSafeSlugs(projects) {
   const used = /* @__PURE__ */ new Map();
   return projects.map((project, index) => {
-    const base = slugify2(project.slug ?? project.id ?? project.title ?? path14.basename(project.root), `project-${index + 1}`);
+    const base = slugify2(project.slug ?? project.id ?? project.title ?? path17.basename(project.root), `project-${index + 1}`);
     const count = used.get(base) ?? 0;
     used.set(base, count + 1);
     const slug = count === 0 ? base : `${base}-${count + 1}`;
@@ -14547,7 +14630,7 @@ function withCollisionSafeSlugs(projects) {
       ...project,
       id: project.id ?? slug,
       slug,
-      title: project.title ?? path14.basename(project.root)
+      title: project.title ?? path17.basename(project.root)
     };
   });
 }
@@ -14569,12 +14652,12 @@ function resolveGlobalStatusSelection(root, options = {}) {
   };
 }
 function readProjectPublicStatus(project) {
-  const jsonPath = path14.join(project.root, ARTIFACT_PATHS.publicStatusJson);
-  if (!fs13.existsSync(jsonPath)) {
+  const jsonPath = path17.join(project.root, ARTIFACT_PATHS.publicStatusJson);
+  if (!fs15.existsSync(jsonPath)) {
     return { status: "missing", project, snapshot: null, reason: `${ARTIFACT_PATHS.publicStatusJson} is missing` };
   }
   try {
-    const snapshot = JSON.parse(fs13.readFileSync(jsonPath, "utf8"));
+    const snapshot = JSON.parse(fs15.readFileSync(jsonPath, "utf8"));
     if (!isPlainObject4(snapshot) || snapshot.mode !== "dove-public-status") {
       return { status: "invalid", project, snapshot: null, reason: "status.json is not a Dove public status snapshot" };
     }
@@ -14760,23 +14843,23 @@ function projectPlaceholderHtml(project, status, reason) {
 `;
 }
 function ensureAbsoluteDir(dirPath) {
-  fs13.mkdirSync(dirPath, { recursive: true });
+  fs15.mkdirSync(dirPath, { recursive: true });
 }
 function writeAbsoluteJson(filePath, value) {
-  ensureAbsoluteDir(path14.dirname(filePath));
-  fs13.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}
+  ensureAbsoluteDir(path17.dirname(filePath));
+  fs15.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}
 `, "utf8");
 }
 function writeAbsoluteText(filePath, value) {
-  ensureAbsoluteDir(path14.dirname(filePath));
-  fs13.writeFileSync(filePath, value, "utf8");
+  ensureAbsoluteDir(path17.dirname(filePath));
+  fs15.writeFileSync(filePath, value, "utf8");
 }
 function projectRelativeOutputPath(root, filePath) {
-  const relativePath = path14.relative(path14.resolve(root), path14.resolve(filePath));
-  if (!relativePath || relativePath.startsWith("..") || path14.isAbsolute(relativePath)) {
+  const relativePath = path17.relative(path17.resolve(root), path17.resolve(filePath));
+  if (!relativePath || relativePath.startsWith("..") || path17.isAbsolute(relativePath)) {
     return null;
   }
-  return relativePath.split(path14.sep).join("/");
+  return relativePath.split(path17.sep).join("/");
 }
 function writeOutputJson(root, filePath, value) {
   const relativePath = projectRelativeOutputPath(root, filePath);
@@ -14801,16 +14884,16 @@ function writeOutputText(root, filePath, value) {
   writeAbsoluteText(filePath, value);
 }
 function readPublicText(project, relativePath, fallback) {
-  const fullPath = path14.join(project.root, relativePath);
+  const fullPath = path17.join(project.root, relativePath);
   try {
-    return fs13.existsSync(fullPath) ? fs13.readFileSync(fullPath, "utf8") : fallback;
+    return fs15.existsSync(fullPath) ? fs15.readFileSync(fullPath, "utf8") : fallback;
   } catch {
     return fallback;
   }
 }
 function writeGlobalProjectArtifacts(root, outputDir, readResult) {
   const { project, snapshot, status, reason } = readResult;
-  const projectDir = path14.join(outputDir, "projects", project.slug);
+  const projectDir = path17.join(outputDir, "projects", project.slug);
   const projectSnapshot = snapshot ?? {
     version: 1,
     mode: "dove-global-project-placeholder",
@@ -14827,21 +14910,21 @@ function writeGlobalProjectArtifacts(root, outputDir, readResult) {
   };
   const markdown = snapshot ? readPublicText(project, ARTIFACT_PATHS.publicStatusMarkdown, projectPlaceholderMarkdown(project, status, reason)) : projectPlaceholderMarkdown(project, status, reason);
   const html = snapshot ? readPublicText(project, ARTIFACT_PATHS.publicStatusHtml, projectPlaceholderHtml(project, status, reason)) : projectPlaceholderHtml(project, status, reason);
-  writeOutputJson(root, path14.join(projectDir, "status.json"), projectSnapshot);
-  writeOutputText(root, path14.join(projectDir, "status.md"), markdown);
-  writeOutputText(root, path14.join(projectDir, "index.html"), html);
+  writeOutputJson(root, path17.join(projectDir, "status.json"), projectSnapshot);
+  writeOutputText(root, path17.join(projectDir, "status.md"), markdown);
+  writeOutputText(root, path17.join(projectDir, "index.html"), html);
   return [
-    path14.join(projectDir, "status.json"),
-    path14.join(projectDir, "status.md"),
-    path14.join(projectDir, "index.html")
-  ].map((filePath) => path14.relative(outputDir, filePath).split(path14.sep).join("/"));
+    path17.join(projectDir, "status.json"),
+    path17.join(projectDir, "status.md"),
+    path17.join(projectDir, "index.html")
+  ].map((filePath) => path17.relative(outputDir, filePath).split(path17.sep).join("/"));
 }
 function buildDoveGlobalPublicStatus(root, options = {}) {
   return buildGlobalStatusSnapshot(root, options);
 }
 function refreshGlobalProjectPublicStatus(project, options = {}) {
   try {
-    if (!fs13.existsSync(project.root) || !fs13.statSync(project.root).isDirectory()) {
+    if (!fs15.existsSync(project.root) || !fs15.statSync(project.root).isDirectory()) {
       return { status: "skipped", project, snapshot: null, reason: "project root is missing" };
     }
     publishDoveStatus(project.root, {
@@ -14876,11 +14959,11 @@ function publishDoveGlobalStatus(root, options = {}) {
   const markdown = renderGlobalMarkdown(snapshot);
   const html = renderGlobalHtml(snapshot);
   const writes = [];
-  writeOutputJson(root, path14.join(selection.outputDir, "status.json"), snapshot);
+  writeOutputJson(root, path17.join(selection.outputDir, "status.json"), snapshot);
   writes.push("status.json");
-  writeOutputText(root, path14.join(selection.outputDir, "status.md"), markdown);
+  writeOutputText(root, path17.join(selection.outputDir, "status.md"), markdown);
   writes.push("status.md");
-  writeOutputText(root, path14.join(selection.outputDir, "index.html"), html);
+  writeOutputText(root, path17.join(selection.outputDir, "index.html"), html);
   writes.push("index.html");
   for (const readResult of readResults) {
     writes.push(...writeGlobalProjectArtifacts(root, selection.outputDir, readResult));
@@ -15015,11 +15098,11 @@ function publishDoveStatus(root, options = {}) {
 
 // src/core/global-status-serving.mjs
 import { spawn, spawnSync } from "node:child_process";
-import crypto8 from "node:crypto";
-import fs14 from "node:fs";
+import crypto9 from "node:crypto";
+import fs16 from "node:fs";
 import http from "node:http";
 import os2 from "node:os";
-import path15 from "node:path";
+import path18 from "node:path";
 var PUBLIC_FILES = /* @__PURE__ */ new Set(["index.html", "status.json", "status.md"]);
 var PROJECT_PUBLIC_FILE_PATTERN = /^projects\/[^/]+\/(?:index\.html|status\.json|status\.md)$/;
 var CONTENT_TYPES = /* @__PURE__ */ new Map([
@@ -15059,8 +15142,8 @@ function normalizeBoolean3(value, fallback = false) {
   return fallback;
 }
 function isInside(childPath, parentPath) {
-  const relative = path15.relative(parentPath, childPath);
-  return relative === "" || !relative.startsWith("..") && !path15.isAbsolute(relative);
+  const relative = path18.relative(parentPath, childPath);
+  return relative === "" || !relative.startsWith("..") && !path18.isAbsolute(relative);
 }
 function normalizeServingAuthConfig(baseConfig = {}, options = {}) {
   return normalizeGlobalStatusAuthConfig({
@@ -15093,7 +15176,7 @@ function defaultTunnelName() {
   return "dove-global-status";
 }
 function defaultCloudflaredConfigPath(tunnelName) {
-  return path15.join(os2.homedir(), ".cloudflared", `${tunnelName}.yml`);
+  return path18.join(os2.homedir(), ".cloudflared", `${tunnelName}.yml`);
 }
 function normalizeServingCloudflareConfig(baseConfig, options, outputDir) {
   const raw = {
@@ -15147,8 +15230,8 @@ function safePublicPath(requestUrl) {
   if (relative.split("/").includes("..")) {
     return null;
   }
-  const normalized = path15.posix.normalize(relative);
-  if (normalized.startsWith("../") || normalized === ".." || path15.posix.isAbsolute(normalized)) {
+  const normalized = path18.posix.normalize(relative);
+  if (normalized.startsWith("../") || normalized === ".." || path18.posix.isAbsolute(normalized)) {
     return null;
   }
   if (PUBLIC_FILES.has(normalized) || PROJECT_PUBLIC_FILE_PATTERN.test(normalized)) {
@@ -15211,10 +15294,10 @@ function constantTimeEqual(actual, expected) {
   const actualBuffer = Buffer.from(String(actual ?? ""));
   const expectedBuffer = Buffer.from(String(expected ?? ""));
   if (actualBuffer.length !== expectedBuffer.length) {
-    crypto8.timingSafeEqual(Buffer.alloc(expectedBuffer.length), Buffer.alloc(expectedBuffer.length));
+    crypto9.timingSafeEqual(Buffer.alloc(expectedBuffer.length), Buffer.alloc(expectedBuffer.length));
     return false;
   }
-  return crypto8.timingSafeEqual(actualBuffer, expectedBuffer);
+  return crypto9.timingSafeEqual(actualBuffer, expectedBuffer);
 }
 function parseCookies(value) {
   const cookies = /* @__PURE__ */ new Map();
@@ -15228,7 +15311,7 @@ function parseCookies(value) {
   return cookies;
 }
 function authCookieValue(authOptions) {
-  return crypto8.createHmac("sha256", authOptions.sessionSecret).update(authOptions.password).digest("hex");
+  return crypto9.createHmac("sha256", authOptions.sessionSecret).update(authOptions.password).digest("hex");
 }
 function parseBasicAuth(value) {
   const header = Array.isArray(value) ? value[0] : value;
@@ -15307,10 +15390,10 @@ async function handlePasswordLogin(request, response, authOptions) {
   response.end();
 }
 function validateGlobalPublicServeRoot(outputDir) {
-  const statusPath = path15.join(outputDir, "status.json");
+  const statusPath = path18.join(outputDir, "status.json");
   let snapshot;
   try {
-    snapshot = JSON.parse(fs14.readFileSync(statusPath, "utf8"));
+    snapshot = JSON.parse(fs16.readFileSync(statusPath, "utf8"));
   } catch {
     throw new Error(`Dove global status serve root is missing a readable status.json: ${outputDir}`);
   }
@@ -15320,8 +15403,8 @@ function validateGlobalPublicServeRoot(outputDir) {
   return snapshot;
 }
 function createStaticGlobalStatusServer(outputDir, authOptions = { enabled: false }) {
-  const serveRoot = path15.resolve(outputDir);
-  const effectiveAuthOptions = authOptions.enabled ? { ...authOptions, sessionSecret: authOptions.sessionSecret ?? crypto8.randomBytes(32).toString("hex") } : { enabled: false };
+  const serveRoot = path18.resolve(outputDir);
+  const effectiveAuthOptions = authOptions.enabled ? { ...authOptions, sessionSecret: authOptions.sessionSecret ?? crypto9.randomBytes(32).toString("hex") } : { enabled: false };
   return http.createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     if (effectiveAuthOptions.enabled && url.pathname === AUTH_LOGIN_PATH) {
@@ -15345,19 +15428,19 @@ function createStaticGlobalStatusServer(outputDir, authOptions = { enabled: fals
       }
       return;
     }
-    const filePath = path15.join(serveRoot, relativePath);
+    const filePath = path18.join(serveRoot, relativePath);
     if (!isInside(filePath, serveRoot)) {
       sendText(response, 404, "Not found");
       return;
     }
     let stat;
     try {
-      const linkStat = fs14.lstatSync(filePath);
+      const linkStat = fs16.lstatSync(filePath);
       if (linkStat.isSymbolicLink()) {
         sendText(response, 404, "Not found");
         return;
       }
-      stat = fs14.statSync(filePath);
+      stat = fs16.statSync(filePath);
     } catch {
       sendText(response, 404, "Not found");
       return;
@@ -15367,7 +15450,7 @@ function createStaticGlobalStatusServer(outputDir, authOptions = { enabled: fals
       return;
     }
     response.writeHead(200, {
-      "content-type": CONTENT_TYPES.get(path15.extname(filePath)) ?? "application/octet-stream",
+      "content-type": CONTENT_TYPES.get(path18.extname(filePath)) ?? "application/octet-stream",
       "cache-control": "no-store",
       "x-content-type-options": "nosniff"
     });
@@ -15375,7 +15458,7 @@ function createStaticGlobalStatusServer(outputDir, authOptions = { enabled: fals
       response.end();
       return;
     }
-    fs14.createReadStream(filePath).pipe(response);
+    fs16.createReadStream(filePath).pipe(response);
   });
 }
 function buildPublishOptions(options, outputDir) {
@@ -15505,8 +15588,8 @@ function writeCloudflaredConfig(plan) {
   if (!cloudflare.enabled || !cloudflare.configPath || cloudflare.tokenEnv) {
     return null;
   }
-  fs14.mkdirSync(path15.dirname(cloudflare.configPath), { recursive: true });
-  fs14.writeFileSync(cloudflare.configPath, cloudflaredConfigText(cloudflare, plan.localUrl), "utf8");
+  fs16.mkdirSync(path18.dirname(cloudflare.configPath), { recursive: true });
+  fs16.writeFileSync(cloudflare.configPath, cloudflaredConfigText(cloudflare, plan.localUrl), "utf8");
   return cloudflare.configPath;
 }
 function runSetupCommand(command, args, options = {}) {
@@ -15716,8 +15799,8 @@ async function runGlobalStatusServingForeground(root, options = {}) {
 }
 
 // src/core/documents.mjs
-import fs15 from "node:fs";
-import path16 from "node:path";
+import fs17 from "node:fs";
+import path19 from "node:path";
 function normalizeString6(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
@@ -15817,8 +15900,8 @@ function isOperationalFailureOutcome(result, { confirmed = false } = {}) {
 }
 
 // src/core/workflow-goals.mjs
-import fs16 from "node:fs";
-import path17 from "node:path";
+import fs18 from "node:fs";
+import path20 from "node:path";
 var WORKFLOW_GOAL_CONTRACTS = [
   {
     id: "operator-host-pass-without-results",
@@ -16150,13 +16233,13 @@ function workflowVerifiedCriteria(criterion = WORKFLOW_GOAL_CRITERION) {
   return [{ criterion, status: "verified", evidencePaths: [WORKFLOW_GOAL_VERIFICATION_PATH] }];
 }
 function writeJson2(root, relativePath, value) {
-  fs16.writeFileSync(path17.join(root, relativePath), `${JSON.stringify(value, null, 2)}
+  fs18.writeFileSync(path20.join(root, relativePath), `${JSON.stringify(value, null, 2)}
 `);
 }
 function writeWorkflowGoalEvidenceFile(root, relativePath, text3) {
-  const fullPath = path17.join(root, relativePath);
-  fs16.mkdirSync(path17.dirname(fullPath), { recursive: true });
-  fs16.writeFileSync(fullPath, text3, "utf8");
+  const fullPath = path20.join(root, relativePath);
+  fs18.mkdirSync(path20.dirname(fullPath), { recursive: true });
+  fs18.writeFileSync(fullPath, text3, "utf8");
   return relativePath;
 }
 function seedWorkflowGoalEvidence(root) {
@@ -16306,8 +16389,8 @@ function createGoalTask(root, dispatch, args, action = "create_dove_task") {
   return parseToolJson(dispatch(root, "create_dove_task", confirmArgs), `${action} confirmed`);
 }
 function readJson2(root, relativePath) {
-  const fullPath = path17.join(root, relativePath);
-  return JSON.parse(fs16.readFileSync(fullPath, "utf8"));
+  const fullPath = path20.join(root, relativePath);
+  return JSON.parse(fs18.readFileSync(fullPath, "utf8"));
 }
 function expect(condition, message, evidence = {}) {
   if (!condition) {
@@ -16794,19 +16877,21 @@ function runOperatorHostResultRequiresCriteriaGoal(root, dispatch) {
     domain: "paper",
     executionContract: workflowExecutionContract()
   });
-  const run = parseToolJson(dispatch(root, "run_dove_operator", {
+  const run = parseOperationalToolJson(dispatch(root, "run_dove_operator", {
     confirmed: true,
     includeQueueDetails: true,
     runId,
     taskResults: [{
       packetId,
       resultStatus: "completed",
-      summary: "The host pass claims completion with evidence but no criteria coverage.",
+      resultSummary: "The host pass claims completion with evidence but no criteria coverage.",
       artifactRefs: [WORKFLOW_GOAL_ARTIFACT_PATH],
       verificationEvidencePaths: [WORKFLOW_GOAL_VERIFICATION_PATH]
     }]
   }), "run_dove_operator host result without criteria");
   const iteration = run.result?.iterations?.find((item) => item.packetId === packetId);
+  expect(run.status === "blocked-boundary", "Operator host result boundary must keep the top-level operator result action-required", { status: run.status });
+  expect(run.resultCard?.requiresAction === true, "Operator host result boundary must require action in the result card", { resultCard: run.resultCard });
   expect(iteration?.status === "verification-failed", "Operator host result without criteria must record verification-failed iteration", { iteration });
   expect((iteration?.requiredActions ?? []).includes("provide-verified-criteria"), "Operator host result must require verified criteria", { iteration });
   const afterIndex = readJson2(root, ARTIFACT_PATHS.taskPacketsIndex);
@@ -16822,6 +16907,7 @@ function runOperatorHostResultRequiresCriteriaGoal(root, dispatch) {
     evidence: {
       packetId,
       runStatus: run.status,
+      requiresAction: run.resultCard?.requiresAction === true,
       iterationStatus: iteration?.status,
       finalTaskStatus: afterTask.status,
       boundaryType: afterTask.boundary?.type,
@@ -17900,6 +17986,7 @@ export {
   createStaticGlobalStatusServer,
   doveText,
   evaluateEvidence,
+  evaluateNoteReferences,
   evaluateSourceReferences,
   evidencePathProblemFlags,
   executeNetworkSearch,

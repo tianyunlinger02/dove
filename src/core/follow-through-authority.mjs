@@ -150,6 +150,95 @@ function executionBridgeAuthority(source = {}) {
   };
 }
 
+export function followThroughAuthorityState(
+  item = {},
+  operatingState = {}
+) {
+  const authorityStatuses = new Set([
+    "accepted-for-execution",
+    "executing",
+    "accepted-risk"
+  ]);
+  if (!authorityStatuses.has(item.status)) {
+    return { required: false, trusted: true, reason: null };
+  }
+  if (item.authorityProvenance !== "trusted-system-transition") {
+    return {
+      required: true,
+      trusted: false,
+      reason: "untrusted-authority-provenance"
+    };
+  }
+  if (!item.programId || !item.programRunId || !item.approvalId) {
+    return {
+      required: true,
+      trusted: false,
+      reason: "missing-program-authority-lineage"
+    };
+  }
+
+  const program = (operatingState.programs?.items ?? []).find(
+    (candidate) => candidate.id === item.programId
+  ) ?? null;
+  const programRun = (operatingState.programRuns?.items ?? []).find(
+    (candidate) => candidate.id === item.programRunId
+  ) ?? null;
+  const approval = (operatingState.programApprovals?.items ?? []).find(
+    (candidate) => candidate.id === item.approvalId
+  ) ?? null;
+  if (!program || !programRun || !approval) {
+    return {
+      required: true,
+      trusted: false,
+      reason: "program-authority-not-found"
+    };
+  }
+  if (
+    programRun.programId !== program.id
+    || programRun.approvalId !== approval.id
+    || approval.programId !== program.id
+    || approval.programRunId !== programRun.id
+    || !programRun.linkedFollowThroughIds?.includes(item.id)
+  ) {
+    return {
+      required: true,
+      trusted: false,
+      reason: "program-authority-lineage-mismatch"
+    };
+  }
+  if (
+    approval.status !== "approved"
+    || !["approved", "active"].includes(programRun.status)
+    || !["active", "planned"].includes(program.status)
+    || (approval.expiresAt && Date.parse(approval.expiresAt) <= Date.now())
+  ) {
+    return {
+      required: true,
+      trusted: false,
+      reason: "program-authority-inactive"
+    };
+  }
+
+  const claim = approval.activeExecutionClaim ?? null;
+  if (
+    !claim
+    || !["claimed", "applied"].includes(claim.status)
+    || claim.followThroughId !== item.id
+    || claim.packetId !== item.linkedTargetId
+    || claim.sourceType !== item.sourceType
+    || claim.sourceId !== item.sourceId
+    || claim.sourceFingerprint !== item.sourceFingerprint
+    || programRun.activeExecutionClaimId !== claim.claimId
+  ) {
+    return {
+      required: true,
+      trusted: false,
+      reason: "runtime-authority-claim-mismatch"
+    };
+  }
+  return { required: true, trusted: true, reason: null };
+}
+
 export function followThroughSourceAuthorityFingerprint(
   sourceType,
   source
