@@ -21,6 +21,7 @@ import {
   readJson,
   readText,
   resolvePath,
+  writeBinary,
   writeJson,
   writeText
 } from "./workspace.mjs";
@@ -855,8 +856,7 @@ function invokeOpenAiImageProvider(root, provider, input, prompt, env, runId, ti
   }, provider.maxSvgBytes * 8 + 100000);
   const image = openAiImageData(response.body, provider.id);
   const imagePath = `${generationRunDir(runId)}/gpt-image2.png`;
-  ensureDir(path.dirname(resolvePath(root, imagePath)));
-  fs.writeFileSync(resolvePath(root, imagePath), Buffer.from(image.b64, "base64"));
+  writeBinary(root, imagePath, Buffer.from(image.b64, "base64"));
   const sourceSvgPath = assertSafeFigureSourcePath(`${generationRunDir(runId)}/gpt-image2.svg`, "OpenAI image sourceSvgPath", runId);
   const targetFinalSvgPath = assertSafeFigureFinalTargetPath(input.figure?.finalSvgPath, "OpenAI image final artifact target");
   const href = path.posix.relative(path.posix.dirname(targetFinalSvgPath), imagePath) || path.posix.basename(imagePath);

@@ -33,6 +33,8 @@ test("network search registry exposes public no-key providers", () => {
   }
   assert.equal(providers.get("public-web")?.kind, "web");
   assert.equal(providers.get("public-web")?.unavailable, true);
+  assert.ok(providers.get("crossref")?.capabilities.includes("open-access"));
+  assert.equal(providers.get("crossref")?.filters.openAccessOnly, "post");
 });
 
 test("network search query normalization rejects unsafe or unsupported inputs", () => {
@@ -113,6 +115,13 @@ test("network search blocks public web search instead of pretending a provider e
   assert.match(result.summary, /免 key/);
 });
 
+test("network search rejects explicit provider-kind conflicts", async () => {
+  await assert.rejects(
+    executeNetworkSearch({ query: "graph", kind: "web", providerIds: ["openalex"] }),
+    /provider-kind conflict/
+  );
+});
+
 test("network search redacts provider error details", async () => {
   const result = await executeNetworkSearch({ query: "secret redaction", providerIds: ["openalex"] }, {}, {
     fetchFn: async () => {
@@ -177,6 +186,49 @@ test("network search applies reliable filters and reports unsupported filters ex
   const crossref = result.providerReports[1];
   assert.deepEqual(crossref.appliedFilters, ["year", "domains", "openAccessOnly", "locale"]);
   assert.deepEqual(crossref.unsupportedFilters, ["fieldsOfStudy"]);
+});
+
+test("network search uses bounded over-fetch before post filtering", async () => {
+  let requestedRows = null;
+  const result = await executeNetworkSearch({
+    query: "open access graph",
+    providerIds: ["crossref"],
+    limit: 2,
+    openAccessOnly: true
+  }, {}, { fetchFn: async (url) => {
+    requestedRows = Number(new URL(url).searchParams.get("rows"));
+    return jsonResponse({ message: { items: [
+      { title: ["Closed one"], DOI: "10.1000/closed-1" },
+      { title: ["Closed two"], DOI: "10.1000/closed-2" },
+      { title: ["Open graph one"], DOI: "10.1000/open-1", license: [{ URL: "https://creativecommons.org/licenses/by/4.0/" }] },
+      { title: ["Open graph two"], DOI: "10.1000/open-2", link: [{ URL: "https://example.org/open-2.pdf", "content-type": "application/pdf" }] }
+    ] } });
+  } });
+
+  assert.equal(requestedRows, 6);
+  assert.deepEqual(result.candidates.map((candidate) => candidate.doi).sort(), ["10.1000/open-1", "10.1000/open-2"]);
+  assert.equal(result.providerReports[0].fetchedCount, 4);
+  assert.equal(result.providerReports[0].filterModes.openAccessOnly, "post");
+});
+
+test("Europe PMC normalizes three-letter language and canonical result domains", async () => {
+  const result = await executeNetworkSearch({
+    query: "immune graph",
+    providerIds: ["europe-pmc"],
+    locale: "eng",
+    domains: ["doi.org"]
+  }, {}, { fetchFn: async () => jsonResponse({ resultList: { result: [{
+    title: "Immune Graph",
+    doi: "10.1000/immune",
+    language: "ENG",
+    authorList: { author: [{ fullName: "Ada Researcher" }] },
+    isOpenAccess: "Y"
+  }] } }) });
+
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].locale, "eng");
+  assert.deepEqual(result.candidates[0].domains, ["doi.org"]);
+  assert.deepEqual(result.candidates[0].authors, ["Ada Researcher"]);
 });
 
 test("network search reports provider-specific unsupported locale and field filters", async () => {

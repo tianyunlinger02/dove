@@ -7,8 +7,10 @@ import {
   ARTIFACT_PATHS,
   ensureWorkspace,
   evaluateEvidence,
+  querySources,
   readJson,
   registerSource,
+  sourceEligibility,
   upsertClaims,
   verifySource
 } from "../../src/core/internal-api.mjs";
@@ -153,4 +155,26 @@ test("verification record remains separate from the source index", () => setup("
   const verificationIndex = readJson(root, ARTIFACT_PATHS.sourceVerifications, {});
   assert.equal(sourceIndex.items[0].verification, undefined);
   assert.equal(verificationIndex.items.length, 1);
+  assert.equal(verificationIndex.items[0].packetId, packetId);
+}));
+
+test("latest verification decision controls eligibility", () => setup("latest-verification-decision-controls-eligibility", ({ root, packetId }) => {
+  registerCandidate(root, packetId);
+  verifyCandidate(root, packetId, "verified");
+  verifyCandidate(root, packetId, "rejected");
+  const source = querySources(root, { sourceId: "trust-source" }).items[0];
+  assert.equal(source.eligibility.eligible, false);
+  assert.equal(source.eligibility.reason, "source-rejected");
+  assert.equal(source.eligibility.decision, "rejected");
+}));
+
+test("source eligibility requires matching verification packet binding", () => setup("source-eligibility-requires-matching-verification-packet-binding", ({ root, packetId }) => {
+  registerCandidate(root, packetId);
+  verifyCandidate(root, packetId, "verified");
+  const verificationIndex = readJson(root, ARTIFACT_PATHS.sourceVerifications, {});
+  verificationIndex.items[0].packetId = "other-packet";
+  const source = readJson(root, ARTIFACT_PATHS.sources, {}).items[0];
+  const eligibility = sourceEligibility(source, verificationIndex.items);
+  assert.equal(eligibility.eligible, false);
+  assert.equal(eligibility.reason, "source-packet-binding-mismatch");
 }));

@@ -26,6 +26,7 @@ const coreFiles = discoverCoreFiles();
 const WRITE_SIGNAL_REGEX = /(?:writeJson|writeText|appendText|saveState|refreshDurableSurfaces|materializeGuidancePacket|materializeDoveTask|updateTaskLifecycle|persistAutoResult|persistOperatorFollowThrough)\(|(?:fs(?:\.promises)?|fsPromises)\.(?:writeFile|appendFile|rm|cp|copyFile|mkdir|rename|writeFileSync|appendFileSync|rmSync|cpSync|copyFileSync|mkdirSync|renameSync)\(/;
 const EXEMPT_FUNCTIONS = new Set([
   "appendText",
+  "applyPacketStepResult",
   "discoverPaperArtifacts",
   "ensureDir",
   "ensureWorkspace",

@@ -5,6 +5,7 @@ import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
 import { appendText, assertGovernanceMutationRegistered, ensureWorkspace, loadState, nowIso, readJson, writeJson } from "./workspace.mjs";
 import { runReviewLoop } from "./reviews.mjs";
+import { applyPacketStepResult } from "./task-workflow.mjs";
 
 function slugify(value) {
   return String(value ?? "")
@@ -70,7 +71,12 @@ function reviewLoopStopSummary(status, stopReason, responseLanguage) {
   return localizedText(responseLanguage, "review-loop 已用完本轮预算，需要人工决定下一步。", "The review loop used its iteration budget and needs an operator decision.");
 }
 
-function buildBuilderRevisionBoundary({ runId, packetId, review, draftRequested, experienceRequested }) {
+function packetBuilderRoute(packet = {}) {
+  const route = hasNonEmptyString(packet.nextAction) ? packet.nextAction.trim() : "";
+  return route && route !== "project:dove.mission" ? route : "project:dove.auto";
+}
+
+function buildBuilderRevisionBoundary({ runId, packetId, packet, review, draftRequested, experienceRequested }) {
   if (review.verdict === "coherent" && !draftRequested && !experienceRequested) {
     return null;
   }
@@ -100,7 +106,7 @@ function buildBuilderRevisionBoundary({ runId, packetId, review, draftRequested,
     requiredActions,
     ownerRole: "reviewer",
     nextRole: "builder",
-    nextAction: "project:dove.mission",
+    nextAction: packetBuilderRoute(packet),
     requestedWork,
     writes: []
   };
@@ -142,6 +148,7 @@ export function runDoveReviewLoop(root, args = {}) {
   const boundary = buildBuilderRevisionBoundary({
     runId,
     packetId: target.packetId,
+    packet: target.packet,
     review: reviewEntry,
     draftRequested,
     experienceRequested
@@ -208,6 +215,55 @@ export function runDoveReviewLoop(root, args = {}) {
   stateIndex.lastReviewedAt = timestamp;
   writeJson(root, ARTIFACT_PATHS.reviewState, stateIndex);
   appendText(root, ARTIFACT_PATHS.reviewLog, `## ${timestamp} — dove-review-loop\n\n- Run: ${runId}\n- Packet: ${target.packetId}\n- Status: ${status}\n- Stop reason: ${stopReason}\n- Boundary: ${boundary?.type ?? "none"}\n- Review pass: single independent pass\n- Builder mutation: none; revision requires a new explicit handoff call\n\n`);
+  const packetArtifactRefs = normalizeStringArray([
+    ...(target.packet?.artifactRefs ?? []),
+    reviewEntry.reviewStatePath,
+    reviewEntry.reviewLogPath,
+    ARTIFACT_PATHS.reviewState,
+    ARTIFACT_PATHS.reviewLog
+  ]);
+  const packetEvidenceLinks = normalizeStringArray([
+    ...(target.packet?.evidenceLinks ?? []),
+    ...(reviewEntry.reviewedArtifactPaths ?? []),
+    ...(reviewEntry.reviewedArtifactSet ?? [])
+  ]);
+  const task = applyPacketStepResult(root, target.packet, {
+    runId,
+    surface: "dove.review-loop",
+    command: "dove.review-loop",
+    output: {
+      status,
+      runId,
+      summary: reviewEntry.summary,
+      nextAction: boundary?.nextAction ?? "project:dove.status",
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks,
+      boundary,
+      requiredActions: boundary?.requiredActions ?? [],
+      ownerRole: boundary?.ownerRole,
+      nextRole: boundary?.nextRole
+    },
+    classified: boundary ? {
+      status: "blocked-boundary",
+      outcome: boundary.type,
+      stopReason,
+      terminal: true,
+      canCompleteTask: false,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks,
+      requiredActions: boundary.requiredActions
+    } : {
+      status: "step-completed",
+      outcome: "dove.review-loop-coherent",
+      stopReason: null,
+      terminal: false,
+      canCompleteTask: true,
+      artifactRefs: packetArtifactRefs,
+      evidenceLinks: packetEvidenceLinks
+    },
+    nextAction: boundary?.nextAction ?? "project:dove.status",
+    currentFocus: boundary?.summary ?? reviewEntry.summary
+  });
   const preActionGuidance = buildPreActionGuidance({
     surface: "dove.review",
     responseLanguage,
@@ -280,6 +336,8 @@ export function runDoveReviewLoop(root, args = {}) {
     stopReason,
     packetId: target.packetId,
     runId,
+    task,
+    packetLifecycleApplied: true,
     pass,
     review,
     boundary,

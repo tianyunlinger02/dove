@@ -113,6 +113,10 @@ export function writeText(root, relativePath, content) {
   return requireMutationContext(root, "writeText").writeText(relativePath, content);
 }
 
+export function writeBinary(root, relativePath, content) {
+  return requireMutationContext(root, "writeBinary").writeBinary(relativePath, content);
+}
+
 export function appendText(root, relativePath, content) {
   return requireMutationContext(root, "appendText").appendText(relativePath, content);
 }

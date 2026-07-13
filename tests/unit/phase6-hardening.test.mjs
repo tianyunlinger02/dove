@@ -56,6 +56,7 @@ import {
   runExperienceWorkflow,
   runReviewLoop,
   setSectionStatus,
+  sourceIdentityFingerprint,
   syncCitations,
   upsertFigurePlan,
   prepareFigureGeneration,
@@ -980,6 +981,33 @@ test("workflow completion hardening rejects fake completion signals", () => {
   }
 });
 
+test("completion evidence accepts eligible typed sources while source ledgers remain bookkeeping", () => {
+  const root = createTempRoot("dove-typed-source-evidence-");
+  const source = {
+    id: "typed-source",
+    title: "Typed Source Evidence",
+    authors: ["Ada Researcher"],
+    locator: "https://example.org/typed-source",
+    lifecycle: "verified",
+    packetIds: ["typed-source-packet"]
+  };
+  const fingerprint = sourceIdentityFingerprint(source);
+  fs.mkdirSync(path.join(root, ".dove/sources"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".dove/sources/index.json"), `${JSON.stringify({ version: 2, items: [{ ...source, fingerprint }], updatedAt: new Date(0).toISOString() }, null, 2)}\n`);
+  fs.writeFileSync(path.join(root, ".dove/sources/verifications.json"), `${JSON.stringify({ version: 1, items: [{ id: "verification-1", sourceId: source.id, packetId: "typed-source-packet", fingerprint, decision: "verified", checkedAt: new Date(0).toISOString() }], updatedAt: new Date(0).toISOString() }, null, 2)}\n`);
+
+  const typed = completionEvidenceIntegrity(root, { evidencePaths: ["source:typed-source"] }, {
+    context: { eligibleSourceReferences: ["source:typed-source"] }
+  });
+  assert.equal(typed.hasSubstantiveEvidence, true);
+  assert.deepEqual(typed.substantiveEvidencePaths, ["source:typed-source"]);
+
+  const ledgers = completionEvidenceIntegrity(root, { evidencePaths: [ARTIFACT_PATHS.sources, ARTIFACT_PATHS.sourceVerifications] });
+  assert.equal(ledgers.hasSubstantiveEvidence, false);
+  assert.ok(ledgers.pathEvidence.bookkeepingPaths.includes(ARTIFACT_PATHS.sources));
+  assert.ok(ledgers.pathEvidence.bookkeepingPaths.includes(ARTIFACT_PATHS.sourceVerifications));
+});
+
 test("completion evidence integrity rejects fake local paths and bookkeeping-only evidence", () => {
   const missingRoot = tempRoot();
   try {
@@ -1532,7 +1560,11 @@ test("completion evidence rejects bootstrap placeholders and semantically empty 
         verifiedCriteria: [{ criterion: HARDENING_CRITERION, status: "verified", evidencePaths: [artifactPath] }]
       });
       assert.equal(integrity.satisfied, false, artifactPath);
-      assert.deepEqual(integrity.pathEvidence.placeholderPaths, [artifactPath], artifactPath);
+      if ([ARTIFACT_PATHS.sources, ARTIFACT_PATHS.sourceVerifications].includes(artifactPath)) {
+        assert.deepEqual(integrity.pathEvidence.bookkeepingPaths, [artifactPath], artifactPath);
+      } else {
+        assert.deepEqual(integrity.pathEvidence.placeholderPaths, [artifactPath], artifactPath);
+      }
     }
 
     const draftsReadme = completionEvidenceIntegrity(root, {

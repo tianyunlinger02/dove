@@ -2587,7 +2587,7 @@ export function verifySource(root, args = {}) {
   if (unknown.length > 0) throw new Error(`verify_source does not accept unknown input: ${unknown.join(", ")}.`);
   const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 2, items: [], updatedAt: null });
   const source = sourceReferenceMap(sources.items ?? []).get(args.sourceId) ?? null;
-  const prepared = prepareSourceVerification(root, source, args);
+  const prepared = prepareSourceVerification(root, source, args, target.packet?.id);
   const record = prepared.record;
   writeJson(root, ARTIFACT_PATHS.sourceVerifications, prepared.index);
   source.lifecycle = record.decision;

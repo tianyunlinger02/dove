@@ -321,6 +321,16 @@ for (const relativePath of ["../src/core/workspace.mjs", "../src/mcp/server.mjs"
   }
 });
 
+test("generated adapter writers reject symlinked destinations", () => {
+  const root = createTempRoot("dove-generated-adapter-symlink-");
+  const outside = createTempRoot("dove-generated-adapter-symlink-outside-");
+  fs.mkdirSync(path.join(root, ".opencode"), { recursive: true });
+  fs.symlinkSync(outside, path.join(root, ".opencode", "commands"), "dir");
+
+  assert.throws(() => writeGeneratedAdapters(root), /must not contain symbolic links/);
+  assert.deepEqual(fs.readdirSync(outside), []);
+});
+
 test("generated adapter check reports stale managed adapter files", () => {
   const target = createTempRoot("dove-generated-adapters-");
 
@@ -365,6 +375,22 @@ test("CLI install rejects symlinked managed destinations", () => {
   const target = createTempRoot("dove-install-symlink-");
   const outside = createTempRoot("dove-install-symlink-outside-");
   fs.symlinkSync(outside, path.join(target, ".dove"), "dir");
+
+  const result = spawnSync("node", [CLI, "install", target, "--force"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stderr || result.stdout, /must not contain symbolic links/);
+  assert.deepEqual(fs.readdirSync(outside), []);
+});
+
+test("CLI install rejects symlinked nested managed destinations", () => {
+  const target = createTempRoot("dove-install-nested-symlink-");
+  const outside = createTempRoot("dove-install-nested-symlink-outside-");
+  fs.mkdirSync(path.join(target, "docs"), { recursive: true });
+  fs.symlinkSync(outside, path.join(target, "docs", "README.md"));
 
   const result = spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
@@ -438,6 +464,33 @@ test("CLI install can install optional host adapters without local unsafe files"
   assert.equal(fs.existsSync(path.join(target, ".agents", "skills", "start", "SKILL.md")), false);
   assert.equal(fs.existsSync(path.join(target, ".claude", "settings.local.json")), false);
   assert.equal(fs.existsSync(path.join(target, ".opencode", "node_modules")), false);
+});
+
+test("CLI install rejects symlinked Claude user adapter and gateway files", () => {
+  const target = createTempRoot("dove-install-claude-symlink-");
+  const { claudeConfigRoot, claudeShellRc, env } = createClaudeHostTestEnv();
+  const outside = createTempRoot("dove-install-claude-symlink-outside-");
+  fs.mkdirSync(path.join(claudeConfigRoot, "commands"), { recursive: true });
+  fs.symlinkSync(outside, path.join(claudeConfigRoot, "commands", "dove"), "dir");
+
+  const adapterResult = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env
+  });
+  assert.equal(adapterResult.status, 1, adapterResult.stderr || adapterResult.stdout);
+  assert.match(adapterResult.stderr || adapterResult.stdout, /must not contain symbolic links/);
+
+  fs.unlinkSync(path.join(claudeConfigRoot, "commands", "dove"));
+  fs.symlinkSync(path.join(outside, "settings.json"), path.join(claudeConfigRoot, "settings.json"));
+  const gatewayResult = spawnSync("node", [CLI, "sync", target, "--force", "--host", "claude"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env
+  });
+  assert.equal(gatewayResult.status, 1, gatewayResult.stderr || gatewayResult.stdout);
+  assert.match(gatewayResult.stderr || gatewayResult.stdout, /must not contain symbolic links/);
+  assert.deepEqual(fs.readdirSync(outside), []);
 });
 
 test("CLI install writes Claude user-level command adapters and gateway defaults without project-local .claude files", () => {

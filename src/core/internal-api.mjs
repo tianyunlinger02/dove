@@ -9,7 +9,7 @@ export { importIsolatedReview, prepareIsolatedReview, runIsolatedReview } from "
 export { buildRebuttal, evaluateFigurePipeline, initProject, listWorkspaceArtifacts, readState, refreshWiki, registerSource, verifySource, setSectionStatus, summarizeFigureQa, syncChecklist, syncCitations, upsertDraft, upsertFigurePlan, upsertNote, upsertOutline, upsertPlan, validateFigurePipeline } from "./artifacts.mjs";
 export { importFigureGeneration, prepareFigureGeneration } from "./figure-generation.mjs";
 export { runFigureWorkflow } from "./figure-workflow.mjs";
-export { applyDoveStatusAdjustments, createDoveTask, initDoveGoal, killDoveTask, recordDoveMissionPass, resetDoveVersion, runDoveAuto, runDoveOperator } from "./task-workflow.mjs";
+export { applyDoveStatusAdjustments, applyPacketStepResult, createDoveTask, initDoveGoal, killDoveTask, recordDoveMissionPass, resetDoveVersion, runDoveAuto, runDoveOperator } from "./task-workflow.mjs";
 export { runExperienceWorkflow } from "./experience-workflow.mjs";
 export { importAudioReview, prepareAudioReview, runAudioReview } from "./audio-review.mjs";
 export { runDoveReviewLoop } from "./dove-review-loop.mjs";

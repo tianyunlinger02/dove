@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { resolveCanonicalContainedWrite } from "../src/core/contained-write.mjs";
 import {
   COMMAND_SURFACES,
   DIRECT_PROCESS_ADAPTER_COMMAND_IDS,
@@ -203,7 +204,7 @@ export function generatedClaudeUserCommandEntries() {
 export function writeClaudeUserCommandAdapters(claudeConfigRoot) {
   const written = [];
   for (const entry of generatedClaudeUserCommandEntries()) {
-    const absolutePath = path.join(claudeConfigRoot, entry.relativePath);
+    const { fullPath: absolutePath } = resolveCanonicalContainedWrite(claudeConfigRoot, entry.relativePath, { label: "Claude command adapter path" });
     fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
     fs.writeFileSync(absolutePath, `${entry.content.trimEnd()}\n`, "utf8");
     written.push(entry.relativePath);
@@ -245,7 +246,7 @@ function existingGeneratedAdapterPaths(root) {
 export function writeGeneratedAdapters(root = PACKAGE_ROOT) {
   const written = [];
   for (const entry of generatedAdapterEntries()) {
-    const absolutePath = path.join(root, entry.relativePath);
+    const { fullPath: absolutePath } = resolveCanonicalContainedWrite(root, entry.relativePath, { label: "Generated command adapter path" });
     fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
     fs.writeFileSync(absolutePath, `${entry.content.trimEnd()}\n`, "utf8");
     written.push(entry.relativePath);

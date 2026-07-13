@@ -6,14 +6,15 @@ const DEFAULT_LIMIT = 8;
 const MAX_LIMIT = 50;
 const DEFAULT_TIMEOUT_MS = 12000;
 const MAX_QUERY_CHARS = 500;
+const POST_FILTER_OVERFETCH_FACTOR = 3;
 const SECRET_VALUE_PATTERN = /\b(?:Bearer\s+[A-Za-z0-9._~+/=-]+|sk-[A-Za-z0-9_-]{12,}|(?:api[_-]?key|token|secret|password)\s*[:=]\s*[^\s,}]+)\b/giu;
 
 export const NETWORK_SEARCH_PROVIDER_REGISTRY = Object.freeze([
-  Object.freeze({ id: "openalex", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 25, capabilities: ["works", "doi", "open-access", "authors", "year"] }),
-  Object.freeze({ id: "crossref", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 20, capabilities: ["works", "doi", "authors", "year"] }),
-  Object.freeze({ id: "arxiv", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 20, capabilities: ["preprints", "arxiv-id", "authors", "year"] }),
-  Object.freeze({ id: "europe-pmc", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 25, capabilities: ["papers", "doi", "pubmed-id", "open-access", "authors", "year"] }),
-  Object.freeze({ id: "public-web", kind: "web", access: "public", defaultLimit: 0, maxLimit: 0, unavailable: true, capabilities: ["status"] })
+  Object.freeze({ id: "openalex", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 25, capabilities: ["works", "doi", "open-access", "authors", "year"], filters: Object.freeze({ year: "native", domains: "post", fieldsOfStudy: "post", openAccessOnly: "post", locale: "post" }) }),
+  Object.freeze({ id: "crossref", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 20, capabilities: ["works", "doi", "open-access", "authors", "year"], filters: Object.freeze({ year: "native", domains: "post", openAccessOnly: "post", locale: "post" }) }),
+  Object.freeze({ id: "arxiv", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 20, capabilities: ["preprints", "arxiv-id", "authors", "year"], filters: Object.freeze({ year: "post", domains: "post", openAccessOnly: "post" }) }),
+  Object.freeze({ id: "europe-pmc", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 25, capabilities: ["papers", "doi", "pubmed-id", "open-access", "authors", "year"], filters: Object.freeze({ year: "post", domains: "post", openAccessOnly: "post", locale: "post" }) }),
+  Object.freeze({ id: "public-web", kind: "web", access: "public", defaultLimit: 0, maxLimit: 0, unavailable: true, capabilities: ["status"], filters: Object.freeze({}) })
 ]);
 
 export const DEFAULT_NETWORK_SEARCH_PROVIDER_IDS = Object.freeze(["openalex", "crossref", "arxiv", "europe-pmc"]);
@@ -101,10 +102,10 @@ function normalizeLocale(value) {
   if (!locale) {
     return null;
   }
-  if (!/^[a-z]{2}(?:[-_][A-Za-z0-9]{2,8})?$/u.test(locale)) {
+  if (!/^[a-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$/iu.test(locale)) {
     throw new Error(`Dove network search locale must be a compact locale code: ${locale}`);
   }
-  return locale.replace("_", "-");
+  return locale.replace("_", "-").toLowerCase();
 }
 
 function normalizeNetworkSearchConfigForCore(config = {}) {
@@ -195,13 +196,16 @@ function normalizeTitle(value) {
 }
 
 function normalizeAuthors(value) {
+  if (isPlainObject(value)) {
+    return normalizeAuthors(value.author ?? value.authors ?? value.fullName ?? value.name);
+  }
   if (Array.isArray(value)) {
     return value.map((item) => {
       if (typeof item === "string") {
         return normalizeString(item);
       }
       if (isPlainObject(item)) {
-        return normalizeString(item.name ?? item.display_name ?? [item.given, item.family].filter(Boolean).join(" "));
+        return normalizeString(item.fullName ?? item.name ?? item.display_name ?? [item.given, item.family].filter(Boolean).join(" "));
       }
       return null;
     }).filter(Boolean).slice(0, 12);
@@ -319,12 +323,12 @@ async function fetchJson(url, options) {
 
 const FILTER_NAMES = Object.freeze(["year", "domains", "fieldsOfStudy", "openAccessOnly", "locale"]);
 
-const PROVIDER_FILTER_SUPPORT = Object.freeze({
-  openalex: Object.freeze({ year: "native", domains: "post", fieldsOfStudy: "post", openAccessOnly: "post", locale: "post" }),
-  crossref: Object.freeze({ year: "native", domains: "post", openAccessOnly: "post", locale: "post" }),
-  arxiv: Object.freeze({ year: "post", domains: "post", openAccessOnly: "post" }),
-  "europe-pmc": Object.freeze({ year: "post", domains: "post", openAccessOnly: "post", locale: "post" })
-});
+const PROVIDER_FILTER_SUPPORT = Object.freeze(Object.fromEntries(NETWORK_SEARCH_PROVIDER_REGISTRY.map((provider) => [
+  provider.id,
+  Object.freeze(Object.fromEntries(FILTER_NAMES
+    .filter((name) => provider.filters?.[name])
+    .map((name) => [name, provider.filters[name]])))
+])));
 
 function requestedFilterNames(query) {
   return FILTER_NAMES.filter((name) => name === "openAccessOnly" ? query.openAccessOnly : Array.isArray(query[name]) ? query[name].length > 0 : Boolean(query[name]));
@@ -547,6 +551,10 @@ function dedupeAndRank(candidates, query) {
 
 function selectedProviderIds(query, config) {
   if (query.providerIds.length > 0) {
+    const conflicts = query.providerIds.filter((id) => !providerVisibleForKind(PROVIDER_BY_ID.get(id), query.kind));
+    if (conflicts.length > 0) {
+      throw new Error(`Dove network search provider-kind conflict: ${conflicts.join(", ")} cannot be used for kind ${query.kind}.`);
+    }
     return query.providerIds;
   }
   if (query.kind === "web") {
@@ -559,7 +567,7 @@ function selectedProviderIds(query, config) {
 }
 
 function providerVisibleForKind(provider, kind) {
-  return kind === "all" || provider.kind === kind;
+  return Boolean(provider) && (kind === "all" || provider.kind === kind);
 }
 
 function providerReport(provider, fields = {}) {
@@ -569,10 +577,12 @@ function providerReport(provider, fields = {}) {
     access: provider.access,
     status: fields.status ?? "available",
     resultCount: fields.resultCount ?? 0,
+    fetchedCount: fields.fetchedCount ?? 0,
     message: fields.message ?? null,
     error: fields.error ?? null,
     appliedFilters: fields.appliedFilters ?? [],
     unsupportedFilters: fields.unsupportedFilters ?? [],
+    filterModes: fields.filterModes ?? {},
     capabilities: provider.capabilities
   };
 }
@@ -608,14 +618,18 @@ async function runProvider(provider, query, config, fetchFn) {
   }
   const limit = Math.min(query.limit, provider.maxLimit || query.limit);
   const timeoutMs = normalizePositiveInteger(config.providerSettings?.[provider.id]?.timeoutMs, config.timeoutMs, 1000, 60000);
-  const providerQuery = { ...query, limit };
   const filterPlan = providerFilterPlan(provider, query);
+  const needsPostFilter = Object.values(filterPlan.filterModes).includes("post");
+  const fetchLimit = needsPostFilter
+    ? Math.min(provider.maxLimit || limit, Math.max(limit, limit * POST_FILTER_OVERFETCH_FACTOR))
+    : limit;
+  const providerQuery = { ...query, limit: fetchLimit };
   try {
     const rawCandidates = await withTimeout(Promise.resolve().then(() => PROVIDER_ADAPTERS[provider.id](providerQuery, { timeoutMs, fetchFn })), timeoutMs);
-    const candidates = postFilterCandidates(rawCandidates.map((candidate) => normalizeCandidate(candidate, provider)).filter(Boolean), query, filterPlan);
+    const candidates = postFilterCandidates(rawCandidates.map((candidate) => normalizeCandidate(candidate, provider)).filter(Boolean), query, filterPlan).slice(0, limit);
     return {
       candidates,
-      report: providerReport(provider, { status: "ok", resultCount: candidates.length, ...filterPlan })
+      report: providerReport(provider, { status: "ok", resultCount: candidates.length, fetchedCount: rawCandidates.length, ...filterPlan })
     };
   } catch (error) {
     return {
@@ -654,8 +668,16 @@ async function searchOpenAlex(query, options) {
   })) : [];
 }
 
+function crossrefOpenAccess(item) {
+  const links = Array.isArray(item.link) ? item.link : [];
+  if (links.some((link) => /^https?:/iu.test(link?.URL ?? "") && /(?:application\/pdf|text\/html)/iu.test(link?.["content-type"] ?? ""))) {
+    return true;
+  }
+  return item.license ? (Array.isArray(item.license) ? item.license.length > 0 : true) : null;
+}
+
 async function searchCrossref(query, options) {
-  const params = buildParams({ query: query.query, rows: query.limit, select: "DOI,title,URL,link,author,published,published-print,published-online,container-title,abstract,language,is-referenced-by-count" });
+  const params = buildParams({ query: query.query, rows: query.limit, select: "DOI,title,URL,link,license,author,published,published-print,published-online,container-title,abstract,language,is-referenced-by-count" });
   if (query.year && !query.year.includes("-")) {
     params.set("filter", `from-pub-date:${query.year}-01-01,until-pub-date:${query.year}-12-31`);
   } else if (query.year) {
@@ -674,7 +696,7 @@ async function searchCrossref(query, options) {
     domains: Array.from(new Set([hostnameFromUrl(item.URL), ...(Array.isArray(item.link) ? item.link.map((link) => hostnameFromUrl(link?.URL)) : [])].filter(Boolean))),
     locale: item.language,
     doi: item.DOI,
-    openAccess: null,
+    openAccess: crossrefOpenAccess(item),
     score: Number(item["is-referenced-by-count"] ?? 0) > 0 ? Math.log10(Number(item["is-referenced-by-count"]) + 1) : 0
   })) : [];
 }
@@ -711,20 +733,23 @@ async function searchEuropePmc(query, options) {
   const params = buildParams({ query: query.query, format: "json", pageSize: query.limit, resultType: "core" });
   const json = await fetchJson(`https://www.ebi.ac.uk/europepmc/webservices/rest/search?${params.toString()}`, options);
   const results = json.resultList?.result;
-  return Array.isArray(results) ? results.map((item) => ({
-    title: item.title,
-    url: item.doi ? doiUrl(item.doi) : item.pmid ? `https://europepmc.org/article/MED/${item.pmid}` : item.pmcid ? `https://europepmc.org/article/PMC/${item.pmcid}` : null,
-    snippet: item.abstractText,
-    sourceName: item.journalTitle ?? "Europe PMC",
-    publishedAt: normalizePublishedAt(item.firstPublicationDate ?? item.pubYear),
-    authors: item.authorList?.author ? normalizeAuthors(item.authorList.author.map((author) => author.fullName)) : normalizeAuthors(item.authorString),
-    domains: [item.doi ? "doi.org" : "europepmc.org"],
-    locale: item.language,
-    doi: item.doi,
-    pubmedId: item.pmid,
-    openAccess: item.isOpenAccess === "Y" || item.inEPMC === "Y",
-    score: Number(item.citedByCount ?? 0) > 0 ? Math.log10(Number(item.citedByCount) + 1) : 0
-  })) : [];
+  return Array.isArray(results) ? results.map((item) => {
+    const url = item.doi ? doiUrl(item.doi) : item.pmid ? `https://europepmc.org/article/MED/${item.pmid}` : item.pmcid ? `https://europepmc.org/article/PMC/${item.pmcid}` : null;
+    return {
+      title: item.title,
+      url,
+      snippet: item.abstractText,
+      sourceName: item.journalTitle ?? "Europe PMC",
+      publishedAt: normalizePublishedAt(item.firstPublicationDate ?? item.pubYear),
+      authors: item.authorList?.author ? normalizeAuthors(item.authorList.author) : normalizeAuthors(item.authorString),
+      domains: [hostnameFromUrl(url)].filter(Boolean),
+      locale: item.language ?? item.lang,
+      doi: item.doi,
+      pubmedId: item.pmid,
+      openAccess: item.isOpenAccess === "Y" || item.inEPMC === "Y",
+      score: Number(item.citedByCount ?? 0) > 0 ? Math.log10(Number(item.citedByCount) + 1) : 0
+    };
+  }) : [];
 }
 
 const PROVIDER_ADAPTERS = {
@@ -818,7 +843,13 @@ export async function executeNetworkSearch(rawArgs = {}, config = {}, options = 
     },
     needsAttention: buildNeedsAttention(status, providerReports, candidates),
     showMore: { text: "展开结果可查看候选列表和 provider 状态；默认 compact 不展示原始返回。" },
-    diagnostics: { providerCount: providerReports.length, candidateCountBeforeDedupe: allCandidates.length }
+    diagnostics: {
+      providerCount: providerReports.length,
+      candidateCountBeforeDedupe: allCandidates.length,
+      fetchedCount: providerReports.reduce((sum, report) => sum + report.fetchedCount, 0),
+      appliedFilters: Array.from(new Set(providerReports.flatMap((report) => report.appliedFilters))),
+      unsupportedFilters: Array.from(new Set(providerReports.flatMap((report) => report.unsupportedFilters)))
+    }
   };
 }
 
@@ -844,6 +875,10 @@ export function queryNetworkSearchProviders(root, args = {}, env = process.env) 
     throw new Error(`Dove network search kind must be one of: ${Array.from(SEARCH_KINDS).join(", ")}.`);
   }
   const requestedIds = normalizeProviderIds(args.providerIds ?? args.providers);
+  const conflicts = requestedIds.filter((id) => !providerVisibleForKind(PROVIDER_BY_ID.get(id), kind));
+  if (conflicts.length > 0) {
+    throw new Error(`Dove network search provider-kind conflict: ${conflicts.join(", ")} cannot be used for kind ${kind}.`);
+  }
   const providers = NETWORK_SEARCH_PROVIDER_REGISTRY
     .filter((provider) => requestedIds.length === 0 || requestedIds.includes(provider.id))
     .filter((provider) => providerVisibleForKind(provider, kind));

@@ -46,6 +46,7 @@ import {
   queryProgramApprovals,
   queryCampaigns,
   queryNetworkSearchProviders,
+  querySources,
   queryTaskGraph,
   queryWorkspaceIndex,
   readActionContextBundle,
@@ -543,6 +544,8 @@ export function dispatchToolData(root, name, args = {}) {
         return result(searchNetwork(root, args));
       case "query_network_search_providers":
         return result(queryNetworkSearchProviders(root, args));
+      case "query_sources":
+        return result(querySources(root, args));
       case "query_operator_follow_through":
         return result(queryOperatorFollowThrough(root));
       case "query_paper_audit":

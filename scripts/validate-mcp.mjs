@@ -930,14 +930,9 @@ async function main() {
   assert.equal(autoRun.result.foreground, true);
   assert.equal(autoRun.result.background, false);
   assert.equal(autoRun.result.maxIterations, 2);
-  assert.equal(autoRun.result.iterationCount, 1);
-  assert.equal(autoRun.result.iterations[0].command, "dove.review");
-  assert.notEqual(autoRun.result.iterations[0].outcome, "completed");
-  if (autoRun.result.iterations[0].outcome === "workflow-error-boundary") {
-    assert.equal(autoRun.result.stopReason, autoRun.result.iterations[0].stopReason);
-  } else {
-    assert.equal(autoRun.result.stopReason, `dove.review-${autoRun.result.iterations[0].outcome}`);
-  }
+  assert.equal(autoRun.result.iterationCount, 0);
+  assert.equal(autoRun.result.boundary?.type, reviewLoop.boundary?.type);
+  assert.equal(autoRun.result.stopReason, reviewLoop.boundary?.reason);
   assert.ok(autoRun.result.allowedInternalCommands.includes("dove.review-loop"));
   requirePublicResultCard(autoRun.resultCard, { surface: "dove.auto" });
   assert.equal(autoRun.resultCard.requiresAction, true);

@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
+import { resolveCanonicalContainedWrite } from "./contained-write.mjs";
+
 export const CLAUDE_CODE_GATEWAY_ENV_DEFAULTS = Object.freeze({
   CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
   CLAUDE_CODE_MAX_CONTEXT_TOKENS: "220000",
@@ -161,9 +163,12 @@ export function configureClaudeCodeGatewayDefaults(options = {}) {
   const claudeConfigRoot = path.resolve(options.claudeConfigRoot ?? resolveClaudeConfigRoot());
   const shellStartupFile = path.resolve(options.shellStartupFile ?? resolveClaudeShellStartupFile());
   const envDefaults = options.envDefaults ?? CLAUDE_CODE_GATEWAY_ENV_DEFAULTS;
-  const settingsPath = path.join(claudeConfigRoot, "settings.json");
-
   fs.mkdirSync(claudeConfigRoot, { recursive: true });
+  const { fullPath: settingsPath } = resolveCanonicalContainedWrite(claudeConfigRoot, "settings.json", { label: "Claude Code settings path" });
+  const shellRoot = path.dirname(shellStartupFile);
+  fs.mkdirSync(shellRoot, { recursive: true });
+  const { fullPath: safeShellStartupFile } = resolveCanonicalContainedWrite(shellRoot, path.basename(shellStartupFile), { label: "Claude shell startup path" });
+
   const settings = readJsonObject(settingsPath);
   const env = isPlainObject(settings.env) ? { ...settings.env } : {};
   for (const [key, value] of Object.entries(envDefaults)) {
@@ -177,12 +182,11 @@ export function configureClaudeCodeGatewayDefaults(options = {}) {
     fs.writeFileSync(settingsPath, nextSettingsContent, "utf8");
   }
 
-  fs.mkdirSync(path.dirname(shellStartupFile), { recursive: true });
-  const previousShellContent = fs.existsSync(shellStartupFile) ? fs.readFileSync(shellStartupFile, "utf8") : "";
+  const previousShellContent = fs.existsSync(safeShellStartupFile) ? fs.readFileSync(safeShellStartupFile, "utf8") : "";
   const nextShellContent = insertShellBlock(previousShellContent, renderClaudeCodeGatewayShellBlock(envDefaults));
   const shellWritten = previousShellContent !== nextShellContent;
   if (shellWritten) {
-    fs.writeFileSync(shellStartupFile, nextShellContent, "utf8");
+    fs.writeFileSync(safeShellStartupFile, nextShellContent, "utf8");
   }
 
   return {
@@ -196,7 +200,7 @@ export function configureClaudeCodeGatewayDefaults(options = {}) {
     shell: {
       ok: true,
       written: shellWritten,
-      beforeEarlyReturn: inspectShellStartup(shellStartupFile, envDefaults).beforeEarlyReturn,
+      beforeEarlyReturn: inspectShellStartup(safeShellStartupFile, envDefaults).beforeEarlyReturn,
       ensuredEnvKeys: Object.keys(envDefaults)
     },
     restartRequired: true,

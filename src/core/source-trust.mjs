@@ -77,14 +77,18 @@ export function sourceReferenceMap(sources = []) {
 
 export function sourceEligibility(source, verifications = []) {
   if (!source) return { eligible: false, reason: "unknown-source", source: null, verification: null };
-  if (source.lifecycle !== "verified") {
-    return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: null };
+  const verification = [...verifications].reverse().find((item) => item.sourceId === source.id) ?? null;
+  if (!verification) return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: null };
+  if (verification.decision !== "verified") {
+    return { eligible: false, reason: `source-${verification.decision ?? source.lifecycle ?? "candidate"}`, source, verification };
   }
   const fingerprint = sourceIdentityFingerprint(source);
-  const verification = [...verifications].reverse().find((item) => item.sourceId === source.id && item.decision === "verified") ?? null;
-  if (!verification) return { eligible: false, reason: "missing-source-verification", source, verification: null };
   if (verification.fingerprint !== fingerprint) {
     return { eligible: false, reason: "source-identity-changed", source, verification };
+  }
+  const sourcePacketIds = new Set(Array.isArray(source.packetIds) ? source.packetIds : []);
+  if (!verification.packetId || !sourcePacketIds.has(verification.packetId)) {
+    return { eligible: false, reason: "source-packet-binding-mismatch", source, verification };
   }
   return { eligible: true, reason: "verified-source", source, verification };
 }
@@ -96,6 +100,39 @@ export function evaluateSourceReferences(root, references = []) {
     const source = byReference.get(reference) ?? null;
     return { reference, ...sourceEligibility(source, verifications.items ?? []) };
   });
+}
+
+export function querySources(root, args = {}) {
+  const { sources, verifications } = readSourceTrustState(root);
+  const sourceId = normalizeText(args.sourceId ?? args.id);
+  const packetId = normalizeText(args.packetId ?? args.taskPacketId ?? args.missionPacketId);
+  const lifecycle = normalizeText(args.lifecycle).toLowerCase();
+  const limit = Math.min(200, Math.max(1, Number.isFinite(Number(args.limit)) ? Math.trunc(Number(args.limit)) : 50));
+  const items = (sources.items ?? [])
+    .filter((source) => !sourceId || [source.id, source.citationKey, source.locator, source.url, source.doi].includes(sourceId))
+    .filter((source) => !packetId || (source.packetIds ?? []).includes(packetId))
+    .map((source) => {
+      const eligibility = sourceEligibility(source, verifications.items ?? []);
+      return {
+        ...source,
+        eligibility: {
+          eligible: eligibility.eligible,
+          reason: eligibility.reason,
+          verificationId: eligibility.verification?.id ?? null,
+          decision: eligibility.verification?.decision ?? null,
+          packetId: eligibility.verification?.packetId ?? null,
+          checkedAt: eligibility.verification?.checkedAt ?? null
+        }
+      };
+    })
+    .filter((source) => !lifecycle || source.eligibility.decision === lifecycle || source.lifecycle === lifecycle)
+    .slice(0, limit);
+  return {
+    status: items.length > 0 ? "ok" : "empty",
+    sourceCount: items.length,
+    items,
+    bookkeeping: [ARTIFACT_PATHS.sources, ARTIFACT_PATHS.sourceVerifications]
+  };
 }
 
 export function assertEligibleSourceReferences(root, references = [], label = "Evidence") {
@@ -158,7 +195,7 @@ function auditEvidenceMatchesSource(source, evidence) {
   });
 }
 
-export function prepareSourceVerification(root, source, args = {}) {
+export function prepareSourceVerification(root, source, args = {}, packetId = null) {
   const method = normalizeText(args.method);
   const checkedMaterial = normalizeText(args.checkedMaterial);
   const auditEvidence = normalizedAuditEvidence(root, args.auditEvidence);
@@ -173,10 +210,15 @@ export function prepareSourceVerification(root, source, args = {}) {
   if (!SOURCE_LIFECYCLE_STATES.slice(1).includes(decision)) {
     throw new Error("verify_source decision must be verified or rejected.");
   }
+  const normalizedPacketId = normalizeText(packetId);
+  if (!normalizedPacketId || !(Array.isArray(source.packetIds) ? source.packetIds : []).includes(normalizedPacketId)) {
+    throw new Error("verify_source requires the resolved packet to be bound to the registered source.");
+  }
   const timestamp = nowIso();
   const record = {
     id: `source-verification-${source.id}-${Date.now().toString(36)}`,
     sourceId: source.id,
+    packetId: normalizedPacketId,
     fingerprint: sourceIdentityFingerprint(source),
     decision,
     method,

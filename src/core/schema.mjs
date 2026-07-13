@@ -373,6 +373,7 @@ export const GOVERNANCE_READONLY_TOOLS = [
   "query_operator_lessons",
   "search_network",
   "query_network_search_providers",
+  "query_sources",
   "query_operator_follow_through",
   "query_paper_audit",
   "query_dove_onboarding",

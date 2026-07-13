@@ -186,8 +186,8 @@ var COMMAND_SURFACES_BASE = [
     category: "mutation",
     policy: "guarded-mutation",
     summary: "Collect and organize external material such as web pages, papers, venue templates, reviewer guidelines, rankings, APIs, or operator-provided sources for the selected task.",
-    requiredTools: ["register_source"],
-    constraints: ["Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.", "Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.", "When current public information or scholarly discovery is needed, use read-only public no-key network search or visible retrieval to find candidates first, then verify title, locator, DOI/URL, source identity, and citation details before registration.", "Dove network search results are candidate material, not durable source evidence; snippets alone must not become registered sources or claims.", "Never call `register_source` with only a packet id; every new source must include a real title or locator, and source-research auto runs must collect those URLs/templates/guidelines before writing.", "Treat host search output such as `Did 0 searches`, zero results, empty result sets, or unavailable search as a hard retrieval failure; do not describe it as finding official sources, and do not infer locators from memory or prior transcript context.", "Do not call `register_source` when search/fetch returned zero results, safe-domain verification failed, retrieval was blocked, or a network search provider reports unavailable; record or surface a `host-tool-blocked` boundary until verifiable source evidence exists.", "If the host denies or blocks the boundary-recording mutation, stop and report that no durable source or boundary update was written; do not retry another mutating Dove call such as patch-plan without explicit operator approval.", "Use explicit configured providers or operator-provided material; do not hide network/provider calls.", "Link each source to the resolved durable task packet through packetIds.", "For reviewer-guideline or \u5BA1\u7A3F\u504F\u597D research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact."]
+    requiredTools: ["query_sources", "register_source", "verify_source"],
+    constraints: ["Treat source as external information intake, not internal note consolidation; pressure-test summaries and writing-style synthesis belong in note or document evidence.", "Use `register_source` with `sources: [...]` for batch provenance capture when the operator provides multiple URLs/templates/guidelines at once.", "When current public information or scholarly discovery is needed, use read-only public no-key network search or visible retrieval to find candidates first, then verify title, locator, DOI/URL, source identity, and citation details before registration.", "Dove network search results are candidate material, not durable source evidence; snippets alone must not become registered sources or claims.", "Never call `register_source` with only a packet id; every new source must include a real title or locator, and source-research auto runs must collect those URLs/templates/guidelines before writing.", "Treat host search output such as `Did 0 searches`, zero results, empty result sets, or unavailable search as a hard retrieval failure; do not describe it as finding official sources, and do not infer locators from memory or prior transcript context.", "Do not call `register_source` when search/fetch returned zero results, safe-domain verification failed, retrieval was blocked, or a network search provider reports unavailable; record or surface a `host-tool-blocked` boundary until verifiable source evidence exists.", "If the host denies or blocks the boundary-recording mutation, stop and report that no durable source or boundary update was written; do not retry another mutating Dove call such as patch-plan without explicit operator approval.", "Use explicit configured providers or operator-provided material; do not hide network/provider calls.", "Link each source to the resolved durable task packet through packetIds.", "Treat source and source-verification JSON ledgers as bookkeeping, not completion artifacts; use typed source:<id> completion evidence only when the latest verification decision is verified and both fingerprint and packet binding match.", "For reviewer-guideline or \u5BA1\u7A3F\u504F\u597D research, stay in Builder/researcher source intake unless the operator asks for an independent audit of an artifact."]
   },
   {
     id: "dove.note",
@@ -942,6 +942,7 @@ var GOVERNANCE_READONLY_TOOLS = [
   "query_operator_lessons",
   "search_network",
   "query_network_search_providers",
+  "query_sources",
   "query_operator_follow_through",
   "query_paper_audit",
   "query_dove_onboarding",
@@ -4665,23 +4666,29 @@ function createWorkflowBoundaries() {
 }
 
 // src/core/workspace.mjs
-import fs2 from "node:fs";
-import path3 from "node:path";
+import fs3 from "node:fs";
+import path4 from "node:path";
 
 // src/core/mutation-backend.mjs
 import { AsyncLocalStorage } from "node:async_hooks";
 import crypto2 from "node:crypto";
+import fs2 from "node:fs";
+import path2 from "node:path";
+
+// src/core/contained-write.mjs
 import fs from "node:fs";
 import path from "node:path";
+
+// src/core/mutation-backend.mjs
 var mutationStorage = new AsyncLocalStorage();
 function currentMutationContext(root) {
   const context = mutationStorage.getStore();
-  if (!context) {
+  if (!context || context.lifecycle !== "active") {
     return null;
   }
   if (root) {
     try {
-      if (fs.realpathSync.native(path.resolve(root)) !== context.root) {
+      if (fs2.realpathSync.native(path2.resolve(root)) !== context.root) {
         return null;
       }
     } catch {
@@ -4695,7 +4702,7 @@ function isPatchPlanMode(root) {
 }
 
 // src/core/workspace-bootstrap.mjs
-import path2 from "node:path";
+import path3 from "node:path";
 var WORKSPACE_BOOTSTRAP_DIRECTORIES = [
   ARTIFACT_PATHS.doveRoot,
   ARTIFACT_PATHS.publicDir,
@@ -5153,14 +5160,14 @@ No comparison has been generated yet.
 
 - No durable session summary has been generated yet.
 `,
-    [path2.join(ARTIFACT_PATHS.draftsDir, "README.md")]: zh ? `# Drafts
+    [path3.join(ARTIFACT_PATHS.draftsDir, "README.md")]: zh ? `# Drafts
 
 \u6BCF\u4E2A markdown \u6587\u4EF6\u4FDD\u5B58\u4E00\u4E2A section\u3002
 ` : `# Drafts
 
 Store one section per markdown file.
 `,
-    [path2.join(ARTIFACT_PATHS.claims.replace("CLAIMS_FROM_RESULTS.md", "README.md"))]: zh ? `# Claims
+    [path3.join(ARTIFACT_PATHS.claims.replace("CLAIMS_FROM_RESULTS.md", "README.md"))]: zh ? `# Claims
 
 \u6B64\u76EE\u5F55\u4FDD\u5B58\u6709\u8BC1\u636E\u652F\u6491\u7684 claim artifacts\u3002
 ` : `# Claims
@@ -5173,6 +5180,7 @@ function createWorkspaceBootstrapJsonArtifacts(state) {
   return [
     [ARTIFACT_PATHS.orchestrationBoard, () => createDefaultBoard(state)],
     [ARTIFACT_PATHS.sources, createSourcesIndex],
+    [ARTIFACT_PATHS.sourceVerifications, () => ({ version: 1, items: [], updatedAt: null })],
     [ARTIFACT_PATHS.notes, createNotesIndex],
     [ARTIFACT_PATHS.evidence, createEvidenceIndex],
     [ARTIFACT_PATHS.documentsLedger, createDocumentLedgerIndex],
@@ -5267,7 +5275,7 @@ function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function resolvePath(root, relativePath) {
-  return path3.join(root, relativePath);
+  return path4.join(root, relativePath);
 }
 function cloneFallback(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
@@ -5284,7 +5292,7 @@ function fileExists(root, relativePath) {
   if (context) {
     return context.fileExists(relativePath);
   }
-  return fs2.existsSync(resolvePath(root, relativePath));
+  return fs3.existsSync(resolvePath(root, relativePath));
 }
 function readJson(root, relativePath, fallback) {
   const context = currentMutationContext(root);
@@ -5292,11 +5300,11 @@ function readJson(root, relativePath, fallback) {
     return context.readJson(relativePath, fallback);
   }
   const fullPath = resolvePath(root, relativePath);
-  if (!fs2.existsSync(fullPath)) {
+  if (!fs3.existsSync(fullPath)) {
     return cloneFallback(fallback);
   }
   try {
-    return JSON.parse(fs2.readFileSync(fullPath, "utf8"));
+    return JSON.parse(fs3.readFileSync(fullPath, "utf8"));
   } catch (error) {
     throw new Error(`Malformed JSON in ${relativePath}: ${error.message}`);
   }
@@ -5318,10 +5326,10 @@ function readText(root, relativePath, fallback = "") {
     return context.readText(relativePath, fallback);
   }
   const fullPath = resolvePath(root, relativePath);
-  if (!fs2.existsSync(fullPath)) {
+  if (!fs3.existsSync(fullPath)) {
     return fallback;
   }
-  return fs2.readFileSync(fullPath, "utf8");
+  return fs3.readFileSync(fullPath, "utf8");
 }
 function writeText(root, relativePath, content) {
   return requireMutationContext(root, "writeText").writeText(relativePath, content);
@@ -5359,7 +5367,7 @@ function ensureWorkspace(root) {
 function listDraftFiles(root) {
   ensureWorkspace(root);
   const draftsDir = resolvePath(root, ARTIFACT_PATHS.draftsDir);
-  return fs2.readdirSync(draftsDir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md").map((entry) => entry.name);
+  return fs3.readdirSync(draftsDir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md").map((entry) => entry.name);
 }
 function extractCitationKeysFromText(content) {
   const keys = [];
@@ -5396,13 +5404,13 @@ function assertGovernanceMutationRegistered(actionId, expectedMode) {
 }
 
 // src/core/i18n.mjs
-import fs4 from "node:fs";
-import path5 from "node:path";
+import fs5 from "node:fs";
+import path6 from "node:path";
 
 // src/core/config.mjs
-import fs3 from "node:fs";
+import fs4 from "node:fs";
 import os from "node:os";
-import path4 from "node:path";
+import path5 from "node:path";
 var DEFAULT_TIMEOUT_MS = 12e4;
 var DEFAULT_MAX_PROMPT_CHARS = 2e4;
 var DEFAULT_MAX_SVG_BYTES = 1e6;
@@ -5518,13 +5526,13 @@ function expandHomePath(value) {
     return os.homedir();
   }
   if (normalized.startsWith("~/")) {
-    return path4.join(os.homedir(), normalized.slice(2));
+    return path5.join(os.homedir(), normalized.slice(2));
   }
   return normalized;
 }
 function resolveAbsolutePath(value) {
   const expanded = expandHomePath(value);
-  return expanded ? path4.resolve(expanded) : null;
+  return expanded ? path5.resolve(expanded) : null;
 }
 function resolveDoveGlobalStatusOutputDir(value = null, env = process.env) {
   const explicit = resolveAbsolutePath(value);
@@ -5532,7 +5540,7 @@ function resolveDoveGlobalStatusOutputDir(value = null, env = process.env) {
     return explicit;
   }
   const xdgDataHome = resolveAbsolutePath(env.XDG_DATA_HOME);
-  return path4.join(xdgDataHome ?? path4.join(os.homedir(), ".local", "share"), "dove", "public");
+  return path5.join(xdgDataHome ?? path5.join(os.homedir(), ".local", "share"), "dove", "public");
 }
 function normalizeEnvRef(value) {
   const normalized = normalizeString2(value);
@@ -5589,11 +5597,11 @@ function assertNoNetworkSearchCredentials(value, configPath = "networkSearch") {
   }
 }
 function readOptionalJsonFile(filePath) {
-  if (!filePath || !fs3.existsSync(filePath)) {
+  if (!filePath || !fs4.existsSync(filePath)) {
     return null;
   }
   try {
-    return JSON.parse(fs3.readFileSync(filePath, "utf8"));
+    return JSON.parse(fs4.readFileSync(filePath, "utf8"));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to read Dove config ${filePath}: ${message}`);
@@ -5619,15 +5627,15 @@ function mergeConfig(base, override) {
 }
 function configPaths(root, env) {
   if (normalizeString2(env.DOVE_CONFIG_PATH)) {
-    return [path4.resolve(env.DOVE_CONFIG_PATH)];
+    return [path5.resolve(env.DOVE_CONFIG_PATH)];
   }
   const paths = [];
   if (normalizeString2(env.XDG_CONFIG_HOME)) {
-    paths.push(path4.join(env.XDG_CONFIG_HOME, "dove", "config.json"));
+    paths.push(path5.join(env.XDG_CONFIG_HOME, "dove", "config.json"));
   }
-  paths.push(path4.join(os.homedir(), ".config", "dove", "config.json"));
-  paths.push(path4.join(root, ".dove", "config.json"));
-  paths.push(path4.join(root, ".dove", "config.local.json"));
+  paths.push(path5.join(os.homedir(), ".config", "dove", "config.json"));
+  paths.push(path5.join(root, ".dove", "config.json"));
+  paths.push(path5.join(root, ".dove", "config.local.json"));
   return Array.from(new Set(paths));
 }
 function envConfig(env) {
@@ -5864,8 +5872,8 @@ function normalizeDnsResolverAddrs(value) {
   return Array.from(new Set(items));
 }
 function isPathInside(childPath, parentPath) {
-  const relative = path4.relative(parentPath, childPath);
-  return relative === "" || !relative.startsWith("..") && !path4.isAbsolute(relative);
+  const relative = path5.relative(parentPath, childPath);
+  return relative === "" || !relative.startsWith("..") && !path5.isAbsolute(relative);
 }
 function assertOutsidePublicDir(filePath, outputDir, label) {
   if (!filePath || !outputDir) {
@@ -6022,12 +6030,12 @@ function readStateLanguage(root) {
   if (!root) {
     return null;
   }
-  const statePath = path5.join(root, ARTIFACT_PATHS.state);
-  if (!fs4.existsSync(statePath)) {
+  const statePath = path6.join(root, ARTIFACT_PATHS.state);
+  if (!fs5.existsSync(statePath)) {
     return null;
   }
   try {
-    const state = normalizeState(JSON.parse(fs4.readFileSync(statePath, "utf8")));
+    const state = normalizeState(JSON.parse(fs5.readFileSync(statePath, "utf8")));
     return state.settings?.responseLanguage ?? null;
   } catch {
     return null;
@@ -6619,16 +6627,16 @@ function doveText(language, key, params = {}) {
 
 // src/core/navigation.mjs
 import crypto5 from "node:crypto";
-import fs6 from "node:fs";
-import path7 from "node:path";
+import fs7 from "node:fs";
+import path8 from "node:path";
 
 // src/core/follow-through-authority.mjs
 import crypto3 from "node:crypto";
 
 // src/core/task-packets.mjs
 import crypto4 from "node:crypto";
-import fs5 from "node:fs";
-import path6 from "node:path";
+import fs6 from "node:fs";
+import path7 from "node:path";
 function slugify(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
 }
@@ -6658,17 +6666,17 @@ function normalizePrimaryRole(value, fallback = "builder") {
   return normalizeAllowed(value, DOVE_PRIMARY_ROLE_IDS, fallback);
 }
 function readJsonReadOnly(root, relativePath, fallback = null) {
-  const fullPath = path6.join(root, relativePath);
-  if (!fs5.existsSync(fullPath)) {
+  const fullPath = path7.join(root, relativePath);
+  if (!fs6.existsSync(fullPath)) {
     return typeof fallback === "function" ? fallback() : structuredClone(fallback);
   }
-  return JSON.parse(fs5.readFileSync(fullPath, "utf8"));
+  return JSON.parse(fs6.readFileSync(fullPath, "utf8"));
 }
 function packetFilePath(packetId) {
-  return path6.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`);
+  return path7.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`);
 }
 function packetContextPath(packetId) {
-  return path6.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`);
+  return path7.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`);
 }
 function readOptionalJson(root, relativePath) {
   try {
@@ -7182,8 +7190,8 @@ function assertResolvedTaskPacket(root, args = {}, options = {}) {
 }
 
 // src/core/orchestration.mjs
-import fs8 from "node:fs";
-import path9 from "node:path";
+import fs9 from "node:fs";
+import path10 from "node:path";
 import crypto6 from "node:crypto";
 
 // src/core/mutation-guard.mjs
@@ -7719,8 +7727,8 @@ function summarizePreActionGuidance(guidance = {}) {
 }
 
 // src/core/artifact-integrity.mjs
-import fs7 from "node:fs";
-import path8 from "node:path";
+import fs8 from "node:fs";
+import path9 from "node:path";
 import { inflateSync } from "node:zlib";
 var DEFAULT_READ_LIMIT_BYTES = 24 * 1024;
 var ARTIFACT_EVIDENCE_ROLES = /* @__PURE__ */ new Map([
@@ -7733,7 +7741,6 @@ var ARTIFACT_EVIDENCE_ROLES = /* @__PURE__ */ new Map([
   [ARTIFACT_PATHS.experimentPlans, "conditional"],
   [ARTIFACT_PATHS.experimentResults, "conditional"],
   [ARTIFACT_PATHS.experimentAudits, "conditional"],
-  [ARTIFACT_PATHS.sources, "conditional"],
   [ARTIFACT_PATHS.notes, "conditional"],
   [ARTIFACT_PATHS.evidence, "conditional"],
   [ARTIFACT_PATHS.claims, "conditional"],
@@ -7762,7 +7769,7 @@ var ARTIFACT_EVIDENCE_ROLES = /* @__PURE__ */ new Map([
   [ARTIFACT_PATHS.versionComparisonReport, "conditional"]
 ]);
 var BOOKKEEPING_ARTIFACT_PATHS = new Set(
-  Object.values(ARTIFACT_PATHS).filter((artifactPath) => typeof artifactPath === "string" && artifactPath.startsWith(`${ARTIFACT_PATHS.doveRoot}/`) && path8.posix.extname(artifactPath).length > 0 && !ARTIFACT_EVIDENCE_ROLES.has(artifactPath))
+  Object.values(ARTIFACT_PATHS).filter((artifactPath) => typeof artifactPath === "string" && artifactPath.startsWith(`${ARTIFACT_PATHS.doveRoot}/`) && path9.posix.extname(artifactPath).length > 0 && !ARTIFACT_EVIDENCE_ROLES.has(artifactPath))
 );
 var DYNAMIC_EVIDENCE_PATTERNS = [
   { pattern: /^\.dove\/drafts\/(?!README\.md$)[^/]+\.(?:md|txt|tex)$/u, role: "substantive" },
@@ -7931,7 +7938,7 @@ function evidenceRequirementKind(value) {
     return "invalid";
   }
   const looksNarrative = /\s|[，。；！？：]/u.test(normalized.normalizedPath);
-  const pathLike = normalized.normalizedPath.startsWith(".") || !looksNarrative && normalized.normalizedPath.includes("/") || !looksNarrative && path8.posix.extname(normalized.normalizedPath).length > 0;
+  const pathLike = normalized.normalizedPath.startsWith(".") || !looksNarrative && normalized.normalizedPath.includes("/") || !looksNarrative && path9.posix.extname(normalized.normalizedPath).length > 0;
   return pathLike ? "reference" : "description";
 }
 function explicitContractLinkedPaths(executionContract = {}) {
@@ -8003,7 +8010,7 @@ function completionPolicyContext(options = {}) {
 }
 function isExternalArtifactReference(value) {
   const text3 = String(value ?? "").trim();
-  return /^https?:\/\/[^\s]+$/iu.test(text3) || /^(?:doi|arxiv):[^\s]+$/iu.test(text3) || /^10\.\d{4,9}\/[^\s]+$/u.test(text3);
+  return /^https?:\/\/[^\s]+$/iu.test(text3) || /^(?:doi|arxiv|source):[^\s]+$/iu.test(text3) || /^10\.\d{4,9}\/[^\s]+$/u.test(text3);
 }
 function normalizeProjectRelativePath(rawPath) {
   const original = typeof rawPath === "string" ? rawPath.trim() : String(rawPath ?? "").trim();
@@ -8013,29 +8020,29 @@ function normalizeProjectRelativePath(rawPath) {
   if (original.includes("\0")) {
     return { ok: false, path: original, reason: "path contains a null byte" };
   }
-  if (path8.isAbsolute(original) || /^[A-Za-z]:[\\/]/.test(original)) {
+  if (path9.isAbsolute(original) || /^[A-Za-z]:[\\/]/.test(original)) {
     return { ok: false, path: original, reason: "absolute paths are not inspected" };
   }
   if (/^[a-z][a-z0-9+.-]*:/iu.test(original)) {
     return { ok: false, path: original, reason: "unsupported or malformed external reference scheme" };
   }
-  const normalizedPath = path8.posix.normalize(original.replace(/\\/g, "/"));
+  const normalizedPath = path9.posix.normalize(original.replace(/\\/g, "/"));
   if (normalizedPath === "." || normalizedPath === ".." || normalizedPath.startsWith("../")) {
     return { ok: false, path: original, normalizedPath, reason: "path escapes the project root" };
   }
   return { ok: true, path: original, normalizedPath };
 }
 function readBoundedText(fullPath, maxBytes = DEFAULT_READ_LIMIT_BYTES) {
-  const descriptor = fs7.openSync(fullPath, "r");
+  const descriptor = fs8.openSync(fullPath, "r");
   try {
     const buffer = Buffer.alloc(maxBytes);
-    const bytesRead = fs7.readSync(descriptor, buffer, 0, maxBytes, 0);
+    const bytesRead = fs8.readSync(descriptor, buffer, 0, maxBytes, 0);
     return {
       text: buffer.subarray(0, bytesRead).toString("utf8"),
       bytesRead
     };
   } finally {
-    fs7.closeSync(descriptor);
+    fs8.closeSync(descriptor);
   }
 }
 var EXPERIMENT_RESULT_OUTCOMES = /* @__PURE__ */ new Set(["supports", "refutes", "inconclusive", "failed", "pending"]);
@@ -8091,17 +8098,17 @@ function inspectSemanticEvidence(relativePath, text3) {
   };
 }
 function readBoundedBuffer(fullPath, maxBytes = DEFAULT_READ_LIMIT_BYTES) {
-  const descriptor = fs7.openSync(fullPath, "r");
+  const descriptor = fs8.openSync(fullPath, "r");
   try {
     const buffer = Buffer.alloc(maxBytes);
-    const bytesRead = fs7.readSync(descriptor, buffer, 0, maxBytes, 0);
+    const bytesRead = fs8.readSync(descriptor, buffer, 0, maxBytes, 0);
     return buffer.subarray(0, bytesRead);
   } finally {
-    fs7.closeSync(descriptor);
+    fs8.closeSync(descriptor);
   }
 }
 function completionMediaFormat(relativePath) {
-  return COMPLETION_MEDIA_EXTENSIONS.get(path8.posix.extname(String(relativePath ?? "")).toLowerCase()) ?? null;
+  return COMPLETION_MEDIA_EXTENSIONS.get(path9.posix.extname(String(relativePath ?? "")).toLowerCase()) ?? null;
 }
 function validSvgBuffer(buffer) {
   const text3 = buffer.toString("utf8").replace(/^﻿/u, "").trim();
@@ -8530,10 +8537,10 @@ function inspectDeclaredPath(root, rawPath, options = {}) {
       reason: normalized.reason
     };
   }
-  const rootPath = path8.resolve(root);
-  const fullPath = path8.resolve(rootPath, normalized.normalizedPath);
-  const relativeToRoot = path8.relative(rootPath, fullPath);
-  if (relativeToRoot.startsWith("..") || path8.isAbsolute(relativeToRoot)) {
+  const rootPath = path9.resolve(root);
+  const fullPath = path9.resolve(rootPath, normalized.normalizedPath);
+  const relativeToRoot = path9.relative(rootPath, fullPath);
+  if (relativeToRoot.startsWith("..") || path9.isAbsolute(relativeToRoot)) {
     return {
       path: normalized.path,
       normalizedPath: normalized.normalizedPath,
@@ -8548,10 +8555,10 @@ function inspectDeclaredPath(root, rawPath, options = {}) {
   let canonicalRelativePath;
   let stat;
   try {
-    realRootPath = fs7.realpathSync(rootPath);
-    realFullPath = fs7.realpathSync(fullPath);
-    const relativeToRealRoot = path8.relative(realRootPath, realFullPath);
-    if (relativeToRealRoot === ".." || relativeToRealRoot.startsWith(`..${path8.sep}`) || path8.isAbsolute(relativeToRealRoot)) {
+    realRootPath = fs8.realpathSync(rootPath);
+    realFullPath = fs8.realpathSync(fullPath);
+    const relativeToRealRoot = path9.relative(realRootPath, realFullPath);
+    if (relativeToRealRoot === ".." || relativeToRealRoot.startsWith(`..${path9.sep}`) || path9.isAbsolute(relativeToRealRoot)) {
       return {
         path: normalized.path,
         normalizedPath: normalized.normalizedPath,
@@ -8561,8 +8568,8 @@ function inspectDeclaredPath(root, rawPath, options = {}) {
         reason: "real path escapes the project root"
       };
     }
-    canonicalRelativePath = relativeToRealRoot.split(path8.sep).join("/");
-    stat = fs7.statSync(realFullPath);
+    canonicalRelativePath = relativeToRealRoot.split(path9.sep).join("/");
+    stat = fs8.statSync(realFullPath);
   } catch (error) {
     if (error?.code === "ENOENT") {
       return {
@@ -8915,7 +8922,7 @@ function parseValidationArtifact(item) {
     return null;
   }
   const canonicalPath = item.canonicalRelativePath ?? item.normalizedPath;
-  if (path8.posix.extname(canonicalPath ?? "").toLowerCase() !== ".json") {
+  if (path9.posix.extname(canonicalPath ?? "").toLowerCase() !== ".json") {
     return null;
   }
   try {
@@ -9036,14 +9043,18 @@ function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
     ...options.inspectOptions ?? {}
   };
   const policy = completionPolicyContext(options);
+  const eligibleSourceReferences = new Set(normalizeStringArray5(options.context?.eligibleSourceReferences));
   const evidencePaths = normalizeStringArray5(evidence.evidencePaths);
   const localEvidencePaths = evidencePaths.filter((item) => !isExternalArtifactReference(item));
   const externalEvidenceRefs = evidencePaths.filter(isExternalArtifactReference);
+  const sourceEvidenceRefs = externalEvidenceRefs.filter((item) => item.startsWith("source:"));
+  const eligibleSourceEvidenceRefs = sourceEvidenceRefs.filter((item) => eligibleSourceReferences.has(item));
   const pathEvidence = completionPathEvidence(root, localEvidencePaths, policy, inspectOptions);
   const criteria = (Array.isArray(evidence.verifiedCriteria) ? evidence.verifiedCriteria : []).map((criterion) => {
     const criterionEvidencePaths = normalizeStringArray5(criterion?.evidencePaths);
     const criterionLocalEvidencePaths = criterionEvidencePaths.filter((item) => !isExternalArtifactReference(item));
     const criterionExternalEvidenceRefs = criterionEvidencePaths.filter(isExternalArtifactReference);
+    const criterionEligibleSourceEvidenceRefs = criterionExternalEvidenceRefs.filter((item) => item.startsWith("source:")).filter((item) => eligibleSourceReferences.has(item));
     const criterionPathEvidence = completionPathEvidence(root, criterionLocalEvidencePaths, policy, inspectOptions);
     const negativeOutcome = negativeOutcomeInspection(root, criterion, criterionPathEvidence, inspectOptions);
     return {
@@ -9052,9 +9063,10 @@ function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
       evidencePaths: criterionEvidencePaths,
       localEvidencePaths: criterionLocalEvidencePaths,
       externalEvidenceRefs: criterionExternalEvidenceRefs,
+      eligibleSourceEvidenceRefs: criterionEligibleSourceEvidenceRefs,
       pathEvidence: criterionPathEvidence,
       negativeOutcome,
-      satisfied: criterionPathEvidence.satisfied && criterionPathEvidence.problemCount === 0 && negativeOutcome.contradictory === false,
+      satisfied: (criterionPathEvidence.satisfied || criterionEligibleSourceEvidenceRefs.length > 0) && criterionPathEvidence.problemCount === 0 && negativeOutcome.contradictory === false,
       problemPaths: completionPathProblems(criterionPathEvidence)
     };
   });
@@ -9063,13 +9075,15 @@ function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
   const requirementIntegrity = requirementCoverage(policy, pathEvidence);
   const uncoveredRequirements = requirementIntegrity.uncoveredRequirements;
   const existingEvidencePaths = pathEvidence.existingPaths.filter((item) => !(pathEvidence.unlinkedPaths ?? []).includes(item));
+  const substantiveEvidencePaths = [...existingEvidencePaths, ...eligibleSourceEvidenceRefs];
   return {
     declaredPaths: evidencePaths,
     localEvidencePaths,
     externalEvidenceRefs,
+    eligibleSourceEvidenceRefs,
     pathEvidence,
     existingEvidencePaths,
-    substantiveEvidencePaths: existingEvidencePaths,
+    substantiveEvidencePaths,
     problemPaths,
     criteria,
     missingCriteriaEvidence,
@@ -9082,8 +9096,8 @@ function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
       contractLinkedPaths: policy.contractLinkedPaths,
       requirementLinkedPaths: policy.requirementLinkedPaths
     },
-    satisfied: pathEvidence.satisfied && missingCriteriaEvidence.length === 0 && problemPaths.length === 0 && uncoveredRequirements.length === 0,
-    hasSubstantiveEvidence: existingEvidencePaths.length > 0 && problemPaths.length === 0
+    satisfied: (pathEvidence.satisfied || eligibleSourceEvidenceRefs.length > 0) && missingCriteriaEvidence.length === 0 && problemPaths.length === 0 && uncoveredRequirements.length === 0,
+    hasSubstantiveEvidence: substantiveEvidencePaths.length > 0 && problemPaths.length === 0
   };
 }
 
@@ -9179,14 +9193,18 @@ function sourceReferenceMap(sources = []) {
 }
 function sourceEligibility(source, verifications = []) {
   if (!source) return { eligible: false, reason: "unknown-source", source: null, verification: null };
-  if (source.lifecycle !== "verified") {
-    return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: null };
+  const verification = [...verifications].reverse().find((item) => item.sourceId === source.id) ?? null;
+  if (!verification) return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: null };
+  if (verification.decision !== "verified") {
+    return { eligible: false, reason: `source-${verification.decision ?? source.lifecycle ?? "candidate"}`, source, verification };
   }
   const fingerprint = sourceIdentityFingerprint(source);
-  const verification = [...verifications].reverse().find((item) => item.sourceId === source.id && item.decision === "verified") ?? null;
-  if (!verification) return { eligible: false, reason: "missing-source-verification", source, verification: null };
   if (verification.fingerprint !== fingerprint) {
     return { eligible: false, reason: "source-identity-changed", source, verification };
+  }
+  const sourcePacketIds = new Set(Array.isArray(source.packetIds) ? source.packetIds : []);
+  if (!verification.packetId || !sourcePacketIds.has(verification.packetId)) {
+    return { eligible: false, reason: "source-packet-binding-mismatch", source, verification };
   }
   return { eligible: true, reason: "verified-source", source, verification };
 }
@@ -9197,6 +9215,33 @@ function evaluateSourceReferences(root, references = []) {
     const source = byReference.get(reference) ?? null;
     return { reference, ...sourceEligibility(source, verifications.items ?? []) };
   });
+}
+function querySources(root, args = {}) {
+  const { sources, verifications } = readSourceTrustState(root);
+  const sourceId = normalizeText(args.sourceId ?? args.id);
+  const packetId = normalizeText(args.packetId ?? args.taskPacketId ?? args.missionPacketId);
+  const lifecycle = normalizeText(args.lifecycle).toLowerCase();
+  const limit = Math.min(200, Math.max(1, Number.isFinite(Number(args.limit)) ? Math.trunc(Number(args.limit)) : 50));
+  const items = (sources.items ?? []).filter((source) => !sourceId || [source.id, source.citationKey, source.locator, source.url, source.doi].includes(sourceId)).filter((source) => !packetId || (source.packetIds ?? []).includes(packetId)).map((source) => {
+    const eligibility = sourceEligibility(source, verifications.items ?? []);
+    return {
+      ...source,
+      eligibility: {
+        eligible: eligibility.eligible,
+        reason: eligibility.reason,
+        verificationId: eligibility.verification?.id ?? null,
+        decision: eligibility.verification?.decision ?? null,
+        packetId: eligibility.verification?.packetId ?? null,
+        checkedAt: eligibility.verification?.checkedAt ?? null
+      }
+    };
+  }).filter((source) => !lifecycle || source.eligibility.decision === lifecycle || source.lifecycle === lifecycle).slice(0, limit);
+  return {
+    status: items.length > 0 ? "ok" : "empty",
+    sourceCount: items.length,
+    items,
+    bookkeeping: [ARTIFACT_PATHS.sources, ARTIFACT_PATHS.sourceVerifications]
+  };
 }
 function assertEligibleSourceReferences(root, references = [], label = "Evidence") {
   const evaluations = evaluateSourceReferences(root, references);
@@ -9332,8 +9377,8 @@ function evaluateEvidence(root) {
 }
 
 // src/core/onboarding.mjs
-import fs9 from "node:fs";
-import path10 from "node:path";
+import fs10 from "node:fs";
+import path11 from "node:path";
 var DEFAULT_EXCLUDED_DIRS = /* @__PURE__ */ new Set([
   ".git",
   ".dove",
@@ -9364,16 +9409,16 @@ var TABLE_EXTENSIONS = /* @__PURE__ */ new Set([".csv", ".tsv", ".xlsx"]);
 var RESULT_EXTENSIONS = /* @__PURE__ */ new Set([".json", ".jsonl", ".npy", ".npz", ".pkl", ".parquet"]);
 var NOTE_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".txt"]);
 function normalizeRelativePath(relativePath) {
-  return relativePath.split(path10.sep).join("/");
+  return relativePath.split(path11.sep).join("/");
 }
 function safeInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 function classifyByName(relativePath) {
-  const baseName = path10.basename(relativePath).toLowerCase();
+  const baseName = path11.basename(relativePath).toLowerCase();
   const stem = baseName.replace(/\.[^.]+$/, "");
-  const extension = path10.extname(baseName);
+  const extension = path11.extname(baseName);
   const pathParts = relativePath.toLowerCase().split("/");
   const parentHints = new Set(pathParts.slice(0, -1));
   if (extension === ".bib") {
@@ -9462,9 +9507,9 @@ function walkFiles(root, options = {}) {
     }
     let entries = [];
     try {
-      entries = fs9.readdirSync(currentDir, { withFileTypes: true });
+      entries = fs10.readdirSync(currentDir, { withFileTypes: true });
     } catch (error) {
-      warnings.push(`Could not read ${normalizeRelativePath(path10.relative(root, currentDir)) || "."}: ${error instanceof Error ? error.message : String(error)}`);
+      warnings.push(`Could not read ${normalizeRelativePath(path11.relative(root, currentDir)) || "."}: ${error instanceof Error ? error.message : String(error)}`);
       return;
     }
     for (const entry of entries) {
@@ -9472,8 +9517,8 @@ function walkFiles(root, options = {}) {
         warnings.push(`Scan stopped after ${maxFiles} files.`);
         return;
       }
-      const fullPath = path10.join(currentDir, entry.name);
-      const relativePath = normalizeRelativePath(path10.relative(root, fullPath));
+      const fullPath = path11.join(currentDir, entry.name);
+      const relativePath = normalizeRelativePath(path11.relative(root, fullPath));
       if (entry.isDirectory()) {
         if (excludedDirs.has(entry.name) || depth >= maxDepth) {
           continue;
@@ -9535,7 +9580,7 @@ function buildProposal(root, options = {}) {
   for (const sourcePath of files) {
     const classified = classifyByName(sourcePath);
     if (!classified) {
-      const extension = path10.extname(sourcePath).toLowerCase();
+      const extension = path11.extname(sourcePath).toLowerCase();
       if ([".tex", ".md", ".bib", ".pdf", ".png", ".jpg", ".jpeg", ".svg", ".csv", ".tsv", ".json"].includes(extension)) {
         unmapped.push({ sourcePath, reason: "Recognized paper-adjacent extension but no confident lifecycle mapping." });
       }
@@ -9615,22 +9660,22 @@ function queryDoveOnboarding(root, args = {}) {
 }
 
 // src/core/dove.mjs
-import fs11 from "node:fs";
-import path12 from "node:path";
+import fs12 from "node:fs";
+import path13 from "node:path";
 
 // src/core/paper-audit.mjs
-import fs10 from "node:fs";
-import path11 from "node:path";
+import fs11 from "node:fs";
+import path12 from "node:path";
 function cloneFallback2(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
 }
 function safeReadJson(root, relativePath, fallback, readErrors) {
   const fullPath = resolvePath(root, relativePath);
-  if (!fs10.existsSync(fullPath)) {
+  if (!fs11.existsSync(fullPath)) {
     return cloneFallback2(fallback);
   }
   try {
-    return JSON.parse(fs10.readFileSync(fullPath, "utf8"));
+    return JSON.parse(fs11.readFileSync(fullPath, "utf8"));
   } catch (error) {
     readErrors.push({
       path: relativePath,
@@ -9644,10 +9689,10 @@ function safeLoadState(root, readErrors) {
 }
 function safeListDraftFiles(root) {
   const draftsDir = resolvePath(root, ARTIFACT_PATHS.draftsDir);
-  if (!fs10.existsSync(draftsDir)) {
+  if (!fs11.existsSync(draftsDir)) {
     return [];
   }
-  return fs10.readdirSync(draftsDir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md").map((entry) => entry.name);
+  return fs11.readdirSync(draftsDir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md").map((entry) => entry.name);
 }
 function normalizeStringArray6(value) {
   if (!Array.isArray(value)) {
@@ -9663,11 +9708,11 @@ function normalizeFigureArtifactPath(value) {
   return normalized.length > 0 ? normalized : null;
 }
 function isSafeProjectRelativePath(relativePath) {
-  if (!relativePath || path11.isAbsolute(relativePath)) {
+  if (!relativePath || path12.isAbsolute(relativePath)) {
     return false;
   }
-  const normalized = path11.normalize(relativePath);
-  return normalized !== "." && !normalized.startsWith("..") && !normalized.includes(`${path11.sep}..${path11.sep}`);
+  const normalized = path12.normalize(relativePath);
+  return normalized !== "." && !normalized.startsWith("..") && !normalized.includes(`${path12.sep}..${path12.sep}`);
 }
 function figurePathLooksPortable(relativePath) {
   if (!relativePath) {
@@ -10035,7 +10080,7 @@ function safeEvaluateFigurePipeline(root, state, readErrors) {
     ];
     for (const pathCheck of stagePathChecks) {
       const normalizedPath = normalizeFigureArtifactPath(pathCheck.value);
-      const exists = normalizedPath && isSafeProjectRelativePath(normalizedPath) ? fs10.existsSync(resolvePath(root, normalizedPath)) : false;
+      const exists = normalizedPath && isSafeProjectRelativePath(normalizedPath) ? fs11.existsSync(resolvePath(root, normalizedPath)) : false;
       fileChecks.stagedArtifacts[pathCheck.field] = { path: normalizedPath, exists };
       if (!normalizedPath || !isSafeProjectRelativePath(normalizedPath)) {
         figureIssues.push(buildFigureIssue({
@@ -10092,7 +10137,7 @@ function safeEvaluateFigurePipeline(root, state, readErrors) {
     const normalizedSourceArtifactPaths = sourceArtifactPaths.map(normalizeFigureArtifactPath);
     for (let index = 0; index < normalizedSourceArtifactPaths.length; index += 1) {
       const sourcePath = normalizedSourceArtifactPaths[index];
-      const exists = sourcePath && isSafeProjectRelativePath(sourcePath) ? fs10.existsSync(resolvePath(root, sourcePath)) : false;
+      const exists = sourcePath && isSafeProjectRelativePath(sourcePath) ? fs11.existsSync(resolvePath(root, sourcePath)) : false;
       fileChecks.sourceArtifacts.push({ path: sourcePath, exists });
       if (!sourcePath || !isSafeProjectRelativePath(sourcePath)) {
         figureIssues.push(buildFigureIssue({
@@ -10700,15 +10745,15 @@ function cloneFallback3(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
 }
 function resolveProjectPath(root, relativePath) {
-  return path12.join(root, relativePath);
+  return path13.join(root, relativePath);
 }
 function safeReadJson2(root, relativePath, fallback, readErrors) {
   const fullPath = resolveProjectPath(root, relativePath);
-  if (!fs11.existsSync(fullPath)) {
+  if (!fs12.existsSync(fullPath)) {
     return cloneFallback3(fallback);
   }
   try {
-    return JSON.parse(fs11.readFileSync(fullPath, "utf8"));
+    return JSON.parse(fs12.readFileSync(fullPath, "utf8"));
   } catch (error) {
     readErrors.push({
       path: relativePath,
@@ -10719,11 +10764,11 @@ function safeReadJson2(root, relativePath, fallback, readErrors) {
 }
 function safeReadText(root, relativePath, readErrors) {
   const fullPath = resolveProjectPath(root, relativePath);
-  if (!fs11.existsSync(fullPath)) {
+  if (!fs12.existsSync(fullPath)) {
     return null;
   }
   try {
-    return fs11.readFileSync(fullPath, "utf8");
+    return fs12.readFileSync(fullPath, "utf8");
   } catch (error) {
     readErrors.push({
       path: relativePath,
@@ -11046,8 +11091,8 @@ function selectDomainGuidance(workspaceIndex, domain) {
 }
 function missionPacketAliases(packet) {
   const packetId = String(packet.id ?? packet.packetId ?? packet.missionPacketId ?? "").trim();
-  const packetPath = packet.packetPath ?? (packetId ? path12.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`) : null);
-  const packetContextPath2 = packet.packetContextPath ?? (packetId ? path12.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`) : null);
+  const packetPath = packet.packetPath ?? (packetId ? path13.join(ARTIFACT_PATHS.taskPacketsPacketsDir, `${packetId}.json`) : null);
+  const packetContextPath2 = packet.packetContextPath ?? (packetId ? path13.join(ARTIFACT_PATHS.packetContextsDir, `${packetId}.json`) : null);
   return {
     packetId,
     packetPath,
@@ -12650,9 +12695,9 @@ function buildHostFileCheckpointNotice() {
 function buildMutationRollbackModel(root) {
   const indexPath = resolveProjectPath(root, ARTIFACT_PATHS.mutationsIndex);
   let index = createMutationProvenanceIndex();
-  if (fs11.existsSync(indexPath)) {
+  if (fs12.existsSync(indexPath)) {
     try {
-      index = normalizeMutationProvenanceIndex(JSON.parse(fs11.readFileSync(indexPath, "utf8")));
+      index = normalizeMutationProvenanceIndex(JSON.parse(fs12.readFileSync(indexPath, "utf8")));
     } catch {
       index = createMutationProvenanceIndex();
     }
@@ -13428,7 +13473,7 @@ var PAPER_PIPELINE_STAGE_METADATA = {
 function inspectPipelineArtifact(root, relativePath) {
   return {
     path: relativePath,
-    exists: fs11.existsSync(path12.join(root, relativePath))
+    exists: fs12.existsSync(path13.join(root, relativePath))
   };
 }
 function buildPaperPipelineStage(root, stageId, index) {
@@ -14168,8 +14213,8 @@ function queryDoveReturn(root, args = {}) {
 }
 
 // src/core/public-status.mjs
-import fs12 from "node:fs";
-import path13 from "node:path";
+import fs13 from "node:fs";
+import path14 from "node:path";
 var PUBLIC_STATUS_VERSION = 1;
 var GLOBAL_PUBLIC_STATUS_VERSION = 1;
 var PUBLIC_TASK_LIMIT = 12;
@@ -14494,7 +14539,7 @@ function dedupeProjects(projects) {
 function withCollisionSafeSlugs(projects) {
   const used = /* @__PURE__ */ new Map();
   return projects.map((project, index) => {
-    const base = slugify2(project.slug ?? project.id ?? project.title ?? path13.basename(project.root), `project-${index + 1}`);
+    const base = slugify2(project.slug ?? project.id ?? project.title ?? path14.basename(project.root), `project-${index + 1}`);
     const count = used.get(base) ?? 0;
     used.set(base, count + 1);
     const slug = count === 0 ? base : `${base}-${count + 1}`;
@@ -14502,7 +14547,7 @@ function withCollisionSafeSlugs(projects) {
       ...project,
       id: project.id ?? slug,
       slug,
-      title: project.title ?? path13.basename(project.root)
+      title: project.title ?? path14.basename(project.root)
     };
   });
 }
@@ -14524,12 +14569,12 @@ function resolveGlobalStatusSelection(root, options = {}) {
   };
 }
 function readProjectPublicStatus(project) {
-  const jsonPath = path13.join(project.root, ARTIFACT_PATHS.publicStatusJson);
-  if (!fs12.existsSync(jsonPath)) {
+  const jsonPath = path14.join(project.root, ARTIFACT_PATHS.publicStatusJson);
+  if (!fs13.existsSync(jsonPath)) {
     return { status: "missing", project, snapshot: null, reason: `${ARTIFACT_PATHS.publicStatusJson} is missing` };
   }
   try {
-    const snapshot = JSON.parse(fs12.readFileSync(jsonPath, "utf8"));
+    const snapshot = JSON.parse(fs13.readFileSync(jsonPath, "utf8"));
     if (!isPlainObject4(snapshot) || snapshot.mode !== "dove-public-status") {
       return { status: "invalid", project, snapshot: null, reason: "status.json is not a Dove public status snapshot" };
     }
@@ -14715,23 +14760,23 @@ function projectPlaceholderHtml(project, status, reason) {
 `;
 }
 function ensureAbsoluteDir(dirPath) {
-  fs12.mkdirSync(dirPath, { recursive: true });
+  fs13.mkdirSync(dirPath, { recursive: true });
 }
 function writeAbsoluteJson(filePath, value) {
-  ensureAbsoluteDir(path13.dirname(filePath));
-  fs12.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}
+  ensureAbsoluteDir(path14.dirname(filePath));
+  fs13.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}
 `, "utf8");
 }
 function writeAbsoluteText(filePath, value) {
-  ensureAbsoluteDir(path13.dirname(filePath));
-  fs12.writeFileSync(filePath, value, "utf8");
+  ensureAbsoluteDir(path14.dirname(filePath));
+  fs13.writeFileSync(filePath, value, "utf8");
 }
 function projectRelativeOutputPath(root, filePath) {
-  const relativePath = path13.relative(path13.resolve(root), path13.resolve(filePath));
-  if (!relativePath || relativePath.startsWith("..") || path13.isAbsolute(relativePath)) {
+  const relativePath = path14.relative(path14.resolve(root), path14.resolve(filePath));
+  if (!relativePath || relativePath.startsWith("..") || path14.isAbsolute(relativePath)) {
     return null;
   }
-  return relativePath.split(path13.sep).join("/");
+  return relativePath.split(path14.sep).join("/");
 }
 function writeOutputJson(root, filePath, value) {
   const relativePath = projectRelativeOutputPath(root, filePath);
@@ -14756,16 +14801,16 @@ function writeOutputText(root, filePath, value) {
   writeAbsoluteText(filePath, value);
 }
 function readPublicText(project, relativePath, fallback) {
-  const fullPath = path13.join(project.root, relativePath);
+  const fullPath = path14.join(project.root, relativePath);
   try {
-    return fs12.existsSync(fullPath) ? fs12.readFileSync(fullPath, "utf8") : fallback;
+    return fs13.existsSync(fullPath) ? fs13.readFileSync(fullPath, "utf8") : fallback;
   } catch {
     return fallback;
   }
 }
 function writeGlobalProjectArtifacts(root, outputDir, readResult) {
   const { project, snapshot, status, reason } = readResult;
-  const projectDir = path13.join(outputDir, "projects", project.slug);
+  const projectDir = path14.join(outputDir, "projects", project.slug);
   const projectSnapshot = snapshot ?? {
     version: 1,
     mode: "dove-global-project-placeholder",
@@ -14782,21 +14827,21 @@ function writeGlobalProjectArtifacts(root, outputDir, readResult) {
   };
   const markdown = snapshot ? readPublicText(project, ARTIFACT_PATHS.publicStatusMarkdown, projectPlaceholderMarkdown(project, status, reason)) : projectPlaceholderMarkdown(project, status, reason);
   const html = snapshot ? readPublicText(project, ARTIFACT_PATHS.publicStatusHtml, projectPlaceholderHtml(project, status, reason)) : projectPlaceholderHtml(project, status, reason);
-  writeOutputJson(root, path13.join(projectDir, "status.json"), projectSnapshot);
-  writeOutputText(root, path13.join(projectDir, "status.md"), markdown);
-  writeOutputText(root, path13.join(projectDir, "index.html"), html);
+  writeOutputJson(root, path14.join(projectDir, "status.json"), projectSnapshot);
+  writeOutputText(root, path14.join(projectDir, "status.md"), markdown);
+  writeOutputText(root, path14.join(projectDir, "index.html"), html);
   return [
-    path13.join(projectDir, "status.json"),
-    path13.join(projectDir, "status.md"),
-    path13.join(projectDir, "index.html")
-  ].map((filePath) => path13.relative(outputDir, filePath).split(path13.sep).join("/"));
+    path14.join(projectDir, "status.json"),
+    path14.join(projectDir, "status.md"),
+    path14.join(projectDir, "index.html")
+  ].map((filePath) => path14.relative(outputDir, filePath).split(path14.sep).join("/"));
 }
 function buildDoveGlobalPublicStatus(root, options = {}) {
   return buildGlobalStatusSnapshot(root, options);
 }
 function refreshGlobalProjectPublicStatus(project, options = {}) {
   try {
-    if (!fs12.existsSync(project.root) || !fs12.statSync(project.root).isDirectory()) {
+    if (!fs13.existsSync(project.root) || !fs13.statSync(project.root).isDirectory()) {
       return { status: "skipped", project, snapshot: null, reason: "project root is missing" };
     }
     publishDoveStatus(project.root, {
@@ -14831,11 +14876,11 @@ function publishDoveGlobalStatus(root, options = {}) {
   const markdown = renderGlobalMarkdown(snapshot);
   const html = renderGlobalHtml(snapshot);
   const writes = [];
-  writeOutputJson(root, path13.join(selection.outputDir, "status.json"), snapshot);
+  writeOutputJson(root, path14.join(selection.outputDir, "status.json"), snapshot);
   writes.push("status.json");
-  writeOutputText(root, path13.join(selection.outputDir, "status.md"), markdown);
+  writeOutputText(root, path14.join(selection.outputDir, "status.md"), markdown);
   writes.push("status.md");
-  writeOutputText(root, path13.join(selection.outputDir, "index.html"), html);
+  writeOutputText(root, path14.join(selection.outputDir, "index.html"), html);
   writes.push("index.html");
   for (const readResult of readResults) {
     writes.push(...writeGlobalProjectArtifacts(root, selection.outputDir, readResult));
@@ -14971,10 +15016,10 @@ function publishDoveStatus(root, options = {}) {
 // src/core/global-status-serving.mjs
 import { spawn, spawnSync } from "node:child_process";
 import crypto8 from "node:crypto";
-import fs13 from "node:fs";
+import fs14 from "node:fs";
 import http from "node:http";
 import os2 from "node:os";
-import path14 from "node:path";
+import path15 from "node:path";
 var PUBLIC_FILES = /* @__PURE__ */ new Set(["index.html", "status.json", "status.md"]);
 var PROJECT_PUBLIC_FILE_PATTERN = /^projects\/[^/]+\/(?:index\.html|status\.json|status\.md)$/;
 var CONTENT_TYPES = /* @__PURE__ */ new Map([
@@ -15014,8 +15059,8 @@ function normalizeBoolean3(value, fallback = false) {
   return fallback;
 }
 function isInside(childPath, parentPath) {
-  const relative = path14.relative(parentPath, childPath);
-  return relative === "" || !relative.startsWith("..") && !path14.isAbsolute(relative);
+  const relative = path15.relative(parentPath, childPath);
+  return relative === "" || !relative.startsWith("..") && !path15.isAbsolute(relative);
 }
 function normalizeServingAuthConfig(baseConfig = {}, options = {}) {
   return normalizeGlobalStatusAuthConfig({
@@ -15048,7 +15093,7 @@ function defaultTunnelName() {
   return "dove-global-status";
 }
 function defaultCloudflaredConfigPath(tunnelName) {
-  return path14.join(os2.homedir(), ".cloudflared", `${tunnelName}.yml`);
+  return path15.join(os2.homedir(), ".cloudflared", `${tunnelName}.yml`);
 }
 function normalizeServingCloudflareConfig(baseConfig, options, outputDir) {
   const raw = {
@@ -15102,8 +15147,8 @@ function safePublicPath(requestUrl) {
   if (relative.split("/").includes("..")) {
     return null;
   }
-  const normalized = path14.posix.normalize(relative);
-  if (normalized.startsWith("../") || normalized === ".." || path14.posix.isAbsolute(normalized)) {
+  const normalized = path15.posix.normalize(relative);
+  if (normalized.startsWith("../") || normalized === ".." || path15.posix.isAbsolute(normalized)) {
     return null;
   }
   if (PUBLIC_FILES.has(normalized) || PROJECT_PUBLIC_FILE_PATTERN.test(normalized)) {
@@ -15262,10 +15307,10 @@ async function handlePasswordLogin(request, response, authOptions) {
   response.end();
 }
 function validateGlobalPublicServeRoot(outputDir) {
-  const statusPath = path14.join(outputDir, "status.json");
+  const statusPath = path15.join(outputDir, "status.json");
   let snapshot;
   try {
-    snapshot = JSON.parse(fs13.readFileSync(statusPath, "utf8"));
+    snapshot = JSON.parse(fs14.readFileSync(statusPath, "utf8"));
   } catch {
     throw new Error(`Dove global status serve root is missing a readable status.json: ${outputDir}`);
   }
@@ -15275,7 +15320,7 @@ function validateGlobalPublicServeRoot(outputDir) {
   return snapshot;
 }
 function createStaticGlobalStatusServer(outputDir, authOptions = { enabled: false }) {
-  const serveRoot = path14.resolve(outputDir);
+  const serveRoot = path15.resolve(outputDir);
   const effectiveAuthOptions = authOptions.enabled ? { ...authOptions, sessionSecret: authOptions.sessionSecret ?? crypto8.randomBytes(32).toString("hex") } : { enabled: false };
   return http.createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -15300,19 +15345,19 @@ function createStaticGlobalStatusServer(outputDir, authOptions = { enabled: fals
       }
       return;
     }
-    const filePath = path14.join(serveRoot, relativePath);
+    const filePath = path15.join(serveRoot, relativePath);
     if (!isInside(filePath, serveRoot)) {
       sendText(response, 404, "Not found");
       return;
     }
     let stat;
     try {
-      const linkStat = fs13.lstatSync(filePath);
+      const linkStat = fs14.lstatSync(filePath);
       if (linkStat.isSymbolicLink()) {
         sendText(response, 404, "Not found");
         return;
       }
-      stat = fs13.statSync(filePath);
+      stat = fs14.statSync(filePath);
     } catch {
       sendText(response, 404, "Not found");
       return;
@@ -15322,7 +15367,7 @@ function createStaticGlobalStatusServer(outputDir, authOptions = { enabled: fals
       return;
     }
     response.writeHead(200, {
-      "content-type": CONTENT_TYPES.get(path14.extname(filePath)) ?? "application/octet-stream",
+      "content-type": CONTENT_TYPES.get(path15.extname(filePath)) ?? "application/octet-stream",
       "cache-control": "no-store",
       "x-content-type-options": "nosniff"
     });
@@ -15330,7 +15375,7 @@ function createStaticGlobalStatusServer(outputDir, authOptions = { enabled: fals
       response.end();
       return;
     }
-    fs13.createReadStream(filePath).pipe(response);
+    fs14.createReadStream(filePath).pipe(response);
   });
 }
 function buildPublishOptions(options, outputDir) {
@@ -15460,8 +15505,8 @@ function writeCloudflaredConfig(plan) {
   if (!cloudflare.enabled || !cloudflare.configPath || cloudflare.tokenEnv) {
     return null;
   }
-  fs13.mkdirSync(path14.dirname(cloudflare.configPath), { recursive: true });
-  fs13.writeFileSync(cloudflare.configPath, cloudflaredConfigText(cloudflare, plan.localUrl), "utf8");
+  fs14.mkdirSync(path15.dirname(cloudflare.configPath), { recursive: true });
+  fs14.writeFileSync(cloudflare.configPath, cloudflaredConfigText(cloudflare, plan.localUrl), "utf8");
   return cloudflare.configPath;
 }
 function runSetupCommand(command, args, options = {}) {
@@ -15671,8 +15716,8 @@ async function runGlobalStatusServingForeground(root, options = {}) {
 }
 
 // src/core/documents.mjs
-import fs14 from "node:fs";
-import path15 from "node:path";
+import fs15 from "node:fs";
+import path16 from "node:path";
 function normalizeString6(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
@@ -15772,8 +15817,8 @@ function isOperationalFailureOutcome(result, { confirmed = false } = {}) {
 }
 
 // src/core/workflow-goals.mjs
-import fs15 from "node:fs";
-import path16 from "node:path";
+import fs16 from "node:fs";
+import path17 from "node:path";
 var WORKFLOW_GOAL_CONTRACTS = [
   {
     id: "operator-host-pass-without-results",
@@ -16105,13 +16150,13 @@ function workflowVerifiedCriteria(criterion = WORKFLOW_GOAL_CRITERION) {
   return [{ criterion, status: "verified", evidencePaths: [WORKFLOW_GOAL_VERIFICATION_PATH] }];
 }
 function writeJson2(root, relativePath, value) {
-  fs15.writeFileSync(path16.join(root, relativePath), `${JSON.stringify(value, null, 2)}
+  fs16.writeFileSync(path17.join(root, relativePath), `${JSON.stringify(value, null, 2)}
 `);
 }
 function writeWorkflowGoalEvidenceFile(root, relativePath, text3) {
-  const fullPath = path16.join(root, relativePath);
-  fs15.mkdirSync(path16.dirname(fullPath), { recursive: true });
-  fs15.writeFileSync(fullPath, text3, "utf8");
+  const fullPath = path17.join(root, relativePath);
+  fs16.mkdirSync(path17.dirname(fullPath), { recursive: true });
+  fs16.writeFileSync(fullPath, text3, "utf8");
   return relativePath;
 }
 function seedWorkflowGoalEvidence(root) {
@@ -16261,8 +16306,8 @@ function createGoalTask(root, dispatch, args, action = "create_dove_task") {
   return parseToolJson(dispatch(root, "create_dove_task", confirmArgs), `${action} confirmed`);
 }
 function readJson2(root, relativePath) {
-  const fullPath = path16.join(root, relativePath);
-  return JSON.parse(fs15.readFileSync(fullPath, "utf8"));
+  const fullPath = path17.join(root, relativePath);
+  return JSON.parse(fs16.readFileSync(fullPath, "utf8"));
 }
 function expect(condition, message, evidence = {}) {
   if (!condition) {
@@ -16985,13 +17030,14 @@ var DEFAULT_LIMIT = 8;
 var MAX_LIMIT = 50;
 var DEFAULT_TIMEOUT_MS2 = 12e3;
 var MAX_QUERY_CHARS = 500;
+var POST_FILTER_OVERFETCH_FACTOR = 3;
 var SECRET_VALUE_PATTERN = /\b(?:Bearer\s+[A-Za-z0-9._~+/=-]+|sk-[A-Za-z0-9_-]{12,}|(?:api[_-]?key|token|secret|password)\s*[:=]\s*[^\s,}]+)\b/giu;
 var NETWORK_SEARCH_PROVIDER_REGISTRY = Object.freeze([
-  Object.freeze({ id: "openalex", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 25, capabilities: ["works", "doi", "open-access", "authors", "year"] }),
-  Object.freeze({ id: "crossref", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 20, capabilities: ["works", "doi", "authors", "year"] }),
-  Object.freeze({ id: "arxiv", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 20, capabilities: ["preprints", "arxiv-id", "authors", "year"] }),
-  Object.freeze({ id: "europe-pmc", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 25, capabilities: ["papers", "doi", "pubmed-id", "open-access", "authors", "year"] }),
-  Object.freeze({ id: "public-web", kind: "web", access: "public", defaultLimit: 0, maxLimit: 0, unavailable: true, capabilities: ["status"] })
+  Object.freeze({ id: "openalex", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 25, capabilities: ["works", "doi", "open-access", "authors", "year"], filters: Object.freeze({ year: "native", domains: "post", fieldsOfStudy: "post", openAccessOnly: "post", locale: "post" }) }),
+  Object.freeze({ id: "crossref", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 20, capabilities: ["works", "doi", "open-access", "authors", "year"], filters: Object.freeze({ year: "native", domains: "post", openAccessOnly: "post", locale: "post" }) }),
+  Object.freeze({ id: "arxiv", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 20, capabilities: ["preprints", "arxiv-id", "authors", "year"], filters: Object.freeze({ year: "post", domains: "post", openAccessOnly: "post" }) }),
+  Object.freeze({ id: "europe-pmc", kind: "scholarly", access: "public", defaultLimit: 5, maxLimit: 25, capabilities: ["papers", "doi", "pubmed-id", "open-access", "authors", "year"], filters: Object.freeze({ year: "post", domains: "post", openAccessOnly: "post", locale: "post" }) }),
+  Object.freeze({ id: "public-web", kind: "web", access: "public", defaultLimit: 0, maxLimit: 0, unavailable: true, capabilities: ["status"], filters: Object.freeze({}) })
 ]);
 var DEFAULT_NETWORK_SEARCH_PROVIDER_IDS2 = Object.freeze(["openalex", "crossref", "arxiv", "europe-pmc"]);
 var PROVIDER_BY_ID = new Map(NETWORK_SEARCH_PROVIDER_REGISTRY.map((provider) => [provider.id, provider]));
@@ -17067,10 +17113,10 @@ function normalizeLocale(value) {
   if (!locale) {
     return null;
   }
-  if (!/^[a-z]{2}(?:[-_][A-Za-z0-9]{2,8})?$/u.test(locale)) {
+  if (!/^[a-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$/iu.test(locale)) {
     throw new Error(`Dove network search locale must be a compact locale code: ${locale}`);
   }
-  return locale.replace("_", "-");
+  return locale.replace("_", "-").toLowerCase();
 }
 function normalizeNetworkSearchConfigForCore(config = {}) {
   const source = isPlainObject6(config) ? config : {};
@@ -17151,13 +17197,16 @@ function normalizeTitle(value) {
   return normalizeString7(Array.isArray(value) ? value[0] : value);
 }
 function normalizeAuthors(value) {
+  if (isPlainObject6(value)) {
+    return normalizeAuthors(value.author ?? value.authors ?? value.fullName ?? value.name);
+  }
   if (Array.isArray(value)) {
     return value.map((item) => {
       if (typeof item === "string") {
         return normalizeString7(item);
       }
       if (isPlainObject6(item)) {
-        return normalizeString7(item.name ?? item.display_name ?? [item.given, item.family].filter(Boolean).join(" "));
+        return normalizeString7(item.fullName ?? item.name ?? item.display_name ?? [item.given, item.family].filter(Boolean).join(" "));
       }
       return null;
     }).filter(Boolean).slice(0, 12);
@@ -17254,12 +17303,10 @@ async function fetchJson(url, options) {
   }
 }
 var FILTER_NAMES = Object.freeze(["year", "domains", "fieldsOfStudy", "openAccessOnly", "locale"]);
-var PROVIDER_FILTER_SUPPORT = Object.freeze({
-  openalex: Object.freeze({ year: "native", domains: "post", fieldsOfStudy: "post", openAccessOnly: "post", locale: "post" }),
-  crossref: Object.freeze({ year: "native", domains: "post", openAccessOnly: "post", locale: "post" }),
-  arxiv: Object.freeze({ year: "post", domains: "post", openAccessOnly: "post" }),
-  "europe-pmc": Object.freeze({ year: "post", domains: "post", openAccessOnly: "post", locale: "post" })
-});
+var PROVIDER_FILTER_SUPPORT = Object.freeze(Object.fromEntries(NETWORK_SEARCH_PROVIDER_REGISTRY.map((provider) => [
+  provider.id,
+  Object.freeze(Object.fromEntries(FILTER_NAMES.filter((name) => provider.filters?.[name]).map((name) => [name, provider.filters[name]])))
+])));
 function requestedFilterNames(query) {
   return FILTER_NAMES.filter((name) => name === "openAccessOnly" ? query.openAccessOnly : Array.isArray(query[name]) ? query[name].length > 0 : Boolean(query[name]));
 }
@@ -17463,6 +17510,10 @@ function dedupeAndRank(candidates, query) {
 }
 function selectedProviderIds(query, config) {
   if (query.providerIds.length > 0) {
+    const conflicts = query.providerIds.filter((id) => !providerVisibleForKind(PROVIDER_BY_ID.get(id), query.kind));
+    if (conflicts.length > 0) {
+      throw new Error(`Dove network search provider-kind conflict: ${conflicts.join(", ")} cannot be used for kind ${query.kind}.`);
+    }
     return query.providerIds;
   }
   if (query.kind === "web") {
@@ -17474,7 +17525,7 @@ function selectedProviderIds(query, config) {
   return config.defaultProviderIds.filter((id) => PROVIDER_BY_ID.get(id)?.kind === "scholarly");
 }
 function providerVisibleForKind(provider, kind) {
-  return kind === "all" || provider.kind === kind;
+  return Boolean(provider) && (kind === "all" || provider.kind === kind);
 }
 function providerReport(provider, fields = {}) {
   return {
@@ -17483,10 +17534,12 @@ function providerReport(provider, fields = {}) {
     access: provider.access,
     status: fields.status ?? "available",
     resultCount: fields.resultCount ?? 0,
+    fetchedCount: fields.fetchedCount ?? 0,
     message: fields.message ?? null,
     error: fields.error ?? null,
     appliedFilters: fields.appliedFilters ?? [],
     unsupportedFilters: fields.unsupportedFilters ?? [],
+    filterModes: fields.filterModes ?? {},
     capabilities: provider.capabilities
   };
 }
@@ -17519,14 +17572,16 @@ async function runProvider(provider, query, config, fetchFn) {
   }
   const limit = Math.min(query.limit, provider.maxLimit || query.limit);
   const timeoutMs = normalizePositiveInteger2(config.providerSettings?.[provider.id]?.timeoutMs, config.timeoutMs, 1e3, 6e4);
-  const providerQuery = { ...query, limit };
   const filterPlan = providerFilterPlan(provider, query);
+  const needsPostFilter = Object.values(filterPlan.filterModes).includes("post");
+  const fetchLimit = needsPostFilter ? Math.min(provider.maxLimit || limit, Math.max(limit, limit * POST_FILTER_OVERFETCH_FACTOR)) : limit;
+  const providerQuery = { ...query, limit: fetchLimit };
   try {
     const rawCandidates = await withTimeout(Promise.resolve().then(() => PROVIDER_ADAPTERS[provider.id](providerQuery, { timeoutMs, fetchFn })), timeoutMs);
-    const candidates = postFilterCandidates(rawCandidates.map((candidate) => normalizeCandidate(candidate, provider)).filter(Boolean), query, filterPlan);
+    const candidates = postFilterCandidates(rawCandidates.map((candidate) => normalizeCandidate(candidate, provider)).filter(Boolean), query, filterPlan).slice(0, limit);
     return {
       candidates,
-      report: providerReport(provider, { status: "ok", resultCount: candidates.length, ...filterPlan })
+      report: providerReport(provider, { status: "ok", resultCount: candidates.length, fetchedCount: rawCandidates.length, ...filterPlan })
     };
   } catch (error) {
     return {
@@ -17563,8 +17618,15 @@ async function searchOpenAlex(query, options) {
     score: Number(item.cited_by_count ?? 0) > 0 ? Math.log10(Number(item.cited_by_count) + 1) : 0
   })) : [];
 }
+function crossrefOpenAccess(item) {
+  const links = Array.isArray(item.link) ? item.link : [];
+  if (links.some((link) => /^https?:/iu.test(link?.URL ?? "") && /(?:application\/pdf|text\/html)/iu.test(link?.["content-type"] ?? ""))) {
+    return true;
+  }
+  return item.license ? Array.isArray(item.license) ? item.license.length > 0 : true : null;
+}
 async function searchCrossref(query, options) {
-  const params = buildParams({ query: query.query, rows: query.limit, select: "DOI,title,URL,link,author,published,published-print,published-online,container-title,abstract,language,is-referenced-by-count" });
+  const params = buildParams({ query: query.query, rows: query.limit, select: "DOI,title,URL,link,license,author,published,published-print,published-online,container-title,abstract,language,is-referenced-by-count" });
   if (query.year && !query.year.includes("-")) {
     params.set("filter", `from-pub-date:${query.year}-01-01,until-pub-date:${query.year}-12-31`);
   } else if (query.year) {
@@ -17583,7 +17645,7 @@ async function searchCrossref(query, options) {
     domains: Array.from(new Set([hostnameFromUrl(item.URL), ...Array.isArray(item.link) ? item.link.map((link) => hostnameFromUrl(link?.URL)) : []].filter(Boolean))),
     locale: item.language,
     doi: item.DOI,
-    openAccess: null,
+    openAccess: crossrefOpenAccess(item),
     score: Number(item["is-referenced-by-count"] ?? 0) > 0 ? Math.log10(Number(item["is-referenced-by-count"]) + 1) : 0
   })) : [];
 }
@@ -17618,20 +17680,23 @@ async function searchEuropePmc(query, options) {
   const params = buildParams({ query: query.query, format: "json", pageSize: query.limit, resultType: "core" });
   const json = await fetchJson(`https://www.ebi.ac.uk/europepmc/webservices/rest/search?${params.toString()}`, options);
   const results = json.resultList?.result;
-  return Array.isArray(results) ? results.map((item) => ({
-    title: item.title,
-    url: item.doi ? doiUrl(item.doi) : item.pmid ? `https://europepmc.org/article/MED/${item.pmid}` : item.pmcid ? `https://europepmc.org/article/PMC/${item.pmcid}` : null,
-    snippet: item.abstractText,
-    sourceName: item.journalTitle ?? "Europe PMC",
-    publishedAt: normalizePublishedAt(item.firstPublicationDate ?? item.pubYear),
-    authors: item.authorList?.author ? normalizeAuthors(item.authorList.author.map((author) => author.fullName)) : normalizeAuthors(item.authorString),
-    domains: [item.doi ? "doi.org" : "europepmc.org"],
-    locale: item.language,
-    doi: item.doi,
-    pubmedId: item.pmid,
-    openAccess: item.isOpenAccess === "Y" || item.inEPMC === "Y",
-    score: Number(item.citedByCount ?? 0) > 0 ? Math.log10(Number(item.citedByCount) + 1) : 0
-  })) : [];
+  return Array.isArray(results) ? results.map((item) => {
+    const url = item.doi ? doiUrl(item.doi) : item.pmid ? `https://europepmc.org/article/MED/${item.pmid}` : item.pmcid ? `https://europepmc.org/article/PMC/${item.pmcid}` : null;
+    return {
+      title: item.title,
+      url,
+      snippet: item.abstractText,
+      sourceName: item.journalTitle ?? "Europe PMC",
+      publishedAt: normalizePublishedAt(item.firstPublicationDate ?? item.pubYear),
+      authors: item.authorList?.author ? normalizeAuthors(item.authorList.author) : normalizeAuthors(item.authorString),
+      domains: [hostnameFromUrl(url)].filter(Boolean),
+      locale: item.language ?? item.lang,
+      doi: item.doi,
+      pubmedId: item.pmid,
+      openAccess: item.isOpenAccess === "Y" || item.inEPMC === "Y",
+      score: Number(item.citedByCount ?? 0) > 0 ? Math.log10(Number(item.citedByCount) + 1) : 0
+    };
+  }) : [];
 }
 var PROVIDER_ADAPTERS = {
   openalex: searchOpenAlex,
@@ -17719,7 +17784,13 @@ async function executeNetworkSearch(rawArgs = {}, config = {}, options = {}) {
     },
     needsAttention: buildNeedsAttention(status, providerReports, candidates),
     showMore: { text: "\u5C55\u5F00\u7ED3\u679C\u53EF\u67E5\u770B\u5019\u9009\u5217\u8868\u548C provider \u72B6\u6001\uFF1B\u9ED8\u8BA4 compact \u4E0D\u5C55\u793A\u539F\u59CB\u8FD4\u56DE\u3002" },
-    diagnostics: { providerCount: providerReports.length, candidateCountBeforeDedupe: allCandidates.length }
+    diagnostics: {
+      providerCount: providerReports.length,
+      candidateCountBeforeDedupe: allCandidates.length,
+      fetchedCount: providerReports.reduce((sum, report) => sum + report.fetchedCount, 0),
+      appliedFilters: Array.from(new Set(providerReports.flatMap((report) => report.appliedFilters))),
+      unsupportedFilters: Array.from(new Set(providerReports.flatMap((report) => report.unsupportedFilters)))
+    }
   };
 }
 async function searchNetwork(root, args = {}, env = process.env, options = {}) {
@@ -17742,6 +17813,10 @@ function queryNetworkSearchProviders(root, args = {}, env = process.env) {
     throw new Error(`Dove network search kind must be one of: ${Array.from(SEARCH_KINDS).join(", ")}.`);
   }
   const requestedIds = normalizeProviderIds(args.providerIds ?? args.providers);
+  const conflicts = requestedIds.filter((id) => !providerVisibleForKind(PROVIDER_BY_ID.get(id), kind));
+  if (conflicts.length > 0) {
+    throw new Error(`Dove network search provider-kind conflict: ${conflicts.join(", ")} cannot be used for kind ${kind}.`);
+  }
   const providers = NETWORK_SEARCH_PROVIDER_REGISTRY.filter((provider) => requestedIds.length === 0 || requestedIds.includes(provider.id)).filter((provider) => providerVisibleForKind(provider, kind));
   const providerReports = providers.map((provider) => providerStatus(provider, config));
   const availableCount = providerReports.filter((report) => report.status === "available").length;
@@ -17878,6 +17953,7 @@ export {
   queryNetworkSearchProviders,
   queryPaperAudit,
   queryPaperPipeline,
+  querySources,
   readJson,
   readSourceTrustState,
   readTaskPacketCatalog,

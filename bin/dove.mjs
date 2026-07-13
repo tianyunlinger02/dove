@@ -16,7 +16,9 @@ import { isOperationalFailureOutcome } from "../src/core/operational-outcome.mjs
 import { launchDoveMission, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus } from "../src/core/dove.mjs";
 import { publishDoveGlobalStatus, publishDoveStatus } from "../src/core/public-status.mjs";
 import { queryOperatorLessons, recordOperatorLesson, refreshDurableSurfaces } from "../src/core/navigation.mjs";
-import { registerSource, setSectionStatus, upsertDraft, upsertNote } from "../src/core/artifacts.mjs";
+import { registerSource, setSectionStatus, upsertDraft, upsertNote, verifySource } from "../src/core/artifacts.mjs";
+import { parseDoveCli } from "../src/cli/command-parser.mjs";
+import { resolveCanonicalContainedWrite } from "../src/core/contained-write.mjs";
 import { runDoveReviewLoop } from "../src/core/dove-review-loop.mjs";
 import { runExperienceWorkflow } from "../src/core/experience-workflow.mjs";
 import { runFigureWorkflow } from "../src/core/figure-workflow.mjs";
@@ -65,6 +67,8 @@ Usage:
   dove auto [target] --target <task>
   dove operator [target] --confirmed
   dove source [target] --target <task> --title <text> --locator <url-or-doi>
+  dove source register [target] --target <task> --title <text> --locator <url-or-doi>
+  dove source verify [target] --target <task> --source-id <id> --decision <verified|rejected> --method <text> --checked-material <text> --audit-evidence-json <json>
   dove note [target] --target <task> --summary <text>
   dove draft [target] --target <task> --section-id <id> --body <text>
   dove experience [target] --target <task> --goal <text> --methodology <text> --success-metric <text>
@@ -310,7 +314,7 @@ function shouldSkipCopy(relativePath) {
   return GLOBAL_COPY_EXCLUDE_SUFFIXES.some((suffix) => basename.endsWith(suffix));
 }
 
-function copyRecursive(source, destination, force, sourceRoot = source, skipped = []) {
+function copyRecursive(source, destination, force, sourceRoot = source, skipped = [], destinationRoot = destination) {
   const relativePath = path.relative(sourceRoot, source).split(path.sep).join("/");
   const comparablePath = relativePath || path.basename(source);
   if (shouldSkipCopy(comparablePath)) {
@@ -318,20 +322,32 @@ function copyRecursive(source, destination, force, sourceRoot = source, skipped 
     return;
   }
 
-  const stat = fs.statSync(source);
+  const stat = fs.lstatSync(source);
+  if (stat.isSymbolicLink()) {
+    skipped.push(comparablePath);
+    return;
+  }
+  const destinationRelativePath = path.relative(destinationRoot, destination).split(path.sep).join("/") || ".";
+  const resolvedDestination = destinationRelativePath === "."
+    ? { fullPath: fs.realpathSync.native(destinationRoot) }
+    : resolveCanonicalContainedWrite(destinationRoot, destinationRelativePath, { label: "Install destination" });
   if (stat.isDirectory()) {
-    ensureDir(destination);
+    ensureDir(resolvedDestination.fullPath);
     for (const entry of fs.readdirSync(source)) {
-      copyRecursive(path.join(source, entry), path.join(destination, entry), force, sourceRoot, skipped);
+      copyRecursive(path.join(source, entry), path.join(destination, entry), force, sourceRoot, skipped, destinationRoot);
     }
     return;
   }
-
-  ensureDir(path.dirname(destination));
-  if (fs.existsSync(destination) && !force) {
+  if (!stat.isFile()) {
+    skipped.push(comparablePath);
     return;
   }
-  fs.copyFileSync(source, destination);
+
+  ensureDir(path.dirname(resolvedDestination.fullPath));
+  if (fs.existsSync(resolvedDestination.fullPath) && !force) {
+    return;
+  }
+  fs.copyFileSync(source, resolvedDestination.fullPath);
 }
 
 function buildInstallPaths(hosts) {
@@ -805,11 +821,31 @@ function buildDoveVersionArgs(rest = []) {
   };
 }
 
-function buildDoveSourceArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--source-id", "--citation-key", "--title", "--locator", "--url", "--doi", "--source-type", "--origin", "--abstract", "--year", "--author", "--mutation-mode", "--format"],
-    booleanFlags: ["--json"]
+function parseAuditEvidenceFlag(rest = []) {
+  const evidence = parseJsonArrayFlag(rest, "--audit-evidence-json", "an array of audit evidence objects", (item, index) => {
+    assertPlainObjectItem(item, index, "--audit-evidence-json");
+    const keys = Object.keys(item);
+    if (keys.some((key) => !["reference", "kind", "observation"].includes(key))
+      || typeof item.reference !== "string" || !item.reference.trim()
+      || !["source", "capture"].includes(item.kind)
+      || typeof item.observation !== "string" || !item.observation.trim()) {
+      throw new Error(`--audit-evidence-json[${index}] must contain reference, kind (source or capture), and observation.`);
+    }
   });
+  return evidence ?? [];
+}
+
+function buildDoveSourceArgs(rest = [], action = "register") {
+  if (action === "verify") {
+    return {
+      ...buildTaskTargetArgs(rest),
+      sourceId: readFlagValue(rest, "--source-id"),
+      decision: readFlagValue(rest, "--decision"),
+      method: readFlagValue(rest, "--method"),
+      checkedMaterial: readFlagValue(rest, "--checked-material"),
+      auditEvidence: parseAuditEvidenceFlag(rest)
+    };
+  }
   return {
     ...buildTaskTargetArgs(rest),
     sourceId: readFlagValue(rest, "--source-id"),
@@ -1574,7 +1610,7 @@ function installOrSync(target, force, args = []) {
     if (!fs.existsSync(source)) {
       continue;
     }
-    copyRecursive(source, path.join(target, relativePath), force, source, skippedUnsafePaths);
+    copyRecursive(source, path.join(target, relativePath), force, source, skippedUnsafePaths, target);
     copiedCorePaths.push(relativePath);
   }
 
@@ -1583,7 +1619,7 @@ function installOrSync(target, force, args = []) {
     if (!fs.existsSync(source)) {
       continue;
     }
-    copyRecursive(source, path.join(target, relativePath), force, source, skippedUnsafePaths);
+    copyRecursive(source, path.join(target, relativePath), force, source, skippedUnsafePaths, target);
     copiedHostPaths.push({ host, path: relativePath });
   }
 
@@ -3063,7 +3099,22 @@ function doctor(target) {
   process.exitCode = result.healthy ? 0 : 1;
 }
 
-const [, , command, maybeTarget, ...rest] = process.argv;
+let parsedCli;
+try {
+  assertNoRetiredCliFlags(process.argv.slice(3));
+  parsedCli = parseDoveCli(process.argv.slice(2));
+} catch (error) {
+  console.log(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
+const command = parsedCli.command;
+let [maybeTarget, ...commandPositionals] = parsedCli.positionals;
+let sourceAction = "register";
+if (command === "source" && ["register", "verify"].includes(maybeTarget)) {
+  sourceAction = maybeTarget;
+  [maybeTarget, ...commandPositionals] = commandPositionals;
+}
+const rest = [...commandPositionals, ...parsedCli.args];
 
 function assertNoRetiredCliFlags(rawArgs = []) {
   const retired = rawArgs.filter((arg) => {
@@ -3283,7 +3334,11 @@ if (["init", "auto", "operator", "version", "source", "note", "draft", "experien
     } else if (command === "version") {
       result = withMutationContext(target, "reset-dove-version", commandRest, (cleanRest) => resetDoveVersion(target, buildDoveVersionArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
     } else if (command === "source") {
-      result = withMutationContext(target, "register-source", commandRest, (cleanRest) => registerSource(target, buildDoveSourceArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
+      const actionId = sourceAction === "verify" ? "verify-source" : "register-source";
+      result = withMutationContext(target, actionId, commandRest, (cleanRest) => {
+        const args = buildDoveSourceArgs(cleanRest, sourceAction);
+        return sourceAction === "verify" ? verifySource(target, args) : registerSource(target, args);
+      }, { defaultMutationMode: "patch-plan" });
     } else if (command === "note") {
       result = withMutationContext(target, "upsert-note", commandRest, (cleanRest) => upsertNote(target, buildDoveNoteArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
     } else if (command === "draft") {

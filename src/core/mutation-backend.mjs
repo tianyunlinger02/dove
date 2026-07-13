@@ -4,13 +4,14 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ARTIFACT_PATHS, createMutationProvenanceIndex, normalizeMutationProvenanceIndex } from "./schema.mjs";
+import { resolveCanonicalContainedWrite } from "./contained-write.mjs";
 
 const mutationStorage = new AsyncLocalStorage();
 const DIRECT_PROCESS_ROLLBACK_REASON = "direct-process writes are performed by the Dove process, not by host-tracked file edits; native programming-terminal rollback cannot be verified for those writes.";
 const PATCH_PLAN_ROLLBACK_ADVICE = "Use mutationMode: patch-plan and apply the returned operations through host-tracked file edits before relying on host rollback.";
 
 function sha256(content) {
-  return crypto.createHash("sha256").update(content, "utf8").digest("hex");
+  return crypto.createHash("sha256").update(content).digest("hex");
 }
 
 export function normalizeMutationMode(value) {
@@ -63,10 +64,9 @@ function readDiskText(root, relativePath, fallback = "") {
 function diskFileState(root, relativePath) {
   const fullPath = path.join(root, relativePath);
   if (!fs.existsSync(fullPath)) {
-    return { exists: false, content: null, sha256: null };
+    return { exists: false, sha256: null };
   }
-  const content = fs.readFileSync(fullPath, "utf8");
-  return { exists: true, content, sha256: sha256(content) };
+  return { exists: true, sha256: sha256(fs.readFileSync(fullPath)) };
 }
 
 function buildMutationId() {
@@ -87,52 +87,23 @@ export class MutationContext {
     this.overlay = new Map();
     this.operationsByPath = new Map();
     this.operationOrder = [];
+    this.lifecycle = "active";
   }
 
   get patchPlanMode() {
     return this.mutationMode === "patch-plan";
   }
 
+  assertActive(operation = "MutationContext operation") {
+    if (this.lifecycle !== "active") {
+      throw new Error(`${operation} cannot use a ${this.lifecycle} MutationContext.`);
+    }
+  }
+
   resolve(relativePath) {
+    this.assertActive("Mutation path resolution");
     const normalized = normalizeRelativePath(relativePath);
-    const fullPath = path.resolve(this.root, normalized);
-    const relativeFromRoot = path.relative(this.root, fullPath);
-    if (relativeFromRoot.startsWith("..") || path.isAbsolute(relativeFromRoot)) {
-      throw new Error(`Mutation path must stay inside the project: ${relativePath}`);
-    }
-
-    let currentPath = this.root;
-    for (const component of normalized.split("/")) {
-      currentPath = path.join(currentPath, component);
-      let stat;
-      try {
-        stat = fs.lstatSync(currentPath);
-      } catch (error) {
-        if (error?.code === "ENOENT") {
-          break;
-        }
-        throw error;
-      }
-      if (stat.isSymbolicLink()) {
-        throw new Error(`Mutation path must not contain symbolic links: ${relativePath}`);
-      }
-    }
-
-    const existingPath = fs.existsSync(fullPath) ? fullPath : path.dirname(fullPath);
-    let canonicalExistingPath = existingPath;
-    while (!fs.existsSync(canonicalExistingPath)) {
-      const parentPath = path.dirname(canonicalExistingPath);
-      if (parentPath === canonicalExistingPath) {
-        break;
-      }
-      canonicalExistingPath = parentPath;
-    }
-    const canonicalParent = fs.realpathSync.native(canonicalExistingPath);
-    const canonicalRelative = path.relative(this.root, canonicalParent);
-    if (canonicalRelative.startsWith("..") || path.isAbsolute(canonicalRelative)) {
-      throw new Error(`Mutation path must stay inside the canonical project root: ${relativePath}`);
-    }
-    return { relativePath: normalized, fullPath };
+    return resolveCanonicalContainedWrite(this.root, normalized, { label: "Mutation path" });
   }
 
   fileExists(relativePath) {
@@ -171,11 +142,21 @@ export class MutationContext {
   }
 
   writeText(relativePath, content, kind = "write-text") {
+    return this.writeContent(relativePath, String(content ?? ""), { kind, encoding: "utf8" });
+  }
+
+  writeBinary(relativePath, content, kind = "write-binary") {
+    if (this.patchPlanMode) {
+      throw new Error("Binary mutations require direct-process mode; patch-plan cannot safely represent binary output.");
+    }
+    const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
+    return this.writeContent(relativePath, buffer, { kind, encoding: "binary" });
+  }
+
+  writeContent(relativePath, content, { kind, encoding }) {
     const { relativePath: normalized, fullPath } = this.resolve(relativePath);
-    const nextContent = String(content ?? "");
     const existing = this.operationsByPath.get(normalized);
     const initial = existing ? { exists: existing.previousExists, sha256: existing.previousSha256 } : diskFileState(this.root, normalized);
-    const nextSha = sha256(nextContent);
     const operation = {
       operationId: existing?.operationId ?? `op-${crypto.randomUUID()}`,
       mutationId: this.id,
@@ -183,12 +164,12 @@ export class MutationContext {
       packetId: this.packetId,
       relativePath: normalized,
       kind,
-      encoding: "utf8",
-      content: nextContent,
+      encoding,
+      ...(encoding === "utf8" ? { content } : { byteLength: content.byteLength }),
       previousExists: initial.exists,
       previousSha256: initial.sha256,
       expectedPreviousSha256: initial.sha256,
-      nextSha256: nextSha,
+      nextSha256: sha256(content),
       scope: classifyScope(normalized),
       rollbackEligibility: this.patchPlanMode ? "host-tracked-file-edits-required" : "direct-process-unverified"
     };
@@ -197,11 +178,13 @@ export class MutationContext {
       this.operationOrder.push(normalized);
     }
     this.operationsByPath.set(normalized, operation);
-    this.overlay.set(normalized, nextContent);
+    if (encoding === "utf8") {
+      this.overlay.set(normalized, content);
+    }
 
     if (!this.patchPlanMode) {
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-      fs.writeFileSync(fullPath, nextContent, "utf8");
+      fs.writeFileSync(fullPath, content, encoding === "utf8" ? "utf8" : undefined);
     }
     return operation;
   }
@@ -288,6 +271,7 @@ export class MutationContext {
   }
 
   finish(result = {}) {
+    this.assertActive("MutationContext finish");
     this.recordProvenance();
     const operations = this.operations();
     const writesApplied = !this.patchPlanMode && (operations.length > 0 || resultDeclaresWrites(result));
@@ -324,10 +308,17 @@ export class MutationContext {
         operations
       };
     }
+    this.lifecycle = "finished";
     if (result && typeof result === "object" && !Array.isArray(result)) {
       return { ...result, ...metadata };
     }
     return { result, ...metadata };
+  }
+
+  abort() {
+    if (this.lifecycle === "active") {
+      this.lifecycle = "aborted";
+    }
   }
 }
 
@@ -338,17 +329,28 @@ export function createMutationContext(root, options = {}) {
 export function runWithMutationContext(root, options, callback) {
   const context = createMutationContext(root, options);
   return mutationStorage.run(context, () => {
-    const result = callback(context);
-    if (result && typeof result.then === "function") {
-      return result.then((resolved) => context.finish(resolved));
+    try {
+      const result = callback(context);
+      if (result && typeof result.then === "function") {
+        return result.then(
+          (resolved) => context.finish(resolved),
+          (error) => {
+            context.abort();
+            throw error;
+          }
+        );
+      }
+      return context.finish(result);
+    } catch (error) {
+      context.abort();
+      throw error;
     }
-    return context.finish(result);
   });
 }
 
 export function currentMutationContext(root) {
   const context = mutationStorage.getStore();
-  if (!context) {
+  if (!context || context.lifecycle !== "active") {
     return null;
   }
   if (root) {

@@ -48,7 +48,7 @@ const expectedTools = {
   "dove.operator": ["run_dove_operator"],
   "dove.lessons": ["query_operator_lessons", "record_operator_lesson"],
   "dove.version": ["reset_dove_version"],
-  "dove.source": ["register_source"],
+  "dove.source": ["query_sources", "register_source", "verify_source"],
   "dove.note": ["upsert_note"],
   "dove.figure": ["run_figure_workflow"],
   "dove.experience": ["run_experience_workflow"],

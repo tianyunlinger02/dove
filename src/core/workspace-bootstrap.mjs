@@ -163,6 +163,7 @@ export function createWorkspaceBootstrapJsonArtifacts(state) {
   return [
     [ARTIFACT_PATHS.orchestrationBoard, () => createDefaultBoard(state)],
     [ARTIFACT_PATHS.sources, createSourcesIndex],
+    [ARTIFACT_PATHS.sourceVerifications, () => ({ version: 1, items: [], updatedAt: null })],
     [ARTIFACT_PATHS.notes, createNotesIndex],
     [ARTIFACT_PATHS.evidence, createEvidenceIndex],
     [ARTIFACT_PATHS.documentsLedger, createDocumentLedgerIndex],

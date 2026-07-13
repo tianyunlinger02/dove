@@ -16,7 +16,6 @@ const ARTIFACT_EVIDENCE_ROLES = new Map([
   [ARTIFACT_PATHS.experimentPlans, "conditional"],
   [ARTIFACT_PATHS.experimentResults, "conditional"],
   [ARTIFACT_PATHS.experimentAudits, "conditional"],
-  [ARTIFACT_PATHS.sources, "conditional"],
   [ARTIFACT_PATHS.notes, "conditional"],
   [ARTIFACT_PATHS.evidence, "conditional"],
   [ARTIFACT_PATHS.claims, "conditional"],
@@ -316,7 +315,7 @@ function completionPolicyContext(options = {}) {
 export function isExternalArtifactReference(value) {
   const text = String(value ?? "").trim();
   return /^https?:\/\/[^\s]+$/iu.test(text)
-    || /^(?:doi|arxiv):[^\s]+$/iu.test(text)
+    || /^(?:doi|arxiv|source):[^\s]+$/iu.test(text)
     || /^10\.\d{4,9}\/[^\s]+$/u.test(text);
 }
 
@@ -1507,14 +1506,20 @@ export function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
     ...(options.inspectOptions ?? {})
   };
   const policy = completionPolicyContext(options);
+  const eligibleSourceReferences = new Set(normalizeStringArray(options.context?.eligibleSourceReferences));
   const evidencePaths = normalizeStringArray(evidence.evidencePaths);
   const localEvidencePaths = evidencePaths.filter((item) => !isExternalArtifactReference(item));
   const externalEvidenceRefs = evidencePaths.filter(isExternalArtifactReference);
+  const sourceEvidenceRefs = externalEvidenceRefs.filter((item) => item.startsWith("source:"));
+  const eligibleSourceEvidenceRefs = sourceEvidenceRefs.filter((item) => eligibleSourceReferences.has(item));
   const pathEvidence = completionPathEvidence(root, localEvidencePaths, policy, inspectOptions);
   const criteria = (Array.isArray(evidence.verifiedCriteria) ? evidence.verifiedCriteria : []).map((criterion) => {
     const criterionEvidencePaths = normalizeStringArray(criterion?.evidencePaths);
     const criterionLocalEvidencePaths = criterionEvidencePaths.filter((item) => !isExternalArtifactReference(item));
     const criterionExternalEvidenceRefs = criterionEvidencePaths.filter(isExternalArtifactReference);
+    const criterionEligibleSourceEvidenceRefs = criterionExternalEvidenceRefs
+      .filter((item) => item.startsWith("source:"))
+      .filter((item) => eligibleSourceReferences.has(item));
     const criterionPathEvidence = completionPathEvidence(root, criterionLocalEvidencePaths, policy, inspectOptions);
     const negativeOutcome = negativeOutcomeInspection(root, criterion, criterionPathEvidence, inspectOptions);
     return {
@@ -1523,9 +1528,10 @@ export function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
       evidencePaths: criterionEvidencePaths,
       localEvidencePaths: criterionLocalEvidencePaths,
       externalEvidenceRefs: criterionExternalEvidenceRefs,
+      eligibleSourceEvidenceRefs: criterionEligibleSourceEvidenceRefs,
       pathEvidence: criterionPathEvidence,
       negativeOutcome,
-      satisfied: criterionPathEvidence.satisfied
+      satisfied: (criterionPathEvidence.satisfied || criterionEligibleSourceEvidenceRefs.length > 0)
         && criterionPathEvidence.problemCount === 0
         && negativeOutcome.contradictory === false,
       problemPaths: completionPathProblems(criterionPathEvidence)
@@ -1536,13 +1542,15 @@ export function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
   const requirementIntegrity = requirementCoverage(policy, pathEvidence);
   const uncoveredRequirements = requirementIntegrity.uncoveredRequirements;
   const existingEvidencePaths = pathEvidence.existingPaths.filter((item) => !(pathEvidence.unlinkedPaths ?? []).includes(item));
+  const substantiveEvidencePaths = [...existingEvidencePaths, ...eligibleSourceEvidenceRefs];
   return {
     declaredPaths: evidencePaths,
     localEvidencePaths,
     externalEvidenceRefs,
+    eligibleSourceEvidenceRefs,
     pathEvidence,
     existingEvidencePaths,
-    substantiveEvidencePaths: existingEvidencePaths,
+    substantiveEvidencePaths,
     problemPaths,
     criteria,
     missingCriteriaEvidence,
@@ -1555,10 +1563,10 @@ export function completionEvidenceIntegrity(root, evidence = {}, options = {}) {
       contractLinkedPaths: policy.contractLinkedPaths,
       requirementLinkedPaths: policy.requirementLinkedPaths
     },
-    satisfied: pathEvidence.satisfied
+    satisfied: (pathEvidence.satisfied || eligibleSourceEvidenceRefs.length > 0)
       && missingCriteriaEvidence.length === 0
       && problemPaths.length === 0
       && uncoveredRequirements.length === 0,
-    hasSubstantiveEvidence: existingEvidencePaths.length > 0 && problemPaths.length === 0
+    hasSubstantiveEvidence: substantiveEvidencePaths.length > 0 && problemPaths.length === 0
   };
 }

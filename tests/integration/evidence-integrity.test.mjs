@@ -33,9 +33,9 @@ function tempRoot() {
   return createTempRoot("dove-evidence-");
 }
 
-function writeVerifiedSources(root, items) {
+function writeVerifiedSources(root, items, packetId = "evidence-main-packet") {
   const normalized = items.map((item) => {
-    const source = { ...item, lifecycle: "verified" };
+    const source = { ...item, lifecycle: "verified", packetIds: item.packetIds ?? [packetId] };
     return { ...source, fingerprint: sourceIdentityFingerprint(source) };
   });
   fs.mkdirSync(path.join(root, ".dove", "sources"), { recursive: true });
@@ -45,6 +45,7 @@ function writeVerifiedSources(root, items) {
     items: normalized.map((source, index) => ({
       id: `fixture-verification-${index + 1}`,
       sourceId: source.id,
+      packetId,
       fingerprint: source.fingerprint,
       decision: "verified",
       method: "test fixture inspected source metadata",

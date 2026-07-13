@@ -485,6 +485,7 @@ test("MCP tool definitions include the mature workflow tools", () => {
     "query_operator_lessons",
     "search_network",
     "query_network_search_providers",
+    "query_sources",
     "query_operator_follow_through",
     "query_paper_audit",
     "query_dove_onboarding",
@@ -2707,6 +2708,44 @@ test("run_dove_operator leaves host-pass-only queues unchanged without taskResul
   }
 });
 
+test("run_dove_operator writes successful non-terminal step progress back to the owning packet", () => {
+  const root = createTempRoot("dove-mcp-operator-packet-progress-");
+  try {
+    dispatchTool(root, "init_dove_goal", {
+      id: "operator-packet-progress-init",
+      goal: "Validate operator packet progress persistence."
+    });
+    const artifactPath = writeMcpEvidenceFile(root, ".dove/drafts/operator-packet-progress.md", "# Operator review material\n\nSubstantive coherent material.\n");
+    proposeAndMaterializeDoveTask(root, {
+      id: "operator-packet-progress-task",
+      title: "Operator packet progress task",
+      goal: "Review the packet-owned artifact.",
+      status: "ready",
+      nextAction: "project:dove.review",
+      artifactRefs: [artifactPath],
+      domain: "paper",
+      checklist: false
+    });
+
+    const run = extractToolJson(dispatchToolFull(root, "run_dove_operator", {
+      confirmed: true,
+      runId: "operator-packet-progress-run"
+    }));
+    assert.equal(run.status, "foreground-pass-complete");
+    assert.deepEqual(run.updatedTaskIds, ["operator-packet-progress-task"]);
+
+    const packet = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "operator-packet-progress-task.json"), "utf8"));
+    assert.equal(packet.status, "in-progress");
+    assert.equal(packet.nextAction, "project:dove.review");
+    assert.equal(packet.currentFocus, "The selected packet scope is internally consistent for this review pass.");
+    assert.ok(packet.artifactRefs.includes(ARTIFACT_PATHS.reviewState));
+    assert.ok(packet.artifactRefs.includes(ARTIFACT_PATHS.reviewLog));
+    assert.ok(packet.evidenceLinks.includes(artifactPath));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("run_dove_operator previews blocker investigations and only creates them when explicit", () => {
   const root = createTempRoot("dove-mcp-operator-");
   try {
@@ -3517,6 +3556,9 @@ test("run_dove_auto records bounded foreground iterations", () => {
     });
     assert.equal(sourceNoteRun.status, "completed");
     assert.deepEqual(sourceNoteRun.result.iterations.map((iteration) => iteration.command), ["dove.source", "dove.note"]);
+    assert.ok(sourceNoteRun.task.artifactRefs.includes(ARTIFACT_PATHS.notes));
+    assert.equal(sourceNoteRun.task.currentFocus, "CVPR source research should register official provenance and synthesize writing guidance in the same auto run.");
+    assert.equal(sourceNoteRun.task.nextAction, "project:dove.status");
     assert.notEqual(sourceNoteRun.result.stopReason, "source-requires-host-provenance");
     const progressedSources = JSON.parse(fs.readFileSync(path.join(root, ".dove", "sources", "index.json"), "utf8"));
     assert.ok(progressedSources.items.some((item) => item.id === "cvpr-author-guidelines" && item.packetIds.includes("auto-source-note-sequence")));
@@ -3883,6 +3925,47 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assert.equal(reviewLoop.review.verdict, "coherent");
     assertPublicResultCard(reviewLoop.review.resultCard, { surface: "dove.review" });
     assert.equal("handoffSuggestion" in reviewLoop.review.resultCard.nextActions[0], false);
+    const coherentPacket = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "packets", "mcp-main-packet.json"), "utf8"));
+    assert.ok(coherentPacket.artifactRefs.includes(ARTIFACT_PATHS.reviewState));
+    assert.ok(coherentPacket.artifactRefs.includes(ARTIFACT_PATHS.reviewLog));
+    assert.ok(coherentPacket.evidenceLinks.includes(isolatedReviewedArtifact));
+    assert.equal(coherentPacket.nextAction, "project:dove.status");
+    assert.match(coherentPacket.currentFocus, /internally consistent/u);
+
+    const revisionPacket = proposeAndMaterializeDoveTask(root, {
+      id: "mcp-review-loop-fix-required",
+      goal: "Review a draft that still needs citation repair.",
+      title: "Review loop fix required",
+      checklist: false,
+      nextAction: "project:dove.draft",
+      artifactRefs: [".dove/drafts/mcp-review-loop-fix-required.md"]
+    }).createdTask;
+    const revisionArtifact = writeMcpEvidenceFile(root, ".dove/drafts/mcp-review-loop-fix-required.md", "# Draft\n\nA claim still needs support. TODO[citation]\n");
+    const needsRevisionLoop = extractToolJson(dispatchToolFull(root, "run_dove_review_loop", {
+      packetId: revisionPacket.id,
+      runId: "mcp-review-loop-fix-required-run",
+      artifactPaths: [revisionArtifact]
+    }));
+    assert.equal(needsRevisionLoop.status, "needs-review");
+    assert.equal(needsRevisionLoop.boundary.type, "fix-required");
+    assert.equal(needsRevisionLoop.boundary.nextAction, "project:dove.draft");
+    assert.equal(needsRevisionLoop.task.status, "blocked");
+    assert.equal(needsRevisionLoop.task.ownerRole, "reviewer");
+    assert.equal(needsRevisionLoop.task.nextRole, "builder");
+    assert.equal(needsRevisionLoop.task.boundary.type, "fix-required");
+    assert.equal(needsRevisionLoop.task.handoff.fromRole, "reviewer");
+    assert.equal(needsRevisionLoop.task.handoff.toRole, "builder");
+    assert.equal(needsRevisionLoop.task.nextAction, "project:dove.draft");
+    assert.ok(needsRevisionLoop.task.artifactRefs.includes(ARTIFACT_PATHS.reviewState));
+    assert.ok(needsRevisionLoop.task.evidenceLinks.includes(revisionArtifact));
+    const revisionIndex = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex), "utf8"));
+    const revisionIndexItem = revisionIndex.items.find((item) => item.id === revisionPacket.id);
+    assert.equal(revisionIndexItem.boundary.type, "fix-required");
+    assert.equal(revisionIndexItem.handoff.toRole, "builder");
+    assert.equal(revisionIndexItem.nextAction, "project:dove.draft");
+    seedTaskPacket(root);
+    linkPacketOutput(root, "mcp-main-packet", isolatedReviewedArtifact);
+    linkPacketOutput(root, "mcp-main-packet", audioReviewedArtifact);
 
     runFixtureMutation(root, "mcp-isolated-review-board", () => upsertOrchestrationBoard(root, {
       phase: "review",

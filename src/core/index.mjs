@@ -6,7 +6,7 @@ export { queryDoveAudit, queryDoveMission, queryDoveMissionBoard, queryDoveOrche
 export { buildIntentFrame, buildPreActionGuidance, buildWorkflowFrame, compactPreActionLesson, inferPrimaryRoleForSurface, inferSubagentSpecialty, selectPreActionLessons, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 export { queryPaperAudit } from "./paper-audit.mjs";
 export { classifyWorkflowIntent } from "./orchestration.mjs";
-export { SOURCE_LIFECYCLE_STATES, assertEligibleSourceReferences, canonicalSourceIdentity, evaluateSourceReferences, readSourceTrustState, sourceEligibility, sourceIdentityFingerprint, sourceReferenceMap } from "./source-trust.mjs";
+export { SOURCE_LIFECYCLE_STATES, assertEligibleSourceReferences, canonicalSourceIdentity, evaluateSourceReferences, querySources, readSourceTrustState, sourceEligibility, sourceIdentityFingerprint, sourceReferenceMap } from "./source-trust.mjs";
 export { buildDoveGlobalPublicStatus } from "./public-status.mjs";
 export { buildGlobalStatusServingPlan, createStaticGlobalStatusServer, runGlobalStatusServingForeground, validateGlobalPublicServeRoot } from "./global-status-serving.mjs";
 export { queryDocumentLedger } from "./documents.mjs";

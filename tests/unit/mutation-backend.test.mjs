@@ -7,8 +7,8 @@ import {
   ARTIFACT_PATHS,
   readText,
 } from "../../src/core/internal-api.mjs";
-import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
-import { appendText, ensureWorkspace, writeJson, writeText } from "../../src/core/workspace.mjs";
+import { createMutationContext, currentMutationContext, runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { appendText, ensureWorkspace, writeBinary, writeJson, writeText } from "../../src/core/workspace.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function exists(root, relativePath) {
@@ -174,6 +174,53 @@ for (const mutationMode of ["direct-process", "patch-plan"]) {
     assert.equal(fs.existsSync(path.join(outside, "new.md")), false);
   });
 }
+
+test("binary mutations write exact bytes and record binary metadata", () => {
+  const root = createTempRoot("dove-mutation-binary-");
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff]);
+
+  let operation;
+  const result = runWithMutationContext(root, { actionId: "unit-test-binary", mutationMode: "direct-process" }, () => {
+    operation = writeBinary(root, ".dove/figures/output.png", png);
+  });
+
+  assert.deepEqual(fs.readFileSync(path.join(root, ".dove/figures/output.png")), png);
+  assert.equal(operation.encoding, "binary");
+  assert.equal(operation.kind, "write-binary");
+  assert.equal(operation.byteLength, png.byteLength);
+  assert.equal(Object.hasOwn(operation, "content"), false);
+  assert.equal(result.mutationSummary.paths.includes(".dove/figures/output.png"), true);
+});
+
+test("binary mutations fail closed in patch-plan mode", () => {
+  const root = createTempRoot("dove-mutation-binary-patch-");
+  assert.throws(
+    () => runWithMutationContext(root, { actionId: "unit-test-binary", mutationMode: "patch-plan" }, () => {
+      writeBinary(root, ".dove/figures/output.png", Buffer.from([1, 2, 3]));
+    }),
+    /Binary mutations require direct-process mode/
+  );
+  assert.equal(exists(root, ".dove/figures/output.png"), false);
+});
+
+test("MutationContext lifecycle closes after finish and abort", async () => {
+  const root = createTempRoot("dove-mutation-lifecycle-");
+  let finishedContext;
+  runWithMutationContext(root, { actionId: "unit-test-lifecycle" }, (context) => {
+    finishedContext = context;
+    writeText(root, ".dove/notes/lifecycle.md", "done\n");
+  });
+  assert.equal(finishedContext.lifecycle, "finished");
+  assert.throws(() => finishedContext.writeText(".dove/notes/late.md", "late\n"), /finished MutationContext/);
+
+  let abortedContext;
+  await assert.rejects(() => runWithMutationContext(root, { actionId: "unit-test-abort" }, async (context) => {
+    abortedContext = context;
+    throw new Error("boom");
+  }), /boom/);
+  assert.equal(abortedContext.lifecycle, "aborted");
+  assert.equal(currentMutationContext(root), null);
+});
 
 test("ensureWorkspace can be represented as a patch plan without creating .dove", () => {
   const root = createTempRoot("dove-mutation-workspace-");
