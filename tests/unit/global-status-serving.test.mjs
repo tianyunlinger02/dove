@@ -5,7 +5,8 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 
-import { buildGlobalStatusServingPlan, createStaticGlobalStatusServer, runGlobalStatusServingForeground, validateGlobalPublicServeRoot } from "../../src/core/index.mjs";
+import { buildGlobalStatusServingPlan, createStaticGlobalStatusServer, runGlobalStatusServingForeground, validateGlobalPublicServeRoot } from "../../src/core/internal-api.mjs";
+import { runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -244,7 +245,7 @@ test("tokenEnv serving only passes TUNNEL_TOKEN to cloudflared", async () => {
       }
     }), "utf8");
 
-    const result = await runGlobalStatusServingForeground(root, {
+    const result = await runFixtureMutation(root, "token-env-serving", () => runGlobalStatusServingForeground(root, {
       env: {
         DOVE_CONFIG_PATH: configPath,
         DOVE_CLOUDFLARE_TUNNEL_TOKEN: "secret-token",
@@ -263,7 +264,7 @@ test("tokenEnv serving only passes TUNNEL_TOKEN to cloudflared", async () => {
         process.nextTick(() => child.emit("exit", 0, null));
         return child;
       }
-    });
+    }));
 
     assert.equal(result.status, "stopped");
     assert.equal(childEnv.TUNNEL_TOKEN, "secret-token");

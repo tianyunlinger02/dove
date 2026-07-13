@@ -11,7 +11,8 @@ import {
   registerSource,
   upsertClaims,
   verifySource
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function seedTaskPacket(root, packetId = "source-trust-packet") {
@@ -40,10 +41,12 @@ function seedTaskPacket(root, packetId = "source-trust-packet") {
   return packetId;
 }
 
-function setup() {
+function setup(actionId, callback) {
   const root = createTempRoot("dove-source-trust-");
-  ensureWorkspace(root);
-  return { root, packetId: seedTaskPacket(root) };
+  return runFixtureMutation(root, actionId, () => {
+    ensureTestWorkspace(root);
+    return callback({ root, packetId: seedTaskPacket(root) });
+  });
 }
 
 function snapshot(root) {
@@ -74,12 +77,15 @@ function verifyCandidate(root, packetId, decision = "verified") {
     decision,
     method: "opened canonical publication page and compared metadata",
     checkedMaterial: "publisher page title, author list, and full-text abstract",
-    auditEvidence: ["https://example.org/paper", "publisher-page-observation-2026-07-12"]
+    auditEvidence: [{
+      reference: "https://example.org/paper",
+      kind: "source",
+      observation: "Publisher page title, author list, and abstract matched the registered source identity."
+    }]
   });
 }
 
-test("candidate source is registered but claim evidence rejects it with zero writes", () => {
-  const { root, packetId } = setup();
+test("candidate source is registered but claim evidence rejects it with zero writes", () => setup("candidate-source-is-registered-but-claim-evidence-rejects-it-with-zero-w", ({ root, packetId }) => {
   const source = registerCandidate(root, packetId);
   assert.equal(source.lifecycle, "candidate");
   const before = snapshot(root);
@@ -88,10 +94,9 @@ test("candidate source is registered but claim evidence rejects it with zero wri
     claims: [{ id: "candidate-claim", text: "Candidate cannot support this claim.", sourceIds: [source.id] }]
   }), /source-candidate/);
   assert.deepEqual(snapshot(root), before);
-});
+}));
 
-test("matching durable verification makes a source claim-eligible", () => {
-  const { root, packetId } = setup();
+test("matching durable verification makes a source claim-eligible", () => setup("matching-durable-verification-makes-a-source-claim-eligible", ({ root, packetId }) => {
   registerCandidate(root, packetId);
   const result = verifyCandidate(root, packetId);
   assert.equal(result.source.lifecycle, "verified");
@@ -108,10 +113,9 @@ test("matching durable verification makes a source claim-eligible", () => {
   });
   assert.equal(claims.claims.length, 1);
   assert.equal(evaluateEvidence(root).unsupportedClaims.length, 0);
-});
+}));
 
-test("source identity mutation invalidates prior verification", () => {
-  const { root, packetId } = setup();
+test("source identity mutation invalidates prior verification", () => setup("source-identity-mutation-invalidates-prior-verification", ({ root, packetId }) => {
   registerCandidate(root, packetId);
   verifyCandidate(root, packetId);
   registerCandidate(root, packetId, { title: "Mutated Source Identity" });
@@ -121,10 +125,9 @@ test("source identity mutation invalidates prior verification", () => {
     claims: [{ id: "mutated-claim", text: "Stale verification must not apply.", sourceIds: ["trust-source"] }]
   }), /source-candidate|source-identity-changed/);
   assert.deepEqual(snapshot(root), before);
-});
+}));
 
-test("rejected source cannot support claims", () => {
-  const { root, packetId } = setup();
+test("rejected source cannot support claims", () => setup("rejected-source-cannot-support-claims", ({ root, packetId }) => {
   registerCandidate(root, packetId);
   verifyCandidate(root, packetId, "rejected");
   const before = snapshot(root);
@@ -133,23 +136,21 @@ test("rejected source cannot support claims", () => {
     claims: [{ id: "rejected-claim", text: "Rejected material cannot support this.", sourceIds: ["trust-source"] }]
   }), /source-rejected/);
   assert.deepEqual(snapshot(root), before);
-});
+}));
 
-test("caller-minted verification fields fail before any source write", () => {
-  const { root, packetId } = setup();
+test("caller-minted verification fields fail before any source write", () => setup("caller-minted-verification-fields-fail-before-any-source-write", ({ root, packetId }) => {
   const before = snapshot(root);
   assert.throws(() => registerCandidate(root, packetId, { verified: true }), /caller-minted trust fields/);
   assert.deepEqual(snapshot(root), before);
   assert.throws(() => registerCandidate(root, packetId, { verification: { decision: "verified" } }), /caller-minted trust fields/);
   assert.deepEqual(snapshot(root), before);
-});
+}));
 
-test("verification record remains separate from the source index", () => {
-  const { root, packetId } = setup();
+test("verification record remains separate from the source index", () => setup("verification-record-remains-separate-from-the-source-index", ({ root, packetId }) => {
   registerCandidate(root, packetId);
   verifyCandidate(root, packetId);
   const sourceIndex = readJson(root, ARTIFACT_PATHS.sources, {});
   const verificationIndex = readJson(root, ARTIFACT_PATHS.sourceVerifications, {});
   assert.equal(sourceIndex.items[0].verification, undefined);
   assert.equal(verificationIndex.items.length, 1);
-});
+}));

@@ -390,8 +390,10 @@ for (const { hostId, command, relativePath, commandText } of adapterEntriesForVa
   }
 
   if (command.id === "dove.review-loop") {
-    assert.equal(commandText.includes("three rounds by default"), true, `${relativePath} must mention the default max iteration count`);
-    assert.equal(commandText.includes("Do not start a draft or experiment substep without the needed material"), true, `${relativePath} must require material before loop substeps`);
+    assert.equal(commandText.includes("exactly one visible local Reviewer pass"), true, `${relativePath} must define one Reviewer pass`);
+    assert.equal(commandText.includes("does not revise Builder-owned material"), true, `${relativePath} must keep revision out of the Reviewer call`);
+    assert.equal(commandText.includes("separate explicit Builder revision call"), true, `${relativePath} must require an explicit Builder handoff before another review`);
+    assert.equal(commandText.includes("three rounds by default"), false, `${relativePath} must not advertise a three-round loop`);
   }
 
   if (command.id === "dove.rebuttal") {

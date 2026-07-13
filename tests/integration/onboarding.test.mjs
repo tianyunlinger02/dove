@@ -4,8 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-import { ARTIFACT_PATHS, createDoveTask, discoverPaperArtifacts, ensureWorkspace, initDoveGoal, queryDoveOnboarding } from "../../src/core/index.mjs";
+import { ARTIFACT_PATHS, createDoveTask, discoverPaperArtifacts, ensureWorkspace, initDoveGoal, queryDoveOnboarding } from "../../src/core/internal-api.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
@@ -39,11 +40,11 @@ function materializeProposedDoveTask(root, args) {
 
 function seedDoveProject(root, suffix) {
   fs.mkdirSync(root, { recursive: true });
-  initDoveGoal(root, {
+  runFixtureMutation(root, `seed-dove-project-${suffix}`, () => initDoveGoal(root, {
     id: `cli-global-init-${suffix}`,
     title: `CLI Global Project ${suffix}`,
     goal: "Validate CLI global public status publishing."
-  });
+  }));
   materializeProposedDoveTask(root, {
     id: `cli-global-task-${suffix}`,
     title: `CLI global task ${suffix}`,
@@ -53,11 +54,11 @@ function seedDoveProject(root, suffix) {
 
 test("createDoveTask rejects bare and stale confirmations before exact proposal replay", () => {
   const root = tempRoot("dove-task-confirmation-");
-  initDoveGoal(root, {
+  runFixtureMutation(root, "confirmation-init", () => initDoveGoal(root, {
     id: "confirmation-init",
     title: "Confirmation project",
     goal: "Validate exact mission proposal confirmation."
-  });
+  }));
   const request = {
     id: "confirmation-task",
     title: "Confirmation task",
@@ -115,7 +116,7 @@ test("discoverPaperArtifacts proposes mappings without writing by default", () =
 test("discoverPaperArtifacts writeMap writes only the artifact map", () => {
   const root = tempRoot();
   const { manuscriptPath, manuscriptBefore } = writeFixturePaper(root);
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const watched = [
     ARTIFACT_PATHS.state,
     ARTIFACT_PATHS.workspaceIndex,
@@ -127,7 +128,7 @@ test("discoverPaperArtifacts writeMap writes only the artifact map", () => {
     return [relativePath, fs.existsSync(fullPath) ? fs.readFileSync(fullPath, "utf8") : null];
   }));
 
-  const proposal = discoverPaperArtifacts(root, { writeMap: true });
+  const proposal = runFixtureMutation(root, "discover-paper-artifacts-write-map", () => discoverPaperArtifacts(root, { writeMap: true }));
   const after = Object.fromEntries(watched.map((relativePath) => {
     const fullPath = path.join(root, relativePath);
     return [relativePath, fs.existsSync(fullPath) ? fs.readFileSync(fullPath, "utf8") : null];
@@ -272,7 +273,7 @@ test("CLI publish-global-status refreshes only explicit projects", () => {
 
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.equal(result.stdout, "");
-    assert.equal(fs.existsSync(path.join(projectA, ".dove", "public", "status.json")), true);
+    assert.equal(fs.existsSync(path.join(projectA, ".dove", "public", "status.json")), false);
     assert.equal(fs.existsSync(path.join(projectB, ".dove", "public", "status.json")), false);
     assert.equal(fs.existsSync(path.join(outputDir, "status.json")), true);
     assert.equal(fs.existsSync(path.join(outputDir, "status.md")), true);
@@ -280,7 +281,7 @@ test("CLI publish-global-status refreshes only explicit projects", () => {
     const snapshot = JSON.parse(fs.readFileSync(path.join(outputDir, "status.json"), "utf8"));
     assert.equal(snapshot.mode, "dove-global-public-status");
     assert.equal(snapshot.counts.configured, 1);
-    assert.equal(snapshot.counts.published, 1);
+    assert.equal(snapshot.counts.published, 0);
     assert.equal(snapshot.privacy.absoluteRootsIncluded, false);
     const publicText = `${fs.readFileSync(path.join(outputDir, "status.json"), "utf8")}\n${fs.readFileSync(path.join(outputDir, "status.md"), "utf8")}\n${fs.readFileSync(path.join(outputDir, "index.html"), "utf8")}`;
     assert.equal(publicText.includes(root), false);

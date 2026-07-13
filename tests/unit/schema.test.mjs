@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ensureWorkspace, readJson } from "../../src/core/workspace.mjs";
+import { ensureTestWorkspace } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 import {
   ARTIFACT_PATHS,
@@ -467,7 +468,7 @@ test("campaign indexes and workspace mirrors are normalized", () => {
 
 test("ensureWorkspace creates and repairs the campaigns artifact", () => {
   const root = createTempRoot("dove-schema-campaigns-");
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.workspaceArtifactMap)), false);
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.doveRootManifest)), true);
   assert.equal(fs.existsSync(path.join(root, ".dove")), true);
@@ -489,7 +490,7 @@ test("ensureWorkspace creates and repairs the campaigns artifact", () => {
   assert.equal(campaigns.summary.campaignsPath, ".dove/programs/campaigns.json");
 
   fs.writeFileSync(path.join(root, ARTIFACT_PATHS.campaignsIndex), JSON.stringify({ version: 99, items: "bad-shape", summary: { activeCount: 2 } }), "utf8");
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   const repaired = readJson(root, ARTIFACT_PATHS.campaignsIndex, {});
   assert.equal(repaired.version, 1);
@@ -501,7 +502,7 @@ test("ensureWorkspace creates and repairs the campaigns artifact", () => {
 test("ensureWorkspace creates and repairs the operator lessons artifact", () => {
   const root = createTempRoot("dove-schema-lessons-");
   try {
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
     const lessons = readJson(root, ARTIFACT_PATHS.metaOperatorLessons, {});
     assert.equal(lessons.version, 1);
     assert.equal(lessons.explicitOnly, true);
@@ -511,7 +512,7 @@ test("ensureWorkspace creates and repairs the operator lessons artifact", () => 
     assert.equal(lessons.summary.lessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
 
     fs.writeFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorLessons), JSON.stringify({ explicitOnly: false, noAutoApply: false, lessons: "bad-shape" }), "utf8");
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
 
     const repaired = readJson(root, ARTIFACT_PATHS.metaOperatorLessons, {});
     assert.equal(repaired.explicitOnly, true);
@@ -526,7 +527,7 @@ test("ensureWorkspace creates and repairs the operator lessons artifact", () => 
 test("ensureWorkspace creates and repairs the document ledger artifact", () => {
   const root = createTempRoot("dove-schema-documents-");
   try {
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
     const ledger = readJson(root, ARTIFACT_PATHS.documentsLedger, {});
     assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.documentsDir)), true);
     assert.equal(ledger.version, 1);
@@ -535,7 +536,7 @@ test("ensureWorkspace creates and repairs the document ledger artifact", () => {
     assert.equal(ledger.summary.ledgerPath, ARTIFACT_PATHS.documentsLedger);
 
     fs.writeFileSync(path.join(root, ARTIFACT_PATHS.documentsLedger), JSON.stringify({ entries: [{ id: "repair-doc", evidenceScope: "external", publicSafe: true }], summary: { documentCount: 99 } }), "utf8");
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
 
     const repaired = readJson(root, ARTIFACT_PATHS.documentsLedger, {});
     assert.equal(repaired.version, 1);

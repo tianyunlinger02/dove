@@ -7,8 +7,23 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { configureClaudeCodeGatewayDefaults, inspectClaudeCodeGatewayDefaults, resolveClaudeConfigRoot, resolveClaudeShellStartupFile } from "../src/core/claude-code-gateway.mjs";
-import { buildRebuttal, buildRebuttalStrategy, createDoveTask, discoverPaperArtifacts, ensureWorkspace, importIsolatedReview, initDoveGoal, isOperationalFailureOutcome, launchDoveMission, normalizeRebuttalIssues, prepareIsolatedReview, publishDoveGlobalStatus, publishDoveStatus, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus, queryOperatorLessons, recordOperatorLesson, refreshDurableSurfaces, registerSource, resetDoveVersion, runDoveAuto, runDoveOperator, runDoveReviewLoop, runExperienceWorkflow, runFigureWorkflow, runGlobalStatusServingForeground, runIsolatedReview, runReviewLoop, setSectionStatus, upsertDraft, upsertNote } from "../src/core/index.mjs";
+import { buildRebuttal } from "../src/core/artifacts.mjs";
+import { buildRebuttalStrategy, normalizeRebuttalIssues } from "../src/core/orchestration.mjs";
+import { createDoveTask, initDoveGoal, resetDoveVersion, runDoveAuto, runDoveOperator } from "../src/core/task-workflow.mjs";
+import { discoverPaperArtifacts } from "../src/core/onboarding.mjs";
+import { importIsolatedReview, prepareIsolatedReview, runIsolatedReview } from "../src/core/isolated-review.mjs";
+import { isOperationalFailureOutcome } from "../src/core/operational-outcome.mjs";
+import { launchDoveMission, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus } from "../src/core/dove.mjs";
+import { publishDoveGlobalStatus, publishDoveStatus } from "../src/core/public-status.mjs";
+import { queryOperatorLessons, recordOperatorLesson, refreshDurableSurfaces } from "../src/core/navigation.mjs";
+import { registerSource, setSectionStatus, upsertDraft, upsertNote } from "../src/core/artifacts.mjs";
+import { runDoveReviewLoop } from "../src/core/dove-review-loop.mjs";
+import { runExperienceWorkflow } from "../src/core/experience-workflow.mjs";
+import { runFigureWorkflow } from "../src/core/figure-workflow.mjs";
+import { runGlobalStatusServingForeground } from "../src/core/global-status-serving.mjs";
+import { runReviewLoop } from "../src/core/reviews.mjs";
 import { runWithMutationContext } from "../src/core/mutation-backend.mjs";
+import { ensureWorkspace } from "../src/core/workspace.mjs";
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
 import {
@@ -400,7 +415,7 @@ function assertKnownCommandFlags(args, { valueFlags = [], booleanFlags = [] } = 
       continue;
     }
     if (valueFlagSet.has(arg)) {
-      if (index + 1 >= args.length || String(args[index + 1]).startsWith("--")) {
+      if (index + 1 >= args.length) {
         throw new Error(`${arg} requires a value.`);
       }
       index += 1;
@@ -527,7 +542,13 @@ function missionProposalJson(result, target = ".") {
   };
 }
 
-function buildDoveMissionArgs(rest = []) {
+function buildDoveMissionArgs(rest = [], options = {}) {
+  if (options.validateFlags !== false) {
+    assertKnownCommandFlags(rest, {
+      valueFlags: ["--proposal-token", "--proposal-digest", "--mutation-mode", "--format", "--id", "--packet-id", "--task-id", "--goal", "--domain", "--dove-domain", "--mission-domain", "--stage", "--mission-stage", "--artifact", "--target-artifact", "--artifact-path", "--target", "--acceptance-check", "--check", "--next-command"],
+      booleanFlags: ["--confirmed", "--yes", "--json"]
+    });
+  }
   assertFlagAppearsAtMostOnce(rest, "--proposal-token");
   assertFlagAppearsAtMostOnce(rest, "--proposal-digest");
   const proposalToken = readFlagValue(rest, "--proposal-token");
@@ -561,7 +582,7 @@ function buildDoveMissionArgs(rest = []) {
 
 function buildDoveOrchestrateArgs(rest = []) {
   return {
-    ...buildDoveMissionArgs(rest),
+    ...buildDoveMissionArgs(rest, { validateFlags: false }),
     request: readFlagValue(rest, "--request"),
     userRequest: readFlagValue(rest, "--user-request"),
     allowAutonomy: rest.includes("--allow-autonomy")
@@ -570,7 +591,7 @@ function buildDoveOrchestrateArgs(rest = []) {
 
 function buildDoveReturnArgs(rest = []) {
   return {
-    ...buildDoveMissionArgs(rest),
+    ...buildDoveMissionArgs(rest, { validateFlags: false }),
     scope: readFlagValue(rest, "--scope"),
     validationEvidencePaths: readFlagValues(rest, ["--validation-evidence", "--validation-evidence-path", "--evidence", "--evidence-path"]),
     changedFilePaths: readFlagValues(rest, ["--changed-file", "--changed-file-path", "--changed-path"]),
@@ -582,6 +603,10 @@ function buildDoveReturnArgs(rest = []) {
 }
 
 function buildDoveStatusArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--intent", "--domain", "--dove-domain", "--mission-domain", "--stage", "--mission-stage", "--packet-id", "--packet", "--mission-packet-id", "--mission-packet", "--status", "--lifecycle-status", "--detail", "--view", "--result-mode", "--format"],
+    booleanFlags: ["--contract-test", "--health", "--include-archived", "--full", "--include-details", "--missions", "--show-missions", "--include-mission-details", "--request-status-adjustment", "--status-adjustment", "--show-status-adjustments", "--include-status-adjustment-preview", "--json"]
+  });
   const detail = readFirstFlagValue(rest, ["--detail", "--view", "--result-mode"]);
   const intent = rest.includes("--contract-test") ? "contract-test" : rest.includes("--health") ? "health-check" : readFlagValue(rest, "--intent");
   return {
@@ -611,6 +636,10 @@ function buildTaskTargetArgs(rest = []) {
 }
 
 function buildDoveFigureArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--intent", "--description", "--name", "--title", "--figure-id", "--purpose", "--caption-intent", "--target-claim-id", "--claim-id", "--source-section", "--section-id", "--source-artifact-path", "--artifact-path", "--related-experiment-id", "--experiment-id", "--review-concern-id", "--rebuttal-issue-id", "--required-visual-element", "--material-hint", "--provider-id", "--run-id", "--output-format", "--constraint", "--output-manifest-path", "--source-svg-path", "--target-final-svg-path", "--svg-content", "--caption", "--caption-draft", "--caption-id", "--mutation-mode", "--format"],
+    booleanFlags: ["--execute-provider", "--allow-missing-materials", "--json"]
+  });
   return {
     packetId: readFirstFlagValue(rest, ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id"]),
     target: readFlagValue(rest, "--target"),
@@ -631,7 +660,7 @@ function buildDoveFigureArgs(rest = []) {
     rebuttalIssueIds: readFlagValues(rest, ["--rebuttal-issue-id"]),
     requiredVisualElements: readFlagValues(rest, ["--required-visual-element"]),
     materialHints: readFlagValues(rest, ["--material-hint"]),
-    providerId: readFlagValue(rest, "--provider-id") ?? "none",
+    providerId: readFlagValue(rest, "--provider-id") ?? undefined,
     executeProvider: rest.includes("--execute-provider"),
     allowMissingMaterials: rest.includes("--allow-missing-materials"),
     runId: readFlagValue(rest, "--run-id"),
@@ -648,6 +677,10 @@ function buildDoveFigureArgs(rest = []) {
 }
 
 function buildDoveInitArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--title", "--goal", "--objective", "--summary", "--domain", "--dove-domain", "--mutation-mode", "--format"],
+    booleanFlags: ["--json"]
+  });
   return {
     title: readFlagValue(rest, "--title") ?? readFlagValue(rest, "--goal"),
     goal: readFlagValue(rest, "--goal"),
@@ -740,6 +773,10 @@ function buildDoveOperatorArgs(rest = []) {
 }
 
 function buildDoveLessonsArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--title", "--problem", "--decision", "--pitfall", "--validation", "--next-time", "--tag", "--domain", "--dove-domain", "--status", "--limit", "--mutation-mode", "--format"],
+    booleanFlags: ["--json"]
+  });
   return {
     ...buildTaskTargetArgs(rest),
     title: readFlagValue(rest, "--title"),
@@ -756,6 +793,10 @@ function buildDoveLessonsArgs(rest = []) {
 }
 
 function buildDoveVersionArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--title", "--reason", "--summary", "--version-id", "--id", "--mutation-mode", "--format"],
+    booleanFlags: ["--json"]
+  });
   return {
     title: readFlagValue(rest, "--title"),
     reason: readFlagValue(rest, "--reason") ?? readFlagValue(rest, "--summary"),
@@ -765,6 +806,10 @@ function buildDoveVersionArgs(rest = []) {
 }
 
 function buildDoveSourceArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--source-id", "--citation-key", "--title", "--locator", "--url", "--doi", "--source-type", "--origin", "--abstract", "--year", "--author", "--mutation-mode", "--format"],
+    booleanFlags: ["--json"]
+  });
   return {
     ...buildTaskTargetArgs(rest),
     sourceId: readFlagValue(rest, "--source-id"),
@@ -780,6 +825,10 @@ function buildDoveSourceArgs(rest = []) {
 }
 
 function buildDoveNoteArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--note-id", "--title", "--section-id", "--summary", "--quote", "--claim", "--open-question", "--source-id", "--mutation-mode", "--format"],
+    booleanFlags: ["--json"]
+  });
   return {
     ...buildTaskTargetArgs(rest),
     noteId: readFlagValue(rest, "--note-id"),
@@ -794,6 +843,10 @@ function buildDoveNoteArgs(rest = []) {
 }
 
 function buildDoveDraftArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--section-id", "--title", "--body", "--summary", "--status", "--mutation-mode", "--format"],
+    booleanFlags: ["--json"]
+  });
   return {
     ...buildTaskTargetArgs(rest),
     sectionId: readFlagValue(rest, "--section-id"),
@@ -805,6 +858,10 @@ function buildDoveDraftArgs(rest = []) {
 }
 
 function buildDoveExperienceArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--id", "--experiment-id", "--title", "--goal", "--idea", "--methodology", "--method", "--success-metric", "--metric", "--claim-id", "--outcome", "--result-summary", "--summary", "--evidence", "--evidence-link", "--artifact-path", "--comparison-target", "--baseline", "--mutation-mode", "--format"],
+    booleanFlags: ["--json"]
+  });
   return {
     ...buildTaskTargetArgs(rest),
     id: readFlagValue(rest, "--id"),
@@ -824,15 +881,25 @@ function buildDoveExperienceArgs(rest = []) {
 }
 
 function buildDoveReviewArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--scope", "--stage", "--reviewer", "--artifact", "--artifact-path", "--reviewed-artifact-path", "--mutation-mode", "--format"],
+    booleanFlags: ["--json"]
+  });
   return {
     ...buildTaskTargetArgs(rest),
     scope: readFlagValue(rest, "--scope"),
     stage: readFlagValue(rest, "--stage"),
-    reviewer: readFlagValue(rest, "--reviewer")
+    reviewer: readFlagValue(rest, "--reviewer"),
+    artifactPaths: readFlagValues(rest, ["--artifact", "--artifact-path"]),
+    reviewedArtifactPaths: readFlagValues(rest, ["--reviewed-artifact-path"])
   };
 }
 
 function buildDoveReviewLoopArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--run-id", "--scope", "--instructions", "--stage", "--summary", "--artifact", "--artifact-path", "--reviewed-artifact-path", "--mutation-mode", "--format", "--max-iterations", "--draft-body", "--section-id", "--experience-goal", "--final-plan", "--final-plan-path", "--final-result", "--final-result-path"],
+    booleanFlags: ["--json"]
+  });
   const retiredFlags = ["--max-iterations", "--draft-body", "--section-id", "--experience-goal", "--final-plan", "--final-plan-path", "--final-result", "--final-result-path"];
   const retired = retiredFlags.filter((flag) => rest.includes(flag));
   if (retired.length > 0) {
@@ -845,11 +912,16 @@ function buildDoveReviewLoopArgs(rest = []) {
     instructions: readFlagValue(rest, "--instructions"),
     stage: readFlagValue(rest, "--stage"),
     summary: readFlagValue(rest, "--summary"),
-    artifactPaths: readFlagValues(rest, ["--artifact", "--artifact-path"])
+    artifactPaths: readFlagValues(rest, ["--artifact", "--artifact-path"]),
+    reviewedArtifactPaths: readFlagValues(rest, ["--reviewed-artifact-path"])
   };
 }
 
 function buildDoveRebuttalArgs(rest = []) {
+  assertKnownCommandFlags(rest, {
+    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--issue", "--reviewer-issue", "--title", "--summary", "--mutation-mode", "--format"],
+    booleanFlags: ["--issues-only", "--strategy-only", "--json"]
+  });
   const issueSummaries = readFlagValues(rest, ["--issue", "--reviewer-issue"]);
   return {
     ...buildTaskTargetArgs(rest),
@@ -2829,13 +2901,15 @@ function doctor(target) {
   result.checks.push(rawMetaOptimizeConsistency);
 
   if (rawJsonChecksPassed && boundaryRawParseOk && rawManagedArtifactChecksPassed) {
-    ensureWorkspace(target);
     try {
-      refreshDurableSurfaces(target, {
-        type: "doctor",
-        summary: "Refreshed durable surfaces during doctor health check.",
-        artifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.metaGovernanceCoverage, ARTIFACT_PATHS.metaGovernanceCoverageReport]
-      });
+      withMutationContext(target, "dove-doctor", [], () => {
+        ensureWorkspace(target);
+        return refreshDurableSurfaces(target, {
+          type: "doctor",
+          summary: "Refreshed durable surfaces during doctor health check.",
+          artifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.metaGovernanceCoverage, ARTIFACT_PATHS.metaGovernanceCoverageReport]
+        });
+      }, { defaultMutationMode: "direct-process" });
       result.checks.push({ check: "durable-surface-refresh", ok: true, message: "durable surfaces refreshed" });
     } catch (error) {
       result.checks.push({ check: "durable-surface-refresh", ok: false, message: error instanceof Error ? error.message : String(error) });
@@ -3022,7 +3096,14 @@ function runDoveSurface(surface, rawTarget, rawRest = []) {
       const proposalToken = missionArgs.proposalToken;
       return withMutationContext(target, "create-dove-task", commandRest, (cleanRest) => {
         const cleanArgs = buildDoveMissionArgs(cleanRest);
-        return createDoveTask(target, proposalToken ? missionArgs : cleanArgs);
+        const mutationMode = readMutationMode(commandRest) ?? "direct-process";
+        return createDoveTask(target, proposalToken ? {
+          ...missionArgs,
+          mutationMode
+        } : {
+          ...cleanArgs,
+          mutationMode
+        });
       }, { defaultMutationMode: "direct-process" });
     }
     return createDoveTask(target, missionArgs);
@@ -3054,7 +3135,7 @@ if (command === "install" || command === "sync") {
   const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
   rejectPatchPlanMode(command, commandRest, "install/sync copies adapter files and may write user-level host configuration, so use direct-process only.");
   const cleanRest = stripMutationModeFlag(commandRest);
-  const result = installOrSync(target, cleanRest.includes("--force"), cleanRest);
+  const result = withMutationContext(target, `dove-${command}`, commandRest, () => installOrSync(target, cleanRest.includes("--force"), cleanRest), { defaultMutationMode: "direct-process" });
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 }

@@ -5,7 +5,7 @@ import { evaluateEvidence } from "./evidence.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
-import { loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
+import { loadBoard, upsertSystemOrchestrationBoard } from "./orchestration.mjs";
 import { buildPreActionGuidance } from "./pre-action-guidance.mjs";
 import { buildCommandResultCard } from "./result-cards.mjs";
 import { assertReviewMaterials, buildReviewScope } from "./review-scope.mjs";
@@ -401,7 +401,8 @@ const SYSTEM_OWNED_REVIEW_FIELDS = new Set([
   "sourceExecutionClaimIds",
   "sourceReviewExecutionClaimId",
   "sourceReviewId",
-  "sourceReviewIds"
+  "sourceReviewIds",
+  "reviewRequiredBeforeFinalize"
 ]);
 
 const INTERNAL_REVIEW_CONTROL_FIELDS = new Set([
@@ -639,7 +640,7 @@ function persistReviewLog(root, args = {}, runtimeContext = {}) {
     }
   });
   if (runtimeContext.skipBoardUpdate !== true) {
-    upsertOrchestrationBoard(root, {
+    upsertSystemOrchestrationBoard(root, {
       phase: "review",
       assignedRole: "reviewer",
       intentType: entry.verdict === "coherent" ? "review" : "repair",
@@ -694,7 +695,7 @@ export function upsertRevisionPlan(root, args = {}) {
     ...(items.length > 0 ? items.map((item) => `- [ ] ${item}`) : ["- [ ] No action items recorded."])
   ].join("\n");
   writeText(root, ARTIFACT_PATHS.revisionPlan, content);
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "review",
     assignedRole: "planner",
     intentType: "repair",
@@ -819,7 +820,7 @@ function transitionToLocalReviewer(root, args = {}, target = {}) {
   if (board.currentPhase === "review" && board.assignedRole === "reviewer") {
     return null;
   }
-  return upsertOrchestrationBoard(root, {
+  return upsertSystemOrchestrationBoard(root, {
     phase: "review",
     assignedRole: "reviewer",
     intentType: "review",

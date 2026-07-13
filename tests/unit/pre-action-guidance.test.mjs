@@ -5,7 +5,7 @@ import {
   buildPreActionGuidance,
   selectPreActionLessons,
   summarizePreActionGuidance
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
 
 const GUIDANCE_CRITERION = "Guidance execution criterion";
 const GUIDANCE_EVIDENCE_PATH = ".dove/evidence/guidance-verification.log";

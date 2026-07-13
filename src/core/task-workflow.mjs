@@ -25,7 +25,7 @@ import {
   normalizeDovePrimaryRoleId
 } from "./schema.mjs";
 import { assertGovernanceMutationRegistered, ensureWorkspace, loadState, nowIso, readJson, saveState, writeJson } from "./workspace.mjs";
-import { normalizeTaskPacketId, readTaskPacketCatalog, resolveDurableTaskPacket } from "./task-packets.mjs";
+import { deterministicBoundedTaskPacketId, normalizeTaskPacketId, readTaskPacketCatalog, resolveDurableTaskPacket } from "./task-packets.mjs";
 import { registerSource, upsertNote, upsertDraft, buildRebuttal } from "./artifacts.mjs";
 import { runFigureWorkflow } from "./figure-workflow.mjs";
 import { runExperienceWorkflow } from "./experience-workflow.mjs";
@@ -1838,13 +1838,7 @@ function deterministicDerivedTaskId(source, prefix, title) {
   if (explicitId) {
     return normalizeTaskPacketId(explicitId);
   }
-  const normalizedPrefix = normalizeTaskPacketId(prefix);
-  const normalizedTitle = slugify(title);
-  const digest = crypto.createHash("sha256").update(`${normalizedPrefix}\0${normalizedTitle}`).digest("hex").slice(0, 12);
-  const maxIdLength = 160;
-  const boundedPrefix = normalizedPrefix.slice(0, 72).replace(/-+$/u, "") || "task";
-  const availableTitleLength = Math.max(1, maxIdLength - boundedPrefix.length - digest.length - 2);
-  return normalizeTaskPacketId(`${boundedPrefix}-${normalizedTitle.slice(0, availableTitleLength)}-${digest}`);
+  return deterministicBoundedTaskPacketId(prefix, title);
 }
 
 function buildDerivedTask(root, init, parent, source, options = {}) {
@@ -2417,8 +2411,7 @@ function completionVerificationBlock(root, task, args = {}, responseLanguage = "
     }
   });
   const hasInspectibleEvidence = hasPlanOutput
-    || integrity.hasSubstantiveEvidence === true
-    || integrity.pathEvidence.unlinkedPaths.length > 0;
+    || integrity.hasSubstantiveEvidence === true;
   const hasSummary = Boolean(normalizeString(payload.resultSummary ?? payload.summary ?? payload.reason, ""));
   if (!hasSummary || !hasInspectibleEvidence) {
     const requiredActions = [
@@ -2466,7 +2459,7 @@ function completionVerificationBlock(root, task, args = {}, responseLanguage = "
   }
   if (
     evidenceRequirements.descriptiveRequirements.length > 0
-    && integrity.hasSubstantiveEvidence !== true
+    && integrity.uncoveredRequirements.length > 0
   ) {
     return {
       status: "verification-failed",
@@ -2477,10 +2470,11 @@ function completionVerificationBlock(root, task, args = {}, responseLanguage = "
       criteriaCoverage: coverage,
       evidenceIntegrity: integrity,
       descriptiveEvidenceRequirements: evidenceRequirements.descriptiveRequirements,
-      requiredActions: ["satisfy-described-contract-evidence", "attach-existing-non-empty-non-bookkeeping-evidence"],
+      uncoveredRequirements: integrity.uncoveredRequirements,
+      requiredActions: ["satisfy-described-contract-evidence", "attach-purpose-matched-evidence"],
       message: responseLanguage === "en"
-        ? "The execution contract includes descriptive evidence requirements; completion must attach substantive evidence that satisfies those descriptions."
-        : "executionContract 包含说明性证据要求；完成任务时必须附上满足这些说明的实质证据。",
+        ? "Every descriptive execution-contract evidence requirement must be covered by distinct, purpose-matched substantive evidence."
+        : "executionContract 中每一项说明性证据要求都必须由独立且用途匹配的实质证据覆盖。",
       nextAction: "project:dove.status",
       proposalOnly: true,
       noAutoApply: true,
@@ -2508,7 +2502,7 @@ function completionVerificationBlock(root, task, args = {}, responseLanguage = "
       writes: []
     };
   }
-  if (integrity && integrity.problemPaths.length > 0) {
+  if (integrity && integrity.satisfied !== true) {
     return {
       status: "needs-completion-evidence",
       requestedStatus: "completed",
@@ -3570,10 +3564,10 @@ export function runDoveOperator(root, args = {}) {
   const blockerProposalPending = blockerPlanConversion.proposedBlockedTaskIds?.length > 0;
   const resultStatus = awaitingResults.length > 0
     ? (durableWorkHappened ? "awaiting-host-results" : "needs-host-results")
-    : (blockerProposalPending ? "blocked-investigation-proposed" : "completed");
+    : (blockerProposalPending ? "blocked-investigation-proposed" : "foreground-pass-complete");
   const resultOutcome = awaitingResults.length > 0
     ? (durableWorkHappened ? "operator-pass-results-required" : "operator-pass-needs-host-results")
-    : (blockerProposalPending ? "operator-blocker-investigation-proposed" : "operator-pass-recorded");
+    : (blockerProposalPending ? "operator-blocker-investigation-proposed" : (durableWorkHappened ? "operator-pass-recorded" : "operator-queue-has-no-runnable-work"));
   const result = {
     id: runId,
     surface: "dove.operator",
@@ -3597,7 +3591,7 @@ export function runDoveOperator(root, args = {}) {
     blockerInvestigationMode,
     blockerPlanConversion,
     iterations,
-    stopReason: awaitingResults.length > 0 ? "host-pass-results-required" : (blockerProposalPending ? "blocked-investigation-requires-explicit-create" : null),
+    stopReason: awaitingResults.length > 0 ? "host-pass-results-required" : (blockerProposalPending ? "blocked-investigation-requires-explicit-create" : "foreground-pass-complete"),
     responseLanguage,
     createdAt: timestamp,
     updatedAt: nowIso()
@@ -5601,31 +5595,9 @@ export function runDoveAuto(root, args = {}) {
     const startedAt = nowIso();
     const step = steps[index] ?? null;
     if (!step) {
-      const completedAt = nowIso();
-      result.iterations.push({
-        iteration: iterationNumber,
-        command: null,
-        status: "awaiting-host-pass",
-        outcome: "host-pass-required",
-        stopReason: autoPlan.whyThisStep,
-        startedAt,
-        completedAt
-      });
-      result.status = "awaiting-host-pass";
-      result.outcome = "host-pass-required";
-      result.stopReason = autoPlan.whyThisStep;
-      task = updateTaskLifecycle(root, task, "blocked", {
-        runId: resultId,
-        surface: "dove.auto",
-        command: "run_dove_auto",
-        boundaryType: "awaiting-host-pass",
-        reason: result.stopReason,
-        stopReason: result.stopReason,
-        summary: result.outcome,
-        requiredActions: autoHostPassRequiredActions(autoPlan),
-        nextAction: task.nextAction
-      });
-      result.boundary = task.boundary;
+      result.status = "foreground-pass-complete";
+      result.outcome = "approved-steps-exhausted";
+      result.stopReason = "approved-steps-exhausted";
       finalTaskStatus = task.status;
       break;
     }
@@ -5727,9 +5699,10 @@ export function runDoveAuto(root, args = {}) {
         break;
       }
       if (iterationNumber === maxIterations) {
-        result.status = "step-budget-exhausted";
-        result.outcome = "max-iterations-reached";
-        result.stopReason = "max-iterations-reached";
+        const approvedStepsRemain = steps.length > maxIterations;
+        result.status = approvedStepsRemain ? "step-budget-exhausted" : "foreground-pass-complete";
+        result.outcome = approvedStepsRemain ? "step-budget-exhausted" : "approved-steps-exhausted";
+        result.stopReason = result.outcome;
         finalTaskStatus = task.status;
       }
     } catch (error) {

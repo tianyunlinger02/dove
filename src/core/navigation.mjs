@@ -79,7 +79,7 @@ import {
 } from "./schema.mjs";
 import { followThroughSourceAuthorityFingerprint } from "./follow-through-authority.mjs";
 import { readProgramOperatingState } from "./program-operating-state.mjs";
-import { resolveDurableTaskPacket } from "./task-packets.mjs";
+import { deterministicBoundedTaskPacketId, resolveDurableTaskPacket } from "./task-packets.mjs";
 import { assertGovernanceMutationRegistered, assertNoPolicyOverrideArgs, ensureWorkspace, loadState, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
 
 function normalizeStringArray(value) {
@@ -1481,7 +1481,7 @@ function deriveExperimentPackets(plansIndex) {
 
 function deriveIssuePackets(issuesIndex) {
   return (issuesIndex.items ?? []).map((issue) => normalizePacket({
-    id: `rebuttal-${issue.id}`,
+    id: deterministicBoundedTaskPacketId("rebuttal", issue.id),
     sourceType: "rebuttal-issue",
     sourceId: issue.id,
     title: issue.summary,
@@ -1797,7 +1797,7 @@ function buildTaskGraph(packets, autonomyLoops = null) {
       }
     }
     for (const issueId of packet.rebuttalIssueIds) {
-      const target = `rebuttal-${issueId}`;
+      const target = deterministicBoundedTaskPacketId("rebuttal", issueId);
       if (packet.id !== target && nodeIds.has(target)) {
         edges.push({ from: packet.id, to: target, type: "rebuttal-link" });
       }

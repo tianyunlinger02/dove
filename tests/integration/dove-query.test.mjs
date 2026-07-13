@@ -19,10 +19,11 @@ import {
   runDoveAuto,
   runDoveReviewLoop,
   upsertOrchestrationBoard
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
@@ -307,13 +308,13 @@ function seedReviewLoopPacket(root, {
   boardPhase = "draft",
   boardRole = "builder"
 }) {
-  ensureWorkspace(root);
-  upsertOrchestrationBoard(root, {
+  ensureTestWorkspace(root);
+  runFixtureMutation(root, "seed-review-loop-board", () => upsertOrchestrationBoard(root, {
     phase: boardPhase,
     assignedRole: boardRole,
     currentFocus: "Prepare the current work for review.",
     nextAction: "Hand the current work to the reviewer."
-  });
+  }));
   const timestamp = new Date(0).toISOString();
   const draftPath = `${ARTIFACT_PATHS.draftsDir}/${id}.md`;
   const packet = {
@@ -342,7 +343,7 @@ function seedReviewLoopPacket(root, {
 test("figure CLI returns non-zero for an operational missing-materials boundary", () => {
   const root = tempRoot();
   try {
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
     writeTaskPacket(root, {
       id: "cli-figure-blocked",
       title: "CLI figure blocked boundary",
@@ -383,7 +384,7 @@ test("figure CLI returns non-zero for an operational missing-materials boundary"
 test("task target resolver prefers full Unicode task titles over short ASCII fragments", () => {
   const root = tempRoot();
   try {
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
     const timestamp = new Date(0).toISOString();
     writeTaskPacket(root, {
       id: "venue-main",
@@ -431,7 +432,7 @@ test("task target resolver prefers full Unicode task titles over short ASCII fra
 test("CLI figure defaults to a governed patch-plan without writing figure records", () => {
   const root = tempRoot();
   try {
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
     const timestamp = new Date(0).toISOString();
     writeTaskPacket(root, {
       id: "figure-cli-packet",
@@ -589,6 +590,14 @@ test("CLI mission proposes without writes and materializes the approved contract
     assert.equal(plannedResult.contractMaterialized, false);
     assert.equal(plannedResult.writesApplied, false);
     assert.ok(plannedResult.mutationPlan.operations.length > 0);
+    assert.equal(fs.existsSync(path.join(plannedRoot, ".dove")), false);
+
+    const missingMode = spawnSync("node", [CLI, "mission", plannedRoot, "--proposal-token", planProposal.proposalToken, "--confirmed", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+    assert.equal(missingMode.status, 1, missingMode.stderr || missingMode.stdout);
+    assert.match(missingMode.stdout, /different mutation mode|no longer matches|写入模式|不再匹配/u);
     assert.equal(fs.existsSync(path.join(plannedRoot, ".dove")), false);
   } finally {
     fs.rmSync(plannedRoot, { recursive: true, force: true });
@@ -802,7 +811,7 @@ test("mission replay rejects target id collisions without overwriting", () => {
       goal: "Do not overwrite a task created after proposal time.",
       checklist: false
     });
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
     const packetPath = path.join(root, ARTIFACT_PATHS.taskPacketsPacketsDir, "collision-task.json");
     fs.mkdirSync(path.dirname(packetPath), { recursive: true });
     fs.writeFileSync(packetPath, '{"id":"collision-task","title":"Concurrent task"}\n', "utf8");
@@ -1033,7 +1042,7 @@ test("CLI auto emits a canonical proposal token and safely replays its exact con
     assert.match(patchReplayProcess.stderr || patchReplayProcess.stdout, /host-pass-required|补真实结果或证据/u);
     assert.equal(fs.existsSync(path.join(patchRoot, ".dove")), false);
 
-    ensureWorkspace(selectionRoot);
+    ensureTestWorkspace(selectionRoot);
     writeTaskPacket(selectionRoot, {
       id: "cli-auto-selection",
       title: "CLI auto selection replay",
@@ -1332,7 +1341,7 @@ test("CLI auto proposal replay rejects canonical workspace symlink retarget with
 
 test("CLI review performs the local reviewer pass without requiring a hidden handoff command", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const timestamp = new Date(0).toISOString();
   const draftPath = `${ARTIFACT_PATHS.draftsDir}/cli-review.md`;
   const packet = {
@@ -1420,12 +1429,12 @@ test("direct-process review-loop does not duplicate a handoff when reviewer alre
     assignedRole: "reviewer",
     stage: "review"
   });
-  upsertOrchestrationBoard(root, {
+  runFixtureMutation(root, "seed-reviewer-owned-board", () => upsertOrchestrationBoard(root, {
     phase: "review",
     assignedRole: "reviewer",
     currentFocus: "Continue the existing reviewer pass.",
     nextAction: "Run the bounded local review loop."
-  });
+  }));
   const handoffsBefore = fs.readFileSync(path.join(root, ARTIFACT_PATHS.orchestrationHandoffs), "utf8");
 
   const review = spawnSync("node", [CLI, "review-loop", root, "--packet-id", packet.id, "--mutation-mode", "direct-process", "--json"], {
@@ -1564,9 +1573,30 @@ test("direct-process review-loop rejects retired governance controls recursively
   }
 });
 
+test("read-only status query does not bootstrap an empty workspace", () => {
+  const root = tempRoot();
+  try {
+    const before = snapshotRelativeFileContents(root);
+    const result = queryDoveStatus(root);
+
+    assert.equal(result.mode, "dove-status-query");
+    assert.equal(result.proposalOnly, true);
+    assert.deepEqual(result.changes, {
+      intent: "none",
+      applied: false,
+      count: 0,
+      rollback: "not-applicable"
+    });
+    assert.deepEqual(snapshotRelativeFileContents(root), before);
+    assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("CLI status defaults to a concise human summary and keeps JSON opt-in", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   const human = spawnSync("node", [CLI, "status", root], {
     cwd: ROOT,
@@ -1718,7 +1748,7 @@ test("CLI work surface help stays public without executing writes", () => {
 test("CLI source and note default to governed patch-plans without writing records", () => {
   const root = tempRoot();
   try {
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
     const timestamp = new Date(0).toISOString();
     writeTaskPacket(root, {
       id: "cli-work-packet",
@@ -1781,7 +1811,7 @@ test("CLI source and note default to governed patch-plans without writing record
 test("CLI draft requires real body or explicit section status", () => {
   const root = tempRoot();
   try {
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
     writeTaskPacket(root, {
       id: "cli-draft-packet",
       title: "CLI draft packet",
@@ -1824,7 +1854,7 @@ test("CLI draft requires real body or explicit section status", () => {
 
 test("CLI status hides internal packet ids and expansion commands by default", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const timestamp = new Date(0).toISOString();
 
   writeTaskPacket(root, {
@@ -1888,7 +1918,7 @@ test("CLI status hides internal packet ids and expansion commands by default", (
 
 test("status reports host rollback capture as unverifiable from Dove", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const compactResult = queryDoveStatus(root);
   const result = queryDoveStatus(root, { detail: "full" });
   assertDurableContextNotice(result.durableContextNotice);
@@ -1928,7 +1958,7 @@ function seedDoveLaunchGuidance(root) {
     reviewRound: 1,
     reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
   });
-  const meta = queryMetaOptimize(root);
+  const meta = runFixtureMutation(root, "refresh-meta-optimize-guidance", () => queryMetaOptimize(root));
   const pack = meta.remediationPacks.packs[0];
   const packetPath = pack.rankedConversionPaths?.find((item) => item.targetType === "create-new-packet") ?? null;
   return { pack, packetPath };
@@ -1955,9 +1985,9 @@ const watchedArtifacts = [
 
 test("queryMetaOptimize exposes operator lessons summary and path", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
-  const result = queryMetaOptimize(root);
+  const result = runFixtureMutation(root, "query-meta-optimize", () => queryMetaOptimize(root));
   assert.equal(result.operatorLessonsPath, ARTIFACT_PATHS.metaOperatorLessons);
   assert.equal(result.operatorLessons.explicitOnly, true);
   assert.equal(result.operatorLessons.noAutoCapture, true);
@@ -1972,7 +2002,7 @@ test("queryMetaOptimize exposes operator lessons summary and path", () => {
 
 test("queryDoveMissionBoard exposes the as-read Dove mission board without writing artifacts", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   writeJson(root, ARTIFACT_PATHS.orchestrationBoard, {
     version: 2,
@@ -2100,7 +2130,7 @@ test("queryDoveMissionBoard exposes the as-read Dove mission board without writi
 
 test("queryDoveStatus returns an authoritative task dashboard without surfacing stale navigation state", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   writeJson(root, ARTIFACT_PATHS.orchestrationBoard, {
     version: 2,
@@ -2871,7 +2901,7 @@ test("queryDoveStatus returns an authoritative task dashboard without surfacing 
 
 test("queryDoveStatus routes executable workflow gaps before mission details", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   writeTaskPacket(root, {
     id: "dove-global-init",
@@ -3000,7 +3030,7 @@ test("queryDoveStatus routes executable workflow gaps before mission details", (
 
 test("CLI status omits fallback status command for material recovery", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   writeTaskPacket(root, {
     id: "dove-global-init",
@@ -3061,7 +3091,7 @@ test("CLI status omits fallback status command for material recovery", () => {
 
 test("queryDoveMission frames an engineering mission without writing artifacts", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   writeJson(root, ARTIFACT_PATHS.orchestrationBoard, {
     version: 2,
@@ -3132,7 +3162,7 @@ test("queryDoveMission frames an engineering mission without writing artifacts",
 
 test("queryDoveOrchestrate routes an engineering mission without writing artifacts", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   const before = snapshotArtifacts(root, watchedArtifacts);
   const result = queryDoveOrchestrate(root, {
@@ -3166,7 +3196,7 @@ test("queryDoveOrchestrate routes an engineering mission without writing artifac
 
 test("createDoveTask routes venue source research ahead of reviewer audit", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   const sourceResearch = createDoveTask(root, {
     id: "venue-source-research",
@@ -3198,7 +3228,7 @@ test("createDoveTask routes venue source research ahead of reviewer audit", () =
 
 test("runDoveAuto treats project continuation routes as host triage, not concrete steps", () => {
   const statusRoot = tempRoot();
-  ensureWorkspace(statusRoot);
+  ensureTestWorkspace(statusRoot);
   writeTaskPacket(statusRoot, {
     id: "status-continuation",
     title: "Status continuation",
@@ -3220,7 +3250,7 @@ test("runDoveAuto treats project continuation routes as host triage, not concret
   assert.equal(statusAuto.whyThisStep, "project-continuation-requires-status-triage:dove.status");
 
   const autoRoot = tempRoot();
-  ensureWorkspace(autoRoot);
+  ensureTestWorkspace(autoRoot);
   writeTaskPacket(autoRoot, {
     id: "auto-continuation",
     title: "Auto continuation",
@@ -3244,7 +3274,7 @@ test("runDoveAuto treats project continuation routes as host triage, not concret
 
 test("queryDoveAudit reports audit and return readiness without writing artifacts", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   writeText(root, "src/cache.mjs", "export const enabled = true;\n");
   writeText(root, "tests/cache.test.mjs", "import test from 'node:test';\n");
   writeText(root, "tmp/cache-test.log", "ok 1 cache test passed\n0 failures\nexit 0\n");
@@ -3285,7 +3315,7 @@ test("queryDoveAudit reports audit and return readiness without writing artifact
 
 test("queryDoveReturn reports missing engineering evidence without writing artifacts", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   const before = snapshotArtifacts(root, watchedArtifacts);
   const result = queryDoveReturn(root, {
@@ -3325,7 +3355,7 @@ test("queryDoveReturn reports missing engineering evidence without writing artif
 
 test("queryDoveReturn accepts declared engineering evidence without writing artifacts", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   writeText(root, "src/cache.mjs", "export const enabled = true;\n");
   writeText(root, "tests/cache.test.mjs", "import test from 'node:test';\n");
   writeText(root, "tmp/cache-test.log", "ok 1 cache test passed\n0 failing\nexit 0\n");
@@ -3358,7 +3388,7 @@ test("queryDoveReturn accepts declared engineering evidence without writing arti
 
 test("queryDoveReturn reports failing validation output as needs-execution", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   writeText(root, "src/cache.mjs", "export const enabled = false;\n");
   writeText(root, "tests/cache.test.mjs", "import test from 'node:test';\n");
   writeText(root, "tmp/cache-test.log", "not ok 1 cache test failed\nError: cache regression\nexit 1\n");
@@ -3381,7 +3411,7 @@ test("queryDoveReturn reports failing validation output as needs-execution", () 
 
 test("queryDoveReturn rejects unsafe engineering evidence paths", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   writeText(root, "tests/cache.test.mjs", "import test from 'node:test';\n");
   writeText(root, "tmp/cache-test.log", "ok 1 cache test passed\nexit 0\n");
 
@@ -3402,7 +3432,7 @@ test("queryDoveReturn rejects unsafe engineering evidence paths", () => {
 
 test("queryDoveReturn uses packet output and evidence links as declared engineering evidence", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   writeText(root, "src/cache.mjs", "export const enabled = true;\n");
   writeText(root, "tests/cache.test.mjs", "import test from 'node:test';\n");
   writeText(root, "tmp/cache-test.log", "ok 1 cache test passed\n0 failures\nexit 0\n");
@@ -3445,7 +3475,7 @@ test("queryDoveReturn uses packet output and evidence links as declared engineer
 
 test("queryDoveReturn does not repair malformed durable JSON", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const malformedPath = path.join(root, ARTIFACT_PATHS.reviewState);
   fs.writeFileSync(malformedPath, "{ broken json", "utf8");
   const before = fs.readFileSync(malformedPath, "utf8");
@@ -3461,7 +3491,7 @@ test("queryDoveReturn does not repair malformed durable JSON", () => {
 
 test("queryDoveReturn treats a malformed Dove root manifest as read-only input", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const malformedPath = path.join(root, ARTIFACT_PATHS.doveRootManifest);
   fs.writeFileSync(malformedPath, "{ broken json", "utf8");
   const before = fs.readFileSync(malformedPath, "utf8");
@@ -3478,10 +3508,10 @@ test("queryDoveReturn treats a malformed Dove root manifest as read-only input",
 
 test("launchDoveMission materializes accepted guidance through the .dove mission packet store", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const { pack, packetPath } = seedDoveLaunchGuidance(root);
 
-  const result = launchDoveMission(root, {
+  const result = runFixtureMutation(root, "launch-dove-mission", () => launchDoveMission(root, {
     sourceType: "remediation-pack",
     sourceId: pack.id,
     actorRole: "planner",
@@ -3494,7 +3524,7 @@ test("launchDoveMission materializes accepted guidance through the .dove mission
     packetId: packetPath?.targetId ?? "task-dove-launch",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
+  }));
 
   assert.equal(result.mode, "dove-launch-mission");
   assert.equal(result.status, "materialized");
@@ -3531,12 +3561,12 @@ test("launchDoveMission materializes accepted guidance through the .dove mission
 
 test("launchDoveMission reports stale legacy .paper artifacts without importing them", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const { pack, packetPath } = seedDoveLaunchGuidance(root);
   fs.mkdirSync(path.join(root, ".paper", "workspace"), { recursive: true });
   fs.writeFileSync(path.join(root, ".paper", "workspace", "index.json"), "{}\n", "utf8");
 
-  const result = launchDoveMission(root, {
+  const result = runFixtureMutation(root, "launch-dove-mission", () => launchDoveMission(root, {
     sourceType: "remediation-pack",
     sourceId: pack.id,
     actorRole: "planner",
@@ -3546,7 +3576,7 @@ test("launchDoveMission reports stale legacy .paper artifacts without importing 
     packetId: packetPath?.targetId ?? "task-dove-launch",
     executeBy: "2099-01-01T00:00:00.000Z",
     reviewAfter: "2099-01-01T12:00:00.000Z"
-  });
+  }));
 
   assert.equal(result.status, "materialized");
   assert.deepEqual(result.diagnostics.staleLegacyAuthorityArtifacts, [".paper/workspace/index.json"]);
@@ -3555,7 +3585,7 @@ test("launchDoveMission reports stale legacy .paper artifacts without importing 
 
 test("CLI Dove orchestrate, mission, status, audit, and return commands expose proposal-only JSON", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   const orchestrate = spawnSync("node", [
     CLI,

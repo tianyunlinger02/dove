@@ -23,7 +23,9 @@ import {
   upsertNote,
   upsertOrchestrationBoard,
   verifySource
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
+import { writeJson } from "../../src/core/workspace.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -36,7 +38,7 @@ function verifyFixtureSource(root, sourceId) {
     decision: "verified",
     method: "test fixture inspected the canonical publication record",
     checkedMaterial: "source title, authors, year, and publication metadata",
-    auditEvidence: [`fixture:${sourceId}`]
+    auditEvidence: [{ reference: "https://example.org/paper", kind: "source", observation: `Verified fixture identity for ${sourceId}.` }]
   });
 }
 
@@ -60,15 +62,15 @@ function seedTaskPacket(root, packetId = "phase2-main-packet") {
     packetContextPath: `.dove/context/packets/${packetId}.json`,
     updatedAt: timestamp
   };
-  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
-  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
-  fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  writeJson(root, packet.packetPath, packet);
+  writeJson(root, ".dove/task-packets/index.json", { version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp });
   return packetId;
 }
 
 test("continuation focus and next action remain durable across refresh", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "continuation-focus-and-next-action-remain-durable-across-refresh", () => {
+  ensureTestWorkspace(root);
   initProject(root, { title: "Continuation Test", objective: "Verify durable next-step state." });
 
   upsertOrchestrationBoard(root, {
@@ -107,15 +109,17 @@ test("continuation focus and next action remain durable across refresh", () => {
   assert.ok(workspaceIndex.resumeGuidance.packetContextPaths.includes(".dove/context/packets/task-plan-eval.json"));
   assert.equal(graph.nodes.find((node) => node.id === "task-plan-eval").packetContextPath, ".dove/context/packets/task-plan-eval.json");
   assert.ok(fs.existsSync(path.join(root, ".dove", "context", "packets", "task-plan-eval.json")));
+  });
 });
 
 test("experiment audits and claim bridge records persist separately from raw results", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "experiment-audits-and-claim-bridge-records-persist-separately-from-raw-r", () => {
+  ensureTestWorkspace(root);
   initProject(root, { title: "Audit Bridge Test", objective: "Exercise audit and bridge persistence." });
   seedTaskPacket(root);
 
-  const source = registerSource(root, { citationKey: "audit-source", title: "Audit Source", authors: ["Ng"], year: 2026 });
+  const source = registerSource(root, { citationKey: "audit-source", title: "Audit Source", authors: ["Ng"], year: 2026, locator: "https://example.org/paper" });
   verifyFixtureSource(root, source.id);
   const note = upsertNote(root, { title: "Audit note", sectionId: "method", sourceIds: [source.id], summary: "Method note." });
   upsertClaims(root, {
@@ -153,15 +157,17 @@ test("experiment audits and claim bridge records persist separately from raw res
   assert.ok(audits.items.some((item) => item.id === audit.id));
   assert.ok(bridgeLog.items.some((item) => item.claimId === "claim-audit" && item.resultId === result.id));
   assert.equal(evidence.claims.find((item) => item.id === "claim-audit").latestBridgeId !== null, true);
+  });
 });
 
 test("refreshWiki writes typed wiki indexes and workspace summary surfaces", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "refreshwiki-writes-typed-wiki-indexes-and-workspace-summary-surfaces", () => {
+  ensureTestWorkspace(root);
   initProject(root, { title: "Typed Wiki Test", objective: "Generate typed wiki artifacts." });
   seedTaskPacket(root);
 
-  const source = registerSource(root, { citationKey: "wiki-source", title: "Wiki Source", authors: ["Lee"], year: 2026 });
+  const source = registerSource(root, { citationKey: "wiki-source", title: "Wiki Source", authors: ["Lee"], year: 2026, locator: "https://example.org/paper" });
   verifyFixtureSource(root, source.id);
   const note = upsertNote(root, { title: "Wiki note", sectionId: "introduction", sourceIds: [source.id], summary: "Question-bearing note.", openQuestions: ["How should the bridge affect confidence?"] });
   upsertClaims(root, {
@@ -195,11 +201,13 @@ test("refreshWiki writes typed wiki indexes and workspace summary surfaces", () 
   assert.ok(Array.isArray(workspaceIndex.activePackets));
   assert.equal(workspaceIndex.repairFrontier.count, 0);
   assert.equal(workspaceIndex.repairFrontier.relationFamilyIssueCount, 0);
+  });
 });
 
 test("figure workflow prepares materials, imports generated output, and writes caption QA", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "figure-workflow-prepares-materials-imports-generated-output-and-writes-c", () => {
+  ensureTestWorkspace(root);
   initProject(root, { title: "Figure Contract Test", objective: "Plan a durable figure contract." });
   const packetId = seedTaskPacket(root);
   const source = registerSource(root, {
@@ -207,6 +215,7 @@ test("figure workflow prepares materials, imports generated output, and writes c
     title: "Figure Source",
     authors: ["Doe"],
     year: 2026,
+    locator: "https://example.org/paper",
     sourceType: "paper"
   });
   verifyFixtureSource(root, source.id);
@@ -280,4 +289,5 @@ test("figure workflow prepares materials, imports generated output, and writes c
   assert.equal(qa.items[0].qaStatus, "ready");
   assert.match(readme, /Generation workflow/i);
   assert.doesNotMatch(readme, /does not claim to ship a render backend/i);
+  });
 });

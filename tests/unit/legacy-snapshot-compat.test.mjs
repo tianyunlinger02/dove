@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { compareVersions, ensureWorkspace, upsertOrchestrationBoard } from "../../src/core/index.mjs";
+import { compareVersions, ensureWorkspace, upsertOrchestrationBoard } from "../../src/core/internal-api.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -37,7 +38,8 @@ function seedTaskPacket(root) {
 
 test("compareVersions tolerates legacy snapshot shapes with missing modern fields", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "legacy-snapshot-compat", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
   const snapshotDir = path.join(root, ".dove", "versions", "snapshots");
   fs.mkdirSync(snapshotDir, { recursive: true });
@@ -58,12 +60,12 @@ test("compareVersions tolerates legacy snapshot shapes with missing modern field
 
   upsertOrchestrationBoard(root, {
     phase: "versions",
-    assignedRole: "version-analyst",
-    reviewRequiredBeforeFinalize: false
+    assignedRole: "version-analyst"
   });
 
   const comparison = compareVersions(root, { fromVersionId: "legacy-a", toVersionId: "legacy-b" });
   assert.equal(comparison.fromVersionId, "legacy-a");
   assert.equal(comparison.toVersionId, "legacy-b");
   assert.deepEqual(comparison.addedClaimIds, ["claim-b"]);
+  });
 });

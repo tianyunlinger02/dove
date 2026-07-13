@@ -936,9 +936,10 @@ function boundaryActionCommand(task, boundary, kind) {
     return "project:dove.review";
   }
   if (kind === "adjust-status") {
-    return "project:dove.status";
+    return null;
   }
-  return toPublicDoveCommand(boundary?.command ?? task.continuationState?.command ?? task.nextAction, "project:dove.status");
+  const command = toPublicDoveCommand(boundary?.command ?? task.continuationState?.command ?? task.nextAction, null);
+  return command === "project:dove.status" ? null : command;
 }
 
 function boundaryActionLabel(kind, responseLanguage) {
@@ -1325,14 +1326,18 @@ function buildMissingExecutionMaterialsCard(task, responseLanguage = "zh") {
   if (missingMaterials.length === 0) {
     return null;
   }
+  const route = primaryStatusRoute(task);
+  const command = toPublicDoveCommand(route?.command ?? task.nextAction, null);
+  const actionableCommand = command === "project:dove.status" ? null : command;
   return statusActionBase({
     priority: 30,
     kind: "missing-required-materials",
     title: statusInlineText(responseLanguage, `补材料/输入：${task.title}`, `Provide materials/inputs: ${task.title}`),
     why: statusInlineText(responseLanguage, "执行合同声明了必需输入或 artifact，Builder 不能在材料缺失时假装推进。", "The execution contract declares required inputs or artifacts; Builder cannot claim progress while materials are missing."),
     packetId: task.id,
-    command: "project:dove.status",
-    firstAction: "project:dove.status",
+    command: actionableCommand,
+    firstAction: actionableCommand ? (route?.copyableCommand ?? statusCopyableCommand(actionableCommand, task.id)) : null,
+    copyableCommand: actionableCommand ? (route?.copyableCommand ?? statusCopyableCommand(actionableCommand, task.id)) : null,
     evidenceRequired: missingMaterials,
     doneCriteria: [statusInlineText(responseLanguage, "缺失材料被注册为 source、artifact 或 verification evidence。", "Missing materials are registered as source, artifact, or verification evidence.")],
     requiredMaterials: missingMaterials,
@@ -1372,14 +1377,18 @@ function buildVerificationGapCard(task, responseLanguage = "zh") {
   if (!hasExecutableContract(task) || task.criteriaCoverage?.complete !== false || statusTaskEvidenceBundle(task).length === 0) {
     return null;
   }
+  const route = primaryStatusRoute(task);
+  const command = toPublicDoveCommand(route?.command ?? task.nextAction, "project:dove.review");
+  const actionableCommand = command === "project:dove.status" ? "project:dove.review" : command;
   return statusActionBase({
     priority: 45,
     kind: "verification-failed",
     title: statusInlineText(responseLanguage, `补验证覆盖：${task.title}`, `Complete verification coverage: ${task.title}`),
     why: statusInlineText(responseLanguage, "已有执行证据，但 verifiedCriteria 尚未覆盖全部 convergence.criteria。", "Execution evidence exists, but verifiedCriteria does not cover all convergence.criteria."),
     packetId: task.id,
-    command: "project:dove.status",
-    firstAction: "project:dove.status",
+    command: actionableCommand,
+    firstAction: route?.copyableCommand ?? statusCopyableCommand(actionableCommand, task.id),
+    copyableCommand: route?.copyableCommand ?? statusCopyableCommand(actionableCommand, task.id),
     evidenceRequired: normalizeStringArray(task.criteriaCoverage?.missing),
     doneCriteria: normalizeStringArray(task.criteriaCoverage?.required),
     criteriaCoverage: task.criteriaCoverage,
@@ -1571,14 +1580,18 @@ function buildStatusNextActionCards({ initTask, activeTasks, blockedTasks, visib
     });
   }
   for (const task of blockedTasks) {
+    const route = primaryStatusRoute(task);
+    const command = toPublicDoveCommand(task.currentBoundary?.command ?? route?.command ?? task.nextAction, null);
+    const actionableCommand = command === "project:dove.status" ? null : command;
     pushCard(`blocked:${task.id}`, {
       priority: 30,
       kind: "blocked-unblock",
       title: doveText(responseLanguage, "statusHomeBlockedTitle", { title: task.title }),
       why: doveText(responseLanguage, "statusHomeBlockedWhy", { reason: task.blockedReason ?? task.lastStopReason }),
       packetId: task.id,
-      command: "project:dove.status",
-      firstAction: "project:dove.status",
+      command: actionableCommand,
+      firstAction: actionableCommand ? (route?.copyableCommand ?? statusCopyableCommand(actionableCommand, task.id)) : null,
+      copyableCommand: actionableCommand ? (route?.copyableCommand ?? statusCopyableCommand(actionableCommand, task.id)) : null,
       evidenceRequired: normalizeStringArray(task.evidenceExpectations),
       boundary: task.currentBoundary ?? null,
       handoff: task.handoff ?? null

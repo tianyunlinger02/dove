@@ -16,6 +16,7 @@ import {
   queryOperatorLessons,
   queryTaskGraph,
   queryWorkspaceIndex,
+  refreshDurableSurfaces,
   refreshWiki,
   readActionContextBundle,
   readArtifactContextManifest,
@@ -30,8 +31,9 @@ import {
   upsertNote,
   upsertOrchestrationBoard,
   verifySource
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -58,15 +60,15 @@ function seedTaskPacket(root, packetId = "trellis-main-packet") {
     packetContextPath: `.dove/context/packets/${packetId}.json`,
     updatedAt: timestamp
   };
-  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
-  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
-  fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  writeJson(root, packet.packetPath, packet);
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, { version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp });
   return packetId;
 }
 
 test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "portable-trellis-inspired-surfaces-stay-file-first-and-durable", () => {
+  ensureTestWorkspace(root);
   initProject(root, {
     title: "Portable Trellis Upgrade",
     objective: "Exercise durable task packets and context manifests.",
@@ -78,14 +80,15 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
     citationKey: "packet-source",
     title: "Task Packet Paper",
     authors: ["Ng"],
-    year: 2026
+    year: 2026,
+    locator: "https://example.org/test-source"
   });
   verifySource(root, {
     sourceId: source.id,
     decision: "verified",
     method: "test fixture inspected the canonical publication record",
     checkedMaterial: "source title, authors, year, and publication metadata",
-    auditEvidence: [`fixture:${source.id}`]
+    auditEvidence: [{ reference: source.locator, kind: "source", observation: `Verified fixture identity for ${source.id}.` }]
   });
   const note = upsertNote(root, {
     title: "Packet note",
@@ -207,11 +210,52 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
   assert.ok(fs.existsSync(path.join(root, ".dove", "context", "roles", "reviewer.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "sessions", "journal.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "workflow-pack", "boundaries.json")));
+  });
+});
+
+test("derived rebuttal packet filenames stay bounded and collision-resistant for long issue ids", () => {
+  const root = tempRoot();
+  runFixtureMutation(root, "bounded-rebuttal-packets", () => {
+    ensureWorkspace(root);
+    initProject(root, {
+      title: "Bounded rebuttal packet names",
+      objective: "Keep derived rebuttal packet filenames within filesystem limits.",
+      thesis: "Stable hashes preserve distinct long issue identities."
+    });
+
+    const sharedPrefix = `review-${"validator-figure-missing-artifact-".repeat(10)}`;
+    const firstIssueId = `${sharedPrefix}first`;
+    const secondIssueId = `${sharedPrefix}second`;
+    writeJson(root, ARTIFACT_PATHS.rebuttalIssues, {
+      version: 1,
+      items: [firstIssueId, secondIssueId].map((id) => ({
+        id,
+        summary: id,
+        status: "open",
+        evidenceLinks: [],
+        claimIds: [],
+        experimentIds: []
+      })),
+      updatedAt: new Date(0).toISOString()
+    });
+
+    refreshDurableSurfaces(root, { type: "test-bounded-rebuttal-packets" });
+  });
+
+  const packets = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex), "utf8"))
+    .items.filter((item) => item.sourceType === "rebuttal-issue");
+  assert.equal(packets.length, 2);
+  assert.notEqual(packets[0].id, packets[1].id);
+  for (const packet of packets) {
+    assert.ok(packet.id.length <= 160, packet.id);
+    assert.ok(fs.existsSync(path.join(root, ARTIFACT_PATHS.taskPacketsPacketsDir, `${packet.id}.json`)));
+  }
 });
 
 test("artifact context filenames stay bounded and collision-resistant for long paths", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "artifact-context-filenames-stay-bounded-and-collision-resistant-for-long", () => {
+  ensureTestWorkspace(root);
   initProject(root, {
     title: "Bounded artifact context names",
     objective: "Keep generated context filenames within filesystem limits.",
@@ -235,15 +279,11 @@ test("artifact context filenames stay bounded and collision-resistant for long p
     ...packet,
     outputPaths: [firstPath, secondPath]
   };
-  fs.writeFileSync(packetPath, `${JSON.stringify(packetWithLongOutputs, null, 2)}\n`, "utf8");
-  fs.writeFileSync(
-    path.join(root, ARTIFACT_PATHS.taskPacketsIndex),
-    `${JSON.stringify({
-      ...packetIndex,
-      items: [packetWithLongOutputs]
-    }, null, 2)}\n`,
-    "utf8"
-  );
+  writeJson(root, path.relative(root, packetPath), packetWithLongOutputs);
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, {
+    ...packetIndex,
+    items: [packetWithLongOutputs]
+  });
 
   const firstManifest = readArtifactContextManifest(root, firstPath);
   const secondManifest = readArtifactContextManifest(root, secondPath);
@@ -273,11 +313,13 @@ test("artifact context filenames stay bounded and collision-resistant for long p
       (item) => /\/dove-task-packets-packets-long-segment-.+-[a-f0-9]{16}\.json$/.test(item)
     )
   );
+  });
 });
 
 test("operator lessons persist durable retrospectives without importing raw Trellis traces", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "operator-lessons-persist-durable-retrospectives-without-importing-raw-tr", () => {
+  ensureTestWorkspace(root);
   initProject(root, {
     title: "Portable Lessons",
     objective: "Preserve reusable task experience without raw task traces.",
@@ -332,11 +374,13 @@ test("operator lessons persist durable retrospectives without importing raw Trel
   assert.match(navigation, /Operator lessons:/);
   assert.match(sessionSummaryText, /Operator lessons:/);
   assert.doesNotMatch(lessonsFileText, /\.trellis\/tasks/);
+  });
 });
 
 test("remediation packs stay durable and visible through operator-facing surfaces", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "remediation-packs-stay-durable-and-visible-through-operator-facing-surfa", () => {
+  ensureTestWorkspace(root);
   initProject(root, {
     title: "Remediation Pack Visibility",
     objective: "Expose durable remediation packs through workspace and meta surfaces.",
@@ -433,11 +477,13 @@ test("remediation packs stay durable and visible through operator-facing surface
   assert.match(sessionSummaryText, /Family playbooks path:/);
   assert.ok(fs.existsSync(path.join(root, ".dove", "meta", "remediation-packs.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "meta", "operator-playbooks.json")));
+  });
 });
 
 test("playbook artifact update maps stay durable and visible through operator-facing surfaces", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "playbook-artifact-update-maps-stay-durable-and-visible-through-operator-", () => {
+  ensureTestWorkspace(root);
   initProject(root, { title: "Artifact Update Maps", objective: "Expose playbook-driven artifact target lists without auto-applying updates." });
   seedTaskPacket(root);
 
@@ -488,11 +534,13 @@ test("playbook artifact update maps stay durable and visible through operator-fa
   assert.match(report, /Artifact update overview:/);
   assert.match(report, /Artifact update order:/);
   assert.match(report, /Execution bridge candidate scaffolds/);
+  });
 });
 
 test("task packet refresh preserves user-added fields and invalid role manifests fail fast", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "task-packet-refresh-preserves-user-added-fields-and-invalid-role-manifes", () => {
+  ensureTestWorkspace(root);
   initProject(root, {
     title: "Packet Preservation",
     objective: "Verify packet preservation semantics.",
@@ -508,18 +556,19 @@ test("task packet refresh preserves user-added fields and invalid role manifests
   const packetPath = path.join(root, ".dove", "task-packets", "packets", "task-preserve-task.json");
   const packet = JSON.parse(fs.readFileSync(packetPath, "utf8"));
   packet.userMetadata = { owner: "human", tags: ["custom"] };
-  fs.writeFileSync(packetPath, `${JSON.stringify(packet, null, 2)}\n`, "utf8");
+  writeJson(root, path.relative(root, packetPath), packet);
 
   const refreshed = queryTaskGraph(root);
   const preserved = refreshed.nodes.find((node) => node.id === "task-preserve-task");
   assert.deepEqual(preserved.userMetadata, { owner: "human", tags: ["custom"] });
 
   assert.throws(() => readRoleContextManifest(root, "ghost-role"), /Unknown roleId/);
+  });
 });
 
 test("boundary report exposes malformed boundary metadata instead of silently healing it", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const boundaryPath = path.join(root, ".dove", "workflow-pack", "boundaries.json");
   fs.writeFileSync(boundaryPath, "{bad json", "utf8");
 

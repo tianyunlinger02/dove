@@ -6,8 +6,9 @@ import path from "node:path";
 import {
   ensureWorkspace,
   queryPaperAudit
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
+import { ensureTestWorkspace } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -23,7 +24,7 @@ function snapshotArtifacts(root, relativePaths) {
 
 test("queryPaperAudit reports findings without writing paper artifacts", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
 
   fs.writeFileSync(path.join(root, ARTIFACT_PATHS.evidence), `${JSON.stringify({
     version: 3,
@@ -71,7 +72,7 @@ test("queryPaperAudit reports findings without writing paper artifacts", () => {
 
 test("queryPaperAudit does not repair malformed JSON", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const malformedPath = path.join(root, ARTIFACT_PATHS.reviewConcerns);
   fs.writeFileSync(malformedPath, "{ broken json", "utf8");
   const before = fs.readFileSync(malformedPath, "utf8");

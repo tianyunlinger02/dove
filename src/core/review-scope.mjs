@@ -117,10 +117,9 @@ export function buildReviewScope(root, target, options = {}) {
       throw scopeError(`Reviewed artifact paths conflict with packet ${packet.id}: ${owners}.`, { artifactResolution: consistency });
     }
     const allowed = new Set(defaultPaths);
-    const claimedByOtherPacket = new Set(consistency.conflictingMatches.flatMap((item) => item.matchedArtifacts ?? []));
-    const invalid = explicitPaths.filter((item) => !allowed.has(item) && claimedByOtherPacket.has(item));
+    const invalid = explicitPaths.filter((item) => !allowed.has(item));
     if (invalid.length > 0) {
-      throw scopeError(`Reviewed artifact paths are owned outside packet ${packet.id} and its descendants: ${invalid.join(", ")}.`);
+      throw scopeError(`Reviewed artifact paths must be owned by packet ${packet.id} or its descendants: ${invalid.join(", ")}.`);
     }
   }
 

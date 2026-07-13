@@ -22,9 +22,10 @@ import {
   upsertNote,
   validateFigurePipeline,
   verifySource
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -150,17 +151,17 @@ function seedTaskPacket(root, packetId = "figure-main-packet") {
 }
 
 function seedFigureWorkspace(root) {
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   initProject(root, { title: "Figure Generation Test", objective: "Generate a durable evidence-linked figure." });
   const packetId = seedTaskPacket(root);
-  const source = registerSource(root, { packetId, citationKey: "figure-source", title: "Figure Source", authors: ["Doe"], year: 2026, sourceType: "paper" });
+  const source = registerSource(root, { packetId, citationKey: "figure-source", title: "Figure Source", authors: ["Doe"], year: 2026, sourceType: "paper", locator: "https://example.org/test-source" });
   verifySource(root, {
     packetId,
     sourceId: source.id,
     decision: "verified",
     method: "test fixture inspected the canonical publication record",
     checkedMaterial: "source title, authors, year, and publication metadata",
-    auditEvidence: [`fixture:${source.id}`]
+    auditEvidence: [{ reference: source.locator, kind: "source", observation: `Verified fixture identity for ${source.id}.` }]
   });
   const note = upsertNote(root, { packetId, noteId: "figure-note", title: "Figure note", sectionId: "method", sourceIds: [source.id], summary: "Source-backed material for the figure." });
   upsertClaims(root, {
@@ -189,6 +190,7 @@ function seedFigureWorkspace(root) {
 
 test("prepareFigureGeneration writes material and run input artifacts without fabricating a final figure", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "preparefiguregeneration-writes-material-and-run-input-artifacts-without-", () => {
   const packetId = seedFigureWorkspace(root);
 
   const prepared = prepareFigureGeneration(root, { packetId, figureId: "workflow", runId: "workflow-run" });
@@ -204,10 +206,12 @@ test("prepareFigureGeneration writes material and run input artifacts without fa
   assert.equal(materials.items[0].figureId, "workflow");
   assert.equal(materials.items[0].packetId, packetId);
   assert.equal(generations.items[0].status, "prepared");
+  });
 });
 
 test("importFigureGeneration validates SVG, records caption provenance, and clears QA", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "importfiguregeneration-validates-svg-records-caption-provenance-and-clea", () => {
   const packetId = seedFigureWorkspace(root);
   prepareFigureGeneration(root, { packetId, figureId: "workflow", runId: "workflow-run" });
 
@@ -228,10 +232,12 @@ test("importFigureGeneration validates SVG, records caption provenance, and clea
   assert.equal(generations.items[0].status, "imported");
   assert.equal(generations.items[0].captionId, captions.items[0].id);
   assert.equal(qa.items[0].qaStatus, "ready");
+  });
 });
 
 test("importFigureGeneration reads sourceSvgPath and scopes QA to the imported figure", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "importfiguregeneration-reads-sourcesvgpath-and-scopes-qa-to-the-imported", () => {
   const packetId = seedFigureWorkspace(root);
   const figures = readJson(root, ARTIFACT_PATHS.figuresIndex, { version: 1, items: [] });
   upsertFigurePlan(root, {
@@ -270,10 +276,12 @@ test("importFigureGeneration reads sourceSvgPath and scopes QA to the imported f
   assert.equal(imported.qaIssueCount, 0);
   assert.ok(imported.workspaceQaIssueCount > 0);
   assert.equal(fs.readFileSync(path.join(root, ".dove", "figures", "workflow.final.svg"), "utf8").includes("Evidence node"), true);
+  });
 });
 
 test("importFigureGeneration rejects unsafe SVG and path traversal", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "importfiguregeneration-rejects-unsafe-svg-and-path-traversal", () => {
   const packetId = seedFigureWorkspace(root);
   prepareFigureGeneration(root, { packetId, figureId: "workflow", runId: "unsafe-run" });
 
@@ -308,10 +316,12 @@ test("importFigureGeneration rejects unsafe SVG and path traversal", () => {
       caption: "Unsafe path."
     });
   }, /must stay under/);
+  });
 });
 
 test("prepareFigureGeneration can explicitly invoke a configured external-command provider", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "preparefiguregeneration-can-explicitly-invoke-a-configured-external-comm", () => {
   const packetId = seedFigureWorkspace(root);
   const providerScript = path.join(root, "fake-figure-provider.cjs");
   fs.writeFileSync(providerScript, `#!/usr/bin/env node
@@ -342,10 +352,12 @@ process.stdout.write(JSON.stringify({
 
   const imported = importFigureGeneration(root, { packetId, figureId: "workflow", runId: "provider-run" });
   assert.equal(imported.qaIssueCount, 0);
+  });
 });
 
 test("prepareFigureGeneration does not execute providers in patch-plan mode", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "preparefiguregeneration-does-not-execute-providers-in-patch-plan-mode", () => {
   const packetId = seedFigureWorkspace(root);
   const providerScript = path.join(root, "patch-plan-provider.cjs");
   fs.writeFileSync(providerScript, `#!/usr/bin/env node
@@ -386,10 +398,12 @@ process.stdout.write(JSON.stringify({
   const generation = generations.items.find((item) => item.id === "patch-plan-provider-run");
   assert.equal(generation.status, "awaiting-provider-output");
   assert.equal(generation.providerExecution.requiredMutationMode, "direct-process");
+  });
 });
 
 test("provider output manifests reject inline secret fields before persistence", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "provider-output-manifests-reject-inline-secret-fields-before-persistence", () => {
   const packetId = seedFigureWorkspace(root);
   const providerScript = path.join(root, "leaky-figure-provider.cjs");
   fs.writeFileSync(providerScript, `#!/usr/bin/env node
@@ -416,6 +430,7 @@ process.stdout.write(JSON.stringify({
   assert.equal(prepared.providerExecution.status, "failed");
   assert.match(prepared.providerExecution.error, /inline secret field/);
   assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "runs", "leaky-run", "output.json")), false);
+  });
 });
 
 test("Dove figure config rejects inline secrets and accepts env secret references", () => {
@@ -476,6 +491,7 @@ test("Dove figure config exposes gpt-image2 as an explicit env provider without 
 test("prepareFigureGeneration invokes gpt-image2 through the OpenAI image provider path", async () => {
   await withMockOpenAiImageServer(async (endpoint, requests) => {
     const root = tempRoot();
+    return runFixtureMutation(root, "preparefiguregeneration-invokes-gpt-image2-through-the-openai-image-prov", async () => {
     try {
       const packetId = seedFigureWorkspace(root);
       const env = {
@@ -537,13 +553,15 @@ test("prepareFigureGeneration invokes gpt-image2 through the OpenAI image provid
       qa = readJson(root, ARTIFACT_PATHS.figureQa, { version: 1, items: [], issues: [] });
       assert.equal(qa.items[0].semanticCoverage.rasterSemanticReviewPassed, false);
     } finally {
-      fs.rmSync(root, { recursive: true, force: true });
+      // The mutation fixture records provenance after this callback returns.
     }
   });
+    });
 });
 
 test("prepareFigureGeneration reports missing OPENAI_API_KEY for gpt-image2", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "preparefiguregeneration-reports-missing-openai-api-key-for-gpt-image2", () => {
   try {
     const packetId = seedFigureWorkspace(root);
     const prepared = prepareFigureGeneration(root, {
@@ -566,8 +584,9 @@ test("prepareFigureGeneration reports missing OPENAI_API_KEY for gpt-image2", ()
     const generation = generations.items.find((item) => item.id === "gpt-image2-missing-key-run");
     assert.equal(generation.status, "missing-secret-env");
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("Dove config supports response language with Chinese default and English override", () => {

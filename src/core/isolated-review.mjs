@@ -7,7 +7,7 @@ import { inspectDeclaredPath } from "./artifact-integrity.mjs";
 import { sha256File, snapshotReviewedArtifacts, verifyPreparedReviewSnapshot } from "./review-artifact-snapshot.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { appendText, assertFollowThroughReady, assertGovernanceMutationRegistered, loadState, nowIso, readJson, resolvePath, writeJson, writeText } from "./workspace.mjs";
-import { loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
+import { loadBoard, upsertSystemOrchestrationBoard } from "./orchestration.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { assertReviewMaterials, buildReviewScope } from "./review-scope.mjs";
@@ -265,7 +265,7 @@ function transitionToIsolatedReviewer(root, args, target, runId, reviewedArtifac
   if (board.currentPhase === "review" && board.assignedRole === "reviewer") {
     return board;
   }
-  return upsertOrchestrationBoard(root, {
+  return upsertSystemOrchestrationBoard(root, {
     ...args,
     phase: "review",
     assignedRole: "reviewer",
@@ -296,7 +296,7 @@ function isolatedReviewReturnTransition(handoff) {
 
 function returnImportedIsolatedReview(root, args, handoff, handoffPath, reportPath, transition) {
   const board = loadBoard(root);
-  return upsertOrchestrationBoard(root, {
+  return upsertSystemOrchestrationBoard(root, {
     ...args,
     ...transition,
     currentFocus: handoff.summary,

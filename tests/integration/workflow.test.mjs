@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
+  ARTIFACT_PATHS,
   appendHandoff,
   compareVersions,
   createVersionSnapshot,
@@ -22,8 +23,10 @@ import {
   upsertOrchestrationBoard,
   upsertPlan,
   verifySource
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
+import { writeJson } from "../../src/core/workspace.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -50,16 +53,16 @@ function seedTaskPacket(root, packetId = "workflow-main-packet") {
     packetContextPath: `.dove/context/packets/${packetId}.json`,
     updatedAt: timestamp
   };
-  fs.mkdirSync(path.join(root, ".dove", "task-packets", "packets"), { recursive: true });
-  fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
-  fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
+  writeJson(root, packet.packetPath, packet);
+  writeJson(root, ARTIFACT_PATHS.taskPacketsIndex, { version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp });
   return packetId;
 }
 
 test("single-paper workflow creates durable artifacts", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "single-paper-workflow-creates-durable-artifacts", () => {
 
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   initProject(root, {
     title: "Dove Workflow",
     venue: "ICML",
@@ -89,7 +92,8 @@ test("single-paper workflow creates durable artifacts", () => {
     citationKey: "lee2026durable",
     title: "Durable Writing Systems",
     authors: ["Lee"],
-    year: 2026
+    year: 2026,
+    locator: "https://example.org/durable-writing-systems"
   });
 
   const source2 = registerSource(root, {
@@ -97,7 +101,8 @@ test("single-paper workflow creates durable artifacts", () => {
     citationKey: "kim2026workflow",
     title: "Workflow Reliability in Academic Writing",
     authors: ["Kim"],
-    year: 2026
+    year: 2026,
+    locator: "https://example.org/workflow-reliability"
   });
   for (const registeredSource of [source, source2]) {
     verifySource(root, {
@@ -106,7 +111,7 @@ test("single-paper workflow creates durable artifacts", () => {
       decision: "verified",
       method: "test fixture inspected the canonical publication record",
       checkedMaterial: "source title, authors, year, and publication metadata",
-      auditEvidence: [`fixture:${registeredSource.id}`]
+      auditEvidence: [{ reference: registeredSource.locator, kind: "source", observation: `Verified fixture identity for ${registeredSource.id}.` }]
     });
   }
 
@@ -239,4 +244,5 @@ test("single-paper workflow creates durable artifacts", () => {
   assert.ok(fs.existsSync(path.join(root, ".dove", "orchestration", "board.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "rebuttal", "issues.json")));
   assert.ok(fs.existsSync(path.join(root, ".dove", "versions", "snapshots", `${snapshotA.id}.json`)));
+  });
 });

@@ -534,10 +534,10 @@ const COMMAND_ADAPTER_CONSTRAINTS = {
     "Report review outcomes in plain language."
   ],
   "dove.review-loop": [
-    "Run only limited visible local review, revision, and experience-planning iterations.",
-    "Use three rounds by default unless the project config says otherwise.",
-    "Do not start a draft or experiment substep without the needed material.",
-    "Stop early when the task is coherent, blocked, waiting on material, or waiting on user input."
+    "Run exactly one visible local Reviewer pass over the selected packet materials.",
+    "Do not revise draft, experiment, experience, or other Builder-owned material in this call.",
+    "When changes are required, return concrete required actions and an explicit Builder handoff.",
+    "Invoke review again only after a separate explicit Builder revision call."
   ],
   "dove.rebuttal": [
     "Organize reviewer issues before drafting responses.",

@@ -8,9 +8,10 @@ import {
   ensureWorkspace,
   initProject,
   runExperienceWorkflow
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -44,7 +45,7 @@ function seedTaskPacket(root, packetId = "experience-workflow-packet") {
 }
 
 function seedExperienceContext(root) {
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   initProject(root, { title: "Experience Workflow Test", objective: "Validate experiment-to-claim boundaries." });
   return seedTaskPacket(root);
 }
@@ -58,6 +59,7 @@ function writeEvidenceFile(root, relativePath, text = "Experiment evidence fixtu
 
 test("runExperienceWorkflow returns a material boundary for blocked experiment audits", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runexperienceworkflow-returns-a-material-boundary-for-blocked-experiment", () => {
   try {
     const packetId = seedExperienceContext(root);
 
@@ -94,12 +96,14 @@ test("runExperienceWorkflow returns a material boundary for blocked experiment a
     assert.equal(result.nextAction, "project:dove.experience");
     assertNoCompactPublicLeaks(result.resultCard, { ignoredKeys: ["command"] });
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runExperienceWorkflow returns a material boundary when a clean result references a missing claim", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runexperienceworkflow-returns-a-material-boundary-when-a-clean-result-re", () => {
   try {
     const packetId = seedExperienceContext(root);
     writeJson(root, ARTIFACT_PATHS.evidence, {
@@ -158,6 +162,7 @@ test("runExperienceWorkflow returns a material boundary when a clean result refe
     assert.match(result.resultCard.nextActions[0].why, /bridge is not complete/u);
     assertNoCompactPublicLeaks(result.resultCard, { ignoredKeys: ["command"] });
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });

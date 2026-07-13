@@ -171,6 +171,11 @@ function safeUrl(value) {
   }
 }
 
+function hostnameFromUrl(value) {
+  const url = safeUrl(value);
+  return url ? new URL(url).hostname.toLowerCase() : null;
+}
+
 function doiUrl(doi) {
   const normalized = normalizeDoi(doi);
   return normalized ? `https://doi.org/${normalized}` : null;
@@ -312,12 +317,57 @@ async function fetchJson(url, options) {
   }
 }
 
-function postFilterCandidates(candidates, query) {
+const FILTER_NAMES = Object.freeze(["year", "domains", "fieldsOfStudy", "openAccessOnly", "locale"]);
+
+const PROVIDER_FILTER_SUPPORT = Object.freeze({
+  openalex: Object.freeze({ year: "native", domains: "post", fieldsOfStudy: "post", openAccessOnly: "post", locale: "post" }),
+  crossref: Object.freeze({ year: "native", domains: "post", openAccessOnly: "post", locale: "post" }),
+  arxiv: Object.freeze({ year: "post", domains: "post", openAccessOnly: "post" }),
+  "europe-pmc": Object.freeze({ year: "post", domains: "post", openAccessOnly: "post", locale: "post" })
+});
+
+function requestedFilterNames(query) {
+  return FILTER_NAMES.filter((name) => name === "openAccessOnly" ? query.openAccessOnly : Array.isArray(query[name]) ? query[name].length > 0 : Boolean(query[name]));
+}
+
+function providerFilterPlan(provider, query) {
+  const support = PROVIDER_FILTER_SUPPORT[provider.id] ?? {};
+  const requested = requestedFilterNames(query);
+  return {
+    appliedFilters: requested.filter((name) => Boolean(support[name])),
+    unsupportedFilters: requested.filter((name) => !support[name]),
+    filterModes: Object.fromEntries(requested.filter((name) => Boolean(support[name])).map((name) => [name, support[name]]))
+  };
+}
+
+function normalizeComparableText(value) {
+  return String(value ?? "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function normalizedLocaleBase(value) {
+  return normalizeString(value)?.toLowerCase().replace("_", "-").split("-")[0] ?? null;
+}
+
+function candidateMatchesDomain(candidate, domains) {
+  const candidateDomains = normalizeStringArray(candidate.domains).map((domain) => domain.toLowerCase());
+  return domains.some((requested) => candidateDomains.some((candidateDomain) => candidateDomain === requested || candidateDomain.endsWith(`.${requested}`)));
+}
+
+function candidateMatchesFields(candidate, fieldsOfStudy) {
+  const candidateFields = normalizeStringArray(candidate.fieldsOfStudy).map(normalizeComparableText).filter(Boolean);
+  return fieldsOfStudy.some((requested) => {
+    const normalized = normalizeComparableText(requested);
+    return candidateFields.some((candidateField) => candidateField === normalized || candidateField.includes(normalized) || normalized.includes(candidateField));
+  });
+}
+
+function postFilterCandidates(candidates, query, filterPlan) {
+  const postFilters = new Set(Object.entries(filterPlan.filterModes).filter(([, mode]) => mode === "post").map(([name]) => name));
   return candidates.filter((candidate) => {
-    if (query.openAccessOnly && candidate.openAccess !== true) {
+    if (postFilters.has("openAccessOnly") && candidate.openAccess !== true) {
       return false;
     }
-    if (query.year) {
+    if (postFilters.has("year")) {
       const candidateYear = normalizeString(candidate.publishedAt)?.slice(0, 4);
       if (!candidateYear) {
         return false;
@@ -327,6 +377,15 @@ function postFilterCandidates(candidates, query) {
       if (year < start || year > (end || start)) {
         return false;
       }
+    }
+    if (postFilters.has("domains") && !candidateMatchesDomain(candidate, query.domains)) {
+      return false;
+    }
+    if (postFilters.has("fieldsOfStudy") && !candidateMatchesFields(candidate, query.fieldsOfStudy)) {
+      return false;
+    }
+    if (postFilters.has("locale") && normalizedLocaleBase(candidate.locale) !== normalizedLocaleBase(query.locale)) {
+      return false;
     }
     return true;
   });
@@ -339,6 +398,11 @@ function normalizeCandidate(candidate, provider) {
   }
   const doi = normalizeDoi(candidate.doi);
   const url = safeUrl(candidate.url) ?? doiUrl(doi);
+  const candidateDomains = normalizeStringArray(candidate.domains).map((domain) => domain.toLowerCase());
+  const urlHostname = hostnameFromUrl(url);
+  if (urlHostname) {
+    candidateDomains.push(urlHostname);
+  }
   if (!url && !doi && !candidate.arxivId && !candidate.pubmedId && !candidate.semanticScholarId) {
     return null;
   }
@@ -350,6 +414,9 @@ function normalizeCandidate(candidate, provider) {
     sourceName: normalizeString(candidate.sourceName, provider.id),
     publishedAt: normalizeString(candidate.publishedAt),
     authors: normalizeAuthors(candidate.authors),
+    domains: Array.from(new Set(candidateDomains)),
+    fieldsOfStudy: normalizeStringArray(candidate.fieldsOfStudy),
+    locale: normalizedLocaleBase(candidate.locale),
     doi,
     arxivId: normalizeString(candidate.arxivId),
     pubmedId: normalizeString(candidate.pubmedId),
@@ -401,24 +468,52 @@ function dedupeKey(candidate) {
   return title ? `title:${title}` : null;
 }
 
+function textTokens(value) {
+  return Array.from(new Set(normalizeComparableText(value).split(/\s+/u).filter(Boolean)));
+}
+
+function tokenOverlapScore(value, queryTokens) {
+  if (queryTokens.length === 0) {
+    return 0;
+  }
+  const tokens = new Set(textTokens(value));
+  return queryTokens.filter((token) => tokens.has(token)).length / queryTokens.length;
+}
+
+function publicationRecencyScore(publishedAt) {
+  const year = Number(normalizeString(publishedAt)?.slice(0, 4));
+  if (!Number.isInteger(year)) {
+    return 0;
+  }
+  const age = Math.max(0, new Date().getUTCFullYear() - year);
+  return Math.max(0, 10 - age * 0.75);
+}
+
 function scoreCandidate(candidate, query) {
-  let score = Number.isFinite(candidate.score) ? candidate.score : 0;
-  if (candidate.doi) {
-    score += 8;
+  const normalizedQuery = normalizeComparableText(query.query);
+  const normalizedTitle = normalizeComparableText(candidate.title);
+  const queryTokens = textTokens(query.query);
+  const titleOverlap = tokenOverlapScore(candidate.title, queryTokens);
+  const snippetOverlap = tokenOverlapScore(candidate.snippet, queryTokens);
+  const fieldOverlap = Math.max(0, ...candidate.fieldsOfStudy.map((field) => tokenOverlapScore(field, queryTokens)));
+  const authority = Math.min(8, Math.max(0, Number.isFinite(candidate.score) ? candidate.score : 0));
+  let score = authority;
+  if (normalizedTitle === normalizedQuery) {
+    score += 70;
+  } else if (normalizedQuery && normalizedTitle.includes(normalizedQuery)) {
+    score += 52;
   }
-  if (candidate.arxivId || candidate.pubmedId || candidate.semanticScholarId) {
-    score += 5;
-  }
-  if (candidate.url) {
+  score += titleOverlap * 42;
+  score += snippetOverlap * 20;
+  score += fieldOverlap * 16;
+  score += publicationRecencyScore(candidate.publishedAt);
+  if (candidate.doi || candidate.arxivId || candidate.pubmedId || candidate.semanticScholarId) {
     score += 2;
   }
+  if (candidate.url) {
+    score += 1;
+  }
   if (candidate.openAccess === true) {
-    score += 1;
-  }
-  if (query.year && candidate.publishedAt?.startsWith(query.year.split("-")[0])) {
-    score += 1;
-  }
-  if (candidate.snippet) {
     score += 0.5;
   }
   return score;
@@ -476,6 +571,8 @@ function providerReport(provider, fields = {}) {
     resultCount: fields.resultCount ?? 0,
     message: fields.message ?? null,
     error: fields.error ?? null,
+    appliedFilters: fields.appliedFilters ?? [],
+    unsupportedFilters: fields.unsupportedFilters ?? [],
     capabilities: provider.capabilities
   };
 }
@@ -488,24 +585,42 @@ function publicWebUnavailableReport() {
   });
 }
 
+async function withTimeout(operation, timeoutMs) {
+  let timer;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise((resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function runProvider(provider, query, config, fetchFn) {
   if (provider.unavailable) {
-    return { candidates: [], report: publicWebUnavailableReport() };
+    return {
+      candidates: [],
+      report: { ...publicWebUnavailableReport(), unsupportedFilters: requestedFilterNames(query) }
+    };
   }
   const limit = Math.min(query.limit, provider.maxLimit || query.limit);
   const timeoutMs = normalizePositiveInteger(config.providerSettings?.[provider.id]?.timeoutMs, config.timeoutMs, 1000, 60000);
   const providerQuery = { ...query, limit };
+  const filterPlan = providerFilterPlan(provider, query);
   try {
-    const rawCandidates = await PROVIDER_ADAPTERS[provider.id](providerQuery, { timeoutMs, fetchFn });
-    const candidates = postFilterCandidates(rawCandidates.map((candidate) => normalizeCandidate(candidate, provider)).filter(Boolean), query);
+    const rawCandidates = await withTimeout(Promise.resolve().then(() => PROVIDER_ADAPTERS[provider.id](providerQuery, { timeoutMs, fetchFn })), timeoutMs);
+    const candidates = postFilterCandidates(rawCandidates.map((candidate) => normalizeCandidate(candidate, provider)).filter(Boolean), query, filterPlan);
     return {
       candidates,
-      report: providerReport(provider, { status: "ok", resultCount: candidates.length })
+      report: providerReport(provider, { status: "ok", resultCount: candidates.length, ...filterPlan })
     };
   } catch (error) {
     return {
       candidates: [],
-      report: providerReport(provider, { status: "error", error: sanitizeError(error), message: "Provider search failed." })
+      report: providerReport(provider, { status: "error", error: sanitizeError(error), message: "Provider search failed.", ...filterPlan })
     };
   }
 }
@@ -514,7 +629,7 @@ async function searchOpenAlex(query, options) {
   const params = buildParams({
     search: query.query,
     "per-page": query.limit,
-    select: "id,doi,title,display_name,publication_year,authorships,open_access,primary_location,cited_by_count,abstract_inverted_index"
+    select: "id,doi,title,display_name,publication_year,authorships,open_access,primary_location,locations,primary_topic,topics,language,cited_by_count,abstract_inverted_index"
   });
   if (query.year && !query.year.includes("-")) {
     params.set("filter", `from_publication_date:${query.year}-01-01,to_publication_date:${query.year}-12-31`);
@@ -530,6 +645,9 @@ async function searchOpenAlex(query, options) {
     sourceName: item.primary_location?.source?.display_name ?? "OpenAlex",
     publishedAt: normalizePublishedAt(item.publication_year),
     authors: Array.isArray(item.authorships) ? item.authorships.map((authorship) => authorship.author?.display_name).filter(Boolean) : [],
+    domains: Array.from(new Set([item.primary_location, ...(Array.isArray(item.locations) ? item.locations : [])].flatMap((location) => [hostnameFromUrl(location?.landing_page_url), hostnameFromUrl(location?.pdf_url)]).filter(Boolean))),
+    fieldsOfStudy: Array.from(new Set([item.primary_topic?.display_name, ...(Array.isArray(item.topics) ? item.topics.map((topic) => topic?.display_name) : [])].filter(Boolean))),
+    locale: item.language,
     doi: item.doi,
     openAccess: item.open_access?.is_oa === true,
     score: Number(item.cited_by_count ?? 0) > 0 ? Math.log10(Number(item.cited_by_count) + 1) : 0
@@ -537,7 +655,7 @@ async function searchOpenAlex(query, options) {
 }
 
 async function searchCrossref(query, options) {
-  const params = buildParams({ query: query.query, rows: query.limit, select: "DOI,title,URL,author,published,published-print,published-online,container-title,abstract,is-referenced-by-count" });
+  const params = buildParams({ query: query.query, rows: query.limit, select: "DOI,title,URL,link,author,published,published-print,published-online,container-title,abstract,language,is-referenced-by-count" });
   if (query.year && !query.year.includes("-")) {
     params.set("filter", `from-pub-date:${query.year}-01-01,until-pub-date:${query.year}-12-31`);
   } else if (query.year) {
@@ -553,6 +671,8 @@ async function searchCrossref(query, options) {
     sourceName: item["container-title"]?.[0] ?? "Crossref",
     publishedAt: normalizePublishedAt(null, item.published?.["date-parts"] ?? item["published-online"]?.["date-parts"] ?? item["published-print"]?.["date-parts"]),
     authors: normalizeAuthors(item.author),
+    domains: Array.from(new Set([hostnameFromUrl(item.URL), ...(Array.isArray(item.link) ? item.link.map((link) => hostnameFromUrl(link?.URL)) : [])].filter(Boolean))),
+    locale: item.language,
     doi: item.DOI,
     openAccess: null,
     score: Number(item["is-referenced-by-count"] ?? 0) > 0 ? Math.log10(Number(item["is-referenced-by-count"]) + 1) : 0
@@ -579,6 +699,7 @@ async function searchArxiv(query, options) {
       sourceName: "arXiv",
       publishedAt: extractXmlText(entry, "published")?.slice(0, 10),
       authors: Array.from(entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/giu)).map((author) => decodeXml(author[1])),
+      domains: [hostnameFromUrl(idUrl)].filter(Boolean),
       arxivId,
       openAccess: true,
       score: 2
@@ -597,6 +718,8 @@ async function searchEuropePmc(query, options) {
     sourceName: item.journalTitle ?? "Europe PMC",
     publishedAt: normalizePublishedAt(item.firstPublicationDate ?? item.pubYear),
     authors: item.authorList?.author ? normalizeAuthors(item.authorList.author.map((author) => author.fullName)) : normalizeAuthors(item.authorString),
+    domains: [item.doi ? "doi.org" : "europepmc.org"],
+    locale: item.language,
     doi: item.doi,
     pubmedId: item.pmid,
     openAccess: item.isOpenAccess === "Y" || item.inEPMC === "Y",
@@ -671,17 +794,14 @@ export async function executeNetworkSearch(rawArgs = {}, config = {}, options = 
   const providerIds = selectedProviderIds(query, normalizedConfig);
   const selectedProviders = providerIds.map((id) => PROVIDER_BY_ID.get(id)).filter((provider) => provider && providerVisibleForKind(provider, query.kind));
   const fetchFn = options.fetchFn ?? globalThis.fetch;
-  const allCandidates = [];
-  const providerReports = [];
-  for (const provider of selectedProviders) {
+  const providerResults = await Promise.all(selectedProviders.map((provider) => {
     if (disabled.has(provider.id) || normalizedConfig.providerSettings?.[provider.id]?.enabled === false) {
-      providerReports.push(providerReport(provider, { status: "disabled", message: "Provider disabled in Dove networkSearch config." }));
-      continue;
+      return { candidates: [], report: providerReport(provider, { status: "disabled", message: "Provider disabled in Dove networkSearch config.", ...providerFilterPlan(provider, query) }) };
     }
-    const result = await runProvider(provider, query, normalizedConfig, fetchFn);
-    providerReports.push(result.report);
-    allCandidates.push(...result.candidates);
-  }
+    return runProvider(provider, query, normalizedConfig, fetchFn);
+  }));
+  const providerReports = providerResults.map((result) => result.report);
+  const allCandidates = providerResults.flatMap((result) => result.candidates);
   const candidates = dedupeAndRank(allCandidates, query);
   const status = candidates.length > 0 ? "ok" : "blocked";
   return {

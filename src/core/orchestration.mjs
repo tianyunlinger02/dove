@@ -866,8 +866,11 @@ function persistBoard(root, board) {
   return normalized;
 }
 
-export function upsertOrchestrationBoard(root, args = {}) {
+function persistOrchestrationBoardUpdate(root, args = {}, { systemOwned = false } = {}) {
   assertNoPolicyOverrideArgs(args, "Updating the orchestration board");
+  if (!systemOwned && Object.hasOwn(args, "reviewRequiredBeforeFinalize")) {
+    throw new Error("Updating the orchestration board does not accept system-owned field reviewRequiredBeforeFinalize.");
+  }
   const state = loadState(root);
   const current = loadBoard(root);
   const nextPhase = args.phase ?? current.currentPhase;
@@ -926,6 +929,14 @@ export function upsertOrchestrationBoard(root, args = {}) {
   });
 }
 
+export function upsertOrchestrationBoard(root, args = {}) {
+  return persistOrchestrationBoardUpdate(root, args);
+}
+
+export function upsertSystemOrchestrationBoard(root, args = {}) {
+  return persistOrchestrationBoardUpdate(root, args, { systemOwned: true });
+}
+
 export function appendHandoff(root, args = {}) {
   assertNoPolicyOverrideArgs(args, "Appending a handoff");
   const board = loadBoard(root);
@@ -955,7 +966,7 @@ export function appendHandoff(root, args = {}) {
     blockerIds: normalizeStringArray(args.blockerIds ?? board.blockers.filter((item) => item.status !== "resolved").map((item) => item.id))
   });
 
-  return upsertOrchestrationBoard(root, {
+  return upsertSystemOrchestrationBoard(root, {
     phase,
     assignedRole: toRole,
     intentType,
@@ -999,7 +1010,7 @@ export function updateResearchBrief(root, args = {}) {
   };
   writeJson(root, ARTIFACT_PATHS.researchAgenda, next);
   writeText(root, ARTIFACT_PATHS.researchBrief, renderResearchBrief(next));
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     objective: next.objective,
     phase: args.phase ?? "research",
     assignedRole: args.assignedRole ?? "builder",
@@ -1621,7 +1632,7 @@ export function upsertExperimentPlan(root, args = {}) {
   const audits = readJson(root, ARTIFACT_PATHS.experimentAudits, { version: 1, items: [], updatedAt: null });
   writeText(root, ARTIFACT_PATHS.experimentLog, renderExperimentLog(plansIndex.items, resultsIndex.items, audits.items));
   const board = loadBoard(root);
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "experiments",
     assignedRole: "builder",
     intentType: "experiment",
@@ -1759,7 +1770,7 @@ export function upsertExperimentResult(root, args = {}) {
         nextAction: "Use the audit and bridge logs to decide whether the claim should be strengthened, weakened, or rewritten."
       })
     : board.blockers;
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "experiments",
     assignedRole: "builder",
     intentType: bridgeEvent.mapping === "supports" ? "experiment" : "repair",
@@ -1917,7 +1928,7 @@ function persistRebuttalIssues(root, args = {}) {
   const next = { version: 1, items, updatedAt: nowIso() };
   writeJson(root, ARTIFACT_PATHS.rebuttalIssues, next);
   if (args.updateBoard !== false) {
-    upsertOrchestrationBoard(root, {
+    upsertSystemOrchestrationBoard(root, {
       phase: "rebuttal",
       assignedRole: "builder",
       intentType: "respond",
@@ -1991,7 +2002,7 @@ export function buildRebuttalStrategy(root, args = {}) {
   ].join("\n");
   writeText(root, ARTIFACT_PATHS.rebuttalStrategy, strategy);
   writeText(root, ARTIFACT_PATHS.rebuttalResponseDraft, responseDraft);
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "rebuttal",
     assignedRole: "builder",
     intentType: "respond",
@@ -2135,7 +2146,7 @@ export function createVersionSnapshot(root, args = {}) {
   writeJson(root, ARTIFACT_PATHS.versionsIndex, versions);
 
   const snapshotIds = Array.from(new Set([...(board.versionLineage?.snapshotIds ?? []), versionId]));
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "versions",
     assignedRole: "planner",
     intentType: "version",
@@ -2270,7 +2281,7 @@ export function compareVersions(root, args = {}) {
     ...(comparison.changedDraftSections.length > 0 ? comparison.changedDraftSections.map((change) => `- ${change.sectionId}: content hash changed`) : ["- None"])
   ].join("\n"));
 
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "versions",
     assignedRole: "planner",
     intentType: "version",

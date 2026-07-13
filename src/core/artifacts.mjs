@@ -10,7 +10,7 @@ import {
   buildRebuttalStrategy,
   loadBoard,
   missingRebuttalIssuesResult,
-  upsertOrchestrationBoard
+  upsertSystemOrchestrationBoard
 } from "./orchestration.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
@@ -1204,7 +1204,7 @@ function updatePipeline(state, currentStage, resumeCommand) {
 function syncPhase(root, state, { stage, resumeCommand, role, objective, evidenceLinks, experimentIds, rebuttalIssueIds, activeComparisonTargets, intentType, currentFocus, nextAction, reviewRequiredBeforeFinalize } = {}) {
   const nextState = updatePipeline(state, stage, resumeCommand);
   saveState(root, nextState);
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: stage,
     assignedRole: role,
     objective,
@@ -2935,7 +2935,7 @@ export function setSectionStatus(root, args = {}) {
   };
   const board = loadBoard(root);
   saveState(root, state);
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: state.pipeline.currentStage,
     assignedRole: board.assignedRole,
     currentFocus: args.summary ?? board.currentFocus,

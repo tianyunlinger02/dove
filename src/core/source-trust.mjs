@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 
+import { inspectDeclaredPath } from "./artifact-integrity.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { nowIso, readJson, writeJson } from "./workspace.mjs";
 
@@ -106,17 +107,69 @@ export function assertEligibleSourceReferences(root, references = [], label = "E
   return evaluations;
 }
 
+function normalizedAuditEvidence(root, value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`verify_source auditEvidence[${index}] must be an object with reference, kind, and observation.`);
+    }
+    const keys = Object.keys(item);
+    const unknown = keys.filter((key) => !["reference", "kind", "observation"].includes(key));
+    if (unknown.length > 0) {
+      throw new Error(`verify_source auditEvidence[${index}] does not accept unknown fields: ${unknown.join(", ")}.`);
+    }
+    const reference = normalizeText(item.reference);
+    const kind = normalizeText(item.kind).toLowerCase();
+    const observation = normalizeText(item.observation);
+    if (!reference || !observation || !["source", "capture"].includes(kind)) {
+      throw new Error(`verify_source auditEvidence[${index}] requires non-empty reference and observation, with kind source or capture.`);
+    }
+    if (kind === "source") {
+      const validReference = /^https:\/\/[^\s]+$/iu.test(reference)
+        || /^(?:doi:)?10\.\d{4,9}\/[^\s]+$/iu.test(reference)
+        || /^arxiv:(?:\d{4}\.\d{4,5}|[a-z-]+\/\d{7})(?:v\d+)?$/iu.test(reference);
+      if (!validReference) {
+        throw new Error(`verify_source auditEvidence[${index}].reference must be HTTPS, DOI, or arXiv when kind is source.`);
+      }
+    } else {
+      const inspection = inspectDeclaredPath(root, reference, { requireNonEmpty: true });
+      if (inspection.status !== "existing") {
+        throw new Error(`verify_source auditEvidence[${index}] capture must be a safe existing non-empty local file (${inspection.reason ?? inspection.status}).`);
+      }
+    }
+    return { reference, kind, observation };
+  });
+}
+
+function auditEvidenceMatchesSource(source, evidence) {
+  const identity = canonicalSourceIdentity(source);
+  const references = new Set([
+    identity.url,
+    identity.doi,
+    identity.doi ? `doi:${identity.doi}` : "",
+    identity.locator
+  ].filter(Boolean));
+  return evidence.some((item) => {
+    if (item.kind !== "source") return false;
+    const reference = normalizeIdentityText(item.reference);
+    const referenceDoi = normalizeDoi(item.reference);
+    const referenceUrl = normalizeUrl(item.reference);
+    return references.has(reference) || (referenceDoi && referenceDoi === identity.doi) || (referenceUrl && referenceUrl === identity.url);
+  });
+}
+
 export function prepareSourceVerification(root, source, args = {}) {
   const method = normalizeText(args.method);
   const checkedMaterial = normalizeText(args.checkedMaterial);
-  const auditEvidence = Array.isArray(args.auditEvidence)
-    ? Array.from(new Set(args.auditEvidence.map(normalizeText).filter(Boolean)))
-    : [];
+  const auditEvidence = normalizedAuditEvidence(root, args.auditEvidence);
   const decision = normalizeText(args.decision).toLowerCase();
   if (!source) throw new Error("verify_source references an unknown source.");
   if (!method) throw new Error("verify_source requires a verification method.");
   if (!checkedMaterial) throw new Error("verify_source requires checkedMaterial describing the material actually inspected.");
-  if (auditEvidence.length === 0) throw new Error("verify_source requires at least one auditable evidence reference.");
+  if (auditEvidence.length === 0) throw new Error("verify_source requires at least one structured auditEvidence item.");
+  if (!auditEvidenceMatchesSource(source, auditEvidence)) {
+    throw new Error("verify_source requires at least one auditEvidence source reference matching the registered source identity.");
+  }
   if (!SOURCE_LIFECYCLE_STATES.slice(1).includes(decision)) {
     throw new Error("verify_source decision must be verified or rejected.");
   }

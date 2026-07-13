@@ -6,8 +6,7 @@ const PROPOSAL_STATUSES = new Set([
 const CONFIRMED_EXECUTION_FAILURE_STATUSES = new Set([
   "awaiting-host-pass",
   "awaiting-host-results",
-  "needs-host-results",
-  "step-budget-exhausted"
+  "needs-host-results"
 ]);
 
 const OPERATIONAL_FAILURE_STATUSES = new Set([

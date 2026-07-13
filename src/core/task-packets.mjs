@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -83,6 +84,15 @@ function readOptionalJson(root, relativePath) {
 
 export function normalizeTaskPacketId(value) {
   return slugify(value);
+}
+
+export function deterministicBoundedTaskPacketId(prefix, identity, maxIdLength = 160) {
+  const normalizedPrefix = normalizeTaskPacketId(prefix);
+  const normalizedIdentity = normalizeTaskPacketId(identity);
+  const digest = crypto.createHash("sha256").update(`${normalizedPrefix}\0${normalizedIdentity}`).digest("hex").slice(0, 12);
+  const boundedPrefix = normalizedPrefix.slice(0, 72).replace(/-+$/u, "") || "task";
+  const availableIdentityLength = Math.max(1, maxIdLength - boundedPrefix.length - digest.length - 2);
+  return normalizeTaskPacketId(`${boundedPrefix}-${normalizedIdentity.slice(0, availableIdentityLength)}-${digest}`);
 }
 
 export function readTaskTargetResolutionSettings(root) {

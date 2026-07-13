@@ -433,7 +433,11 @@ async function main() {
     goal: "Draft and review the validator paper section with one figure and one experiment.",
     title: "Validator paper task",
     evidenceExpectations: ["draft", "figure", "review"],
-    artifactRefs: [".dove/drafts/introduction.md"]
+    artifactRefs: [
+      ".dove/plans/current-plan.md",
+      ".dove/drafts/introduction.md",
+      ".dove/figures/validator-figure.final.svg"
+    ]
   };
   const { proposal: missionProposal, confirmArgs: approvedMissionConfirmArgs } = await proposeMission(missionRequest, "validator paper mission proposal");
   assert.equal(missionProposal.status, "needs-confirmation");
@@ -553,7 +557,8 @@ async function main() {
     authors: ["Smith", "Lee"],
     year: 2026,
     sourceType: "paper",
-    origin: "validator"
+    origin: "validator",
+    locator: "https://example.org/dove-task-centered-research-workflows"
   });
   assert.equal(source.citationKey, "smith2026dove");
   assert.equal(source.lifecycle, "candidate");
@@ -565,7 +570,10 @@ async function main() {
     decision: "verified",
     method: "validator inspected the canonical source fixture",
     checkedMaterial: "title, authors, and publication locator",
-    auditEvidence: [VALIDATION_EVIDENCE_PATH]
+    auditEvidence: [
+      { reference: source.locator, kind: "source", observation: "Canonical source locator matched the registered source identity." },
+      { reference: VALIDATION_EVIDENCE_PATH, kind: "capture", observation: "Local validation capture records the inspected metadata." }
+    ]
   });
   assert.equal(verifiedSource.source.lifecycle, "verified");
   assert.equal(verifiedSource.verification.sourceId, source.id);

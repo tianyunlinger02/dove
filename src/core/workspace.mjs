@@ -11,7 +11,7 @@ import {
   normalizeMetaOperatorFollowThroughIndex,
   normalizeState
 } from "./schema.mjs";
-import { currentMutationContext, jsonContent } from "./mutation-backend.mjs";
+import { currentMutationContext } from "./mutation-backend.mjs";
 import {
   WORKSPACE_BOOTSTRAP_DIRECTORIES,
   createManagedWorkspaceJsonArtifacts,
@@ -51,6 +51,14 @@ function cloneFallback(fallback) {
   return typeof fallback === "function" ? fallback() : structuredClone(fallback);
 }
 
+function requireMutationContext(root, operation) {
+  const context = currentMutationContext(root);
+  if (!context) {
+    throw new Error(`${operation} requires an active MutationContext.`);
+  }
+  return context;
+}
+
 function fileExists(root, relativePath) {
   const context = currentMutationContext(root);
   if (context) {
@@ -76,29 +84,11 @@ export function readJson(root, relativePath, fallback) {
 }
 
 export function writeJson(root, relativePath, value) {
-  const context = currentMutationContext(root);
-  if (context) {
-    return context.writeJson(relativePath, value);
-  }
-  const fullPath = resolvePath(root, relativePath);
-  ensureDir(path.dirname(fullPath));
-  fs.writeFileSync(fullPath, jsonContent(value), "utf8");
-  return null;
+  return requireMutationContext(root, "writeJson").writeJson(relativePath, value);
 }
 
 function writeJsonIfChanged(root, relativePath, value) {
-  const context = currentMutationContext(root);
-  if (context) {
-    return context.writeJsonIfChanged(relativePath, value);
-  }
-  const fullPath = resolvePath(root, relativePath);
-  const nextContent = jsonContent(value);
-  ensureDir(path.dirname(fullPath));
-  if (fs.existsSync(fullPath) && fs.readFileSync(fullPath, "utf8") === nextContent) {
-    return false;
-  }
-  fs.writeFileSync(fullPath, nextContent, "utf8");
-  return true;
+  return requireMutationContext(root, "writeJsonIfChanged").writeJsonIfChanged(relativePath, value);
 }
 
 function reconcileManagedJsonArtifact(root, relativePath, fallback, normalize) {
@@ -120,52 +110,24 @@ export function readText(root, relativePath, fallback = "") {
 }
 
 export function writeText(root, relativePath, content) {
-  const context = currentMutationContext(root);
-  if (context) {
-    return context.writeText(relativePath, content);
-  }
-  const fullPath = resolvePath(root, relativePath);
-  ensureDir(path.dirname(fullPath));
-  fs.writeFileSync(fullPath, content, "utf8");
-  return null;
+  return requireMutationContext(root, "writeText").writeText(relativePath, content);
 }
 
 export function appendText(root, relativePath, content) {
-  const context = currentMutationContext(root);
-  if (context) {
-    return context.appendText(relativePath, content);
-  }
-  const fullPath = resolvePath(root, relativePath);
-  ensureDir(path.dirname(fullPath));
-  fs.appendFileSync(fullPath, content, "utf8");
-  return null;
+  return requireMutationContext(root, "appendText").appendText(relativePath, content);
 }
 
 function ensureFile(root, relativePath, content) {
-  const context = currentMutationContext(root);
-  if (context) {
-    return context.ensureFile(relativePath, content);
-  }
-  const fullPath = resolvePath(root, relativePath);
-  ensureDir(path.dirname(fullPath));
-  if (!fs.existsSync(fullPath)) {
-    fs.writeFileSync(fullPath, content, "utf8");
-    return true;
-  }
-  return false;
+  return requireMutationContext(root, "ensureFile").ensureFile(relativePath, content);
 }
 
 export function ensureWorkspace(root) {
+  const context = requireMutationContext(root, "ensureWorkspace");
   const state = normalizeState(readJson(root, ARTIFACT_PATHS.state, createDefaultState));
-  const context = currentMutationContext(root);
 
   const created = [];
   for (const relativeDir of WORKSPACE_BOOTSTRAP_DIRECTORIES) {
-    if (context) {
-      context.ensureDirectory(relativeDir);
-    } else {
-      ensureDir(resolvePath(root, relativeDir));
-    }
+    context.ensureDirectory(relativeDir);
   }
 
   if (!fileExists(root, ARTIFACT_PATHS.state)) {

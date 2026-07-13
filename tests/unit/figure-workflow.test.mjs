@@ -14,10 +14,11 @@ import {
   upsertFigurePlan,
   upsertNote,
   verifySource
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -51,7 +52,7 @@ function seedTaskPacket(root, packetId = "figure-workflow-packet") {
 }
 
 function seedFigureWorkflowContext(root) {
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   initProject(root, { title: "Figure Workflow Test", objective: "Generate a figure from one user intent." });
   const packetId = seedTaskPacket(root);
   const state = readJson(root, ARTIFACT_PATHS.state, {});
@@ -68,14 +69,14 @@ function seedFigureWorkflowContext(root) {
       }
     }
   });
-  const source = registerSource(root, { packetId, citationKey: "figure-workflow-source", title: "Figure Workflow Source", authors: ["Doe"], year: 2026, sourceType: "paper" });
+  const source = registerSource(root, { packetId, citationKey: "figure-workflow-source", title: "Figure Workflow Source", authors: ["Doe"], year: 2026, sourceType: "paper", locator: "https://example.org/test-source" });
   verifySource(root, {
     packetId,
     sourceId: source.id,
     decision: "verified",
     method: "test fixture inspected the canonical publication record",
     checkedMaterial: "source title, authors, year, and publication metadata",
-    auditEvidence: [`fixture:${source.id}`]
+    auditEvidence: [{ reference: source.locator, kind: "source", observation: `Verified fixture identity for ${source.id}.` }]
   });
   const note = upsertNote(root, { packetId, noteId: "figure-workflow-note", title: "Figure workflow note", sectionId: "method", sourceIds: [source.id], summary: "Source-backed material for the figure." });
   upsertClaims(root, {
@@ -127,6 +128,7 @@ function assertFigureResultCard(result, expected = {}) {
 
 test("runFigureWorkflow does not expose generated figure ids in public summaries", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-does-not-expose-generated-figure-ids-in-public-summari", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -141,12 +143,14 @@ test("runFigureWorkflow does not expose generated figure ids in public summaries
     assert.doesNotMatch(result.resultCard.happened, /gpt-image2/);
     assert.match(result.resultCard.happened, /这张图的计划和材料包已经准备好/);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow turns one SVG-backed intent into a validated figure", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-turns-one-svg-backed-intent-into-a-validated-figure", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -189,12 +193,14 @@ test("runFigureWorkflow turns one SVG-backed intent into a validated figure", ()
     assert.equal(figure.status, "generated");
     assert.deepEqual(figure.targetClaimIds, ["claim-figure-workflow"]);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow result card focuses current-figure QA issues", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-result-card-focuses-current-figure-qa-issues", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -224,12 +230,14 @@ test("runFigureWorkflow result card focuses current-figure QA issues", () => {
     assert.match(result.resultCard.happened, /当前图|this figure/);
     assert.doesNotMatch(result.resultCard.happened, /workspace|全工作区|全局/);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow validates current figure despite unrelated workspace QA issues", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-validates-current-figure-despite-unrelated-workspace-q", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
     upsertFigurePlan(root, {
@@ -274,12 +282,14 @@ test("runFigureWorkflow validates current figure despite unrelated workspace QA 
     });
     assert.doesNotMatch(result.resultCard.happened, /workspace|全工作区|全局|unrelated|12/);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow imports sourceSvgPath into the canonical final target", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-imports-sourcesvgpath-into-the-canonical-final-target", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
     const sourceSvgPath = ".dove/figures/runs/source-path-run/manual.svg";
@@ -303,12 +313,14 @@ test("runFigureWorkflow imports sourceSvgPath into the canonical final target", 
     assert.equal(result.finalSvgPath, ".dove/figures/source-path.final.svg");
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "source-path.final.svg")), true);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow accepts targetFinalSvgPath as the canonical final artifact target", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-accepts-targetfinalsvgpath-as-the-canonical-final-arti", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -331,12 +343,14 @@ test("runFigureWorkflow accepts targetFinalSvgPath as the canonical final artifa
     assert.equal(figure.finalSvgPath, ".dove/figures/custom-target.final.svg");
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "custom-target.final.svg")), true);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow rejects legacy finalSvgPath input", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-rejects-legacy-finalsvgpath-input", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -351,12 +365,14 @@ test("runFigureWorkflow rejects legacy finalSvgPath input", () => {
       caption: "Legacy field should be rejected."
     }), /no longer accepts finalSvgPath/);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow imports inline SVG as patch-plan operations without writing final files", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-imports-inline-svg-as-patch-plan-operations-without-wr", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -383,12 +399,14 @@ test("runFigureWorkflow imports inline SVG as patch-plan operations without writ
     assert.ok(result.mutationPlan.operations.some((operation) => operation.relativePath === ".dove/figures/inline-svg-patch-plan.final.svg"));
     assert.ok(result.mutationPlan.operations.some((operation) => operation.relativePath === ARTIFACT_PATHS.figureQa));
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow auto-imports completed external-command provider output", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-auto-imports-completed-external-command-provider-outpu", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
     const providerScript = path.join(root, "fake-figure-provider.cjs");
@@ -432,12 +450,14 @@ process.stdout.write(JSON.stringify({
     });
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "provider-intent.final.svg")), true);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow keeps provider execution as a direct-process boundary in patch-plan mode", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-keeps-provider-execution-as-a-direct-process-boundary-", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
     const providerScript = path.join(root, "patch-plan-workflow-provider.cjs");
@@ -491,12 +511,14 @@ process.stdout.write(JSON.stringify({
     assert.equal(fs.existsSync(path.join(root, "workflow-provider-spawned.txt")), false);
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "patch-plan-workflow.final.svg")), false);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow prepares materials without marking a final figure ready when no output exists", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-prepares-materials-without-marking-a-final-figure-read", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -532,12 +554,14 @@ test("runFigureWorkflow prepares materials without marking a final figure ready 
     assert.equal(result.nextAction, "project:dove.figure");
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "prepared-only.final.svg")), false);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow treats providerId none as a plan-only figure run", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-treats-providerid-none-as-a-plan-only-figure-run", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -578,14 +602,16 @@ test("runFigureWorkflow treats providerId none as a plan-only figure run", () =>
     const figure = readFigures(root).items.find((item) => item.id === "plan-only-provider-none");
     assert.equal(figure.generationProviderId, "none");
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow reports no durable writes when blocked before planning", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-reports-no-durable-writes-when-blocked-before-planning", () => {
   try {
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
     initProject(root, { title: "Figure Pre-plan Boundary", objective: "Require real figure materials before planning." });
     const packetId = seedTaskPacket(root, "pre-plan-no-materials-packet");
     const result = runWithMutationContext(root, { actionId: "figure-pre-plan-boundary", mutationMode: "direct-process" }, () => runFigureWorkflow(root, {
@@ -601,12 +627,14 @@ test("runFigureWorkflow reports no durable writes when blocked before planning",
     assert.match(result.resultCard.durableWrites[0], /没有声明新的持久写入|no new durable writes/i);
     assert.doesNotMatch(result.resultCard.durableWrites[0], /已更新图表计划|Updated the figure plan/i);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow surfaces missing figure materials as a boundary", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-surfaces-missing-figure-materials-as-a-boundary", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -639,12 +667,14 @@ test("runFigureWorkflow surfaces missing figure materials as a boundary", () => 
     assert.ok(result.requiredActions.includes("resolve-missing-figure-requirements"));
     assert.equal(result.nextAction, "project:dove.figure");
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow surfaces provider failures as a boundary", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-surfaces-provider-failures-as-a-boundary", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
     const providerScript = path.join(root, "failing-figure-provider.cjs");
@@ -691,12 +721,14 @@ process.exit(3);
     assert.ok(result.requiredActions.includes("import-manual-figure-output"));
     assert.equal(result.nextAction, "project:dove.figure");
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow routes gpt-image2 missing key to a secret boundary", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-routes-gpt-image2-missing-key-to-a-secret-boundary", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -738,14 +770,15 @@ test("runFigureWorkflow routes gpt-image2 missing key to a secret boundary", () 
     assert.equal(result.finalSvgPath, null);
     assert.equal(fs.existsSync(path.join(root, ".dove", "figures", "gpt-image2-missing-key.final.svg")), false);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow rejects missing packet targets before writing figure items", () => {
   const root = tempRoot();
   try {
-    ensureWorkspace(root);
+    ensureTestWorkspace(root);
     assert.throws(() => {
       runFigureWorkflow(root, {
         intent: "Draw a figure without a durable task packet.",
@@ -761,6 +794,7 @@ test("runFigureWorkflow rejects missing packet targets before writing figure ite
 
 test("runFigureWorkflow rejects unsafe SVG and inline secret arguments", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-rejects-unsafe-svg-and-inline-secret-arguments", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
 
@@ -785,12 +819,14 @@ test("runFigureWorkflow rejects unsafe SVG and inline secret arguments", () => {
       });
     }, /inline secret/);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });
 
 test("runFigureWorkflow updates one figure without overwriting unrelated backlog items", () => {
   const root = tempRoot();
+  return runFixtureMutation(root, "runfigureworkflow-updates-one-figure-without-overwriting-unrelated-backl", () => {
   try {
     const packetId = seedFigureWorkflowContext(root);
     upsertFigurePlan(root, {
@@ -825,6 +861,7 @@ test("runFigureWorkflow updates one figure without overwriting unrelated backlog
     const figureIds = readFigures(root).items.map((item) => item.id).sort();
     assert.deepEqual(figureIds, ["existing-figure", "new-figure"]);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    // The mutation fixture records provenance after this callback returns.
   }
+  });
 });

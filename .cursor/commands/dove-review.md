@@ -25,8 +25,8 @@ Run a local evidence-aware review pass over selected task materials and produce 
 1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check or action below; do not construct default answers by manually reading or listing internal files.
 2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
 3. If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
-4. This request has one listed project action: `node ./bin/dove-package.mjs review . --target "<task title>" --mutation-mode direct-process` from the project root; Run it only when the needed material is present; then summarize the real artifact state or material boundary instead of inspecting internal files directly.
-5. Use this for local evidence-aware review; use separate isolated or audio review only when the operator explicitly asks for that mode.
+4. This request has one listed project action: `node ./bin/dove-package.mjs review . --target "<task title>" --artifact-path "<artifact path>" --mutation-mode direct-process` from the project root; Run it only when the needed material is present; then summarize the real artifact state or material boundary instead of inspecting internal files directly.
+5. Use this for local evidence-aware review; pass one or more `--artifact-path` values when the operator names exact materials, and use separate isolated or audio review only when explicitly requested.
 6. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 7. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
 8. When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.

@@ -213,6 +213,8 @@ async function main() {
   assertNoWrites(providerStatus, "query_network_search_providers");
   const searchStatus = await callReadOnlyTool("search_network", { query: "dove doctor public web status", kind: "web" });
   assert2.equal(searchStatus.status, "blocked");
+  assert2.equal(searchStatus.candidates.length, 0, "Expected unavailable public web search to exhaust with no candidate work");
+  assert2.equal(searchStatus.needsAttention?.status, "blocked");
   assertNoWrites(searchStatus, "search_network");
   const parsed = await callReadOnlyTool("query_meta_optimize");
   assert2.equal(parsed.proposalOnly, true);

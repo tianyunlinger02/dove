@@ -25,7 +25,8 @@ import {
   upsertFigurePlan,
   upsertNote,
   upsertOutline
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function tempRoot() {
@@ -48,7 +49,7 @@ function writeVerifiedSources(root, items) {
       decision: "verified",
       method: "test fixture inspected source metadata",
       checkedMaterial: "fixture title, authors, locator, and publication metadata",
-      auditEvidence: [`fixture:${source.id}`],
+      auditEvidence: [{ reference: source.locator, kind: "source", observation: `Verified fixture identity for ${source.id}.` }],
       checkedAt: new Date(0).toISOString()
     })),
     updatedAt: new Date(0).toISOString()
@@ -83,7 +84,8 @@ function seedTaskPacket(root, packetId = "evidence-main-packet") {
 
 test("upsertClaims rejects claims with unknown sources", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "upsertclaims-rejects-claims-with-unknown-sources", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
   fs.mkdirSync(path.join(root, ".dove", "sources"), { recursive: true });
   writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known source", authors: [], year: 2026 }]);
@@ -100,11 +102,13 @@ test("upsertClaims rejects claims with unknown sources", () => {
       claims: [{ id: "claim-1", text: "Unsupported", sectionId: "introduction", sourceIds: ["missing-source"] }]
     });
   }, /unknown sources/);
+  });
 });
 
 test("strict mode blocks drafting before evidence exists", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "strict-mode-blocks-drafting-before-evidence-exists", () => {
+  ensureTestWorkspace(root);
   initProject(root, { strictMode: true });
   seedTaskPacket(root);
 
@@ -114,11 +118,13 @@ test("strict mode blocks drafting before evidence exists", () => {
       body: "# Introduction\n\nPremature draft.\n"
     });
   }, /Strict mode requires an approved outline stage before drafting/);
+  });
 });
 
 test("strict mode requires the real planning stage before outlining", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "strict-mode-requires-the-real-planning-stage-before-outlining", () => {
+  ensureTestWorkspace(root);
   initProject(root, { strictMode: true });
   seedTaskPacket(root);
 
@@ -127,11 +133,13 @@ test("strict mode requires the real planning stage before outlining", () => {
       sections: [{ id: "introduction", title: "Introduction", status: "drafting", goal: "Goal" }]
     });
   }, /Strict mode requires planning before outlining/);
+  });
 });
 
 test("upsertNote rejects unknown source references", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "upsertnote-rejects-unknown-source-references", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
 
   assert.throws(() => {
@@ -142,11 +150,13 @@ test("upsertNote rejects unknown source references", () => {
       summary: "summary"
     });
   }, /unknown sources/);
+  });
 });
 
 test("upsertClaims merges claims instead of overwriting the full index", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "upsertclaims-merges-claims-instead-of-overwriting-the-full-index", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
   writeVerifiedSources(root, [
       { id: "source-a", citationKey: "source-a", title: "A", authors: [], year: 2024 },
@@ -171,11 +181,13 @@ test("upsertClaims merges claims instead of overwriting the full index", () => {
 
   assert.equal(merged.claims.length, 2);
   assert.equal(loadBoard(root).currentPhase, "plan");
+  });
 });
 
 test("board role metadata does not authorize evidence writes and retired overrides fail closed", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "board-role-metadata-does-not-authorize-evidence-writes-and-retired-overr", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
   writeVerifiedSources(root, [{ id: "source-a", citationKey: "source-a", title: "A", authors: [], year: 2024 }]);
 
@@ -200,11 +212,13 @@ test("board role metadata does not authorize evidence writes and retired overrid
     claims: [{ id: "claim-c", text: "Claim C", sectionId: "results", sourceIds: ["source-a"] }],
     policyOverrideReason: "manual evidence maintenance after session recovery"
   }), /does not accept retired policy override fields/);
+  });
 });
 
 test("experiment results reject unknown outcomes and mismatched claim links", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "experiment-results-reject-unknown-outcomes-and-mismatched-claim-links", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
   writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove", "notes", "index.json"), JSON.stringify({
@@ -258,11 +272,13 @@ test("experiment results reject unknown outcomes and mismatched claim links", ()
       outcome: "supports"
     });
   }, /must include claimId/);
+  });
 });
 
 test("review loop flags unknown citations and draft-claim mismatches", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "review-loop-flags-unknown-citations-and-draft-claim-mismatches", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
   writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove", "notes", "index.json"), JSON.stringify({
@@ -294,11 +310,13 @@ test("review loop flags unknown citations and draft-claim mismatches", () => {
   });
   const review = runReviewLoop(root, { scope: "introduction" });
   assert.equal(review.verdict, "needs-evidence");
+  });
 });
 
 test("repeated review findings escalate a persistent concern while preserving reviewer-author separation", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "repeated-review-findings-escalate-a-persistent-concern-while-preserving-", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
   writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove", "notes", "index.json"), JSON.stringify({
@@ -338,11 +356,13 @@ test("repeated review findings escalate a persistent concern while preserving re
   assert.ok(reviewState.escalatedConcernIds.includes(escalatedConcern.id));
   assert.equal(reviewState.reviewerIndependence.separationMaintained, true);
   assert.ok(reviewState.reviewerIndependence.responseOwnerRoles.includes("researcher"));
+  });
 });
 
 test("figure QA issues surface through the review loop and durable rebuttal surfaces", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "figure-qa-issues-surface-through-the-review-loop-and-durable-rebuttal-su", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
   writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove/notes/index.json"), JSON.stringify({
@@ -388,11 +408,13 @@ test("figure QA issues surface through the review loop and durable rebuttal surf
   assert.ok(qa.issues.some((item) => item.code === "non-portable-paths"));
   assert.ok(concerns.items.some((item) => item.summary.includes("has no linked target claims")));
   assert.ok(rebuttalIssues.items.some((item) => item.summary.includes("links to review or rebuttal context but has no durable review notes")));
+  });
 });
 
 test("supporting results with blocked audits hold claim promotion for review", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "supporting-results-with-blocked-audits-hold-claim-promotion-for-review", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
   writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove", "notes", "index.json"), JSON.stringify({
@@ -441,13 +463,15 @@ test("supporting results with blocked audits hold claim promotion for review", (
   assert.equal(claim.bridgeStatus ?? null, null);
   assert.equal(claim.latestBridgeId ?? null, null);
   assert.ok(evidence.claimBridgeProblems.some((item) => item.reason === "bridge-held-for-review"));
+  });
 });
 
 
 
 test("finalization is blocked while claim bridges remain held for review", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "finalization-is-blocked-while-claim-bridges-remain-held-for-review", () => {
+  ensureTestWorkspace(root);
   const packetId = seedTaskPacket(root);
   writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: [], year: 2026 }]);
   fs.writeFileSync(path.join(root, ".dove/notes/index.json"), JSON.stringify({
@@ -499,8 +523,7 @@ test("finalization is blocked while claim bridges remain held for review", () =>
     reviewedArtifactPaths: [ARTIFACT_PATHS.claims],
     autoGeneratedReviewReport: true,
     findings: [],
-    actionItems: [],
-    reviewRequiredBeforeFinalize: true
+    actionItems: []
   });
 
   appendHandoff(root, {
@@ -514,10 +537,12 @@ test("finalization is blocked while claim bridges remain held for review", () =>
   assert.throws(() => {
     createVersionSnapshot(root, { packetId, versionId: "blocked-version" });
   }, /held for review|bridge|integrity/);
+  });
 });
 test("citation sync writes references and wiki/rebuttal helpers create artifacts", () => {
   const root = tempRoot();
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "citation-sync-writes-references-and-wiki-rebuttal-helpers-create-artifac", () => {
+  ensureTestWorkspace(root);
   seedTaskPacket(root);
   writeVerifiedSources(root, [{ id: "known-source", citationKey: "known-source", title: "Known", authors: ["Doe"], year: 2026, sourceType: "paper" }]);
   fs.writeFileSync(path.join(root, ".dove", "notes", "index.json"), JSON.stringify({
@@ -538,4 +563,5 @@ test("citation sync writes references and wiki/rebuttal helpers create artifacts
 
   const wiki = refreshWiki(root);
   assert.equal(wiki.wikiPath, ".dove/wiki/index.md");
+  });
 });

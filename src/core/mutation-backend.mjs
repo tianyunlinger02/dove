@@ -75,7 +75,8 @@ function buildMutationId() {
 
 export class MutationContext {
   constructor(root, options = {}) {
-    this.root = path.resolve(root);
+    const resolvedRoot = path.resolve(root);
+    this.root = fs.realpathSync.native(resolvedRoot);
     this.id = options.id ?? buildMutationId();
     this.actionId = options.actionId ?? "unspecified";
     this.mutationMode = normalizeMutationMode(options.mutationMode);
@@ -98,6 +99,38 @@ export class MutationContext {
     const relativeFromRoot = path.relative(this.root, fullPath);
     if (relativeFromRoot.startsWith("..") || path.isAbsolute(relativeFromRoot)) {
       throw new Error(`Mutation path must stay inside the project: ${relativePath}`);
+    }
+
+    let currentPath = this.root;
+    for (const component of normalized.split("/")) {
+      currentPath = path.join(currentPath, component);
+      let stat;
+      try {
+        stat = fs.lstatSync(currentPath);
+      } catch (error) {
+        if (error?.code === "ENOENT") {
+          break;
+        }
+        throw error;
+      }
+      if (stat.isSymbolicLink()) {
+        throw new Error(`Mutation path must not contain symbolic links: ${relativePath}`);
+      }
+    }
+
+    const existingPath = fs.existsSync(fullPath) ? fullPath : path.dirname(fullPath);
+    let canonicalExistingPath = existingPath;
+    while (!fs.existsSync(canonicalExistingPath)) {
+      const parentPath = path.dirname(canonicalExistingPath);
+      if (parentPath === canonicalExistingPath) {
+        break;
+      }
+      canonicalExistingPath = parentPath;
+    }
+    const canonicalParent = fs.realpathSync.native(canonicalExistingPath);
+    const canonicalRelative = path.relative(this.root, canonicalParent);
+    if (canonicalRelative.startsWith("..") || path.isAbsolute(canonicalRelative)) {
+      throw new Error(`Mutation path must stay inside the canonical project root: ${relativePath}`);
     }
     return { relativePath: normalized, fullPath };
   }
@@ -306,6 +339,9 @@ export function runWithMutationContext(root, options, callback) {
   const context = createMutationContext(root, options);
   return mutationStorage.run(context, () => {
     const result = callback(context);
+    if (result && typeof result.then === "function") {
+      return result.then((resolved) => context.finish(resolved));
+    }
     return context.finish(result);
   });
 }
@@ -316,15 +352,12 @@ export function currentMutationContext(root) {
     return null;
   }
   if (root) {
-    const resolvedRoot = path.resolve(root);
-    if (resolvedRoot !== context.root) {
-      try {
-        if (fs.realpathSync.native(resolvedRoot) !== fs.realpathSync.native(context.root)) {
-          return null;
-        }
-      } catch {
+    try {
+      if (fs.realpathSync.native(path.resolve(root)) !== context.root) {
         return null;
       }
+    } catch {
+      return null;
     }
   }
   return context;

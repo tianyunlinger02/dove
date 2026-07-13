@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { readJson } from "../../src/core/index.mjs";
+import { readJson } from "../../src/core/internal-api.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 test("readJson rejects malformed JSON without repairing files", () => {

@@ -5,11 +5,10 @@ import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
-  ensureWorkspace,
   readText,
-} from "../../src/core/index.mjs";
+} from "../../src/core/internal-api.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
-import { appendText, writeJson, writeText } from "../../src/core/workspace.mjs";
+import { appendText, ensureWorkspace, writeJson, writeText } from "../../src/core/workspace.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function exists(root, relativePath) {
@@ -99,6 +98,20 @@ test("default direct-process mutations report rollback limits", () => {
   assert.equal(fs.readFileSync(path.join(root, ".dove/notes/default.md"), "utf8"), "default direct write\n");
 });
 
+test("async mutation callbacks finish with the resolved result", async () => {
+  const root = createTempRoot("dove-mutation-async-");
+
+  const result = await runWithMutationContext(root, { actionId: "unit-test-async", mutationMode: "direct-process" }, async () => {
+    await Promise.resolve();
+    return { status: "foreground-pass-complete", outcome: "approved-steps-exhausted" };
+  });
+
+  assert.equal(result.status, "foreground-pass-complete");
+  assert.equal(result.outcome, "approved-steps-exhausted");
+  assert.equal(result.writesApplied, false);
+  assert.equal(result.mutationSummary.operationCount, 0);
+});
+
 
 test("patch-plan overlay reads staged writes and appends as full writes", () => {
   const root = createTempRoot("dove-mutation-overlay-");
@@ -116,6 +129,16 @@ test("patch-plan overlay reads staged writes and appends as full writes", () => 
   assert.equal(exists(root, ".dove/reviews/log.md"), false);
 });
 
+test("workspace writers fail closed without a MutationContext", () => {
+  const root = createTempRoot("dove-mutation-no-context-");
+
+  assert.throws(() => writeText(root, ".dove/notes/example.md", "bad\n"), /requires an active MutationContext/);
+  assert.throws(() => writeJson(root, ".dove/state.json", { bad: true }), /requires an active MutationContext/);
+  assert.throws(() => appendText(root, ".dove/reviews/log.md", "bad\n"), /requires an active MutationContext/);
+  assert.throws(() => ensureWorkspace(root), /requires an active MutationContext/);
+  assert.equal(exists(root, ".dove"), false);
+});
+
 test("mutation paths must stay inside the project", () => {
   const root = createTempRoot("dove-mutation-path-");
 
@@ -124,6 +147,33 @@ test("mutation paths must stay inside the project", () => {
     /Mutation path must stay inside the project/
   );
 });
+
+for (const mutationMode of ["direct-process", "patch-plan"]) {
+  test(`${mutationMode} rejects symlink targets and intermediate components`, () => {
+    const root = createTempRoot(`dove-mutation-symlink-${mutationMode}-`);
+    const outside = createTempRoot(`dove-mutation-symlink-outside-${mutationMode}-`);
+    fs.mkdirSync(path.join(root, ".dove"), { recursive: true });
+    fs.mkdirSync(path.join(root, ".dove", "real-notes"), { recursive: true });
+    fs.writeFileSync(path.join(root, ".dove", "real-target.md"), "original\n", "utf8");
+    fs.symlinkSync("real-target.md", path.join(root, ".dove", "target.md"));
+    fs.symlinkSync("real-notes", path.join(root, ".dove", "notes-alias"), "dir");
+    fs.symlinkSync(outside, path.join(root, ".dove", "outside-alias"), "dir");
+
+    for (const relativePath of [
+      ".dove/target.md",
+      ".dove/notes-alias/new.md",
+      ".dove/outside-alias/new.md"
+    ]) {
+      assert.throws(
+        () => runWithMutationContext(root, { actionId: "unit-test", mutationMode }, () => writeText(root, relativePath, "bad\n")),
+        /must not contain symbolic links/
+      );
+    }
+    assert.equal(fs.readFileSync(path.join(root, ".dove", "real-target.md"), "utf8"), "original\n");
+    assert.equal(exists(root, ".dove/real-notes/new.md"), false);
+    assert.equal(fs.existsSync(path.join(outside, "new.md")), false);
+  });
+}
 
 test("ensureWorkspace can be represented as a patch plan without creating .dove", () => {
   const root = createTempRoot("dove-mutation-workspace-");

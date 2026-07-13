@@ -88,10 +88,9 @@ import {
   validateFigurePipeline,
   verifySource,
   summarizeSessionJournal,
-  currentMutationContext,
   isOperationalFailureOutcome
-} from "../core/index.mjs";
-import { normalizeMutationMode, runWithMutationContext } from "../core/mutation-backend.mjs";
+} from "../core/internal-api.mjs";
+import { currentMutationContext, normalizeMutationMode, runWithMutationContext } from "../core/mutation-backend.mjs";
 import { buildOperatorUnblock } from "../core/operator-ux.mjs";
 import {
   MUTATING_TOOL_NAMES,
@@ -722,10 +721,11 @@ export function dispatchTool(root, name, args = {}) {
         );
       }
     }
-    const data = MUTATING_TOOL_NAMES.has(name) && !existingContext
+    const needsContext = !existingContext;
+    const data = needsContext
       ? runWithMutationContext(root, {
         actionId: name,
-        mutationMode: args?.mutationMode,
+        mutationMode: MUTATING_TOOL_NAMES.has(name) ? args?.mutationMode : "direct-process",
         hostId: "mcp",
         packetId: extractPacketId(args)
       }, (context) => dispatchToolData(root, name, {
@@ -734,7 +734,7 @@ export function dispatchTool(root, name, args = {}) {
       }))
       : dispatchToolData(root, name, {
         ...cleanArgs,
-        ...(["create_dove_task", "run_dove_auto"].includes(name) && existingContext ? { mutationMode: existingContext.mutationMode } : {})
+        ...(["create_dove_task", "run_dove_auto"].includes(name) ? { mutationMode: existingContext.mutationMode } : {})
       });
     if (data && typeof data.then === "function") {
       return data

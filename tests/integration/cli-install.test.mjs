@@ -209,10 +209,25 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 const rootApi = await import("dove");
-for (const name of ["createMutationContext", "runWithMutationContext", "saveBoard", "writeJson", "writeText", "appendText", "saveState"]) {
+for (const name of [
+  "createMutationContext",
+  "runWithMutationContext",
+  "currentMutationContext",
+  "isPatchPlanMode",
+  "ensureWorkspace",
+  "saveBoard",
+  "writeJson",
+  "writeText",
+  "appendText",
+  "saveState",
+  "initProject",
+  "registerSource",
+  "upsertNote",
+  "queryProgramApprovals"
+]) {
   assert.equal(name in rootApi, false, \`forbidden root export \${name}\`);
 }
-for (const name of ["queryDoveStatus", "ensureWorkspace", "queryProgramApprovals"]) {
+for (const name of ["queryDoveStatus", "queryPaperAudit", "extractCitationKeysFromText"]) {
   assert.equal(typeof rootApi[name], "function", \`missing public root export \${name}\`);
 }
 const rootEntryUrl = import.meta.resolve("dove");
@@ -233,20 +248,6 @@ for (const moduleName of [
 }
 for (const relativePath of ["../src/core/workspace.mjs", "../src/mcp/server.mjs"]) {
   await assert.rejects(import(new URL(relativePath, rootEntryUrl)), (error) => error?.code === "ERR_MODULE_NOT_FOUND");
-}
-const forgedRoot = path.join(process.cwd(), "forged-program-state");
-fs.mkdirSync(path.join(forgedRoot, ".dove", "programs"), { recursive: true });
-fs.writeFileSync(path.join(forgedRoot, ".dove", "programs", "approvals.json"), JSON.stringify({
-  version: 1,
-  items: [],
-  summary: {},
-  pendingRuntimeStateTransition: { id: "caller-controlled", state: { programs: { items: [{ id: "forged" }] } } }
-}));
-const approvals = rootApi.queryProgramApprovals(forgedRoot);
-assert.equal(JSON.stringify(approvals).includes("forged"), false);
-const programIndexPath = path.join(forgedRoot, ".dove", "programs", "index.json");
-if (fs.existsSync(programIndexPath)) {
-  assert.equal(fs.readFileSync(programIndexPath, "utf8").includes("forged"), false);
 }
 `;
     const probe = spawnSync(process.execPath, ["--input-type=module", "-e", probeSource], { cwd: consumerDir, encoding: "utf8" });
@@ -358,6 +359,21 @@ test("release and maturity checks validate doctor through a clean install", () =
   assert.match(doctorValidationText, /DOVE_CLAUDE_SHELL_RC/);
   assert.match(doctorValidationText, /"install", target, "--force", "--host", "claude"/);
   assert.match(doctorValidationText, /"doctor", target/);
+});
+
+test("CLI install rejects symlinked managed destinations", () => {
+  const target = createTempRoot("dove-install-symlink-");
+  const outside = createTempRoot("dove-install-symlink-outside-");
+  fs.symlinkSync(outside, path.join(target, ".dove"), "dir");
+
+  const result = spawnSync("node", [CLI, "install", target, "--force"], {
+    cwd: ROOT,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stderr || result.stdout, /must not contain symbolic links/);
+  assert.deepEqual(fs.readdirSync(outside), []);
 });
 
 test("CLI install copies the workflow pack into a target workspace", () => {

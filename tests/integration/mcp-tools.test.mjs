@@ -4,11 +4,12 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS, ensureWorkspace, initProject, queryMetaOptimize, recordOperatorFollowThrough, upsertOrchestrationBoard } from "../../src/core/index.mjs";
+import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS, ensureWorkspace, initProject, loadBoard, queryMetaOptimize, recordOperatorFollowThrough, upsertOrchestrationBoard } from "../../src/core/internal-api.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { dispatchTool } from "../../src/mcp/handlers.mjs";
 import { MUTATING_TOOL_NAMES, toolDefinitions, toolDefinitionsForSurface } from "../../src/mcp/tool-definitions.mjs";
+import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 
@@ -450,6 +451,22 @@ function seedTaskPacket(root, packetId = "mcp-main-packet") {
   fs.writeFileSync(path.join(root, packet.packetPath), `${JSON.stringify(packet, null, 2)}\n`, "utf8");
   fs.writeFileSync(path.join(root, ".dove", "task-packets", "index.json"), `${JSON.stringify({ version: 3, items: [packet], lifecycleCounts: {}, dependencyHealth: {}, updatedAt: timestamp }, null, 2)}\n`, "utf8");
   return packetId;
+}
+
+function linkPacketOutput(root, packetId, relativePath) {
+  const packetPath = path.join(root, `.dove/task-packets/packets/${packetId}.json`);
+  const packet = JSON.parse(fs.readFileSync(packetPath, "utf8"));
+  const updated = {
+    ...packet,
+    outputPaths: Array.from(new Set([...(packet.outputPaths ?? []), relativePath])),
+    evidenceLinks: Array.from(new Set([...(packet.evidenceLinks ?? []), relativePath]))
+  };
+  fs.writeFileSync(packetPath, `${JSON.stringify(updated, null, 2)}\n`, "utf8");
+  const indexPath = path.join(root, ARTIFACT_PATHS.taskPacketsIndex);
+  const index = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+  index.items = index.items.map((item) => item.id === packetId ? updated : item);
+  fs.writeFileSync(indexPath, `${JSON.stringify(index, null, 2)}\n`, "utf8");
+  return relativePath;
 }
 
 test("MCP tool definitions include the mature workflow tools", () => {
@@ -1739,7 +1756,8 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
       title: "Thin Surface Guidance",
       authors: ["Validator"],
       year: 2026,
-      sourceType: "paper"
+      sourceType: "paper",
+      locator: "https://example.org/thin-surface-guidance"
     }));
     assertPreActionGuidanceSummary(source.preActionGuidanceSummary, { surface: "dove.source", primaryRole: "builder" });
     assert.ok(source.packetIds.includes(packetId));
@@ -1754,7 +1772,7 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
       decision: "verified",
       method: "integration fixture inspected the canonical publication record",
       checkedMaterial: "source title, authors, year, and publication metadata",
-      auditEvidence: [`fixture:${source.id}`]
+      auditEvidence: [{ reference: source.locator, kind: "source", observation: `Verified fixture identity for ${source.id}.` }]
     }));
     assert.equal(verification.source.lifecycle, "verified");
     assert.equal(verification.verification.fingerprint, verification.source.fingerprint);
@@ -2152,6 +2170,64 @@ test("record_dove_mission_pass rejects system-owned workflow routing fields befo
       assert.equal(packet.handoffId ?? null, created.createdTask.handoffId ?? null);
       assert.equal(indexed.status, "ready");
     }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("record_dove_mission_pass blocks uncovered descriptive evidence requirements and unlinked evidence", () => {
+  const root = createTempRoot("dove-mcp-mission-evidence-integrity-");
+  try {
+    const validationPath = writeMcpEvidenceFile(root, ".dove/evidence/descriptive-validation.log", "Validation status: passed\n");
+    const unlinkedPath = writeMcpEvidenceFile(root, ".dove/evidence/unlinked-completion.log", "Unlinked completion evidence.\n");
+    extractToolJson(dispatchToolFull(root, "init_dove_goal", {
+      id: "mission-evidence-integrity-init",
+      goal: "Validate descriptive completion evidence coverage."
+    }));
+    const created = proposeAndMaterializeDoveTask(root, {
+      id: "mission-evidence-integrity-task",
+      goal: "Require distinct validation and review evidence.",
+      title: "Mission evidence integrity task",
+      checklist: false,
+      executionContract: mcpExecutionContract({
+        files: [{ path: validationPath, action: "inspect", target: validationPath, change: "Validate completion evidence." }],
+        convergence: {
+          criteria: [MCP_EXECUTION_CRITERION],
+          verificationCommands: ["node --test tests/integration/mcp-tools.test.mjs"],
+          evidenceRequired: ["Provide validation evidence.", "Provide reviewer verdict evidence."],
+          definitionOfDone: "Validation and review evidence are independently covered."
+        }
+      })
+    });
+
+    const uncovered = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
+      packetId: created.createdTask.id,
+      runId: "mission-evidence-integrity-pass",
+      resultStatus: "completed",
+      resultSummary: "Only validation evidence exists.",
+      artifactRefs: [validationPath],
+      verificationEvidencePaths: [validationPath],
+      verifiedCriteria: mcpVerifiedCriteria(MCP_EXECUTION_CRITERION, [validationPath])
+    }));
+    assert.ok(["verification-failed", "needs-completion-evidence"].includes(uncovered.status));
+    assert.deepEqual(uncovered.evidenceIntegrity.uncoveredRequirements.map((item) => item.purpose), ["review"]);
+    assert.equal(uncovered.evidenceIntegrity.satisfied, false);
+
+    const unlinked = extractToolJson(dispatchToolFull(root, "record_dove_mission_pass", {
+      packetId: created.createdTask.id,
+      runId: "mission-unlinked-evidence-pass",
+      resultStatus: "completed",
+      resultSummary: "Unlinked evidence must not count as success.",
+      artifactRefs: [unlinkedPath],
+      verificationEvidencePaths: [validationPath],
+      verifiedCriteria: mcpVerifiedCriteria(MCP_EXECUTION_CRITERION, [validationPath])
+    }));
+    assert.equal(unlinked.status, "needs-completion-evidence");
+    assert.deepEqual(unlinked.evidenceIntegrity.pathEvidence.unlinkedPaths, [unlinkedPath]);
+    assert.equal(unlinked.evidenceIntegrity.satisfied, false);
+
+    const index = JSON.parse(fs.readFileSync(path.join(root, ".dove", "task-packets", "index.json"), "utf8"));
+    assert.equal(index.items.find((item) => item.id === created.createdTask.id).status, "ready");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -3757,6 +3833,7 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     const isolatedReviewedArtifact = ".dove/drafts/mcp-isolated-reviewed.md";
     fs.mkdirSync(path.join(root, ".dove", "drafts"), { recursive: true });
     fs.writeFileSync(path.join(root, isolatedReviewedArtifact), "# MCP isolated reviewed artifact\n\nSubstantive packet review material.\n", "utf8");
+    linkPacketOutput(root, "mcp-main-packet", isolatedReviewedArtifact);
     const prepared = extractToolJson(dispatchToolFull(root, "prepare_isolated_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-1", scope: "mcp validation", artifactPaths: [isolatedReviewedArtifact] }));
     assert.equal(prepared.status, "prepared");
     assert.equal(prepared.runId, "mcp-isolated-1");
@@ -3791,6 +3868,7 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     const audioReviewedArtifact = ".dove/drafts/mcp-audio-reviewed.md";
     fs.mkdirSync(path.join(root, ".dove", "drafts"), { recursive: true });
     fs.writeFileSync(path.join(root, audioReviewedArtifact), "# MCP audio reviewed artifact\n\nSubstantive draft material for audio reviewer handoff.\n", "utf8");
+    linkPacketOutput(root, "mcp-main-packet", audioReviewedArtifact);
     const runReview = extractToolJson(dispatchToolFull(root, "run_audio_review", { packetId: "mcp-main-packet", runId: "mcp-isolated-2", scope: "mcp validation", artifactPaths: [audioReviewedArtifact] }));
     assert.equal(runReview.status, "prepared-awaiting-audio");
     assertPublicResultCard(runReview.resultCard, { surface: "dove.review" });
@@ -3806,14 +3884,14 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     assertPublicResultCard(reviewLoop.review.resultCard, { surface: "dove.review" });
     assert.equal("handoffSuggestion" in reviewLoop.review.resultCard.nextActions[0], false);
 
-    upsertOrchestrationBoard(root, {
+    runFixtureMutation(root, "mcp-isolated-review-board", () => upsertOrchestrationBoard(root, {
       phase: "review",
       assignedRole: "reviewer",
       intentType: "review",
       currentFocus: "Import the prepared audio reviewer return.",
       nextAction: `Import audio review ${runReview.runId}.`,
       handoffSummary: `Returning ownership to the audio reviewer for prepared run ${runReview.runId}.`
-    });
+    }));
     fs.writeFileSync(path.join(root, runReview.reportPath), "# MCP isolated report\n\nNeeds validation evidence.\n", "utf8");
     fs.writeFileSync(path.join(root, runReview.handoffPath), `${JSON.stringify({
       version: 1,
@@ -3918,7 +3996,8 @@ test("full and compact operator auto schemas seal every reachable object", () =>
 
 test("materialize_guidance_packet MCP identity conflicts do not write packets", () => {
   const root = createTempRoot("dove-mcp-materialize-atomic-");
-  ensureWorkspace(root);
+  return runFixtureMutation(root, "mcp-materialize-guidance", () => {
+  ensureTestWorkspace(root);
   initProject(root, {
     title: "MCP atomic materialization",
     objective: "Preserve packet state when follow-through identity conflicts."
@@ -3993,11 +4072,143 @@ test("materialize_guidance_packet MCP identity conflicts do not write packets", 
   assert.deepEqual(fs.readFileSync(path.join(root, ARTIFACT_PATHS.taskPacketsIndex)), packetIndexBefore);
   assert.deepEqual(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThrough)), followThroughBefore);
   assert.deepEqual(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThroughTransitions)), transitionsBefore);
+  });
+});
+
+test("verify_source enforces structured audit evidence, safe captures, and source identity linkage", () => {
+  const root = createTempRoot("dove-mcp-source-audit-evidence-");
+  extractToolJson(dispatchToolFull(root, "init_dove_goal", {
+    id: "source-audit-init",
+    goal: "Validate structured source audit evidence."
+  }));
+  const created = proposeAndMaterializeDoveTask(root, {
+    id: "source-audit-task",
+    goal: "Verify one registered source.",
+    title: "Source audit evidence task",
+    checklist: false
+  });
+  const packetId = created.createdTask.id;
+  const source = extractToolJson(dispatchToolFull(root, "register_source", {
+    packetId,
+    sourceId: "audit-source",
+    citationKey: "auditSource2026",
+    title: "Audit Source",
+    authors: ["Ada Researcher"],
+    year: 2026,
+    locator: "https://example.org/audit-source"
+  }));
+  const capturePath = writeMcpEvidenceFile(root, ".dove/evidence/source-capture.txt", "Captured publisher metadata.\n");
+  const accepted = extractToolJson(dispatchToolFull(root, "verify_source", {
+    packetId,
+    sourceId: source.id,
+    decision: "verified",
+    method: "independent metadata check",
+    checkedMaterial: "registered title and publisher metadata",
+    auditEvidence: [
+      { reference: source.locator, kind: "source", observation: "Matched the registered source locator." },
+      { reference: capturePath, kind: "capture", observation: "Stored the inspected metadata locally." }
+    ]
+  }));
+  assert.deepEqual(accepted.verification.auditEvidence.map((item) => item.kind), ["source", "capture"]);
+
+  extractToolJson(dispatchToolFull(root, "register_source", {
+    packetId,
+    sourceId: source.id,
+    citationKey: source.citationKey,
+    title: source.title,
+    authors: source.authors,
+    year: source.year,
+    locator: source.locator
+  }));
+  for (const auditEvidence of [
+    [source.locator],
+    [{ reference: "http://example.org/audit-source", kind: "source", observation: "Insecure source reference." }],
+    [{ reference: "https://example.org/other", kind: "source", observation: "Different source identity." }],
+    [{ reference: "../outside.txt", kind: "capture", observation: "Unsafe local capture." }]
+  ]) {
+    const response = dispatchToolFull(root, "verify_source", {
+      packetId,
+      sourceId: source.id,
+      decision: "verified",
+      method: "independent metadata check",
+      checkedMaterial: "registered metadata",
+      auditEvidence
+    });
+    assert.equal(response.isError, true);
+    assert.match(response.content[0].text, /auditEvidence|HTTPS|matching|safe existing non-empty local file|input is invalid/);
+  }
+});
+
+test("review scope rejects explicit artifacts not owned by the selected packet or descendants", () => {
+  const root = createTempRoot("dove-mcp-review-scope-ownership-");
+  extractToolJson(dispatchToolFull(root, "init_dove_goal", {
+    id: "review-scope-init",
+    goal: "Validate review artifact ownership."
+  }));
+  const created = proposeAndMaterializeDoveTask(root, {
+    id: "review-scope-task",
+    goal: "Review one packet-owned draft.",
+    title: "Review scope ownership task",
+    checklist: false,
+    artifactRefs: [".dove/drafts/owned-review.md"]
+  });
+  const packetId = created.createdTask.id;
+  writeMcpEvidenceFile(root, ".dove/drafts/owned-review.md", "# Owned review material\n");
+  writeMcpEvidenceFile(root, ".dove/drafts/unowned-review.md", "# Unowned review material\n");
+
+  const response = dispatchToolFull(root, "prepare_isolated_review", {
+    packetId,
+    runId: "unowned-review-scope",
+    reviewedArtifactPaths: [".dove/drafts/unowned-review.md"]
+  });
+  assert.equal(response.isError, true);
+  assert.match(response.content[0].text, /must be owned by packet|packet.*descendants/);
+});
+
+test("internal review paths can enable the system-owned finalize review gate", () => {
+  const root = createTempRoot("dove-mcp-internal-review-gate-");
+  extractToolJson(dispatchToolFull(root, "init_dove_goal", {
+    id: "internal-review-gate-init",
+    goal: "Validate internal review gate ownership."
+  }));
+  const created = proposeAndMaterializeDoveTask(root, {
+    id: "internal-review-gate-task",
+    goal: "Review one packet-owned draft.",
+    title: "Internal review gate task",
+    checklist: false,
+    artifactRefs: [".dove/drafts/internal-review-gate.md"]
+  });
+  const packetId = created.createdTask.id;
+  const artifactPath = writeMcpEvidenceFile(root, ".dove/drafts/internal-review-gate.md", "# Review gate material\n");
+
+  const needsRevision = extractToolJson(dispatchToolFull(root, "append_review_log", {
+    packetId,
+    verdict: "needs-revision",
+    summary: "The selected material needs revision.",
+    findings: [{ severity: "high", summary: "Revision is required.", linkedArtifactPaths: [artifactPath] }],
+    actionItems: ["Revise the material."]
+  }));
+  assert.equal(needsRevision.reviewRequiredBeforeFinalize, true);
+  assert.equal(loadBoard(root).reviewRequiredBeforeFinalize, true);
+});
+
+test("MCP board schema omits and runtime rejects the system-owned finalize review gate", () => {
+  const tool = toolDefinitions.find((item) => item.name === "upsert_orchestration_board");
+  assert.equal(tool.inputSchema.properties.reviewRequiredBeforeFinalize, undefined);
+
+  const root = createTempRoot("dove-mcp-system-owned-review-gate-");
+  const response = dispatchToolFull(root, "upsert_orchestration_board", {
+    phase: "plan",
+    assignedRole: "planner",
+    reviewRequiredBeforeFinalize: false
+  });
+  assert.equal(response.isError, true);
+  assert.match(response.content[0].text, /reviewRequiredBeforeFinalize|not allowed|input is invalid/);
 });
 
 test("MCP rebuttal returns an error boundary without normalized issues", () => {
   const root = createTempRoot("dove-mcp-empty-rebuttal-");
-  ensureWorkspace(root);
+  ensureTestWorkspace(root);
   const packetId = seedTaskPacket(root, "mcp-empty-rebuttal-packet");
   const artifactPaths = [ARTIFACT_PATHS.rebuttalStrategy, ARTIFACT_PATHS.rebuttalResponseDraft, `${ARTIFACT_PATHS.draftsDir}/rebuttal.md`];
   const beforeArtifacts = artifactPaths.map((artifactPath) => {
@@ -4311,6 +4522,12 @@ test("mutating MCP tools omit retired override fields", () => {
   assert.ok(registerSourceTool.inputSchema.properties.sources, "register_source should expose batch sources");
   assert.equal(registerSourceTool.inputSchema.properties.sources.type, "array");
   assert.ok(registerSourceTool.inputSchema.properties.sources.items.properties.sourceId, "register_source batch items should expose sourceId");
+  const verifySourceTool = toolDefinitions.find((item) => item.name === "verify_source");
+  const auditEvidenceItem = verifySourceTool.inputSchema.properties.auditEvidence.items;
+  assert.equal(auditEvidenceItem.type, "object");
+  assert.deepEqual(auditEvidenceItem.required, ["reference", "kind", "observation"]);
+  assert.deepEqual(auditEvidenceItem.properties.kind.enum, ["source", "capture"]);
+  assert.equal(auditEvidenceItem.additionalProperties, false);
   assert.ok(upsertNoteTool, "upsert_note should exist");
   assert.match(upsertNoteTool.description, /internal synthesis/);
   assert.match(upsertNoteTool.description, /pressure-test findings/);
