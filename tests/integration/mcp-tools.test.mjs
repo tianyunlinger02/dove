@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS, ensureWorkspace, initProject, loadBoard, queryMetaOptimize, recordOperatorFollowThrough, upsertOrchestrationBoard } from "../../src/core/internal-api.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { dispatchTool } from "../../src/mcp/handlers.mjs";
 import { MUTATING_TOOL_NAMES, toolDefinitions, toolDefinitionsForSurface } from "../../src/mcp/tool-definitions.mjs";
@@ -1873,13 +1874,10 @@ test("thin workflow MCP surfaces return pre-action guidance summaries", () => {
     assert.ok(draft.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/workspace/index.json"));
     assert.ok(draft.artifactWrites.refreshOnlyArtifactPaths.includes(".dove/sessions/LATEST_SUMMARY.md"));
 
-    const experimentOwner = extractToolJson(dispatchToolFull(root, "append_handoff", {
-      fromRole: "researcher",
-      toRole: "experiment-planner",
-      phase: "experiments",
-      summary: "Transfer the direct experiment flow to its truthful owner."
+    const experimentCheckpoint = extractToolJson(dispatchToolFull(root, "append_handoff", {
+      summary: "Record the direct experiment-flow checkpoint under the durable board owner."
     }));
-    assert.equal(experimentOwner.assignedRole, "experiment-planner");
+    assert.equal(typeof experimentCheckpoint.assignedRole, "string");
 
     const experimentPlan = extractToolJson(dispatchToolFull(root, "upsert_experiment_plan", {
       packetId,
@@ -2370,6 +2368,10 @@ test("completed plan mission pass materializes pending executable missions", () 
         title: "Optimize Dove workflow",
         summary: "Implement the planned Dove workflow improvements.",
         executionContract: topContract,
+        workContract: {
+          purpose: "Describe the planned implementation route without transferring packet authority.",
+          recommendedRoutes: [{ command: "project:dove.auto", ownerRole: "builder" }]
+        },
         childMissions: [{
           id: "plan-converted-child",
           title: "Wire Dove status UX",
@@ -2410,6 +2412,10 @@ test("completed plan mission pass materializes pending executable missions", () 
         title: "Optimize Dove workflow",
         summary: "Implement the planned Dove workflow improvements.",
         executionContract: topContract,
+        workContract: {
+          purpose: "Describe the planned implementation route without transferring packet authority.",
+          recommendedRoutes: [{ command: "project:dove.auto", ownerRole: "builder" }]
+        },
         childMissions: [{
           id: "plan-converted-child",
           title: "Wire Dove status UX",
@@ -3967,7 +3973,7 @@ test("isolated review MCP tools prepare and import explicit handoff artifacts", 
     linkPacketOutput(root, "mcp-main-packet", isolatedReviewedArtifact);
     linkPacketOutput(root, "mcp-main-packet", audioReviewedArtifact);
 
-    runFixtureMutation(root, "mcp-isolated-review-board", () => upsertOrchestrationBoard(root, {
+    runFixtureMutation(root, "mcp-isolated-review-board", () => upsertSystemOrchestrationBoard(root, {
       phase: "review",
       assignedRole: "reviewer",
       intentType: "review",

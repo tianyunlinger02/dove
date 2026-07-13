@@ -5,7 +5,6 @@ import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
-  appendHandoff,
   appendReviewLog,
   createVersionSnapshot,
   ensureWorkspace,
@@ -18,7 +17,6 @@ import {
   sourceIdentityFingerprint,
   syncCitations,
   upsertClaims,
-  upsertOrchestrationBoard,
   upsertDraft,
   upsertExperimentPlan,
   upsertExperimentResult,
@@ -26,6 +24,7 @@ import {
   upsertNote,
   upsertOutline
 } from "../../src/core/internal-api.mjs";
+import { appendSystemHandoff, upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
@@ -96,7 +95,7 @@ test("upsertClaims rejects claims with unknown sources", () => {
     sourceIds: ["known-source"],
     summary: "summary"
   });
-  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
+  upsertSystemOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
 
   assert.throws(() => {
     upsertClaims(root, {
@@ -164,12 +163,12 @@ test("upsertClaims merges claims instead of overwriting the full index", () => {
       { id: "source-b", citationKey: "source-b", title: "B", authors: [], year: 2025 }
     ]);
 
-  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
+  upsertSystemOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
 
   upsertClaims(root, {
     claims: [{ id: "claim-a", text: "Claim A", sectionId: "introduction", sourceIds: ["source-a"] }]
   });
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "researcher",
     phase: "research",
@@ -192,13 +191,13 @@ test("board role metadata does not authorize evidence writes and retired overrid
   seedTaskPacket(root);
   writeVerifiedSources(root, [{ id: "source-a", citationKey: "source-a", title: "A", authors: [], year: 2024 }]);
 
-  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "builder" });
+  upsertSystemOrchestrationBoard(root, { phase: "research", assignedRole: "builder" });
   const first = upsertClaims(root, {
     claims: [{ id: "claim-a", text: "Claim A", sectionId: "introduction", sourceIds: ["source-a"] }]
   });
   assert.equal(first.claims.length, 1);
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "researcher",
     phase: "research",
@@ -227,11 +226,11 @@ test("experiment results reject unknown outcomes and mismatched claim links", ()
     items: [{ id: "intro-note", title: "Intro note", sectionId: "introduction", sourceIds: ["known-source"], summary: "summary" }],
     updatedAt: null
   }, null, 2));
-  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
+  upsertSystemOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
   upsertClaims(root, {
     claims: [{ id: "claim-1", text: "Claim 1", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["intro-note"] }]
   });
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "experiment-planner",
     phase: "experiments",
@@ -288,7 +287,7 @@ test("review loop flags unknown citations and draft-claim mismatches", () => {
     updatedAt: null
   }, null, 2));
 
-  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
+  upsertSystemOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
 
   upsertClaims(root, {
     claims: [{ id: "claim-1", text: "Claim 1", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["intro-note"] }]
@@ -302,7 +301,7 @@ test("review loop flags unknown citations and draft-claim mismatches", () => {
   assert.equal(evidence.missingCitationRefs.length, 1);
   assert.equal(evidence.draftClaimMismatches.length, 1);
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "researcher",
     toRole: "reviewer",
     phase: "review",
@@ -326,12 +325,12 @@ test("repeated review findings escalate a persistent concern while preserving re
     updatedAt: null
   }, null, 2));
 
-  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
+  upsertSystemOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
   upsertClaims(root, {
     claims: [{ id: "claim-weak", text: "Claim 1", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["intro-note"] }]
   });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "reviewer",
     phase: "review",
@@ -372,7 +371,7 @@ test("figure QA issues surface through the review loop and durable rebuttal surf
     updatedAt: null
   }, null, 2));
 
-  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
+  upsertSystemOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
   upsertClaims(root, {
     claims: [{ id: "claim-figure", text: "Claim with figure support", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["intro-note"] }]
   });
@@ -391,7 +390,7 @@ test("figure QA issues surface through the review loop and durable rebuttal surf
     }]
   });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "reviewer",
     phase: "review",
@@ -424,11 +423,11 @@ test("supporting results with blocked audits hold claim promotion for review", (
     updatedAt: null
   }, null, 2));
 
-  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
+  upsertSystemOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
   upsertClaims(root, {
     claims: [{ id: "claim-1", text: "Claim 1", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["intro-note"] }]
   });
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "experiment-planner",
     phase: "experiments",
@@ -481,13 +480,13 @@ test("finalization is blocked while claim bridges remain held for review", () =>
     updatedAt: null
   }, null, 2));
 
-  upsertOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
+  upsertSystemOrchestrationBoard(root, { phase: "research", assignedRole: "researcher" });
   upsertClaims(root, {
     packetId,
     claims: [{ id: "claim-1", text: "Claim 1", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["intro-note"] }]
   });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "experiment-planner",
     phase: "experiments",
@@ -507,7 +506,7 @@ test("finalization is blocked while claim bridges remain held for review", () =>
     outcome: "supports"
   });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "experiment-planner",
     toRole: "reviewer",
     phase: "review",
@@ -527,7 +526,7 @@ test("finalization is blocked while claim bridges remain held for review", () =>
     actionItems: []
   });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "reviewer",
     toRole: "version-analyst",
     phase: "versions",

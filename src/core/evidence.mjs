@@ -1,7 +1,7 @@
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { resolveDoveResponseLanguage } from "./i18n.mjs";
 import { refreshDurableSurfaces } from "./navigation.mjs";
-import { loadBoard, upsertOrchestrationBoard } from "./orchestration.mjs";
+import { loadBoard, upsertSystemOrchestrationBoard } from "./orchestration.mjs";
 import { assertTaskScopedMutationTarget } from "./mutation-guard.mjs";
 import { buildPreActionGuidance, summarizePreActionGuidance } from "./pre-action-guidance.mjs";
 import { assertGovernanceMutationRegistered, assertFollowThroughReady, extractCitationKeysFromText, nowIso, readJson, readText, writeJson, writeText, listDraftFiles } from "./workspace.mjs";
@@ -127,7 +127,7 @@ export function upsertClaims(root, args = {}) {
   writeJson(root, ARTIFACT_PATHS.evidence, next);
   writeText(root, ARTIFACT_PATHS.claims, renderClaimsMarkdown(claims));
   const board = loadBoard(root);
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "plan",
     assignedRole: "planner",
     intentType: "plan",

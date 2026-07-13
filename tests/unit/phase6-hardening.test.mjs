@@ -72,8 +72,10 @@ import {
   upsertOrchestrationBoard
 } from "../../src/core/internal-api.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { writeJson, writeText } from "../../src/core/workspace.mjs";
 import { toolDefinitions } from "../../src/mcp/tool-definitions.mjs";
+import { dispatchTool } from "../../src/mcp/handlers.mjs";
 import { createMetaExecutionBridgeCandidatesIndex, createMetaLongHorizonMemory, createMetaOperatorLessonsIndex, createMetaOperatorPlaybooksIndex, createMetaOptimizerState, createMetaRemediationPacksIndex } from "../../src/core/schema.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -770,18 +772,86 @@ test("runExperienceWorkflow rejects system-owned nested fields before workspace 
   }
 });
 
-test("recordDoveMissionPass rejects public workflow routing fields before bootstrap or durable writes", () => {
-  for (const [field, value] of [
-    ["ownerRole", "reviewer"],
-    ["nextRole", "planner"],
-    ["handoff", { reason: "caller-selected route" }],
-    ["handoffId", "caller-handoff"]
-  ]) {
+test("public board mutation APIs cannot self-grant ownership after a role guard rejects the caller", () => {
+  const root = tempRoot();
+  try {
+    runFixtureMutation(root, "public-board-ownership-escalation", () => {
+      ensureTestWorkspace(root);
+      const boardPath = path.join(root, ARTIFACT_PATHS.orchestrationBoard);
+      const handoffPath = path.join(root, ARTIFACT_PATHS.orchestrationHandoffs);
+      const boardBefore = fs.readFileSync(boardPath, "utf8");
+      const handoffBefore = fs.readFileSync(handoffPath, "utf8");
+
+      assert.throws(
+        () => appendHandoff(root, { fromRole: "reviewer", toRole: "reviewer", summary: "Unauthorized reviewer mutation." }),
+        /cannot claim or transfer board ownership/u
+      );
+      assert.throws(
+        () => upsertOrchestrationBoard(root, { assignedRole: "reviewer", currentFocus: "Caller-selected owner." }),
+        /cannot transfer board ownership/u
+      );
+      assert.equal(fs.readFileSync(boardPath, "utf8"), boardBefore);
+      assert.equal(fs.readFileSync(handoffPath, "utf8"), handoffBefore);
+
+      assert.throws(
+        () => appendHandoff(root, { fromRole: "reviewer", toRole: "builder", summary: "Retry after attempted escalation." }),
+        /cannot claim or transfer board ownership/u
+      );
+      assert.equal(fs.readFileSync(boardPath, "utf8"), boardBefore);
+      assert.equal(fs.readFileSync(handoffPath, "utf8"), handoffBefore);
+    });
+
+    for (const [toolName, args, expected] of [
+      ["upsert_orchestration_board", { assignedRole: "reviewer" }, /does not accept unknown input: \$\.assignedRole/u],
+      ["append_handoff", { fromRole: "planner", toRole: "reviewer", summary: "MCP escalation." }, /does not accept unknown input: \$\.fromRole, \$\.toRole/u]
+    ]) {
+      const response = dispatchTool(root, toolName, args);
+      const message = response.content?.[0]?.text ?? "";
+      assert.equal(response.isError, true);
+      assert.match(message, expected);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("recordDoveMissionPass rejects public authority fields at every supported envelope depth without durable writes", () => {
+  const authorityValues = {
+    ownerRole: "reviewer",
+    nextRole: "planner",
+    handoff: { reason: "caller-selected route" },
+    handoffId: "caller-handoff"
+  };
+  const attacks = [];
+  for (const [field, value] of Object.entries(authorityValues)) {
+    attacks.push({ label: field, args: { [field]: value }, expectedPath: field });
+    attacks.push({ label: `planned-${field}`, args: { plannedMissions: [{ [field]: value }] }, expectedPath: `plannedMissions[0].${field}` });
+    for (const envelope of ["missionPass", "passResult", "result"]) {
+      attacks.push({ label: `${envelope}-${field}`, args: { [envelope]: { [field]: value } }, expectedPath: `${envelope}.${field}` });
+      attacks.push({ label: `${envelope}-nested-${field}`, args: { [envelope]: { result: { [field]: value } } }, expectedPath: `${envelope}.result.${field}` });
+      attacks.push({ label: `${envelope}-planned-${field}`, args: { [envelope]: { plannedMissions: [{ [field]: value }] } }, expectedPath: `${envelope}.plannedMissions[0].${field}` });
+    }
+  }
+
+  for (const attack of attacks) {
+    const mcpRoot = tempRoot();
+    try {
+      const response = dispatchTool(mcpRoot, "record_dove_mission_pass", attack.args);
+      assert.equal(response.isError, true);
+      assert.match(response.content?.[0]?.text ?? "", /does not accept unknown input|unknown input|does not accept system-owned workflow routing fields/u);
+      assert.equal(fs.existsSync(path.join(mcpRoot, ARTIFACT_PATHS.doveRoot)), false);
+    } finally {
+      fs.rmSync(mcpRoot, { recursive: true, force: true });
+    }
+
     const emptyRoot = tempRoot();
     try {
-      runFixtureMutation(emptyRoot, "empty-root", () => {
-      assert.throws(() => recordDoveMissionPass(emptyRoot, { [field]: value }), /does not accept system-owned workflow routing fields/u);
-      assert.equal(fs.existsSync(path.join(emptyRoot, ARTIFACT_PATHS.doveRoot)), false);
+      runFixtureMutation(emptyRoot, `empty-${attack.label}`, () => {
+        assert.throws(
+          () => recordDoveMissionPass(emptyRoot, attack.args),
+          new RegExp(attack.expectedPath.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u")
+        );
+        assert.equal(fs.existsSync(path.join(emptyRoot, ARTIFACT_PATHS.doveRoot)), false);
       });
     } finally {
       fs.rmSync(emptyRoot, { recursive: true, force: true });
@@ -789,42 +859,33 @@ test("recordDoveMissionPass rejects public workflow routing fields before bootst
 
     const root = tempRoot();
     try {
-      runFixtureMutation(root, `routing-${field}`, () => {
-      ensureTestWorkspace(root);
-      seedHardeningTask(root, "routing-field-task", {
-        ownerRole: "builder",
-        nextRole: "reviewer",
-        handoff: { id: "durable-handoff", fromRole: "builder", toRole: "reviewer" },
-        handoffId: "durable-handoff"
-      });
-      const packetPath = path.join(root, ".dove", "task-packets", "packets", "routing-field-task.json");
-      const indexPath = path.join(root, ARTIFACT_PATHS.taskPacketsIndex);
-      const packetBefore = fs.readFileSync(packetPath, "utf8");
-      const indexBefore = fs.readFileSync(indexPath, "utf8");
+      runFixtureMutation(root, `durable-${attack.label}`, () => {
+        ensureTestWorkspace(root);
+        seedHardeningTask(root, "routing-field-task", {
+          ownerRole: "builder",
+          nextRole: "reviewer",
+          handoff: { id: "durable-handoff", fromRole: "builder", toRole: "reviewer" },
+          handoffId: "durable-handoff"
+        });
+        const packetPath = path.join(root, ".dove", "task-packets", "packets", "routing-field-task.json");
+        const indexPath = path.join(root, ARTIFACT_PATHS.taskPacketsIndex);
+        const packetBefore = fs.readFileSync(packetPath, "utf8");
+        const indexBefore = fs.readFileSync(indexPath, "utf8");
 
-      assert.throws(() => recordDoveMissionPass(root, {
-        packetId: "routing-field-task",
-        resultStatus: "blocked",
-        [field]: value
-      }), /does not accept system-owned workflow routing fields/u);
-      assert.equal(fs.readFileSync(packetPath, "utf8"), packetBefore);
-      assert.equal(fs.readFileSync(indexPath, "utf8"), indexBefore);
+        assert.throws(
+          () => recordDoveMissionPass(root, {
+            packetId: "routing-field-task",
+            resultStatus: "blocked",
+            ...attack.args
+          }),
+          new RegExp(attack.expectedPath.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u")
+        );
+        assert.equal(fs.readFileSync(packetPath, "utf8"), packetBefore);
+        assert.equal(fs.readFileSync(indexPath, "utf8"), indexBefore);
       });
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
-  }
-
-  const envelopeRoot = tempRoot();
-  try {
-    runFixtureMutation(envelopeRoot, "envelope-root", () => {
-    assert.throws(() => recordDoveMissionPass(envelopeRoot, {
-      missionPass: { ownerRole: "reviewer" }
-    }), /missionPass\.ownerRole/u);
-    assert.equal(fs.existsSync(path.join(envelopeRoot, ARTIFACT_PATHS.doveRoot)), false);
-    });
-  } finally {
-    fs.rmSync(envelopeRoot, { recursive: true, force: true });
   }
 });
 
@@ -3212,7 +3273,7 @@ test("workspace repair frontier and operator manifests surface governance repair
     reviewRound: 1,
     reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["researcher"], separationMaintained: true }
   });
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "research",
     assignedRole: "researcher",
     intentType: "advance-paper",
@@ -3682,7 +3743,7 @@ test("executing follow-through remains a valid governed state across query and w
   assert.equal(followThrough.items[0].invalidStatus, false);
 
   assert.throws(() => upsertPlan(root, { thesis: "blocked by executing state" }), /blocked while operator follow-through still requires action/);
-  assert.throws(() => upsertOrchestrationBoard(root, { phase: "review", assignedRole: "reviewer" }), /operator follow-through still requires action|Cannot advance orchestration from/);
+  assert.throws(() => upsertOrchestrationBoard(root, { phase: "review" }), /operator follow-through still requires action|Cannot advance orchestration from|requires routing role reviewer for phase review/);
   const doctor = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.metaOperatorFollowThrough), "utf8"));
   assert.equal(Array.isArray(doctor.items), true);
   });
@@ -4166,7 +4227,7 @@ test("a broader set of guarded write paths all reject unresolved follow-through 
   ];
 
   for (const call of guardedCalls) {
-    assert.throws(call, /blocked while operator follow-through still requires action|Cannot advance orchestration from|requires routing role planner for phase init/);
+    assert.throws(call, /blocked while operator follow-through still requires action|Cannot advance orchestration from|requires routing role planner for phase init|cannot transfer board ownership|cannot claim or transfer board ownership/);
   }
   });
 });
@@ -4195,7 +4256,7 @@ test("legacy policy override fields fail closed and cannot bypass follow-through
     reviewRound: 1,
     reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["planner"], separationMaintained: true }
   });
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "research",
     assignedRole: "researcher",
     intentType: "advance-paper",
@@ -4683,7 +4744,9 @@ test("public package bundle exposes no mutation context writer or retired execut
     "saveState",
     "writeJson",
     "writeText",
-    "assertRoleBoundMutation"
+    "assertRoleBoundMutation",
+    "appendSystemHandoff",
+    "upsertSystemOrchestrationBoard"
   ]) {
     assert.equal(name in rootApi, false, `forbidden root export ${name}`);
   }
@@ -4843,7 +4906,7 @@ test("playbook selection prefers packet and taxonomy specific matches over broad
     reviewRound: 3,
     reviewerIndependence: { reviewerRole: "reviewer", responseOwnerRoles: ["researcher"], separationMaintained: true }
   });
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "research",
     assignedRole: "researcher",
     intentType: "advance-paper",

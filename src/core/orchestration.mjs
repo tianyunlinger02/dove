@@ -866,7 +866,10 @@ function persistBoard(root, board) {
   return normalized;
 }
 
-function persistOrchestrationBoardUpdate(root, args = {}, { systemOwned = false } = {}) {
+const SYSTEM_BOARD_AUTHORITY = Symbol("system-board-authority");
+
+function persistOrchestrationBoardUpdate(root, args = {}, { authority = null } = {}) {
+  const systemOwned = authority === SYSTEM_BOARD_AUTHORITY;
   assertNoPolicyOverrideArgs(args, "Updating the orchestration board");
   if (!systemOwned && Object.hasOwn(args, "reviewRequiredBeforeFinalize")) {
     throw new Error("Updating the orchestration board does not accept system-owned field reviewRequiredBeforeFinalize.");
@@ -930,23 +933,34 @@ function persistOrchestrationBoardUpdate(root, args = {}, { systemOwned = false 
 }
 
 export function upsertOrchestrationBoard(root, args = {}) {
-  return persistOrchestrationBoardUpdate(root, args);
+  const board = loadBoard(root);
+  if (Object.hasOwn(args, "assignedRole") && args.assignedRole !== board.assignedRole) {
+    throw new Error("Updating the orchestration board cannot transfer board ownership through public assignedRole input.");
+  }
+  return persistOrchestrationBoardUpdate(root, {
+    ...args,
+    assignedRole: board.assignedRole
+  });
 }
 
 export function upsertSystemOrchestrationBoard(root, args = {}) {
-  return persistOrchestrationBoardUpdate(root, args, { systemOwned: true });
+  return persistOrchestrationBoardUpdate(root, args, { authority: SYSTEM_BOARD_AUTHORITY });
 }
 
-export function appendHandoff(root, args = {}) {
+function persistHandoff(root, args = {}, { authority = null } = {}) {
+  const systemOwned = authority === SYSTEM_BOARD_AUTHORITY;
   assertNoPolicyOverrideArgs(args, "Appending a handoff");
   const board = loadBoard(root);
   const state = loadState(root);
   const timestamp = args.timestamp ?? nowIso();
-  const fromRole = args.fromRole ?? board.assignedRole;
-  const toRole = args.toRole ?? board.assignedRole;
+  if (!systemOwned && (Object.hasOwn(args, "fromRole") || Object.hasOwn(args, "toRole"))) {
+    throw new Error("Appending a handoff cannot claim or transfer board ownership through public role input.");
+  }
+  const fromRole = systemOwned ? args.fromRole ?? board.assignedRole : board.assignedRole;
+  const toRole = systemOwned ? args.toRole ?? board.assignedRole : board.assignedRole;
   const phase = args.phase ?? board.currentPhase;
   validateBoardMutation(board, phase, toRole, state.settings?.strictMode, "Appending a handoff");
-  if (!roleCanActAs(fromRole, board.assignedRole)) {
+  if (systemOwned && !roleCanActAs(fromRole, board.assignedRole)) {
     throw new Error(`Appending a handoff requires fromRole ${board.assignedRole}, but received ${fromRole}.`);
   }
   const intentType = args.intentType ?? board.intentType ?? classifyWorkflowIntent({ phase, tasks: board.tasks, blockers: board.blockers });
@@ -977,6 +991,14 @@ export function appendHandoff(root, args = {}) {
     blockers: board.blockers,
     skipAutoHandoff: true
   });
+}
+
+export function appendHandoff(root, args = {}) {
+  return persistHandoff(root, args);
+}
+
+export function appendSystemHandoff(root, args = {}) {
+  return persistHandoff(root, args, { authority: SYSTEM_BOARD_AUTHORITY });
 }
 
 function renderResearchBrief(agenda) {

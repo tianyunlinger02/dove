@@ -5,7 +5,6 @@ import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
-  appendHandoff,
   ensureWorkspace,
   initProject,
   queryBoundaryReport,
@@ -29,9 +28,9 @@ import {
   upsertClaims,
   upsertExperimentPlan,
   upsertNote,
-  upsertOrchestrationBoard,
   verifySource
 } from "../../src/core/internal-api.mjs";
+import { appendSystemHandoff, upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -106,7 +105,7 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
       noteIds: [note.id]
     }]
   });
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "experiment-planner",
     phase: "experiments",
@@ -120,7 +119,7 @@ test("portable Trellis-inspired surfaces stay file-first and durable", () => {
     methodology: "Inspect durable packet lineage",
     successMetric: "Linked packets remain queryable"
   });
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "research",
     assignedRole: "researcher",
     tasks: [{
@@ -547,7 +546,7 @@ test("task packet refresh preserves user-added fields and invalid role manifests
     thesis: "Preserving user packet fields avoids silent data loss."
   });
 
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "research",
     assignedRole: "researcher",
     tasks: [{ id: "preserve-task", title: "Preserve metadata", assignedRole: "researcher", status: "pending" }]

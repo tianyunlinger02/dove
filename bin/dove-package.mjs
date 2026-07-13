@@ -16713,7 +16713,9 @@ function persistBoard(root, board) {
   });
   return normalized;
 }
-function persistOrchestrationBoardUpdate(root, args = {}, { systemOwned = false } = {}) {
+var SYSTEM_BOARD_AUTHORITY = /* @__PURE__ */ Symbol("system-board-authority");
+function persistOrchestrationBoardUpdate(root, args = {}, { authority = null } = {}) {
+  const systemOwned = authority === SYSTEM_BOARD_AUTHORITY;
   assertNoPolicyOverrideArgs(args, "Updating the orchestration board");
   if (!systemOwned && Object.hasOwn(args, "reviewRequiredBeforeFinalize")) {
     throw new Error("Updating the orchestration board does not accept system-owned field reviewRequiredBeforeFinalize.");
@@ -16772,7 +16774,7 @@ function persistOrchestrationBoardUpdate(root, args = {}, { systemOwned = false 
   });
 }
 function upsertSystemOrchestrationBoard(root, args = {}) {
-  return persistOrchestrationBoardUpdate(root, args, { systemOwned: true });
+  return persistOrchestrationBoardUpdate(root, args, { authority: SYSTEM_BOARD_AUTHORITY });
 }
 function normalizeIssue(issue = {}, index = 0) {
   return {
@@ -35856,7 +35858,7 @@ var planMissionProps = {
   nextAction: { type: "string" },
   workContract: workContractSchema,
   ...executionVerificationProps,
-  ...boundaryProps,
+  ...missionPassBoundaryProps,
   childMissions: { type: "array", items: { type: ["object", "string"] } },
   children: { type: "array", items: { type: ["object", "string"] } }
 };
@@ -36133,13 +36135,13 @@ var baseToolDefinitions = [
   { name: "summarize_session_journal", description: "Refresh and summarize durable session/workspace persistence surfaces.", inputSchema: { type: "object", properties: {} } },
   {
     name: "upsert_orchestration_board",
-    description: "Update the canonical orchestration board under .dove/orchestration/board.json.",
-    inputSchema: { type: "object", properties: { objective: { type: "string" }, phase: { type: "string" }, assignedRole: { type: "string" }, intentType: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, continuationState: { type: "object" }, tasks: { type: "array", items: { type: "object" } }, blockers: { type: "array", items: { type: "object" } }, evidenceLinks: { type: "array", items: { type: "string" } }, experimentIds: { type: "array", items: { type: "string" } }, rebuttalIssueIds: { type: "array", items: { type: "string" } }, activeComparisonTargets: { type: "array", items: { type: "string" } }, versionLineage: { type: "object" } } }
+    description: "Update non-authority fields on the canonical orchestration board under .dove/orchestration/board.json without changing its durable role owner.",
+    inputSchema: { type: "object", properties: { objective: { type: "string" }, phase: { type: "string" }, intentType: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, continuationState: { type: "object" }, tasks: { type: "array", items: { type: "object" } }, blockers: { type: "array", items: { type: "object" } }, evidenceLinks: { type: "array", items: { type: "string" } }, experimentIds: { type: "array", items: { type: "string" } }, rebuttalIssueIds: { type: "array", items: { type: "string" } }, activeComparisonTargets: { type: "array", items: { type: "string" } }, versionLineage: { type: "object" } } }
   },
   {
     name: "append_handoff",
-    description: "Append a durable handoff entry and update the assigned role.",
-    inputSchema: { type: "object", properties: { fromRole: { type: "string" }, toRole: { type: "string" }, phase: { type: "string" }, intentType: { type: "string" }, summary: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, nextActions: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, blockerIds: { type: "array", items: { type: "string" } } } }
+    description: "Append a durable checkpoint for the current board owner without accepting caller-selected role ownership or transfer.",
+    inputSchema: { type: "object", properties: { phase: { type: "string" }, intentType: { type: "string" }, summary: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, nextActions: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, blockerIds: { type: "array", items: { type: "string" } } } }
   },
   {
     name: "update_research_brief",

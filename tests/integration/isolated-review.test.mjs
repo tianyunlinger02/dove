@@ -15,8 +15,8 @@ import {
   prepareIsolatedReview,
   runAudioReview,
   upsertDraft,
-  upsertOrchestrationBoard
 } from "../../src/core/internal-api.mjs";
+import { upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -138,7 +138,7 @@ test("isolated-review CLI imports only handoff and report from external reviewer
     audience: "reviewers"
   });
   const packetId = seedTaskPacket(root);
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "outline",
     assignedRole: "planner"
   });
@@ -403,7 +403,7 @@ test("audio review prepare and import record reviewer routing metadata and retur
   return runFixtureMutation(root, "audio-review-prepare-and-import-record-reviewer-routing-metadata-and-ret", () => {
   ensureTestWorkspace(root);
   const packetId = seedTaskPacket(root, "audio-review-packet");
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "plan",
     assignedRole: "planner",
     actorRole: "planner"

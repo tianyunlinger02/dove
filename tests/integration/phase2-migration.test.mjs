@@ -4,7 +4,6 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
-  appendHandoff,
   ensureWorkspace,
   initProject,
   readState,
@@ -21,9 +20,9 @@ import {
   upsertExperimentResult,
   upsertFigurePlan,
   upsertNote,
-  upsertOrchestrationBoard,
   verifySource
 } from "../../src/core/internal-api.mjs";
+import { appendSystemHandoff, upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -73,7 +72,7 @@ test("continuation focus and next action remain durable across refresh", () => {
   ensureTestWorkspace(root);
   initProject(root, { title: "Continuation Test", objective: "Verify durable next-step state." });
 
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "plan",
     assignedRole: "planner",
     currentFocus: "Resolve the evaluation plan.",
@@ -125,7 +124,7 @@ test("experiment audits and claim bridge records persist separately from raw res
   upsertClaims(root, {
     claims: [{ id: "claim-audit", text: "Audited experiment improves trust.", sectionId: "method", sourceIds: [source.id], noteIds: [note.id] }]
   });
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "experiment-planner",
     phase: "experiments",
@@ -173,7 +172,7 @@ test("refreshWiki writes typed wiki indexes and workspace summary surfaces", () 
   upsertClaims(root, {
     claims: [{ id: "claim-wiki", text: "Typed wiki records improve resumability.", sectionId: "introduction", sourceIds: [source.id], noteIds: [note.id] }]
   });
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "reviewer",
     phase: "review",

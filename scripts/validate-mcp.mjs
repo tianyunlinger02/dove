@@ -657,13 +657,10 @@ async function main() {
   assert.equal(sectionStatus.status, "drafting");
   requirePreActionGuidanceSummary(sectionStatus.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "planner" });
 
-  const claimOwner = await callTool("append_handoff", {
-    fromRole: "planner",
-    toRole: "researcher",
-    phase: "research",
-    summary: "Transfer validator claim work to its truthful owner."
+  const claimCheckpoint = await callTool("append_handoff", {
+    summary: "Record the validator claim-work checkpoint under the durable board owner."
   });
-  assert.equal(claimOwner.assignedRole, "researcher");
+  assert.equal(typeof claimCheckpoint.assignedRole, "string");
 
   const directClaims = await callTool("upsert_claims", {
     packetId,
@@ -680,13 +677,10 @@ async function main() {
   assert.ok(directClaims.claims.some((claim) => claim.id === "validator-direct-claim"));
   requirePreActionGuidanceSummary(directClaims.preActionGuidanceSummary, { surface: "dove.draft", primaryRole: "builder" });
 
-  const experimentOwner = await callTool("append_handoff", {
-    fromRole: "planner",
-    toRole: "experiment-planner",
-    phase: "experiments",
-    summary: "Transfer validator experiment work to its truthful owner."
+  const experimentCheckpoint = await callTool("append_handoff", {
+    summary: "Record the validator experiment-work checkpoint under the durable board owner."
   });
-  assert.equal(experimentOwner.assignedRole, "experiment-planner");
+  assert.equal(experimentCheckpoint.assignedRole, claimCheckpoint.assignedRole);
 
   const directExperimentPlan = await callTool("upsert_experiment_plan", {
     packetId,

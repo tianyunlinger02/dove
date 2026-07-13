@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { compareVersions, ensureWorkspace, upsertOrchestrationBoard } from "../../src/core/internal-api.mjs";
+import { compareVersions, ensureWorkspace } from "../../src/core/internal-api.mjs";
+import { upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
@@ -58,7 +59,7 @@ test("compareVersions tolerates legacy snapshot shapes with missing modern field
     claimIds: ["claim-a", "claim-b"]
   }, null, 2));
 
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "versions",
     assignedRole: "version-analyst"
   });

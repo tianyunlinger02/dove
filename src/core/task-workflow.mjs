@@ -2151,26 +2151,40 @@ const SYSTEM_OWNED_MISSION_PASS_FIELDS = new Set([
   "handoffId"
 ]);
 
+const MISSION_PASS_DESCRIPTION_SUBTREES = new Set([
+  "workContract"
+]);
+
 function collectSystemOwnedMissionPassFields(args = {}) {
   const found = [];
-  for (const [envelopeName, value] of [
-    ["missionPass", args.missionPass],
-    ["passResult", args.passResult],
-    ["result", args.result]
-  ]) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      continue;
-    }
-    for (const field of SYSTEM_OWNED_MISSION_PASS_FIELDS) {
-      if (Object.hasOwn(value, field)) {
-        found.push(`${envelopeName}.${field}`);
-      }
-    }
-  }
   for (const field of SYSTEM_OWNED_MISSION_PASS_FIELDS) {
     if (Object.hasOwn(args, field)) {
       found.push(field);
     }
+  }
+  const visitEnvelope = (value, inputPath) => {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visitEnvelope(item, `${inputPath}[${index}]`));
+      return;
+    }
+    for (const [field, nested] of Object.entries(value)) {
+      const fieldPath = `${inputPath}.${field}`;
+      if (SYSTEM_OWNED_MISSION_PASS_FIELDS.has(field)) {
+        found.push(fieldPath);
+      }
+      if (!MISSION_PASS_DESCRIPTION_SUBTREES.has(field)) {
+        visitEnvelope(nested, fieldPath);
+      }
+    }
+  };
+  for (const envelopeName of ["missionPass", "passResult", "result"]) {
+    visitEnvelope(args[envelopeName], envelopeName);
+  }
+  for (const planField of ["planConversion", "plannedMissions", "resultingMissions", "missions", "childMissions"]) {
+    visitEnvelope(args[planField], planField);
   }
   return found;
 }

@@ -5,7 +5,6 @@ import path from "node:path";
 
 import {
   ARTIFACT_PATHS,
-  appendHandoff,
   compareVersions,
   createVersionSnapshot,
   ensureWorkspace,
@@ -20,10 +19,10 @@ import {
   upsertExperimentResult,
   upsertNote,
   upsertOutline,
-  upsertOrchestrationBoard,
   upsertPlan,
   verifySource
 } from "../../src/core/internal-api.mjs";
+import { appendSystemHandoff, upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { writeJson } from "../../src/core/workspace.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
@@ -72,7 +71,7 @@ test("single-paper workflow creates durable artifacts", () => {
   });
   const packetId = seedTaskPacket(root);
 
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "research",
     assignedRole: "researcher",
     tasks: [
@@ -163,7 +162,7 @@ test("single-paper workflow creates durable artifacts", () => {
   assertNoCompactPublicLeaks(outline.resultCard, { ignoredKeys: ["command"] });
   assertNoCompactPublicLeaks(draft.resultCard, { ignoredKeys: ["command"] });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "researcher",
     toRole: "experiment-planner",
     phase: "experiments",
@@ -190,7 +189,7 @@ test("single-paper workflow creates durable artifacts", () => {
     comparisonTargets: ["baseline-ad-hoc"]
   });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "experiment-planner",
     toRole: "reviewer",
     phase: "review",
@@ -199,7 +198,7 @@ test("single-paper workflow creates durable artifacts", () => {
   });
 
   const review = runReviewLoop(root, { packetId, scope: "introduction" });
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "reviewer",
     toRole: "version-analyst",
     phase: "versions",
@@ -219,7 +218,7 @@ test("single-paper workflow creates durable artifacts", () => {
     body: "# Introduction\n\nDurable workflows reduce context loss [cite:lee2026durable] and improve review traceability [cite:kim2026workflow].\n",
     status: "drafting"
   });
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "researcher",
     toRole: "version-analyst",
     phase: "versions",

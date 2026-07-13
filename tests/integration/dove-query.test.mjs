@@ -17,9 +17,9 @@ import {
   queryDoveStatus,
   queryMetaOptimize,
   runDoveAuto,
-  runDoveReviewLoop,
-  upsertOrchestrationBoard
+  runDoveReviewLoop
 } from "../../src/core/internal-api.mjs";
+import { upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
@@ -309,7 +309,7 @@ function seedReviewLoopPacket(root, {
   boardRole = "builder"
 }) {
   ensureTestWorkspace(root);
-  runFixtureMutation(root, "seed-review-loop-board", () => upsertOrchestrationBoard(root, {
+  runFixtureMutation(root, "seed-review-loop-board", () => upsertSystemOrchestrationBoard(root, {
     phase: boardPhase,
     assignedRole: boardRole,
     currentFocus: "Prepare the current work for review.",
@@ -1429,7 +1429,7 @@ test("direct-process review-loop does not duplicate a handoff when reviewer alre
     assignedRole: "reviewer",
     stage: "review"
   });
-  runFixtureMutation(root, "seed-reviewer-owned-board", () => upsertOrchestrationBoard(root, {
+  runFixtureMutation(root, "seed-reviewer-owned-board", () => upsertSystemOrchestrationBoard(root, {
     phase: "review",
     assignedRole: "reviewer",
     currentFocus: "Continue the existing reviewer pass.",

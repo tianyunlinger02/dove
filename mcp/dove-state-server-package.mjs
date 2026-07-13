@@ -17169,7 +17169,9 @@ function persistBoard(root, board) {
   });
   return normalized;
 }
-function persistOrchestrationBoardUpdate(root, args = {}, { systemOwned = false } = {}) {
+var SYSTEM_BOARD_AUTHORITY = /* @__PURE__ */ Symbol("system-board-authority");
+function persistOrchestrationBoardUpdate(root, args = {}, { authority = null } = {}) {
+  const systemOwned = authority === SYSTEM_BOARD_AUTHORITY;
   assertNoPolicyOverrideArgs(args, "Updating the orchestration board");
   if (!systemOwned && Object.hasOwn(args, "reviewRequiredBeforeFinalize")) {
     throw new Error("Updating the orchestration board does not accept system-owned field reviewRequiredBeforeFinalize.");
@@ -17228,21 +17230,32 @@ function persistOrchestrationBoardUpdate(root, args = {}, { systemOwned = false 
   });
 }
 function upsertOrchestrationBoard(root, args = {}) {
-  return persistOrchestrationBoardUpdate(root, args);
+  const board = loadBoard(root);
+  if (Object.hasOwn(args, "assignedRole") && args.assignedRole !== board.assignedRole) {
+    throw new Error("Updating the orchestration board cannot transfer board ownership through public assignedRole input.");
+  }
+  return persistOrchestrationBoardUpdate(root, {
+    ...args,
+    assignedRole: board.assignedRole
+  });
 }
 function upsertSystemOrchestrationBoard(root, args = {}) {
-  return persistOrchestrationBoardUpdate(root, args, { systemOwned: true });
+  return persistOrchestrationBoardUpdate(root, args, { authority: SYSTEM_BOARD_AUTHORITY });
 }
-function appendHandoff(root, args = {}) {
+function persistHandoff(root, args = {}, { authority = null } = {}) {
+  const systemOwned = authority === SYSTEM_BOARD_AUTHORITY;
   assertNoPolicyOverrideArgs(args, "Appending a handoff");
   const board = loadBoard(root);
   const state = loadState(root);
   const timestamp = args.timestamp ?? nowIso();
-  const fromRole = args.fromRole ?? board.assignedRole;
-  const toRole = args.toRole ?? board.assignedRole;
+  if (!systemOwned && (Object.hasOwn(args, "fromRole") || Object.hasOwn(args, "toRole"))) {
+    throw new Error("Appending a handoff cannot claim or transfer board ownership through public role input.");
+  }
+  const fromRole = systemOwned ? args.fromRole ?? board.assignedRole : board.assignedRole;
+  const toRole = systemOwned ? args.toRole ?? board.assignedRole : board.assignedRole;
   const phase = args.phase ?? board.currentPhase;
   validateBoardMutation(board, phase, toRole, state.settings?.strictMode, "Appending a handoff");
-  if (!roleCanActAs(fromRole, board.assignedRole)) {
+  if (systemOwned && !roleCanActAs(fromRole, board.assignedRole)) {
     throw new Error(`Appending a handoff requires fromRole ${board.assignedRole}, but received ${fromRole}.`);
   }
   const intentType = args.intentType ?? board.intentType ?? classifyWorkflowIntent({ phase, tasks: board.tasks, blockers: board.blockers });
@@ -17272,6 +17285,9 @@ function appendHandoff(root, args = {}) {
     blockers: board.blockers,
     skipAutoHandoff: true
   });
+}
+function appendHandoff(root, args = {}) {
+  return persistHandoff(root, args);
 }
 function renderResearchBrief(agenda) {
   return [
@@ -18790,7 +18806,7 @@ function upsertClaims(root, args = {}) {
   writeJson(root, ARTIFACT_PATHS.evidence, next);
   writeText(root, ARTIFACT_PATHS.claims, renderClaimsMarkdown2(claims));
   const board = loadBoard(root);
-  upsertOrchestrationBoard(root, {
+  upsertSystemOrchestrationBoard(root, {
     phase: "plan",
     assignedRole: "planner",
     intentType: "plan",
@@ -35577,26 +35593,39 @@ var SYSTEM_OWNED_MISSION_PASS_FIELDS = /* @__PURE__ */ new Set([
   "handoff",
   "handoffId"
 ]);
+var MISSION_PASS_DESCRIPTION_SUBTREES = /* @__PURE__ */ new Set([
+  "workContract"
+]);
 function collectSystemOwnedMissionPassFields(args = {}) {
   const found = [];
-  for (const [envelopeName, value] of [
-    ["missionPass", args.missionPass],
-    ["passResult", args.passResult],
-    ["result", args.result]
-  ]) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      continue;
-    }
-    for (const field of SYSTEM_OWNED_MISSION_PASS_FIELDS) {
-      if (Object.hasOwn(value, field)) {
-        found.push(`${envelopeName}.${field}`);
-      }
-    }
-  }
   for (const field of SYSTEM_OWNED_MISSION_PASS_FIELDS) {
     if (Object.hasOwn(args, field)) {
       found.push(field);
     }
+  }
+  const visitEnvelope = (value, inputPath) => {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visitEnvelope(item, `${inputPath}[${index}]`));
+      return;
+    }
+    for (const [field, nested] of Object.entries(value)) {
+      const fieldPath = `${inputPath}.${field}`;
+      if (SYSTEM_OWNED_MISSION_PASS_FIELDS.has(field)) {
+        found.push(fieldPath);
+      }
+      if (!MISSION_PASS_DESCRIPTION_SUBTREES.has(field)) {
+        visitEnvelope(nested, fieldPath);
+      }
+    }
+  };
+  for (const envelopeName of ["missionPass", "passResult", "result"]) {
+    visitEnvelope(args[envelopeName], envelopeName);
+  }
+  for (const planField of ["planConversion", "plannedMissions", "resultingMissions", "missions", "childMissions"]) {
+    visitEnvelope(args[planField], planField);
   }
   return found;
 }
@@ -40367,7 +40396,7 @@ var planMissionProps = {
   nextAction: { type: "string" },
   workContract: workContractSchema,
   ...executionVerificationProps,
-  ...boundaryProps,
+  ...missionPassBoundaryProps,
   childMissions: { type: "array", items: { type: ["object", "string"] } },
   children: { type: "array", items: { type: ["object", "string"] } }
 };
@@ -40708,13 +40737,13 @@ var baseToolDefinitions = [
   { name: "summarize_session_journal", description: "Refresh and summarize durable session/workspace persistence surfaces.", inputSchema: { type: "object", properties: {} } },
   {
     name: "upsert_orchestration_board",
-    description: "Update the canonical orchestration board under .dove/orchestration/board.json.",
-    inputSchema: { type: "object", properties: { objective: { type: "string" }, phase: { type: "string" }, assignedRole: { type: "string" }, intentType: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, continuationState: { type: "object" }, tasks: { type: "array", items: { type: "object" } }, blockers: { type: "array", items: { type: "object" } }, evidenceLinks: { type: "array", items: { type: "string" } }, experimentIds: { type: "array", items: { type: "string" } }, rebuttalIssueIds: { type: "array", items: { type: "string" } }, activeComparisonTargets: { type: "array", items: { type: "string" } }, versionLineage: { type: "object" } } }
+    description: "Update non-authority fields on the canonical orchestration board under .dove/orchestration/board.json without changing its durable role owner.",
+    inputSchema: { type: "object", properties: { objective: { type: "string" }, phase: { type: "string" }, intentType: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, continuationState: { type: "object" }, tasks: { type: "array", items: { type: "object" } }, blockers: { type: "array", items: { type: "object" } }, evidenceLinks: { type: "array", items: { type: "string" } }, experimentIds: { type: "array", items: { type: "string" } }, rebuttalIssueIds: { type: "array", items: { type: "string" } }, activeComparisonTargets: { type: "array", items: { type: "string" } }, versionLineage: { type: "object" } } }
   },
   {
     name: "append_handoff",
-    description: "Append a durable handoff entry and update the assigned role.",
-    inputSchema: { type: "object", properties: { fromRole: { type: "string" }, toRole: { type: "string" }, phase: { type: "string" }, intentType: { type: "string" }, summary: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, nextActions: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, blockerIds: { type: "array", items: { type: "string" } } } }
+    description: "Append a durable checkpoint for the current board owner without accepting caller-selected role ownership or transfer.",
+    inputSchema: { type: "object", properties: { phase: { type: "string" }, intentType: { type: "string" }, summary: { type: "string" }, currentFocus: { type: "string" }, nextAction: { type: "string" }, nextActions: { type: "array", items: { type: "string" } }, evidenceLinks: { type: "array", items: { type: "string" } }, blockerIds: { type: "array", items: { type: "string" } } } }
   },
   {
     name: "update_research_brief",

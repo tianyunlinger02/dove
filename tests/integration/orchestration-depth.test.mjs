@@ -5,7 +5,6 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
-  appendHandoff,
   appendReviewLog,
   buildRebuttal,
   buildRebuttalStrategy,
@@ -28,6 +27,7 @@ import {
   verifySource,
   writeJson
 } from "../../src/core/internal-api.mjs";
+import { appendSystemHandoff, upsertSystemOrchestrationBoard } from "../../src/core/orchestration.mjs";
 import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { ensureTestWorkspace, runFixtureMutation } from "../helpers/mutation-fixture.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -76,7 +76,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   });
   const packetId = seedTaskPacket(root);
 
-  const board = upsertOrchestrationBoard(root, {
+  const board = upsertSystemOrchestrationBoard(root, {
     phase: "research",
     assignedRole: "researcher",
     tasks: [
@@ -124,7 +124,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     claims: [{ id: "claim-depth", text: "Board-first workflows improve resumability.", sectionId: "introduction", sourceIds: ["known-source"], noteIds: ["introduction-depth-note"] }]
   });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "experiment-planner",
     phase: "experiments",
@@ -153,7 +153,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     comparisonTargets: ["baseline-a"]
   });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "experiment-planner",
     toRole: "reviewer",
     phase: "review",
@@ -172,7 +172,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
   assert.equal(strategy.issueCount, 1);
   assertNoCompactPublicLeaks(strategy.resultCard, { ignoredKeys: ["command"] });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "rebuttal-lead",
     toRole: "reviewer",
     phase: "review",
@@ -191,7 +191,7 @@ test("orchestration board, handoff, experiment, rebuttal, and version flows stay
     findings: [],
     actionItems: []
   });
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "reviewer",
     toRole: "version-analyst",
     phase: "versions",
@@ -353,7 +353,7 @@ test("version actions are blocked until coherent review clears finalize gate", (
     actionItems: ["Resolve the review before finalization."]
   });
 
-  appendHandoff(root, {
+  appendSystemHandoff(root, {
     fromRole: "reviewer",
     toRole: "version-analyst",
     phase: "versions",
@@ -398,7 +398,7 @@ test("board role-phase contract rejects mismatches and retired overrides fail cl
     thesis: "Explicit handoffs should validate workflow routing transitions without granting mutation authority."
   });
 
-  const handedOffBoard = appendHandoff(root, {
+  const handedOffBoard = appendSystemHandoff(root, {
     fromRole: "planner",
     toRole: "researcher",
     phase: "research",
@@ -407,7 +407,7 @@ test("board role-phase contract rejects mismatches and retired overrides fail cl
   assert.equal(handedOffBoard.currentPhase, "research");
   assert.equal(handedOffBoard.assignedRole, "researcher");
 
-  const updatedBoard = upsertOrchestrationBoard(root, {
+  const updatedBoard = upsertSystemOrchestrationBoard(root, {
     phase: "research",
     assignedRole: "builder",
     currentFocus: "Continue legal research work."
@@ -420,11 +420,11 @@ test("board role-phase contract rejects mismatches and retired overrides fail cl
       phase: "review",
       assignedRole: "planner"
     });
-  }, /requires routing role reviewer for phase review/);
+  }, /cannot transfer board ownership/);
 
   assert.throws(() => upsertOrchestrationBoard(root, {
-    phase: "review",
-    assignedRole: "planner",
+    phase: "research",
+    assignedRole: "builder",
     policyOverrideReason: "manual board repair after importing an older workspace"
   }), /does not accept retired policy override fields/);
 
