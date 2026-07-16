@@ -2,17 +2,18 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { artifactEvidenceRole, inspectDeclaredPath, normalizeProjectRelativePath } from "./artifact-integrity.mjs";
-import { prepareArtifactLineageUpdate } from "./artifact-lineage.mjs";
+import { assessMissionCompletion } from "./completion-gates.mjs";
 import { assertCurrentMissionContract, missionCompletionCriteria } from "./mission-contracts.mjs";
 import { currentMutationContext, isPatchPlanMode } from "./mutation-backend.mjs";
 import { sha256File } from "./review-artifact-snapshot.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { assertNotDoveLessonArtifactPath } from "./domain-artifacts.mjs";
+import { assertReceiptAppendable, deriveArtifactReferences, EXECUTION_RECEIPT_SCHEMA_VERSION } from "./receipt-ledger.mjs";
 import { evaluateNoteReferences, evaluateSourceReferences } from "./source-trust.mjs";
 import { assertGovernanceMutationRegistered, readJson, writeJson } from "./workspace.mjs";
 import { openDoveWorkspace } from "./workspace-schema.mjs";
 
-export const EXECUTION_RECEIPT_SCHEMA_VERSION = 1;
+export { EXECUTION_RECEIPT_SCHEMA_VERSION };
 export const EXECUTION_RECEIPT_ARTIFACT_KINDS = Object.freeze(["report", "document", "code", "data", "figure", "media", "other"]);
 export const EXECUTION_RECEIPT_VALIDATION_KINDS = Object.freeze(["test-log", "typecheck-log", "lint-log", "build-log", "audit-log", "validation-log", "command-output"]);
 
@@ -34,6 +35,8 @@ const CRITERION_FIELDS = new Set(["criterionId", "evidenceRefs"]);
 const RECEIPT_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const EVIDENCE_REF_PATTERN = /^(artifact|validation|source|note):(.+)$/u;
+const POST_COMMIT_ASSESSMENT_FIELDS = new Set(["kind", "missionId"]);
+const POST_COMMIT_ASSESSMENT_KIND = "assess-mission-completion";
 
 function assertPlainObject(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -234,71 +237,83 @@ export function validateExecutionReceipt(root, args = {}) {
   if (contractDigest !== currentContract.contractDigest) throw new Error(`contractDigest does not match the current mission contract for ${missionId}.`);
   const receiptRelativePath = executionReceiptPath(receiptId);
   const mutationContext = currentMutationContext(root);
+  if (mutationContext) {
+    mutationContext.requireCommitPrecondition(ARTIFACT_PATHS.executionReceiptsDir);
+    mutationContext.requireCommitLock(".dove/.receipt-ledger-append.lock", { label: "Execution receipt ledger append lock" });
+  }
   if (mutationContext ? mutationContext.fileExists(receiptRelativePath) : fs.existsSync(path.resolve(root, receiptRelativePath))) {
     throw new Error(`Execution receipt id is already occupied: ${receiptId}.`);
   }
   const artifacts = normalizeArtifacts(root, mission, args.artifacts);
   const validations = normalizeValidations(root, args.validations);
   const criteriaSatisfied = normalizeCriteria(root, mission, args.criteriaSatisfied, artifacts, validations);
-  const receipt = {
+  const baseReceipt = {
     schemaVersion: EXECUTION_RECEIPT_SCHEMA_VERSION,
     workspaceId: workspace.manifest.workspaceId,
     receiptId,
+    ledgerSequence: workspace.receiptLedger.nextLedgerSequence,
     missionId,
     contractDigest,
     summary,
     artifacts,
     validations,
     criteriaSatisfied,
-    producedAt
+    producedAt,
+    recordedAt: new Date().toISOString(),
+    producer: { kind: "public-execution", actionId: "ingest-execution-receipt" }
   };
-  const lineageUpdate = prepareArtifactLineageUpdate(root, receipt);
-  return {
-    mission,
-    receipt,
-    lineageUpdate
-  };
+  const receipt = { ...baseReceipt, artifacts: deriveArtifactReferences(baseReceipt) };
+  assertReceiptAppendable(workspace.receiptLedger, receipt);
+  return { mission, receipt };
 }
 
 export function ingestExecutionReceipt(root, args = {}) {
   assertGovernanceMutationRegistered("ingest-execution-receipt", "guarded");
-  if (!currentMutationContext(root)) throw new Error("ingest_execution_receipt requires an active MutationContext.");
-  const { receipt, lineageUpdate } = validateExecutionReceipt(root, args);
+  const mutationContext = currentMutationContext(root);
+  if (!mutationContext) throw new Error("ingest_execution_receipt requires an active MutationContext.");
+  const { receipt } = validateExecutionReceipt(root, args);
   writeJson(root, executionReceiptPath(receipt.receiptId), receipt);
-  writeJson(root, ARTIFACT_PATHS.artifactOwnership, lineageUpdate.ownership);
-  writeJson(root, ARTIFACT_PATHS.artifactLineage, lineageUpdate.lineage);
   const plannedOnly = isPatchPlanMode(root);
   return {
     status: plannedOnly ? "ingest-planned" : "ingested",
     receipt,
-    completion: { missionId: receipt.missionId, assessWith: "assess_mission_completion" },
+    completion: { missionId: receipt.missionId, assessWith: "assess_mission_completion", assessment: null },
+    postCommit: plannedOnly ? null : { kind: POST_COMMIT_ASSESSMENT_KIND, missionId: receipt.missionId },
     mutation: {
-      mutationMode: currentMutationContext(root).mutationMode,
+      mutationMode: mutationContext.mutationMode,
       writesApplied: !plannedOnly,
-      paths: [executionReceiptPath(receipt.receiptId), ARTIFACT_PATHS.artifactOwnership, ARTIFACT_PATHS.artifactLineage]
+      paths: [executionReceiptPath(receipt.receiptId)]
+    }
+  };
+}
+
+export function resolveExecutionReceiptPostCommit(root, result, options = {}) {
+  if (!result || typeof result !== "object" || Array.isArray(result) || !Object.hasOwn(result, "postCommit")) return result;
+  const unknownOptions = Object.keys(options).filter((field) => field !== "committed");
+  if (unknownOptions.length > 0) throw new Error(`Execution receipt post-commit resolution does not accept unknown options: ${unknownOptions.join(", ")}.`);
+  const committed = options.committed !== false;
+  const { postCommit, ...publicResult } = result;
+  if (postCommit === null) return publicResult;
+  assertAllowedFields(postCommit, POST_COMMIT_ASSESSMENT_FIELDS, "execution receipt postCommit");
+  if (postCommit.kind !== POST_COMMIT_ASSESSMENT_KIND) throw new Error(`Unsupported execution receipt postCommit kind: ${postCommit.kind}.`);
+  const missionId = safeId(postCommit.missionId, "execution receipt postCommit.missionId");
+  if (!publicResult.completion || publicResult.completion.missionId !== missionId || publicResult.completion.assessment !== null) {
+    throw new Error("Execution receipt postCommit descriptor does not match its sealed completion result.");
+  }
+  if (!committed) return publicResult;
+  if (publicResult.mutationMode === "patch-plan" || publicResult.writesApplied !== true || publicResult.mutationSummary?.transactionState?.phase !== "committed") {
+    throw new Error("Execution receipt post-commit assessment requires a successfully committed direct-process mutation result.");
+  }
+  return {
+    ...publicResult,
+    completion: {
+      ...publicResult.completion,
+      assessment: assessMissionCompletion(root, { missionId })
     }
   };
 }
 
 export function readExecutionReceipts(root, missionId = null) {
-  openDoveWorkspace(root, { operation: "Execution receipt read" });
-  const receiptsRoot = path.resolve(root, ARTIFACT_PATHS.executionReceiptsDir);
-  if (!fs.existsSync(receiptsRoot)) return [];
-  return fs.readdirSync(receiptsRoot, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-    .map((entry) => {
-      const relativePath = path.posix.join(ARTIFACT_PATHS.executionReceiptsDir, entry.name);
-      try {
-        return readJson(root, relativePath, null);
-      } catch (error) {
-        return {
-          schemaVersion: null,
-          receiptId: entry.name.slice(0, -".json".length),
-          missionId,
-          __readFailure: error instanceof Error ? error.message : String(error)
-        };
-      }
-    })
-    .filter((receipt) => receipt && (!missionId || receipt.missionId === missionId || receipt.__readFailure))
-    .sort((left, right) => String(left.producedAt).localeCompare(String(right.producedAt)) || String(left.receiptId).localeCompare(String(right.receiptId)));
+  const workspace = openDoveWorkspace(root, { operation: "Execution receipt read" });
+  return workspace.receiptLedger.receipts.filter((receipt) => !missionId || receipt.missionId === missionId);
 }

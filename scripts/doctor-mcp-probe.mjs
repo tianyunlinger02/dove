@@ -24,13 +24,13 @@ async function main() {
   const init = await call("initialize", {
     protocolVersion: "2024-11-05",
     capabilities: {},
-    clientInfo: { name: "dove-doctor", version: "0.2.0" }
+    clientInfo: { name: "dove-doctor", version: "0.3.0" }
   });
   assert.equal(init.serverInfo.name, "dove");
   notify("notifications/initialized");
 
   const listed = await call("tools/list");
-  assert.deepEqual(listed.tools.map((tool) => tool.name), TOOL_NAMES, "MCP registry drifted from the sealed schema 7 surface");
+  assert.deepEqual(listed.tools.map((tool) => tool.name), TOOL_NAMES, "MCP registry drifted from the sealed schema 8 surface");
 
   const status = await callReadOnlyTool("query_dove_status");
   assert.equal(status.query, true);

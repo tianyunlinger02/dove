@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -123,7 +124,7 @@ function assertSchemaObjectsSealed(schema, inputPath = "$", seen = new WeakSet()
 function materializeMission(root, missionId = "mcp-schema-seven") {
   const proposal = extractToolJson(dispatchTool(root, "create_dove_mission", {
     missionId,
-    goal: "Exercise the sealed schema 7 MCP contract.",
+    goal: "Exercise the sealed schema 8 MCP contract.",
     targetArtifacts: ["README.md"],
     expectedArtifacts: ["README.md"],
     completionCriteria: ["The approved artifact is current."],
@@ -139,7 +140,7 @@ function materializeMission(root, missionId = "mcp-schema-seven") {
   };
 }
 
-test("schema 7 MCP exposes one sealed registry without board or operator discovery tiers", () => {
+test("schema 8 MCP exposes one sealed registry without board or operator discovery tiers", () => {
   assert.deepEqual(toolDefinitions.map((tool) => tool.name), EXPECTED_TOOL_NAMES);
   assert.equal(new Set(EXPECTED_TOOL_NAMES).size, EXPECTED_TOOL_NAMES.length);
   assert.deepEqual([...TOOL_INPUT_SCHEMAS.keys()], EXPECTED_TOOL_NAMES);
@@ -147,6 +148,7 @@ test("schema 7 MCP exposes one sealed registry without board or operator discove
 
   assert.deepEqual(toolDefinitions.find((tool) => tool.name === "query_dove_lessons").inputSchema.properties.kind.enum, ["preference", "constraint", "method", "failure", "review-insight"]);
   assert.deepEqual(toolDefinitions.find((tool) => tool.name === "record_dove_lesson").inputSchema.properties.kind.enum, ["preference", "constraint", "method", "failure", "review-insight"]);
+  assert.ok(toolDefinitions.find((tool) => tool.name === "query_dove_status").inputSchema.properties.missionId);
 
   for (const tool of toolDefinitions) {
     assert.equal(tool.inputSchema.additionalProperties, false, tool.name);
@@ -246,7 +248,7 @@ test("MCP init proposal and patch-plan confirmation remain zero-write and minima
   const root = createTempRoot("dove-mcp-init-patch-");
   const before = snapshot(root);
   const proposal = extractToolJson(dispatchTool(root, "init_dove_goal", {
-    goal: "Plan sealed schema 7 initialization.",
+    goal: "Plan sealed schema 8 initialization.",
     mutationMode: "patch-plan",
     resultMode: "full"
   }));
@@ -260,7 +262,7 @@ test("MCP init proposal and patch-plan confirmation remain zero-write and minima
   assert.equal(planned.status, "initialization-planned");
   assert.equal(planned.writesApplied, false);
   const paths = new Set(planned.mutationPlan.operations.map((operation) => operation.relativePath));
-  for (const required of [ARTIFACT_PATHS.doveRootManifest, ARTIFACT_PATHS.projectIdentity, ARTIFACT_PATHS.artifactOwnership, ARTIFACT_PATHS.artifactLineage]) {
+  for (const required of [ARTIFACT_PATHS.doveRootManifest, ARTIFACT_PATHS.projectIdentity]) {
     assert.equal(paths.has(required), true, required);
   }
   for (const forbidden of [".dove/state.json", ".dove/task-packets/index.json", ".dove/orchestration/board.json", ".dove/runtime/results.json", ".dove/mutations/index.json"]) {
@@ -301,7 +303,7 @@ test("MCP mission exact replay persists only the minimal contract and rejects dr
   const proposal = extractToolJson(dispatchTool(root, "create_dove_mission", {
     missionId: "exact-replay",
     goal: "Persist only this approved mission contract.",
-    scope: ["schema 7 MCP"],
+    scope: ["schema 8 MCP"],
     targetArtifacts: ["README.md"],
     completionCriteria: ["README is current"],
     resultMode: "full"
@@ -327,15 +329,58 @@ test("MCP mission exact replay persists only the minimal contract and rejects dr
   }));
   assert.equal(created.status, "materialized");
   assert.equal(created.mission.missionId, "exact-replay");
+  assert.equal(created.executionHandoff.missionId, "exact-replay");
+  assert.equal(created.executionHandoff.contractDigest, created.mission.contractDigest);
+  assert.match(created.executionHandoff.receiptCliTemplate, /receipt .*--json/u);
+  assert.deepEqual(created.executionHandoff.mcpTools, { ingest: "ingest_execution_receipt", assess: "assess_mission_completion" });
+  assert.equal(Object.hasOwn(JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.missionsDir, "exact-replay.json"), "utf8")), "executionHandoff"), false);
   assert.deepEqual(Object.keys(snapshot(root)).sort(), [
-    ARTIFACT_PATHS.artifactLineage,
-    ARTIFACT_PATHS.artifactOwnership,
     ARTIFACT_PATHS.doveRootManifest,
     `${ARTIFACT_PATHS.missionsDir}/exact-replay.json`,
     ARTIFACT_PATHS.projectIdentity
   ].sort());
   assert.equal(fs.existsSync(path.join(root, ".dove", "state.json")), false);
   assert.equal(fs.existsSync(path.join(root, ".dove", "task-packets")), false);
+  cleanupTempRoot(root);
+});
+
+test("MCP receipt ingestion returns current assessment only after commit and keeps patch plans null", () => {
+  const root = createTempRoot("dove-mcp-receipt-post-commit-");
+  fs.writeFileSync(path.join(root, "README.md"), "committed MCP receipt artifact\n", "utf8");
+  const { created } = materializeMission(root, "mcp-receipt-post-commit");
+  const missionPath = path.join(root, ARTIFACT_PATHS.missionsDir, `${created.mission.missionId}.json`);
+  const mission = JSON.parse(fs.readFileSync(missionPath, "utf8"));
+  const receiptArgs = {
+    receiptId: "mcp-receipt-current",
+    missionId: mission.missionId,
+    contractDigest: mission.contractDigest,
+    summary: "Recorded the current MCP artifact.",
+    artifacts: [{ path: "README.md", kind: "document", sha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "README.md"))).digest("hex") }],
+    validations: [],
+    criteriaSatisfied: mission.completionCriterionIds.map((criterionId) => ({ criterionId, evidenceRefs: ["artifact:README.md"] })),
+    producedAt: "2026-07-16T00:00:00.000Z",
+    resultMode: "full"
+  };
+
+  const planned = extractToolJson(dispatchTool(root, "ingest_execution_receipt", { ...receiptArgs, receiptId: "mcp-receipt-planned", mutationMode: "patch-plan" }));
+  assert.equal(planned.status, "ingest-planned");
+  assert.equal(planned.completion.assessment, null);
+  assert.equal(Object.hasOwn(planned, "postCommit"), false);
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir, "mcp-receipt-planned.json")), false);
+
+  const direct = extractToolJson(dispatchTool(root, "ingest_execution_receipt", { ...receiptArgs, mutationMode: "direct-process" }));
+  assert.equal(direct.status, "ingested");
+  assert.equal(direct.completion.assessment.currentReceiptId, receiptArgs.receiptId);
+  assert.equal(direct.completion.assessment.complete, true);
+  assert.equal(Object.hasOwn(direct, "postCommit"), false);
+
+  const lockPath = path.join(root, ".dove", ".receipt-ledger-append.lock");
+  fs.writeFileSync(lockPath, "occupied\n", "utf8");
+  const failed = dispatchTool(root, "ingest_execution_receipt", { ...receiptArgs, receiptId: "mcp-receipt-failed", mutationMode: "direct-process" });
+  assert.equal(failed.isError, true);
+  assert.doesNotMatch(failed.content[0].text, /completion|assessment/u);
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir, "mcp-receipt-failed.json")), false);
+  fs.rmSync(lockPath);
   cleanupTempRoot(root);
 });
 
@@ -416,18 +461,25 @@ test("MCP stdio server lists the exact registry and rejects discovery tiers", as
   }
 });
 
-test("materialized mission status reads current contracts without a separate board surface", () => {
+test("materialized mission status scopes one mission and multiple missions require explicit selection", () => {
   const root = createTempRoot("dove-mcp-status-current-");
   materializeMission(root, "status-current");
-  const before = snapshot(root);
-  const status = extractToolJson(dispatchTool(root, "query_dove_status", {
-    full: true,
-    resultMode: "full"
-  }));
+  const status = extractToolJson(dispatchTool(root, "query_dove_status", { full: true, resultMode: "full" }));
   assert.equal(status.currentContext.missionCount, 1);
+  assert.equal(status.currentContext.missionScope, "only-mission");
   assert.equal(status.missions[0].missionId, "status-current");
   assert.equal(status.diagnostics.noRefresh, true);
   assert.equal(status.diagnostics.noSourceMutation, true);
-  assert.deepEqual(snapshot(root), before);
+  materializeMission(root, "status-second");
+  const afterMissions = snapshot(root);
+  const multiple = extractToolJson(dispatchTool(root, "query_dove_status", { resultMode: "full" }));
+  assert.equal(multiple.currentContext.missionScope, "workspace");
+  assert.equal(multiple.currentContext.selectedMissionId, null);
+  assert.equal(multiple.needsAttention.status, "mission-selection-required");
+  assert.ok(multiple.needsAttention.reasons.includes("explicit-mission-required"));
+  const explicit = extractToolJson(dispatchTool(root, "query_dove_status", { missionId: "status-current", resultMode: "full" }));
+  assert.equal(explicit.currentContext.missionScope, "explicit");
+  assert.equal(explicit.currentContext.selectedMissionId, "status-current");
+  assert.deepEqual(snapshot(root), afterMissions);
   cleanupTempRoot(root);
 });

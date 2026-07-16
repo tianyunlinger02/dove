@@ -395,6 +395,28 @@ function postFilterCandidates(candidates, query, filterPlan) {
   });
 }
 
+function registrationDraftFor(candidate, provider) {
+  const identity = candidate.doi ?? candidate.arxivId ?? candidate.pubmedId ?? candidate.semanticScholarId ?? candidate.title;
+  const sourceId = `source-${String(identity ?? "candidate")}`
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .slice(0, 127);
+  return {
+    authoritative: false,
+    missionId: null,
+    sourceId: sourceId || "source-candidate",
+    title: candidate.title,
+    authors: candidate.authors,
+    year: normalizeString(candidate.publishedAt)?.slice(0, 4) ?? null,
+    locator: candidate.url ?? doiUrl(candidate.doi),
+    sourceType: provider.kind === "scholarly" ? "scholarly" : "web",
+    origin: `network-search:${provider.id}`,
+    abstract: candidate.snippet,
+    capturePath: null
+  };
+}
+
 function normalizeCandidate(candidate, provider) {
   const title = normalizeTitle(candidate.title);
   if (!title) {
@@ -410,7 +432,7 @@ function normalizeCandidate(candidate, provider) {
   if (!url && !doi && !candidate.arxivId && !candidate.pubmedId && !candidate.semanticScholarId) {
     return null;
   }
-  return {
+  const normalized = {
     lifecycle: "candidate",
     title,
     url,
@@ -434,8 +456,10 @@ function normalizeCandidate(candidate, provider) {
       retrievedAt: new Date().toISOString()
     },
     score: Number.isFinite(candidate.score) ? candidate.score : 0,
-    warnings: normalizeStringArray(candidate.warnings)
+    warnings: normalizeStringArray(candidate.warnings),
+    captureRequiredForEvidence: true
   };
+  return { ...normalized, registrationDraft: registrationDraftFor(normalized, provider) };
 }
 
 function canonicalUrlKey(value) {
@@ -837,10 +861,11 @@ export async function executeNetworkSearch(rawArgs = {}, config = {}, options = 
     candidates,
     providerReports,
     nextStep: {
-      label: candidates.length > 0 ? "打开候选来源核实标题、DOI 和原文。" : "换查询词或改用宿主公开搜索核实。",
-      why: "联网搜索只产出候选，不能直接登记来源或生成 claim。",
-      requiredActions: candidates.length > 0 ? ["核实候选来源", "把验证过的来源交给 source/note/evidence 流程"] : ["重新检索或提供可验证 URL"]
+      label: candidates.length > 0 ? "在宿主中打开候选并可见地捕获原文，然后用 capturePath 登记并查询 source。" : "换查询词或改用宿主公开搜索核实。",
+      why: "联网搜索只产出非权威 registrationDraft；没有可见捕获文件时不能进入证据链。",
+      requiredActions: candidates.length > 0 ? ["宿主可见捕获候选材料", "用 --capture-path 调用 register_source", "调用 query_sources 检查候选状态"] : ["重新检索或提供可验证 URL"]
     },
+    captureRequiredForEvidence: candidates.length > 0,
     needsAttention: buildNeedsAttention(status, providerReports, candidates),
     showMore: { text: "展开结果可查看候选列表和 provider 状态；默认 compact 不展示原始返回。" },
     diagnostics: {

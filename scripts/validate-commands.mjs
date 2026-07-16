@@ -9,9 +9,9 @@ import { CLI_COMMAND_SPECS } from "../src/cli/command-parser.mjs";
 import {
   COMMAND_SURFACES,
   PROJECT_HOST_IDS,
-  TOOL_CONTEXT_PATHS,
+  TOOL_RESULT_CONTEXT_FIELDS,
   adapterPathForCommand,
-  commandContextPaths
+  commandResultContextFields
 } from "../src/core/command-manifest.mjs";
 import { checkGeneratedAdapters, generatedAdapterEntries, generatedClaudeUserCommandEntries } from "./generate-command-adapters.mjs";
 
@@ -96,7 +96,7 @@ for (const relativePath of runtimeSourcePaths) {
 
 const drift = checkGeneratedAdapters(ROOT);
 assert.deepEqual(drift, [], `Unexpected generated command adapter drift: ${drift.map((item) => `${item.relativePath} (${item.reason})`).join(", ")}`);
-assert.deepEqual(COMMAND_SURFACES.map((command) => command.id), expectedCommandIds, "Public schema 7 commands must stay flat and sealed");
+assert.deepEqual(COMMAND_SURFACES.map((command) => command.id), expectedCommandIds, "Public schema 8 commands must stay flat and sealed");
 
 const openCodeSkillRoot = path.join(ROOT, ".opencode", "skills");
 const installedRoleSkillPaths = fs.readdirSync(openCodeSkillRoot, { withFileTypes: true })
@@ -107,7 +107,7 @@ assert.deepEqual(installedRoleSkillPaths, [
   ".opencode/skills/dove-builder/SKILL.md",
   ".opencode/skills/dove-planner/SKILL.md",
   ".opencode/skills/dove-reviewer/SKILL.md"
-], "OpenCode role skills must expose only the three primary schema 7 responsibilities");
+], "OpenCode role skills must expose only the three primary schema 8 responsibilities");
 for (const relativePath of installedRoleSkillPaths) {
   const content = fs.readFileSync(path.join(ROOT, relativePath), "utf8");
   assert.doesNotMatch(content, /\.dove\/(?:context|meta|wiki|workspace|task-packets|orchestration|runtime|mutations|programs)|\b(?:board|route|queue|lease|continuation|review loop|automatic subagent)\b/iu, `${relativePath} references retired orchestration state`);
@@ -127,9 +127,13 @@ for (const command of COMMAND_SURFACES) {
     assert.equal(guardedCommandIds.has(command.id), true, "dove.lessons record must be guarded");
     assert.equal(readonlyCommandIds.has(command.id), false, "mixed dove.lessons surface must not be classified wholly read-only");
   }
-  const contexts = commandContextPaths(command);
-  for (const toolName of command.requiredTools) assert.ok(TOOL_CONTEXT_PATHS[toolName], `${toolName} lacks declared context paths`);
-  for (const forbidden of forbiddenSchema7Paths) assert.equal(contexts.some((item) => item === forbidden || item.startsWith(`${forbidden}/`)), false, `${command.id} reaches forbidden schema 7 path ${forbidden}`);
+  const contextFields = commandResultContextFields(command);
+  for (const toolName of command.requiredTools) assert.ok(TOOL_RESULT_CONTEXT_FIELDS[toolName], `${toolName} lacks bounded result context fields`);
+  assert.ok(contextFields.length > 0, `${command.id} lacks bounded result-scoped context`);
+  for (const field of contextFields) {
+    assert.doesNotMatch(field, /^\.dove\//u, `${command.id} exposes a broad durable context path instead of a result field`);
+    assert.doesNotMatch(field, /(?:^|\.)(?:context|transcript|session)(?:\.|$)/iu, `${command.id} exposes persistent or private context`);
+  }
 }
 
 const generated = [
@@ -138,8 +142,16 @@ const generated = [
 ];
 for (const entry of generated) {
   assert.match(entry.content, /^---\n/um, `${entry.relativePath} lacks frontmatter`);
-  assert.match(entry.content, /missionId|mission id|mission contract|schema 7|workspace/u, `${entry.relativePath} does not describe the explicit mission/schema boundary`);
+  assert.match(entry.content, /missionId|mission id|mission contract|schema 8|workspace/u, `${entry.relativePath} does not describe the explicit mission/schema boundary`);
   assert.doesNotMatch(entry.content, /--(?:packet-id|task-packet-id|mission-packet-id|target|domain|stage|status|role|policy-override)\b|\.dove\/(?:task-packets|orchestration|runtime|workspace)\b/u, `${entry.relativePath} exposes retired packet/orchestration input`);
+  const generatedCliActions = [...entry.content.matchAll(/`(node \.\/bin\/dove-package\.mjs[^`]+)`/gu)].map((match) => match[1]);
+  assert.ok(generatedCliActions.length > 0, `${entry.relativePath} lacks a structured CLI action`);
+  for (const action of generatedCliActions) assert.match(action, /(?:^|\s)--json(?:\s|$)/u, `${entry.relativePath} contains a CLI action without --json: ${action}`);
+  if (entry.command.id === "dove.review") {
+    assert.match(entry.content, /operation field/iu, `${entry.relativePath} must distinguish review operations`);
+    assert.match(entry.content, /actionablePaths\.input.*actionablePaths\.manifest.*actionablePaths\.handoff.*actionablePaths\.report.*importAction/isu, `${entry.relativePath} must preserve prepared review paths and import action`);
+    assert.match(entry.content, /nextAction/iu, `${entry.relativePath} must preserve the imported review coverage action`);
+  }
   if (entry.command.id === "dove.lessons") {
     assert.match(entry.content, /recording mission|recording-mission|provenance/iu, `${entry.relativePath} must preserve lesson mission provenance`);
     assert.match(entry.content, /preference.*constraint.*method.*failure.*review-insight/isu, `${entry.relativePath} must name all five lesson kinds`);

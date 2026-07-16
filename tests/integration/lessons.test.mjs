@@ -105,7 +105,7 @@ test("lesson query and proposal are zero-write, and missing optional lessons dir
   assert.deepEqual(snapshot(root), before);
 });
 
-test("exact lesson replay writes immutable lesson, advisory receipt, ownership, and lineage", () => {
+test("exact lesson replay writes an immutable lesson and derived receipt-ledger lineage", () => {
   const root = createTempRoot("dove-lessons-record-");
   const currentMission = mission(root, "lesson-record");
   own(root, currentMission, "outputs/method.json");
@@ -171,9 +171,7 @@ test("confirmed lesson recording supports patch-plan without writing", () => {
   assert.deepEqual(snapshot(root), before);
   assert.deepEqual(result.mutationPlan.operations.map((item) => item.relativePath), [
     `${ARTIFACT_PATHS.lessonsDir}/lesson-one.json`,
-    result.mutation.paths[1],
-    ARTIFACT_PATHS.artifactOwnership,
-    ARTIFACT_PATHS.artifactLineage
+    result.mutation.paths[1]
   ]);
 });
 

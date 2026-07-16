@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveCanonicalContainedWrite } from "../src/core/contained-write.mjs";
+import { writeFileSetTransaction } from "../src/core/file-set-transaction.mjs";
 import {
   COMMAND_SURFACES,
   DIRECT_PROCESS_ADAPTER_COMMAND_IDS,
@@ -72,21 +73,22 @@ function exampleBullets(command, hostId = null) {
 const DIRECT_PROCESS_COMMAND_IDS = new Set(DIRECT_PROCESS_ADAPTER_COMMAND_IDS);
 
 function adapterCliCommand(commandId, command) {
-  return DIRECT_PROCESS_COMMAND_IDS.has(commandId) ? `${command} --mutation-mode direct-process` : command;
+  const withMutationMode = DIRECT_PROCESS_COMMAND_IDS.has(commandId) ? `${command} --mutation-mode direct-process` : command;
+  return `${withMutationMode} --json`;
 }
 
 const LOCAL_CLI_COMMANDS = new Map([
-  ["dove.init", { command: adapterCliCommand("dove.init", "node ./bin/dove-package.mjs init . --goal \"<project goal>\""), kind: "work", note: "Use init only to establish minimal project identity; it must not create tasks, packets, checklists, runtime, orchestration, or navigation state." }],
-  ["dove.status", { command: "node ./bin/dove-package.mjs status .", kind: "check" }],
-  ["dove.lessons", { command: "node ./bin/dove-package.mjs lessons query . --mission-id \"<mission id>\"", kind: "check", note: "Query is the default and must remain zero-write. Never auto-capture a lesson and never auto-recall lessons from another command. Use `lessons record` only when the operator explicitly asks to preserve a specific lesson; then run only the exact confirmation command returned by the zero-write proposal." }],
+  ["dove.init", { command: adapterCliCommand("dove.init", "node ./bin/dove-package.mjs init . --goal \"<project goal>\""), kind: "work", note: "Use init only to establish minimal project identity; it must not create packets, checklists, runtime, orchestration, or persistent context." }],
+  ["dove.status", { command: "node ./bin/dove-package.mjs status . --json", kind: "check", note: "When multiple missions exist, rerun with `--mission-id \"<mission id>\" --json`; never select an implicit latest mission." }],
+  ["dove.lessons", { command: "node ./bin/dove-package.mjs lessons query . --mission-id \"<mission id>\" --json", kind: "check", note: "Query is the default and must remain zero-write. Never auto-capture a lesson and never auto-recall lessons from another command. Use `lessons record` only when the operator explicitly asks to preserve a specific lesson; then run only the exact confirmation command returned by the zero-write proposal." }],
   ["dove.mission", { command: adapterCliCommand("dove.mission", "node ./bin/dove-package.mjs mission . --goal \"<mission goal>\""), kind: "check", note: "After approval, run the exact confirmation command returned by the proposal, persist only that contract, and continue with native host planning and tools." }],
   ["dove.version", { command: adapterCliCommand("dove.version", "node ./bin/dove-package.mjs version . --mission-id \"<mission id>\" --version-id \"<version id>\" --artifact \"<artifact path>\""), kind: "work", note: "Snapshots and comparisons are mission-bound and hash-current; finalization fails closed without completion and trusted review proof." }],
-  ["dove.source", { command: adapterCliCommand("dove.source", "node ./bin/dove-package.mjs source . --mission-id \"<mission id>\" --source-id \"<source id>\" --title \"<source title>\" --locator \"<url or doi>\""), kind: "work", note: "Registration creates candidate material only; public verification can reject but cannot issue positive trust." }],
+  ["dove.source", { command: adapterCliCommand("dove.source", "node ./bin/dove-package.mjs source register . --mission-id \"<mission id>\" --source-id \"<source id>\" --title \"<source title>\" --locator \"<url or doi>\" --capture-path \"<visible captured material path>\""), kind: "work", note: "First use `search_network` to discover a non-authoritative registrationDraft, visibly capture the selected material with host tools, run the listed registration command with that exact capture path, then run `node ./bin/dove-package.mjs source . --mission-id \"<mission id>\" --source-id \"<source id>\" --json` to inspect the candidate. Search and registration make no trust claim; public verification can reject but cannot issue positive trust." }],
   ["dove.note", { command: adapterCliCommand("dove.note", "node ./bin/dove-package.mjs note . --mission-id \"<mission id>\" --note-id \"<note id>\" --summary \"<synthesis>\""), kind: "work", note: "Use this only with substantive synthesis and current mission-bound evidence." }],
   ["dove.experience", { command: adapterCliCommand("dove.experience", "node ./bin/dove-package.mjs experience . --mission-id \"<mission id>\" --experiment-id \"<experiment id>\" --goal \"<experiment goal>\" --hypothesis \"<hypothesis>\" --protocol \"<protocol>\" --success-criterion \"<criterion>\""), kind: "work", note: "Results require current evidence and a clean audit before claim bridging." }],
   ["dove.draft", { command: adapterCliCommand("dove.draft", "node ./bin/dove-package.mjs draft . --mission-id \"<mission id>\" --draft-id \"<draft id>\" --body \"<draft text>\""), kind: "work", note: "Write real body content; metadata-only mode requires an existing current mission draft." }],
   ["dove.figure", { command: adapterCliCommand("dove.figure", "node ./bin/dove-package.mjs figure . --mission-id \"<mission id>\" --figure-id \"<figure id>\" --intent \"<figure request>\" --purpose \"<purpose>\" --material \"<artifact path>\" --prompt \"<drawing prompt>\""), kind: "work", note: "Provider execution stays host-side; import output with an exact hash, caption, QA, and independent-review boundary." }],
-  ["dove.review", { command: adapterCliCommand("dove.review", "node ./bin/dove-package.mjs review . --mission-id \"<mission id>\" --review-id \"<review id>\" --artifact \"<artifact path>\" --preflight"), kind: "work", note: "Use --preflight for zero-write local checks, --prepare to freeze the canonical exchange, and --import only after the reviewer writes the canonical handoff and report. Public imports never mint Reviewer authority." }],
+  ["dove.review", { command: adapterCliCommand("dove.review", "node ./bin/dove-package.mjs review . --mission-id \"<mission id>\" --review-id \"<review id>\" --artifact \"<artifact path>\" --preflight"), kind: "work", note: "Use --preflight for zero-write local checks, --prepare to freeze the canonical exchange, and --import only after the reviewer writes the canonical handoff and report. Distinguish the returned operation field. For prepare, preserve actionablePaths.input, actionablePaths.manifest, actionablePaths.handoff, actionablePaths.report, and importAction exactly. For import, preserve those canonical actionable paths and nextAction exactly. Public imports never mint Reviewer authority." }],
   ["dove.rebuttal", { command: adapterCliCommand("dove.rebuttal", "node ./bin/dove-package.mjs rebuttal . --mission-id \"<mission id>\" --issue-json \"<finding-linked issue JSON>\" --strategy \"<strategy>\" --response-json \"<response JSON>\""), kind: "work", note: "Every issue must link a current review artifact and finding id; responses remain author-side and evidence-linked." }]
 ]);
 
@@ -103,7 +105,7 @@ function localCliBullets(command) {
     ];
   }
   const terminalProbe = `node ./bin/dove-package.mjs ${hostCommandSlug(command.id)} --help`;
-  return [`This request has no listed project action. Do not run status, \`${terminalProbe}\`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the task, and the next user choice; do not explain why the tool is unavailable.`];
+  return [`This request has no listed project action. Do not run status, \`${terminalProbe}\`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the mission, and the next user choice; do not explain why the tool is unavailable.`];
 }
 
 function guardrailBullets(command) {
@@ -113,8 +115,8 @@ function guardrailBullets(command) {
     "If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.",
     ...localCliBullets(command),
     "Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.",
-    "Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.",
-    "When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.",
+    "Use ordinary mission wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.",
+    "When the target work is unclear, ask the operator to choose by visible mission goal or numbered option; do not ask for internal ids in the default answer.",
     "Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.",
     "When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.",
     policyLine(command),
@@ -126,7 +128,7 @@ function guardrailBullets(command) {
   } else if (command.domain === "paper") {
     bullets.push("Use the top-level Dove requests for sources, notes, drafting, review, rebuttal, experiences, figures, and version lineage.");
   } else {
-    bullets.push("Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.");
+    bullets.push("Use this shared Dove mission flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.");
   }
   if (command.id !== "dove.mission") {
     bullets.push("Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.");
@@ -202,15 +204,16 @@ export function generatedClaudeUserCommandEntries() {
   }));
 }
 
-export function writeClaudeUserCommandAdapters(claudeConfigRoot) {
-  const written = [];
-  for (const entry of generatedClaudeUserCommandEntries()) {
-    const { fullPath: absolutePath } = resolveCanonicalContainedWrite(claudeConfigRoot, entry.relativePath, { label: "Claude command adapter path" });
-    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-    fs.writeFileSync(absolutePath, `${entry.content.trimEnd()}\n`, "utf8");
-    written.push(entry.relativePath);
-  }
-  return written;
+export function writeClaudeUserCommandAdapters(claudeConfigRoot, options = {}) {
+  const entries = generatedClaudeUserCommandEntries().map((entry) => ({
+    root: claudeConfigRoot,
+    relativePath: entry.relativePath,
+    content: `${entry.content.trimEnd()}\n`,
+    encoding: "utf8",
+    force: true,
+    label: "Claude command adapter path"
+  }));
+  return writeFileSetTransaction(entries, { fsOps: options.fsOps });
 }
 
 function listFiles(root, relativeDir, acceptPath) {
@@ -244,15 +247,15 @@ function existingGeneratedAdapterPaths(root) {
   ]).sort();
 }
 
-export function writeGeneratedAdapters(root = PACKAGE_ROOT) {
-  const written = [];
-  for (const entry of generatedAdapterEntries()) {
-    const { fullPath: absolutePath } = resolveCanonicalContainedWrite(root, entry.relativePath, { label: "Generated command adapter path" });
-    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-    fs.writeFileSync(absolutePath, `${entry.content.trimEnd()}\n`, "utf8");
-    written.push(entry.relativePath);
-  }
-  return written;
+export function writeGeneratedAdapters(root = PACKAGE_ROOT, options = {}) {
+  return writeFileSetTransaction(generatedAdapterEntries().map((entry) => ({
+    root,
+    relativePath: entry.relativePath,
+    content: `${entry.content.trimEnd()}\n`,
+    encoding: "utf8",
+    force: true,
+    label: "Generated command adapter path"
+  })), { fsOps: options.fsOps });
 }
 
 export function checkGeneratedAdapters(root = PACKAGE_ROOT) {

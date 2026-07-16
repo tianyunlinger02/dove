@@ -5,10 +5,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { assessMissionCompletion } from "../../src/core/completion-gates.mjs";
-import { ingestExecutionReceipt, validateExecutionReceipt } from "../../src/core/execution-receipts.mjs";
+import { readArtifactHistory, readArtifactLineage, readArtifactOwnership } from "../../src/core/artifact-lineage.mjs";
+import { ingestExecutionReceipt, resolveExecutionReceiptPostCommit, validateExecutionReceipt } from "../../src/core/execution-receipts.mjs";
 import { createDoveMission, missionCompletionCriteria, missionCompletionCriterionId } from "../../src/core/mission-contracts.mjs";
 import { queryDoveStatus } from "../../src/core/mission-queries.mjs";
 import { ARTIFACT_PATHS } from "../../src/core/schema.mjs";
+import { registerSource, verifySource } from "../../src/core/source-trust.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
@@ -84,11 +86,12 @@ function preparedRoot(overrides = {}) {
 }
 
 function ingestDirect(root, receipt) {
-  return runWithMutationContext(root, {
+  const result = runWithMutationContext(root, {
     actionId: "ingest-execution-receipt",
     mutationMode: "direct-process",
     hostId: "test"
   }, () => ingestExecutionReceipt(root, receipt));
+  return resolveExecutionReceiptPostCommit(root, result);
 }
 
 test("receipt validation and completion queries are strictly zero-write", () => {
@@ -97,6 +100,12 @@ test("receipt validation and completion queries are strictly zero-write", () => 
   const before = snapshot(root);
   const validated = validateExecutionReceipt(root, receipt);
   assert.equal(validated.receipt.receiptId, receipt.receiptId);
+  assert.equal(validated.receipt.schemaVersion, 2);
+  assert.equal(validated.receipt.ledgerSequence, 1);
+  assert.equal(validated.receipt.producer.kind, "public-execution");
+  assert.equal(validated.receipt.producer.actionId, "ingest-execution-receipt");
+  assert.equal(typeof validated.receipt.recordedAt, "string");
+  assert.deepEqual(validated.receipt.artifacts[0].derivedReferences, [`criterion:${receipt.criteriaSatisfied[0].criterionId}`]);
   assert.deepEqual(snapshot(root), before);
 
   const assessment = assessMissionCompletion(root, { missionId: mission.missionId });
@@ -106,10 +115,10 @@ test("receipt validation and completion queries are strictly zero-write", () => 
 });
 
 test("receipt ingestion rejects unknown fields and caller authority before writing", () => {
-  const forbiddenFields = ["authority", "role", "verdict", "status", "successful"];
+  const forbiddenFields = ["authority", "role", "verdict", "status", "successful", "schemaVersion", "ledgerSequence", "recordedAt", "producer"];
   for (const field of forbiddenFields) {
-    const { root, mission } = preparedRoot({ missionId: `forbidden-${field}` });
-    const receipt = validReceipt(root, mission, { extra: { [field]: field === "successful" ? true : "reviewer" } });
+    const { root, mission } = preparedRoot({ missionId: `forbidden-${field.toLowerCase()}` });
+    const receipt = validReceipt(root, mission, { extra: { [field]: field === "successful" ? true : field === "ledgerSequence" || field === "schemaVersion" ? 1 : field === "producer" ? { kind: "dove-internal", actionId: "upsert-note" } : "reviewer" } });
     const before = snapshot(root);
     assert.throws(() => ingestDirect(root, receipt), /does not accept unknown input/u);
     assert.deepEqual(snapshot(root), before);
@@ -251,7 +260,7 @@ test("direct-process lineage preflight rejects cross-mission ownership without p
   assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir, "owner-two-receipt.json")), false);
 });
 
-test("receipt ingestion preflights malformed lineage and required artifact coverage before writing", () => {
+test("receipt ingestion preflights malformed receipt ledger and required artifact coverage before writing", () => {
   const { root, mission } = preparedRoot({
     missionId: "preflight-lineage",
     targetArtifacts: ["outputs/result.md"],
@@ -270,9 +279,9 @@ test("receipt ingestion preflights malformed lineage and required artifact cover
       { path: "outputs/expected.md", kind: "report", sha256: sha256File(root, "outputs/expected.md") }
     ]
   });
-  writeText(root, ARTIFACT_PATHS.artifactLineage, "{ malformed\n");
+  writeText(root, `${ARTIFACT_PATHS.executionReceiptsDir}/broken.json`, "{ malformed\n");
   const beforeMalformed = snapshot(root);
-  assert.throws(() => ingestDirect(root, completeReceipt), /Malformed JSON|Expected property name/u);
+  assert.throws(() => ingestDirect(root, completeReceipt), /Malformed durable JSON|Expected property name/u);
   assert.deepEqual(snapshot(root), beforeMalformed);
 });
 
@@ -295,32 +304,138 @@ test("receipt ingestion rejects validation bookkeeping and duplicate canonical r
 test("receipt ingestion supports patch-plan and direct-process mutation modes", () => {
   const direct = preparedRoot({ missionId: "direct-mode" });
   const directReceipt = validReceipt(direct.root, direct.mission);
-  const directResult = ingestDirect(direct.root, directReceipt);
+  const directMutation = runWithMutationContext(direct.root, {
+    actionId: "ingest-execution-receipt",
+    mutationMode: "direct-process",
+    hostId: "test"
+  }, () => ingestExecutionReceipt(direct.root, directReceipt));
+  assert.equal(directMutation.completion.assessment, null);
+  assert.deepEqual(directMutation.postCommit, { kind: "assess-mission-completion", missionId: direct.mission.missionId });
+  const directResult = resolveExecutionReceiptPostCommit(direct.root, directMutation);
   assert.equal(directResult.status, "ingested");
+  assert.equal(Object.hasOwn(directResult, "postCommit"), false);
+  assert.equal(directResult.completion.assessWith, "assess_mission_completion");
+  assert.equal(directResult.completion.assessment.missionId, direct.mission.missionId);
+  assert.equal(directResult.completion.assessment.currentReceiptId, directReceipt.receiptId);
+  assert.equal(directResult.completion.assessment.complete, true);
   assert.equal(directResult.writesApplied, true);
   assert.equal(fs.existsSync(path.join(direct.root, ARTIFACT_PATHS.executionReceiptsDir, `${directReceipt.receiptId}.json`)), true);
-  assert.equal(fs.existsSync(path.join(direct.root, ARTIFACT_PATHS.artifactOwnership)), true);
-  assert.equal(fs.existsSync(path.join(direct.root, ARTIFACT_PATHS.artifactLineage)), true);
-  const lineage = JSON.parse(fs.readFileSync(path.join(direct.root, ARTIFACT_PATHS.artifactLineage), "utf8"));
+  assert.equal(fs.existsSync(path.join(direct.root, ".dove/artifacts/ownership.json")), false);
+  assert.equal(fs.existsSync(path.join(direct.root, ".dove/artifacts/lineage.json")), false);
+  const ownership = readArtifactOwnership(direct.root);
+  const lineage = readArtifactLineage(direct.root);
+  const history = readArtifactHistory(direct.root);
+  assert.equal(ownership.artifacts[0].receiptId, directReceipt.receiptId);
   assert.deepEqual(lineage.artifacts[0].derivedReferences, [`criterion:${directReceipt.criteriaSatisfied[0].criterionId}`]);
+  assert.equal(history[0].ledgerSequence, 1);
   assert.equal(fs.existsSync(path.join(direct.root, ".dove", "mutations")), false);
 
   const planned = preparedRoot({ missionId: "patch-mode" });
   const plannedReceipt = validReceipt(planned.root, planned.mission, { receiptId: "receipt-planned" });
   const before = snapshot(planned.root);
-  const plannedResult = runWithMutationContext(planned.root, {
+  const plannedMutation = runWithMutationContext(planned.root, {
     actionId: "ingest-execution-receipt",
     mutationMode: "patch-plan",
     hostId: "test"
   }, () => ingestExecutionReceipt(planned.root, plannedReceipt));
+  const plannedResult = resolveExecutionReceiptPostCommit(planned.root, plannedMutation);
   assert.equal(plannedResult.status, "ingest-planned");
+  assert.equal(Object.hasOwn(plannedResult, "postCommit"), false);
+  assert.equal(plannedResult.completion.assessment, null);
   assert.equal(plannedResult.writesApplied, false);
   assert.deepEqual(plannedResult.mutationPlan.operations.map((item) => item.relativePath), [
-    `${ARTIFACT_PATHS.executionReceiptsDir}/receipt-planned.json`,
-    ARTIFACT_PATHS.artifactOwnership,
-    ARTIFACT_PATHS.artifactLineage
+    `${ARTIFACT_PATHS.executionReceiptsDir}/receipt-planned.json`
   ]);
   assert.deepEqual(snapshot(planned.root), before);
+});
+
+test("failed direct-process receipt commit returns no completion assessment", () => {
+  const { root, mission } = preparedRoot({ missionId: "failed-receipt-commit" });
+  const receipt = validReceipt(root, mission, { receiptId: "failed-receipt" });
+  const receiptPath = path.join(root, ARTIFACT_PATHS.executionReceiptsDir, `${receipt.receiptId}.json`);
+  let coreResult = null;
+  const fsOps = {
+    ...fs,
+    renameSync(from, to) {
+      if (to === receiptPath) throw new Error("injected receipt promotion failure");
+      return fs.renameSync(from, to);
+    }
+  };
+  assert.throws(() => runWithMutationContext(root, {
+    actionId: "ingest-execution-receipt",
+    mutationMode: "direct-process",
+    hostId: "test",
+    fsOps
+  }, () => {
+    coreResult = ingestExecutionReceipt(root, receipt);
+    assert.equal(coreResult.completion.assessment, null);
+    assert.deepEqual(coreResult.postCommit, { kind: "assess-mission-completion", missionId: mission.missionId });
+    return coreResult;
+  }), /all staged changes were rolled back.*injected receipt promotion failure/u);
+  assert.equal(fs.existsSync(receiptPath), false);
+  assert.equal(coreResult.completion.assessment, null);
+  const assessment = assessMissionCompletion(root, { missionId: mission.missionId });
+  assert.equal(assessment.currentReceiptId, null);
+  assert.equal(assessment.complete, false);
+});
+
+test("simultaneous receipt ingestions cannot allocate the same ledger sequence", async () => {
+  const { root, mission } = preparedRoot({ missionId: "concurrent-ledger" });
+  const first = validReceipt(root, mission, { receiptId: "concurrent-first" });
+  const second = validReceipt(root, mission, { receiptId: "concurrent-second" });
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let ready = 0;
+  const start = (receipt) => runWithMutationContext(root, { actionId: "ingest-execution-receipt", mutationMode: "direct-process", hostId: "test" }, async () => {
+    const result = ingestExecutionReceipt(root, receipt);
+    ready += 1;
+    if (ready === 2) release();
+    await gate;
+    return result;
+  });
+  const settled = await Promise.allSettled([start(first), start(second)]);
+  assert.equal(settled.filter((item) => item.status === "fulfilled").length, 1);
+  assert.equal(settled.filter((item) => item.status === "rejected").length, 1);
+  assert.match(settled.find((item) => item.status === "rejected").reason.message, /commit precondition changed|ledger append lock/u);
+  const status = queryDoveStatus(root, { missionId: mission.missionId });
+  assert.equal(status.currentContext.receiptCount, 1);
+  const stored = fs.readdirSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir)).filter((name) => name.endsWith(".json"));
+  assert.equal(stored.length, 1);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir, stored[0]), "utf8")).ledgerSequence, 1);
+  assert.equal(fs.existsSync(path.join(root, ".dove/.receipt-ledger-append.lock")), false);
+});
+
+test("strict opener rejects stored receipt filename, sequence, producer, binding, and cross-mission ledger tampering", () => {
+  const cases = [
+    ["filename", (root, receipt) => fs.renameSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir, `${receipt.receiptId}.json`), path.join(root, ARTIFACT_PATHS.executionReceiptsDir, "wrong-name.json")), /filename must match receiptId/u],
+    ["sequence", (root, receipt) => { const receiptPath = path.join(root, ARTIFACT_PATHS.executionReceiptsDir, `${receipt.receiptId}.json`); const stored = JSON.parse(fs.readFileSync(receiptPath, "utf8")); stored.ledgerSequence = 2; fs.writeFileSync(receiptPath, `${JSON.stringify(stored, null, 2)}\n`); }, /contiguous from 1/u],
+    ["producer", (root, receipt) => { const receiptPath = path.join(root, ARTIFACT_PATHS.executionReceiptsDir, `${receipt.receiptId}.json`); const stored = JSON.parse(fs.readFileSync(receiptPath, "utf8")); stored.producer = { kind: "dove-internal", actionId: "ingest-execution-receipt" }; fs.writeFileSync(receiptPath, `${JSON.stringify(stored, null, 2)}\n`); }, /producer actionId/u],
+    ["binding", (root, receipt) => { const receiptPath = path.join(root, ARTIFACT_PATHS.executionReceiptsDir, `${receipt.receiptId}.json`); const stored = JSON.parse(fs.readFileSync(receiptPath, "utf8")); stored.contractDigest = "0".repeat(64); fs.writeFileSync(receiptPath, `${JSON.stringify(stored, null, 2)}\n`); }, /contractDigest does not match/u]
+  ];
+  for (const [name, tamper, pattern] of cases) {
+    const { root, mission } = preparedRoot({ missionId: `stored-${name}` });
+    const receipt = validReceipt(root, mission, { receiptId: `stored-${name}-receipt` });
+    ingestDirect(root, receipt);
+    tamper(root, receipt);
+    assert.throws(() => queryDoveStatus(root), pattern);
+  }
+
+  const root = createTempRoot("dove-stored-cross-mission-");
+  writeText(root, "outputs/shared.md", "shared\n");
+  writeText(root, "outputs/validation.log", "tests passed\n");
+  const firstMission = materializeMission(root, { missionId: "stored-owner-one" });
+  const first = validReceipt(root, firstMission, { receiptId: "stored-owner-one-receipt", artifactPath: "outputs/shared.md" });
+  ingestDirect(root, first);
+  writeText(root, "outputs/other.md", "other\n");
+  const secondMission = materializeMission(root, { missionId: "stored-owner-two" });
+  const second = validReceipt(root, secondMission, { receiptId: "stored-owner-two-receipt", artifactPath: "outputs/other.md" });
+  ingestDirect(root, second);
+  const secondPath = path.join(root, ARTIFACT_PATHS.executionReceiptsDir, `${second.receiptId}.json`);
+  const stored = JSON.parse(fs.readFileSync(secondPath, "utf8"));
+  stored.artifacts[0].path = "outputs/shared.md";
+  stored.artifacts[0].sha256 = sha256File(root, "outputs/shared.md");
+  fs.writeFileSync(secondPath, `${JSON.stringify(stored, null, 2)}\n`);
+  assert.throws(() => queryDoveStatus(root), /assigns artifact path .* after ownership by/u);
 });
 
 test("a valid receipt completes a no-review mission and artifact drift makes it stale", () => {
@@ -352,6 +467,41 @@ test("review-required missions remain incomplete without authoritative proof", (
   assert.equal(assessment.evidenceRequirements[0].reason, "authoritative-review-proof-missing");
 });
 
+test("selected mission status surfaces only contract-required source and review gaps", () => {
+  const ordinary = preparedRoot({ missionId: "ordinary-status" });
+  ingestDirect(ordinary.root, validReceipt(ordinary.root, ordinary.mission));
+  const ordinaryStatus = queryDoveStatus(ordinary.root, { missionId: ordinary.mission.missionId });
+  assert.equal(ordinaryStatus.needsAttention.status, "clear");
+  assert.deepEqual(ordinaryStatus.needsAttention.stableGaps.sources, []);
+  assert.deepEqual(ordinaryStatus.needsAttention.stableGaps.review, []);
+
+  const missing = preparedRoot({ missionId: "missing-required-status", evidenceRequirements: ["source:paper-required"] });
+  ingestDirect(missing.root, validReceipt(missing.root, missing.mission));
+  const missingStatus = queryDoveStatus(missing.root, { missionId: missing.mission.missionId, full: true });
+  assert.deepEqual(missingStatus.needsAttention.stableGaps.sources, [{ sourceId: "paper-required", lifecycle: "missing", eligible: false, reason: "unknown-source" }]);
+  assert.deepEqual(missingStatus.sourceIntegrity.required, [{ sourceId: "paper-required", lifecycle: "missing", eligible: false, reason: "unknown-source" }]);
+  assert.ok(missingStatus.needsAttention.reasons.includes("source-evidence-unavailable"));
+
+  const required = preparedRoot({ missionId: "required-status", evidenceRequirements: ["source:paper-required", "review:authoritative"] });
+  writeText(required.root, "inputs/paper.pdf", "captured source\n");
+  writeText(required.root, "inputs/optional.pdf", "optional captured source\n");
+  runWithMutationContext(required.root, { actionId: "register-source", mutationMode: "direct-process", hostId: "test" }, () => registerSource(required.root, { missionId: required.mission.missionId, sourceId: "paper-required", title: "Required paper", capturePath: "inputs/paper.pdf" }));
+  runWithMutationContext(required.root, { actionId: "register-source", mutationMode: "direct-process", hostId: "test" }, () => registerSource(required.root, { missionId: required.mission.missionId, sourceId: "optional-candidate", title: "Optional paper", capturePath: "inputs/optional.pdf" }));
+  ingestDirect(required.root, validReceipt(required.root, required.mission));
+  const candidate = queryDoveStatus(required.root, { missionId: required.mission.missionId, full: true });
+  assert.equal(candidate.needsAttention.status, "incomplete");
+  assert.deepEqual(candidate.needsAttention.stableGaps.sources.map((item) => [item.sourceId, item.lifecycle, item.eligible, item.reason]), [["paper-required", "candidate", false, "source-candidate"]]);
+  assert.deepEqual(candidate.sourceIntegrity.required.map((item) => item.sourceId), ["paper-required"]);
+  assert.equal(candidate.sourceIntegrity.candidateCount, 2);
+  assert.ok(candidate.needsAttention.stableGaps.review.includes("current-review-coverage-missing"));
+  assert.ok(candidate.needsAttention.stableGaps.review.includes("trusted-review-issuer-missing"));
+
+  runWithMutationContext(required.root, { actionId: "verify-source", mutationMode: "direct-process", hostId: "test" }, () => verifySource(required.root, { missionId: required.mission.missionId, sourceId: "paper-required", method: "manual-audit", checkedMaterial: "captured PDF", auditEvidence: [{ reference: "page 1", kind: "capture", observation: "Rejected after audit." }] }));
+  const rejected = queryDoveStatus(required.root, { missionId: required.mission.missionId });
+  assert.deepEqual(rejected.needsAttention.stableGaps.sources.map((item) => [item.sourceId, item.lifecycle, item.eligible, item.reason]), [["paper-required", "rejected", false, "source-rejected"]]);
+  assert.notEqual(rejected.needsAttention.status, "clear");
+});
+
 test("completion reassessment fails closed for malformed receipts and unknown stored fields", () => {
   const malformed = preparedRoot({ missionId: "malformed-receipt" });
   writeText(malformed.root, `${ARTIFACT_PATHS.executionReceiptsDir}/broken.json`, "{ broken\n");
@@ -371,7 +521,7 @@ test("completion reassessment fails closed for malformed receipts and unknown st
   assert.deepEqual(snapshot(unknown.root), beforeUnknown);
 });
 
-test("current mission contract drift invalidates receipts without persisting status", () => {
+test("current mission contract drift is rejected by the strict opener without persisting status", () => {
   const { root, mission } = preparedRoot();
   const receipt = validReceipt(root, mission);
   ingestDirect(root, receipt);
@@ -380,19 +530,18 @@ test("current mission contract drift invalidates receipts without persisting sta
   changed.goal = "Tampered mission goal";
   fs.writeFileSync(missionPath, `${JSON.stringify(changed, null, 2)}\n`, "utf8");
   const before = snapshot(root);
-  const assessment = assessMissionCompletion(root, { missionId: mission.missionId });
-  assert.equal(assessment.complete, false);
-  assert.ok(assessment.incompleteReasons.includes("mission-contract-invalid"));
-  assert.deepEqual(assessment.staleReceiptIds, [receipt.receiptId]);
+  assert.throws(() => assessMissionCompletion(root, { missionId: mission.missionId }), /contractDigest does not match its canonical mission content/u);
   assert.deepEqual(snapshot(root), before);
   assert.equal(Object.hasOwn(JSON.parse(fs.readFileSync(missionPath, "utf8")), "status"), false);
 });
 
-test("minimal status exposes only high-level live integrity assessment", () => {
+test("minimal status scopes the only mission and exposes high-level live integrity", () => {
   const { root, mission } = preparedRoot();
   ingestDirect(root, validReceipt(root, mission));
   const before = snapshot(root);
   const status = queryDoveStatus(root);
+  assert.equal(status.currentContext.missionScope, "only-mission");
+  assert.equal(status.currentContext.selectedMissionId, mission.missionId);
   assert.deepEqual(status.currentContext.integrityAssessment, {
     complete: true,
     staleReceiptCount: 0,

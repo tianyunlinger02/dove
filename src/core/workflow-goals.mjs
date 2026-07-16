@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -8,10 +9,10 @@ function reflection(regressionArtifacts, remediationTargets, summary) {
 }
 
 export const WORKFLOW_GOAL_CONTRACTS = Object.freeze([
-  { id: "mission-contract-materializes-without-execution", surface: "dove.mission", objective: "A mission persists only an exactly approved schema 7 contract.", acceptanceCriteria: ["proposal is zero-write", "bare or stale confirmation is rejected", "exact replay writes only the mission contract"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/workflow-goals.test.mjs"], ["src/core/mission-contracts.mjs"], "Restore exact proposal replay and minimal mission persistence.") },
+  { id: "mission-contract-materializes-without-execution", surface: "dove.mission", objective: "A mission persists only an exactly approved schema 8 contract.", acceptanceCriteria: ["proposal is zero-write", "bare or stale confirmation is rejected", "exact replay writes only the mission contract"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/workflow-goals.test.mjs"], ["src/core/mission-contracts.mjs"], "Restore exact proposal replay and minimal mission persistence.") },
   { id: "experience-blocked-audit-not-bridged", surface: "dove.experience", objective: "A blocked experiment audit fails before result or claim bridge writes.", acceptanceCriteria: ["integrity flags reject claim bridging", "rejection is zero-write", "no result or bridge artifact is created"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/domain-artifacts.test.mjs"], ["src/core/retained-domain-workflows.mjs"], "Restore complete domain preflight before the first write.") },
-  { id: "status-rejects-legacy-packet-state", surface: "dove.status", objective: "Status refuses a legacy marker without importing or changing it.", acceptanceCriteria: ["legacy state requires archive-reset", "the tree is unchanged", "no schema 7 manifest or mission is synthesized"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/workspace-schema.test.mjs"], ["src/core/workspace-schema.mjs", "src/core/mission-queries.mjs"], "Restore strict shallow legacy classification and zero-write reads.") },
-  { id: "public-surfaces-stay-flat", surface: "dove.status", objective: "Dove exposes exactly the twelve approved flat command surfaces.", acceptanceCriteria: ["twelve approved commands are present", "no retired command is present", "the command order is canonical"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "scripts/validate-commands.mjs"], ["src/core/command-manifest.mjs"], "Restore the exact schema 7 command inventory.") }
+  { id: "status-rejects-legacy-packet-state", surface: "dove.status", objective: "Status refuses a legacy marker without importing or changing it.", acceptanceCriteria: ["legacy state requires archive-reset", "the tree is unchanged", "no schema 8 manifest or mission is synthesized"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/workspace-schema.test.mjs"], ["src/core/workspace-schema.mjs", "src/core/mission-queries.mjs"], "Restore strict shallow legacy classification and zero-write reads.") },
+  { id: "public-surfaces-stay-flat", surface: "dove.status", objective: "Dove exposes exactly the twelve approved flat command surfaces.", acceptanceCriteria: ["twelve approved commands are present", "no retired command is present", "the command order is canonical"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "scripts/validate-commands.mjs"], ["src/core/command-manifest.mjs"], "Restore the exact schema 8 command inventory.") }
 ]);
 
 class WorkflowGoalValidationError extends Error {
@@ -68,7 +69,11 @@ function missionGoal(root, dispatch) {
 function experienceGoal(root, dispatch) {
   const proposal = toolResult(dispatch(root, "create_dove_mission", { missionId: "workflow-goal-experience-blocked", goal: "Reject blocked audit bridging.", completionCriteria: [], evidenceRequirements: [] }), "experience mission proposal");
   const mission = toolResult(dispatch(root, "create_dove_mission", proposal.confirmation.confirmArgs), "experience mission").mission;
-  toolResult(dispatch(root, "upsert_draft", { missionId: mission.missionId, draftId: "evidence", body: "Current host-produced evidence." }), "seed draft");
+  fs.mkdirSync(path.join(root, "outputs"), { recursive: true });
+  fs.writeFileSync(path.join(root, "outputs/evidence.md"), "Current host-produced evidence.\n");
+  const evidenceSha256 = crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "outputs/evidence.md"))).digest("hex");
+  toolResult(dispatch(root, "ingest_execution_receipt", { receiptId: "seed-experience-evidence", missionId: mission.missionId, contractDigest: mission.contractDigest, summary: "Seed workflow evidence.", artifacts: [{ path: "outputs/evidence.md", kind: "document", sha256: evidenceSha256 }], validations: [], criteriaSatisfied: [], producedAt: new Date().toISOString() }), "seed evidence receipt");
+  toolResult(dispatch(root, "upsert_draft", { missionId: mission.missionId, draftId: "evidence", body: "Current host-produced evidence.", artifactRefs: ["outputs/evidence.md"] }), "seed draft");
   const before = snapshot(root);
   const error = expectError(dispatch(root, "run_experience_workflow", { missionId: mission.missionId, experimentId: "blocked", goal: "Check audit.", hypothesis: "Flags block bridging.", protocol: "Inspect current evidence.", successCriteria: ["No blocked bridge"], result: "Blocked result.", resultEvidenceRefs: ["artifact:.dove/drafts/evidence.md"], auditFindings: ["Integrity is incomplete."], integrityFlags: ["methodology-incomplete"], claimId: "missing", bridgeReason: "Must fail." }), /cannot bridge to a claim while integrity flags remain/u, "blocked experiment");
   if (JSON.stringify(snapshot(root)) !== JSON.stringify(before)) throw new Error("blocked experiment changed the tree");

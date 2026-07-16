@@ -13,12 +13,20 @@ import {
   finalizeDomainArtifacts,
   readCurrentMission
 } from "./domain-artifacts.mjs";
-import { executionReceiptPath } from "./execution-receipts.mjs";
-import { ARTIFACT_PATHS } from "./schema.mjs";
 import { readJson } from "./workspace.mjs";
 import { openDoveWorkspace } from "./workspace-schema.mjs";
 
-export const SOURCE_LIFECYCLE_STATES = Object.freeze(["candidate", "verified", "rejected"]);
+export const SOURCE_LIFECYCLE_STATES = Object.freeze(["candidate", "rejected"]);
+
+const SOURCE_FIELDS = new Set([
+  "schemaVersion", "sourceId", "missionId", "contractDigest", "citationKey", "title", "authors", "year", "locator", "sourceType",
+  "abstract", "origin", "identityFingerprint", "capturedMaterial", "lifecycle", "currentDecision"
+]);
+const CAPTURED_MATERIAL_FIELDS = new Set(["path", "sha256"]);
+const CANDIDATE_DECISION_FIELDS = new Set(["decision", "decidedAt", "reason"]);
+const REJECTED_DECISION_FIELDS = new Set(["decision", "method", "checkedMaterial", "auditEvidence", "decidedAt"]);
+const AUDIT_EVIDENCE_FIELDS = new Set(["reference", "kind", "observation"]);
+const HASH_PATTERN = /^[0-9a-f]{64}$/u;
 
 const REGISTER_FIELDS = new Set(["missionId", "sourceId", "citationKey", "title", "authors", "year", "locator", "sourceType", "abstract", "origin", "capturePath"]);
 const REJECT_FIELDS = new Set(["missionId", "sourceId", "method", "checkedMaterial", "auditEvidence"]);
@@ -74,13 +82,65 @@ function notePath(noteId) {
   return path.posix.join(".dove/notes", `${noteId}.json`);
 }
 
+function assertSealed(value, fields, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be a plain object.`);
+  const unknown = Object.keys(value).filter((field) => !fields.has(field));
+  if (unknown.length) throw new Error(`${label} does not accept unknown fields: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
+}
+
+function exactTimestamp(value, label) {
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value)) || new Date(Date.parse(value)).toISOString() !== value) throw new Error(`${label} must be an exact ISO-8601 timestamp.`);
+  return value;
+}
+
+function validateStoredSource(root, source, filename, missions, label) {
+  assertSealed(source, SOURCE_FIELDS, label);
+  if (source.schemaVersion !== 1) throw new Error(`${label} has an unsupported schemaVersion.`);
+  const sourceId = domainSafeId(source.sourceId, `${label}.sourceId`);
+  if (filename !== `${sourceId}.json`) throw new Error(`${label} filename must match sourceId ${sourceId}.`);
+  const missionId = domainSafeId(source.missionId, `${label}.missionId`);
+  const mission = missions.get(missionId);
+  if (!mission) throw new Error(`${label} references unknown mission ${missionId}.`);
+  if (!HASH_PATTERN.test(String(source.contractDigest ?? "")) || source.contractDigest !== mission.contractDigest) throw new Error(`${label}.contractDigest does not match mission ${missionId}.`);
+  if (!SOURCE_LIFECYCLE_STATES.includes(source.lifecycle)) throw new Error(`${label}.lifecycle must be candidate or rejected; stored verified source state is invalid.`);
+  if (source.identityFingerprint !== sourceIdentityFingerprint(source)) throw new Error(`${label}.identityFingerprint does not match current source identity.`);
+  if (!source.title && !source.locator) throw new Error(`${label} requires a title or locator.`);
+  if (!Array.isArray(source.authors) || source.authors.some((item) => typeof item !== "string" || !item.trim()) || new Set(source.authors).size !== source.authors.length) throw new Error(`${label}.authors must be a unique string array.`);
+  if (!source.capturedMaterial) throw new Error(`${label}.capturedMaterial is required.`);
+  assertSealed(source.capturedMaterial, CAPTURED_MATERIAL_FIELDS, `${label}.capturedMaterial`);
+  const materialPath = canonicalDomainPath(source.capturedMaterial.path, `${label}.capturedMaterial.path`, ".dove/sources/materials");
+  if (!HASH_PATTERN.test(String(source.capturedMaterial.sha256 ?? ""))) throw new Error(`${label}.capturedMaterial.sha256 must be a lowercase SHA-256 hash.`);
+  const material = capturedMaterial(root, materialPath);
+  if (!material || material.path !== materialPath || material.sha256 !== source.capturedMaterial.sha256) throw new Error(`${label}.capturedMaterial is missing, aliased, empty, or hash-drifted.`);
+  const expectedDecisionFields = source.lifecycle === "candidate" ? CANDIDATE_DECISION_FIELDS : REJECTED_DECISION_FIELDS;
+  assertSealed(source.currentDecision, expectedDecisionFields, `${label}.currentDecision`);
+  if (source.currentDecision.decision !== source.lifecycle) throw new Error(`${label}.currentDecision.decision must match lifecycle ${source.lifecycle}.`);
+  exactTimestamp(source.currentDecision.decidedAt, `${label}.currentDecision.decidedAt`);
+  if (source.lifecycle === "candidate") {
+    domainNonEmptyText(source.currentDecision.reason, `${label}.currentDecision.reason`);
+  } else {
+    domainNonEmptyText(source.currentDecision.method, `${label}.currentDecision.method`);
+    domainNonEmptyText(source.currentDecision.checkedMaterial, `${label}.currentDecision.checkedMaterial`);
+    if (!Array.isArray(source.currentDecision.auditEvidence) || source.currentDecision.auditEvidence.length === 0) throw new Error(`${label}.currentDecision.auditEvidence must contain at least one item.`);
+    source.currentDecision.auditEvidence.forEach((item, index) => {
+      assertSealed(item, AUDIT_EVIDENCE_FIELDS, `${label}.currentDecision.auditEvidence[${index}]`);
+      for (const field of AUDIT_EVIDENCE_FIELDS) domainNonEmptyText(item[field], `${label}.currentDecision.auditEvidence[${index}].${field}`);
+    });
+  }
+  return source;
+}
+
 function readSourceFiles(root) {
-  openDoveWorkspace(root, { operation: "Source query" });
+  const workspace = openDoveWorkspace(root, { operation: "Source query" });
   const directory = path.resolve(root, ".dove/sources");
   return fs.readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-    .map((entry) => readJson(root, path.posix.join(".dove/sources", entry.name), null))
-    .filter((item) => item && item.schemaVersion === 1 && item.sourceId)
+    .filter((entry) => entry.name !== "materials")
+    .map((entry) => {
+      const relativePath = path.posix.join(".dove/sources", entry.name);
+      if (entry.isSymbolicLink()) throw new Error(`${relativePath} must not be a symbolic link.`);
+      if (!entry.isFile() || !entry.name.endsWith(".json")) throw new Error(`${relativePath} must be a regular JSON source file.`);
+      return validateStoredSource(root, readJson(root, relativePath, null), entry.name, workspace.missions, relativePath);
+    })
     .sort((left, right) => String(left.sourceId).localeCompare(String(right.sourceId)));
 }
 
@@ -94,7 +154,7 @@ function capturedMaterial(root, capturePath) {
   return { path: resolved, sha256: domainSha256(fs.readFileSync(path.resolve(root, resolved))) };
 }
 
-function sourceRecord(root, args, capturedMaterial, current = null) {
+function sourceRecord(args, capturedMaterial, contractDigest, current = null) {
   const missionId = domainSafeId(args.missionId, "missionId");
   const sourceId = domainSafeId(args.sourceId, "sourceId");
   const title = normalizeText(args.title);
@@ -107,6 +167,7 @@ function sourceRecord(root, args, capturedMaterial, current = null) {
     schemaVersion: 1,
     sourceId,
     missionId,
+    contractDigest,
     citationKey: normalizeText(args.citationKey) || null,
     title: title || null,
     authors,
@@ -129,16 +190,18 @@ function sourceRecord(root, args, capturedMaterial, current = null) {
 export function registerSource(root, args = {}) {
   assertSealedDomainArgs(args, REGISTER_FIELDS, "register_source");
   const { mission } = readCurrentMission(root, args.missionId, "Source registration");
+  readSourceFiles(root);
   const sourceId = domainSafeId(args.sourceId, "sourceId");
   const relativePath = sourcePath(sourceId);
   const existing = fs.existsSync(path.resolve(root, relativePath)) ? readJson(root, relativePath, null) : null;
   if (existing && existing.missionId !== mission.missionId) throw new Error(`Source ${args.sourceId} belongs to mission ${existing.missionId}.`);
   const captured = capturedMaterial(root, args.capturePath);
-  const materialPath = captured ? path.posix.join(".dove/sources/materials", `${sourceId}${path.extname(captured.path).toLowerCase() || ".bin"}`) : null;
-  const sourceMaterial = captured ? { path: materialPath, sha256: captured.sha256 } : null;
-  const source = sourceRecord(root, args, sourceMaterial, existing);
-  const writes = [{ path: relativePath, kind: "data", content: domainJson(source), derivedReferences: source.capturedMaterial ? [`artifact:${source.capturedMaterial.path}`] : [] }];
-  if (captured) writes.unshift({ path: materialPath, kind: "document", content: fs.readFileSync(path.resolve(root, captured.path)), derivedReferences: [] });
+  if (!captured) throw new Error("register_source requires capturePath for concrete non-empty captured material.");
+  const materialPath = path.posix.join(".dove/sources/materials", `${sourceId}${path.extname(captured.path).toLowerCase() || ".bin"}`);
+  const sourceMaterial = { path: materialPath, sha256: captured.sha256 };
+  const source = sourceRecord(args, sourceMaterial, mission.contractDigest, existing);
+  const writes = [{ path: relativePath, kind: "data", content: domainJson(source), derivedReferences: [`artifact:${source.capturedMaterial.path}`] }];
+  writes.unshift({ path: materialPath, kind: "document", content: fs.readFileSync(path.resolve(root, captured.path)), derivedReferences: [] });
   return {
     ...finalizeDomainArtifacts(root, {
       actionId: "register-source",
@@ -169,6 +232,7 @@ function normalizeAuditEvidence(value) {
 export function verifySource(root, args = {}) {
   assertSealedDomainArgs(args, REJECT_FIELDS, "verify_source");
   const { mission } = readCurrentMission(root, args.missionId, "Source rejection");
+  readSourceFiles(root);
   const sourceId = domainSafeId(args.sourceId, "sourceId");
   const relativePath = sourcePath(sourceId);
   const source = readJson(root, relativePath, null);
@@ -206,14 +270,21 @@ export function sourceEligibility(source, _verifications = [], options = {}) {
   if (!source) return { eligible: false, reason: "unknown-source", source: null, verification: null };
   const missionId = normalizeText(options.missionId);
   if (!missionId || source.missionId !== missionId) return { eligible: false, reason: "source-mission-binding-mismatch", source, verification: source.currentDecision ?? null };
+  if (!SOURCE_LIFECYCLE_STATES.includes(source.lifecycle) || source.currentDecision?.decision !== source.lifecycle) return { eligible: false, reason: "source-durable-state-invalid", source, verification: source.currentDecision ?? null };
   if (source.identityFingerprint !== sourceIdentityFingerprint(source)) return { eligible: false, reason: "source-identity-changed", source, verification: source.currentDecision ?? null };
-  if (source.lifecycle !== "verified" || source.currentDecision?.decision !== "verified") return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: source.currentDecision ?? null };
-  if (!source.capturedMaterial) return { eligible: false, reason: "source-captured-material-missing", source, verification: source.currentDecision };
-  const material = capturedMaterial(options.root, source.capturedMaterial.path);
-  if (!material || material.sha256 !== source.capturedMaterial.sha256 || source.currentDecision.materialHash !== material.sha256) return { eligible: false, reason: "source-verification-material-changed", source, verification: source.currentDecision };
-  const receipt = readJson(options.root, executionReceiptPath(source.currentDecision.receiptId), null);
-  if (!receipt || receipt.missionId !== missionId || !receipt.artifacts.some((item) => item.path === material.path && item.sha256 === material.sha256)) return { eligible: false, reason: "source-verification-receipt-invalid", source, verification: source.currentDecision };
-  return { eligible: true, reason: "verified-source", source, verification: source.currentDecision };
+  if (!source.capturedMaterial) return { eligible: false, reason: "source-captured-material-missing", source, verification: source.currentDecision ?? null };
+  try {
+    const material = capturedMaterial(options.root, source.capturedMaterial.path);
+    if (!material || material.sha256 !== source.capturedMaterial.sha256) return { eligible: false, reason: "source-captured-material-changed", source, verification: source.currentDecision ?? null };
+  } catch {
+    return { eligible: false, reason: "source-captured-material-invalid", source, verification: source.currentDecision ?? null };
+  }
+  return { eligible: false, reason: `source-${source.lifecycle}`, source, verification: source.currentDecision ?? null };
+}
+
+export function evaluateSourceIds(root, sourceIds = [], missionId = null) {
+  const byId = new Map(readSourceFiles(root).map((source) => [source.sourceId, source]));
+  return sourceIds.map((sourceId) => ({ sourceId, ...sourceEligibility(byId.get(sourceId) ?? null, [], { root, missionId }) }));
 }
 
 export function evaluateSourceReferences(root, references = [], missionId = null) {
@@ -232,8 +303,7 @@ export function evaluateNoteReferences(root, references = [], missionId = null) 
     if (sourceIds.length === 0 && artifactRefs.length === 0) return { reference, eligible: false, reason: "note-evidence-missing", note, sources: [], artifacts: [] };
     const sources = evaluateSourceReferences(root, sourceIds, missionId);
     const sourceFailure = sources.find((item) => !item.eligible);
-    const ownership = readJson(root, ARTIFACT_PATHS.artifactOwnership, { artifacts: [] });
-    const owned = new Map((ownership.artifacts ?? []).map((item) => [item.path, item]));
+    const owned = new Map(openDoveWorkspace(root, { operation: "Note evidence receipt ledger read" }).receiptLedger.currentOwnership.map((item) => [item.path, item]));
     const artifacts = artifactRefs.map((artifactPath) => {
       const owner = owned.get(artifactPath);
       if (!owner) return { path: artifactPath, current: false, reason: "artifact-ownership-missing" };
@@ -254,6 +324,7 @@ export function querySources(root, args = {}) {
   const { mission } = readCurrentMission(root, args.missionId, "Source query");
   const sourceId = normalizeText(args.sourceId);
   const lifecycle = normalizeText(args.lifecycle).toLowerCase();
+  if (lifecycle && !SOURCE_LIFECYCLE_STATES.includes(lifecycle)) throw new Error(`lifecycle must be one of: ${SOURCE_LIFECYCLE_STATES.join(", ")}.`);
   const limit = Math.min(200, Math.max(1, Number.isFinite(Number(args.limit)) ? Math.trunc(Number(args.limit)) : 50));
   const items = readSourceFiles(root)
     .filter((source) => source.missionId === mission.missionId)
@@ -277,6 +348,6 @@ export function sourceReferenceMap(sources = []) {
 
 export function assertEligibleSourceReferences(root, references = [], label = "Evidence", missionId = null) {
   const failures = evaluateSourceReferences(root, references, missionId).filter((item) => !item.eligible);
-  if (failures.length) throw new Error(`${label} requires current mission-bound verified sources: ${failures.map((item) => `${item.reference} (${item.reason})`).join(", ")}.`);
+  if (failures.length) throw new Error(`${label} cannot use source references until a trusted positive verifier exists: ${failures.map((item) => `${item.reference} (${item.reason})`).join(", ")}.`);
   return true;
 }

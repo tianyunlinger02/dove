@@ -75,7 +75,7 @@ export function startServer(root = process.cwd()) {
       sendResponse(id, {
         protocolVersion: "2024-11-05",
         capabilities: { tools: {} },
-        serverInfo: { name: "dove", version: "0.2.0" }
+        serverInfo: { name: "dove", version: "0.3.0" }
       });
       return;
     }

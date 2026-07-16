@@ -220,12 +220,30 @@ function buildProposal(root, args) {
     supersession
   };
   const proposalDigest = domainSha256(stableWorkspaceSerialize(envelope));
-  const proposalToken = Buffer.from(JSON.stringify({
-    version: DOVE_LESSON_PROPOSAL_VERSION,
+  const replayArgs = {
+    confirmed: true,
+    proposalVersion: DOVE_LESSON_PROPOSAL_VERSION,
     proposalWorkspace,
     proposalDigest,
-    lessonId: lesson.lessonId
-  }), "utf8").toString("base64url");
+    mutationMode,
+    workspaceId: envelope.workspaceId,
+    contractDigest: envelope.contractDigest,
+    createdAt: lesson.createdAt,
+    missionId: content.missionId,
+    lessonId: content.lessonId,
+    scope: content.scope,
+    kind: content.kind,
+    summary: content.summary,
+    ...(content.details === undefined ? {} : { details: content.details }),
+    nextTimeGuidance: content.nextTimeGuidance,
+    sourceIds: content.sourceIds,
+    noteIds: content.noteIds,
+    artifactRefs: content.artifactRefs,
+    appliesToArtifactRefs: content.appliesToArtifactRefs,
+    tags: content.tags,
+    ...(content.supersedesLessonId === undefined ? {} : { supersedesLessonId: content.supersedesLessonId })
+  };
+  const proposalToken = Buffer.from(JSON.stringify({ version: DOVE_LESSON_PROPOSAL_VERSION, mutationMode, confirmArgs: replayArgs }), "utf8").toString("base64url");
   return { content, lesson, envelope, proposalDigest, proposalToken, relativePath, mutationMode };
 }
 

@@ -66,7 +66,7 @@ test("workflow goal validation keeps minimal status isolated from legacy packet 
   assert.equal(legacyStatusGoal.evidence.legacyPacketNotPresented, true);
 });
 
-test("workflow goal validation preserves the exact schema 7 command inventory", () => {
+test("workflow goal validation preserves the exact schema 8 command inventory", () => {
   const result = validateGoals();
   assert.equal(result.status, "passed");
 

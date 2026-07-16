@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { inspectDeclaredPath } from "./artifact-integrity.mjs";
 import { assessMissionCompletion } from "./completion-gates.mjs";
 import {
   assertSealedDomainArgs,
@@ -127,7 +128,7 @@ export function upsertNote(root, args = {}) {
     if (failures.length) throw new Error(`upsert_note rejects ineligible sources: ${failures.map((item) => `${item.reference} (${item.reason})`).join(", ")}.`);
   }
   const artifacts = resolveMissionArtifactReferences(root, mission.missionId, args.artifactRefs, "artifactRefs");
-  if (sourceIds.length === 0 && artifacts.length === 0) throw new Error("upsert_note requires at least one verified source or current mission artifact reference.");
+  if (sourceIds.length === 0 && artifacts.length === 0) throw new Error("upsert_note requires at least one current mission artifact reference; sourceIds remain unavailable until a trusted positive source verifier exists.");
   const relativePath = filePath(".dove/notes", noteId);
   existingBoundRecord(root, relativePath, mission.missionId, `Note ${noteId}`);
   const note = {
@@ -184,6 +185,7 @@ export function upsertDraft(root, args = {}) {
   const { mission } = readCurrentMission(root, args.missionId, "Draft workflow");
   const draftId = domainSafeId(args.draftId, "draftId");
   const evidenceRefs = normalizeEvidenceRefs(root, mission.missionId, [...domainStringArray(args.evidenceRefs, "evidenceRefs"), ...domainStringArray(args.artifactRefs, "artifactRefs").map((value) => `artifact:${value}`)]);
+  if (evidenceRefs.length === 0) throw new Error("upsert_draft body requires at least one current eligible evidence or artifact reference.");
   const draft = { schemaVersion: 1, draftId, missionId: mission.missionId, title: typeof args.title === "string" && args.title.trim() ? args.title.trim() : draftId, body: domainNonEmptyText(args.body, "body"), summary: typeof args.summary === "string" && args.summary.trim() ? args.summary.trim() : null, evidenceRefs, updatedAt: new Date().toISOString() };
   const relativePath = filePath(".dove/drafts", draftId, "md");
   return { ...finalizeDomainArtifacts(root, { actionId: "upsert-draft", missionId: mission.missionId, summary: `Recorded draft ${draftId}.`, completionEligible: true, writes: [{ path: relativePath, kind: "document", content: draftContent(draft), derivedReferences: evidenceRefs }] }), draft };
@@ -239,10 +241,13 @@ export function runExperienceWorkflow(root, args = {}) {
 
 function currentOutput(root, outputPath, expectedHash) {
   const canonical = canonicalDomainPath(outputPath, "outputPath");
-  if (!fs.existsSync(path.resolve(root, canonical))) throw new Error("Figure outputPath does not exist.");
-  const actual = domainSha256(fs.readFileSync(path.resolve(root, canonical)));
+  const inspection = inspectDeclaredPath(root, canonical, { requireNonEmpty: true });
+  if (inspection.status !== "existing") throw new Error(`Figure outputPath must reference an existing non-empty regular file (${inspection.reason ?? inspection.status}).`);
+  const resolved = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  if (inspection.normalizedPath !== canonical || resolved !== canonical) throw new Error("Figure outputPath must use its canonical realpath-contained path and cannot use a symlink or alias.");
+  const actual = domainSha256(fs.readFileSync(path.resolve(root, resolved)));
   if (expectedHash && expectedHash !== actual) throw new Error("Figure output hash does not match the imported file.");
-  return { path: canonical, sha256: actual };
+  return { path: resolved, sha256: actual };
 }
 
 export function runFigureWorkflow(root, args = {}) {
@@ -387,11 +392,13 @@ export function compareVersions(root, args = {}) {
   return finalizeDomainArtifacts(root, { actionId: "compare-versions", missionId: mission.missionId, summary: `Compared versions ${fromVersionId} and ${toVersionId}.`, completionEligible: false, writes: [{ path: filePath(".dove/versions", `${fromVersionId}--${toVersionId}.comparison`), kind: "data", content: domainJson(comparison), derivedReferences: [`version:${fromVersionId}`, `version:${toVersionId}`] }] });
 }
 
-export function queryDomainIntegrity(root) {
+export function queryDomainIntegrity(root, missionId = null) {
   const workspace = openDoveWorkspace(root, { operation: "Domain integrity query" });
   const ownership = readArtifactOwnership(root);
   const domainPrefixes = [".dove/sources/", ".dove/notes/", ".dove/claims/", ".dove/experiments/", ".dove/drafts/", ".dove/figures/", ".dove/rebuttal/", ".dove/versions/"];
-  const domainArtifacts = ownership.artifacts.filter((item) => domainPrefixes.some((prefix) => item.path.startsWith(prefix)));
+  const domainArtifacts = ownership.artifacts
+    .filter((item) => domainPrefixes.some((prefix) => item.path.startsWith(prefix)))
+    .filter((item) => !missionId || item.missionId === missionId);
   const stale = domainArtifacts.filter((item) => !fs.existsSync(path.resolve(root, item.path)) || domainSha256(fs.readFileSync(path.resolve(root, item.path))) !== item.sha256);
-  return { workspaceId: workspace.manifest.workspaceId, artifactCount: domainArtifacts.length, staleArtifactCount: stale.length, stalePaths: stale.map((item) => item.path) };
+  return { workspaceId: workspace.manifest.workspaceId, missionId, artifactCount: domainArtifacts.length, staleArtifactCount: stale.length, stalePaths: stale.map((item) => item.path) };
 }

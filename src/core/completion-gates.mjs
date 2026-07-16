@@ -15,8 +15,8 @@ import { openDoveWorkspace } from "./workspace-schema.mjs";
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const ARTIFACT_KINDS = new Set(["report", "document", "code", "data", "figure", "media", "other"]);
 const VALIDATION_KINDS = new Set(["test-log", "typecheck-log", "lint-log", "build-log", "audit-log", "validation-log", "command-output"]);
-const RECEIPT_FIELDS = new Set(["schemaVersion", "workspaceId", "receiptId", "missionId", "contractDigest", "summary", "artifacts", "validations", "criteriaSatisfied", "producedAt"]);
-const ARTIFACT_FIELDS = new Set(["path", "kind", "sha256"]);
+const RECEIPT_FIELDS = new Set(["schemaVersion", "workspaceId", "receiptId", "ledgerSequence", "missionId", "contractDigest", "summary", "artifacts", "validations", "criteriaSatisfied", "producedAt", "recordedAt", "producer"]);
+const ARTIFACT_FIELDS = new Set(["path", "kind", "sha256", "derivedReferences"]);
 const VALIDATION_FIELDS = new Set(["kind", "reference", "outputHash"]);
 const CRITERION_FIELDS = new Set(["criterionId", "evidenceRefs"]);
 
@@ -69,7 +69,7 @@ function receiptAssessment(root, mission, receipt, workspaceId, missionCurrent =
   const failures = [];
   if (receipt?.__readFailure) failures.push("receipt-json-malformed");
   if (!missionCurrent) failures.push("mission-contract-invalid");
-  if (!sealed(receipt, RECEIPT_FIELDS) || receipt.schemaVersion !== 1) failures.push("receipt-schema-invalid");
+  if (!sealed(receipt, RECEIPT_FIELDS) || receipt.schemaVersion !== 2) failures.push("receipt-schema-invalid");
   if (receipt.workspaceId !== workspaceId || mission.workspaceId !== workspaceId) failures.push("workspace-binding-mismatch");
   if (receipt.missionId !== mission.missionId) failures.push("mission-binding-mismatch");
   if (receipt?.contractDigest !== mission.contractDigest || !missionCurrent) failures.push("contract-digest-stale");
@@ -78,7 +78,7 @@ function receiptAssessment(root, mission, receipt, workspaceId, missionCurrent =
   if (!Array.isArray(receipt.criteriaSatisfied)) failures.push("criteria-invalid");
 
   const artifactAssessments = (Array.isArray(receipt.artifacts) ? receipt.artifacts : []).map((artifact) => {
-    if (!sealed(artifact, ARTIFACT_FIELDS) || typeof artifact.path !== "string" || !artifact.path.trim() || !ARTIFACT_KINDS.has(artifact.kind) || !HASH_PATTERN.test(String(artifact.sha256 ?? ""))) {
+    if (!sealed(artifact, ARTIFACT_FIELDS) || typeof artifact.path !== "string" || !artifact.path.trim() || !ARTIFACT_KINDS.has(artifact.kind) || !HASH_PATTERN.test(String(artifact.sha256 ?? "")) || !Array.isArray(artifact.derivedReferences)) {
       return { path: artifact?.path ?? null, current: false, reason: "artifact-schema-invalid" };
     }
     return currentHashedFile(root, artifact.path, artifact.sha256);
@@ -224,8 +224,7 @@ export function assessMissionCompletion(root, args = {}) {
       missionContractFailure,
       missionPath: relativePath,
       receiptRoot: ARTIFACT_PATHS.executionReceiptsDir,
-      artifactOwnershipPath: ARTIFACT_PATHS.artifactOwnership,
-      artifactLineagePath: ARTIFACT_PATHS.artifactLineage
+      artifactAuthority: "execution-receipt-ledger"
     }
   };
 }

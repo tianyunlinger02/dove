@@ -95,7 +95,7 @@ export function inspectDeclaredPath(root, rawPath, options = {}) {
   if (options.rejectBookkeeping === true) {
     const rejected = [evidenceRole, canonicalEvidenceRole].find((role) => role === "bookkeeping" || role === "unsupported");
     if (rejected) {
-      return { ...base, status: rejected, reason: rejected === "bookkeeping" ? "path is Dove bookkeeping rather than substantive evidence" : "path is not an approved schema 7 evidence artifact" };
+      return { ...base, status: rejected, reason: rejected === "bookkeeping" ? "path is Dove bookkeeping rather than substantive evidence" : "path is not an approved schema 8 evidence artifact" };
     }
   }
   if (options.requireNonEmpty === true && stat.size === 0) return { ...base, status: "empty", reason: "path is an empty file" };

@@ -1,6 +1,6 @@
 # Quality Guidelines
 
-> Code and package quality standards for Dove schema 7.
+> Code and package quality standards for Dove schema 8.
 
 ---
 
@@ -38,7 +38,7 @@ npm run pack:dry-run
 
 ## Required Tests
 
-Broad schema 7 changes should cover:
+Broad schema 8 changes should cover:
 
 - physical deletion and static unreachability of retired modules and callables;
 - exact CLI, command, package, and MCP inventories: 12 commands, 27 MCP tools, and 60 combined generated adapters;
@@ -64,7 +64,7 @@ Broad schema 7 changes should cover:
 
 ## Review Checklist
 
-- Are all durable paths canonical and declared by schema 7?
+- Are all durable paths canonical and declared by schema 8?
 - Are legacy roots rejected when they coexist with a current manifest?
 - Are public exports, CLI commands, generated adapters, MCP tools, governance bindings, and tests aligned?
 - Are nested MCP objects sealed?

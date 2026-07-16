@@ -11,7 +11,6 @@ import {
   createMinimalWorkspaceDocuments,
   inspectDoveSourceTree,
   inspectDoveWorkspace,
-  materializeMinimalWorkspaceDirectory,
   newWorkspaceId,
   openDoveWorkspace,
   stableWorkspaceSerialize,
@@ -254,50 +253,17 @@ export function previewDoveInit(root, args = {}) {
   return proposalResult(buildProposal(root, args));
 }
 
-export function materializeDoveInitDirect(root, proposal, options = {}) {
-  const ops = options.fsOps ?? fs;
-  const workspace = proposal.envelope.workspace;
-  const doveRoot = path.join(workspace, ".dove");
-  if (!proposal.envelope.archiveReset) {
-    try {
-      materializeMinimalWorkspaceDirectory(doveRoot, proposal.documents, { fsOps: ops });
-    } catch (error) {
-      let rollbackError = null;
-      try {
-        if (ops.existsSync(doveRoot)) ops.rmSync(doveRoot, { recursive: true, force: true });
-      } catch (rollbackFailure) {
-        rollbackError = rollbackFailure;
-      }
-      if (rollbackError) {
-        throw new Error(`Dove initialization failed and cleanup also failed: ${error instanceof Error ? error.message : String(error)}; cleanup: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
-      }
-      throw new Error(`Dove initialization failed; no .dove workspace was retained: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    return;
+function stageDoveInitialization(context, proposal) {
+  if (proposal.envelope.archiveReset) {
+    context.replaceDirectory(".dove", {
+      archiveTarget: path.relative(proposal.envelope.workspace, proposal.envelope.archiveTarget).split(path.sep).join("/")
+    });
+  } else {
+    context.replaceDirectory(".dove");
   }
-  const archiveTarget = proposal.envelope.archiveTarget;
-  const archiveParent = path.dirname(archiveTarget);
-  const archiveParentExisted = ops.existsSync(archiveParent);
-  let renamed = false;
-  try {
-    if (!archiveParentExisted) ops.mkdirSync(archiveParent, { recursive: false });
-    ops.renameSync(doveRoot, archiveTarget);
-    renamed = true;
-    materializeMinimalWorkspaceDirectory(doveRoot, proposal.documents, { fsOps: ops });
-  } catch (error) {
-    let rollbackError = null;
-    try {
-      if (renamed && ops.existsSync(doveRoot)) ops.rmSync(doveRoot, { recursive: true, force: true });
-      if (renamed && ops.existsSync(archiveTarget)) ops.renameSync(archiveTarget, doveRoot);
-      if (!archiveParentExisted && ops.existsSync(archiveParent) && ops.readdirSync(archiveParent).length === 0) ops.rmdirSync(archiveParent);
-    } catch (rollbackFailure) {
-      rollbackError = rollbackFailure;
-    }
-    if (rollbackError) {
-      throw new Error(`Dove archive-reset failed and rollback also failed: ${error instanceof Error ? error.message : String(error)}; rollback: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
-    }
-    throw new Error(`Dove archive-reset failed; the original .dove directory was restored: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  for (const relativePath of MINIMAL_WORKSPACE_DIRECTORIES) context.ensureDirectory(relativePath);
+  context.writeJson(".dove/manifest.json", proposal.documents.manifest);
+  context.writeJson(".dove/project.json", proposal.documents.project);
 }
 
 export function initDoveWorkspace(root, args = {}, options = {}) {
@@ -309,13 +275,11 @@ export function initDoveWorkspace(root, args = {}, options = {}) {
   if (proposal.envelope.archiveReset && proposal.envelope.mutationMode === "patch-plan") {
     throw new Error("Confirmed Dove archive-reset cannot claim patch-plan writes: the required atomic directory rename and rollback are direct-process only.");
   }
+  const context = currentMutationContext(root);
   if (proposal.envelope.mutationMode === "patch-plan") {
-    const context = currentMutationContext(root);
     for (const relativePath of MINIMAL_WORKSPACE_DIRECTORIES) context.ensureDirectory(relativePath);
     context.writeJson(".dove/manifest.json", proposal.documents.manifest);
     context.writeJson(".dove/project.json", proposal.documents.project);
-    context.writeJson(".dove/artifacts/ownership.json", proposal.documents.ownership);
-    context.writeJson(".dove/artifacts/lineage.json", proposal.documents.lineage);
     return {
       status: "initialization-planned",
       kind: "init",
@@ -326,13 +290,12 @@ export function initDoveWorkspace(root, args = {}, options = {}) {
       writes: []
     };
   }
-  materializeDoveInitDirect(root, proposal, options);
-  const opened = openDoveWorkspace(root, { operation: "confirmed Dove init" });
+  stageDoveInitialization(context, proposal);
   return {
     status: proposal.envelope.archiveReset ? "archive-reset-complete" : "initialized",
     kind: proposal.envelope.archiveReset ? "archive-reset" : "init",
-    manifest: opened.manifest,
-    project: opened.project,
+    manifest: proposal.documents.manifest,
+    project: proposal.documents.project,
     archiveTarget: proposal.envelope.archiveTarget,
     mutation: mutationMetadata(proposal, true),
     writes: MINIMAL_WORKSPACE_REQUIRED_FILES

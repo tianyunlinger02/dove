@@ -1,6 +1,6 @@
 {
   "name": "dove",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local-first Dove mission and evidence workflow pack for papers, engineering work, research, and review.",
   "type": "module",
   "bin": {

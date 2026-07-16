@@ -46,7 +46,7 @@ export function resolveReviewArtifactSnapshots(root, missionId, relativePaths, l
     if (seen.has(canonicalPath)) continue;
     seen.add(canonicalPath);
     const owner = ownerByPath.get(canonicalPath);
-    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 7 artifact: ${canonicalPath}.`);
+    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 8 artifact: ${canonicalPath}.`);
     if (owner.missionId !== missionId) throw new Error(`${label}[${index}] belongs to mission ${owner.missionId}, not ${missionId}.`);
     const inspection = inspectDeclaredPath(root, canonicalPath, { requireNonEmpty: true, rejectBookkeeping: true });
     const snapshot = {

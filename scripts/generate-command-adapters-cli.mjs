@@ -15,6 +15,6 @@ if (process.argv.includes("--check")) {
     console.log("Generated command adapters are up to date.");
   }
 } else {
-  const written = writeGeneratedAdapters();
-  console.log(JSON.stringify({ written }, null, 2));
+  const transaction = writeGeneratedAdapters();
+  console.log(JSON.stringify({ written: transaction.writtenPaths, transactionState: transaction.transactionState }, null, 2));
 }

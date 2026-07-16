@@ -5,11 +5,12 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { configureClaudeCodeGatewayDefaults, inspectClaudeCodeGatewayDefaults, resolveClaudeConfigRoot, resolveClaudeShellStartupFile } from "../src/core/claude-code-gateway.mjs";
+import { resolveClaudeConfigRoot } from "../src/core/claude-code-gateway.mjs";
 import { parseDoveCli } from "../src/cli/command-parser.mjs";
 import { COMMAND_SURFACES, CORE_INSTALL_PATHS, DEFAULT_HOST_ADAPTERS, HOST_ADAPTERS, HOST_IDS, USER_HOST_IDS } from "../src/core/command-manifest.mjs";
 import { resolveCanonicalContainedWrite } from "../src/core/contained-write.mjs";
-import { ingestExecutionReceipt } from "../src/core/execution-receipts.mjs";
+import { ingestExecutionReceipt, resolveExecutionReceiptPostCommit } from "../src/core/execution-receipts.mjs";
+import { writeFileSetTransaction } from "../src/core/file-set-transaction.mjs";
 import { queryDoveLessons, recordDoveLesson } from "../src/core/lessons.mjs";
 import { createDoveMission, initDoveGoal } from "../src/core/mission-contracts.mjs";
 import { queryDoveStatus } from "../src/core/mission-queries.mjs";
@@ -18,7 +19,7 @@ import { buildRebuttal, buildRebuttalStrategy, compareVersions, createVersionSna
 import { importReviewExchange, prepareReviewExchange, verifyReviewCoverage } from "../src/core/review-exchange.mjs";
 import { registerSource, verifySource } from "../src/core/source-trust.mjs";
 import { inspectDoveWorkspace } from "../src/core/workspace-schema.mjs";
-import { writeClaudeUserCommandAdapters } from "../scripts/generate-command-adapters.mjs";
+import { generatedClaudeUserCommandEntries } from "../scripts/generate-command-adapters.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,7 +48,7 @@ Usage:
   dove sync [target] --host <opencode|codex|cursor|agents|claude|all>
   dove doctor [target]
 
-Dove persists only schema 7 mission, advisory lesson, receipt, ownership, lineage, source, domain, review, rebuttal, and version artifacts.
+Dove persists only schema 8 mission, advisory lesson, execution receipt ledger, source, domain, review, rebuttal, and version artifacts.
 `);
 }
 
@@ -109,7 +110,8 @@ function targetAndArgs(rawTarget, args) {
 
 function runMutation(target, actionId, args, callback, fallback = "patch-plan") {
   const cleanArgs = withoutMutationMode(args);
-  return runWithMutationContext(target, { actionId, mutationMode: mutationMode(args, fallback), hostId: "cli" }, () => callback(cleanArgs));
+  const result = runWithMutationContext(target, { actionId, mutationMode: mutationMode(args, fallback), hostId: "cli" }, () => callback(cleanArgs));
+  return resolveExecutionReceiptPostCommit(target, result);
 }
 
 function shellQuote(value) {
@@ -117,21 +119,19 @@ function shellQuote(value) {
 }
 
 function proposalToken(result) {
-  return result?.confirmation?.confirmArgs
-    ? Buffer.from(JSON.stringify({ version: result.confirmation.proposalVersion ?? 1, mutationMode: result.confirmation.mutationMode, confirmArgs: result.confirmation.confirmArgs }), "utf8").toString("base64url")
-    : result?.confirmation?.proposalToken ?? null;
+  return result?.confirmation?.proposalToken ?? null;
 }
 
 function proposalCommand(command, result, target, token = proposalToken(result)) {
   const mode = result?.confirmation?.mutationMode ?? result?.confirmation?.confirmArgs?.mutationMode;
   if (!token || !mode) return null;
-  return ["node", shellQuote(__filename), command, shellQuote(target), "--proposal-token", shellQuote(token), "--confirmed", "--mutation-mode", shellQuote(mode)].join(" ");
+  return ["node", shellQuote(__filename), command, shellQuote(target), "--proposal-token", shellQuote(token), "--confirmed", "--mutation-mode", shellQuote(mode), "--json"].join(" ");
 }
 
 function withProposalCommand(command, result, target) {
   const token = proposalToken(result);
   const exactConfirmationCommand = proposalCommand(command, result, target, token);
-  return exactConfirmationCommand ? { ...result, confirmation: { ...result.confirmation, proposalToken: token, exactConfirmationCommand } } : result;
+  return exactConfirmationCommand ? { ...result, confirmation: { ...result.confirmation, exactConfirmationCommand } } : result;
 }
 
 function decodeProposalToken(token, label) {
@@ -185,7 +185,7 @@ function lessonRecordArgs(args) {
   const token = readFlagValue(args, "--proposal-token");
   if (token) {
     const payload = decodeProposalToken(token, "lesson");
-    return { ...payload.confirmArgs, confirmed: args.includes("--confirmed"), mutationMode: payload.mutationMode ?? payload.confirmArgs.mutationMode };
+    return { ...payload.confirmArgs, proposalToken: token, confirmed: args.includes("--confirmed"), mutationMode: payload.mutationMode ?? payload.confirmArgs.mutationMode };
   }
   if (args.includes("--confirmed")) throw new Error("dove lessons record --confirmed requires the exact --proposal-token returned by the proposal.");
   return {
@@ -242,19 +242,17 @@ function hostIds(args) {
   return [...new Set(requested)];
 }
 
-function copyPath(source, destination, force, destinationRoot) {
+function collectCopyEntries(source, destination, force, destinationRoot, entries) {
   const stat = fs.lstatSync(source);
   if (stat.isSymbolicLink()) return;
   const relative = path.relative(destinationRoot, destination).split(path.sep).join("/");
-  const resolved = resolveCanonicalContainedWrite(destinationRoot, relative, { label: "Install destination" });
+  resolveCanonicalContainedWrite(destinationRoot, relative, { label: "Install destination" });
   if (stat.isDirectory()) {
-    fs.mkdirSync(resolved.fullPath, { recursive: true });
-    for (const entry of fs.readdirSync(source)) copyPath(path.join(source, entry), path.join(destination, entry), force, destinationRoot);
+    for (const entry of fs.readdirSync(source)) collectCopyEntries(path.join(source, entry), path.join(destination, entry), force, destinationRoot, entries);
     return;
   }
   if (!stat.isFile()) return;
-  fs.mkdirSync(path.dirname(resolved.fullPath), { recursive: true });
-  if (!fs.existsSync(resolved.fullPath) || force) fs.copyFileSync(source, resolved.fullPath);
+  entries.push({ root: destinationRoot, relativePath: relative, content: fs.readFileSync(source), force, label: "Install destination" });
 }
 
 function installOrSync(target, args) {
@@ -262,22 +260,27 @@ function installOrSync(target, args) {
   const projectHosts = hosts.filter((host) => Object.hasOwn(HOST_ADAPTERS, host));
   const corePaths = [...CORE_INSTALL_PATHS];
   const hostPaths = projectHosts.flatMap((host) => HOST_ADAPTERS[host].paths.map((relativePath) => ({ host, relativePath })));
+  const force = args.includes("--force");
+  const entries = [];
   for (const relativePath of corePaths) {
     const source = path.join(PACKAGE_ROOT, relativePath);
-    if (fs.existsSync(source)) copyPath(source, path.join(target, relativePath), args.includes("--force"), target);
+    if (fs.existsSync(source)) collectCopyEntries(source, path.join(target, relativePath), force, target, entries);
   }
   for (const { relativePath } of hostPaths) {
     const source = path.join(PACKAGE_ROOT, relativePath);
-    if (fs.existsSync(source)) copyPath(source, path.join(target, relativePath), args.includes("--force"), target);
+    if (fs.existsSync(source)) collectCopyEntries(source, path.join(target, relativePath), force, target, entries);
   }
-  const copiedUserHostPaths = [];
-  let claudeCodeGateway = null;
+  let claudeConfigRoot = null;
   if (hosts.some((host) => USER_HOST_IDS.includes(host))) {
-    const claudeConfigRoot = resolveClaudeConfigRoot();
-    for (const relativePath of writeClaudeUserCommandAdapters(claudeConfigRoot)) copiedUserHostPaths.push({ host: "claude", path: relativePath, root: claudeConfigRoot });
-    claudeCodeGateway = configureClaudeCodeGatewayDefaults({ claudeConfigRoot, shellStartupFile: resolveClaudeShellStartupFile() });
+    claudeConfigRoot = resolveClaudeConfigRoot();
+    for (const entry of generatedClaudeUserCommandEntries()) entries.push({ root: claudeConfigRoot, relativePath: entry.relativePath, content: `${entry.content.trimEnd()}\n`, encoding: "utf8", force: true, label: "Claude command adapter path" });
   }
-  return { target, hosts, force: args.includes("--force"), copiedCorePaths: corePaths, copiedHostPaths: hostPaths.map(({ host, relativePath }) => ({ host, path: relativePath })), copiedUserHostPaths, claudeCodeGateway };
+  const transaction = writeFileSetTransaction(entries);
+  const writtenPaths = new Set(transaction.writtenPaths);
+  const copiedUserHostPaths = claudeConfigRoot
+    ? generatedClaudeUserCommandEntries().filter((entry) => writtenPaths.has(entry.relativePath)).map((entry) => ({ host: "claude", path: entry.relativePath, root: claudeConfigRoot }))
+    : [];
+  return { target, hosts, force: args.includes("--force"), copiedCorePaths: corePaths, copiedHostPaths: hostPaths.map(({ host, relativePath }) => ({ host, path: relativePath })), copiedUserHostPaths, transactionState: transaction.transactionState };
 }
 
 function claudeCommandPaths() {
@@ -291,23 +294,20 @@ function detectHosts(target, { includeClaude = false } = {}) {
 }
 
 function doctor(target) {
-  const gateway = inspectClaudeCodeGatewayDefaults({ claudeConfigRoot: resolveClaudeConfigRoot(), shellStartupFile: resolveClaudeShellStartupFile() });
-  const inspectGateway = Boolean(process.env.DOVE_CLAUDE_CONFIG_DIR || process.env.DOVE_CLAUDE_SHELL_RC || gateway.shell?.hasManagedBlock);
-  const installedHosts = detectHosts(target, { includeClaude: inspectGateway });
+  const installedHosts = detectHosts(target, { includeClaude: true });
   const missing = installedHosts.filter((host) => host !== "claude").flatMap((host) => (HOST_ADAPTERS[host]?.requiredPaths ?? []).filter((relativePath) => !fs.existsSync(path.join(target, relativePath))));
   if (installedHosts.some((host) => host !== "claude") && !fs.existsSync(path.join(target, "mcp/dove-state-server-package.mjs"))) missing.push("mcp/dove-state-server-package.mjs");
   const checks = installedHosts.map((host) => ({ check: `host-adapter:${host}`, ok: host === "claude" ? claudeCommandPaths().every((absolutePath) => fs.existsSync(absolutePath)) : (HOST_ADAPTERS[host]?.requiredPaths ?? []).every((relativePath) => fs.existsSync(path.join(target, relativePath))), requiredPaths: host === "claude" ? claudeCommandPaths().map((absolutePath) => path.relative(resolveClaudeConfigRoot(), absolutePath).split(path.sep).join("/")) : HOST_ADAPTERS[host]?.requiredPaths ?? [] }));
-  if (inspectGateway) checks.push({ check: "claude-code-gateway", ok: gateway.ok, message: gateway.ok ? "Claude Code gateway defaults are configured" : gateway.issues.join(" | ") });
   const workspace = inspectDoveWorkspace(target);
   const workspaceOk = workspace.state === "absent" ? installedHosts.length > 0 && missing.length === 0 : workspace.healthy;
   checks.push({ check: "workspace-schema", ok: workspaceOk, message: workspace.state === "absent" ? "Dove runtime is installed and .dove is absent; initialize explicitly when needed." : workspace.healthy ? `Current Dove schema ${workspace.schemaVersion} is healthy.` : `${workspace.state}${workspace.error ? `: ${workspace.error}` : ""}; run dove init --archive-reset and confirm the exact proposal.` });
-  const result = { target, node: process.version, healthy: missing.length === 0 && checks.every((check) => check.ok), workspaceMode: workspace.state === "absent" ? "runtime-only" : workspace.healthy ? "current-schema" : "archive-reset-required", workspaceSchema: { state: workspace.state, category: workspace.category, healthy: workspace.healthy, schemaVersion: workspace.schemaVersion, detectedSchema: workspace.detectedSchema, error: workspace.error ?? null, zeroWrite: true }, missing: [...new Set(missing)], checks, warnings: [], hostAdapters: installedHosts, claudeCodeGateway: inspectGateway ? gateway : null, writes: [] };
+  const result = { target, node: process.version, healthy: missing.length === 0 && checks.every((check) => check.ok), workspaceMode: workspace.state === "absent" ? "runtime-only" : workspace.healthy ? "current-schema" : "archive-reset-required", workspaceSchema: { state: workspace.state, category: workspace.category, healthy: workspace.healthy, schemaVersion: workspace.schemaVersion, detectedSchema: workspace.detectedSchema, error: workspace.error ?? null, zeroWrite: true }, missing: [...new Set(missing)], checks, warnings: [], hostAdapters: installedHosts, writes: [] };
   console.log(JSON.stringify(result, null, 2));
   return result.healthy ? 0 : 1;
 }
 
 function statusArgs(args) {
-  return { detail: args.includes("--full") || args.includes("--missions") ? "full" : readFlagValue(args, "--detail"), full: args.includes("--full"), showMissions: args.includes("--missions") };
+  return { missionId: readFlagValue(args, "--mission-id") ?? undefined, detail: args.includes("--full") || args.includes("--missions") ? "full" : readFlagValue(args, "--detail"), full: args.includes("--full"), showMissions: args.includes("--missions") };
 }
 
 function wantsJson(args) {
@@ -315,8 +315,23 @@ function wantsJson(args) {
 }
 
 function printResult(result, args) {
-  if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
-  else console.log(result.summary ?? result.headline ?? result.status ?? "Dove operation completed.");
+  if (wantsJson(args)) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  const command = result?.confirmation?.exactConfirmationCommand;
+  if (command && result?.confirmation?.required === true) {
+    console.log([
+      "--- DOVE PROPOSAL: ZERO-WRITE BOUNDARY ---",
+      result.summary ?? result.headline ?? result.status ?? "Dove proposal is ready.",
+      "No durable mutation has been applied.",
+      "Exact confirmation command:",
+      command,
+      "--- END DOVE PROPOSAL ---"
+    ].join("\n"));
+    return;
+  }
+  console.log(result.summary ?? result.headline ?? result.status ?? "Dove operation completed.");
 }
 
 let parsed;

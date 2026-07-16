@@ -49,42 +49,40 @@ export const OPENCODE_ROLE_SKILL_PATHS = [
   ".opencode/skills/dove-reviewer/SKILL.md"
 ];
 
-export const COMMAND_BASE_CONTEXT_PATHS = [".dove/manifest.json", ".dove/project.json"];
-
-export const TOOL_CONTEXT_PATHS = {
-  init_dove_goal: [".dove/manifest.json", ".dove/project.json"],
-  create_dove_mission: [".dove/manifest.json", ".dove/project.json", ".dove/missions"],
-  query_dove_mission: [".dove/manifest.json", ".dove/project.json", ".dove/missions"],
-  query_dove_status: [".dove/manifest.json", ".dove/project.json", ".dove/missions", ".dove/receipts/execution", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json", ".dove/sources"],
-  ingest_execution_receipt: [".dove/project.json", ".dove/missions", ".dove/receipts/execution", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  assess_mission_completion: [".dove/missions", ".dove/receipts/execution", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json", ".dove/sources", ".dove/notes"],
-  search_network: [],
-  query_network_search_providers: [],
-  query_sources: [".dove/missions", ".dove/sources", ".dove/receipts/execution"],
-  query_dove_lessons: [".dove/manifest.json", ".dove/missions", ".dove/lessons", ".dove/sources", ".dove/notes", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  record_dove_lesson: [".dove/manifest.json", ".dove/missions", ".dove/lessons", ".dove/sources", ".dove/notes", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  register_source: [".dove/missions", ".dove/sources", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  verify_source: [".dove/missions", ".dove/sources", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  upsert_note: [".dove/missions", ".dove/sources", ".dove/notes", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  upsert_claims: [".dove/missions", ".dove/sources", ".dove/notes", ".dove/claims", ".dove/experiments", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  run_experience_workflow: [".dove/missions", ".dove/experiments", ".dove/claims", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  upsert_draft: [".dove/missions", ".dove/drafts", ".dove/sources", ".dove/notes", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  upsert_draft_metadata: [".dove/missions", ".dove/drafts", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  run_figure_workflow: [".dove/missions", ".dove/figures", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  prepare_review_exchange: [".dove/missions", ".dove/reviews/exchanges", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  import_review_exchange: [".dove/missions", ".dove/reviews/exchanges", ".dove/reviews", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  verify_review_coverage: [".dove/missions", ".dove/reviews", ".dove/reviews/exchanges", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  normalize_rebuttal_issues: [".dove/missions", ".dove/rebuttal", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  build_rebuttal_strategy: [".dove/missions", ".dove/rebuttal", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  build_rebuttal: [".dove/missions", ".dove/rebuttal", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  create_version_snapshot: [".dove/missions", ".dove/versions", ".dove/receipts/execution", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"],
-  compare_versions: [".dove/missions", ".dove/versions", ".dove/artifacts/ownership.json", ".dove/artifacts/lineage.json"]
-};
+export const TOOL_RESULT_CONTEXT_FIELDS = Object.freeze({
+  init_dove_goal: ["mutation.paths"],
+  create_dove_mission: ["executionHandoff.missionId", "executionHandoff.contractDigest", "executionHandoff.targetArtifacts", "executionHandoff.expectedArtifacts", "executionHandoff.completionCriteria", "executionHandoff.evidenceRequirements"],
+  query_dove_mission: ["mission.missionId", "contractDigest", "mission.targetArtifacts", "mission.expectedArtifacts"],
+  query_dove_status: ["scope.missionId", "currentContext.selectedMissionId", "needsAttention.stableGaps"],
+  ingest_execution_receipt: ["receipt.artifacts", "receipt.validations", "completion.assessment"],
+  assess_mission_completion: ["missionId", "completionCriteria", "evidenceRequirements", "diagnostics.missionPath"],
+  search_network: ["candidates.registrationDraft", "candidates.captureRequiredForEvidence"],
+  query_network_search_providers: ["providers"],
+  query_sources: ["items.capturedMaterial", "items.eligibility"],
+  query_dove_lessons: ["items.artifactRefs"],
+  record_dove_lesson: ["lesson.artifactRefs"],
+  register_source: ["source.capturedMaterial", "artifacts"],
+  verify_source: ["source.capturedMaterial", "artifacts"],
+  upsert_note: ["artifacts"],
+  upsert_claims: ["artifacts"],
+  run_experience_workflow: ["artifacts"],
+  upsert_draft: ["artifacts"],
+  upsert_draft_metadata: ["artifacts"],
+  run_figure_workflow: ["artifacts"],
+  prepare_review_exchange: ["actionablePaths", "reviewedArtifacts", "importAction"],
+  import_review_exchange: ["actionablePaths", "nextAction"],
+  verify_review_coverage: ["reviews.reviewPath", "reviews.reviewedArtifactPaths"],
+  normalize_rebuttal_issues: ["artifacts"],
+  build_rebuttal_strategy: ["artifacts"],
+  build_rebuttal: ["artifacts"],
+  create_version_snapshot: ["artifacts"],
+  compare_versions: ["artifacts"]
+});
 
 const COMMON_CONSTRAINTS = [
   "Every mutation requires an explicit missionId and writes only mission-bound artifacts, canonical receipts, ownership, and lineage.",
   "Validate every imported path, hash, source, note, finding, experiment result, and artifact reference before the first write.",
-  "Do not create task packets, boards, runtime state, navigation refreshes, hidden schedulers, policy overrides, role authority, or lifecycle mirrors.",
+  "Do not create packets, boards, runtime state, hidden schedulers, policy overrides, role authority, lifecycle mirrors, or persistent context.",
   "Every read is zero-write and must not repair, refresh, bootstrap, or convert durable state.",
   "Keep Planner, Builder, and Reviewer responsibilities separate; Reviewer authority must fail closed when no trusted proof capability exists."
 ];
@@ -103,18 +101,18 @@ const surface = (id, title, category, policy, summary, requiredTools, constraint
 });
 
 export const COMMAND_SURFACES = [
-  surface("dove.init", "Dove init", "mutation", "guarded-mutation", "Propose and exactly confirm sealed schema 7 workspace initialization.", ["init_dove_goal"], [
-    "Proposal is strictly zero-write; exact confirmation creates only manifest, project identity, ownership/lineage indexes, and required directories.",
+  surface("dove.init", "Dove init", "mutation", "guarded-mutation", "Propose and exactly confirm sealed schema 8 workspace initialization.", ["init_dove_goal"], [
+    "Proposal is strictly zero-write; exact confirmation creates only manifest, project identity, receipt directories, and required domain directories.",
     "Legacy or invalid state requires explicit direct-process archive-reset with no import, repair, fallback, or alias."
-  ], { dailyFlow: ["Request a zero-write schema 7 initialization proposal.", "Inspect and replay the exact confirmation data only when approved."], targetingBehavior: "Initialization is bound to the canonical workspace, not a task target.", confirmationBehavior: "Replay the exact proposal digest and workspace identity.", expectedOutcome: "A sealed minimal schema 7 workspace exists without workflow side effects.", examples: ["/dove:init Initialize this research workspace", "/dove:init Archive invalid Dove state and initialize schema 7"] }),
+  ], { dailyFlow: ["Request a zero-write schema 8 initialization proposal.", "Inspect and replay the exact confirmation data only when approved."], targetingBehavior: "Initialization is bound to the canonical workspace, not another workflow target.", confirmationBehavior: "Replay the exact proposal digest and workspace identity.", expectedOutcome: "A sealed minimal schema 8 workspace exists without workflow side effects.", examples: ["/dove:init Initialize this research workspace", "/dove:init Archive invalid Dove state and initialize schema 8"] }),
   surface("dove.mission", "Dove mission", "mutation", "explicit-approval", "Propose and persist one minimal mission contract, then return control to the host.", ["create_dove_mission"], [
     "Persist only goal, scope, out-of-scope, target and expected artifacts, completion criteria, evidence requirements, dependencies, and supersession metadata.",
     "Proposal is zero-write; confirmation must exactly replay the returned contract and target artifact identities."
   ], { dailyFlow: ["Turn one concrete goal into a minimal mission contract.", "After approval, continue substantive work with native host planning and tools."], targetingBehavior: "The missionId is explicit or deterministically proposed; no packet target is resolved.", confirmationBehavior: "Approve the exact proposal, adjust it, or cancel.", expectedOutcome: "One durable mission contract exists and no orchestration route is created.", examples: ["/dove:mission Validate the new retrieval method", "/dove:mission Revise the methods draft from current evidence"] }),
-  surface("dove.status", "Dove status", "query", "read-only", "Read schema 7 mission and evidence integrity without refreshing state.", ["query_dove_status"], [
+  surface("dove.status", "Dove status", "query", "read-only", "Read schema 8 mission and evidence integrity without refreshing state.", ["query_dove_status"], [
     "Absent state returns needs-init; malformed, legacy, contradictory, or future state fails closed.",
     "Compact status reports only schema health, mission count, receipt count, source count, and live integrity."
-  ], { dailyFlow: ["Inspect current schema and integrity without writes.", "Expand details only when the operator explicitly asks."], targetingBehavior: "Status aggregates real current artifacts across missions without selecting a task.", confirmationBehavior: "No confirmation is applicable because status is read-only.", expectedOutcome: "The operator sees current integrity and one safe next step.", examples: ["/dove:status", "/dove:status Show full mission integrity"] }),
+  ], { dailyFlow: ["Inspect current schema and integrity without writes.", "Pass missionId to scope completion, source, domain, and review checks; when more than one mission exists, choose explicitly."], targetingBehavior: "With zero missions status reports none; with one mission it scopes to the only mission; with multiple missions it never selects an implicit latest mission.", confirmationBehavior: "No confirmation is applicable because status is read-only.", expectedOutcome: "The operator sees stable gaps and one existing command or tool to run next.", examples: ["/dove:status", "/dove:status Show integrity for mission <id>"] }),
   surface("dove.lessons", "Dove lessons", "mutation", "guarded-mutation", "Query advisory lessons by default or explicitly record one exact-confirmation mission-provenanced lesson.", ["query_dove_lessons", "record_dove_lesson"], [
     "Default behavior is an explicit read-only query; never auto-capture a lesson and never auto-recall lessons from another command.",
     "Every lesson retains its recording mission as provenance; global scope means broad applicability, not provenance detached from that mission.",
@@ -128,12 +126,12 @@ export const COMMAND_SURFACES = [
   ], { dailyFlow: ["Snapshot current mission artifacts before a meaningful revision.", "Compare two snapshots or request fail-closed finalization."], targetingBehavior: "Provide missionId and version ids explicitly.", confirmationBehavior: "Finalization succeeds only from current completion and Reviewer proof.", expectedOutcome: "Version lineage and a real hash comparison are durable.", examples: ["/dove:version Snapshot the current draft", "/dove:version Compare the previous and current snapshots"] }),
   surface("dove.source", "Dove source", "mutation", "guarded-mutation", "Register mission-bound source candidates or record a rejection.", ["query_sources", "register_source", "verify_source"], [
     "Registration always creates a candidate and imports captured material under mission-owned source artifacts.",
-    "Public verification is rejection-only; positive verification requires a trusted internal receipt bound to current material and fingerprint."
+    "Schema 8 stores only candidate or rejected source state; public verification is rejection-only and ordinary execution receipts never mint positive source authority."
   ], { dailyFlow: ["Register real external material with title or locator.", "Query eligibility or reject a candidate after an explicit audit."], targetingBehavior: "Provide missionId and sourceId explicitly.", confirmationBehavior: "No candidate becomes trusted through public input.", expectedOutcome: "The source has current identity, material fingerprint, lifecycle, and eligibility.", examples: ["/dove:source Register this paper for the mission", "/dove:source Reject the candidate after checking the captured PDF"] }),
-  surface("dove.note", "Dove note", "mutation", "guarded-mutation", "Write substantive mission-bound synthesis from current trusted evidence.", ["upsert_note"], [
-    "A note requires summary, quote, claim, or open question plus at least one current verified source or mission artifact.",
-    "Source trust and artifact hashes are reassessed before writing."
-  ], { dailyFlow: ["Synthesize verified source material or current artifacts.", "Record claims, quotes, and open questions rather than empty bookkeeping."], targetingBehavior: "Provide missionId and noteId explicitly.", confirmationBehavior: "Ineligible or cross-mission evidence stops the write.", expectedOutcome: "A substantive note with current evidence lineage exists.", examples: ["/dove:note Summarize the verified sources", "/dove:note Record the open methodological question"] }),
+  surface("dove.note", "Dove note", "mutation", "guarded-mutation", "Write substantive mission-bound synthesis from current eligible evidence.", ["upsert_note"], [
+    "A note requires summary, quote, claim, or open question plus at least one current mission-owned artifact, including a current note artifact when applicable.",
+    "sourceIds remain ineligible until a trusted positive source verifier exists; candidate or rejected sources cannot authorize the write."
+  ], { dailyFlow: ["Synthesize current mission-owned artifacts, including current note artifacts when applicable.", "Record claims, quotes, and open questions rather than empty bookkeeping."], targetingBehavior: "Provide missionId and noteId explicitly.", confirmationBehavior: "Ineligible or cross-mission evidence stops the write.", expectedOutcome: "A substantive note with current evidence lineage exists.", examples: ["/dove:note Summarize the current mission artifacts", "/dove:note Record the open methodological question"] }),
   surface("dove.figure", "Dove figure", "mutation", "guarded-mutation", "Prepare or import a mission-bound figure with caption, provenance, QA, and review boundary.", ["run_figure_workflow"], [
     "Provider execution stays host-side; Dove accepts only current imported output with a matching hash.",
     "Clean QA is diagnostic only; validated requires authoritative proof for the exact final artifact hash."
@@ -146,12 +144,13 @@ export const COMMAND_SURFACES = [
     "Body writes require non-empty substantive text and current evidence lineage.",
     "Metadata-only updates require an existing current mission-owned draft."
   ], { dailyFlow: ["Write or revise real draft text from current evidence.", "Use metadata-only mode only for an existing draft."], targetingBehavior: "Provide missionId and draftId explicitly.", confirmationBehavior: "Cross-mission or stale evidence stops the write.", expectedOutcome: "A real draft artifact and canonical receipt exist.", examples: ["/dove:draft Write the methods section", "/dove:draft Update metadata for the current draft"] }),
-  surface("dove.review", "Dove review", "mutation", "guarded-mutation", "Preflight, prepare, import, or verify one policy-scoped schema 7 review exchange without reviewer orchestration.", ["prepare_review_exchange", "import_review_exchange", "verify_review_coverage"], [
+  surface("dove.review", "Dove review", "mutation", "guarded-mutation", "Preflight, prepare, import, or verify one policy-scoped schema 8 review exchange without reviewer orchestration.", ["prepare_review_exchange", "import_review_exchange", "verify_review_coverage"], [
     "Policy expresses input scope only: local-preflight, isolated-selected-artifacts, final-plan-results-only, or external.",
     "local-preflight is strictly zero-write and non-authoritative; other policies freeze only current mission-owned artifact snapshots.",
-    "Prepare writes canonical input and manifest artifacts; import accepts only the canonical handoff and report after all path, identity, scope, and hash checks pass.",
+    "Prepare writes canonical input and manifest artifacts owned together by one preparation receipt; import validates that ledger anchor before accepting the canonical handoff and report.",
+    "Only completed coherent, needs-revision, or needs-evidence returns count as coverage; blocked or failed returns remain durable but ineligible, and every finding links an in-scope artifact.",
     "Imported public review material remains non-authoritative; caller-supplied reviewer identity, verdict, report, handoff, or manifest fields never mint Reviewer authority.",
-    "Dove does not launch a reviewer, session, subagent, process, loop, board transition, runtime continuation, or navigation refresh."
+    "Dove does not launch a reviewer, session, subagent, process, loop, board transition, or runtime continuation."
   ], { dailyFlow: ["Use local-preflight for a zero-write exact scope check.", "Prepare a policy-scoped exchange, let an independent external process or person produce the declared files, then import and verify coverage."], targetingBehavior: "Provide missionId and explicit policy artifact paths; import also requires exchangeId and reviewId.", confirmationBehavior: "Prepare/import are guarded mutations; preflight and coverage verification are read-only.", expectedOutcome: "A tamper-evident mission-bound review and exact current coverage assessment exist without self-issued authority.", examples: ["/dove:review Preflight the current methods artifacts", "/dove:review Import the returned review exchange"] }),
   surface("dove.rebuttal", "Dove rebuttal", "mutation", "guarded-mutation", "Normalize reviewer findings and write author-side evidence-linked responses.", ["normalize_rebuttal_issues", "build_rebuttal_strategy", "build_rebuttal"], [
     "Every issue must link to a current mission-owned review artifact and concrete finding id.",
@@ -166,10 +165,10 @@ function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-export function commandContextPaths(command) {
+export function commandResultContextFields(command) {
   const selected = typeof command === "string" ? COMMAND_SURFACE_BY_ID[command] : command;
   if (!selected) throw new Error(`Unknown command surface: ${command}`);
-  return unique([...COMMAND_BASE_CONTEXT_PATHS, ...(selected.requiredTools ?? []).flatMap((tool) => TOOL_CONTEXT_PATHS[tool] ?? [])]);
+  return unique((selected.requiredTools ?? []).flatMap((tool) => TOOL_RESULT_CONTEXT_FIELDS[tool] ?? []));
 }
 
 export function commandIdToSlug(commandId) {

@@ -99,6 +99,10 @@ test("network search deduplicates scholarly candidates and reports partial provi
   assert.equal(result.candidates.length, 1);
   assert.equal(result.candidates[0].lifecycle, "candidate");
   assert.equal(result.candidates[0].doi, "10.1234/gff");
+  assert.equal(result.candidates[0].captureRequiredForEvidence, true);
+  assert.equal(result.candidates[0].registrationDraft.authoritative, false);
+  assert.equal(result.candidates[0].registrationDraft.capturePath, null);
+  assert.equal(result.captureRequiredForEvidence, true);
   assert.deepEqual(result.candidates[0].provenance.mergedProviderIds.sort(), ["crossref", "openalex"]);
   assert.equal(result.providerReports.find((report) => report.providerId === "arxiv")?.status, "error");
   assert.equal(result.needsAttention.status, "partial");

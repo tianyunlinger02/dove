@@ -2,8 +2,20 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import {
+  MISSION_CONTRACT_SCHEMA_VERSION,
+  MISSION_CRITERION_ID_VERSION,
+  MISSION_EVIDENCE_REQUIREMENT_ID_VERSION,
+  missionCompletionCriteria,
+  missionCompletionCriterionId,
+  missionContractDigest,
+  missionEvidenceRequirementId,
+  missionEvidenceRequirements,
+  stableMissionSerialize
+} from "./mission-contract-integrity.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { artifactEvidenceRole, normalizeProjectRelativePath } from "./artifact-integrity.mjs";
+import { validateMissionGraph } from "./mission-graph.mjs";
 import { resolveCanonicalContainedWrite } from "./contained-write.mjs";
 import { currentMutationContext, isPatchPlanMode, normalizeMutationMode } from "./mutation-backend.mjs";
 import { assertGovernanceMutationRegistered, nowIso, readJson, writeJson } from "./workspace.mjs";
@@ -18,11 +30,9 @@ import {
   workspaceSchemaError
 } from "./workspace-schema.mjs";
 
-export const MISSION_CONTRACT_SCHEMA_VERSION = 1;
+export { MISSION_CONTRACT_SCHEMA_VERSION, MISSION_CRITERION_ID_VERSION, MISSION_EVIDENCE_REQUIREMENT_ID_VERSION } from "./mission-contract-integrity.mjs";
 export const MISSION_PROPOSAL_VERSION = 1;
 export const PROJECT_IDENTITY_SCHEMA_VERSION = 1;
-export const MISSION_CRITERION_ID_VERSION = 1;
-export const MISSION_EVIDENCE_REQUIREMENT_ID_VERSION = 1;
 
 const MISSION_CONTRACT_ARRAY_FIELDS = [
   "scope",
@@ -105,7 +115,7 @@ function canonicalContractPath(rawPath, label) {
     throw new Error(`${label} must not reference advisory-only Dove lessons: ${rawPath}.`);
   }
   if (evidenceRole === "bookkeeping" || evidenceRole === "unsupported") {
-    throw new Error(`${label} must reference a substantive schema 7 artifact or an external project artifact, not Dove bookkeeping: ${rawPath}.`);
+    throw new Error(`${label} must reference a substantive schema 8 artifact or an external project artifact, not Dove bookkeeping: ${rawPath}.`);
   }
   return normalized.normalizedPath;
 }
@@ -145,25 +155,6 @@ function assertAllowedFields(args, allowed, label) {
   if (unknown.length > 0) {
     throw new Error(`${label} does not accept unknown input: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
   }
-}
-
-function stableMissionValue(value) {
-  if (Array.isArray(value)) {
-    return value.map(stableMissionValue);
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .filter(([, item]) => item !== undefined)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, stableMissionValue(item)])
-    );
-  }
-  return value;
-}
-
-function stableMissionSerialize(value) {
-  return JSON.stringify(stableMissionValue(value));
 }
 
 function canonicalWorkspace(root) {
@@ -213,43 +204,7 @@ function missionContractContent(args = {}) {
   return content;
 }
 
-export function missionCompletionCriterionId(_index, criterion) {
-  return `criterion-${sha256(stableMissionSerialize({
-    version: MISSION_CRITERION_ID_VERSION,
-    criterion
-  })).slice(0, 16)}`;
-}
-
-export function missionEvidenceRequirementId(_index, requirement) {
-  return `evidence-${sha256(stableMissionSerialize({
-    version: MISSION_EVIDENCE_REQUIREMENT_ID_VERSION,
-    requirement
-  })).slice(0, 16)}`;
-}
-
-export function missionCompletionCriteria(content = {}) {
-  return (Array.isArray(content.completionCriteria) ? content.completionCriteria : []).map((criterion, index) => ({
-    criterionId: missionCompletionCriterionId(index, criterion),
-    criterion
-  }));
-}
-
-export function missionEvidenceRequirements(content = {}) {
-  return (Array.isArray(content.evidenceRequirements) ? content.evidenceRequirements : []).map((requirement, index) => ({
-    requirementId: missionEvidenceRequirementId(index, requirement),
-    requirement
-  }));
-}
-
-function contractDigestFor(missionId, content) {
-  return sha256(stableMissionSerialize({
-    schemaVersion: MISSION_CONTRACT_SCHEMA_VERSION,
-    missionId,
-    ...content,
-    completionCriterionIds: missionCompletionCriteria(content).map(({ criterionId }) => criterionId),
-    evidenceRequirementIds: missionEvidenceRequirements(content).map(({ requirementId }) => requirementId)
-  }));
-}
+export { missionCompletionCriteria, missionCompletionCriterionId, missionEvidenceRequirementId, missionEvidenceRequirements };
 
 export function currentMissionContractMetadata(mission = {}) {
   assertPlainObject(mission, "Mission contract");
@@ -286,7 +241,7 @@ export function currentMissionContractMetadata(mission = {}) {
   return {
     missionId,
     content,
-    contractDigest: contractDigestFor(missionId, content),
+    contractDigest: missionContractDigest(missionId, content),
     completionCriterionIds,
     evidenceRequirementIds
   };
@@ -468,11 +423,21 @@ function hasConfirmation(args = {}) {
   return args.confirmed === true;
 }
 
+function validateProposedMissionGraph(root, projectIdentity, mission) {
+  const existing = projectIdentity.required
+    ? []
+    : [...openDoveWorkspace(root, { operation: "Dove mission graph validation" }).missions.values()];
+  validateMissionGraph([
+    ...existing.map((item) => ({ filename: `${item.missionId}.json`, mission: item })),
+    { filename: `${mission.missionId}.json`, mission }
+  ]);
+}
+
 function buildMissionProposal(root, args = {}) {
   const workspace = canonicalWorkspace(root);
   const content = missionContractContent(args);
   const missionId = normalizeMissionId(args.missionId, content.goal);
-  const contractDigest = contractDigestFor(missionId, content);
+  const contractDigest = missionContractDigest(missionId, content);
   const mutationMode = missionMutationMode(root, args);
   const projectIdentity = projectIdentitySnapshot(root, workspace, {
     goal: content.goal,
@@ -496,6 +461,7 @@ function buildMissionProposal(root, args = {}) {
     completionCriterionIds: missionCompletionCriteria(content).map(({ criterionId }) => criterionId),
     evidenceRequirementIds: missionEvidenceRequirements(content).map(({ requirementId }) => requirementId)
   };
+  validateProposedMissionGraph(root, projectIdentity, mission);
   const envelope = {
     proposalVersion: MISSION_PROPOSAL_VERSION,
     workspace,
@@ -537,6 +503,7 @@ function confirmArgsFor(proposal) {
 }
 
 function confirmationMetadata(proposal) {
+  const confirmArgs = confirmArgsFor(proposal);
   return {
     required: true,
     proposalVersion: MISSION_PROPOSAL_VERSION,
@@ -546,7 +513,25 @@ function confirmationMetadata(proposal) {
     trustBoundary: "trusted-local-exact-replay-data",
     proofOfHumanApproval: false,
     tamperProof: false,
-    confirmArgs: confirmArgsFor(proposal)
+    confirmArgs,
+    proposalToken: Buffer.from(JSON.stringify({ version: MISSION_PROPOSAL_VERSION, mutationMode: proposal.mutationMode, confirmArgs }), "utf8").toString("base64url")
+  };
+}
+
+function executionHandoff(mission) {
+  return {
+    missionId: mission.missionId,
+    contractDigest: mission.contractDigest,
+    targetArtifacts: mission.targetArtifacts,
+    expectedArtifacts: mission.expectedArtifacts,
+    completionCriteria: missionCompletionCriteria(mission),
+    evidenceRequirements: missionEvidenceRequirements(mission),
+    receiptCliTemplate: "node ./bin/dove-package.mjs receipt . --input \"<receipt.json>\" --mutation-mode direct-process --json",
+    mcpTools: {
+      ingest: "ingest_execution_receipt",
+      assess: "assess_mission_completion"
+    },
+    persisted: false
   };
 }
 
@@ -557,9 +542,7 @@ function missionMutationMetadata(proposal, applied) {
     paths: applied ? [
       ...(proposal.projectIdentity.required ? [
         ARTIFACT_PATHS.doveRootManifest,
-        ARTIFACT_PATHS.projectIdentity,
-        ARTIFACT_PATHS.artifactOwnership,
-        ARTIFACT_PATHS.artifactLineage
+        ARTIFACT_PATHS.projectIdentity
       ] : []),
       missionPath(proposal.mission.missionId)
     ] : []
@@ -644,25 +627,15 @@ export function createDoveMission(root, args = {}) {
   assertReplayHeader(proposal, args);
   assertMissionIdAvailable(root, proposal.mission.missionId);
   const mission = persistedMission(proposal);
-  try {
-    materializeProjectIdentity(root, proposal);
-    writeJson(root, missionPath(mission.missionId), mission);
-  } catch (error) {
-    if (proposal.projectIdentity.required && proposal.mutationMode === "direct-process") {
-      try {
-        fs.rmSync(path.join(root, ARTIFACT_PATHS.doveRoot), { recursive: true, force: true });
-      } catch (cleanupError) {
-        throw new Error(`First Dove mission materialization failed and cleanup also failed: ${error instanceof Error ? error.message : String(error)}; cleanup: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
-      }
-    }
-    throw error;
-  }
+  materializeProjectIdentity(root, proposal);
+  writeJson(root, missionPath(mission.missionId), mission);
   const plannedOnly = isPatchPlanMode(root);
   return {
     status: plannedOnly ? "materialization-planned" : "materialized",
     mission,
     contractDigest: proposal.contractDigest,
     handoffBrief: proposal.content,
+    executionHandoff: executionHandoff(mission),
     mutation: missionMutationMetadata(proposal, !plannedOnly)
   };
 }

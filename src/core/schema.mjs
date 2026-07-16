@@ -1,5 +1,5 @@
-export const DOVE_WORKSPACE_SCHEMA_VERSION = 7;
-export const PACKAGE_VERSION = "0.2.0";
+export const DOVE_WORKSPACE_SCHEMA_VERSION = 8;
+export const PACKAGE_VERSION = "0.3.0";
 
 export const DOVE_RESPONSE_LANGUAGES = Object.freeze(["zh", "en"]);
 export const DEFAULT_DOVE_RESPONSE_LANGUAGE = "zh";
@@ -26,8 +26,6 @@ export const ARTIFACT_PATHS = Object.freeze({
   completionReceiptsDir: ".dove/receipts/completion",
   authorityReceiptsDir: ".dove/receipts/authority",
   artifactsDir: ".dove/artifacts",
-  artifactOwnership: ".dove/artifacts/ownership.json",
-  artifactLineage: ".dove/artifacts/lineage.json",
   sourcesDir: ".dove/sources",
   notesDir: ".dove/notes",
   claimsDir: ".dove/claims",

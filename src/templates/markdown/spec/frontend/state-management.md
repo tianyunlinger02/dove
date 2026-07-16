@@ -1,12 +1,12 @@
 # State Management
 
-> Durable schema 7 state and strict read/write boundaries.
+> Durable schema 8 state and strict read/write boundaries.
 
 ---
 
 ## Overview
 
-Dove is file-first. Durable state exists only in explicit schema 7 `.dove/` artifacts. Native host planning and execution remain host responsibilities; Dove stores approved mission contracts and evidence, not a duplicate execution engine.
+Dove is file-first. Durable state exists only in explicit schema 8 `.dove/` artifacts. Native host planning and execution remain host responsibilities; Dove stores approved mission contracts and evidence, not a duplicate execution engine.
 
 ## Canonical State
 
@@ -14,7 +14,7 @@ Dove is file-first. Durable state exists only in explicit schema 7 `.dove/` arti
 - `.dove/missions/` contains approved mission contracts.
 - `.dove/lessons/` contains immutable advisory lessons with recording-mission provenance and mission or global applicability.
 - `.dove/receipts/execution/` contains immutable receipts bound to current contract digests, paths, hashes, criteria, and evidence.
-- `.dove/artifacts/ownership.json` and `.dove/artifacts/lineage.json` bind artifacts to missions and provenance.
+- Artifact ownership and lineage are derived live from the immutable `.dove/receipts/execution/` ledger; schema 8 rejects persisted `ownership.json` or `lineage.json` mirrors.
 - `.dove/sources/`, `.dove/notes/`, `.dove/claims/`, `.dove/experiments/`, `.dove/drafts/`, `.dove/figures/`, `.dove/reviews/`, `.dove/rebuttal/`, and `.dove/versions/` hold mission-bound domain artifacts.
 
 `ARTIFACT_PATHS` in `src/core/schema.mjs` is the canonical registry.
@@ -44,7 +44,7 @@ The strict opener classifies a workspace as absent, current healthy, current unh
 
 ## Server State
 
-The MCP server has no database and no durable runtime of its own. It validates inputs and calls the same core functions as the CLI. Tool discovery exposes one sealed schema 7 registry rather than public/internal or operator tiers.
+The MCP server has no database and no durable runtime of its own. It validates inputs and calls the same core functions as the CLI. Tool discovery exposes one sealed schema 8 registry rather than public/internal or operator tiers.
 
 ## Forbidden Patterns
 

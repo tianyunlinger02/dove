@@ -2,7 +2,7 @@
 
 These instructions are for AI assistants working in a Dove workspace.
 
-- Treat `.dove/` as user-owned durable schema 7 state. Use public Dove commands or MCP tools for ordinary reads and mutations instead of editing durable records ad hoc.
+- Treat `.dove/` as user-owned durable schema 8 state. Use public Dove commands or MCP tools for ordinary reads and mutations instead of editing durable records ad hoc.
 - Use `node ./bin/dove-package.mjs status .` only when the user asks about Dove state, current integrity, blockers, or mission progress. Status is read-only and must not replace substantive work.
 - For requests to fix, implement, research, verify, write, review, experiment, or draw, start with visible substantive work in the native host. Dove records approved mission contracts and evidence; it does not duplicate host workflow control or execution.
 - Before a durable domain write, require an explicit approved `missionId` and validate current source, artifact, path, hash, ownership, lineage, and review boundaries as applicable.

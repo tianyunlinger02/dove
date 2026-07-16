@@ -1,6 +1,6 @@
 import { assessMissionCompletion } from "../core/completion-gates.mjs";
 import { queryDoveMission, queryDoveStatus } from "../core/mission-queries.mjs";
-import { ingestExecutionReceipt } from "../core/execution-receipts.mjs";
+import { ingestExecutionReceipt, resolveExecutionReceiptPostCommit } from "../core/execution-receipts.mjs";
 import { queryDoveLessons, recordDoveLesson } from "../core/lessons.mjs";
 import { createDoveMission, initDoveGoal } from "../core/mission-contracts.mjs";
 import { queryNetworkSearchProviders, searchNetwork } from "../core/network-search.mjs";
@@ -85,14 +85,14 @@ export function dispatchTool(root, name, args = {}) {
     if (existing && MUTATING_TOOL_NAMES.has(name) && Object.hasOwn(args, "mutationMode") && normalizeMutationMode(args.mutationMode) !== existing.mutationMode) {
       throw new Error(`MCP mutationMode ${args.mutationMode} does not match the active mutation context mode ${existing.mutationMode}.`);
     }
-    const proposalOnly = ["init_dove_goal", "record_dove_lesson"].includes(name) && args.confirmed !== true;
+    const proposalOnly = ["init_dove_goal", "create_dove_mission", "record_dove_lesson"].includes(name) && args.confirmed !== true;
     const needsContext = !existing && MUTATING_TOOL_NAMES.has(name) && !proposalOnly;
     const clean = cleanControlArgs(args, name);
     const data = needsContext
       ? runWithMutationContext(root, { actionId: name.replaceAll("_", "-"), mutationMode: args.mutationMode, hostId: "mcp" }, (context) => dispatchData(root, name, { ...clean, ...(["init_dove_goal", "create_dove_mission", "record_dove_lesson"].includes(name) ? { mutationMode: context.mutationMode } : {}) }))
       : dispatchData(root, name, clean);
-    if (data && typeof data.then === "function") return data.then((value) => textResult(value)).catch((error) => textResult(error instanceof Error ? error.message : String(error), true));
-    return textResult(data);
+    if (data && typeof data.then === "function") return data.then((value) => textResult(resolveExecutionReceiptPostCommit(root, value, { committed: needsContext }))).catch((error) => textResult(error instanceof Error ? error.message : String(error), true));
+    return textResult(resolveExecutionReceiptPostCommit(root, data, { committed: needsContext }));
   } catch (error) {
     return textResult(error instanceof Error ? error.message : String(error), true);
   }

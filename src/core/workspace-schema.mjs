@@ -2,6 +2,9 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import { missionCompletionCriteria, missionContractDigest, missionEvidenceRequirements } from "./mission-contract-integrity.mjs";
+import { validateMissionGraph } from "./mission-graph.mjs";
+import { readExecutionReceiptLedger } from "./receipt-ledger.mjs";
 import { DOVE_WORKSPACE_SCHEMA_VERSION, PACKAGE_VERSION } from "./schema.mjs";
 
 export { DOVE_WORKSPACE_SCHEMA_VERSION };
@@ -30,9 +33,7 @@ export const MINIMAL_WORKSPACE_DIRECTORIES = Object.freeze([
 
 export const MINIMAL_WORKSPACE_REQUIRED_FILES = Object.freeze([
   ".dove/manifest.json",
-  ".dove/project.json",
-  ".dove/artifacts/ownership.json",
-  ".dove/artifacts/lineage.json"
+  ".dove/project.json"
 ]);
 
 const CURRENT_SCHEMA_FORBIDDEN_LEGACY_PATHS = Object.freeze([
@@ -45,20 +46,15 @@ const CURRENT_SCHEMA_FORBIDDEN_LEGACY_PATHS = Object.freeze([
   ".dove/programs",
   ".dove/meta",
   ".dove/context",
-  ".dove/wiki"
+  ".dove/wiki",
+  ".dove/artifacts/ownership.json",
+  ".dove/artifacts/lineage.json"
 ]);
 
 const MANIFEST_FIELDS = new Set(["schemaVersion", "manifestVersion", "workspaceId", "createdAt", "packageVersion"]);
 const PROJECT_FIELDS = new Set(["schemaVersion", "workspaceId", "projectId", "goal", "trust", "createdAt", "updatedAt"]);
 const TRUST_FIELDS = new Set(["schemaVersion", "entries"]);
-const INDEX_FIELDS = new Set(["schemaVersion", "workspaceId", "artifacts", "updatedAt"]);
-const INDEX_ITEM_FIELDS = new Set(["path", "kind", "sha256", "missionId", "contractDigest", "receiptId"]);
-const LINEAGE_ITEM_FIELDS = new Set([...INDEX_ITEM_FIELDS, "derivedReferences"]);
 const MISSION_FIELDS = new Set(["schemaVersion", "workspaceId", "missionId", "contractDigest", "createdAt", "scope", "outOfScope", "targetArtifacts", "expectedArtifacts", "completionCriteria", "evidenceRequirements", "dependsOnMissionIds", "goal", "supersedesMissionId", "completionCriterionIds", "evidenceRequirementIds"]);
-const RECEIPT_FIELDS = new Set(["schemaVersion", "workspaceId", "receiptId", "missionId", "contractDigest", "summary", "artifacts", "validations", "criteriaSatisfied", "producedAt"]);
-const RECEIPT_ARTIFACT_FIELDS = new Set(["path", "kind", "sha256"]);
-const RECEIPT_VALIDATION_FIELDS = new Set(["kind", "reference", "outputHash"]);
-const RECEIPT_CRITERION_FIELDS = new Set(["criterionId", "evidenceRefs"]);
 const LESSON_FIELDS = new Set(["schemaVersion", "workspaceId", "lessonId", "missionId", "contractDigest", "scope", "kind", "summary", "details", "nextTimeGuidance", "sourceIds", "noteIds", "artifactRefs", "appliesToArtifactRefs", "tags", "supersedesLessonId", "createdAt"]);
 const LESSON_REF_FIELDS = new Set(["path", "sha256"]);
 const LESSON_SCOPES = new Set(["global", "mission"]);
@@ -197,11 +193,6 @@ export function validateDoveProject(value, manifest) {
   return value;
 }
 
-function exactOptionalIso(value, label) {
-  if (value === null) return null;
-  return exactIso(value, label);
-}
-
 function hash(value, label) {
   if (typeof value !== "string" || !HASH.test(value)) throw new Error(`${label} must be a lowercase SHA-256 digest.`);
   return value;
@@ -220,36 +211,13 @@ function stringArray(value, label) {
   return value;
 }
 
-function validateOwnershipShape(value, label, manifest, lineage = false) {
-  assertSealed(value, INDEX_FIELDS, label);
-  if (value.schemaVersion !== 1) throw new Error(`${label} has an unsupported schemaVersion.`);
-  safeId(value.workspaceId, `${label}.workspaceId`);
-  if (value.workspaceId !== manifest.workspaceId) throw new Error(`${label}.workspaceId does not match the manifest workspaceId.`);
-  if (!Array.isArray(value.artifacts)) throw new Error(`${label}.artifacts must be an array.`);
-  exactOptionalIso(value.updatedAt, `${label}.updatedAt`);
-  const seen = new Set();
-  for (const [index, item] of value.artifacts.entries()) {
-    const itemLabel = `${label}.artifacts[${index}]`;
-    assertSealed(item, lineage ? LINEAGE_ITEM_FIELDS : INDEX_ITEM_FIELDS, itemLabel);
-    nonEmptyString(item.path, `${itemLabel}.path`);
-    nonEmptyString(item.kind, `${itemLabel}.kind`);
-    hash(item.sha256, `${itemLabel}.sha256`);
-    safeId(item.missionId, `${itemLabel}.missionId`);
-    hash(item.contractDigest, `${itemLabel}.contractDigest`);
-    safeId(item.receiptId, `${itemLabel}.receiptId`);
-    if (seen.has(item.path)) throw new Error(`${label}.artifacts contains duplicate path ${item.path}.`);
-    seen.add(item.path);
-    if (lineage) stringArray(item.derivedReferences, `${itemLabel}.derivedReferences`);
-  }
-  return value;
-}
-
 function validateMissionShape(value, manifest, label) {
   assertSealed(value, MISSION_FIELDS, label);
   if (value.schemaVersion !== 1) throw new Error(`${label} has an unsupported schemaVersion.`);
   safeId(value.workspaceId, `${label}.workspaceId`);
   if (value.workspaceId !== manifest.workspaceId) throw new Error(`${label}.workspaceId does not match the manifest workspaceId.`);
-  safeId(value.missionId, `${label}.missionId`);
+  const missionId = safeId(value.missionId, `${label}.missionId`);
+  if (path.posix.basename(label) !== `${missionId}.json`) throw new Error(`${label} filename must match missionId ${missionId}.`);
   hash(value.contractDigest, `${label}.contractDigest`);
   exactIso(value.createdAt, `${label}.createdAt`);
   nonEmptyString(value.goal, `${label}.goal`);
@@ -258,6 +226,23 @@ function validateMissionShape(value, manifest, label) {
   }
   if (value.dependsOnMissionIds !== undefined) stringArray(value.dependsOnMissionIds, `${label}.dependsOnMissionIds`);
   if (value.supersedesMissionId !== undefined) safeId(value.supersedesMissionId, `${label}.supersedesMissionId`);
+  const content = {
+    goal: value.goal,
+    scope: value.scope,
+    outOfScope: value.outOfScope,
+    targetArtifacts: value.targetArtifacts,
+    expectedArtifacts: value.expectedArtifacts,
+    completionCriteria: value.completionCriteria,
+    evidenceRequirements: value.evidenceRequirements,
+    ...(value.dependsOnMissionIds === undefined ? {} : { dependsOnMissionIds: value.dependsOnMissionIds }),
+    ...(value.supersedesMissionId === undefined ? {} : { supersedesMissionId: value.supersedesMissionId })
+  };
+  const expectedDigest = missionContractDigest(missionId, content);
+  if (value.contractDigest !== expectedDigest) throw new Error(`${label}.contractDigest does not match its canonical mission content.`);
+  const expectedCriterionIds = missionCompletionCriteria(content).map(({ criterionId }) => criterionId);
+  if (JSON.stringify(value.completionCriterionIds) !== JSON.stringify(expectedCriterionIds)) throw new Error(`${label}.completionCriterionIds do not match canonical mission content.`);
+  const expectedEvidenceIds = missionEvidenceRequirements(content).map(({ requirementId }) => requirementId);
+  if (JSON.stringify(value.evidenceRequirementIds) !== JSON.stringify(expectedEvidenceIds)) throw new Error(`${label}.evidenceRequirementIds do not match canonical mission content.`);
   return value;
 }
 
@@ -327,42 +312,6 @@ function validateLessonSupersession(lessons) {
       current = lessons.get(current)?.supersedesLessonId ?? null;
     }
   }
-}
-
-function validateReceiptShape(value, manifest, label) {
-  assertSealed(value, RECEIPT_FIELDS, label);
-  if (value.schemaVersion !== 1) throw new Error(`${label} has an unsupported schemaVersion.`);
-  safeId(value.workspaceId, `${label}.workspaceId`);
-  if (value.workspaceId !== manifest.workspaceId) throw new Error(`${label}.workspaceId does not match the manifest workspaceId.`);
-  safeId(value.receiptId, `${label}.receiptId`);
-  safeId(value.missionId, `${label}.missionId`);
-  hash(value.contractDigest, `${label}.contractDigest`);
-  nonEmptyString(value.summary, `${label}.summary`);
-  exactIso(value.producedAt, `${label}.producedAt`);
-  if (!Array.isArray(value.artifacts) || value.artifacts.length === 0) throw new Error(`${label}.artifacts must contain at least one item.`);
-  if (!Array.isArray(value.validations)) throw new Error(`${label}.validations must be an array.`);
-  if (!Array.isArray(value.criteriaSatisfied)) throw new Error(`${label}.criteriaSatisfied must be an array.`);
-  for (const [index, item] of value.artifacts.entries()) {
-    const itemLabel = `${label}.artifacts[${index}]`;
-    assertSealed(item, RECEIPT_ARTIFACT_FIELDS, itemLabel);
-    nonEmptyString(item.path, `${itemLabel}.path`);
-    nonEmptyString(item.kind, `${itemLabel}.kind`);
-    hash(item.sha256, `${itemLabel}.sha256`);
-  }
-  for (const [index, item] of value.validations.entries()) {
-    const itemLabel = `${label}.validations[${index}]`;
-    assertSealed(item, RECEIPT_VALIDATION_FIELDS, itemLabel);
-    nonEmptyString(item.kind, `${itemLabel}.kind`);
-    nonEmptyString(item.reference, `${itemLabel}.reference`);
-    hash(item.outputHash, `${itemLabel}.outputHash`);
-  }
-  for (const [index, item] of value.criteriaSatisfied.entries()) {
-    const itemLabel = `${label}.criteriaSatisfied[${index}]`;
-    assertSealed(item, RECEIPT_CRITERION_FIELDS, itemLabel);
-    nonEmptyString(item.criterionId, `${itemLabel}.criterionId`);
-    stringArray(item.evidenceRefs, `${itemLabel}.evidenceRefs`);
-  }
-  return value;
 }
 
 function validateJsonDirectory(root, relativeDirectory, manifest, validate, context = {}) {
@@ -499,10 +448,10 @@ export function inspectDoveWorkspace(root) {
     ].filter(Boolean);
     if (problems.length > 0) throw new Error(`Dove schema declaration contradicts required layout: ${problems.join("; ")}.`);
     const project = validateDoveProject(readJsonStrict(path.join(doveRoot, "project.json"), ".dove/project.json"), manifest);
-    validateOwnershipShape(readJsonStrict(path.join(doveRoot, "artifacts", "ownership.json"), ".dove/artifacts/ownership.json"), "Artifact ownership index", manifest);
-    validateOwnershipShape(readJsonStrict(path.join(doveRoot, "artifacts", "lineage.json"), ".dove/artifacts/lineage.json"), "Artifact lineage index", manifest, true);
-    const missions = new Map(validateJsonDirectory(workspace, ".dove/missions", manifest, validateMissionShape).map((mission) => [mission.missionId, mission]));
-    validateJsonDirectory(workspace, ".dove/receipts/execution", manifest, validateReceiptShape);
+    const missionValues = validateJsonDirectory(workspace, ".dove/missions", manifest, validateMissionShape);
+    const missionGraph = validateMissionGraph(missionValues.map((mission) => ({ filename: `${mission.missionId}.json`, mission })));
+    const missions = missionGraph.missions;
+    const receiptLedger = readExecutionReceiptLedger(workspace, { manifest, missions });
     const lessonsDirectory = path.join(workspace, ".dove/lessons");
     if (pathExistsNoFollow(lessonsDirectory)) {
       const stat = fs.lstatSync(lessonsDirectory);
@@ -516,7 +465,7 @@ export function inspectDoveWorkspace(root) {
         throw new Error(`${relativeDirectory} must remain empty until its sealed schema is introduced.`);
       }
     }
-    return { workspace, state: "current-healthy", category: "current", healthy: true, schemaVersion: version, detectedSchema: String(version), source, manifest, project };
+    return { workspace, state: "current-healthy", category: "current", healthy: true, schemaVersion: version, detectedSchema: String(version), source, manifest, project, missions, receiptLedger };
   } catch (error) {
     return { workspace, state: "current-unhealthy", category: "invalid", healthy: false, schemaVersion: version, detectedSchema: String(version), source, manifest, error: error instanceof Error ? error.message : String(error) };
   }
@@ -562,12 +511,7 @@ export function createMinimalWorkspaceDocuments({ workspaceId, goal, createdAt }
     createdAt,
     updatedAt: createdAt
   };
-  return {
-    manifest,
-    project,
-    ownership: { schemaVersion: 1, workspaceId, artifacts: [], updatedAt: null },
-    lineage: { schemaVersion: 1, workspaceId, artifacts: [], updatedAt: null }
-  };
+  return { manifest, project };
 }
 
 export function newWorkspaceId() {
@@ -586,8 +530,6 @@ export function materializeMinimalWorkspaceDirectory(directory, documents, optio
   }
   writeJsonAtomicContent(path.join(directory, "manifest.json"), documents.manifest, ops);
   writeJsonAtomicContent(path.join(directory, "project.json"), documents.project, ops);
-  writeJsonAtomicContent(path.join(directory, "artifacts", "ownership.json"), documents.ownership, ops);
-  writeJsonAtomicContent(path.join(directory, "artifacts", "lineage.json"), documents.lineage, ops);
 }
 
 export function archiveTargetFor({ workspace, detectedSchema, treeDigest }) {

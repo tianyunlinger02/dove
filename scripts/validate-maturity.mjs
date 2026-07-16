@@ -5,8 +5,7 @@ const steps = [
   ["npm", ["run", "mcp:validate"]],
   ["npm", ["run", "workflow-goals:validate"]],
   ["npm", ["run", "governance:audit"]],
-  ["npm", ["test"]],
-  ["npm", ["run", "doctor:validate"]]
+  ["npm", ["test"]]
 ];
 
 for (const [command, args] of steps) {

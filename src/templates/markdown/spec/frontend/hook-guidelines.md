@@ -1,6 +1,6 @@
 # Hook Guidelines
 
-> Reusable file-backed helpers and workflow pipelines in Dove schema 7.
+> Reusable file-backed helpers and workflow pipelines in Dove schema 8.
 
 ---
 
@@ -25,7 +25,7 @@ Before creating a helper, search `src/core/workspace.mjs`, `src/core/artifact-in
 A mutation pipeline should be explicit:
 
 1. Validate sealed boundary input.
-2. Open the current schema 7 workspace.
+2. Open the current schema 8 workspace.
 3. Load and validate the mission contract.
 4. Resolve canonical target and evidence paths.
 5. Reassess hashes, source eligibility, ownership, lineage, and review coverage as required.

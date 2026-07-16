@@ -1,6 +1,6 @@
 # Dove Command Output Samples
 
-This internal source-checkout document records concise representative shapes for the twelve public schema 7 commands. Exact ids, hashes, timestamps, and mutation summaries vary by workspace.
+This checked source-output document records representative shapes for the 12 public schema 8 host workflows. Separately, the CLI has 16 top-level subcommands; the remaining inventory is 27 MCP tools and 60 generated adapters. Exact ids, hashes, timestamps, and mutation summaries vary by workspace.
 
 ## Common rules
 
@@ -8,7 +8,7 @@ This internal source-checkout document records concise representative shapes for
 - Every proposal is zero-write until exact replay where confirmation is required.
 - Every domain mutation requires explicit `missionId`.
 - Domain writes preflight all referenced material and evidence before the first write.
-- Successful domain writes include substantive artifacts, a canonical receipt, ownership, and lineage.
+- Successful domain writes include substantive artifacts and a canonical receipt; ownership and lineage are derived from the receipt ledger.
 - Unknown or retired packet/target/domain/stage/status/role/policy fields are rejected.
 
 ## `dove.init`
@@ -22,16 +22,29 @@ Representative result:
 ```json
 {
   "status": "needs-confirmation",
-  "schemaVersion": 7,
-  "zeroWrite": true,
+  "kind": "init",
+  "newSchemaVersion": 8,
+  "detectedSchemaState": {
+    "state": "absent",
+    "detectedSchema": "absent"
+  },
+  "proposalDigest": "<64 lowercase hex>",
   "confirmation": {
-    "proposalDigest": "sha256:...",
-    "exactConfirmationCommand": "node ./bin/dove-package.mjs init ..."
+    "required": true,
+    "exactReplay": true,
+    "proposalDigest": "<same 64 lowercase hex>",
+    "mutationMode": "direct-process",
+    "proposalToken": "<base64url token>"
+  },
+  "mutation": {
+    "mutationMode": "direct-process",
+    "writesApplied": false,
+    "paths": []
   }
 }
 ```
 
-Exact confirmation creates only the sealed manifest, project identity, ownership/lineage indexes, and required directories.
+Exact confirmation creates only the sealed manifest, project identity, and required directories. Ownership and lineage are later derived from execution receipts.
 
 ## `dove.mission`
 
@@ -43,16 +56,31 @@ Exact confirmation creates only the sealed manifest, project identity, ownership
 {
   "status": "needs-confirmation",
   "mission": {
+    "schemaVersion": 1,
+    "proposalVersion": 1,
     "missionId": "mission-...",
+    "contractDigest": "<64 lowercase hex>",
     "goal": "Validate the retrieval method against the current baseline",
     "completionCriteria": ["..."],
-    "evidenceRequirements": ["artifact:...", "validation:..."]
+    "evidenceRequirements": ["artifact:...", "validation:..."],
+    "completionCriterionIds": ["criterion-..."],
+    "evidenceRequirementIds": ["evidence-...", "evidence-..."]
   },
-  "zeroWrite": true
+  "confirmation": {
+    "required": true,
+    "proposalDigest": "<64 lowercase hex>",
+    "mutationMode": "direct-process",
+    "proposalToken": "<base64url token>"
+  },
+  "mutation": {
+    "mutationMode": "direct-process",
+    "writesApplied": false,
+    "paths": []
+  }
 }
 ```
 
-Exact replay persists one mission contract and returns control to the host.
+Exact replay persists one mission contract and returns control to the host. Its nonpersisted result includes `executionHandoff` with mission/contract identity, target/expected artifacts, stable criterion/evidence ids, the existing receipt CLI template ending in `--json`, and the existing ingest/assess MCP names.
 
 ## `dove.status`
 
@@ -62,19 +90,38 @@ Exact replay persists one mission contract and returns control to the host.
 
 ```json
 {
-  "schema": { "state": "current", "version": 7 },
-  "missionCount": 2,
-  "receiptCount": 4,
-  "sourceCount": 3,
-  "domainIntegrity": {
-    "artifactCount": 9,
-    "staleArtifactCount": 0,
-    "stalePaths": []
+  "mode": "dove-status-query",
+  "query": true,
+  "scope": {
+    "kind": "minimal-mission-workspace",
+    "schemaVersion": 8,
+    "missionScope": "explicit",
+    "missionId": "mission-..."
+  },
+  "currentContext": {
+    "missionCount": 2,
+    "selectedMissionId": "mission-...",
+    "receiptCount": 4,
+    "sourceCount": 3,
+    "domainIntegrity": {
+      "artifactCount": 9,
+      "staleArtifactCount": 0,
+      "stalePaths": []
+    }
+  },
+  "needsAttention": {
+    "status": "incomplete",
+    "stableGaps": {
+      "completion": [],
+      "sources": [],
+      "domain": [],
+      "review": ["trusted-review-issuer-missing"]
+    }
   }
 }
 ```
 
-Status is always zero-write and never refreshes or repairs state.
+Status is always zero-write and never refreshes or repairs state. Zero missions reports none, one mission is scoped automatically, and multiple missions return `explicit-mission-required` until `missionId` is supplied; scoped gaps cover completion, source, domain, and review.
 
 ## `dove.lessons`
 
@@ -114,7 +161,7 @@ Representative record proposal:
   },
   "confirmation": {
     "exactReplay": true,
-    "exactConfirmationCommand": "node ./bin/dove-package.mjs lessons record ... --confirmed"
+    "exactConfirmationCommand": "node ./bin/dove-package.mjs lessons record ... --confirmed --json"
   },
   "advisoryOnly": true,
   "authority": false,
@@ -127,7 +174,9 @@ All lessons retain recording-mission provenance. Global scope means broadly appl
 ## `dove.source`
 
 ```text
-/dove:source --mission-id mission-... --source-id paper-a --title "Paper A" --locator https://... --material ./downloads/paper-a.pdf
+search_network → host visibly captures ./downloads/paper-a.pdf
+/dove:source --mission-id mission-... --source-id paper-a --title "Paper A" --locator https://... --capture-path ./downloads/paper-a.pdf
+query_sources
 ```
 
 ```json
@@ -142,7 +191,7 @@ All lessons retain recording-mission provenance. Global scope means broadly appl
 }
 ```
 
-Public verification can record rejection only; positive verification fails closed.
+Search candidates carry a non-authoritative `registrationDraft` and `captureRequiredForEvidence: true`. Public verification can record rejection only; neither search nor registration makes a positive trust claim.
 
 ## `dove.note`
 
@@ -150,7 +199,7 @@ Public verification can record rejection only; positive verification fails close
 /dove:note --mission-id mission-... --note-id finding-a --summary "..." --source-id paper-a
 ```
 
-The result records substantive note text after current source trust/hash checks, plus receipt, ownership, and lineage.
+The current package records substantive note text from current mission-owned artifacts or current mission notes, plus a receipt-derived ownership/lineage binding. `sourceIds` remain unavailable as eligible note evidence until a trusted positive source verifier exists.
 
 ## `dove.experience`
 
@@ -185,7 +234,7 @@ Dove binds materials and prepares/imports declared host-generated output. The re
 /dove:review --mission-id mission-... --artifact .dove/drafts/methods.md --verify-coverage
 ```
 
-The four policies are `local-preflight`, `isolated-selected-artifacts`, `final-plan-results-only`, and `external`; policy controls input scope only. Preflight maps to zero-write `local-preflight`. Prepare freezes mission, contract digest, exact classified artifact paths/sizes/hashes, set hash, privacy boundary, and canonical handoff/report paths. Import rejects tampering, drift, symlinks, aliases, noncanonical paths, cross-mission or cross-scope material, and repeated imports before writing. Coverage verification is read-only. Imported review material remains non-authoritative, and Dove never launches a reviewer, process, session, subagent, or loop.
+Review-exchange format v7 operates inside the schema 8 workspace. Its four policies are `local-preflight`, `isolated-selected-artifacts`, `final-plan-results-only`, and `external`; policy controls input scope only. Results name `operation` as `preflight`, `prepare`, or `import`. Preflight maps to zero-write `local-preflight`. Prepare freezes mission, contract digest, exact classified artifact paths/sizes/hashes, set hash, privacy boundary, canonical input/manifest/handoff/report paths, and returns the exact import action. Import rejects tampering, drift, symlinks, aliases, noncanonical paths, cross-mission or cross-scope material, and repeated imports before writing, then returns imported paths and the existing coverage action. Coverage verification is read-only. Imported review material remains non-authoritative, and Dove never launches a reviewer, process, session, subagent, or loop.
 
 ## `dove.rebuttal`
 
@@ -205,4 +254,4 @@ Snapshots copy actual artifact contents into immutable version storage. Comparis
 
 ## Removed public surfaces
 
-`dove.review-loop`, `dove.auto`, `dove.operator`, onboarding, public-status publishing/serving, packet mutation, board, runtime, and navigation commands are not public schema 7 surfaces. `dove.lessons` is public, but retired operator lesson storage and tools are absent. `dove.review` is the mission-bound policy-scoped prepare/import/coverage exchange only; it does not expose packet review, audio review, review-loop, reviewer execution, routing, or caller-minted authority.
+`dove.review-loop`, `dove.auto`, `dove.operator`, onboarding, public-status publishing/serving, packet mutation, board, runtime, and navigation commands are not public schema 8 surfaces. `dove.lessons` is public, but retired operator lesson storage and tools are absent. `dove.review` is the mission-bound policy-scoped prepare/import/coverage exchange only; it does not expose packet review, audio review, review-loop, reviewer execution, routing, or caller-minted authority.

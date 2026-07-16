@@ -38,12 +38,12 @@ const REVIEW_STATUSES = new Set(["completed", "blocked", "failed"]);
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const INPUT_FIELDS = new Set([
   "schemaVersion", "workspaceId", "missionId", "contractDigest", "exchangeId", "createdAt", "policy",
-  "scopeSha256", "inputBoundary", "artifactPaths", "finalPlanPaths", "finalResultPaths", "reviewedArtifactPaths",
+  "scopeSha256", "inputBoundary", "preparationReceiptId", "artifactPaths", "finalPlanPaths", "finalResultPaths", "reviewedArtifactPaths",
   "reviewedArtifacts", "reviewedArtifactSetSha256", "outputContract", "privacyBoundary"
 ]);
 const MANIFEST_FIELDS = new Set([
   "schemaVersion", "workspaceId", "missionId", "contractDigest", "exchangeId", "status", "createdAt", "policy",
-  "scopeSha256", "inputBoundary", "inputPath", "inputSha256", "handoffPath", "reportPath", "artifactPaths", "finalPlanPaths",
+  "scopeSha256", "inputBoundary", "preparationReceiptId", "inputPath", "inputSha256", "handoffPath", "reportPath", "artifactPaths", "finalPlanPaths",
   "finalResultPaths", "reviewedArtifactPaths", "reviewedArtifacts", "reviewedArtifactSetSha256"
 ]);
 const HANDOFF_FIELDS = new Set([
@@ -55,7 +55,7 @@ const FINDING_FIELDS = new Set(["findingId", "severity", "summary", "linkedArtif
 const IMPORTED_REVIEW_FIELDS = new Set([
   "schemaVersion", "workspaceId", "missionId", "contractDigest", "exchangeId", "reviewId", "policy", "scopeSha256",
   "status", "verdict", "reviewerId", "summary", "reviewedAt", "reviewedArtifactPaths", "reviewedArtifacts",
-  "reviewedArtifactSetSha256", "findings", "actionItems", "exchange", "authority", "privateTranscriptImported"
+  "reviewedArtifactSetSha256", "findings", "actionItems", "preparationReceiptId", "importReceiptId", "exchange", "authority", "privateTranscriptImported"
 ]);
 const EXCHANGE_HASH_FIELDS = new Set([
   "manifestPath", "manifestSha256", "inputPath", "inputSha256", "handoffPath", "handoffSha256", "reportPath", "reportSha256",
@@ -198,6 +198,11 @@ function preflightResult(prepared) {
     reviewedArtifactPaths: prepared.snapshot.reviewedArtifacts.map((item) => item.path),
     reviewedArtifacts: prepared.snapshot.reviewedArtifacts,
     reviewedArtifactSetSha256: prepared.snapshot.reviewedArtifactSetSha256,
+    operation: "preflight",
+    nextAction: {
+      command: "node ./bin/dove-package.mjs review . --mission-id \"<mission id>\" --policy \"<review policy>\" --artifact \"<artifact path>\" --prepare --mutation-mode direct-process --json",
+      mcpTool: "prepare_review_exchange"
+    },
     authority: { authoritative: false, callerMayMintAuthority: false, reason: "Local preflight is read-only and non-authoritative." }
   };
 }
@@ -213,6 +218,7 @@ export function prepareReviewExchange(root, args = {}) {
   const handoffPath = exchangePath(exchangeId, "handoff.json");
   const reportPath = exchangePath(exchangeId, "report.md");
   const createdAt = new Date().toISOString();
+  const preparationReceiptId = domainSafeId(`receipt-prepare-review-exchange-${crypto.randomUUID()}`, "preparationReceiptId");
   const input = {
     schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
     workspaceId: prepared.workspace.manifest.workspaceId,
@@ -223,6 +229,7 @@ export function prepareReviewExchange(root, args = {}) {
     policy: prepared.policy,
     inputBoundary: policyInputBoundary(prepared.policy),
     scopeSha256: prepared.scope.sha256,
+    preparationReceiptId,
     artifactPaths: prepared.paths.artifactPaths,
     finalPlanPaths: prepared.paths.finalPlanPaths,
     finalResultPaths: prepared.paths.finalResultPaths,
@@ -232,7 +239,13 @@ export function prepareReviewExchange(root, args = {}) {
     outputContract: {
       handoffPath,
       reportPath,
-      requiredHandoffFields: [...HANDOFF_FIELDS]
+      requiredHandoffFields: [...HANDOFF_FIELDS],
+      actionableReturn: {
+        completedVerdicts: ["coherent", "needs-revision", "needs-evidence"],
+        blockedVerdict: "blocked",
+        findingLinkedArtifactMinimum: 1,
+        actionItemsRequiredFor: ["needs-revision", "needs-evidence"]
+      }
     },
     privacyBoundary: {
       writerPrivateTranscriptShared: false,
@@ -253,6 +266,7 @@ export function prepareReviewExchange(root, args = {}) {
     policy: prepared.policy,
     inputBoundary: policyInputBoundary(prepared.policy),
     scopeSha256: prepared.scope.sha256,
+    preparationReceiptId,
     inputPath,
     inputSha256: domainSha256(inputContent),
     handoffPath,
@@ -267,6 +281,7 @@ export function prepareReviewExchange(root, args = {}) {
   const manifestContent = domainJson(manifest);
   const result = finalizeDomainArtifacts(root, {
     actionId: "prepare-review-exchange",
+    receiptId: preparationReceiptId,
     operation: "Review exchange preparation",
     missionId: prepared.mission.missionId,
     summary: `Prepared ${prepared.policy} review exchange ${exchangeId}.`,
@@ -282,6 +297,7 @@ export function prepareReviewExchange(root, args = {}) {
     exchangeId,
     policy: prepared.policy,
     scopeSha256: prepared.scope.sha256,
+    preparationReceiptId,
     inputPath,
     inputSha256: manifest.inputSha256,
     manifestPath,
@@ -290,6 +306,17 @@ export function prepareReviewExchange(root, args = {}) {
     reportPath,
     reviewedArtifactPaths: input.reviewedArtifactPaths,
     reviewedArtifactSetSha256: input.reviewedArtifactSetSha256,
+    operation: "prepare",
+    actionablePaths: {
+      input: { path: inputPath, sha256: manifest.inputSha256, role: "review-input" },
+      manifest: { path: manifestPath, sha256: domainSha256(manifestContent), role: "review-manifest" },
+      handoff: { path: handoffPath, sha256: null, role: "reviewer-return-handoff" },
+      report: { path: reportPath, sha256: null, role: "reviewer-return-report" }
+    },
+    importAction: {
+      command: `node ./bin/dove-package.mjs review . --mission-id "${prepared.mission.missionId}" --exchange-id "${exchangeId}" --review-id "<review id>" --import --mutation-mode direct-process --json`,
+      mcpTool: "import_review_exchange"
+    },
     authority: { authoritative: false, callerMayMintAuthority: false }
   };
 }
@@ -306,6 +333,17 @@ function assertIdentity(value, manifest, mission, workspaceId, label) {
 
 function same(value, expected) {
   return JSON.stringify(value) === JSON.stringify(expected);
+}
+
+function assertPreparationReceipt(workspace, mission, manifestLeaf, inputLeaf, manifestPath, inputPath) {
+  const receipt = workspace.receiptLedger.receipts.find((item) => {
+    if (item.producer?.kind !== "dove-internal" || item.producer?.actionId !== "prepare-review-exchange") return false;
+    const artifacts = new Map(item.artifacts.map((artifact) => [artifact.path, artifact]));
+    return artifacts.size === 2 && artifacts.get(inputPath)?.sha256 === inputLeaf.sha256 && artifacts.get(manifestPath)?.sha256 === manifestLeaf.sha256;
+  });
+  if (!receipt) throw new Error("Review exchange preparation receipt does not own the exact immutable input and manifest paths and hashes.");
+  if (receipt.missionId !== mission.missionId || receipt.contractDigest !== mission.contractDigest) throw new Error("Review exchange preparation receipt mission binding mismatch.");
+  return receipt;
 }
 
 function assertPreparedScope(manifest, input) {
@@ -332,7 +370,7 @@ function normalizeFindings(items, reviewedArtifactPaths) {
     seen.add(findingId);
     const severity = domainNonEmptyText(item.severity, `findings[${index}].severity`).toLowerCase();
     if (!["low", "medium", "high"].includes(severity)) throw new Error(`findings[${index}].severity must be low, medium, or high.`);
-    const linkedArtifactPaths = domainStringArray(item.linkedArtifactPaths, `findings[${index}].linkedArtifactPaths`);
+    const linkedArtifactPaths = domainStringArray(item.linkedArtifactPaths, `findings[${index}].linkedArtifactPaths`, { minItems: 1 });
     if (linkedArtifactPaths.some((artifactPath) => !reviewed.has(artifactPath))) throw new Error(`findings[${index}] links an artifact outside the frozen review set.`);
     return { findingId, severity, summary: domainNonEmptyText(item.summary, `findings[${index}].summary`), linkedArtifactPaths };
   });
@@ -352,20 +390,40 @@ export function importReviewExchange(root, args = {}) {
   if (fs.existsSync(path.resolve(root, reviewPath)) || fs.existsSync(path.resolve(root, finalReportPath))) throw new Error(`Review ${reviewId} has already been imported.`);
 
   const manifestLeaf = currentCanonicalLeaf(root, manifestPath, "Review exchange manifest");
-  const manifest = sealed(JSON.parse(manifestLeaf.content.toString("utf8")), MANIFEST_FIELDS, "Review exchange manifest");
+  let manifest;
+  try {
+    manifest = sealed(JSON.parse(manifestLeaf.content.toString("utf8")), MANIFEST_FIELDS, "Review exchange manifest");
+  } catch (error) {
+    throw new Error(`Review exchange manifest is malformed: ${error instanceof Error ? error.message : String(error)}`);
+  }
   if (manifest.status !== "prepared") throw new Error(`Review exchange ${exchangeId} is not importable from status ${manifest.status ?? "unknown"}.`);
+  domainSafeId(manifest.preparationReceiptId, "manifest.preparationReceiptId");
   if (manifest.exchangeId !== exchangeId) throw new Error("Review exchange manifest exchangeId mismatch.");
   assertIdentity(manifest, manifest, mission, workspace.manifest.workspaceId, "Review exchange manifest");
   if (manifest.inputPath !== inputPath || manifest.handoffPath !== handoffPath || manifest.reportPath !== reportPath) throw new Error("Review exchange manifest contains noncanonical exchange paths.");
   exactHash(manifest.inputSha256, "manifest.inputSha256");
 
   const inputLeaf = currentCanonicalLeaf(root, inputPath, "Review exchange input");
-  const input = sealed(JSON.parse(inputLeaf.content.toString("utf8")), INPUT_FIELDS, "Review exchange input");
+  let input;
+  try {
+    input = sealed(JSON.parse(inputLeaf.content.toString("utf8")), INPUT_FIELDS, "Review exchange input");
+  } catch (error) {
+    throw new Error(`Review exchange input is malformed: ${error instanceof Error ? error.message : String(error)}`);
+  }
   assertIdentity(input, manifest, mission, workspace.manifest.workspaceId, "Review exchange input");
+  domainSafeId(input.preparationReceiptId, "input.preparationReceiptId");
   if (inputLeaf.sha256 !== manifest.inputSha256) throw new Error("Review exchange input hash does not match the prepared manifest.");
   if (input.outputContract?.handoffPath !== handoffPath || input.outputContract?.reportPath !== reportPath) throw new Error("Review exchange input output contract is noncanonical.");
   if (!same(input.outputContract?.requiredHandoffFields, [...HANDOFF_FIELDS])) throw new Error("Review exchange handoff contract drifted.");
+  if (!same(input.outputContract?.actionableReturn, {
+    completedVerdicts: ["coherent", "needs-revision", "needs-evidence"],
+    blockedVerdict: "blocked",
+    findingLinkedArtifactMinimum: 1,
+    actionItemsRequiredFor: ["needs-revision", "needs-evidence"]
+  })) throw new Error("Review exchange actionable return contract drifted.");
   if (input.privacyBoundary?.writerPrivateTranscriptShared !== false || input.privacyBoundary?.reviewerPrivateTranscriptShouldReturn !== false || input.privacyBoundary?.undeclaredContextShared !== false) throw new Error("Review exchange privacy boundary is invalid.");
+  const preparationReceipt = assertPreparationReceipt(workspace, mission, manifestLeaf, inputLeaf, manifestPath, inputPath);
+  if (manifest.preparationReceiptId !== preparationReceipt.receiptId || input.preparationReceiptId !== preparationReceipt.receiptId) throw new Error("Review exchange preparation receipt anchor does not match the ledger owner.");
   assertPreparedScope(manifest, input);
 
   const manifestSnapshots = normalizeReviewSnapshots(manifest.reviewedArtifacts, "manifest.reviewedArtifacts");
@@ -384,7 +442,8 @@ export function importReviewExchange(root, args = {}) {
   if (handoff.reviewId !== reviewId) throw new Error("Review exchange handoff reviewId mismatch.");
   if (!REVIEW_STATUSES.has(handoff.status)) throw new Error(`Review exchange handoff status is unsupported: ${handoff.status}.`);
   if (!REVIEW_VERDICTS.has(handoff.verdict)) throw new Error(`Review exchange handoff verdict is unsupported: ${handoff.verdict}.`);
-  if (handoff.status !== "completed" && handoff.verdict === "coherent") throw new Error("A non-completed review handoff cannot return a coherent verdict.");
+  if (handoff.status === "completed" && handoff.verdict === "blocked") throw new Error("A completed review handoff must return coherent, needs-revision, or needs-evidence.");
+  if (handoff.status !== "completed" && handoff.verdict !== "blocked") throw new Error("A blocked or failed review handoff must return verdict blocked.");
   if (handoff.inputPath !== inputPath || handoff.reportPath !== reportPath) throw new Error("Review exchange handoff paths do not match the canonical exchange.");
   if (exactHash(handoff.inputSha256, "handoff.inputSha256") !== inputLeaf.sha256) throw new Error("Review exchange handoff input hash mismatch.");
   if (exactHash(handoff.reportSha256, "handoff.reportSha256") !== reportLeaf.sha256) throw new Error("Review exchange report hash mismatch.");
@@ -392,6 +451,8 @@ export function importReviewExchange(root, args = {}) {
 
   const findings = normalizeFindings(handoff.findings, manifest.reviewedArtifactPaths);
   const actionItems = domainStringArray(handoff.actionItems, "Review handoff actionItems");
+  if (["needs-revision", "needs-evidence"].includes(handoff.verdict) && actionItems.length === 0) throw new Error(`Review handoff verdict ${handoff.verdict} requires at least one actionable action item.`);
+  const importReceiptId = domainSafeId(`receipt-import-review-exchange-${crypto.randomUUID()}`, "importReceiptId");
   const review = {
     schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
     workspaceId: workspace.manifest.workspaceId,
@@ -411,6 +472,8 @@ export function importReviewExchange(root, args = {}) {
     reviewedArtifactSetSha256: exactSetHash,
     findings,
     actionItems,
+    preparationReceiptId: preparationReceipt.receiptId,
+    importReceiptId,
     exchange: {
       manifestPath,
       manifestSha256: manifestLeaf.sha256,
@@ -433,6 +496,7 @@ export function importReviewExchange(root, args = {}) {
   };
   const result = finalizeDomainArtifacts(root, {
     actionId: "import-review-exchange",
+    receiptId: importReceiptId,
     operation: "Review exchange import",
     missionId: mission.missionId,
     summary: `Imported non-authoritative review ${reviewId} from exchange ${exchangeId}.`,
@@ -450,6 +514,18 @@ export function importReviewExchange(root, args = {}) {
     review,
     reviewPath,
     reportPath: finalReportPath,
+    operation: "import",
+    actionablePaths: {
+      input: { path: inputPath, sha256: inputLeaf.sha256, role: "review-input" },
+      manifest: { path: manifestPath, sha256: manifestLeaf.sha256, role: "review-manifest" },
+      handoff: { path: handoffPath, sha256: handoffLeaf.sha256, role: "reviewer-return-handoff" },
+      report: { path: finalReportPath, sha256: reportLeaf.sha256, role: "imported-review-report" },
+      review: { path: reviewPath, sha256: result.artifacts?.find((item) => item.path === reviewPath)?.sha256 ?? null, role: "imported-review-record" }
+    },
+    nextAction: {
+      command: `node ./bin/dove-package.mjs review . --mission-id "${mission.missionId}" --artifact "<reviewed artifact path>" --verify-coverage --json`,
+      mcpTool: "verify_review_coverage"
+    },
     authoritative: false,
     privateTranscriptImported: false
   };
@@ -490,7 +566,7 @@ function requestedCoverageSnapshot(root, missionId, requestedPaths) {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/is not a usable file .*path does not exist|is not a registered schema 7 artifact|has changed since its latest ownership receipt/u.test(message)) {
+    if (/is not a usable file .*path does not exist|is not a registered schema 8 artifact|has changed since its latest ownership receipt/u.test(message)) {
       return { snapshot: null, failures: [`requested-artifact-unavailable:${message}`] };
     }
     throw error;
@@ -507,7 +583,11 @@ function normalizeExpectedCoverageSnapshots(value) {
   };
 }
 
-function assessImportedReview(root, mission, { reviewPath, review, readFailure }, requestedSnapshot) {
+function receiptArtifactMap(receipt) {
+  return new Map(Array.isArray(receipt?.artifacts) ? receipt.artifacts.map((artifact) => [artifact.path, artifact]) : []);
+}
+
+function assessImportedReview(root, workspace, mission, { reviewPath, review, readFailure }, requestedSnapshot) {
   const failures = [];
   if (readFailure || !review) return { reviewId: null, reviewPath, current: false, authoritative: false, failures: [readFailure ?? "review-unreadable"] };
   if (review.schemaVersion !== REVIEW_EXCHANGE_SCHEMA_VERSION) {
@@ -515,14 +595,48 @@ function assessImportedReview(root, mission, { reviewPath, review, readFailure }
   }
   if (review.contractDigest !== mission.contractDigest) failures.push("contract-digest-stale");
   if (!POLICY_SET.has(review.policy) || review.policy === "local-preflight") failures.push("review-policy-invalid");
+  if (review.status !== "completed") failures.push(`review-status-ineligible:${review.status ?? "unknown"}`);
+  if (!["coherent", "needs-revision", "needs-evidence"].includes(review.verdict)) failures.push(`review-verdict-ineligible:${review.verdict ?? "unknown"}`);
   const snapshots = normalizeReviewSnapshots(review.reviewedArtifacts, "review.reviewedArtifacts");
   if (!snapshots.ok) failures.push(snapshots.reason);
   const setHash = snapshots.ok ? stableSnapshotSetHash(snapshots.snapshots) : null;
   if (!setHash || review.reviewedArtifactSetSha256 !== setHash || !same(review.reviewedArtifactPaths, snapshots.snapshots.map((item) => item.path))) failures.push("reviewed-artifact-set-hash-mismatch");
   if (snapshots.ok) failures.push(...verifyReviewSnapshotSet(root, snapshots.snapshots, setHash).failures);
   if (requestedSnapshot && (!snapshots.ok || !same(requestedSnapshot.reviewedArtifacts, snapshots.snapshots))) failures.push("requested-artifact-set-not-exactly-covered");
+  const importReceipt = workspace.receiptLedger.receipts.find((receipt) => receipt.receiptId === review.importReceiptId);
+  const preparationReceipt = workspace.receiptLedger.receipts.find((receipt) => receipt.receiptId === review.preparationReceiptId);
+  if (importReceipt?.producer?.kind !== "dove-internal" || importReceipt?.producer?.actionId !== "import-review-exchange") failures.push("import-review-receipt-missing");
+  if (preparationReceipt?.producer?.kind !== "dove-internal" || preparationReceipt?.producer?.actionId !== "prepare-review-exchange") failures.push("preparation-review-receipt-missing");
+  if (importReceipt && (importReceipt.missionId !== mission.missionId || importReceipt.contractDigest !== mission.contractDigest)) failures.push("import-review-receipt-binding-mismatch");
+  if (preparationReceipt && (preparationReceipt.missionId !== mission.missionId || preparationReceipt.contractDigest !== mission.contractDigest)) failures.push("preparation-review-receipt-binding-mismatch");
   try {
     const exchange = sealed(review.exchange, EXCHANGE_HASH_FIELDS, `Imported review ${review.reviewId} exchange`);
+    const importArtifacts = receiptArtifactMap(importReceipt);
+    const preparationArtifacts = receiptArtifactMap(preparationReceipt);
+    const reviewLeaf = currentHash(root, reviewPath, importArtifacts.get(reviewPath)?.sha256, "imported review record");
+    if (!importArtifacts.has(reviewPath) || !reviewLeaf.current) failures.push("imported-review-receipt-hash-stale");
+    if (importArtifacts.get(exchange.importedReportPath)?.sha256 !== exchange.importedReportSha256) failures.push("imported-report-receipt-hash-mismatch");
+    if (preparationArtifacts.get(exchange.manifestPath)?.sha256 !== exchange.manifestSha256) failures.push("manifest-receipt-hash-mismatch");
+    if (preparationArtifacts.get(exchange.inputPath)?.sha256 !== exchange.inputSha256) failures.push("input-receipt-hash-mismatch");
+    let manifest = null;
+    let input = null;
+    try {
+      manifest = sealed(JSON.parse(fs.readFileSync(path.resolve(root, exchange.manifestPath), "utf8")), MANIFEST_FIELDS, `Imported review ${review.reviewId} manifest`);
+      input = sealed(JSON.parse(fs.readFileSync(path.resolve(root, exchange.inputPath), "utf8")), INPUT_FIELDS, `Imported review ${review.reviewId} input`);
+    } catch (error) {
+      failures.push(`prepared-review-control-invalid:${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (manifest && input) {
+      if (manifest.preparationReceiptId !== review.preparationReceiptId || input.preparationReceiptId !== review.preparationReceiptId) failures.push("preparation-receipt-anchor-mismatch");
+      const preparedSnapshots = normalizeReviewSnapshots(manifest.reviewedArtifacts, "manifest.reviewedArtifacts");
+      const inputSnapshots = normalizeReviewSnapshots(input.reviewedArtifacts, "input.reviewedArtifacts");
+      if (!preparedSnapshots.ok || !inputSnapshots.ok || !same(preparedSnapshots.snapshots, inputSnapshots.snapshots)) failures.push("prepared-reviewed-artifact-set-invalid");
+      else {
+        const preparedSetHash = stableSnapshotSetHash(preparedSnapshots.snapshots);
+        if (manifest.reviewedArtifactSetSha256 !== preparedSetHash || input.reviewedArtifactSetSha256 !== preparedSetHash) failures.push("prepared-reviewed-artifact-set-hash-mismatch");
+        if (!same(review.reviewedArtifacts, preparedSnapshots.snapshots) || review.reviewedArtifactSetSha256 !== preparedSetHash || !same(review.reviewedArtifactPaths, preparedSnapshots.snapshots.map((item) => item.path))) failures.push("reviewed-set-not-receipt-anchored");
+      }
+    }
     for (const [pathField, hashField, label] of [
       ["manifestPath", "manifestSha256", "review manifest"],
       ["inputPath", "inputSha256", "review input"],
@@ -564,14 +678,14 @@ function assessImportedReview(root, mission, { reviewPath, review, readFailure }
 
 function verifyReviewCoverageInput(root, args, fields, operation) {
   assertSealedDomainArgs(args, fields, operation);
-  const { mission } = readCurrentMission(root, args.missionId, "Review coverage verification");
+  const { workspace, mission } = readCurrentMission(root, args.missionId, "Review coverage verification");
   const requestedPaths = args.artifactPaths === undefined ? [] : domainStringArray(args.artifactPaths, "artifactPaths");
   const expected = normalizeExpectedCoverageSnapshots(args.expectedSnapshots);
   const requested = expected
     ? { snapshot: expected, failures: [] }
     : requestedCoverageSnapshot(root, mission.missionId, requestedPaths);
   const assessments = readImportedReviews(root, mission.missionId)
-    .map((item) => assessImportedReview(root, mission, item, requested.snapshot));
+    .map((item) => assessImportedReview(root, workspace, mission, item, requested.snapshot));
   const currentReviews = assessments.filter((item) => item.current);
   const failures = [...requested.failures];
   const exactCoverageRequested = requestedPaths.length > 0 || expected !== null;

@@ -1,7 +1,9 @@
 export { ARTIFACT_PATHS, DEFAULT_DOVE_RESPONSE_LANGUAGE, DOVE_RESPONSE_LANGUAGES, DOVE_WORKSPACE_SCHEMA_VERSION, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, GOVERNANCE_READONLY_COMMANDS, GOVERNANCE_READONLY_TOOLS, normalizeDoveResponseLanguage } from "./schema.mjs";
 export { queryDoveMission, queryDoveStatus } from "./mission-queries.mjs";
 export { MISSION_CONTRACT_SCHEMA_VERSION, MISSION_PROPOSAL_VERSION, PROJECT_IDENTITY_SCHEMA_VERSION, MISSION_CRITERION_ID_VERSION, MISSION_EVIDENCE_REQUIREMENT_ID_VERSION, assertCurrentMissionContract, createDoveMission, currentMissionContractMetadata, initDoveGoal, missionCompletionCriteria, missionCompletionCriterionId, missionEvidenceRequirementId, missionEvidenceRequirements, previewDoveMissionContract } from "./mission-contracts.mjs";
+export { validateMissionGraph } from "./mission-graph.mjs";
 export { EXECUTION_RECEIPT_SCHEMA_VERSION, executionReceiptPath, ingestExecutionReceipt, readExecutionReceipts, validateExecutionReceipt } from "./execution-receipts.mjs";
+export { readArtifactHistory, readArtifactLedger, readArtifactLineage, readArtifactOwnership } from "./artifact-lineage.mjs";
 export { assessMissionCompletion } from "./completion-gates.mjs";
 export { DOVE_LESSON_KINDS, DOVE_LESSON_PROPOSAL_VERSION, DOVE_LESSON_SCHEMA_VERSION, DOVE_LESSON_SCOPES, queryDoveLessons, recordDoveLesson } from "./lessons.mjs";
 export { DOVE_INIT_PROPOSAL_VERSION, initDoveWorkspace, previewDoveInit } from "./workspace-init.mjs";

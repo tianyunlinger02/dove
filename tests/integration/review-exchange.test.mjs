@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import { createDoveMission } from "../../src/core/mission-contracts.mjs";
 import { ingestExecutionReceipt } from "../../src/core/execution-receipts.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { stableSnapshotSetHash } from "../../src/core/review-artifact-snapshot.mjs";
 import { importReviewExchange, prepareReviewExchange, verifyExpectedReviewCoverage, verifyReviewCoverage } from "../../src/core/review-exchange.mjs";
 import { dispatchTool } from "../../src/mcp/handlers.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -147,6 +148,12 @@ test("four review policies define input scope only and local preflight is zero-w
     const input = JSON.parse(fs.readFileSync(path.join(root, prepared.inputPath), "utf8"));
     assert.equal(input.schemaVersion, 7);
     assert.equal(input.policy, prepared.policy);
+    assert.equal(input.preparationReceiptId, prepared.preparationReceiptId);
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, prepared.manifestPath), "utf8"));
+    assert.equal(manifest.preparationReceiptId, prepared.preparationReceiptId);
+    const preparationReceipt = JSON.parse(fs.readFileSync(path.join(root, `.dove/receipts/execution/${prepared.preparationReceiptId}.json`), "utf8"));
+    assert.equal(preparationReceipt.producer.actionId, "prepare-review-exchange");
+    assert.deepEqual(preparationReceipt.artifacts.map((item) => item.path).sort(), [prepared.inputPath, prepared.manifestPath].sort());
     assert.equal(input.inputBoundary, {
       "isolated-selected-artifacts": "selected-artifact-isolation",
       "final-plan-results-only": "classified-final-plan-results",
@@ -185,7 +192,10 @@ test("CLI and MCP expose prepare local-preflight and coverage without a legacy p
   const before = tree(root);
   const cli = spawnSync(process.execPath, [CLI, "review", root, "--mission-id", mission.missionId, "--artifact", "outputs/result.md", "--preflight", "--json"], { cwd: ROOT, encoding: "utf8" });
   assert.equal(cli.status, 0, cli.stderr || cli.stdout);
-  assert.equal(JSON.parse(cli.stdout).status, "ready");
+  const preflight = JSON.parse(cli.stdout);
+  assert.equal(preflight.status, "ready");
+  assert.equal(preflight.operation, "preflight");
+  assert.match(preflight.nextAction.command, /--prepare .*--json/u);
   assert.deepEqual(tree(root), before);
 
   const mcp = dispatchTool(root, "prepare_review_exchange", { missionId: mission.missionId, policy: "local-preflight", artifactPaths: ["outputs/result.md"] });
@@ -209,9 +219,19 @@ test("CLI and MCP expose prepare local-preflight and coverage without a legacy p
 test("prepare and import bind mission, policy, scope, artifacts, input, handoff, and report", () => {
   const { root, mission } = setup();
   const prepared = prepare(root, mission.missionId, "external");
+  assert.equal(prepared.operation, "prepare");
+  assert.equal(prepared.actionablePaths.input.path, prepared.inputPath);
+  assert.equal(prepared.actionablePaths.manifest.path, prepared.manifestPath);
+  assert.equal(prepared.actionablePaths.handoff.path, prepared.handoffPath);
+  assert.equal(prepared.actionablePaths.report.path, prepared.reportPath);
+  assert.match(prepared.importAction.command, /--import .*--json/u);
   const reviewId = writeReturn(root, prepared);
   const imported = importPrepared(root, prepared, reviewId);
   assert.equal(imported.status, "imported");
+  assert.equal(imported.operation, "import");
+  assert.equal(imported.actionablePaths.handoff.path, prepared.handoffPath);
+  assert.equal(imported.actionablePaths.report.path, `.dove/reviews/${reviewId}.report.md`);
+  assert.match(imported.nextAction.command, /--verify-coverage --json/u);
   assert.equal(imported.review.schemaVersion, 7);
   assert.equal(imported.review.exchangeId, prepared.exchangeId);
   assert.equal(imported.review.policy, "external");
@@ -322,6 +342,26 @@ test("duplicate import fails and coherent public import stays non-authoritative"
   assertFailurePreservesBytes(root, () => importPrepared(root, prepared, reviewId), /already been imported/u);
 });
 
+test("review returns require actionable linkage and blocked or failed reviews remain durable but ineligible", () => {
+  {
+    const { root, mission } = setup("review-linkage");
+    const prepared = prepare(root, mission.missionId, "external");
+    const reviewId = writeReturn(root, prepared, { findings: [{ findingId: "unlinked", severity: "medium", summary: "Missing linkage.", linkedArtifactPaths: [] }] });
+    assertFailurePreservesBytes(root, () => importPrepared(root, prepared, reviewId), /must contain at least 1 item/u);
+  }
+  for (const status of ["blocked", "failed"]) {
+    const { root, mission } = setup(`review-${status}`);
+    const prepared = prepare(root, mission.missionId, "external");
+    const reviewId = writeReturn(root, prepared, { reviewId: `review-${status}`, status, verdict: "blocked", findings: [], actionItems: [] });
+    const imported = importPrepared(root, prepared, reviewId);
+    assert.equal(imported.review.status, status);
+    const coverage = verifyReviewCoverage(root, { missionId: mission.missionId, artifactPaths: ["outputs/result.md"] });
+    assert.equal(coverage.covered, false);
+    assert.ok(coverage.reviews[0].failures.includes(`review-status-ineligible:${status}`));
+    assert.ok(coverage.reviews[0].failures.includes("review-verdict-ineligible:blocked"));
+  }
+});
+
 test("coverage detects input, handoff, exchange report, and imported report drift", () => {
   for (const [label, mutateReview] of Object.entries({
     input: ({ root, prepared }) => fs.appendFileSync(path.join(root, prepared.inputPath), " "),
@@ -344,6 +384,25 @@ test("coverage detects input, handoff, exchange report, and imported report drif
     assert.deepEqual(tree(root), afterTamper, `${label} coverage verification must be zero-write`);
     assert.notDeepEqual(afterTamper, before);
   }
+});
+
+test("coverage rejects an exact forged appendix added only to the imported review JSON", () => {
+  const { root, mission } = setup("coverage-forged-appendix");
+  const prepared = prepare(root, mission.missionId, "external");
+  const reviewId = writeReturn(root, prepared, { reviewId: "review-forged-appendix" });
+  importPrepared(root, prepared, reviewId);
+  const reviewPath = path.join(root, `.dove/reviews/${reviewId}.json`);
+  const review = JSON.parse(fs.readFileSync(reviewPath, "utf8"));
+  const appendix = { path: "outputs/appendix.md", kind: "document", sha256: sha256(root, "outputs/appendix.md"), missionId: mission.missionId, contractDigest: mission.contractDigest, receiptId: "seed-outputs-appendix-md" };
+  review.reviewedArtifacts = [...review.reviewedArtifacts, appendix].sort((left, right) => left.path.localeCompare(right.path));
+  review.reviewedArtifactPaths = review.reviewedArtifacts.map((item) => item.path);
+  review.reviewedArtifactSetSha256 = stableSnapshotSetHash(review.reviewedArtifacts);
+  fs.writeFileSync(reviewPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
+  const before = tree(root);
+  const coverage = verifyReviewCoverage(root, { missionId: mission.missionId, artifactPaths: ["outputs/appendix.md", "outputs/result.md"] });
+  assert.equal(coverage.covered, false);
+  assert.ok(coverage.reviews[0].failures.some((failure) => ["imported-review-receipt-hash-stale", "reviewed-set-not-receipt-anchored"].includes(failure)), JSON.stringify(coverage, null, 2));
+  assert.deepEqual(tree(root), before);
 });
 
 test("artifact modification makes previously current review coverage stale", () => {

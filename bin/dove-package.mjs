@@ -1,271 +1,17 @@
 #!/usr/bin/env node
 
 // bin/dove.mjs
-import fs19 from "node:fs";
-import path19 from "node:path";
+import fs20 from "node:fs";
+import path22 from "node:path";
 import process2 from "node:process";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/core/claude-code-gateway.mjs
-import fs2 from "node:fs";
 import os from "node:os";
-import path2 from "node:path";
-import process from "node:process";
-
-// src/core/contained-write.mjs
-import fs from "node:fs";
 import path from "node:path";
-function pathEscapesRoot(relativePath) {
-  return relativePath === ".." || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath);
-}
-function existingAncestor(candidatePath) {
-  let currentPath = candidatePath;
-  while (!fs.existsSync(currentPath)) {
-    const parentPath = path.dirname(currentPath);
-    if (parentPath === currentPath) {
-      break;
-    }
-    currentPath = parentPath;
-  }
-  return currentPath;
-}
-function resolveCanonicalContainedWrite(root, candidatePath, options = {}) {
-  const label = options.label ?? "Write path";
-  const resolvedRoot = path.resolve(root);
-  const canonicalRoot = fs.realpathSync.native(resolvedRoot);
-  const requestedPath = path.isAbsolute(candidatePath) ? path.resolve(candidatePath) : path.resolve(resolvedRoot, candidatePath);
-  const requestedRelative = path.relative(resolvedRoot, requestedPath);
-  if (!requestedRelative || pathEscapesRoot(requestedRelative)) {
-    throw new Error(`${label} must stay inside the canonical root: ${candidatePath}`);
-  }
-  let currentPath = resolvedRoot;
-  for (const component of requestedRelative.split(path.sep)) {
-    currentPath = path.join(currentPath, component);
-    let stat;
-    try {
-      stat = fs.lstatSync(currentPath);
-    } catch (error) {
-      if (error?.code === "ENOENT") {
-        break;
-      }
-      throw error;
-    }
-    if (stat.isSymbolicLink()) {
-      throw new Error(`${label} must not contain symbolic links: ${candidatePath}`);
-    }
-  }
-  const canonicalAncestor = fs.realpathSync.native(existingAncestor(requestedPath));
-  const canonicalRelative = path.relative(canonicalRoot, canonicalAncestor);
-  if (pathEscapesRoot(canonicalRelative)) {
-    throw new Error(`${label} must stay inside the canonical root: ${candidatePath}`);
-  }
-  return {
-    root: canonicalRoot,
-    relativePath: requestedRelative.split(path.sep).join("/"),
-    fullPath: path.join(canonicalRoot, requestedRelative)
-  };
-}
-
-// src/core/claude-code-gateway.mjs
-var CLAUDE_CODE_GATEWAY_ENV_DEFAULTS = Object.freeze({
-  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
-  CLAUDE_CODE_MAX_CONTEXT_TOKENS: "220000",
-  CLAUDE_CODE_AUTO_COMPACT_WINDOW: "220000",
-  CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "70",
-  CLAUDE_CODE_MAX_OUTPUT_TOKENS: "64000",
-  CLAUDE_CODE_SKIP_FAST_MODE_NETWORK_ERRORS: "1",
-  CLAUDE_CODE_ENABLE_OPUS_4_7_FAST_MODE: "1"
-});
-var CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START = "# >>> dove claude-code gateway defaults >>>";
-var CLAUDE_CODE_GATEWAY_SHELL_BLOCK_END = "# <<< dove claude-code gateway defaults <<<";
-var EARLY_RETURN_PATTERN = /^\s*\[\s*-z\s+"\$PS1"\s*\]\s*&&\s*return\s*$/mu;
-function isPlainObject(value2) {
-  return Boolean(value2) && typeof value2 === "object" && !Array.isArray(value2);
-}
-function escapeRegExp(value2) {
-  return String(value2).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-function readJsonObject(filePath2) {
-  if (!fs2.existsSync(filePath2)) {
-    return {};
-  }
-  const parsed2 = JSON.parse(fs2.readFileSync(filePath2, "utf8"));
-  if (!isPlainObject(parsed2)) {
-    throw new Error(`${path2.basename(filePath2)} must contain a JSON object.`);
-  }
-  return parsed2;
-}
-function renderSettings(settings) {
-  return `${JSON.stringify(settings, null, 2)}
-`;
-}
+import process from "node:process";
 function resolveClaudeConfigRoot(env = process.env) {
-  return path2.resolve(env.DOVE_CLAUDE_CONFIG_DIR || path2.join(os.homedir(), ".claude"));
-}
-function resolveClaudeShellStartupFile(env = process.env) {
-  return path2.resolve(env.DOVE_CLAUDE_SHELL_RC || path2.join(os.homedir(), ".bashrc"));
-}
-function renderClaudeCodeGatewayShellBlock(envDefaults = CLAUDE_CODE_GATEWAY_ENV_DEFAULTS) {
-  return [
-    CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START,
-    "# Managed by Dove. Non-secret Claude Code compatibility settings only.",
-    ...Object.entries(envDefaults).map(([key, value2]) => `export ${key}=${JSON.stringify(value2)}`),
-    CLAUDE_CODE_GATEWAY_SHELL_BLOCK_END
-  ].join("\n");
-}
-function removeManagedShellBlock(content) {
-  const blockPattern = new RegExp(`${escapeRegExp(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START)}[\\s\\S]*?${escapeRegExp(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_END)}\\n?`, "u");
-  return String(content ?? "").replace(blockPattern, "").replace(/\n{3,}/gu, "\n\n");
-}
-function insertShellBlock(content, block) {
-  const stripped = removeManagedShellBlock(content);
-  const earlyReturn = EARLY_RETURN_PATTERN.exec(stripped);
-  if (earlyReturn) {
-    const prefix2 = stripped.slice(0, earlyReturn.index).replace(/\n*$/u, "\n");
-    const suffix = stripped.slice(earlyReturn.index).replace(/^\n*/u, "");
-    return `${prefix2}${block}
-
-${suffix}`;
-  }
-  const prefix = stripped.replace(/\n*$/u, "");
-  return `${prefix}${prefix ? "\n\n" : ""}${block}
-`;
-}
-function extractManagedShellBlock(content) {
-  const start = String(content ?? "").indexOf(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START);
-  const end = String(content ?? "").indexOf(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_END);
-  if (start === -1 || end === -1 || end < start) {
-    return "";
-  }
-  return String(content).slice(start, end + CLAUDE_CODE_GATEWAY_SHELL_BLOCK_END.length);
-}
-function inspectSettings(settingsPath, envDefaults = CLAUDE_CODE_GATEWAY_ENV_DEFAULTS) {
-  if (!fs2.existsSync(settingsPath)) {
-    return {
-      ok: false,
-      exists: false,
-      fastMode: false,
-      ensuredEnvKeys: Object.keys(envDefaults),
-      missingEnvKeys: Object.keys(envDefaults),
-      mismatchedEnvKeys: [],
-      message: "Claude Code settings are missing; run dove sync . --host claude."
-    };
-  }
-  try {
-    const settings = readJsonObject(settingsPath);
-    const env = isPlainObject(settings.env) ? settings.env : {};
-    const missingEnvKeys = Object.keys(envDefaults).filter((key) => !(key in env));
-    const mismatchedEnvKeys = Object.entries(envDefaults).filter(([key, value2]) => key in env && String(env[key]) !== value2).map(([key]) => key);
-    const fastMode = settings.fastMode === true;
-    const ok = fastMode && missingEnvKeys.length === 0 && mismatchedEnvKeys.length === 0;
-    return {
-      ok,
-      exists: true,
-      fastMode,
-      ensuredEnvKeys: Object.keys(envDefaults),
-      missingEnvKeys,
-      mismatchedEnvKeys,
-      message: ok ? "Claude Code settings are configured." : "Claude Code settings need Dove gateway defaults; run dove sync . --host claude."
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      exists: true,
-      fastMode: false,
-      ensuredEnvKeys: Object.keys(envDefaults),
-      missingEnvKeys: Object.keys(envDefaults),
-      mismatchedEnvKeys: [],
-      message: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-function inspectShellStartup(shellStartupFile, envDefaults = CLAUDE_CODE_GATEWAY_ENV_DEFAULTS) {
-  if (!fs2.existsSync(shellStartupFile)) {
-    return {
-      ok: false,
-      exists: false,
-      hasManagedBlock: false,
-      beforeEarlyReturn: false,
-      ensuredEnvKeys: Object.keys(envDefaults),
-      missingEnvKeys: Object.keys(envDefaults),
-      message: "Claude Code shell startup defaults are missing; run dove sync . --host claude."
-    };
-  }
-  const content = fs2.readFileSync(shellStartupFile, "utf8");
-  const block = extractManagedShellBlock(content);
-  const earlyReturn = EARLY_RETURN_PATTERN.exec(content);
-  const blockIndex = content.indexOf(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START);
-  const beforeEarlyReturn = Boolean(block) && (earlyReturn === null || blockIndex < earlyReturn.index);
-  const missingEnvKeys = Object.entries(envDefaults).filter(([key, value2]) => !block.includes(`export ${key}=${JSON.stringify(value2)}`)).map(([key]) => key);
-  const ok = Boolean(block) && beforeEarlyReturn && missingEnvKeys.length === 0;
-  return {
-    ok,
-    exists: true,
-    hasManagedBlock: Boolean(block),
-    beforeEarlyReturn,
-    ensuredEnvKeys: Object.keys(envDefaults),
-    missingEnvKeys,
-    message: ok ? "Claude Code shell startup defaults are configured." : "Claude Code shell startup defaults need refresh; run dove sync . --host claude."
-  };
-}
-function configureClaudeCodeGatewayDefaults(options = {}) {
-  const claudeConfigRoot = path2.resolve(options.claudeConfigRoot ?? resolveClaudeConfigRoot());
-  const shellStartupFile = path2.resolve(options.shellStartupFile ?? resolveClaudeShellStartupFile());
-  const envDefaults = options.envDefaults ?? CLAUDE_CODE_GATEWAY_ENV_DEFAULTS;
-  fs2.mkdirSync(claudeConfigRoot, { recursive: true });
-  const { fullPath: settingsPath } = resolveCanonicalContainedWrite(claudeConfigRoot, "settings.json", { label: "Claude Code settings path" });
-  const shellRoot = path2.dirname(shellStartupFile);
-  fs2.mkdirSync(shellRoot, { recursive: true });
-  const { fullPath: safeShellStartupFile } = resolveCanonicalContainedWrite(shellRoot, path2.basename(shellStartupFile), { label: "Claude shell startup path" });
-  const settings = readJsonObject(settingsPath);
-  const env = isPlainObject(settings.env) ? { ...settings.env } : {};
-  for (const [key, value2] of Object.entries(envDefaults)) {
-    env[key] = value2;
-  }
-  const nextSettings = { ...settings, env, fastMode: true };
-  const nextSettingsContent = renderSettings(nextSettings);
-  const previousSettingsContent = fs2.existsSync(settingsPath) ? fs2.readFileSync(settingsPath, "utf8") : "";
-  const settingsWritten = previousSettingsContent !== nextSettingsContent;
-  if (settingsWritten) {
-    fs2.writeFileSync(settingsPath, nextSettingsContent, "utf8");
-  }
-  const previousShellContent = fs2.existsSync(safeShellStartupFile) ? fs2.readFileSync(safeShellStartupFile, "utf8") : "";
-  const nextShellContent = insertShellBlock(previousShellContent, renderClaudeCodeGatewayShellBlock(envDefaults));
-  const shellWritten = previousShellContent !== nextShellContent;
-  if (shellWritten) {
-    fs2.writeFileSync(safeShellStartupFile, nextShellContent, "utf8");
-  }
-  return {
-    ok: true,
-    settings: {
-      ok: true,
-      written: settingsWritten,
-      fastMode: true,
-      ensuredEnvKeys: Object.keys(envDefaults)
-    },
-    shell: {
-      ok: true,
-      written: shellWritten,
-      beforeEarlyReturn: inspectShellStartup(safeShellStartupFile, envDefaults).beforeEarlyReturn,
-      ensuredEnvKeys: Object.keys(envDefaults)
-    },
-    restartRequired: true,
-    message: "Claude Code Fast mode and gateway context defaults are configured; restart Claude Code or source the shell startup file before launching from an existing shell."
-  };
-}
-function inspectClaudeCodeGatewayDefaults(options = {}) {
-  const claudeConfigRoot = path2.resolve(options.claudeConfigRoot ?? resolveClaudeConfigRoot());
-  const shellStartupFile = path2.resolve(options.shellStartupFile ?? resolveClaudeShellStartupFile());
-  const envDefaults = options.envDefaults ?? CLAUDE_CODE_GATEWAY_ENV_DEFAULTS;
-  const settings = inspectSettings(path2.join(claudeConfigRoot, "settings.json"), envDefaults);
-  const shell = inspectShellStartup(shellStartupFile, envDefaults);
-  const issues = [settings, shell].filter((item) => !item.ok).map((item) => item.message);
-  return {
-    ok: settings.ok && shell.ok,
-    settings,
-    shell,
-    issues
-  };
+  return path.resolve(env.DOVE_CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"));
 }
 
 // src/cli/command-parser.mjs
@@ -312,7 +58,7 @@ var CLI_COMMAND_SPECS = {
   init: command([value("--goal"), boolean("--archive-reset"), boolean("--confirmed"), value("--proposal-token"), value("--proposal-digest"), ...mutationOptions]),
   mission: command(missionOptions),
   receipt: command(receiptOptions),
-  status: command([value("--detail"), value("--result-mode"), value("--format"), boolean("--full"), boolean("--missions"), boolean("--json"), boolean("--help", { key: "help" }), boolean("-h", { key: "help" })]),
+  status: command([value("--mission-id"), value("--detail"), value("--result-mode"), value("--format"), boolean("--full"), boolean("--missions"), boolean("--json"), boolean("--help", { key: "help" }), boolean("-h", { key: "help" })]),
   lessons: command([value("--lesson-id"), value("--mission-id"), value("--scope"), value("--kind"), value("--summary"), value("--details"), value("--next-time-guidance", { repeatable: true }), value("--source-id", { repeatable: true }), value("--note-id", { repeatable: true }), value("--artifact", { repeatable: true }), value("--applies-to-artifact", { repeatable: true }), value("--tag", { repeatable: true }), value("--supersedes-lesson-id"), boolean("--include-superseded"), boolean("--include-unscoped"), value("--limit"), value("--proposal-token"), value("--mutation-mode"), boolean("--confirmed"), ...outputOptions], { min: 0, max: 2 }),
   version: command([value("--mission-id"), value("--version-id"), value("--label"), value("--artifact", { repeatable: true }), value("--supersedes-version-id"), value("--from-version-id"), value("--to-version-id"), boolean("--finalize"), ...mutationOptions]),
   source: command([value("--mission-id"), value("--source-id"), value("--citation-key"), value("--title"), value("--locator"), value("--source-type"), value("--origin"), value("--abstract"), value("--year"), value("--author", { repeatable: true }), value("--capture-path"), value("--method"), value("--checked-material"), value("--audit-evidence-json"), ...mutationOptions], { min: 0, max: 2 }),
@@ -425,10 +171,39 @@ var OPENCODE_ROLE_SKILL_PATHS = [
   ".opencode/skills/dove-builder/SKILL.md",
   ".opencode/skills/dove-reviewer/SKILL.md"
 ];
+var TOOL_RESULT_CONTEXT_FIELDS = Object.freeze({
+  init_dove_goal: ["mutation.paths"],
+  create_dove_mission: ["executionHandoff.missionId", "executionHandoff.contractDigest", "executionHandoff.targetArtifacts", "executionHandoff.expectedArtifacts", "executionHandoff.completionCriteria", "executionHandoff.evidenceRequirements"],
+  query_dove_mission: ["mission.missionId", "contractDigest", "mission.targetArtifacts", "mission.expectedArtifacts"],
+  query_dove_status: ["scope.missionId", "currentContext.selectedMissionId", "needsAttention.stableGaps"],
+  ingest_execution_receipt: ["receipt.artifacts", "receipt.validations", "completion.assessment"],
+  assess_mission_completion: ["missionId", "completionCriteria", "evidenceRequirements", "diagnostics.missionPath"],
+  search_network: ["candidates.registrationDraft", "candidates.captureRequiredForEvidence"],
+  query_network_search_providers: ["providers"],
+  query_sources: ["items.capturedMaterial", "items.eligibility"],
+  query_dove_lessons: ["items.artifactRefs"],
+  record_dove_lesson: ["lesson.artifactRefs"],
+  register_source: ["source.capturedMaterial", "artifacts"],
+  verify_source: ["source.capturedMaterial", "artifacts"],
+  upsert_note: ["artifacts"],
+  upsert_claims: ["artifacts"],
+  run_experience_workflow: ["artifacts"],
+  upsert_draft: ["artifacts"],
+  upsert_draft_metadata: ["artifacts"],
+  run_figure_workflow: ["artifacts"],
+  prepare_review_exchange: ["actionablePaths", "reviewedArtifacts", "importAction"],
+  import_review_exchange: ["actionablePaths", "nextAction"],
+  verify_review_coverage: ["reviews.reviewPath", "reviews.reviewedArtifactPaths"],
+  normalize_rebuttal_issues: ["artifacts"],
+  build_rebuttal_strategy: ["artifacts"],
+  build_rebuttal: ["artifacts"],
+  create_version_snapshot: ["artifacts"],
+  compare_versions: ["artifacts"]
+});
 var COMMON_CONSTRAINTS = [
   "Every mutation requires an explicit missionId and writes only mission-bound artifacts, canonical receipts, ownership, and lineage.",
   "Validate every imported path, hash, source, note, finding, experiment result, and artifact reference before the first write.",
-  "Do not create task packets, boards, runtime state, navigation refreshes, hidden schedulers, policy overrides, role authority, or lifecycle mirrors.",
+  "Do not create packets, boards, runtime state, hidden schedulers, policy overrides, role authority, lifecycle mirrors, or persistent context.",
   "Every read is zero-write and must not repair, refresh, bootstrap, or convert durable state.",
   "Keep Planner, Builder, and Reviewer responsibilities separate; Reviewer authority must fail closed when no trusted proof capability exists."
 ];
@@ -445,18 +220,18 @@ var surface = (id, title, category, policy, summary, requiredTools, constraints,
   ux
 });
 var COMMAND_SURFACES = [
-  surface("dove.init", "Dove init", "mutation", "guarded-mutation", "Propose and exactly confirm sealed schema 7 workspace initialization.", ["init_dove_goal"], [
-    "Proposal is strictly zero-write; exact confirmation creates only manifest, project identity, ownership/lineage indexes, and required directories.",
+  surface("dove.init", "Dove init", "mutation", "guarded-mutation", "Propose and exactly confirm sealed schema 8 workspace initialization.", ["init_dove_goal"], [
+    "Proposal is strictly zero-write; exact confirmation creates only manifest, project identity, receipt directories, and required domain directories.",
     "Legacy or invalid state requires explicit direct-process archive-reset with no import, repair, fallback, or alias."
-  ], { dailyFlow: ["Request a zero-write schema 7 initialization proposal.", "Inspect and replay the exact confirmation data only when approved."], targetingBehavior: "Initialization is bound to the canonical workspace, not a task target.", confirmationBehavior: "Replay the exact proposal digest and workspace identity.", expectedOutcome: "A sealed minimal schema 7 workspace exists without workflow side effects.", examples: ["/dove:init Initialize this research workspace", "/dove:init Archive invalid Dove state and initialize schema 7"] }),
+  ], { dailyFlow: ["Request a zero-write schema 8 initialization proposal.", "Inspect and replay the exact confirmation data only when approved."], targetingBehavior: "Initialization is bound to the canonical workspace, not another workflow target.", confirmationBehavior: "Replay the exact proposal digest and workspace identity.", expectedOutcome: "A sealed minimal schema 8 workspace exists without workflow side effects.", examples: ["/dove:init Initialize this research workspace", "/dove:init Archive invalid Dove state and initialize schema 8"] }),
   surface("dove.mission", "Dove mission", "mutation", "explicit-approval", "Propose and persist one minimal mission contract, then return control to the host.", ["create_dove_mission"], [
     "Persist only goal, scope, out-of-scope, target and expected artifacts, completion criteria, evidence requirements, dependencies, and supersession metadata.",
     "Proposal is zero-write; confirmation must exactly replay the returned contract and target artifact identities."
   ], { dailyFlow: ["Turn one concrete goal into a minimal mission contract.", "After approval, continue substantive work with native host planning and tools."], targetingBehavior: "The missionId is explicit or deterministically proposed; no packet target is resolved.", confirmationBehavior: "Approve the exact proposal, adjust it, or cancel.", expectedOutcome: "One durable mission contract exists and no orchestration route is created.", examples: ["/dove:mission Validate the new retrieval method", "/dove:mission Revise the methods draft from current evidence"] }),
-  surface("dove.status", "Dove status", "query", "read-only", "Read schema 7 mission and evidence integrity without refreshing state.", ["query_dove_status"], [
+  surface("dove.status", "Dove status", "query", "read-only", "Read schema 8 mission and evidence integrity without refreshing state.", ["query_dove_status"], [
     "Absent state returns needs-init; malformed, legacy, contradictory, or future state fails closed.",
     "Compact status reports only schema health, mission count, receipt count, source count, and live integrity."
-  ], { dailyFlow: ["Inspect current schema and integrity without writes.", "Expand details only when the operator explicitly asks."], targetingBehavior: "Status aggregates real current artifacts across missions without selecting a task.", confirmationBehavior: "No confirmation is applicable because status is read-only.", expectedOutcome: "The operator sees current integrity and one safe next step.", examples: ["/dove:status", "/dove:status Show full mission integrity"] }),
+  ], { dailyFlow: ["Inspect current schema and integrity without writes.", "Pass missionId to scope completion, source, domain, and review checks; when more than one mission exists, choose explicitly."], targetingBehavior: "With zero missions status reports none; with one mission it scopes to the only mission; with multiple missions it never selects an implicit latest mission.", confirmationBehavior: "No confirmation is applicable because status is read-only.", expectedOutcome: "The operator sees stable gaps and one existing command or tool to run next.", examples: ["/dove:status", "/dove:status Show integrity for mission <id>"] }),
   surface("dove.lessons", "Dove lessons", "mutation", "guarded-mutation", "Query advisory lessons by default or explicitly record one exact-confirmation mission-provenanced lesson.", ["query_dove_lessons", "record_dove_lesson"], [
     "Default behavior is an explicit read-only query; never auto-capture a lesson and never auto-recall lessons from another command.",
     "Every lesson retains its recording mission as provenance; global scope means broad applicability, not provenance detached from that mission.",
@@ -470,12 +245,12 @@ var COMMAND_SURFACES = [
   ], { dailyFlow: ["Snapshot current mission artifacts before a meaningful revision.", "Compare two snapshots or request fail-closed finalization."], targetingBehavior: "Provide missionId and version ids explicitly.", confirmationBehavior: "Finalization succeeds only from current completion and Reviewer proof.", expectedOutcome: "Version lineage and a real hash comparison are durable.", examples: ["/dove:version Snapshot the current draft", "/dove:version Compare the previous and current snapshots"] }),
   surface("dove.source", "Dove source", "mutation", "guarded-mutation", "Register mission-bound source candidates or record a rejection.", ["query_sources", "register_source", "verify_source"], [
     "Registration always creates a candidate and imports captured material under mission-owned source artifacts.",
-    "Public verification is rejection-only; positive verification requires a trusted internal receipt bound to current material and fingerprint."
+    "Schema 8 stores only candidate or rejected source state; public verification is rejection-only and ordinary execution receipts never mint positive source authority."
   ], { dailyFlow: ["Register real external material with title or locator.", "Query eligibility or reject a candidate after an explicit audit."], targetingBehavior: "Provide missionId and sourceId explicitly.", confirmationBehavior: "No candidate becomes trusted through public input.", expectedOutcome: "The source has current identity, material fingerprint, lifecycle, and eligibility.", examples: ["/dove:source Register this paper for the mission", "/dove:source Reject the candidate after checking the captured PDF"] }),
-  surface("dove.note", "Dove note", "mutation", "guarded-mutation", "Write substantive mission-bound synthesis from current trusted evidence.", ["upsert_note"], [
-    "A note requires summary, quote, claim, or open question plus at least one current verified source or mission artifact.",
-    "Source trust and artifact hashes are reassessed before writing."
-  ], { dailyFlow: ["Synthesize verified source material or current artifacts.", "Record claims, quotes, and open questions rather than empty bookkeeping."], targetingBehavior: "Provide missionId and noteId explicitly.", confirmationBehavior: "Ineligible or cross-mission evidence stops the write.", expectedOutcome: "A substantive note with current evidence lineage exists.", examples: ["/dove:note Summarize the verified sources", "/dove:note Record the open methodological question"] }),
+  surface("dove.note", "Dove note", "mutation", "guarded-mutation", "Write substantive mission-bound synthesis from current eligible evidence.", ["upsert_note"], [
+    "A note requires summary, quote, claim, or open question plus at least one current mission-owned artifact, including a current note artifact when applicable.",
+    "sourceIds remain ineligible until a trusted positive source verifier exists; candidate or rejected sources cannot authorize the write."
+  ], { dailyFlow: ["Synthesize current mission-owned artifacts, including current note artifacts when applicable.", "Record claims, quotes, and open questions rather than empty bookkeeping."], targetingBehavior: "Provide missionId and noteId explicitly.", confirmationBehavior: "Ineligible or cross-mission evidence stops the write.", expectedOutcome: "A substantive note with current evidence lineage exists.", examples: ["/dove:note Summarize the current mission artifacts", "/dove:note Record the open methodological question"] }),
   surface("dove.figure", "Dove figure", "mutation", "guarded-mutation", "Prepare or import a mission-bound figure with caption, provenance, QA, and review boundary.", ["run_figure_workflow"], [
     "Provider execution stays host-side; Dove accepts only current imported output with a matching hash.",
     "Clean QA is diagnostic only; validated requires authoritative proof for the exact final artifact hash."
@@ -488,12 +263,13 @@ var COMMAND_SURFACES = [
     "Body writes require non-empty substantive text and current evidence lineage.",
     "Metadata-only updates require an existing current mission-owned draft."
   ], { dailyFlow: ["Write or revise real draft text from current evidence.", "Use metadata-only mode only for an existing draft."], targetingBehavior: "Provide missionId and draftId explicitly.", confirmationBehavior: "Cross-mission or stale evidence stops the write.", expectedOutcome: "A real draft artifact and canonical receipt exist.", examples: ["/dove:draft Write the methods section", "/dove:draft Update metadata for the current draft"] }),
-  surface("dove.review", "Dove review", "mutation", "guarded-mutation", "Preflight, prepare, import, or verify one policy-scoped schema 7 review exchange without reviewer orchestration.", ["prepare_review_exchange", "import_review_exchange", "verify_review_coverage"], [
+  surface("dove.review", "Dove review", "mutation", "guarded-mutation", "Preflight, prepare, import, or verify one policy-scoped schema 8 review exchange without reviewer orchestration.", ["prepare_review_exchange", "import_review_exchange", "verify_review_coverage"], [
     "Policy expresses input scope only: local-preflight, isolated-selected-artifacts, final-plan-results-only, or external.",
     "local-preflight is strictly zero-write and non-authoritative; other policies freeze only current mission-owned artifact snapshots.",
-    "Prepare writes canonical input and manifest artifacts; import accepts only the canonical handoff and report after all path, identity, scope, and hash checks pass.",
+    "Prepare writes canonical input and manifest artifacts owned together by one preparation receipt; import validates that ledger anchor before accepting the canonical handoff and report.",
+    "Only completed coherent, needs-revision, or needs-evidence returns count as coverage; blocked or failed returns remain durable but ineligible, and every finding links an in-scope artifact.",
     "Imported public review material remains non-authoritative; caller-supplied reviewer identity, verdict, report, handoff, or manifest fields never mint Reviewer authority.",
-    "Dove does not launch a reviewer, session, subagent, process, loop, board transition, runtime continuation, or navigation refresh."
+    "Dove does not launch a reviewer, session, subagent, process, loop, board transition, or runtime continuation."
   ], { dailyFlow: ["Use local-preflight for a zero-write exact scope check.", "Prepare a policy-scoped exchange, let an independent external process or person produce the declared files, then import and verify coverage."], targetingBehavior: "Provide missionId and explicit policy artifact paths; import also requires exchangeId and reviewId.", confirmationBehavior: "Prepare/import are guarded mutations; preflight and coverage verification are read-only.", expectedOutcome: "A tamper-evident mission-bound review and exact current coverage assessment exist without self-issued authority.", examples: ["/dove:review Preflight the current methods artifacts", "/dove:review Import the returned review exchange"] }),
   surface("dove.rebuttal", "Dove rebuttal", "mutation", "guarded-mutation", "Normalize reviewer findings and write author-side evidence-linked responses.", ["normalize_rebuttal_issues", "build_rebuttal_strategy", "build_rebuttal"], [
     "Every issue must link to a current mission-owned review artifact and concrete finding id.",
@@ -535,17 +311,71 @@ var HOST_ADAPTERS = Object.fromEntries(PROJECT_HOST_IDS.map((hostId) => {
   return [hostId, { label: HOST_DEFINITIONS[hostId].label, paths: [...commandPaths, ...extraPaths], requiredPaths: [...commandPaths, ...extraPaths], jsonChecks: HOST_DEFINITIONS[hostId].jsonChecks }];
 }));
 
+// src/core/contained-write.mjs
+import fs from "node:fs";
+import path2 from "node:path";
+function pathEscapesRoot(relativePath) {
+  return relativePath === ".." || relativePath.startsWith(`..${path2.sep}`) || path2.isAbsolute(relativePath);
+}
+function existingAncestor(candidatePath) {
+  let currentPath = candidatePath;
+  while (!fs.existsSync(currentPath)) {
+    const parentPath = path2.dirname(currentPath);
+    if (parentPath === currentPath) {
+      break;
+    }
+    currentPath = parentPath;
+  }
+  return currentPath;
+}
+function resolveCanonicalContainedWrite(root, candidatePath, options = {}) {
+  const label = options.label ?? "Write path";
+  const resolvedRoot = path2.resolve(root);
+  const canonicalRoot = fs.realpathSync.native(resolvedRoot);
+  const requestedPath = path2.isAbsolute(candidatePath) ? path2.resolve(candidatePath) : path2.resolve(resolvedRoot, candidatePath);
+  const requestedRelative = path2.relative(resolvedRoot, requestedPath);
+  if (!requestedRelative || pathEscapesRoot(requestedRelative)) {
+    throw new Error(`${label} must stay inside the canonical root: ${candidatePath}`);
+  }
+  let currentPath = resolvedRoot;
+  for (const component of requestedRelative.split(path2.sep)) {
+    currentPath = path2.join(currentPath, component);
+    let stat;
+    try {
+      stat = fs.lstatSync(currentPath);
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        break;
+      }
+      throw error;
+    }
+    if (stat.isSymbolicLink()) {
+      throw new Error(`${label} must not contain symbolic links: ${candidatePath}`);
+    }
+  }
+  const canonicalAncestor = fs.realpathSync.native(existingAncestor(requestedPath));
+  const canonicalRelative = path2.relative(canonicalRoot, canonicalAncestor);
+  if (pathEscapesRoot(canonicalRelative)) {
+    throw new Error(`${label} must stay inside the canonical root: ${candidatePath}`);
+  }
+  return {
+    root: canonicalRoot,
+    relativePath: requestedRelative.split(path2.sep).join("/"),
+    fullPath: path2.join(canonicalRoot, requestedRelative)
+  };
+}
+
 // src/core/execution-receipts.mjs
-import fs12 from "node:fs";
-import path12 from "node:path";
+import fs14 from "node:fs";
+import path16 from "node:path";
 
 // src/core/artifact-integrity.mjs
-import fs3 from "node:fs";
+import fs2 from "node:fs";
 import path3 from "node:path";
 
 // src/core/schema.mjs
-var DOVE_WORKSPACE_SCHEMA_VERSION = 7;
-var PACKAGE_VERSION = "0.2.0";
+var DOVE_WORKSPACE_SCHEMA_VERSION = 8;
+var PACKAGE_VERSION = "0.3.0";
 var DOVE_RESPONSE_LANGUAGES = Object.freeze(["zh", "en"]);
 var ARTIFACT_PATHS = Object.freeze({
   doveRoot: ".dove",
@@ -558,8 +388,6 @@ var ARTIFACT_PATHS = Object.freeze({
   completionReceiptsDir: ".dove/receipts/completion",
   authorityReceiptsDir: ".dove/receipts/authority",
   artifactsDir: ".dove/artifacts",
-  artifactOwnership: ".dove/artifacts/ownership.json",
-  artifactLineage: ".dove/artifacts/lineage.json",
   sourcesDir: ".dove/sources",
   notesDir: ".dove/notes",
   claimsDir: ".dove/claims",
@@ -705,14 +533,14 @@ function inspectDeclaredPath(root, rawPath, options = {}) {
   let canonicalRelativePath;
   let stat;
   try {
-    realRootPath = fs3.realpathSync.native(rootPath);
-    realFullPath = fs3.realpathSync.native(fullPath);
+    realRootPath = fs2.realpathSync.native(rootPath);
+    realFullPath = fs2.realpathSync.native(fullPath);
     const relativeToRealRoot = path3.relative(realRootPath, realFullPath);
     if (relativeToRealRoot === ".." || relativeToRealRoot.startsWith(`..${path3.sep}`) || path3.isAbsolute(relativeToRealRoot)) {
       return { path: normalized.path, normalizedPath: normalized.normalizedPath, status: "unsafe", exists: true, file: false, reason: "real path escapes the project root" };
     }
     canonicalRelativePath = relativeToRealRoot.split(path3.sep).join("/");
-    stat = fs3.statSync(realFullPath);
+    stat = fs2.statSync(realFullPath);
   } catch (error) {
     if (error?.code === "ENOENT") {
       return { path: normalized.path, normalizedPath: normalized.normalizedPath, status: "missing", exists: false, file: false, reason: "path does not exist" };
@@ -731,398 +559,412 @@ function inspectDeclaredPath(root, rawPath, options = {}) {
   if (options.rejectBookkeeping === true) {
     const rejected = [evidenceRole, canonicalEvidenceRole].find((role) => role === "bookkeeping" || role === "unsupported");
     if (rejected) {
-      return { ...base, status: rejected, reason: rejected === "bookkeeping" ? "path is Dove bookkeeping rather than substantive evidence" : "path is not an approved schema 7 evidence artifact" };
+      return { ...base, status: rejected, reason: rejected === "bookkeeping" ? "path is Dove bookkeeping rather than substantive evidence" : "path is not an approved schema 8 evidence artifact" };
     }
   }
   if (options.requireNonEmpty === true && stat.size === 0) return { ...base, status: "empty", reason: "path is an empty file" };
   if (options.readText !== true) return base;
   try {
     const maxBytes = Number.isInteger(options.maxBytes) && options.maxBytes > 0 ? options.maxBytes : 24 * 1024;
-    const descriptor = fs3.openSync(realFullPath, "r");
+    const descriptor = fs2.openSync(realFullPath, "r");
     try {
       const buffer = Buffer.alloc(Math.min(maxBytes, stat.size));
-      const bytesRead = fs3.readSync(descriptor, buffer, 0, buffer.length, 0);
+      const bytesRead = fs2.readSync(descriptor, buffer, 0, buffer.length, 0);
       return { ...base, text: buffer.subarray(0, bytesRead).toString("utf8"), bytesRead, truncated: stat.size > bytesRead };
     } finally {
-      fs3.closeSync(descriptor);
+      fs2.closeSync(descriptor);
     }
   } catch (error) {
     return { ...base, status: "unreadable", reason: error instanceof Error ? error.message : String(error) };
   }
 }
 
-// src/core/workspace.mjs
-import fs5 from "node:fs";
-import path5 from "node:path";
+// src/core/completion-gates.mjs
+import fs13 from "node:fs";
+import path15 from "node:path";
 
-// src/core/mutation-backend.mjs
-import { AsyncLocalStorage } from "node:async_hooks";
-import crypto from "node:crypto";
-import fs4 from "node:fs";
+// src/core/domain-artifacts.mjs
+import crypto6 from "node:crypto";
+import fs10 from "node:fs";
+import path12 from "node:path";
+
+// src/core/receipt-ledger.mjs
+import fs3 from "node:fs";
 import path4 from "node:path";
-var mutationStorage = new AsyncLocalStorage();
-var DIRECT_PROCESS_ROLLBACK_REASON = "direct-process writes are performed by the Dove process, not by host-tracked file edits; native programming-terminal rollback cannot be verified for those writes.";
-var PATCH_PLAN_ROLLBACK_ADVICE = "Use mutationMode: patch-plan and apply the returned operations through host-tracked file edits before relying on host rollback.";
-function sha256(content) {
-  return crypto.createHash("sha256").update(content).digest("hex");
+var EXECUTION_RECEIPT_SCHEMA_VERSION = 2;
+var EXECUTION_RECEIPT_PRODUCER_KINDS = Object.freeze(["public-execution", "dove-internal"]);
+var RECEIPT_FIELDS = /* @__PURE__ */ new Set([
+  "schemaVersion",
+  "workspaceId",
+  "receiptId",
+  "ledgerSequence",
+  "missionId",
+  "contractDigest",
+  "summary",
+  "artifacts",
+  "validations",
+  "criteriaSatisfied",
+  "producedAt",
+  "recordedAt",
+  "producer"
+]);
+var ARTIFACT_FIELDS = /* @__PURE__ */ new Set(["path", "kind", "sha256", "derivedReferences"]);
+var VALIDATION_FIELDS = /* @__PURE__ */ new Set(["kind", "reference", "outputHash"]);
+var CRITERION_FIELDS = /* @__PURE__ */ new Set(["criterionId", "evidenceRefs"]);
+var PRODUCER_FIELDS = /* @__PURE__ */ new Set(["kind", "actionId"]);
+var SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
+var HASH = /^[0-9a-f]{64}$/u;
+var PRODUCER_KIND_SET = new Set(EXECUTION_RECEIPT_PRODUCER_KINDS);
+var INTERNAL_ACTION_IDS = new Set(GOVERNANCE_GUARDED_MUTATIONS.map((entry) => entry.id));
+function assertPlainObject(value2, label) {
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) throw new Error(`${label} must be a plain object.`);
 }
-function normalizeMutationMode(value2) {
-  if (value2 === void 0) {
-    return "direct-process";
-  }
-  if (value2 === "patch-plan" || value2 === "direct-process") {
-    return value2;
-  }
-  throw new Error("mutationMode must be either patch-plan or direct-process when explicitly provided.");
+function assertSealed(value2, fields, label) {
+  assertPlainObject(value2, label);
+  const unknown = Object.keys(value2).filter((field) => !fields.has(field));
+  if (unknown.length > 0) throw new Error(`${label} does not accept unknown fields: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
 }
-function normalizeRelativePath(relativePath) {
-  if (typeof relativePath !== "string" || !relativePath.trim()) {
-    throw new Error("Mutation path must be a non-empty relative path.");
-  }
-  const normalized = path4.posix.normalize(relativePath.replace(/\\/g, "/"));
-  if (path4.isAbsolute(relativePath) || normalized === "." || normalized.startsWith("../") || normalized === "..") {
-    throw new Error(`Mutation path must stay inside the project: ${relativePath}`);
-  }
+function exactString(value2, label) {
+  if (typeof value2 !== "string" || !value2.trim() || value2 !== value2.trim()) throw new Error(`${label} must be a canonical non-empty string.`);
+  return value2;
+}
+function safeId(value2, label) {
+  const normalized = exactString(value2, label);
+  if (!SAFE_ID.test(normalized)) throw new Error(`${label} must be a safe lowercase identifier.`);
   return normalized;
 }
-function classifyScope(relativePath) {
-  if (relativePath === ".dove" || relativePath.startsWith(".dove/")) {
-    return ".dove";
-  }
-  if (relativePath.startsWith(".opencode/") || relativePath.startsWith(".cursor/") || relativePath.startsWith(".codex/") || relativePath.startsWith(".agents/")) {
-    return "generated-adapter";
-  }
-  return "explicit-external-output";
+function hash(value2, label) {
+  const normalized = exactString(value2, label);
+  if (!HASH.test(normalized)) throw new Error(`${label} must be a lowercase SHA-256 digest.`);
+  return normalized;
 }
-function serializeJson(value2) {
-  return `${JSON.stringify(value2, null, 2)}
-`;
+function exactIso(value2, label) {
+  if (typeof value2 !== "string" || !Number.isFinite(Date.parse(value2)) || new Date(Date.parse(value2)).toISOString() !== value2) {
+    throw new Error(`${label} must be an exact ISO-8601 timestamp.`);
+  }
+  return value2;
 }
-function resultDeclaresWrites(value2) {
-  return Boolean(value2) && typeof value2 === "object" && !Array.isArray(value2) && Array.isArray(value2.writes) && value2.writes.length > 0;
+function canonicalPath(value2, label) {
+  const normalized = normalizeProjectRelativePath(value2);
+  if (!normalized.ok) throw new Error(`${label} has an unsafe path: ${normalized.reason}.`);
+  if (value2 !== normalized.normalizedPath) throw new Error(`${label} must use a canonical project-relative path.`);
+  return value2;
 }
-function readDiskText(root, relativePath, fallback = "") {
-  const fullPath = path4.join(root, relativePath);
-  if (!fs4.existsSync(fullPath)) {
-    return fallback;
+function canonicalStringArray(value2, label, options = {}) {
+  if (!Array.isArray(value2)) throw new Error(`${label} must be an array.`);
+  const items = value2.map((item, index) => exactString(item, `${label}[${index}]`));
+  if (new Set(items).size !== items.length) throw new Error(`${label} must not contain duplicates.`);
+  if (options.sorted === true && items.some((item, index) => index > 0 && items[index - 1].localeCompare(item) > 0)) {
+    throw new Error(`${label} must use canonical lexical order.`);
   }
-  return fs4.readFileSync(fullPath, "utf8");
+  return items;
 }
-function diskFileState(root, relativePath) {
-  const fullPath = path4.join(root, relativePath);
-  if (!fs4.existsSync(fullPath)) {
-    return { exists: false, sha256: null };
+function validateProducer(value2, label) {
+  assertSealed(value2, PRODUCER_FIELDS, label);
+  if (!PRODUCER_KIND_SET.has(value2.kind)) throw new Error(`${label}.kind is unsupported.`);
+  const actionId = safeId(value2.actionId, `${label}.actionId`);
+  if (value2.kind === "public-execution" && actionId !== "ingest-execution-receipt") {
+    throw new Error(`${label} public-execution producer must use actionId ingest-execution-receipt.`);
   }
-  return { exists: true, sha256: sha256(fs4.readFileSync(fullPath)) };
+  if (value2.kind === "dove-internal" && (!INTERNAL_ACTION_IDS.has(actionId) || actionId === "ingest-execution-receipt")) {
+    throw new Error(`${label} dove-internal producer actionId is not a registered internal Dove mutation.`);
+  }
+  return value2;
 }
-function buildMutationId() {
-  return `mutation-${crypto.randomUUID()}`;
-}
-var MutationContext = class {
-  constructor(root, options = {}) {
-    const resolvedRoot = path4.resolve(root);
-    this.root = fs4.realpathSync.native(resolvedRoot);
-    this.id = options.id ?? buildMutationId();
-    this.actionId = options.actionId ?? "unspecified";
-    this.mutationMode = normalizeMutationMode(options.mutationMode);
-    this.mutationModeSource = options.mutationMode === "patch-plan" || options.mutationMode === "direct-process" ? "explicit" : "default";
-    this.hostId = options.hostId ?? "unknown";
-    this.createdAt = options.createdAt ?? (/* @__PURE__ */ new Date()).toISOString();
-    this.overlay = /* @__PURE__ */ new Map();
-    this.operationsByPath = /* @__PURE__ */ new Map();
-    this.operationOrder = [];
-    this.lifecycle = "active";
+function validateStoredReceipt(value2, context) {
+  const { manifest, missions, label, filename } = context;
+  assertSealed(value2, RECEIPT_FIELDS, label);
+  if (value2.schemaVersion !== EXECUTION_RECEIPT_SCHEMA_VERSION) throw new Error(`${label} has an unsupported schemaVersion.`);
+  if (value2.workspaceId !== manifest.workspaceId) throw new Error(`${label}.workspaceId does not match the manifest workspaceId.`);
+  safeId(value2.workspaceId, `${label}.workspaceId`);
+  const receiptId = safeId(value2.receiptId, `${label}.receiptId`);
+  if (filename !== `${receiptId}.json`) throw new Error(`${label} filename must match receiptId ${receiptId}.`);
+  if (!Number.isSafeInteger(value2.ledgerSequence) || value2.ledgerSequence < 1) throw new Error(`${label}.ledgerSequence must be a positive safe integer.`);
+  const missionId = safeId(value2.missionId, `${label}.missionId`);
+  const mission = missions.get(missionId);
+  if (!mission) throw new Error(`${label} references unknown mission ${missionId}.`);
+  hash(value2.contractDigest, `${label}.contractDigest`);
+  if (value2.contractDigest !== mission.contractDigest) throw new Error(`${label}.contractDigest does not match mission ${missionId}.`);
+  exactString(value2.summary, `${label}.summary`);
+  exactIso(value2.producedAt, `${label}.producedAt`);
+  exactIso(value2.recordedAt, `${label}.recordedAt`);
+  validateProducer(value2.producer, `${label}.producer`);
+  if (!Array.isArray(value2.artifacts) || value2.artifacts.length === 0) throw new Error(`${label}.artifacts must contain at least one item.`);
+  const artifactPaths = /* @__PURE__ */ new Set();
+  for (const [index, artifact] of value2.artifacts.entries()) {
+    const itemLabel = `${label}.artifacts[${index}]`;
+    assertSealed(artifact, ARTIFACT_FIELDS, itemLabel);
+    const artifactPath = canonicalPath(artifact.path, `${itemLabel}.path`);
+    if (artifactPaths.has(artifactPath)) throw new Error(`${label}.artifacts contains duplicate path ${artifactPath}.`);
+    artifactPaths.add(artifactPath);
+    exactString(artifact.kind, `${itemLabel}.kind`);
+    hash(artifact.sha256, `${itemLabel}.sha256`);
+    canonicalStringArray(artifact.derivedReferences, `${itemLabel}.derivedReferences`, { sorted: true });
   }
-  get patchPlanMode() {
-    return this.mutationMode === "patch-plan";
+  if (!Array.isArray(value2.validations)) throw new Error(`${label}.validations must be an array.`);
+  const validationPaths = /* @__PURE__ */ new Set();
+  for (const [index, validation] of value2.validations.entries()) {
+    const itemLabel = `${label}.validations[${index}]`;
+    assertSealed(validation, VALIDATION_FIELDS, itemLabel);
+    exactString(validation.kind, `${itemLabel}.kind`);
+    const reference = canonicalPath(validation.reference, `${itemLabel}.reference`);
+    if (validationPaths.has(reference)) throw new Error(`${label}.validations contains duplicate reference ${reference}.`);
+    validationPaths.add(reference);
+    hash(validation.outputHash, `${itemLabel}.outputHash`);
   }
-  assertActive(operation = "MutationContext operation") {
-    if (this.lifecycle !== "active") {
-      throw new Error(`${operation} cannot use a ${this.lifecycle} MutationContext.`);
-    }
-  }
-  resolve(relativePath) {
-    this.assertActive("Mutation path resolution");
-    const normalized = normalizeRelativePath(relativePath);
-    return resolveCanonicalContainedWrite(this.root, normalized, { label: "Mutation path" });
-  }
-  fileExists(relativePath) {
-    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
-    return this.overlay.has(normalized) || fs4.existsSync(fullPath);
-  }
-  readText(relativePath, fallback = "") {
-    const { relativePath: normalized } = this.resolve(relativePath);
-    if (this.overlay.has(normalized)) {
-      return this.overlay.get(normalized);
-    }
-    return readDiskText(this.root, normalized, fallback);
-  }
-  readJson(relativePath, fallback) {
-    const text = this.readText(relativePath, null);
-    if (text === null) {
-      return typeof fallback === "function" ? fallback() : structuredClone(fallback);
-    }
-    return JSON.parse(text);
-  }
-  writeJson(relativePath, value2) {
-    return this.writeText(relativePath, serializeJson(value2), "write-json");
-  }
-  writeJsonIfChanged(relativePath, value2) {
-    const nextContent = serializeJson(value2);
-    const currentContent = this.readText(relativePath, null);
-    if (currentContent === nextContent) {
-      return false;
-    }
-    this.writeText(relativePath, nextContent, "write-json");
-    return true;
-  }
-  writeText(relativePath, content, kind = "write-text") {
-    return this.writeContent(relativePath, String(content ?? ""), { kind, encoding: "utf8" });
-  }
-  writeBinary(relativePath, content, kind = "write-binary") {
-    if (this.patchPlanMode) {
-      throw new Error("Binary mutations require direct-process mode; patch-plan cannot safely represent binary output.");
-    }
-    const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
-    return this.writeContent(relativePath, buffer, { kind, encoding: "binary" });
-  }
-  writeContent(relativePath, content, { kind, encoding }) {
-    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
-    const existing = this.operationsByPath.get(normalized);
-    const initial = existing ? { exists: existing.previousExists, sha256: existing.previousSha256 } : diskFileState(this.root, normalized);
-    const operation = {
-      operationId: existing?.operationId ?? `op-${crypto.randomUUID()}`,
-      mutationId: this.id,
-      actionId: this.actionId,
-      relativePath: normalized,
-      kind,
-      encoding,
-      ...encoding === "utf8" ? { content } : { byteLength: content.byteLength },
-      previousExists: initial.exists,
-      previousSha256: initial.sha256,
-      expectedPreviousSha256: initial.sha256,
-      nextSha256: sha256(content),
-      scope: classifyScope(normalized),
-      rollbackEligibility: this.patchPlanMode ? "host-tracked-file-edits-required" : "direct-process-unverified"
-    };
-    if (!existing) {
-      this.operationOrder.push(normalized);
-    }
-    this.operationsByPath.set(normalized, operation);
-    if (encoding === "utf8") {
-      this.overlay.set(normalized, content);
-    }
-    if (!this.patchPlanMode) {
-      fs4.mkdirSync(path4.dirname(fullPath), { recursive: true });
-      fs4.writeFileSync(fullPath, content, encoding === "utf8" ? "utf8" : void 0);
-    }
-    return operation;
-  }
-  appendText(relativePath, content) {
-    const previous = this.readText(relativePath, "");
-    return this.writeText(relativePath, `${previous}${String(content ?? "")}`, "append-as-write");
-  }
-  ensureFile(relativePath, content) {
-    if (this.fileExists(relativePath)) {
-      return false;
-    }
-    this.writeText(relativePath, content, "ensure-file");
-    return true;
-  }
-  ensureDirectory(relativePath) {
-    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
-    if (fs4.existsSync(fullPath) || this.operationsByPath.has(normalized)) {
-      return false;
-    }
-    const operation = {
-      operationId: `op-${crypto.randomUUID()}`,
-      mutationId: this.id,
-      actionId: this.actionId,
-      relativePath: normalized,
-      kind: "ensure-directory",
-      encoding: null,
-      previousExists: false,
-      previousSha256: null,
-      expectedPreviousSha256: null,
-      nextSha256: null,
-      scope: classifyScope(normalized),
-      rollbackEligibility: this.patchPlanMode ? "host-tracked-file-edits-required" : "direct-process-unverified"
-    };
-    this.operationOrder.push(normalized);
-    this.operationsByPath.set(normalized, operation);
-    if (!this.patchPlanMode) {
-      fs4.mkdirSync(fullPath, { recursive: true });
-    }
-    return true;
-  }
-  operations() {
-    return this.operationOrder.map((relativePath) => this.operationsByPath.get(relativePath)).filter(Boolean);
-  }
-  summary(options = {}) {
-    const operations = this.operations();
-    const writesApplied = options.writesApplied ?? (!this.patchPlanMode && operations.length > 0);
-    return {
-      mutationId: this.id,
-      actionId: this.actionId,
-      mutationMode: this.mutationMode,
-      mutationModeSource: this.mutationModeSource,
-      writesApplied,
-      operationCount: operations.length,
-      paths: operations.map((operation) => operation.relativePath),
-      directoryEffectCount: operations.filter((operation) => operation.kind === "ensure-directory").length,
-      directoryPaths: operations.filter((operation) => operation.kind === "ensure-directory").map((operation) => operation.relativePath),
-      hostRollbackEligible: this.patchPlanMode,
-      hostRollbackIneligibleReason: this.patchPlanMode ? null : DIRECT_PROCESS_ROLLBACK_REASON,
-      recommendedMutationMode: this.patchPlanMode ? null : "patch-plan",
-      rollbackAdvice: this.patchPlanMode ? null : PATCH_PLAN_ROLLBACK_ADVICE,
-      externalWriteCaptureVerified: false,
-      doveRestoreSupported: false
-    };
-  }
-  finish(result = {}) {
-    this.assertActive("MutationContext finish");
-    const operations = this.operations();
-    const writesApplied = !this.patchPlanMode && (operations.length > 0 || resultDeclaresWrites(result));
-    const metadata = {
-      mutationId: this.id,
-      mutationMode: this.mutationMode,
-      mutationModeSource: this.mutationModeSource,
-      writesApplied,
-      hostRollbackEligible: this.patchPlanMode,
-      hostTrackedFileEditsRequired: this.patchPlanMode,
-      directProcessWritesAreRollbackSafe: false,
-      externalWriteCaptureVerified: false,
-      doveRestoreSupported: false,
-      hostRollbackIneligibleReason: this.patchPlanMode ? null : DIRECT_PROCESS_ROLLBACK_REASON,
-      recommendedMutationMode: this.patchPlanMode ? null : "patch-plan",
-      rollbackAdvice: this.patchPlanMode ? null : PATCH_PLAN_ROLLBACK_ADVICE,
-      mutationSummary: this.summary({ writesApplied })
-    };
-    if (this.patchPlanMode) {
-      metadata.mutationPlan = {
-        presentation: "dove-mutation-plan",
-        mutationId: this.id,
-        actionId: this.actionId,
-        hostId: this.hostId,
-        workspaceRealpath: fs4.realpathSync.native(this.root),
-        mutationModeSource: this.mutationModeSource,
-        createdAt: this.createdAt,
-        writesApplied: false,
-        hostTrackedFileEditsRequired: true,
-        directProcessWritesAreRollbackSafe: false,
-        externalWriteCaptureVerified: false,
-        doveRestoreSupported: false,
-        operations
-      };
-    }
-    this.lifecycle = "finished";
-    if (result && typeof result === "object" && !Array.isArray(result)) {
-      return { ...result, ...metadata };
-    }
-    return { result, ...metadata };
-  }
-  abort() {
-    if (this.lifecycle === "active") {
-      this.lifecycle = "aborted";
-    }
-  }
-};
-function createMutationContext(root, options = {}) {
-  return new MutationContext(root, options);
-}
-function runWithMutationContext(root, options, callback) {
-  const context = createMutationContext(root, options);
-  return mutationStorage.run(context, () => {
-    try {
-      const result = callback(context);
-      if (result && typeof result.then === "function") {
-        return result.then(
-          (resolved) => context.finish(resolved),
-          (error) => {
-            context.abort();
-            throw error;
-          }
-        );
+  if (!Array.isArray(value2.criteriaSatisfied)) throw new Error(`${label}.criteriaSatisfied must be an array.`);
+  const criterionIds = /* @__PURE__ */ new Set();
+  const missionCriterionIds = new Set(Array.isArray(mission.completionCriterionIds) ? mission.completionCriterionIds : []);
+  for (const [index, criterion] of value2.criteriaSatisfied.entries()) {
+    const itemLabel = `${label}.criteriaSatisfied[${index}]`;
+    assertSealed(criterion, CRITERION_FIELDS, itemLabel);
+    const criterionId = safeId(criterion.criterionId, `${itemLabel}.criterionId`);
+    if (!missionCriterionIds.has(criterionId)) throw new Error(`${itemLabel}.criterionId is unknown for mission ${missionId}.`);
+    if (criterionIds.has(criterionId)) throw new Error(`${label}.criteriaSatisfied contains duplicate criterionId ${criterionId}.`);
+    criterionIds.add(criterionId);
+    const references = canonicalStringArray(criterion.evidenceRefs, `${itemLabel}.evidenceRefs`);
+    for (const [referenceIndex, reference] of references.entries()) {
+      const separator = reference.indexOf(":");
+      if (separator <= 0 || separator === reference.length - 1) throw new Error(`${itemLabel}.evidenceRefs[${referenceIndex}] must be a typed evidence reference.`);
+      const kind = reference.slice(0, separator);
+      const target2 = reference.slice(separator + 1);
+      if ((kind === "artifact" || kind === "validation") && canonicalPath(target2, `${itemLabel}.evidenceRefs[${referenceIndex}]`) !== target2) {
+        throw new Error(`${itemLabel}.evidenceRefs[${referenceIndex}] must be canonical.`);
       }
-      return context.finish(result);
-    } catch (error) {
-      context.abort();
-      throw error;
-    }
-  });
-}
-function currentMutationContext(root) {
-  const context = mutationStorage.getStore();
-  if (!context || context.lifecycle !== "active") {
-    return null;
-  }
-  if (root) {
-    try {
-      if (fs4.realpathSync.native(path4.resolve(root)) !== context.root) {
-        return null;
-      }
-    } catch {
-      return null;
     }
   }
-  return context;
+  return value2;
 }
-function isPatchPlanMode(root) {
-  return currentMutationContext(root)?.patchPlanMode === true;
-}
-
-// src/core/workspace.mjs
-function nowIso() {
-  return (/* @__PURE__ */ new Date()).toISOString();
-}
-function resolvePath(root, relativePath) {
-  return path5.join(root, relativePath);
-}
-function cloneFallback(fallback) {
-  return typeof fallback === "function" ? fallback() : structuredClone(fallback);
-}
-function requireMutationContext(root, operation) {
-  const context = currentMutationContext(root);
-  if (!context) throw new Error(`${operation} requires an active MutationContext.`);
-  return context;
-}
-function readJson(root, relativePath, fallback) {
-  const context = currentMutationContext(root);
-  if (context) return context.readJson(relativePath, fallback);
-  const fullPath = resolvePath(root, relativePath);
-  if (!fs5.existsSync(fullPath)) return cloneFallback(fallback);
+function readJsonStrict(fullPath, label) {
+  let text;
   try {
-    return JSON.parse(fs5.readFileSync(fullPath, "utf8"));
+    text = fs3.readFileSync(fullPath, "utf8");
   } catch (error) {
-    throw new Error(`Malformed JSON in ${relativePath}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`${label} cannot be read: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Malformed durable JSON in ${label}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
-function writeJson(root, relativePath, value2) {
-  return requireMutationContext(root, "writeJson").writeJson(relativePath, value2);
-}
-function writeText(root, relativePath, content) {
-  return requireMutationContext(root, "writeText").writeText(relativePath, content);
-}
-function assertGovernanceMutationRegistered(actionId, expectedMode) {
-  const guarded = new Set(GOVERNANCE_GUARDED_MUTATIONS.map((entry) => entry.id));
-  const exempt = new Map(GOVERNANCE_EXEMPT_MUTATIONS.map((entry) => [entry.id, entry]));
-  if (expectedMode === "guarded") {
-    if (!guarded.has(actionId)) throw new Error(`Governance registry missing guarded mutation entry: ${actionId}`);
-    return;
+function derivedState(manifest, receipts) {
+  const currentByPath = /* @__PURE__ */ new Map();
+  const artifactHistory = [];
+  for (const receipt of receipts) {
+    for (const artifact of receipt.artifacts) {
+      const previous = currentByPath.get(artifact.path);
+      if (previous && previous.missionId !== receipt.missionId) {
+        throw new Error(`Execution receipt ledger assigns artifact path ${artifact.path} to mission ${receipt.missionId} after ownership by mission ${previous.missionId}.`);
+      }
+      const entry = {
+        path: artifact.path,
+        kind: artifact.kind,
+        sha256: artifact.sha256,
+        missionId: receipt.missionId,
+        contractDigest: receipt.contractDigest,
+        receiptId: receipt.receiptId,
+        ledgerSequence: receipt.ledgerSequence,
+        recordedAt: receipt.recordedAt,
+        producer: receipt.producer,
+        derivedReferences: artifact.derivedReferences
+      };
+      artifactHistory.push(entry);
+      currentByPath.set(artifact.path, entry);
+    }
   }
-  if (expectedMode === "exempt") {
-    const entry = exempt.get(actionId);
-    if (!entry) throw new Error(`Governance registry missing exempt mutation entry: ${actionId}`);
-    if (entry.sunsetAt && entry.sunsetAt <= nowIso()) throw new Error(`Governance exempt entry expired: ${actionId}`);
-    return;
+  const current = [...currentByPath.values()].sort((left, right) => left.path.localeCompare(right.path));
+  const updatedAt = receipts.at(-1)?.recordedAt ?? null;
+  return {
+    schemaVersion: EXECUTION_RECEIPT_SCHEMA_VERSION,
+    workspaceId: manifest.workspaceId,
+    receipts,
+    artifactHistory,
+    currentOwnership: current.map(({ derivedReferences: _derivedReferences, ledgerSequence: _ledgerSequence, recordedAt: _recordedAt, producer: _producer, ...item }) => item),
+    currentLineage: current.map(({ ledgerSequence: _ledgerSequence, recordedAt: _recordedAt, producer: _producer, ...item }) => item),
+    updatedAt,
+    nextLedgerSequence: receipts.length + 1
+  };
+}
+function readExecutionReceiptLedger(root, options = {}) {
+  const manifest = options.manifest;
+  const missions = options.missions;
+  if (!manifest || !(missions instanceof Map)) throw new Error("Execution receipt ledger read requires the validated manifest and mission map.");
+  const directory = path4.resolve(root, ARTIFACT_PATHS.executionReceiptsDir);
+  const receipts = fs3.readdirSync(directory, { withFileTypes: true }).map((entry) => {
+    const relativePath = path4.posix.join(ARTIFACT_PATHS.executionReceiptsDir, entry.name);
+    if (entry.isSymbolicLink()) throw new Error(`${relativePath} must not be a symbolic link.`);
+    if (!entry.isFile() || !entry.name.endsWith(".json")) throw new Error(`${relativePath} must be a regular JSON file.`);
+    return validateStoredReceipt(readJsonStrict(path4.join(directory, entry.name), relativePath), {
+      manifest,
+      missions,
+      label: relativePath,
+      filename: entry.name
+    });
+  }).sort((left, right) => left.ledgerSequence - right.ledgerSequence);
+  const receiptIds = /* @__PURE__ */ new Set();
+  for (const [index, receipt] of receipts.entries()) {
+    const expectedSequence = index + 1;
+    if (receipt.ledgerSequence !== expectedSequence) {
+      throw new Error(`Execution receipt ledgerSequence must be contiguous from 1; expected ${expectedSequence}, found ${receipt.ledgerSequence} in ${receipt.receiptId}.`);
+    }
+    if (receiptIds.has(receipt.receiptId)) throw new Error(`Execution receipt ledger contains duplicate receiptId ${receipt.receiptId}.`);
+    receiptIds.add(receipt.receiptId);
   }
-  throw new Error(`Unknown governance mutation mode: ${expectedMode}`);
+  return derivedState(manifest, receipts);
+}
+function deriveArtifactReferences(receipt, explicitByPath = /* @__PURE__ */ new Map()) {
+  const criterionReferences = new Map(receipt.artifacts.map((artifact) => [artifact.path, []]));
+  for (const criterion of receipt.criteriaSatisfied) {
+    for (const reference of criterion.evidenceRefs) {
+      if (!reference.startsWith("artifact:")) continue;
+      const artifactPath = reference.slice("artifact:".length);
+      criterionReferences.get(artifactPath)?.push(`criterion:${criterion.criterionId}`);
+    }
+  }
+  return receipt.artifacts.map((artifact) => ({
+    ...artifact,
+    derivedReferences: [.../* @__PURE__ */ new Set([...explicitByPath.get(artifact.path) ?? [], ...criterionReferences.get(artifact.path) ?? []])].sort()
+  }));
+}
+function assertReceiptAppendable(ledger, receipt) {
+  if (receipt.ledgerSequence !== ledger.nextLedgerSequence) {
+    throw new Error(`Execution receipt ledgerSequence must be ${ledger.nextLedgerSequence}.`);
+  }
+  if (ledger.receipts.some((item) => item.receiptId === receipt.receiptId)) throw new Error(`Execution receipt id is already occupied: ${receipt.receiptId}.`);
+  const currentByPath = new Map(ledger.currentOwnership.map((item) => [item.path, item]));
+  const receiptById = new Map(ledger.receipts.map((item) => [item.receiptId, item]));
+  for (const artifact of receipt.artifacts) {
+    const current = currentByPath.get(artifact.path);
+    const currentReceipt = current ? receiptById.get(current.receiptId) : null;
+    if (currentReceipt?.producer?.kind === "dove-internal" && ["prepare-review-exchange", "import-review-exchange"].includes(currentReceipt.producer.actionId)) {
+      throw new Error(`Artifact path ${artifact.path} is an immutable review ${currentReceipt.producer.actionId === "prepare-review-exchange" ? "preparation control" : "import record"} and cannot be overwritten.`);
+    }
+    if (current && current.missionId !== receipt.missionId) {
+      throw new Error(`Artifact path ${artifact.path} is already owned by mission ${current.missionId}; mission ${receipt.missionId} cannot overwrite it.`);
+    }
+  }
 }
 
 // src/core/workspace-schema.mjs
 import crypto2 from "node:crypto";
-import fs6 from "node:fs";
+import fs4 from "node:fs";
 import path6 from "node:path";
+
+// src/core/mission-contract-integrity.mjs
+import crypto from "node:crypto";
+var MISSION_CONTRACT_SCHEMA_VERSION = 1;
+var MISSION_CRITERION_ID_VERSION = 1;
+var MISSION_EVIDENCE_REQUIREMENT_ID_VERSION = 1;
+function sha256(value2) {
+  return crypto.createHash("sha256").update(value2).digest("hex");
+}
+function stableMissionValue(value2) {
+  if (Array.isArray(value2)) return value2.map(stableMissionValue);
+  if (value2 && typeof value2 === "object") {
+    return Object.fromEntries(
+      Object.entries(value2).filter(([, item]) => item !== void 0).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, stableMissionValue(item)])
+    );
+  }
+  return value2;
+}
+function stableMissionSerialize(value2) {
+  return JSON.stringify(stableMissionValue(value2));
+}
+function missionCompletionCriterionId(_index, criterion) {
+  return `criterion-${sha256(stableMissionSerialize({
+    version: MISSION_CRITERION_ID_VERSION,
+    criterion
+  })).slice(0, 16)}`;
+}
+function missionEvidenceRequirementId(_index, requirement) {
+  return `evidence-${sha256(stableMissionSerialize({
+    version: MISSION_EVIDENCE_REQUIREMENT_ID_VERSION,
+    requirement
+  })).slice(0, 16)}`;
+}
+function missionCompletionCriteria(content = {}) {
+  return (Array.isArray(content.completionCriteria) ? content.completionCriteria : []).map((criterion, index) => ({
+    criterionId: missionCompletionCriterionId(index, criterion),
+    criterion
+  }));
+}
+function missionEvidenceRequirements(content = {}) {
+  return (Array.isArray(content.evidenceRequirements) ? content.evidenceRequirements : []).map((requirement, index) => ({
+    requirementId: missionEvidenceRequirementId(index, requirement),
+    requirement
+  }));
+}
+function missionContractDigest(missionId, content) {
+  return sha256(stableMissionSerialize({
+    schemaVersion: MISSION_CONTRACT_SCHEMA_VERSION,
+    missionId,
+    ...content,
+    completionCriterionIds: missionCompletionCriteria(content).map(({ criterionId }) => criterionId),
+    evidenceRequirementIds: missionEvidenceRequirements(content).map(({ requirementId }) => requirementId)
+  }));
+}
+
+// src/core/mission-graph.mjs
+import path5 from "node:path";
+function missionEntries(value2) {
+  if (!Array.isArray(value2)) throw new Error("Mission graph entries must be an array.");
+  return value2.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error(`Mission graph entry ${index} must be an object.`);
+    const mission = entry.mission;
+    if (!mission || typeof mission !== "object" || Array.isArray(mission)) throw new Error(`Mission graph entry ${index} must contain a mission object.`);
+    const missionId = mission.missionId;
+    if (typeof missionId !== "string" || !missionId) throw new Error(`Mission graph entry ${index} has no missionId.`);
+    const filename = typeof entry.filename === "string" ? path5.posix.basename(entry.filename) : "";
+    if (filename !== `${missionId}.json`) throw new Error(`Mission file ${entry.filename ?? "unknown"} filename must match missionId ${missionId}.`);
+    return { filename, mission, missionId };
+  });
+}
+function assertAcyclic(byId, edgeIds, label) {
+  const visiting = /* @__PURE__ */ new Set();
+  const visited = /* @__PURE__ */ new Set();
+  const visit = (missionId) => {
+    if (visited.has(missionId)) return;
+    if (visiting.has(missionId)) throw new Error(`${label} contains a cycle at ${missionId}.`);
+    visiting.add(missionId);
+    for (const nextId of edgeIds(byId.get(missionId))) visit(nextId);
+    visiting.delete(missionId);
+    visited.add(missionId);
+  };
+  for (const missionId of byId.keys()) visit(missionId);
+}
+function validateMissionGraph(value2) {
+  const entries = missionEntries(value2);
+  const byId = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    if (byId.has(entry.missionId)) throw new Error(`Mission graph contains duplicate missionId ${entry.missionId}.`);
+    byId.set(entry.missionId, entry.mission);
+  }
+  for (const mission of byId.values()) {
+    const dependencies = Array.isArray(mission.dependsOnMissionIds) ? mission.dependsOnMissionIds : [];
+    for (const dependencyId of dependencies) {
+      if (dependencyId === mission.missionId) throw new Error(`Mission ${mission.missionId} must not depend on itself.`);
+      if (!byId.has(dependencyId)) throw new Error(`Mission ${mission.missionId} depends on unknown mission ${dependencyId}.`);
+    }
+    if (mission.supersedesMissionId !== void 0) {
+      if (mission.supersedesMissionId === mission.missionId) throw new Error(`Mission ${mission.missionId} must not supersede itself.`);
+      if (!byId.has(mission.supersedesMissionId)) throw new Error(`Mission ${mission.missionId} supersedes unknown mission ${mission.supersedesMissionId}.`);
+    }
+  }
+  assertAcyclic(byId, (mission) => Array.isArray(mission.dependsOnMissionIds) ? mission.dependsOnMissionIds : [], "Mission dependency graph");
+  const successorByMission = /* @__PURE__ */ new Map();
+  for (const mission of byId.values()) {
+    if (!mission.supersedesMissionId) continue;
+    if (successorByMission.has(mission.supersedesMissionId)) {
+      throw new Error(`Mission supersession forks at ${mission.supersedesMissionId}.`);
+    }
+    successorByMission.set(mission.supersedesMissionId, mission.missionId);
+  }
+  assertAcyclic(byId, (mission) => mission.supersedesMissionId ? [mission.supersedesMissionId] : [], "Mission supersession");
+  return { missions: byId, successorByMission };
+}
+
+// src/core/workspace-schema.mjs
 var DOVE_MANIFEST_SCHEMA_VERSION = 1;
 var DOVE_PROJECT_SCHEMA_VERSION = 1;
 var DOVE_TRUST_SCHEMA_VERSION = 1;
@@ -1146,9 +988,7 @@ var MINIMAL_WORKSPACE_DIRECTORIES = Object.freeze([
 ]);
 var MINIMAL_WORKSPACE_REQUIRED_FILES = Object.freeze([
   ".dove/manifest.json",
-  ".dove/project.json",
-  ".dove/artifacts/ownership.json",
-  ".dove/artifacts/lineage.json"
+  ".dove/project.json"
 ]);
 var CURRENT_SCHEMA_FORBIDDEN_LEGACY_PATHS = Object.freeze([
   ".dove/state.json",
@@ -1160,25 +1000,20 @@ var CURRENT_SCHEMA_FORBIDDEN_LEGACY_PATHS = Object.freeze([
   ".dove/programs",
   ".dove/meta",
   ".dove/context",
-  ".dove/wiki"
+  ".dove/wiki",
+  ".dove/artifacts/ownership.json",
+  ".dove/artifacts/lineage.json"
 ]);
 var MANIFEST_FIELDS = /* @__PURE__ */ new Set(["schemaVersion", "manifestVersion", "workspaceId", "createdAt", "packageVersion"]);
 var PROJECT_FIELDS = /* @__PURE__ */ new Set(["schemaVersion", "workspaceId", "projectId", "goal", "trust", "createdAt", "updatedAt"]);
 var TRUST_FIELDS = /* @__PURE__ */ new Set(["schemaVersion", "entries"]);
-var INDEX_FIELDS = /* @__PURE__ */ new Set(["schemaVersion", "workspaceId", "artifacts", "updatedAt"]);
-var INDEX_ITEM_FIELDS = /* @__PURE__ */ new Set(["path", "kind", "sha256", "missionId", "contractDigest", "receiptId"]);
-var LINEAGE_ITEM_FIELDS = /* @__PURE__ */ new Set([...INDEX_ITEM_FIELDS, "derivedReferences"]);
 var MISSION_FIELDS = /* @__PURE__ */ new Set(["schemaVersion", "workspaceId", "missionId", "contractDigest", "createdAt", "scope", "outOfScope", "targetArtifacts", "expectedArtifacts", "completionCriteria", "evidenceRequirements", "dependsOnMissionIds", "goal", "supersedesMissionId", "completionCriterionIds", "evidenceRequirementIds"]);
-var RECEIPT_FIELDS = /* @__PURE__ */ new Set(["schemaVersion", "workspaceId", "receiptId", "missionId", "contractDigest", "summary", "artifacts", "validations", "criteriaSatisfied", "producedAt"]);
-var RECEIPT_ARTIFACT_FIELDS = /* @__PURE__ */ new Set(["path", "kind", "sha256"]);
-var RECEIPT_VALIDATION_FIELDS = /* @__PURE__ */ new Set(["kind", "reference", "outputHash"]);
-var RECEIPT_CRITERION_FIELDS = /* @__PURE__ */ new Set(["criterionId", "evidenceRefs"]);
 var LESSON_FIELDS = /* @__PURE__ */ new Set(["schemaVersion", "workspaceId", "lessonId", "missionId", "contractDigest", "scope", "kind", "summary", "details", "nextTimeGuidance", "sourceIds", "noteIds", "artifactRefs", "appliesToArtifactRefs", "tags", "supersedesLessonId", "createdAt"]);
 var LESSON_REF_FIELDS = /* @__PURE__ */ new Set(["path", "sha256"]);
 var LESSON_SCOPES = /* @__PURE__ */ new Set(["global", "mission"]);
 var LESSON_KINDS = /* @__PURE__ */ new Set(["preference", "constraint", "method", "failure", "review-insight"]);
-var SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
-var HASH = /^[0-9a-f]{64}$/u;
+var SAFE_ID2 = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
+var HASH2 = /^[0-9a-f]{64}$/u;
 var ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 function sha2562(value2) {
   return crypto2.createHash("sha256").update(value2).digest("hex");
@@ -1197,45 +1032,45 @@ function workspaceDigest(value2) {
   return sha2562(stableWorkspaceSerialize(value2));
 }
 function canonicalWorkspacePath(root) {
-  return fs6.realpathSync.native(path6.resolve(root));
+  return fs4.realpathSync.native(path6.resolve(root));
 }
-function assertPlainObject(value2, label) {
+function assertPlainObject2(value2, label) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) {
     throw new Error(`${label} must be a plain object.`);
   }
 }
-function assertSealed(value2, fields, label) {
-  assertPlainObject(value2, label);
+function assertSealed2(value2, fields, label) {
+  assertPlainObject2(value2, label);
   const unknown = Object.keys(value2).filter((field) => !fields.has(field));
   if (unknown.length > 0) {
     throw new Error(`${label} does not accept unknown fields: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
   }
 }
-function exactIso(value2, label) {
+function exactIso2(value2, label) {
   if (typeof value2 !== "string" || !ISO_TIMESTAMP.test(value2) || !Number.isFinite(Date.parse(value2)) || new Date(Date.parse(value2)).toISOString() !== value2) {
     throw new Error(`${label} must be an exact ISO-8601 timestamp.`);
   }
   return value2;
 }
-function safeId(value2, label) {
-  if (typeof value2 !== "string" || !SAFE_ID.test(value2)) {
+function safeId2(value2, label) {
+  if (typeof value2 !== "string" || !SAFE_ID2.test(value2)) {
     throw new Error(`${label} must be a safe lowercase identifier.`);
   }
   return value2;
 }
 function pathExistsNoFollow(fullPath) {
   try {
-    fs6.lstatSync(fullPath);
+    fs4.lstatSync(fullPath);
     return true;
   } catch (error) {
     if (error?.code === "ENOENT") return false;
     throw error;
   }
 }
-function readJsonStrict(fullPath, label) {
+function readJsonStrict2(fullPath, label) {
   let text;
   try {
-    text = fs6.readFileSync(fullPath, "utf8");
+    text = fs4.readFileSync(fullPath, "utf8");
   } catch (error) {
     throw new Error(`${label} cannot be read: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -1246,22 +1081,22 @@ function readJsonStrict(fullPath, label) {
   }
 }
 function validateDoveManifest(value2) {
-  assertSealed(value2, MANIFEST_FIELDS, "Dove manifest");
+  assertSealed2(value2, MANIFEST_FIELDS, "Dove manifest");
   if (value2.schemaVersion !== DOVE_WORKSPACE_SCHEMA_VERSION) {
     throw new Error(`Dove manifest schemaVersion ${value2.schemaVersion ?? "missing"} is unsupported; expected ${DOVE_WORKSPACE_SCHEMA_VERSION}.`);
   }
   if (value2.manifestVersion !== DOVE_MANIFEST_SCHEMA_VERSION) {
     throw new Error(`Dove manifest manifestVersion ${value2.manifestVersion ?? "missing"} is unsupported.`);
   }
-  safeId(value2.workspaceId, "Dove manifest workspaceId");
-  exactIso(value2.createdAt, "Dove manifest createdAt");
+  safeId2(value2.workspaceId, "Dove manifest workspaceId");
+  exactIso2(value2.createdAt, "Dove manifest createdAt");
   if (typeof value2.packageVersion !== "string" || !value2.packageVersion.trim()) {
     throw new Error("Dove manifest packageVersion must be a non-empty string.");
   }
   return value2;
 }
 function validateDoveTrustConfig(value2) {
-  assertSealed(value2, TRUST_FIELDS, "Dove project trust config");
+  assertSealed2(value2, TRUST_FIELDS, "Dove project trust config");
   if (value2.schemaVersion !== DOVE_TRUST_SCHEMA_VERSION) {
     throw new Error(`Dove project trust schemaVersion ${value2.schemaVersion ?? "missing"} is unsupported.`);
   }
@@ -1271,12 +1106,12 @@ function validateDoveTrustConfig(value2) {
   return value2;
 }
 function validateDoveProject(value2, manifest) {
-  assertSealed(value2, PROJECT_FIELDS, "Dove project identity");
+  assertSealed2(value2, PROJECT_FIELDS, "Dove project identity");
   if (value2.schemaVersion !== DOVE_PROJECT_SCHEMA_VERSION) {
     throw new Error(`Dove project schemaVersion ${value2.schemaVersion ?? "missing"} is unsupported.`);
   }
-  safeId(value2.workspaceId, "Dove project workspaceId");
-  safeId(value2.projectId, "Dove project projectId");
+  safeId2(value2.workspaceId, "Dove project workspaceId");
+  safeId2(value2.projectId, "Dove project projectId");
   if (value2.workspaceId !== manifest.workspaceId) {
     throw new Error("Dove project workspaceId does not match the manifest workspaceId.");
   }
@@ -1286,20 +1121,16 @@ function validateDoveProject(value2, manifest) {
   if (typeof value2.goal !== "string" || !value2.goal.trim()) {
     throw new Error("Dove project goal must be a non-empty string.");
   }
-  exactIso(value2.createdAt, "Dove project createdAt");
-  exactIso(value2.updatedAt, "Dove project updatedAt");
+  exactIso2(value2.createdAt, "Dove project createdAt");
+  exactIso2(value2.updatedAt, "Dove project updatedAt");
   if (value2.createdAt !== manifest.createdAt) {
     throw new Error("Dove project createdAt must match the manifest createdAt.");
   }
   validateDoveTrustConfig(value2.trust);
   return value2;
 }
-function exactOptionalIso(value2, label) {
-  if (value2 === null) return null;
-  return exactIso(value2, label);
-}
-function hash(value2, label) {
-  if (typeof value2 !== "string" || !HASH.test(value2)) throw new Error(`${label} must be a lowercase SHA-256 digest.`);
+function hash2(value2, label) {
+  if (typeof value2 !== "string" || !HASH2.test(value2)) throw new Error(`${label} must be a lowercase SHA-256 digest.`);
   return value2;
 }
 function nonEmptyString(value2, label) {
@@ -1313,43 +1144,38 @@ function stringArray(value2, label) {
   if (new Set(value2).size !== value2.length) throw new Error(`${label} must not contain duplicates.`);
   return value2;
 }
-function validateOwnershipShape(value2, label, manifest, lineage = false) {
-  assertSealed(value2, INDEX_FIELDS, label);
-  if (value2.schemaVersion !== 1) throw new Error(`${label} has an unsupported schemaVersion.`);
-  safeId(value2.workspaceId, `${label}.workspaceId`);
-  if (value2.workspaceId !== manifest.workspaceId) throw new Error(`${label}.workspaceId does not match the manifest workspaceId.`);
-  if (!Array.isArray(value2.artifacts)) throw new Error(`${label}.artifacts must be an array.`);
-  exactOptionalIso(value2.updatedAt, `${label}.updatedAt`);
-  const seen = /* @__PURE__ */ new Set();
-  for (const [index, item] of value2.artifacts.entries()) {
-    const itemLabel = `${label}.artifacts[${index}]`;
-    assertSealed(item, lineage ? LINEAGE_ITEM_FIELDS : INDEX_ITEM_FIELDS, itemLabel);
-    nonEmptyString(item.path, `${itemLabel}.path`);
-    nonEmptyString(item.kind, `${itemLabel}.kind`);
-    hash(item.sha256, `${itemLabel}.sha256`);
-    safeId(item.missionId, `${itemLabel}.missionId`);
-    hash(item.contractDigest, `${itemLabel}.contractDigest`);
-    safeId(item.receiptId, `${itemLabel}.receiptId`);
-    if (seen.has(item.path)) throw new Error(`${label}.artifacts contains duplicate path ${item.path}.`);
-    seen.add(item.path);
-    if (lineage) stringArray(item.derivedReferences, `${itemLabel}.derivedReferences`);
-  }
-  return value2;
-}
 function validateMissionShape(value2, manifest, label) {
-  assertSealed(value2, MISSION_FIELDS, label);
+  assertSealed2(value2, MISSION_FIELDS, label);
   if (value2.schemaVersion !== 1) throw new Error(`${label} has an unsupported schemaVersion.`);
-  safeId(value2.workspaceId, `${label}.workspaceId`);
+  safeId2(value2.workspaceId, `${label}.workspaceId`);
   if (value2.workspaceId !== manifest.workspaceId) throw new Error(`${label}.workspaceId does not match the manifest workspaceId.`);
-  safeId(value2.missionId, `${label}.missionId`);
-  hash(value2.contractDigest, `${label}.contractDigest`);
-  exactIso(value2.createdAt, `${label}.createdAt`);
+  const missionId = safeId2(value2.missionId, `${label}.missionId`);
+  if (path6.posix.basename(label) !== `${missionId}.json`) throw new Error(`${label} filename must match missionId ${missionId}.`);
+  hash2(value2.contractDigest, `${label}.contractDigest`);
+  exactIso2(value2.createdAt, `${label}.createdAt`);
   nonEmptyString(value2.goal, `${label}.goal`);
   for (const field of ["scope", "outOfScope", "targetArtifacts", "expectedArtifacts", "completionCriteria", "evidenceRequirements", "completionCriterionIds", "evidenceRequirementIds"]) {
     stringArray(value2[field], `${label}.${field}`);
   }
   if (value2.dependsOnMissionIds !== void 0) stringArray(value2.dependsOnMissionIds, `${label}.dependsOnMissionIds`);
-  if (value2.supersedesMissionId !== void 0) safeId(value2.supersedesMissionId, `${label}.supersedesMissionId`);
+  if (value2.supersedesMissionId !== void 0) safeId2(value2.supersedesMissionId, `${label}.supersedesMissionId`);
+  const content = {
+    goal: value2.goal,
+    scope: value2.scope,
+    outOfScope: value2.outOfScope,
+    targetArtifacts: value2.targetArtifacts,
+    expectedArtifacts: value2.expectedArtifacts,
+    completionCriteria: value2.completionCriteria,
+    evidenceRequirements: value2.evidenceRequirements,
+    ...value2.dependsOnMissionIds === void 0 ? {} : { dependsOnMissionIds: value2.dependsOnMissionIds },
+    ...value2.supersedesMissionId === void 0 ? {} : { supersedesMissionId: value2.supersedesMissionId }
+  };
+  const expectedDigest = missionContractDigest(missionId, content);
+  if (value2.contractDigest !== expectedDigest) throw new Error(`${label}.contractDigest does not match its canonical mission content.`);
+  const expectedCriterionIds = missionCompletionCriteria(content).map(({ criterionId }) => criterionId);
+  if (JSON.stringify(value2.completionCriterionIds) !== JSON.stringify(expectedCriterionIds)) throw new Error(`${label}.completionCriterionIds do not match canonical mission content.`);
+  const expectedEvidenceIds = missionEvidenceRequirements(content).map(({ requirementId }) => requirementId);
+  if (JSON.stringify(value2.evidenceRequirementIds) !== JSON.stringify(expectedEvidenceIds)) throw new Error(`${label}.evidenceRequirementIds do not match canonical mission content.`);
   return value2;
 }
 function validateLessonReferenceArray(value2, label) {
@@ -1357,24 +1183,24 @@ function validateLessonReferenceArray(value2, label) {
   const seen = /* @__PURE__ */ new Set();
   for (const [index, item] of value2.entries()) {
     const itemLabel = `${label}[${index}]`;
-    assertSealed(item, LESSON_REF_FIELDS, itemLabel);
+    assertSealed2(item, LESSON_REF_FIELDS, itemLabel);
     nonEmptyString(item.path, `${itemLabel}.path`);
-    hash(item.sha256, `${itemLabel}.sha256`);
+    hash2(item.sha256, `${itemLabel}.sha256`);
     if (seen.has(item.path)) throw new Error(`${label} contains duplicate path ${item.path}.`);
     seen.add(item.path);
   }
   return value2;
 }
 function validateLessonShape(value2, manifest, label, context = {}) {
-  assertSealed(value2, LESSON_FIELDS, label);
+  assertSealed2(value2, LESSON_FIELDS, label);
   if (value2.schemaVersion !== 1) throw new Error(`${label} has an unsupported schemaVersion.`);
-  safeId(value2.workspaceId, `${label}.workspaceId`);
+  safeId2(value2.workspaceId, `${label}.workspaceId`);
   if (value2.workspaceId !== manifest.workspaceId) throw new Error(`${label}.workspaceId does not match the manifest workspaceId.`);
-  const lessonId = safeId(value2.lessonId, `${label}.lessonId`);
+  const lessonId = safeId2(value2.lessonId, `${label}.lessonId`);
   const expectedFilename = `${lessonId}.json`;
   if (path6.posix.basename(label) !== expectedFilename) throw new Error(`${label} filename must match lessonId ${lessonId}.`);
-  const missionId = safeId(value2.missionId, `${label}.missionId`);
-  hash(value2.contractDigest, `${label}.contractDigest`);
+  const missionId = safeId2(value2.missionId, `${label}.missionId`);
+  hash2(value2.contractDigest, `${label}.contractDigest`);
   if (!LESSON_SCOPES.has(value2.scope)) throw new Error(`${label}.scope must be global or mission.`);
   if (!LESSON_KINDS.has(value2.kind)) throw new Error(`${label}.kind is unsupported.`);
   nonEmptyString(value2.summary, `${label}.summary`);
@@ -1387,10 +1213,10 @@ function validateLessonShape(value2, manifest, label, context = {}) {
   validateLessonReferenceArray(value2.appliesToArtifactRefs, `${label}.appliesToArtifactRefs`);
   stringArray(value2.tags, `${label}.tags`);
   if (value2.supersedesLessonId !== void 0) {
-    safeId(value2.supersedesLessonId, `${label}.supersedesLessonId`);
+    safeId2(value2.supersedesLessonId, `${label}.supersedesLessonId`);
     if (value2.supersedesLessonId === lessonId) throw new Error(`${label} must not supersede itself.`);
   }
-  exactIso(value2.createdAt, `${label}.createdAt`);
+  exactIso2(value2.createdAt, `${label}.createdAt`);
   const mission = context.missions?.get(missionId);
   if (!mission) throw new Error(`${label} references unknown mission ${missionId}.`);
   if (mission.contractDigest !== value2.contractDigest) throw new Error(`${label}.contractDigest does not match mission ${missionId}.`);
@@ -1417,63 +1243,28 @@ function validateLessonSupersession(lessons) {
     }
   }
 }
-function validateReceiptShape(value2, manifest, label) {
-  assertSealed(value2, RECEIPT_FIELDS, label);
-  if (value2.schemaVersion !== 1) throw new Error(`${label} has an unsupported schemaVersion.`);
-  safeId(value2.workspaceId, `${label}.workspaceId`);
-  if (value2.workspaceId !== manifest.workspaceId) throw new Error(`${label}.workspaceId does not match the manifest workspaceId.`);
-  safeId(value2.receiptId, `${label}.receiptId`);
-  safeId(value2.missionId, `${label}.missionId`);
-  hash(value2.contractDigest, `${label}.contractDigest`);
-  nonEmptyString(value2.summary, `${label}.summary`);
-  exactIso(value2.producedAt, `${label}.producedAt`);
-  if (!Array.isArray(value2.artifacts) || value2.artifacts.length === 0) throw new Error(`${label}.artifacts must contain at least one item.`);
-  if (!Array.isArray(value2.validations)) throw new Error(`${label}.validations must be an array.`);
-  if (!Array.isArray(value2.criteriaSatisfied)) throw new Error(`${label}.criteriaSatisfied must be an array.`);
-  for (const [index, item] of value2.artifacts.entries()) {
-    const itemLabel = `${label}.artifacts[${index}]`;
-    assertSealed(item, RECEIPT_ARTIFACT_FIELDS, itemLabel);
-    nonEmptyString(item.path, `${itemLabel}.path`);
-    nonEmptyString(item.kind, `${itemLabel}.kind`);
-    hash(item.sha256, `${itemLabel}.sha256`);
-  }
-  for (const [index, item] of value2.validations.entries()) {
-    const itemLabel = `${label}.validations[${index}]`;
-    assertSealed(item, RECEIPT_VALIDATION_FIELDS, itemLabel);
-    nonEmptyString(item.kind, `${itemLabel}.kind`);
-    nonEmptyString(item.reference, `${itemLabel}.reference`);
-    hash(item.outputHash, `${itemLabel}.outputHash`);
-  }
-  for (const [index, item] of value2.criteriaSatisfied.entries()) {
-    const itemLabel = `${label}.criteriaSatisfied[${index}]`;
-    assertSealed(item, RECEIPT_CRITERION_FIELDS, itemLabel);
-    nonEmptyString(item.criterionId, `${itemLabel}.criterionId`);
-    stringArray(item.evidenceRefs, `${itemLabel}.evidenceRefs`);
-  }
-  return value2;
-}
 function validateJsonDirectory(root, relativeDirectory, manifest, validate, context = {}) {
   const directory = path6.join(root, relativeDirectory);
   const values = [];
-  for (const entry of fs6.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+  for (const entry of fs4.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
     if (entry.isSymbolicLink()) throw new Error(`${path6.posix.join(relativeDirectory, entry.name)} must not be a symbolic link.`);
     if (!entry.isFile() || !entry.name.endsWith(".json")) throw new Error(`${path6.posix.join(relativeDirectory, entry.name)} must be a regular JSON file.`);
     const relativePath = path6.posix.join(relativeDirectory, entry.name);
-    values.push(validate(readJsonStrict(path6.join(root, relativePath), relativePath), manifest, relativePath, context));
+    values.push(validate(readJsonStrict2(path6.join(root, relativePath), relativePath), manifest, relativePath, context));
   }
   return values;
 }
 function requiredPathProblem(root, relativePath, kind) {
   const fullPath = path6.join(root, relativePath);
-  if (!fs6.existsSync(fullPath)) return `${relativePath} is missing`;
-  const stat = fs6.lstatSync(fullPath);
+  if (!fs4.existsSync(fullPath)) return `${relativePath} is missing`;
+  const stat = fs4.lstatSync(fullPath);
   if (stat.isSymbolicLink()) return `${relativePath} must not be a symbolic link`;
   if (kind === "directory" && !stat.isDirectory()) return `${relativePath} must be a directory`;
   if (kind === "file" && !stat.isFile()) return `${relativePath} must be a regular file`;
   return null;
 }
 function sourceIdentity(doveRoot) {
-  const stat = fs6.lstatSync(doveRoot, { bigint: true });
+  const stat = fs4.lstatSync(doveRoot, { bigint: true });
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
     throw new Error(".dove must be a real directory; symbolic-link workspace roots are not accepted.");
   }
@@ -1489,10 +1280,10 @@ function sourceIdentity(doveRoot) {
 function treeEntries(doveRoot) {
   const entries = [];
   const visit = (directory, prefix = "") => {
-    for (const entry of fs6.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+    for (const entry of fs4.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
       const relativePath = prefix ? path6.posix.join(prefix, entry.name) : entry.name;
       const fullPath = path6.join(directory, entry.name);
-      const stat = fs6.lstatSync(fullPath, { bigint: true });
+      const stat = fs4.lstatSync(fullPath, { bigint: true });
       const metadata = {
         path: relativePath,
         device: String(stat.dev),
@@ -1505,9 +1296,9 @@ function treeEntries(doveRoot) {
         entries.push({ ...metadata, kind: "directory" });
         visit(fullPath, relativePath);
       } else if (stat.isFile()) {
-        entries.push({ ...metadata, kind: "file", sizeBytes: String(stat.size), sha256: sha2562(fs6.readFileSync(fullPath)) });
+        entries.push({ ...metadata, kind: "file", sizeBytes: String(stat.size), sha256: sha2562(fs4.readFileSync(fullPath)) });
       } else if (stat.isSymbolicLink()) {
-        entries.push({ ...metadata, kind: "symlink", target: fs6.readlinkSync(fullPath) });
+        entries.push({ ...metadata, kind: "symlink", target: fs4.readlinkSync(fullPath) });
       } else {
         throw new Error(`Unsupported filesystem entry inside .dove: ${relativePath}.`);
       }
@@ -1546,12 +1337,12 @@ function inspectDoveWorkspace(root) {
     return { workspace, state: "invalid-root", category: "invalid", healthy: false, schemaVersion: null, detectedSchema: "invalid-root", error: error instanceof Error ? error.message : String(error) };
   }
   const manifestPath = path6.join(doveRoot, "manifest.json");
-  if (!fs6.existsSync(manifestPath)) {
+  if (!fs4.existsSync(manifestPath)) {
     return { workspace, state: "legacy-missing-manifest", category: "legacy", healthy: false, schemaVersion: null, detectedSchema: "missing-manifest", source };
   }
   let manifest;
   try {
-    manifest = readJsonStrict(manifestPath, ".dove/manifest.json");
+    manifest = readJsonStrict2(manifestPath, ".dove/manifest.json");
   } catch (error) {
     return { workspace, state: "malformed-manifest", category: "invalid", healthy: false, schemaVersion: null, detectedSchema: "malformed", source, error: error instanceof Error ? error.message : String(error) };
   }
@@ -1574,28 +1365,28 @@ function inspectDoveWorkspace(root) {
     const problems = [
       ...MINIMAL_WORKSPACE_DIRECTORIES.map((relativePath) => requiredPathProblem(workspace, relativePath, "directory")),
       ...MINIMAL_WORKSPACE_REQUIRED_FILES.map((relativePath) => requiredPathProblem(workspace, relativePath, "file")),
-      ...CURRENT_SCHEMA_FORBIDDEN_LEGACY_PATHS.filter((relativePath) => fs6.existsSync(path6.join(workspace, relativePath))).map((relativePath) => `${relativePath} is a retained legacy artifact and must not coexist with current schema ${DOVE_WORKSPACE_SCHEMA_VERSION}`)
+      ...CURRENT_SCHEMA_FORBIDDEN_LEGACY_PATHS.filter((relativePath) => fs4.existsSync(path6.join(workspace, relativePath))).map((relativePath) => `${relativePath} is a retained legacy artifact and must not coexist with current schema ${DOVE_WORKSPACE_SCHEMA_VERSION}`)
     ].filter(Boolean);
     if (problems.length > 0) throw new Error(`Dove schema declaration contradicts required layout: ${problems.join("; ")}.`);
-    const project = validateDoveProject(readJsonStrict(path6.join(doveRoot, "project.json"), ".dove/project.json"), manifest);
-    validateOwnershipShape(readJsonStrict(path6.join(doveRoot, "artifacts", "ownership.json"), ".dove/artifacts/ownership.json"), "Artifact ownership index", manifest);
-    validateOwnershipShape(readJsonStrict(path6.join(doveRoot, "artifacts", "lineage.json"), ".dove/artifacts/lineage.json"), "Artifact lineage index", manifest, true);
-    const missions = new Map(validateJsonDirectory(workspace, ".dove/missions", manifest, validateMissionShape).map((mission) => [mission.missionId, mission]));
-    validateJsonDirectory(workspace, ".dove/receipts/execution", manifest, validateReceiptShape);
+    const project = validateDoveProject(readJsonStrict2(path6.join(doveRoot, "project.json"), ".dove/project.json"), manifest);
+    const missionValues = validateJsonDirectory(workspace, ".dove/missions", manifest, validateMissionShape);
+    const missionGraph = validateMissionGraph(missionValues.map((mission) => ({ filename: `${mission.missionId}.json`, mission })));
+    const missions = missionGraph.missions;
+    const receiptLedger = readExecutionReceiptLedger(workspace, { manifest, missions });
     const lessonsDirectory = path6.join(workspace, ".dove/lessons");
     if (pathExistsNoFollow(lessonsDirectory)) {
-      const stat = fs6.lstatSync(lessonsDirectory);
+      const stat = fs4.lstatSync(lessonsDirectory);
       if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(".dove/lessons must be a real directory when present.");
       const lessons = new Map(validateJsonDirectory(workspace, ".dove/lessons", manifest, validateLessonShape, { missions }).map((lesson) => [lesson.lessonId, lesson]));
       validateLessonSupersession(lessons);
     }
     for (const relativeDirectory of [".dove/receipts/completion", ".dove/receipts/authority"]) {
-      const entries = fs6.readdirSync(path6.join(workspace, relativeDirectory));
+      const entries = fs4.readdirSync(path6.join(workspace, relativeDirectory));
       if (entries.length > 0) {
         throw new Error(`${relativeDirectory} must remain empty until its sealed schema is introduced.`);
       }
     }
-    return { workspace, state: "current-healthy", category: "current", healthy: true, schemaVersion: version, detectedSchema: String(version), source, manifest, project };
+    return { workspace, state: "current-healthy", category: "current", healthy: true, schemaVersion: version, detectedSchema: String(version), source, manifest, project, missions, receiptLedger };
   } catch (error) {
     return { workspace, state: "current-unhealthy", category: "invalid", healthy: false, schemaVersion: version, detectedSchema: String(version), source, manifest, error: error instanceof Error ? error.message : String(error) };
   }
@@ -1619,8 +1410,8 @@ function openDoveWorkspace(root, options = {}) {
   throw workspaceSchemaError(inspection, options.operation);
 }
 function createMinimalWorkspaceDocuments({ workspaceId, goal, createdAt }) {
-  safeId(workspaceId, "workspaceId");
-  exactIso(createdAt, "createdAt");
+  safeId2(workspaceId, "workspaceId");
+  exactIso2(createdAt, "createdAt");
   if (typeof goal !== "string" || !goal.trim()) throw new Error("Dove init requires a non-empty goal.");
   const manifest = {
     schemaVersion: DOVE_WORKSPACE_SCHEMA_VERSION,
@@ -1638,30 +1429,10 @@ function createMinimalWorkspaceDocuments({ workspaceId, goal, createdAt }) {
     createdAt,
     updatedAt: createdAt
   };
-  return {
-    manifest,
-    project,
-    ownership: { schemaVersion: 1, workspaceId, artifacts: [], updatedAt: null },
-    lineage: { schemaVersion: 1, workspaceId, artifacts: [], updatedAt: null }
-  };
+  return { manifest, project };
 }
 function newWorkspaceId() {
   return `workspace-${crypto2.randomUUID()}`;
-}
-function writeJsonAtomicContent(targetPath, value2, ops) {
-  ops.writeFileSync(targetPath, `${JSON.stringify(value2, null, 2)}
-`, "utf8");
-}
-function materializeMinimalWorkspaceDirectory(directory, documents, options = {}) {
-  const ops = options.fsOps ?? fs6;
-  ops.mkdirSync(directory, { recursive: false });
-  for (const relativePath of MINIMAL_WORKSPACE_DIRECTORIES.map((item) => item.slice(".dove/".length))) {
-    ops.mkdirSync(path6.join(directory, relativePath), { recursive: true });
-  }
-  writeJsonAtomicContent(path6.join(directory, "manifest.json"), documents.manifest, ops);
-  writeJsonAtomicContent(path6.join(directory, "project.json"), documents.project, ops);
-  writeJsonAtomicContent(path6.join(directory, "artifacts", "ownership.json"), documents.ownership, ops);
-  writeJsonAtomicContent(path6.join(directory, "artifacts", "lineage.json"), documents.lineage, ops);
 }
 function archiveTargetFor({ workspace, detectedSchema, treeDigest }) {
   const schemaLabel = String(detectedSchema ?? "invalid").replace(/[^a-z0-9._-]+/giu, "-").toLowerCase();
@@ -1669,168 +1440,695 @@ function archiveTargetFor({ workspace, detectedSchema, treeDigest }) {
 }
 
 // src/core/artifact-lineage.mjs
-var ARTIFACT_OWNERSHIP_SCHEMA_VERSION = 1;
-var ARTIFACT_LINEAGE_SCHEMA_VERSION = 1;
-var OWNERSHIP_FIELDS = /* @__PURE__ */ new Set(["schemaVersion", "workspaceId", "artifacts", "updatedAt"]);
-var LINEAGE_FIELDS = /* @__PURE__ */ new Set(["schemaVersion", "workspaceId", "artifacts", "updatedAt"]);
-var OWNERSHIP_ITEM_FIELDS = /* @__PURE__ */ new Set(["path", "kind", "sha256", "missionId", "contractDigest", "receiptId"]);
-var LINEAGE_ITEM_FIELDS2 = /* @__PURE__ */ new Set([...OWNERSHIP_ITEM_FIELDS, "derivedReferences"]);
-var HASH_PATTERN = /^[0-9a-f]{64}$/u;
-function createArtifactOwnershipIndex(workspaceId = null) {
-  return {
-    schemaVersion: ARTIFACT_OWNERSHIP_SCHEMA_VERSION,
-    workspaceId,
-    artifacts: [],
-    updatedAt: null
-  };
-}
-function createArtifactLineageIndex(workspaceId = null) {
-  return {
-    schemaVersion: ARTIFACT_LINEAGE_SCHEMA_VERSION,
-    workspaceId,
-    artifacts: [],
-    updatedAt: null
-  };
-}
-function assertPlainObject2(value2, label) {
-  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) {
-    throw new Error(`${label} must be a plain object.`);
-  }
-}
-function assertAllowedFields(value2, allowed, label) {
-  assertPlainObject2(value2, label);
-  const unknown = Object.keys(value2).filter((field) => !allowed.has(field));
-  if (unknown.length > 0) {
-    throw new Error(`${label} does not accept unknown fields: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
-  }
-}
-function assertString(value2, label) {
-  if (typeof value2 !== "string" || !value2.trim()) throw new Error(`${label} must be a non-empty string.`);
-  return value2.trim();
-}
-function normalizeIndex(value2, { label, schemaVersion, workspaceId, fields, itemFields, lineage = false }) {
-  assertAllowedFields(value2, fields, label);
-  if (value2.schemaVersion !== schemaVersion) {
-    throw new Error(`${label} has an unsupported schemaVersion.`);
-  }
-  if (typeof value2.workspaceId !== "string" || value2.workspaceId !== workspaceId) {
-    throw new Error(`${label}.workspaceId does not match the current manifest workspaceId.`);
-  }
-  if (!Array.isArray(value2.artifacts)) throw new Error(`${label}.artifacts must be an array.`);
-  if (value2.updatedAt !== null && typeof value2.updatedAt !== "string") throw new Error(`${label}.updatedAt must be a string or null.`);
-  const seen = /* @__PURE__ */ new Set();
-  const artifacts = value2.artifacts.map((item, index) => {
-    const itemLabel = `${label}.artifacts[${index}]`;
-    assertAllowedFields(item, itemFields, itemLabel);
-    const normalized = {
-      path: assertString(item.path, `${itemLabel}.path`),
-      kind: assertString(item.kind, `${itemLabel}.kind`),
-      sha256: assertString(item.sha256, `${itemLabel}.sha256`).toLowerCase(),
-      missionId: assertString(item.missionId, `${itemLabel}.missionId`),
-      contractDigest: assertString(item.contractDigest, `${itemLabel}.contractDigest`).toLowerCase(),
-      receiptId: assertString(item.receiptId, `${itemLabel}.receiptId`)
-    };
-    if (!HASH_PATTERN.test(normalized.sha256) || !HASH_PATTERN.test(normalized.contractDigest)) {
-      throw new Error(`${itemLabel} contains an invalid SHA-256 digest.`);
-    }
-    if (seen.has(normalized.path)) throw new Error(`${label}.artifacts contains duplicate path ${normalized.path}.`);
-    seen.add(normalized.path);
-    if (lineage) {
-      if (!Array.isArray(item.derivedReferences) || item.derivedReferences.some((reference) => typeof reference !== "string" || !reference.trim())) {
-        throw new Error(`${itemLabel}.derivedReferences must be an array of non-empty strings.`);
-      }
-      const derivedReferences = item.derivedReferences.map((reference) => reference.trim());
-      if (new Set(derivedReferences).size !== derivedReferences.length) {
-        throw new Error(`${itemLabel}.derivedReferences contains duplicates.`);
-      }
-      normalized.derivedReferences = derivedReferences;
-    }
-    return normalized;
-  });
-  return { schemaVersion, workspaceId, artifacts, updatedAt: value2.updatedAt };
+function readArtifactLedger(root) {
+  const workspace = openDoveWorkspace(root, { operation: "Artifact receipt ledger read" });
+  return workspace.receiptLedger;
 }
 function readArtifactOwnership(root) {
-  const workspace = openDoveWorkspace(root, { operation: "Artifact ownership read" });
-  return normalizeIndex(readJson(root, ARTIFACT_PATHS.artifactOwnership, () => createArtifactOwnershipIndex(workspace.manifest.workspaceId)), {
-    label: "Artifact ownership index",
-    schemaVersion: ARTIFACT_OWNERSHIP_SCHEMA_VERSION,
-    workspaceId: workspace.manifest.workspaceId,
-    fields: OWNERSHIP_FIELDS,
-    itemFields: OWNERSHIP_ITEM_FIELDS
-  });
-}
-function readArtifactLineage(root) {
-  const workspace = openDoveWorkspace(root, { operation: "Artifact lineage read" });
-  return normalizeIndex(readJson(root, ARTIFACT_PATHS.artifactLineage, () => createArtifactLineageIndex(workspace.manifest.workspaceId)), {
-    label: "Artifact lineage index",
-    schemaVersion: ARTIFACT_LINEAGE_SCHEMA_VERSION,
-    workspaceId: workspace.manifest.workspaceId,
-    fields: LINEAGE_FIELDS,
-    itemFields: LINEAGE_ITEM_FIELDS2,
-    lineage: true
-  });
-}
-function mergeOwnedPaths(items, additions) {
-  const next = new Map(items.map((item) => [item.path, item]));
-  for (const item of additions) {
-    const existing = next.get(item.path);
-    if (existing && existing.missionId !== item.missionId) {
-      throw new Error(`Artifact path ${item.path} is already owned by mission ${existing.missionId}; mission ${item.missionId} cannot overwrite it.`);
-    }
-    next.set(item.path, item);
-  }
-  return [...next.values()].sort((left, right) => left.path.localeCompare(right.path));
-}
-function prepareArtifactLineageUpdate(root, receipt) {
-  const timestamp = nowIso();
-  const ownership = readArtifactOwnership(root);
-  const lineage = readArtifactLineage(root);
-  const ownershipItems = receipt.artifacts.map((artifact) => ({
-    path: artifact.path,
-    kind: artifact.kind,
-    sha256: artifact.sha256,
-    missionId: receipt.missionId,
-    contractDigest: receipt.contractDigest,
-    receiptId: receipt.receiptId
-  }));
-  const criterionRefsByArtifact = new Map(receipt.artifacts.map((artifact) => [artifact.path, /* @__PURE__ */ new Set()]));
-  for (const criterion of receipt.criteriaSatisfied) {
-    for (const evidenceRef of criterion.evidenceRefs) {
-      if (!evidenceRef.startsWith("artifact:")) continue;
-      const artifactPath = evidenceRef.slice("artifact:".length);
-      criterionRefsByArtifact.get(artifactPath)?.add(`criterion:${criterion.criterionId}`);
-    }
-  }
-  const lineageItems = ownershipItems.map((item) => ({
-    ...item,
-    derivedReferences: [...criterionRefsByArtifact.get(item.path) ?? []].sort()
-  }));
+  const ledger = readArtifactLedger(root);
   return {
-    ownership: {
-      schemaVersion: ARTIFACT_OWNERSHIP_SCHEMA_VERSION,
-      workspaceId: ownership.workspaceId,
-      artifacts: mergeOwnedPaths(ownership.artifacts, ownershipItems),
-      updatedAt: timestamp
-    },
-    lineage: {
-      schemaVersion: ARTIFACT_LINEAGE_SCHEMA_VERSION,
-      workspaceId: lineage.workspaceId,
-      artifacts: mergeOwnedPaths(lineage.artifacts, lineageItems),
-      updatedAt: timestamp
-    },
-    ownershipPaths: ownershipItems.map((item) => item.path),
-    lineagePaths: lineageItems.map((item) => item.path)
+    schemaVersion: ledger.schemaVersion,
+    workspaceId: ledger.workspaceId,
+    artifacts: ledger.currentOwnership,
+    updatedAt: ledger.updatedAt
   };
 }
 
 // src/core/mission-contracts.mjs
-import crypto3 from "node:crypto";
+import crypto4 from "node:crypto";
 import fs8 from "node:fs";
+import path10 from "node:path";
+
+// src/core/mutation-backend.mjs
+import { AsyncLocalStorage } from "node:async_hooks";
+import crypto3 from "node:crypto";
+import fs5 from "node:fs";
+import path7 from "node:path";
+var mutationStorage = new AsyncLocalStorage();
+var DIRECT_PROCESS_ROLLBACK_REASON = "direct-process writes are performed by the Dove process, not by host-tracked file edits; native programming-terminal rollback does not track those writes.";
+var PATCH_PLAN_ROLLBACK_ADVICE = "Use mutationMode: patch-plan and apply the returned operations through host-tracked file edits before relying on host rollback.";
+var MAX_CLEANUP_RESIDUES = 20;
+function sha2563(content) {
+  return crypto3.createHash("sha256").update(content).digest("hex");
+}
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+function normalizeMutationMode(value2) {
+  if (value2 === void 0) return "direct-process";
+  if (value2 === "patch-plan" || value2 === "direct-process") return value2;
+  throw new Error("mutationMode must be either patch-plan or direct-process when explicitly provided.");
+}
+function normalizeRelativePath(relativePath) {
+  if (typeof relativePath !== "string" || !relativePath.trim()) {
+    throw new Error("Mutation path must be a non-empty relative path.");
+  }
+  const normalized = path7.posix.normalize(relativePath.replace(/\\/g, "/"));
+  if (path7.isAbsolute(relativePath) || normalized === "." || normalized.startsWith("../") || normalized === "..") {
+    throw new Error(`Mutation path must stay inside the project: ${relativePath}`);
+  }
+  return normalized;
+}
+function classifyScope(relativePath) {
+  if (relativePath === ".dove" || relativePath.startsWith(".dove/")) return ".dove";
+  if (relativePath.startsWith(".opencode/") || relativePath.startsWith(".cursor/") || relativePath.startsWith(".codex/") || relativePath.startsWith(".agents/")) {
+    return "generated-adapter";
+  }
+  return "explicit-external-output";
+}
+function serializeJson(value2) {
+  return `${JSON.stringify(value2, null, 2)}
+`;
+}
+function resultDeclaresWrites(value2) {
+  return Boolean(value2) && typeof value2 === "object" && !Array.isArray(value2) && Array.isArray(value2.writes) && value2.writes.length > 0;
+}
+function readDiskText(root, relativePath, fallback = "") {
+  const fullPath = path7.join(root, relativePath);
+  if (!fs5.existsSync(fullPath)) return fallback;
+  return fs5.readFileSync(fullPath, "utf8");
+}
+function pathType(stat) {
+  if (stat.isFile()) return "file";
+  if (stat.isDirectory()) return "directory";
+  if (stat.isSymbolicLink()) return "symlink";
+  return "other";
+}
+function directoryHash(directory) {
+  const entries = [];
+  const visit = (current, prefix = "") => {
+    for (const entry of fs5.readdirSync(current, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+      const fullPath = path7.join(current, entry.name);
+      const relativePath = prefix ? path7.posix.join(prefix, entry.name) : entry.name;
+      const stat = fs5.lstatSync(fullPath);
+      const type = pathType(stat);
+      const metadata = { path: relativePath, type, mode: stat.mode & 4095 };
+      if (type === "file") entries.push({ ...metadata, sha256: sha2563(fs5.readFileSync(fullPath)) });
+      else if (type === "symlink") entries.push({ ...metadata, target: fs5.readlinkSync(fullPath) });
+      else {
+        entries.push(metadata);
+        if (type === "directory") visit(fullPath, relativePath);
+      }
+    }
+  };
+  visit(directory);
+  return sha2563(JSON.stringify(entries));
+}
+function diskPathState(fullPath) {
+  let stat;
+  try {
+    stat = fs5.lstatSync(fullPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return { exists: false, type: "absent", sha256: null, mode: null };
+    throw error;
+  }
+  const type = pathType(stat);
+  return {
+    exists: true,
+    type,
+    sha256: type === "file" ? sha2563(fs5.readFileSync(fullPath)) : type === "directory" ? directoryHash(fullPath) : type === "symlink" ? sha2563(fs5.readlinkSync(fullPath)) : null,
+    mode: stat.mode & 4095
+  };
+}
+function samePathState(left, right) {
+  return left.exists === right.exists && left.type === right.type && left.sha256 === right.sha256;
+}
+function buildMutationId() {
+  return `mutation-${crypto3.randomUUID()}`;
+}
+function isInside(relativePath, directoryPath) {
+  return relativePath === directoryPath || relativePath.startsWith(`${directoryPath}/`);
+}
+function pathDepth(relativePath) {
+  return relativePath.split("/").length;
+}
+var MutationContext = class {
+  constructor(root, options = {}) {
+    const resolvedRoot = path7.resolve(root);
+    this.root = fs5.realpathSync.native(resolvedRoot);
+    this.id = options.id ?? buildMutationId();
+    this.actionId = options.actionId ?? "unspecified";
+    this.mutationMode = normalizeMutationMode(options.mutationMode);
+    this.mutationModeSource = options.mutationMode === "patch-plan" || options.mutationMode === "direct-process" ? "explicit" : "default";
+    this.hostId = options.hostId ?? "unknown";
+    this.createdAt = options.createdAt ?? (/* @__PURE__ */ new Date()).toISOString();
+    this.fsOps = options.fsOps ?? fs5;
+    this.overlay = /* @__PURE__ */ new Map();
+    this.virtualDirectories = /* @__PURE__ */ new Set();
+    this.preconditions = /* @__PURE__ */ new Map();
+    this.operationsByPath = /* @__PURE__ */ new Map();
+    this.operationOrder = [];
+    this.directoryReplacements = /* @__PURE__ */ new Map();
+    this.commitLocks = /* @__PURE__ */ new Map();
+    this.commitState = { phase: "not-started", rollbackAttempted: false, cleanupFailures: [] };
+    this.lifecycle = "active";
+  }
+  get patchPlanMode() {
+    return this.mutationMode === "patch-plan";
+  }
+  assertActive(operation = "MutationContext operation") {
+    if (this.lifecycle !== "active") throw new Error(`${operation} cannot use a ${this.lifecycle} MutationContext.`);
+  }
+  resolve(relativePath) {
+    this.assertActive("Mutation path resolution");
+    const normalized = normalizeRelativePath(relativePath);
+    return resolveCanonicalContainedWrite(this.root, normalized, { label: "Mutation path" });
+  }
+  replacementFor(relativePath) {
+    return [...this.directoryReplacements.keys()].find((directoryPath) => isInside(relativePath, directoryPath)) ?? null;
+  }
+  recordFirstTouch(normalized, fullPath) {
+    if (!this.preconditions.has(normalized)) this.preconditions.set(normalized, diskPathState(fullPath));
+    return this.preconditions.get(normalized);
+  }
+  fileExists(relativePath) {
+    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
+    if (this.overlay.has(normalized) || this.virtualDirectories.has(normalized)) return true;
+    if (this.replacementFor(normalized)) return false;
+    return fs5.existsSync(fullPath);
+  }
+  readText(relativePath, fallback = "") {
+    const { relativePath: normalized } = this.resolve(relativePath);
+    if (this.overlay.has(normalized)) {
+      const content = this.overlay.get(normalized);
+      return Buffer.isBuffer(content) ? content.toString("utf8") : content;
+    }
+    if (this.replacementFor(normalized)) return fallback;
+    return readDiskText(this.root, normalized, fallback);
+  }
+  readJson(relativePath, fallback) {
+    const text = this.readText(relativePath, null);
+    if (text === null) return typeof fallback === "function" ? fallback() : structuredClone(fallback);
+    return JSON.parse(text);
+  }
+  writeJson(relativePath, value2) {
+    return this.writeText(relativePath, serializeJson(value2), "write-json");
+  }
+  writeJsonIfChanged(relativePath, value2) {
+    const nextContent = serializeJson(value2);
+    const currentContent = this.readText(relativePath, null);
+    if (currentContent === nextContent) return false;
+    this.writeText(relativePath, nextContent, "write-json");
+    return true;
+  }
+  writeText(relativePath, content, kind = "write-text") {
+    return this.writeContent(relativePath, String(content ?? ""), { kind, encoding: "utf8" });
+  }
+  writeBinary(relativePath, content, kind = "write-binary") {
+    if (this.patchPlanMode) throw new Error("Binary mutations require direct-process mode; patch-plan cannot safely represent binary output.");
+    const buffer = Buffer.isBuffer(content) ? Buffer.from(content) : Buffer.from(content);
+    return this.writeContent(relativePath, buffer, { kind, encoding: "binary" });
+  }
+  writeContent(relativePath, content, { kind, encoding }) {
+    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
+    const existing = this.operationsByPath.get(normalized);
+    if (existing?.kind === "ensure-directory") throw new Error(`Mutation path cannot be both a directory and a file: ${normalized}`);
+    const initial = this.recordFirstTouch(normalized, fullPath);
+    if (!this.replacementFor(normalized) && initial.exists && initial.type !== "file") {
+      throw new Error(`Mutation file target must be absent or a regular file: ${normalized}`);
+    }
+    const operation = {
+      operationId: existing?.operationId ?? `op-${crypto3.randomUUID()}`,
+      mutationId: this.id,
+      actionId: this.actionId,
+      relativePath: normalized,
+      kind,
+      encoding,
+      ...encoding === "utf8" ? { content } : { byteLength: content.byteLength },
+      previousExists: initial.exists,
+      previousSha256: initial.sha256,
+      expectedPreviousSha256: initial.sha256,
+      nextSha256: sha2563(content),
+      scope: classifyScope(normalized),
+      rollbackEligibility: this.patchPlanMode ? "host-tracked-file-edits-required" : "dove-caught-failure-restore"
+    };
+    if (!existing) this.operationOrder.push(normalized);
+    this.operationsByPath.set(normalized, operation);
+    this.overlay.set(normalized, content);
+    return operation;
+  }
+  appendText(relativePath, content) {
+    const previous = this.readText(relativePath, "");
+    return this.writeText(relativePath, `${previous}${String(content ?? "")}`, "append-as-write");
+  }
+  requireCommitPrecondition(relativePath) {
+    this.assertActive("Mutation commit precondition registration");
+    if (this.patchPlanMode) return null;
+    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
+    this.recordFirstTouch(normalized, fullPath);
+    return normalized;
+  }
+  requireCommitLock(relativePath, options = {}) {
+    this.assertActive("Mutation commit lock registration");
+    if (this.patchPlanMode) return null;
+    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
+    if (fs5.existsSync(fullPath)) throw new Error(`${options.label ?? "Mutation commit lock"} is already held: ${normalized}.`);
+    this.commitLocks.set(normalized, { relativePath: normalized, fullPath, label: options.label ?? "Mutation commit lock" });
+    return normalized;
+  }
+  ensureFile(relativePath, content) {
+    if (this.fileExists(relativePath)) return false;
+    this.writeText(relativePath, content, "ensure-file");
+    return true;
+  }
+  ensureDirectory(relativePath) {
+    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
+    const existing = this.operationsByPath.get(normalized);
+    if (existing && existing.kind !== "ensure-directory") throw new Error(`Mutation path cannot be both a file and a directory: ${normalized}`);
+    if (this.virtualDirectories.has(normalized)) return false;
+    const initial = this.recordFirstTouch(normalized, fullPath);
+    if (!this.replacementFor(normalized) && initial.exists) {
+      if (initial.type !== "directory") throw new Error(`Mutation directory target must be absent or a real directory: ${normalized}`);
+      return false;
+    }
+    const operation = {
+      operationId: existing?.operationId ?? `op-${crypto3.randomUUID()}`,
+      mutationId: this.id,
+      actionId: this.actionId,
+      relativePath: normalized,
+      kind: "ensure-directory",
+      encoding: null,
+      previousExists: initial.exists,
+      previousSha256: initial.sha256,
+      expectedPreviousSha256: initial.sha256,
+      nextSha256: null,
+      scope: classifyScope(normalized),
+      rollbackEligibility: this.patchPlanMode ? "host-tracked-file-edits-required" : "dove-caught-failure-restore"
+    };
+    if (!existing) this.operationOrder.push(normalized);
+    this.operationsByPath.set(normalized, operation);
+    this.virtualDirectories.add(normalized);
+    return true;
+  }
+  replaceDirectory(relativePath, options = {}) {
+    this.assertActive("Directory replacement");
+    if (this.patchPlanMode) throw new Error("Directory replacement is direct-process only.");
+    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
+    const initial = this.recordFirstTouch(normalized, fullPath);
+    if (initial.exists && initial.type !== "directory") throw new Error(`Directory replacement target must be absent or a real directory: ${normalized}`);
+    let archiveTarget = null;
+    if (options.archiveTarget !== void 0 && options.archiveTarget !== null) {
+      const resolvedArchive = this.resolve(options.archiveTarget);
+      archiveTarget = resolvedArchive.relativePath;
+      const archiveInitial = this.recordFirstTouch(archiveTarget, resolvedArchive.fullPath);
+      if (archiveInitial.exists) throw new Error(`Directory replacement archive target must be absent: ${archiveTarget}`);
+    }
+    this.directoryReplacements.set(normalized, { relativePath: normalized, archiveTarget });
+    this.virtualDirectories.add(normalized);
+  }
+  operations() {
+    return this.operationOrder.map((relativePath) => this.operationsByPath.get(relativePath)).filter(Boolean);
+  }
+  summary(options = {}) {
+    const operations = this.operations();
+    const writesApplied = options.writesApplied ?? (!this.patchPlanMode && operations.length > 0);
+    const cleanupResidues = this.commitState.cleanupFailures.slice(0, MAX_CLEANUP_RESIDUES);
+    return {
+      mutationId: this.id,
+      actionId: this.actionId,
+      mutationMode: this.mutationMode,
+      mutationModeSource: this.mutationModeSource,
+      writesApplied,
+      operationCount: operations.length,
+      paths: operations.map((operation) => operation.relativePath),
+      directoryEffectCount: operations.filter((operation) => operation.kind === "ensure-directory").length,
+      directoryPaths: operations.filter((operation) => operation.kind === "ensure-directory").map((operation) => operation.relativePath),
+      hostRollbackEligible: this.patchPlanMode,
+      hostRollbackIneligibleReason: this.patchPlanMode ? null : DIRECT_PROCESS_ROLLBACK_REASON,
+      recommendedMutationMode: this.patchPlanMode ? null : "patch-plan",
+      rollbackAdvice: this.patchPlanMode ? null : PATCH_PLAN_ROLLBACK_ADVICE,
+      externalWriteCaptureVerified: false,
+      doveRestoreSupported: !this.patchPlanMode,
+      doveRestoreScope: this.patchPlanMode ? null : "caught-commit-failures-only",
+      crashConsistencyGuaranteed: false,
+      transactionState: {
+        phase: this.patchPlanMode ? "planned" : this.commitState.phase,
+        rollbackAttempted: this.commitState.rollbackAttempted,
+        cleanup: {
+          status: this.commitState.cleanupFailures.length === 0 ? "clean" : "residue",
+          residueCount: this.commitState.cleanupFailures.length,
+          residues: cleanupResidues,
+          omittedResidueCount: Math.max(0, this.commitState.cleanupFailures.length - cleanupResidues.length)
+        }
+      }
+    };
+  }
+  revalidatePreconditions() {
+    for (const [relativePath, expected] of this.preconditions) {
+      const { fullPath } = this.resolve(relativePath);
+      const actual = diskPathState(fullPath);
+      if (!samePathState(actual, expected)) {
+        throw new Error(`Mutation commit precondition changed for ${relativePath}: expected ${expected.type}${expected.sha256 ? ` ${expected.sha256}` : ""}, found ${actual.type}${actual.sha256 ? ` ${actual.sha256}` : ""}.`);
+      }
+    }
+  }
+  makeDirectory(directoryPath, createdDirectories) {
+    if (fs5.existsSync(directoryPath)) return;
+    const missing = [];
+    let current = directoryPath;
+    while (current !== this.root && !fs5.existsSync(current)) {
+      missing.push(current);
+      current = path7.dirname(current);
+    }
+    if (current !== this.root) {
+      const relative = path7.relative(this.root, current);
+      if (relative === ".." || relative.startsWith(`..${path7.sep}`)) throw new Error(`Mutation directory escaped the workspace: ${directoryPath}`);
+    }
+    for (const item of missing.reverse()) {
+      this.fsOps.mkdirSync(item, { recursive: false });
+      createdDirectories.push(item);
+    }
+  }
+  stageTransaction(transactionRoot) {
+    const createdDirectories = [];
+    this.fsOps.mkdirSync(transactionRoot, { recursive: false });
+    createdDirectories.push(transactionRoot);
+    const stagedRoot = path7.join(transactionRoot, "staged");
+    const backupsRoot = path7.join(transactionRoot, "backups");
+    this.fsOps.mkdirSync(stagedRoot, { recursive: false });
+    this.fsOps.mkdirSync(backupsRoot, { recursive: false });
+    const replacementStages = /* @__PURE__ */ new Map();
+    let replacementIndex = 0;
+    for (const replacement of this.directoryReplacements.values()) {
+      const stagePath = path7.join(stagedRoot, `directory-${replacementIndex++}`);
+      this.fsOps.mkdirSync(stagePath, { recursive: false });
+      replacementStages.set(replacement.relativePath, stagePath);
+      const directoryOperations = this.operations().filter((operation) => operation.kind === "ensure-directory" && isInside(operation.relativePath, replacement.relativePath));
+      for (const operation of directoryOperations.sort((left, right) => pathDepth(left.relativePath) - pathDepth(right.relativePath))) {
+        if (operation.relativePath === replacement.relativePath) continue;
+        const nested = path7.relative(replacement.relativePath, operation.relativePath);
+        this.fsOps.mkdirSync(path7.join(stagePath, nested), { recursive: true });
+      }
+      const fileOperations = this.operations().filter((operation) => operation.kind !== "ensure-directory" && isInside(operation.relativePath, replacement.relativePath));
+      for (const operation of fileOperations) {
+        const nested = path7.relative(replacement.relativePath, operation.relativePath);
+        const stagedFile = path7.join(stagePath, nested);
+        this.fsOps.mkdirSync(path7.dirname(stagedFile), { recursive: true });
+        const content = this.overlay.get(operation.relativePath);
+        this.fsOps.writeFileSync(stagedFile, content, operation.encoding === "utf8" ? "utf8" : void 0);
+      }
+    }
+    const fileStages = /* @__PURE__ */ new Map();
+    let fileIndex = 0;
+    for (const operation of this.operations()) {
+      if (operation.kind === "ensure-directory" || this.replacementFor(operation.relativePath)) continue;
+      const stagedFile = path7.join(stagedRoot, `file-${fileIndex++}`);
+      const content = this.overlay.get(operation.relativePath);
+      this.fsOps.writeFileSync(stagedFile, content, operation.encoding === "utf8" ? "utf8" : void 0);
+      const initial = this.preconditions.get(operation.relativePath);
+      if (initial?.exists && initial.type === "file" && typeof this.fsOps.chmodSync === "function") this.fsOps.chmodSync(stagedFile, initial.mode);
+      fileStages.set(operation.relativePath, stagedFile);
+    }
+    return { transactionRoot, backupsRoot, replacementStages, fileStages, createdDirectories };
+  }
+  removePath(targetPath) {
+    if (!fs5.existsSync(targetPath)) return;
+    this.fsOps.rmSync(targetPath, { recursive: true, force: true });
+  }
+  rollbackTransaction(transaction, promotions) {
+    const failures = [];
+    const attempt = (callback) => {
+      try {
+        callback();
+      } catch (error) {
+        failures.push(errorMessage(error));
+      }
+    };
+    for (const promotion of [...promotions].reverse()) {
+      if (promotion.promoted) attempt(() => this.removePath(promotion.targetPath));
+      if (promotion.originalLocation) {
+        if (fs5.existsSync(promotion.originalLocation)) attempt(() => this.fsOps.renameSync(promotion.originalLocation, promotion.targetPath));
+      } else if (promotion.backupPath && fs5.existsSync(promotion.backupPath)) {
+        attempt(() => this.fsOps.renameSync(promotion.backupPath, promotion.targetPath));
+      }
+    }
+    for (const directoryPath of [...transaction.createdDirectories].sort((left, right) => right.length - left.length)) {
+      if (directoryPath === transaction.transactionRoot) continue;
+      if (fs5.existsSync(directoryPath)) attempt(() => this.fsOps.rmdirSync(directoryPath));
+    }
+    if (fs5.existsSync(transaction.transactionRoot)) attempt(() => this.fsOps.rmSync(transaction.transactionRoot, { recursive: true, force: true }));
+    if (failures.length > 0) throw new Error(failures.join("; "));
+  }
+  acquireCommitLocks() {
+    const acquired = [];
+    try {
+      for (const lock of this.commitLocks.values()) {
+        let handle;
+        try {
+          handle = this.fsOps.openSync(lock.fullPath, "wx", 384);
+        } catch (error) {
+          if (error?.code === "EEXIST") throw new Error(`${lock.label} is already held: ${lock.relativePath}.`);
+          throw error;
+        }
+        this.fsOps.closeSync(handle);
+        acquired.push(lock);
+      }
+      return acquired;
+    } catch (error) {
+      this.releaseCommitLocks(acquired);
+      throw error;
+    }
+  }
+  releaseCommitLocks(acquired) {
+    const failures = [];
+    for (const lock of [...acquired].reverse()) {
+      try {
+        this.fsOps.unlinkSync(lock.fullPath);
+      } catch (error) {
+        if (error?.code !== "ENOENT") failures.push(errorMessage(error));
+      }
+    }
+    if (failures.length > 0) throw new Error(`Mutation commit lock cleanup failed: ${failures.join("; ")}`);
+  }
+  commitDirect() {
+    const acquiredLocks = this.acquireCommitLocks();
+    let primaryError = null;
+    try {
+      this.commitState.phase = "preparing";
+      this.revalidatePreconditions();
+      if (this.operations().length === 0 && this.directoryReplacements.size === 0) {
+        this.commitState.phase = "committed";
+        return;
+      }
+      const transactionRoot = path7.join(this.root, `.dove-transaction-${this.id.replace(/[^a-z0-9._-]/giu, "-")}`);
+      resolveCanonicalContainedWrite(this.root, path7.relative(this.root, transactionRoot), { label: "Mutation transaction path" });
+      if (fs5.existsSync(transactionRoot)) throw new Error(`Mutation transaction path is already occupied: ${transactionRoot}`);
+      let transaction = { transactionRoot, createdDirectories: [] };
+      const promotions = [];
+      try {
+        transaction = this.stageTransaction(transactionRoot);
+        this.commitState.phase = "promoting";
+        let replacementIndex = 0;
+        for (const replacement of this.directoryReplacements.values()) {
+          const targetPath = path7.join(this.root, replacement.relativePath);
+          const stagePath = transaction.replacementStages.get(replacement.relativePath);
+          const promotion = { targetPath, promoted: false, backupPath: null, originalLocation: null };
+          promotions.push(promotion);
+          if (fs5.existsSync(targetPath)) {
+            const originalLocation = replacement.archiveTarget ? path7.join(this.root, replacement.archiveTarget) : path7.join(transaction.backupsRoot, `directory-${replacementIndex}`);
+            this.makeDirectory(path7.dirname(originalLocation), transaction.createdDirectories);
+            this.fsOps.renameSync(targetPath, originalLocation);
+            promotion.originalLocation = originalLocation;
+          }
+          this.makeDirectory(path7.dirname(targetPath), transaction.createdDirectories);
+          this.fsOps.renameSync(stagePath, targetPath);
+          promotion.promoted = true;
+          replacementIndex += 1;
+        }
+        for (const operation of this.operations().filter((item) => item.kind === "ensure-directory" && !this.replacementFor(item.relativePath)).sort((left, right) => pathDepth(left.relativePath) - pathDepth(right.relativePath))) {
+          this.makeDirectory(path7.join(this.root, operation.relativePath), transaction.createdDirectories);
+        }
+        let fileIndex = 0;
+        for (const operation of this.operations()) {
+          if (operation.kind === "ensure-directory" || this.replacementFor(operation.relativePath)) continue;
+          const targetPath = path7.join(this.root, operation.relativePath);
+          const stagedPath = transaction.fileStages.get(operation.relativePath);
+          const promotion = { targetPath, promoted: false, backupPath: null, originalLocation: null };
+          promotions.push(promotion);
+          this.makeDirectory(path7.dirname(targetPath), transaction.createdDirectories);
+          if (fs5.existsSync(targetPath)) {
+            const backupPath = path7.join(transaction.backupsRoot, `file-${fileIndex}`);
+            this.fsOps.renameSync(targetPath, backupPath);
+            promotion.backupPath = backupPath;
+          }
+          this.fsOps.renameSync(stagedPath, targetPath);
+          promotion.promoted = true;
+          fileIndex += 1;
+        }
+      } catch (error) {
+        this.commitState.phase = "rolling-back";
+        this.commitState.rollbackAttempted = true;
+        try {
+          this.rollbackTransaction(transaction, promotions);
+          this.commitState.phase = "rolled-back";
+        } catch (rollbackError) {
+          this.commitState.phase = "rollback-failed";
+          throw new Error(`Dove mutation commit failed and rollback also failed: ${errorMessage(error)}; rollback: ${errorMessage(rollbackError)}`, { cause: error });
+        }
+        throw new Error(`Dove mutation commit failed and all staged changes were rolled back: ${errorMessage(error)}`, { cause: error });
+      }
+      this.commitState.phase = "committed";
+      try {
+        this.fsOps.rmSync(transactionRoot, { recursive: true, force: true });
+      } catch (cleanupError) {
+        this.commitState.cleanupFailures.push({ path: transactionRoot, reason: errorMessage(cleanupError) });
+      }
+    } catch (error) {
+      primaryError = error;
+      throw error;
+    } finally {
+      try {
+        this.releaseCommitLocks(acquiredLocks);
+      } catch (cleanupError) {
+        if (!primaryError && this.commitState.phase === "committed") {
+          this.commitState.cleanupFailures.push({ path: "commit-locks", reason: errorMessage(cleanupError) });
+        }
+      }
+    }
+  }
+  finish(result = {}) {
+    this.assertActive("MutationContext finish");
+    const operations = this.operations();
+    if (!this.patchPlanMode) this.commitDirect();
+    const writesApplied = !this.patchPlanMode && (operations.length > 0 || this.directoryReplacements.size > 0 || resultDeclaresWrites(result));
+    const directRestoreSupported = !this.patchPlanMode;
+    const metadata = {
+      mutationId: this.id,
+      mutationMode: this.mutationMode,
+      mutationModeSource: this.mutationModeSource,
+      writesApplied,
+      hostRollbackEligible: this.patchPlanMode,
+      hostTrackedFileEditsRequired: this.patchPlanMode,
+      directProcessWritesAreRollbackSafe: directRestoreSupported,
+      externalWriteCaptureVerified: false,
+      doveRestoreSupported: directRestoreSupported,
+      doveRestoreScope: directRestoreSupported ? "caught-commit-failures-only" : null,
+      crashConsistencyGuaranteed: false,
+      hostRollbackIneligibleReason: this.patchPlanMode ? null : DIRECT_PROCESS_ROLLBACK_REASON,
+      recommendedMutationMode: this.patchPlanMode ? null : "patch-plan",
+      rollbackAdvice: this.patchPlanMode ? null : PATCH_PLAN_ROLLBACK_ADVICE,
+      mutationSummary: this.summary({ writesApplied })
+    };
+    if (this.patchPlanMode) {
+      metadata.mutationPlan = {
+        presentation: "dove-mutation-plan",
+        mutationId: this.id,
+        actionId: this.actionId,
+        hostId: this.hostId,
+        workspaceRealpath: fs5.realpathSync.native(this.root),
+        mutationModeSource: this.mutationModeSource,
+        createdAt: this.createdAt,
+        writesApplied: false,
+        hostTrackedFileEditsRequired: true,
+        directProcessWritesAreRollbackSafe: false,
+        externalWriteCaptureVerified: false,
+        doveRestoreSupported: false,
+        doveRestoreScope: null,
+        crashConsistencyGuaranteed: false,
+        operations
+      };
+    }
+    this.lifecycle = "finished";
+    if (result && typeof result === "object" && !Array.isArray(result)) return { ...result, ...metadata };
+    return { result, ...metadata };
+  }
+  abort() {
+    if (this.lifecycle === "active") this.lifecycle = "aborted";
+  }
+};
+function createMutationContext(root, options = {}) {
+  return new MutationContext(root, options);
+}
+function runWithMutationContext(root, options, callback) {
+  const context = createMutationContext(root, options);
+  return mutationStorage.run(context, () => {
+    try {
+      const result = callback(context);
+      if (result && typeof result.then === "function") {
+        return result.then(
+          (resolved) => context.finish(resolved),
+          (error) => {
+            context.abort();
+            throw error;
+          }
+        );
+      }
+      return context.finish(result);
+    } catch (error) {
+      context.abort();
+      throw error;
+    }
+  });
+}
+function currentMutationContext(root) {
+  const context = mutationStorage.getStore();
+  if (!context || context.lifecycle !== "active") return null;
+  if (root) {
+    try {
+      if (fs5.realpathSync.native(path7.resolve(root)) !== context.root) return null;
+    } catch {
+      return null;
+    }
+  }
+  return context;
+}
+function isPatchPlanMode(root) {
+  return currentMutationContext(root)?.patchPlanMode === true;
+}
+
+// src/core/workspace.mjs
+import fs6 from "node:fs";
 import path8 from "node:path";
+function nowIso() {
+  return (/* @__PURE__ */ new Date()).toISOString();
+}
+function resolvePath(root, relativePath) {
+  return path8.join(root, relativePath);
+}
+function cloneFallback(fallback) {
+  return typeof fallback === "function" ? fallback() : structuredClone(fallback);
+}
+function requireMutationContext(root, operation) {
+  const context = currentMutationContext(root);
+  if (!context) throw new Error(`${operation} requires an active MutationContext.`);
+  return context;
+}
+function readJson(root, relativePath, fallback) {
+  const context = currentMutationContext(root);
+  if (context) return context.readJson(relativePath, fallback);
+  const fullPath = resolvePath(root, relativePath);
+  if (!fs6.existsSync(fullPath)) return cloneFallback(fallback);
+  try {
+    return JSON.parse(fs6.readFileSync(fullPath, "utf8"));
+  } catch (error) {
+    throw new Error(`Malformed JSON in ${relativePath}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+function writeJson(root, relativePath, value2) {
+  return requireMutationContext(root, "writeJson").writeJson(relativePath, value2);
+}
+function writeText(root, relativePath, content) {
+  return requireMutationContext(root, "writeText").writeText(relativePath, content);
+}
+function assertGovernanceMutationRegistered(actionId, expectedMode) {
+  const guarded = new Set(GOVERNANCE_GUARDED_MUTATIONS.map((entry) => entry.id));
+  const exempt = new Map(GOVERNANCE_EXEMPT_MUTATIONS.map((entry) => [entry.id, entry]));
+  if (expectedMode === "guarded") {
+    if (!guarded.has(actionId)) throw new Error(`Governance registry missing guarded mutation entry: ${actionId}`);
+    return;
+  }
+  if (expectedMode === "exempt") {
+    const entry = exempt.get(actionId);
+    if (!entry) throw new Error(`Governance registry missing exempt mutation entry: ${actionId}`);
+    if (entry.sunsetAt && entry.sunsetAt <= nowIso()) throw new Error(`Governance exempt entry expired: ${actionId}`);
+    return;
+  }
+  throw new Error(`Unknown governance mutation mode: ${expectedMode}`);
+}
 
 // src/core/workspace-init.mjs
 import fs7 from "node:fs";
-import path7 from "node:path";
+import path9 from "node:path";
 var DOVE_INIT_PROPOSAL_VERSION = 1;
 var INIT_FIELDS = /* @__PURE__ */ new Set([
   "goal",
@@ -1908,8 +2206,8 @@ function proposalEnvelope({ workspace, mutationMode: mutationMode2, workspaceId,
   };
 }
 function assertArchiveTargetSafe(workspace, archiveTarget) {
-  const archiveParent = path7.join(workspace, ".dove-archive");
-  if (path7.dirname(archiveTarget) !== archiveParent) {
+  const archiveParent = path9.join(workspace, ".dove-archive");
+  if (path9.dirname(archiveTarget) !== archiveParent) {
     throw new Error("Dove archive target must be the deterministic workspace-local .dove-archive target.");
   }
   if (!fs7.existsSync(archiveParent)) return;
@@ -1924,7 +2222,7 @@ function proposalOperations(envelope) {
     ...MINIMAL_WORKSPACE_REQUIRED_FILES.map((relativePath) => ({ type: "write-sealed-json", path: relativePath }))
   ];
   return envelope.archiveReset ? [
-    { type: "atomic-directory-rename", from: ".dove", to: path7.relative(envelope.workspace, envelope.archiveTarget).split(path7.sep).join("/") },
+    { type: "atomic-directory-rename", from: ".dove", to: path9.relative(envelope.workspace, envelope.archiveTarget).split(path9.sep).join("/") },
     ...initialize
   ] : initialize;
 }
@@ -1986,7 +2284,7 @@ function mutationMetadata(proposal, writesApplied) {
     mutationMode: proposal.envelope.mutationMode,
     writesApplied,
     paths: writesApplied ? [
-      ...proposal.envelope.archiveReset ? [".dove", path7.relative(proposal.envelope.workspace, proposal.envelope.archiveTarget).split(path7.sep).join("/")] : [],
+      ...proposal.envelope.archiveReset ? [".dove", path9.relative(proposal.envelope.workspace, proposal.envelope.archiveTarget).split(path9.sep).join("/")] : [],
       ...MINIMAL_WORKSPACE_REQUIRED_FILES
     ] : []
   };
@@ -2040,50 +2338,17 @@ function assertExactReplay(proposal, args2) {
     }
   }
 }
-function materializeDoveInitDirect(root, proposal, options = {}) {
-  const ops = options.fsOps ?? fs7;
-  const workspace = proposal.envelope.workspace;
-  const doveRoot = path7.join(workspace, ".dove");
-  if (!proposal.envelope.archiveReset) {
-    try {
-      materializeMinimalWorkspaceDirectory(doveRoot, proposal.documents, { fsOps: ops });
-    } catch (error) {
-      let rollbackError = null;
-      try {
-        if (ops.existsSync(doveRoot)) ops.rmSync(doveRoot, { recursive: true, force: true });
-      } catch (rollbackFailure) {
-        rollbackError = rollbackFailure;
-      }
-      if (rollbackError) {
-        throw new Error(`Dove initialization failed and cleanup also failed: ${error instanceof Error ? error.message : String(error)}; cleanup: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
-      }
-      throw new Error(`Dove initialization failed; no .dove workspace was retained: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    return;
+function stageDoveInitialization(context, proposal) {
+  if (proposal.envelope.archiveReset) {
+    context.replaceDirectory(".dove", {
+      archiveTarget: path9.relative(proposal.envelope.workspace, proposal.envelope.archiveTarget).split(path9.sep).join("/")
+    });
+  } else {
+    context.replaceDirectory(".dove");
   }
-  const archiveTarget = proposal.envelope.archiveTarget;
-  const archiveParent = path7.dirname(archiveTarget);
-  const archiveParentExisted = ops.existsSync(archiveParent);
-  let renamed = false;
-  try {
-    if (!archiveParentExisted) ops.mkdirSync(archiveParent, { recursive: false });
-    ops.renameSync(doveRoot, archiveTarget);
-    renamed = true;
-    materializeMinimalWorkspaceDirectory(doveRoot, proposal.documents, { fsOps: ops });
-  } catch (error) {
-    let rollbackError = null;
-    try {
-      if (renamed && ops.existsSync(doveRoot)) ops.rmSync(doveRoot, { recursive: true, force: true });
-      if (renamed && ops.existsSync(archiveTarget)) ops.renameSync(archiveTarget, doveRoot);
-      if (!archiveParentExisted && ops.existsSync(archiveParent) && ops.readdirSync(archiveParent).length === 0) ops.rmdirSync(archiveParent);
-    } catch (rollbackFailure) {
-      rollbackError = rollbackFailure;
-    }
-    if (rollbackError) {
-      throw new Error(`Dove archive-reset failed and rollback also failed: ${error instanceof Error ? error.message : String(error)}; rollback: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
-    }
-    throw new Error(`Dove archive-reset failed; the original .dove directory was restored: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  for (const relativePath of MINIMAL_WORKSPACE_DIRECTORIES) context.ensureDirectory(relativePath);
+  context.writeJson(".dove/manifest.json", proposal.documents.manifest);
+  context.writeJson(".dove/project.json", proposal.documents.project);
 }
 function initDoveWorkspace(root, args2 = {}, options = {}) {
   assertAllowed(args2);
@@ -2094,13 +2359,11 @@ function initDoveWorkspace(root, args2 = {}, options = {}) {
   if (proposal.envelope.archiveReset && proposal.envelope.mutationMode === "patch-plan") {
     throw new Error("Confirmed Dove archive-reset cannot claim patch-plan writes: the required atomic directory rename and rollback are direct-process only.");
   }
+  const context = currentMutationContext(root);
   if (proposal.envelope.mutationMode === "patch-plan") {
-    const context = currentMutationContext(root);
     for (const relativePath of MINIMAL_WORKSPACE_DIRECTORIES) context.ensureDirectory(relativePath);
     context.writeJson(".dove/manifest.json", proposal.documents.manifest);
     context.writeJson(".dove/project.json", proposal.documents.project);
-    context.writeJson(".dove/artifacts/ownership.json", proposal.documents.ownership);
-    context.writeJson(".dove/artifacts/lineage.json", proposal.documents.lineage);
     return {
       status: "initialization-planned",
       kind: "init",
@@ -2111,13 +2374,12 @@ function initDoveWorkspace(root, args2 = {}, options = {}) {
       writes: []
     };
   }
-  materializeDoveInitDirect(root, proposal, options);
-  const opened = openDoveWorkspace(root, { operation: "confirmed Dove init" });
+  stageDoveInitialization(context, proposal);
   return {
     status: proposal.envelope.archiveReset ? "archive-reset-complete" : "initialized",
     kind: proposal.envelope.archiveReset ? "archive-reset" : "init",
-    manifest: opened.manifest,
-    project: opened.project,
+    manifest: proposal.documents.manifest,
+    project: proposal.documents.project,
     archiveTarget: proposal.envelope.archiveTarget,
     mutation: mutationMetadata(proposal, true),
     writes: MINIMAL_WORKSPACE_REQUIRED_FILES
@@ -2125,10 +2387,7 @@ function initDoveWorkspace(root, args2 = {}, options = {}) {
 }
 
 // src/core/mission-contracts.mjs
-var MISSION_CONTRACT_SCHEMA_VERSION = 1;
 var MISSION_PROPOSAL_VERSION = 1;
-var MISSION_CRITERION_ID_VERSION = 1;
-var MISSION_EVIDENCE_REQUIREMENT_ID_VERSION = 1;
 var MISSION_CONTRACT_ARRAY_FIELDS = [
   "scope",
   "outOfScope",
@@ -2169,8 +2428,8 @@ var PERSISTED_MISSION_FIELDS = /* @__PURE__ */ new Set([
 ]);
 var TYPED_EVIDENCE_REQUIREMENT_PATTERN = /^(artifact|validation|source|note):(.+)$/u;
 var INIT_INPUT_FIELDS = /* @__PURE__ */ new Set(["goal", "archiveReset", "confirmed", "proposalVersion", "proposalWorkspace", "proposalDigest", "mutationMode", "workspaceId", "createdAt", "detectedState", "detectedSchema", "sourceIdentity", "sourceTreeDigest", "archiveTarget"]);
-function sha2563(value2) {
-  return crypto3.createHash("sha256").update(value2).digest("hex");
+function sha2564(value2) {
+  return crypto4.createHash("sha256").update(value2).digest("hex");
 }
 function normalizeString(value2, fallback = null) {
   if (typeof value2 !== "string") {
@@ -2206,7 +2465,7 @@ function canonicalContractPath(rawPath, label) {
     throw new Error(`${label} must not reference advisory-only Dove lessons: ${rawPath}.`);
   }
   if (evidenceRole === "bookkeeping" || evidenceRole === "unsupported") {
-    throw new Error(`${label} must reference a substantive schema 7 artifact or an external project artifact, not Dove bookkeeping: ${rawPath}.`);
+    throw new Error(`${label} must reference a substantive schema 8 artifact or an external project artifact, not Dove bookkeeping: ${rawPath}.`);
   }
   return normalized.normalizedPath;
 }
@@ -2236,35 +2495,21 @@ function assertPlainObject4(value2, label) {
     throw new Error(`${label} must be a plain object.`);
   }
 }
-function assertAllowedFields2(args2, allowed, label) {
+function assertAllowedFields(args2, allowed, label) {
   assertPlainObject4(args2, `${label} arguments`);
   const unknown = Object.keys(args2).filter((field) => !allowed.has(field));
   if (unknown.length > 0) {
     throw new Error(`${label} does not accept unknown input: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
   }
 }
-function stableMissionValue(value2) {
-  if (Array.isArray(value2)) {
-    return value2.map(stableMissionValue);
-  }
-  if (value2 && typeof value2 === "object") {
-    return Object.fromEntries(
-      Object.entries(value2).filter(([, item]) => item !== void 0).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, stableMissionValue(item)])
-    );
-  }
-  return value2;
-}
-function stableMissionSerialize(value2) {
-  return JSON.stringify(stableMissionValue(value2));
-}
 function canonicalWorkspace(root) {
-  return fs8.realpathSync.native(path8.resolve(root));
+  return fs8.realpathSync.native(path10.resolve(root));
 }
 function slugify(value2) {
   return String(value2 ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "mission";
 }
 function normalizeMissionId(value2, goal) {
-  const fallback = `mission-${slugify(goal)}-${sha2563(goal).slice(0, 10)}`;
+  const fallback = `mission-${slugify(goal)}-${sha2564(goal).slice(0, 10)}`;
   const missionId = normalizeString(value2, fallback);
   if (!/^[a-z0-9][a-z0-9._-]{0,127}$/u.test(missionId)) {
     throw new Error("missionId must start with a lowercase letter or digit and contain only lowercase letters, digits, dot, underscore, or hyphen.");
@@ -2295,39 +2540,6 @@ function missionContractContent(args2 = {}) {
     content.supersedesMissionId = supersedesMissionId;
   }
   return content;
-}
-function missionCompletionCriterionId(_index, criterion) {
-  return `criterion-${sha2563(stableMissionSerialize({
-    version: MISSION_CRITERION_ID_VERSION,
-    criterion
-  })).slice(0, 16)}`;
-}
-function missionEvidenceRequirementId(_index, requirement) {
-  return `evidence-${sha2563(stableMissionSerialize({
-    version: MISSION_EVIDENCE_REQUIREMENT_ID_VERSION,
-    requirement
-  })).slice(0, 16)}`;
-}
-function missionCompletionCriteria(content = {}) {
-  return (Array.isArray(content.completionCriteria) ? content.completionCriteria : []).map((criterion, index) => ({
-    criterionId: missionCompletionCriterionId(index, criterion),
-    criterion
-  }));
-}
-function missionEvidenceRequirements(content = {}) {
-  return (Array.isArray(content.evidenceRequirements) ? content.evidenceRequirements : []).map((requirement, index) => ({
-    requirementId: missionEvidenceRequirementId(index, requirement),
-    requirement
-  }));
-}
-function contractDigestFor(missionId, content) {
-  return sha2563(stableMissionSerialize({
-    schemaVersion: MISSION_CONTRACT_SCHEMA_VERSION,
-    missionId,
-    ...content,
-    completionCriterionIds: missionCompletionCriteria(content).map(({ criterionId }) => criterionId),
-    evidenceRequirementIds: missionEvidenceRequirements(content).map(({ requirementId }) => requirementId)
-  }));
 }
 function currentMissionContractMetadata(mission = {}) {
   assertPlainObject4(mission, "Mission contract");
@@ -2364,7 +2576,7 @@ function currentMissionContractMetadata(mission = {}) {
   return {
     missionId,
     content,
-    contractDigest: contractDigestFor(missionId, content),
+    contractDigest: missionContractDigest(missionId, content),
     completionCriterionIds,
     evidenceRequirementIds
   };
@@ -2383,11 +2595,11 @@ function assertCurrentMissionContract(mission = {}) {
   return current;
 }
 function missionPath(missionId) {
-  return path8.posix.join(ARTIFACT_PATHS.missionsDir, `${missionId}.json`);
+  return path10.posix.join(ARTIFACT_PATHS.missionsDir, `${missionId}.json`);
 }
 function fileExists(root, relativePath) {
   const context = currentMutationContext(root);
-  return context ? context.fileExists(relativePath) : fs8.existsSync(path8.join(root, relativePath));
+  return context ? context.fileExists(relativePath) : fs8.existsSync(path10.join(root, relativePath));
 }
 function projectIdentitySnapshot(root, workspace, args2 = {}, mutationMode2 = "direct-process") {
   const inspection = inspectDoveWorkspace(root);
@@ -2437,24 +2649,24 @@ function fileArtifactIdentity(relativePath, fullPath, stat) {
     sizeBytes: String(stat.size),
     ctimeNs: String(stat.ctimeNs),
     mtimeNs: String(stat.mtimeNs),
-    sha256: sha2563(fs8.readFileSync(fullPath))
+    sha256: sha2564(fs8.readFileSync(fullPath))
   };
 }
 function directoryArtifactIdentity(relativePath, fullPath) {
   const entries = [];
   const visit = (directoryPath, directoryRelativePath) => {
     for (const entry of fs8.readdirSync(directoryPath, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
-      const entryPath = path8.join(directoryPath, entry.name);
-      const entryRelativePath = path8.posix.join(directoryRelativePath, entry.name);
+      const entryPath = path10.join(directoryPath, entry.name);
+      const entryRelativePath = path10.posix.join(directoryRelativePath, entry.name);
       const stat = fs8.lstatSync(entryPath, { bigint: true });
       const metadata = { path: entryRelativePath, mode: Number(stat.mode), ctimeNs: String(stat.ctimeNs), mtimeNs: String(stat.mtimeNs) };
       if (stat.isSymbolicLink()) {
-        throw new Error(`Mission target artifact directories must not contain symbolic links: ${path8.posix.join(relativePath, entryRelativePath)}.`);
+        throw new Error(`Mission target artifact directories must not contain symbolic links: ${path10.posix.join(relativePath, entryRelativePath)}.`);
       } else if (stat.isDirectory()) {
         entries.push({ ...metadata, kind: "directory" });
         visit(entryPath, entryRelativePath);
       } else if (stat.isFile()) {
-        entries.push({ ...metadata, kind: "file", sizeBytes: String(stat.size), sha256: sha2563(fs8.readFileSync(entryPath)) });
+        entries.push({ ...metadata, kind: "file", sizeBytes: String(stat.size), sha256: sha2564(fs8.readFileSync(entryPath)) });
       } else {
         entries.push({ ...metadata, kind: "other", sizeBytes: String(stat.size) });
       }
@@ -2467,7 +2679,7 @@ function directoryArtifactIdentity(relativePath, fullPath) {
     kind: "directory",
     mode: Number(fs8.lstatSync(fullPath, { bigint: true }).mode),
     entryCount: entries.length,
-    treeDigest: sha2563(stableMissionSerialize(entries))
+    treeDigest: sha2564(stableMissionSerialize(entries))
   };
 }
 function artifactIdentity(root, rawPath) {
@@ -2479,7 +2691,7 @@ function artifactIdentity(root, rawPath) {
   if (relativePath === ".dove-archive" || relativePath.startsWith(".dove-archive/")) {
     throw new Error("Mission target artifacts must not include preserved .dove-archive state.");
   }
-  const fullPath = path8.join(root, relativePath);
+  const fullPath = path10.join(root, relativePath);
   if (!fs8.existsSync(fullPath)) {
     resolveCanonicalContainedWrite(root, relativePath, { label: "Mission target artifact path" });
     return { path: relativePath, exists: false };
@@ -2521,11 +2733,18 @@ function missionMutationMode(root, args2 = {}) {
 function hasConfirmation(args2 = {}) {
   return args2.confirmed === true;
 }
+function validateProposedMissionGraph(root, projectIdentity, mission) {
+  const existing = projectIdentity.required ? [] : [...openDoveWorkspace(root, { operation: "Dove mission graph validation" }).missions.values()];
+  validateMissionGraph([
+    ...existing.map((item) => ({ filename: `${item.missionId}.json`, mission: item })),
+    { filename: `${mission.missionId}.json`, mission }
+  ]);
+}
 function buildMissionProposal(root, args2 = {}) {
   const workspace = canonicalWorkspace(root);
   const content = missionContractContent(args2);
   const missionId = normalizeMissionId(args2.missionId, content.goal);
-  const contractDigest = contractDigestFor(missionId, content);
+  const contractDigest = missionContractDigest(missionId, content);
   const mutationMode2 = missionMutationMode(root, args2);
   const projectIdentity = projectIdentitySnapshot(root, workspace, {
     goal: content.goal,
@@ -2549,6 +2768,7 @@ function buildMissionProposal(root, args2 = {}) {
     completionCriterionIds: missionCompletionCriteria(content).map(({ criterionId }) => criterionId),
     evidenceRequirementIds: missionEvidenceRequirements(content).map(({ requirementId }) => requirementId)
   };
+  validateProposedMissionGraph(root, projectIdentity, mission);
   const envelope = {
     proposalVersion: MISSION_PROPOSAL_VERSION,
     workspace,
@@ -2562,7 +2782,7 @@ function buildMissionProposal(root, args2 = {}) {
     targetArtifactIdentities: targetIdentities,
     mission
   };
-  const proposalDigest = sha2563(stableMissionSerialize(envelope));
+  const proposalDigest = sha2564(stableMissionSerialize(envelope));
   return {
     workspace,
     mutationMode: mutationMode2,
@@ -2588,6 +2808,7 @@ function confirmArgsFor(proposal) {
   };
 }
 function confirmationMetadata(proposal) {
+  const confirmArgs2 = confirmArgsFor(proposal);
   return {
     required: true,
     proposalVersion: MISSION_PROPOSAL_VERSION,
@@ -2597,7 +2818,24 @@ function confirmationMetadata(proposal) {
     trustBoundary: "trusted-local-exact-replay-data",
     proofOfHumanApproval: false,
     tamperProof: false,
-    confirmArgs: confirmArgsFor(proposal)
+    confirmArgs: confirmArgs2,
+    proposalToken: Buffer.from(JSON.stringify({ version: MISSION_PROPOSAL_VERSION, mutationMode: proposal.mutationMode, confirmArgs: confirmArgs2 }), "utf8").toString("base64url")
+  };
+}
+function executionHandoff(mission) {
+  return {
+    missionId: mission.missionId,
+    contractDigest: mission.contractDigest,
+    targetArtifacts: mission.targetArtifacts,
+    expectedArtifacts: mission.expectedArtifacts,
+    completionCriteria: missionCompletionCriteria(mission),
+    evidenceRequirements: missionEvidenceRequirements(mission),
+    receiptCliTemplate: 'node ./bin/dove-package.mjs receipt . --input "<receipt.json>" --mutation-mode direct-process --json',
+    mcpTools: {
+      ingest: "ingest_execution_receipt",
+      assess: "assess_mission_completion"
+    },
+    persisted: false
   };
 }
 function missionMutationMetadata(proposal, applied) {
@@ -2607,9 +2845,7 @@ function missionMutationMetadata(proposal, applied) {
     paths: applied ? [
       ...proposal.projectIdentity.required ? [
         ARTIFACT_PATHS.doveRootManifest,
-        ARTIFACT_PATHS.projectIdentity,
-        ARTIFACT_PATHS.artifactOwnership,
-        ARTIFACT_PATHS.artifactLineage
+        ARTIFACT_PATHS.projectIdentity
       ] : [],
       missionPath(proposal.mission.missionId)
     ] : []
@@ -2660,7 +2896,7 @@ function persistedMission(proposal) {
 }
 function createDoveMission(root, args2 = {}) {
   assertGovernanceMutationRegistered("create-dove-mission", "guarded");
-  assertAllowedFields2(args2, /* @__PURE__ */ new Set([...MISSION_CONTRACT_INPUT_FIELDS, ...MISSION_REPLAY_CONTROL_FIELDS]), "create_dove_mission");
+  assertAllowedFields(args2, /* @__PURE__ */ new Set([...MISSION_CONTRACT_INPUT_FIELDS, ...MISSION_REPLAY_CONTROL_FIELDS]), "create_dove_mission");
   const confirmed = hasConfirmation(args2);
   const proposal = buildMissionProposal(root, args2);
   if (!confirmed) {
@@ -2676,47 +2912,37 @@ function createDoveMission(root, args2 = {}) {
   assertReplayHeader(proposal, args2);
   assertMissionIdAvailable(root, proposal.mission.missionId);
   const mission = persistedMission(proposal);
-  try {
-    materializeProjectIdentity(root, proposal);
-    writeJson(root, missionPath(mission.missionId), mission);
-  } catch (error) {
-    if (proposal.projectIdentity.required && proposal.mutationMode === "direct-process") {
-      try {
-        fs8.rmSync(path8.join(root, ARTIFACT_PATHS.doveRoot), { recursive: true, force: true });
-      } catch (cleanupError) {
-        throw new Error(`First Dove mission materialization failed and cleanup also failed: ${error instanceof Error ? error.message : String(error)}; cleanup: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
-      }
-    }
-    throw error;
-  }
+  materializeProjectIdentity(root, proposal);
+  writeJson(root, missionPath(mission.missionId), mission);
   const plannedOnly = isPatchPlanMode(root);
   return {
     status: plannedOnly ? "materialization-planned" : "materialized",
     mission,
     contractDigest: proposal.contractDigest,
     handoffBrief: proposal.content,
+    executionHandoff: executionHandoff(mission),
     mutation: missionMutationMetadata(proposal, !plannedOnly)
   };
 }
 function initDoveGoal(root, args2 = {}) {
   assertGovernanceMutationRegistered("init-dove-goal", "guarded");
-  assertAllowedFields2(args2, INIT_INPUT_FIELDS, "init_dove_goal");
+  assertAllowedFields(args2, INIT_INPUT_FIELDS, "init_dove_goal");
   return initDoveWorkspace(root, args2);
 }
 
 // src/core/review-artifact-snapshot.mjs
-import crypto4 from "node:crypto";
+import crypto5 from "node:crypto";
 import fs9 from "node:fs";
-import path9 from "node:path";
-var HASH_PATTERN2 = /^[a-f0-9]{64}$/u;
+import path11 from "node:path";
+var HASH_PATTERN = /^[a-f0-9]{64}$/u;
 function sha256Buffer(value2) {
-  return crypto4.createHash("sha256").update(value2).digest("hex");
+  return crypto5.createHash("sha256").update(value2).digest("hex");
 }
 function sha256File(fullPath) {
   return sha256Buffer(fs9.readFileSync(fullPath));
 }
 function stableSnapshotSetHash(snapshots = []) {
-  const canonical = [...snapshots].map(({ path: artifactPath, sizeBytes, sha256: sha2564 }) => ({ path: artifactPath, sizeBytes, sha256: sha2564 })).sort((left, right) => left.path.localeCompare(right.path));
+  const canonical = [...snapshots].map(({ path: artifactPath, sizeBytes, sha256: sha2565 }) => ({ path: artifactPath, sizeBytes, sha256: sha2565 })).sort((left, right) => left.path.localeCompare(right.path));
   return sha256Buffer(`${JSON.stringify(canonical)}
 `);
 }
@@ -2727,9 +2953,9 @@ function canonicalReviewArtifactPath(root, relativePath, label = "review artifac
   if (normalized.normalizedPath !== suppliedPath) throw new Error(`${label} must use a normalized project-relative path.`);
   const inspection = inspectDeclaredPath(root, normalized.normalizedPath, { requireNonEmpty: true, rejectBookkeeping: true });
   if (inspection.status !== "existing") throw new Error(`${label} is not a usable file at ${normalized.normalizedPath}: ${inspection.reason ?? inspection.status}.`);
-  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  if (canonicalPath !== normalized.normalizedPath) throw new Error(`${label} must use its canonical realpath and cannot use an internal alias.`);
-  return canonicalPath;
+  const canonicalPath2 = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  if (canonicalPath2 !== normalized.normalizedPath) throw new Error(`${label} must use its canonical realpath and cannot use an internal alias.`);
+  return canonicalPath2;
 }
 function resolveReviewArtifactSnapshots(root, missionId, relativePaths, label = "reviewed artifacts", options = {}) {
   if (!Array.isArray(relativePaths)) throw new Error(`${label} must be an array of project-relative paths.`);
@@ -2739,20 +2965,20 @@ function resolveReviewArtifactSnapshots(root, missionId, relativePaths, label = 
   const seen = /* @__PURE__ */ new Set();
   for (const [index, relativePath] of relativePaths.entries()) {
     if (typeof relativePath !== "string" || !relativePath.trim()) throw new Error(`${label}[${index}] must be a non-empty path.`);
-    const canonicalPath = canonicalReviewArtifactPath(root, relativePath, `${label}[${index}]`);
-    if (seen.has(canonicalPath)) continue;
-    seen.add(canonicalPath);
-    const owner = ownerByPath.get(canonicalPath);
-    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 7 artifact: ${canonicalPath}.`);
+    const canonicalPath2 = canonicalReviewArtifactPath(root, relativePath, `${label}[${index}]`);
+    if (seen.has(canonicalPath2)) continue;
+    seen.add(canonicalPath2);
+    const owner = ownerByPath.get(canonicalPath2);
+    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 8 artifact: ${canonicalPath2}.`);
     if (owner.missionId !== missionId) throw new Error(`${label}[${index}] belongs to mission ${owner.missionId}, not ${missionId}.`);
-    const inspection = inspectDeclaredPath(root, canonicalPath, { requireNonEmpty: true, rejectBookkeeping: true });
+    const inspection = inspectDeclaredPath(root, canonicalPath2, { requireNonEmpty: true, rejectBookkeeping: true });
     const snapshot = {
-      path: canonicalPath,
+      path: canonicalPath2,
       sizeBytes: inspection.sizeBytes,
-      sha256: sha256File(path9.resolve(root, canonicalPath))
+      sha256: sha256File(path11.resolve(root, canonicalPath2))
     };
     if (options.requireOwnershipCurrent !== false && snapshot.sha256 !== owner.sha256) {
-      throw new Error(`${label}[${index}] has changed since its latest ownership receipt: ${canonicalPath}.`);
+      throw new Error(`${label}[${index}] has changed since its latest ownership receipt: ${canonicalPath2}.`);
     }
     snapshots.push(snapshot);
   }
@@ -2768,7 +2994,7 @@ function normalizeReviewSnapshots(value2, label = "reviewedArtifacts") {
     if (!item || typeof item !== "object" || Array.isArray(item)) return { ok: false, snapshots: [], reason: `${label}[${index}] must be an object` };
     if (Object.keys(item).some((field) => !["path", "sizeBytes", "sha256"].includes(field))) return { ok: false, snapshots: [], reason: `${label}[${index}] has unknown fields` };
     const normalized = normalizeProjectRelativePath(item.path);
-    if (!normalized.ok || normalized.normalizedPath !== item.path || !Number.isSafeInteger(item.sizeBytes) || item.sizeBytes <= 0 || !HASH_PATTERN2.test(String(item.sha256 ?? ""))) {
+    if (!normalized.ok || normalized.normalizedPath !== item.path || !Number.isSafeInteger(item.sizeBytes) || item.sizeBytes <= 0 || !HASH_PATTERN.test(String(item.sha256 ?? ""))) {
       return { ok: false, snapshots: [], reason: `${label}[${index}] is invalid` };
     }
     if (seen.has(item.path)) return { ok: false, snapshots: [], reason: `${label} contains duplicate paths` };
@@ -2790,12 +3016,12 @@ function verifyReviewSnapshotSet(root, preparedSnapshots, expectedSetHash) {
       failures.push(`reviewed-artifact-${inspection.status}:${prepared.path}`);
       continue;
     }
-    const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-    if (inspection.normalizedPath !== prepared.path || canonicalPath !== prepared.path) {
+    const canonicalPath2 = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+    if (inspection.normalizedPath !== prepared.path || canonicalPath2 !== prepared.path) {
       failures.push(`reviewed-artifact-path-changed:${prepared.path}`);
       continue;
     }
-    const current = { path: canonicalPath, sizeBytes: inspection.sizeBytes, sha256: sha256File(path9.resolve(root, canonicalPath)) };
+    const current = { path: canonicalPath2, sizeBytes: inspection.sizeBytes, sha256: sha256File(path11.resolve(root, canonicalPath2)) };
     if (JSON.stringify(current) !== JSON.stringify(prepared)) failures.push(`reviewed-artifact-changed:${prepared.path}`);
   }
   return {
@@ -2807,13 +3033,10 @@ function verifyReviewSnapshotSet(root, preparedSnapshots, expectedSetHash) {
 }
 
 // src/core/domain-artifacts.mjs
-import crypto5 from "node:crypto";
-import fs10 from "node:fs";
-import path10 from "node:path";
-var SAFE_ID2 = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
+var SAFE_ID3 = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 function domainSafeId(value2, label) {
   const normalized = typeof value2 === "string" ? value2.trim() : "";
-  if (!SAFE_ID2.test(normalized)) throw new Error(`${label} must be a safe lowercase identifier.`);
+  if (!SAFE_ID3.test(normalized)) throw new Error(`${label} must be a safe lowercase identifier.`);
   return normalized;
 }
 function domainNonEmptyText(value2, label) {
@@ -2839,13 +3062,13 @@ function domainJson(value2) {
 `;
 }
 function domainSha256(value2) {
-  return crypto5.createHash("sha256").update(value2).digest("hex");
+  return crypto6.createHash("sha256").update(value2).digest("hex");
 }
 function readCurrentMission(root, missionId, operation = "Domain workflow") {
   const workspace = openDoveWorkspace(root, { operation });
   const normalizedMissionId = domainSafeId(missionId, "missionId");
-  const relativePath = path10.posix.join(ARTIFACT_PATHS.missionsDir, `${normalizedMissionId}.json`);
-  const fullPath = path10.resolve(root, relativePath);
+  const relativePath = path12.posix.join(ARTIFACT_PATHS.missionsDir, `${normalizedMissionId}.json`);
+  const fullPath = path12.resolve(root, relativePath);
   if (!fs10.existsSync(fullPath)) throw new Error(`Mission does not exist: ${normalizedMissionId}.`);
   const mission = readJson(root, relativePath, null);
   const current = assertCurrentMissionContract(mission);
@@ -2865,9 +3088,9 @@ function canonicalDomainPath(rawPath, label, requiredPrefix = null) {
 function currentFileHash(root, relativePath, label) {
   const inspection = inspectDeclaredPath(root, relativePath, { requireNonEmpty: true });
   if (inspection.status !== "existing") throw new Error(`${label} must reference an existing non-empty regular file (${inspection.reason ?? inspection.status}).`);
-  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  if (canonicalPath !== relativePath) throw new Error(`${label} must use the canonical realpath-contained path.`);
-  return { path: canonicalPath, sha256: sha256File(path10.resolve(root, canonicalPath)) };
+  const canonicalPath2 = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  if (canonicalPath2 !== relativePath) throw new Error(`${label} must use the canonical realpath-contained path.`);
+  return { path: canonicalPath2, sha256: sha256File(path12.resolve(root, canonicalPath2)) };
 }
 function isDoveLessonArtifactPath(rawPath) {
   const normalized = normalizeProjectRelativePath(rawPath);
@@ -2887,7 +3110,7 @@ function resolveMissionArtifactReferences(root, missionId, references = [], labe
     const artifactPath = canonicalDomainPath(rawPath, `${label}[${index}]`);
     assertNotDoveLessonArtifactPath(artifactPath, `${label}[${index}]`);
     const owner = byPath.get(artifactPath);
-    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 7 artifact: ${artifactPath}.`);
+    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 8 artifact: ${artifactPath}.`);
     if (owner.missionId !== missionId) throw new Error(`${label}[${index}] belongs to mission ${owner.missionId}, not ${missionId}.`);
     const current = currentFileHash(root, artifactPath, `${label}[${index}]`);
     if (current.sha256 !== owner.sha256) throw new Error(`${label}[${index}] has changed since its latest ownership receipt: ${artifactPath}.`);
@@ -2909,7 +3132,7 @@ function normalizeWrite(root, missionId, item, index, options = {}) {
   if (content.byteLength === 0) throw new Error(`domainWrites[${index}].content must be non-empty.`);
   const context = currentMutationContext(root);
   context.resolve(relativePath);
-  if (Buffer.isBuffer(item.content) && isPatchPlanMode(root) && path10.extname(relativePath).toLowerCase() !== ".svg") {
+  if (Buffer.isBuffer(item.content) && isPatchPlanMode(root) && path12.extname(relativePath).toLowerCase() !== ".svg") {
     throw new Error(`domainWrites[${index}] patch-plan cannot safely represent binary artifact ${relativePath}; import PNG, JPEG, or PDF output in direct-process mode.`);
   }
   const derivedReferences = domainStringArray(item.derivedReferences, `domainWrites[${index}].derivedReferences`);
@@ -2923,39 +3146,22 @@ function normalizeWrite(root, missionId, item, index, options = {}) {
     derivedReferences
   };
 }
-function mergeDerivedReferences(lineageUpdate, writes, receipt) {
-  const byPath = new Map(writes.map((item) => [item.path, item.derivedReferences]));
-  const criterionRefs = new Map(receipt.artifacts.map((artifact) => [artifact.path, []]));
-  for (const criterion of receipt.criteriaSatisfied) {
-    for (const reference of criterion.evidenceRefs) {
-      if (!reference.startsWith("artifact:")) continue;
-      const artifactPath = reference.slice("artifact:".length);
-      criterionRefs.get(artifactPath)?.push(`criterion:${criterion.criterionId}`);
-    }
-  }
-  lineageUpdate.lineage.artifacts = lineageUpdate.lineage.artifacts.map((item) => {
-    if (!byPath.has(item.path)) return item;
-    return {
-      ...item,
-      derivedReferences: [.../* @__PURE__ */ new Set([...byPath.get(item.path) ?? [], ...criterionRefs.get(item.path) ?? []])].sort()
-    };
-  });
-  return lineageUpdate;
-}
 function finalizeDomainArtifacts(root, options = {}) {
   const actionId = domainNonEmptyText(options.actionId, "actionId");
   assertGovernanceMutationRegistered(actionId, options.governanceMode ?? "guarded");
   const context = currentMutationContext(root);
   if (!context) throw new Error(`${actionId} requires an active MutationContext.`);
   const { workspace, mission } = readCurrentMission(root, options.missionId, options.operation ?? actionId);
+  context.requireCommitPrecondition(ARTIFACT_PATHS.executionReceiptsDir);
+  context.requireCommitLock(".dove/.receipt-ledger-append.lock", { label: "Execution receipt ledger append lock" });
   if (!Array.isArray(options.writes) || options.writes.length === 0) throw new Error(`${actionId} requires at least one real domain artifact write.`);
   const writes = options.writes.map((item, index) => normalizeWrite(root, mission.missionId, item, index, {
     allowLessonArtifacts: options.allowLessonArtifacts === true && actionId === "record-dove-lesson"
   }));
   const duplicatePath = writes.map((item) => item.path).find((item, index, items) => items.indexOf(item) !== index);
   if (duplicatePath) throw new Error(`${actionId} contains duplicate artifact path ${duplicatePath}.`);
-  const receiptId = `receipt-${actionId}-${crypto5.randomUUID()}`;
-  const receiptPath = path10.posix.join(ARTIFACT_PATHS.executionReceiptsDir, `${receiptId}.json`);
+  const receiptId = options.receiptId === void 0 ? `receipt-${actionId}-${crypto6.randomUUID()}` : domainSafeId(options.receiptId, "receiptId");
+  const receiptPath = path12.posix.join(ARTIFACT_PATHS.executionReceiptsDir, `${receiptId}.json`);
   if (context.fileExists(receiptPath)) throw new Error(`Generated execution receipt id is occupied: ${receiptId}.`);
   const ownershipBeforeWrite = readArtifactOwnership(root);
   const ownerByPath = new Map(ownershipBeforeWrite.artifacts.map((item) => [item.path, item]));
@@ -2966,26 +3172,38 @@ function finalizeDomainArtifacts(root, options = {}) {
     }
     const owner = ownerByPath.get(item.path);
     if (!owner) throw new Error(`${actionId} refuses to overwrite unowned existing artifact ${item.path}.`);
+    const ownerReceipt = workspace.receiptLedger.receipts.find((receipt2) => receipt2.receiptId === owner.receiptId);
+    if (ownerReceipt?.producer?.kind === "dove-internal" && ["prepare-review-exchange", "import-review-exchange"].includes(ownerReceipt.producer.actionId)) {
+      throw new Error(`${actionId} refuses to overwrite immutable review ${ownerReceipt.producer.actionId === "prepare-review-exchange" ? "preparation control" : "import record"} ${item.path}.`);
+    }
     if (owner.missionId !== mission.missionId) throw new Error(`${actionId} refuses to overwrite artifact ${item.path} owned by mission ${owner.missionId}.`);
     const current = currentFileHash(root, item.path, item.path);
     if (current.sha256 !== owner.sha256) throw new Error(`${actionId} refuses to overwrite drifted artifact ${item.path}.`);
   }
-  const artifacts = writes.map(({ path: artifactPath, kind, sha256: sha2564 }) => ({ path: artifactPath, kind, sha256: sha2564 }));
+  const artifacts = writes.map(({ path: artifactPath, kind, sha256: sha2565 }) => ({ path: artifactPath, kind, sha256: sha2565 }));
   const completionEligible = false;
   const criteriaSatisfied = [];
-  const receipt = {
-    schemaVersion: 1,
+  const recordedAt = nowIso();
+  const baseReceipt = {
+    schemaVersion: EXECUTION_RECEIPT_SCHEMA_VERSION,
     workspaceId: workspace.manifest.workspaceId,
     receiptId,
+    ledgerSequence: workspace.receiptLedger.nextLedgerSequence,
     missionId: mission.missionId,
     contractDigest: mission.contractDigest,
     summary: domainNonEmptyText(options.summary, "summary"),
     artifacts,
     validations: [],
     criteriaSatisfied,
-    producedAt: nowIso()
+    producedAt: recordedAt,
+    recordedAt,
+    producer: { kind: "dove-internal", actionId }
   };
-  const lineageUpdate = mergeDerivedReferences(prepareArtifactLineageUpdate(root, receipt), writes, receipt);
+  const receipt = {
+    ...baseReceipt,
+    artifacts: deriveArtifactReferences(baseReceipt, new Map(writes.map((item) => [item.path, item.derivedReferences])))
+  };
+  assertReceiptAppendable(workspace.receiptLedger, receipt);
   for (const item of writes) {
     if (item.encoding === "binary") {
       if (isPatchPlanMode(root)) {
@@ -2996,8 +3214,6 @@ function finalizeDomainArtifacts(root, options = {}) {
     } else writeText(root, item.path, item.content.toString("utf8"));
   }
   writeJson(root, receiptPath, receipt);
-  writeJson(root, ARTIFACT_PATHS.artifactOwnership, lineageUpdate.ownership);
-  writeJson(root, ARTIFACT_PATHS.artifactLineage, lineageUpdate.lineage);
   const plannedOnly = isPatchPlanMode(root);
   return {
     status: plannedOnly ? "planned" : "recorded",
@@ -3009,15 +3225,772 @@ function finalizeDomainArtifacts(root, options = {}) {
     mutation: {
       mutationMode: context.mutationMode,
       writesApplied: !plannedOnly,
-      paths: [...writes.map((item) => item.path), receiptPath, ARTIFACT_PATHS.artifactOwnership, ARTIFACT_PATHS.artifactLineage]
+      paths: [...writes.map((item) => item.path), receiptPath]
     }
   };
 }
 
-// src/core/source-trust.mjs
+// src/core/review-exchange.mjs
+import crypto7 from "node:crypto";
 import fs11 from "node:fs";
-import path11 from "node:path";
-var SOURCE_LIFECYCLE_STATES = Object.freeze(["candidate", "verified", "rejected"]);
+import path13 from "node:path";
+var REVIEW_EXCHANGE_SCHEMA_VERSION = 7;
+var REVIEW_EXCHANGE_POLICIES = Object.freeze([
+  "local-preflight",
+  "isolated-selected-artifacts",
+  "final-plan-results-only",
+  "external"
+]);
+var POLICY_SET = new Set(REVIEW_EXCHANGE_POLICIES);
+var PREPARE_FIELDS = /* @__PURE__ */ new Set(["missionId", "policy", "artifactPaths", "finalPlanPaths", "finalResultPaths"]);
+var IMPORT_FIELDS = /* @__PURE__ */ new Set(["missionId", "exchangeId", "reviewId"]);
+var COVERAGE_FIELDS = /* @__PURE__ */ new Set(["missionId", "artifactPaths", "requireAuthoritative"]);
+var EXPECTED_COVERAGE_FIELDS = /* @__PURE__ */ new Set(["missionId", "expectedSnapshots", "requireAuthoritative"]);
+var REVIEW_VERDICTS = /* @__PURE__ */ new Set(["coherent", "needs-revision", "needs-evidence", "blocked"]);
+var REVIEW_STATUSES = /* @__PURE__ */ new Set(["completed", "blocked", "failed"]);
+var HASH_PATTERN2 = /^[0-9a-f]{64}$/u;
+var INPUT_FIELDS = /* @__PURE__ */ new Set([
+  "schemaVersion",
+  "workspaceId",
+  "missionId",
+  "contractDigest",
+  "exchangeId",
+  "createdAt",
+  "policy",
+  "scopeSha256",
+  "inputBoundary",
+  "preparationReceiptId",
+  "artifactPaths",
+  "finalPlanPaths",
+  "finalResultPaths",
+  "reviewedArtifactPaths",
+  "reviewedArtifacts",
+  "reviewedArtifactSetSha256",
+  "outputContract",
+  "privacyBoundary"
+]);
+var MANIFEST_FIELDS2 = /* @__PURE__ */ new Set([
+  "schemaVersion",
+  "workspaceId",
+  "missionId",
+  "contractDigest",
+  "exchangeId",
+  "status",
+  "createdAt",
+  "policy",
+  "scopeSha256",
+  "inputBoundary",
+  "preparationReceiptId",
+  "inputPath",
+  "inputSha256",
+  "handoffPath",
+  "reportPath",
+  "artifactPaths",
+  "finalPlanPaths",
+  "finalResultPaths",
+  "reviewedArtifactPaths",
+  "reviewedArtifacts",
+  "reviewedArtifactSetSha256"
+]);
+var HANDOFF_FIELDS = /* @__PURE__ */ new Set([
+  "schemaVersion",
+  "workspaceId",
+  "missionId",
+  "contractDigest",
+  "exchangeId",
+  "reviewId",
+  "policy",
+  "scopeSha256",
+  "status",
+  "verdict",
+  "reviewerId",
+  "summary",
+  "inputPath",
+  "inputSha256",
+  "reportPath",
+  "reportSha256",
+  "reviewedArtifactPaths",
+  "findings",
+  "actionItems",
+  "reviewedAt"
+]);
+var FINDING_FIELDS = /* @__PURE__ */ new Set(["findingId", "severity", "summary", "linkedArtifactPaths"]);
+var IMPORTED_REVIEW_FIELDS = /* @__PURE__ */ new Set([
+  "schemaVersion",
+  "workspaceId",
+  "missionId",
+  "contractDigest",
+  "exchangeId",
+  "reviewId",
+  "policy",
+  "scopeSha256",
+  "status",
+  "verdict",
+  "reviewerId",
+  "summary",
+  "reviewedAt",
+  "reviewedArtifactPaths",
+  "reviewedArtifacts",
+  "reviewedArtifactSetSha256",
+  "findings",
+  "actionItems",
+  "preparationReceiptId",
+  "importReceiptId",
+  "exchange",
+  "authority",
+  "privateTranscriptImported"
+]);
+var EXCHANGE_HASH_FIELDS = /* @__PURE__ */ new Set([
+  "manifestPath",
+  "manifestSha256",
+  "inputPath",
+  "inputSha256",
+  "handoffPath",
+  "handoffSha256",
+  "reportPath",
+  "reportSha256",
+  "importedReportPath",
+  "importedReportSha256"
+]);
+var AUTHORITY_FIELDS = /* @__PURE__ */ new Set(["authoritative", "callerMayMintAuthority", "issuer", "reason"]);
+function sealed(value2, fields, label) {
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) throw new Error(`${label} must be a plain object.`);
+  const unknown = Object.keys(value2).filter((field) => !fields.has(field));
+  if (unknown.length > 0) throw new Error(`${label} does not accept unknown fields: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
+  return value2;
+}
+function exchangePath(exchangeId, leaf) {
+  return path13.posix.join(".dove/reviews/exchanges", exchangeId, leaf);
+}
+function importedReviewPath(reviewId) {
+  return path13.posix.join(".dove/reviews", `${reviewId}.json`);
+}
+function importedReportPath(reviewId) {
+  return path13.posix.join(".dove/reviews", `${reviewId}.report.md`);
+}
+function exactTimestamp(value2, label) {
+  const text = domainNonEmptyText(value2, label);
+  const parsed2 = Date.parse(text);
+  if (!Number.isFinite(parsed2) || new Date(parsed2).toISOString() !== text) throw new Error(`${label} must be an exact ISO-8601 timestamp.`);
+  return text;
+}
+function exactHash(value2, label) {
+  const hash3 = String(value2 ?? "");
+  if (!HASH_PATTERN2.test(hash3)) throw new Error(`${label} must be a lowercase SHA-256 hash.`);
+  return hash3;
+}
+function currentCanonicalLeaf(root, relativePath, label) {
+  const inspection = inspectDeclaredPath(root, relativePath, { requireNonEmpty: true });
+  if (inspection.status !== "existing") throw new Error(`${label} must be an existing non-empty regular file (${inspection.reason ?? inspection.status}).`);
+  const canonicalPath2 = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  if (inspection.normalizedPath !== relativePath || canonicalPath2 !== relativePath) throw new Error(`${label} must be the canonical realpath-contained exchange path.`);
+  const content = fs11.readFileSync(path13.resolve(root, canonicalPath2));
+  return { path: canonicalPath2, content, sha256: domainSha256(content) };
+}
+function normalizedPolicy(value2) {
+  const policy = domainNonEmptyText(value2, "policy");
+  if (!POLICY_SET.has(policy)) throw new Error(`policy must be one of: ${REVIEW_EXCHANGE_POLICIES.join(", ")}.`);
+  return policy;
+}
+function normalizePolicyPaths(args2, policy) {
+  const artifactPaths = domainStringArray(args2.artifactPaths, "artifactPaths");
+  const finalPlanPaths = domainStringArray(args2.finalPlanPaths, "finalPlanPaths");
+  const finalResultPaths = domainStringArray(args2.finalResultPaths, "finalResultPaths");
+  if (policy === "final-plan-results-only") {
+    if (artifactPaths.length > 0) throw new Error("final-plan-results-only does not accept artifactPaths outside its final plan and result classes.");
+    if (finalPlanPaths.length === 0 || finalResultPaths.length === 0) throw new Error("final-plan-results-only requires at least one finalPlanPath and one finalResultPath.");
+  } else {
+    if (finalPlanPaths.length > 0 || finalResultPaths.length > 0) throw new Error(`${policy} accepts only artifactPaths.`);
+    if (artifactPaths.length === 0) throw new Error(`${policy} requires at least one artifactPath.`);
+  }
+  return {
+    artifactPaths,
+    finalPlanPaths,
+    finalResultPaths,
+    reviewedArtifactPaths: policy === "final-plan-results-only" ? [...finalPlanPaths, ...finalResultPaths].sort() : artifactPaths
+  };
+}
+function policyInputBoundary(policy) {
+  switch (policy) {
+    case "local-preflight":
+      return "read-only-current-workspace";
+    case "isolated-selected-artifacts":
+      return "selected-artifact-isolation";
+    case "final-plan-results-only":
+      return "classified-final-plan-results";
+    case "external":
+      return "host-mediated-external-review";
+    default:
+      throw new Error(`Unsupported review policy: ${policy}.`);
+  }
+}
+function policyScope(policy, paths) {
+  const value2 = {
+    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
+    policy,
+    inputBoundary: policyInputBoundary(policy),
+    artifactPaths: paths.artifactPaths,
+    finalPlanPaths: paths.finalPlanPaths,
+    finalResultPaths: paths.finalResultPaths,
+    reviewedArtifactPaths: paths.reviewedArtifactPaths
+  };
+  return { value: value2, sha256: domainSha256(`${JSON.stringify(value2)}
+`) };
+}
+function reviewPreflight(root, args2, operation) {
+  const { workspace, mission } = readCurrentMission(root, args2.missionId, operation);
+  const policy = normalizedPolicy(args2.policy);
+  const paths = normalizePolicyPaths(args2, policy);
+  let snapshot;
+  let canonical;
+  if (policy === "final-plan-results-only") {
+    const plans = resolveReviewArtifactSnapshots(root, mission.missionId, paths.finalPlanPaths, "finalPlanPaths");
+    const results = resolveReviewArtifactSnapshots(root, mission.missionId, paths.finalResultPaths, "finalResultPaths");
+    const finalPlanPaths = plans.reviewedArtifacts.map((item) => item.path);
+    const finalResultPaths = results.reviewedArtifacts.map((item) => item.path);
+    if (finalPlanPaths.length !== paths.finalPlanPaths.length || finalResultPaths.length !== paths.finalResultPaths.length || finalPlanPaths.some((item) => finalResultPaths.includes(item))) {
+      throw new Error("final-plan-results-only contains an internal alias or overlap that collapses the exact classified artifact set.");
+    }
+    snapshot = resolveReviewArtifactSnapshots(root, mission.missionId, [...finalPlanPaths, ...finalResultPaths], `${policy} review artifacts`);
+    canonical = { artifactPaths: [], finalPlanPaths, finalResultPaths, reviewedArtifactPaths: snapshot.reviewedArtifacts.map((item) => item.path) };
+  } else {
+    snapshot = resolveReviewArtifactSnapshots(root, mission.missionId, paths.artifactPaths, `${policy} review artifacts`);
+    const artifactPaths = snapshot.reviewedArtifacts.map((item) => item.path);
+    if (artifactPaths.length !== paths.artifactPaths.length) throw new Error(`${policy} contains an internal alias that collapses the exact artifact set.`);
+    canonical = { artifactPaths, finalPlanPaths: [], finalResultPaths: [], reviewedArtifactPaths: artifactPaths };
+  }
+  const scope = policyScope(policy, canonical);
+  return { workspace, mission, policy, paths: canonical, snapshot, scope };
+}
+function newExchangeId(policy) {
+  return domainSafeId(`exchange-${policy}-${crypto7.randomUUID()}`, "exchangeId");
+}
+function preflightResult(prepared) {
+  return {
+    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
+    status: "ready",
+    zeroWrite: true,
+    missionId: prepared.mission.missionId,
+    contractDigest: prepared.mission.contractDigest,
+    policy: prepared.policy,
+    inputBoundary: policyInputBoundary(prepared.policy),
+    scopeSha256: prepared.scope.sha256,
+    artifactPaths: prepared.paths.artifactPaths,
+    finalPlanPaths: prepared.paths.finalPlanPaths,
+    finalResultPaths: prepared.paths.finalResultPaths,
+    reviewedArtifactPaths: prepared.snapshot.reviewedArtifacts.map((item) => item.path),
+    reviewedArtifacts: prepared.snapshot.reviewedArtifacts,
+    reviewedArtifactSetSha256: prepared.snapshot.reviewedArtifactSetSha256,
+    operation: "preflight",
+    nextAction: {
+      command: 'node ./bin/dove-package.mjs review . --mission-id "<mission id>" --policy "<review policy>" --artifact "<artifact path>" --prepare --mutation-mode direct-process --json',
+      mcpTool: "prepare_review_exchange"
+    },
+    authority: { authoritative: false, callerMayMintAuthority: false, reason: "Local preflight is read-only and non-authoritative." }
+  };
+}
+function prepareReviewExchange(root, args2 = {}) {
+  assertSealedDomainArgs(args2, PREPARE_FIELDS, "prepare_review_exchange");
+  const prepared = reviewPreflight(root, args2, "Review exchange preparation");
+  if (prepared.policy === "local-preflight") return preflightResult(prepared);
+  const exchangeId = newExchangeId(prepared.policy);
+  const inputPath = exchangePath(exchangeId, "input.json");
+  const manifestPath = exchangePath(exchangeId, "manifest.json");
+  const handoffPath = exchangePath(exchangeId, "handoff.json");
+  const reportPath = exchangePath(exchangeId, "report.md");
+  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+  const preparationReceiptId = domainSafeId(`receipt-prepare-review-exchange-${crypto7.randomUUID()}`, "preparationReceiptId");
+  const input = {
+    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
+    workspaceId: prepared.workspace.manifest.workspaceId,
+    missionId: prepared.mission.missionId,
+    contractDigest: prepared.mission.contractDigest,
+    exchangeId,
+    createdAt,
+    policy: prepared.policy,
+    inputBoundary: policyInputBoundary(prepared.policy),
+    scopeSha256: prepared.scope.sha256,
+    preparationReceiptId,
+    artifactPaths: prepared.paths.artifactPaths,
+    finalPlanPaths: prepared.paths.finalPlanPaths,
+    finalResultPaths: prepared.paths.finalResultPaths,
+    reviewedArtifactPaths: prepared.snapshot.reviewedArtifacts.map((item) => item.path),
+    reviewedArtifacts: prepared.snapshot.reviewedArtifacts,
+    reviewedArtifactSetSha256: prepared.snapshot.reviewedArtifactSetSha256,
+    outputContract: {
+      handoffPath,
+      reportPath,
+      requiredHandoffFields: [...HANDOFF_FIELDS],
+      actionableReturn: {
+        completedVerdicts: ["coherent", "needs-revision", "needs-evidence"],
+        blockedVerdict: "blocked",
+        findingLinkedArtifactMinimum: 1,
+        actionItemsRequiredFor: ["needs-revision", "needs-evidence"]
+      }
+    },
+    privacyBoundary: {
+      writerPrivateTranscriptShared: false,
+      reviewerPrivateTranscriptShouldReturn: false,
+      undeclaredContextShared: false,
+      acceptedReturnArtifacts: [handoffPath, reportPath]
+    }
+  };
+  const inputContent = domainJson(input);
+  const manifest = {
+    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
+    workspaceId: prepared.workspace.manifest.workspaceId,
+    missionId: prepared.mission.missionId,
+    contractDigest: prepared.mission.contractDigest,
+    exchangeId,
+    status: "prepared",
+    createdAt,
+    policy: prepared.policy,
+    inputBoundary: policyInputBoundary(prepared.policy),
+    scopeSha256: prepared.scope.sha256,
+    preparationReceiptId,
+    inputPath,
+    inputSha256: domainSha256(inputContent),
+    handoffPath,
+    reportPath,
+    artifactPaths: input.artifactPaths,
+    finalPlanPaths: input.finalPlanPaths,
+    finalResultPaths: input.finalResultPaths,
+    reviewedArtifactPaths: input.reviewedArtifactPaths,
+    reviewedArtifacts: input.reviewedArtifacts,
+    reviewedArtifactSetSha256: input.reviewedArtifactSetSha256
+  };
+  const manifestContent = domainJson(manifest);
+  const result = finalizeDomainArtifacts(root, {
+    actionId: "prepare-review-exchange",
+    receiptId: preparationReceiptId,
+    operation: "Review exchange preparation",
+    missionId: prepared.mission.missionId,
+    summary: `Prepared ${prepared.policy} review exchange ${exchangeId}.`,
+    writes: [
+      { path: inputPath, kind: "data", content: inputContent, derivedReferences: input.reviewedArtifactPaths.map((item) => `artifact:${item}`) },
+      { path: manifestPath, kind: "data", content: manifestContent, derivedReferences: [`artifact:${inputPath}`] }
+    ]
+  });
+  return {
+    ...result,
+    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
+    status: result.status === "planned" ? "prepare-planned" : "prepared",
+    exchangeId,
+    policy: prepared.policy,
+    scopeSha256: prepared.scope.sha256,
+    preparationReceiptId,
+    inputPath,
+    inputSha256: manifest.inputSha256,
+    manifestPath,
+    manifestSha256: domainSha256(manifestContent),
+    handoffPath,
+    reportPath,
+    reviewedArtifactPaths: input.reviewedArtifactPaths,
+    reviewedArtifactSetSha256: input.reviewedArtifactSetSha256,
+    operation: "prepare",
+    actionablePaths: {
+      input: { path: inputPath, sha256: manifest.inputSha256, role: "review-input" },
+      manifest: { path: manifestPath, sha256: domainSha256(manifestContent), role: "review-manifest" },
+      handoff: { path: handoffPath, sha256: null, role: "reviewer-return-handoff" },
+      report: { path: reportPath, sha256: null, role: "reviewer-return-report" }
+    },
+    importAction: {
+      command: `node ./bin/dove-package.mjs review . --mission-id "${prepared.mission.missionId}" --exchange-id "${exchangeId}" --review-id "<review id>" --import --mutation-mode direct-process --json`,
+      mcpTool: "import_review_exchange"
+    },
+    authority: { authoritative: false, callerMayMintAuthority: false }
+  };
+}
+function assertIdentity(value2, manifest, mission, workspaceId, label) {
+  if (value2.schemaVersion !== REVIEW_EXCHANGE_SCHEMA_VERSION) throw new Error(`${label}.schemaVersion must be ${REVIEW_EXCHANGE_SCHEMA_VERSION}.`);
+  if (value2.workspaceId !== workspaceId || value2.workspaceId !== manifest.workspaceId) throw new Error(`${label} workspace binding mismatch.`);
+  if (value2.missionId !== mission.missionId || value2.missionId !== manifest.missionId) throw new Error(`${label} mission binding mismatch.`);
+  if (value2.contractDigest !== mission.contractDigest || value2.contractDigest !== manifest.contractDigest) throw new Error(`${label} contract digest is stale.`);
+  if (value2.exchangeId !== manifest.exchangeId) throw new Error(`${label} exchangeId mismatch.`);
+  if (value2.policy !== manifest.policy) throw new Error(`${label} policy binding mismatch.`);
+  if (value2.scopeSha256 !== manifest.scopeSha256) throw new Error(`${label} scope binding mismatch.`);
+}
+function same(value2, expected) {
+  return JSON.stringify(value2) === JSON.stringify(expected);
+}
+function assertPreparationReceipt(workspace, mission, manifestLeaf, inputLeaf, manifestPath, inputPath) {
+  const receipt = workspace.receiptLedger.receipts.find((item) => {
+    if (item.producer?.kind !== "dove-internal" || item.producer?.actionId !== "prepare-review-exchange") return false;
+    const artifacts = new Map(item.artifacts.map((artifact) => [artifact.path, artifact]));
+    return artifacts.size === 2 && artifacts.get(inputPath)?.sha256 === inputLeaf.sha256 && artifacts.get(manifestPath)?.sha256 === manifestLeaf.sha256;
+  });
+  if (!receipt) throw new Error("Review exchange preparation receipt does not own the exact immutable input and manifest paths and hashes.");
+  if (receipt.missionId !== mission.missionId || receipt.contractDigest !== mission.contractDigest) throw new Error("Review exchange preparation receipt mission binding mismatch.");
+  return receipt;
+}
+function assertPreparedScope(manifest, input) {
+  const policy = normalizedPolicy(manifest.policy);
+  if (policy === "local-preflight") throw new Error("local-preflight cannot create an importable exchange.");
+  const expectedInputBoundary = policyInputBoundary(policy);
+  if (manifest.inputBoundary !== expectedInputBoundary || input.inputBoundary !== expectedInputBoundary) throw new Error("Review exchange policy input boundary drifted.");
+  const fields = ["artifactPaths", "finalPlanPaths", "finalResultPaths", "reviewedArtifactPaths"];
+  for (const field of fields) if (!same(manifest[field], input[field])) throw new Error(`Review exchange ${field} drifted between manifest and input.`);
+  const paths = normalizePolicyPaths(input, policy);
+  if (!same(paths.reviewedArtifactPaths, input.reviewedArtifactPaths)) throw new Error("Review exchange policy scope no longer equals the exact reviewed artifact set.");
+  const scope = policyScope(policy, paths);
+  if (scope.sha256 !== manifest.scopeSha256 || scope.sha256 !== input.scopeSha256) throw new Error("Review exchange scope hash drifted.");
+}
+function normalizeFindings(items, reviewedArtifactPaths) {
+  if (!Array.isArray(items)) throw new Error("Review handoff findings must be an array.");
+  const reviewed = new Set(reviewedArtifactPaths);
+  const seen = /* @__PURE__ */ new Set();
+  return items.map((item, index) => {
+    sealed(item, FINDING_FIELDS, `Review handoff findings[${index}]`);
+    const findingId = domainSafeId(item.findingId, `findings[${index}].findingId`);
+    if (seen.has(findingId)) throw new Error(`Review handoff contains duplicate findingId ${findingId}.`);
+    seen.add(findingId);
+    const severity = domainNonEmptyText(item.severity, `findings[${index}].severity`).toLowerCase();
+    if (!["low", "medium", "high"].includes(severity)) throw new Error(`findings[${index}].severity must be low, medium, or high.`);
+    const linkedArtifactPaths = domainStringArray(item.linkedArtifactPaths, `findings[${index}].linkedArtifactPaths`, { minItems: 1 });
+    if (linkedArtifactPaths.some((artifactPath) => !reviewed.has(artifactPath))) throw new Error(`findings[${index}] links an artifact outside the frozen review set.`);
+    return { findingId, severity, summary: domainNonEmptyText(item.summary, `findings[${index}].summary`), linkedArtifactPaths };
+  });
+}
+function importReviewExchange(root, args2 = {}) {
+  assertSealedDomainArgs(args2, IMPORT_FIELDS, "import_review_exchange");
+  const { workspace, mission } = readCurrentMission(root, args2.missionId, "Review exchange import");
+  const exchangeId = domainSafeId(args2.exchangeId, "exchangeId");
+  const reviewId = domainSafeId(args2.reviewId, "reviewId");
+  const inputPath = exchangePath(exchangeId, "input.json");
+  const manifestPath = exchangePath(exchangeId, "manifest.json");
+  const handoffPath = exchangePath(exchangeId, "handoff.json");
+  const reportPath = exchangePath(exchangeId, "report.md");
+  const reviewPath = importedReviewPath(reviewId);
+  const finalReportPath = importedReportPath(reviewId);
+  if (fs11.existsSync(path13.resolve(root, reviewPath)) || fs11.existsSync(path13.resolve(root, finalReportPath))) throw new Error(`Review ${reviewId} has already been imported.`);
+  const manifestLeaf = currentCanonicalLeaf(root, manifestPath, "Review exchange manifest");
+  let manifest;
+  try {
+    manifest = sealed(JSON.parse(manifestLeaf.content.toString("utf8")), MANIFEST_FIELDS2, "Review exchange manifest");
+  } catch (error) {
+    throw new Error(`Review exchange manifest is malformed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (manifest.status !== "prepared") throw new Error(`Review exchange ${exchangeId} is not importable from status ${manifest.status ?? "unknown"}.`);
+  domainSafeId(manifest.preparationReceiptId, "manifest.preparationReceiptId");
+  if (manifest.exchangeId !== exchangeId) throw new Error("Review exchange manifest exchangeId mismatch.");
+  assertIdentity(manifest, manifest, mission, workspace.manifest.workspaceId, "Review exchange manifest");
+  if (manifest.inputPath !== inputPath || manifest.handoffPath !== handoffPath || manifest.reportPath !== reportPath) throw new Error("Review exchange manifest contains noncanonical exchange paths.");
+  exactHash(manifest.inputSha256, "manifest.inputSha256");
+  const inputLeaf = currentCanonicalLeaf(root, inputPath, "Review exchange input");
+  let input;
+  try {
+    input = sealed(JSON.parse(inputLeaf.content.toString("utf8")), INPUT_FIELDS, "Review exchange input");
+  } catch (error) {
+    throw new Error(`Review exchange input is malformed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  assertIdentity(input, manifest, mission, workspace.manifest.workspaceId, "Review exchange input");
+  domainSafeId(input.preparationReceiptId, "input.preparationReceiptId");
+  if (inputLeaf.sha256 !== manifest.inputSha256) throw new Error("Review exchange input hash does not match the prepared manifest.");
+  if (input.outputContract?.handoffPath !== handoffPath || input.outputContract?.reportPath !== reportPath) throw new Error("Review exchange input output contract is noncanonical.");
+  if (!same(input.outputContract?.requiredHandoffFields, [...HANDOFF_FIELDS])) throw new Error("Review exchange handoff contract drifted.");
+  if (!same(input.outputContract?.actionableReturn, {
+    completedVerdicts: ["coherent", "needs-revision", "needs-evidence"],
+    blockedVerdict: "blocked",
+    findingLinkedArtifactMinimum: 1,
+    actionItemsRequiredFor: ["needs-revision", "needs-evidence"]
+  })) throw new Error("Review exchange actionable return contract drifted.");
+  if (input.privacyBoundary?.writerPrivateTranscriptShared !== false || input.privacyBoundary?.reviewerPrivateTranscriptShouldReturn !== false || input.privacyBoundary?.undeclaredContextShared !== false) throw new Error("Review exchange privacy boundary is invalid.");
+  const preparationReceipt = assertPreparationReceipt(workspace, mission, manifestLeaf, inputLeaf, manifestPath, inputPath);
+  if (manifest.preparationReceiptId !== preparationReceipt.receiptId || input.preparationReceiptId !== preparationReceipt.receiptId) throw new Error("Review exchange preparation receipt anchor does not match the ledger owner.");
+  assertPreparedScope(manifest, input);
+  const manifestSnapshots = normalizeReviewSnapshots(manifest.reviewedArtifacts, "manifest.reviewedArtifacts");
+  const inputSnapshots = normalizeReviewSnapshots(input.reviewedArtifacts, "input.reviewedArtifacts");
+  if (!manifestSnapshots.ok || !inputSnapshots.ok || !same(manifestSnapshots.snapshots, inputSnapshots.snapshots)) throw new Error("Review exchange artifact snapshot contract drifted.");
+  const exactSetHash = stableSnapshotSetHash(manifestSnapshots.snapshots);
+  if (manifest.reviewedArtifactSetSha256 !== exactSetHash || input.reviewedArtifactSetSha256 !== exactSetHash) throw new Error("Review exchange artifact-set hash drifted.");
+  if (!same(manifest.reviewedArtifactPaths, manifestSnapshots.snapshots.map((item) => item.path))) throw new Error("Review exchange artifact paths do not equal the exact frozen snapshot set.");
+  const snapshotVerification = verifyReviewSnapshotSet(root, manifestSnapshots.snapshots, exactSetHash);
+  if (!snapshotVerification.ok) throw new Error(`Review exchange artifacts changed before import: ${snapshotVerification.failures.join(", ")}.`);
+  const handoffLeaf = currentCanonicalLeaf(root, handoffPath, "Review exchange handoff");
+  const reportLeaf = currentCanonicalLeaf(root, reportPath, "Review exchange report");
+  const handoff = sealed(JSON.parse(handoffLeaf.content.toString("utf8")), HANDOFF_FIELDS, "Review exchange handoff");
+  assertIdentity(handoff, manifest, mission, workspace.manifest.workspaceId, "Review exchange handoff");
+  if (handoff.reviewId !== reviewId) throw new Error("Review exchange handoff reviewId mismatch.");
+  if (!REVIEW_STATUSES.has(handoff.status)) throw new Error(`Review exchange handoff status is unsupported: ${handoff.status}.`);
+  if (!REVIEW_VERDICTS.has(handoff.verdict)) throw new Error(`Review exchange handoff verdict is unsupported: ${handoff.verdict}.`);
+  if (handoff.status === "completed" && handoff.verdict === "blocked") throw new Error("A completed review handoff must return coherent, needs-revision, or needs-evidence.");
+  if (handoff.status !== "completed" && handoff.verdict !== "blocked") throw new Error("A blocked or failed review handoff must return verdict blocked.");
+  if (handoff.inputPath !== inputPath || handoff.reportPath !== reportPath) throw new Error("Review exchange handoff paths do not match the canonical exchange.");
+  if (exactHash(handoff.inputSha256, "handoff.inputSha256") !== inputLeaf.sha256) throw new Error("Review exchange handoff input hash mismatch.");
+  if (exactHash(handoff.reportSha256, "handoff.reportSha256") !== reportLeaf.sha256) throw new Error("Review exchange report hash mismatch.");
+  if (!same(handoff.reviewedArtifactPaths, manifest.reviewedArtifactPaths)) throw new Error("Review exchange handoff scope drifted from the exact frozen artifact set.");
+  const findings = normalizeFindings(handoff.findings, manifest.reviewedArtifactPaths);
+  const actionItems = domainStringArray(handoff.actionItems, "Review handoff actionItems");
+  if (["needs-revision", "needs-evidence"].includes(handoff.verdict) && actionItems.length === 0) throw new Error(`Review handoff verdict ${handoff.verdict} requires at least one actionable action item.`);
+  const importReceiptId = domainSafeId(`receipt-import-review-exchange-${crypto7.randomUUID()}`, "importReceiptId");
+  const review = {
+    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
+    workspaceId: workspace.manifest.workspaceId,
+    missionId: mission.missionId,
+    contractDigest: mission.contractDigest,
+    exchangeId,
+    reviewId,
+    policy: manifest.policy,
+    scopeSha256: manifest.scopeSha256,
+    status: handoff.status,
+    verdict: handoff.verdict,
+    reviewerId: domainNonEmptyText(handoff.reviewerId, "reviewerId"),
+    summary: domainNonEmptyText(handoff.summary, "summary"),
+    reviewedAt: exactTimestamp(handoff.reviewedAt, "reviewedAt"),
+    reviewedArtifactPaths: manifest.reviewedArtifactPaths,
+    reviewedArtifacts: manifestSnapshots.snapshots,
+    reviewedArtifactSetSha256: exactSetHash,
+    findings,
+    actionItems,
+    preparationReceiptId: preparationReceipt.receiptId,
+    importReceiptId,
+    exchange: {
+      manifestPath,
+      manifestSha256: manifestLeaf.sha256,
+      inputPath,
+      inputSha256: inputLeaf.sha256,
+      handoffPath,
+      handoffSha256: handoffLeaf.sha256,
+      reportPath,
+      reportSha256: reportLeaf.sha256,
+      importedReportPath: finalReportPath,
+      importedReportSha256: reportLeaf.sha256
+    },
+    authority: {
+      authoritative: false,
+      callerMayMintAuthority: false,
+      issuer: null,
+      reason: "No trusted Reviewer issuer is connected; public handoff, reviewerId, verdict, and report material are non-authoritative."
+    },
+    privateTranscriptImported: false
+  };
+  const result = finalizeDomainArtifacts(root, {
+    actionId: "import-review-exchange",
+    receiptId: importReceiptId,
+    operation: "Review exchange import",
+    missionId: mission.missionId,
+    summary: `Imported non-authoritative review ${reviewId} from exchange ${exchangeId}.`,
+    writes: [
+      { path: finalReportPath, kind: "report", content: reportLeaf.content, derivedReferences: review.reviewedArtifactPaths.map((item) => `artifact:${item}`) },
+      { path: reviewPath, kind: "data", content: domainJson(review), derivedReferences: [`artifact:${finalReportPath}`, ...review.reviewedArtifactPaths.map((item) => `artifact:${item}`)] }
+    ]
+  });
+  return {
+    ...result,
+    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
+    status: result.status === "planned" ? "import-planned" : "imported",
+    exchangeId,
+    reviewId,
+    review,
+    reviewPath,
+    reportPath: finalReportPath,
+    operation: "import",
+    actionablePaths: {
+      input: { path: inputPath, sha256: inputLeaf.sha256, role: "review-input" },
+      manifest: { path: manifestPath, sha256: manifestLeaf.sha256, role: "review-manifest" },
+      handoff: { path: handoffPath, sha256: handoffLeaf.sha256, role: "reviewer-return-handoff" },
+      report: { path: finalReportPath, sha256: reportLeaf.sha256, role: "imported-review-report" },
+      review: { path: reviewPath, sha256: result.artifacts?.find((item) => item.path === reviewPath)?.sha256 ?? null, role: "imported-review-record" }
+    },
+    nextAction: {
+      command: `node ./bin/dove-package.mjs review . --mission-id "${mission.missionId}" --artifact "<reviewed artifact path>" --verify-coverage --json`,
+      mcpTool: "verify_review_coverage"
+    },
+    authoritative: false,
+    privateTranscriptImported: false
+  };
+}
+function currentHash(root, relativePath, expectedHash, label) {
+  try {
+    const leaf = currentCanonicalLeaf(root, relativePath, label);
+    return { current: leaf.sha256 === expectedHash, actualSha256: leaf.sha256, reason: leaf.sha256 === expectedHash ? null : "hash-mismatch" };
+  } catch (error) {
+    return { current: false, actualSha256: null, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+function readImportedReviews(root, missionId) {
+  const directory = path13.resolve(root, ".dove/reviews");
+  if (!fs11.existsSync(directory)) return [];
+  return fs11.readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => {
+    const reviewPath = path13.posix.join(".dove/reviews", entry.name);
+    try {
+      const review = sealed(JSON.parse(fs11.readFileSync(path13.resolve(root, reviewPath), "utf8")), IMPORTED_REVIEW_FIELDS, `Imported review ${reviewPath}`);
+      return review.missionId === missionId ? { reviewPath, review } : null;
+    } catch (error) {
+      return { reviewPath, review: null, readFailure: error instanceof Error ? error.message : String(error) };
+    }
+  }).filter(Boolean);
+}
+function requestedCoverageSnapshot(root, missionId, requestedPaths) {
+  if (requestedPaths.length === 0) return { snapshot: null, failures: [] };
+  try {
+    return {
+      snapshot: resolveReviewArtifactSnapshots(root, missionId, requestedPaths, "review coverage artifacts"),
+      failures: []
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/is not a usable file .*path does not exist|is not a registered schema 8 artifact|has changed since its latest ownership receipt/u.test(message)) {
+      return { snapshot: null, failures: [`requested-artifact-unavailable:${message}`] };
+    }
+    throw error;
+  }
+}
+function normalizeExpectedCoverageSnapshots(value2) {
+  if (value2 === void 0) return null;
+  const normalized = normalizeReviewSnapshots(value2, "expectedSnapshots");
+  if (!normalized.ok) throw new Error(normalized.reason);
+  return {
+    reviewedArtifacts: normalized.snapshots,
+    reviewedArtifactSetSha256: stableSnapshotSetHash(normalized.snapshots)
+  };
+}
+function receiptArtifactMap(receipt) {
+  return new Map(Array.isArray(receipt?.artifacts) ? receipt.artifacts.map((artifact) => [artifact.path, artifact]) : []);
+}
+function assessImportedReview(root, workspace, mission, { reviewPath, review, readFailure }, requestedSnapshot) {
+  const failures = [];
+  if (readFailure || !review) return { reviewId: null, reviewPath, current: false, authoritative: false, failures: [readFailure ?? "review-unreadable"] };
+  if (review.schemaVersion !== REVIEW_EXCHANGE_SCHEMA_VERSION) {
+    return { reviewId: review.reviewId ?? null, reviewPath, current: false, authoritative: false, failures: ["review-schema-invalid"] };
+  }
+  if (review.contractDigest !== mission.contractDigest) failures.push("contract-digest-stale");
+  if (!POLICY_SET.has(review.policy) || review.policy === "local-preflight") failures.push("review-policy-invalid");
+  if (review.status !== "completed") failures.push(`review-status-ineligible:${review.status ?? "unknown"}`);
+  if (!["coherent", "needs-revision", "needs-evidence"].includes(review.verdict)) failures.push(`review-verdict-ineligible:${review.verdict ?? "unknown"}`);
+  const snapshots = normalizeReviewSnapshots(review.reviewedArtifacts, "review.reviewedArtifacts");
+  if (!snapshots.ok) failures.push(snapshots.reason);
+  const setHash = snapshots.ok ? stableSnapshotSetHash(snapshots.snapshots) : null;
+  if (!setHash || review.reviewedArtifactSetSha256 !== setHash || !same(review.reviewedArtifactPaths, snapshots.snapshots.map((item) => item.path))) failures.push("reviewed-artifact-set-hash-mismatch");
+  if (snapshots.ok) failures.push(...verifyReviewSnapshotSet(root, snapshots.snapshots, setHash).failures);
+  if (requestedSnapshot && (!snapshots.ok || !same(requestedSnapshot.reviewedArtifacts, snapshots.snapshots))) failures.push("requested-artifact-set-not-exactly-covered");
+  const importReceipt = workspace.receiptLedger.receipts.find((receipt) => receipt.receiptId === review.importReceiptId);
+  const preparationReceipt = workspace.receiptLedger.receipts.find((receipt) => receipt.receiptId === review.preparationReceiptId);
+  if (importReceipt?.producer?.kind !== "dove-internal" || importReceipt?.producer?.actionId !== "import-review-exchange") failures.push("import-review-receipt-missing");
+  if (preparationReceipt?.producer?.kind !== "dove-internal" || preparationReceipt?.producer?.actionId !== "prepare-review-exchange") failures.push("preparation-review-receipt-missing");
+  if (importReceipt && (importReceipt.missionId !== mission.missionId || importReceipt.contractDigest !== mission.contractDigest)) failures.push("import-review-receipt-binding-mismatch");
+  if (preparationReceipt && (preparationReceipt.missionId !== mission.missionId || preparationReceipt.contractDigest !== mission.contractDigest)) failures.push("preparation-review-receipt-binding-mismatch");
+  try {
+    const exchange = sealed(review.exchange, EXCHANGE_HASH_FIELDS, `Imported review ${review.reviewId} exchange`);
+    const importArtifacts = receiptArtifactMap(importReceipt);
+    const preparationArtifacts = receiptArtifactMap(preparationReceipt);
+    const reviewLeaf = currentHash(root, reviewPath, importArtifacts.get(reviewPath)?.sha256, "imported review record");
+    if (!importArtifacts.has(reviewPath) || !reviewLeaf.current) failures.push("imported-review-receipt-hash-stale");
+    if (importArtifacts.get(exchange.importedReportPath)?.sha256 !== exchange.importedReportSha256) failures.push("imported-report-receipt-hash-mismatch");
+    if (preparationArtifacts.get(exchange.manifestPath)?.sha256 !== exchange.manifestSha256) failures.push("manifest-receipt-hash-mismatch");
+    if (preparationArtifacts.get(exchange.inputPath)?.sha256 !== exchange.inputSha256) failures.push("input-receipt-hash-mismatch");
+    let manifest = null;
+    let input = null;
+    try {
+      manifest = sealed(JSON.parse(fs11.readFileSync(path13.resolve(root, exchange.manifestPath), "utf8")), MANIFEST_FIELDS2, `Imported review ${review.reviewId} manifest`);
+      input = sealed(JSON.parse(fs11.readFileSync(path13.resolve(root, exchange.inputPath), "utf8")), INPUT_FIELDS, `Imported review ${review.reviewId} input`);
+    } catch (error) {
+      failures.push(`prepared-review-control-invalid:${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (manifest && input) {
+      if (manifest.preparationReceiptId !== review.preparationReceiptId || input.preparationReceiptId !== review.preparationReceiptId) failures.push("preparation-receipt-anchor-mismatch");
+      const preparedSnapshots = normalizeReviewSnapshots(manifest.reviewedArtifacts, "manifest.reviewedArtifacts");
+      const inputSnapshots = normalizeReviewSnapshots(input.reviewedArtifacts, "input.reviewedArtifacts");
+      if (!preparedSnapshots.ok || !inputSnapshots.ok || !same(preparedSnapshots.snapshots, inputSnapshots.snapshots)) failures.push("prepared-reviewed-artifact-set-invalid");
+      else {
+        const preparedSetHash = stableSnapshotSetHash(preparedSnapshots.snapshots);
+        if (manifest.reviewedArtifactSetSha256 !== preparedSetHash || input.reviewedArtifactSetSha256 !== preparedSetHash) failures.push("prepared-reviewed-artifact-set-hash-mismatch");
+        if (!same(review.reviewedArtifacts, preparedSnapshots.snapshots) || review.reviewedArtifactSetSha256 !== preparedSetHash || !same(review.reviewedArtifactPaths, preparedSnapshots.snapshots.map((item) => item.path))) failures.push("reviewed-set-not-receipt-anchored");
+      }
+    }
+    for (const [pathField, hashField, label] of [
+      ["manifestPath", "manifestSha256", "review manifest"],
+      ["inputPath", "inputSha256", "review input"],
+      ["handoffPath", "handoffSha256", "review handoff"],
+      ["reportPath", "reportSha256", "review report"],
+      ["importedReportPath", "importedReportSha256", "imported review report"]
+    ]) {
+      if (!HASH_PATTERN2.test(String(exchange[hashField] ?? ""))) failures.push(`${hashField}-invalid`);
+      else if (!currentHash(root, exchange[pathField], exchange[hashField], label).current) failures.push(`${hashField}-stale`);
+    }
+  } catch (error) {
+    failures.push(`review-exchange-invalid:${error instanceof Error ? error.message : String(error)}`);
+  }
+  try {
+    const authority = sealed(review.authority, AUTHORITY_FIELDS, `Imported review ${review.reviewId} authority`);
+    if (authority.authoritative !== false || authority.callerMayMintAuthority !== false || authority.issuer !== null || typeof authority.reason !== "string" || !authority.reason.trim()) failures.push("public-review-authority-invalid");
+  } catch (error) {
+    failures.push(`public-review-authority-invalid:${error instanceof Error ? error.message : String(error)}`);
+  }
+  return {
+    reviewId: review.reviewId,
+    exchangeId: review.exchangeId,
+    reviewPath,
+    policy: review.policy,
+    verdict: review.verdict,
+    current: failures.length === 0,
+    authoritative: false,
+    reviewedArtifactPaths: review.reviewedArtifactPaths,
+    reviewedArtifactSetSha256: review.reviewedArtifactSetSha256,
+    failures: [...new Set(failures)]
+  };
+}
+function verifyReviewCoverageInput(root, args2, fields, operation) {
+  assertSealedDomainArgs(args2, fields, operation);
+  const { workspace, mission } = readCurrentMission(root, args2.missionId, "Review coverage verification");
+  const requestedPaths = args2.artifactPaths === void 0 ? [] : domainStringArray(args2.artifactPaths, "artifactPaths");
+  const expected = normalizeExpectedCoverageSnapshots(args2.expectedSnapshots);
+  const requested = expected ? { snapshot: expected, failures: [] } : requestedCoverageSnapshot(root, mission.missionId, requestedPaths);
+  const assessments = readImportedReviews(root, mission.missionId).map((item) => assessImportedReview(root, workspace, mission, item, requested.snapshot));
+  const currentReviews = assessments.filter((item) => item.current);
+  const failures = [...requested.failures];
+  const exactCoverageRequested = requestedPaths.length > 0 || expected !== null;
+  if (currentReviews.length === 0) failures.push(exactCoverageRequested ? "current-exact-review-coverage-missing" : "current-review-coverage-missing");
+  if (args2.requireAuthoritative === true) failures.push("trusted-review-issuer-missing");
+  return {
+    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
+    status: failures.length === 0 ? "covered" : "not-covered",
+    zeroWrite: true,
+    missionId: mission.missionId,
+    contractDigest: mission.contractDigest,
+    requestedArtifactPaths: requested.snapshot?.reviewedArtifacts.map((item) => item.path) ?? requestedPaths,
+    requestedArtifactSetSha256: requested.snapshot?.reviewedArtifactSetSha256 ?? null,
+    covered: requested.failures.length === 0 && currentReviews.length > 0,
+    authoritative: false,
+    issuer: null,
+    failures: [...new Set(failures)],
+    reviews: assessments
+  };
+}
+function verifyExpectedReviewCoverage(root, args2 = {}) {
+  return verifyReviewCoverageInput(root, args2, EXPECTED_COVERAGE_FIELDS, "verify expected review coverage");
+}
+function verifyReviewCoverage(root, args2 = {}) {
+  return verifyReviewCoverageInput(root, args2, COVERAGE_FIELDS, "verify_review_coverage");
+}
+
+// src/core/source-trust.mjs
+import fs12 from "node:fs";
+import path14 from "node:path";
+var SOURCE_LIFECYCLE_STATES = Object.freeze(["candidate", "rejected"]);
+var SOURCE_FIELDS = /* @__PURE__ */ new Set([
+  "schemaVersion",
+  "sourceId",
+  "missionId",
+  "contractDigest",
+  "citationKey",
+  "title",
+  "authors",
+  "year",
+  "locator",
+  "sourceType",
+  "abstract",
+  "origin",
+  "identityFingerprint",
+  "capturedMaterial",
+  "lifecycle",
+  "currentDecision"
+]);
+var CAPTURED_MATERIAL_FIELDS = /* @__PURE__ */ new Set(["path", "sha256"]);
+var CANDIDATE_DECISION_FIELDS = /* @__PURE__ */ new Set(["decision", "decidedAt", "reason"]);
+var REJECTED_DECISION_FIELDS = /* @__PURE__ */ new Set(["decision", "method", "checkedMaterial", "auditEvidence", "decidedAt"]);
+var AUDIT_EVIDENCE_FIELDS = /* @__PURE__ */ new Set(["reference", "kind", "observation"]);
+var HASH_PATTERN3 = /^[0-9a-f]{64}$/u;
 var REGISTER_FIELDS = /* @__PURE__ */ new Set(["missionId", "sourceId", "citationKey", "title", "authors", "year", "locator", "sourceType", "abstract", "origin", "capturePath"]);
 var REJECT_FIELDS = /* @__PURE__ */ new Set(["missionId", "sourceId", "method", "checkedMaterial", "auditEvidence"]);
 var QUERY_FIELDS = /* @__PURE__ */ new Set(["missionId", "sourceId", "lifecycle", "limit"]);
@@ -3058,26 +4031,76 @@ function sourceIdentityFingerprint(source = {}) {
   return domainSha256(JSON.stringify(canonicalSourceIdentity(source)));
 }
 function sourcePath(sourceId) {
-  return path11.posix.join(".dove/sources", `${sourceId}.json`);
+  return path14.posix.join(".dove/sources", `${sourceId}.json`);
 }
 function notePath(noteId) {
-  return path11.posix.join(".dove/notes", `${noteId}.json`);
+  return path14.posix.join(".dove/notes", `${noteId}.json`);
+}
+function assertSealed3(value2, fields, label) {
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) throw new Error(`${label} must be a plain object.`);
+  const unknown = Object.keys(value2).filter((field) => !fields.has(field));
+  if (unknown.length) throw new Error(`${label} does not accept unknown fields: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
+}
+function exactTimestamp2(value2, label) {
+  if (typeof value2 !== "string" || !Number.isFinite(Date.parse(value2)) || new Date(Date.parse(value2)).toISOString() !== value2) throw new Error(`${label} must be an exact ISO-8601 timestamp.`);
+  return value2;
+}
+function validateStoredSource(root, source, filename, missions, label) {
+  assertSealed3(source, SOURCE_FIELDS, label);
+  if (source.schemaVersion !== 1) throw new Error(`${label} has an unsupported schemaVersion.`);
+  const sourceId = domainSafeId(source.sourceId, `${label}.sourceId`);
+  if (filename !== `${sourceId}.json`) throw new Error(`${label} filename must match sourceId ${sourceId}.`);
+  const missionId = domainSafeId(source.missionId, `${label}.missionId`);
+  const mission = missions.get(missionId);
+  if (!mission) throw new Error(`${label} references unknown mission ${missionId}.`);
+  if (!HASH_PATTERN3.test(String(source.contractDigest ?? "")) || source.contractDigest !== mission.contractDigest) throw new Error(`${label}.contractDigest does not match mission ${missionId}.`);
+  if (!SOURCE_LIFECYCLE_STATES.includes(source.lifecycle)) throw new Error(`${label}.lifecycle must be candidate or rejected; stored verified source state is invalid.`);
+  if (source.identityFingerprint !== sourceIdentityFingerprint(source)) throw new Error(`${label}.identityFingerprint does not match current source identity.`);
+  if (!source.title && !source.locator) throw new Error(`${label} requires a title or locator.`);
+  if (!Array.isArray(source.authors) || source.authors.some((item) => typeof item !== "string" || !item.trim()) || new Set(source.authors).size !== source.authors.length) throw new Error(`${label}.authors must be a unique string array.`);
+  if (!source.capturedMaterial) throw new Error(`${label}.capturedMaterial is required.`);
+  assertSealed3(source.capturedMaterial, CAPTURED_MATERIAL_FIELDS, `${label}.capturedMaterial`);
+  const materialPath = canonicalDomainPath(source.capturedMaterial.path, `${label}.capturedMaterial.path`, ".dove/sources/materials");
+  if (!HASH_PATTERN3.test(String(source.capturedMaterial.sha256 ?? ""))) throw new Error(`${label}.capturedMaterial.sha256 must be a lowercase SHA-256 hash.`);
+  const material = capturedMaterial(root, materialPath);
+  if (!material || material.path !== materialPath || material.sha256 !== source.capturedMaterial.sha256) throw new Error(`${label}.capturedMaterial is missing, aliased, empty, or hash-drifted.`);
+  const expectedDecisionFields = source.lifecycle === "candidate" ? CANDIDATE_DECISION_FIELDS : REJECTED_DECISION_FIELDS;
+  assertSealed3(source.currentDecision, expectedDecisionFields, `${label}.currentDecision`);
+  if (source.currentDecision.decision !== source.lifecycle) throw new Error(`${label}.currentDecision.decision must match lifecycle ${source.lifecycle}.`);
+  exactTimestamp2(source.currentDecision.decidedAt, `${label}.currentDecision.decidedAt`);
+  if (source.lifecycle === "candidate") {
+    domainNonEmptyText(source.currentDecision.reason, `${label}.currentDecision.reason`);
+  } else {
+    domainNonEmptyText(source.currentDecision.method, `${label}.currentDecision.method`);
+    domainNonEmptyText(source.currentDecision.checkedMaterial, `${label}.currentDecision.checkedMaterial`);
+    if (!Array.isArray(source.currentDecision.auditEvidence) || source.currentDecision.auditEvidence.length === 0) throw new Error(`${label}.currentDecision.auditEvidence must contain at least one item.`);
+    source.currentDecision.auditEvidence.forEach((item, index) => {
+      assertSealed3(item, AUDIT_EVIDENCE_FIELDS, `${label}.currentDecision.auditEvidence[${index}]`);
+      for (const field of AUDIT_EVIDENCE_FIELDS) domainNonEmptyText(item[field], `${label}.currentDecision.auditEvidence[${index}].${field}`);
+    });
+  }
+  return source;
 }
 function readSourceFiles(root) {
-  openDoveWorkspace(root, { operation: "Source query" });
-  const directory = path11.resolve(root, ".dove/sources");
-  return fs11.readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => readJson(root, path11.posix.join(".dove/sources", entry.name), null)).filter((item) => item && item.schemaVersion === 1 && item.sourceId).sort((left, right) => String(left.sourceId).localeCompare(String(right.sourceId)));
+  const workspace = openDoveWorkspace(root, { operation: "Source query" });
+  const directory = path14.resolve(root, ".dove/sources");
+  return fs12.readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.name !== "materials").map((entry) => {
+    const relativePath = path14.posix.join(".dove/sources", entry.name);
+    if (entry.isSymbolicLink()) throw new Error(`${relativePath} must not be a symbolic link.`);
+    if (!entry.isFile() || !entry.name.endsWith(".json")) throw new Error(`${relativePath} must be a regular JSON source file.`);
+    return validateStoredSource(root, readJson(root, relativePath, null), entry.name, workspace.missions, relativePath);
+  }).sort((left, right) => String(left.sourceId).localeCompare(String(right.sourceId)));
 }
 function capturedMaterial(root, capturePath) {
   if (!capturePath) return null;
-  const canonicalPath = canonicalDomainPath(capturePath, "capturePath");
-  const inspection = inspectDeclaredPath(root, canonicalPath, { requireNonEmpty: true });
+  const canonicalPath2 = canonicalDomainPath(capturePath, "capturePath");
+  const inspection = inspectDeclaredPath(root, canonicalPath2, { requireNonEmpty: true });
   if (inspection.status !== "existing") throw new Error(`capturePath must reference an existing non-empty regular file (${inspection.reason ?? inspection.status}).`);
   const resolved = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  if (resolved !== canonicalPath) throw new Error("capturePath must use its canonical realpath-contained path.");
-  return { path: resolved, sha256: domainSha256(fs11.readFileSync(path11.resolve(root, resolved))) };
+  if (resolved !== canonicalPath2) throw new Error("capturePath must use its canonical realpath-contained path.");
+  return { path: resolved, sha256: domainSha256(fs12.readFileSync(path14.resolve(root, resolved))) };
 }
-function sourceRecord(root, args2, capturedMaterial2, current = null) {
+function sourceRecord(args2, capturedMaterial2, contractDigest, current = null) {
   const missionId = domainSafeId(args2.missionId, "missionId");
   const sourceId = domainSafeId(args2.sourceId, "sourceId");
   const title = normalizeText(args2.title);
@@ -3090,6 +4113,7 @@ function sourceRecord(root, args2, capturedMaterial2, current = null) {
     schemaVersion: 1,
     sourceId,
     missionId,
+    contractDigest,
     citationKey: normalizeText(args2.citationKey) || null,
     title: title || null,
     authors,
@@ -3111,16 +4135,18 @@ function sourceRecord(root, args2, capturedMaterial2, current = null) {
 function registerSource(root, args2 = {}) {
   assertSealedDomainArgs(args2, REGISTER_FIELDS, "register_source");
   const { mission } = readCurrentMission(root, args2.missionId, "Source registration");
+  readSourceFiles(root);
   const sourceId = domainSafeId(args2.sourceId, "sourceId");
   const relativePath = sourcePath(sourceId);
-  const existing = fs11.existsSync(path11.resolve(root, relativePath)) ? readJson(root, relativePath, null) : null;
+  const existing = fs12.existsSync(path14.resolve(root, relativePath)) ? readJson(root, relativePath, null) : null;
   if (existing && existing.missionId !== mission.missionId) throw new Error(`Source ${args2.sourceId} belongs to mission ${existing.missionId}.`);
   const captured = capturedMaterial(root, args2.capturePath);
-  const materialPath = captured ? path11.posix.join(".dove/sources/materials", `${sourceId}${path11.extname(captured.path).toLowerCase() || ".bin"}`) : null;
-  const sourceMaterial = captured ? { path: materialPath, sha256: captured.sha256 } : null;
-  const source = sourceRecord(root, args2, sourceMaterial, existing);
-  const writes = [{ path: relativePath, kind: "data", content: domainJson(source), derivedReferences: source.capturedMaterial ? [`artifact:${source.capturedMaterial.path}`] : [] }];
-  if (captured) writes.unshift({ path: materialPath, kind: "document", content: fs11.readFileSync(path11.resolve(root, captured.path)), derivedReferences: [] });
+  if (!captured) throw new Error("register_source requires capturePath for concrete non-empty captured material.");
+  const materialPath = path14.posix.join(".dove/sources/materials", `${sourceId}${path14.extname(captured.path).toLowerCase() || ".bin"}`);
+  const sourceMaterial = { path: materialPath, sha256: captured.sha256 };
+  const source = sourceRecord(args2, sourceMaterial, mission.contractDigest, existing);
+  const writes = [{ path: relativePath, kind: "data", content: domainJson(source), derivedReferences: [`artifact:${source.capturedMaterial.path}`] }];
+  writes.unshift({ path: materialPath, kind: "document", content: fs12.readFileSync(path14.resolve(root, captured.path)), derivedReferences: [] });
   return {
     ...finalizeDomainArtifacts(root, {
       actionId: "register-source",
@@ -3149,6 +4175,7 @@ function normalizeAuditEvidence(value2) {
 function verifySource(root, args2 = {}) {
   assertSealedDomainArgs(args2, REJECT_FIELDS, "verify_source");
   const { mission } = readCurrentMission(root, args2.missionId, "Source rejection");
+  readSourceFiles(root);
   const sourceId = domainSafeId(args2.sourceId, "sourceId");
   const relativePath = sourcePath(sourceId);
   const source = readJson(root, relativePath, null);
@@ -3181,14 +4208,20 @@ function sourceEligibility(source, _verifications = [], options = {}) {
   if (!source) return { eligible: false, reason: "unknown-source", source: null, verification: null };
   const missionId = normalizeText(options.missionId);
   if (!missionId || source.missionId !== missionId) return { eligible: false, reason: "source-mission-binding-mismatch", source, verification: source.currentDecision ?? null };
+  if (!SOURCE_LIFECYCLE_STATES.includes(source.lifecycle) || source.currentDecision?.decision !== source.lifecycle) return { eligible: false, reason: "source-durable-state-invalid", source, verification: source.currentDecision ?? null };
   if (source.identityFingerprint !== sourceIdentityFingerprint(source)) return { eligible: false, reason: "source-identity-changed", source, verification: source.currentDecision ?? null };
-  if (source.lifecycle !== "verified" || source.currentDecision?.decision !== "verified") return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: source.currentDecision ?? null };
-  if (!source.capturedMaterial) return { eligible: false, reason: "source-captured-material-missing", source, verification: source.currentDecision };
-  const material = capturedMaterial(options.root, source.capturedMaterial.path);
-  if (!material || material.sha256 !== source.capturedMaterial.sha256 || source.currentDecision.materialHash !== material.sha256) return { eligible: false, reason: "source-verification-material-changed", source, verification: source.currentDecision };
-  const receipt = readJson(options.root, executionReceiptPath(source.currentDecision.receiptId), null);
-  if (!receipt || receipt.missionId !== missionId || !receipt.artifacts.some((item) => item.path === material.path && item.sha256 === material.sha256)) return { eligible: false, reason: "source-verification-receipt-invalid", source, verification: source.currentDecision };
-  return { eligible: true, reason: "verified-source", source, verification: source.currentDecision };
+  if (!source.capturedMaterial) return { eligible: false, reason: "source-captured-material-missing", source, verification: source.currentDecision ?? null };
+  try {
+    const material = capturedMaterial(options.root, source.capturedMaterial.path);
+    if (!material || material.sha256 !== source.capturedMaterial.sha256) return { eligible: false, reason: "source-captured-material-changed", source, verification: source.currentDecision ?? null };
+  } catch {
+    return { eligible: false, reason: "source-captured-material-invalid", source, verification: source.currentDecision ?? null };
+  }
+  return { eligible: false, reason: `source-${source.lifecycle}`, source, verification: source.currentDecision ?? null };
+}
+function evaluateSourceIds(root, sourceIds = [], missionId = null) {
+  const byId = new Map(readSourceFiles(root).map((source) => [source.sourceId, source]));
+  return sourceIds.map((sourceId) => ({ sourceId, ...sourceEligibility(byId.get(sourceId) ?? null, [], { root, missionId }) }));
 }
 function evaluateSourceReferences(root, references = [], missionId = null) {
   const sources = readSourceFiles(root);
@@ -3205,15 +4238,14 @@ function evaluateNoteReferences(root, references = [], missionId = null) {
     if (sourceIds.length === 0 && artifactRefs.length === 0) return { reference, eligible: false, reason: "note-evidence-missing", note, sources: [], artifacts: [] };
     const sources = evaluateSourceReferences(root, sourceIds, missionId);
     const sourceFailure = sources.find((item) => !item.eligible);
-    const ownership = readJson(root, ARTIFACT_PATHS.artifactOwnership, { artifacts: [] });
-    const owned = new Map((ownership.artifacts ?? []).map((item) => [item.path, item]));
+    const owned = new Map(openDoveWorkspace(root, { operation: "Note evidence receipt ledger read" }).receiptLedger.currentOwnership.map((item) => [item.path, item]));
     const artifacts = artifactRefs.map((artifactPath) => {
       const owner = owned.get(artifactPath);
       if (!owner) return { path: artifactPath, current: false, reason: "artifact-ownership-missing" };
       if (owner.missionId !== missionId) return { path: artifactPath, current: false, reason: "artifact-mission-binding-mismatch" };
       const inspection = inspectDeclaredPath(root, artifactPath, { requireNonEmpty: true });
       if (inspection.status !== "existing") return { path: artifactPath, current: false, reason: inspection.reason ?? inspection.status };
-      const currentHash2 = domainSha256(fs11.readFileSync(path11.resolve(root, artifactPath)));
+      const currentHash2 = domainSha256(fs12.readFileSync(path14.resolve(root, artifactPath)));
       return { path: artifactPath, current: currentHash2 === owner.sha256, reason: currentHash2 === owner.sha256 ? "current-artifact" : "artifact-hash-drift" };
     });
     const artifactFailure = artifacts.find((item) => !item.current);
@@ -3226,6 +4258,7 @@ function querySources(root, args2 = {}) {
   const { mission } = readCurrentMission(root, args2.missionId, "Source query");
   const sourceId = normalizeText(args2.sourceId);
   const lifecycle = normalizeText(args2.lifecycle).toLowerCase();
+  if (lifecycle && !SOURCE_LIFECYCLE_STATES.includes(lifecycle)) throw new Error(`lifecycle must be one of: ${SOURCE_LIFECYCLE_STATES.join(", ")}.`);
   const limit = Math.min(200, Math.max(1, Number.isFinite(Number(args2.limit)) ? Math.trunc(Number(args2.limit)) : 50));
   const items = readSourceFiles(root).filter((source) => source.missionId === mission.missionId).filter((source) => !sourceId || [source.sourceId, source.citationKey, source.locator].includes(sourceId)).filter((source) => !lifecycle || source.lifecycle === lifecycle).slice(0, limit).map((source) => {
     const eligibility = sourceEligibility(source, [], { root, missionId: mission.missionId });
@@ -3234,8 +4267,212 @@ function querySources(root, args2 = {}) {
   return { status: items.length ? "ok" : "empty", missionId: mission.missionId, sourceCount: items.length, items, writes: [] };
 }
 
+// src/core/completion-gates.mjs
+var HASH_PATTERN4 = /^[0-9a-f]{64}$/u;
+var ARTIFACT_KINDS = /* @__PURE__ */ new Set(["report", "document", "code", "data", "figure", "media", "other"]);
+var VALIDATION_KINDS = /* @__PURE__ */ new Set(["test-log", "typecheck-log", "lint-log", "build-log", "audit-log", "validation-log", "command-output"]);
+var RECEIPT_FIELDS2 = /* @__PURE__ */ new Set(["schemaVersion", "workspaceId", "receiptId", "ledgerSequence", "missionId", "contractDigest", "summary", "artifacts", "validations", "criteriaSatisfied", "producedAt", "recordedAt", "producer"]);
+var ARTIFACT_FIELDS2 = /* @__PURE__ */ new Set(["path", "kind", "sha256", "derivedReferences"]);
+var VALIDATION_FIELDS2 = /* @__PURE__ */ new Set(["kind", "reference", "outputHash"]);
+var CRITERION_FIELDS2 = /* @__PURE__ */ new Set(["criterionId", "evidenceRefs"]);
+function missionPath2(missionId) {
+  return path15.posix.join(ARTIFACT_PATHS.missionsDir, `${missionId}.json`);
+}
+function sealed2(value2, allowed) {
+  return value2 && typeof value2 === "object" && !Array.isArray(value2) && Object.keys(value2).every((key) => allowed.has(key));
+}
+function currentHashedFile(root, relativePath, expectedHash) {
+  if (isDoveLessonArtifactPath(relativePath)) {
+    return { current: false, reason: "lesson-advisory-only", path: relativePath ?? null, actualHash: null };
+  }
+  if (typeof relativePath !== "string" || !relativePath.trim() || !HASH_PATTERN4.test(String(expectedHash ?? ""))) {
+    return { current: false, reason: "hashed-file-input-invalid", path: relativePath ?? null, actualHash: null };
+  }
+  const suppliedPath = relativePath.trim().replace(/\\/gu, "/");
+  const inspection = inspectDeclaredPath(root, suppliedPath, { requireNonEmpty: true });
+  if (inspection.status !== "existing") {
+    return { current: false, reason: inspection.reason ?? inspection.status, path: relativePath, actualHash: null };
+  }
+  const canonicalPath2 = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  if (inspection.normalizedPath !== suppliedPath || canonicalPath2 !== suppliedPath) {
+    return { current: false, reason: "canonical-path-changed", path: suppliedPath, canonicalPath: canonicalPath2, actualHash: null };
+  }
+  const actualHash = sha256File(path15.resolve(root, canonicalPath2));
+  return {
+    current: actualHash === expectedHash,
+    reason: actualHash === expectedHash ? null : "hash-mismatch",
+    path: canonicalPath2,
+    actualHash
+  };
+}
+function typedEvidenceEligibility(root, missionId, reference) {
+  if (reference.startsWith("source:")) {
+    const value2 = reference.slice("source:".length);
+    return evaluateSourceReferences(root, [value2], missionId)[0] ?? { eligible: false, reason: "unknown-source" };
+  }
+  if (reference.startsWith("note:")) {
+    const value2 = reference.slice("note:".length);
+    return evaluateNoteReferences(root, [value2], missionId)[0] ?? { eligible: false, reason: "unknown-note" };
+  }
+  return { eligible: null, reason: null };
+}
+function receiptAssessment(root, mission, receipt, workspaceId, missionCurrent = true) {
+  const failures = [];
+  if (receipt?.__readFailure) failures.push("receipt-json-malformed");
+  if (!missionCurrent) failures.push("mission-contract-invalid");
+  if (!sealed2(receipt, RECEIPT_FIELDS2) || receipt.schemaVersion !== 2) failures.push("receipt-schema-invalid");
+  if (receipt.workspaceId !== workspaceId || mission.workspaceId !== workspaceId) failures.push("workspace-binding-mismatch");
+  if (receipt.missionId !== mission.missionId) failures.push("mission-binding-mismatch");
+  if (receipt?.contractDigest !== mission.contractDigest || !missionCurrent) failures.push("contract-digest-stale");
+  if (!Array.isArray(receipt.artifacts) || receipt.artifacts.length === 0) failures.push("artifacts-missing");
+  if (!Array.isArray(receipt.validations)) failures.push("validations-invalid");
+  if (!Array.isArray(receipt.criteriaSatisfied)) failures.push("criteria-invalid");
+  const artifactAssessments = (Array.isArray(receipt.artifacts) ? receipt.artifacts : []).map((artifact) => {
+    if (!sealed2(artifact, ARTIFACT_FIELDS2) || typeof artifact.path !== "string" || !artifact.path.trim() || !ARTIFACT_KINDS.has(artifact.kind) || !HASH_PATTERN4.test(String(artifact.sha256 ?? "")) || !Array.isArray(artifact.derivedReferences)) {
+      return { path: artifact?.path ?? null, current: false, reason: "artifact-schema-invalid" };
+    }
+    return currentHashedFile(root, artifact.path, artifact.sha256);
+  });
+  const validationAssessments = (Array.isArray(receipt.validations) ? receipt.validations : []).map((validation) => {
+    if (!sealed2(validation, VALIDATION_FIELDS2) || typeof validation.reference !== "string" || !validation.reference.trim() || !VALIDATION_KINDS.has(validation.kind) || !HASH_PATTERN4.test(String(validation.outputHash ?? ""))) {
+      return { path: validation?.reference ?? null, current: false, reason: "validation-schema-invalid" };
+    }
+    return currentHashedFile(root, validation.reference, validation.outputHash);
+  });
+  if (artifactAssessments.some((item) => !item.current)) failures.push("artifact-drift");
+  if (validationAssessments.some((item) => !item.current)) failures.push("validation-drift");
+  const artifactPaths = (Array.isArray(receipt.artifacts) ? receipt.artifacts : []).map((artifact) => artifact?.path).filter(Boolean);
+  const validationPaths = (Array.isArray(receipt.validations) ? receipt.validations : []).map((validation) => validation?.reference).filter(Boolean);
+  if (new Set(artifactPaths).size !== artifactPaths.length) failures.push("artifact-path-duplicate");
+  if (new Set(validationPaths).size !== validationPaths.length) failures.push("validation-path-duplicate");
+  const requiredArtifactPaths = /* @__PURE__ */ new Set([
+    ...Array.isArray(mission.targetArtifacts) ? mission.targetArtifacts : [],
+    ...Array.isArray(mission.expectedArtifacts) ? mission.expectedArtifacts : []
+  ]);
+  if ([...requiredArtifactPaths].some((requiredPath) => !artifactPaths.includes(requiredPath))) {
+    failures.push("mission-artifact-coverage-missing");
+  }
+  const requiredCriteria = missionCompletionCriteria(mission);
+  const requiredIds = new Set(requiredCriteria.map((criterion) => criterion.criterionId));
+  const artifactRefs = new Set((receipt.artifacts ?? []).map((artifact) => `artifact:${artifact.path}`));
+  const validationRefs = new Set((receipt.validations ?? []).map((validation) => `validation:${validation.reference}`));
+  const seenCriteria = /* @__PURE__ */ new Set();
+  const criteria = (Array.isArray(receipt.criteriaSatisfied) ? receipt.criteriaSatisfied : []).map((criterion) => {
+    const criterionFailures = [];
+    if (!sealed2(criterion, CRITERION_FIELDS2)) criterionFailures.push("criterion-schema-invalid");
+    if (!requiredIds.has(criterion?.criterionId)) criterionFailures.push("criterion-unknown");
+    if (seenCriteria.has(criterion?.criterionId)) criterionFailures.push("criterion-duplicate");
+    seenCriteria.add(criterion?.criterionId);
+    const evidenceRefs = Array.isArray(criterion?.evidenceRefs) ? criterion.evidenceRefs : [];
+    if (evidenceRefs.length === 0 || evidenceRefs.some((reference) => typeof reference !== "string" || !reference.trim()) || new Set(evidenceRefs).size !== evidenceRefs.length) criterionFailures.push("criterion-evidence-invalid");
+    const evidence = evidenceRefs.map((reference) => {
+      if (artifactRefs.has(reference)) {
+        const artifactPath = reference.slice("artifact:".length);
+        const current = artifactAssessments.find((item) => item.path === artifactPath)?.current === true;
+        return { reference, eligible: current, reason: current ? null : "artifact-not-current" };
+      }
+      if (validationRefs.has(reference)) {
+        const validationPath = reference.slice("validation:".length);
+        const current = validationAssessments.find((item) => item.path === validationPath)?.current === true;
+        return { reference, eligible: current, reason: current ? null : "validation-not-current" };
+      }
+      const typed = typedEvidenceEligibility(root, mission.missionId, reference);
+      return { reference, eligible: typed.eligible === true, reason: typed.reason ?? "unresolved-evidence-reference" };
+    });
+    if (evidence.some((item) => !item.eligible)) criterionFailures.push("criterion-evidence-stale-or-ineligible");
+    return { criterionId: criterion?.criterionId ?? null, evidence, failures: criterionFailures, satisfied: criterionFailures.length === 0 };
+  });
+  const missingCriteria = requiredCriteria.filter((criterion) => !seenCriteria.has(criterion.criterionId));
+  if (missingCriteria.length > 0) failures.push("criteria-coverage-missing");
+  if (criteria.some((criterion) => !criterion.satisfied)) failures.push("criteria-evidence-invalid");
+  const typedEvidenceStale = criteria.some((criterion) => criterion.failures.includes("criterion-evidence-stale-or-ineligible"));
+  return {
+    receiptId: receipt.receiptId ?? null,
+    current: failures.length === 0,
+    stale: typedEvidenceStale || failures.some((failure) => ["mission-contract-invalid", "contract-digest-stale", "artifact-drift", "validation-drift"].includes(failure)),
+    failures: [...new Set(failures)],
+    artifacts: artifactAssessments,
+    validations: validationAssessments,
+    criteria,
+    missingCriterionIds: missingCriteria.map((criterion) => criterion.criterionId),
+    producedAt: receipt.producedAt ?? null
+  };
+}
+function evidenceRequirementAssessment(root, mission, receiptAssessments) {
+  const requirements = missionEvidenceRequirements(mission);
+  const currentReceipts = receiptAssessments.filter((receipt) => receipt.current);
+  const artifactRefs = new Set(currentReceipts.flatMap((receipt) => receipt.artifacts.filter((item) => item.current).map((item) => `artifact:${item.path}`)));
+  const validationRefs = new Set(currentReceipts.flatMap((receipt) => receipt.validations.filter((item) => item.current).map((item) => `validation:${item.path}`)));
+  return requirements.map(({ requirementId, requirement }) => {
+    if (requirement === "review:authoritative") {
+      const coverage = verifyReviewCoverage(root, { missionId: mission.missionId, requireAuthoritative: true });
+      return { requirementId, requirement, satisfied: coverage.authoritative === true && coverage.failures.length === 0, reason: coverage.authoritative === true && coverage.failures.length === 0 ? null : "authoritative-review-proof-missing" };
+    }
+    if (requirement.startsWith("source:")) {
+      const evaluation = typedEvidenceEligibility(root, mission.missionId, requirement);
+      return { requirementId, requirement, satisfied: evaluation.eligible === true, reason: evaluation.eligible === true ? null : evaluation.reason };
+    }
+    if (requirement.startsWith("note:")) {
+      const evaluation = typedEvidenceEligibility(root, mission.missionId, requirement);
+      return { requirementId, requirement, satisfied: evaluation.eligible === true, reason: evaluation.eligible === true ? null : evaluation.reason };
+    }
+    if (requirement.startsWith("artifact:")) {
+      return { requirementId, requirement, satisfied: artifactRefs.has(requirement), reason: artifactRefs.has(requirement) ? null : "required-artifact-not-current" };
+    }
+    if (requirement.startsWith("validation:")) {
+      return { requirementId, requirement, satisfied: validationRefs.has(requirement), reason: validationRefs.has(requirement) ? null : "required-validation-not-current" };
+    }
+    return { requirementId, requirement, satisfied: false, reason: "unsupported-evidence-requirement-syntax" };
+  });
+}
+function assessMissionCompletion(root, args2 = {}) {
+  const workspace = openDoveWorkspace(root, { operation: "Mission completion assessment" });
+  if (!args2 || typeof args2 !== "object" || Array.isArray(args2)) throw new Error("assess_mission_completion arguments must be a plain object.");
+  const unknown = Object.keys(args2).filter((field) => field !== "missionId");
+  if (unknown.length > 0) throw new Error(`assess_mission_completion does not accept unknown input: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
+  const missionId = typeof args2.missionId === "string" ? args2.missionId.trim() : "";
+  if (!missionId) throw new Error("assess_mission_completion requires missionId.");
+  const relativePath = missionPath2(missionId);
+  if (!fs13.existsSync(path15.resolve(root, relativePath))) throw new Error(`Mission does not exist: ${missionId}.`);
+  const mission = readJson(root, relativePath, null);
+  let missionContractFailure = null;
+  try {
+    assertCurrentMissionContract(mission);
+  } catch (error) {
+    missionContractFailure = error instanceof Error ? error.message : String(error);
+  }
+  const receipts = readExecutionReceipts(root, missionId);
+  const receiptAssessments = receipts.map((receipt) => receiptAssessment(root, mission, receipt, workspace.manifest.workspaceId, missionContractFailure === null));
+  const requirements = evidenceRequirementAssessment(root, mission, receiptAssessments);
+  const currentReceipt = [...receiptAssessments].reverse().find((receipt) => receipt.current) ?? null;
+  const incompleteReasons = [];
+  if (missionContractFailure) incompleteReasons.push("mission-contract-invalid");
+  if (!currentReceipt) incompleteReasons.push(receipts.length === 0 ? "execution-receipt-missing" : "execution-receipts-stale-or-invalid");
+  const unmetRequirements = requirements.filter((requirement) => !requirement.satisfied);
+  if (unmetRequirements.length > 0) incompleteReasons.push("evidence-requirements-unmet");
+  return {
+    status: incompleteReasons.length === 0 ? "complete" : "incomplete",
+    complete: incompleteReasons.length === 0,
+    missionId,
+    contractDigest: mission.contractDigest,
+    currentReceiptId: currentReceipt?.receiptId ?? null,
+    receiptCount: receipts.length,
+    staleReceiptIds: receiptAssessments.filter((receipt) => receipt.stale).map((receipt) => receipt.receiptId),
+    receipts: receiptAssessments,
+    completionCriteria: missionCompletionCriteria(mission),
+    evidenceRequirements: requirements,
+    incompleteReasons,
+    diagnostics: {
+      zeroWrite: true,
+      missionContractFailure,
+      missionPath: relativePath,
+      receiptRoot: ARTIFACT_PATHS.executionReceiptsDir,
+      artifactAuthority: "execution-receipt-ledger"
+    }
+  };
+}
+
 // src/core/execution-receipts.mjs
-var EXECUTION_RECEIPT_SCHEMA_VERSION = 1;
 var EXECUTION_RECEIPT_ARTIFACT_KINDS = Object.freeze(["report", "document", "code", "data", "figure", "media", "other"]);
 var EXECUTION_RECEIPT_VALIDATION_KINDS = Object.freeze(["test-log", "typecheck-log", "lint-log", "build-log", "audit-log", "validation-log", "command-output"]);
 var ARTIFACT_KIND_SET = new Set(EXECUTION_RECEIPT_ARTIFACT_KINDS);
@@ -3250,18 +4487,20 @@ var TOP_LEVEL_FIELDS = /* @__PURE__ */ new Set([
   "criteriaSatisfied",
   "producedAt"
 ]);
-var ARTIFACT_FIELDS = /* @__PURE__ */ new Set(["path", "kind", "sha256"]);
-var VALIDATION_FIELDS = /* @__PURE__ */ new Set(["kind", "reference", "outputHash"]);
-var CRITERION_FIELDS = /* @__PURE__ */ new Set(["criterionId", "evidenceRefs"]);
+var ARTIFACT_FIELDS3 = /* @__PURE__ */ new Set(["path", "kind", "sha256"]);
+var VALIDATION_FIELDS3 = /* @__PURE__ */ new Set(["kind", "reference", "outputHash"]);
+var CRITERION_FIELDS3 = /* @__PURE__ */ new Set(["criterionId", "evidenceRefs"]);
 var RECEIPT_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
-var HASH_PATTERN3 = /^[0-9a-f]{64}$/u;
+var HASH_PATTERN5 = /^[0-9a-f]{64}$/u;
 var EVIDENCE_REF_PATTERN = /^(artifact|validation|source|note):(.+)$/u;
+var POST_COMMIT_ASSESSMENT_FIELDS = /* @__PURE__ */ new Set(["kind", "missionId"]);
+var POST_COMMIT_ASSESSMENT_KIND = "assess-mission-completion";
 function assertPlainObject5(value2, label) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) {
     throw new Error(`${label} must be a plain object.`);
   }
 }
-function assertAllowedFields3(value2, allowed, label) {
+function assertAllowedFields2(value2, allowed, label) {
   assertPlainObject5(value2, label);
   const unknown = Object.keys(value2).filter((field) => !allowed.has(field));
   if (unknown.length > 0) {
@@ -3275,13 +4514,13 @@ function nonEmptyString2(value2, label) {
   return value2.trim();
 }
 function hashString(value2, label) {
-  const hash2 = nonEmptyString2(value2, label).toLowerCase();
-  if (!HASH_PATTERN3.test(hash2)) {
+  const hash3 = nonEmptyString2(value2, label).toLowerCase();
+  if (!HASH_PATTERN5.test(hash3)) {
     throw new Error(`${label} must be a lowercase SHA-256 digest.`);
   }
-  return hash2;
+  return hash3;
 }
-function safeId2(value2, label) {
+function safeId3(value2, label) {
   const id = nonEmptyString2(value2, label);
   if (!RECEIPT_ID_PATTERN.test(id)) {
     throw new Error(`${label} must start with a lowercase letter or digit and contain only lowercase letters, digits, dot, underscore, or hyphen.`);
@@ -3297,10 +4536,10 @@ function parseProducedAt(value2) {
   return producedAt;
 }
 function executionReceiptPath(receiptId) {
-  return path12.posix.join(ARTIFACT_PATHS.executionReceiptsDir, `${receiptId}.json`);
+  return path16.posix.join(ARTIFACT_PATHS.executionReceiptsDir, `${receiptId}.json`);
 }
 function missionContractPath(missionId) {
-  return path12.posix.join(ARTIFACT_PATHS.missionsDir, `${missionId}.json`);
+  return path16.posix.join(ARTIFACT_PATHS.missionsDir, `${missionId}.json`);
 }
 function inspectHashedFile(root, rawPath, expectedHash, label) {
   const normalized = normalizeProjectRelativePath(rawPath);
@@ -3314,15 +4553,15 @@ function inspectHashedFile(root, rawPath, expectedHash, label) {
   if (inspection.status !== "existing") {
     throw new Error(`${label} must be a safe existing non-empty regular file: ${normalized.normalizedPath} (${inspection.reason ?? inspection.status}).`);
   }
-  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  if (canonicalPath !== normalized.normalizedPath) {
-    throw new Error(`${label} must use its canonical realpath-contained path; alias ${normalized.normalizedPath} resolves to ${canonicalPath}.`);
+  const canonicalPath2 = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  if (canonicalPath2 !== normalized.normalizedPath) {
+    throw new Error(`${label} must use its canonical realpath-contained path; alias ${normalized.normalizedPath} resolves to ${canonicalPath2}.`);
   }
-  const actualHash = sha256File(path12.resolve(root, canonicalPath));
+  const actualHash = sha256File(path16.resolve(root, canonicalPath2));
   if (actualHash !== expectedHash) {
-    throw new Error(`${label} SHA-256 mismatch for ${canonicalPath}.`);
+    throw new Error(`${label} SHA-256 mismatch for ${canonicalPath2}.`);
   }
-  return { path: canonicalPath, sha256: actualHash };
+  return { path: canonicalPath2, sha256: actualHash };
 }
 function normalizeArtifacts(root, mission, value2) {
   if (!Array.isArray(value2) || value2.length === 0) {
@@ -3331,18 +4570,18 @@ function normalizeArtifacts(root, mission, value2) {
   const seen = /* @__PURE__ */ new Set();
   const artifacts = value2.map((item, index) => {
     const label = `artifacts[${index}]`;
-    assertAllowedFields3(item, ARTIFACT_FIELDS, label);
+    assertAllowedFields2(item, ARTIFACT_FIELDS3, label);
     const rawPath = nonEmptyString2(item.path, `${label}.path`);
     const kind = nonEmptyString2(item.kind, `${label}.kind`);
     if (!ARTIFACT_KIND_SET.has(kind)) {
       throw new Error(`${label}.kind must be one of: ${EXECUTION_RECEIPT_ARTIFACT_KINDS.join(", ")}.`);
     }
-    const sha2564 = hashString(item.sha256, `${label}.sha256`);
-    const inspected = inspectHashedFile(root, rawPath, sha2564, label);
+    const sha2565 = hashString(item.sha256, `${label}.sha256`);
+    const inspected = inspectHashedFile(root, rawPath, sha2565, label);
     assertNotDoveLessonArtifactPath(inspected.path, `${label}.path`);
     if (seen.has(inspected.path)) throw new Error(`artifacts contains duplicate canonical path ${inspected.path}.`);
     seen.add(inspected.path);
-    return { path: inspected.path, kind, sha256: sha2564 };
+    return { path: inspected.path, kind, sha256: sha2565 };
   });
   const requiredArtifacts = /* @__PURE__ */ new Set([
     ...Array.isArray(mission.targetArtifacts) ? mission.targetArtifacts : [],
@@ -3360,7 +4599,7 @@ function normalizeValidations(root, value2) {
   const seen = /* @__PURE__ */ new Set();
   return value2.map((item, index) => {
     const label = `validations[${index}]`;
-    assertAllowedFields3(item, VALIDATION_FIELDS, label);
+    assertAllowedFields2(item, VALIDATION_FIELDS3, label);
     const kind = nonEmptyString2(item.kind, `${label}.kind`);
     if (!VALIDATION_KIND_SET.has(kind)) {
       throw new Error(`${label}.kind must be one of: ${EXECUTION_RECEIPT_VALIDATION_KINDS.join(", ")}.`);
@@ -3399,7 +4638,7 @@ function normalizeCriteria(root, mission, value2, artifacts, validations) {
   const seen = /* @__PURE__ */ new Set();
   const criteria = value2.map((item, index) => {
     const label = `criteriaSatisfied[${index}]`;
-    assertAllowedFields3(item, CRITERION_FIELDS, label);
+    assertAllowedFields2(item, CRITERION_FIELDS3, label);
     const criterionId = nonEmptyString2(item.criterionId, `${label}.criterionId`);
     if (!requiredIds.has(criterionId)) throw new Error(`${label}.criterionId is unknown for the current mission: ${criterionId}.`);
     if (seen.has(criterionId)) throw new Error(`criteriaSatisfied contains duplicate criterionId ${criterionId}.`);
@@ -3425,14 +4664,14 @@ function normalizeCriteria(root, mission, value2, artifacts, validations) {
 }
 function validateExecutionReceipt(root, args2 = {}) {
   const workspace = openDoveWorkspace(root, { operation: "Execution receipt validation" });
-  assertAllowedFields3(args2, TOP_LEVEL_FIELDS, "ingest_execution_receipt");
-  const receiptId = safeId2(args2.receiptId, "receiptId");
-  const missionId = safeId2(args2.missionId, "missionId");
+  assertAllowedFields2(args2, TOP_LEVEL_FIELDS, "ingest_execution_receipt");
+  const receiptId = safeId3(args2.receiptId, "receiptId");
+  const missionId = safeId3(args2.missionId, "missionId");
   const contractDigest = hashString(args2.contractDigest, "contractDigest");
   const summary = nonEmptyString2(args2.summary, "summary");
   const producedAt = parseProducedAt(args2.producedAt);
   const missionRelativePath = missionContractPath(missionId);
-  if (!fs12.existsSync(path12.resolve(root, missionRelativePath))) {
+  if (!fs14.existsSync(path16.resolve(root, missionRelativePath))) {
     throw new Error(`Mission does not exist: ${missionId}.`);
   }
   const mission = readJson(root, missionRelativePath, null);
@@ -3442,72 +4681,254 @@ function validateExecutionReceipt(root, args2 = {}) {
   if (contractDigest !== currentContract.contractDigest) throw new Error(`contractDigest does not match the current mission contract for ${missionId}.`);
   const receiptRelativePath = executionReceiptPath(receiptId);
   const mutationContext = currentMutationContext(root);
-  if (mutationContext ? mutationContext.fileExists(receiptRelativePath) : fs12.existsSync(path12.resolve(root, receiptRelativePath))) {
+  if (mutationContext) {
+    mutationContext.requireCommitPrecondition(ARTIFACT_PATHS.executionReceiptsDir);
+    mutationContext.requireCommitLock(".dove/.receipt-ledger-append.lock", { label: "Execution receipt ledger append lock" });
+  }
+  if (mutationContext ? mutationContext.fileExists(receiptRelativePath) : fs14.existsSync(path16.resolve(root, receiptRelativePath))) {
     throw new Error(`Execution receipt id is already occupied: ${receiptId}.`);
   }
   const artifacts = normalizeArtifacts(root, mission, args2.artifacts);
   const validations = normalizeValidations(root, args2.validations);
   const criteriaSatisfied = normalizeCriteria(root, mission, args2.criteriaSatisfied, artifacts, validations);
-  const receipt = {
+  const baseReceipt = {
     schemaVersion: EXECUTION_RECEIPT_SCHEMA_VERSION,
     workspaceId: workspace.manifest.workspaceId,
     receiptId,
+    ledgerSequence: workspace.receiptLedger.nextLedgerSequence,
     missionId,
     contractDigest,
     summary,
     artifacts,
     validations,
     criteriaSatisfied,
-    producedAt
+    producedAt,
+    recordedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    producer: { kind: "public-execution", actionId: "ingest-execution-receipt" }
   };
-  const lineageUpdate = prepareArtifactLineageUpdate(root, receipt);
-  return {
-    mission,
-    receipt,
-    lineageUpdate
-  };
+  const receipt = { ...baseReceipt, artifacts: deriveArtifactReferences(baseReceipt) };
+  assertReceiptAppendable(workspace.receiptLedger, receipt);
+  return { mission, receipt };
 }
 function ingestExecutionReceipt(root, args2 = {}) {
   assertGovernanceMutationRegistered("ingest-execution-receipt", "guarded");
-  if (!currentMutationContext(root)) throw new Error("ingest_execution_receipt requires an active MutationContext.");
-  const { receipt, lineageUpdate } = validateExecutionReceipt(root, args2);
+  const mutationContext = currentMutationContext(root);
+  if (!mutationContext) throw new Error("ingest_execution_receipt requires an active MutationContext.");
+  const { receipt } = validateExecutionReceipt(root, args2);
   writeJson(root, executionReceiptPath(receipt.receiptId), receipt);
-  writeJson(root, ARTIFACT_PATHS.artifactOwnership, lineageUpdate.ownership);
-  writeJson(root, ARTIFACT_PATHS.artifactLineage, lineageUpdate.lineage);
   const plannedOnly = isPatchPlanMode(root);
   return {
     status: plannedOnly ? "ingest-planned" : "ingested",
     receipt,
-    completion: { missionId: receipt.missionId, assessWith: "assess_mission_completion" },
+    completion: { missionId: receipt.missionId, assessWith: "assess_mission_completion", assessment: null },
+    postCommit: plannedOnly ? null : { kind: POST_COMMIT_ASSESSMENT_KIND, missionId: receipt.missionId },
     mutation: {
-      mutationMode: currentMutationContext(root).mutationMode,
+      mutationMode: mutationContext.mutationMode,
       writesApplied: !plannedOnly,
-      paths: [executionReceiptPath(receipt.receiptId), ARTIFACT_PATHS.artifactOwnership, ARTIFACT_PATHS.artifactLineage]
+      paths: [executionReceiptPath(receipt.receiptId)]
+    }
+  };
+}
+function resolveExecutionReceiptPostCommit(root, result, options = {}) {
+  if (!result || typeof result !== "object" || Array.isArray(result) || !Object.hasOwn(result, "postCommit")) return result;
+  const unknownOptions = Object.keys(options).filter((field) => field !== "committed");
+  if (unknownOptions.length > 0) throw new Error(`Execution receipt post-commit resolution does not accept unknown options: ${unknownOptions.join(", ")}.`);
+  const committed = options.committed !== false;
+  const { postCommit, ...publicResult } = result;
+  if (postCommit === null) return publicResult;
+  assertAllowedFields2(postCommit, POST_COMMIT_ASSESSMENT_FIELDS, "execution receipt postCommit");
+  if (postCommit.kind !== POST_COMMIT_ASSESSMENT_KIND) throw new Error(`Unsupported execution receipt postCommit kind: ${postCommit.kind}.`);
+  const missionId = safeId3(postCommit.missionId, "execution receipt postCommit.missionId");
+  if (!publicResult.completion || publicResult.completion.missionId !== missionId || publicResult.completion.assessment !== null) {
+    throw new Error("Execution receipt postCommit descriptor does not match its sealed completion result.");
+  }
+  if (!committed) return publicResult;
+  if (publicResult.mutationMode === "patch-plan" || publicResult.writesApplied !== true || publicResult.mutationSummary?.transactionState?.phase !== "committed") {
+    throw new Error("Execution receipt post-commit assessment requires a successfully committed direct-process mutation result.");
+  }
+  return {
+    ...publicResult,
+    completion: {
+      ...publicResult.completion,
+      assessment: assessMissionCompletion(root, { missionId })
     }
   };
 }
 function readExecutionReceipts(root, missionId = null) {
-  openDoveWorkspace(root, { operation: "Execution receipt read" });
-  const receiptsRoot = path12.resolve(root, ARTIFACT_PATHS.executionReceiptsDir);
-  if (!fs12.existsSync(receiptsRoot)) return [];
-  return fs12.readdirSync(receiptsRoot, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => {
-    const relativePath = path12.posix.join(ARTIFACT_PATHS.executionReceiptsDir, entry.name);
+  const workspace = openDoveWorkspace(root, { operation: "Execution receipt read" });
+  return workspace.receiptLedger.receipts.filter((receipt) => !missionId || receipt.missionId === missionId);
+}
+
+// src/core/file-set-transaction.mjs
+import crypto8 from "node:crypto";
+import fs15 from "node:fs";
+import path17 from "node:path";
+function errorMessage2(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+function makeDirectory(fsOps, root, directoryPath, createdDirectories) {
+  if (fs15.existsSync(directoryPath)) return;
+  const missing = [];
+  let current = directoryPath;
+  while (current !== root && !fs15.existsSync(current)) {
+    missing.push(current);
+    current = path17.dirname(current);
+  }
+  const relative = path17.relative(root, current);
+  if (relative === ".." || relative.startsWith(`..${path17.sep}`) || path17.isAbsolute(relative)) throw new Error(`Transactional write directory escaped its root: ${directoryPath}`);
+  for (const item of missing.reverse()) {
+    fsOps.mkdirSync(item, { recursive: false });
+    createdDirectories.push(item);
+  }
+}
+function removeEmptyDirectories(fsOps, directories) {
+  for (const directoryPath of [...directories].sort((left, right) => right.length - left.length)) {
     try {
-      return readJson(root, relativePath, null);
+      fsOps.rmdirSync(directoryPath);
     } catch (error) {
-      return {
-        schemaVersion: null,
-        receiptId: entry.name.slice(0, -".json".length),
-        missionId,
-        __readFailure: error instanceof Error ? error.message : String(error)
-      };
+      if (!["ENOENT", "ENOTEMPTY"].includes(error?.code)) throw error;
     }
-  }).filter((receipt) => receipt && (!missionId || receipt.missionId === missionId || receipt.__readFailure)).sort((left, right) => String(left.producedAt).localeCompare(String(right.producedAt)) || String(left.receiptId).localeCompare(String(right.receiptId)));
+  }
+}
+var MAX_CLEANUP_RESIDUES2 = 20;
+function committedResult(paths, cleanupFailures) {
+  const residues = cleanupFailures.slice(0, MAX_CLEANUP_RESIDUES2);
+  return {
+    writtenPaths: [...paths],
+    transactionState: {
+      phase: "committed",
+      rollbackAttempted: false,
+      cleanup: {
+        status: cleanupFailures.length === 0 ? "clean" : "residue",
+        residueCount: cleanupFailures.length,
+        residues,
+        omittedResidueCount: Math.max(0, cleanupFailures.length - residues.length)
+      }
+    }
+  };
+}
+function writeFileSetTransaction(entries, options = {}) {
+  if (!Array.isArray(entries)) throw new Error("Transactional write entries must be an array.");
+  const fsOps = options.fsOps ?? fs15;
+  const transactionId = options.transactionId ?? crypto8.randomUUID();
+  const resolved = [];
+  const targets = /* @__PURE__ */ new Set();
+  for (const [index, entry] of entries.entries()) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error(`Transactional write entry ${index} must be an object.`);
+    const root = fs15.realpathSync.native(path17.resolve(entry.root));
+    const target2 = resolveCanonicalContainedWrite(root, entry.relativePath, { label: entry.label ?? "Transactional write path" });
+    if (targets.has(target2.fullPath)) throw new Error(`Transactional write set contains duplicate target ${target2.relativePath}.`);
+    targets.add(target2.fullPath);
+    let stat = null;
+    try {
+      stat = fs15.lstatSync(target2.fullPath);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (stat && !stat.isFile()) throw new Error(`Transactional write target must be absent or a regular file: ${target2.relativePath}.`);
+    if (stat && entry.force !== true) continue;
+    resolved.push({
+      ...entry,
+      root,
+      relativePath: target2.relativePath,
+      fullPath: target2.fullPath,
+      content: Buffer.isBuffer(entry.content) ? Buffer.from(entry.content) : Buffer.from(String(entry.content ?? ""), entry.encoding ?? "utf8"),
+      previous: stat ? Buffer.from(fs15.readFileSync(target2.fullPath)) : null,
+      previousMode: stat ? stat.mode & 4095 : null
+    });
+  }
+  if (resolved.length === 0) return committedResult([], []);
+  const roots = [...new Set(resolved.map((entry) => entry.root))];
+  const transactions = /* @__PURE__ */ new Map();
+  const createdDirectories = [];
+  const promotions = [];
+  let phase = "preparing";
+  try {
+    for (const root of roots) {
+      const relativeTransactionPath = `.dove-file-transaction-${transactionId.replace(/[^a-z0-9._-]/giu, "-")}`;
+      const transactionPath = resolveCanonicalContainedWrite(root, relativeTransactionPath, { label: "Transactional staging path" }).fullPath;
+      if (fs15.existsSync(transactionPath)) throw new Error(`Transactional staging path is already occupied: ${transactionPath}.`);
+      fsOps.mkdirSync(transactionPath, { recursive: false });
+      const stagedRoot = path17.join(transactionPath, "staged");
+      const backupRoot = path17.join(transactionPath, "backups");
+      fsOps.mkdirSync(stagedRoot, { recursive: false });
+      fsOps.mkdirSync(backupRoot, { recursive: false });
+      transactions.set(root, { transactionPath, stagedRoot, backupRoot });
+    }
+    for (const [index, entry] of resolved.entries()) {
+      const transaction = transactions.get(entry.root);
+      const stagedPath = path17.join(transaction.stagedRoot, `file-${index}`);
+      fsOps.writeFileSync(stagedPath, entry.content);
+      if (entry.previousMode !== null && typeof fsOps.chmodSync === "function") fsOps.chmodSync(stagedPath, entry.previousMode);
+      entry.stagedPath = stagedPath;
+    }
+    phase = "promoting";
+    for (const [index, entry] of resolved.entries()) {
+      resolveCanonicalContainedWrite(entry.root, entry.relativePath, { label: entry.label ?? "Transactional write path" });
+      const currentExists = fs15.existsSync(entry.fullPath);
+      if (currentExists !== (entry.previous !== null)) throw new Error(`Transactional write precondition changed for ${entry.relativePath}.`);
+      if (currentExists && !fs15.readFileSync(entry.fullPath).equals(entry.previous)) throw new Error(`Transactional write precondition changed for ${entry.relativePath}.`);
+      const transaction = transactions.get(entry.root);
+      const promotion = { entry, backupPath: null, promoted: false };
+      promotions.push(promotion);
+      makeDirectory(fsOps, entry.root, path17.dirname(entry.fullPath), createdDirectories);
+      if (currentExists) {
+        promotion.backupPath = path17.join(transaction.backupRoot, `file-${index}`);
+        fsOps.renameSync(entry.fullPath, promotion.backupPath);
+      }
+      fsOps.renameSync(entry.stagedPath, entry.fullPath);
+      promotion.promoted = true;
+    }
+    phase = "committed";
+    const cleanupFailures = [];
+    for (const transaction of transactions.values()) {
+      try {
+        fsOps.rmSync(transaction.transactionPath, { recursive: true, force: true });
+      } catch (cleanupError) {
+        cleanupFailures.push({ path: transaction.transactionPath, reason: errorMessage2(cleanupError) });
+      }
+    }
+    return committedResult(resolved.map((entry) => entry.relativePath), cleanupFailures);
+  } catch (error) {
+    if (phase === "committed") throw new Error(`Transactional write committed before post-commit cleanup failed: ${errorMessage2(error)}`, { cause: error });
+    if (promotions.length === 0) {
+      for (const transaction of transactions.values()) {
+        try {
+          if (fs15.existsSync(transaction.transactionPath)) fsOps.rmSync(transaction.transactionPath, { recursive: true, force: true });
+        } catch {
+        }
+      }
+      throw error;
+    }
+    const rollbackFailures = [];
+    for (const promotion of [...promotions].reverse()) {
+      try {
+        if (promotion.promoted && fs15.existsSync(promotion.entry.fullPath)) fsOps.rmSync(promotion.entry.fullPath, { force: true });
+        if (promotion.backupPath && fs15.existsSync(promotion.backupPath)) fsOps.renameSync(promotion.backupPath, promotion.entry.fullPath);
+      } catch (rollbackError) {
+        rollbackFailures.push(errorMessage2(rollbackError));
+      }
+    }
+    try {
+      removeEmptyDirectories(fsOps, createdDirectories);
+    } catch (rollbackError) {
+      rollbackFailures.push(errorMessage2(rollbackError));
+    }
+    for (const transaction of transactions.values()) {
+      try {
+        if (fs15.existsSync(transaction.transactionPath)) fsOps.rmSync(transaction.transactionPath, { recursive: true, force: true });
+      } catch (rollbackError) {
+        rollbackFailures.push(errorMessage2(rollbackError));
+      }
+    }
+    if (rollbackFailures.length > 0) throw new Error(`Transactional write failed and rollback also failed: ${errorMessage2(error)}; rollback: ${rollbackFailures.join("; ")}`, { cause: error });
+    throw new Error(`Transactional write failed and all staged changes were rolled back: ${errorMessage2(error)}`, { cause: error });
+  }
 }
 
 // src/core/lessons.mjs
-import fs13 from "node:fs";
-import path13 from "node:path";
+import fs16 from "node:fs";
+import path18 from "node:path";
 var DOVE_LESSON_SCHEMA_VERSION = 1;
 var DOVE_LESSON_PROPOSAL_VERSION = 1;
 var DOVE_LESSON_SCOPES = Object.freeze(["global", "mission"]);
@@ -3552,7 +4973,7 @@ var QUERY_FIELDS2 = /* @__PURE__ */ new Set([
   "limit"
 ]);
 function lessonPath(lessonId) {
-  return path13.posix.join(ARTIFACT_PATHS.lessonsDir, `${lessonId}.json`);
+  return path18.posix.join(ARTIFACT_PATHS.lessonsDir, `${lessonId}.json`);
 }
 function normalizeOptionalText(value2, label) {
   if (value2 === void 0) return void 0;
@@ -3573,9 +4994,9 @@ function normalizeMutationModeForLesson(root, args2) {
 }
 function readLessons(root) {
   openDoveWorkspace(root, { operation: "Dove lesson read" });
-  const directory = path13.resolve(root, ARTIFACT_PATHS.lessonsDir);
-  if (!fs13.existsSync(directory)) return [];
-  return fs13.readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".json")).sort((left, right) => left.name.localeCompare(right.name)).map((entry) => readJson(root, path13.posix.join(ARTIFACT_PATHS.lessonsDir, entry.name), null));
+  const directory = path18.resolve(root, ARTIFACT_PATHS.lessonsDir);
+  if (!fs16.existsSync(directory)) return [];
+  return fs16.readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".json")).sort((left, right) => left.name.localeCompare(right.name)).map((entry) => readJson(root, path18.posix.join(ARTIFACT_PATHS.lessonsDir, entry.name), null));
 }
 function validateEligibleReferences(root, missionId, sourceIds, noteIds) {
   const sources = evaluateSourceReferences(root, sourceIds, missionId);
@@ -3652,7 +5073,7 @@ function buildProposal2(root, args2) {
   }
   const relativePath = lessonPath(content.lessonId);
   const context = currentMutationContext(root);
-  const occupied = context ? context.fileExists(relativePath) : fs13.existsSync(path13.resolve(root, relativePath));
+  const occupied = context ? context.fileExists(relativePath) : fs16.existsSync(path18.resolve(root, relativePath));
   if (occupied) throw new Error(`Dove lesson id is already occupied: ${content.lessonId}.`);
   const lessons = readLessons(root);
   const evidenceSnapshots = validateEligibleReferences(root, mission.missionId, content.sourceIds, content.noteIds);
@@ -3692,12 +5113,30 @@ function buildProposal2(root, args2) {
     supersession
   };
   const proposalDigest = domainSha256(stableWorkspaceSerialize(envelope));
-  const proposalToken2 = Buffer.from(JSON.stringify({
-    version: DOVE_LESSON_PROPOSAL_VERSION,
+  const replayArgs = {
+    confirmed: true,
+    proposalVersion: DOVE_LESSON_PROPOSAL_VERSION,
     proposalWorkspace,
     proposalDigest,
-    lessonId: lesson.lessonId
-  }), "utf8").toString("base64url");
+    mutationMode: mutationMode2,
+    workspaceId: envelope.workspaceId,
+    contractDigest: envelope.contractDigest,
+    createdAt: lesson.createdAt,
+    missionId: content.missionId,
+    lessonId: content.lessonId,
+    scope: content.scope,
+    kind: content.kind,
+    summary: content.summary,
+    ...content.details === void 0 ? {} : { details: content.details },
+    nextTimeGuidance: content.nextTimeGuidance,
+    sourceIds: content.sourceIds,
+    noteIds: content.noteIds,
+    artifactRefs: content.artifactRefs,
+    appliesToArtifactRefs: content.appliesToArtifactRefs,
+    tags: content.tags,
+    ...content.supersedesLessonId === void 0 ? {} : { supersedesLessonId: content.supersedesLessonId }
+  };
+  const proposalToken2 = Buffer.from(JSON.stringify({ version: DOVE_LESSON_PROPOSAL_VERSION, mutationMode: mutationMode2, confirmArgs: replayArgs }), "utf8").toString("base64url");
   return { content, lesson, envelope, proposalDigest, proposalToken: proposalToken2, relativePath, mutationMode: mutationMode2 };
 }
 function confirmArgsFor2(proposal) {
@@ -3806,7 +5245,7 @@ function assessPinnedArtifacts(root, missionId, references) {
     if (!owner) return { ...reference, current: false, reason: "artifact-ownership-missing" };
     const inspection = inspectDeclaredPath(root, reference.path, { requireNonEmpty: true });
     if (inspection.status !== "existing") return { ...reference, current: false, reason: inspection.reason ?? inspection.status };
-    const currentHash2 = sha256File(path13.resolve(root, reference.path));
+    const currentHash2 = sha256File(path18.resolve(root, reference.path));
     const current = currentHash2 === reference.sha256 && owner.sha256 === reference.sha256 && owner.missionId === missionId;
     return { ...reference, current, reason: current ? null : "artifact-hash-or-ownership-drift", actualHash: currentHash2 };
   });
@@ -3879,840 +5318,12 @@ function queryDoveLessons(root, args2 = {}) {
 }
 
 // src/core/mission-queries.mjs
-import fs17 from "node:fs";
-import path17 from "node:path";
-
-// src/core/completion-gates.mjs
-import fs15 from "node:fs";
-import path15 from "node:path";
-
-// src/core/review-exchange.mjs
-import crypto6 from "node:crypto";
-import fs14 from "node:fs";
-import path14 from "node:path";
-var REVIEW_EXCHANGE_SCHEMA_VERSION = 7;
-var REVIEW_EXCHANGE_POLICIES = Object.freeze([
-  "local-preflight",
-  "isolated-selected-artifacts",
-  "final-plan-results-only",
-  "external"
-]);
-var POLICY_SET = new Set(REVIEW_EXCHANGE_POLICIES);
-var PREPARE_FIELDS = /* @__PURE__ */ new Set(["missionId", "policy", "artifactPaths", "finalPlanPaths", "finalResultPaths"]);
-var IMPORT_FIELDS = /* @__PURE__ */ new Set(["missionId", "exchangeId", "reviewId"]);
-var COVERAGE_FIELDS = /* @__PURE__ */ new Set(["missionId", "artifactPaths", "requireAuthoritative"]);
-var EXPECTED_COVERAGE_FIELDS = /* @__PURE__ */ new Set(["missionId", "expectedSnapshots", "requireAuthoritative"]);
-var REVIEW_VERDICTS = /* @__PURE__ */ new Set(["coherent", "needs-revision", "needs-evidence", "blocked"]);
-var REVIEW_STATUSES = /* @__PURE__ */ new Set(["completed", "blocked", "failed"]);
-var HASH_PATTERN4 = /^[0-9a-f]{64}$/u;
-var INPUT_FIELDS = /* @__PURE__ */ new Set([
-  "schemaVersion",
-  "workspaceId",
-  "missionId",
-  "contractDigest",
-  "exchangeId",
-  "createdAt",
-  "policy",
-  "scopeSha256",
-  "inputBoundary",
-  "artifactPaths",
-  "finalPlanPaths",
-  "finalResultPaths",
-  "reviewedArtifactPaths",
-  "reviewedArtifacts",
-  "reviewedArtifactSetSha256",
-  "outputContract",
-  "privacyBoundary"
-]);
-var MANIFEST_FIELDS2 = /* @__PURE__ */ new Set([
-  "schemaVersion",
-  "workspaceId",
-  "missionId",
-  "contractDigest",
-  "exchangeId",
-  "status",
-  "createdAt",
-  "policy",
-  "scopeSha256",
-  "inputBoundary",
-  "inputPath",
-  "inputSha256",
-  "handoffPath",
-  "reportPath",
-  "artifactPaths",
-  "finalPlanPaths",
-  "finalResultPaths",
-  "reviewedArtifactPaths",
-  "reviewedArtifacts",
-  "reviewedArtifactSetSha256"
-]);
-var HANDOFF_FIELDS = /* @__PURE__ */ new Set([
-  "schemaVersion",
-  "workspaceId",
-  "missionId",
-  "contractDigest",
-  "exchangeId",
-  "reviewId",
-  "policy",
-  "scopeSha256",
-  "status",
-  "verdict",
-  "reviewerId",
-  "summary",
-  "inputPath",
-  "inputSha256",
-  "reportPath",
-  "reportSha256",
-  "reviewedArtifactPaths",
-  "findings",
-  "actionItems",
-  "reviewedAt"
-]);
-var FINDING_FIELDS = /* @__PURE__ */ new Set(["findingId", "severity", "summary", "linkedArtifactPaths"]);
-var IMPORTED_REVIEW_FIELDS = /* @__PURE__ */ new Set([
-  "schemaVersion",
-  "workspaceId",
-  "missionId",
-  "contractDigest",
-  "exchangeId",
-  "reviewId",
-  "policy",
-  "scopeSha256",
-  "status",
-  "verdict",
-  "reviewerId",
-  "summary",
-  "reviewedAt",
-  "reviewedArtifactPaths",
-  "reviewedArtifacts",
-  "reviewedArtifactSetSha256",
-  "findings",
-  "actionItems",
-  "exchange",
-  "authority",
-  "privateTranscriptImported"
-]);
-var EXCHANGE_HASH_FIELDS = /* @__PURE__ */ new Set([
-  "manifestPath",
-  "manifestSha256",
-  "inputPath",
-  "inputSha256",
-  "handoffPath",
-  "handoffSha256",
-  "reportPath",
-  "reportSha256",
-  "importedReportPath",
-  "importedReportSha256"
-]);
-var AUTHORITY_FIELDS = /* @__PURE__ */ new Set(["authoritative", "callerMayMintAuthority", "issuer", "reason"]);
-function sealed(value2, fields, label) {
-  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) throw new Error(`${label} must be a plain object.`);
-  const unknown = Object.keys(value2).filter((field) => !fields.has(field));
-  if (unknown.length > 0) throw new Error(`${label} does not accept unknown fields: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
-  return value2;
-}
-function exchangePath(exchangeId, leaf) {
-  return path14.posix.join(".dove/reviews/exchanges", exchangeId, leaf);
-}
-function importedReviewPath(reviewId) {
-  return path14.posix.join(".dove/reviews", `${reviewId}.json`);
-}
-function importedReportPath(reviewId) {
-  return path14.posix.join(".dove/reviews", `${reviewId}.report.md`);
-}
-function exactTimestamp(value2, label) {
-  const text = domainNonEmptyText(value2, label);
-  const parsed2 = Date.parse(text);
-  if (!Number.isFinite(parsed2) || new Date(parsed2).toISOString() !== text) throw new Error(`${label} must be an exact ISO-8601 timestamp.`);
-  return text;
-}
-function exactHash(value2, label) {
-  const hash2 = String(value2 ?? "");
-  if (!HASH_PATTERN4.test(hash2)) throw new Error(`${label} must be a lowercase SHA-256 hash.`);
-  return hash2;
-}
-function currentCanonicalLeaf(root, relativePath, label) {
-  const inspection = inspectDeclaredPath(root, relativePath, { requireNonEmpty: true });
-  if (inspection.status !== "existing") throw new Error(`${label} must be an existing non-empty regular file (${inspection.reason ?? inspection.status}).`);
-  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  if (inspection.normalizedPath !== relativePath || canonicalPath !== relativePath) throw new Error(`${label} must be the canonical realpath-contained exchange path.`);
-  const content = fs14.readFileSync(path14.resolve(root, canonicalPath));
-  return { path: canonicalPath, content, sha256: domainSha256(content) };
-}
-function normalizedPolicy(value2) {
-  const policy = domainNonEmptyText(value2, "policy");
-  if (!POLICY_SET.has(policy)) throw new Error(`policy must be one of: ${REVIEW_EXCHANGE_POLICIES.join(", ")}.`);
-  return policy;
-}
-function normalizePolicyPaths(args2, policy) {
-  const artifactPaths = domainStringArray(args2.artifactPaths, "artifactPaths");
-  const finalPlanPaths = domainStringArray(args2.finalPlanPaths, "finalPlanPaths");
-  const finalResultPaths = domainStringArray(args2.finalResultPaths, "finalResultPaths");
-  if (policy === "final-plan-results-only") {
-    if (artifactPaths.length > 0) throw new Error("final-plan-results-only does not accept artifactPaths outside its final plan and result classes.");
-    if (finalPlanPaths.length === 0 || finalResultPaths.length === 0) throw new Error("final-plan-results-only requires at least one finalPlanPath and one finalResultPath.");
-  } else {
-    if (finalPlanPaths.length > 0 || finalResultPaths.length > 0) throw new Error(`${policy} accepts only artifactPaths.`);
-    if (artifactPaths.length === 0) throw new Error(`${policy} requires at least one artifactPath.`);
-  }
-  return {
-    artifactPaths,
-    finalPlanPaths,
-    finalResultPaths,
-    reviewedArtifactPaths: policy === "final-plan-results-only" ? [...finalPlanPaths, ...finalResultPaths].sort() : artifactPaths
-  };
-}
-function policyInputBoundary(policy) {
-  switch (policy) {
-    case "local-preflight":
-      return "read-only-current-workspace";
-    case "isolated-selected-artifacts":
-      return "selected-artifact-isolation";
-    case "final-plan-results-only":
-      return "classified-final-plan-results";
-    case "external":
-      return "host-mediated-external-review";
-    default:
-      throw new Error(`Unsupported review policy: ${policy}.`);
-  }
-}
-function policyScope(policy, paths) {
-  const value2 = {
-    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
-    policy,
-    inputBoundary: policyInputBoundary(policy),
-    artifactPaths: paths.artifactPaths,
-    finalPlanPaths: paths.finalPlanPaths,
-    finalResultPaths: paths.finalResultPaths,
-    reviewedArtifactPaths: paths.reviewedArtifactPaths
-  };
-  return { value: value2, sha256: domainSha256(`${JSON.stringify(value2)}
-`) };
-}
-function reviewPreflight(root, args2, operation) {
-  const { workspace, mission } = readCurrentMission(root, args2.missionId, operation);
-  const policy = normalizedPolicy(args2.policy);
-  const paths = normalizePolicyPaths(args2, policy);
-  let snapshot;
-  let canonical;
-  if (policy === "final-plan-results-only") {
-    const plans = resolveReviewArtifactSnapshots(root, mission.missionId, paths.finalPlanPaths, "finalPlanPaths");
-    const results = resolveReviewArtifactSnapshots(root, mission.missionId, paths.finalResultPaths, "finalResultPaths");
-    const finalPlanPaths = plans.reviewedArtifacts.map((item) => item.path);
-    const finalResultPaths = results.reviewedArtifacts.map((item) => item.path);
-    if (finalPlanPaths.length !== paths.finalPlanPaths.length || finalResultPaths.length !== paths.finalResultPaths.length || finalPlanPaths.some((item) => finalResultPaths.includes(item))) {
-      throw new Error("final-plan-results-only contains an internal alias or overlap that collapses the exact classified artifact set.");
-    }
-    snapshot = resolveReviewArtifactSnapshots(root, mission.missionId, [...finalPlanPaths, ...finalResultPaths], `${policy} review artifacts`);
-    canonical = { artifactPaths: [], finalPlanPaths, finalResultPaths, reviewedArtifactPaths: snapshot.reviewedArtifacts.map((item) => item.path) };
-  } else {
-    snapshot = resolveReviewArtifactSnapshots(root, mission.missionId, paths.artifactPaths, `${policy} review artifacts`);
-    const artifactPaths = snapshot.reviewedArtifacts.map((item) => item.path);
-    if (artifactPaths.length !== paths.artifactPaths.length) throw new Error(`${policy} contains an internal alias that collapses the exact artifact set.`);
-    canonical = { artifactPaths, finalPlanPaths: [], finalResultPaths: [], reviewedArtifactPaths: artifactPaths };
-  }
-  const scope = policyScope(policy, canonical);
-  return { workspace, mission, policy, paths: canonical, snapshot, scope };
-}
-function newExchangeId(policy) {
-  return domainSafeId(`exchange-${policy}-${crypto6.randomUUID()}`, "exchangeId");
-}
-function preflightResult(prepared) {
-  return {
-    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
-    status: "ready",
-    zeroWrite: true,
-    missionId: prepared.mission.missionId,
-    contractDigest: prepared.mission.contractDigest,
-    policy: prepared.policy,
-    inputBoundary: policyInputBoundary(prepared.policy),
-    scopeSha256: prepared.scope.sha256,
-    artifactPaths: prepared.paths.artifactPaths,
-    finalPlanPaths: prepared.paths.finalPlanPaths,
-    finalResultPaths: prepared.paths.finalResultPaths,
-    reviewedArtifactPaths: prepared.snapshot.reviewedArtifacts.map((item) => item.path),
-    reviewedArtifacts: prepared.snapshot.reviewedArtifacts,
-    reviewedArtifactSetSha256: prepared.snapshot.reviewedArtifactSetSha256,
-    authority: { authoritative: false, callerMayMintAuthority: false, reason: "Local preflight is read-only and non-authoritative." }
-  };
-}
-function prepareReviewExchange(root, args2 = {}) {
-  assertSealedDomainArgs(args2, PREPARE_FIELDS, "prepare_review_exchange");
-  const prepared = reviewPreflight(root, args2, "Review exchange preparation");
-  if (prepared.policy === "local-preflight") return preflightResult(prepared);
-  const exchangeId = newExchangeId(prepared.policy);
-  const inputPath = exchangePath(exchangeId, "input.json");
-  const manifestPath = exchangePath(exchangeId, "manifest.json");
-  const handoffPath = exchangePath(exchangeId, "handoff.json");
-  const reportPath = exchangePath(exchangeId, "report.md");
-  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
-  const input = {
-    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
-    workspaceId: prepared.workspace.manifest.workspaceId,
-    missionId: prepared.mission.missionId,
-    contractDigest: prepared.mission.contractDigest,
-    exchangeId,
-    createdAt,
-    policy: prepared.policy,
-    inputBoundary: policyInputBoundary(prepared.policy),
-    scopeSha256: prepared.scope.sha256,
-    artifactPaths: prepared.paths.artifactPaths,
-    finalPlanPaths: prepared.paths.finalPlanPaths,
-    finalResultPaths: prepared.paths.finalResultPaths,
-    reviewedArtifactPaths: prepared.snapshot.reviewedArtifacts.map((item) => item.path),
-    reviewedArtifacts: prepared.snapshot.reviewedArtifacts,
-    reviewedArtifactSetSha256: prepared.snapshot.reviewedArtifactSetSha256,
-    outputContract: {
-      handoffPath,
-      reportPath,
-      requiredHandoffFields: [...HANDOFF_FIELDS]
-    },
-    privacyBoundary: {
-      writerPrivateTranscriptShared: false,
-      reviewerPrivateTranscriptShouldReturn: false,
-      undeclaredContextShared: false,
-      acceptedReturnArtifacts: [handoffPath, reportPath]
-    }
-  };
-  const inputContent = domainJson(input);
-  const manifest = {
-    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
-    workspaceId: prepared.workspace.manifest.workspaceId,
-    missionId: prepared.mission.missionId,
-    contractDigest: prepared.mission.contractDigest,
-    exchangeId,
-    status: "prepared",
-    createdAt,
-    policy: prepared.policy,
-    inputBoundary: policyInputBoundary(prepared.policy),
-    scopeSha256: prepared.scope.sha256,
-    inputPath,
-    inputSha256: domainSha256(inputContent),
-    handoffPath,
-    reportPath,
-    artifactPaths: input.artifactPaths,
-    finalPlanPaths: input.finalPlanPaths,
-    finalResultPaths: input.finalResultPaths,
-    reviewedArtifactPaths: input.reviewedArtifactPaths,
-    reviewedArtifacts: input.reviewedArtifacts,
-    reviewedArtifactSetSha256: input.reviewedArtifactSetSha256
-  };
-  const manifestContent = domainJson(manifest);
-  const result = finalizeDomainArtifacts(root, {
-    actionId: "prepare-review-exchange",
-    operation: "Review exchange preparation",
-    missionId: prepared.mission.missionId,
-    summary: `Prepared ${prepared.policy} review exchange ${exchangeId}.`,
-    writes: [
-      { path: inputPath, kind: "data", content: inputContent, derivedReferences: input.reviewedArtifactPaths.map((item) => `artifact:${item}`) },
-      { path: manifestPath, kind: "data", content: manifestContent, derivedReferences: [`artifact:${inputPath}`] }
-    ]
-  });
-  return {
-    ...result,
-    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
-    status: result.status === "planned" ? "prepare-planned" : "prepared",
-    exchangeId,
-    policy: prepared.policy,
-    scopeSha256: prepared.scope.sha256,
-    inputPath,
-    inputSha256: manifest.inputSha256,
-    manifestPath,
-    manifestSha256: domainSha256(manifestContent),
-    handoffPath,
-    reportPath,
-    reviewedArtifactPaths: input.reviewedArtifactPaths,
-    reviewedArtifactSetSha256: input.reviewedArtifactSetSha256,
-    authority: { authoritative: false, callerMayMintAuthority: false }
-  };
-}
-function assertIdentity(value2, manifest, mission, workspaceId, label) {
-  if (value2.schemaVersion !== REVIEW_EXCHANGE_SCHEMA_VERSION) throw new Error(`${label}.schemaVersion must be ${REVIEW_EXCHANGE_SCHEMA_VERSION}.`);
-  if (value2.workspaceId !== workspaceId || value2.workspaceId !== manifest.workspaceId) throw new Error(`${label} workspace binding mismatch.`);
-  if (value2.missionId !== mission.missionId || value2.missionId !== manifest.missionId) throw new Error(`${label} mission binding mismatch.`);
-  if (value2.contractDigest !== mission.contractDigest || value2.contractDigest !== manifest.contractDigest) throw new Error(`${label} contract digest is stale.`);
-  if (value2.exchangeId !== manifest.exchangeId) throw new Error(`${label} exchangeId mismatch.`);
-  if (value2.policy !== manifest.policy) throw new Error(`${label} policy binding mismatch.`);
-  if (value2.scopeSha256 !== manifest.scopeSha256) throw new Error(`${label} scope binding mismatch.`);
-}
-function same(value2, expected) {
-  return JSON.stringify(value2) === JSON.stringify(expected);
-}
-function assertPreparedScope(manifest, input) {
-  const policy = normalizedPolicy(manifest.policy);
-  if (policy === "local-preflight") throw new Error("local-preflight cannot create an importable exchange.");
-  const expectedInputBoundary = policyInputBoundary(policy);
-  if (manifest.inputBoundary !== expectedInputBoundary || input.inputBoundary !== expectedInputBoundary) throw new Error("Review exchange policy input boundary drifted.");
-  const fields = ["artifactPaths", "finalPlanPaths", "finalResultPaths", "reviewedArtifactPaths"];
-  for (const field of fields) if (!same(manifest[field], input[field])) throw new Error(`Review exchange ${field} drifted between manifest and input.`);
-  const paths = normalizePolicyPaths(input, policy);
-  if (!same(paths.reviewedArtifactPaths, input.reviewedArtifactPaths)) throw new Error("Review exchange policy scope no longer equals the exact reviewed artifact set.");
-  const scope = policyScope(policy, paths);
-  if (scope.sha256 !== manifest.scopeSha256 || scope.sha256 !== input.scopeSha256) throw new Error("Review exchange scope hash drifted.");
-}
-function normalizeFindings(items, reviewedArtifactPaths) {
-  if (!Array.isArray(items)) throw new Error("Review handoff findings must be an array.");
-  const reviewed = new Set(reviewedArtifactPaths);
-  const seen = /* @__PURE__ */ new Set();
-  return items.map((item, index) => {
-    sealed(item, FINDING_FIELDS, `Review handoff findings[${index}]`);
-    const findingId = domainSafeId(item.findingId, `findings[${index}].findingId`);
-    if (seen.has(findingId)) throw new Error(`Review handoff contains duplicate findingId ${findingId}.`);
-    seen.add(findingId);
-    const severity = domainNonEmptyText(item.severity, `findings[${index}].severity`).toLowerCase();
-    if (!["low", "medium", "high"].includes(severity)) throw new Error(`findings[${index}].severity must be low, medium, or high.`);
-    const linkedArtifactPaths = domainStringArray(item.linkedArtifactPaths, `findings[${index}].linkedArtifactPaths`);
-    if (linkedArtifactPaths.some((artifactPath) => !reviewed.has(artifactPath))) throw new Error(`findings[${index}] links an artifact outside the frozen review set.`);
-    return { findingId, severity, summary: domainNonEmptyText(item.summary, `findings[${index}].summary`), linkedArtifactPaths };
-  });
-}
-function importReviewExchange(root, args2 = {}) {
-  assertSealedDomainArgs(args2, IMPORT_FIELDS, "import_review_exchange");
-  const { workspace, mission } = readCurrentMission(root, args2.missionId, "Review exchange import");
-  const exchangeId = domainSafeId(args2.exchangeId, "exchangeId");
-  const reviewId = domainSafeId(args2.reviewId, "reviewId");
-  const inputPath = exchangePath(exchangeId, "input.json");
-  const manifestPath = exchangePath(exchangeId, "manifest.json");
-  const handoffPath = exchangePath(exchangeId, "handoff.json");
-  const reportPath = exchangePath(exchangeId, "report.md");
-  const reviewPath = importedReviewPath(reviewId);
-  const finalReportPath = importedReportPath(reviewId);
-  if (fs14.existsSync(path14.resolve(root, reviewPath)) || fs14.existsSync(path14.resolve(root, finalReportPath))) throw new Error(`Review ${reviewId} has already been imported.`);
-  const manifestLeaf = currentCanonicalLeaf(root, manifestPath, "Review exchange manifest");
-  const manifest = sealed(JSON.parse(manifestLeaf.content.toString("utf8")), MANIFEST_FIELDS2, "Review exchange manifest");
-  if (manifest.status !== "prepared") throw new Error(`Review exchange ${exchangeId} is not importable from status ${manifest.status ?? "unknown"}.`);
-  if (manifest.exchangeId !== exchangeId) throw new Error("Review exchange manifest exchangeId mismatch.");
-  assertIdentity(manifest, manifest, mission, workspace.manifest.workspaceId, "Review exchange manifest");
-  if (manifest.inputPath !== inputPath || manifest.handoffPath !== handoffPath || manifest.reportPath !== reportPath) throw new Error("Review exchange manifest contains noncanonical exchange paths.");
-  exactHash(manifest.inputSha256, "manifest.inputSha256");
-  const inputLeaf = currentCanonicalLeaf(root, inputPath, "Review exchange input");
-  const input = sealed(JSON.parse(inputLeaf.content.toString("utf8")), INPUT_FIELDS, "Review exchange input");
-  assertIdentity(input, manifest, mission, workspace.manifest.workspaceId, "Review exchange input");
-  if (inputLeaf.sha256 !== manifest.inputSha256) throw new Error("Review exchange input hash does not match the prepared manifest.");
-  if (input.outputContract?.handoffPath !== handoffPath || input.outputContract?.reportPath !== reportPath) throw new Error("Review exchange input output contract is noncanonical.");
-  if (!same(input.outputContract?.requiredHandoffFields, [...HANDOFF_FIELDS])) throw new Error("Review exchange handoff contract drifted.");
-  if (input.privacyBoundary?.writerPrivateTranscriptShared !== false || input.privacyBoundary?.reviewerPrivateTranscriptShouldReturn !== false || input.privacyBoundary?.undeclaredContextShared !== false) throw new Error("Review exchange privacy boundary is invalid.");
-  assertPreparedScope(manifest, input);
-  const manifestSnapshots = normalizeReviewSnapshots(manifest.reviewedArtifacts, "manifest.reviewedArtifacts");
-  const inputSnapshots = normalizeReviewSnapshots(input.reviewedArtifacts, "input.reviewedArtifacts");
-  if (!manifestSnapshots.ok || !inputSnapshots.ok || !same(manifestSnapshots.snapshots, inputSnapshots.snapshots)) throw new Error("Review exchange artifact snapshot contract drifted.");
-  const exactSetHash = stableSnapshotSetHash(manifestSnapshots.snapshots);
-  if (manifest.reviewedArtifactSetSha256 !== exactSetHash || input.reviewedArtifactSetSha256 !== exactSetHash) throw new Error("Review exchange artifact-set hash drifted.");
-  if (!same(manifest.reviewedArtifactPaths, manifestSnapshots.snapshots.map((item) => item.path))) throw new Error("Review exchange artifact paths do not equal the exact frozen snapshot set.");
-  const snapshotVerification = verifyReviewSnapshotSet(root, manifestSnapshots.snapshots, exactSetHash);
-  if (!snapshotVerification.ok) throw new Error(`Review exchange artifacts changed before import: ${snapshotVerification.failures.join(", ")}.`);
-  const handoffLeaf = currentCanonicalLeaf(root, handoffPath, "Review exchange handoff");
-  const reportLeaf = currentCanonicalLeaf(root, reportPath, "Review exchange report");
-  const handoff = sealed(JSON.parse(handoffLeaf.content.toString("utf8")), HANDOFF_FIELDS, "Review exchange handoff");
-  assertIdentity(handoff, manifest, mission, workspace.manifest.workspaceId, "Review exchange handoff");
-  if (handoff.reviewId !== reviewId) throw new Error("Review exchange handoff reviewId mismatch.");
-  if (!REVIEW_STATUSES.has(handoff.status)) throw new Error(`Review exchange handoff status is unsupported: ${handoff.status}.`);
-  if (!REVIEW_VERDICTS.has(handoff.verdict)) throw new Error(`Review exchange handoff verdict is unsupported: ${handoff.verdict}.`);
-  if (handoff.status !== "completed" && handoff.verdict === "coherent") throw new Error("A non-completed review handoff cannot return a coherent verdict.");
-  if (handoff.inputPath !== inputPath || handoff.reportPath !== reportPath) throw new Error("Review exchange handoff paths do not match the canonical exchange.");
-  if (exactHash(handoff.inputSha256, "handoff.inputSha256") !== inputLeaf.sha256) throw new Error("Review exchange handoff input hash mismatch.");
-  if (exactHash(handoff.reportSha256, "handoff.reportSha256") !== reportLeaf.sha256) throw new Error("Review exchange report hash mismatch.");
-  if (!same(handoff.reviewedArtifactPaths, manifest.reviewedArtifactPaths)) throw new Error("Review exchange handoff scope drifted from the exact frozen artifact set.");
-  const findings = normalizeFindings(handoff.findings, manifest.reviewedArtifactPaths);
-  const actionItems = domainStringArray(handoff.actionItems, "Review handoff actionItems");
-  const review = {
-    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
-    workspaceId: workspace.manifest.workspaceId,
-    missionId: mission.missionId,
-    contractDigest: mission.contractDigest,
-    exchangeId,
-    reviewId,
-    policy: manifest.policy,
-    scopeSha256: manifest.scopeSha256,
-    status: handoff.status,
-    verdict: handoff.verdict,
-    reviewerId: domainNonEmptyText(handoff.reviewerId, "reviewerId"),
-    summary: domainNonEmptyText(handoff.summary, "summary"),
-    reviewedAt: exactTimestamp(handoff.reviewedAt, "reviewedAt"),
-    reviewedArtifactPaths: manifest.reviewedArtifactPaths,
-    reviewedArtifacts: manifestSnapshots.snapshots,
-    reviewedArtifactSetSha256: exactSetHash,
-    findings,
-    actionItems,
-    exchange: {
-      manifestPath,
-      manifestSha256: manifestLeaf.sha256,
-      inputPath,
-      inputSha256: inputLeaf.sha256,
-      handoffPath,
-      handoffSha256: handoffLeaf.sha256,
-      reportPath,
-      reportSha256: reportLeaf.sha256,
-      importedReportPath: finalReportPath,
-      importedReportSha256: reportLeaf.sha256
-    },
-    authority: {
-      authoritative: false,
-      callerMayMintAuthority: false,
-      issuer: null,
-      reason: "No trusted Reviewer issuer is connected; public handoff, reviewerId, verdict, and report material are non-authoritative."
-    },
-    privateTranscriptImported: false
-  };
-  const result = finalizeDomainArtifacts(root, {
-    actionId: "import-review-exchange",
-    operation: "Review exchange import",
-    missionId: mission.missionId,
-    summary: `Imported non-authoritative review ${reviewId} from exchange ${exchangeId}.`,
-    writes: [
-      { path: finalReportPath, kind: "report", content: reportLeaf.content, derivedReferences: review.reviewedArtifactPaths.map((item) => `artifact:${item}`) },
-      { path: reviewPath, kind: "data", content: domainJson(review), derivedReferences: [`artifact:${finalReportPath}`, ...review.reviewedArtifactPaths.map((item) => `artifact:${item}`)] }
-    ]
-  });
-  return {
-    ...result,
-    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
-    status: result.status === "planned" ? "import-planned" : "imported",
-    exchangeId,
-    reviewId,
-    review,
-    reviewPath,
-    reportPath: finalReportPath,
-    authoritative: false,
-    privateTranscriptImported: false
-  };
-}
-function currentHash(root, relativePath, expectedHash, label) {
-  try {
-    const leaf = currentCanonicalLeaf(root, relativePath, label);
-    return { current: leaf.sha256 === expectedHash, actualSha256: leaf.sha256, reason: leaf.sha256 === expectedHash ? null : "hash-mismatch" };
-  } catch (error) {
-    return { current: false, actualSha256: null, reason: error instanceof Error ? error.message : String(error) };
-  }
-}
-function readImportedReviews(root, missionId) {
-  const directory = path14.resolve(root, ".dove/reviews");
-  if (!fs14.existsSync(directory)) return [];
-  return fs14.readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => {
-    const reviewPath = path14.posix.join(".dove/reviews", entry.name);
-    try {
-      const review = sealed(JSON.parse(fs14.readFileSync(path14.resolve(root, reviewPath), "utf8")), IMPORTED_REVIEW_FIELDS, `Imported review ${reviewPath}`);
-      return review.missionId === missionId ? { reviewPath, review } : null;
-    } catch (error) {
-      return { reviewPath, review: null, readFailure: error instanceof Error ? error.message : String(error) };
-    }
-  }).filter(Boolean);
-}
-function requestedCoverageSnapshot(root, missionId, requestedPaths) {
-  if (requestedPaths.length === 0) return { snapshot: null, failures: [] };
-  try {
-    return {
-      snapshot: resolveReviewArtifactSnapshots(root, missionId, requestedPaths, "review coverage artifacts"),
-      failures: []
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/is not a usable file .*path does not exist|is not a registered schema 7 artifact|has changed since its latest ownership receipt/u.test(message)) {
-      return { snapshot: null, failures: [`requested-artifact-unavailable:${message}`] };
-    }
-    throw error;
-  }
-}
-function normalizeExpectedCoverageSnapshots(value2) {
-  if (value2 === void 0) return null;
-  const normalized = normalizeReviewSnapshots(value2, "expectedSnapshots");
-  if (!normalized.ok) throw new Error(normalized.reason);
-  return {
-    reviewedArtifacts: normalized.snapshots,
-    reviewedArtifactSetSha256: stableSnapshotSetHash(normalized.snapshots)
-  };
-}
-function assessImportedReview(root, mission, { reviewPath, review, readFailure }, requestedSnapshot) {
-  const failures = [];
-  if (readFailure || !review) return { reviewId: null, reviewPath, current: false, authoritative: false, failures: [readFailure ?? "review-unreadable"] };
-  if (review.schemaVersion !== REVIEW_EXCHANGE_SCHEMA_VERSION) {
-    return { reviewId: review.reviewId ?? null, reviewPath, current: false, authoritative: false, failures: ["review-schema-invalid"] };
-  }
-  if (review.contractDigest !== mission.contractDigest) failures.push("contract-digest-stale");
-  if (!POLICY_SET.has(review.policy) || review.policy === "local-preflight") failures.push("review-policy-invalid");
-  const snapshots = normalizeReviewSnapshots(review.reviewedArtifacts, "review.reviewedArtifacts");
-  if (!snapshots.ok) failures.push(snapshots.reason);
-  const setHash = snapshots.ok ? stableSnapshotSetHash(snapshots.snapshots) : null;
-  if (!setHash || review.reviewedArtifactSetSha256 !== setHash || !same(review.reviewedArtifactPaths, snapshots.snapshots.map((item) => item.path))) failures.push("reviewed-artifact-set-hash-mismatch");
-  if (snapshots.ok) failures.push(...verifyReviewSnapshotSet(root, snapshots.snapshots, setHash).failures);
-  if (requestedSnapshot && (!snapshots.ok || !same(requestedSnapshot.reviewedArtifacts, snapshots.snapshots))) failures.push("requested-artifact-set-not-exactly-covered");
-  try {
-    const exchange = sealed(review.exchange, EXCHANGE_HASH_FIELDS, `Imported review ${review.reviewId} exchange`);
-    for (const [pathField, hashField, label] of [
-      ["manifestPath", "manifestSha256", "review manifest"],
-      ["inputPath", "inputSha256", "review input"],
-      ["handoffPath", "handoffSha256", "review handoff"],
-      ["reportPath", "reportSha256", "review report"],
-      ["importedReportPath", "importedReportSha256", "imported review report"]
-    ]) {
-      if (!HASH_PATTERN4.test(String(exchange[hashField] ?? ""))) failures.push(`${hashField}-invalid`);
-      else if (!currentHash(root, exchange[pathField], exchange[hashField], label).current) failures.push(`${hashField}-stale`);
-    }
-  } catch (error) {
-    failures.push(`review-exchange-invalid:${error instanceof Error ? error.message : String(error)}`);
-  }
-  try {
-    const authority = sealed(review.authority, AUTHORITY_FIELDS, `Imported review ${review.reviewId} authority`);
-    if (authority.authoritative !== false || authority.callerMayMintAuthority !== false || authority.issuer !== null || typeof authority.reason !== "string" || !authority.reason.trim()) failures.push("public-review-authority-invalid");
-  } catch (error) {
-    failures.push(`public-review-authority-invalid:${error instanceof Error ? error.message : String(error)}`);
-  }
-  return {
-    reviewId: review.reviewId,
-    exchangeId: review.exchangeId,
-    reviewPath,
-    policy: review.policy,
-    verdict: review.verdict,
-    current: failures.length === 0,
-    authoritative: false,
-    reviewedArtifactPaths: review.reviewedArtifactPaths,
-    reviewedArtifactSetSha256: review.reviewedArtifactSetSha256,
-    failures: [...new Set(failures)]
-  };
-}
-function verifyReviewCoverageInput(root, args2, fields, operation) {
-  assertSealedDomainArgs(args2, fields, operation);
-  const { mission } = readCurrentMission(root, args2.missionId, "Review coverage verification");
-  const requestedPaths = args2.artifactPaths === void 0 ? [] : domainStringArray(args2.artifactPaths, "artifactPaths");
-  const expected = normalizeExpectedCoverageSnapshots(args2.expectedSnapshots);
-  const requested = expected ? { snapshot: expected, failures: [] } : requestedCoverageSnapshot(root, mission.missionId, requestedPaths);
-  const assessments = readImportedReviews(root, mission.missionId).map((item) => assessImportedReview(root, mission, item, requested.snapshot));
-  const currentReviews = assessments.filter((item) => item.current);
-  const failures = [...requested.failures];
-  const exactCoverageRequested = requestedPaths.length > 0 || expected !== null;
-  if (currentReviews.length === 0) failures.push(exactCoverageRequested ? "current-exact-review-coverage-missing" : "current-review-coverage-missing");
-  if (args2.requireAuthoritative === true) failures.push("trusted-review-issuer-missing");
-  return {
-    schemaVersion: REVIEW_EXCHANGE_SCHEMA_VERSION,
-    status: failures.length === 0 ? "covered" : "not-covered",
-    zeroWrite: true,
-    missionId: mission.missionId,
-    contractDigest: mission.contractDigest,
-    requestedArtifactPaths: requested.snapshot?.reviewedArtifacts.map((item) => item.path) ?? requestedPaths,
-    requestedArtifactSetSha256: requested.snapshot?.reviewedArtifactSetSha256 ?? null,
-    covered: requested.failures.length === 0 && currentReviews.length > 0,
-    authoritative: false,
-    issuer: null,
-    failures: [...new Set(failures)],
-    reviews: assessments
-  };
-}
-function verifyExpectedReviewCoverage(root, args2 = {}) {
-  return verifyReviewCoverageInput(root, args2, EXPECTED_COVERAGE_FIELDS, "verify expected review coverage");
-}
-function verifyReviewCoverage(root, args2 = {}) {
-  return verifyReviewCoverageInput(root, args2, COVERAGE_FIELDS, "verify_review_coverage");
-}
-
-// src/core/completion-gates.mjs
-var HASH_PATTERN5 = /^[0-9a-f]{64}$/u;
-var ARTIFACT_KINDS = /* @__PURE__ */ new Set(["report", "document", "code", "data", "figure", "media", "other"]);
-var VALIDATION_KINDS = /* @__PURE__ */ new Set(["test-log", "typecheck-log", "lint-log", "build-log", "audit-log", "validation-log", "command-output"]);
-var RECEIPT_FIELDS2 = /* @__PURE__ */ new Set(["schemaVersion", "workspaceId", "receiptId", "missionId", "contractDigest", "summary", "artifacts", "validations", "criteriaSatisfied", "producedAt"]);
-var ARTIFACT_FIELDS2 = /* @__PURE__ */ new Set(["path", "kind", "sha256"]);
-var VALIDATION_FIELDS2 = /* @__PURE__ */ new Set(["kind", "reference", "outputHash"]);
-var CRITERION_FIELDS2 = /* @__PURE__ */ new Set(["criterionId", "evidenceRefs"]);
-function missionPath2(missionId) {
-  return path15.posix.join(ARTIFACT_PATHS.missionsDir, `${missionId}.json`);
-}
-function sealed2(value2, allowed) {
-  return value2 && typeof value2 === "object" && !Array.isArray(value2) && Object.keys(value2).every((key) => allowed.has(key));
-}
-function currentHashedFile(root, relativePath, expectedHash) {
-  if (isDoveLessonArtifactPath(relativePath)) {
-    return { current: false, reason: "lesson-advisory-only", path: relativePath ?? null, actualHash: null };
-  }
-  if (typeof relativePath !== "string" || !relativePath.trim() || !HASH_PATTERN5.test(String(expectedHash ?? ""))) {
-    return { current: false, reason: "hashed-file-input-invalid", path: relativePath ?? null, actualHash: null };
-  }
-  const suppliedPath = relativePath.trim().replace(/\\/gu, "/");
-  const inspection = inspectDeclaredPath(root, suppliedPath, { requireNonEmpty: true });
-  if (inspection.status !== "existing") {
-    return { current: false, reason: inspection.reason ?? inspection.status, path: relativePath, actualHash: null };
-  }
-  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  if (inspection.normalizedPath !== suppliedPath || canonicalPath !== suppliedPath) {
-    return { current: false, reason: "canonical-path-changed", path: suppliedPath, canonicalPath, actualHash: null };
-  }
-  const actualHash = sha256File(path15.resolve(root, canonicalPath));
-  return {
-    current: actualHash === expectedHash,
-    reason: actualHash === expectedHash ? null : "hash-mismatch",
-    path: canonicalPath,
-    actualHash
-  };
-}
-function typedEvidenceEligibility(root, missionId, reference) {
-  if (reference.startsWith("source:")) {
-    const value2 = reference.slice("source:".length);
-    return evaluateSourceReferences(root, [value2], missionId)[0] ?? { eligible: false, reason: "unknown-source" };
-  }
-  if (reference.startsWith("note:")) {
-    const value2 = reference.slice("note:".length);
-    return evaluateNoteReferences(root, [value2], missionId)[0] ?? { eligible: false, reason: "unknown-note" };
-  }
-  return { eligible: null, reason: null };
-}
-function receiptAssessment(root, mission, receipt, workspaceId, missionCurrent = true) {
-  const failures = [];
-  if (receipt?.__readFailure) failures.push("receipt-json-malformed");
-  if (!missionCurrent) failures.push("mission-contract-invalid");
-  if (!sealed2(receipt, RECEIPT_FIELDS2) || receipt.schemaVersion !== 1) failures.push("receipt-schema-invalid");
-  if (receipt.workspaceId !== workspaceId || mission.workspaceId !== workspaceId) failures.push("workspace-binding-mismatch");
-  if (receipt.missionId !== mission.missionId) failures.push("mission-binding-mismatch");
-  if (receipt?.contractDigest !== mission.contractDigest || !missionCurrent) failures.push("contract-digest-stale");
-  if (!Array.isArray(receipt.artifacts) || receipt.artifacts.length === 0) failures.push("artifacts-missing");
-  if (!Array.isArray(receipt.validations)) failures.push("validations-invalid");
-  if (!Array.isArray(receipt.criteriaSatisfied)) failures.push("criteria-invalid");
-  const artifactAssessments = (Array.isArray(receipt.artifacts) ? receipt.artifacts : []).map((artifact) => {
-    if (!sealed2(artifact, ARTIFACT_FIELDS2) || typeof artifact.path !== "string" || !artifact.path.trim() || !ARTIFACT_KINDS.has(artifact.kind) || !HASH_PATTERN5.test(String(artifact.sha256 ?? ""))) {
-      return { path: artifact?.path ?? null, current: false, reason: "artifact-schema-invalid" };
-    }
-    return currentHashedFile(root, artifact.path, artifact.sha256);
-  });
-  const validationAssessments = (Array.isArray(receipt.validations) ? receipt.validations : []).map((validation) => {
-    if (!sealed2(validation, VALIDATION_FIELDS2) || typeof validation.reference !== "string" || !validation.reference.trim() || !VALIDATION_KINDS.has(validation.kind) || !HASH_PATTERN5.test(String(validation.outputHash ?? ""))) {
-      return { path: validation?.reference ?? null, current: false, reason: "validation-schema-invalid" };
-    }
-    return currentHashedFile(root, validation.reference, validation.outputHash);
-  });
-  if (artifactAssessments.some((item) => !item.current)) failures.push("artifact-drift");
-  if (validationAssessments.some((item) => !item.current)) failures.push("validation-drift");
-  const artifactPaths = (Array.isArray(receipt.artifacts) ? receipt.artifacts : []).map((artifact) => artifact?.path).filter(Boolean);
-  const validationPaths = (Array.isArray(receipt.validations) ? receipt.validations : []).map((validation) => validation?.reference).filter(Boolean);
-  if (new Set(artifactPaths).size !== artifactPaths.length) failures.push("artifact-path-duplicate");
-  if (new Set(validationPaths).size !== validationPaths.length) failures.push("validation-path-duplicate");
-  const requiredArtifactPaths = /* @__PURE__ */ new Set([
-    ...Array.isArray(mission.targetArtifacts) ? mission.targetArtifacts : [],
-    ...Array.isArray(mission.expectedArtifacts) ? mission.expectedArtifacts : []
-  ]);
-  if ([...requiredArtifactPaths].some((requiredPath) => !artifactPaths.includes(requiredPath))) {
-    failures.push("mission-artifact-coverage-missing");
-  }
-  const requiredCriteria = missionCompletionCriteria(mission);
-  const requiredIds = new Set(requiredCriteria.map((criterion) => criterion.criterionId));
-  const artifactRefs = new Set((receipt.artifacts ?? []).map((artifact) => `artifact:${artifact.path}`));
-  const validationRefs = new Set((receipt.validations ?? []).map((validation) => `validation:${validation.reference}`));
-  const seenCriteria = /* @__PURE__ */ new Set();
-  const criteria = (Array.isArray(receipt.criteriaSatisfied) ? receipt.criteriaSatisfied : []).map((criterion) => {
-    const criterionFailures = [];
-    if (!sealed2(criterion, CRITERION_FIELDS2)) criterionFailures.push("criterion-schema-invalid");
-    if (!requiredIds.has(criterion?.criterionId)) criterionFailures.push("criterion-unknown");
-    if (seenCriteria.has(criterion?.criterionId)) criterionFailures.push("criterion-duplicate");
-    seenCriteria.add(criterion?.criterionId);
-    const evidenceRefs = Array.isArray(criterion?.evidenceRefs) ? criterion.evidenceRefs : [];
-    if (evidenceRefs.length === 0 || evidenceRefs.some((reference) => typeof reference !== "string" || !reference.trim()) || new Set(evidenceRefs).size !== evidenceRefs.length) criterionFailures.push("criterion-evidence-invalid");
-    const evidence = evidenceRefs.map((reference) => {
-      if (artifactRefs.has(reference)) {
-        const artifactPath = reference.slice("artifact:".length);
-        const current = artifactAssessments.find((item) => item.path === artifactPath)?.current === true;
-        return { reference, eligible: current, reason: current ? null : "artifact-not-current" };
-      }
-      if (validationRefs.has(reference)) {
-        const validationPath = reference.slice("validation:".length);
-        const current = validationAssessments.find((item) => item.path === validationPath)?.current === true;
-        return { reference, eligible: current, reason: current ? null : "validation-not-current" };
-      }
-      const typed = typedEvidenceEligibility(root, mission.missionId, reference);
-      return { reference, eligible: typed.eligible === true, reason: typed.reason ?? "unresolved-evidence-reference" };
-    });
-    if (evidence.some((item) => !item.eligible)) criterionFailures.push("criterion-evidence-stale-or-ineligible");
-    return { criterionId: criterion?.criterionId ?? null, evidence, failures: criterionFailures, satisfied: criterionFailures.length === 0 };
-  });
-  const missingCriteria = requiredCriteria.filter((criterion) => !seenCriteria.has(criterion.criterionId));
-  if (missingCriteria.length > 0) failures.push("criteria-coverage-missing");
-  if (criteria.some((criterion) => !criterion.satisfied)) failures.push("criteria-evidence-invalid");
-  const typedEvidenceStale = criteria.some((criterion) => criterion.failures.includes("criterion-evidence-stale-or-ineligible"));
-  return {
-    receiptId: receipt.receiptId ?? null,
-    current: failures.length === 0,
-    stale: typedEvidenceStale || failures.some((failure) => ["mission-contract-invalid", "contract-digest-stale", "artifact-drift", "validation-drift"].includes(failure)),
-    failures: [...new Set(failures)],
-    artifacts: artifactAssessments,
-    validations: validationAssessments,
-    criteria,
-    missingCriterionIds: missingCriteria.map((criterion) => criterion.criterionId),
-    producedAt: receipt.producedAt ?? null
-  };
-}
-function evidenceRequirementAssessment(root, mission, receiptAssessments) {
-  const requirements = missionEvidenceRequirements(mission);
-  const currentReceipts = receiptAssessments.filter((receipt) => receipt.current);
-  const artifactRefs = new Set(currentReceipts.flatMap((receipt) => receipt.artifacts.filter((item) => item.current).map((item) => `artifact:${item.path}`)));
-  const validationRefs = new Set(currentReceipts.flatMap((receipt) => receipt.validations.filter((item) => item.current).map((item) => `validation:${item.path}`)));
-  return requirements.map(({ requirementId, requirement }) => {
-    if (requirement === "review:authoritative") {
-      const coverage = verifyReviewCoverage(root, { missionId: mission.missionId, requireAuthoritative: true });
-      return { requirementId, requirement, satisfied: coverage.authoritative === true && coverage.failures.length === 0, reason: coverage.authoritative === true && coverage.failures.length === 0 ? null : "authoritative-review-proof-missing" };
-    }
-    if (requirement.startsWith("source:")) {
-      const evaluation = typedEvidenceEligibility(root, mission.missionId, requirement);
-      return { requirementId, requirement, satisfied: evaluation.eligible === true, reason: evaluation.eligible === true ? null : evaluation.reason };
-    }
-    if (requirement.startsWith("note:")) {
-      const evaluation = typedEvidenceEligibility(root, mission.missionId, requirement);
-      return { requirementId, requirement, satisfied: evaluation.eligible === true, reason: evaluation.eligible === true ? null : evaluation.reason };
-    }
-    if (requirement.startsWith("artifact:")) {
-      return { requirementId, requirement, satisfied: artifactRefs.has(requirement), reason: artifactRefs.has(requirement) ? null : "required-artifact-not-current" };
-    }
-    if (requirement.startsWith("validation:")) {
-      return { requirementId, requirement, satisfied: validationRefs.has(requirement), reason: validationRefs.has(requirement) ? null : "required-validation-not-current" };
-    }
-    return { requirementId, requirement, satisfied: false, reason: "unsupported-evidence-requirement-syntax" };
-  });
-}
-function assessMissionCompletion(root, args2 = {}) {
-  const workspace = openDoveWorkspace(root, { operation: "Mission completion assessment" });
-  if (!args2 || typeof args2 !== "object" || Array.isArray(args2)) throw new Error("assess_mission_completion arguments must be a plain object.");
-  const unknown = Object.keys(args2).filter((field) => field !== "missionId");
-  if (unknown.length > 0) throw new Error(`assess_mission_completion does not accept unknown input: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
-  const missionId = typeof args2.missionId === "string" ? args2.missionId.trim() : "";
-  if (!missionId) throw new Error("assess_mission_completion requires missionId.");
-  const relativePath = missionPath2(missionId);
-  if (!fs15.existsSync(path15.resolve(root, relativePath))) throw new Error(`Mission does not exist: ${missionId}.`);
-  const mission = readJson(root, relativePath, null);
-  let missionContractFailure = null;
-  try {
-    assertCurrentMissionContract(mission);
-  } catch (error) {
-    missionContractFailure = error instanceof Error ? error.message : String(error);
-  }
-  const receipts = readExecutionReceipts(root, missionId);
-  const receiptAssessments = receipts.map((receipt) => receiptAssessment(root, mission, receipt, workspace.manifest.workspaceId, missionContractFailure === null));
-  const requirements = evidenceRequirementAssessment(root, mission, receiptAssessments);
-  const currentReceipt = [...receiptAssessments].reverse().find((receipt) => receipt.current) ?? null;
-  const incompleteReasons = [];
-  if (missionContractFailure) incompleteReasons.push("mission-contract-invalid");
-  if (!currentReceipt) incompleteReasons.push(receipts.length === 0 ? "execution-receipt-missing" : "execution-receipts-stale-or-invalid");
-  const unmetRequirements = requirements.filter((requirement) => !requirement.satisfied);
-  if (unmetRequirements.length > 0) incompleteReasons.push("evidence-requirements-unmet");
-  return {
-    status: incompleteReasons.length === 0 ? "complete" : "incomplete",
-    complete: incompleteReasons.length === 0,
-    missionId,
-    contractDigest: mission.contractDigest,
-    currentReceiptId: currentReceipt?.receiptId ?? null,
-    receiptCount: receipts.length,
-    staleReceiptIds: receiptAssessments.filter((receipt) => receipt.stale).map((receipt) => receipt.receiptId),
-    receipts: receiptAssessments,
-    completionCriteria: missionCompletionCriteria(mission),
-    evidenceRequirements: requirements,
-    incompleteReasons,
-    diagnostics: {
-      zeroWrite: true,
-      missionContractFailure,
-      missionPath: relativePath,
-      receiptRoot: ARTIFACT_PATHS.executionReceiptsDir,
-      artifactOwnershipPath: ARTIFACT_PATHS.artifactOwnership,
-      artifactLineagePath: ARTIFACT_PATHS.artifactLineage
-    }
-  };
-}
+import fs18 from "node:fs";
+import path20 from "node:path";
 
 // src/core/retained-domain-workflows.mjs
-import fs16 from "node:fs";
-import path16 from "node:path";
+import fs17 from "node:fs";
+import path19 from "node:path";
 var NOTE_FIELDS = /* @__PURE__ */ new Set(["missionId", "noteId", "title", "summary", "quotes", "claims", "openQuestions", "sourceIds", "artifactRefs"]);
 var DRAFT_FIELDS = /* @__PURE__ */ new Set(["missionId", "draftId", "title", "body", "summary", "evidenceRefs", "artifactRefs"]);
 var DRAFT_META_FIELDS = /* @__PURE__ */ new Set(["missionId", "draftId", "title", "summary", "evidenceRefs", "artifactRefs"]);
@@ -4722,10 +5333,10 @@ var REBUTTAL_FIELDS = /* @__PURE__ */ new Set(["missionId", "issues", "strategy"
 var VERSION_FIELDS = /* @__PURE__ */ new Set(["missionId", "versionId", "label", "artifactRefs", "supersedesVersionId", "finalize"]);
 var COMPARE_FIELDS = /* @__PURE__ */ new Set(["missionId", "fromVersionId", "toVersionId"]);
 function filePath(directory, id, extension = "json") {
-  return path16.posix.join(directory, `${id}.${extension}`);
+  return path19.posix.join(directory, `${id}.${extension}`);
 }
 function existingBoundRecord(root, relativePath, missionId, label) {
-  const current = fs16.existsSync(path16.resolve(root, relativePath)) ? readJson(root, relativePath, null) : null;
+  const current = fs17.existsSync(path19.resolve(root, relativePath)) ? readJson(root, relativePath, null) : null;
   if (current && current.missionId !== missionId) throw new Error(`${label} belongs to mission ${current.missionId}, not ${missionId}.`);
   return current;
 }
@@ -4804,7 +5415,7 @@ function upsertNote(root, args2 = {}) {
     if (failures.length) throw new Error(`upsert_note rejects ineligible sources: ${failures.map((item) => `${item.reference} (${item.reason})`).join(", ")}.`);
   }
   const artifacts = resolveMissionArtifactReferences(root, mission.missionId, args2.artifactRefs, "artifactRefs");
-  if (sourceIds.length === 0 && artifacts.length === 0) throw new Error("upsert_note requires at least one verified source or current mission artifact reference.");
+  if (sourceIds.length === 0 && artifacts.length === 0) throw new Error("upsert_note requires at least one current mission artifact reference; sourceIds remain unavailable until a trusted positive source verifier exists.");
   const relativePath = filePath(".dove/notes", noteId);
   existingBoundRecord(root, relativePath, mission.missionId, `Note ${noteId}`);
   const note = {
@@ -4837,6 +5448,7 @@ function upsertDraft(root, args2 = {}) {
   const { mission } = readCurrentMission(root, args2.missionId, "Draft workflow");
   const draftId = domainSafeId(args2.draftId, "draftId");
   const evidenceRefs = normalizeEvidenceRefs(root, mission.missionId, [...domainStringArray(args2.evidenceRefs, "evidenceRefs"), ...domainStringArray(args2.artifactRefs, "artifactRefs").map((value2) => `artifact:${value2}`)]);
+  if (evidenceRefs.length === 0) throw new Error("upsert_draft body requires at least one current eligible evidence or artifact reference.");
   const draft = { schemaVersion: 1, draftId, missionId: mission.missionId, title: typeof args2.title === "string" && args2.title.trim() ? args2.title.trim() : draftId, body: domainNonEmptyText(args2.body, "body"), summary: typeof args2.summary === "string" && args2.summary.trim() ? args2.summary.trim() : null, evidenceRefs, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
   const relativePath = filePath(".dove/drafts", draftId, "md");
   return { ...finalizeDomainArtifacts(root, { actionId: "upsert-draft", missionId: mission.missionId, summary: `Recorded draft ${draftId}.`, completionEligible: true, writes: [{ path: relativePath, kind: "document", content: draftContent(draft), derivedReferences: evidenceRefs }] }), draft };
@@ -4889,10 +5501,13 @@ function runExperienceWorkflow(root, args2 = {}) {
 }
 function currentOutput(root, outputPath, expectedHash) {
   const canonical = canonicalDomainPath(outputPath, "outputPath");
-  if (!fs16.existsSync(path16.resolve(root, canonical))) throw new Error("Figure outputPath does not exist.");
-  const actual = domainSha256(fs16.readFileSync(path16.resolve(root, canonical)));
+  const inspection = inspectDeclaredPath(root, canonical, { requireNonEmpty: true });
+  if (inspection.status !== "existing") throw new Error(`Figure outputPath must reference an existing non-empty regular file (${inspection.reason ?? inspection.status}).`);
+  const resolved = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  if (inspection.normalizedPath !== canonical || resolved !== canonical) throw new Error("Figure outputPath must use its canonical realpath-contained path and cannot use a symlink or alias.");
+  const actual = domainSha256(fs17.readFileSync(path19.resolve(root, resolved)));
   if (expectedHash && expectedHash !== actual) throw new Error("Figure output hash does not match the imported file.");
-  return { path: canonical, sha256: actual };
+  return { path: resolved, sha256: actual };
 }
 function runFigureWorkflow(root, args2 = {}) {
   assertSealedDomainArgs(args2, FIGURE_FIELDS, "run_figure_workflow");
@@ -4908,8 +5523,8 @@ function runFigureWorkflow(root, args2 = {}) {
   let qa = null;
   if (args2.outputPath !== void 0) {
     const output = currentOutput(root, args2.outputPath, args2.outputSha256);
-    const sourceContent = fs16.readFileSync(path16.resolve(root, output.path));
-    const extension = path16.extname(output.path).toLowerCase() || ".bin";
+    const sourceContent = fs17.readFileSync(path19.resolve(root, output.path));
+    const extension = path19.extname(output.path).toLowerCase() || ".bin";
     const finalPath = filePath(".dove/figures", `${figureId}.final`, extension.slice(1));
     const caption = domainNonEmptyText(args2.caption, "caption");
     const qaFindings = domainStringArray(args2.qaFindings, "qaFindings");
@@ -4989,7 +5604,7 @@ function createVersionSnapshot(root, args2 = {}) {
   assertSealedDomainArgs(args2, VERSION_FIELDS, "create_version_snapshot");
   const { mission } = readCurrentMission(root, args2.missionId, "Version snapshot");
   const versionId = domainSafeId(args2.versionId, "versionId");
-  if (fs16.existsSync(path16.resolve(root, versionPath(versionId)))) throw new Error(`Version snapshot id is already occupied: ${versionId}.`);
+  if (fs17.existsSync(path19.resolve(root, versionPath(versionId)))) throw new Error(`Version snapshot id is already occupied: ${versionId}.`);
   const artifacts = resolveMissionArtifactReferences(root, mission.missionId, args2.artifactRefs, "artifactRefs");
   if (artifacts.length === 0) throw new Error("create_version_snapshot requires current mission artifacts.");
   const supersedesVersionId = args2.supersedesVersionId === void 0 ? null : domainSafeId(args2.supersedesVersionId, "supersedesVersionId");
@@ -5000,14 +5615,14 @@ function createVersionSnapshot(root, args2 = {}) {
   const reviewCoverage = verifyReviewCoverage(root, { missionId: mission.missionId, artifactPaths: artifacts.map((item) => item.path), requireAuthoritative: true });
   const finalization = args2.finalize === true ? { eligible: completion.complete && reviewCoverage.authoritative === true && reviewCoverage.failures.length === 0, completion, reviewCoverage } : null;
   if (args2.finalize === true && !finalization.eligible) throw new Error("Version finalization requires current mission completion and current authoritative review proof.");
-  const copiedArtifacts = artifacts.map(({ path: artifactPath, kind, sha256: sha2564, receiptId }) => {
-    const extension = path16.extname(artifactPath);
-    const snapshotPath = filePath(path16.posix.join(".dove/versions", versionId, "artifacts"), domainSha256(artifactPath).slice(0, 20), extension ? extension.slice(1) : "bin");
-    return { path: artifactPath, kind, sha256: sha2564, receiptId, snapshotPath };
+  const copiedArtifacts = artifacts.map(({ path: artifactPath, kind, sha256: sha2565, receiptId }) => {
+    const extension = path19.extname(artifactPath);
+    const snapshotPath = filePath(path19.posix.join(".dove/versions", versionId, "artifacts"), domainSha256(artifactPath).slice(0, 20), extension ? extension.slice(1) : "bin");
+    return { path: artifactPath, kind, sha256: sha2565, receiptId, snapshotPath };
   });
   const snapshot = { schemaVersion: 1, versionId, missionId: mission.missionId, label: typeof args2.label === "string" && args2.label.trim() ? args2.label.trim() : versionId, artifacts: copiedArtifacts, supersedesVersionId, finalization, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
   const writes = [
-    ...copiedArtifacts.map((item) => ({ path: item.snapshotPath, kind: item.kind, content: fs16.readFileSync(path16.resolve(root, item.path)), derivedReferences: [`artifact:${item.path}`] })),
+    ...copiedArtifacts.map((item) => ({ path: item.snapshotPath, kind: item.kind, content: fs17.readFileSync(path19.resolve(root, item.path)), derivedReferences: [`artifact:${item.path}`] })),
     { path: versionPath(versionId), kind: "data", content: domainJson(snapshot), derivedReferences: snapshot.artifacts.map((item) => `artifact:${item.path}`) }
   ];
   return finalizeDomainArtifacts(root, { actionId: "create-version-snapshot", missionId: mission.missionId, summary: `Created version snapshot ${versionId}.`, completionEligible: false, writes });
@@ -5031,13 +5646,13 @@ function compareVersions(root, args2 = {}) {
   const comparison = { schemaVersion: 1, missionId: mission.missionId, fromVersionId, toVersionId, added: paths.filter((item) => !fromMap.has(item)), removed: paths.filter((item) => !toMap.has(item)), changed: paths.filter((item) => fromMap.has(item) && toMap.has(item) && fromMap.get(item) !== toMap.get(item)), comparedAt: (/* @__PURE__ */ new Date()).toISOString() };
   return finalizeDomainArtifacts(root, { actionId: "compare-versions", missionId: mission.missionId, summary: `Compared versions ${fromVersionId} and ${toVersionId}.`, completionEligible: false, writes: [{ path: filePath(".dove/versions", `${fromVersionId}--${toVersionId}.comparison`), kind: "data", content: domainJson(comparison), derivedReferences: [`version:${fromVersionId}`, `version:${toVersionId}`] }] });
 }
-function queryDomainIntegrity(root) {
+function queryDomainIntegrity(root, missionId = null) {
   const workspace = openDoveWorkspace(root, { operation: "Domain integrity query" });
   const ownership = readArtifactOwnership(root);
   const domainPrefixes = [".dove/sources/", ".dove/notes/", ".dove/claims/", ".dove/experiments/", ".dove/drafts/", ".dove/figures/", ".dove/rebuttal/", ".dove/versions/"];
-  const domainArtifacts = ownership.artifacts.filter((item) => domainPrefixes.some((prefix) => item.path.startsWith(prefix)));
-  const stale = domainArtifacts.filter((item) => !fs16.existsSync(path16.resolve(root, item.path)) || domainSha256(fs16.readFileSync(path16.resolve(root, item.path))) !== item.sha256);
-  return { workspaceId: workspace.manifest.workspaceId, artifactCount: domainArtifacts.length, staleArtifactCount: stale.length, stalePaths: stale.map((item) => item.path) };
+  const domainArtifacts = ownership.artifacts.filter((item) => domainPrefixes.some((prefix) => item.path.startsWith(prefix))).filter((item) => !missionId || item.missionId === missionId);
+  const stale = domainArtifacts.filter((item) => !fs17.existsSync(path19.resolve(root, item.path)) || domainSha256(fs17.readFileSync(path19.resolve(root, item.path))) !== item.sha256);
+  return { workspaceId: workspace.manifest.workspaceId, missionId, artifactCount: domainArtifacts.length, staleArtifactCount: stale.length, stalePaths: stale.map((item) => item.path) };
 }
 
 // src/core/mission-queries.mjs
@@ -5057,12 +5672,12 @@ function compactDomainIntegrity(integrity) {
 function readCurrentMissions(root, options = {}) {
   const workspace = openDoveWorkspace(root, { allowAbsent: options.allowAbsent === true, operation: options.operation ?? "Dove mission query" });
   if (workspace.state === "absent") return { workspace, missions: [] };
-  const missionsRoot = path17.resolve(root, ARTIFACT_PATHS.missionsDir);
-  const missions = fs17.readdirSync(missionsRoot, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => {
-    const relativePath = path17.posix.join(ARTIFACT_PATHS.missionsDir, entry.name);
+  const missionsRoot = path20.resolve(root, ARTIFACT_PATHS.missionsDir);
+  const missions = fs18.readdirSync(missionsRoot, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => {
+    const relativePath = path20.posix.join(ARTIFACT_PATHS.missionsDir, entry.name);
     let mission;
     try {
-      mission = JSON.parse(fs17.readFileSync(path17.resolve(root, relativePath), "utf8"));
+      mission = JSON.parse(fs18.readFileSync(path20.resolve(root, relativePath), "utf8"));
     } catch (error) {
       throw new Error(`Malformed durable JSON in ${relativePath}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -5114,29 +5729,55 @@ function queryDoveStatus(root, args2 = {}) {
   const language = responseLanguage(args2);
   const { workspace, missions } = readCurrentMissions(root, { allowAbsent: true, operation: "Dove status" });
   if (workspace.state === "absent") return emptyStatus(args2, language);
-  const latestMission = missions.at(-1) ?? null;
-  const integrityAssessment = latestMission ? assessMissionCompletion(root, { missionId: latestMission.missionId }) : null;
-  const receipts = readExecutionReceipts(root);
+  const requestedMissionId = typeof args2.missionId === "string" ? args2.missionId.trim() : "";
+  const selectedMission = requestedMissionId ? missions.find((mission) => mission.missionId === requestedMissionId) ?? null : missions.length === 1 ? missions[0] : null;
+  if (requestedMissionId && !selectedMission) throw new Error(`Mission does not exist: ${requestedMissionId}.`);
+  const missionScope = requestedMissionId ? "explicit" : missions.length === 0 ? "none" : missions.length === 1 ? "only-mission" : "workspace";
+  const scopedMissions = selectedMission ? [selectedMission] : missionScope === "workspace" ? missions : [];
+  const integrityAssessment = selectedMission ? assessMissionCompletion(root, { missionId: selectedMission.missionId }) : null;
+  const receipts = readExecutionReceipts(root, selectedMission?.missionId ?? null);
   const malformedReceipt = receipts.find((receipt) => receipt.__readFailure);
-  if (malformedReceipt) throw new Error(`Malformed durable JSON in ${path17.posix.join(ARTIFACT_PATHS.executionReceiptsDir, `${malformedReceipt.receiptId}.json`)}: ${malformedReceipt.__readFailure}`);
-  const domainIntegrity = queryDomainIntegrity(root);
-  const sourceItems = missions.flatMap((mission) => querySources(root, { missionId: mission.missionId, limit: 200 }).items);
+  if (malformedReceipt) throw new Error(`Malformed durable JSON in ${path20.posix.join(ARTIFACT_PATHS.executionReceiptsDir, `${malformedReceipt.receiptId}.json`)}: ${malformedReceipt.__readFailure}`);
+  const domainIntegrity = queryDomainIntegrity(root, selectedMission?.missionId ?? null);
+  const sourceItems = scopedMissions.flatMap((mission) => querySources(root, { missionId: mission.missionId, limit: 200 }).items);
+  const requiredSourceIds = selectedMission ? [...new Set(selectedMission.evidenceRequirements.filter((requirement) => requirement.startsWith("source:")).map((requirement) => requirement.slice("source:".length)))] : [];
+  const requiredSources = selectedMission ? evaluateSourceIds(root, requiredSourceIds, selectedMission.missionId).map((evaluation) => ({
+    sourceId: evaluation.sourceId,
+    lifecycle: evaluation.source?.lifecycle ?? "missing",
+    eligible: evaluation.eligible === true,
+    reason: evaluation.reason
+  })) : [];
   const sourceIntegrity = {
     sourceCount: sourceItems.length,
     eligibleCount: sourceItems.filter((item) => item.eligibility?.eligible === true).length,
     candidateCount: sourceItems.filter((item) => item.lifecycle === "candidate").length,
     rejectedCount: sourceItems.filter((item) => item.lifecycle === "rejected").length,
-    invalidCount: sourceItems.filter((item) => item.eligibility?.eligible !== true && item.lifecycle === "verified").length
+    invalidCount: 0,
+    required: requiredSources
   };
-  const reviewValidity = latestMission ? verifyReviewCoverage(root, { missionId: latestMission.missionId }) : { covered: false, authoritative: false, failures: ["mission-missing"] };
+  const requiresSourceEvidence = requiredSourceIds.length > 0;
+  const requiresReviewEvidence = selectedMission?.evidenceRequirements?.includes("review:authoritative") === true;
+  const reviewValidity = selectedMission && requiresReviewEvidence ? verifyReviewCoverage(root, { missionId: selectedMission.missionId, requireAuthoritative: true }) : { covered: false, authoritative: false, failures: [] };
+  const sourceGaps = requiresSourceEvidence ? requiredSources.filter((item) => item.eligible !== true) : [];
+  const reviewGaps = requiresReviewEvidence ? reviewValidity.failures ?? [] : [];
   const headline = language === "en" ? `Dove schema ${workspace.schemaVersion} is healthy with ${missions.length} mission contract${missions.length === 1 ? "" : "s"}.` : `Dove schema ${workspace.schemaVersion} \u5065\u5EB7\uFF0C\u5F53\u524D\u6709 ${missions.length} \u4E2A mission contract\u3002`;
+  const stableGaps = {
+    completion: integrityAssessment?.incompleteReasons ?? [],
+    sources: sourceGaps,
+    domain: domainIntegrity.stalePaths ?? [],
+    review: reviewGaps
+  };
   const attentionReasons = [
-    ...integrityAssessment && !integrityAssessment.complete ? integrityAssessment.incompleteReasons : [],
-    ...domainIntegrity.stalePaths ?? [],
+    ...stableGaps.completion,
+    ...stableGaps.domain,
+    ...stableGaps.sources.length > 0 ? ["source-evidence-unavailable"] : [],
+    ...stableGaps.review.length > 0 ? ["review-evidence-unavailable"] : [],
     ...sourceIntegrity.invalidCount > 0 ? ["invalid-source-verification"] : []
   ];
   const currentContext = {
     missionCount: missions.length,
+    missionScope,
+    selectedMissionId: selectedMission?.missionId ?? null,
     receiptCount: receipts.length,
     sourceCount: sourceIntegrity.sourceCount,
     integrityAssessment: integrityAssessment ? { complete: integrityAssessment.complete, staleReceiptCount: integrityAssessment.staleReceiptIds.length, incompleteReasons: integrityAssessment.incompleteReasons } : null,
@@ -5154,10 +5795,10 @@ function queryDoveStatus(root, args2 = {}) {
     detailsAvailable: true,
     summary: headline,
     headline,
-    scope: { kind: "minimal-mission-workspace", schemaVersion: workspace.schemaVersion },
+    scope: { kind: "minimal-mission-workspace", schemaVersion: workspace.schemaVersion, missionScope, missionId: selectedMission?.missionId ?? null },
     currentContext,
-    nextStep: { label: latestMission ? language === "en" ? "Continue the approved work with native host planning." : "\u7531\u5BBF\u4E3B\u539F\u751F plan \u7EE7\u7EED\u5DF2\u6279\u51C6\u5DE5\u4F5C\u3002" : language === "en" ? "Create one minimal mission contract." : "\u521B\u5EFA\u4E00\u4E2A\u6700\u5C0F mission contract\u3002" },
-    needsAttention: attentionReasons.length ? { status: "incomplete", summary: language === "en" ? "Current mission or domain evidence is incomplete." : "\u5F53\u524D mission \u6216\u9886\u57DF\u8BC1\u636E\u5C1A\u4E0D\u5B8C\u6574\u3002", reasons: attentionReasons } : { status: "clear", summary: language === "en" ? "No current mission or domain integrity failure is present." : "\u5F53\u524D\u6CA1\u6709 mission \u6216\u9886\u57DF\u5B8C\u6574\u6027\u5931\u8D25\u3002" },
+    nextStep: missionScope === "workspace" ? { label: language === "en" ? "Choose a mission explicitly with dove status --mission-id <id> --json." : "\u4F7F\u7528 dove status --mission-id <id> --json \u663E\u5F0F\u9009\u62E9 mission\u3002", command: 'node ./bin/dove-package.mjs status . --mission-id "<mission id>" --json', mcpTool: "query_dove_status" } : selectedMission ? { label: language === "en" ? "Address the listed mission gaps, then reassess completion." : "\u5904\u7406\u5217\u51FA\u7684 mission \u7F3A\u53E3\uFF0C\u7136\u540E\u91CD\u65B0\u8BC4\u4F30\u5B8C\u6210\u5EA6\u3002", command: `node ./bin/dove-package.mjs status . --mission-id "${selectedMission.missionId}" --json`, mcpTool: "query_dove_status" } : { label: language === "en" ? "Create one minimal mission contract." : "\u521B\u5EFA\u4E00\u4E2A\u6700\u5C0F mission contract\u3002", command: 'node ./bin/dove-package.mjs mission . --goal "<mission goal>" --mutation-mode direct-process --json', mcpTool: "create_dove_mission" },
+    needsAttention: missionScope === "workspace" ? { status: "mission-selection-required", summary: language === "en" ? "More than one mission exists; status did not select an implicit latest mission." : "\u5B58\u5728\u591A\u4E2A mission\uFF1Bstatus \u4E0D\u4F1A\u9690\u5F0F\u9009\u62E9\u6700\u65B0 mission\u3002", reasons: ["explicit-mission-required"], missionOptions: missions.map((mission) => ({ missionId: mission.missionId, goal: mission.goal })) } : attentionReasons.length ? { status: "incomplete", summary: language === "en" ? "Current mission or domain evidence is incomplete." : "\u5F53\u524D mission \u6216\u9886\u57DF\u8BC1\u636E\u5C1A\u4E0D\u5B8C\u6574\u3002", reasons: attentionReasons, stableGaps } : { status: "clear", summary: language === "en" ? "No current mission or domain integrity failure is present." : "\u5F53\u524D\u6CA1\u6709 mission \u6216\u9886\u57DF\u5B8C\u6574\u6027\u5931\u8D25\u3002", stableGaps },
     changes: { intent: "none", applied: false, count: 0, rollback: "not-applicable" },
     showMore: { detailsAvailable: true },
     optionalMissionDetails: null,
@@ -5170,13 +5811,13 @@ function queryDoveStatus(root, args2 = {}) {
     detail: "full",
     manifest: workspace.manifest,
     project: workspace.project,
-    missions,
+    missions: selectedMission ? [selectedMission] : missions,
     integrityAssessment,
     domainIntegrity,
     sourceIntegrity,
     reviewValidity,
     diagnostics: {
-      artifactPathsRead: [ARTIFACT_PATHS.doveRootManifest, ARTIFACT_PATHS.projectIdentity, ARTIFACT_PATHS.missionsDir, ARTIFACT_PATHS.executionReceiptsDir, ARTIFACT_PATHS.artifactOwnership, ARTIFACT_PATHS.artifactLineage, ".dove/sources"],
+      artifactPathsRead: [ARTIFACT_PATHS.doveRootManifest, ARTIFACT_PATHS.projectIdentity, ARTIFACT_PATHS.missionsDir, ARTIFACT_PATHS.executionReceiptsDir, ".dove/sources"],
       noRefresh: true,
       noCommandExecution: true,
       noExternalProcess: true,
@@ -5187,12 +5828,12 @@ function queryDoveStatus(root, args2 = {}) {
 }
 
 // scripts/generate-command-adapters.mjs
-import fs18 from "node:fs";
-import path18 from "node:path";
+import fs19 from "node:fs";
+import path21 from "node:path";
 import { fileURLToPath } from "node:url";
 var __filename = fileURLToPath(import.meta.url);
-var __dirname = path18.dirname(__filename);
-var PACKAGE_ROOT = path18.resolve(__dirname, "..");
+var __dirname = path21.dirname(__filename);
+var PACKAGE_ROOT = path21.resolve(__dirname, "..");
 function markdownTitle(command3) {
   return command3.title.replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -5240,20 +5881,21 @@ function exampleBullets(command3, hostId = null) {
 }
 var DIRECT_PROCESS_COMMAND_IDS = new Set(DIRECT_PROCESS_ADAPTER_COMMAND_IDS);
 function adapterCliCommand(commandId, command3) {
-  return DIRECT_PROCESS_COMMAND_IDS.has(commandId) ? `${command3} --mutation-mode direct-process` : command3;
+  const withMutationMode = DIRECT_PROCESS_COMMAND_IDS.has(commandId) ? `${command3} --mutation-mode direct-process` : command3;
+  return `${withMutationMode} --json`;
 }
 var LOCAL_CLI_COMMANDS = /* @__PURE__ */ new Map([
-  ["dove.init", { command: adapterCliCommand("dove.init", 'node ./bin/dove-package.mjs init . --goal "<project goal>"'), kind: "work", note: "Use init only to establish minimal project identity; it must not create tasks, packets, checklists, runtime, orchestration, or navigation state." }],
-  ["dove.status", { command: "node ./bin/dove-package.mjs status .", kind: "check" }],
-  ["dove.lessons", { command: 'node ./bin/dove-package.mjs lessons query . --mission-id "<mission id>"', kind: "check", note: "Query is the default and must remain zero-write. Never auto-capture a lesson and never auto-recall lessons from another command. Use `lessons record` only when the operator explicitly asks to preserve a specific lesson; then run only the exact confirmation command returned by the zero-write proposal." }],
+  ["dove.init", { command: adapterCliCommand("dove.init", 'node ./bin/dove-package.mjs init . --goal "<project goal>"'), kind: "work", note: "Use init only to establish minimal project identity; it must not create packets, checklists, runtime, orchestration, or persistent context." }],
+  ["dove.status", { command: "node ./bin/dove-package.mjs status . --json", kind: "check", note: 'When multiple missions exist, rerun with `--mission-id "<mission id>" --json`; never select an implicit latest mission.' }],
+  ["dove.lessons", { command: 'node ./bin/dove-package.mjs lessons query . --mission-id "<mission id>" --json', kind: "check", note: "Query is the default and must remain zero-write. Never auto-capture a lesson and never auto-recall lessons from another command. Use `lessons record` only when the operator explicitly asks to preserve a specific lesson; then run only the exact confirmation command returned by the zero-write proposal." }],
   ["dove.mission", { command: adapterCliCommand("dove.mission", 'node ./bin/dove-package.mjs mission . --goal "<mission goal>"'), kind: "check", note: "After approval, run the exact confirmation command returned by the proposal, persist only that contract, and continue with native host planning and tools." }],
   ["dove.version", { command: adapterCliCommand("dove.version", 'node ./bin/dove-package.mjs version . --mission-id "<mission id>" --version-id "<version id>" --artifact "<artifact path>"'), kind: "work", note: "Snapshots and comparisons are mission-bound and hash-current; finalization fails closed without completion and trusted review proof." }],
-  ["dove.source", { command: adapterCliCommand("dove.source", 'node ./bin/dove-package.mjs source . --mission-id "<mission id>" --source-id "<source id>" --title "<source title>" --locator "<url or doi>"'), kind: "work", note: "Registration creates candidate material only; public verification can reject but cannot issue positive trust." }],
+  ["dove.source", { command: adapterCliCommand("dove.source", 'node ./bin/dove-package.mjs source register . --mission-id "<mission id>" --source-id "<source id>" --title "<source title>" --locator "<url or doi>" --capture-path "<visible captured material path>"'), kind: "work", note: 'First use `search_network` to discover a non-authoritative registrationDraft, visibly capture the selected material with host tools, run the listed registration command with that exact capture path, then run `node ./bin/dove-package.mjs source . --mission-id "<mission id>" --source-id "<source id>" --json` to inspect the candidate. Search and registration make no trust claim; public verification can reject but cannot issue positive trust.' }],
   ["dove.note", { command: adapterCliCommand("dove.note", 'node ./bin/dove-package.mjs note . --mission-id "<mission id>" --note-id "<note id>" --summary "<synthesis>"'), kind: "work", note: "Use this only with substantive synthesis and current mission-bound evidence." }],
   ["dove.experience", { command: adapterCliCommand("dove.experience", 'node ./bin/dove-package.mjs experience . --mission-id "<mission id>" --experiment-id "<experiment id>" --goal "<experiment goal>" --hypothesis "<hypothesis>" --protocol "<protocol>" --success-criterion "<criterion>"'), kind: "work", note: "Results require current evidence and a clean audit before claim bridging." }],
   ["dove.draft", { command: adapterCliCommand("dove.draft", 'node ./bin/dove-package.mjs draft . --mission-id "<mission id>" --draft-id "<draft id>" --body "<draft text>"'), kind: "work", note: "Write real body content; metadata-only mode requires an existing current mission draft." }],
   ["dove.figure", { command: adapterCliCommand("dove.figure", 'node ./bin/dove-package.mjs figure . --mission-id "<mission id>" --figure-id "<figure id>" --intent "<figure request>" --purpose "<purpose>" --material "<artifact path>" --prompt "<drawing prompt>"'), kind: "work", note: "Provider execution stays host-side; import output with an exact hash, caption, QA, and independent-review boundary." }],
-  ["dove.review", { command: adapterCliCommand("dove.review", 'node ./bin/dove-package.mjs review . --mission-id "<mission id>" --review-id "<review id>" --artifact "<artifact path>" --preflight'), kind: "work", note: "Use --preflight for zero-write local checks, --prepare to freeze the canonical exchange, and --import only after the reviewer writes the canonical handoff and report. Public imports never mint Reviewer authority." }],
+  ["dove.review", { command: adapterCliCommand("dove.review", 'node ./bin/dove-package.mjs review . --mission-id "<mission id>" --review-id "<review id>" --artifact "<artifact path>" --preflight'), kind: "work", note: "Use --preflight for zero-write local checks, --prepare to freeze the canonical exchange, and --import only after the reviewer writes the canonical handoff and report. Distinguish the returned operation field. For prepare, preserve actionablePaths.input, actionablePaths.manifest, actionablePaths.handoff, actionablePaths.report, and importAction exactly. For import, preserve those canonical actionable paths and nextAction exactly. Public imports never mint Reviewer authority." }],
   ["dove.rebuttal", { command: adapterCliCommand("dove.rebuttal", 'node ./bin/dove-package.mjs rebuttal . --mission-id "<mission id>" --issue-json "<finding-linked issue JSON>" --strategy "<strategy>" --response-json "<response JSON>"'), kind: "work", note: "Every issue must link a current review artifact and finding id; responses remain author-side and evidence-linked." }]
 ]);
 function localCliBullets(command3) {
@@ -5267,7 +5909,7 @@ function localCliBullets(command3) {
     ];
   }
   const terminalProbe = `node ./bin/dove-package.mjs ${hostCommandSlug(command3.id)} --help`;
-  return [`This request has no listed project action. Do not run status, \`${terminalProbe}\`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the task, and the next user choice; do not explain why the tool is unavailable.`];
+  return [`This request has no listed project action. Do not run status, \`${terminalProbe}\`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the mission, and the next user choice; do not explain why the tool is unavailable.`];
 }
 function guardrailBullets(command3) {
   const bullets = [
@@ -5276,8 +5918,8 @@ function guardrailBullets(command3) {
     "If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.",
     ...localCliBullets(command3),
     "Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.",
-    "Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.",
-    "When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.",
+    "Use ordinary mission wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.",
+    "When the target work is unclear, ask the operator to choose by visible mission goal or numbered option; do not ask for internal ids in the default answer.",
     "Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.",
     "When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.",
     policyLine(command3),
@@ -5289,7 +5931,7 @@ function guardrailBullets(command3) {
   } else if (command3.domain === "paper") {
     bullets.push("Use the top-level Dove requests for sources, notes, drafting, review, rebuttal, experiences, figures, and version lineage.");
   } else {
-    bullets.push("Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.");
+    bullets.push("Use this shared Dove mission flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.");
   }
   if (command3.id !== "dove.mission") {
     bullets.push("Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.");
@@ -5367,22 +6009,11 @@ function generatedClaudeUserCommandEntries() {
     content: renderCommandAdapter("claude", command3)
   }));
 }
-function writeClaudeUserCommandAdapters(claudeConfigRoot) {
-  const written = [];
-  for (const entry of generatedClaudeUserCommandEntries()) {
-    const { fullPath: absolutePath } = resolveCanonicalContainedWrite(claudeConfigRoot, entry.relativePath, { label: "Claude command adapter path" });
-    fs18.mkdirSync(path18.dirname(absolutePath), { recursive: true });
-    fs18.writeFileSync(absolutePath, `${entry.content.trimEnd()}
-`, "utf8");
-    written.push(entry.relativePath);
-  }
-  return written;
-}
 
 // bin/dove.mjs
 var __filename2 = fileURLToPath2(import.meta.url);
-var __dirname2 = path19.dirname(__filename2);
-var PACKAGE_ROOT2 = path19.resolve(__dirname2, "..");
+var __dirname2 = path22.dirname(__filename2);
+var PACKAGE_ROOT2 = path22.resolve(__dirname2, "..");
 var LOCAL_COMMANDS = /* @__PURE__ */ new Set(["init", "mission", "receipt", "status", "lessons", "version", "source", "note", "draft", "experience", "figure", "review", "rebuttal"]);
 var PUBLIC_COMMANDS = new Set(COMMAND_SURFACES.map((surface2) => surface2.id.replace(/^dove\./u, "")));
 function usage() {
@@ -5406,7 +6037,7 @@ Usage:
   dove sync [target] --host <opencode|codex|cursor|agents|claude|all>
   dove doctor [target]
 
-Dove persists only schema 7 mission, advisory lesson, receipt, ownership, lineage, source, domain, review, rebuttal, and version artifacts.
+Dove persists only schema 8 mission, advisory lesson, execution receipt ledger, source, domain, review, rebuttal, and version artifacts.
 `);
 }
 function readFlagValue(args2, flag) {
@@ -5450,30 +6081,31 @@ function withoutMutationMode(args2) {
   return result;
 }
 function resolveTarget(rawTarget2) {
-  return path19.resolve(process2.cwd(), rawTarget2 || ".");
+  return path22.resolve(process2.cwd(), rawTarget2 || ".");
 }
 function targetAndArgs(rawTarget2, args2) {
   return !rawTarget2 || rawTarget2.startsWith("-") ? { target: resolveTarget("."), args: rawTarget2 ? [rawTarget2, ...args2] : args2 } : { target: resolveTarget(rawTarget2), args: args2 };
 }
 function runMutation(target2, actionId, args2, callback, fallback = "patch-plan") {
   const cleanArgs = withoutMutationMode(args2);
-  return runWithMutationContext(target2, { actionId, mutationMode: mutationMode(args2, fallback), hostId: "cli" }, () => callback(cleanArgs));
+  const result = runWithMutationContext(target2, { actionId, mutationMode: mutationMode(args2, fallback), hostId: "cli" }, () => callback(cleanArgs));
+  return resolveExecutionReceiptPostCommit(target2, result);
 }
 function shellQuote(value2) {
   return `'${String(value2 ?? "").replace(/'/gu, `'"'"'`)}'`;
 }
 function proposalToken(result) {
-  return result?.confirmation?.confirmArgs ? Buffer.from(JSON.stringify({ version: result.confirmation.proposalVersion ?? 1, mutationMode: result.confirmation.mutationMode, confirmArgs: result.confirmation.confirmArgs }), "utf8").toString("base64url") : result?.confirmation?.proposalToken ?? null;
+  return result?.confirmation?.proposalToken ?? null;
 }
 function proposalCommand(command3, result, target2, token = proposalToken(result)) {
   const mode = result?.confirmation?.mutationMode ?? result?.confirmation?.confirmArgs?.mutationMode;
   if (!token || !mode) return null;
-  return ["node", shellQuote(__filename2), command3, shellQuote(target2), "--proposal-token", shellQuote(token), "--confirmed", "--mutation-mode", shellQuote(mode)].join(" ");
+  return ["node", shellQuote(__filename2), command3, shellQuote(target2), "--proposal-token", shellQuote(token), "--confirmed", "--mutation-mode", shellQuote(mode), "--json"].join(" ");
 }
 function withProposalCommand(command3, result, target2) {
   const token = proposalToken(result);
   const exactConfirmationCommand = proposalCommand(command3, result, target2, token);
-  return exactConfirmationCommand ? { ...result, confirmation: { ...result.confirmation, proposalToken: token, exactConfirmationCommand } } : result;
+  return exactConfirmationCommand ? { ...result, confirmation: { ...result.confirmation, exactConfirmationCommand } } : result;
 }
 function decodeProposalToken(token, label) {
   if (!token || !/^[A-Za-z0-9_-]+$/u.test(token)) throw new Error(`--proposal-token must be the exact token returned by the Dove ${label} proposal.`);
@@ -5530,7 +6162,7 @@ function lessonRecordArgs(args2) {
   const token = readFlagValue(args2, "--proposal-token");
   if (token) {
     const payload = decodeProposalToken(token, "lesson");
-    return { ...payload.confirmArgs, confirmed: args2.includes("--confirmed"), mutationMode: payload.mutationMode ?? payload.confirmArgs.mutationMode };
+    return { ...payload.confirmArgs, proposalToken: token, confirmed: args2.includes("--confirmed"), mutationMode: payload.mutationMode ?? payload.confirmArgs.mutationMode };
   }
   if (args2.includes("--confirmed")) throw new Error("dove lessons record --confirmed requires the exact --proposal-token returned by the proposal.");
   return {
@@ -5553,10 +6185,10 @@ function lessonRecordArgs(args2) {
 function receiptArgs(args2, root) {
   const input = readFlagValue(args2, "--input");
   if (input) {
-    const fullPath = path19.resolve(root, input);
-    const relative = path19.relative(root, fullPath);
-    if (relative.startsWith("..") || path19.isAbsolute(relative)) throw new Error("--input must stay inside the selected workspace.");
-    return parseJson(fs19.readFileSync(fullPath, "utf8"), "--input");
+    const fullPath = path22.resolve(root, input);
+    const relative = path22.relative(root, fullPath);
+    if (relative.startsWith("..") || path22.isAbsolute(relative)) throw new Error("--input must stay inside the selected workspace.");
+    return parseJson(fs20.readFileSync(fullPath, "utf8"), "--input");
   }
   return { receiptId: readFlagValue(args2, "--receipt-id"), missionId: readFlagValue(args2, "--mission-id"), contractDigest: readFlagValue(args2, "--contract-digest"), summary: readFlagValue(args2, "--summary"), artifacts: parseRepeatedJson(args2, "--artifact-json"), validations: parseRepeatedJson(args2, "--validation-json"), criteriaSatisfied: parseRepeatedJson(args2, "--criterion-json"), producedAt: readFlagValue(args2, "--produced-at") };
 }
@@ -5582,74 +6214,88 @@ function hostIds(args2) {
   if (invalid.length) throw new Error(`Unknown host adapter(s): ${invalid.join(", ")}.`);
   return [...new Set(requested)];
 }
-function copyPath(source, destination, force, destinationRoot) {
-  const stat = fs19.lstatSync(source);
+function collectCopyEntries(source, destination, force, destinationRoot, entries) {
+  const stat = fs20.lstatSync(source);
   if (stat.isSymbolicLink()) return;
-  const relative = path19.relative(destinationRoot, destination).split(path19.sep).join("/");
-  const resolved = resolveCanonicalContainedWrite(destinationRoot, relative, { label: "Install destination" });
+  const relative = path22.relative(destinationRoot, destination).split(path22.sep).join("/");
+  resolveCanonicalContainedWrite(destinationRoot, relative, { label: "Install destination" });
   if (stat.isDirectory()) {
-    fs19.mkdirSync(resolved.fullPath, { recursive: true });
-    for (const entry of fs19.readdirSync(source)) copyPath(path19.join(source, entry), path19.join(destination, entry), force, destinationRoot);
+    for (const entry of fs20.readdirSync(source)) collectCopyEntries(path22.join(source, entry), path22.join(destination, entry), force, destinationRoot, entries);
     return;
   }
   if (!stat.isFile()) return;
-  fs19.mkdirSync(path19.dirname(resolved.fullPath), { recursive: true });
-  if (!fs19.existsSync(resolved.fullPath) || force) fs19.copyFileSync(source, resolved.fullPath);
+  entries.push({ root: destinationRoot, relativePath: relative, content: fs20.readFileSync(source), force, label: "Install destination" });
 }
 function installOrSync(target2, args2) {
   const hosts = hostIds(args2);
   const projectHosts = hosts.filter((host) => Object.hasOwn(HOST_ADAPTERS, host));
   const corePaths = [...CORE_INSTALL_PATHS];
   const hostPaths = projectHosts.flatMap((host) => HOST_ADAPTERS[host].paths.map((relativePath) => ({ host, relativePath })));
+  const force = args2.includes("--force");
+  const entries = [];
   for (const relativePath of corePaths) {
-    const source = path19.join(PACKAGE_ROOT2, relativePath);
-    if (fs19.existsSync(source)) copyPath(source, path19.join(target2, relativePath), args2.includes("--force"), target2);
+    const source = path22.join(PACKAGE_ROOT2, relativePath);
+    if (fs20.existsSync(source)) collectCopyEntries(source, path22.join(target2, relativePath), force, target2, entries);
   }
   for (const { relativePath } of hostPaths) {
-    const source = path19.join(PACKAGE_ROOT2, relativePath);
-    if (fs19.existsSync(source)) copyPath(source, path19.join(target2, relativePath), args2.includes("--force"), target2);
+    const source = path22.join(PACKAGE_ROOT2, relativePath);
+    if (fs20.existsSync(source)) collectCopyEntries(source, path22.join(target2, relativePath), force, target2, entries);
   }
-  const copiedUserHostPaths = [];
-  let claudeCodeGateway = null;
+  let claudeConfigRoot = null;
   if (hosts.some((host) => USER_HOST_IDS.includes(host))) {
-    const claudeConfigRoot = resolveClaudeConfigRoot();
-    for (const relativePath of writeClaudeUserCommandAdapters(claudeConfigRoot)) copiedUserHostPaths.push({ host: "claude", path: relativePath, root: claudeConfigRoot });
-    claudeCodeGateway = configureClaudeCodeGatewayDefaults({ claudeConfigRoot, shellStartupFile: resolveClaudeShellStartupFile() });
+    claudeConfigRoot = resolveClaudeConfigRoot();
+    for (const entry of generatedClaudeUserCommandEntries()) entries.push({ root: claudeConfigRoot, relativePath: entry.relativePath, content: `${entry.content.trimEnd()}
+`, encoding: "utf8", force: true, label: "Claude command adapter path" });
   }
-  return { target: target2, hosts, force: args2.includes("--force"), copiedCorePaths: corePaths, copiedHostPaths: hostPaths.map(({ host, relativePath }) => ({ host, path: relativePath })), copiedUserHostPaths, claudeCodeGateway };
+  const transaction = writeFileSetTransaction(entries);
+  const writtenPaths = new Set(transaction.writtenPaths);
+  const copiedUserHostPaths = claudeConfigRoot ? generatedClaudeUserCommandEntries().filter((entry) => writtenPaths.has(entry.relativePath)).map((entry) => ({ host: "claude", path: entry.relativePath, root: claudeConfigRoot })) : [];
+  return { target: target2, hosts, force: args2.includes("--force"), copiedCorePaths: corePaths, copiedHostPaths: hostPaths.map(({ host, relativePath }) => ({ host, path: relativePath })), copiedUserHostPaths, transactionState: transaction.transactionState };
 }
 function claudeCommandPaths() {
-  return COMMAND_SURFACES.map((surface2) => path19.join(resolveClaudeConfigRoot(), "commands", "dove", `${surface2.id.replace(/^dove\./u, "").replace(/\./gu, "-")}.md`));
+  return COMMAND_SURFACES.map((surface2) => path22.join(resolveClaudeConfigRoot(), "commands", "dove", `${surface2.id.replace(/^dove\./u, "").replace(/\./gu, "-")}.md`));
 }
 function detectHosts(target2, { includeClaude = false } = {}) {
-  const result = Object.entries(HOST_ADAPTERS).filter(([, adapter]) => adapter.paths.some((relativePath) => fs19.existsSync(path19.join(target2, relativePath)))).map(([host]) => host);
-  if (includeClaude && claudeCommandPaths().some((absolutePath) => fs19.existsSync(absolutePath))) result.push("claude");
+  const result = Object.entries(HOST_ADAPTERS).filter(([, adapter]) => adapter.paths.some((relativePath) => fs20.existsSync(path22.join(target2, relativePath)))).map(([host]) => host);
+  if (includeClaude && claudeCommandPaths().some((absolutePath) => fs20.existsSync(absolutePath))) result.push("claude");
   return result;
 }
 function doctor(target2) {
-  const gateway = inspectClaudeCodeGatewayDefaults({ claudeConfigRoot: resolveClaudeConfigRoot(), shellStartupFile: resolveClaudeShellStartupFile() });
-  const inspectGateway = Boolean(process2.env.DOVE_CLAUDE_CONFIG_DIR || process2.env.DOVE_CLAUDE_SHELL_RC || gateway.shell?.hasManagedBlock);
-  const installedHosts = detectHosts(target2, { includeClaude: inspectGateway });
-  const missing = installedHosts.filter((host) => host !== "claude").flatMap((host) => (HOST_ADAPTERS[host]?.requiredPaths ?? []).filter((relativePath) => !fs19.existsSync(path19.join(target2, relativePath))));
-  if (installedHosts.some((host) => host !== "claude") && !fs19.existsSync(path19.join(target2, "mcp/dove-state-server-package.mjs"))) missing.push("mcp/dove-state-server-package.mjs");
-  const checks = installedHosts.map((host) => ({ check: `host-adapter:${host}`, ok: host === "claude" ? claudeCommandPaths().every((absolutePath) => fs19.existsSync(absolutePath)) : (HOST_ADAPTERS[host]?.requiredPaths ?? []).every((relativePath) => fs19.existsSync(path19.join(target2, relativePath))), requiredPaths: host === "claude" ? claudeCommandPaths().map((absolutePath) => path19.relative(resolveClaudeConfigRoot(), absolutePath).split(path19.sep).join("/")) : HOST_ADAPTERS[host]?.requiredPaths ?? [] }));
-  if (inspectGateway) checks.push({ check: "claude-code-gateway", ok: gateway.ok, message: gateway.ok ? "Claude Code gateway defaults are configured" : gateway.issues.join(" | ") });
+  const installedHosts = detectHosts(target2, { includeClaude: true });
+  const missing = installedHosts.filter((host) => host !== "claude").flatMap((host) => (HOST_ADAPTERS[host]?.requiredPaths ?? []).filter((relativePath) => !fs20.existsSync(path22.join(target2, relativePath))));
+  if (installedHosts.some((host) => host !== "claude") && !fs20.existsSync(path22.join(target2, "mcp/dove-state-server-package.mjs"))) missing.push("mcp/dove-state-server-package.mjs");
+  const checks = installedHosts.map((host) => ({ check: `host-adapter:${host}`, ok: host === "claude" ? claudeCommandPaths().every((absolutePath) => fs20.existsSync(absolutePath)) : (HOST_ADAPTERS[host]?.requiredPaths ?? []).every((relativePath) => fs20.existsSync(path22.join(target2, relativePath))), requiredPaths: host === "claude" ? claudeCommandPaths().map((absolutePath) => path22.relative(resolveClaudeConfigRoot(), absolutePath).split(path22.sep).join("/")) : HOST_ADAPTERS[host]?.requiredPaths ?? [] }));
   const workspace = inspectDoveWorkspace(target2);
   const workspaceOk = workspace.state === "absent" ? installedHosts.length > 0 && missing.length === 0 : workspace.healthy;
   checks.push({ check: "workspace-schema", ok: workspaceOk, message: workspace.state === "absent" ? "Dove runtime is installed and .dove is absent; initialize explicitly when needed." : workspace.healthy ? `Current Dove schema ${workspace.schemaVersion} is healthy.` : `${workspace.state}${workspace.error ? `: ${workspace.error}` : ""}; run dove init --archive-reset and confirm the exact proposal.` });
-  const result = { target: target2, node: process2.version, healthy: missing.length === 0 && checks.every((check) => check.ok), workspaceMode: workspace.state === "absent" ? "runtime-only" : workspace.healthy ? "current-schema" : "archive-reset-required", workspaceSchema: { state: workspace.state, category: workspace.category, healthy: workspace.healthy, schemaVersion: workspace.schemaVersion, detectedSchema: workspace.detectedSchema, error: workspace.error ?? null, zeroWrite: true }, missing: [...new Set(missing)], checks, warnings: [], hostAdapters: installedHosts, claudeCodeGateway: inspectGateway ? gateway : null, writes: [] };
+  const result = { target: target2, node: process2.version, healthy: missing.length === 0 && checks.every((check) => check.ok), workspaceMode: workspace.state === "absent" ? "runtime-only" : workspace.healthy ? "current-schema" : "archive-reset-required", workspaceSchema: { state: workspace.state, category: workspace.category, healthy: workspace.healthy, schemaVersion: workspace.schemaVersion, detectedSchema: workspace.detectedSchema, error: workspace.error ?? null, zeroWrite: true }, missing: [...new Set(missing)], checks, warnings: [], hostAdapters: installedHosts, writes: [] };
   console.log(JSON.stringify(result, null, 2));
   return result.healthy ? 0 : 1;
 }
 function statusArgs(args2) {
-  return { detail: args2.includes("--full") || args2.includes("--missions") ? "full" : readFlagValue(args2, "--detail"), full: args2.includes("--full"), showMissions: args2.includes("--missions") };
+  return { missionId: readFlagValue(args2, "--mission-id") ?? void 0, detail: args2.includes("--full") || args2.includes("--missions") ? "full" : readFlagValue(args2, "--detail"), full: args2.includes("--full"), showMissions: args2.includes("--missions") };
 }
 function wantsJson(args2) {
   return args2.includes("--json") || readFlagValue(args2, "--format") === "json";
 }
 function printResult(result, args2) {
-  if (wantsJson(args2)) console.log(JSON.stringify(result, null, 2));
-  else console.log(result.summary ?? result.headline ?? result.status ?? "Dove operation completed.");
+  if (wantsJson(args2)) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  const command3 = result?.confirmation?.exactConfirmationCommand;
+  if (command3 && result?.confirmation?.required === true) {
+    console.log([
+      "--- DOVE PROPOSAL: ZERO-WRITE BOUNDARY ---",
+      result.summary ?? result.headline ?? result.status ?? "Dove proposal is ready.",
+      "No durable mutation has been applied.",
+      "Exact confirmation command:",
+      command3,
+      "--- END DOVE PROPOSAL ---"
+    ].join("\n"));
+    return;
+  }
+  console.log(result.summary ?? result.headline ?? result.status ?? "Dove operation completed.");
 }
 var parsed;
 try {

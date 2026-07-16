@@ -103,6 +103,13 @@ test("source candidates import captured material, public rejection is explicit, 
   }));
   assert.equal(rejected.source.lifecycle, "rejected");
   assert.equal(rejected.source.currentDecision.decision, "rejected");
+
+  const storedPath = path.join(root, ".dove/sources/paper-one.json");
+  const stored = JSON.parse(fs.readFileSync(storedPath, "utf8"));
+  stored.lifecycle = "verified";
+  stored.currentDecision = { decision: "verified", decidedAt: new Date().toISOString() };
+  fs.writeFileSync(storedPath, `${JSON.stringify(stored, null, 2)}\n`);
+  assert.throws(() => mutate(root, "register-source", () => registerSource(root, { missionId: currentMission.missionId, sourceId: "other", title: "Other", capturePath: "inputs/paper.pdf" })), /stored verified source state is invalid/u);
 });
 
 test("notes and drafts require current mission-owned evidence and preflight drift before writing", () => {
@@ -128,6 +135,12 @@ test("notes and drafts require current mission-owned evidence and preflight drif
   }));
   assert.match(fs.readFileSync(path.join(root, ".dove/drafts/methods.md"), "utf8"), /We evaluate the method/u);
   assert.equal(draft.receipt.criteriaSatisfied.length, 0);
+
+  assert.throws(() => mutate(root, "upsert-draft", () => upsertDraft(root, {
+    missionId: currentMission.missionId,
+    draftId: "unsupported",
+    body: "Body without evidence."
+  })), /requires at least one current eligible evidence/u);
 
   write(root, "outputs/evidence.txt", "drifted evidence\n");
   const before = tree(root);
@@ -230,6 +243,29 @@ test("figure workflow keeps provider execution host-side and imports exact outpu
   assert.ok(imported.qa.reviewCoverage.failures.includes("trusted-review-issuer-missing"));
   assert.equal(fs.existsSync(path.join(root, ".dove/figures/main-result.final.svg")), true);
   assert.equal(fs.existsSync(path.join(root, ".dove/figures/main-result.caption.md")), true);
+
+  write(root, "outputs/empty.svg", "");
+  assert.throws(() => mutate(root, "run-figure-workflow", () => runFigureWorkflow(root, {
+    missionId: currentMission.missionId,
+    figureId: "empty-result",
+    intent: "Reject empty output.",
+    purpose: "Validate import boundary.",
+    materials: ["outputs/material.csv"],
+    prompt: "Draw.",
+    outputPath: "outputs/empty.svg",
+    caption: "Empty."
+  })), /non-empty regular file|empty file/u);
+  fs.symlinkSync("figure.svg", path.join(root, "outputs/figure-alias.svg"));
+  assert.throws(() => mutate(root, "run-figure-workflow", () => runFigureWorkflow(root, {
+    missionId: currentMission.missionId,
+    figureId: "alias-result",
+    intent: "Reject alias output.",
+    purpose: "Validate import boundary.",
+    materials: ["outputs/material.csv"],
+    prompt: "Draw.",
+    outputPath: "outputs/figure-alias.svg",
+    caption: "Alias."
+  })), /canonical realpath-contained path|symlink or alias/u);
 });
 
 test("rebuttal requires concrete current finding linkage and version comparison uses immutable snapshot copies", () => {

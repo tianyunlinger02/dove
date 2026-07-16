@@ -31,7 +31,7 @@ npm run build:check
 
 The installer copies the four bundled runtime artifacts, necessary public docs, and selected host adapters. It does not require or copy shipped raw source. The standard installed MCP path is `mcp/dove-state-server-package.mjs`.
 
-The project-local `.dove/` workspace remains user-owned state. Install and sync do not bootstrap or overwrite it. Explicit schema 7 mutations own advisory lessons, evolving sources, notes, claims, drafts, experiments, figures, rebuttal issues, receipts, ownership/lineage indexes, and immutable snapshots; legacy packet/runtime state is not imported or repaired.
+The project-local `.dove/` workspace remains user-owned state. Install and sync do not bootstrap or overwrite it. Explicit schema 8 mutations own advisory lessons, evolving sources, notes, claims, drafts, experiments, figures, rebuttal issues, receipts, and immutable snapshots. Ownership and lineage are derived from the receipt ledger; legacy packet/runtime state is not imported or repaired.
 
 ## Generated adapters and release checks
 
@@ -43,6 +43,6 @@ npm run release:check
 npm pack --dry-run --json
 ```
 
-Generated adapters route installed projects to `bin/dove-package.mjs`, and generated MCP configuration routes to `mcp/dove-state-server-package.mjs`. The exact generated inventory is 48 checked-in project adapters across OpenCode, Codex, Cursor, and shared agents, plus 12 user-level Claude commands: 60 combined adapters. The package exposes exactly 12 commands and 27 MCP tools. `check` and `release:check` include bundle drift validation.
+Generated adapters route installed projects to `bin/dove-package.mjs` with `--json`, and generated MCP configuration routes to `mcp/dove-state-server-package.mjs`. The inventories are distinct: 12 host workflows; separately 16 top-level CLI subcommands, 27 MCP tools, and 60 adapters: 48 checked-in project adapters across OpenCode, Codex, Cursor, and shared agents plus 12 user-level Claude commands. Claude install/sync writes only those command files and leaves settings and shell files byte-identical. `check` and `release:check` include bundle drift validation.
 
 The lessons package surface contains `.dove/lessons` support, `query_dove_lessons`, `record_dove_lesson`, and generated `dove.lessons` adapters. It does not ship retired operator lesson storage or tools, automatic capture/recall hooks, transcript import, Trellis writes, runtime state, or compatibility aliases.
