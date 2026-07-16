@@ -2,7 +2,7 @@ import process from "node:process";
 
 import { dispatchTool } from "./handlers.mjs";
 import {
-  toolDefinitionsForSurface,
+  toolDefinitions,
   toolDiscoveryInputSchema
 } from "./tool-definitions.mjs";
 
@@ -28,16 +28,6 @@ function normalizeToolDiscoveryParams(params) {
     throw invalidParams(
       `tools/list does not accept unknown input: ` +
       `${unknown.map((key) => `$.${key}`).join(", ")}.`
-    );
-  }
-  const surface = params.surface;
-  if (
-    surface !== undefined
-    && !toolDiscoveryInputSchema.properties.surface.enum.includes(surface)
-  ) {
-    throw invalidParams(
-      `tools/list surface must be one of: ` +
-      `${toolDiscoveryInputSchema.properties.surface.enum.join(", ")}.`
     );
   }
   const resultMode = params.resultMode;
@@ -96,9 +86,9 @@ export function startServer(root = process.cwd()) {
     }
 
     if (method === "tools/list") {
-      const discoveryParams = normalizeToolDiscoveryParams(params);
+      normalizeToolDiscoveryParams(params);
       sendResponse(id, {
-        tools: toolDefinitionsForSurface(discoveryParams.surface)
+        tools: toolDefinitions
       });
       return;
     }

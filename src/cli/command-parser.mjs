@@ -1,101 +1,42 @@
 const value = (name, options = {}) => ({ name, kind: "value", ...options });
 const boolean = (name, options = {}) => ({ name, kind: "boolean", ...options });
-const aliases = (key, names, options = {}) => names.map((name) => value(name, { key, ...options }));
 
 const outputOptions = [boolean("--json"), value("--format")];
 const mutationOptions = [value("--mutation-mode"), ...outputOptions];
-const taskTargetOptions = [
-  ...aliases("packet-target-id", ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id"]),
-  value("--target"), value("--packet-target"), value("--task-name")
-];
 const missionOptions = [
   value("--proposal-token"), value("--proposal-digest"), value("--mutation-mode"), ...outputOptions,
-  ...aliases("mission-id", ["--id", "--packet-id", "--task-id"]),
-  value("--goal"), ...aliases("domain", ["--domain", "--dove-domain", "--mission-domain"]),
-  ...aliases("stage", ["--stage", "--mission-stage"]),
-  ...aliases("artifact", ["--artifact", "--target-artifact", "--artifact-path", "--target"], { repeatable: true }),
-  ...aliases("acceptance-check", ["--acceptance-check", "--check"], { repeatable: true }), value("--next-command"),
-  boolean("--confirmed"), boolean("--yes")
+  value("--mission-id"), value("--goal"), value("--scope", { repeatable: true }),
+  value("--out-of-scope", { repeatable: true }), value("--target-artifact", { repeatable: true }),
+  value("--expected-artifact", { repeatable: true }), value("--completion-criterion", { repeatable: true }),
+  value("--evidence-requirement", { repeatable: true }), value("--depends-on-mission-id", { repeatable: true }),
+  value("--supersedes-mission-id"), boolean("--confirmed")
 ];
-const evidenceOptions = [
-  ...aliases("validation-evidence", ["--validation-evidence", "--validation-evidence-path", "--evidence", "--evidence-path"], { repeatable: true }),
-  ...aliases("changed-file", ["--changed-file", "--changed-file-path", "--changed-path"], { repeatable: true }),
-  ...aliases("test-evidence", ["--test-evidence", "--test-evidence-path", "--test-path"], { repeatable: true }),
-  ...aliases("validation-output", ["--validation-output", "--validation-output-path", "--validation-log", "--test-output"], { repeatable: true }),
-  ...aliases("validation-output-text", ["--validation-output-text", "--test-output-text"], { repeatable: true }),
-  ...aliases("review-evidence", ["--review-evidence", "--review-evidence-path"], { repeatable: true })
+const receiptOptions = [
+  value("--input"), value("--receipt-id"), value("--mission-id"), value("--contract-digest"),
+  value("--summary"), value("--artifact-json", { repeatable: true }), value("--validation-json", { repeatable: true }),
+  value("--criterion-json", { repeatable: true }), value("--produced-at"), ...mutationOptions
 ];
-const isolatedOptions = [
-  value("--run-id"), value("--scope"), value("--instructions"), value("--mediator-role"), value("--reviewer-role"),
-  value("--artifact", { repeatable: true }), value("--mutation-mode"), ...outputOptions
-];
-
 function command(options = [], positional = { min: 0, max: 1 }) {
   return { options, positional };
 }
 
 export const CLI_COMMAND_SPECS = {
-  install: command([boolean("--force"), ...aliases("host", ["--host", "--platform"], { repeatable: true }), value("--mutation-mode"), ...outputOptions]),
-  sync: command([boolean("--force"), ...aliases("host", ["--host", "--platform"], { repeatable: true }), value("--mutation-mode"), ...outputOptions]),
-  doctor: command([...mutationOptions]),
-  onboard: command([boolean("--write-map"), value("--max-depth"), value("--max-files"), value("--exclude-dir", { repeatable: true }), ...mutationOptions]),
-  init: command([value("--title"), value("--goal"), value("--objective"), value("--summary"), ...aliases("domain", ["--domain", "--dove-domain"]), ...mutationOptions]),
-  orchestrate: command([...missionOptions, value("--request"), value("--user-request"), boolean("--allow-autonomy")]),
+  install: command([boolean("--force"), value("--host", { repeatable: true }), value("--platform", { repeatable: true }), value("--mutation-mode"), ...outputOptions]),
+  sync: command([boolean("--force"), value("--host", { repeatable: true }), value("--platform", { repeatable: true }), value("--mutation-mode"), ...outputOptions]),
+  doctor: command([...outputOptions]),
+  init: command([value("--goal"), boolean("--archive-reset"), boolean("--confirmed"), value("--proposal-token"), value("--proposal-digest"), ...mutationOptions]),
   mission: command(missionOptions),
-  status: command([
-    value("--intent"), ...aliases("domain", ["--domain", "--dove-domain", "--mission-domain"]), ...aliases("stage", ["--stage", "--mission-stage"]),
-    ...aliases("packet", ["--packet-id", "--packet", "--mission-packet-id", "--mission-packet"], { repeatable: true }),
-    ...aliases("status", ["--status", "--lifecycle-status"], { repeatable: true }), ...aliases("detail", ["--detail", "--view", "--result-mode"]),
-    value("--format"), boolean("--contract-test"), boolean("--health"), boolean("--include-archived"), boolean("--full"),
-    boolean("--include-details"), boolean("--missions"), boolean("--show-missions"), boolean("--include-mission-details"),
-    boolean("--request-status-adjustment"), boolean("--status-adjustment"), boolean("--show-status-adjustments"),
-    boolean("--include-status-adjustment-preview"), boolean("--json"), boolean("--help", { key: "help" }), boolean("-h", { key: "help" })
-  ]),
-  statusline: command([
-    value("--intent"), ...aliases("domain", ["--domain", "--dove-domain", "--mission-domain"]), ...aliases("stage", ["--stage", "--mission-stage"]),
-    ...aliases("packet", ["--packet-id", "--packet", "--mission-packet-id", "--mission-packet"], { repeatable: true }),
-    ...aliases("status", ["--status", "--lifecycle-status"], { repeatable: true }), ...aliases("detail", ["--detail", "--view", "--result-mode"]),
-    value("--format"), boolean("--contract-test"), boolean("--health"), boolean("--include-archived"), boolean("--full"), boolean("--include-details"),
-    boolean("--missions"), boolean("--show-missions"), boolean("--include-mission-details"), boolean("--request-status-adjustment"),
-    boolean("--status-adjustment"), boolean("--show-status-adjustments"), boolean("--include-status-adjustment-preview"), boolean("--json")
-  ]),
-  audit: command([...missionOptions, value("--scope"), ...evidenceOptions]),
-  return: command([...missionOptions, value("--scope"), ...evidenceOptions]),
-  launch: command([
-    ...missionOptions, value("--source-type"), value("--source-id"),
-    value("--follow-through-id"), value("--conversion-path"), value("--title"),
-    value("--summary"), value("--current-focus"), value("--next-action"),
-    value("--dependency", { repeatable: true }), ...aliases("evidence-link", ["--evidence", "--evidence-link"], { repeatable: true }),
-    ...aliases("output-path", ["--output", "--output-path"], { repeatable: true }),
-    value("--decision-summary"), value("--rationale"), value("--execute-by"), value("--review-after")
-  ]),
-  auto: command([
-    ...taskTargetOptions, value("--proposal-token"), value("--mutation-mode"), ...outputOptions, value("--goal"), value("--prompt"), value("--objective"),
-    ...aliases("domain", ["--domain", "--dove-domain", "--mission-domain"]), ...aliases("stage", ["--stage", "--mission-stage"]),
-    ...aliases("artifact", ["--artifact", "--artifact-path"], { repeatable: true }), value("--max-iterations"), value("--max-steps"), value("--steps-json"),
-    value("--run-id"), boolean("--confirmed")
-  ]),
-  operator: command([value("--mutation-mode"), ...outputOptions, value("--blocker-investigation-mode"), value("--task-results-json"), value("--run-id"), boolean("--confirmed"), boolean("--include-queue-details")]),
-  lessons: command([...taskTargetOptions, value("--title"), value("--problem"), value("--decision", { repeatable: true }), value("--pitfall", { repeatable: true }), value("--validation", { repeatable: true }), value("--next-time", { repeatable: true }), value("--tag", { repeatable: true }), ...aliases("domain", ["--domain", "--dove-domain"]), value("--status"), value("--limit"), ...mutationOptions]),
-  version: command([value("--title"), value("--reason"), value("--summary"), ...aliases("version-id", ["--version-id", "--id"]), ...mutationOptions]),
-  source: command([
-    ...taskTargetOptions, value("--source-id"), value("--citation-key"), value("--title"), ...aliases("locator", ["--locator", "--url", "--doi"]),
-    value("--source-type"), value("--origin"), value("--abstract"), value("--year"), value("--author", { repeatable: true }),
-    value("--decision"), value("--method"), value("--checked-material"), value("--audit-evidence-json"), ...mutationOptions
-  ], { min: 0, max: 2 }),
-  note: command([...taskTargetOptions, value("--note-id"), value("--title"), value("--section-id"), value("--summary"), value("--quote", { repeatable: true }), value("--claim", { repeatable: true }), value("--open-question", { repeatable: true }), value("--source-id", { repeatable: true }), ...mutationOptions]),
-  draft: command([...taskTargetOptions, value("--section-id"), value("--title"), value("--body"), value("--summary"), value("--status"), ...mutationOptions]),
-  experience: command([...taskTargetOptions, ...aliases("experiment-id", ["--id", "--experiment-id"]), value("--title"), value("--goal"), value("--idea"), ...aliases("methodology", ["--methodology", "--method"]), ...aliases("success-metric", ["--success-metric", "--metric"]), value("--claim-id"), value("--outcome"), value("--result-summary"), value("--summary"), ...aliases("evidence", ["--evidence", "--evidence-link", "--artifact-path"], { repeatable: true }), ...aliases("comparison", ["--comparison-target", "--baseline"], { repeatable: true }), ...mutationOptions]),
-  figure: command([...taskTargetOptions, value("--intent"), value("--description"), value("--name"), value("--title"), value("--figure-id"), value("--purpose"), value("--caption-intent"), ...aliases("claim-id", ["--target-claim-id", "--claim-id"], { repeatable: true }), ...aliases("section", ["--source-section", "--section-id"], { repeatable: true }), ...aliases("source-artifact", ["--source-artifact-path", "--artifact-path"], { repeatable: true }), ...aliases("experiment", ["--related-experiment-id", "--experiment-id"], { repeatable: true }), value("--review-concern-id", { repeatable: true }), value("--rebuttal-issue-id", { repeatable: true }), value("--required-visual-element", { repeatable: true }), value("--material-hint", { repeatable: true }), value("--provider-id"), value("--run-id"), value("--output-format"), value("--constraint", { repeatable: true }), value("--output-manifest-path"), value("--source-svg-path"), value("--target-final-svg-path"), value("--svg-content"), value("--caption"), value("--caption-draft"), value("--caption-id"), boolean("--execute-provider"), boolean("--allow-missing-materials"), ...mutationOptions]),
-  review: command([...taskTargetOptions, value("--scope"), value("--stage"), value("--reviewer"), ...aliases("artifact", ["--artifact", "--artifact-path"], { repeatable: true }), value("--reviewed-artifact-path", { repeatable: true }), ...mutationOptions]),
-  "review-loop": command([...taskTargetOptions, value("--run-id"), value("--scope"), value("--instructions"), value("--stage"), value("--summary"), ...aliases("artifact", ["--artifact", "--artifact-path"], { repeatable: true }), value("--reviewed-artifact-path", { repeatable: true }), value("--max-iterations"), value("--draft-body"), value("--section-id"), value("--experience-goal"), value("--final-plan"), value("--final-plan-path"), value("--final-result"), value("--final-result-path"), ...mutationOptions]),
-  rebuttal: command([...taskTargetOptions, ...aliases("issue", ["--issue", "--reviewer-issue"], { repeatable: true }), value("--title"), value("--summary"), boolean("--issues-only"), boolean("--strategy-only"), ...mutationOptions]),
-  "isolated-review-prepare": command(isolatedOptions),
-  "isolated-review-import": command([value("--run-id"), value("--handoff"), value("--report"), ...mutationOptions]),
-  "isolated-review": command([...isolatedOptions, value("--reviewer-command")]),
-  "publish-status": command([boolean("--include-archived"), ...aliases("language", ["--response-language", "--language"]), boolean("--quiet"), ...mutationOptions]),
-  "publish-global-status": command([value("--project", { repeatable: true }), value("--output"), ...aliases("language", ["--response-language", "--language"]), value("--generated-at"), boolean("--refresh"), boolean("--include-config"), boolean("--include-archived"), boolean("--quiet"), ...mutationOptions], { min: 0, max: Infinity }),
-  "serve-global-status": command([value("--project", { repeatable: true }), value("--output"), ...aliases("language", ["--response-language", "--language"]), value("--generated-at"), ...aliases("auth-user", ["--auth-user", "--auth-username"]), value("--auth-password-env"), ...aliases("domain", ["--domain", "--hostname"]), value("--port"), value("--host"), value("--tunnel-name"), value("--cloudflared-path"), value("--cloudflare-config"), value("--credentials-file"), value("--token-env"), value("--dns-resolver-addrs", { repeatable: true }), boolean("--refresh"), boolean("--include-config"), boolean("--include-archived"), boolean("--no-auth"), boolean("--auth"), boolean("--no-cloudflare"), boolean("--cloudflare"), boolean("--configure-cloudflare"), boolean("--dry-run"), boolean("--quiet"), ...mutationOptions], { min: 0, max: Infinity })
+  receipt: command(receiptOptions),
+  status: command([value("--detail"), value("--result-mode"), value("--format"), boolean("--full"), boolean("--missions"), boolean("--json"), boolean("--help", { key: "help" }), boolean("-h", { key: "help" })]),
+  lessons: command([value("--lesson-id"), value("--mission-id"), value("--scope"), value("--kind"), value("--summary"), value("--details"), value("--next-time-guidance", { repeatable: true }), value("--source-id", { repeatable: true }), value("--note-id", { repeatable: true }), value("--artifact", { repeatable: true }), value("--applies-to-artifact", { repeatable: true }), value("--tag", { repeatable: true }), value("--supersedes-lesson-id"), boolean("--include-superseded"), boolean("--include-unscoped"), value("--limit"), value("--proposal-token"), value("--mutation-mode"), boolean("--confirmed"), ...outputOptions], { min: 0, max: 2 }),
+  version: command([value("--mission-id"), value("--version-id"), value("--label"), value("--artifact", { repeatable: true }), value("--supersedes-version-id"), value("--from-version-id"), value("--to-version-id"), boolean("--finalize"), ...mutationOptions]),
+  source: command([value("--mission-id"), value("--source-id"), value("--citation-key"), value("--title"), value("--locator"), value("--source-type"), value("--origin"), value("--abstract"), value("--year"), value("--author", { repeatable: true }), value("--capture-path"), value("--method"), value("--checked-material"), value("--audit-evidence-json"), ...mutationOptions], { min: 0, max: 2 }),
+  note: command([value("--mission-id"), value("--note-id"), value("--title"), value("--summary"), value("--quote", { repeatable: true }), value("--claim", { repeatable: true }), value("--open-question", { repeatable: true }), value("--source-id", { repeatable: true }), value("--artifact", { repeatable: true }), ...mutationOptions]),
+  draft: command([value("--mission-id"), value("--draft-id"), value("--title"), value("--body"), value("--summary"), value("--evidence", { repeatable: true }), value("--artifact", { repeatable: true }), boolean("--metadata-only"), ...mutationOptions]),
+  experience: command([value("--mission-id"), value("--experiment-id"), value("--title"), value("--goal"), value("--hypothesis"), value("--protocol"), value("--success-criterion", { repeatable: true }), value("--comparison-target", { repeatable: true }), value("--result"), value("--result-evidence", { repeatable: true }), value("--audit-finding", { repeatable: true }), value("--integrity-flag", { repeatable: true }), value("--claim-id"), value("--bridge-reason"), ...mutationOptions]),
+  figure: command([value("--mission-id"), value("--figure-id"), value("--intent"), value("--purpose"), value("--material", { repeatable: true }), value("--prompt"), value("--output-path"), value("--output-sha256"), value("--caption"), value("--qa-finding", { repeatable: true }), ...mutationOptions]),
+  review: command([value("--mission-id"), value("--exchange-id"), value("--review-id"), value("--policy"), value("--artifact", { repeatable: true }), value("--final-plan", { repeatable: true }), value("--final-result", { repeatable: true }), boolean("--preflight"), boolean("--prepare"), boolean("--import"), boolean("--verify-coverage"), boolean("--require-authoritative"), ...mutationOptions]),
+  rebuttal: command([value("--mission-id"), value("--issue-json", { repeatable: true }), value("--strategy"), value("--response-json", { repeatable: true }), boolean("--issues-only"), boolean("--strategy-only"), ...mutationOptions])
 };
 
 function optionMap(spec) {
@@ -113,9 +54,7 @@ export function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
   const commandName = tokens.shift();
   if (["help", "--help", "-h"].includes(commandName)) return { command: commandName, positionals: [], args: [] };
   const spec = specs[commandName];
-  if (spec && tokens.some((token) => token === "--help" || token === "-h")) {
-    return { command: commandName, positionals: [], args: ["--help"] };
-  }
+  if (spec && tokens.some((token) => token === "--help" || token === "-h")) return { command: commandName, positionals: [], args: ["--help"] };
   if (!spec) return { command: commandName, positionals: tokens, args: [] };
   const options = optionMap(spec);
   const args = [];
@@ -124,14 +63,8 @@ export function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
   let separated = false;
   for (let index = 0; index < tokens.length; index += 1) {
     const raw = tokens[index];
-    if (!separated && raw === "--") {
-      separated = true;
-      continue;
-    }
-    if (separated || !raw.startsWith("-")) {
-      positionals.push(raw);
-      continue;
-    }
+    if (!separated && raw === "--") { separated = true; continue; }
+    if (separated || !raw.startsWith("-")) { positionals.push(raw); continue; }
     const equalsIndex = raw.indexOf("=");
     const name = equalsIndex > 0 ? raw.slice(0, equalsIndex) : raw;
     const inlineValue = equalsIndex > 0 ? raw.slice(equalsIndex + 1) : null;

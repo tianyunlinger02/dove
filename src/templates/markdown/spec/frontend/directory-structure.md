@@ -1,84 +1,61 @@
 # Directory Structure
 
-> Project-facing surface and module organization for `Dove`.
+> Project-facing surface and module organization for `Dove` schema 7.
 
 ---
 
 ## Overview
 
-This repository does not contain a React/browser frontend. The Trellis `frontend` layer is used for the user-facing package surfaces: generated multi-host command adapters, OpenCode role skills, CLI entrypoints, MCP tools, and durable `.dove/` artifacts. New work should stay file-first and package-first: manifest metadata, generated adapters, role skills, CLI/MCP handlers, core state logic, and tests each have separate homes.
-
----
+This repository has no browser frontend. The Trellis `frontend` layer documents Dove's user-facing package surfaces: generated multi-host command adapters, the three primary OpenCode responsibility skills, CLI commands, MCP tools, and sealed `.dove/` artifacts.
 
 ## Directory Layout
 
 ```text
 .
-├── .opencode/
-│   ├── commands/          # Generated OpenCode command adapters, e.g. dove.status.md
-│   └── skills/            # OpenCode role/discipline skill packs, one SKILL.md per skill
-├── .cursor/commands/      # Generated Cursor command adapters
-├── .codex/skills/         # Generated Codex skill adapters, one dove-*/SKILL.md per command
-├── .agents/skills/        # Generated shared agent skill adapters, one dove-*/SKILL.md per command
-├── .dove/                 # Durable workspace/artifact template used by the package
-│   ├── context/           # Role, phase, artifact, and action manifests
-│   ├── orchestration/     # Board and handoffs
-│   ├── meta/              # Proposal-only optimizer/governance surfaces
-│   ├── runtime/           # Foreground autonomy state/results/leases/events
-│   └── ...                # Research, evidence, drafts, reviews, versions, figures
-├── bin/                   # CLI executable (`dove`)
-├── docs/                  # Package documentation
-├── mcp/                   # Thin executable wrapper for the MCP server
-├── scripts/               # Validation, generator, and audit scripts used by npm scripts
+├── .opencode/commands/       # Generated OpenCode command adapters
+├── .opencode/skills/         # Planner, Builder, and Reviewer skills
+├── .cursor/commands/         # Generated Cursor adapters
+├── .codex/skills/            # Generated Codex adapters
+├── .agents/skills/           # Generated shared-agent adapters
+├── bin/                      # CLI executable
+├── docs/                     # Package documentation
+├── mcp/                      # Thin MCP executable wrapper
+├── scripts/                  # Generators and validation gates
 ├── src/
-│   ├── core/              # File-backed domain logic, command manifest, and schema normalization
-│   └── mcp/               # MCP definitions, server, and dispatch handlers
+│   ├── core/                 # Schema 7 mission, receipt, domain, review, and workspace logic
+│   └── mcp/                  # MCP definitions, dispatch, validation, and server
 └── tests/
-    ├── integration/       # End-to-end package/workflow/MCP tests
-    └── unit/              # Schema and focused core behavior tests
+    ├── integration/
+    └── unit/
 ```
 
----
+A user workspace contains only schema 7 identity, mission, advisory lesson, receipt, ownership/lineage, source, note, claim, experiment, draft, figure, review, rebuttal, and version artifacts.
 
 ## Module Organization
 
-- Put durable workflow behavior in `src/core/*.mjs`. Examples: `src/core/workspace.mjs` owns file IO helpers and workspace bootstrapping; `src/core/schema.mjs` owns schema versions, constants, default objects, and normalization.
-- Put canonical command and host-adapter metadata in `src/core/command-manifest.mjs`.
-- Put MCP exposure in `src/mcp/*.mjs`. `src/mcp/tool-definitions.mjs` defines schemas; `src/mcp/handlers.mjs` dispatches tool names to core functions.
-- Put install/doctor/autonomy CLI wiring in `bin/dove.mjs`; keep reusable behavior in `src/core/`.
-- Put adapter generation in `scripts/generate-command-adapters.mjs`, and validation/audit scripts in `scripts/*.mjs` wired through `package.json`.
-- Put generated project host adapters in `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/dove-*/SKILL.md`, and `.agents/skills/dove-*/SKILL.md`. Do not hand-maintain divergent command inventories per project-local host; Claude Code uses manifest-rendered user-level `/dove:*` entries via `dove install/sync --host claude` instead of project-local `.claude/commands/dove/`.
-- Put OpenCode role skills in `.opencode/skills/dove-*/SKILL.md`.
-- Treat `.dove/` as the durable artifact model, not as generated scratch. Bootstrap may create files there, but package update logic must preserve user-owned state.
-
----
+- Keep canonical paths and governance registries in `src/core/schema.mjs`.
+- Keep strict workspace classification and initialization in `src/core/workspace-schema.mjs` and `src/core/workspace-init.mjs`.
+- Keep mission proposal/materialization in `src/core/mission-contracts.mjs`, read-only status in `src/core/mission-queries.mjs`, and explicit advisory lesson query/record in `src/core/lessons.mjs`.
+- Keep execution evidence in `src/core/execution-receipts.mjs` and ownership/lineage in narrow artifact modules.
+- Keep domain workflows in `src/core/retained-domain-workflows.mjs`, source trust in `src/core/source-trust.mjs`, and review exchange in `src/core/review-exchange.mjs`.
+- Define MCP schemas in `src/mcp/tool-definitions.mjs` and dispatch exact names in `src/mcp/handlers.mjs`.
+- Define command and host-adapter metadata in `src/core/command-manifest.mjs`; regenerate adapters rather than editing them by hand.
+- Treat `.dove/` as user-owned durable state. Install and sync must not initialize, repair, convert, or overwrite it.
 
 ## Naming Conventions
 
-- JavaScript modules use ESM `.mjs` and kebab-case filenames where they are executables/scripts (`validate-mcp.mjs`, `dove-state-server.mjs`). Core modules use descriptive lower-case names (`schema.mjs`, `orchestration.mjs`).
-- Command IDs live in `src/core/command-manifest.mjs` as flat top-level `dove.<surface>` entries for all public Dove surfaces.
-- Generated project adapter slugs are derived from command IDs: Cursor uses `.cursor/commands/dove-<slug>.md`, and Codex/Agents use `dove-<slug>/SKILL.md`.
-- OpenCode role skills use `dove-<discipline>/SKILL.md` with YAML frontmatter.
-- Durable artifact paths are centralized in `ARTIFACT_PATHS` in `src/core/schema.mjs`; do not scatter new `.dove/...` string constants through command, MCP, or test surfaces.
-- Role IDs are explicit and lower-case hyphenated (`rebuttal-lead`, `experiment-planner`, `version-analyst`).
-
----
-
-## Examples
-
-- `README.md` documents the public package surfaces and the canonical `.dove/` artifact list.
-- `src/core/command-manifest.mjs` is the example for centralizing command IDs, generated adapter paths, host inventories, and managed adapter boundaries.
-- `scripts/generate-command-adapters.mjs` is the example for deterministic checked-in host adapter generation.
-- `src/core/schema.mjs` is the example for centralizing artifact paths, role IDs, governance registries, and schema defaults.
-- `src/core/workspace.mjs` is the example for file-first workspace creation and normalized JSON writes.
-- `.opencode/commands/dove.status.md` is the generated read-only router example; paper-specific adapters cover artifact workflows rather than mirror shared mission controls.
-- `tests/integration/workflow.test.mjs` is the example for validating an end-to-end paper workflow through core functions.
-
----
+- Node.js modules use ESM `.mjs` and descriptive kebab-case filenames.
+- Public command IDs are the twelve flat `dove.<surface>` entries in `COMMAND_SURFACES`; the generator emits 48 checked-in project adapters plus 12 Claude user commands, 60 combined.
+- MCP tool names are snake_case and core functions are camelCase.
+- Durable artifact paths come from `ARTIFACT_PATHS`; do not scatter ad hoc `.dove/...` constants.
+- Mission-bound mutations require explicit mission identity and current artifact evidence.
 
 ## Forbidden Patterns
 
-- Do not create a hidden app-style frontend tree (`components/`, `pages/`, `hooks/`) unless a real UI is introduced.
-- Do not put durable workflow rules only in prompts; core invariants need code and tests.
-- Do not add new package-managed paths without checking workflow boundaries in `createWorkflowBoundaries()` and `src/core/command-manifest.mjs`.
-- Do not hand-add generated command adapters; update the manifest, regenerate adapters, and update validators/tests that assert complete surface classification.
+- Do not add compatibility roots, aliases, fallbacks, or hidden callable surfaces.
+- Do not add task catalogs, boards, routes, queues, leases, campaigns, background continuation, or host orchestration mirrors.
+- Do not package extra role skills that reintroduce removed workflow-control state.
+- Do not put durable invariants only in prompts; enforce them in core code and tests.
+- Do not add a command or MCP tool in only one layer.
+- Do not hand-edit generated adapters.
+- Do not let install or sync mutate user-owned `.dove/` state.

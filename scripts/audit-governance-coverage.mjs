@@ -24,39 +24,46 @@ function discoverCoreFiles(directory = path.join(ROOT, "src/core")) {
 
 const coreFiles = discoverCoreFiles();
 
-const WRITE_SIGNAL_REGEX = /(?:writeJson|writeText|appendText|saveState|refreshDurableSurfaces|materializeGuidancePacket|materializeDoveTask|updateTaskLifecycle|persistAutoResult|persistOperatorFollowThrough)\(|(?:fs(?:\.promises)?|fsPromises)\.(?:writeFile|appendFile|rm|cp|copyFile|mkdir|rename|writeFileSync|appendFileSync|rmSync|cpSync|copyFileSync|mkdirSync|renameSync)\(/;
+const WRITE_SIGNAL_REGEX = /(?:writeJson|writeText|writeBinary)\(|(?:fs(?:\.promises)?|fsPromises)\.(?:writeFile|rm|cp|copyFile|mkdir|rename|writeFileSync|rmSync|cpSync|copyFileSync|mkdirSync|renameSync)\(/;
 const EXEMPT_FUNCTIONS = new Set([
-  "appendText",
-  "applyPacketStepResult",
-  "recordReviewProofRequiredBoundary",
-  "discoverPaperArtifacts",
-  "ensureDir",
-  "saveRuntimeArtifacts",
-  "saveState",
-  "updatePacketLifecycle",
-  "writeJson",
-  "writeText"
+  "finalizeDomainArtifacts"
+]);
+
+const PUBLIC_SCHEMA7_MUTATION_FILES = new Set([
+  "src/core/domain-artifacts.mjs",
+  "src/core/execution-receipts.mjs",
+  "src/core/lessons.mjs",
+  "src/core/mission-contracts.mjs",
+  "src/core/retained-domain-workflows.mjs",
+  "src/core/source-trust.mjs"
 ]);
 
 function collectExportedFunctions(filePath) {
   const content = fs.readFileSync(path.join(ROOT, filePath), "utf8");
   const exportRegex = /export\s+(?:(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*\{|const\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|\w+)\s*=>\s*\{|const\s+(\w+)\s*=\s*(?:async\s+)?function\s*\([^)]*\)\s*\{|class\s+(\w+)\s*\{)/g;
   const matches = [...content.matchAll(exportRegex)];
-  return matches.flatMap((match, index) => {
+  const functions = [];
+  let pendingClassStart = null;
+  for (const match of matches) {
     if (match[4]) {
-      return [];
+      pendingClassStart = match.index ?? 0;
+      continue;
     }
-    const name = match[1] ?? match[2] ?? match[3];
-    const start = match.index ?? 0;
-    const end = index + 1 < matches.length ? (matches[index + 1].index ?? content.length) : content.length;
-    const body = content.slice(start, end);
-    return [{ filePath, name, body }];
-  });
+    if (functions.length > 0) {
+      functions.at(-1).end = pendingClassStart ?? (match.index ?? content.length);
+    }
+    functions.push({ filePath, name: match[1] ?? match[2] ?? match[3], start: match.index ?? 0, end: content.length });
+    pendingClassStart = null;
+  }
+  if (functions.length > 0 && pendingClassStart !== null) {
+    functions.at(-1).end = pendingClassStart;
+  }
+  return functions.map(({ filePath: exportedFilePath, name, start, end }) => ({ filePath: exportedFilePath, name, body: content.slice(start, end) }));
 }
 
 const exports = coreFiles.flatMap(collectExportedFunctions);
 const mutatingCoreFunctions = exports
-  .filter((entry) => WRITE_SIGNAL_REGEX.test(entry.body))
+  .filter((entry) => PUBLIC_SCHEMA7_MUTATION_FILES.has(entry.filePath) && WRITE_SIGNAL_REGEX.test(entry.body))
   .map((entry) => entry.name)
   .filter((name) => !name.startsWith("read") && !name.startsWith("query") && !name.startsWith("list"));
 

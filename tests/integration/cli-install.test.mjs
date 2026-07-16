@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import { checkGeneratedAdapters, writeGeneratedAdapters } from "../../scripts/generate-command-adapters.mjs";
 import { CLAUDE_CODE_GATEWAY_ENV_DEFAULTS, CLAUDE_CODE_GATEWAY_SHELL_BLOCK_END, CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START } from "../../src/core/claude-code-gateway.mjs";
 import { PROJECT_HOST_IDS, commandAdapterPathsForHost } from "../../src/core/command-manifest.mjs";
+import { initDoveGoal } from "../../src/core/mission-contracts.mjs";
+import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
@@ -56,6 +58,21 @@ function assertDoveHostPaths(target, hostIds) {
   }
 }
 
+function bootstrapLegacyWorkspace(target) {
+  const doveRoot = path.join(target, ".dove");
+  fs.mkdirSync(doveRoot, { recursive: true });
+  fs.writeFileSync(path.join(doveRoot, "manifest.json"), `${JSON.stringify({ version: 1, status: "authoritative" }, null, 2)}\n`, "utf8");
+}
+
+function bootstrapCurrentWorkspace(target, goal = "Doctor current schema test") {
+  const proposal = initDoveGoal(target, { goal, mutationMode: "direct-process" });
+  return runWithMutationContext(target, {
+    actionId: "init-dove-goal",
+    mutationMode: "direct-process",
+    hostId: "test"
+  }, () => initDoveGoal(target, proposal.confirmation.confirmArgs));
+}
+
 function snapshotInstalledDurableState(target) {
   const doveRoot = path.join(target, ".dove");
   const snapshot = {};
@@ -78,7 +95,7 @@ function snapshotInstalledDurableState(target) {
 }
 
 test("public package docs distinguish installed commands from source-checkout development", () => {
-  const publicDocPaths = ["README.md", "docs/README.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md"];
+  const publicDocPaths = ["README.md", "docs/README.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"];
   for (const relativePath of publicDocPaths) {
     const text = fs.readFileSync(path.join(ROOT, relativePath), "utf8");
     assert.doesNotMatch(text, /\/home\/nvme01\/paper_factory/);
@@ -87,13 +104,17 @@ test("public package docs distinguish installed commands from source-checkout de
   assert.match(installText, /npx dove install \. --force/);
   assert.match(installText, /raw `bin\/dove\.mjs` entrypoint exists only in a Dove source checkout/);
   assert.doesNotMatch(installText, /From the repository root:[\s\S]{0,600}node \.\/bin\/dove-package\.mjs install/);
-  for (const relativePath of ["README.md", "docs/README.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md"]) {
+  for (const relativePath of ["README.md", "docs/README.md", "docs/INSTALL.md", "docs/USAGE.md", "docs/PACKAGING.md", "docs/CAPABILITY_MATRIX.md", "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"]) {
     const text = fs.readFileSync(path.join(ROOT, relativePath), "utf8");
     for (const command of ["npm run commands:generate", "npm run commands:check", "npm run workflow-goals:validate", "npm run build", "npm run check", "npm run release:check"]) {
       if (text.includes(command)) {
         assert.match(text, /source checkout|source-checkout|maintainer-only/i, `${relativePath} must scope ${command} to source development`);
       }
     }
+  }
+  for (const relativePath of publicDocPaths) {
+    const text = fs.readFileSync(path.join(ROOT, relativePath), "utf8");
+    assert.doesNotMatch(text, /\.dove\/meta\/operator-lessons\.json|query_operator_lessons|record_operator_lesson/u, `${relativePath} exposes retired lesson surfaces`);
   }
 });
 
@@ -116,14 +137,18 @@ test("npm package dry-run includes Dove-only adapters and current public docs", 
     "docs/INSTALL.md",
     "docs/USAGE.md",
     "docs/PACKAGING.md",
-    "docs/CAPABILITY_MATRIX.md"
+    "docs/CAPABILITY_MATRIX.md",
+    "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md"
   ]) {
     assert.ok(packagedPaths.has(publicDocPath), `missing public doc ${publicDocPath}`);
   }
-  for (const publicCommand of ["init", "mission", "auto", "status", "operator", "lessons", "version", "source", "note", "figure", "experience", "draft", "review", "review-loop", "rebuttal"]) {
+  for (const publicCommand of ["init", "mission", "status", "lessons", "version", "source", "note", "figure", "experience", "draft", "review", "rebuttal"]) {
     assert.ok(packagedPaths.has(`.opencode/commands/dove.${publicCommand}.md`), `missing public command ${publicCommand}`);
   }
   for (const removedPath of [
+    ".opencode/commands/dove.auto.md",
+    ".opencode/commands/dove.operator.md",
+    ".opencode/commands/dove.review-loop.md",
     ".opencode/commands/dove.orchestrate.md",
     ".opencode/commands/dove.plan.md",
     ".opencode/commands/dove.checklist.md",
@@ -146,8 +171,13 @@ test("npm package dry-run includes Dove-only adapters and current public docs", 
   ]) {
     assert.equal(packagedPaths.has(removedPath), false, `packaged removed adapter ${removedPath}`);
   }
-  assert.ok(packagedPaths.has(".opencode/skills/dove-pipeline/SKILL.md"));
-  assert.ok(packagedPaths.has(".agents/skills/dove-lessons/SKILL.md"));
+  for (const roleSkill of ["dove-planner", "dove-builder", "dove-reviewer"]) {
+    assert.ok(packagedPaths.has(`.opencode/skills/${roleSkill}/SKILL.md`));
+  }
+  for (const removedSkill of ["dove-pipeline", "dove-researcher", "dove-rebuttal-strategist", "dove-experiment-planning", "dove-version-analyst", "dove-claim-gate", "dove-citation-discipline", "dove-rebuttal", "dove-review-loop"]) {
+    assert.equal(packagedPaths.has(`.opencode/skills/${removedSkill}/SKILL.md`), false);
+  }
+  assert.equal(packagedPaths.has(".agents/skills/dove-lessons/SKILL.md"), true);
   for (const forbiddenPath of [
     ".codex/config.toml",
     ".codex/skills/parallel/SKILL.md",
@@ -221,13 +251,11 @@ for (const name of [
   "appendText",
   "saveState",
   "initProject",
-  "registerSource",
-  "upsertNote",
   "queryProgramApprovals"
 ]) {
   assert.equal(name in rootApi, false, \`forbidden root export \${name}\`);
 }
-for (const name of ["queryDoveStatus", "queryPaperAudit", "extractCitationKeysFromText"]) {
+for (const name of ["queryDoveStatus", "createDoveMission", "queryDoveLessons", "recordDoveLesson", "registerSource", "upsertNote", "runExperienceWorkflow", "runFigureWorkflow", "createVersionSnapshot"]) {
   assert.equal(typeof rootApi[name], "function", \`missing public root export \${name}\`);
 }
 const rootEntryUrl = import.meta.resolve("dove");
@@ -261,60 +289,55 @@ for (const relativePath of ["../src/core/workspace.mjs", "../src/mcp/server.mjs"
     fs.mkdirSync(installedProject, { recursive: true });
     const installProject = spawnSync(installedCliPath, ["install", installedProject, "--force", "--host", "opencode"], { cwd: consumerDir, encoding: "utf8" });
     assert.equal(installProject.status, 0, installProject.stderr || installProject.stdout);
+    assert.equal(fs.existsSync(path.join(installedProject, ".dove")), false, "install must not bootstrap project workflow state");
 
     const initAdapter = fs.readFileSync(path.join(installedProject, ".opencode", "commands", "dove.init.md"), "utf8");
     assert.match(initAdapter, /node \.\/bin\/dove-package\.mjs init \. --goal "<project goal>" --mutation-mode direct-process/);
     const adapterInit = spawnSync("node", ["./bin/dove-package.mjs", "init", ".", "--goal", "Installed adapter smoke", "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
     assert.equal(adapterInit.status, 0, adapterInit.stderr || adapterInit.stdout);
-    const initState = JSON.parse(fs.readFileSync(path.join(installedProject, ".dove", "state.json"), "utf8"));
-    assert.match(JSON.stringify(initState), /Installed adapter smoke/);
+    const initPayload = JSON.parse(adapterInit.stdout);
+    assert.equal(fs.existsSync(path.join(installedProject, ".dove")), false, "init proposal must be zero-write");
+    const initReplay = spawnSync("/bin/sh", ["-c", initPayload.confirmation.exactConfirmationCommand], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(initReplay.status, 0, initReplay.stderr || initReplay.stdout);
+    const projectIdentity = JSON.parse(fs.readFileSync(path.join(installedProject, ".dove", "project.json"), "utf8"));
+    assert.match(JSON.stringify(projectIdentity), /Installed adapter smoke/);
+    assert.equal(fs.existsSync(path.join(installedProject, ".dove", "state.json")), false);
 
-    const packetIndexPath = path.join(installedProject, ".dove", "task-packets", "index.json");
-    const beforeMissionProposal = fs.readFileSync(packetIndexPath, "utf8");
+    const beforeMissionProposal = snapshotInstalledDurableState(installedProject);
     const missionProposal = spawnSync("node", ["./bin/dove-package.mjs", "mission", ".", "--goal", "Verify installed exact mission replay", "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
     assert.equal(missionProposal.status, 0, missionProposal.stderr || missionProposal.stdout);
     const missionPayload = JSON.parse(missionProposal.stdout);
-    assert.match(missionPayload.exactConfirmationCommand, /bin\/dove-package\.mjs/);
-    assert.doesNotMatch(missionPayload.exactConfirmationCommand, /bin\/dove\.mjs/);
-    assert.match(missionPayload.exactConfirmationCommand, /--mutation-mode 'direct-process'/);
-    assert.equal(fs.readFileSync(packetIndexPath, "utf8"), beforeMissionProposal, "mission proposal must not write task packets");
-    const missionReplay = spawnSync("/bin/sh", ["-c", missionPayload.exactConfirmationCommand], { cwd: installedProject, encoding: "utf8" });
+    assert.match(missionPayload.confirmation.exactConfirmationCommand, /bin\/dove-package\.mjs/);
+    assert.doesNotMatch(missionPayload.confirmation.exactConfirmationCommand, /bin\/dove\.mjs/);
+    assert.match(missionPayload.confirmation.exactConfirmationCommand, /--mutation-mode 'direct-process'/);
+    assert.deepEqual(snapshotInstalledDurableState(installedProject), beforeMissionProposal, "mission proposal must be zero-write");
+    const missionReplay = spawnSync("/bin/sh", ["-c", missionPayload.confirmation.exactConfirmationCommand], { cwd: installedProject, encoding: "utf8" });
     assert.equal(missionReplay.status, 0, missionReplay.stderr || missionReplay.stdout);
     assert.doesNotMatch(`${missionReplay.stderr}\n${missionReplay.stdout}`, /MODULE_NOT_FOUND/);
-    assert.notEqual(fs.readFileSync(packetIndexPath, "utf8"), beforeMissionProposal, "confirmed mission must materialize durable state");
+    assert.equal(fs.existsSync(path.join(installedProject, ".dove", "missions", `${missionPayload.mission.missionId}.json`)), true);
+    assert.equal(fs.existsSync(path.join(installedProject, ".dove", "task-packets")), false);
 
-    const beforeAutoProposal = fs.readFileSync(packetIndexPath, "utf8");
-    const autoSteps = JSON.stringify([
-      { command: "dove.source", args: { sourceId: "installed-auto-source", title: "Installed auto source", locator: "https://example.com/installed-auto-source" } },
-      { command: "dove.note", args: { summary: "Installed structured auto note", sourceIds: ["installed-auto-source"] } }
-    ]);
-    const autoProposal = spawnSync("node", ["./bin/dove-package.mjs", "auto", ".", "--target", missionPayload.proposedTask.title, "--steps-json", autoSteps, "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
-    assert.equal(autoProposal.status, 0, autoProposal.stderr || autoProposal.stdout);
-    const autoPayload = JSON.parse(autoProposal.stdout);
-    assert.match(autoPayload.exactConfirmationCommand, /bin\/dove-package\.mjs/);
-    assert.doesNotMatch(autoPayload.exactConfirmationCommand, /bin\/dove\.mjs/);
-    assert.match(autoPayload.exactConfirmationCommand, /--mutation-mode 'direct-process'/);
-    assert.equal(fs.readFileSync(packetIndexPath, "utf8"), beforeAutoProposal, "auto proposal must not write task packets");
-    const autoReplay = spawnSync("/bin/sh", ["-c", autoPayload.exactConfirmationCommand], { cwd: installedProject, encoding: "utf8" });
-    assert.notEqual(autoReplay.status, null, autoReplay.stderr || autoReplay.stdout);
-    assert.doesNotMatch(`${autoReplay.stderr}\n${autoReplay.stdout}`, /MODULE_NOT_FOUND|missing-note-material/);
-    const replayDurableText = [
-      fs.readFileSync(path.join(installedProject, ".dove", "runtime", "results.json"), "utf8"),
-      fs.readFileSync(path.join(installedProject, ".dove", "task-packets", "index.json"), "utf8"),
-      fs.readFileSync(path.join(installedProject, ".dove", "notes", "index.json"), "utf8")
-    ].join("\n");
-    assert.match(replayDurableText, /Installed structured auto note|installed-auto-source/);
+    const beforeLessonQuery = snapshotInstalledDurableState(installedProject);
+    const lessonQuery = spawnSync("node", ["./bin/dove-package.mjs", "lessons", "query", ".", "--mission-id", missionPayload.mission.missionId, "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(lessonQuery.status, 0, lessonQuery.stderr || lessonQuery.stdout);
+    assert.equal(JSON.parse(lessonQuery.stdout).status, "empty");
+    assert.deepEqual(snapshotInstalledDurableState(installedProject), beforeLessonQuery, "installed lesson query must be zero-write");
 
-    const beforeMalformedAuto = snapshotInstalledDurableState(installedProject);
-    for (const invalidArgs of [
-      ["auto", ".", "--goal", "Malformed steps", "--steps-json", "{", "--mutation-mode", "direct-process", "--json"],
-      ["auto", ".", "--goal", "Unknown flag", "--unknown-auto-flag", "value", "--mutation-mode", "direct-process", "--json"],
-      ["operator", ".", "--confirmed", "--task-results-json", "{}", "--mutation-mode", "direct-process", "--json"],
-      ["operator", ".", "--confirmed", "--unknown-operator-flag", "value", "--mutation-mode", "direct-process", "--json"]
-    ]) {
-      const rejected = spawnSync("node", ["./bin/dove-package.mjs", ...invalidArgs], { cwd: installedProject, encoding: "utf8" });
+    const lessonProposal = spawnSync("node", ["./bin/dove-package.mjs", "lessons", "record", ".", "--mission-id", missionPayload.mission.missionId, "--lesson-id", "installed-lesson", "--scope", "global", "--kind", "method", "--summary", "Keep installed lesson replay exact.", "--next-time-guidance", "Replay only the returned token.", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(lessonProposal.status, 0, lessonProposal.stderr || lessonProposal.stdout);
+    const lessonPayload = JSON.parse(lessonProposal.stdout);
+    assert.equal(lessonPayload.status, "needs-confirmation");
+    assert.equal(fs.existsSync(path.join(installedProject, ".dove", "lessons")), false);
+    const lessonReplay = spawnSync("/bin/sh", ["-c", lessonPayload.confirmation.exactConfirmationCommand], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(lessonReplay.status, 0, lessonReplay.stderr || lessonReplay.stdout);
+    assert.equal(fs.existsSync(path.join(installedProject, ".dove", "lessons", "installed-lesson.json")), true);
+
+    const beforeDeletedCommands = snapshotInstalledDurableState(installedProject);
+    for (const deletedCommand of ["auto", "operator", "review-loop", "launch", "orchestrate", "audit", "return"]) {
+      const rejected = spawnSync("node", ["./bin/dove-package.mjs", deletedCommand, "."], { cwd: installedProject, encoding: "utf8" });
       assert.equal(rejected.status, 1, rejected.stderr || rejected.stdout);
-      assert.deepEqual(snapshotInstalledDurableState(installedProject), beforeMalformedAuto);
+      assert.match(rejected.stdout, /Usage:/u);
+      assert.deepEqual(snapshotInstalledDurableState(installedProject), beforeDeletedCommands);
     }
   } finally {
     fs.rmSync(target, { recursive: true, force: true });
@@ -371,7 +394,7 @@ test("release and maturity checks validate doctor through a clean install", () =
   assert.match(doctorValidationText, /"doctor", target/);
 });
 
-test("CLI install rejects symlinked managed destinations", () => {
+test("CLI install leaves a pre-existing symlinked .dove path untouched", () => {
   const target = createTempRoot("dove-install-symlink-");
   const outside = createTempRoot("dove-install-symlink-outside-");
   fs.symlinkSync(outside, path.join(target, ".dove"), "dir");
@@ -381,9 +404,9 @@ test("CLI install rejects symlinked managed destinations", () => {
     encoding: "utf8"
   });
 
-  assert.equal(result.status, 1, result.stderr || result.stdout);
-  assert.match(result.stderr || result.stdout, /must not contain symbolic links/);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.deepEqual(fs.readdirSync(outside), []);
+  assert.equal(fs.realpathSync.native(path.join(target, ".dove")), fs.realpathSync.native(outside));
 });
 
 test("CLI install rejects symlinked nested managed destinations", () => {
@@ -402,7 +425,7 @@ test("CLI install rejects symlinked nested managed destinations", () => {
   assert.deepEqual(fs.readdirSync(outside), []);
 });
 
-test("CLI install copies the workflow pack into a target workspace", () => {
+test("CLI install copies runtime and adapters without bootstrapping workflow state", () => {
   const target = createTempRoot("dove-install-");
   const result = spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
@@ -410,22 +433,23 @@ test("CLI install copies the workflow pack into a target workspace", () => {
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  for (const publicCommand of ["init", "mission", "auto", "status", "operator", "lessons", "version", "source", "note", "figure", "experience", "draft", "review", "review-loop", "rebuttal"]) {
+  for (const publicCommand of ["init", "mission", "status", "lessons", "version", "source", "note", "figure", "experience", "draft", "review", "rebuttal"]) {
     assert.ok(fs.existsSync(path.join(target, ".opencode", "commands", `dove.${publicCommand}.md`)), `missing installed public command ${publicCommand}`);
   }
-  for (const removedCommand of ["approvals", "launch", "kill", "plan", "audit", "return", "autonomy-operate", "follow-through", "onboard"]) {
+  for (const removedCommand of ["auto", "operator", "review-loop", "approvals", "launch", "kill", "plan", "orchestrate", "audit", "return", "autonomy-operate", "follow-through", "onboard"]) {
     assert.equal(fs.existsSync(path.join(target, ".opencode", "commands", `dove.${removedCommand}.md`)), false);
   }
   assert.equal(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.experiment.md")), false);
   assert.equal(fs.existsSync(path.join(target, ".opencode", "commands", "dove.paper.version.md")), false);
-  assert.ok(fs.existsSync(path.join(target, ".opencode", "skills", "dove-pipeline", "SKILL.md")));
+  for (const roleSkill of ["dove-planner", "dove-builder", "dove-reviewer"]) {
+    assert.ok(fs.existsSync(path.join(target, ".opencode", "skills", roleSkill, "SKILL.md")));
+  }
+  for (const removedSkill of ["dove-pipeline", "dove-researcher", "dove-rebuttal-strategist", "dove-experiment-planning", "dove-version-analyst", "dove-claim-gate", "dove-citation-discipline", "dove-rebuttal", "dove-review-loop"]) {
+    assert.equal(fs.existsSync(path.join(target, ".opencode", "skills", removedSkill)), false);
+  }
   assert.equal(fs.existsSync(path.join(target, ".opencode", "agents")), false);
   assert.equal(fs.existsSync(path.join(target, ".opencode", "plugins")), false);
-  assert.ok(fs.existsSync(path.join(target, ".dove", "state.json")));
-   assert.ok(fs.existsSync(path.join(target, ".dove", "workflow-pack", "boundaries.json")));
-   assert.ok(fs.existsSync(path.join(target, ".dove", "task-packets", "index.json")));
-  assert.ok(fs.existsSync(path.join(target, ".dove", "manifest.json")));
-  assert.equal(fs.existsSync(path.join(target, ".dove")), true);
+  assert.equal(fs.existsSync(path.join(target, ".dove")), false);
   assert.ok(fs.existsSync(path.join(target, "dist", "index.mjs")));
   assert.ok(fs.existsSync(path.join(target, "bin", "dove-package.mjs")));
   assert.ok(fs.existsSync(path.join(target, "mcp", "dove-state-server-package.mjs")));
@@ -541,11 +565,11 @@ test("CLI install writes Claude user-level command adapters and gateway defaults
   assert.equal(secondShell.split(CLAUDE_CODE_GATEWAY_SHELL_BLOCK_START).length - 1, 1);
 
   const statusCommand = fs.readFileSync(path.join(claudeConfigRoot, "commands", "dove", "status.md"), "utf8");
-  assert.match(statusCommand, /Default output should read like a project assistant/);
-  assert.match(statusCommand, /Do not impose a fixed four-line template/);
-  assert.match(statusCommand, /smallest useful action/);
-  assert.match(statusCommand, /Default status is not a mission board or audit report/);
-  assert.match(statusCommand, /collapsed unless the operator asks to expand/);
+  assert.match(statusCommand, /Read schema 7 mission and evidence integrity without refreshing state/);
+  assert.match(statusCommand, /No confirmation is applicable because status is read-only/);
+  assert.match(statusCommand, /Absent state returns needs-init; malformed, legacy, contradictory, or future state fails closed/);
+  assert.match(statusCommand, /Compact status reports only schema health, mission count, receipt count, source count, and live integrity/);
+  assert.match(statusCommand, /Expand details only when the operator explicitly asks/);
   assert.doesNotMatch(statusCommand, /query_dove_status|statusHome|boundaryActionCards|\.dove\//);
   assert.doesNotMatch(statusCommand, /dailyHome\.missionList/);
   assert.doesNotMatch(statusCommand, /Mission 主页/);
@@ -579,7 +603,7 @@ test("CLI install all host adapters skips unsafe local artifacts", () => {
   assert.equal(fs.existsSync(path.join(target, ".claude", "settings.local.json")), false);
 });
 
-test("CLI sync preserves user-owned .dove workspace state", () => {
+test("CLI sync preserves user-owned .dove workspace state and .dove-archive state", () => {
   const target = createTempRoot("dove-sync-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
@@ -587,8 +611,11 @@ test("CLI sync preserves user-owned .dove workspace state", () => {
   });
 
   const draftPath = path.join(target, ".dove", "drafts", "introduction.md");
+  const archivePath = path.join(target, ".dove-archive", "legacy", "state.json");
   fs.mkdirSync(path.dirname(draftPath), { recursive: true });
+  fs.mkdirSync(path.dirname(archivePath), { recursive: true });
   fs.writeFileSync(draftPath, "# Introduction\n\nUser-owned draft content.\n", "utf8");
+  fs.writeFileSync(archivePath, '{"legacy":true}\n', "utf8");
 
   const result = spawnSync("node", [CLI, "sync", target, "--force"], {
     cwd: ROOT,
@@ -597,6 +624,7 @@ test("CLI sync preserves user-owned .dove workspace state", () => {
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(fs.readFileSync(draftPath, "utf8"), /User-owned draft content/);
+  assert.equal(fs.readFileSync(archivePath, "utf8"), '{"legacy":true}\n');
 });
 
 test("CLI doctor returns non-zero for unhealthy workspaces", () => {
@@ -615,6 +643,7 @@ test("CLI doctor reports installed host adapters for multi-host workspaces", () 
     cwd: ROOT,
     encoding: "utf8"
   });
+  bootstrapCurrentWorkspace(target, "Doctor host adapters");
 
   const result = spawnSync("node", [CLI, "doctor", target], {
     cwd: ROOT,
@@ -626,9 +655,9 @@ test("CLI doctor reports installed host adapters for multi-host workspaces", () 
   assert.deepEqual(payload.hostAdapters.filter((host) => host !== "claude"), ["codex", "cursor"]);
   assert.ok(payload.checks.some((check) => check.check === "host-adapter:codex" && check.ok));
   assert.ok(payload.checks.some((check) => check.check === "host-adapter:cursor" && check.ok));
-  assert.ok(payload.checks.some((check) => check.check === "dove-authority" && check.ok));
-  assert.equal(payload.managedArtifacts.doveAuthorityManifest.authoritativeRoot, ".dove");
-  assert.equal(payload.managedArtifacts.doveAuthorityManifest.currentWriteAuthority, ".dove");
+  assert.ok(payload.checks.some((check) => check.check === "workspace-schema" && check.ok));
+  assert.equal(payload.workspaceMode, "current-schema");
+  assert.equal(payload.workspaceSchema.schemaVersion, 7);
 });
 
 test("CLI doctor reports missing Claude gateway defaults for explicit Claude config targets", () => {
@@ -702,12 +731,13 @@ test("CLI doctor fails when a required Dove adapter is missing", () => {
   assert.ok(payload.checks.some((check) => check.check === "host-adapter:cursor" && !check.ok && check.requiredPaths.includes(missingAdapterPath)));
 });
 
-test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy workspaces", () => {
-  const target = createTempRoot("dove-doctor-meta-optimize-");
+test("CLI doctor reports a healthy current schema without legacy orchestration diagnostics", () => {
+  const target = createTempRoot("dove-doctor-current-schema-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
   });
+  bootstrapCurrentWorkspace(target, "Doctor current schema");
 
   const result = spawnSync("node", [CLI, "doctor", target], {
     cwd: ROOT,
@@ -715,16 +745,14 @@ test("CLI doctor exposes grouped meta-optimize frontier visibility for healthy w
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /meta-optimize-frontier/);
-  assert.match(result.stdout, /grouped frontier: \d+ clusters \/ \d+ recommendations/);
-  assert.match(result.stdout, /family playbooks:/);
-  assert.match(result.stdout, /remediation readiness:/);
-  assert.match(result.stdout, /playbook readiness:/);
-  assert.match(result.stdout, /frontier summary:/);
-  assert.match(result.stdout, /taxonomy pressure:/);
-  assert.match(result.stdout, /long-horizon summary:/);
-  assert.match(result.stdout, /dove-authority/);
-  assert.match(result.stdout, /Dove authority: \.dove authoritative, writes=\.dove/);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.healthy, true);
+  assert.equal(payload.workspaceMode, "current-schema");
+  assert.equal(payload.workspaceSchema.state, "current-healthy");
+  assert.equal(payload.workspaceSchema.schemaVersion, 7);
+  assert.deepEqual(payload.writes, []);
+  assert.equal(payload.checks.some((check) => check.check === "meta-optimize-frontier"), false);
+  assert.equal(payload.checks.some((check) => check.check === "dove-authority"), false);
 });
 
 test("retired autonomy CLI commands fail without creating workspace state", () => {
@@ -746,293 +774,54 @@ test("retired autonomy CLI commands fail without creating workspace state", () =
   }
 });
 
-test("CLI doctor fails when key JSON artifacts are malformed", () => {
+test("CLI doctor fails visibly when current manifest JSON is malformed", () => {
   const target = createTempRoot("dove-doctor-bad-json-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
   });
-  fs.writeFileSync(path.join(target, ".dove", "state.json"), "{bad json", "utf8");
+  bootstrapCurrentWorkspace(target, "Doctor malformed manifest");
+  fs.writeFileSync(path.join(target, ".dove", "manifest.json"), "{bad json", "utf8");
 
+  const before = snapshotInstalledDurableState(target);
   const result = spawnSync("node", [CLI, "doctor", target], {
     cwd: ROOT,
     encoding: "utf8"
   });
 
   assert.equal(result.status, 1, result.stdout);
-  assert.match(result.stdout, /json:.dove\/state.json/);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.workspaceMode, "archive-reset-required");
+  assert.equal(payload.workspaceSchema.state, "malformed-manifest");
+  assert.match(payload.workspaceSchema.error, /Malformed durable JSON/u);
+  assert.deepEqual(snapshotInstalledDurableState(target), before);
 });
 
-test("CLI doctor reports ignored stale workspace artifacts as warnings", () => {
+test("CLI doctor classifies legacy workspaces as archive-reset required without inspecting legacy internals", () => {
   const target = createTempRoot("dove-doctor-legacy-root-");
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
     encoding: "utf8"
   });
+  bootstrapLegacyWorkspace(target);
   const legacyWorkspacePath = path.join(target, ".paper", "workspace");
   fs.mkdirSync(legacyWorkspacePath, { recursive: true });
   fs.writeFileSync(path.join(legacyWorkspacePath, "index.json"), "{}\n", "utf8");
+  const before = snapshotInstalledDurableState(target);
 
   const result = spawnSync("node", [CLI, "doctor", target], {
     cwd: ROOT,
     encoding: "utf8"
   });
 
-  assert.equal(result.status, 0, result.stdout);
+  assert.equal(result.status, 1, result.stdout);
   const payload = JSON.parse(result.stdout);
-  assert.equal(payload.healthy, true);
-  assert.ok(payload.checks.some((check) => check.check === "dove-authority" && check.ok));
-  assert.deepEqual(payload.managedArtifacts.doveAuthorityManifest.staleLegacyArtifacts, [".paper/workspace/index.json"]);
-  assert.deepEqual(payload.managedArtifacts.doveAuthorityManifest.ignoredStaleWorkspaceArtifacts, [".paper/workspace/index.json"]);
-  assert.ok(payload.warnings.some((warning) => warning.code === "ignored-stale-workspace-artifacts" && warning.paths.includes(".paper/workspace/index.json")));
-});
-
-test("CLI doctor reports degraded typed wiki relations explicitly", () => {
-  const target = createTempRoot("dove-doctor-wiki-health-");
-  spawnSync("node", [CLI, "install", target, "--force"], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-  fs.writeFileSync(path.join(target, ".dove", "wiki", "relations.json"), `${JSON.stringify({
-    version: 3,
-    items: [{
-      id: "claim-bad-supported-by-source",
-      fromId: "claim-bad",
-      toId: "missing-source",
-      relationType: "supported-by-source",
-      sourceArtifactPaths: [".dove/evidence/index.json", ".dove/sources/index.json"],
-      taxonomy: {
-        familyId: "evidence-grounding",
-        familyLabel: "Evidence grounding",
-        groupId: "claim-source-support",
-        groupLabel: "Claim-to-source support"
-      },
-      semantics: {
-        relationType: "supported-by-source",
-        label: "Tracks that a claim cites a registered source directly.",
-        expectedFromEntityType: "claim",
-        expectedToEntityType: "source",
-        directionalMeaning: {
-          forward: "Claim cites source",
-          reverse: "Source supports claim"
-        }
-      },
-      integrity: {
-        status: "degraded",
-        severity: "high",
-        reasons: [{ code: "dangling-to-entity", severity: "high", message: "Relation claim-bad-supported-by-source points to a missing target endpoint missing-source." }],
-        endpointChecks: [],
-        sourceArtifactChecks: []
-      },
-      updatedAt: new Date(0).toISOString()
-    }],
-    summary: {
-      totalRelations: 1,
-      healthyCount: 0,
-      degradedCount: 1,
-      relationTypeCounts: { "supported-by-source": 1 },
-      integrityReasonCounts: { "dangling-to-entity": 1 },
-      repairFrontier: [],
-      taxonomyRepairFrontier: [],
-      taxonomy: {
-        familyCount: 1,
-        groupCount: 1,
-        degradedFamilyCount: 1,
-        degradedGroupCount: 1,
-        familyCounts: { "evidence-grounding": 1 },
-        groupCounts: { "claim-source-support": 1 },
-        topDegradedFamilyIds: ["evidence-grounding"],
-        topDegradedGroupIds: ["claim-source-support"],
-        families: [{
-          id: "evidence-grounding",
-          label: "Evidence grounding",
-          degradedCount: 1,
-          totalRelations: 1,
-          overview: "Evidence grounding has 1 degraded family relation out of 1; dominant type supported-by-source; top issues dangling-to-entity.",
-          topReasonCodes: ["dangling-to-entity"]
-        }],
-        groups: [{
-          id: "claim-source-support",
-          label: "Claim-to-source support",
-          degradedCount: 1,
-          totalRelations: 1,
-          overview: "Claim-to-source support has 1 degraded group relation out of 1; dominant type supported-by-source; top issues dangling-to-entity.",
-          topReasonCodes: ["dangling-to-entity"]
-        }],
-        overview: "1 typed wiki relation families across 1 groups; 1 families currently degraded."
-      }
-    },
-    updatedAt: new Date(0).toISOString()
-  }, null, 2)}\n`, "utf8");
-
-  const result = spawnSync("node", [CLI, "doctor", target], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-
-  assert.equal(result.status, 1, result.stdout);
-  assert.match(result.stdout, /typed-wiki-relations-health/);
-  assert.match(result.stdout, /dangling-to-entity|missing target endpoint/);
-  assert.match(result.stdout, /degraded families|evidence-grounding/);
-});
-
-test("CLI doctor reports explicit non-object managed artifact internals before normalization", () => {
-  const target = createTempRoot("dove-doctor-bad-shape-");
-  spawnSync("node", [CLI, "install", target, "--force"], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-
-  fs.writeFileSync(path.join(target, ".dove", "meta", "recommendations.json"), `${JSON.stringify({
-    version: 1,
-    items: [],
-    clusters: [],
-    ranking: { method: "legacy", tieBreakOrder: "bad-shape" },
-    frontier: { recommendationCount: 0 },
-    summary: { topClusters: [] }
-  }, null, 2)}\n`, "utf8");
-  fs.writeFileSync(path.join(target, ".dove", "workspace", "index.json"), `${JSON.stringify({
-    version: 6,
-    repairFrontier: { prioritizedItems: [], relationFamilySummaries: [] },
-    metaOptimize: {
-      proposalOnly: true,
-      topClusterIds: [],
-      topRecommendationIds: [],
-      topClusters: [],
-      longHorizon: "bad-shape"
-    }
-  }, null, 2)}\n`, "utf8");
-
-  const result = spawnSync("node", [CLI, "doctor", target], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-
-  assert.equal(result.status, 1, result.stdout);
-  assert.match(result.stdout, /raw-meta-recommendations-shape/);
-  assert.match(result.stdout, /ranking\.tieBreakOrder must be an array/);
-  assert.match(result.stdout, /raw-workspace-index-shape/);
-  assert.match(result.stdout, /metaOptimize\.longHorizon must be an object/);
-});
-
-test("CLI doctor reports workspace metaOptimize mirror drift explicitly", () => {
-  const target = createTempRoot("dove-doctor-meta-drift-");
-  spawnSync("node", [CLI, "install", target, "--force"], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-
-  fs.writeFileSync(path.join(target, ".dove", "meta", "recommendations.json"), `${JSON.stringify({
-    version: 3,
-    proposalOnly: true,
-    items: [{ id: "rec-1", priority: "critical" }],
-    clusters: [{ id: "cluster-1", rank: 1 }],
-    ranking: { method: "durable-signal-frontier-v1", signals: [], tieBreakOrder: ["score-desc"] },
-    frontier: {
-      recommendationCount: 1,
-      criticalCount: 1,
-      clusterCount: 1,
-      frontierScore: 10,
-      topClusterIds: ["cluster-1"],
-      topRecommendationIds: ["rec-1"],
-      activeSignalTypes: [],
-      frontierSummary: "Drifted frontier.",
-      rankingMethod: "durable-signal-frontier-v1",
-      topClusters: [{ id: "cluster-1" }]
-    },
-    summary: {
-      recommendationCount: 1,
-      criticalCount: 1,
-      clusterCount: 1,
-      frontierScore: 10,
-      categories: {},
-      signalTypes: [],
-      topClusterIds: ["cluster-1"],
-      topRecommendationIds: ["rec-1"],
-      clusterMembership: { "cluster-1": ["rec-1"] },
-      topClusters: [{ id: "cluster-1" }]
-    }
-  }, null, 2)}\n`, "utf8");
-  fs.writeFileSync(path.join(target, ".dove", "meta", "optimizer-state.json"), `${JSON.stringify({
-    version: 4,
-    proposalOnly: true,
-    sourceArtifacts: [],
-    frontier: {
-      recommendationCount: 1,
-      criticalCount: 1,
-      clusterCount: 1,
-      frontierScore: 10,
-      activeSignalTypes: [],
-      topClusterIds: ["cluster-1"],
-      topRecommendationIds: ["rec-1"],
-      topClusters: [{ id: "cluster-1" }],
-      frontierSummary: "Drifted frontier.",
-      rankingMethod: "durable-signal-frontier-v1",
-      tieBreakOrder: ["score-desc"],
-      reportPath: ".dove/meta/LATEST_OPTIMIZER_REPORT.md",
-      recommendationsPath: ".dove/meta/recommendations.json",
-      longHorizonPath: ".dove/meta/long-horizon-memory.json"
-    },
-    clusters: [{ id: "cluster-1" }],
-    longHorizon: {
-      familyCount: 1,
-      recurringFamilyCount: 0,
-      risingFamilyCount: 0,
-      stableFamilyCount: 1,
-      coolingFamilyCount: 0,
-      topFamilyIds: ["family-1"],
-      overview: "Long horizon.",
-      memoryPath: ".dove/meta/long-horizon-memory.json"
-    }
-  }, null, 2)}\n`, "utf8");
-  fs.writeFileSync(path.join(target, ".dove", "meta", "long-horizon-memory.json"), `${JSON.stringify({
-    version: 1,
-    proposalOnly: true,
-    historyWindowSize: 30,
-    horizon: {},
-    summary: {
-      familyCount: 1,
-      recurringFamilyCount: 0,
-      risingFamilyCount: 0,
-      stableFamilyCount: 1,
-      coolingFamilyCount: 0,
-      topFamilyIds: ["family-1"],
-      overview: "Long horizon."
-    },
-    history: [],
-    families: []
-  }, null, 2)}\n`, "utf8");
-  fs.writeFileSync(path.join(target, ".dove", "workspace", "index.json"), `${JSON.stringify({
-    version: 6,
-    repairFrontier: { prioritizedItems: [], relationFamilySummaries: [] },
-    metaOptimize: {
-      proposalOnly: true,
-      recommendationCount: 99,
-      clusterCount: 5,
-      topClusterIds: ["wrong-cluster"],
-      topRecommendationIds: ["wrong-rec"],
-      topClusters: [],
-      reportPath: ".dove/meta/WRONG.md",
-      recommendationsPath: ".dove/meta/recommendations.json",
-      statePath: ".dove/meta/WRONG-STATE.json",
-      longHorizonPath: ".dove/meta/WRONG-LONG.json",
-      longHorizon: {
-        topFamilyIds: ["wrong-family"],
-        memoryPath: ".dove/meta/WRONG-LONG.json"
-      }
-    }
-  }, null, 2)}\n`, "utf8");
-
-  const result = spawnSync("node", [CLI, "doctor", target], {
-    cwd: ROOT,
-    encoding: "utf8"
-  });
-
-  assert.equal(result.status, 1, result.stdout);
-  assert.match(result.stdout, /raw-meta-optimize-mirror-consistency/);
-  assert.match(result.stdout, /workspace metaOptimize recommendation count drift/);
-  assert.match(result.stdout, /workspace metaOptimize reportPath drift/);
-  assert.match(result.stdout, /workspace metaOptimize statePath drift/);
-  assert.match(result.stdout, /proposalFrontier/);
-  assert.match(result.stdout, /meta-optimize-drift/);
+  assert.equal(payload.healthy, false);
+  assert.equal(payload.workspaceMode, "archive-reset-required");
+  assert.equal(payload.workspaceSchema.category, "legacy");
+  assert.equal(payload.workspaceSchema.state, "legacy-authority-manifest");
+  assert.ok(payload.checks.some((check) => check.check === "workspace-schema" && !check.ok && /archive-reset/u.test(check.message)));
+  assert.equal(payload.checks.some((check) => check.check === "dove-authority" || check.check === "meta-optimize-frontier" || check.check === "typed-wiki-relations-health"), false);
+  assert.deepEqual(payload.writes, []);
+  assert.deepEqual(snapshotInstalledDurableState(target), before);
 });

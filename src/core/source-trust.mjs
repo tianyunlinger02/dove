@@ -1,17 +1,28 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
 import { inspectDeclaredPath } from "./artifact-integrity.mjs";
+import {
+  assertSealedDomainArgs,
+  canonicalDomainPath,
+  domainJson,
+  domainNonEmptyText,
+  domainSafeId,
+  domainSha256,
+  domainStringArray,
+  finalizeDomainArtifacts,
+  readCurrentMission
+} from "./domain-artifacts.mjs";
+import { executionReceiptPath } from "./execution-receipts.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
-import { nowIso, readJson, writeJson } from "./workspace.mjs";
+import { readJson } from "./workspace.mjs";
+import { openDoveWorkspace } from "./workspace-schema.mjs";
 
 export const SOURCE_LIFECYCLE_STATES = Object.freeze(["candidate", "verified", "rejected"]);
 
-const TRUSTED_SOURCE_VERIFICATION_ISSUERS = new Map([
-  ["dove-reviewer", "reviewer"],
-  ["dove-system", "system"]
-]);
+const REGISTER_FIELDS = new Set(["missionId", "sourceId", "citationKey", "title", "authors", "year", "locator", "sourceType", "abstract", "origin", "capturePath"]);
+const REJECT_FIELDS = new Set(["missionId", "sourceId", "method", "checkedMaterial", "auditEvidence"]);
+const QUERY_FIELDS = new Set(["missionId", "sourceId", "lifecycle", "limit"]);
 
 function normalizeText(value) {
   return typeof value === "string" ? value.trim().replace(/\s+/gu, " ") : "";
@@ -41,269 +52,231 @@ function normalizeUrl(value) {
   }
 }
 
-function sourceDoi(source = {}) {
-  return normalizeDoi(source.doi) || normalizeDoi(source.url) || normalizeDoi(source.locator);
-}
-
-function sourceUrl(source = {}) {
-  return normalizeUrl(source.url) || normalizeUrl(source.locator);
-}
-
 export function canonicalSourceIdentity(source = {}) {
   return {
-    doi: sourceDoi(source),
-    url: sourceUrl(source),
+    doi: normalizeDoi(source.doi) || normalizeDoi(source.locator),
+    url: normalizeUrl(source.url) || normalizeUrl(source.locator),
     locator: normalizeIdentityText(source.locator),
     title: normalizeIdentityText(source.title),
-    authors: (Array.isArray(source.authors) ? source.authors : [])
-      .map(normalizeIdentityText)
-      .filter(Boolean)
-      .sort()
+    authors: (Array.isArray(source.authors) ? source.authors : []).map(normalizeIdentityText).filter(Boolean).sort()
   };
 }
 
 export function sourceIdentityFingerprint(source = {}) {
-  return crypto.createHash("sha256").update(JSON.stringify(canonicalSourceIdentity(source))).digest("hex");
+  return domainSha256(JSON.stringify(canonicalSourceIdentity(source)));
 }
 
-function verificationMaterialState(root, materialPath) {
-  const normalizedPath = normalizeText(materialPath);
-  if (!normalizedPath) return { valid: false, reason: "source-verification-material-missing" };
-  const inspection = inspectDeclaredPath(root, normalizedPath, { requireNonEmpty: true });
-  if (inspection.status !== "existing") {
-    return { valid: false, reason: `source-verification-material-${inspection.status}` };
-  }
-  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  const fullPath = path.resolve(root, canonicalPath);
-  const materialHash = crypto.createHash("sha256").update(fs.readFileSync(fullPath)).digest("hex");
-  return { valid: true, materialPath: canonicalPath, materialHash };
+function sourcePath(sourceId) {
+  return path.posix.join(".dove/sources", `${sourceId}.json`);
 }
 
-function trustedVerificationProvenance(verification = {}) {
-  const issuer = normalizeText(verification.issuer);
-  const issuerRole = normalizeText(verification.issuerRole).toLowerCase();
-  const expectedRole = TRUSTED_SOURCE_VERIFICATION_ISSUERS.get(issuer);
-  if (!expectedRole || issuerRole !== expectedRole) return false;
-  return normalizeText(verification.provenance) === "trusted-internal-transition";
+function notePath(noteId) {
+  return path.posix.join(".dove/notes", `${noteId}.json`);
 }
 
-export function readSourceTrustState(root) {
-  const sources = readJson(root, ARTIFACT_PATHS.sources, { version: 2, items: [], updatedAt: null });
-  const verifications = readJson(root, ARTIFACT_PATHS.sourceVerifications, { version: 1, items: [], updatedAt: null });
-  return { sources, verifications };
+function readSourceFiles(root) {
+  openDoveWorkspace(root, { operation: "Source query" });
+  const directory = path.resolve(root, ".dove/sources");
+  return fs.readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => readJson(root, path.posix.join(".dove/sources", entry.name), null))
+    .filter((item) => item && item.schemaVersion === 1 && item.sourceId)
+    .sort((left, right) => String(left.sourceId).localeCompare(String(right.sourceId)));
 }
 
-export function sourceReferenceMap(sources = []) {
-  return new Map(sources.flatMap((source) => [
-    source.id ? [source.id, source] : null,
-    source.citationKey ? [source.citationKey, source] : null,
-    source.locator ? [source.locator, source] : null,
-    source.url ? [source.url, source] : null,
-    source.doi ? [source.doi, source] : null
-  ].filter(Boolean)));
+function capturedMaterial(root, capturePath) {
+  if (!capturePath) return null;
+  const canonicalPath = canonicalDomainPath(capturePath, "capturePath");
+  const inspection = inspectDeclaredPath(root, canonicalPath, { requireNonEmpty: true });
+  if (inspection.status !== "existing") throw new Error(`capturePath must reference an existing non-empty regular file (${inspection.reason ?? inspection.status}).`);
+  const resolved = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  if (resolved !== canonicalPath) throw new Error("capturePath must use its canonical realpath-contained path.");
+  return { path: resolved, sha256: domainSha256(fs.readFileSync(path.resolve(root, resolved))) };
 }
 
-export function sourceEligibility(source, verifications = [], options = {}) {
-  if (!source) return { eligible: false, reason: "unknown-source", source: null, verification: null };
-  const verification = [...verifications].reverse().find((item) => item.sourceId === source.id) ?? null;
-  if (!verification) return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: null };
-  if (verification.decision !== "verified") {
-    return { eligible: false, reason: `source-${verification.decision ?? source.lifecycle ?? "candidate"}`, source, verification };
-  }
-  if (!trustedVerificationProvenance(verification)) {
-    return { eligible: false, reason: "source-verification-untrusted-provenance", source, verification };
-  }
-  const fingerprint = sourceIdentityFingerprint(source);
-  if (verification.fingerprint !== fingerprint) {
-    return { eligible: false, reason: "source-identity-changed", source, verification };
-  }
-  const sourcePacketIds = new Set(Array.isArray(source.packetIds) ? source.packetIds : []);
-  if (!verification.packetId || !sourcePacketIds.has(verification.packetId)) {
-    return { eligible: false, reason: "source-packet-binding-mismatch", source, verification };
-  }
-  if (options.root) {
-    const material = verificationMaterialState(options.root, verification.materialPath);
-    if (!material.valid) {
-      return { eligible: false, reason: material.reason, source, verification };
+function sourceRecord(root, args, capturedMaterial, current = null) {
+  const missionId = domainSafeId(args.missionId, "missionId");
+  const sourceId = domainSafeId(args.sourceId, "sourceId");
+  const title = normalizeText(args.title);
+  const locator = normalizeText(args.locator);
+  if (!title && !locator) throw new Error("register_source requires a real title or locator.");
+  const authors = domainStringArray(args.authors, "authors");
+  const identityFields = { title, authors, locator };
+  const fingerprint = sourceIdentityFingerprint(identityFields);
+  return {
+    schemaVersion: 1,
+    sourceId,
+    missionId,
+    citationKey: normalizeText(args.citationKey) || null,
+    title: title || null,
+    authors,
+    year: args.year === undefined || args.year === null || String(args.year).trim() === "" ? null : String(args.year).trim(),
+    locator: locator || null,
+    sourceType: normalizeText(args.sourceType) || null,
+    abstract: normalizeText(args.abstract) || null,
+    origin: normalizeText(args.origin) || null,
+    identityFingerprint: fingerprint,
+    capturedMaterial,
+    lifecycle: "candidate",
+    currentDecision: {
+      decision: "candidate",
+      decidedAt: new Date().toISOString(),
+      reason: current ? "source-registration-refreshed" : "source-registered"
     }
-    if (!verification.materialHash || verification.materialHash !== material.materialHash) {
-      return { eligible: false, reason: "source-verification-material-changed", source, verification };
-    }
-  } else if (!verification.materialPath || !verification.materialHash) {
-    return { eligible: false, reason: "source-verification-material-unavailable", source, verification };
-  }
-  return { eligible: true, reason: "verified-source", source, verification };
+  };
 }
 
-export function evaluateSourceReferences(root, references = []) {
-  const { sources, verifications } = readSourceTrustState(root);
-  const byReference = sourceReferenceMap(sources.items ?? []);
-  return references.map((reference) => {
-    const source = byReference.get(reference) ?? null;
-    return { reference, ...sourceEligibility(source, verifications.items ?? [], { root }) };
-  });
+export function registerSource(root, args = {}) {
+  assertSealedDomainArgs(args, REGISTER_FIELDS, "register_source");
+  const { mission } = readCurrentMission(root, args.missionId, "Source registration");
+  const sourceId = domainSafeId(args.sourceId, "sourceId");
+  const relativePath = sourcePath(sourceId);
+  const existing = fs.existsSync(path.resolve(root, relativePath)) ? readJson(root, relativePath, null) : null;
+  if (existing && existing.missionId !== mission.missionId) throw new Error(`Source ${args.sourceId} belongs to mission ${existing.missionId}.`);
+  const captured = capturedMaterial(root, args.capturePath);
+  const materialPath = captured ? path.posix.join(".dove/sources/materials", `${sourceId}${path.extname(captured.path).toLowerCase() || ".bin"}`) : null;
+  const sourceMaterial = captured ? { path: materialPath, sha256: captured.sha256 } : null;
+  const source = sourceRecord(root, args, sourceMaterial, existing);
+  const writes = [{ path: relativePath, kind: "data", content: domainJson(source), derivedReferences: source.capturedMaterial ? [`artifact:${source.capturedMaterial.path}`] : [] }];
+  if (captured) writes.unshift({ path: materialPath, kind: "document", content: fs.readFileSync(path.resolve(root, captured.path)), derivedReferences: [] });
+  return {
+    ...finalizeDomainArtifacts(root, {
+      actionId: "register-source",
+      operation: "Source registration",
+      missionId: mission.missionId,
+      summary: `Registered source candidate ${source.sourceId}.`,
+      completionEligible: false,
+      writes
+    }),
+    source
+  };
 }
 
-export function evaluateNoteReferences(root, references = [], packetId = null) {
-  const notes = readJson(root, ARTIFACT_PATHS.notes, { version: 1, items: [], updatedAt: null });
-  const { sources, verifications } = readSourceTrustState(root);
-  const bySource = sourceReferenceMap(sources.items ?? []);
-  const normalizedPacketId = normalizeText(packetId);
-  return references.map((reference) => {
-    const note = (notes.items ?? []).find((item) => item.id === reference) ?? null;
-    if (!note) return { reference, eligible: false, reason: "unknown-note", note: null, sources: [] };
-    if (!normalizedPacketId || !(note.packetIds ?? []).includes(normalizedPacketId)) {
-      return { reference, eligible: false, reason: "note-packet-binding-mismatch", note, sources: [] };
-    }
-    const sourceIds = Array.isArray(note.sourceIds) ? note.sourceIds : [];
-    if (sourceIds.length === 0) {
-      return { reference, eligible: false, reason: "note-source-missing", note, sources: [] };
-    }
-    const sourceEvaluations = sourceIds.map((sourceId) => {
-      const source = bySource.get(sourceId) ?? null;
-      const eligibility = sourceEligibility(source, verifications.items ?? [], { root });
-      if (eligibility.eligible && eligibility.verification?.packetId !== normalizedPacketId) {
-        return { reference: sourceId, ...eligibility, eligible: false, reason: "source-verification-packet-mismatch" };
-      }
-      return { reference: sourceId, ...eligibility };
-    });
-    const failure = sourceEvaluations.find((item) => !item.eligible);
+function normalizeAuditEvidence(value) {
+  if (!Array.isArray(value) || value.length === 0) throw new Error("verify_source requires at least one auditEvidence item.");
+  return value.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`auditEvidence[${index}] must be an object.`);
+    const unknown = Object.keys(item).filter((field) => !["reference", "kind", "observation"].includes(field));
+    if (unknown.length) throw new Error(`auditEvidence[${index}] does not accept unknown fields: ${unknown.join(", ")}.`);
     return {
-      reference,
-      eligible: !failure,
-      reason: failure ? failure.reason : "verified-note",
-      note,
-      sources: sourceEvaluations
+      reference: domainNonEmptyText(item.reference, `auditEvidence[${index}].reference`),
+      kind: domainNonEmptyText(item.kind, `auditEvidence[${index}].kind`),
+      observation: domainNonEmptyText(item.observation, `auditEvidence[${index}].observation`)
     };
   });
 }
 
+export function verifySource(root, args = {}) {
+  assertSealedDomainArgs(args, REJECT_FIELDS, "verify_source");
+  const { mission } = readCurrentMission(root, args.missionId, "Source rejection");
+  const sourceId = domainSafeId(args.sourceId, "sourceId");
+  const relativePath = sourcePath(sourceId);
+  const source = readJson(root, relativePath, null);
+  if (!source) throw new Error(`Unknown source: ${sourceId}.`);
+  if (source.missionId !== mission.missionId) throw new Error(`Source ${sourceId} belongs to mission ${source.missionId}.`);
+  const next = {
+    ...source,
+    lifecycle: "rejected",
+    currentDecision: {
+      decision: "rejected",
+      method: domainNonEmptyText(args.method, "method"),
+      checkedMaterial: domainNonEmptyText(args.checkedMaterial, "checkedMaterial"),
+      auditEvidence: normalizeAuditEvidence(args.auditEvidence),
+      decidedAt: new Date().toISOString()
+    }
+  };
+  return {
+    ...finalizeDomainArtifacts(root, {
+      actionId: "verify-source",
+      operation: "Source rejection",
+      missionId: mission.missionId,
+      summary: `Rejected source ${sourceId}.`,
+      completionEligible: false,
+      writes: [{ path: relativePath, kind: "data", content: domainJson(next), derivedReferences: [] }]
+    }),
+    source: next
+  };
+}
+
+export function recordTrustedSourceVerification() {
+  throw new Error("Trusted positive source verification is unavailable until a private verifier capability can issue current material- and fingerprint-bound authority.");
+}
+
+export function sourceEligibility(source, _verifications = [], options = {}) {
+  if (!source) return { eligible: false, reason: "unknown-source", source: null, verification: null };
+  const missionId = normalizeText(options.missionId);
+  if (!missionId || source.missionId !== missionId) return { eligible: false, reason: "source-mission-binding-mismatch", source, verification: source.currentDecision ?? null };
+  if (source.identityFingerprint !== sourceIdentityFingerprint(source)) return { eligible: false, reason: "source-identity-changed", source, verification: source.currentDecision ?? null };
+  if (source.lifecycle !== "verified" || source.currentDecision?.decision !== "verified") return { eligible: false, reason: `source-${source.lifecycle ?? "candidate"}`, source, verification: source.currentDecision ?? null };
+  if (!source.capturedMaterial) return { eligible: false, reason: "source-captured-material-missing", source, verification: source.currentDecision };
+  const material = capturedMaterial(options.root, source.capturedMaterial.path);
+  if (!material || material.sha256 !== source.capturedMaterial.sha256 || source.currentDecision.materialHash !== material.sha256) return { eligible: false, reason: "source-verification-material-changed", source, verification: source.currentDecision };
+  const receipt = readJson(options.root, executionReceiptPath(source.currentDecision.receiptId), null);
+  if (!receipt || receipt.missionId !== missionId || !receipt.artifacts.some((item) => item.path === material.path && item.sha256 === material.sha256)) return { eligible: false, reason: "source-verification-receipt-invalid", source, verification: source.currentDecision };
+  return { eligible: true, reason: "verified-source", source, verification: source.currentDecision };
+}
+
+export function evaluateSourceReferences(root, references = [], missionId = null) {
+  const sources = readSourceFiles(root);
+  const byReference = new Map(sources.flatMap((source) => [source.sourceId, source.citationKey, source.locator].filter(Boolean).map((reference) => [reference, source])));
+  return references.map((reference) => ({ reference, ...sourceEligibility(byReference.get(reference) ?? null, [], { root, missionId }) }));
+}
+
+export function evaluateNoteReferences(root, references = [], missionId = null) {
+  return references.map((reference) => {
+    const note = readJson(root, notePath(reference), null);
+    if (!note) return { reference, eligible: false, reason: "unknown-note", note: null, sources: [], artifacts: [] };
+    if (!missionId || note.missionId !== missionId) return { reference, eligible: false, reason: "note-mission-binding-mismatch", note, sources: [], artifacts: [] };
+    const sourceIds = Array.isArray(note.sourceIds) ? note.sourceIds : [];
+    const artifactRefs = Array.isArray(note.artifactRefs) ? note.artifactRefs : [];
+    if (sourceIds.length === 0 && artifactRefs.length === 0) return { reference, eligible: false, reason: "note-evidence-missing", note, sources: [], artifacts: [] };
+    const sources = evaluateSourceReferences(root, sourceIds, missionId);
+    const sourceFailure = sources.find((item) => !item.eligible);
+    const ownership = readJson(root, ARTIFACT_PATHS.artifactOwnership, { artifacts: [] });
+    const owned = new Map((ownership.artifacts ?? []).map((item) => [item.path, item]));
+    const artifacts = artifactRefs.map((artifactPath) => {
+      const owner = owned.get(artifactPath);
+      if (!owner) return { path: artifactPath, current: false, reason: "artifact-ownership-missing" };
+      if (owner.missionId !== missionId) return { path: artifactPath, current: false, reason: "artifact-mission-binding-mismatch" };
+      const inspection = inspectDeclaredPath(root, artifactPath, { requireNonEmpty: true });
+      if (inspection.status !== "existing") return { path: artifactPath, current: false, reason: inspection.reason ?? inspection.status };
+      const currentHash = domainSha256(fs.readFileSync(path.resolve(root, artifactPath)));
+      return { path: artifactPath, current: currentHash === owner.sha256, reason: currentHash === owner.sha256 ? "current-artifact" : "artifact-hash-drift" };
+    });
+    const artifactFailure = artifacts.find((item) => !item.current);
+    const failure = sourceFailure?.reason ?? artifactFailure?.reason ?? null;
+    return { reference, eligible: !failure, reason: failure ?? "verified-note", note, sources, artifacts };
+  });
+}
+
 export function querySources(root, args = {}) {
-  const { sources, verifications } = readSourceTrustState(root);
-  const sourceId = normalizeText(args.sourceId ?? args.id);
-  const packetId = normalizeText(args.packetId ?? args.taskPacketId ?? args.missionPacketId);
+  assertSealedDomainArgs(args, QUERY_FIELDS, "query_sources");
+  const { mission } = readCurrentMission(root, args.missionId, "Source query");
+  const sourceId = normalizeText(args.sourceId);
   const lifecycle = normalizeText(args.lifecycle).toLowerCase();
   const limit = Math.min(200, Math.max(1, Number.isFinite(Number(args.limit)) ? Math.trunc(Number(args.limit)) : 50));
-  const items = (sources.items ?? [])
-    .filter((source) => !sourceId || [source.id, source.citationKey, source.locator, source.url, source.doi].includes(sourceId))
-    .filter((source) => !packetId || (source.packetIds ?? []).includes(packetId))
+  const items = readSourceFiles(root)
+    .filter((source) => source.missionId === mission.missionId)
+    .filter((source) => !sourceId || [source.sourceId, source.citationKey, source.locator].includes(sourceId))
+    .filter((source) => !lifecycle || source.lifecycle === lifecycle)
+    .slice(0, limit)
     .map((source) => {
-      const eligibility = sourceEligibility(source, verifications.items ?? [], { root });
-      return {
-        ...source,
-        eligibility: {
-          eligible: eligibility.eligible,
-          reason: eligibility.reason,
-          verificationId: eligibility.verification?.id ?? null,
-          decision: eligibility.verification?.decision ?? null,
-          packetId: eligibility.verification?.packetId ?? null,
-          checkedAt: eligibility.verification?.checkedAt ?? null
-        }
-      };
-    })
-    .filter((source) => !lifecycle || source.eligibility.decision === lifecycle || source.lifecycle === lifecycle)
-    .slice(0, limit);
-  return {
-    status: items.length > 0 ? "ok" : "empty",
-    sourceCount: items.length,
-    items,
-    bookkeeping: [ARTIFACT_PATHS.sources, ARTIFACT_PATHS.sourceVerifications]
-  };
+      const eligibility = sourceEligibility(source, [], { root, missionId: mission.missionId });
+      return { ...source, eligibility: { eligible: eligibility.eligible, reason: eligibility.reason } };
+    });
+  return { status: items.length ? "ok" : "empty", missionId: mission.missionId, sourceCount: items.length, items, writes: [] };
 }
 
-export function assertEligibleSourceReferences(root, references = [], label = "Evidence") {
-  const evaluations = evaluateSourceReferences(root, references);
-  const failures = evaluations.filter((item) => !item.eligible);
-  if (failures.length > 0) {
-    throw new Error(`${label} requires verified sources with matching identity fingerprints: ${failures.map((item) => `${item.reference} (${item.reason})`).join(", ")}.`);
-  }
-  return evaluations;
+export function readSourceTrustState(root) {
+  return { sources: { version: 1, items: readSourceFiles(root) }, verifications: { version: 1, items: [] } };
 }
 
-function normalizedAuditEvidence(root, value) {
-  if (!Array.isArray(value)) return [];
-  return value.map((item, index) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) {
-      throw new Error(`verify_source auditEvidence[${index}] must be an object with reference, kind, and observation.`);
-    }
-    const keys = Object.keys(item);
-    const unknown = keys.filter((key) => !["reference", "kind", "observation"].includes(key));
-    if (unknown.length > 0) {
-      throw new Error(`verify_source auditEvidence[${index}] does not accept unknown fields: ${unknown.join(", ")}.`);
-    }
-    const reference = normalizeText(item.reference);
-    const kind = normalizeText(item.kind).toLowerCase();
-    const observation = normalizeText(item.observation);
-    if (!reference || !observation || !["source", "capture"].includes(kind)) {
-      throw new Error(`verify_source auditEvidence[${index}] requires non-empty reference and observation, with kind source or capture.`);
-    }
-    if (kind === "source") {
-      const validReference = /^https:\/\/[^\s]+$/iu.test(reference)
-        || /^(?:doi:)?10\.\d{4,9}\/[^\s]+$/iu.test(reference)
-        || /^arxiv:(?:\d{4}\.\d{4,5}|[a-z-]+\/\d{7})(?:v\d+)?$/iu.test(reference);
-      if (!validReference) {
-        throw new Error(`verify_source auditEvidence[${index}].reference must be HTTPS, DOI, or arXiv when kind is source.`);
-      }
-    } else {
-      const inspection = inspectDeclaredPath(root, reference, { requireNonEmpty: true });
-      if (inspection.status !== "existing") {
-        throw new Error(`verify_source auditEvidence[${index}] capture must be a safe existing non-empty local file (${inspection.reason ?? inspection.status}).`);
-      }
-    }
-    return { reference, kind, observation };
-  });
+export function sourceReferenceMap(sources = []) {
+  return new Map(sources.flatMap((source) => [source.sourceId ?? source.id, source.citationKey, source.locator].filter(Boolean).map((reference) => [reference, source])));
 }
 
-function auditEvidenceMatchesSource(source, evidence) {
-  const identity = canonicalSourceIdentity(source);
-  const references = new Set([
-    identity.url,
-    identity.doi,
-    identity.doi ? `doi:${identity.doi}` : "",
-    identity.locator
-  ].filter(Boolean));
-  return evidence.some((item) => {
-    if (item.kind !== "source") return false;
-    const reference = normalizeIdentityText(item.reference);
-    const referenceDoi = normalizeDoi(item.reference);
-    const referenceUrl = normalizeUrl(item.reference);
-    return references.has(reference) || (referenceDoi && referenceDoi === identity.doi) || (referenceUrl && referenceUrl === identity.url);
-  });
-}
-
-export function prepareSourceVerification(root, source, args = {}, packetId = null) {
-  const method = normalizeText(args.method);
-  const checkedMaterial = normalizeText(args.checkedMaterial);
-  const auditEvidence = normalizedAuditEvidence(root, args.auditEvidence);
-  const decision = normalizeText(args.decision).toLowerCase();
-  if (!source) throw new Error("verify_source references an unknown source.");
-  if (!method) throw new Error("verify_source requires a verification method.");
-  if (!checkedMaterial) throw new Error("verify_source requires checkedMaterial describing the material actually inspected.");
-  if (auditEvidence.length === 0) throw new Error("verify_source requires at least one structured auditEvidence item.");
-  if (!auditEvidenceMatchesSource(source, auditEvidence)) {
-    throw new Error("verify_source requires at least one auditEvidence source reference matching the registered source identity.");
-  }
-  if (decision !== "rejected") {
-    throw new Error("Public verify_source only records rejection. Positive verification requires a trusted internal Reviewer/system transition that is not exposed through this API.");
-  }
-  const normalizedPacketId = normalizeText(packetId);
-  if (!normalizedPacketId || !(Array.isArray(source.packetIds) ? source.packetIds : []).includes(normalizedPacketId)) {
-    throw new Error("verify_source requires the resolved packet to be bound to the registered source.");
-  }
-  const timestamp = nowIso();
-  const record = {
-    id: `source-verification-${source.id}-${Date.now().toString(36)}`,
-    sourceId: source.id,
-    packetId: normalizedPacketId,
-    fingerprint: sourceIdentityFingerprint(source),
-    decision,
-    method,
-    checkedMaterial,
-    auditEvidence,
-    checkedAt: timestamp
-  };
-  const index = readJson(root, ARTIFACT_PATHS.sourceVerifications, { version: 1, items: [], updatedAt: null });
-  index.items.push(record);
-  index.updatedAt = timestamp;
-  return { record, index };
+export function assertEligibleSourceReferences(root, references = [], label = "Evidence", missionId = null) {
+  const failures = evaluateSourceReferences(root, references, missionId).filter((item) => !item.eligible);
+  if (failures.length) throw new Error(`${label} requires current mission-bound verified sources: ${failures.map((item) => `${item.reference} (${item.reason})`).join(", ")}.`);
+  return true;
 }

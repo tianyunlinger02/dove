@@ -1,61 +1,52 @@
 # Hook Guidelines
 
-> How reusable orchestration hooks/pipelines are represented in this project.
+> Reusable file-backed helpers and workflow pipelines in Dove schema 7.
 
 ---
 
 ## Overview
 
-There are no React hooks. The hook-like abstractions in `Dove` are explicit file-backed actions and core helper pipelines:
+There are no React hooks. Hook-like abstractions are narrow core helpers for strict workspace access, contained mutation, artifact integrity, ownership/lineage, and mission-bound workflows. Do not rely on process memory or implicit host hooks.
 
-- Pre-action context bundles under `.dove/context/actions/`.
-- Role, phase, packet, and artifact manifests under `.dove/context/`.
-- Core read/normalize/write helpers in `src/core/workspace.mjs`.
-- Query and mutation functions exported through `src/core/index.mjs` and exposed through MCP.
+## Reusable Helper Patterns
 
-Do not rely on hidden runtime memory or implicit host hooks. Operators should be able to resume from files only.
+- Resolve canonical contained paths before reading or writing.
+- Open workspaces through the strict schema opener.
+- Use `readJson` and `readText` only after the relevant contract establishes that a path is current and readable.
+- Use `writeJson`, `writeText`, and `writeBinary` through an active mutation context.
+- Use artifact integrity helpers to reject traversal, symlink escape, directories, empty evidence, bookkeeping evidence, and stale hashes.
+- Use ownership and lineage helpers rather than duplicating mission-binding logic.
+- Preflight the complete write set before applying the first mutation.
 
----
+Before creating a helper, search `src/core/workspace.mjs`, `src/core/artifact-integrity.mjs`, `src/core/artifact-lineage.mjs`, `src/core/domain-artifacts.mjs`, and the relevant domain module.
 
-## Custom Hook Patterns
+## Data Flow
 
-Use small, named helper functions for repeated workflow mechanics:
+A mutation pipeline should be explicit:
 
-- `readJson(root, relativePath, fallback)` returns parsed JSON or a cloned fallback and repairs malformed JSON into a backup file.
-- `writeJson(root, relativePath, value)` writes pretty JSON with a trailing newline.
-- `reconcileManagedJsonArtifact(root, relativePath, fallback, normalize)` reads, normalizes, and writes managed JSON artifacts.
-- Board role metadata is updated through explicit valid phase transitions or handoffs, but ordinary mutations are governed by task, artifact, follow-through, review, and completion contracts rather than role strings; retired governance bypass inputs are rejected.
+1. Validate sealed boundary input.
+2. Open the current schema 7 workspace.
+3. Load and validate the mission contract.
+4. Resolve canonical target and evidence paths.
+5. Reassess hashes, source eligibility, ownership, lineage, and review coverage as required.
+6. Build the complete deterministic write set.
+7. Apply it through `patch-plan` or `direct-process` mutation context.
+8. Return machine-checkable results without creating a secondary workflow mirror.
 
-When introducing a repeated operation, first search for an existing helper in `src/core/workspace.mjs`, `src/core/schema.mjs`, and the relevant `src/core/*.mjs` module.
-
----
-
-## Data Fetching / Context Loading
-
-Data is fetched from local files, not remote APIs:
-
-1. Resolve paths through `resolvePath(root, relativePath)`.
-2. Read JSON through `readJson` with a schema-appropriate fallback.
-3. Normalize objects through `normalize*` functions from `src/core/schema.mjs`.
-4. Persist normalized data with deterministic formatting.
-5. For public commands, read the nearest context first: action bundle, role/phase manifest, packet manifest, then artifact manifest.
-
-Example command pattern: generated `dove.status` adapters read `.dove/context/actions/current.json` and available board/workspace context before recommending one next command without writing. `.opencode/commands/dove.status.md` reads optimizer report, recommendations, remediation packs, events, optimizer state, long-horizon memory, and workspace index before recommending next action.
-
----
+A read-only pipeline stops after assessment and must not repair, bootstrap, or refresh anything. Lesson query follows this rule. Lesson record follows the full proposal/exact-replay pipeline and remains advisory-only; it must not auto-capture, auto-recall, import transcripts, write Trellis/runtime state, or infer global provenance from global applicability.
 
 ## Naming Conventions
 
-- Core functions use verb-first camelCase: `ensureWorkspace`, `queryWorkspaceIndex`, `runDoveAuto`, `materializeGuidancePacket`.
-- Normalizers use `normalize<Name>`; default object factories use `create<Name>`.
-- Query MCP tools use `query_*` or `read_*`; mutating tools use action verbs like `upsert_*`, `append_*`, `run_*`, `materialize_*`.
-- Context manifests should be named after the role, phase, action, packet, or artifact they represent.
-
----
+- Core functions are verb-first camelCase: `createDoveMission`, `queryDoveStatus`, `ingestExecutionReceipt`, `prepareReviewExchange`.
+- Normalizers use `normalize<Name>` and validators use `validate<Name>` or `assert<Name>`.
+- Query MCP tools use `query_*` or assessment verbs; mutation tools use explicit domain verbs such as `register_*`, `upsert_*`, `prepare_*`, `import_*`, `build_*`, or `create_*`.
+- Avoid names that imply host orchestration, background execution, tiers, aliases, or compatibility behavior.
 
 ## Common Mistakes
 
-- Reading or writing JSON directly with `fs` in new core code when `readJson`, `writeJson`, and normalizers already exist.
-- Adding a helper before searching for the same pattern in existing modules.
-- Depending on OpenCode host-level hook interception. `README.md` explicitly lists hidden schedulers and host-level hook interception as out of scope.
-- Updating a durable artifact without refreshing the surfaces that make the next session resumable, such as workspace index, context manifests, or handoffs.
+- Reading durable JSON before strict workspace classification.
+- Writing directly with `fs` when a mutation context and contained-write helper are required.
+- Validating one output at a time and leaving partial state on later failure.
+- Accepting a path without checking evidence role, realpath containment, and current hash.
+- Creating a second index or lifecycle mirror when the answer can be derived from canonical artifacts.
+- Adding fallback parsing for removed schema layouts.

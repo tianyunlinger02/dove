@@ -3,7 +3,6 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { ARTIFACT_PATHS, createMutationProvenanceIndex, normalizeMutationProvenanceIndex } from "./schema.mjs";
 import { resolveCanonicalContainedWrite } from "./contained-write.mjs";
 
 const mutationStorage = new AsyncLocalStorage();
@@ -82,7 +81,6 @@ export class MutationContext {
     this.mutationMode = normalizeMutationMode(options.mutationMode);
     this.mutationModeSource = options.mutationMode === "patch-plan" || options.mutationMode === "direct-process" ? "explicit" : "default";
     this.hostId = options.hostId ?? "unknown";
-    this.packetId = options.packetId ?? null;
     this.createdAt = options.createdAt ?? new Date().toISOString();
     this.overlay = new Map();
     this.operationsByPath = new Map();
@@ -161,7 +159,6 @@ export class MutationContext {
       operationId: existing?.operationId ?? `op-${crypto.randomUUID()}`,
       mutationId: this.id,
       actionId: this.actionId,
-      packetId: this.packetId,
       relativePath: normalized,
       kind,
       encoding,
@@ -211,7 +208,6 @@ export class MutationContext {
       operationId: `op-${crypto.randomUUID()}`,
       mutationId: this.id,
       actionId: this.actionId,
-      packetId: this.packetId,
       relativePath: normalized,
       kind: "ensure-directory",
       encoding: null,
@@ -232,45 +228,6 @@ export class MutationContext {
 
   operations() {
     return this.operationOrder.map((relativePath) => this.operationsByPath.get(relativePath)).filter(Boolean);
-  }
-
-  recordProvenance() {
-    const operations = this.operations().filter((operation) => operation.relativePath !== ARTIFACT_PATHS.mutationsIndex);
-    if (operations.length === 0) {
-      return;
-    }
-    const currentText = this.readText(ARTIFACT_PATHS.mutationsIndex, null);
-    const currentIndex = currentText === null ? createMutationProvenanceIndex() : normalizeMutationProvenanceIndex(JSON.parse(currentText));
-    const entry = {
-      id: this.id,
-      actionId: this.actionId,
-      packetId: this.packetId,
-      mutationMode: this.mutationMode,
-      mutationModeSource: this.mutationModeSource,
-      writesApplied: !this.patchPlanMode,
-      appliedBy: this.patchPlanMode ? "host-tracked-file-edits-required" : "node-fs",
-      hostId: this.hostId,
-      hostRollbackEligible: this.patchPlanMode,
-      hostTrackedFileEditsRequired: this.patchPlanMode,
-      hostCheckpointVerified: false,
-      directProcessWritesAreRollbackSafe: false,
-      externalWriteCaptureVerified: false,
-      doveRestoreSupported: false,
-      hostRollbackIneligibleReason: this.patchPlanMode ? null : DIRECT_PROCESS_ROLLBACK_REASON,
-      recommendedMutationMode: this.patchPlanMode ? null : "patch-plan",
-      rollbackAdvice: this.patchPlanMode ? null : PATCH_PLAN_ROLLBACK_ADVICE,
-      operationCount: operations.length,
-      paths: operations.map((operation) => operation.relativePath),
-      directoryEffectCount: operations.filter((operation) => operation.kind === "ensure-directory").length,
-      directoryPaths: operations.filter((operation) => operation.kind === "ensure-directory").map((operation) => operation.relativePath),
-      createdAt: this.createdAt
-    };
-    const nextEntries = [...currentIndex.entries.filter((item) => item.id !== this.id), entry];
-    this.writeJson(ARTIFACT_PATHS.mutationsIndex, normalizeMutationProvenanceIndex({
-      ...currentIndex,
-      entries: nextEntries,
-      updatedAt: this.createdAt
-    }));
   }
 
   summary(options = {}) {
@@ -297,7 +254,6 @@ export class MutationContext {
 
   finish(result = {}) {
     this.assertActive("MutationContext finish");
-    this.recordProvenance();
     const operations = this.operations();
     const writesApplied = !this.patchPlanMode && (operations.length > 0 || resultDeclaresWrites(result));
     const metadata = {
@@ -321,8 +277,7 @@ export class MutationContext {
         mutationId: this.id,
         actionId: this.actionId,
         hostId: this.hostId,
-        packetId: this.packetId,
-        workspaceRealpath: fs.realpathSync.native(this.root),
+          workspaceRealpath: fs.realpathSync.native(this.root),
         mutationModeSource: this.mutationModeSource,
         createdAt: this.createdAt,
         writesApplied: false,

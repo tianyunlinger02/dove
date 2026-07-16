@@ -1,8 +1,8 @@
 # Installation
 
-Dove ships as the `dove` package and `dove` CLI. Installing Dove adds a host-neutral workflow core plus optional host adapters, then bootstraps a project-local `.dove/` workspace as the authoritative durable state root.
+Dove ships as the `dove` package and `dove` CLI. Installing Dove adds a host-neutral workflow core plus optional host adapters, without bootstrapping project workflow state. A confirmed `/dove:init` or confirmed first mission creates the sealed minimal schema 7 workspace: manifest, project identity, ownership/lineage indexes, and required directories. Existing legacy or invalid `.dove` state requires an explicit zero-write `dove init --archive-reset` proposal followed by exact direct-process confirmation; no archived content is imported or repaired.
 
-Ignored stale workspace artifacts are not imported automatically. If they exist, `dove doctor` reports them as warnings so an operator can decide how to handle them explicitly.
+`dove doctor` is read-only. It reports runtime-only state when `.dove` is absent, current schema health when schema 7 is present, and archive-reset-required for legacy or invalid state. It never bootstraps or repairs the workspace.
 
 ## Supported install model
 
@@ -11,8 +11,8 @@ The supported install path is host-neutral at the core and adapter-based at the 
 1. copy or sync the standalone runtime bundles (`dist/index.mjs`, `bin/dove-package.mjs`, `mcp/dove-state-server-package.mjs`, and `scripts/doctor-mcp-probe-package.mjs`) plus necessary public docs
 2. install requested host adapters generated from the canonical command manifest
 3. let the selected host discover Dove command or skill adapter files plus the local MCP configuration when that host supports it
-4. bootstrap missing `.dove/` artifacts without overwriting user-owned workspace state
-5. write `.dove/manifest.json` as the Dove authority manifest
+4. leave project workflow state untouched during install/sync
+5. let only explicit schema 7 init, mission, receipt, and domain workflows create the state they own
 
 The installed npm package does not include raw `src/` modules or raw development scripts. The package `exports` map restricts package specifiers, but physical omission of raw source provides the filesystem isolation needed to block sibling-URL imports from the public root bundle.
 
@@ -45,28 +45,18 @@ After the runtime bundle has been copied into the target, `node ./bin/dove-packa
 
 `sync` accepts the same `--host` flags.
 
-## Existing paper onboarding
+## Existing paper workspaces
 
-```bash
-# Proposal-only scan; writes nothing
-node ./bin/dove-package.mjs onboard .
+Initialize schema 7 explicitly with `dove init`. Existing legacy or invalid `.dove` state is never imported, repaired, or mapped into the current schema; use the exact `--archive-reset` proposal and direct-process confirmation when replacement is intended. Existing manuscript assets remain outside `.dove` until a mission-bound workflow explicitly imports or references them.
 
-# Persist only the proposed reference map
-node ./bin/dove-package.mjs onboard . --write-map
-```
+## Dove mission workflow
 
-The artifact map lives at `.dove/workspace/artifact-map.json` and records source path, lifecycle family, suggested `.dove` target, confidence, conflicts, unmapped assets, and recommended next actions. The onboarding flow never moves, deletes, imports, rewrites, or overwrites manuscript assets.
-
-## Dove task workflow
-
-Use the installed host adapters or MCP tools for task-centered workflow operations:
+Use the installed host adapters or MCP tools for mission-bound workflow operations:
 
 ```text
 project:dove.init
 project:dove.mission
-project:dove.auto
 project:dove.status
-project:dove.operator
 project:dove.lessons
 project:dove.version
 project:dove.source
@@ -75,11 +65,12 @@ project:dove.figure
 project:dove.experience
 project:dove.draft
 project:dove.review
-project:dove.review-loop
 project:dove.rebuttal
 ```
 
-The daily workflow is: create/update the unique init goal, create or auto-run concrete tasks under that goal, use preset commands for source/note/experience/figure/draft/review/rebuttal work, inspect and adjust state through status, run ready work through operator, and record reusable lessons explicitly. Lower-level CLI and MCP support tools may still exist for validation or import/export workflows, but they are not separate public slash commands.
+The daily workflow is: initialize schema 7, confirm one minimal mission contract, use explicit mission-bound source/note/experience/figure/draft/review/rebuttal/version workflows for substantive work, explicitly query or record advisory lessons when requested, and inspect current integrity through read-only status. `dove.lessons` never captures or recalls automatically; record is zero-write until exact confirmation. Removed packet, board, runtime, navigation, review-loop, operator, and public-status surfaces are not callable through the packaged CLI or MCP.
+
+The installed inventory is exactly 12 public commands and 27 MCP tools. The command generator produces 60 adapters when the four checked-in project hosts and 12 Claude user commands are counted together. Retired operator lesson storage and tool names are not installed.
 
 ## Language configuration
 
@@ -99,13 +90,13 @@ Supported values are `zh` for Chinese and `en` for English. `DOVE_LANGUAGE` or `
 node ./bin/dove-package.mjs doctor .
 ```
 
-The doctor command checks the neutral core, `.dove/state.json`, `.dove/manifest.json`, the MCP entrypoint, required adapter files, key JSON artifacts, typed-wiki and figure-managed internals, installed host adapters, artifact-map status, ignored stale workspace artifacts, and the local MCP probe. When the Claude host config is explicitly targeted or already managed by Dove, doctor also reports whether the Claude Code gateway defaults are present and suggests `dove sync . --host claude` instead of mutating user config.
+The doctor command is read-only. It checks installed runtime/adapters and reports a healthy schema 7 workspace, an absent workspace, or a legacy/invalid workspace that requires explicit archive-reset, without creating or refreshing `.dove/` artifacts. When the Claude host config is explicitly targeted or already managed by Dove, doctor also reports whether the Claude Code gateway defaults are present and suggests `dove sync . --host claude` instead of mutating user config.
 
 ## Update boundary safety
 
-`install` and `sync` treat `.dove/` as user-owned workspace data. The CLI bootstraps missing `.dove` artifacts via the workspace initializer, but it does not copy a packaged `.dove/` tree over the target project as managed code.
+`install` and `sync` treat `.dove/` as user-owned workspace data and do not create or refresh it. They never copy a packaged `.dove/` tree over the target project as managed code.
 
-Adapter copying is allowlisted to Dove project surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. The `claude` host is user-level: `install`/`sync` render the same generated commands to `~/.claude/commands/dove` (or `DOVE_CLAUDE_CONFIG_DIR` for isolated validation) and ensure the non-secret Claude Code gateway defaults without copying `.claude/commands/dove` into the target project. Local development scaffolding, host settings, and project-local `.claude/commands/dove` files are not installed as Dove product surfaces. The durable boundary description lives in `.dove/workflow-pack/boundaries.json`.
+Adapter copying is allowlisted to Dove project surfaces only: `.opencode/commands/dove*.md`, `.opencode/skills/dove-*`, `.cursor/commands/dove-*.md`, `.codex/skills/dove-*`, `.agents/skills/dove-*`, `.opencode.json`, and the Dove-native `AGENTS.md`. The `claude` host is user-level: `install`/`sync` render the same generated commands to `~/.claude/commands/dove` (or `DOVE_CLAUDE_CONFIG_DIR` for isolated validation) and ensure the non-secret Claude Code gateway defaults without copying `.claude/commands/dove` into the target project. Local development scaffolding, host settings, and project-local `.claude/commands/dove` files are not installed as Dove product surfaces. Managed package paths are declared by the command manifest; `.dove/` is outside that managed install boundary.
 
 ## Source-checkout validation
 

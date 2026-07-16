@@ -1,159 +1,79 @@
 # Component Guidelines
 
-> How user-facing command, skill, CLI, and MCP surfaces are built in this project.
+> User-facing command, skill, CLI, and MCP contracts for Dove schema 7.
 
 ---
 
 ## Overview
 
-There are no React components in this repository. Treat each public surface as a component with a small, explicit contract:
+There are no browser components. Treat each generated adapter, primary responsibility skill, CLI command, and MCP tool as a small public component over the same schema 7 core.
 
-- Generated project command adapters in `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/`, and `.agents/skills/` are host-specific prompt or skill adapter components; Claude Code uses manifest-rendered user-level `/dove:*` entries via `dove install/sync --host claude` instead of project-local `.claude/commands/dove/`.
-- OpenCode role skills in `.opencode/skills/dove-*/` are reusable role/discipline components.
-- CLI subcommands in `bin/dove.mjs` are terminal components.
-- MCP tools in `src/mcp/tool-definitions.mjs` and `src/mcp/handlers.mjs` are API components.
+- Generated adapters come from `src/core/command-manifest.mjs`.
+- OpenCode responsibility skills are exactly Planner, Builder, and Reviewer.
+- CLI parsing lives in `src/cli/command-parser.mjs` and execution in `bin/dove.mjs`.
+- MCP schemas live in `src/mcp/tool-definitions.mjs`; dispatch lives in `src/mcp/handlers.mjs`.
+- Core behavior must not be duplicated in prompts, CLI branches, or MCP handlers.
 
-Command adapters should be generated from `src/core/command-manifest.mjs` via `scripts/generate-command-adapters.mjs`. All surfaces should converge on the same file-backed `.dove/` state and should prefer deterministic core functions over prompt-only behavior.
+## Public Command Surface
 
----
+Dove exposes exactly twelve flat commands: `dove.init`, `dove.mission`, `dove.status`, `dove.lessons`, `dove.version`, `dove.source`, `dove.note`, `dove.figure`, `dove.experience`, `dove.draft`, `dove.review`, and `dove.rebuttal`. MCP discovery exposes exactly 27 tools.
 
-## Surface Structure
+Do not add public aliases, hidden command tiers, or compatibility names.
 
-### Generated command adapters
+## Surface Contracts
 
-Define command metadata in `src/core/command-manifest.mjs`, then run `npm run commands:generate` to rewrite host adapters. Use a short title, a goal, and an ordered workflow. The first workflow step should say exactly which durable context/artifacts to read.
+### Generated adapters
 
-Example generated contract for `dove.status`:
+Define title, summary, required MCP tools, artifact context, constraints, and examples in `COMMAND_SURFACES`, then run `npm run commands:generate`. Adapters should name canonical schema 7 artifacts and explain whether the action is read-only, proposal-only, patch-plan, or direct-process.
 
-```md
-# dove.status
+### Lessons
 
-Route the current Dove mission to one next surface without writing durable state.
+`dove.lessons` combines two explicit operations over one advisory artifact family. Query is zero-write. Record is proposal-first and requires exact replay. Lessons always retain recording-mission provenance; `global` means broadly applicable guidance, while `mission` limits applicability to that mission. The only kinds are `preference`, `constraint`, `method`, `failure`, and `review-insight`.
 
-## Goal
+Lessons never grant authority, satisfy completion, become mission target/output artifacts, or replace current evidence validation. Do not auto-capture, auto-recall, import transcripts, write Trellis state, or create runtime/host memory integration. Retired operator lesson storage and tool names must remain absent.
 
-Inspect existing `.dove/` context and return a proposal-only next command across paper, engineering, experiment, review, or general domains.
+### Primary responsibility skills
 
-## Workflow
+- Planner frames mission contracts, priorities, dependencies, evidence requirements, and completion criteria.
+- Builder produces substantive mission-owned artifacts using native host planning and tools.
+- Reviewer independently assesses exact frozen artifact sets through review exchanges.
+- Do not add skills that behave as a Dove scheduler, router, continuation engine, or compatibility layer.
 
-1. Read `.dove/context/actions/current.json`, `.dove/workspace/index.json`, and `.dove/orchestration/board.json` as available.
-2. Prefer `query_dove_orchestrate` or the CLI read-only route when available.
-3. Do not call mutation tools such as `upsert_orchestration_board`, `append_handoff`, or packet materialization tools.
-```
+### CLI
 
-### Skills
+Keep CLI branches thin: parse sealed options, call shared core functions, and print deterministic JSON or concise human-readable output. Initialization and mission creation expose exact replay tokens and commands. Unknown retired commands fail without workspace writes.
 
-Use YAML frontmatter with `name` and `description`, then concise bullet rules. OpenCode role skills such as `.opencode/skills/dove-planner/SKILL.md` tell the planner to treat `.dove/orchestration/board.json` as canonical and use handoffs instead of hidden runtime memory.
+### MCP
 
-### MCP tools
-
-Define input schemas in `src/mcp/tool-definitions.mjs`, route by exact tool name in `src/mcp/handlers.mjs`, and return JSON text through the shared result helpers.
-
-Example pattern from `src/mcp/handlers.mjs`:
-
-```js
-case "query_workspace_index":
-  return makeTextResult(queryWorkspaceIndex(root));
-case "upsert_orchestration_board":
-  return makeTextResult(upsertOrchestrationBoard(root, args));
-```
-
----
+Expose one sealed tool registry. Every tool schema, including nested objects, rejects unknown properties. Mutating tools include `mutationMode`; read-only tools do not. Dispatch exact tool names to shared core functions, and classify each tool exactly once in governance.
 
 ## Contract Conventions
 
-- Every user-facing mutation surface should name its target artifact and the artifact, task, follow-through, review, or completion contracts that govern it.
-- Command IDs, host slugs, and adapter paths come from `src/core/command-manifest.mjs`; MCP tool names are snake_case; core functions are camelCase.
-- Board role strings are workflow routing metadata, not mutation authority. Validate role/phase combinations only when recording board transitions, and do not expose bypass fields in MCP schemas.
-- Prompt surfaces should say when MCP is preferred, but must remain useful when MCP is unavailable by naming the file-backed artifacts to read.
-- Read-only/query surfaces should be clearly separate from mutation surfaces.
+- Mission-bound mutations require explicit `missionId`.
+- Reads are zero-write and never repair or refresh state.
+- Exact replay mutations reject workspace, digest, contract, target, source-tree, or mutation-mode drift.
+- Public source input cannot mint positive verification authority.
+- Public review import cannot mint Reviewer authority.
+- Provider execution and substantive host work remain outside Dove; imports require current hashes and evidence.
+- Bookkeeping artifacts cannot satisfy mission target or evidence requirements.
 
----
+## Review Exchange Scenario
 
-## Scenario: Isolated reviewer command handoff
+`dove.review` supports policy-scoped preflight, preparation, import, and coverage verification.
 
-### 1. Scope / Trigger
-
-- Trigger: `dove.review` spans command markdown, CLI, core file mutations, external process invocation, governance coverage, and review-state import.
-- Purpose: keep writer/main-session private context isolated from reviewer private context while still allowing an operator to mediate through explicit artifacts.
-
-### 2. Signatures
-
-- Slash command: `dove.review`.
-- CLI runner: `dove isolated-review [target] --reviewer-command <cmd> [--scope <text>] [--run-id <id>] [--instructions <text>] [--artifact <path>]...`.
-- CLI prepare-only: `dove isolated-review-prepare [target] [--scope <text>] [--run-id <id>] [--instructions <text>] [--artifact <path>]...`.
-- CLI import-only: `dove isolated-review-import [target] --run-id <id> [--handoff <path>] [--report <path>]`.
-- Core functions: `prepareIsolatedReview(root, args)`, `runIsolatedReview(root, args)`, and `importIsolatedReview(root, args)`.
-
-### 3. Contracts
-
-- Prepared input path: `.dove/reviews/isolated/<run-id>/input.json`.
-- Manifest path: `.dove/reviews/isolated/<run-id>/manifest.json`.
-- Reviewer output paths: `.dove/reviews/isolated/<run-id>/handoff.json` and optional `.dove/reviews/isolated/<run-id>/report.md`.
-- Reviewer command receives argv: `--input <inputPath> --handoff <handoffPath> --report <reportPath> --run-id <runId>`.
-- Reviewer command receives env: `DOVE_ISOLATED_REVIEW_INPUT`, `DOVE_ISOLATED_REVIEW_HANDOFF`, `DOVE_ISOLATED_REVIEW_REPORT`, `DOVE_ISOLATED_REVIEW_RUN_ID`, and `DOVE_ISOLATED_REVIEW_INPUT_SHA256`.
-- Imported handoff must include matching `runId`, `inputPath`, `inputSha256`, `verdict`, `summary`, and reviewer findings/action items. Private reviewer transcripts are not imported.
-
-### 4. Validation & Error Matrix
-
-- Missing reviewer command -> reject the all-in-one runner before spawning.
-- Unterminated command quote -> reject during CLI argv parsing.
-- Handoff `runId` mismatch -> reject import.
-- Handoff `inputPath` mismatch -> reject import.
-- Handoff `inputSha256` mismatch -> reject import.
-- Reviewer non-zero exit -> reject runner and surface stdout/stderr.
-- Findings with missing IDs -> normalize to stable run-scoped IDs before writing concerns.
-
-### 5. Good/Base/Bad Cases
-
-- Good: slash command invokes the CLI runner; reviewer sees only `input.json`; main session imports only `handoff.json` and `report.md`; private reviewer notes remain outside review logs.
-- Base: operator prepares a run, manually coordinates clarification artifacts, then imports a valid handoff later.
-- Bad: pasting writer-session hidden reasoning into reviewer input, importing reviewer private transcript, or accepting a handoff whose input hash does not match the frozen bundle.
-
-### 6. Tests Required
-
-- Integration test: fake external reviewer writes handoff/report/private transcript; runner imports verdict and concerns but not private transcript.
-- Integration test: import rejects mismatched `inputSha256`.
-- Command validation: `dove.review.md` is registered through the canonical command manifest and generated adapters.
-- Governance audit/hardening: isolated-review mutations bind to command/core surfaces; MCP binding may be absent for this CLI-only external-process surface.
-
-### 7. Wrong vs Correct
-
-#### Wrong
-
-```bash
-dove isolated-review . --reviewer-command "node reviewer.js --private-session-log writer-transcript.md"
-```
-
-#### Correct
-
-```bash
-dove isolated-review . --reviewer-command "node reviewer.js" --scope "current draft"
-```
-
-## Composition Patterns
-
-- Compose public surfaces around core functions exported from `src/core/index.mjs`; do not duplicate workflow logic in CLI or MCP layers.
-- Keep CLI operations thin: parse args, call core functions, print JSON or human-readable status.
-- Keep command metadata in `src/core/command-manifest.mjs`, regenerate adapters, and keep OpenCode role skills aligned with the same artifact paths and role names defined in code.
-- Use action bundles, role manifests, phase manifests, packet manifests, and artifact manifests to narrow context before mutating durable state.
-
----
-
-## Accessibility / Operator Ergonomics
-
-For this CLI/prompt package, accessibility means operators can recover state from files without hidden context:
-
-- Commands must name canonical files and next actions explicitly.
-- Outputs should be machine-checkable JSON when exposed through CLI/MCP.
-- Handoffs, board state, approvals, runtime results, and optimizer decisions should be durable, not only described in chat.
-
----
+- `local-preflight` is zero-write.
+- Prepared exchanges freeze explicit mission-owned artifact paths and hashes.
+- Independent reviewers or external processes operate outside Dove.
+- Import accepts only canonical handoff/report files after identity, scope, path, and hash validation.
+- Private writer and reviewer transcripts are not imported.
+- Imported public review material remains non-authoritative without a trusted issuer.
 
 ## Common Mistakes
 
-- Hand-editing generated command adapters instead of updating `src/core/command-manifest.mjs` and running `npm run commands:generate`.
-- Adding a command to the manifest but forgetting governance classification in `src/core/schema.mjs` or validation coverage in `scripts/validate-commands.mjs`.
-- Adding an MCP tool definition without adding a matching dispatch case and classification tests in `tests/integration/mcp-tools.test.mjs`.
-- Letting prompt text mention an artifact path that is not in `ARTIFACT_PATHS` or not bootstrapped by `ensureWorkspace`.
-- Auto-applying `dove.status` recommendations. That surface is proposal-only until materialized through governed follow-through.
+- Editing generated adapters by hand.
+- Packaging stale role skills that name removed artifacts.
+- Adding a tool without a handler or governance classification.
+- Adding a CLI option that is absent from MCP and command contracts.
+- Mentioning a durable path that is not declared by schema 7.
+- Treating compact status or review diagnostics as execution authority.
+- Reintroducing removed workflow state under a new name.

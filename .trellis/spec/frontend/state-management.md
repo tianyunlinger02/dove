@@ -1,91 +1,57 @@
 # State Management
 
-> How durable state is managed in this project.
+> Durable schema 7 state and strict read/write boundaries.
 
 ---
 
 ## Overview
 
-`Dove` is file-first. State lives in durable `.dove/` artifacts, not in process memory, browser stores, or hidden agent context. Core functions load state from disk, normalize it, mutate explicit artifacts, and write deterministic JSON/Markdown outputs.
+Dove is file-first. Durable state exists only in explicit schema 7 `.dove/` artifacts. Native host planning and execution remain host responsibilities; Dove stores approved mission contracts and evidence, not a duplicate execution engine.
 
-Primary state locations:
+## Canonical State
 
-- `.dove/state.json` for normalized top-level paper/workflow state.
-- `.dove/orchestration/board.json` and `.dove/orchestration/handoffs.md` for coordination.
-- `.dove/task-packets/` and `.dove/context/` for resumable task/context narrowing.
-- `.dove/research`, `.dove/sources`, `.dove/notes`, `.dove/evidence`, `.dove/experiments`, `.dove/claims`, `.dove/drafts`, `.dove/reviews`, `.dove/rebuttal`, `.dove/versions`, and `.dove/figures` for paper artifacts.
-- `.dove/meta`, `.dove/programs`, and `.dove/runtime` for proposal, approval, and explicit foreground autonomy surfaces.
+- `.dove/manifest.json` and `.dove/project.json` identify the sealed workspace.
+- `.dove/missions/` contains approved mission contracts.
+- `.dove/lessons/` contains immutable advisory lessons with recording-mission provenance and mission or global applicability.
+- `.dove/receipts/execution/` contains immutable receipts bound to current contract digests, paths, hashes, criteria, and evidence.
+- `.dove/artifacts/ownership.json` and `.dove/artifacts/lineage.json` bind artifacts to missions and provenance.
+- `.dove/sources/`, `.dove/notes/`, `.dove/claims/`, `.dove/experiments/`, `.dove/drafts/`, `.dove/figures/`, `.dove/reviews/`, `.dove/rebuttal/`, and `.dove/versions/` hold mission-bound domain artifacts.
 
----
+`ARTIFACT_PATHS` in `src/core/schema.mjs` is the canonical registry.
 
-## State Categories
+## Workspace States
 
-### Package-managed defaults
+The strict opener classifies a workspace as absent, current healthy, current unhealthy, legacy, future, or invalid.
 
-Defaults and schema constants live in `src/core/schema.mjs`. `ARTIFACT_PATHS` is the canonical registry for durable paths, and factory functions such as `createDefaultState()` and `createWorkflowBoundaries()` define expected shapes.
+- Read-only queries may inspect absent or current state only as their contracts permit.
+- Malformed, contradictory, legacy, and future state fails closed.
+- A current manifest that coexists with removed state, packet, orchestration, runtime, workspace, mutation-ledger, program, meta, context, or wiki roots is contradictory.
+- Archive-reset may identify and atomically archive an old `.dove/` tree, but it must not read, repair, convert, or import legacy business data.
+- No read operation bootstraps, refreshes, normalizes, or repairs durable state.
 
-### User-owned durable workspace
+## Mutation Model
 
-`.dove/` contains the user's paper state. Install/sync code in `bin/dove.mjs` calls `ensureWorkspace(target)` but must preserve user-owned data. The boundary policy returned from `createWorkflowBoundaries()` separates managed package paths from bootstrap-only/user-owned paths.
+- Proposal calls are zero-write.
+- Exact confirmation replays the returned workspace identity, contract, digest, target identities, and mutation mode.
+- `patch-plan` returns canonical contained operations for host-tracked application and performs no writes.
+- `direct-process` writes through the contained mutation context and reports that host rollback is not automatically verified.
+- Binary writes require `direct-process` except supported text-safe formats.
+- Every domain mutation validates mission ownership, current paths, hashes, and evidence before its first write.
 
-### Orchestration state
+## Derived Assessment
 
-The board is canonical for active workflow coordination. `dove.status` may read board state to recommend one next command for any mission domain, but it must not mutate board, handoff, packet, or derived workspace artifacts. Board mutations belong to explicit governed mutation surfaces.
-
-### Proposal and runtime state
-
-`dove.status` is proposal-only. Accepted proposals must cross a governed bridge through follow-through/materialization before execution. Runtime/autonomy state under `.dove/runtime/` is explicit foreground state, not a daemon or hidden scheduler.
-
-### Lifecycle mirror state
-
-Campaign, workspace, task graph, navigation, and autonomy-loop summaries are mirrors over lower-level durable artifacts. When adding a lifecycle transition, update the canonical artifact first, then reflect the outcome into every durable mirror that operators use to resume work. Keep reflection passive: it may summarize or copy explicit outcomes, but it must not schedule, approve, or execute new work.
-
----
-
-## When to Add or Promote State
-
-Add durable state only when it is needed for session recovery, governance, tests, or user-facing package behavior. Before adding a field or artifact:
-
-1. Search for existing fields/constants in `src/core/schema.mjs`, `.dove/context/`, and tests.
-2. Add the path or field to the relevant schema/default/normalizer.
-3. Ensure `ensureWorkspace` bootstraps or normalizes it when needed.
-4. Expose it through CLI/MCP/commands only if it is part of a public contract.
-5. Add or update tests that prove the state is created, normalized, queried, or governed.
-
----
+`dove.status`, completion assessment, source eligibility, domain integrity, and review coverage derive answers from current canonical artifacts. They do not persist status, select work, route roles, refresh indexes, or create lifecycle mirrors.
 
 ## Server State
 
-There is no server-side database. The optional MCP server is a deterministic interface over local files. `src/mcp/handlers.mjs` dispatches tool calls to core functions and returns JSON text. Keep MCP behavior equivalent to CLI/core behavior by calling shared functions rather than reimplementing mutations.
+The MCP server has no database and no durable runtime of its own. It validates inputs and calls the same core functions as the CLI. Tool discovery exposes one sealed schema 7 registry rather than public/internal or operator tiers.
 
----
+## Forbidden Patterns
 
-## Derived State
-
-Derived summaries and indexes should be refreshable from source artifacts:
-
-- Workspace/navigation surfaces (`queryWorkspaceIndex`, task graph, open questions, decisions, lineage).
-- Governance coverage reports.
-- Optimizer frontier reports and remediation packs.
-- Figure QA and staged figure contract outputs.
-
-Derived state should not become the only source of truth for facts that belong in sources, notes, experiments, claims, reviews, or board state.
-
----
-
-## Examples
-
-- `src/core/schema.mjs` defines `ARTIFACT_PATHS`, `SCHEMA_VERSION`, `PIPELINE_STAGE_ORDER`, role IDs, governance registries, default object factories, and normalizers.
-- `src/core/workspace.mjs` shows the standard read/normalize/write flow used by `ensureWorkspace(root)` to create and reconcile durable `.dove/` artifacts.
-- Generated `dove.status` adapters document the proposal-only routing flow and the context files to read before recommending one next command.
-- `.opencode/commands/dove.status.md` documents the proposal-only optimizer flow and the governed bridge to materialized work.
-- `tests/integration/workflow.test.mjs` exercises state transitions across workspace creation, sources, notes, claims, experiments, review, handoffs, snapshots, comparisons, and checklist sync.
-
----
-
-## Common Mistakes
-
-- Treating `.dove/meta/*` optimizer recommendations as executable state. They are proposal-only until materialized.
-- Adding a new `.dove/` artifact path without updating `ARTIFACT_PATHS`, workspace bootstrapping, validators, and tests.
-- Mutating user-owned workspace data during install/sync beyond bootstrap-safe defaults.
-- Storing important workflow decisions only in chat or prompt text instead of durable artifacts.
+- No fallback or compatibility state loaders.
+- No task packet, board, route, queue, lease, campaign, continuation, mutation ledger, program-control, meta-optimizer, context-manifest, or navigation state.
+- No daemon, scheduler, background loop, or hidden host hook.
+- No mutable status mirror.
+- No automatic lesson capture/recall, transcript memory, Trellis lesson mirror, runtime lesson state, or retired operator lesson store.
+- No caller-minted source, lesson, or Reviewer authority.
+- No install/sync mutation of user-owned `.dove/` data.

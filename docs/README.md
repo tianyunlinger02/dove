@@ -6,8 +6,8 @@ This directory contains the product documentation for Dove. Treat `README.md` at
 
 Read these first when installing, using, validating, or packaging Dove:
 
-- [Installation](INSTALL.md) — host-neutral core install, optional multi-host adapters, onboarding, doctor, and validation commands.
-- [Usage](USAGE.md) — slash-command workflow, durable `.dove/` workspace model, paper pipeline, query surfaces, bounded autonomy, MCP tools, and role model.
+- [Installation](INSTALL.md) — host-neutral core install, optional multi-host adapters, schema initialization, doctor, and validation commands.
+- [Usage](USAGE.md) — mission-bound workflow, durable schema 7 artifact model, explicit advisory lesson query/record, read-only status, sealed MCP tools, and responsibility boundaries.
 - [Packaging](PACKAGING.md) — package boundary, generated adapter expectations, managed-vs-user-owned state, release checks, and dry-run packaging.
 - [Capability matrix](CAPABILITY_MATRIX.md) — auditable current-release claims and deliberately deferred capabilities.
 
@@ -19,6 +19,8 @@ Read these first when installing, using, validating, or packaging Dove:
 - Treat generated host command adapters as generated outputs; do not document hand-edited per-host command inventories.
 - Keep local development scaffolding separate from Dove product/package surfaces.
 - When command, MCP, package, or governance contracts change, update the relevant docs and run the matching validation commands before release.
+- Keep the exact public inventory aligned: 12 commands, 27 MCP tools, and 60 generated command adapters across the four checked-in project hosts plus Claude user commands.
+- Describe lessons as mission-provenanced but optionally globally applicable, limited to five kinds and explicit query/record. They are advisory-only and never auto-captured, auto-recalled, transcript-derived, or written into Trellis/runtime state.
 
 ## Source-checkout release documentation checklist
 

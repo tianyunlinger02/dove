@@ -10,7 +10,6 @@ const CONFIRMED_EXECUTION_FAILURE_STATUSES = new Set([
 ]);
 
 const OPERATIONAL_FAILURE_STATUSES = new Set([
-  "auto-read-only-step-no-progress",
   "blocked",
   "blocked-boundary",
   "blocked-missing-materials",

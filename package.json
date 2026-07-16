@@ -1,7 +1,7 @@
 {
   "name": "dove",
   "version": "0.2.0",
-  "description": "Local-first Dove mission workflow pack for papers, engineering work, research, review, and governed autonomy.",
+  "description": "Local-first Dove mission and evidence workflow pack for papers, engineering work, research, and review.",
   "type": "module",
   "bin": {
     "dove": "bin/dove-package.mjs"
@@ -26,6 +26,7 @@
     "docs/USAGE.md",
     "docs/PACKAGING.md",
     "docs/CAPABILITY_MATRIX.md",
+    "docs/DOVE_COMMAND_OUTPUT_SAMPLES.md",
     "README.md"
   ],
   "scripts": {
@@ -34,7 +35,6 @@
     "doctor:validate": "node ./scripts/validate-doctor.mjs",
     "install:local": "node ./bin/dove.mjs install . --force",
     "mcp:serve": "node ./mcp/dove-state-server.mjs",
-    "serve:global-status": "node ./bin/dove.mjs serve-global-status --refresh --cloudflare --configure-cloudflare",
     "mcp:validate": "node ./scripts/validate-mcp.mjs",
     "commands:generate": "node ./scripts/generate-command-adapters-cli.mjs",
     "commands:check": "node ./scripts/generate-command-adapters-cli.mjs --check",

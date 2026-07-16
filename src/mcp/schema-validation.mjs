@@ -92,8 +92,14 @@ function validateSchemaValue(value, schema, inputPath) {
     }
   }
 
-  if (typeof value === "string" && typeof schema.pattern === "string") {
-    if (!new RegExp(schema.pattern, "u").test(value)) {
+  if (typeof value === "string") {
+    if (typeof schema.minLength === "number" && value.length < schema.minLength) {
+      return `${inputPath} must contain at least ${schema.minLength} character(s).`;
+    }
+    if (typeof schema.maxLength === "number" && value.length > schema.maxLength) {
+      return `${inputPath} must contain at most ${schema.maxLength} character(s).`;
+    }
+    if (typeof schema.pattern === "string" && !new RegExp(schema.pattern, "u").test(value)) {
       return `${inputPath} does not match the required pattern.`;
     }
   }

@@ -1,20 +1,19 @@
 # Quality Guidelines
 
-> Code and package quality standards for `Dove`.
+> Code and package quality standards for Dove schema 7.
 
 ---
 
-## Overview
+## Primary Gates
 
-Quality is enforced through package scripts, deterministic file-backed behavior, and tests that assert public surfaces remain complete. Before reporting implementation work as complete, run the relevant checks from `package.json`.
-
-Primary commands:
+Run the checks relevant to the change, and run `npm run check` for broad Phase changes.
 
 ```bash
-npm run commands:generate
+npm run build:check
 npm run commands:check
 npm run commands:validate
 npm run mcp:validate
+npm run workflow-goals:validate
 npm run governance:audit
 npm test
 npm run check
@@ -23,70 +22,54 @@ npm run release:check
 npm run pack:dry-run
 ```
 
-`npm run check` runs generated adapter drift checks, command validation, MCP validation, workflow-goal pressure validation, governance coverage audit, and the Node test suite. `npm run doctor:validate` installs Dove into a clean temporary workspace and runs doctor there. `npm run release:check` adds maturity audit, clean doctor validation, and package dry-run for the full pre-release/package gate.
-
----
-
-## Forbidden Patterns
-
-- Do not commit or report completed work with failing `npm run check` unless the failure is explicitly documented as unrelated and accepted by the user.
-- Do not bypass validators or tests when adding command/MCP/governance surfaces.
-- Do not add hidden daemons, hidden schedulers, or host-level hook interception. `README.md` lists those as intentionally out of scope.
-- Do not let package install/sync overwrite user-owned `.dove/` data.
-- Do not make `.dove/meta/*` optimizer output execute changes automatically; it is proposal-only until governed materialization/follow-through.
-- Do not add command, skill, artifact, or MCP names in only one layer. Public surfaces must stay aligned across manifest metadata, generated adapters, schema registries, handlers, validators, and tests.
-
----
+`npm run check` verifies generated bundles and adapters, command surfaces, MCP registry and schemas, workflow goals, governance bindings, and the full Node test suite.
 
 ## Required Patterns
 
-- Keep durable workflow state file-first and resumable from `.dove/`.
-- Prefer shared core functions for behavior exposed by CLI and MCP.
-- Update governance registries when adding or changing mutation surfaces.
-- Keep role ownership and override policy fields explicit for guarded mutations.
-- Use deterministic JSON formatting (`JSON.stringify(value, null, 2)` plus newline) for written artifacts.
-- Include real tests for new state, normalization, command lists, MCP surfaces, governance coverage, and generated adapter coverage.
+- Keep the public command inventory flat and exact across all generated hosts.
+- Keep MCP discovery as one sealed registry with exact tool names and no tiers.
+- Keep the public package root narrow; do not export raw mutation contexts, write helpers, strict-opener internals, or compatibility utilities.
+- Keep proposal and query operations zero-write.
+- Validate complete write sets before the first mutation.
+- Bind receipts and domain artifacts to current workspace, mission, contract digest, canonical path, hash, ownership, and lineage.
+- Keep source and Reviewer authority fail closed without a trusted issuer capability.
+- Rebuild checked-in bundles after source changes and regenerate adapters after manifest changes.
+- Package only current public adapters, the three primary OpenCode responsibility skills, public docs, and standalone bundles.
 
----
+## Required Tests
 
-## Testing Requirements
+Broad schema 7 changes should cover:
 
-Choose checks based on what changed:
+- physical deletion and static unreachability of retired modules and callables;
+- exact CLI, command, package, and MCP inventories: 12 commands, 27 MCP tools, and 60 combined generated adapters;
+- zero-write absent reads, proposals, preflights, assessments, and rejected confirmations;
+- strict opener handling for absent, malformed, legacy, future, contradictory, and symlinked state;
+- exact confirmation replay and stale workspace, contract, target, source-tree, or mutation-mode rejection;
+- receipt path, hash, criterion, ownership, lineage, and immutable-id boundaries;
+- cross-mission and stale-artifact rejection before writes;
+- review scope, privacy, canonical path, artifact-set hash, handoff/report hash, duplicate import, and fail-closed authority;
+- explicit zero-write lesson queries, exact-confirmation recording, five kinds, mission provenance versus global applicability, advisory-only boundaries, and absence of automatic capture/recall/transcript/Trellis/runtime integration;
+- package install/sync preservation of user-owned `.dove/` state;
+- generated bundle and adapter drift.
 
-- Command manifest or generated adapter changes: update `src/core/command-manifest.mjs`, run `npm run commands:generate`, `npm run commands:check`, and `npm run commands:validate`.
-- OpenCode role skill changes: `npm run commands:validate` and any relevant tests.
-- MCP tool definitions or handlers: `npm run mcp:validate` and `tests/integration/mcp-tools.test.mjs`.
-- Governance registries, guarded/exempt mutations, or follow-through logic: `npm run governance:audit` and relevant integration/unit tests.
-- Lifecycle mirror changes across programs, campaigns, workspace summaries, runtime results, or navigation reports: add a focused transition test and run that subset before `npm run check`.
-- Schema/default/normalizer changes: `tests/unit/schema.test.mjs` plus any affected integration tests.
-- CLI install/sync/doctor behavior: integration tests under `tests/integration/` and `npm run pack:dry-run` when package boundaries change.
-- Broad changes: `npm run check`; release/package changes should also run `npm run release:check`.
+## Forbidden Patterns
 
-Examples of existing quality tests:
+- Do not bypass or weaken validators after deleting tests.
+- Do not retain legacy modules, public aliases, hidden tiers, renamed workflow-control state, or compatibility loaders.
+- Do not package stale role skills that reference removed board, packet, runtime, context, meta, wiki, mutation-ledger, or program artifacts.
+- Do not let bookkeeping artifacts satisfy mission target or evidence requirements.
+- Do not add daemons, schedulers, background loops, automatic continuation, or hidden host hooks.
+- Do not let install/sync initialize, repair, convert, or overwrite user-owned `.dove/` data.
+- Do not report completion with a failing `npm run check` unless the user explicitly accepts a documented unrelated failure.
 
-- `scripts/validate-commands.mjs` asserts generated adapter files match the canonical manifest, required tools are present, OpenCode role skills exist, and every command surface is classified.
-- `tests/integration/mcp-tools.test.mjs` asserts exact MCP tool names and role-bound policy fields.
-- `tests/integration/workflow.test.mjs` validates a full durable paper workflow from workspace creation through sources, notes, claims, experiments, review, handoffs, snapshots, and comparisons.
-- `tests/unit/schema.test.mjs` validates migration/default state behavior and exposed artifact paths.
+## Review Checklist
 
----
-
-## Code Review Checklist
-
-- Are all new durable paths listed in `ARTIFACT_PATHS` and bootstrapped/normalized correctly?
-- Are command IDs, generated adapter paths, MCP tool names, core function names, validators, and tests aligned?
-- Are user-owned paths protected by workflow boundaries?
-- Are role and policy semantics explicit for guarded mutations?
-- Can the next operator resume from files without chat history?
-- Are proposal-only surfaces still proposal-only?
-- Did the appropriate npm validation/test command run successfully?
-
----
-
-## Common Mistakes
-
-- Hand-editing generated command adapters instead of updating `src/core/command-manifest.mjs` and rerunning `npm run commands:generate`.
-- Updating one host adapter surface while leaving other generated hosts, docs, or package install paths inconsistent.
-- Adding MCP input fields without checking tests that assert policy/approval/runtime fields.
-- Fixing one layer of the package while leaving README, command text, context artifacts, and tests inconsistent.
-- Using reference repos as implementation targets. `reference_repos/` is context only; project code lives in this package.
+- Are all durable paths canonical and declared by schema 7?
+- Are legacy roots rejected when they coexist with a current manifest?
+- Are public exports, CLI commands, generated adapters, MCP tools, governance bindings, and tests aligned?
+- Are nested MCP objects sealed?
+- Are proposals and read-only paths demonstrably zero-write?
+- Are receipts and completion based on substantive current evidence rather than bookkeeping?
+- Is Reviewer authority impossible to mint from public handoff fields?
+- Are standalone package bundles current and free of retired callables and modules?
+- Did `npm run check` pass?

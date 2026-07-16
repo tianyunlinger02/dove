@@ -1,41 +1,43 @@
 ---
 name: dove-lessons
-description: "Inspect or record global and task-bound lessons that future Dove work must obey."
+description: "Query advisory lessons by default or explicitly record one exact-confirmation mission-provenanced lesson."
 ---
 
 # Dove Lessons
 
-Inspect or record global and task-bound lessons that future Dove work must obey.
+Query advisory lessons by default or explicitly record one exact-confirmation mission-provenanced lesson.
 
 ## Daily use
 
-- Use this when a closed task yields reusable guidance that future Dove work should obey.
-- Keep lesson entries explicit and short: problem, decision, pitfall, validation, and next-time guidance.
-- Targeting: Can add global lessons or bind a lesson to a selected task.
-- Confirmation: When task binding is ambiguous, show task choices and wait for the operator.
-- Outcome: Applicable lessons are recalled later as standing guidance without importing raw traces or adding new lessons implicitly.
+- Query only the lessons explicitly requested for the current mission, kind, tags, or artifact scope.
+- Use record only when the operator explicitly asks to preserve a specific lesson, then inspect and replay the exact confirmation command.
+- Targeting: Query may include globally applicable lessons and current mission-scoped lessons while preserving each recording mission; artifact filters require an explicit missionId.
+- Confirmation: Query never confirms. Record proposes with zero writes and accepts only the exact proposal token plus --confirmed; there is no confirmation alias.
+- Outcome: The operator receives current advisory guidance or one immutable advisory lesson with evidence lineage.
 
 ## Examples
 
-- `/dove:lessons Add that status should not show completed or killed mission lists`
-- `/dove:lessons Show lessons that apply to the selected task`
+- `/dove:lessons Query method lessons for the current mission`
+- `/dove:lessons Record this explicit review insight`
 
 ## Operating rules
 
 1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check or action below; do not construct default answers by manually reading or listing internal files.
 2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
 3. If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
-4. This request has one listed project check: `node ./bin/dove-package.mjs lessons .` from the project root; Summarize its practical result instead of inspecting internal files directly.
-5. Use lesson writing only for distilled reusable guidance with problem, decision, pitfall, validation, and next-time behavior; add `--mutation-mode direct-process` to the explicit lesson-recording command.
+4. This request has one listed project check: `node ./bin/dove-package.mjs lessons query . --mission-id "<mission id>"`. Run it in the host's current working directory without changing directories or reinterpreting a parent repository as the target; `.` is the Dove workspace being operated on. Summarize its practical result instead of inspecting internal files directly.
+5. Query is the default and must remain zero-write. Never auto-capture a lesson and never auto-recall lessons from another command. Use `lessons record` only when the operator explicitly asks to preserve a specific lesson; then run only the exact confirmation command returned by the zero-write proposal.
 6. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
 7. Use ordinary task wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
 8. When the target work is unclear, ask the operator to choose by visible task name or numbered option; do not ask for internal ids in the default answer.
 9. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
 10. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
-11. Add only the explicit note or lesson the operator asked for.
-12. Add only distilled guidance: problem, decision, pitfall, validation, and next-time behavior.
-13. Do not import raw transcripts or noisy runtime traces as lessons.
-14. When task binding is unclear, ask the operator to choose the task before writing.
-15. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
-16. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
-17. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.
+11. Only make the specific change requested for this command; do not bundle unrelated work.
+12. Default behavior is an explicit read-only query; never auto-capture a lesson and never auto-recall lessons from another command.
+13. Every lesson retains its recording mission as provenance; global scope means broad applicability, not provenance detached from that mission.
+14. The only lesson kinds are preference, constraint, method, failure, and review-insight.
+15. Recording is advisory-only: proposal is strictly zero-write, and only the exact returned proposal token may be replayed with --confirmed inside a MutationContext.
+16. Lessons never grant authority, satisfy completion, replace current evidence checks, become mission output artifacts, import transcripts, write Trellis state, or create runtime memory.
+17. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
+18. Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
+19. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.

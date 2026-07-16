@@ -3,366 +3,60 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { configureClaudeCodeGatewayDefaults, inspectClaudeCodeGatewayDefaults, resolveClaudeConfigRoot, resolveClaudeShellStartupFile } from "../src/core/claude-code-gateway.mjs";
-import { buildRebuttal } from "../src/core/artifacts.mjs";
-import { buildRebuttalStrategy, normalizeRebuttalIssues } from "../src/core/orchestration.mjs";
-import { createDoveTask, initDoveGoal, resetDoveVersion, runDoveAuto, runDoveOperator } from "../src/core/task-workflow.mjs";
-import { discoverPaperArtifacts } from "../src/core/onboarding.mjs";
-import { importIsolatedReview, prepareIsolatedReview, runIsolatedReview } from "../src/core/isolated-review.mjs";
-import { isOperationalFailureOutcome } from "../src/core/operational-outcome.mjs";
-import { launchDoveMission, queryDoveAudit, queryDoveMission, queryDoveOrchestrate, queryDoveReturn, queryDoveStatus } from "../src/core/dove.mjs";
-import { publishDoveGlobalStatus, publishDoveStatus } from "../src/core/public-status.mjs";
-import { queryOperatorLessons, recordOperatorLesson, refreshDurableSurfaces } from "../src/core/navigation.mjs";
-import { registerSource, setSectionStatus, upsertDraft, upsertNote, verifySource } from "../src/core/artifacts.mjs";
 import { parseDoveCli } from "../src/cli/command-parser.mjs";
-import { resolveCanonicalContainedWrite } from "../src/core/contained-write.mjs";
-import { runDoveReviewLoop } from "../src/core/dove-review-loop.mjs";
-import { runExperienceWorkflow } from "../src/core/experience-workflow.mjs";
-import { runFigureWorkflow } from "../src/core/figure-workflow.mjs";
-import { runGlobalStatusServingForeground } from "../src/core/global-status-serving.mjs";
-import { runReviewLoop } from "../src/core/reviews.mjs";
-import { runWithMutationContext } from "../src/core/mutation-backend.mjs";
-import { ensureWorkspace } from "../src/core/workspace.mjs";
-import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
-import { ARTIFACT_PATHS, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, createDoveAuthorityManifest, normalizeDoveAuthorityManifest } from "../src/core/schema.mjs";
-import {
-  createWorkflowBoundaries,
-  normalizeMetaExecutionBridgeCandidatesIndex,
-  normalizeMetaGovernanceCoverageIndex,
-  normalizeMetaLongHorizonMemory,
-  normalizeMetaOperatorLessonsIndex,
-  normalizeMetaOperatorPlaybooksIndex,
-  normalizeMetaOptimizerState,
-  normalizeMetaRecommendationsIndex,
-  normalizeWorkspaceIndex,
-  normalizeWorkspaceMetaOptimize
-} from "../src/core/schema.mjs";
 import { COMMAND_SURFACES, CORE_INSTALL_PATHS, DEFAULT_HOST_ADAPTERS, HOST_ADAPTERS, HOST_IDS, USER_HOST_IDS } from "../src/core/command-manifest.mjs";
+import { resolveCanonicalContainedWrite } from "../src/core/contained-write.mjs";
+import { ingestExecutionReceipt } from "../src/core/execution-receipts.mjs";
+import { queryDoveLessons, recordDoveLesson } from "../src/core/lessons.mjs";
+import { createDoveMission, initDoveGoal } from "../src/core/mission-contracts.mjs";
+import { queryDoveStatus } from "../src/core/mission-queries.mjs";
+import { runWithMutationContext } from "../src/core/mutation-backend.mjs";
+import { buildRebuttal, buildRebuttalStrategy, compareVersions, createVersionSnapshot, normalizeRebuttalIssues, runExperienceWorkflow, runFigureWorkflow, upsertDraft, upsertDraftMetadata, upsertNote } from "../src/core/retained-domain-workflows.mjs";
+import { importReviewExchange, prepareReviewExchange, verifyReviewCoverage } from "../src/core/review-exchange.mjs";
+import { registerSource, verifySource } from "../src/core/source-trust.mjs";
+import { inspectDoveWorkspace } from "../src/core/workspace-schema.mjs";
 import { writeClaudeUserCommandAdapters } from "../scripts/generate-command-adapters.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
-const GLOBAL_COPY_EXCLUDE_NAMES = new Set([".git", "node_modules"]);
-const INTERNAL_DOC_NAMES = new Set([
-  "DOVE_REFACTOR_PLAN_2026-05-04.md",
-  "ROLE_HIERARCHY_REFACTOR_PLAN_2026-05-04.md",
-  "PAPER_FACTORY_SYSTEM_ORIGINS.zh-CN.md",
-  "REFERENCE_ARCHITECTURES.zh-CN.md"
-]);
-const GLOBAL_COPY_EXCLUDE_SUFFIXES = [".log", ".tmp", ".cache"];
+const LOCAL_COMMANDS = new Set(["init", "mission", "receipt", "status", "lessons", "version", "source", "note", "draft", "experience", "figure", "review", "rebuttal"]);
+const PUBLIC_COMMANDS = new Set(COMMAND_SURFACES.map((surface) => surface.id.replace(/^dove\./u, "")));
 
 function usage() {
   console.log(`dove
 
 Usage:
-  dove init [target] --goal <text>
-  dove status [target]
-  dove status [target] --missions
+  dove init [target] --goal <text> [--archive-reset]
   dove mission [target] --goal <text>
-  dove auto [target] --goal <text>
-  dove auto [target] --target <task>
-  dove operator [target] --confirmed
-  dove source [target] --target <task> --title <text> --locator <url-or-doi>
-  dove source register [target] --target <task> --title <text> --locator <url-or-doi>
-  dove source verify [target] --target <task> --source-id <id> --decision <verified|rejected> --method <text> --checked-material <text> --audit-evidence-json <json>
-  dove note [target] --target <task> --summary <text>
-  dove draft [target] --target <task> --section-id <id> --body <text>
-  dove experience [target] --target <task> --goal <text> --methodology <text> --success-metric <text>
-  dove review [target] --target <task>
-  dove review-loop [target] --target <task>
-  dove rebuttal [target] --target <task>
-  dove lessons [target] [--title <text> --problem <text>]
-  dove version [target] --reason <text>
-  dove figure [target] --intent <text>
+  dove receipt [target] --input <receipt.json>
+  dove status [target] [--full|--missions]
+  dove lessons [query|record] [target] [--mission-id <id>]
+  dove source [register|verify] [target] --mission-id <id> --source-id <id>
+  dove note [target] --mission-id <id> --note-id <id>
+  dove draft [target] --mission-id <id> --draft-id <id>
+  dove experience [target] --mission-id <id> --experiment-id <id>
+  dove figure [target] --mission-id <id> --figure-id <id>
+  dove review [target] --mission-id <id> <--preflight|--prepare|--import|--verify-coverage>
+  dove rebuttal [target] --mission-id <id>
+  dove version [target] --mission-id <id>
   dove install [target] --host <opencode|codex|cursor|agents|claude|all>
   dove sync [target] --host <opencode|codex|cursor|agents|claude|all>
   dove doctor [target]
 
-Use status first only for Dove state, task choices, next-step, or blockers. For work requests, use the matching action with real material.
-Use --json only when another tool needs structured details.
-`);
-}
-
-function statusUsage() {
-  console.log(`dove status
-
-Use this as the daily project check-in: show the current situation and the next useful action.
-
-Examples:
-  dove status .
-  dove status . --missions
-  dove status . --json
-
-Use --missions only when you need task choices or details. Use --json only when another tool needs structured data.
-`);
-}
-
-const LOCAL_DOVE_CLI_SURFACES = new Set(["init", "orchestrate", "mission", "status", "auto", "operator", "lessons", "version", "source", "note", "draft", "experience", "figure", "review", "review-loop", "rebuttal"]);
-const PUBLIC_DOVE_SURFACES = new Set(COMMAND_SURFACES.map((surface) => surface.id.replace(/^dove\./u, "")));
-
-function isHostOnlyDoveSurface(command) {
-  return PUBLIC_DOVE_SURFACES.has(command) && !LOCAL_DOVE_CLI_SURFACES.has(command);
-}
-
-function hostOnlySurfaceUsage(command) {
-  console.log(`dove.${command}
-
-This shell can only give guidance for this Dove request.
-Next: run /dove.${command} where the selected task can be updated, or provide the completed material/result here.
-
-For a read-only project check, run:
-  dove status .
+Dove persists only schema 7 mission, advisory lesson, receipt, ownership, lineage, source, domain, review, rebuttal, and version artifacts.
 `);
 }
 
 function readFlagValue(args, flag) {
   const index = args.indexOf(flag);
-  if (index === -1 || index + 1 >= args.length) {
-    return null;
-  }
-  return args[index + 1];
+  return index >= 0 && index + 1 < args.length ? args[index + 1] : null;
 }
 
-function assertFlagAppearsAtMostOnce(args, flag) {
-  const count = args.reduce(
-    (total, item) => total + (item === flag ? 1 : 0),
-    0
-  );
-  if (count > 1) {
-    throw new Error(`${flag} may be provided only once.`);
-  }
-}
-
-function readFlagValues(args, flags) {
-  const values = [];
-  for (let index = 0; index < args.length; index += 1) {
-    if (flags.includes(args[index]) && index + 1 < args.length) {
-      values.push(args[index + 1]);
-      index += 1;
-    }
-  }
-  return values;
-}
-
-function readPositionalArgs(args, valueFlags = []) {
-  const valueFlagSet = new Set(valueFlags);
-  const values = [];
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (valueFlagSet.has(arg)) {
-      index += 1;
-      continue;
-    }
-    if (String(arg).startsWith("--")) {
-      continue;
-    }
-    values.push(arg);
-  }
-  return values;
-}
-
-function readMutationMode(args = []) {
-  assertFlagAppearsAtMostOnce(args, "--mutation-mode");
-  const value = readFlagValue(args, "--mutation-mode");
-  if (value === null) {
-    if (args.includes("--mutation-mode")) {
-      throw new Error("--mutation-mode requires patch-plan or direct-process");
-    }
-    return undefined;
-  }
-  if (value !== "patch-plan" && value !== "direct-process") {
-    throw new Error("--mutation-mode must be patch-plan or direct-process");
-  }
-  return value;
-}
-
-function stripMutationModeFlag(args = []) {
-  const stripped = [];
-  for (let index = 0; index < args.length; index += 1) {
-    if (args[index] === "--mutation-mode") {
-      index += 1;
-      continue;
-    }
-    stripped.push(args[index]);
-  }
-  return stripped;
-}
-
-function withMutationContext(target, actionId, rawRest, callback, options = {}) {
-  const rest = stripMutationModeFlag(rawRest);
-  return runWithMutationContext(target, {
-    actionId,
-    mutationMode: readMutationMode(rawRest) ?? options.defaultMutationMode,
-    hostId: "cli",
-    packetId: options.packetId ?? readFirstFlagValue(rest, ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id"])
-  }, () => callback(rest));
-}
-
-function rejectPatchPlanMode(commandName, rawRest, reason) {
-  if (readMutationMode(rawRest) === "patch-plan") {
-    throw new Error(`${commandName} cannot run in patch-plan mode; ${reason}`);
-  }
-}
-
-function parseCommandArgs(command) {
-  const input = String(command ?? "").trim();
-  if (!input) {
-    return [];
-  }
-  const args = [];
-  let current = "";
-  let quote = null;
-  let escaping = false;
-  for (const char of input) {
-    if (escaping) {
-      current += char;
-      escaping = false;
-      continue;
-    }
-    if (char === "\\") {
-      escaping = true;
-      continue;
-    }
-    if (quote) {
-      if (char === quote) {
-        quote = null;
-      } else {
-        current += char;
-      }
-      continue;
-    }
-    if (char === "'" || char === '"') {
-      quote = char;
-      continue;
-    }
-    if (/\s/.test(char)) {
-      if (current) {
-        args.push(current);
-        current = "";
-      }
-      continue;
-    }
-    current += char;
-  }
-  if (quote) {
-    throw new Error("Reviewer command has an unterminated quote");
-  }
-  if (escaping) {
-    current += "\\";
-  }
-  if (current) {
-    args.push(current);
-  }
-  return args;
-}
-
-function resolveHostAdapters(args = []) {
-  const rawValues = readFlagValues(args, ["--host", "--platform"]);
-  if (rawValues.length === 0) {
-    return DEFAULT_HOST_ADAPTERS;
-  }
-  const requested = rawValues.flatMap((value) => String(value).split(",").map((item) => item.trim()).filter(Boolean));
-  if (requested.includes("all")) {
-    return HOST_IDS;
-  }
-  const invalid = requested.filter((host) => !HOST_IDS.includes(host));
-  if (invalid.length > 0) {
-    throw new Error(`Unknown host adapter(s): ${invalid.join(", ")}. Available adapters: ${HOST_IDS.join(", ")}, all.`);
-  }
-  return Array.from(new Set(requested));
-}
-
-function resolveTarget(rawTarget) {
-  return path.resolve(process.cwd(), rawTarget || ".");
-}
-
-function resolveOptionalTargetAndRest(rawTarget, rest = []) {
-  if (!rawTarget || String(rawTarget).startsWith("--")) {
-    return {
-      target: resolveTarget("."),
-      rest: rawTarget ? [rawTarget, ...rest] : rest
-    };
-  }
-  return {
-    target: resolveTarget(rawTarget),
-    rest
-  };
-}
-
-function ensureDir(dirPath) {
-  fs.mkdirSync(dirPath, { recursive: true });
-}
-
-function shouldSkipCopy(relativePath) {
-  const basename = path.basename(relativePath);
-  if (GLOBAL_COPY_EXCLUDE_NAMES.has(basename)) {
-    return true;
-  }
-  if (basename === "settings.local.json" || basename.endsWith(".local.json")) {
-    return true;
-  }
-  if (INTERNAL_DOC_NAMES.has(basename)) {
-    return true;
-  }
-  if (basename === ".env" || basename.startsWith(".env.")) {
-    return true;
-  }
-  return GLOBAL_COPY_EXCLUDE_SUFFIXES.some((suffix) => basename.endsWith(suffix));
-}
-
-function copyRecursive(source, destination, force, sourceRoot = source, skipped = [], destinationRoot = destination) {
-  const relativePath = path.relative(sourceRoot, source).split(path.sep).join("/");
-  const comparablePath = relativePath || path.basename(source);
-  if (shouldSkipCopy(comparablePath)) {
-    skipped.push(comparablePath);
-    return;
-  }
-
-  const stat = fs.lstatSync(source);
-  if (stat.isSymbolicLink()) {
-    skipped.push(comparablePath);
-    return;
-  }
-  const destinationRelativePath = path.relative(destinationRoot, destination).split(path.sep).join("/") || ".";
-  const resolvedDestination = destinationRelativePath === "."
-    ? { fullPath: fs.realpathSync.native(destinationRoot) }
-    : resolveCanonicalContainedWrite(destinationRoot, destinationRelativePath, { label: "Install destination" });
-  if (stat.isDirectory()) {
-    ensureDir(resolvedDestination.fullPath);
-    for (const entry of fs.readdirSync(source)) {
-      copyRecursive(path.join(source, entry), path.join(destination, entry), force, sourceRoot, skipped, destinationRoot);
-    }
-    return;
-  }
-  if (!stat.isFile()) {
-    skipped.push(comparablePath);
-    return;
-  }
-
-  ensureDir(path.dirname(resolvedDestination.fullPath));
-  if (fs.existsSync(resolvedDestination.fullPath) && !force) {
-    return;
-  }
-  fs.copyFileSync(source, resolvedDestination.fullPath);
-}
-
-function buildInstallPaths(hosts) {
-  const projectHosts = hosts.filter((host) => Object.hasOwn(HOST_ADAPTERS, host));
-  const userHosts = hosts.filter((host) => USER_HOST_IDS.includes(host));
-  const hostPaths = projectHosts.flatMap((host) => HOST_ADAPTERS[host].paths.map((relativePath) => ({ host, relativePath })));
-  return {
-    corePaths: CORE_INSTALL_PATHS,
-    hostPaths,
-    userHosts,
-    allPaths: [...CORE_INSTALL_PATHS, ...hostPaths.map((item) => item.relativePath)]
-  };
-}
-
-function collectRepeatedFlagValues(args, flag) {
+function readFlagValues(args, flag) {
   const values = [];
   for (let index = 0; index < args.length; index += 1) {
     if (args[index] === flag && index + 1 < args.length) {
@@ -373,3109 +67,360 @@ function collectRepeatedFlagValues(args, flag) {
   return values;
 }
 
-function parseJsonArrayFlag(args, flag, label, validateItem = null) {
-  assertFlagAppearsAtMostOnce(args, flag);
-  const raw = readFlagValue(args, flag);
-  if (raw === null) {
-    if (args.includes(flag)) {
-      throw new Error(`${flag} requires a JSON array.`);
-    }
-    return undefined;
-  }
-  let parsed;
+function parseJson(value, label) {
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error(`${flag} must be valid JSON containing ${label}.`);
-  }
-  if (!Array.isArray(parsed)) {
-    throw new Error(`${flag} must contain ${label}.`);
-  }
-  if (validateItem) {
-    parsed.forEach((item, index) => validateItem(item, index));
-  }
-  return parsed;
-}
-
-function assertPlainObjectItem(item, index, flag) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) {
-    throw new Error(`${flag}[${index}] must be an object.`);
+    return JSON.parse(value);
+  } catch (error) {
+    throw new Error(`${label} must be valid JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-function assertAutoStepItem(item, index) {
-  assertPlainObjectItem(item, index, "--steps-json");
-  const allowedKeys = new Set(["command", "args", "requiredMaterials", "outputArtifacts", "convergenceChecks", "failureRoutes", "executionContract", "verifiedCriteria", "completeTask", "completeOnSuccess"]);
-  const unknownKeys = Object.keys(item).filter((key) => !allowedKeys.has(key));
-  if (unknownKeys.length > 0 || typeof item.command !== "string" || !item.command.trim() || (item.args !== undefined && (!item.args || typeof item.args !== "object" || Array.isArray(item.args)))) {
-    throw new Error(`--steps-json[${index}] is not a supported auto step object${unknownKeys.length > 0 ? `; unknown keys: ${unknownKeys.join(", ")}` : ""}.`);
-  }
+function parseRepeatedJson(args, flag) {
+  return readFlagValues(args, flag).map((value) => parseJson(value, flag));
 }
 
-function assertOperatorTaskResultItem(item, index) {
-  assertPlainObjectItem(item, index, "--task-results-json");
-  const allowedKeys = new Set(["packetId", "resultStatus", "resultSummary", "outcome", "reason", "stopReason", "nextAction", "evidenceLinks", "artifactRefs", "validationEvidencePaths", "verificationEvidencePaths", "verifiedCriteria", "executionContract", "executionReceipt", "boundaryType", "boundaryId", "requiredInputs", "requiredActions", "startedAt", "completedAt"]);
-  const unknownKeys = Object.keys(item).filter((key) => !allowedKeys.has(key));
-  if (unknownKeys.length > 0) {
-    throw new Error(`--task-results-json[${index}] contains unsupported fields: ${unknownKeys.join(", ")}.`);
-  }
-  if (typeof item.packetId !== "string" || !item.packetId.trim()) {
-    throw new Error(`--task-results-json[${index}] must include packetId.`);
-  }
-  if (!["completed", "blocked", "in-progress"].includes(item.resultStatus)) {
-    throw new Error(`--task-results-json[${index}] must include resultStatus as completed, blocked, or in-progress.`);
-  }
+function mutationMode(args, fallback = "patch-plan") {
+  const value = readFlagValue(args, "--mutation-mode") ?? fallback;
+  if (!["patch-plan", "direct-process"].includes(value)) throw new Error("--mutation-mode must be patch-plan or direct-process.");
+  return value;
 }
 
-function assertKnownCommandFlags(args, { valueFlags = [], booleanFlags = [] } = {}) {
-  const valueFlagSet = new Set(valueFlags);
-  const booleanFlagSet = new Set(booleanFlags);
-  const unknown = [];
+function withoutMutationMode(args) {
+  const result = [];
   for (let index = 0; index < args.length; index += 1) {
-    const arg = String(args[index] ?? "");
-    if (!arg.startsWith("--")) {
-      unknown.push(arg);
-      continue;
-    }
-    if (valueFlagSet.has(arg)) {
-      if (index + 1 >= args.length) {
-        throw new Error(`${arg} requires a value.`);
-      }
+    if (args[index] === "--mutation-mode") {
       index += 1;
-      continue;
-    }
-    if (!booleanFlagSet.has(arg)) {
-      unknown.push(arg);
+    } else {
+      result.push(args[index]);
     }
   }
-  if (unknown.length > 0) {
-    throw new Error(`Unknown or unsupported CLI argument(s): ${Array.from(new Set(unknown)).join(", ")}.`);
-  }
+  return result;
 }
 
-function readFirstFlagValue(args, flags) {
-  for (const flag of flags) {
-    const value = readFlagValue(args, flag);
-    if (value !== null) {
-      return value;
-    }
-  }
-  return null;
+function resolveTarget(rawTarget) {
+  return path.resolve(process.cwd(), rawTarget || ".");
 }
 
-function decodeProposalTokenPayload(token, label) {
-  const rawToken = String(token ?? "").trim();
-  if (!rawToken || !/^[A-Za-z0-9_-]+$/u.test(rawToken)) {
-    throw new Error(`--proposal-token must be the exact token returned by the approved Dove ${label} proposal.`);
-  }
-  try {
-    return JSON.parse(Buffer.from(rawToken, "base64url").toString("utf8"));
-  } catch {
-    throw new Error(`--proposal-token is malformed. Request a fresh Dove ${label} proposal.`);
-  }
+function targetAndArgs(rawTarget, args) {
+  return !rawTarget || rawTarget.startsWith("-")
+    ? { target: resolveTarget("."), args: rawTarget ? [rawTarget, ...args] : args }
+    : { target: resolveTarget(rawTarget), args };
 }
 
-function decodeMissionProposalToken(token) {
-  const payload = decodeProposalTokenPayload(token, "mission");
-  if (
-    payload?.version !== 1
-    || !["patch-plan", "direct-process"].includes(payload.mutationMode)
-    || !payload.confirmArgs
-    || typeof payload.confirmArgs !== "object"
-    || Array.isArray(payload.confirmArgs)
-  ) {
-    throw new Error("--proposal-token is not a supported Dove mission confirmation token.");
-  }
-  return payload;
-}
-
-function missionProposalToken(result) {
-  const confirmArgs = result?.confirmArgs;
-  const mutationMode = result?.proposalMutationMode;
-  if (
-    !confirmArgs
-    || typeof confirmArgs !== "object"
-    || Array.isArray(confirmArgs)
-    || !["patch-plan", "direct-process"].includes(mutationMode)
-  ) {
-    return "";
-  }
-  return Buffer.from(JSON.stringify({
-    version: result.proposalVersion ?? 1,
-    mutationMode,
-    confirmArgs
-  }), "utf8").toString("base64url");
-}
-
-function decodeAutoProposalToken(token) {
-  const payload = decodeProposalTokenPayload(token, "auto");
-  const expectedKeys = ["action", "confirmArgs", "mutationMode", "version"];
-  const payloadKeys = payload && typeof payload === "object" && !Array.isArray(payload)
-    ? Object.keys(payload).sort()
-    : [];
-  if (
-    payload?.version !== 1
-    || payload.action !== "run-dove-auto"
-    || payloadKeys.length !== expectedKeys.length
-    || payloadKeys.some((key, index) => key !== expectedKeys[index])
-    || !["patch-plan", "direct-process"].includes(payload.mutationMode)
-    || !payload.confirmArgs
-    || typeof payload.confirmArgs !== "object"
-    || Array.isArray(payload.confirmArgs)
-    || payload.confirmArgs.mutationMode !== payload.mutationMode
-    || payload.confirmArgs.proposalVersion !== payload.version
-  ) {
-    throw new Error("--proposal-token is not a supported Dove auto confirmation token.");
-  }
-  return payload;
-}
-
-function autoProposalToken(result) {
-  const confirmArgs = result?.confirmArgs;
-  const mutationMode = result?.proposalMutationMode;
-  const version = result?.proposalVersion;
-  if (
-    !confirmArgs
-    || typeof confirmArgs !== "object"
-    || Array.isArray(confirmArgs)
-    || !["patch-plan", "direct-process"].includes(mutationMode)
-    || confirmArgs.mutationMode !== mutationMode
-    || confirmArgs.proposalVersion !== version
-  ) {
-    return "";
-  }
-  return Buffer.from(JSON.stringify({
-    version,
-    action: "run-dove-auto",
-    mutationMode,
-    confirmArgs
-  }), "utf8").toString("base64url");
-}
-
-function missionProposalJson(result, target = ".") {
-  const proposalToken = missionProposalToken(result);
-  if (!proposalToken) {
-    return result;
-  }
-  return {
-    ...result,
-    proposalToken,
-    exactConfirmationCommand:
-      missionConfirmationCommand(result, target)
-  };
-}
-
-function buildDoveMissionArgs(rest = [], options = {}) {
-  if (options.validateFlags !== false) {
-    assertKnownCommandFlags(rest, {
-      valueFlags: ["--proposal-token", "--proposal-digest", "--mutation-mode", "--format", "--id", "--packet-id", "--task-id", "--goal", "--domain", "--dove-domain", "--mission-domain", "--stage", "--mission-stage", "--artifact", "--target-artifact", "--artifact-path", "--target", "--acceptance-check", "--check", "--next-command"],
-      booleanFlags: ["--confirmed", "--yes", "--json"]
-    });
-  }
-  assertFlagAppearsAtMostOnce(rest, "--proposal-token");
-  assertFlagAppearsAtMostOnce(rest, "--proposal-digest");
-  const proposalToken = readFlagValue(rest, "--proposal-token");
-  if (proposalToken !== null) {
-    const proposal = decodeMissionProposalToken(proposalToken);
-    const suppliedMutationMode = readMutationMode(rest);
-    if (suppliedMutationMode && suppliedMutationMode !== proposal.mutationMode) {
-      throw new Error("The approved Dove mission proposal is bound to a different mutation mode. Request a fresh proposal.");
-    }
-    return {
-      ...proposal.confirmArgs,
-      confirmed: rest.includes("--confirmed") || rest.includes("--yes"),
-      mutationMode: proposal.mutationMode,
-      proposalToken
-    };
-  }
-  return {
-    confirmed: rest.includes("--confirmed") || rest.includes("--yes"),
-    mutationMode: readMutationMode(rest) ?? "direct-process",
-    proposalDigest: readFlagValue(rest, "--proposal-digest"),
-    id: readFirstFlagValue(rest, ["--id", "--packet-id", "--task-id"]),
-    goal: readFlagValue(rest, "--goal"),
-    domain: readFirstFlagValue(rest, ["--domain", "--dove-domain", "--mission-domain"]),
-    stage: readFirstFlagValue(rest, ["--stage", "--mission-stage"]),
-    targetArtifacts: readFlagValues(rest, ["--artifact", "--target-artifact", "--artifact-path", "--target"]),
-    artifactRefs: readFlagValues(rest, ["--artifact", "--target-artifact", "--artifact-path"]),
-    acceptanceChecks: readFlagValues(rest, ["--acceptance-check", "--check"]),
-    nextCommand: readFlagValue(rest, "--next-command")
-  };
-}
-
-function buildDoveOrchestrateArgs(rest = []) {
-  return {
-    ...buildDoveMissionArgs(rest, { validateFlags: false }),
-    request: readFlagValue(rest, "--request"),
-    userRequest: readFlagValue(rest, "--user-request"),
-    allowAutonomy: rest.includes("--allow-autonomy")
-  };
-}
-
-function buildDoveReturnArgs(rest = []) {
-  return {
-    ...buildDoveMissionArgs(rest, { validateFlags: false }),
-    scope: readFlagValue(rest, "--scope"),
-    validationEvidencePaths: readFlagValues(rest, ["--validation-evidence", "--validation-evidence-path", "--evidence", "--evidence-path"]),
-    changedFilePaths: readFlagValues(rest, ["--changed-file", "--changed-file-path", "--changed-path"]),
-    testEvidencePaths: readFlagValues(rest, ["--test-evidence", "--test-evidence-path", "--test-path"]),
-    validationOutputPaths: readFlagValues(rest, ["--validation-output", "--validation-output-path", "--validation-log", "--test-output"]),
-    validationOutputs: readFlagValues(rest, ["--validation-output-text", "--test-output-text"]),
-    reviewEvidencePaths: readFlagValues(rest, ["--review-evidence", "--review-evidence-path"])
-  };
-}
-
-function buildDoveStatusArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--intent", "--domain", "--dove-domain", "--mission-domain", "--stage", "--mission-stage", "--packet-id", "--packet", "--mission-packet-id", "--mission-packet", "--status", "--lifecycle-status", "--detail", "--view", "--result-mode", "--format"],
-    booleanFlags: ["--contract-test", "--health", "--include-archived", "--full", "--include-details", "--missions", "--show-missions", "--include-mission-details", "--request-status-adjustment", "--status-adjustment", "--show-status-adjustments", "--include-status-adjustment-preview", "--json"]
-  });
-  const detail = readFirstFlagValue(rest, ["--detail", "--view", "--result-mode"]);
-  const intent = rest.includes("--contract-test") ? "contract-test" : rest.includes("--health") ? "health-check" : readFlagValue(rest, "--intent");
-  return {
-    intent,
-    domain: readFirstFlagValue(rest, ["--domain", "--dove-domain", "--mission-domain"]),
-    stage: readFirstFlagValue(rest, ["--stage", "--mission-stage"]),
-    packetIds: readFlagValues(rest, ["--packet-id", "--packet", "--mission-packet-id", "--mission-packet"]),
-    statuses: readFlagValues(rest, ["--status", "--lifecycle-status"]),
-    includeArchived: rest.includes("--include-archived"),
-    detail: detail ?? (rest.includes("--full") ? "full" : undefined),
-    full: rest.includes("--full"),
-    includeDetails: rest.includes("--include-details"),
-    showMissions: rest.includes("--missions") || rest.includes("--show-missions"),
-    includeMissionDetails: rest.includes("--include-mission-details"),
-    requestStatusAdjustment: rest.includes("--request-status-adjustment") || rest.includes("--status-adjustment") || rest.includes("--show-status-adjustments"),
-    includeStatusAdjustmentPreview: rest.includes("--include-status-adjustment-preview")
-  };
-}
-
-function buildTaskTargetArgs(rest = []) {
-  return {
-    packetId: readFirstFlagValue(rest, ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id"]),
-    target: readFlagValue(rest, "--target"),
-    packetTarget: readFlagValue(rest, "--packet-target"),
-    taskName: readFlagValue(rest, "--task-name")
-  };
-}
-
-function buildDoveFigureArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--intent", "--description", "--name", "--title", "--figure-id", "--purpose", "--caption-intent", "--target-claim-id", "--claim-id", "--source-section", "--section-id", "--source-artifact-path", "--artifact-path", "--related-experiment-id", "--experiment-id", "--review-concern-id", "--rebuttal-issue-id", "--required-visual-element", "--material-hint", "--provider-id", "--run-id", "--output-format", "--constraint", "--output-manifest-path", "--source-svg-path", "--target-final-svg-path", "--svg-content", "--caption", "--caption-draft", "--caption-id", "--mutation-mode", "--format"],
-    booleanFlags: ["--execute-provider", "--allow-missing-materials", "--json"]
-  });
-  return {
-    packetId: readFirstFlagValue(rest, ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id"]),
-    target: readFlagValue(rest, "--target"),
-    packetTarget: readFlagValue(rest, "--packet-target"),
-    taskName: readFlagValue(rest, "--task-name"),
-    intent: readFlagValue(rest, "--intent"),
-    description: readFlagValue(rest, "--description"),
-    name: readFlagValue(rest, "--name"),
-    title: readFlagValue(rest, "--title"),
-    figureId: readFlagValue(rest, "--figure-id"),
-    purpose: readFlagValue(rest, "--purpose"),
-    captionIntent: readFlagValue(rest, "--caption-intent"),
-    targetClaimIds: readFlagValues(rest, ["--target-claim-id", "--claim-id"]),
-    sourceSections: readFlagValues(rest, ["--source-section", "--section-id"]),
-    sourceArtifactPaths: readFlagValues(rest, ["--source-artifact-path", "--artifact-path"]),
-    relatedExperimentIds: readFlagValues(rest, ["--related-experiment-id", "--experiment-id"]),
-    reviewConcernIds: readFlagValues(rest, ["--review-concern-id"]),
-    rebuttalIssueIds: readFlagValues(rest, ["--rebuttal-issue-id"]),
-    requiredVisualElements: readFlagValues(rest, ["--required-visual-element"]),
-    materialHints: readFlagValues(rest, ["--material-hint"]),
-    providerId: readFlagValue(rest, "--provider-id") ?? undefined,
-    executeProvider: rest.includes("--execute-provider"),
-    allowMissingMaterials: rest.includes("--allow-missing-materials"),
-    runId: readFlagValue(rest, "--run-id"),
-    outputFormat: readFlagValue(rest, "--output-format"),
-    constraints: readFlagValues(rest, ["--constraint"]),
-    outputManifestPath: readFlagValue(rest, "--output-manifest-path"),
-    sourceSvgPath: readFlagValue(rest, "--source-svg-path"),
-    targetFinalSvgPath: readFlagValue(rest, "--target-final-svg-path"),
-    svgContent: readFlagValue(rest, "--svg-content"),
-    caption: readFlagValue(rest, "--caption"),
-    captionDraft: readFlagValue(rest, "--caption-draft"),
-    captionId: readFlagValue(rest, "--caption-id")
-  };
-}
-
-function buildDoveInitArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--title", "--goal", "--objective", "--summary", "--domain", "--dove-domain", "--mutation-mode", "--format"],
-    booleanFlags: ["--json"]
-  });
-  return {
-    title: readFlagValue(rest, "--title") ?? readFlagValue(rest, "--goal"),
-    goal: readFlagValue(rest, "--goal"),
-    objective: readFlagValue(rest, "--objective") ?? readFlagValue(rest, "--summary"),
-    summary: readFlagValue(rest, "--summary"),
-    domain: readFirstFlagValue(rest, ["--domain", "--dove-domain"])
-  };
-}
-
-function assertAutoProposalReplayArgs(rest = []) {
-  for (const flag of ["--proposal-token", "--mutation-mode", "--confirmed", "--yes", "--format"]) {
-    assertFlagAppearsAtMostOnce(rest, flag);
-  }
-  if (!rest.includes("--confirmed") || rest.includes("--yes")) {
-    throw new Error("Dove auto proposal replay requires the canonical --confirmed flag returned by the proposal command.");
-  }
-  if (!rest.includes("--mutation-mode")) {
-    throw new Error("Dove auto proposal replay requires the exact --mutation-mode returned by the proposal command.");
-  }
-  const valueFlags = new Set(["--proposal-token", "--mutation-mode", "--format"]);
-  const booleanFlags = new Set(["--confirmed", "--json"]);
-  const unexpected = [];
-  for (let index = 0; index < rest.length; index += 1) {
-    const arg = rest[index];
-    if (valueFlags.has(arg)) {
-      index += 1;
-      continue;
-    }
-    if (!booleanFlags.has(arg)) {
-      unexpected.push(arg);
-    }
-  }
-  if (unexpected.length > 0) {
-    throw new Error(`Dove auto proposal replay does not accept additional input: ${Array.from(new Set(unexpected)).join(", ")}. Run the exact confirmation command returned by the proposal.`);
-  }
-}
-
-function buildDoveAutoArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--proposal-token", "--mutation-mode", "--format", "--goal", "--prompt", "--objective", "--domain", "--dove-domain", "--mission-domain", "--stage", "--mission-stage", "--artifact", "--artifact-path", "--max-iterations", "--max-steps", "--steps-json", "--run-id"],
-    booleanFlags: ["--confirmed", "--json"]
-  });
-  assertFlagAppearsAtMostOnce(rest, "--proposal-token");
-  const proposalToken = readFlagValue(rest, "--proposal-token");
-  if (proposalToken !== null) {
-    assertAutoProposalReplayArgs(rest);
-    const proposal = decodeAutoProposalToken(proposalToken);
-    const suppliedMutationMode = readMutationMode(rest);
-    if (suppliedMutationMode && suppliedMutationMode !== proposal.mutationMode) {
-      throw new Error("The approved Dove auto proposal is bound to a different mutation mode. Request a fresh proposal.");
-    }
-    return {
-      ...proposal.confirmArgs,
-      confirmed: true,
-      mutationMode: proposal.mutationMode
-    };
-  }
-  if (rest.includes("--proposal-token")) {
-    throw new Error("--proposal-token must be the exact token returned by the approved Dove auto proposal.");
-  }
-  return {
-    ...buildTaskTargetArgs(rest),
-    confirmed: rest.includes("--confirmed") || rest.includes("--yes"),
-    goal: readFlagValue(rest, "--goal"),
-    prompt: readFlagValue(rest, "--prompt"),
-    objective: readFlagValue(rest, "--objective"),
-    domain: readFirstFlagValue(rest, ["--domain", "--dove-domain", "--mission-domain"]),
-    stage: readFirstFlagValue(rest, ["--stage", "--mission-stage"]),
-    artifactRefs: readFlagValues(rest, ["--artifact", "--artifact-path"]),
-    maxIterations: readFlagValue(rest, "--max-iterations") ? Number(readFlagValue(rest, "--max-iterations")) : undefined,
-    maxSteps: readFlagValue(rest, "--max-steps") ? Number(readFlagValue(rest, "--max-steps")) : undefined,
-    steps: parseJsonArrayFlag(rest, "--steps-json", "an array of auto step objects", assertAutoStepItem) ?? [],
-    runId: readFlagValue(rest, "--run-id")
-  };
-}
-
-function buildDoveOperatorArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--mutation-mode", "--format", "--blocker-investigation-mode", "--task-results-json", "--run-id"],
-    booleanFlags: ["--confirmed", "--include-queue-details", "--json"]
-  });
-  return {
-    confirmed: rest.includes("--confirmed"),
-    includeQueueDetails: rest.includes("--include-queue-details"),
-    blockerInvestigationMode: readFlagValue(rest, "--blocker-investigation-mode"),
-    taskResults: parseJsonArrayFlag(rest, "--task-results-json", "an array of operator task result objects", assertOperatorTaskResultItem),
-    runId: readFlagValue(rest, "--run-id")
-  };
-}
-
-function buildDoveLessonsArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--title", "--problem", "--decision", "--pitfall", "--validation", "--next-time", "--tag", "--domain", "--dove-domain", "--status", "--limit", "--mutation-mode", "--format"],
-    booleanFlags: ["--json"]
-  });
-  return {
-    ...buildTaskTargetArgs(rest),
-    title: readFlagValue(rest, "--title"),
-    problem: readFlagValue(rest, "--problem"),
-    decisions: readFlagValues(rest, ["--decision"]),
-    pitfalls: readFlagValues(rest, ["--pitfall"]),
-    validation: readFlagValues(rest, ["--validation"]),
-    nextTime: readFlagValues(rest, ["--next-time"]),
-    tags: readFlagValues(rest, ["--tag"]),
-    domain: readFirstFlagValue(rest, ["--domain", "--dove-domain"]),
-    status: readFlagValue(rest, "--status"),
-    limit: readFlagValue(rest, "--limit") ? Number(readFlagValue(rest, "--limit")) : undefined
-  };
-}
-
-function buildDoveVersionArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--title", "--reason", "--summary", "--version-id", "--id", "--mutation-mode", "--format"],
-    booleanFlags: ["--json"]
-  });
-  return {
-    title: readFlagValue(rest, "--title"),
-    reason: readFlagValue(rest, "--reason") ?? readFlagValue(rest, "--summary"),
-    summary: readFlagValue(rest, "--summary"),
-    versionId: readFlagValue(rest, "--version-id") ?? readFlagValue(rest, "--id")
-  };
-}
-
-function parseAuditEvidenceFlag(rest = []) {
-  const evidence = parseJsonArrayFlag(rest, "--audit-evidence-json", "an array of audit evidence objects", (item, index) => {
-    assertPlainObjectItem(item, index, "--audit-evidence-json");
-    const keys = Object.keys(item);
-    if (keys.some((key) => !["reference", "kind", "observation"].includes(key))
-      || typeof item.reference !== "string" || !item.reference.trim()
-      || !["source", "capture"].includes(item.kind)
-      || typeof item.observation !== "string" || !item.observation.trim()) {
-      throw new Error(`--audit-evidence-json[${index}] must contain reference, kind (source or capture), and observation.`);
-    }
-  });
-  return evidence ?? [];
-}
-
-function buildDoveSourceArgs(rest = [], action = "register") {
-  if (action === "verify") {
-    return {
-      ...buildTaskTargetArgs(rest),
-      sourceId: readFlagValue(rest, "--source-id"),
-      decision: readFlagValue(rest, "--decision"),
-      method: readFlagValue(rest, "--method"),
-      checkedMaterial: readFlagValue(rest, "--checked-material"),
-      auditEvidence: parseAuditEvidenceFlag(rest)
-    };
-  }
-  return {
-    ...buildTaskTargetArgs(rest),
-    sourceId: readFlagValue(rest, "--source-id"),
-    citationKey: readFlagValue(rest, "--citation-key"),
-    title: readFlagValue(rest, "--title"),
-    locator: readFlagValue(rest, "--locator") ?? readFlagValue(rest, "--url") ?? readFlagValue(rest, "--doi"),
-    sourceType: readFlagValue(rest, "--source-type"),
-    origin: readFlagValue(rest, "--origin"),
-    abstract: readFlagValue(rest, "--abstract"),
-    year: readFlagValue(rest, "--year"),
-    authors: readFlagValues(rest, ["--author"])
-  };
-}
-
-function buildDoveNoteArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--note-id", "--title", "--section-id", "--summary", "--quote", "--claim", "--open-question", "--source-id", "--mutation-mode", "--format"],
-    booleanFlags: ["--json"]
-  });
-  return {
-    ...buildTaskTargetArgs(rest),
-    noteId: readFlagValue(rest, "--note-id"),
-    title: readFlagValue(rest, "--title"),
-    sectionId: readFlagValue(rest, "--section-id"),
-    summary: readFlagValue(rest, "--summary"),
-    quotes: readFlagValues(rest, ["--quote"]),
-    claims: readFlagValues(rest, ["--claim"]),
-    openQuestions: readFlagValues(rest, ["--open-question"]),
-    sourceIds: readFlagValues(rest, ["--source-id"])
-  };
-}
-
-function buildDoveDraftArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--section-id", "--title", "--body", "--summary", "--status", "--mutation-mode", "--format"],
-    booleanFlags: ["--json"]
-  });
-  return {
-    ...buildTaskTargetArgs(rest),
-    sectionId: readFlagValue(rest, "--section-id"),
-    title: readFlagValue(rest, "--title"),
-    body: readFlagValue(rest, "--body"),
-    summary: readFlagValue(rest, "--summary"),
-    status: readFlagValue(rest, "--status")
-  };
-}
-
-function buildDoveExperienceArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--id", "--experiment-id", "--title", "--goal", "--idea", "--methodology", "--method", "--success-metric", "--metric", "--claim-id", "--outcome", "--result-summary", "--summary", "--evidence", "--evidence-link", "--artifact-path", "--comparison-target", "--baseline", "--mutation-mode", "--format"],
-    booleanFlags: ["--json"]
-  });
-  return {
-    ...buildTaskTargetArgs(rest),
-    id: readFlagValue(rest, "--id"),
-    experimentId: readFlagValue(rest, "--experiment-id"),
-    title: readFlagValue(rest, "--title"),
-    goal: readFlagValue(rest, "--goal"),
-    idea: readFlagValue(rest, "--idea"),
-    methodology: readFlagValue(rest, "--methodology") ?? readFlagValue(rest, "--method"),
-    successMetric: readFlagValue(rest, "--success-metric") ?? readFlagValue(rest, "--metric"),
-    claimId: readFlagValue(rest, "--claim-id"),
-    outcome: readFlagValue(rest, "--outcome"),
-    resultSummary: readFlagValue(rest, "--result-summary"),
-    summary: readFlagValue(rest, "--summary"),
-    evidenceLinks: readFlagValues(rest, ["--evidence", "--evidence-link", "--artifact-path"]),
-    comparisonTargets: readFlagValues(rest, ["--comparison-target", "--baseline"])
-  };
-}
-
-function buildDoveReviewArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--scope", "--stage", "--reviewer", "--artifact", "--artifact-path", "--reviewed-artifact-path", "--mutation-mode", "--format"],
-    booleanFlags: ["--json"]
-  });
-  return {
-    ...buildTaskTargetArgs(rest),
-    scope: readFlagValue(rest, "--scope"),
-    stage: readFlagValue(rest, "--stage"),
-    reviewer: readFlagValue(rest, "--reviewer"),
-    artifactPaths: readFlagValues(rest, ["--artifact", "--artifact-path"]),
-    reviewedArtifactPaths: readFlagValues(rest, ["--reviewed-artifact-path"])
-  };
-}
-
-function buildDoveReviewLoopArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--run-id", "--scope", "--instructions", "--stage", "--summary", "--artifact", "--artifact-path", "--reviewed-artifact-path", "--mutation-mode", "--format", "--max-iterations", "--draft-body", "--section-id", "--experience-goal", "--final-plan", "--final-plan-path", "--final-result", "--final-result-path"],
-    booleanFlags: ["--json"]
-  });
-  const retiredFlags = ["--max-iterations", "--draft-body", "--section-id", "--experience-goal", "--final-plan", "--final-plan-path", "--final-result", "--final-result-path"];
-  const retired = retiredFlags.filter((flag) => rest.includes(flag));
-  if (retired.length > 0) {
-    throw new Error(`dove review-loop no longer accepts ${retired.join(", ")}; it runs one Reviewer pass only. Use an explicit Builder handoff for revisions, then invoke review again.`);
-  }
-  return {
-    ...buildTaskTargetArgs(rest),
-    runId: readFlagValue(rest, "--run-id"),
-    scope: readFlagValue(rest, "--scope"),
-    instructions: readFlagValue(rest, "--instructions"),
-    stage: readFlagValue(rest, "--stage"),
-    summary: readFlagValue(rest, "--summary"),
-    artifactPaths: readFlagValues(rest, ["--artifact", "--artifact-path"]),
-    reviewedArtifactPaths: readFlagValues(rest, ["--reviewed-artifact-path"])
-  };
-}
-
-function buildDoveRebuttalArgs(rest = []) {
-  assertKnownCommandFlags(rest, {
-    valueFlags: ["--packet-id", "--task-packet-id", "--mission-packet-id", "--task-id", "--target", "--packet-target", "--task-name", "--issue", "--reviewer-issue", "--title", "--summary", "--mutation-mode", "--format"],
-    booleanFlags: ["--issues-only", "--strategy-only", "--json"]
-  });
-  const issueSummaries = readFlagValues(rest, ["--issue", "--reviewer-issue"]);
-  return {
-    ...buildTaskTargetArgs(rest),
-    issues: issueSummaries.map((summary, index) => ({ id: `issue-${index + 1}`, summary })),
-    title: readFlagValue(rest, "--title"),
-    summary: readFlagValue(rest, "--summary")
-  };
-}
-
-function wantsDoveStatusMissionDetails(args = {}) {
-  const detail = String(args.detail ?? "").trim().toLowerCase();
-  return Boolean(args.showMissions || args.includeMissionDetails || ["missions", "mission-details", "mission-list"].includes(detail));
-}
-
-function wantsJsonOutput(rest = []) {
-  return rest.includes("--json") || readFlagValue(rest, "--format") === "json";
-}
-
-function writeStdout(text) {
-  return new Promise((resolve, reject) => {
-    process.stdout.write(text, (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
-}
-
-function printJson(value) {
-  return writeStdout(`${JSON.stringify(value, null, 2)}\n`);
-}
-
-function compactText(value, maxLength = 180) {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
-  if (!text) {
-    return "";
-  }
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
-}
-
-function publicStatusText(value, maxLength = 180) {
-  const text = String(value ?? "")
-    .replace(/\btask-[a-z0-9][a-z0-9-]*\b/giu, "当前任务")
-    .replace(/先为\s+[^\s，。:：]+\s+补/gu, "先为当前任务补");
-  return compactText(text.replace(/为\s*当前任务\s*/gu, "为当前任务"), maxLength);
-}
-
-function publicStatusCommand(value, maxLength = 180) {
-  const text = compactText(value, maxLength);
-  if (/\btask-[a-z0-9][a-z0-9-]*\b/iu.test(text) || /--packet-id\b/u.test(text)) {
-    return "";
-  }
-  return text;
-}
-
-function formatExpansionHint(value, responseLanguage = "zh") {
-  const text = publicStatusText(value, 220);
-  if (!text) {
-    return "";
-  }
-  if (/--missions|--full|--json/u.test(text)) {
-    return responseLanguage === "en" ? "If you explicitly want more detail, ask for task details or the full governance state." : "如果你明确要展开，可以再查看任务细节或完整治理状态。";
-  }
-  return text;
-}
-
-function formatEvidencePreview(items = []) {
-  const evidence = Array.isArray(items) ? items.map((item) => compactText(item, 90)).filter(Boolean) : [];
-  if (evidence.length === 0) {
-    return "";
-  }
-  const shown = evidence.slice(0, 2).join("；");
-  return evidence.length > 2 ? `${shown}；+${evidence.length - 2}` : shown;
-}
-
-function formatBoundarySummaryForCli(boundary, gaps = {}, operatorUnblock = null) {
-  if (operatorUnblock?.blockedSummary) {
-    return compactText(operatorUnblock.blockedSummary, 160);
-  }
-  if (operatorUnblock?.cannotContinueBecause) {
-    return compactText(operatorUnblock.cannotContinueBecause, 160);
-  }
-  if (!boundary?.type && !gaps.boundaryType) {
-    return "none";
-  }
-  return "needs operator action";
-}
-
-function formatMissionBlockedReasonForCli(value, responseLanguage = "zh") {
-  const text = compactText(value, 140);
-  if (!text) {
-    return "";
-  }
-  if (text.startsWith("unresolved-dependencies:") || text.startsWith("blocked-by:")) {
-    return responseLanguage === "en" ? "waiting on another mission" : "等待前置任务";
-  }
-  if (/^awaiting-[a-z0-9-]+$/i.test(text)) {
-    const need = text.slice("awaiting-".length).replace(/-/g, " ");
-    return responseLanguage === "en" ? `needs ${need}` : `需要${need}`;
-  }
-  return publicStatusText(text, 140);
-}
-
-function missionHumanStatus(item = {}, fallbackGroup = "todo") {
-  return ["todo", "doing", "blocked", "done"].includes(item.group) ? item.group : fallbackGroup;
-}
-
-function missionTitleForCli(item = {}, maxLength = 100) {
-  return publicStatusText(item.title ?? item.summary ?? "", maxLength) || "未命名任务";
-}
-
-function formatMissionListGroup(groupName, group = {}, options = {}) {
-  const responseLanguage = options.responseLanguage ?? "zh";
-  const items = Array.isArray(group.items) ? group.items : [];
-  const itemCount = Number(group.itemCount ?? items.length);
-  const limit = Number.isFinite(options.limit) ? Math.max(0, options.limit) : items.length;
-  const visibleItems = options.collapsed || group.defaultCollapsed ? [] : items.slice(0, limit);
-  const hiddenCount = Math.max(0, itemCount - visibleItems.length);
-  const hiddenSuffix = hiddenCount > 0 ? (responseLanguage === "en" ? ` (+${hiddenCount} more)` : `（另有 ${hiddenCount} 个）`) : "";
-  const lines = [`  ${groupName}: ${itemCount}${hiddenSuffix}`];
-  for (const item of visibleItems) {
-    const blockedReason = formatMissionBlockedReasonForCli(item.blockedReason, responseLanguage);
-    lines.push(`    - ${missionTitleForCli(item)} [${missionHumanStatus(item, groupName)}]`);
-    if (blockedReason && blockedReason !== item.boundaryType) {
-      lines.push(responseLanguage === "en" ? `      blocked: ${blockedReason}` : `      受阻：${blockedReason}`);
-    }
-    if (item.boundaryType) {
-      lines.push(responseLanguage === "en" ? "      needs operator action" : "      需要人工处理");
-    }
-  }
-  return lines;
-}
-
-function formatMissionPriorityLaneForCli(priorityLane = {}, responseLanguage = "zh") {
-  const focus = priorityLane.focus ?? {};
-  if (!focus.packetId && !focus.title) {
-    return [];
-  }
-  const lines = [responseLanguage === "en" ? "Priority:" : "优先处理：", `  - ${missionTitleForCli(focus)} [${missionHumanStatus(focus)}]`];
-  const actionLabel = publicStatusText(priorityLane.action?.label, 160);
-  const command = publicStatusCommand(priorityLane.action?.copyableCommand, 160);
-  if (actionLabel || command) {
-    const nextText = actionLabel || command;
-    lines.push(responseLanguage === "en" ? `    Next: ${nextText}${command ? ` [${command}]` : ""}` : `    下一步：${nextText}${command ? ` [${command}]` : ""}`);
-  }
-  if (Array.isArray(priorityLane.needs) && priorityLane.needs.length > 0) {
-    lines.push(responseLanguage === "en" ? `    Need: ${formatEvidencePreview(priorityLane.needs)}` : `    需要：${formatEvidencePreview(priorityLane.needs)}`);
-  }
-  if (Array.isArray(priorityLane.doneCriteria) && priorityLane.doneCriteria.length > 0) {
-    lines.push(responseLanguage === "en" ? `    Done: ${formatEvidencePreview(priorityLane.doneCriteria)}` : `    完成标准：${formatEvidencePreview(priorityLane.doneCriteria)}`);
-  }
-  if (Array.isArray(priorityLane.unlocks) && priorityLane.unlocks.length > 0) {
-    const unlocked = priorityLane.unlocks.slice(0, 3).map((item) => missionTitleForCli(item, 80)).join("；");
-    const hidden = priorityLane.unlocks.length > 3 ? `；+${priorityLane.unlocks.length - 3}` : "";
-    lines.push(responseLanguage === "en" ? `    Unlocks: ${unlocked}${hidden}` : `    完成后可推进：${unlocked}${hidden}`);
-  }
-  return lines;
-}
-
-function missionGroupCount(group = {}) {
-  return Number(group.itemCount ?? group.items?.length ?? 0);
-}
-
-function formatMissionQueueSummaryForCli(groups = {}, responseLanguage = "zh") {
-  const counts = ["doing", "blocked", "todo", "done"].map((name) => `${name} ${missionGroupCount(groups[name])}`);
-  if (missionGroupCount(groups.archived) > 0) {
-    counts.push(`archived ${missionGroupCount(groups.archived)}`);
-  }
-  return [responseLanguage === "en" ? `Queue summary: ${counts.join(", ")}` : `队列概览：${counts.join("，")}`];
-}
-
-function formatMissionListForCli(missionList = {}, responseLanguage = "zh") {
-  const groups = missionList.groups ?? {};
-  const lines = [responseLanguage === "en" ? "Task choices:" : "任务选择："];
-  lines.push(...formatMissionPriorityLaneForCli(missionList.priorityLane, responseLanguage));
-  lines.push(...formatMissionQueueSummaryForCli(groups, responseLanguage));
-  lines.push(responseLanguage === "en" ? "Preview:" : "任务预览：");
-  lines.push(...formatMissionListGroup("doing", groups.doing, { limit: 2, responseLanguage }));
-  lines.push(...formatMissionListGroup("blocked", groups.blocked, { limit: 2, responseLanguage }));
-  lines.push(...formatMissionListGroup("todo", groups.todo, { limit: 2, responseLanguage }));
-  lines.push(...formatMissionListGroup("done", groups.done, { collapsed: true, responseLanguage }));
-  if (missionGroupCount(groups.archived) > 0) {
-    lines.push(...formatMissionListGroup("archived", groups.archived, { collapsed: true, responseLanguage }));
-  }
-  lines.push(responseLanguage === "en" ? "Ask explicitly if you need the full governance detail." : "如果还要完整治理细节，请明确提出。");
-  return lines;
-}
-
-function formatDoveStatusForCli(result, target, options = {}) {
-  const statusHome = result.statusHome ?? {};
-  const nextStep = statusHome.nextStep ?? result.nextStep ?? null;
-  const needsAttention = statusHome.needsAttention ?? result.needsAttention ?? null;
-  const showMore = statusHome.showMore ?? result.showMore ?? {};
-  const missionList = statusHome.optionalMissionDetails ?? result.optionalMissionDetails ?? result.dailyHome?.missionList ?? result.dashboard?.tasks?.grouped ?? {};
-  const responseLanguage = result.responseLanguage ?? "zh";
-  const headline = publicStatusText(statusHome.headline
-    ?? result.headline
-    ?? result.summary
-    ?? (responseLanguage === "en"
-      ? `Dove checked ${statusHome.currentContext?.title ?? result.projectSummary?.title ?? target ?? "this project"}.`
-      : `Dove 已检查${statusHome.currentContext?.title ?? result.projectSummary?.title ?? target ?? "当前项目"}。`), 240);
-  const nextLabel = publicStatusText(nextStep?.label, 200);
-  const command = publicStatusCommand(nextStep?.copyableCommand ?? nextStep?.command, 180);
-  const why = publicStatusText(needsAttention?.why ?? nextStep?.why ?? needsAttention?.summary, 240);
-  const showMoreText = formatExpansionHint(showMore.text, responseLanguage);
-  const lines = [headline].filter(Boolean);
-  if (nextLabel) {
-    lines.push(command
-      ? (responseLanguage === "en" ? `${nextLabel}. You can run: ${command}` : `${nextLabel}。可以直接运行：${command}`)
-      : nextLabel);
-  }
-  if (why && why !== headline && why !== nextLabel) {
-    lines.push(why);
-  }
-  if (showMoreText) {
-    lines.push(showMoreText);
-  }
-  if (options.showMissions) {
-    lines.push("", ...formatMissionListForCli(missionList, responseLanguage));
-  }
-  return `${lines.join("\n")}\n`;
-}
-
-function publicMissionText(value, maxLength = 220) {
-  const text = publicStatusText(value, maxLength);
-  if (!text || /\.dove\/|\bproject:dove\.|\b(?:packetId|taskPacketId|missionPacketId|packetPath|boundaryType|workContract|executionContract|preActionGuidance|proposalOnly|noAutoApply)\b|Snapshot version-/iu.test(text)) {
-    return "";
-  }
-  return text;
+function runMutation(target, actionId, args, callback, fallback = "patch-plan") {
+  const cleanArgs = withoutMutationMode(args);
+  return runWithMutationContext(target, { actionId, mutationMode: mutationMode(args, fallback), hostId: "cli" }, () => callback(cleanArgs));
 }
 
 function shellQuote(value) {
-  return `'${String(value ?? "").replace(/'/g, `'"'"'`)}'`;
+  return `'${String(value ?? "").replace(/'/gu, `'"'"'`)}'`;
 }
 
-function proposalConfirmationCommand(command, result, target, proposalToken) {
-  const mutationMode = result.proposalMutationMode;
-  if (!proposalToken || !mutationMode) {
-    return "";
+function proposalToken(result) {
+  return result?.confirmation?.confirmArgs
+    ? Buffer.from(JSON.stringify({ version: result.confirmation.proposalVersion ?? 1, mutationMode: result.confirmation.mutationMode, confirmArgs: result.confirmation.confirmArgs }), "utf8").toString("base64url")
+    : result?.confirmation?.proposalToken ?? null;
+}
+
+function proposalCommand(command, result, target, token = proposalToken(result)) {
+  const mode = result?.confirmation?.mutationMode ?? result?.confirmation?.confirmArgs?.mutationMode;
+  if (!token || !mode) return null;
+  return ["node", shellQuote(__filename), command, shellQuote(target), "--proposal-token", shellQuote(token), "--confirmed", "--mutation-mode", shellQuote(mode)].join(" ");
+}
+
+function withProposalCommand(command, result, target) {
+  const token = proposalToken(result);
+  const exactConfirmationCommand = proposalCommand(command, result, target, token);
+  return exactConfirmationCommand ? { ...result, confirmation: { ...result.confirmation, proposalToken: token, exactConfirmationCommand } } : result;
+}
+
+function decodeProposalToken(token, label) {
+  if (!token || !/^[A-Za-z0-9_-]+$/u.test(token)) throw new Error(`--proposal-token must be the exact token returned by the Dove ${label} proposal.`);
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
+  } catch {
+    throw new Error(`--proposal-token is malformed. Request a fresh Dove ${label} proposal.`);
   }
-  return [
-    "node",
-    shellQuote(__filename),
-    command,
-    shellQuote(target),
-    "--proposal-token",
-    shellQuote(proposalToken),
-    "--confirmed",
-    "--mutation-mode",
-    shellQuote(mutationMode)
-  ].join(" ");
+  if (!payload?.confirmArgs || typeof payload.confirmArgs !== "object" || Array.isArray(payload.confirmArgs)) throw new Error(`--proposal-token is not a supported Dove ${label} token.`);
+  return payload;
 }
 
-function missionConfirmationCommand(result, target = ".") {
-  return proposalConfirmationCommand("mission", result, target, missionProposalToken(result));
+function initArgs(args) {
+  const token = readFlagValue(args, "--proposal-token");
+  if (token) return { ...decodeProposalToken(token, "init").confirmArgs, confirmed: args.includes("--confirmed") };
+  return { goal: readFlagValue(args, "--goal"), archiveReset: args.includes("--archive-reset"), confirmed: args.includes("--confirmed"), proposalDigest: readFlagValue(args, "--proposal-digest"), mutationMode: mutationMode(args, "direct-process") };
 }
 
-function autoConfirmationCommand(result, target = ".") {
-  return proposalConfirmationCommand("auto", result, target, autoProposalToken(result));
-}
-
-function autoProposalJson(result, target = ".") {
-  const proposalToken = autoProposalToken(result);
-  if (!proposalToken) {
-    return result;
+function missionArgs(args) {
+  const token = readFlagValue(args, "--proposal-token");
+  if (token) {
+    const payload = decodeProposalToken(token, "mission");
+    return { ...payload.confirmArgs, confirmed: args.includes("--confirmed"), mutationMode: payload.mutationMode ?? payload.confirmArgs.mutationMode };
   }
   return {
-    ...result,
-    proposalToken,
-    exactConfirmationCommand: autoConfirmationCommand(result, target)
+    confirmed: args.includes("--confirmed"), mutationMode: mutationMode(args, "direct-process"), proposalDigest: readFlagValue(args, "--proposal-digest"),
+    missionId: readFlagValue(args, "--mission-id"), goal: readFlagValue(args, "--goal"), scope: readFlagValues(args, "--scope"),
+    outOfScope: readFlagValues(args, "--out-of-scope"), targetArtifacts: readFlagValues(args, "--target-artifact"), expectedArtifacts: readFlagValues(args, "--expected-artifact"),
+    completionCriteria: readFlagValues(args, "--completion-criterion"), evidenceRequirements: readFlagValues(args, "--evidence-requirement"),
+    dependsOnMissionIds: readFlagValues(args, "--depends-on-mission-id"), supersedesMissionId: readFlagValue(args, "--supersedes-mission-id")
   };
 }
 
-function formatDoveMissionForCli(result, target = ".") {
-  const responseLanguage = result.responseLanguage ?? "zh";
-  if (result.status === "materialization-planned") {
-    const title = publicMissionText(result.createdTask?.title, 220);
-    return `${[
-      responseLanguage === "en" ? "Dove prepared a host-applied write plan; the mission contract is not materialized yet." : "Dove 已生成待 host 应用的写入计划；mission 合同尚未物化。",
-      title ? (responseLanguage === "en" ? `Task: ${title}` : `任务：${title}`) : null,
-      responseLanguage === "en" ? "Next: apply the mutation plan, then hand off to the recommended workflow." : "下一步：应用 mutation plan，再交接给推荐流程。"
-    ].filter(Boolean).join("\n")}\n`;
-  }
-  if (result.status === "materialized") {
-    const title = publicMissionText(result.createdTask?.title, 220);
-    const nextAction = publicMissionText(result.createdTask?.workContract?.recommendedRoutes?.[0]?.label, 220);
-    return `${[
-      responseLanguage === "en" ? "The approved mission contract was materialized." : "已物化批准的 mission 合同。",
-      title ? (responseLanguage === "en" ? `Task: ${title}` : `任务：${title}`) : null,
-      nextAction
-        ? (responseLanguage === "en" ? `Next: ${nextAction}` : `下一步：${nextAction}`)
-        : (responseLanguage === "en" ? "Next: hand off to the recommended work workflow." : "下一步：交接给推荐的工作流程。")
-    ].filter(Boolean).join("\n")}\n`;
-  }
-  const proposedTask = result.proposedTask ?? {};
-  const mission = result.mission ?? {};
-  const goal = publicMissionText(proposedTask.title ?? proposedTask.summary ?? mission.goal, 220);
-  const evidenceRequired = Array.isArray(result.executionContract?.convergence?.evidenceRequired)
-    ? result.executionContract.convergence.evidenceRequired.map((item) => publicMissionText(item, 160)).filter(Boolean)
-    : [];
-  const lines = [responseLanguage === "en"
-    ? "Dove prepared a task proposal; nothing has been materialized or executed yet."
-    : "Dove 已整理出待确认任务；目前还没有物化合同，也没有执行工作。"];
-  if (goal) {
-    lines.push(responseLanguage === "en" ? `Proposed task: ${goal}` : `任务草案：${goal}`);
-  }
-  if (evidenceRequired.length > 0) {
-    lines.push(responseLanguage === "en" ? `Evidence needed: ${evidenceRequired.join(", ")}` : `需要的证据：${evidenceRequired.join("、")}`);
-  }
-  const confirmationCommand = missionConfirmationCommand(result, target);
-  lines.push(responseLanguage === "en"
-    ? "Approve this exact proposal to materialize only the contract, then hand off to the recommended workflow."
-    : "确认这个精确 proposal 后只物化合同，再交接给推荐流程。");
-  if (confirmationCommand) {
-    lines.push(responseLanguage === "en"
-      ? `Exact confirmation command: ${confirmationCommand}`
-      : `精确确认命令：${confirmationCommand}`);
-  }
-  return `${lines.join("\n")}\n`;
+function lessonQueryArgs(args) {
+  return Object.fromEntries(Object.entries({
+    lessonId: readFlagValue(args, "--lesson-id") ?? undefined,
+    missionId: readFlagValue(args, "--mission-id") ?? undefined,
+    scope: readFlagValue(args, "--scope") ?? undefined,
+    kind: readFlagValue(args, "--kind") ?? undefined,
+    tags: readFlagValues(args, "--tag"),
+    artifactRefs: readFlagValues(args, "--artifact"),
+    includeSuperseded: args.includes("--include-superseded"),
+    includeUnscoped: args.includes("--include-unscoped"),
+    limit: readFlagValue(args, "--limit") ?? undefined
+  }).filter(([, value]) => value !== undefined));
 }
 
-function formatDoveFigureForCli(result) {
-  const card = result.resultCard ?? {};
-  const action = Array.isArray(card.nextActions) ? card.nextActions[0] : null;
-  const happened = compactText(card.happened ?? result.summary, 260);
-  const next = compactText(action?.title, 220);
-  const lines = [happened || "Dove 已检查这张图的工作流状态。"];
-  if (next && next !== happened) {
-    lines.push(next);
+function lessonRecordArgs(args) {
+  const token = readFlagValue(args, "--proposal-token");
+  if (token) {
+    const payload = decodeProposalToken(token, "lesson");
+    return { ...payload.confirmArgs, confirmed: args.includes("--confirmed"), mutationMode: payload.mutationMode ?? payload.confirmArgs.mutationMode };
   }
-  if (result.mutationMode === "patch-plan" || result.mutationPlan) {
-    lines.push("这一步只是待确认方案，还没有直接改项目记录。");
-  } else if (result.writesApplied === true) {
-    lines.push("项目记录已经更新。");
-  }
-  if (card.requiresAction) {
-    lines.push("接下来补齐它要求的材料或 SVG 输出，再让 Dove 继续检查这张图。");
-  }
-  return `${lines.filter(Boolean).join("\n")}\n`;
-}
-
-function formatDoveFigureJsonForCli(result) {
+  if (args.includes("--confirmed")) throw new Error("dove lessons record --confirmed requires the exact --proposal-token returned by the proposal.");
   return {
-    presentation: "dove-figure-cli-result",
-    status: result.status,
-    figureId: result.figureId,
-    runId: result.runId,
-    resultCard: result.resultCard ?? null,
-    mutationMode: result.mutationMode,
-    writesApplied: result.writesApplied === true,
-    mutationPlan: result.mutationPlan ?? null,
-    detailsAvailable: true
+    mutationMode: mutationMode(args, "direct-process"),
+    missionId: readFlagValue(args, "--mission-id"),
+    lessonId: readFlagValue(args, "--lesson-id"),
+    scope: readFlagValue(args, "--scope"),
+    kind: readFlagValue(args, "--kind"),
+    summary: readFlagValue(args, "--summary"),
+    details: readFlagValue(args, "--details") ?? undefined,
+    nextTimeGuidance: readFlagValues(args, "--next-time-guidance"),
+    sourceIds: readFlagValues(args, "--source-id"),
+    noteIds: readFlagValues(args, "--note-id"),
+    artifactRefs: readFlagValues(args, "--artifact"),
+    appliesToArtifactRefs: readFlagValues(args, "--applies-to-artifact"),
+    tags: readFlagValues(args, "--tag"),
+    supersedesLessonId: readFlagValue(args, "--supersedes-lesson-id") ?? undefined
   };
 }
 
-function formatDoveFigureErrorForCli(error) {
-  const message = error instanceof Error ? error.message : String(error ?? "");
-  if (/Task target requires confirmation|Task target is ambiguous|could not resolve a durable task packet|requires a durable task packet|No packets exist/u.test(message)) {
-    return "这张图还不能开始：需要先选定一个 Dove 任务。先看当前最该推进的任务，或重新运行时带上明确任务。\n";
+function receiptArgs(args, root) {
+  const input = readFlagValue(args, "--input");
+  if (input) {
+    const fullPath = path.resolve(root, input);
+    const relative = path.relative(root, fullPath);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("--input must stay inside the selected workspace.");
+    return parseJson(fs.readFileSync(fullPath, "utf8"), "--input");
   }
-  if (/follow-through still requires action|cannot override follow-through governance/u.test(message)) {
-    return "这张图还不能继续：当前还有需要先处理的确认或结果回填。先按状态页的下一步补齐，再回到图表工作流。\n";
-  }
-  if (/secret|token|api key|inline|credential/i.test(message)) {
-    return "这张图还不能继续：检测到不安全的密钥或 provider 配置方式。请改用环境变量引用，不要把密钥写进请求或配置。\n";
-  }
-  return `这张图暂时不能继续：${compactText(message.replace(/\btask-[a-z0-9][a-z0-9-]*\b/giu, "当前任务"), 240)}\n`;
+  return { receiptId: readFlagValue(args, "--receipt-id"), missionId: readFlagValue(args, "--mission-id"), contractDigest: readFlagValue(args, "--contract-digest"), summary: readFlagValue(args, "--summary"), artifacts: parseRepeatedJson(args, "--artifact-json"), validations: parseRepeatedJson(args, "--validation-json"), criteriaSatisfied: parseRepeatedJson(args, "--criterion-json"), producedAt: readFlagValue(args, "--produced-at") };
 }
 
-const WORK_COMMAND_LABELS = {
-  init: "初始化目标",
-  auto: "自动推进",
-  operator: "operator 前台步骤",
-  lessons: "经验记录",
-  version: "版本整理",
-  source: "来源登记",
-  note: "笔记沉淀",
-  draft: "草稿更新",
-  experience: "实验经验",
-  review: "本地审查",
-  "review-loop": "本地审查循环",
-  rebuttal: "回应草稿"
-};
-
-function sanitizeDoveWorkText(value, maxLength = 260) {
-  const replacements = [
-    [/\.dove\/[\w./-]*/gu, "项目记录"],
-    [/\bproject:dove\.[a-z0-9.-]+\b/giu, "Dove"],
-    [/--packet-id\b/giu, "任务选择参数"],
-    [/\btask-[a-z0-9][a-z0-9-]*\b/giu, "当前任务"],
-    [/\b(?:packetId|packetIds|taskPacketId|missionPacketId|runId|receiptId|boundaryId|boundaryType|mutationMode|ownerRole|nextRole|sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|svgContent|queueSummary|queuePreview|preActionGuidance|resultCard)\b/giu, "内部字段"],
-    [/\b(?:patch-plan|direct-process)\b/giu, "待确认写入模式"],
-    [/\b(?:query_dove_status|run_dove_auto|record_dove_mission_pass|run_figure_workflow|run_dove_operator|record_document_evidence|upsert_note|upsert_draft|register_source|run_review_loop|run_dove_review_loop|run_experience_workflow|set_section_status|reset_dove_version|build_rebuttal|build_rebuttal_strategy|normalize_rebuttal_issues|record_operator_lesson|init_dove_goal)\b/giu, "Dove"],
-    [/\b(?:sourceSvgPath|targetFinalSvgPath|finalSvgPath|outputManifestPath|qaPath|providerId|diagnostics|fullResult)\b/giu, "内部字段"]
-  ];
-  let text = String(value ?? "").replace(/\s+/g, " ").trim();
-  for (const [pattern, replacement] of replacements) {
-    text = text.replace(pattern, replacement);
-  }
-  return compactText(text, maxLength);
+function sourceArgs(args, action) {
+  if (action === "verify") return { missionId: readFlagValue(args, "--mission-id"), sourceId: readFlagValue(args, "--source-id"), method: readFlagValue(args, "--method"), checkedMaterial: readFlagValue(args, "--checked-material"), auditEvidence: parseJson(readFlagValue(args, "--audit-evidence-json") ?? "[]", "--audit-evidence-json") };
+  return { missionId: readFlagValue(args, "--mission-id"), sourceId: readFlagValue(args, "--source-id"), citationKey: readFlagValue(args, "--citation-key"), title: readFlagValue(args, "--title"), locator: readFlagValue(args, "--locator"), sourceType: readFlagValue(args, "--source-type"), origin: readFlagValue(args, "--origin"), abstract: readFlagValue(args, "--abstract"), year: readFlagValue(args, "--year"), authors: readFlagValues(args, "--author"), capturePath: readFlagValue(args, "--capture-path") };
 }
 
-function formatDoveWorkForCli(commandName, result = {}) {
-  const card = result.resultCard ?? {};
-  const action = Array.isArray(card.nextActions) ? card.nextActions[0] : null;
-  const label = WORK_COMMAND_LABELS[commandName] ?? "Dove 工作";
-  const happened = sanitizeDoveWorkText(card.happened ?? card.summary ?? result.message ?? result.summary, 280);
-  const boundary = sanitizeDoveWorkText(result.boundary?.summary ?? result.boundary?.reason ?? result.stopReason, 220);
-  const next = sanitizeDoveWorkText(action?.title ?? result.nextAction, 220);
-  const lines = [happened || `${label}已经检查完当前材料。`];
-  if (boundary && !lines.includes(boundary)) {
-    lines.push(boundary);
-  }
-  if (commandName === "review" && Array.isArray(result.findings)) {
-    lines.push(result.findings.length > 0 ? `本地审查发现 ${result.findings.length} 个需要处理的问题。` : "本地审查没有发现新的阻塞问题。");
-  }
-  if (commandName === "review-loop" && result.review) {
-    lines.push("本次调用只完成一次独立 Reviewer 检查；修订后需要显式再次调用 review。");
-  }
-  if (next && !lines.includes(next)) {
-    lines.push(next);
-  }
-  if (result.mutationMode === "patch-plan" || result.mutationPlan) {
-    lines.push("这一步只是待确认方案，还没有直接改项目记录。");
-  } else if (result.writesApplied === true) {
-    lines.push("项目记录已经更新。");
-  }
-  if (result.boundary || /blocked|needs|awaiting/u.test(String(result.status ?? ""))) {
-    lines.push("先补齐它指出的材料，再继续推进。");
-  }
-  return `${lines.map((line) => sanitizeDoveWorkText(line, 320)).filter(Boolean).join("\n")}\n`;
+function reviewArgs(args) {
+  const modes = ["preflight", "prepare", "import", "verify-coverage"].filter((mode) => args.includes(`--${mode}`));
+  if (modes.length > 1) throw new Error("dove review accepts one operation mode.");
+  const mode = modes[0] ?? "preflight";
+  const missionId = readFlagValue(args, "--mission-id");
+  if (mode === "import") return { mode, args: { missionId, exchangeId: readFlagValue(args, "--exchange-id"), reviewId: readFlagValue(args, "--review-id") } };
+  if (mode === "verify-coverage") return { mode, args: { missionId, artifactPaths: readFlagValues(args, "--artifact"), requireAuthoritative: args.includes("--require-authoritative") } };
+  return { mode, args: { missionId, policy: mode === "preflight" ? "local-preflight" : readFlagValue(args, "--policy"), artifactPaths: readFlagValues(args, "--artifact"), finalPlanPaths: readFlagValues(args, "--final-plan"), finalResultPaths: readFlagValues(args, "--final-result") } };
 }
 
-function formatDoveWorkErrorForCli(commandName, error) {
-  const message = error instanceof Error ? error.message : String(error ?? "");
-  const label = WORK_COMMAND_LABELS[commandName] ?? "Dove 工作";
-  if (/Task target requires confirmation|Task target is ambiguous|could not resolve a durable task packet|requires a durable task packet|No packets exist/u.test(message)) {
-    return `${label}还不能开始：需要先选定一个明确的 Dove 任务，再带着真实材料继续。\n`;
-  }
-  if (/follow-through still requires action|Cannot advance orchestration|cannot override follow-through governance/i.test(message)) {
-    return `${label}还不能继续：当前还有需要先处理的确认或结果回填。先按状态页的下一步补齐，再回来推进。\n`;
-  }
-  if (/may be provided only once|exact proposalDigest|proposal[- ]token|mutation[- ]mode|proposal no longer matches/i.test(message)) {
-    return `${label}暂时不能继续：${sanitizeDoveWorkText(message, 260)}\n`;
-  }
-  if (/secret|token|api key|inline|credential/i.test(message)) {
-    return `${label}还不能继续：检测到不安全的密钥或 provider 配置方式。请改用环境变量引用，不要把密钥写进请求或配置。\n`;
-  }
-  return `${label}暂时不能继续：${sanitizeDoveWorkText(message, 260)}\n`;
+function hostIds(args) {
+  const raw = [...readFlagValues(args, "--host"), ...readFlagValues(args, "--platform")];
+  if (raw.length === 0) return DEFAULT_HOST_ADAPTERS;
+  const requested = raw.flatMap((value) => value.split(",").map((item) => item.trim()).filter(Boolean));
+  if (requested.includes("all")) return HOST_IDS;
+  const invalid = requested.filter((host) => !HOST_IDS.includes(host));
+  if (invalid.length) throw new Error(`Unknown host adapter(s): ${invalid.join(", ")}.`);
+  return [...new Set(requested)];
 }
 
-async function printDoveWorkResult(commandName, result, commandRest = [], target = ".") {
-  if (wantsJsonOutput(commandRest)) {
-    await printJson(commandName === "auto" ? autoProposalJson(result, target) : result);
-  } else {
-    const summary = formatDoveWorkForCli(commandName, result);
-    const confirmationCommand = commandName === "auto" ? autoConfirmationCommand(result, target) : "";
-    if (confirmationCommand) {
-      const label = result.responseLanguage === "en" ? "Exact confirmation command" : "精确确认命令";
-      await writeStdout(`${summary.trimEnd()}\n${label}: ${confirmationCommand}\n`);
-    } else {
-      await writeStdout(summary);
-    }
+function copyPath(source, destination, force, destinationRoot) {
+  const stat = fs.lstatSync(source);
+  if (stat.isSymbolicLink()) return;
+  const relative = path.relative(destinationRoot, destination).split(path.sep).join("/");
+  const resolved = resolveCanonicalContainedWrite(destinationRoot, relative, { label: "Install destination" });
+  if (stat.isDirectory()) {
+    fs.mkdirSync(resolved.fullPath, { recursive: true });
+    for (const entry of fs.readdirSync(source)) copyPath(path.join(source, entry), path.join(destination, entry), force, destinationRoot);
+    return;
   }
+  if (!stat.isFile()) return;
+  fs.mkdirSync(path.dirname(resolved.fullPath), { recursive: true });
+  if (!fs.existsSync(resolved.fullPath) || force) fs.copyFileSync(source, resolved.fullPath);
 }
 
-async function printDoveWorkError(commandName, error, commandRest = []) {
-  if (wantsJsonOutput(commandRest)) {
-    await printJson({ status: "blocked", message: formatDoveWorkErrorForCli(commandName, error).trim() });
-  } else {
-    await writeStdout(formatDoveWorkErrorForCli(commandName, error));
+function installOrSync(target, args) {
+  const hosts = hostIds(args);
+  const projectHosts = hosts.filter((host) => Object.hasOwn(HOST_ADAPTERS, host));
+  const corePaths = [...CORE_INSTALL_PATHS];
+  const hostPaths = projectHosts.flatMap((host) => HOST_ADAPTERS[host].paths.map((relativePath) => ({ host, relativePath })));
+  for (const relativePath of corePaths) {
+    const source = path.join(PACKAGE_ROOT, relativePath);
+    if (fs.existsSync(source)) copyPath(source, path.join(target, relativePath), args.includes("--force"), target);
   }
-}
-
-function buildDoveStatusline(result, target) {
-  const statusHome = result.statusHome ?? {};
-  const currentContext = statusHome.currentContext ?? result.currentContext ?? result.dashboard?.project ?? {};
-  const primaryAction = statusHome.nextAction ?? result.nextAction ?? statusHome.nextSteps?.primary ?? result.dailyHome?.nextActions?.[0] ?? null;
-  const gaps = statusHome.gaps ?? result.gaps ?? {};
-  const executionGaps = gaps.executionGaps ?? result.dailyHome?.executionGaps?.counts ?? {};
-  const focus = currentContext.currentFocus ?? result.projectSummary?.currentFocus;
-  const gapParts = [];
-  if (Number(executionGaps.missingContract ?? 0) > 0) {
-    gapParts.push(`contract ${executionGaps.missingContract}`);
+  for (const { relativePath } of hostPaths) {
+    const source = path.join(PACKAGE_ROOT, relativePath);
+    if (fs.existsSync(source)) copyPath(source, path.join(target, relativePath), args.includes("--force"), target);
   }
-  if (Number(executionGaps.missingMaterials ?? 0) > 0) {
-    gapParts.push(`materials ${executionGaps.missingMaterials}`);
-  }
-  if (Number(executionGaps.verificationGaps ?? 0) > 0) {
-    gapParts.push(`verify ${executionGaps.verificationGaps}`);
-  }
-  if (Number(gaps.boundaryCount ?? 0) > 0) {
-    gapParts.push(`boundaries ${gaps.boundaryCount}`);
-  }
-  if (Number(gaps.readErrorCount ?? 0) > 0) {
-    gapParts.push(`readErrors ${gaps.readErrorCount}`);
-  }
-  const textParts = [`Dove: ${compactText(currentContext.title ?? result.projectSummary?.title ?? "untitled", 50)}`];
-  if (focus) {
-    textParts.push(`focus ${compactText(focus, 70)}`);
-  }
-  if (primaryAction) {
-    const action = primaryAction.copyableCommand ?? primaryAction.firstAction ?? primaryAction.command ?? primaryAction.title;
-    textParts.push(`next ${compactText(action, 80)}`);
-  }
-  textParts.push(`gaps ${gapParts.length > 0 ? gapParts.join("/") : "clear"}`);
-  return {
-    mode: "dove-statusline",
-    query: true,
-    proposalOnly: true,
-    noAutoApply: true,
-    writes: [],
-    target,
-    summary: {
-      title: currentContext.title ?? result.projectSummary?.title ?? null,
-      currentFocus: focus ?? null,
-      nextAction: primaryAction ? {
-        title: primaryAction.title ?? null,
-        command: primaryAction.command ?? null,
-        copyableCommand: primaryAction.copyableCommand ?? primaryAction.firstAction ?? null,
-        kind: primaryAction.kind ?? null
-      } : null,
-      gaps: {
-        status: gaps.status ?? "clear",
-        boundaryType: gaps.boundaryType ?? result.boundaryType ?? null,
-        boundaryCount: gaps.boundaryCount ?? 0,
-        readErrorCount: gaps.readErrorCount ?? 0,
-        executionGaps
-      }
-    },
-    text: textParts.join(" | ")
-  };
-}
-
-function formatDoveStatusline(result, target) {
-  return `${buildDoveStatusline(result, target).text}\n`;
-}
-
-function buildDoveAuditArgs(rest = []) {
-  return buildDoveReturnArgs(rest);
-}
-
-function buildDoveLaunchArgs(rest = []) {
-  return {
-    ...buildDoveMissionArgs(rest),
-    sourceType: readFlagValue(rest, "--source-type"),
-    sourceId: readFlagValue(rest, "--source-id"),
-    packetId: readFirstFlagValue(rest, ["--packet-id", "--mission-packet-id"]),
-    missionPacketId: readFlagValue(rest, "--mission-packet-id"),
-    followThroughId: readFlagValue(rest, "--follow-through-id"),
-    selectedConversionPathKey: readFlagValue(rest, "--conversion-path"),
-    title: readFlagValue(rest, "--title"),
-    summary: readFlagValue(rest, "--summary"),
-    currentFocus: readFlagValue(rest, "--current-focus"),
-    nextAction: readFlagValue(rest, "--next-action"),
-    dependencies: readFlagValues(rest, ["--dependency"]),
-    evidenceLinks: readFlagValues(rest, ["--evidence", "--evidence-link"]),
-    outputPaths: readFlagValues(rest, ["--output", "--output-path"]),
-    decisionSummary: readFlagValue(rest, "--decision-summary"),
-    rationale: readFlagValue(rest, "--rationale"),
-    executeBy: readFlagValue(rest, "--execute-by"),
-    reviewAfter: readFlagValue(rest, "--review-after")
-  };
-}
-
-function buildIsolatedReviewArgs(rest = []) {
-  return {
-    runId: readFlagValue(rest, "--run-id"),
-    scope: readFlagValue(rest, "--scope"),
-    instructions: readFlagValue(rest, "--instructions"),
-    mediatorRole: readFlagValue(rest, "--mediator-role"),
-    reviewerRole: readFlagValue(rest, "--reviewer-role"),
-    reviewedArtifactPaths: collectRepeatedFlagValues(rest, "--artifact")
-  };
-}
-
-function buildOnboardingArgs(rest = []) {
-  return {
-    writeMap: rest.includes("--write-map"),
-    maxDepth: readFlagValue(rest, "--max-depth"),
-    maxFiles: readFlagValue(rest, "--max-files"),
-    excludeDirs: collectRepeatedFlagValues(rest, "--exclude-dir")
-  };
-}
-
-function invokeIsolatedReviewer(reviewerCommand, prepared, target) {
-  const commandArgs = parseCommandArgs(reviewerCommand);
-  if (commandArgs.length === 0) {
-    throw new Error("isolated-review requires --reviewer-command or DOVE_ISOLATED_REVIEWER_COMMAND");
-  }
-  const [executable, ...baseArgs] = commandArgs;
-  const reviewer = spawnSync(executable, [
-    ...baseArgs,
-    "--input", prepared.inputPath,
-    "--handoff", prepared.handoffPath,
-    "--report", prepared.reportPath,
-    "--run-id", prepared.runId
-  ], {
-    cwd: target,
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      DOVE_ISOLATED_REVIEW_INPUT: prepared.inputPath,
-      DOVE_ISOLATED_REVIEW_HANDOFF: prepared.handoffPath,
-      DOVE_ISOLATED_REVIEW_REPORT: prepared.reportPath,
-      DOVE_ISOLATED_REVIEW_RUN_ID: prepared.runId,
-      DOVE_ISOLATED_REVIEW_INPUT_SHA256: prepared.inputSha256
-    }
-  });
-  if (reviewer.error) {
-    throw reviewer.error;
-  }
-  if (reviewer.status !== 0) {
-    throw new Error(`isolated reviewer command failed with exit ${reviewer.status}: ${reviewer.stderr || reviewer.stdout || "no output"}`);
-  }
-  return {
-    status: reviewer.status,
-    stdout: reviewer.stdout,
-    stderr: reviewer.stderr
-  };
-}
-
-function installOrSync(target, force, args = []) {
-  const hosts = resolveHostAdapters(args);
-  const boundaries = createWorkflowBoundaries();
-  const installPaths = buildInstallPaths(hosts);
-  const disallowedCopies = installPaths.allPaths.filter((relativePath) => boundaries.userOwnedPaths.some((prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`)));
-  if (disallowedCopies.length > 0) {
-    throw new Error(`Refusing to manage user-owned paths: ${disallowedCopies.join(", ")}`);
-  }
-  const skippedUnsafePaths = [];
-  const copiedCorePaths = [];
-  const copiedHostPaths = [];
   const copiedUserHostPaths = [];
   let claudeCodeGateway = null;
-
-  for (const relativePath of installPaths.corePaths) {
-    const source = path.join(PACKAGE_ROOT, relativePath);
-    if (!fs.existsSync(source)) {
-      continue;
-    }
-    copyRecursive(source, path.join(target, relativePath), force, source, skippedUnsafePaths, target);
-    copiedCorePaths.push(relativePath);
-  }
-
-  for (const { host, relativePath } of installPaths.hostPaths) {
-    const source = path.join(PACKAGE_ROOT, relativePath);
-    if (!fs.existsSync(source)) {
-      continue;
-    }
-    copyRecursive(source, path.join(target, relativePath), force, source, skippedUnsafePaths, target);
-    copiedHostPaths.push({ host, path: relativePath });
-  }
-
-  if (installPaths.userHosts.includes("claude")) {
+  if (hosts.some((host) => USER_HOST_IDS.includes(host))) {
     const claudeConfigRoot = resolveClaudeConfigRoot();
-    const shellStartupFile = resolveClaudeShellStartupFile();
-    for (const relativePath of writeClaudeUserCommandAdapters(claudeConfigRoot)) {
-      copiedUserHostPaths.push({ host: "claude", path: relativePath, root: claudeConfigRoot });
-    }
-    claudeCodeGateway = configureClaudeCodeGatewayDefaults({ claudeConfigRoot, shellStartupFile });
+    for (const relativePath of writeClaudeUserCommandAdapters(claudeConfigRoot)) copiedUserHostPaths.push({ host: "claude", path: relativePath, root: claudeConfigRoot });
+    claudeCodeGateway = configureClaudeCodeGatewayDefaults({ claudeConfigRoot, shellStartupFile: resolveClaudeShellStartupFile() });
   }
-
-  ensureWorkspace(target);
-  const copied = [...copiedCorePaths, ...copiedHostPaths.map((item) => item.path), ...copiedUserHostPaths.map((item) => `claude:${item.path}`), ...(claudeCodeGateway ? ["claude:code-gateway-defaults"] : []), ".dove/* (bootstrap only, user-owned state preserved)"];
-  return {
-    target,
-    copied,
-    copiedCorePaths,
-    copiedHostPaths,
-    copiedUserHostPaths,
-    claudeCodeGateway,
-    skippedUnsafePaths: Array.from(new Set(skippedUnsafePaths)).sort(),
-    hosts,
-    force,
-    boundaryPolicy: {
-      managedPaths: boundaries.managedPaths,
-      neutralCorePaths: boundaries.neutralCorePaths ?? CORE_INSTALL_PATHS,
-      defaultHostAdapters: boundaries.defaultHostAdapters ?? DEFAULT_HOST_ADAPTERS,
-      availableHostAdapters: boundaries.availableHostAdapters ?? HOST_IDS,
-      doveBootstrapOnlyPaths: boundaries.doveBootstrapOnlyPaths.length,
-      userOwnedPaths: boundaries.userOwnedPaths
-    }
-  };
+  return { target, hosts, force: args.includes("--force"), copiedCorePaths: corePaths, copiedHostPaths: hostPaths.map(({ host, relativePath }) => ({ host, path: relativePath })), copiedUserHostPaths, claudeCodeGateway };
 }
 
-function readJsonFile(target, relativePath) {
-  const fullPath = path.join(target, relativePath);
-  if (!fs.existsSync(fullPath)) {
-    return { status: "missing", value: null, message: `${relativePath} is missing.` };
-  }
-  try {
-    return { status: "ok", value: JSON.parse(fs.readFileSync(fullPath, "utf8")), message: "ok" };
-  } catch (error) {
-    return {
-      status: "invalid",
-      value: null,
-      message: error instanceof Error ? error.message : String(error)
-    };
-  }
+function claudeCommandPaths() {
+  return COMMAND_SURFACES.map((surface) => path.join(resolveClaudeConfigRoot(), "commands", "dove", `${surface.id.replace(/^dove\./u, "").replace(/\./gu, "-")}.md`));
 }
 
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function describeShape(value) {
-  if (Array.isArray(value)) {
-    return "array";
-  }
-  if (value === null) {
-    return "null";
-  }
-  return typeof value;
-}
-
-function requireObject(value, label, issues) {
-  if (!isPlainObject(value)) {
-    issues.push(`${label} must be an object (found ${describeShape(value)})`);
-    return null;
-  }
-  return value;
-}
-
-function requireArray(value, label, issues) {
-  if (!Array.isArray(value)) {
-    issues.push(`${label} must be an array (found ${describeShape(value)})`);
-    return null;
-  }
-  return value;
-}
-
-function maybeObject(parent, key, label, issues) {
-  if (!isPlainObject(parent) || !(key in parent) || parent[key] === undefined) {
-    return null;
-  }
-  return requireObject(parent[key], label, issues);
-}
-
-function maybeArray(parent, key, label, issues) {
-  if (!isPlainObject(parent) || !(key in parent) || parent[key] === undefined) {
-    return null;
-  }
-  return requireArray(parent[key], label, issues);
-}
-
-function validateWikiRelationsShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/wiki/relations.json", issues);
-  if (!root) {
-    return issues;
-  }
-  maybeArray(root, "items", ".dove/wiki/relations.json.items", issues);
-  const summary = maybeObject(root, "summary", ".dove/wiki/relations.json.summary", issues);
-  const taxonomy = summary ? maybeObject(summary, "taxonomy", ".dove/wiki/relations.json.summary.taxonomy", issues) : null;
-  if (taxonomy) {
-    maybeArray(taxonomy, "families", ".dove/wiki/relations.json.summary.taxonomy.families", issues);
-  }
-  return issues;
-}
-
-function validateFigureQaShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/figures/qa.json", issues);
-  if (!root) {
-    return issues;
-  }
-  maybeArray(root, "items", ".dove/figures/qa.json.items", issues);
-  maybeArray(root, "issues", ".dove/figures/qa.json.issues", issues);
-  return issues;
-}
-
-function validateWorkspaceRepairFrontierShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/workspace/index.json", issues);
-  if (!root) {
-    return issues;
-  }
-  const repairFrontier = maybeObject(root, "repairFrontier", ".dove/workspace/index.json.repairFrontier", issues);
-  if (repairFrontier) {
-    maybeArray(repairFrontier, "prioritizedItems", ".dove/workspace/index.json.repairFrontier.prioritizedItems", issues);
-    maybeArray(repairFrontier, "relationFamilySummaries", ".dove/workspace/index.json.repairFrontier.relationFamilySummaries", issues);
-    maybeArray(repairFrontier, "relationGroupSummaries", ".dove/workspace/index.json.repairFrontier.relationGroupSummaries", issues);
-    maybeArray(repairFrontier, "topDegradedGroupIds", ".dove/workspace/index.json.repairFrontier.topDegradedGroupIds", issues);
-  }
-  const dove = maybeObject(root, "dove", ".dove/workspace/index.json.dove", issues);
-  if (dove) {
-    maybeObject(dove, "identity", ".dove/workspace/index.json.dove.identity", issues);
-    maybeObject(dove, "authorityManifest", ".dove/workspace/index.json.dove.authorityManifest", issues);
-  }
-  const metaOptimize = maybeObject(root, "metaOptimize", ".dove/workspace/index.json.metaOptimize", issues);
-  if (metaOptimize) {
-    maybeArray(metaOptimize, "topClusterIds", ".dove/workspace/index.json.metaOptimize.topClusterIds", issues);
-    maybeArray(metaOptimize, "topRecommendationIds", ".dove/workspace/index.json.metaOptimize.topRecommendationIds", issues);
-    maybeArray(metaOptimize, "topClusters", ".dove/workspace/index.json.metaOptimize.topClusters", issues);
-    maybeArray(metaOptimize, "topTaxonomyFamilyIds", ".dove/workspace/index.json.metaOptimize.topTaxonomyFamilyIds", issues);
-    maybeArray(metaOptimize, "topTaxonomyGroupIds", ".dove/workspace/index.json.metaOptimize.topTaxonomyGroupIds", issues);
-    maybeArray(metaOptimize, "pressureAreas", ".dove/workspace/index.json.metaOptimize.pressureAreas", issues);
-    const operatorPlaybooks = maybeObject(metaOptimize, "operatorPlaybooks", ".dove/workspace/index.json.metaOptimize.operatorPlaybooks", issues);
-    if (operatorPlaybooks) {
-      maybeArray(operatorPlaybooks, "topPlaybookIds", ".dove/workspace/index.json.metaOptimize.operatorPlaybooks.topPlaybookIds", issues);
-      maybeArray(operatorPlaybooks, "topTaxonomyFamilyIds", ".dove/workspace/index.json.metaOptimize.operatorPlaybooks.topTaxonomyFamilyIds", issues);
-    }
-    const longHorizon = maybeObject(metaOptimize, "longHorizon", ".dove/workspace/index.json.metaOptimize.longHorizon", issues);
-    if (longHorizon) {
-      maybeArray(longHorizon, "topFamilyIds", ".dove/workspace/index.json.metaOptimize.longHorizon.topFamilyIds", issues);
-      maybeArray(longHorizon, "topTaxonomyFamilyIds", ".dove/workspace/index.json.metaOptimize.longHorizon.topTaxonomyFamilyIds", issues);
-      maybeArray(longHorizon, "topTaxonomyGroupIds", ".dove/workspace/index.json.metaOptimize.longHorizon.topTaxonomyGroupIds", issues);
-      maybeArray(longHorizon, "pressureAreas", ".dove/workspace/index.json.metaOptimize.longHorizon.pressureAreas", issues);
-    }
-  }
-  return issues;
-}
-
-function validateDoveAuthorityManifestShape(value) {
-  const issues = [];
-  const root = requireObject(value, ARTIFACT_PATHS.doveRootManifest, issues);
-  if (!root) {
-    return issues;
-  }
-  maybeObject(root, "dualRootInvariant", `${ARTIFACT_PATHS.doveRootManifest}.dualRootInvariant`, issues);
-  maybeArray(root, "phases", `${ARTIFACT_PATHS.doveRootManifest}.phases`, issues);
-  return issues;
-}
-
-function validateMetaRecommendationsShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/meta/recommendations.json", issues);
-  if (!root) {
-    return issues;
-  }
-  maybeArray(root, "items", ".dove/meta/recommendations.json.items", issues);
-  maybeArray(root, "clusters", ".dove/meta/recommendations.json.clusters", issues);
-  const ranking = maybeObject(root, "ranking", ".dove/meta/recommendations.json.ranking", issues);
-  if (ranking) {
-    maybeArray(ranking, "signals", ".dove/meta/recommendations.json.ranking.signals", issues);
-    maybeArray(ranking, "tieBreakOrder", ".dove/meta/recommendations.json.ranking.tieBreakOrder", issues);
-  }
-  const frontier = maybeObject(root, "frontier", ".dove/meta/recommendations.json.frontier", issues);
-  if (frontier) {
-    maybeArray(frontier, "topClusterIds", ".dove/meta/recommendations.json.frontier.topClusterIds", issues);
-    maybeArray(frontier, "topRecommendationIds", ".dove/meta/recommendations.json.frontier.topRecommendationIds", issues);
-    maybeArray(frontier, "activeSignalTypes", ".dove/meta/recommendations.json.frontier.activeSignalTypes", issues);
-    maybeArray(frontier, "topTaxonomyFamilyIds", ".dove/meta/recommendations.json.frontier.topTaxonomyFamilyIds", issues);
-    maybeArray(frontier, "topTaxonomyGroupIds", ".dove/meta/recommendations.json.frontier.topTaxonomyGroupIds", issues);
-    maybeArray(frontier, "pressureAreas", ".dove/meta/recommendations.json.frontier.pressureAreas", issues);
-  }
-  const summary = maybeObject(root, "summary", ".dove/meta/recommendations.json.summary", issues);
-  if (summary) {
-    maybeArray(summary, "signalTypes", ".dove/meta/recommendations.json.summary.signalTypes", issues);
-    maybeArray(summary, "topClusterIds", ".dove/meta/recommendations.json.summary.topClusterIds", issues);
-    maybeArray(summary, "topRecommendationIds", ".dove/meta/recommendations.json.summary.topRecommendationIds", issues);
-    maybeArray(summary, "topTaxonomyFamilyIds", ".dove/meta/recommendations.json.summary.topTaxonomyFamilyIds", issues);
-    maybeArray(summary, "topTaxonomyGroupIds", ".dove/meta/recommendations.json.summary.topTaxonomyGroupIds", issues);
-    maybeArray(summary, "pressureAreas", ".dove/meta/recommendations.json.summary.pressureAreas", issues);
-    maybeArray(summary, "topClusters", ".dove/meta/recommendations.json.summary.topClusters", issues);
-  }
-  return issues;
-}
-
-function validateMetaOptimizerStateShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/meta/optimizer-state.json", issues);
-  if (!root) {
-    return issues;
-  }
-  maybeArray(root, "sourceArtifacts", ".dove/meta/optimizer-state.json.sourceArtifacts", issues);
-  const frontier = maybeObject(root, "frontier", ".dove/meta/optimizer-state.json.frontier", issues);
-  if (frontier) {
-    maybeArray(frontier, "activeSignalTypes", ".dove/meta/optimizer-state.json.frontier.activeSignalTypes", issues);
-    maybeArray(frontier, "topClusterIds", ".dove/meta/optimizer-state.json.frontier.topClusterIds", issues);
-    maybeArray(frontier, "topRecommendationIds", ".dove/meta/optimizer-state.json.frontier.topRecommendationIds", issues);
-    maybeArray(frontier, "topClusters", ".dove/meta/optimizer-state.json.frontier.topClusters", issues);
-    maybeArray(frontier, "topTaxonomyFamilyIds", ".dove/meta/optimizer-state.json.frontier.topTaxonomyFamilyIds", issues);
-    maybeArray(frontier, "topTaxonomyGroupIds", ".dove/meta/optimizer-state.json.frontier.topTaxonomyGroupIds", issues);
-    maybeArray(frontier, "pressureAreas", ".dove/meta/optimizer-state.json.frontier.pressureAreas", issues);
-    maybeArray(frontier, "tieBreakOrder", ".dove/meta/optimizer-state.json.frontier.tieBreakOrder", issues);
-  }
-  maybeArray(root, "clusters", ".dove/meta/optimizer-state.json.clusters", issues);
-  const operatorPlaybooks = maybeObject(root, "operatorPlaybooks", ".dove/meta/optimizer-state.json.operatorPlaybooks", issues);
-  if (operatorPlaybooks) {
-    maybeArray(operatorPlaybooks, "topPlaybookIds", ".dove/meta/optimizer-state.json.operatorPlaybooks.topPlaybookIds", issues);
-    maybeArray(operatorPlaybooks, "topTaxonomyFamilyIds", ".dove/meta/optimizer-state.json.operatorPlaybooks.topTaxonomyFamilyIds", issues);
-  }
-  const longHorizon = maybeObject(root, "longHorizon", ".dove/meta/optimizer-state.json.longHorizon", issues);
-  if (longHorizon) {
-    maybeArray(longHorizon, "topFamilyIds", ".dove/meta/optimizer-state.json.longHorizon.topFamilyIds", issues);
-    maybeArray(longHorizon, "topTaxonomyFamilyIds", ".dove/meta/optimizer-state.json.longHorizon.topTaxonomyFamilyIds", issues);
-    maybeArray(longHorizon, "topTaxonomyGroupIds", ".dove/meta/optimizer-state.json.longHorizon.topTaxonomyGroupIds", issues);
-    maybeArray(longHorizon, "pressureAreas", ".dove/meta/optimizer-state.json.longHorizon.pressureAreas", issues);
-  }
-  return issues;
-}
-
-function validateMetaLongHorizonShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/meta/long-horizon-memory.json", issues);
-  if (!root) {
-    return issues;
-  }
-  maybeObject(root, "horizon", ".dove/meta/long-horizon-memory.json.horizon", issues);
-  const summary = maybeObject(root, "summary", ".dove/meta/long-horizon-memory.json.summary", issues);
-  if (summary) {
-    maybeArray(summary, "topFamilyIds", ".dove/meta/long-horizon-memory.json.summary.topFamilyIds", issues);
-    maybeArray(summary, "topTaxonomyFamilyIds", ".dove/meta/long-horizon-memory.json.summary.topTaxonomyFamilyIds", issues);
-    maybeArray(summary, "topTaxonomyGroupIds", ".dove/meta/long-horizon-memory.json.summary.topTaxonomyGroupIds", issues);
-    maybeArray(summary, "pressureAreas", ".dove/meta/long-horizon-memory.json.summary.pressureAreas", issues);
-  }
-  maybeArray(root, "history", ".dove/meta/long-horizon-memory.json.history", issues);
-  maybeArray(root, "families", ".dove/meta/long-horizon-memory.json.families", issues);
-  return issues;
-}
-
-function validateMetaOperatorPlaybooksShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/meta/operator-playbooks.json", issues);
-  if (!root) {
-    return issues;
-  }
-  maybeArray(root, "playbooks", ".dove/meta/operator-playbooks.json.playbooks", issues);
-  const summary = maybeObject(root, "summary", ".dove/meta/operator-playbooks.json.summary", issues);
-  if (summary) {
-    maybeArray(summary, "topPlaybookIds", ".dove/meta/operator-playbooks.json.summary.topPlaybookIds", issues);
-    maybeArray(summary, "topTaxonomyFamilyIds", ".dove/meta/operator-playbooks.json.summary.topTaxonomyFamilyIds", issues);
-  }
-  return issues;
-}
-
-function validateMetaOperatorLessonsShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/meta/operator-lessons.json", issues);
-  if (!root) {
-    return issues;
-  }
-  if (root.referenceOnly !== true) {
-    issues.push(".dove/meta/operator-lessons.json.referenceOnly must be true");
-  }
-  if (root.explicitOnly !== true) {
-    issues.push(".dove/meta/operator-lessons.json.explicitOnly must be true");
-  }
-  if (root.noAutoCapture !== true) {
-    issues.push(".dove/meta/operator-lessons.json.noAutoCapture must be true");
-  }
-  if (root.noAutoApply !== true) {
-    issues.push(".dove/meta/operator-lessons.json.noAutoApply must be true");
-  }
-  maybeArray(root, "lessons", ".dove/meta/operator-lessons.json.lessons", issues);
-  maybeArray(root, "sourceArtifacts", ".dove/meta/operator-lessons.json.sourceArtifacts", issues);
-  const rawTraceArtifacts = [
-    ...(Array.isArray(root.sourceArtifacts) ? root.sourceArtifacts : []),
-    ...(Array.isArray(root.lessons) ? root.lessons.flatMap((lesson) => Array.isArray(lesson?.sourceArtifacts) ? lesson.sourceArtifacts : []) : [])
-  ].filter((artifactPath) => {
-    const normalized = String(artifactPath ?? "").trim().replace(/\\/g, "/").replace(/^\.\/+/, "");
-    return normalized === "trellis/tasks" || normalized.startsWith("trellis/tasks/") || normalized === ".trellis/tasks" || normalized.startsWith(".trellis/tasks/");
-  });
-  if (rawTraceArtifacts.length > 0) {
-    issues.push(`.dove/meta/operator-lessons.json cannot cite raw .trellis/tasks artifacts: ${rawTraceArtifacts.join(", ")}`);
-  }
-  const summary = maybeObject(root, "summary", ".dove/meta/operator-lessons.json.summary", issues);
-  if (summary) {
-    maybeArray(summary, "topLessonIds", ".dove/meta/operator-lessons.json.summary.topLessonIds", issues);
-    maybeArray(summary, "topTags", ".dove/meta/operator-lessons.json.summary.topTags", issues);
-    maybeArray(summary, "topDomains", ".dove/meta/operator-lessons.json.summary.topDomains", issues);
-  }
-  return issues;
-}
-
-function validateMetaExecutionBridgeCandidatesShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/meta/execution-bridge-candidates.json", issues);
-  if (!root) {
-    return issues;
-  }
-  maybeArray(root, "candidates", ".dove/meta/execution-bridge-candidates.json.candidates", issues);
-  const summary = maybeObject(root, "summary", ".dove/meta/execution-bridge-candidates.json.summary", issues);
-  if (summary) {
-    maybeArray(summary, "topCandidateIds", ".dove/meta/execution-bridge-candidates.json.summary.topCandidateIds", issues);
-  }
-  return issues;
-}
-
-function validateMetaGovernanceCoverageShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/meta/governance-coverage.json", issues);
-  if (!root) {
-    return issues;
-  }
-  maybeArray(root, "guardedMutations", ".dove/meta/governance-coverage.json.guardedMutations", issues);
-  maybeArray(root, "exemptMutations", ".dove/meta/governance-coverage.json.exemptMutations", issues);
-  return issues;
-}
-
-function validateMetaOperatorFollowThroughShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/meta/operator-follow-through.json", issues);
-  if (!root) {
-    return issues;
-  }
-  maybeArray(root, "items", ".dove/meta/operator-follow-through.json.items", issues);
-  const summary = maybeObject(root, "summary", ".dove/meta/operator-follow-through.json.summary", issues);
-  if (summary) {
-    maybeArray(summary, "topSourceIds", ".dove/meta/operator-follow-through.json.summary.topSourceIds", issues);
-  }
-  return issues;
-}
-
-function validateMetaOperatorFollowThroughTransitionsShape(value) {
-  const issues = [];
-  const root = requireObject(value, ".dove/meta/operator-follow-through-transitions.json", issues);
-  if (!root) {
-    return issues;
-  }
-  maybeArray(root, "transitions", ".dove/meta/operator-follow-through-transitions.json.transitions", issues);
-  return issues;
-}
-
-function inspectOperatorFollowThrough(target) {
-  const ledger = readJsonFile(target, ".dove/meta/operator-follow-through.json");
-  if (ledger.status !== "ok") {
-    return {
-      status: ledger.status === "missing" ? "ok" : "degraded",
-      itemCount: 0,
-      actionRequiredCount: 0,
-      reasons: ledger.status === "missing" ? [] : [ledger.message],
-      staleIds: [],
-      dueDeferredIds: [],
-      overdueExecutionIds: [],
-      invalidStatusIds: [],
-      missingTargetIds: []
-    };
-  }
-  const items = Array.isArray(ledger.value?.items) ? ledger.value.items : [];
-  const staleIds = items.filter((item) => item?.stale).map((item) => item.id);
-  const dueDeferredIds = items.filter((item) => item?.dueDeferred).map((item) => item.id);
-  const dueReviewIds = items.filter((item) => item?.dueReview).map((item) => item.id);
-  const overdueExecutionIds = items.filter((item) => item?.overdueExecution).map((item) => item.id);
-  const invalidStatusIds = items.filter((item) => item?.invalidStatus).map((item) => item.id);
-  const missingTargetIds = items.filter((item) => item?.status === "accepted-for-execution" && (!item?.linkedTargetArtifact || !item?.linkedTargetId)).map((item) => item.id);
-  const unresolvedTargetIds = items.filter((item) => {
-    if (!["accepted-for-execution", "closed"].includes(item?.status)) {
-      return false;
-    }
-    if (!item?.linkedTargetArtifact || !item?.linkedTargetId) {
-      return false;
-    }
-    const targetPath = path.join(target, item.linkedTargetArtifact);
-    if (!fs.existsSync(targetPath)) {
-      return true;
-    }
-    const extension = path.extname(item.linkedTargetArtifact).toLowerCase();
-    if (extension === ".json") {
-      try {
-        const value = JSON.parse(fs.readFileSync(targetPath, "utf8"));
-        const queue = [value];
-        while (queue.length > 0) {
-          const current = queue.shift();
-          if (current === item.linkedTargetId) {
-            return false;
-          }
-          if (Array.isArray(current)) {
-            queue.push(...current);
-            continue;
-          }
-          if (current && typeof current === "object") {
-            queue.push(...Object.values(current));
-          }
-        }
-        return true;
-      } catch {
-        return true;
-      }
-    }
-    return !fs.readFileSync(targetPath, "utf8").includes(String(item.linkedTargetId));
-  }).map((item) => item.id);
-  const reasons = [
-    ...(staleIds.length > 0 ? [`stale follow-through: ${staleIds.join(", ")}`] : []),
-    ...(dueDeferredIds.length > 0 ? [`due deferred follow-through: ${dueDeferredIds.join(", ")}`] : []),
-    ...(dueReviewIds.length > 0 ? [`due review follow-through: ${dueReviewIds.join(", ")}`] : []),
-    ...(overdueExecutionIds.length > 0 ? [`overdue execution follow-through: ${overdueExecutionIds.join(", ")}`] : []),
-    ...(invalidStatusIds.length > 0 ? [`invalid follow-through status: ${invalidStatusIds.join(", ")}`] : []),
-    ...(missingTargetIds.length > 0 ? [`accepted-for-execution missing target linkage: ${missingTargetIds.join(", ")}`] : []),
-    ...(unresolvedTargetIds.length > 0 ? [`follow-through target not found in linked artifact: ${unresolvedTargetIds.join(", ")}`] : [])
-  ];
-  return {
-    status: reasons.length === 0 ? "ok" : "degraded",
-    itemCount: items.length,
-    actionRequiredCount: staleIds.length + dueDeferredIds.length + dueReviewIds.length + overdueExecutionIds.length + invalidStatusIds.length + missingTargetIds.length + unresolvedTargetIds.length,
-    reasons,
-    staleIds,
-    dueDeferredIds,
-    dueReviewIds,
-    overdueExecutionIds,
-    invalidStatusIds,
-    missingTargetIds,
-    unresolvedTargetIds
-  };
-}
-
-function inspectOperatorLessons(target) {
-  const lessons = readJsonFile(target, ".dove/meta/operator-lessons.json");
-  if (lessons.status !== "ok") {
-    return {
-      status: lessons.status === "missing" ? "ok" : "degraded",
-      lessonCount: 0,
-      activeLessonCount: 0,
-      topLessonIds: [],
-      reasons: lessons.status === "missing" ? [] : [lessons.message]
-    };
-  }
-  const shapeIssues = validateMetaOperatorLessonsShape(lessons.value);
-  if (shapeIssues.length > 0) {
-    return {
-      status: "degraded",
-      lessonCount: 0,
-      activeLessonCount: 0,
-      topLessonIds: [],
-      reasons: shapeIssues
-    };
-  }
-  const normalized = normalizeMetaOperatorLessonsIndex(lessons.value);
-  return {
-    status: "ok",
-    lessonCount: normalized.summary.lessonCount,
-    activeLessonCount: normalized.summary.activeLessonCount,
-    topLessonIds: normalized.summary.topLessonIds,
-    topTags: normalized.summary.topTags,
-    topDomains: normalized.summary.topDomains,
-    lessonsPath: normalized.summary.lessonsPath,
-    reasons: []
-  };
-}
-
-function inspectAutonomyRuntime(target) {
-  const workspace = readJsonFile(target, ".dove/workspace/index.json");
-  if (workspace.status !== "ok") {
-    return {
-      status: workspace.status === "missing" ? "ok" : "degraded",
-      lastStatus: "never-run",
-      lastOutcome: "not-started",
-      requestCount: 0,
-      checkpointCount: 0,
-      escalationCount: 0,
-      continuationCount: 0,
-      currentContinuationKind: null,
-      currentContinuationPacketId: null,
-      currentContinuationProgramRunId: null,
-      currentContinuationCommand: null,
-      reasons: workspace.status === "missing" ? [] : [workspace.message]
-    };
-  }
-  const runtime = workspace.value?.runtime ?? {};
-  const reasons = [
-    ...(runtime.lastStatus === "error" ? [`runtime last status is error (${runtime.lastOutcome ?? "unknown"})`] : []),
-    ...((runtime.activeLeaseCount ?? 0) > 0 ? [`runtime still has ${runtime.activeLeaseCount} active lease(s)`] : []),
-    ...((runtime.escalationCount ?? 0) > 0 ? [`runtime escalations recorded: ${runtime.escalationCount}`] : [])
-  ];
-  return {
-    status: reasons.length === 0 ? "ok" : "degraded",
-    lastStatus: runtime.lastStatus ?? "never-run",
-    lastOutcome: runtime.lastOutcome ?? "not-started",
-    lastEnvelopeWorkerRole: runtime.lastEnvelopeWorkerRole ?? null,
-    requestCount: Number.isFinite(runtime.requestCount) ? runtime.requestCount : 0,
-    checkpointCount: Number.isFinite(runtime.checkpointCount) ? runtime.checkpointCount : 0,
-    escalationCount: Number.isFinite(runtime.escalationCount) ? runtime.escalationCount : 0,
-    continuationCount: Number.isFinite(runtime.continuationCount) ? runtime.continuationCount : 0,
-    currentContinuationKind: runtime.currentContinuationKind ?? null,
-    currentContinuationPacketId: runtime.currentContinuationPacketId ?? null,
-    currentContinuationProgramRunId: runtime.currentContinuationProgramRunId ?? null,
-    currentContinuationCommand: runtime.currentContinuationCommand ?? null,
-    lastCheckpointPacketId: runtime.lastCheckpointPacketId ?? null,
-    lastEscalationPacketId: runtime.lastEscalationPacketId ?? null,
-    reasons
-  };
-}
-
-function inspectOnboardingArtifactMap(target) {
-  const proposal = discoverPaperArtifacts(target, { maxFiles: 1000 });
-  const mapPath = ARTIFACT_PATHS.workspaceArtifactMap;
-  const mapExists = fs.existsSync(path.join(target, mapPath));
-  const likelyPaperAssets = proposal.summary.mappingCount;
-  const reasons = [
-    !mapExists && likelyPaperAssets > 0 ? `likely paper assets detected without artifact map: ${likelyPaperAssets}` : null,
-    ...proposal.conflicts.map((conflict) => `${conflict.type}: ${conflict.sourcePaths.join(", ")}`),
-    ...proposal.warnings
-  ].filter(Boolean);
-  return {
-    status: reasons.length === 0 ? "ok" : "needs-mapping",
-    mapPath,
-    mapExists,
-    mappingCount: proposal.summary.mappingCount,
-    unmappedCount: proposal.summary.unmappedCount,
-    conflictCount: proposal.summary.conflictCount,
-    manuscriptCount: proposal.summary.manuscriptCount,
-    bibliographyCount: proposal.summary.bibliographyCount,
-    proposalOnly: true,
-    noAutoApply: true,
-    reasons
-  };
-}
-
-function inspectProgramsSurface(target) {
-  const workspace = readJsonFile(target, ".dove/workspace/index.json");
-  if (workspace.status !== "ok") {
-    return {
-      status: workspace.status === "missing" ? "ok" : "degraded",
-      programCount: 0,
-      approvedRunCount: 0,
-      reasons: workspace.status === "missing" ? [] : [workspace.message]
-    };
-  }
-  const programs = workspace.value?.programs ?? {};
-  return {
-    status: "ok",
-    programCount: Number.isFinite(programs.programCount) ? programs.programCount : 0,
-    approvedRunCount: Number.isFinite(programs.approvedRunCount) ? programs.approvedRunCount : 0,
-    reviewCheckpointRunCount: Number.isFinite(programs.reviewCheckpointRunCount) ? programs.reviewCheckpointRunCount : 0,
-    consumedApprovalCount: Number.isFinite(programs.consumedApprovalCount) ? programs.consumedApprovalCount : 0,
-    currentProgramId: programs.currentProgramId ?? null,
-    currentProgramRunId: programs.currentProgramRunId ?? null,
-    currentApprovalId: programs.currentApprovalId ?? null,
-    currentReviewCheckpointRunId: programs.currentReviewCheckpointRunId ?? null,
-    reasons: []
-  };
-}
-
-function inspectDoveAuthority(target) {
-  const manifest = readJsonFile(target, ARTIFACT_PATHS.doveRootManifest);
-  if (manifest.status !== "ok") {
-    return {
-      status: "degraded",
-      activeDurableRoot: ARTIFACT_PATHS.doveRoot,
-      authoritativeRoot: ARTIFACT_PATHS.doveRoot,
-      currentWriteAuthority: ARTIFACT_PATHS.doveRoot,
-      manifestPath: ARTIFACT_PATHS.doveRootManifest,
-      staleLegacyArtifacts: [],
-      ignoredStaleWorkspaceArtifacts: [],
-      reasons: [manifest.message]
-    };
-  }
-
-  const normalized = normalizeDoveAuthorityManifest(manifest.value, createDoveAuthorityManifest());
-  const reasons = [];
-  if (normalized.status !== "authoritative") {
-    reasons.push("Dove manifest status must be authoritative");
-  }
-  if (normalized.strategy !== "dove-direct") {
-    reasons.push("Dove manifest strategy must be dove-direct");
-  }
-  if (normalized.activeDurableRoot !== ARTIFACT_PATHS.doveRoot) {
-    reasons.push(`active durable root must remain ${ARTIFACT_PATHS.doveRoot}`);
-  }
-  if (normalized.authoritativeRoot !== ARTIFACT_PATHS.doveRoot) {
-    reasons.push(`authoritative root must remain ${ARTIFACT_PATHS.doveRoot}`);
-  }
-  if (normalized.currentWriteAuthority !== ARTIFACT_PATHS.doveRoot) {
-    reasons.push(`current write authority must remain ${ARTIFACT_PATHS.doveRoot}`);
-  }
-  if (normalized.manifestPath !== ARTIFACT_PATHS.doveRootManifest) {
-    reasons.push(`authority manifest path must remain ${ARTIFACT_PATHS.doveRootManifest}`);
-  }
-  if (normalized.dualRootInvariant.allowed !== false || normalized.dualRootInvariant.doveRootAuthoritative !== true || normalized.dualRootInvariant.legacyRootAuthoritative !== false) {
-    reasons.push("dual-root invariant must keep only .dove authoritative");
-  }
-
-  const staleLegacyArtifacts = [
-    ".paper/state.json",
-    ".paper/workspace/index.json",
-    ".paper/orchestration/board.json",
-    ".paper/task-packets/index.json"
-  ].filter((relativePath) => fs.existsSync(path.join(target, relativePath)));
-  const ignoredStaleWorkspaceArtifacts = staleLegacyArtifacts;
-
-  return {
-    status: reasons.length === 0 ? "ok" : "degraded",
-    strategy: normalized.strategy,
-    activeDurableRoot: normalized.activeDurableRoot,
-    authoritativeRoot: normalized.authoritativeRoot,
-    currentWriteAuthority: normalized.currentWriteAuthority,
-    manifestPath: normalized.manifestPath,
-    legacyRoot: normalized.legacyRoot,
-    staleLegacyArtifacts,
-    ignoredStaleWorkspaceArtifacts,
-    reasons
-  };
-}
-
-function collectRawManagedArtifactChecks(target) {
-  const specs = [
-    ["raw-typed-wiki-relations-shape", ".dove/wiki/relations.json", validateWikiRelationsShape],
-    ["raw-figure-qa-shape", ".dove/figures/qa.json", validateFigureQaShape],
-    ["raw-workspace-index-shape", ".dove/workspace/index.json", validateWorkspaceRepairFrontierShape],
-    ["raw-dove-authority-manifest-shape", ARTIFACT_PATHS.doveRootManifest, validateDoveAuthorityManifestShape],
-    ["raw-meta-recommendations-shape", ".dove/meta/recommendations.json", validateMetaRecommendationsShape],
-    ["raw-meta-optimizer-state-shape", ".dove/meta/optimizer-state.json", validateMetaOptimizerStateShape],
-    ["raw-meta-operator-playbooks-shape", ".dove/meta/operator-playbooks.json", validateMetaOperatorPlaybooksShape],
-    ["raw-meta-operator-lessons-shape", ".dove/meta/operator-lessons.json", validateMetaOperatorLessonsShape],
-    ["raw-meta-execution-bridge-candidates-shape", ".dove/meta/execution-bridge-candidates.json", validateMetaExecutionBridgeCandidatesShape],
-    ["raw-meta-governance-coverage-shape", ".dove/meta/governance-coverage.json", validateMetaGovernanceCoverageShape],
-    ["raw-meta-operator-follow-through-shape", ".dove/meta/operator-follow-through.json", validateMetaOperatorFollowThroughShape],
-    ["raw-meta-operator-follow-through-transitions-shape", ".dove/meta/operator-follow-through-transitions.json", validateMetaOperatorFollowThroughTransitionsShape],
-    ["raw-meta-long-horizon-shape", ".dove/meta/long-horizon-memory.json", validateMetaLongHorizonShape]
-  ];
-
-  return specs.map(([check, relativePath, validate]) => {
-    const inspected = readJsonFile(target, relativePath);
-    if (inspected.status !== "ok") {
-      return {
-        check,
-        ok: inspected.status === "missing",
-        message: inspected.status === "missing" ? `${relativePath} is missing.` : inspected.message
-      };
-    }
-    const issues = validate(inspected.value);
-    return {
-      check,
-      ok: issues.length === 0,
-      message: issues.length === 0 ? "ok" : issues.join(" | ")
-    };
-  });
-}
-
-function collectRawMetaOptimizeConsistencyCheck(target) {
-  const recommendations = readJsonFile(target, ".dove/meta/recommendations.json");
-  const optimizerState = readJsonFile(target, ".dove/meta/optimizer-state.json");
-  const executionBridgeCandidates = readJsonFile(target, ".dove/meta/execution-bridge-candidates.json");
-  const operatorPlaybooks = readJsonFile(target, ".dove/meta/operator-playbooks.json");
-  const operatorLessons = readJsonFile(target, ".dove/meta/operator-lessons.json");
-  const longHorizonMemory = readJsonFile(target, ".dove/meta/long-horizon-memory.json");
-  const workspaceIndex = readJsonFile(target, ".dove/workspace/index.json");
-
-  if ([recommendations, optimizerState, operatorPlaybooks, operatorLessons, longHorizonMemory, workspaceIndex].some((item) => item.status !== "ok")) {
-    return {
-      check: "raw-meta-optimize-mirror-consistency",
-      ok: true,
-      message: "skipped",
-      mismatches: []
-    };
-  }
-
-  const shapeIssues = [
-    ...validateMetaRecommendationsShape(recommendations.value),
-    ...validateMetaOptimizerStateShape(optimizerState.value),
-    ...validateMetaOperatorPlaybooksShape(operatorPlaybooks.value),
-    ...validateMetaOperatorLessonsShape(operatorLessons.value),
-    ...validateMetaLongHorizonShape(longHorizonMemory.value),
-    ...validateWorkspaceRepairFrontierShape(workspaceIndex.value)
-  ];
-  if (shapeIssues.length > 0) {
-    return {
-      check: "raw-meta-optimize-mirror-consistency",
-      ok: true,
-      message: "skipped due to raw shape issues",
-      mismatches: []
-    };
-  }
-
-  const normalizedRecommendations = normalizeMetaRecommendationsIndex(recommendations.value);
-  const normalizedOptimizerState = normalizeMetaOptimizerState(optimizerState.value);
-  const normalizedOperatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(operatorPlaybooks.value);
-  const normalizedOperatorLessons = normalizeMetaOperatorLessonsIndex(operatorLessons.value);
-  const normalizedWorkspaceIndex = normalizeWorkspaceIndex(workspaceIndex.value);
-  const normalizedWorkspaceMetaOptimize = normalizeWorkspaceMetaOptimize(workspaceIndex.value.metaOptimize, normalizedWorkspaceIndex.metaOptimize);
-  const normalizedLongHorizonMemory = normalizeMetaLongHorizonMemory(longHorizonMemory.value);
-  const mismatches = [];
-  const topClusters = normalizedRecommendations.summary.topClusters;
-
-  if (normalizedWorkspaceMetaOptimize.recommendationCount !== normalizedRecommendations.items.length) {
-    mismatches.push("workspace metaOptimize recommendation count drift");
-  }
-  if (normalizedWorkspaceMetaOptimize.clusterCount !== normalizedRecommendations.clusters.length) {
-    mismatches.push("workspace metaOptimize cluster count drift");
-  }
-  if (normalizedWorkspaceMetaOptimize.reportPath !== normalizedOptimizerState.frontier.reportPath) {
-    mismatches.push("workspace metaOptimize reportPath drift");
-  }
-  if (normalizedWorkspaceMetaOptimize.recommendationsPath !== normalizedOptimizerState.frontier.recommendationsPath) {
-    mismatches.push("workspace metaOptimize recommendationsPath drift");
-  }
-  if (normalizedWorkspaceMetaOptimize.statePath !== normalizedOptimizerState.frontier.statePath) {
-    mismatches.push("workspace metaOptimize statePath drift");
-  }
-  if (normalizedWorkspaceMetaOptimize.longHorizonPath !== normalizedOptimizerState.frontier.longHorizonPath) {
-    mismatches.push("workspace metaOptimize longHorizonPath drift");
-  }
-  if (normalizedWorkspaceMetaOptimize.longHorizon.memoryPath !== normalizedOptimizerState.longHorizon.memoryPath) {
-    mismatches.push("workspace metaOptimize longHorizon.memoryPath drift");
-  }
-  if (JSON.stringify(normalizedRecommendations.frontier.topClusterIds) !== JSON.stringify(normalizedOptimizerState.frontier.topClusterIds)) {
-    mismatches.push("optimizer frontier topClusterIds drift");
-  }
-  if (JSON.stringify(normalizedRecommendations.frontier.topClusterIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.topClusterIds)) {
-    mismatches.push("workspace metaOptimize topClusterIds drift");
-  }
-  if (normalizedRecommendations.frontier.frontierSummary !== normalizedOptimizerState.frontier.frontierSummary) {
-    mismatches.push("optimizer frontier summary drift");
-  }
-  if (normalizedRecommendations.frontier.frontierSummary !== normalizedWorkspaceMetaOptimize.frontierSummary) {
-    mismatches.push("workspace metaOptimize frontier summary drift");
-  }
-  if (JSON.stringify(normalizedRecommendations.frontier.topTaxonomyFamilyIds) !== JSON.stringify(normalizedOptimizerState.frontier.topTaxonomyFamilyIds)) {
-    mismatches.push("optimizer frontier topTaxonomyFamilyIds drift");
-  }
-  if (JSON.stringify(normalizedRecommendations.frontier.topTaxonomyFamilyIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.topTaxonomyFamilyIds)) {
-    mismatches.push("workspace metaOptimize topTaxonomyFamilyIds drift");
-  }
-  if (JSON.stringify(normalizedRecommendations.frontier.topTaxonomyGroupIds) !== JSON.stringify(normalizedOptimizerState.frontier.topTaxonomyGroupIds)) {
-    mismatches.push("optimizer frontier topTaxonomyGroupIds drift");
-  }
-  if (JSON.stringify(normalizedRecommendations.frontier.topTaxonomyGroupIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.topTaxonomyGroupIds)) {
-    mismatches.push("workspace metaOptimize topTaxonomyGroupIds drift");
-  }
-  if (normalizedRecommendations.frontier.taxonomyOverview !== normalizedOptimizerState.frontier.taxonomyOverview) {
-    mismatches.push("optimizer frontier taxonomy overview drift");
-  }
-  if (normalizedRecommendations.frontier.taxonomyOverview !== normalizedWorkspaceMetaOptimize.taxonomyOverview) {
-    mismatches.push("workspace metaOptimize taxonomy overview drift");
-  }
-  if (normalizedOptimizerState.operatorPlaybooks.playbookCount !== normalizedOperatorPlaybooks.playbooks.length) {
-    mismatches.push("optimizer state operatorPlaybooks count drift");
-  }
-  if (normalizedWorkspaceMetaOptimize.operatorPlaybooks.playbookCount !== normalizedOperatorPlaybooks.playbooks.length) {
-    mismatches.push("workspace metaOptimize operatorPlaybooks count drift");
-  }
-  if (JSON.stringify(normalizedOptimizerState.operatorPlaybooks.topPlaybookIds) !== JSON.stringify(normalizedOperatorPlaybooks.summary.topPlaybookIds)) {
-    mismatches.push("optimizer state operatorPlaybooks topPlaybookIds drift");
-  }
-  if (JSON.stringify(normalizedWorkspaceMetaOptimize.operatorPlaybooks.topPlaybookIds) !== JSON.stringify(normalizedOperatorPlaybooks.summary.topPlaybookIds)) {
-    mismatches.push("workspace metaOptimize operatorPlaybooks topPlaybookIds drift");
-  }
-  if (normalizedOptimizerState.operatorLessons.lessonCount !== normalizedOperatorLessons.lessons.length) {
-    mismatches.push("optimizer state operatorLessons count drift");
-  }
-  if (normalizedWorkspaceMetaOptimize.operatorLessons.lessonCount !== normalizedOperatorLessons.lessons.length) {
-    mismatches.push("workspace metaOptimize operatorLessons count drift");
-  }
-  if (JSON.stringify(normalizedOptimizerState.operatorLessons.topLessonIds) !== JSON.stringify(normalizedOperatorLessons.summary.topLessonIds)) {
-    mismatches.push("optimizer state operatorLessons topLessonIds drift");
-  }
-  if (JSON.stringify(normalizedWorkspaceMetaOptimize.operatorLessons.topLessonIds) !== JSON.stringify(normalizedOperatorLessons.summary.topLessonIds)) {
-    mismatches.push("workspace metaOptimize operatorLessons topLessonIds drift");
-  }
-  if (JSON.stringify(normalizedRecommendations.frontier.pressureAreas) !== JSON.stringify(normalizedOptimizerState.frontier.pressureAreas)) {
-    mismatches.push("optimizer frontier pressureAreas drift");
-  }
-  if (JSON.stringify(normalizedRecommendations.frontier.pressureAreas) !== JSON.stringify(normalizedWorkspaceMetaOptimize.pressureAreas)) {
-    mismatches.push("workspace metaOptimize pressureAreas drift");
-  }
-  if (JSON.stringify(topClusters) !== JSON.stringify(normalizedOptimizerState.frontier.topClusters)) {
-    mismatches.push("optimizer frontier topClusters drift");
-  }
-  if (JSON.stringify(topClusters) !== JSON.stringify(normalizedWorkspaceMetaOptimize.topClusters)) {
-    mismatches.push("workspace metaOptimize topClusters drift");
-  }
-  if (normalizedWorkspaceMetaOptimize.longHorizon.familyCount !== normalizedLongHorizonMemory.summary.familyCount) {
-    mismatches.push("workspace metaOptimize longHorizon family count drift");
-  }
-  if (JSON.stringify(normalizedLongHorizonMemory.summary.topFamilyIds) !== JSON.stringify(normalizedOptimizerState.longHorizon.topFamilyIds)) {
-    mismatches.push("optimizer state longHorizon topFamilyIds drift");
-  }
-  if (JSON.stringify(normalizedLongHorizonMemory.summary.topFamilyIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topFamilyIds)) {
-    mismatches.push("workspace metaOptimize longHorizon topFamilyIds drift");
-  }
-  if (JSON.stringify(normalizedLongHorizonMemory.summary.topTaxonomyFamilyIds) !== JSON.stringify(normalizedOptimizerState.longHorizon.topTaxonomyFamilyIds)) {
-    mismatches.push("optimizer state longHorizon topTaxonomyFamilyIds drift");
-  }
-  if (JSON.stringify(normalizedLongHorizonMemory.summary.topTaxonomyFamilyIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topTaxonomyFamilyIds)) {
-    mismatches.push("workspace metaOptimize longHorizon topTaxonomyFamilyIds drift");
-  }
-  if (JSON.stringify(normalizedLongHorizonMemory.summary.topTaxonomyGroupIds) !== JSON.stringify(normalizedOptimizerState.longHorizon.topTaxonomyGroupIds)) {
-    mismatches.push("optimizer state longHorizon topTaxonomyGroupIds drift");
-  }
-  if (JSON.stringify(normalizedLongHorizonMemory.summary.topTaxonomyGroupIds) !== JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topTaxonomyGroupIds)) {
-    mismatches.push("workspace metaOptimize longHorizon topTaxonomyGroupIds drift");
-  }
-  if (JSON.stringify(normalizedLongHorizonMemory.summary.pressureAreas) !== JSON.stringify(normalizedOptimizerState.longHorizon.pressureAreas)) {
-    mismatches.push("optimizer state longHorizon pressureAreas drift");
-  }
-  if (JSON.stringify(normalizedLongHorizonMemory.summary.pressureAreas) !== JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.pressureAreas)) {
-    mismatches.push("workspace metaOptimize longHorizon pressureAreas drift");
-  }
-  if (normalizedLongHorizonMemory.summary.overview !== normalizedOptimizerState.longHorizon.overview) {
-    mismatches.push("optimizer state longHorizon overview drift");
-  }
-  if (normalizedLongHorizonMemory.summary.overview !== normalizedWorkspaceMetaOptimize.longHorizon.overview) {
-    mismatches.push("workspace metaOptimize longHorizon overview drift");
-  }
-  if (normalizedLongHorizonMemory.summary.snapshotCount !== normalizedOptimizerState.longHorizon.snapshotCount) {
-    mismatches.push("optimizer state longHorizon snapshot count drift");
-  }
-  if (normalizedLongHorizonMemory.summary.snapshotCount !== normalizedWorkspaceMetaOptimize.longHorizon.snapshotCount) {
-    mismatches.push("workspace metaOptimize longHorizon snapshot count drift");
-  }
-  if (normalizedLongHorizonMemory.summary.lastAction !== normalizedOptimizerState.longHorizon.lastAction) {
-    mismatches.push("optimizer state longHorizon last action drift");
-  }
-  if (normalizedLongHorizonMemory.summary.lastAction !== normalizedWorkspaceMetaOptimize.longHorizon.lastAction) {
-    mismatches.push("workspace metaOptimize longHorizon last action drift");
-  }
-
-  return {
-    check: "raw-meta-optimize-mirror-consistency",
-    ok: mismatches.length === 0,
-    message: mismatches.length === 0 ? "ok" : mismatches.join(" | "),
-    mismatches
-  };
-}
-
-function inspectWikiRelations(target) {
-  const inspected = readJsonFile(target, ".dove/wiki/relations.json");
-  if (inspected.status !== "ok") {
-    return { status: inspected.status, degradedCount: 0, degradedFamilyCount: 0, reasons: [inspected.message], relationIds: [], familyIds: [] };
-  }
-  const shapeIssues = validateWikiRelationsShape(inspected.value);
-  if (shapeIssues.length > 0) {
-    return { status: "malformed", degradedCount: 0, degradedFamilyCount: 0, reasons: shapeIssues, relationIds: [], familyIds: [] };
-  }
-  const items = Array.isArray(inspected.value?.items) ? inspected.value.items : [];
-  const summary = inspected.value?.summary ?? {};
-  const taxonomy = summary.taxonomy ?? {};
-  const degraded = items.filter((item) => item?.integrity?.status === "degraded");
-  const degradedFamilies = Array.isArray(taxonomy.families) ? taxonomy.families.filter((item) => item?.degradedCount > 0) : [];
-  return {
-    status: degraded.length > 0 ? "degraded" : "ok",
-    degradedCount: degraded.length,
-    degradedFamilyCount: degradedFamilies.length,
-    relationIds: degraded.map((item) => item.id),
-    familyIds: degradedFamilies.map((item) => item.id),
-    taxonomyOverview: taxonomy.overview ?? null,
-    reasons: [
-      degradedFamilies.length > 0 ? `degraded families: ${degradedFamilies.map((item) => `${item.id}(${item.degradedCount})`).join(", ")}` : null,
-      ...degraded.flatMap((item) => (item.integrity?.reasons ?? []).map((reason) => reason.message))
-    ].filter(Boolean).slice(0, 10)
-  };
-}
-
-function inspectFigureQa(target) {
-  const inspected = readJsonFile(target, ".dove/figures/qa.json");
-  if (inspected.status !== "ok") {
-    return { status: inspected.status, issueCount: 0, reasons: [inspected.message], issueIds: [] };
-  }
-  const shapeIssues = validateFigureQaShape(inspected.value);
-  if (shapeIssues.length > 0) {
-    return { status: "malformed", issueCount: 0, reasons: shapeIssues, issueIds: [] };
-  }
-  const issues = Array.isArray(inspected.value?.issues) ? inspected.value.issues : [];
-  return {
-    status: issues.length > 0 ? "degraded" : "ok",
-    issueCount: issues.length,
-    issueIds: issues.map((issue) => issue.id),
-    reasons: issues.map((issue) => issue.summary ?? issue.code ?? issue.id).slice(0, 10)
-  };
-}
-
-function inspectWorkspaceRepairFrontier(target) {
-  const inspected = readJsonFile(target, ".dove/workspace/index.json");
-  if (inspected.status !== "ok") {
-    return { status: inspected.status, count: 0, relationFamilyIssueCount: 0, reasons: [inspected.message], itemIds: [], familyIds: [] };
-  }
-  const shapeIssues = validateWorkspaceRepairFrontierShape(inspected.value);
-  if (shapeIssues.length > 0) {
-    return { status: "malformed", count: 0, relationFamilyIssueCount: 0, reasons: shapeIssues, itemIds: [], familyIds: [] };
-  }
-  const items = Array.isArray(inspected.value?.repairFrontier?.prioritizedItems) ? inspected.value.repairFrontier.prioritizedItems : [];
-  const relationFamilySummaries = Array.isArray(inspected.value?.repairFrontier?.relationFamilySummaries) ? inspected.value.repairFrontier.relationFamilySummaries : [];
-  const relationGroupSummaries = Array.isArray(inspected.value?.repairFrontier?.relationGroupSummaries) ? inspected.value.repairFrontier.relationGroupSummaries : [];
-  return {
-    status: items.length > 0 ? "degraded" : "ok",
-    count: items.length,
-    relationFamilyIssueCount: relationFamilySummaries.length,
-    relationGroupIssueCount: relationGroupSummaries.length,
-    governanceIssueCount: Number.isFinite(inspected.value?.repairFrontier?.governanceIssueCount) ? inspected.value.repairFrontier.governanceIssueCount : 0,
-    itemIds: items.map((item) => item.id),
-    familyIds: relationFamilySummaries.map((item) => item.id),
-    groupIds: relationGroupSummaries.map((item) => item.id),
-    prioritizedItems: items,
-    taxonomyOverview: inspected.value?.repairFrontier?.taxonomyOverview ?? null,
-    reasons: [
-      inspected.value?.repairFrontier?.taxonomyOverview ?? null,
-      ...relationFamilySummaries.map((item) => item.overview ?? item.label ?? item.id),
-      ...relationGroupSummaries.map((item) => item.overview ?? item.label ?? item.id),
-      ...items.map((item) => item.summary ?? item.id)
-    ].filter(Boolean).slice(0, 10)
-  };
-}
-
-function buildDoctorProposalFrontier(managedArtifacts, rawMetaOptimizeConsistency) {
-  const workspaceItems = (managedArtifacts.workspaceRepairFrontier?.prioritizedItems ?? []).map((item) => ({
-    ...item,
-    proposalOnly: true,
-    explicitOnly: true,
-    noAutoApply: true
-  }));
-  const metaDriftItems = (rawMetaOptimizeConsistency?.mismatches ?? []).length > 0
-    ? [{
-      id: "repair-meta-optimize-drift",
-      frontierType: "meta-optimize-drift",
-      severity: "high",
-      proposalOnly: true,
-      explicitOnly: true,
-      noAutoApply: true,
-      summary: "Repair meta-optimize mirror drift so workspace and optimizer frontier stay aligned.",
-      reasons: rawMetaOptimizeConsistency.mismatches.join(" | "),
-      reasonCodes: rawMetaOptimizeConsistency.mismatches,
-      artifactPath: ".dove/meta/recommendations.json",
-      relatedArtifactPaths: [".dove/meta/optimizer-state.json", ".dove/meta/long-horizon-memory.json", ".dove/meta/operator-lessons.json", ".dove/workspace/index.json"],
-      nextAction: "Refresh the durable surfaces or repair the drifted meta artifacts explicitly, then rerun doctor until the proposal-only frontier is clear."
-    }]
-    : [];
-  const prioritizedItems = [...workspaceItems, ...metaDriftItems];
-  return {
-    proposalOnly: true,
-    explicitOnly: true,
-    noAutoApply: true,
-    count: prioritizedItems.length,
-    prioritizedItems
-  };
-}
-
-function inspectMetaOptimize(target) {
-  const recommendations = readJsonFile(target, ".dove/meta/recommendations.json");
-  const optimizerState = readJsonFile(target, ".dove/meta/optimizer-state.json");
-  const executionBridgeCandidates = readJsonFile(target, ".dove/meta/execution-bridge-candidates.json");
-  const governanceCoverage = readJsonFile(target, ".dove/meta/governance-coverage.json");
-  const operatorPlaybooks = readJsonFile(target, ".dove/meta/operator-playbooks.json");
-  const operatorLessons = readJsonFile(target, ".dove/meta/operator-lessons.json");
-  const longHorizonMemory = readJsonFile(target, ".dove/meta/long-horizon-memory.json");
-  const workspaceIndex = readJsonFile(target, ".dove/workspace/index.json");
-  if (recommendations.status !== "ok") {
-    return { status: recommendations.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [recommendations.message] };
-  }
-  if (optimizerState.status !== "ok") {
-    return { status: optimizerState.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [optimizerState.message] };
-  }
-  if (executionBridgeCandidates.status !== "ok") {
-    return { status: executionBridgeCandidates.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [executionBridgeCandidates.message] };
-  }
-  if (governanceCoverage.status !== "ok") {
-    return { status: governanceCoverage.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [governanceCoverage.message] };
-  }
-  if (operatorPlaybooks.status !== "ok") {
-    return { status: operatorPlaybooks.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [operatorPlaybooks.message] };
-  }
-  if (operatorLessons.status !== "ok") {
-    return { status: operatorLessons.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [operatorLessons.message] };
-  }
-  if (longHorizonMemory.status !== "ok") {
-    return { status: longHorizonMemory.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [longHorizonMemory.message] };
-  }
-  if (workspaceIndex.status !== "ok") {
-    return { status: workspaceIndex.status, recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: [workspaceIndex.message] };
-  }
-  const shapeIssues = [
-    ...validateMetaRecommendationsShape(recommendations.value),
-    ...validateMetaOptimizerStateShape(optimizerState.value),
-    ...validateMetaExecutionBridgeCandidatesShape(executionBridgeCandidates.value),
-    ...validateMetaGovernanceCoverageShape(governanceCoverage.value),
-    ...validateMetaOperatorPlaybooksShape(operatorPlaybooks.value),
-    ...validateMetaOperatorLessonsShape(operatorLessons.value),
-    ...validateMetaLongHorizonShape(longHorizonMemory.value),
-    ...validateWorkspaceRepairFrontierShape(workspaceIndex.value)
-  ];
-  if (shapeIssues.length > 0) {
-    return { status: "malformed", recommendationCount: 0, clusterCount: 0, topClusterIds: [], reasons: shapeIssues };
-  }
-  const normalizedRecommendations = normalizeMetaRecommendationsIndex(recommendations.value);
-  const normalizedOptimizerState = normalizeMetaOptimizerState(optimizerState.value);
-  const normalizedExecutionBridgeCandidates = normalizeMetaExecutionBridgeCandidatesIndex(executionBridgeCandidates.value);
-  const normalizedGovernanceCoverage = normalizeMetaGovernanceCoverageIndex(governanceCoverage.value);
-  const normalizedOperatorPlaybooks = normalizeMetaOperatorPlaybooksIndex(operatorPlaybooks.value);
-  const normalizedOperatorLessons = normalizeMetaOperatorLessonsIndex(operatorLessons.value);
-  const normalizedLongHorizonMemory = normalizeMetaLongHorizonMemory(longHorizonMemory.value);
-  const normalizedWorkspaceIndex = normalizeWorkspaceIndex(workspaceIndex.value);
-  const normalizedWorkspaceMetaOptimize = normalizeWorkspaceMetaOptimize(workspaceIndex.value.metaOptimize, normalizedWorkspaceIndex.metaOptimize);
-  const items = normalizedRecommendations.items;
-  const clusters = normalizedRecommendations.clusters;
-  const longHorizonSummary = normalizedLongHorizonMemory.summary;
-  const frontier = {
-    ...normalizedRecommendations.frontier,
-    ...normalizedOptimizerState.frontier
-  };
-  const topClusters = Array.isArray(frontier.topClusters) && frontier.topClusters.length > 0
-    ? frontier.topClusters
-    : normalizedRecommendations.summary.topClusters;
-  const ranking = normalizedRecommendations.ranking;
-  const countMatches = (frontier.recommendationCount ?? items.length) === items.length;
-  const clusterMatches = (frontier.clusterCount ?? clusters.length) === clusters.length;
-  const topClusterMatches = topClusters.length === Math.min(clusters.length, 3);
-  const rankingPresent = typeof ranking.method === "string" && Array.isArray(ranking.tieBreakOrder);
-  const longHorizonPresent = typeof longHorizonSummary.overview === "string" && Array.isArray(longHorizonSummary.topFamilyIds);
-  const workspaceMirrorMatches = normalizedWorkspaceMetaOptimize.recommendationCount === items.length
-    && normalizedWorkspaceMetaOptimize.clusterCount === clusters.length
-    && normalizedWorkspaceMetaOptimize.reportPath === normalizedOptimizerState.frontier.reportPath
-    && normalizedWorkspaceMetaOptimize.recommendationsPath === normalizedOptimizerState.frontier.recommendationsPath
-    && normalizedWorkspaceMetaOptimize.longHorizonPath === normalizedOptimizerState.frontier.longHorizonPath
-    && normalizedWorkspaceMetaOptimize.longHorizon.memoryPath === normalizedOptimizerState.longHorizon.memoryPath
-    && JSON.stringify(normalizedWorkspaceMetaOptimize.topClusterIds) === JSON.stringify(normalizedRecommendations.frontier.topClusterIds)
-    && normalizedWorkspaceMetaOptimize.frontierSummary === normalizedRecommendations.frontier.frontierSummary
-    && JSON.stringify(normalizedWorkspaceMetaOptimize.topTaxonomyFamilyIds) === JSON.stringify(normalizedRecommendations.frontier.topTaxonomyFamilyIds)
-    && JSON.stringify(normalizedWorkspaceMetaOptimize.topTaxonomyGroupIds) === JSON.stringify(normalizedRecommendations.frontier.topTaxonomyGroupIds)
-    && JSON.stringify(normalizedWorkspaceMetaOptimize.pressureAreas) === JSON.stringify(normalizedRecommendations.frontier.pressureAreas)
-    && normalizedWorkspaceMetaOptimize.taxonomyOverview === normalizedRecommendations.frontier.taxonomyOverview
-    && JSON.stringify(normalizedWorkspaceMetaOptimize.topClusters) === JSON.stringify(normalizedRecommendations.summary.topClusters)
-    && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topFamilyIds) === JSON.stringify(longHorizonSummary.topFamilyIds)
-    && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topTaxonomyFamilyIds) === JSON.stringify(longHorizonSummary.topTaxonomyFamilyIds)
-    && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.topTaxonomyGroupIds) === JSON.stringify(longHorizonSummary.topTaxonomyGroupIds)
-    && JSON.stringify(normalizedWorkspaceMetaOptimize.longHorizon.pressureAreas) === JSON.stringify(longHorizonSummary.pressureAreas)
-    && normalizedWorkspaceMetaOptimize.longHorizon.overview === longHorizonSummary.overview
-    && normalizedWorkspaceMetaOptimize.operatorLessons.lessonCount === normalizedOperatorLessons.lessons.length
-    && JSON.stringify(normalizedWorkspaceMetaOptimize.operatorLessons.topLessonIds) === JSON.stringify(normalizedOperatorLessons.summary.topLessonIds)
-    && normalizedWorkspaceMetaOptimize.longHorizon.snapshotCount === longHorizonSummary.snapshotCount
-    && normalizedWorkspaceMetaOptimize.longHorizon.lastAction === longHorizonSummary.lastAction
-    && normalizedWorkspaceMetaOptimize.governanceCoverage.guardedCount === normalizedGovernanceCoverage.summary.guardedCount
-    && normalizedWorkspaceMetaOptimize.governanceCoverage.exemptCount === normalizedGovernanceCoverage.summary.exemptCount;
-  return {
-    status: countMatches && clusterMatches && topClusterMatches && rankingPresent && longHorizonPresent && workspaceMirrorMatches ? "ok" : "degraded",
-    recommendationCount: items.length,
-    clusterCount: clusters.length,
-    criticalCount: items.filter((item) => item?.priority === "critical").length,
-    topClusterIds: Array.isArray(frontier.topClusterIds) ? frontier.topClusterIds : [],
-    topRecommendationIds: Array.isArray(frontier.topRecommendationIds) ? frontier.topRecommendationIds : [],
-    topFamilyIds: Array.isArray(longHorizonSummary.topFamilyIds) ? longHorizonSummary.topFamilyIds : [],
-    topTaxonomyFamilyIds: Array.isArray(frontier.topTaxonomyFamilyIds) ? frontier.topTaxonomyFamilyIds : [],
-    topTaxonomyGroupIds: Array.isArray(frontier.topTaxonomyGroupIds) ? frontier.topTaxonomyGroupIds : [],
-    governanceCoverage: normalizedGovernanceCoverage.summary,
-    topPlaybookIds: Array.isArray(normalizedOperatorPlaybooks.summary.topPlaybookIds) ? normalizedOperatorPlaybooks.summary.topPlaybookIds : [],
-    operatorLessons: normalizedOperatorLessons.summary,
-    topLessonIds: Array.isArray(normalizedOperatorLessons.summary.topLessonIds) ? normalizedOperatorLessons.summary.topLessonIds : [],
-    topCandidateIds: Array.isArray(normalizedExecutionBridgeCandidates.summary.topCandidateIds) ? normalizedExecutionBridgeCandidates.summary.topCandidateIds : [],
-    taxonomyOverview: frontier.taxonomyOverview ?? null,
-    frontierSummary: frontier.frontierSummary ?? null,
-    rankingMethod: frontier.rankingMethod ?? ranking.method ?? null,
-    topClusters,
-    reasons: [
-      !countMatches ? "optimizer frontier recommendation count drift" : null,
-      !clusterMatches ? "optimizer frontier cluster count drift" : null,
-      !topClusterMatches ? "optimizer frontier top-cluster summary drift" : null,
-      !rankingPresent ? "optimizer frontier ranking semantics missing" : null,
-      !longHorizonPresent ? "optimizer long-horizon memory summary missing" : null,
-      !workspaceMirrorMatches ? "workspace metaOptimize mirror drift" : null,
-      `grouped frontier: ${clusters.length} clusters / ${items.length} recommendations`,
-      `governance coverage: ${normalizedGovernanceCoverage.summary.guardedCount ?? 0} guarded / ${normalizedGovernanceCoverage.summary.exemptCount ?? 0} exempt`,
-      `execution bridge candidates: ${normalizedExecutionBridgeCandidates.summary.candidateCount ?? 0} candidates (${normalizedExecutionBridgeCandidates.summary.topCandidateIds.join(", ") || "none"})`,
-      `family playbooks: ${normalizedOperatorPlaybooks.summary.playbookCount ?? 0} playbooks (${normalizedOperatorPlaybooks.summary.topTaxonomyFamilyIds.join(", ") || "none"})`,
-      `operator lessons: ${normalizedOperatorLessons.summary.activeLessonCount ?? 0} active / ${normalizedOperatorLessons.summary.lessonCount ?? 0} total (${normalizedOperatorLessons.summary.topLessonIds.join(", ") || "none"})`,
-      normalizedWorkspaceMetaOptimize.remediationPacks?.readinessOverview ? `remediation readiness: ${normalizedWorkspaceMetaOptimize.remediationPacks.readinessOverview}` : null,
-      normalizedWorkspaceMetaOptimize.operatorPlaybooks?.readinessOverview ? `playbook readiness: ${normalizedWorkspaceMetaOptimize.operatorPlaybooks.readinessOverview}` : null,
-      frontier.frontierSummary ? `frontier summary: ${frontier.frontierSummary}` : null,
-      frontier.taxonomyOverview ? `taxonomy pressure: ${frontier.taxonomyOverview}` : null,
-      longHorizonSummary.overview ? `long-horizon summary: ${longHorizonSummary.overview}` : null
-    ].filter(Boolean)
-  };
-}
-
-function inspectGovernanceCoverageSurfaceBindings(target, options = {}) {
-  const requireCommandSurfaces = options.requireCommandSurfaces !== false;
-  const coverage = readJsonFile(target, ".dove/meta/governance-coverage.json");
-  if (coverage.status !== "ok") {
-    return {
-      status: "degraded",
-      bindingCount: 0,
-      reasons: [coverage.message]
-    };
-  }
-  const toolNames = new Set(toolDefinitions.map((tool) => tool.name));
-  const entries = [...(coverage.value?.guardedMutations ?? []), ...(coverage.value?.exemptMutations ?? [])];
-  const boundToolNames = new Set();
-  const boundCommandIds = new Set();
-  const boundCoreFunctions = new Set();
-  const reasons = [];
-  const exemptIds = new Set((coverage.value?.exemptMutations ?? []).map((entry) => entry.id));
-  for (const entry of entries) {
-    const bindings = entry.surfaceBindings ?? {};
-    if (exemptIds.has(entry.id) && (!entry.ownerRole || !entry.approvedByRole || !entry.approvedAt || !entry.lastReviewedAt || !entry.reasonCode || !entry.reviewCadence || !entry.sunsetAt)) {
-      reasons.push(`governance coverage entry ${entry.id} is missing ownerRole/approvedByRole/approvedAt/lastReviewedAt/reasonCode/reviewCadence/sunsetAt metadata`);
-    }
-    if (exemptIds.has(entry.id) && entry.approvedAt && entry.lastReviewedAt && Date.parse(entry.approvedAt) > Date.parse(entry.lastReviewedAt)) {
-      reasons.push(`governance coverage entry ${entry.id} has approvedAt newer than lastReviewedAt`);
-    }
-    if (exemptIds.has(entry.id) && entry.sunsetAt && entry.sunsetAt <= new Date().toISOString()) {
-      reasons.push(`governance coverage entry ${entry.id} has an expired sunsetAt`);
-    }
-    if (bindings.coreFunction) {
-      boundCoreFunctions.add(bindings.coreFunction);
-    }
-    for (const commandId of bindings.commandIds ?? []) {
-      boundCommandIds.add(commandId);
-      if (requireCommandSurfaces) {
-        const commandPath = path.join(target, ".opencode", "commands", `${commandId}.md`);
-        if (!fs.existsSync(commandPath)) {
-          reasons.push(`governance coverage missing command surface ${commandId} for ${entry.id}`);
-        }
-      }
-    }
-    if (bindings.mcpTool) {
-      boundToolNames.add(bindings.mcpTool);
-      if (!toolNames.has(bindings.mcpTool)) {
-        reasons.push(`governance coverage missing MCP tool ${bindings.mcpTool} for ${entry.id}`);
-      }
-    }
-  }
-
-  const registry = [...GOVERNANCE_GUARDED_MUTATIONS, ...GOVERNANCE_EXEMPT_MUTATIONS];
-  const expectedMutatingTools = registry.map((entry) => entry.surfaceBindings?.mcpTool).filter(Boolean);
-  const expectedMutatingCommands = registry.flatMap((entry) => entry.surfaceBindings?.commandIds ?? []);
-  const expectedCoreFunctions = registry.map((entry) => entry.surfaceBindings?.coreFunction).filter(Boolean);
-  for (const toolName of expectedMutatingTools) {
-    if (!boundToolNames.has(toolName)) {
-      reasons.push(`governance coverage does not bind mutating MCP tool ${toolName}`);
-    }
-  }
-  const uncoveredTools = expectedMutatingTools.filter((toolName) => !boundToolNames.has(toolName));
-  for (const commandId of expectedMutatingCommands) {
-    if (!boundCommandIds.has(commandId)) {
-      reasons.push(`governance coverage does not bind mutating command ${commandId}`);
-    }
-  }
-  const uncoveredCommands = expectedMutatingCommands.filter((commandId) => !boundCommandIds.has(commandId));
-  for (const coreFunction of expectedCoreFunctions) {
-    if (!boundCoreFunctions.has(coreFunction)) {
-      reasons.push(`governance coverage does not bind core function ${coreFunction}`);
-    }
-  }
-  const uncoveredCoreFunctions = expectedCoreFunctions.filter((coreFunction) => !boundCoreFunctions.has(coreFunction));
-  const exemptIdsList = (coverage.value?.exemptMutations ?? []).map((entry) => entry.id);
-  const guardedIds = (coverage.value?.guardedMutations ?? []).map((entry) => entry.id);
-  const coverageIds = new Set(GOVERNANCE_NEGATIVE_COVERAGE.map((entry) => entry.id));
-  const uncoveredNegativeCoverage = guardedIds.filter((id) => !coverageIds.has(id));
-  for (const id of uncoveredNegativeCoverage) {
-    reasons.push(`governance coverage lacks negative test mapping for ${id}`);
-  }
-  return {
-    status: reasons.length === 0 ? "ok" : "degraded",
-    bindingCount: entries.length,
-    reasons,
-    audit: {
-      guardedIds,
-      exemptIds: exemptIdsList,
-      uncoveredTools,
-      uncoveredCommands,
-      uncoveredCoreFunctions,
-      uncoveredNegativeCoverage
-    }
-  };
-}
-
-function claudeUserCommandPaths() {
-  return COMMAND_SURFACES.map((commandSurface) => path.join(resolveClaudeConfigRoot(), "commands", "dove", `${commandSurface.id.replace(/^dove\./u, "").replace(/\./g, "-")}.md`));
-}
-
-function detectInstalledHosts(target) {
-  const detected = Object.entries(HOST_ADAPTERS)
-    .filter(([, adapter]) => adapter.paths.some((relativePath) => fs.existsSync(path.join(target, relativePath))))
-    .map(([host]) => host);
-  const claudePaths = claudeUserCommandPaths();
-  if (claudePaths.some((absolutePath) => fs.existsSync(absolutePath))) {
-    detected.push("claude");
-  }
-  return detected;
-}
-
-function installedHostRequiredPaths(target, host) {
-  if (host === "claude") {
-    return claudeUserCommandPaths();
-  }
-  return (HOST_ADAPTERS[host]?.requiredPaths ?? []).map((relativePath) => path.join(target, relativePath));
-}
-
-function shouldInspectClaudeCodeGatewayDefaults(preflight) {
-  return Boolean(process.env.DOVE_CLAUDE_CONFIG_DIR || process.env.DOVE_CLAUDE_SHELL_RC || preflight?.shell?.hasManagedBlock);
+function detectHosts(target, { includeClaude = false } = {}) {
+  const result = Object.entries(HOST_ADAPTERS).filter(([, adapter]) => adapter.paths.some((relativePath) => fs.existsSync(path.join(target, relativePath)))).map(([host]) => host);
+  if (includeClaude && claudeCommandPaths().some((absolutePath) => fs.existsSync(absolutePath))) result.push("claude");
+  return result;
 }
 
 function doctor(target) {
-  const boundariesPath = path.join(target, ".dove", "workflow-pack", "boundaries.json");
-  const installedHosts = detectInstalledHosts(target);
-  const projectHostRequiredPaths = installedHosts
-    .filter((host) => host !== "claude")
-    .flatMap((host) => HOST_ADAPTERS[host]?.requiredPaths ?? []);
-  const required = [
-    ...projectHostRequiredPaths,
-    ".dove/state.json",
-    ".dove/wiki/entities.json",
-    ".dove/wiki/relations.json",
-    ".dove/figures/qa.json",
-    ".dove/meta/long-horizon-memory.json",
-    ".dove/workspace/index.json",
-    ARTIFACT_PATHS.doveRootManifest,
-    ".dove/meta/operator-playbooks.json",
-    ".dove/meta/operator-lessons.json",
-    "mcp/dove-state-server-package.mjs"
-   ];
-
-  const missing = required.filter((relativePath) => !fs.existsSync(path.join(target, relativePath)));
-  const result = {
-    target,
-    node: process.version,
-    healthy: missing.length === 0,
-    missing,
-    checks: [],
-    warnings: [],
-    hostAdapters: installedHosts,
-    claudeCodeGateway: null,
-    boundaryPolicy: null,
-    managedArtifacts: null
-  };
-
-  const jsonChecks = [
-    ...installedHosts.flatMap((host) => HOST_ADAPTERS[host]?.jsonChecks ?? []),
-    ".dove/state.json"
-  ];
-
-  for (const relativePath of jsonChecks) {
-    const fullPath = path.join(target, relativePath);
-    try {
-      JSON.parse(fs.readFileSync(fullPath, "utf8"));
-      result.checks.push({ check: `json:${relativePath}`, ok: true });
-    } catch (error) {
-      result.checks.push({ check: `json:${relativePath}`, ok: false, message: error instanceof Error ? error.message : String(error) });
-    }
-  }
-
-  for (const host of installedHosts) {
-    const requiredPaths = installedHostRequiredPaths(target, host);
-    result.checks.push({
-      check: `host-adapter:${host}`,
-      ok: requiredPaths.every((requiredPath) => fs.existsSync(requiredPath)),
-      requiredPaths: host === "claude"
-        ? requiredPaths.map((requiredPath) => path.relative(resolveClaudeConfigRoot(), requiredPath).split(path.sep).join("/"))
-        : (HOST_ADAPTERS[host]?.requiredPaths ?? [])
-    });
-  }
-
-  const claudeConfigRoot = resolveClaudeConfigRoot();
-  const shellStartupFile = resolveClaudeShellStartupFile();
-  const claudeGatewayPreflight = inspectClaudeCodeGatewayDefaults({ claudeConfigRoot, shellStartupFile });
-  if (shouldInspectClaudeCodeGatewayDefaults(claudeGatewayPreflight)) {
-    result.claudeCodeGateway = claudeGatewayPreflight;
-    result.checks.push({
-      check: "claude-code-gateway",
-      ok: claudeGatewayPreflight.ok,
-      message: claudeGatewayPreflight.ok
-        ? "Claude Code gateway defaults are configured"
-        : claudeGatewayPreflight.issues.join(" | ")
-    });
-  }
-
-  const rawJsonChecksPassed = result.checks.every((check) => check.ok);
-
-  let boundaryRawParseOk = true;
-  if (fs.existsSync(boundariesPath)) {
-    try {
-      JSON.parse(fs.readFileSync(boundariesPath, "utf8"));
-    } catch (error) {
-      boundaryRawParseOk = false;
-      result.checks.push({
-        check: "raw-boundary-json",
-        ok: false,
-        message: error instanceof Error ? error.message : String(error)
-      });
-    }
-  }
-
-  const rawManagedArtifactChecks = collectRawManagedArtifactChecks(target);
-  result.checks.push(...rawManagedArtifactChecks);
-  const rawManagedArtifactChecksPassed = rawManagedArtifactChecks.every((check) => check.ok);
-  const rawMetaOptimizeConsistency = collectRawMetaOptimizeConsistencyCheck(target);
-  result.checks.push(rawMetaOptimizeConsistency);
-
-  if (rawJsonChecksPassed && boundaryRawParseOk && rawManagedArtifactChecksPassed) {
-    try {
-      withMutationContext(target, "dove-doctor", [], () => {
-        ensureWorkspace(target);
-        return refreshDurableSurfaces(target, {
-          type: "doctor",
-          summary: "Refreshed durable surfaces during doctor health check.",
-          artifactPaths: [ARTIFACT_PATHS.workspaceIndex, ARTIFACT_PATHS.metaGovernanceCoverage, ARTIFACT_PATHS.metaGovernanceCoverageReport]
-        });
-      }, { defaultMutationMode: "direct-process" });
-      result.checks.push({ check: "durable-surface-refresh", ok: true, message: "durable surfaces refreshed" });
-    } catch (error) {
-      result.checks.push({ check: "durable-surface-refresh", ok: false, message: error instanceof Error ? error.message : String(error) });
-    }
-  }
-  result.missing = required.filter((relativePath) => !fs.existsSync(path.join(target, relativePath)));
-  result.healthy = result.missing.length === 0;
-
-  try {
-    const boundaries = JSON.parse(fs.readFileSync(boundariesPath, "utf8"));
-    const missingBootstrapPaths = (boundaries.doveBootstrapOnlyPaths ?? []).filter((relativePath) => !fs.existsSync(path.join(target, relativePath)));
-    const boundaryHasMetadata = Boolean(boundaries.managedArtifacts?.workflowBoundaries?.revisionId)
-      && Boolean(boundaries.managedArtifacts?.workflowBoundaries?.templateHash)
-      && Boolean(boundaries.managedArtifacts?.workspaceIndex?.revisionId)
-      && Boolean(boundaries.managedArtifacts?.doveRootManifest?.revisionId);
-    const userOwnedExistingPaths = (boundaries.userOwnedPaths ?? []).filter((relativePath) => fs.existsSync(path.join(target, relativePath)));
-    result.boundaryPolicy = {
-      boundaryFile: ".dove/workflow-pack/boundaries.json",
-      managedPaths: boundaries.managedPaths ?? [],
-      missingBootstrapPaths,
-      userOwnedExistingPaths,
-      managedArtifactMetadataPresent: boundaryHasMetadata
-    };
-    result.checks.push({
-      check: "boundary-policy",
-      ok: missingBootstrapPaths.length === 0 && boundaryHasMetadata,
-      message: missingBootstrapPaths.length === 0
-        ? (boundaryHasMetadata ? "boundary metadata present" : "boundary metadata missing")
-        : `missing bootstrap artifacts: ${missingBootstrapPaths.join(", ")}`
-    });
-  } catch (error) {
-    result.checks.push({ check: "boundary-policy", ok: false, message: error instanceof Error ? error.message : String(error) });
-  }
-
-  const probeScript = path.join(target, "scripts", "doctor-mcp-probe-package.mjs");
-  if (fs.existsSync(probeScript)) {
-    const probe = spawnSync("node", [probeScript, target], {
-      cwd: target,
-      encoding: "utf8"
-    });
-    result.checks.push({
-      check: "mcp-probe",
-      ok: probe.status === 0,
-      message: probe.status === 0 ? "ok" : (probe.stderr || probe.stdout || `exit ${probe.status}`)
-    });
-  }
-
-  const managedArtifacts = {
-    wikiRelations: inspectWikiRelations(target),
-    figureQa: inspectFigureQa(target),
-    workspaceRepairFrontier: inspectWorkspaceRepairFrontier(target),
-    metaOptimize: inspectMetaOptimize(target),
-    operatorFollowThrough: inspectOperatorFollowThrough(target),
-    operatorLessons: inspectOperatorLessons(target),
-    onboardingArtifactMap: inspectOnboardingArtifactMap(target),
-    doveAuthorityManifest: inspectDoveAuthority(target),
-    autonomyRuntime: inspectAutonomyRuntime(target),
-    programsSurface: inspectProgramsSurface(target),
-    governanceCoverageBindings: inspectGovernanceCoverageSurfaceBindings(target, { requireCommandSurfaces: installedHosts.includes("opencode") })
-  };
-  result.managedArtifacts = managedArtifacts;
-  const ignoredStaleWorkspaceArtifacts = managedArtifacts.doveAuthorityManifest.ignoredStaleWorkspaceArtifacts ?? managedArtifacts.doveAuthorityManifest.staleLegacyArtifacts ?? [];
-  if (ignoredStaleWorkspaceArtifacts.length > 0) {
-    result.warnings.push({
-      code: "ignored-stale-workspace-artifacts",
-      severity: "warning",
-      paths: ignoredStaleWorkspaceArtifacts,
-      message: "Ignored stale workspace artifacts were found; they are not Dove authority and do not affect package health."
-    });
-  }
-  result.proposalFrontier = buildDoctorProposalFrontier(managedArtifacts, rawMetaOptimizeConsistency);
-  result.checks.push({
-    check: "typed-wiki-relations-health",
-    ok: managedArtifacts.wikiRelations.status === "ok",
-    message: managedArtifacts.wikiRelations.status === "ok"
-      ? "typed wiki relations are healthy"
-      : managedArtifacts.wikiRelations.reasons.join(" | ") || `degraded relations: ${managedArtifacts.wikiRelations.relationIds.join(", ")} | degraded families: ${managedArtifacts.wikiRelations.familyIds.join(", ")}`
-  });
-  result.checks.push({
-    check: "figure-qa-health",
-    ok: managedArtifacts.figureQa.status === "ok",
-    message: managedArtifacts.figureQa.status === "ok"
-      ? "figure qa is healthy"
-      : managedArtifacts.figureQa.reasons.join(" | ") || `figure issues: ${managedArtifacts.figureQa.issueIds.join(", ")}`
-  });
-  result.checks.push({
-    check: "workspace-repair-frontier",
-    ok: managedArtifacts.workspaceRepairFrontier.status === "ok",
-    message: managedArtifacts.workspaceRepairFrontier.status === "ok"
-      ? "workspace repair frontier is clear"
-      : managedArtifacts.workspaceRepairFrontier.reasons.join(" | ") || `repair items: ${managedArtifacts.workspaceRepairFrontier.itemIds.join(", ")} | degraded relation families: ${managedArtifacts.workspaceRepairFrontier.familyIds.join(", ")}`
-  });
-  result.checks.push({
-    check: "meta-optimize-frontier",
-    ok: managedArtifacts.metaOptimize.status === "ok",
-    message: managedArtifacts.metaOptimize.reasons.join(" | ") || `clusters=${managedArtifacts.metaOptimize.clusterCount} recommendations=${managedArtifacts.metaOptimize.recommendationCount}`
-  });
-  result.checks.push({
-    check: "governance-coverage-bindings",
-    ok: managedArtifacts.governanceCoverageBindings.status === "ok",
-    message: managedArtifacts.governanceCoverageBindings.status === "ok"
-      ? `governance bindings verified across ${managedArtifacts.governanceCoverageBindings.bindingCount} entries`
-      : managedArtifacts.governanceCoverageBindings.reasons.join(" | ")
-  });
-  result.checks.push({
-    check: "operator-follow-through",
-    ok: managedArtifacts.operatorFollowThrough.status === "ok",
-    message: managedArtifacts.operatorFollowThrough.status === "ok"
-      ? "operator follow-through is healthy"
-      : managedArtifacts.operatorFollowThrough.reasons.join(" | ")
-  });
-  result.checks.push({
-    check: "operator-lessons",
-    ok: managedArtifacts.operatorLessons.status === "ok",
-    message: managedArtifacts.operatorLessons.status === "ok"
-      ? `operator lessons: ${managedArtifacts.operatorLessons.activeLessonCount} active / ${managedArtifacts.operatorLessons.lessonCount} total`
-      : managedArtifacts.operatorLessons.reasons.join(" | ")
-  });
-  result.checks.push({
-    check: "onboarding-artifact-map",
-    ok: true,
-    message: managedArtifacts.onboardingArtifactMap.mapExists
-      ? `artifact map present: ${managedArtifacts.onboardingArtifactMap.mappingCount} mappings / ${managedArtifacts.onboardingArtifactMap.conflictCount} conflicts`
-      : `proposal-only scan: ${managedArtifacts.onboardingArtifactMap.mappingCount} mappings / ${managedArtifacts.onboardingArtifactMap.unmappedCount} unmapped; run dove onboard . --write-map to persist`
-  });
-  result.checks.push({
-    check: "dove-authority",
-    ok: managedArtifacts.doveAuthorityManifest.status === "ok",
-    message: managedArtifacts.doveAuthorityManifest.status === "ok"
-      ? `Dove authority: ${managedArtifacts.doveAuthorityManifest.authoritativeRoot} authoritative, writes=${managedArtifacts.doveAuthorityManifest.currentWriteAuthority}`
-      : managedArtifacts.doveAuthorityManifest.reasons.join(" | ")
-  });
-  result.checks.push({
-    check: "autonomy-runtime",
-    ok: managedArtifacts.autonomyRuntime.status === "ok",
-    message: managedArtifacts.autonomyRuntime.status === "ok"
-      ? `runtime=${managedArtifacts.autonomyRuntime.lastStatus}/${managedArtifacts.autonomyRuntime.lastOutcome} worker=${managedArtifacts.autonomyRuntime.lastEnvelopeWorkerRole ?? "none"} requests=${managedArtifacts.autonomyRuntime.requestCount} checkpoints=${managedArtifacts.autonomyRuntime.checkpointCount} escalations=${managedArtifacts.autonomyRuntime.escalationCount} continuation=${managedArtifacts.autonomyRuntime.continuationCount}/${managedArtifacts.autonomyRuntime.currentContinuationKind ?? "none"}/${managedArtifacts.autonomyRuntime.currentContinuationPacketId ?? "none"}/${managedArtifacts.autonomyRuntime.currentContinuationProgramRunId ?? "none"}/${managedArtifacts.autonomyRuntime.currentContinuationCommand ?? "none"}`
-      : managedArtifacts.autonomyRuntime.reasons.join(" | ")
-  });
-  result.checks.push({
-    check: "program-surfaces",
-    ok: managedArtifacts.programsSurface.status === "ok",
-    message: managedArtifacts.programsSurface.status === "ok"
-      ? `programs=${managedArtifacts.programsSurface.programCount} approved-runs=${managedArtifacts.programsSurface.approvedRunCount} review-checkpoints=${managedArtifacts.programsSurface.reviewCheckpointRunCount} consumed-approvals=${managedArtifacts.programsSurface.consumedApprovalCount} current=${managedArtifacts.programsSurface.currentProgramId ?? "none"}/${managedArtifacts.programsSurface.currentProgramRunId ?? "none"} checkpoint=${managedArtifacts.programsSurface.currentReviewCheckpointRunId ?? "none"}`
-      : managedArtifacts.programsSurface.reasons.join(" | ")
-  });
-
-  result.healthy = result.healthy && result.checks.every((check) => check.ok);
-
+  const gateway = inspectClaudeCodeGatewayDefaults({ claudeConfigRoot: resolveClaudeConfigRoot(), shellStartupFile: resolveClaudeShellStartupFile() });
+  const inspectGateway = Boolean(process.env.DOVE_CLAUDE_CONFIG_DIR || process.env.DOVE_CLAUDE_SHELL_RC || gateway.shell?.hasManagedBlock);
+  const installedHosts = detectHosts(target, { includeClaude: inspectGateway });
+  const missing = installedHosts.filter((host) => host !== "claude").flatMap((host) => (HOST_ADAPTERS[host]?.requiredPaths ?? []).filter((relativePath) => !fs.existsSync(path.join(target, relativePath))));
+  if (installedHosts.some((host) => host !== "claude") && !fs.existsSync(path.join(target, "mcp/dove-state-server-package.mjs"))) missing.push("mcp/dove-state-server-package.mjs");
+  const checks = installedHosts.map((host) => ({ check: `host-adapter:${host}`, ok: host === "claude" ? claudeCommandPaths().every((absolutePath) => fs.existsSync(absolutePath)) : (HOST_ADAPTERS[host]?.requiredPaths ?? []).every((relativePath) => fs.existsSync(path.join(target, relativePath))), requiredPaths: host === "claude" ? claudeCommandPaths().map((absolutePath) => path.relative(resolveClaudeConfigRoot(), absolutePath).split(path.sep).join("/")) : HOST_ADAPTERS[host]?.requiredPaths ?? [] }));
+  if (inspectGateway) checks.push({ check: "claude-code-gateway", ok: gateway.ok, message: gateway.ok ? "Claude Code gateway defaults are configured" : gateway.issues.join(" | ") });
+  const workspace = inspectDoveWorkspace(target);
+  const workspaceOk = workspace.state === "absent" ? installedHosts.length > 0 && missing.length === 0 : workspace.healthy;
+  checks.push({ check: "workspace-schema", ok: workspaceOk, message: workspace.state === "absent" ? "Dove runtime is installed and .dove is absent; initialize explicitly when needed." : workspace.healthy ? `Current Dove schema ${workspace.schemaVersion} is healthy.` : `${workspace.state}${workspace.error ? `: ${workspace.error}` : ""}; run dove init --archive-reset and confirm the exact proposal.` });
+  const result = { target, node: process.version, healthy: missing.length === 0 && checks.every((check) => check.ok), workspaceMode: workspace.state === "absent" ? "runtime-only" : workspace.healthy ? "current-schema" : "archive-reset-required", workspaceSchema: { state: workspace.state, category: workspace.category, healthy: workspace.healthy, schemaVersion: workspace.schemaVersion, detectedSchema: workspace.detectedSchema, error: workspace.error ?? null, zeroWrite: true }, missing: [...new Set(missing)], checks, warnings: [], hostAdapters: installedHosts, claudeCodeGateway: inspectGateway ? gateway : null, writes: [] };
   console.log(JSON.stringify(result, null, 2));
-  process.exitCode = result.healthy ? 0 : 1;
+  return result.healthy ? 0 : 1;
 }
 
-let parsedCli;
+function statusArgs(args) {
+  return { detail: args.includes("--full") || args.includes("--missions") ? "full" : readFlagValue(args, "--detail"), full: args.includes("--full"), showMissions: args.includes("--missions") };
+}
+
+function wantsJson(args) {
+  return args.includes("--json") || readFlagValue(args, "--format") === "json";
+}
+
+function printResult(result, args) {
+  if (wantsJson(args)) console.log(JSON.stringify(result, null, 2));
+  else console.log(result.summary ?? result.headline ?? result.status ?? "Dove operation completed.");
+}
+
+let parsed;
 try {
-  assertNoRetiredCliFlags(process.argv.slice(3));
-  parsedCli = parseDoveCli(process.argv.slice(2));
+  parsed = parseDoveCli(process.argv.slice(2));
 } catch (error) {
-  console.log(error instanceof Error ? error.message : String(error));
+  console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 }
-const command = parsedCli.command;
-let [maybeTarget, ...commandPositionals] = parsedCli.positionals;
+
+const command = parsed.command;
+if (!command || ["help", "--help", "-h"].includes(command)) {
+  usage();
+  process.exit(0);
+}
+if (!Object.hasOwn({ install: true, sync: true, doctor: true }, command) && !LOCAL_COMMANDS.has(command)) {
+  usage();
+  process.exit(1);
+}
+
+let [rawTarget, ...extraPositionals] = parsed.positionals;
 let sourceAction = "register";
-if (command === "source" && ["register", "verify"].includes(maybeTarget)) {
-  sourceAction = maybeTarget;
-  [maybeTarget, ...commandPositionals] = commandPositionals;
+if (command === "source" && ["register", "verify"].includes(rawTarget)) {
+  sourceAction = rawTarget;
+  [rawTarget, ...extraPositionals] = extraPositionals;
 }
-const rest = [...commandPositionals, ...parsedCli.args];
-
-function assertNoRetiredCliFlags(rawArgs = []) {
-  const retired = rawArgs.filter((arg) => {
-    const value = String(arg ?? "");
-    const flagName = value.split("=", 1)[0];
-    return flagName.startsWith("--policy-override")
-      || [
-        "--skip-board-update",
-        "--skip-refresh",
-        "--skip-refresh-durable-surfaces",
-        "--skip-follow-through-ready",
-        "--skip-sync-phase"
-      ].includes(flagName);
-  });
-  if (retired.length > 0) {
-    throw new Error(`Dove CLI no longer accepts retired governance flags: ${Array.from(new Set(retired)).join(", ")}.`);
-  }
+let lessonsAction = "query";
+if (command === "lessons" && ["query", "record"].includes(rawTarget)) {
+  lessonsAction = rawTarget;
+  [rawTarget, ...extraPositionals] = extraPositionals;
 }
+const invalidLessonsPositionals = command === "lessons" && extraPositionals.length > 0;
+const rawArgs = [...extraPositionals, ...parsed.args];
+const selected = targetAndArgs(rawTarget, rawArgs);
+const target = selected.target;
+const args = selected.args;
 
-assertNoRetiredCliFlags([maybeTarget, ...rest].filter(Boolean));
-
-function runDoveSurface(surface, rawTarget, rawRest = []) {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(rawTarget, rawRest);
-  if (surface === "orchestrate") {
-    return queryDoveOrchestrate(target, buildDoveOrchestrateArgs(commandRest));
-  }
-  if (surface === "mission") {
-    const missionArgs = buildDoveMissionArgs(commandRest);
-    if (missionArgs.confirmed) {
-      const proposalToken = missionArgs.proposalToken;
-      return withMutationContext(target, "create-dove-task", commandRest, (cleanRest) => {
-        const cleanArgs = buildDoveMissionArgs(cleanRest);
-        const mutationMode = readMutationMode(commandRest) ?? "direct-process";
-        return createDoveTask(target, proposalToken ? {
-          ...missionArgs,
-          mutationMode
-        } : {
-          ...cleanArgs,
-          mutationMode
-        });
-      }, { defaultMutationMode: "direct-process" });
-    }
-    return createDoveTask(target, missionArgs);
-  }
-  if (surface === "status") {
-    return queryDoveStatus(target, buildDoveStatusArgs(commandRest));
-  }
-  if (surface === "audit") {
-    return queryDoveAudit(target, buildDoveAuditArgs(commandRest));
-  }
-  if (surface === "return") {
-    return queryDoveReturn(target, buildDoveReturnArgs(commandRest));
-  }
-  return withMutationContext(target, "launch_dove_mission", commandRest, (cleanRest) => launchDoveMission(target, buildDoveLaunchArgs(cleanRest)));
-}
-
-if (!command || command === "help" || command === "--help") {
-  usage();
-  process.exit(0);
-}
-
-const wantsCommandHelp = maybeTarget === "--help" || maybeTarget === "-h" || rest.includes("--help") || rest.includes("-h");
-if (wantsCommandHelp && LOCAL_DOVE_CLI_SURFACES.has(command) && command !== "status") {
-  usage();
-  process.exit(0);
-}
-
-if (command === "install" || command === "sync") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  rejectPatchPlanMode(command, commandRest, "install/sync copies adapter files and may write user-level host configuration, so use direct-process only.");
-  const cleanRest = stripMutationModeFlag(commandRest);
-  const result = withMutationContext(target, `dove-${command}`, commandRest, () => installOrSync(target, cleanRest.includes("--force"), cleanRest), { defaultMutationMode: "direct-process" });
-  console.log(JSON.stringify(result, null, 2));
-  process.exit(0);
-}
-
-if (command === "doctor") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  rejectPatchPlanMode(command, commandRest, "doctor may bootstrap missing workspace files while checking health, so use direct-process only.");
-  doctor(target);
-  process.exit(process.exitCode ?? 0);
-}
-
-if (command === "onboard") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const mutating = commandRest.includes("--write-map") || commandRest.includes("--mutation-mode");
-  const result = mutating
-    ? withMutationContext(target, "dove_onboard", commandRest, (cleanRest) => discoverPaperArtifacts(target, buildOnboardingArgs(cleanRest)))
-    : discoverPaperArtifacts(target, buildOnboardingArgs(commandRest));
-  console.log(JSON.stringify(result, null, 2));
-  process.exit(0);
-}
-
-if (command === "publish-status") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = withMutationContext(target, "publish_dove_status", commandRest, (cleanRest) => publishDoveStatus(target, {
-    includeArchived: cleanRest.includes("--include-archived"),
-    responseLanguage: readFlagValue(cleanRest, "--response-language") ?? readFlagValue(cleanRest, "--language")
-  }));
-  if (!commandRest.includes("--quiet")) {
-    console.log(JSON.stringify(result, null, 2));
-  }
-  process.exit(0);
-}
-
-if (command === "publish-global-status") {
-  const commandRest = [maybeTarget, ...rest].filter(Boolean);
-  const target = resolveTarget(".");
-  const result = withMutationContext(target, "publish_dove_global_status", commandRest, (cleanRest) => {
-    const projectRoots = [
-      ...readPositionalArgs(cleanRest, ["--project", "--output", "--response-language", "--language", "--generated-at"]),
-      ...readFlagValues(cleanRest, ["--project"])
-    ];
-    return publishDoveGlobalStatus(target, {
-      projectRoots,
-      outputDir: readFlagValue(cleanRest, "--output"),
-      refresh: cleanRest.includes("--refresh"),
-      includeConfig: cleanRest.includes("--include-config"),
-      includeArchived: cleanRest.includes("--include-archived"),
-      responseLanguage: readFlagValue(cleanRest, "--response-language") ?? readFlagValue(cleanRest, "--language"),
-      generatedAt: readFlagValue(cleanRest, "--generated-at")
-    });
-  });
-  if (!commandRest.includes("--quiet")) {
-    console.log(JSON.stringify(result, null, 2));
-  }
-  process.exit(0);
-}
-
-if (command === "serve-global-status") {
-  const commandRest = [maybeTarget, ...rest].filter(Boolean);
-  rejectPatchPlanMode(command, commandRest, "serving can start a foreground server and may write global/Cloudflare configuration, so use direct-process only.");
-  const cleanRest = stripMutationModeFlag(commandRest);
-  const valueFlags = ["--project", "--output", "--response-language", "--language", "--generated-at", "--auth-user", "--auth-username", "--auth-password-env", "--domain", "--hostname", "--port", "--host", "--tunnel-name", "--cloudflared-path", "--cloudflare-config", "--credentials-file", "--token-env", "--dns-resolver-addrs"];
-  const projectRoots = [
-    ...readPositionalArgs(cleanRest, valueFlags),
-    ...readFlagValues(cleanRest, ["--project"])
-  ];
-  const auth = cleanRest.includes("--no-auth") ? false : (cleanRest.includes("--auth") ? true : undefined);
-  const cloudflare = cleanRest.includes("--no-cloudflare") ? false : (cleanRest.includes("--cloudflare") ? true : undefined);
-  const result = await runGlobalStatusServingForeground(resolveTarget("."), {
-    projectRoots,
-    outputDir: readFlagValue(cleanRest, "--output"),
-    refresh: cleanRest.includes("--refresh"),
-    includeConfig: cleanRest.includes("--include-config"),
-    includeArchived: cleanRest.includes("--include-archived"),
-    responseLanguage: readFlagValue(cleanRest, "--response-language") ?? readFlagValue(cleanRest, "--language"),
-    generatedAt: readFlagValue(cleanRest, "--generated-at"),
-    auth,
-    authUser: readFlagValue(cleanRest, "--auth-user") ?? readFlagValue(cleanRest, "--auth-username"),
-    authPasswordEnv: readFlagValue(cleanRest, "--auth-password-env"),
-    cloudflare,
-    configureCloudflare: cleanRest.includes("--configure-cloudflare"),
-    domain: readFlagValue(cleanRest, "--domain") ?? readFlagValue(cleanRest, "--hostname"),
-    port: readFlagValue(cleanRest, "--port"),
-    host: readFlagValue(cleanRest, "--host"),
-    tunnelName: readFlagValue(cleanRest, "--tunnel-name"),
-    cloudflaredPath: readFlagValue(cleanRest, "--cloudflared-path"),
-    cloudflareConfigPath: readFlagValue(cleanRest, "--cloudflare-config"),
-    credentialsFile: readFlagValue(cleanRest, "--credentials-file"),
-    tokenEnv: readFlagValue(cleanRest, "--token-env"),
-    dnsResolverAddrs: readFlagValues(cleanRest, ["--dns-resolver-addrs"]),
-    dryRun: cleanRest.includes("--dry-run")
-  });
-  if (!cleanRest.includes("--quiet")) {
-    console.log(JSON.stringify(result, null, 2));
-  }
-  process.exit(0);
-}
-
-if (command === "statusline") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = queryDoveStatus(target, buildDoveStatusArgs(commandRest));
-  const statusline = buildDoveStatusline(result, target);
-  if (wantsJsonOutput(commandRest)) {
-    await printJson(statusline);
-  } else {
-    await writeStdout(formatDoveStatusline(result, target));
-  }
-  process.exit(0);
-}
-
-if (command === "figure") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  try {
-    const result = withMutationContext(target, "run-figure-workflow", commandRest, (cleanRest) => runFigureWorkflow(target, buildDoveFigureArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
-    if (wantsJsonOutput(commandRest)) {
-      await printJson(formatDoveFigureJsonForCli(result));
-    } else {
-      await writeStdout(formatDoveFigureForCli(result));
-    }
-    process.exit(isOperationalFailureOutcome(result) ? 1 : 0);
-  } catch (error) {
-    if (wantsJsonOutput(commandRest)) {
-      await printJson({ status: "blocked", message: formatDoveFigureErrorForCli(error).trim() });
-    } else {
-      await writeStdout(formatDoveFigureErrorForCli(error));
-    }
-    process.exit(1);
-  }
-}
-
-if (["init", "auto", "operator", "version", "source", "note", "draft", "experience", "review", "review-loop", "rebuttal"].includes(command)) {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  try {
-    let result;
-    if (command === "init") {
-      result = withMutationContext(target, "init-dove-goal", commandRest, (cleanRest) => initDoveGoal(target, buildDoveInitArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
-    } else if (command === "auto") {
-      const autoArgs = buildDoveAutoArgs(commandRest);
-      result = withMutationContext(target, "run-dove-auto", commandRest, (cleanRest) => runDoveAuto(
-        target,
-        autoArgs.confirmed ? autoArgs : buildDoveAutoArgs(cleanRest)
-      ), { defaultMutationMode: "patch-plan" });
-    } else if (command === "operator") {
-      result = withMutationContext(target, "run-dove-operator", commandRest, (cleanRest) => runDoveOperator(target, buildDoveOperatorArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
-    } else if (command === "version") {
-      result = withMutationContext(target, "reset-dove-version", commandRest, (cleanRest) => resetDoveVersion(target, buildDoveVersionArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
-    } else if (command === "source") {
-      const actionId = sourceAction === "verify" ? "verify-source" : "register-source";
-      result = withMutationContext(target, actionId, commandRest, (cleanRest) => {
-        const args = buildDoveSourceArgs(cleanRest, sourceAction);
-        return sourceAction === "verify" ? verifySource(target, args) : registerSource(target, args);
-      }, { defaultMutationMode: "patch-plan" });
-    } else if (command === "note") {
-      result = withMutationContext(target, "upsert-note", commandRest, (cleanRest) => upsertNote(target, buildDoveNoteArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
-    } else if (command === "draft") {
-      const draftArgs = buildDoveDraftArgs(commandRest);
-      if (!draftArgs.body && !draftArgs.status) {
-        throw new Error("dove draft requires --body for draft text or --status for an explicit section status update.");
-      }
-      const actionId = draftArgs.body ? "upsert-draft" : "set-section-status";
-      result = withMutationContext(target, actionId, commandRest, (cleanRest) => {
-        const args = buildDoveDraftArgs(cleanRest);
-        if (!args.body && !args.status) {
-          throw new Error("dove draft requires --body for draft text or --status for an explicit section status update.");
-        }
-        return args.body ? upsertDraft(target, args) : setSectionStatus(target, args);
-      }, { defaultMutationMode: "patch-plan" });
-    } else if (command === "experience") {
-      result = withMutationContext(target, "run-experience-workflow", commandRest, (cleanRest) => runExperienceWorkflow(target, buildDoveExperienceArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
-    } else if (command === "review") {
-      result = withMutationContext(target, "run-review-loop", commandRest, (cleanRest) => runReviewLoop(target, buildDoveReviewArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
-    } else if (command === "review-loop") {
-      result = withMutationContext(target, "run-dove-review-loop", commandRest, (cleanRest) => runDoveReviewLoop(target, buildDoveReviewLoopArgs(cleanRest)), { defaultMutationMode: "patch-plan" });
-    } else if (command === "rebuttal") {
-      result = withMutationContext(target, "build-rebuttal", commandRest, (cleanRest) => {
-        const args = buildDoveRebuttalArgs(cleanRest);
-        if (args.issues.length > 0 && cleanRest.includes("--issues-only")) {
-          return normalizeRebuttalIssues(target, args);
-        }
-        if (cleanRest.includes("--strategy-only")) {
-          if (args.issues.length > 0) {
-            normalizeRebuttalIssues(target, args);
-          }
-          return buildRebuttalStrategy(target, args);
-        }
-        if (args.issues.length > 0) {
-          normalizeRebuttalIssues(target, args);
-        }
-        return buildRebuttal(target, args);
-      }, { defaultMutationMode: "patch-plan" });
-    }
-    await printDoveWorkResult(command, result, commandRest, target);
-    process.exit(isOperationalFailureOutcome(result, {
-      confirmed: command === "auto"
-        ? buildDoveAutoArgs(commandRest).confirmed
-        : command === "operator"
-          ? buildDoveOperatorArgs(commandRest).confirmed
-          : false
-    }) ? 1 : 0);
-  } catch (error) {
-    await printDoveWorkError(command, error, commandRest);
-    process.exit(1);
-  }
-}
-
-if (command === "lessons") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  try {
-    const args = buildDoveLessonsArgs(commandRest);
-    const shouldRecordLesson = Boolean(args.title || args.problem || args.decisions.length > 0 || args.pitfalls.length > 0 || args.validation.length > 0 || args.nextTime.length > 0);
-    const result = shouldRecordLesson
-      ? withMutationContext(target, "record-operator-lesson", commandRest, (cleanRest) => recordOperatorLesson(target, buildDoveLessonsArgs(cleanRest)), { defaultMutationMode: "patch-plan" })
-      : queryOperatorLessons(target, args);
-    await printDoveWorkResult(command, result, commandRest);
-    process.exit(0);
-  } catch (error) {
-    await printDoveWorkError(command, error, commandRest);
-    process.exit(1);
-  }
-}
-
-if (["orchestrate", "mission", "status", "audit", "return", "launch"].includes(command)) {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  if (command === "status" && (commandRest.includes("--help") || commandRest.includes("-h"))) {
-    statusUsage();
+try {
+  if (invalidLessonsPositionals) throw new Error("dove lessons accepts only query or record followed by one target.");
+  if (command === "install" || command === "sync") {
+    if (readFlagValue(args, "--mutation-mode") === "patch-plan") throw new Error(`${command} requires direct-process file copying.`);
+    console.log(JSON.stringify(installOrSync(target, args), null, 2));
     process.exit(0);
   }
-  try {
-    const result = runDoveSurface(command, target, commandRest);
-    if (command === "status" && !wantsJsonOutput(commandRest)) {
-      await writeStdout(formatDoveStatusForCli(result, target, { showMissions: wantsDoveStatusMissionDetails(buildDoveStatusArgs(commandRest)) }));
-    } else if (command === "mission" && !wantsJsonOutput(commandRest)) {
-      await writeStdout(formatDoveMissionForCli(result, target));
-    } else if (command === "mission") {
-      await printJson(missionProposalJson(result, target));
-    } else {
-      await printJson(result);
-    }
+  if (command === "doctor") process.exit(doctor(target));
+  if (command === "status") {
+    const result = queryDoveStatus(target, statusArgs(args));
+    printResult(result, args);
     process.exit(0);
-  } catch (error) {
-    await printDoveWorkError(command, error, commandRest);
-    process.exit(1);
   }
-}
-
-if (command === "isolated-review-prepare") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = withMutationContext(target, "prepare_isolated_review", commandRest, (cleanRest) => prepareIsolatedReview(target, buildIsolatedReviewArgs(cleanRest)));
-  console.log(JSON.stringify(result, null, 2));
-  process.exit(0);
-}
-
-if (command === "isolated-review-import") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  const result = withMutationContext(target, "import_isolated_review", commandRest, (cleanRest) => importIsolatedReview(target, {
-    runId: readFlagValue(cleanRest, "--run-id"),
-    handoffPath: readFlagValue(cleanRest, "--handoff"),
-    reportPath: readFlagValue(cleanRest, "--report")
-  }));
-  console.log(JSON.stringify(result, null, 2));
-  process.exit(0);
-}
-
-if (command === "isolated-review") {
-  const { target, rest: commandRest } = resolveOptionalTargetAndRest(maybeTarget, rest);
-  if (readMutationMode(commandRest) === "patch-plan") {
-    throw new Error("isolated-review cannot run an external reviewer in patch-plan mode; use isolated-review-prepare, apply the returned plan with host-tracked edits, then run/import the reviewer artifacts.");
+  if (command === "init") {
+    const input = initArgs(args);
+    const result = input.confirmed ? runMutation(target, "init-dove-goal", args, () => initDoveGoal(target, input), "direct-process") : initDoveGoal(target, input);
+    printResult(withProposalCommand("init", result, target), args);
+    process.exit(0);
   }
-  const result = withMutationContext(target, "run_isolated_review", commandRest, (cleanRest) => {
-    const reviewerCommand = readFlagValue(cleanRest, "--reviewer-command") ?? process.env.DOVE_ISOLATED_REVIEWER_COMMAND;
-    const prepared = runIsolatedReview(target, buildIsolatedReviewArgs(cleanRest));
-    const reviewer = invokeIsolatedReviewer(reviewerCommand, prepared, target);
-    const imported = importIsolatedReview(target, prepared.importArgs);
-    return {
-      ...imported,
-      status: imported.reviewProofRequired
-        ? "imported"
-        : "completed",
-      runId: prepared.runId,
-      reviewerCommandConfigured: Boolean(reviewerCommand),
-      reviewerExitStatus: reviewer.status
-    };
-  });
-  console.log(JSON.stringify(result, null, 2));
+  if (command === "mission") {
+    const input = missionArgs(args);
+    const result = input.confirmed ? runMutation(target, "create-dove-mission", args, () => createDoveMission(target, input), "direct-process") : createDoveMission(target, input);
+    printResult(withProposalCommand("mission", result, target), args);
+    process.exit(0);
+  }
+  if (command === "lessons") {
+    if (lessonsAction === "query") {
+      printResult(queryDoveLessons(target, lessonQueryArgs(args)), args);
+      process.exit(0);
+    }
+    const input = lessonRecordArgs(args);
+    const result = input.confirmed ? runMutation(target, "record-dove-lesson", args, () => recordDoveLesson(target, input), "direct-process") : recordDoveLesson(target, input);
+    printResult(withProposalCommand("lessons record", result, target), args);
+    process.exit(0);
+  }
+  let result;
+  if (command === "receipt") result = runMutation(target, "ingest-execution-receipt", args, (clean) => ingestExecutionReceipt(target, receiptArgs(clean, target)));
+  if (command === "source") result = runMutation(target, sourceAction === "verify" ? "verify-source" : "register-source", args, (clean) => sourceAction === "verify" ? verifySource(target, sourceArgs(clean, sourceAction)) : registerSource(target, sourceArgs(clean, sourceAction)));
+  if (command === "note") result = runMutation(target, "upsert-note", args, (clean) => upsertNote(target, { missionId: readFlagValue(clean, "--mission-id"), noteId: readFlagValue(clean, "--note-id"), title: readFlagValue(clean, "--title"), summary: readFlagValue(clean, "--summary"), quotes: readFlagValues(clean, "--quote"), claims: readFlagValues(clean, "--claim"), openQuestions: readFlagValues(clean, "--open-question"), sourceIds: readFlagValues(clean, "--source-id"), artifactRefs: readFlagValues(clean, "--artifact") }));
+  if (command === "draft") {
+    const metadataOnly = args.includes("--metadata-only");
+    result = runMutation(target, metadataOnly ? "upsert-draft-metadata" : "upsert-draft", args, (clean) => (metadataOnly ? upsertDraftMetadata : upsertDraft)(target, { missionId: readFlagValue(clean, "--mission-id"), draftId: readFlagValue(clean, "--draft-id"), title: readFlagValue(clean, "--title"), body: readFlagValue(clean, "--body"), summary: readFlagValue(clean, "--summary"), evidenceRefs: readFlagValues(clean, "--evidence"), artifactRefs: readFlagValues(clean, "--artifact") }));
+  }
+  if (command === "experience") result = runMutation(target, "run-experience-workflow", args, (clean) => runExperienceWorkflow(target, { missionId: readFlagValue(clean, "--mission-id"), experimentId: readFlagValue(clean, "--experiment-id"), title: readFlagValue(clean, "--title"), goal: readFlagValue(clean, "--goal"), hypothesis: readFlagValue(clean, "--hypothesis"), protocol: readFlagValue(clean, "--protocol"), successCriteria: readFlagValues(clean, "--success-criterion"), comparisonTargets: readFlagValues(clean, "--comparison-target"), result: readFlagValue(clean, "--result"), resultEvidenceRefs: readFlagValues(clean, "--result-evidence"), auditFindings: readFlagValues(clean, "--audit-finding"), integrityFlags: readFlagValues(clean, "--integrity-flag"), claimId: readFlagValue(clean, "--claim-id"), bridgeReason: readFlagValue(clean, "--bridge-reason") }));
+  if (command === "figure") result = runMutation(target, "run-figure-workflow", args, (clean) => runFigureWorkflow(target, { missionId: readFlagValue(clean, "--mission-id"), figureId: readFlagValue(clean, "--figure-id"), intent: readFlagValue(clean, "--intent"), purpose: readFlagValue(clean, "--purpose"), materials: readFlagValues(clean, "--material"), prompt: readFlagValue(clean, "--prompt"), outputPath: readFlagValue(clean, "--output-path"), outputSha256: readFlagValue(clean, "--output-sha256"), caption: readFlagValue(clean, "--caption"), qaFindings: readFlagValues(clean, "--qa-finding") }));
+  if (command === "review") {
+    const request = reviewArgs(args);
+    if (request.mode === "preflight") result = prepareReviewExchange(target, request.args);
+    else if (request.mode === "verify-coverage") result = verifyReviewCoverage(target, request.args);
+    else result = runMutation(target, request.mode === "prepare" ? "prepare-review-exchange" : "import-review-exchange", args, () => request.mode === "prepare" ? prepareReviewExchange(target, request.args) : importReviewExchange(target, request.args));
+  }
+  if (command === "rebuttal") {
+    const input = { missionId: readFlagValue(args, "--mission-id"), issues: parseRepeatedJson(args, "--issue-json"), strategy: readFlagValue(args, "--strategy"), responses: parseRepeatedJson(args, "--response-json") };
+    if (args.includes("--issues-only")) result = runMutation(target, "normalize-rebuttal-issues", args, () => normalizeRebuttalIssues(target, { missionId: input.missionId, issues: input.issues }));
+    else if (args.includes("--strategy-only")) result = runMutation(target, "build-rebuttal-strategy", args, () => buildRebuttalStrategy(target, { missionId: input.missionId, strategy: input.strategy }));
+    else result = runMutation(target, "build-rebuttal", args, () => buildRebuttal(target, input));
+  }
+  if (command === "version") {
+    const input = { missionId: readFlagValue(args, "--mission-id"), versionId: readFlagValue(args, "--version-id"), label: readFlagValue(args, "--label"), artifactRefs: readFlagValues(args, "--artifact"), supersedesVersionId: readFlagValue(args, "--supersedes-version-id"), fromVersionId: readFlagValue(args, "--from-version-id"), toVersionId: readFlagValue(args, "--to-version-id"), finalize: args.includes("--finalize") };
+    const comparing = Boolean(input.fromVersionId || input.toVersionId);
+    result = runMutation(target, comparing ? "compare-versions" : "create-version-snapshot", args, () => comparing ? compareVersions(target, input) : createVersionSnapshot(target, input));
+  }
+  printResult(result, args);
   process.exit(0);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (wantsJson(args)) console.log(JSON.stringify({ status: "blocked", message }, null, 2));
+  else console.error(message);
+  process.exit(1);
 }
-
-if (isHostOnlyDoveSurface(command)) {
-  hostOnlySurfaceUsage(command);
-  const wantsSurfaceHelp = maybeTarget === "--help" || maybeTarget === "-h" || rest.includes("--help") || rest.includes("-h");
-  process.exit(wantsSurfaceHelp ? 0 : 1);
-}
-
-usage();
-process.exit(1);

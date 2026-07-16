@@ -76,21 +76,18 @@ function adapterCliCommand(commandId, command) {
 }
 
 const LOCAL_CLI_COMMANDS = new Map([
-  ["dove.init", { command: adapterCliCommand("dove.init", "node ./bin/dove-package.mjs init . --goal \"<project goal>\""), kind: "work", note: "Use init only for the project-level goal; concrete research, writing, review, experiment, figure, or code work belongs in mission, auto, or the matching work request." }],
+  ["dove.init", { command: adapterCliCommand("dove.init", "node ./bin/dove-package.mjs init . --goal \"<project goal>\""), kind: "work", note: "Use init only to establish minimal project identity; it must not create tasks, packets, checklists, runtime, orchestration, or navigation state." }],
   ["dove.status", { command: "node ./bin/dove-package.mjs status .", kind: "check" }],
-  ["dove.mission", { command: adapterCliCommand("dove.mission", "node ./bin/dove-package.mjs mission . --goal \"<task goal>\""), kind: "check", note: "After approval, run the exact confirmation command returned by the proposal; its proposal token binds the complete approved contract, workspace, and fixed mutation mode, materializes only that contract, and returns the natural next-workflow handoff without executing work or granting execution authority." }],
-  ["dove.auto", { command: adapterCliCommand("dove.auto", "node ./bin/dove-package.mjs auto . --target \"<task title>\""), kind: "check", note: "First return the proposal without writing. When real workflow material is supplied, pass the complete structured step array once through `--steps-json '<JSON array>'`; after approval, run the exact confirmation command so the proposal token preserves those step arguments. Run auto only when the selected task has real work material or a concrete material boundary to report." }],
-  ["dove.operator", { command: adapterCliCommand("dove.operator", "node ./bin/dove-package.mjs operator . --confirmed"), kind: "work", note: "Run operator only after approval. Supply real externally performed work results only through the canonical `taskResults[]` contract via `--task-results-json '<JSON array>'` and use `--run-id \"<run id>\"` when the pass needs a stable run identifier; a task awaiting that work must remain unchanged when no matching result is supplied." }],
-  ["dove.lessons", { command: "node ./bin/dove-package.mjs lessons .", kind: "check", note: "Use lesson writing only for distilled reusable guidance with problem, decision, pitfall, validation, and next-time behavior; add `--mutation-mode direct-process` to the explicit lesson-recording command." }],
-  ["dove.version", { command: adapterCliCommand("dove.version", "node ./bin/dove-package.mjs version . --reason \"<direction change reason>\""), kind: "work", note: "Use version only for a deliberate direction reset with a short reason, not as a general undo path." }],
-  ["dove.source", { command: adapterCliCommand("dove.source", "node ./bin/dove-package.mjs source . --target \"<task title>\" --title \"<source title>\" --locator \"<url or doi>\""), kind: "work", note: "Registration records candidate material only. Public source verification can reject a candidate but cannot issue positive verification; if retrieval fails, say no candidate was added and name the missing material." }],
-  ["dove.note", { command: adapterCliCommand("dove.note", "node ./bin/dove-package.mjs note . --target \"<task title>\" --summary \"<synthesis>\""), kind: "work", note: "Use this only when there is real synthesis content such as a summary, quote, claim, or open question." }],
-  ["dove.experience", { command: adapterCliCommand("dove.experience", "node ./bin/dove-package.mjs experience . --target \"<task title>\" --goal \"<experiment goal>\" --methodology \"<method>\" --success-metric \"<metric>\""), kind: "work", note: "Use this for experiment/evidence material; if method, metric, result evidence, or claim linkage is missing, say exactly which material is missing." }],
-  ["dove.draft", { command: adapterCliCommand("dove.draft", "node ./bin/dove-package.mjs draft . --target \"<task title>\" --section-id \"<section>\" --body \"<draft text>\""), kind: "work", note: "Use draft only for real section text; status-only section changes need an explicit status request." }],
-  ["dove.figure", { command: adapterCliCommand("dove.figure", "node ./bin/dove-package.mjs figure . --intent \"<figure request>\""), kind: "work", note: "For figure requests, use the CLI result as the source of truth, say the practical figure state in ordinary language, and do not apply returned file changes unless the operator explicitly approves. Lexical or structural SVG checks are diagnostic only; validated requires current authorized independent proof for the final SVG. If the CLI says a task must be selected and the operator confirms one, rerun `node ./bin/dove-package.mjs figure . --target \"<confirmed task title>\" --intent \"<figure request>\" --mutation-mode direct-process` instead of putting the task title inside the intent." }],
-  ["dove.review", { command: adapterCliCommand("dove.review", "node ./bin/dove-package.mjs review . --target \"<task title>\" --artifact-path \"<artifact path>\""), kind: "work", note: "Use this for a local evidence-aware structural preflight; pass one or more `--artifact-path` values when the operator names exact materials. A clean scan cannot issue authoritative coherent without current authorized independent proof." }],
-  ["dove.review-loop", { command: adapterCliCommand("dove.review-loop", "node ./bin/dove-package.mjs review-loop . --target \"<task title>\" --artifact-path \"<artifact path>\""), kind: "work", note: "Run exactly one Reviewer pass. Local structural inspection is preflight only and cannot issue authoritative coherent without current authorized independent proof. This call does not revise Builder-owned material; return an explicit Builder handoff only for substantive findings and invoke review again only after a separate revision call." }],
-  ["dove.rebuttal", { command: adapterCliCommand("dove.rebuttal", "node ./bin/dove-package.mjs rebuttal . --target \"<task title>\" --issue \"<reviewer issue>\""), kind: "work", note: "Use rebuttal for reviewer issues and author-side response strategy; keep unsupported gaps explicit instead of drafting around them." }]
+  ["dove.lessons", { command: "node ./bin/dove-package.mjs lessons query . --mission-id \"<mission id>\"", kind: "check", note: "Query is the default and must remain zero-write. Never auto-capture a lesson and never auto-recall lessons from another command. Use `lessons record` only when the operator explicitly asks to preserve a specific lesson; then run only the exact confirmation command returned by the zero-write proposal." }],
+  ["dove.mission", { command: adapterCliCommand("dove.mission", "node ./bin/dove-package.mjs mission . --goal \"<mission goal>\""), kind: "check", note: "After approval, run the exact confirmation command returned by the proposal, persist only that contract, and continue with native host planning and tools." }],
+  ["dove.version", { command: adapterCliCommand("dove.version", "node ./bin/dove-package.mjs version . --mission-id \"<mission id>\" --version-id \"<version id>\" --artifact \"<artifact path>\""), kind: "work", note: "Snapshots and comparisons are mission-bound and hash-current; finalization fails closed without completion and trusted review proof." }],
+  ["dove.source", { command: adapterCliCommand("dove.source", "node ./bin/dove-package.mjs source . --mission-id \"<mission id>\" --source-id \"<source id>\" --title \"<source title>\" --locator \"<url or doi>\""), kind: "work", note: "Registration creates candidate material only; public verification can reject but cannot issue positive trust." }],
+  ["dove.note", { command: adapterCliCommand("dove.note", "node ./bin/dove-package.mjs note . --mission-id \"<mission id>\" --note-id \"<note id>\" --summary \"<synthesis>\""), kind: "work", note: "Use this only with substantive synthesis and current mission-bound evidence." }],
+  ["dove.experience", { command: adapterCliCommand("dove.experience", "node ./bin/dove-package.mjs experience . --mission-id \"<mission id>\" --experiment-id \"<experiment id>\" --goal \"<experiment goal>\" --hypothesis \"<hypothesis>\" --protocol \"<protocol>\" --success-criterion \"<criterion>\""), kind: "work", note: "Results require current evidence and a clean audit before claim bridging." }],
+  ["dove.draft", { command: adapterCliCommand("dove.draft", "node ./bin/dove-package.mjs draft . --mission-id \"<mission id>\" --draft-id \"<draft id>\" --body \"<draft text>\""), kind: "work", note: "Write real body content; metadata-only mode requires an existing current mission draft." }],
+  ["dove.figure", { command: adapterCliCommand("dove.figure", "node ./bin/dove-package.mjs figure . --mission-id \"<mission id>\" --figure-id \"<figure id>\" --intent \"<figure request>\" --purpose \"<purpose>\" --material \"<artifact path>\" --prompt \"<drawing prompt>\""), kind: "work", note: "Provider execution stays host-side; import output with an exact hash, caption, QA, and independent-review boundary." }],
+  ["dove.review", { command: adapterCliCommand("dove.review", "node ./bin/dove-package.mjs review . --mission-id \"<mission id>\" --review-id \"<review id>\" --artifact \"<artifact path>\" --preflight"), kind: "work", note: "Use --preflight for zero-write local checks, --prepare to freeze the canonical exchange, and --import only after the reviewer writes the canonical handoff and report. Public imports never mint Reviewer authority." }],
+  ["dove.rebuttal", { command: adapterCliCommand("dove.rebuttal", "node ./bin/dove-package.mjs rebuttal . --mission-id \"<mission id>\" --issue-json \"<finding-linked issue JSON>\" --strategy \"<strategy>\" --response-json \"<response JSON>\""), kind: "work", note: "Every issue must link a current review artifact and finding id; responses remain author-side and evidence-linked." }]
 ]);
 
 function localCliBullets(command) {
@@ -101,7 +98,7 @@ function localCliBullets(command) {
       ? "Run it only when the needed material is present; then summarize the real artifact state or material boundary instead of inspecting internal files directly."
       : "Summarize its practical result instead of inspecting internal files directly.";
     return [
-      `This request has one ${listedKind}: \`${localCli.command}\` from the project root; ${directness}`,
+      `This request has one ${listedKind}: \`${localCli.command}\`. Run it in the host's current working directory without changing directories or reinterpreting a parent repository as the target; \`.\` is the Dove workspace being operated on. ${directness}`,
       ...(localCli.note ? [localCli.note] : [])
     ];
   }
@@ -124,12 +121,16 @@ function guardrailBullets(command) {
     ...(command.adapterConstraints ?? []),
     "Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended."
   ];
-  if (command.domain === "paper") {
+  if (command.id === "dove.mission") {
+    bullets.push("Keep the handoff brief identical to the approved contract content; do not add a next command, role, route, authority, status, or blocker-routing instruction.");
+  } else if (command.domain === "paper") {
     bullets.push("Use the top-level Dove requests for sources, notes, drafting, review, rebuttal, experiences, figures, and version lineage.");
   } else {
     bullets.push("Use this shared Dove task flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.");
   }
-  bullets.push("Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.");
+  if (command.id !== "dove.mission") {
+    bullets.push("Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.");
+  }
   return bullets;
 }
 

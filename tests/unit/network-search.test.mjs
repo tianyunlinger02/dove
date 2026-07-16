@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { normalizeNetworkSearchConfig } from "../../src/core/config.mjs";
 import {
   DEFAULT_NETWORK_SEARCH_PROVIDER_IDS,
   NETWORK_SEARCH_PROVIDER_REGISTRY,
   executeNetworkSearch,
-  normalizeNetworkSearchConfig,
   normalizeNetworkSearchQuery
-} from "../../src/core/internal-api.mjs";
+} from "../../src/core/network-search.mjs";
 
 function jsonResponse(value) {
   return {
