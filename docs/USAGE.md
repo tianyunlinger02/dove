@@ -5,6 +5,7 @@
 Dove is a local-first mission workflow system for paper, experiment, engineering, and research work.
 
 - **Mission contracts** define one explicit goal and evidence boundary.
+- **Research decision trees** in `.dove/research-trees/` keep only bounded retrieval, experiment, and analysis decisions. New nodes start pending; completed and blocked outcomes require current mission-owned evidence. Blocked directions also create an advisory failure lesson, but Dove never pivots automatically.
 - **Advisory lessons** record explicit reusable guidance with recording-mission provenance and mission or global applicability.
 - **Domain artifacts** record substantive source, note, claim, experiment, draft, figure, rebuttal, and version work.
 - **Canonical execution receipts** bind results to the current mission contract and current file hashes.
@@ -15,15 +16,15 @@ Dove should advance real work, not replace it with workflow ceremony. A useful m
 
 ## Public commands
 
-Dove exposes exactly 12 flat host workflows. The CLI has exactly 16 top-level subcommands, MCP has 27 tools, and generation produces 60 adapters across four checked-in project hosts plus Claude user commands:
+Dove exposes exactly 12 flat host workflows. The CLI has exactly 16 top-level subcommands, MCP has 28 tools, and generation produces 60 adapters across four checked-in project hosts plus Claude user commands:
 
 | Command | Use it for |
 |---|---|
-| `project:dove.init` | Propose and exactly confirm a sealed schema 8 workspace. |
+| `project:dove.init` | Propose and exactly confirm a sealed schema 9 workspace. |
 | `project:dove.mission` | Propose and persist one minimal mission contract, then return control to the host. |
 | `project:dove.status` | Read schema health, mission/receipt/source counts, and current artifact integrity without writes. |
 | `project:dove.lessons` | Explicitly query advisory guidance or explicitly propose and exactly confirm one mission-provenanced lesson. |
-| `project:dove.version` | Create immutable mission snapshots, compare snapshots, or request fail-closed finalization. |
+| `project:dove.version` | Create immutable mission snapshots and compare snapshots against current hashes. |
 | `project:dove.source` | Import captured external material as a mission-bound candidate or record rejection. |
 | `project:dove.note` | Write substantive current-evidence notes. |
 | `project:dove.figure` | Bind materials and import host-generated figure output with hash, caption, provenance, and QA. |
@@ -32,29 +33,30 @@ Dove exposes exactly 12 flat host workflows. The CLI has exactly 16 top-level su
 | `project:dove.review` | Preflight current artifacts with zero writes, prepare a frozen mission exchange, or import only its canonical handoff/report as non-authoritative review material. |
 | `project:dove.rebuttal` | Normalize concrete review findings and write author-side strategy and evidence-backed responses. |
 
-There is no public packet, board, runtime, navigation, review-loop, operator, auto, onboarding, or public-status publishing command in schema 8. The public lesson command is the new sealed `dove.lessons` surface, not the retired operator lesson system.
+There is no public packet, board, runtime, navigation, review-loop, operator, auto, onboarding, or public-status publishing command in schema 9. The public lesson command is the new sealed `dove.lessons` surface, not the retired operator lesson system.
 
 ## First 10 minutes with Dove
 
 1. Install Dove and run `dove doctor` to check package bundles, adapters, the MCP entrypoint, and workspace schema.
 2. Run `/dove:init` with a project goal. Inspect the zero-write proposal and replay the exact confirmation only when approved.
-3. Run `/dove:mission` for one concrete goal. Exact confirmation persists only the contract; native host planning and tools perform the work.
-4. Use a domain command with explicit `missionId`. Domain writes never infer a packet target or accept packet/target/domain/stage/status/role/policy authority.
+3. Run `/dove:mission` for one concrete goal. The generated MCP adapter privately supplies and retains the mission identity, exact confirmation persists only the contract, and native host planning and tools perform the work. Normal users do not copy an internal identifier from the result.
+4. Use a domain command with an explicit selected mission when invoking it separately. Domain writes never infer a packet target or accept packet/target/domain/stage/status/role/policy authority.
 5. Use `/dove:status` for a zero-write current integrity view. With one mission it scopes to that mission; with multiple missions provide `missionId` because Dove never selects an implicit latest mission.
-6. Use `/dove:version` before a meaningful revision and for immutable comparison/finalization gates.
+6. Use `/dove:version` before a meaningful revision and for immutable comparison.
 
 ## Mission contract and receipt model
 
-- `/dove:init` is proposal-first and zero-write. Exact confirmation creates `.dove/manifest.json`, `.dove/project.json`, and required schema 8 directories; ownership and lineage are derived from later execution receipts.
+- `/dove:init` is proposal-first and zero-write. Exact confirmation creates `.dove/manifest.json`, `.dove/project.json`, and required schema 9 directories; ownership and lineage are derived from later execution receipts.
 - Legacy, malformed, contradictory, or future `.dove` state is never imported, repaired, normalized, or used as a fallback. Explicit `dove init --archive-reset` binds the old tree identity/digest and uses direct-process atomic rename before clean initialization.
-- `/dove:mission` accepts goal, scope, out-of-scope, target/expected artifacts, completion criteria, evidence requirements, dependencies, and optional supersession metadata.
+- `/dove:mission` accepts goal, scope, out-of-scope, target/expected artifacts, completion criteria, evidence requirements, dependencies, and optional supersession metadata. Generated MCP adapters also supply one private safe mission identity and retain it only through the current resumed host work and optional closure.
 - Exact replay is bound to canonical workspace identity, mutation mode, project identity, target artifact identities, stable serialization, proposal version, and contract digest.
-- A materialized mission returns a nonpersisted `executionHandoff` containing `missionId`, `contractDigest`, target and expected artifacts, stable criterion and evidence-requirement ids, the existing receipt CLI template, and the existing `ingest_execution_receipt` / `assess_mission_completion` MCP names.
+- Core and low-level materialization results include a nonpersisted execution handoff for explicit consumers. Ordinary MCP public results omit mission identity, contract identity, receipt templates, and replay controls; generated hosts reuse the identity they supplied.
 - Receipt ingestion binds `missionId`, current `contractDigest`, canonical realpath-contained artifact and validation files, SHA-256 hashes, deterministic criterion coverage, and typed evidence references. Core ingestion returns only a sealed post-commit assessment descriptor; direct-process CLI and MCP dispatch evaluate it after successful commit, patch-plan remains zero-write with `completion.assessment: null`, and commit failure returns no assessment.
-- Completion is derived live. File drift, contract drift, stale source/note evidence, incomplete criterion coverage, or missing authoritative review proof makes completion fail closed.
+- Completion is derived live. File drift, contract drift, stale source/note evidence, incomplete criterion coverage, incomplete direct dependencies, or missing authoritative review proof makes completion fail closed. Dependencies stay bound to exact immutable mission IDs; if a dependency is superseded, the dependent remains incomplete until its own successor contract explicitly names the replacement. Dependency receipts never count as the dependent mission's own contributing receipts.
+- Superseded missions remain readable history but report `status: superseded` and `complete: false`. They reject new execution receipts, review imports, and internal domain writes; status follows a supersession chain to the terminal current successor. A successor may explicitly take over a current artifact path owned by its superseded lineage by recording its own hash-bound receipt, but it does not inherit the ancestor mission's criteria or completion credit.
 - Evidence requirement syntax is exact: `artifact:<path>`, `validation:<path>`, `source:<id>`, `note:<id>`, and `review:authoritative`.
 
-## Durable schema 8 workspace
+## Durable schema 9 workspace
 
 Important public durable surfaces include:
 
@@ -63,11 +65,11 @@ Important public durable surfaces include:
 - `.dove/missions/<missionId>.json` — confirmed mission contracts.
 - `.dove/lessons/<lessonId>.json` — immutable advisory lessons with recording-mission provenance and optional global applicability.
 - `.dove/receipts/execution/<receiptId>.json` — immutable canonical execution receipts.
-- Artifact ownership, current hashes, and lineage are derived live from `.dove/receipts/execution/`; schema 8 does not persist current `ownership.json` or `lineage.json` mirrors.
+- Artifact ownership, current hashes, and lineage are derived live from `.dove/receipts/execution/`; schema 9 does not persist current `ownership.json` or `lineage.json` mirrors.
 - `.dove/sources/` and `.dove/sources/materials/` — mission-bound source records and captured material.
 - `.dove/notes/`, `.dove/claims/`, `.dove/experiments/`, `.dove/drafts/`, `.dove/figures/`, `.dove/rebuttal/`, `.dove/versions/` — substantive mission artifacts.
 
-Schema 8 public workflows do not write `.dove/state.json`, `.dove/task-packets`, `.dove/orchestration`, `.dove/runtime`, `.dove/workspace`, or navigation refresh state.
+Schema 9 public workflows do not write `.dove/state.json`, `.dove/task-packets`, `.dove/orchestration`, `.dove/runtime`, `.dove/workspace`, or navigation refresh state.
 
 ## Domain workflows
 
@@ -83,7 +85,7 @@ Record is proposal-first. The proposal is zero-write and confirmation must repla
 
 `search_network` returns candidates with a non-authoritative `registrationDraft` and `captureRequiredForEvidence: true`; it does not claim source trust. The adapter flow is `search_network` → visible host capture → `register_source` with the captured file passed as `capturePath` / `--capture-path` → `query_sources`. Registration validates the source filename/id, mission contract binding, canonical non-empty captured material, and hash, then imports the material into `.dove/sources/materials/` and creates a candidate record plus an execution receipt.
 
-Schema 8 stores only `candidate` and `rejected` source lifecycle states. Stored `verified` state is invalid, public `verify_source` is rejection-only, and ordinary execution receipts never provide positive source authority.
+Schema 9 stores only `candidate` and `rejected` source lifecycle states. Stored `verified` state is invalid, public `verify_source` is rejection-only, and ordinary execution receipts never provide positive source authority.
 
 ### Note and claims
 
@@ -105,7 +107,7 @@ Figure providers execute on the host side. Dove prepares or imports only declare
 
 ### Review
 
-Review uses review-exchange format v7 within a schema 8 workspace, with four input-scope policies: `local-preflight`, `isolated-selected-artifacts`, `final-plan-results-only`, and `external`. Results distinguish `operation: preflight`, `operation: prepare`, and `operation: import`. Prepare returns canonical input, manifest, handoff, and report paths plus exact known hashes and an import command/tool; import returns those canonical paths and the existing coverage action. Their sealed input boundaries are respectively `read-only-current-workspace`, `selected-artifact-isolation`, `classified-final-plan-results`, and `host-mediated-external-review`; policy never chooses or launches a reviewer. `dove review --preflight` maps to `local-preflight` and is strictly zero-write. `--prepare --policy <policy>` freezes the boundary, exact classified artifact paths, sizes, hashes, artifact-set hash, mission identity, contract digest, privacy boundary, canonical output paths, and a `preparationReceiptId` under `.dove/reviews/exchanges/<exchangeId>/`; that one internal receipt owns both immutable `input.json` and `manifest.json`. Import validates the ledger receipt id, producer, mission, paths, and hashes before trusting either control file, then accepts only the canonical handoff/report leaves. Every finding must link at least one artifact in the frozen scope, and `needs-revision` or `needs-evidence` requires an action item. Coverage counts only `completed` reviews with `coherent`, `needs-revision`, or `needs-evidence`; blocked or failed returns remain durable with explicit ineligibility reasons. Public review material never issues authoritative Reviewer proof. Dove never launches a reviewer, session, subagent, process, board transition, runtime continuation, or loop.
+Review uses review-exchange format v8 within a schema 9 workspace, with four input-scope policies: `local-preflight`, `isolated-selected-artifacts`, `final-plan-results-only`, and `external`. Results distinguish `operation: preflight`, `operation: prepare`, and `operation: import`. Prepare returns canonical input, manifest, handoff, and report paths plus exact known hashes and an import command/tool; import returns those canonical paths and the existing coverage action. Their sealed input boundaries are respectively `read-only-current-workspace`, `selected-artifact-isolation`, `classified-final-plan-results`, and `host-mediated-external-review`; policy never chooses or launches a reviewer. `dove review --preflight` maps to `local-preflight` and is strictly zero-write. `--prepare --policy <policy>` freezes the boundary, exact classified artifact paths, sizes, hashes, artifact-set hash, mission identity, contract digest, privacy boundary, canonical output paths, and a `preparationReceiptId` under `.dove/reviews/exchanges/<exchangeId>/`; that one internal receipt owns both immutable `input.json` and `manifest.json`. Import validates the ledger receipt id, producer, mission, paths, and hashes before trusting either control file, then accepts only the canonical handoff/report leaves. Every finding must link at least one artifact in the frozen scope, and `needs-revision` or `needs-evidence` requires an action item. Coverage counts only `completed` reviews with `coherent`, `needs-revision`, or `needs-evidence`; blocked or failed returns remain durable with explicit ineligibility reasons. Public review material never issues authoritative Reviewer proof. Dove never launches a reviewer, session, subagent, process, board transition, runtime continuation, or loop.
 
 ### Rebuttal
 
@@ -113,7 +115,7 @@ Every normalized issue and response must link to a concrete review finding using
 
 ### Version
 
-A snapshot copies actual current mission artifact contents into an immutable version directory and records hashes and lineage. Comparison validates immutable copies rather than trusting mutable path labels. Finalization requires current completion plus authoritative review proof.
+A snapshot copies actual current mission artifact contents into an immutable version directory and records hashes and lineage. Comparison is a strictly zero-write query that validates immutable copies rather than trusting mutable path labels and returns added, removed, and changed artifact paths immediately. Finalization requires current completion plus authoritative review proof.
 
 ## Network search
 
@@ -127,7 +129,7 @@ Dove defaults to Chinese user-facing responses. Set `language` to `zh` or `en` i
 
 ## MCP tools
 
-The MCP server exposes a sealed schema 8 registry for:
+The MCP server exposes a sealed schema 9 registry for:
 
 - initialization and mission contracts;
 - read-only mission/status/completion queries;
@@ -135,9 +137,10 @@ The MCP server exposes a sealed schema 8 registry for:
 - source registration/query/rejection;
 - explicit advisory lesson query and exact-confirmation recording;
 - notes, claims, experiments, drafts, figures, review prepare/import/coverage verification, rebuttals, and versions;
-- canonical execution-receipt ingestion.
+- canonical execution-receipt ingestion;
+- one MCP-only host outcome closure that generates receipt metadata and fingerprints internally, skips without writing when no uncovered artifact remains, and is not a thirteenth host command.
 
-The host surface has exactly 12 workflows. Separately, the CLI has 16 top-level subcommands; MCP exposes 27 tools and generation produces 60 adapters. The MCP registry contains exactly 27 tools. Every object schema uses `additionalProperties: false`, including nested objects. Mutating tools declare `mutationMode`, all tools declare `resultMode`, and every domain mutation requires explicit `missionId`. Lesson tools are exactly `query_dove_lessons` and `record_dove_lesson`; old operator lesson tool names are absent. Unknown and retired packet/target/domain/stage/status/role/policy fields are rejected.
+The host surface has exactly 12 workflows. Separately, the CLI has 16 top-level subcommands; MCP exposes 28 tools and generation produces 60 adapters. The MCP registry contains exactly 28 tools. Every object schema uses `additionalProperties: false`, including nested objects. Mutating tools declare `mutationMode`, all tools declare `resultMode`, and every domain mutation requires explicit `missionId`. Lesson tools are exactly `query_dove_lessons` and `record_dove_lesson`; old operator lesson tool names are absent. Unknown and retired packet/target/domain/stage/status/role/policy fields are rejected.
 
 ## Role model
 
@@ -147,7 +150,7 @@ Planner, Builder/Author, and Reviewer are conceptual responsibility boundaries:
 - **Builder/Author** performs substantive work and writes domain artifacts.
 - **Reviewer** provides independent findings or authority proof through a trusted boundary.
 
-Schema 8 does not persist role routing, a board, owner transitions, or lifecycle mirrors. Reviewer authority fails closed when no trusted issuer exists.
+Schema 9 does not persist role routing, a board, owner transitions, or lifecycle mirrors. Reviewer authority fails closed when no trusted issuer exists.
 
 ## Source-checkout validation
 

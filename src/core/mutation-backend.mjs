@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import { openAnchoredFilesystem, requireAnchoredFilesystemCapability } from "./anchored-filesystem.mjs";
 import { resolveCanonicalContainedWrite } from "./contained-write.mjs";
 
 const mutationStorage = new AsyncLocalStorage();
@@ -51,11 +52,6 @@ function resultDeclaresWrites(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value) && Array.isArray(value.writes) && value.writes.length > 0;
 }
 
-function readDiskText(root, relativePath, fallback = "") {
-  const fullPath = path.join(root, relativePath);
-  if (!fs.existsSync(fullPath)) return fallback;
-  return fs.readFileSync(fullPath, "utf8");
-}
 
 function pathType(stat) {
   if (stat.isFile()) return "file";
@@ -64,17 +60,17 @@ function pathType(stat) {
   return "other";
 }
 
-function directoryHash(directory) {
+function directoryHash(directory, fsOps = fs) {
   const entries = [];
   const visit = (current, prefix = "") => {
-    for (const entry of fs.readdirSync(current, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+    for (const entry of fsOps.readdirSync(current, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
       const fullPath = path.join(current, entry.name);
       const relativePath = prefix ? path.posix.join(prefix, entry.name) : entry.name;
-      const stat = fs.lstatSync(fullPath);
+      const stat = fsOps.lstatSync(fullPath);
       const type = pathType(stat);
       const metadata = { path: relativePath, type, mode: stat.mode & 0o7777 };
-      if (type === "file") entries.push({ ...metadata, sha256: sha256(fs.readFileSync(fullPath)) });
-      else if (type === "symlink") entries.push({ ...metadata, target: fs.readlinkSync(fullPath) });
+      if (type === "file") entries.push({ ...metadata, sha256: sha256(fsOps.readFileSync(fullPath)) });
+      else if (type === "symlink") entries.push({ ...metadata, target: fsOps.readlinkSync(fullPath) });
       else {
         entries.push(metadata);
         if (type === "directory") visit(fullPath, relativePath);
@@ -85,10 +81,10 @@ function directoryHash(directory) {
   return sha256(JSON.stringify(entries));
 }
 
-function diskPathState(fullPath) {
+function diskPathState(fullPath, fsOps = fs) {
   let stat;
   try {
-    stat = fs.lstatSync(fullPath);
+    stat = fsOps.lstatSync(fullPath);
   } catch (error) {
     if (error?.code === "ENOENT") return { exists: false, type: "absent", sha256: null, mode: null };
     throw error;
@@ -97,7 +93,7 @@ function diskPathState(fullPath) {
   return {
     exists: true,
     type,
-    sha256: type === "file" ? sha256(fs.readFileSync(fullPath)) : type === "directory" ? directoryHash(fullPath) : type === "symlink" ? sha256(fs.readlinkSync(fullPath)) : null,
+    sha256: type === "file" ? sha256(fsOps.readFileSync(fullPath)) : type === "directory" ? directoryHash(fullPath, fsOps) : type === "symlink" ? sha256(fsOps.readlinkSync(fullPath)) : null,
     mode: stat.mode & 0o7777
   };
 }
@@ -121,7 +117,7 @@ function pathDepth(relativePath) {
 export class MutationContext {
   constructor(root, options = {}) {
     const resolvedRoot = path.resolve(root);
-    this.root = fs.realpathSync.native(resolvedRoot);
+    this.root = typeof (options.fsOps ?? fs).realpathSync.native === "function" ? (options.fsOps ?? fs).realpathSync.native(resolvedRoot) : (options.fsOps ?? fs).realpathSync(resolvedRoot);
     this.id = options.id ?? buildMutationId();
     this.actionId = options.actionId ?? "unspecified";
     this.mutationMode = normalizeMutationMode(options.mutationMode);
@@ -129,9 +125,14 @@ export class MutationContext {
     this.hostId = options.hostId ?? "unknown";
     this.createdAt = options.createdAt ?? new Date().toISOString();
     this.fsOps = options.fsOps ?? fs;
+    if (this.mutationMode === "direct-process") requireAnchoredFilesystemCapability({ fsOps: this.fsOps, platform: options.platform, procFdRoot: options.procFdRoot });
+    this.platform = options.platform;
+    this.procFdRoot = options.procFdRoot;
     this.overlay = new Map();
     this.virtualDirectories = new Set();
     this.preconditions = new Map();
+    this.readSet = new Map();
+    this.snapshotCache = new Map();
     this.operationsByPath = new Map();
     this.operationOrder = [];
     this.directoryReplacements = new Map();
@@ -151,7 +152,7 @@ export class MutationContext {
   resolve(relativePath) {
     this.assertActive("Mutation path resolution");
     const normalized = normalizeRelativePath(relativePath);
-    return resolveCanonicalContainedWrite(this.root, normalized, { label: "Mutation path" });
+    return resolveCanonicalContainedWrite(this.root, normalized, { label: "Mutation path", fsOps: this.fsOps });
   }
 
   replacementFor(relativePath) {
@@ -159,7 +160,7 @@ export class MutationContext {
   }
 
   recordFirstTouch(normalized, fullPath) {
-    if (!this.preconditions.has(normalized)) this.preconditions.set(normalized, diskPathState(fullPath));
+    if (!this.preconditions.has(normalized)) this.preconditions.set(normalized, diskPathState(fullPath, this.fsOps));
     return this.preconditions.get(normalized);
   }
 
@@ -167,17 +168,55 @@ export class MutationContext {
     const { relativePath: normalized, fullPath } = this.resolve(relativePath);
     if (this.overlay.has(normalized) || this.virtualDirectories.has(normalized)) return true;
     if (this.replacementFor(normalized)) return false;
-    return fs.existsSync(fullPath);
+    return this.fsOps.existsSync(fullPath);
+  }
+
+  readFileSnapshot(relativePath) {
+    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
+    if (this.overlay.has(normalized)) {
+      const content = this.overlay.get(normalized);
+      const buffer = Buffer.isBuffer(content) ? Buffer.from(content) : Buffer.from(content, "utf8");
+      return { relativePath: normalized, exists: true, type: "file", mode: null, sha256: sha256(buffer), buffer };
+    }
+    if (this.replacementFor(normalized)) return { relativePath: normalized, exists: false, type: "absent", mode: null, sha256: null, buffer: null };
+    if (!this.snapshotCache.has(normalized)) {
+      const initial = diskPathState(fullPath, this.fsOps);
+      if (initial.exists && initial.type !== "file") throw new Error(`Mutation read target must be absent or a regular file: ${normalized}`);
+      const buffer = initial.exists ? Buffer.from(this.fsOps.readFileSync(fullPath)) : null;
+      const snapshot = { relativePath: normalized, ...initial, buffer };
+      this.snapshotCache.set(normalized, snapshot);
+      this.readSet.set(normalized, initial);
+    }
+    const snapshot = this.snapshotCache.get(normalized);
+    return { ...snapshot, buffer: snapshot.buffer === null ? null : Buffer.from(snapshot.buffer) };
+  }
+
+  readBuffer(relativePath, fallback = null) {
+    const snapshot = this.readFileSnapshot(relativePath);
+    if (!snapshot.exists) return typeof fallback === "function" ? fallback() : fallback === null ? null : Buffer.from(fallback);
+    return Buffer.from(snapshot.buffer);
   }
 
   readText(relativePath, fallback = "") {
-    const { relativePath: normalized } = this.resolve(relativePath);
-    if (this.overlay.has(normalized)) {
-      const content = this.overlay.get(normalized);
-      return Buffer.isBuffer(content) ? content.toString("utf8") : content;
+    const buffer = this.readBuffer(relativePath, null);
+    return buffer === null ? fallback : buffer.toString("utf8");
+  }
+
+  readDirectory(relativePath) {
+    const { relativePath: normalized, fullPath } = this.resolve(relativePath);
+    if (this.replacementFor(normalized)) return [];
+    if (this.snapshotCache.has(`${normalized}/`)) return structuredClone(this.snapshotCache.get(`${normalized}/`));
+    const stat = diskPathState(fullPath, this.fsOps);
+    if (!stat.exists) {
+      this.readSet.set(normalized, stat);
+      this.snapshotCache.set(`${normalized}/`, []);
+      return [];
     }
-    if (this.replacementFor(normalized)) return fallback;
-    return readDiskText(this.root, normalized, fallback);
+    if (stat.type !== "directory") throw new Error(`Mutation directory read target must be a real directory: ${normalized}`);
+    const entries = this.fsOps.readdirSync(fullPath, { withFileTypes: true }).map((entry) => ({ name: entry.name, type: entry.isFile() ? "file" : entry.isDirectory() ? "directory" : entry.isSymbolicLink() ? "symlink" : "other" })).sort((left, right) => left.name.localeCompare(right.name));
+    this.readSet.set(normalized, stat);
+    this.snapshotCache.set(`${normalized}/`, entries);
+    return structuredClone(entries);
   }
 
   readJson(relativePath, fallback) {
@@ -254,7 +293,7 @@ export class MutationContext {
     this.assertActive("Mutation commit lock registration");
     if (this.patchPlanMode) return null;
     const { relativePath: normalized, fullPath } = this.resolve(relativePath);
-    if (fs.existsSync(fullPath)) throw new Error(`${options.label ?? "Mutation commit lock"} is already held: ${normalized}.`);
+    if (this.fsOps.existsSync(fullPath)) throw new Error(`${options.label ?? "Mutation commit lock"} is already held: ${normalized}.`);
     this.commitLocks.set(normalized, { relativePath: normalized, fullPath, label: options.label ?? "Mutation commit lock" });
     return normalized;
   }
@@ -352,61 +391,73 @@ export class MutationContext {
   }
 
   revalidatePreconditions() {
-    for (const [relativePath, expected] of this.preconditions) {
+    const expectedStates = new Map([...this.readSet, ...this.preconditions]);
+    for (const [relativePath, expected] of expectedStates) {
       const { fullPath } = this.resolve(relativePath);
-      const actual = diskPathState(fullPath);
+      const actual = diskPathState(fullPath, this.fsOps);
       if (!samePathState(actual, expected)) {
         throw new Error(`Mutation commit precondition changed for ${relativePath}: expected ${expected.type}${expected.sha256 ? ` ${expected.sha256}` : ""}, found ${actual.type}${actual.sha256 ? ` ${actual.sha256}` : ""}.`);
       }
     }
   }
 
-  makeDirectory(directoryPath, createdDirectories) {
-    if (fs.existsSync(directoryPath)) return;
-    const missing = [];
-    let current = directoryPath;
-    while (current !== this.root && !fs.existsSync(current)) {
-      missing.push(current);
-      current = path.dirname(current);
-    }
-    if (current !== this.root) {
-      const relative = path.relative(this.root, current);
-      if (relative === ".." || relative.startsWith(`..${path.sep}`)) throw new Error(`Mutation directory escaped the workspace: ${directoryPath}`);
-    }
-    for (const item of missing.reverse()) {
-      this.fsOps.mkdirSync(item, { recursive: false });
-      createdDirectories.push(item);
+  revalidatePreconditionsAnchored(anchor) {
+    const expectedStates = new Map([...this.readSet, ...this.preconditions]);
+    for (const [relativePath, expected] of expectedStates) {
+      const stat = anchor.tryLstat(relativePath);
+      let actual;
+      if (!stat) actual = { exists: false, type: "absent", sha256: null, mode: null };
+      else {
+        const type = pathType(stat);
+        actual = { exists: true, type, sha256: type === "file" ? sha256(anchor.readFile(relativePath)) : type === "directory" ? diskPathState(path.join(this.root, relativePath), this.fsOps).sha256 : null, mode: stat.mode & 0o7777 };
+      }
+      if (!samePathState(actual, expected)) throw new Error(`Mutation commit precondition changed for ${relativePath}: expected ${expected.type}${expected.sha256 ? ` ${expected.sha256}` : ""}, found ${actual.type}${actual.sha256 ? ` ${actual.sha256}` : ""}.`);
     }
   }
 
-  stageTransaction(transactionRoot) {
+  makeAnchoredDirectory(anchor, relativePath, createdDirectories) {
+    const normalized = path.posix.normalize(relativePath || ".");
+    if (normalized === ".") return;
+    let current = "";
+    for (const component of normalized.split("/")) {
+      current = current ? `${current}/${component}` : component;
+      const stat = anchor.tryLstat(current);
+      if (stat) {
+        if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Mutation directory component must be a real directory: ${current}`);
+        continue;
+      }
+      anchor.mkdir(current);
+      createdDirectories.push(current);
+    }
+  }
+
+  stageTransaction(anchor, transactionRoot) {
     const createdDirectories = [];
-    this.fsOps.mkdirSync(transactionRoot, { recursive: false });
+    anchor.mkdir(transactionRoot);
     createdDirectories.push(transactionRoot);
-    const stagedRoot = path.join(transactionRoot, "staged");
-    const backupsRoot = path.join(transactionRoot, "backups");
-    this.fsOps.mkdirSync(stagedRoot, { recursive: false });
-    this.fsOps.mkdirSync(backupsRoot, { recursive: false });
+    const stagedRoot = `${transactionRoot}/staged`;
+    const backupsRoot = `${transactionRoot}/backups`;
+    anchor.mkdir(stagedRoot);
+    anchor.mkdir(backupsRoot);
 
     const replacementStages = new Map();
     let replacementIndex = 0;
     for (const replacement of this.directoryReplacements.values()) {
-      const stagePath = path.join(stagedRoot, `directory-${replacementIndex++}`);
-      this.fsOps.mkdirSync(stagePath, { recursive: false });
+      const stagePath = `${stagedRoot}/directory-${replacementIndex++}`;
+      anchor.mkdir(stagePath);
       replacementStages.set(replacement.relativePath, stagePath);
       const directoryOperations = this.operations().filter((operation) => operation.kind === "ensure-directory" && isInside(operation.relativePath, replacement.relativePath));
       for (const operation of directoryOperations.sort((left, right) => pathDepth(left.relativePath) - pathDepth(right.relativePath))) {
         if (operation.relativePath === replacement.relativePath) continue;
-        const nested = path.relative(replacement.relativePath, operation.relativePath);
-        this.fsOps.mkdirSync(path.join(stagePath, nested), { recursive: true });
+        const nested = path.posix.relative(replacement.relativePath, operation.relativePath);
+        anchor.mkdir(`${stagePath}/${nested}`, { recursive: true });
       }
       const fileOperations = this.operations().filter((operation) => operation.kind !== "ensure-directory" && isInside(operation.relativePath, replacement.relativePath));
       for (const operation of fileOperations) {
-        const nested = path.relative(replacement.relativePath, operation.relativePath);
-        const stagedFile = path.join(stagePath, nested);
-        this.fsOps.mkdirSync(path.dirname(stagedFile), { recursive: true });
-        const content = this.overlay.get(operation.relativePath);
-        this.fsOps.writeFileSync(stagedFile, content, operation.encoding === "utf8" ? "utf8" : undefined);
+        const nested = path.posix.relative(replacement.relativePath, operation.relativePath);
+        const stagedFile = `${stagePath}/${nested}`;
+        anchor.mkdir(path.posix.dirname(stagedFile), { recursive: true });
+        anchor.writeNewFile(stagedFile, this.overlay.get(operation.relativePath), { encoding: operation.encoding === "utf8" ? "utf8" : undefined });
       }
     }
 
@@ -414,135 +465,114 @@ export class MutationContext {
     let fileIndex = 0;
     for (const operation of this.operations()) {
       if (operation.kind === "ensure-directory" || this.replacementFor(operation.relativePath)) continue;
-      const stagedFile = path.join(stagedRoot, `file-${fileIndex++}`);
-      const content = this.overlay.get(operation.relativePath);
-      this.fsOps.writeFileSync(stagedFile, content, operation.encoding === "utf8" ? "utf8" : undefined);
+      const stagedFile = `${stagedRoot}/file-${fileIndex++}`;
+      anchor.writeNewFile(stagedFile, this.overlay.get(operation.relativePath), { encoding: operation.encoding === "utf8" ? "utf8" : undefined });
       const initial = this.preconditions.get(operation.relativePath);
-      if (initial?.exists && initial.type === "file" && typeof this.fsOps.chmodSync === "function") this.fsOps.chmodSync(stagedFile, initial.mode);
+      if (initial?.exists && initial.type === "file") anchor.chmod(stagedFile, initial.mode);
       fileStages.set(operation.relativePath, stagedFile);
     }
     return { transactionRoot, backupsRoot, replacementStages, fileStages, createdDirectories };
   }
 
-  removePath(targetPath) {
-    if (!fs.existsSync(targetPath)) return;
-    this.fsOps.rmSync(targetPath, { recursive: true, force: true });
-  }
-
-  rollbackTransaction(transaction, promotions) {
+  rollbackTransaction(anchor, transaction, promotions) {
     const failures = [];
-    const attempt = (callback) => {
-      try {
-        callback();
-      } catch (error) {
-        failures.push(errorMessage(error));
-      }
-    };
+    const attempt = (callback) => { try { callback(); } catch (error) { failures.push(errorMessage(error)); } };
     for (const promotion of [...promotions].reverse()) {
-      if (promotion.promoted) attempt(() => this.removePath(promotion.targetPath));
-      if (promotion.originalLocation) {
-        if (fs.existsSync(promotion.originalLocation)) attempt(() => this.fsOps.renameSync(promotion.originalLocation, promotion.targetPath));
-      } else if (promotion.backupPath && fs.existsSync(promotion.backupPath)) {
-        attempt(() => this.fsOps.renameSync(promotion.backupPath, promotion.targetPath));
-      }
+      if (promotion.promoted) attempt(() => anchor.remove(promotion.targetPath, { recursive: promotion.directory === true, force: true }));
+      if (promotion.originalLocation && anchor.exists(promotion.originalLocation)) attempt(() => anchor.rename(promotion.originalLocation, promotion.targetPath));
+      else if (promotion.backupPath && anchor.exists(promotion.backupPath)) attempt(() => anchor.rename(promotion.backupPath, promotion.targetPath));
     }
     for (const directoryPath of [...transaction.createdDirectories].sort((left, right) => right.length - left.length)) {
       if (directoryPath === transaction.transactionRoot) continue;
-      if (fs.existsSync(directoryPath)) attempt(() => this.fsOps.rmdirSync(directoryPath));
+      if (anchor.exists(directoryPath)) attempt(() => anchor.rmdir(directoryPath));
     }
-    if (fs.existsSync(transaction.transactionRoot)) attempt(() => this.fsOps.rmSync(transaction.transactionRoot, { recursive: true, force: true }));
+    if (anchor.exists(transaction.transactionRoot)) attempt(() => anchor.remove(transaction.transactionRoot, { recursive: true, force: true }));
     if (failures.length > 0) throw new Error(failures.join("; "));
   }
 
-  acquireCommitLocks() {
+  acquireCommitLocks(anchor) {
     const acquired = [];
     try {
       for (const lock of this.commitLocks.values()) {
-        let handle;
         try {
-          handle = this.fsOps.openSync(lock.fullPath, "wx", 0o600);
+          anchor.writeNewFile(lock.relativePath, Buffer.alloc(0), { mode: 0o600 });
         } catch (error) {
           if (error?.code === "EEXIST") throw new Error(`${lock.label} is already held: ${lock.relativePath}.`);
           throw error;
         }
-        this.fsOps.closeSync(handle);
         acquired.push(lock);
       }
       return acquired;
     } catch (error) {
-      this.releaseCommitLocks(acquired);
+      this.releaseCommitLocks(anchor, acquired);
       throw error;
     }
   }
 
-  releaseCommitLocks(acquired) {
+  releaseCommitLocks(anchor, acquired) {
     const failures = [];
     for (const lock of [...acquired].reverse()) {
-      try {
-        this.fsOps.unlinkSync(lock.fullPath);
-      } catch (error) {
-        if (error?.code !== "ENOENT") failures.push(errorMessage(error));
-      }
+      try { anchor.unlink(lock.relativePath, { force: true }); } catch (error) { failures.push(errorMessage(error)); }
     }
     if (failures.length > 0) throw new Error(`Mutation commit lock cleanup failed: ${failures.join("; ")}`);
   }
 
   commitDirect() {
-    const acquiredLocks = this.acquireCommitLocks();
+    const anchor = openAnchoredFilesystem(this.root, { fsOps: this.fsOps, platform: this.platform, procFdRoot: this.procFdRoot });
+    const acquiredLocks = this.acquireCommitLocks(anchor);
     let primaryError = null;
     try {
       this.commitState.phase = "preparing";
-      this.revalidatePreconditions();
+      this.revalidatePreconditionsAnchored(anchor);
       if (this.operations().length === 0 && this.directoryReplacements.size === 0) {
         this.commitState.phase = "committed";
         return;
       }
-      const transactionRoot = path.join(this.root, `.dove-transaction-${this.id.replace(/[^a-z0-9._-]/giu, "-")}`);
-      resolveCanonicalContainedWrite(this.root, path.relative(this.root, transactionRoot), { label: "Mutation transaction path" });
-      if (fs.existsSync(transactionRoot)) throw new Error(`Mutation transaction path is already occupied: ${transactionRoot}`);
+      const transactionRoot = `.dove-transaction-${this.id.replace(/[^a-z0-9._-]/giu, "-")}`;
+      if (anchor.exists(transactionRoot)) throw new Error(`Mutation transaction path is already occupied: ${anchor.displayPath(transactionRoot)}`);
       let transaction = { transactionRoot, createdDirectories: [] };
       const promotions = [];
       try {
-        transaction = this.stageTransaction(transactionRoot);
+        transaction = this.stageTransaction(anchor, transactionRoot);
+        // Revalidate the full write/read set only after staging is complete and immediately before promotion.
+        this.revalidatePreconditionsAnchored(anchor);
         this.commitState.phase = "promoting";
         let replacementIndex = 0;
         for (const replacement of this.directoryReplacements.values()) {
-          const targetPath = path.join(this.root, replacement.relativePath);
+          const targetPath = replacement.relativePath;
           const stagePath = transaction.replacementStages.get(replacement.relativePath);
-          const promotion = { targetPath, promoted: false, backupPath: null, originalLocation: null };
+          const promotion = { targetPath, promoted: false, backupPath: null, originalLocation: null, directory: true };
           promotions.push(promotion);
-          if (fs.existsSync(targetPath)) {
-            const originalLocation = replacement.archiveTarget
-              ? path.join(this.root, replacement.archiveTarget)
-              : path.join(transaction.backupsRoot, `directory-${replacementIndex}`);
-            this.makeDirectory(path.dirname(originalLocation), transaction.createdDirectories);
-            this.fsOps.renameSync(targetPath, originalLocation);
+          if (anchor.exists(targetPath)) {
+            const originalLocation = replacement.archiveTarget ?? `${transaction.backupsRoot}/directory-${replacementIndex}`;
+            this.makeAnchoredDirectory(anchor, path.posix.dirname(originalLocation), transaction.createdDirectories);
+            anchor.rename(targetPath, originalLocation);
             promotion.originalLocation = originalLocation;
           }
-          this.makeDirectory(path.dirname(targetPath), transaction.createdDirectories);
-          this.fsOps.renameSync(stagePath, targetPath);
+          this.makeAnchoredDirectory(anchor, path.posix.dirname(targetPath), transaction.createdDirectories);
+          anchor.rename(stagePath, targetPath);
           promotion.promoted = true;
           replacementIndex += 1;
         }
 
         for (const operation of this.operations().filter((item) => item.kind === "ensure-directory" && !this.replacementFor(item.relativePath)).sort((left, right) => pathDepth(left.relativePath) - pathDepth(right.relativePath))) {
-          this.makeDirectory(path.join(this.root, operation.relativePath), transaction.createdDirectories);
+          this.makeAnchoredDirectory(anchor, operation.relativePath, transaction.createdDirectories);
         }
 
         let fileIndex = 0;
         for (const operation of this.operations()) {
           if (operation.kind === "ensure-directory" || this.replacementFor(operation.relativePath)) continue;
-          const targetPath = path.join(this.root, operation.relativePath);
+          const targetPath = operation.relativePath;
           const stagedPath = transaction.fileStages.get(operation.relativePath);
-          const promotion = { targetPath, promoted: false, backupPath: null, originalLocation: null };
+          const promotion = { targetPath, promoted: false, backupPath: null, originalLocation: null, directory: false };
           promotions.push(promotion);
-          this.makeDirectory(path.dirname(targetPath), transaction.createdDirectories);
-          if (fs.existsSync(targetPath)) {
-            const backupPath = path.join(transaction.backupsRoot, `file-${fileIndex}`);
-            this.fsOps.renameSync(targetPath, backupPath);
+          this.makeAnchoredDirectory(anchor, path.posix.dirname(targetPath), transaction.createdDirectories);
+          if (anchor.exists(targetPath)) {
+            const backupPath = `${transaction.backupsRoot}/file-${fileIndex}`;
+            anchor.rename(targetPath, backupPath);
             promotion.backupPath = backupPath;
           }
-          this.fsOps.renameSync(stagedPath, targetPath);
+          anchor.rename(stagedPath, targetPath);
           promotion.promoted = true;
           fileIndex += 1;
         }
@@ -550,7 +580,7 @@ export class MutationContext {
         this.commitState.phase = "rolling-back";
         this.commitState.rollbackAttempted = true;
         try {
-          this.rollbackTransaction(transaction, promotions);
+          this.rollbackTransaction(anchor, transaction, promotions);
           this.commitState.phase = "rolled-back";
         } catch (rollbackError) {
           this.commitState.phase = "rollback-failed";
@@ -559,21 +589,17 @@ export class MutationContext {
         throw new Error(`Dove mutation commit failed and all staged changes were rolled back: ${errorMessage(error)}`, { cause: error });
       }
       this.commitState.phase = "committed";
-      try {
-        this.fsOps.rmSync(transactionRoot, { recursive: true, force: true });
-      } catch (cleanupError) {
-        this.commitState.cleanupFailures.push({ path: transactionRoot, reason: errorMessage(cleanupError) });
-      }
+      try { anchor.remove(transactionRoot, { recursive: true, force: true }); } catch (cleanupError) { this.commitState.cleanupFailures.push({ path: anchor.displayPath(transactionRoot), reason: errorMessage(cleanupError) }); }
     } catch (error) {
       primaryError = error;
       throw error;
     } finally {
       try {
-        this.releaseCommitLocks(acquiredLocks);
+        this.releaseCommitLocks(anchor, acquiredLocks);
       } catch (cleanupError) {
-        if (!primaryError && this.commitState.phase === "committed") {
-          this.commitState.cleanupFailures.push({ path: "commit-locks", reason: errorMessage(cleanupError) });
-        }
+        if (!primaryError && this.commitState.phase === "committed") this.commitState.cleanupFailures.push({ path: "commit-locks", reason: errorMessage(cleanupError) });
+      } finally {
+        anchor.close();
       }
     }
   }
@@ -607,7 +633,7 @@ export class MutationContext {
         mutationId: this.id,
         actionId: this.actionId,
         hostId: this.hostId,
-        workspaceRealpath: fs.realpathSync.native(this.root),
+        workspaceRealpath: typeof this.fsOps.realpathSync.native === "function" ? this.fsOps.realpathSync.native(this.root) : this.fsOps.realpathSync(this.root),
         mutationModeSource: this.mutationModeSource,
         createdAt: this.createdAt,
         writesApplied: false,
@@ -661,7 +687,8 @@ export function currentMutationContext(root) {
   if (!context || context.lifecycle !== "active") return null;
   if (root) {
     try {
-      if (fs.realpathSync.native(path.resolve(root)) !== context.root) return null;
+      const resolved = typeof context.fsOps.realpathSync.native === "function" ? context.fsOps.realpathSync.native(path.resolve(root)) : context.fsOps.realpathSync(path.resolve(root));
+      if (resolved !== context.root) return null;
     } catch {
       return null;
     }

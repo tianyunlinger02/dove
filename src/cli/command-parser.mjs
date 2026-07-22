@@ -4,6 +4,7 @@ const boolean = (name, options = {}) => ({ name, kind: "boolean", ...options });
 const outputOptions = [boolean("--json"), value("--format")];
 const mutationOptions = [value("--mutation-mode"), ...outputOptions];
 const missionOptions = [
+  value("--operation"), value("--requirement"), value("--node-update-json", { repeatable: true }),
   value("--proposal-token"), value("--proposal-digest"), value("--mutation-mode"), ...outputOptions,
   value("--mission-id"), value("--goal"), value("--scope", { repeatable: true }),
   value("--out-of-scope", { repeatable: true }), value("--target-artifact", { repeatable: true }),
@@ -27,9 +28,9 @@ export const CLI_COMMAND_SPECS = {
   init: command([value("--goal"), boolean("--archive-reset"), boolean("--confirmed"), value("--proposal-token"), value("--proposal-digest"), ...mutationOptions]),
   mission: command(missionOptions),
   receipt: command(receiptOptions),
-  status: command([value("--mission-id"), value("--detail"), value("--result-mode"), value("--format"), boolean("--full"), boolean("--missions"), boolean("--json"), boolean("--help", { key: "help" }), boolean("-h", { key: "help" })]),
+  status: command([value("--mission-id"), value("--detail"), value("--language"), ...outputOptions, boolean("--help", { key: "help" }), boolean("-h", { key: "help" })]),
   lessons: command([value("--lesson-id"), value("--mission-id"), value("--scope"), value("--kind"), value("--summary"), value("--details"), value("--next-time-guidance", { repeatable: true }), value("--source-id", { repeatable: true }), value("--note-id", { repeatable: true }), value("--artifact", { repeatable: true }), value("--applies-to-artifact", { repeatable: true }), value("--tag", { repeatable: true }), value("--supersedes-lesson-id"), boolean("--include-superseded"), boolean("--include-unscoped"), value("--limit"), value("--proposal-token"), value("--mutation-mode"), boolean("--confirmed"), ...outputOptions], { min: 0, max: 2 }),
-  version: command([value("--mission-id"), value("--version-id"), value("--label"), value("--artifact", { repeatable: true }), value("--supersedes-version-id"), value("--from-version-id"), value("--to-version-id"), boolean("--finalize"), ...mutationOptions]),
+  version: command([value("--mission-id"), value("--version-id"), value("--label"), value("--artifact", { repeatable: true }), value("--supersedes-version-id"), value("--from-version-id"), value("--to-version-id"), ...mutationOptions]),
   source: command([value("--mission-id"), value("--source-id"), value("--citation-key"), value("--title"), value("--locator"), value("--source-type"), value("--origin"), value("--abstract"), value("--year"), value("--author", { repeatable: true }), value("--capture-path"), value("--method"), value("--checked-material"), value("--audit-evidence-json"), ...mutationOptions], { min: 0, max: 2 }),
   note: command([value("--mission-id"), value("--note-id"), value("--title"), value("--summary"), value("--quote", { repeatable: true }), value("--claim", { repeatable: true }), value("--open-question", { repeatable: true }), value("--source-id", { repeatable: true }), value("--artifact", { repeatable: true }), ...mutationOptions]),
   draft: command([value("--mission-id"), value("--draft-id"), value("--title"), value("--body"), value("--summary"), value("--evidence", { repeatable: true }), value("--artifact", { repeatable: true }), boolean("--metadata-only"), ...mutationOptions]),

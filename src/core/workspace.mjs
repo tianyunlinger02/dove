@@ -34,11 +34,36 @@ export function readJson(root, relativePath, fallback) {
   }
 }
 
-export function readText(root, relativePath, fallback = "") {
+export function readBuffer(root, relativePath, fallback = null) {
   const context = currentMutationContext(root);
-  if (context) return context.readText(relativePath, fallback);
+  if (context) return context.readBuffer(relativePath, fallback);
   const fullPath = resolvePath(root, relativePath);
-  return fs.existsSync(fullPath) ? fs.readFileSync(fullPath, "utf8") : fallback;
+  if (!fs.existsSync(fullPath)) return typeof fallback === "function" ? fallback() : fallback === null ? null : Buffer.from(fallback);
+  return Buffer.from(fs.readFileSync(fullPath));
+}
+
+export function readFileSnapshot(root, relativePath) {
+  const context = currentMutationContext(root);
+  if (context) return context.readFileSnapshot(relativePath);
+  const fullPath = resolvePath(root, relativePath);
+  if (!fs.existsSync(fullPath)) return { relativePath, exists: false, type: "absent", mode: null, sha256: null, buffer: null };
+  const stat = fs.lstatSync(fullPath);
+  if (!stat.isFile()) throw new Error(`Workspace read target must be a regular file: ${relativePath}`);
+  const buffer = Buffer.from(fs.readFileSync(fullPath));
+  return { relativePath, exists: true, type: "file", mode: stat.mode & 0o7777, sha256: null, buffer };
+}
+
+export function readDirectory(root, relativePath) {
+  const context = currentMutationContext(root);
+  if (context) return context.readDirectory(relativePath);
+  const fullPath = resolvePath(root, relativePath);
+  if (!fs.existsSync(fullPath)) return [];
+  return fs.readdirSync(fullPath, { withFileTypes: true }).map((entry) => ({ name: entry.name, type: entry.isFile() ? "file" : entry.isDirectory() ? "directory" : entry.isSymbolicLink() ? "symlink" : "other" })).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export function readText(root, relativePath, fallback = "") {
+  const buffer = readBuffer(root, relativePath, null);
+  return buffer === null ? fallback : buffer.toString("utf8");
 }
 
 export function writeJson(root, relativePath, value) {

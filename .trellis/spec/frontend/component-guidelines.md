@@ -16,7 +16,7 @@ There are no browser components. Treat each generated adapter, primary responsib
 
 ## Public Command Surface
 
-Dove exposes exactly twelve flat commands: `dove.init`, `dove.mission`, `dove.status`, `dove.lessons`, `dove.version`, `dove.source`, `dove.note`, `dove.figure`, `dove.experience`, `dove.draft`, `dove.review`, and `dove.rebuttal`. MCP discovery exposes exactly 27 tools.
+Dove exposes exactly twelve flat commands: `dove.init`, `dove.mission`, `dove.status`, `dove.lessons`, `dove.version`, `dove.source`, `dove.note`, `dove.figure`, `dove.experience`, `dove.draft`, `dove.review`, and `dove.rebuttal`. MCP discovery exposes exactly 28 tools.
 
 Do not add public aliases, hidden command tiers, or compatibility names.
 

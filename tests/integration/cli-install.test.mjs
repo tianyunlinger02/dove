@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 
 import { checkGeneratedAdapters, writeClaudeUserCommandAdapters, writeGeneratedAdapters } from "../../scripts/generate-command-adapters.mjs";
 import { createMcpStdioClient } from "../../scripts/mcp-stdio-client.mjs";
-import { PROJECT_HOST_IDS, commandAdapterPathsForHost } from "../../src/core/command-manifest.mjs";
+import { DOVE_CLAUDE_PROJECT_MARKER_PATH, DOVE_MCP_CONFIG_PATH, INSTALLED_DOVE_MCP_SERVER, PROJECT_HOST_IDS, commandAdapterPathsForHost } from "../../src/core/command-manifest.mjs";
 import { initDoveGoal } from "../../src/core/mission-contracts.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
@@ -21,17 +21,22 @@ function assertNoSecretValues(output) {
   assert.doesNotMatch(output, SECRET_VALUE_PATTERN);
 }
 
-function createClaudeHostTestEnv() {
+function createClaudeHostTestEnv(status = "Connected") {
   const claudeConfigRoot = createTempRoot("dove-claude-config-");
   const shellRoot = createTempRoot("dove-claude-shell-");
   const claudeShellRc = path.join(shellRoot, ".bashrc");
+  const claudeCommand = path.join(shellRoot, "claude");
+  fs.writeFileSync(claudeCommand, `#!/usr/bin/env node\nif (process.argv.slice(2).join(" ") !== "mcp get dove") process.exit(2);\nconsole.log(${JSON.stringify(`Status: ${status}`)});\n`, "utf8");
+  fs.chmodSync(claudeCommand, 0o755);
   return {
     claudeConfigRoot,
     claudeShellRc,
+    claudeCommand,
     env: {
       ...process.env,
       DOVE_CLAUDE_CONFIG_DIR: claudeConfigRoot,
-      DOVE_CLAUDE_SHELL_RC: claudeShellRc
+      DOVE_CLAUDE_SHELL_RC: claudeShellRc,
+      DOVE_CLAUDE_COMMAND: claudeCommand
     }
   };
 }
@@ -103,10 +108,10 @@ test("public package docs distinguish installed commands from source-checkout de
     assert.doesNotMatch(text, /\/home\/nvme01\/paper_factory/);
   }
   const samples = fs.readFileSync(path.join(ROOT, "docs", "DOVE_COMMAND_OUTPUT_SAMPLES.md"), "utf8");
-  assert.match(samples, /"newSchemaVersion": 8/);
+  assert.match(samples, /"newSchemaVersion": 9/);
   assert.match(samples, /"mission"[\s\S]{0,600}"contractDigest": "<64 lowercase hex>"/);
   assert.match(samples, /"scope"[\s\S]{0,500}"currentContext"[\s\S]{0,800}"stableGaps"/);
-  assert.doesNotMatch(samples, /"schema": \{ "state": "current", "version": 8 \}/);
+  assert.doesNotMatch(samples, /"schema": \{ "state": "current", "version": 9 \}/);
   assert.doesNotMatch(samples, /"zeroWrite": true/);
   const installText = fs.readFileSync(path.join(ROOT, "docs", "INSTALL.md"), "utf8");
   assert.match(installText, /npx dove install \. --force/);
@@ -300,7 +305,10 @@ for (const relativePath of ["../src/core/workspace.mjs", "../src/mcp/server.mjs"
     assert.equal(fs.existsSync(path.join(installedProject, ".dove")), false, "install must not bootstrap project workflow state");
 
     const initAdapter = fs.readFileSync(path.join(installedProject, ".opencode", "commands", "dove.init.md"), "utf8");
-    assert.match(initAdapter, /node \.\/bin\/dove-package\.mjs init \. --goal "<project goal>" --mutation-mode direct-process --json/);
+    assert.match(initAdapter, /Dove MCP tool.*`init_dove_goal`/isu);
+    assert.match(initAdapter, /no files have changed.*approve or cancel/is);
+    assert.doesNotMatch(initAdapter, /node \.\/bin\/dove(?:-package)?\.mjs|--json\b|--mutation-mode\b/iu);
+    assert.doesNotMatch(initAdapter, /schema 9|proposal digest|workspace identity|exact replay|sealed|提案摘要|工作区身份|精确重放|密封/iu);
     const adapterInit = spawnSync("node", ["./bin/dove-package.mjs", "init", ".", "--goal", "Installed adapter smoke", "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
     assert.equal(adapterInit.status, 0, adapterInit.stderr || adapterInit.stdout);
     const initPayload = JSON.parse(adapterInit.stdout);
@@ -325,6 +333,38 @@ for (const relativePath of ["../src/core/workspace.mjs", "../src/mcp/server.mjs"
     assert.equal(fs.existsSync(path.join(installedProject, ".dove", "missions", `${missionPayload.mission.missionId}.json`)), true);
     assert.equal(fs.existsSync(path.join(installedProject, ".dove", "task-packets")), false);
 
+    const treeNode = {
+      nodeId: "installed-baseline-search",
+      parentNodeId: null,
+      workKind: "retrieval",
+      questionOrHypothesis: "Does a directly comparable baseline exist?",
+      workDescription: "Search the scoped public literature.",
+      successOrStopCriterion: "Find a comparable baseline or exhaust the scoped corpus.",
+      status: "pending",
+      outcomeSummary: null,
+      outcomeEvidenceRefs: [],
+      blockedReasonCode: null,
+      lessonId: null
+    };
+    const beforeTreeProposal = snapshotInstalledDurableState(installedProject);
+    const treeProposal = spawnSync("node", ["./bin/dove-package.mjs", "mission", ".", "--operation", "reevaluate-research-tree", "--mission-id", missionPayload.mission.missionId, "--requirement", "Track the baseline search decision.", "--node-update-json", JSON.stringify(treeNode), "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(treeProposal.status, 0, treeProposal.stderr || treeProposal.stdout);
+    const treeProposalPayload = JSON.parse(treeProposal.stdout);
+    assert.equal(treeProposalPayload.status, "needs-confirmation");
+    assert.deepEqual(snapshotInstalledDurableState(installedProject), beforeTreeProposal, "research tree proposal must be zero-write");
+    const treeReplay = spawnSync("/bin/sh", ["-c", treeProposalPayload.confirmation.exactConfirmationCommand], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(treeReplay.status, 0, treeReplay.stderr || treeReplay.stdout);
+    const researchTreePath = path.join(installedProject, ".dove", "research-trees", `${missionPayload.mission.missionId}.json`);
+    assert.equal(fs.existsSync(researchTreePath), true);
+    const statusCompact = spawnSync("node", ["./bin/dove-package.mjs", "status", ".", "--mission-id", missionPayload.mission.missionId, "--detail", "compact", "--json"], { cwd: installedProject, encoding: "utf8" });
+    const statusFull = spawnSync("node", ["./bin/dove-package.mjs", "status", ".", "--mission-id", missionPayload.mission.missionId, "--detail", "full", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(statusCompact.status, 0, statusCompact.stderr || statusCompact.stdout);
+    assert.equal(statusFull.status, 0, statusFull.stderr || statusFull.stdout);
+    const compactStatusPayload = JSON.parse(statusCompact.stdout);
+    const fullStatusPayload = JSON.parse(statusFull.stdout);
+    assert.equal(compactStatusPayload.currentContext.researchTree.statusCounts.pending, 1);
+    assert.equal(fullStatusPayload.researchTree.nodes[0].nodeId, treeNode.nodeId);
+
     const receiptArtifactPath = "outputs/installed-receipt.md";
     const receiptArtifactFullPath = path.join(installedProject, receiptArtifactPath);
     fs.mkdirSync(path.dirname(receiptArtifactFullPath), { recursive: true });
@@ -335,29 +375,36 @@ for (const relativePath of ["../src/core/workspace.mjs", "../src/mcp/server.mjs"
     const receiptMissionReplay = spawnSync("/bin/sh", ["-c", receiptMissionProposalPayload.confirmation.exactConfirmationCommand], { cwd: installedProject, encoding: "utf8" });
     assert.equal(receiptMissionReplay.status, 0, receiptMissionReplay.stderr || receiptMissionReplay.stdout);
     const receiptMission = JSON.parse(fs.readFileSync(path.join(installedProject, ".dove", "missions", "installed-receipt-current.json"), "utf8"));
-    const makeReceipt = (receiptId) => ({
+    const receiptArtifact = { path: receiptArtifactPath, kind: "document", sha256: crypto.createHash("sha256").update(fs.readFileSync(receiptArtifactFullPath)).digest("hex") };
+    const receiptCriteria = receiptMission.completionCriterionIds.map((criterionId) => ({ criterionId, evidenceRefs: [`artifact:${receiptArtifactPath}`] }));
+    const makeReceipt = (receiptId, part = "complete") => ({
       receiptId,
       missionId: receiptMission.missionId,
       contractDigest: receiptMission.contractDigest,
-      summary: "Recorded installed receipt artifact.",
-      artifacts: [{ path: receiptArtifactPath, kind: "document", sha256: crypto.createHash("sha256").update(fs.readFileSync(receiptArtifactFullPath)).digest("hex") }],
+      summary: `Recorded installed receipt ${part} progress.`,
+      artifacts: part === "criteria" ? [] : [receiptArtifact],
       validations: [],
-      criteriaSatisfied: receiptMission.completionCriterionIds.map((criterionId) => ({ criterionId, evidenceRefs: [`artifact:${receiptArtifactPath}`] })),
+      criteriaSatisfied: part === "artifact" ? [] : receiptCriteria,
       producedAt: "2026-07-16T00:00:00.000Z"
     });
     const cliReceiptPath = path.join(installedProject, "cli-receipt-input.json");
-    fs.writeFileSync(cliReceiptPath, `${JSON.stringify(makeReceipt("installed-cli-receipt"), null, 2)}\n`, "utf8");
+    fs.writeFileSync(cliReceiptPath, `${JSON.stringify(makeReceipt("installed-cli-artifact", "artifact"), null, 2)}\n`, "utf8");
     const installedReceiptPlan = spawnSync("node", ["./bin/dove-package.mjs", "receipt", ".", "--input", "cli-receipt-input.json", "--mutation-mode", "patch-plan", "--json"], { cwd: installedProject, encoding: "utf8" });
     assert.equal(installedReceiptPlan.status, 0, installedReceiptPlan.stderr || installedReceiptPlan.stdout);
     const installedReceiptPlanPayload = JSON.parse(installedReceiptPlan.stdout);
     assert.equal(installedReceiptPlanPayload.completion.assessment, null);
     assert.equal(Object.hasOwn(installedReceiptPlanPayload, "postCommit"), false);
-    const installedReceipt = spawnSync("node", ["./bin/dove-package.mjs", "receipt", ".", "--input", "cli-receipt-input.json", "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
-    assert.equal(installedReceipt.status, 0, installedReceipt.stderr || installedReceipt.stdout);
-    const installedReceiptPayload = JSON.parse(installedReceipt.stdout);
-    assert.equal(installedReceiptPayload.completion.assessment.currentReceiptId, "installed-cli-receipt");
-    assert.equal(installedReceiptPayload.completion.assessment.complete, true);
-    assert.equal(Object.hasOwn(installedReceiptPayload, "postCommit"), false);
+    const installedArtifactReceipt = spawnSync("node", ["./bin/dove-package.mjs", "receipt", ".", "--input", "cli-receipt-input.json", "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(installedArtifactReceipt.status, 0, installedArtifactReceipt.stderr || installedArtifactReceipt.stdout);
+    const installedArtifactReceiptPayload = JSON.parse(installedArtifactReceipt.stdout);
+    assert.equal(installedArtifactReceiptPayload.completion.assessment.complete, false);
+    fs.writeFileSync(cliReceiptPath, `${JSON.stringify(makeReceipt("installed-cli-criteria", "criteria"), null, 2)}\n`, "utf8");
+    const installedCriteriaReceipt = spawnSync("node", ["./bin/dove-package.mjs", "receipt", ".", "--input", "cli-receipt-input.json", "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(installedCriteriaReceipt.status, 0, installedCriteriaReceipt.stderr || installedCriteriaReceipt.stdout);
+    const installedCriteriaReceiptPayload = JSON.parse(installedCriteriaReceipt.stdout);
+    assert.deepEqual(installedCriteriaReceiptPayload.completion.assessment.contributingReceiptIds, ["installed-cli-artifact", "installed-cli-criteria"]);
+    assert.equal(installedCriteriaReceiptPayload.completion.assessment.complete, true);
+    assert.equal(Object.hasOwn(installedCriteriaReceiptPayload, "postCommit"), false);
 
     const lockPath = path.join(installedProject, ".dove", ".receipt-ledger-append.lock");
     fs.writeFileSync(lockPath, "occupied\n", "utf8");
@@ -375,15 +422,10 @@ for (const relativePath of ["../src/core/workspace.mjs", "../src/mcp/server.mjs"
     try {
       await installedMcp.call("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "installed-receipt-regression", version: "1" } });
       installedMcp.notify("notifications/initialized");
-      const mcpPlanResult = await installedMcp.call("tools/call", { name: "ingest_execution_receipt", arguments: { ...makeReceipt("installed-mcp-planned"), mutationMode: "patch-plan", resultMode: "full" } });
-      const mcpPlanPayload = JSON.parse(mcpPlanResult.content[0].text);
-      assert.equal(mcpPlanPayload.completion.assessment, null);
-      assert.equal(Object.hasOwn(mcpPlanPayload, "postCommit"), false);
-      const mcpDirectResult = await installedMcp.call("tools/call", { name: "ingest_execution_receipt", arguments: { ...makeReceipt("installed-mcp-receipt"), mutationMode: "direct-process", resultMode: "full" } });
+      const mcpDirectResult = await installedMcp.call("tools/call", { name: "ingest_execution_receipt", arguments: makeReceipt("installed-mcp-receipt") });
       assert.notEqual(mcpDirectResult.isError, true, mcpDirectResult.content?.[0]?.text);
       const mcpDirectPayload = JSON.parse(mcpDirectResult.content[0].text);
-      assert.equal(mcpDirectPayload.completion.assessment.currentReceiptId, "installed-mcp-receipt");
-      assert.equal(mcpDirectPayload.completion.assessment.complete, true);
+      assert.equal(mcpDirectPayload.completion.complete, true);
       assert.equal(Object.hasOwn(mcpDirectPayload, "postCommit"), false);
     } finally {
       installedMcp.kill();
@@ -404,6 +446,84 @@ for (const relativePath of ["../src/core/workspace.mjs", "../src/mcp/server.mjs"
     assert.equal(lessonReplay.status, 0, lessonReplay.stderr || lessonReplay.stdout);
     assert.equal(fs.existsSync(path.join(installedProject, ".dove", "lessons", "installed-lesson.json")), true);
 
+    const capturedSourcePath = path.join(installedProject, "inputs", "installed-source.txt");
+    fs.mkdirSync(path.dirname(capturedSourcePath), { recursive: true });
+    fs.writeFileSync(capturedSourcePath, "Installed source material.\n", "utf8");
+    const sourceRegister = spawnSync("node", ["./bin/dove-package.mjs", "source", "register", ".", "--mission-id", missionPayload.mission.missionId, "--source-id", "installed-source", "--title", "Installed Source", "--locator", "https://example.test/installed-source", "--capture-path", "inputs/installed-source.txt", "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(sourceRegister.status, 0, sourceRegister.stderr || sourceRegister.stdout);
+    assert.equal(JSON.parse(sourceRegister.stdout).source.lifecycle, "candidate");
+    const beforeSourceQuery = snapshotInstalledDurableState(installedProject);
+    const sourceQuery = spawnSync("node", ["./bin/dove-package.mjs", "source", "query", ".", "--mission-id", missionPayload.mission.missionId, "--source-id", "installed-source", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(sourceQuery.status, 0, sourceQuery.stderr || sourceQuery.stdout);
+    const sourceQueryPayload = JSON.parse(sourceQuery.stdout);
+    assert.equal(sourceQueryPayload.sourceCount, 1);
+    assert.equal(sourceQueryPayload.items[0].sourceId, "installed-source");
+    assert.deepEqual(snapshotInstalledDurableState(installedProject), beforeSourceQuery, "installed source query must be zero-write");
+
+    const sharedArtifactPath = "outputs/installed-successor-shared.md";
+    const sharedArtifactFullPath = path.join(installedProject, sharedArtifactPath);
+    fs.writeFileSync(sharedArtifactFullPath, "installed successor shared artifact\n", "utf8");
+    const originalProposal = spawnSync("node", ["./bin/dove-package.mjs", "mission", ".", "--mission-id", "installed-original", "--goal", "Own the installed shared artifact", "--target-artifact", sharedArtifactPath, "--expected-artifact", sharedArtifactPath, "--completion-criterion", "The installed shared artifact is current.", "--evidence-requirement", `artifact:${sharedArtifactPath}`, "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(originalProposal.status, 0, originalProposal.stderr || originalProposal.stdout);
+    const originalReplay = spawnSync("/bin/sh", ["-c", JSON.parse(originalProposal.stdout).confirmation.exactConfirmationCommand], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(originalReplay.status, 0, originalReplay.stderr || originalReplay.stdout);
+    const originalMission = JSON.parse(fs.readFileSync(path.join(installedProject, ".dove", "missions", "installed-original.json"), "utf8"));
+    const sharedArtifact = { path: sharedArtifactPath, kind: "document", sha256: crypto.createHash("sha256").update(fs.readFileSync(sharedArtifactFullPath)).digest("hex") };
+    const sharedReceipt = (receiptId, mission) => ({
+      receiptId,
+      missionId: mission.missionId,
+      contractDigest: mission.contractDigest,
+      summary: `Record ${receiptId}.`,
+      artifacts: [sharedArtifact],
+      validations: [],
+      criteriaSatisfied: mission.completionCriterionIds.map((criterionId) => ({ criterionId, evidenceRefs: [`artifact:${sharedArtifactPath}`] })),
+      producedAt: "2026-07-18T00:00:00.000Z"
+    });
+    fs.writeFileSync(cliReceiptPath, `${JSON.stringify(sharedReceipt("installed-original-receipt", originalMission), null, 2)}\n`, "utf8");
+    const originalReceipt = spawnSync("node", ["./bin/dove-package.mjs", "receipt", ".", "--input", "cli-receipt-input.json", "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(originalReceipt.status, 0, originalReceipt.stderr || originalReceipt.stdout);
+
+    for (const [missionId, predecessor] of [["installed-successor", "installed-original"], ["installed-terminal", "installed-successor"]]) {
+      const proposal = spawnSync("node", ["./bin/dove-package.mjs", "mission", ".", "--mission-id", missionId, "--goal", `Continue ${predecessor}`, "--target-artifact", sharedArtifactPath, "--expected-artifact", sharedArtifactPath, "--completion-criterion", "The installed shared artifact is current.", "--evidence-requirement", `artifact:${sharedArtifactPath}`, "--supersedes-mission-id", predecessor, "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
+      assert.equal(proposal.status, 0, proposal.stderr || proposal.stdout);
+      const replay = spawnSync("/bin/sh", ["-c", JSON.parse(proposal.stdout).confirmation.exactConfirmationCommand], { cwd: installedProject, encoding: "utf8" });
+      assert.equal(replay.status, 0, replay.stderr || replay.stdout);
+    }
+    const terminalMission = JSON.parse(fs.readFileSync(path.join(installedProject, ".dove", "missions", "installed-terminal.json"), "utf8"));
+    fs.writeFileSync(cliReceiptPath, `${JSON.stringify(sharedReceipt("installed-terminal-receipt", terminalMission), null, 2)}\n`, "utf8");
+    const terminalTakeover = spawnSync("node", ["./bin/dove-package.mjs", "receipt", ".", "--input", "cli-receipt-input.json", "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(terminalTakeover.status, 0, terminalTakeover.stderr || terminalTakeover.stdout);
+    assert.equal(JSON.parse(terminalTakeover.stdout).completion.assessment.complete, true);
+
+    const originalStatus = spawnSync("node", ["./bin/dove-package.mjs", "status", ".", "--mission-id", "installed-original", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(originalStatus.status, 0, originalStatus.stderr || originalStatus.stdout);
+    const originalStatusPayload = JSON.parse(originalStatus.stdout);
+    assert.equal(originalStatusPayload.currentContext.integrityAssessment.supersededByMissionId, "installed-terminal");
+    assert.match(originalStatusPayload.nextStep.command, /installed-terminal/u);
+    const beforeLateReceipt = snapshotInstalledDurableState(installedProject);
+    fs.writeFileSync(cliReceiptPath, `${JSON.stringify(sharedReceipt("installed-late-original", originalMission), null, 2)}\n`, "utf8");
+    const lateOriginal = spawnSync("node", ["./bin/dove-package.mjs", "receipt", ".", "--input", "cli-receipt-input.json", "--mutation-mode", "direct-process", "--json"], { cwd: installedProject, encoding: "utf8" });
+    assert.equal(lateOriginal.status, 1, lateOriginal.stderr || lateOriginal.stdout);
+    assert.match(lateOriginal.stdout, /superseded by installed-terminal.*no longer accepts execution receipts/u);
+    assert.deepEqual(snapshotInstalledDurableState(installedProject), beforeLateReceipt);
+
+    const installedLifecycleMcp = createMcpStdioClient({ args: [path.join(consumerDir, "node_modules", "dove", "mcp", "dove-state-server-package.mjs")], cwd: installedProject });
+    try {
+      await installedLifecycleMcp.call("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "installed-lifecycle-regression", version: "1" } });
+      installedLifecycleMcp.notify("notifications/initialized");
+      const compactHistorical = await installedLifecycleMcp.call("tools/call", { name: "query_dove_status", arguments: { missionId: "installed-original" } });
+      const compactHistoricalPayload = JSON.parse(compactHistorical.content[0].text);
+      assert.equal(compactHistoricalPayload.current.integrity.status, "superseded");
+      assert.equal(compactHistoricalPayload.attention.status, "superseded");
+      assert.ok(compactHistoricalPayload.attention.reasons.includes("This mission has been superseded."));
+      assert.equal(Object.hasOwn(compactHistoricalPayload, "currentContext"), false);
+      const lateMcp = await installedLifecycleMcp.call("tools/call", { name: "ingest_execution_receipt", arguments: sharedReceipt("installed-late-mcp", originalMission) });
+      assert.equal(lateMcp.isError, true);
+      assert.match(lateMcp.content[0].text, /superseded by installed-terminal.*no longer accepts execution receipts/u);
+    } finally {
+      installedLifecycleMcp.kill();
+    }
+
     const beforeDeletedCommands = snapshotInstalledDurableState(installedProject);
     for (const deletedCommand of ["auto", "operator", "review-loop", "launch", "orchestrate", "audit", "return"]) {
       const rejected = spawnSync("node", ["./bin/dove-package.mjs", deletedCommand, "."], { cwd: installedProject, encoding: "utf8" });
@@ -422,7 +542,7 @@ test("generated adapter writers reject symlinked destinations", () => {
   fs.mkdirSync(path.join(root, ".opencode"), { recursive: true });
   fs.symlinkSync(outside, path.join(root, ".opencode", "commands"), "dir");
 
-  assert.throws(() => writeGeneratedAdapters(root), /must not contain symbolic links/);
+  assert.throws(() => writeGeneratedAdapters(root), /must not contain symbolic links|not a directory|symbolic link|must be absent or a regular file/);
   assert.deepEqual(fs.readdirSync(outside), []);
 });
 
@@ -433,7 +553,7 @@ test("Claude adapter writer preflights its full write set before a later symlink
   const outside = createTempRoot("dove-claude-adapter-atomic-outside-");
   fs.symlinkSync(outside, path.join(root, "commands", "dove", "status.md"));
   const before = snapshotTreeBytes(root);
-  assert.throws(() => writeClaudeUserCommandAdapters(root), /must not contain symbolic links/);
+  assert.throws(() => writeClaudeUserCommandAdapters(root), /must not contain symbolic links|not a directory|symbolic link|must be absent or a regular file/);
   assert.deepEqual(snapshotTreeBytes(root), before);
   assert.deepEqual(fs.readdirSync(outside), []);
 });
@@ -506,9 +626,35 @@ test("CLI install preflights the full project write set before a later symlink f
   });
 
   assert.equal(result.status, 1, result.stderr || result.stdout);
-  assert.match(result.stderr || result.stdout, /must not contain symbolic links/);
+  assert.match(result.stderr || result.stdout, /must not contain symbolic links|not a directory|symbolic link|must be absent or a regular file/);
   assert.deepEqual(snapshotTreeBytes(target), before);
   assert.deepEqual(fs.readdirSync(outside), []);
+});
+
+test("installed MCP entry and workspace root remain stable from project subdirectories", async () => {
+  const target = createTempRoot("dove-install-nested-mcp-");
+  const { env } = createClaudeHostTestEnv();
+  const install = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude", "--json"], { cwd: ROOT, encoding: "utf8", env });
+  assert.equal(install.status, 0, install.stderr || install.stdout);
+  bootstrapCurrentWorkspace(target, "Nested MCP root");
+  const nested = path.join(target, "docs", "nested");
+  fs.mkdirSync(nested, { recursive: true });
+  const client = createMcpStdioClient({
+    args: [path.join(target, "mcp", "dove-state-server-package.mjs")],
+    cwd: nested,
+    env: { ...process.env, CLAUDE_PROJECT_DIR: target }
+  });
+  try {
+    await client.call("initialize", { protocolVersion: "2025-06-18", capabilities: { elicitation: {} }, clientInfo: { name: "nested-install-test", version: "1.0.0" } });
+    client.notify("notifications/initialized");
+    const result = await client.call("tools/call", { name: "query_dove_status", arguments: {} });
+    assert.notEqual(result.isError, true, result.content?.[0]?.text);
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload.current.missionCount, 0);
+    assert.equal(payload.message, "Dove has 0 mission checkpoints.");
+  } finally {
+    client.kill();
+  }
 });
 
 test("CLI install copies runtime and adapters without bootstrapping workflow state", () => {
@@ -592,15 +738,143 @@ test("CLI install preflights project and Claude writes before a Claude symlink f
 
   const adapterResult = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude"], { cwd: ROOT, encoding: "utf8", env });
   assert.equal(adapterResult.status, 1, adapterResult.stderr || adapterResult.stdout);
-  assert.match(adapterResult.stderr || adapterResult.stdout, /must not contain symbolic links/);
+  assert.match(adapterResult.stderr || adapterResult.stdout, /must not contain symbolic links|not a directory|symbolic link|must be absent or a regular file/);
   assert.deepEqual(snapshotTreeBytes(target), projectBefore);
+  assert.equal(fs.existsSync(path.join(target, DOVE_MCP_CONFIG_PATH)), false);
+  assert.equal(fs.existsSync(path.join(target, DOVE_CLAUDE_PROJECT_MARKER_PATH)), false);
   assert.deepEqual(snapshotTreeBytes(claudeConfigRoot), claudeBefore);
   assert.equal(fs.readFileSync(path.join(claudeConfigRoot, "settings.json"), "utf8"), settings);
   assert.equal(fs.readFileSync(claudeShellRc, "utf8"), shell);
   assert.deepEqual(fs.readdirSync(outside), []);
 });
 
-test("CLI install writes only Claude user commands and keeps settings and shell byte-identical", () => {
+test("CLI Claude install creates and merges project MCP configuration", () => {
+  const target = createTempRoot("dove-install-claude-mcp-");
+  const { claudeConfigRoot, env } = createClaudeHostTestEnv();
+  const existingConfig = {
+    projectSetting: { keep: true, values: [1, 2, 3] },
+    mcpServers: {
+      existing: {
+        type: "stdio",
+        command: "existing-command",
+        args: ["--keep"],
+        env: { KEEP: "yes" }
+      }
+    }
+  };
+  fs.writeFileSync(path.join(target, DOVE_MCP_CONFIG_PATH), `${JSON.stringify(existingConfig, null, 2)}\n`, "utf8");
+
+  const result = spawnSync("node", [CLI, "install", target, "--host", "claude", "--json"], { cwd: ROOT, encoding: "utf8", env });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const actual = JSON.parse(fs.readFileSync(path.join(target, DOVE_MCP_CONFIG_PATH), "utf8"));
+  assert.deepEqual(actual.projectSetting, existingConfig.projectSetting);
+  assert.deepEqual(actual.mcpServers.existing, existingConfig.mcpServers.existing);
+  assert.deepEqual(actual.mcpServers.dove, INSTALLED_DOVE_MCP_SERVER);
+  assert.ok(fs.existsSync(path.join(target, DOVE_CLAUDE_PROJECT_MARKER_PATH)));
+  assert.ok(fs.existsSync(path.join(claudeConfigRoot, "commands", "dove", "status.md")));
+});
+
+test("CLI Claude sync preserves configured project MCP bytes", () => {
+  const target = createTempRoot("dove-sync-claude-mcp-idempotent-");
+  const { env } = createClaudeHostTestEnv();
+  const configBytes = [
+    "{",
+    '\t"projectSetting": {"keep": true},',
+    '\t"mcpServers": {',
+    '\t\t"dove": {',
+    `\t\t\t"args": ${JSON.stringify(INSTALLED_DOVE_MCP_SERVER.args)},`,
+    '\t\t\t"command": "node",',
+    '\t\t\t"type": "stdio"',
+    "\t\t}",
+    "\t}",
+    "}",
+    ""
+  ].join("\n");
+  fs.writeFileSync(path.join(target, DOVE_MCP_CONFIG_PATH), configBytes, "utf8");
+
+  const result = spawnSync("node", [CLI, "sync", target, "--force", "--host", "claude", "--json"], { cwd: ROOT, encoding: "utf8", env });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(fs.readFileSync(path.join(target, DOVE_MCP_CONFIG_PATH), "utf8"), configBytes);
+  assert.equal(payload.plannedPaths.some((entry) => entry.path === DOVE_MCP_CONFIG_PATH), false);
+  assert.equal(payload.writtenPaths.some((entry) => entry.path === DOVE_MCP_CONFIG_PATH), false);
+});
+
+test("CLI Claude install rejects invalid project MCP configuration before writing", () => {
+  const cases = [
+    ["malformed", "{bad json", /must contain valid JSON/u],
+    ["null-root", "null\n", /must contain a JSON object/u],
+    ["array-root", "[]\n", /must contain a JSON object/u],
+    ["null-servers", '{"mcpServers":null}\n', /mcpServers must be a JSON object/u],
+    ["array-servers", '{"mcpServers":[]}\n', /mcpServers must be a JSON object/u]
+  ];
+  for (const [label, content, message] of cases) {
+    const target = createTempRoot(`dove-install-claude-mcp-${label}-`);
+    const { claudeConfigRoot, env } = createClaudeHostTestEnv();
+    fs.writeFileSync(path.join(target, DOVE_MCP_CONFIG_PATH), content, "utf8");
+    const projectBefore = snapshotTreeBytes(target);
+    const claudeBefore = snapshotTreeBytes(claudeConfigRoot);
+    const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude", "--json"], { cwd: ROOT, encoding: "utf8", env });
+    assert.equal(result.status, 1, `${label}: ${result.stderr || result.stdout}`);
+    assert.match(result.stderr || result.stdout, message);
+    assert.deepEqual(snapshotTreeBytes(target), projectBefore);
+    assert.deepEqual(snapshotTreeBytes(claudeConfigRoot), claudeBefore);
+  }
+});
+
+test("CLI Claude install rejects duplicate JSON object keys before writing", () => {
+  const cases = [
+    ["top-level", '{"mcpServers":{},"mcpServers":{}}\n'],
+    ["dove", '{"mcpServers":{"dove":{"type":"stdio"},"dove":{"type":"stdio"}}}\n'],
+    ["nested", '{"metadata":{"keep":1,"keep":2}}\n'],
+    ["escaped", '{"mcpServers":{},"mcp\\u0053ervers":{}}\n']
+  ];
+  for (const [label, content] of cases) {
+    const target = createTempRoot(`dove-install-claude-mcp-duplicate-${label}-`);
+    const { claudeConfigRoot, env } = createClaudeHostTestEnv();
+    fs.writeFileSync(path.join(target, DOVE_MCP_CONFIG_PATH), content, "utf8");
+    const projectBefore = snapshotTreeBytes(target);
+    const claudeBefore = snapshotTreeBytes(claudeConfigRoot);
+    const result = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude", "--json"], { cwd: ROOT, encoding: "utf8", env });
+    assert.equal(result.status, 1, `${label}: ${result.stderr || result.stdout}`);
+    assert.match(result.stderr || result.stdout, /must not contain duplicate JSON object keys/u);
+    assert.deepEqual(snapshotTreeBytes(target), projectBefore);
+    assert.deepEqual(snapshotTreeBytes(claudeConfigRoot), claudeBefore);
+  }
+});
+
+test("CLI Claude install rejects conflicting and symlinked project MCP configuration", () => {
+  for (const force of [false, true]) {
+    const target = createTempRoot(`dove-install-claude-mcp-conflict-${force}-`);
+    const { claudeConfigRoot, env } = createClaudeHostTestEnv();
+    fs.writeFileSync(path.join(target, DOVE_MCP_CONFIG_PATH), `${JSON.stringify({ mcpServers: { dove: { type: "stdio", command: "node", args: ["./other-server.mjs"] } } }, null, 2)}\n`, "utf8");
+    const projectBefore = snapshotTreeBytes(target);
+    const claudeBefore = snapshotTreeBytes(claudeConfigRoot);
+    const args = [CLI, "install", target, "--host", "claude", "--json", ...(force ? ["--force"] : [])];
+    const result = spawnSync("node", args, { cwd: ROOT, encoding: "utf8", env });
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    assert.match(result.stderr || result.stdout, /already defines a conflicting Dove MCP server/u);
+    assert.deepEqual(snapshotTreeBytes(target), projectBefore);
+    assert.deepEqual(snapshotTreeBytes(claudeConfigRoot), claudeBefore);
+  }
+
+  const target = createTempRoot("dove-install-claude-mcp-symlink-");
+  const outside = createTempRoot("dove-install-claude-mcp-symlink-outside-");
+  const { claudeConfigRoot, env } = createClaudeHostTestEnv();
+  const outsideConfig = path.join(outside, "config.json");
+  fs.writeFileSync(outsideConfig, '{"keep":true}\n', "utf8");
+  fs.symlinkSync(outsideConfig, path.join(target, DOVE_MCP_CONFIG_PATH));
+  const projectBefore = snapshotTreeBytes(target);
+  const claudeBefore = snapshotTreeBytes(claudeConfigRoot);
+  const result = spawnSync("node", [CLI, "sync", target, "--force", "--host", "claude", "--json"], { cwd: ROOT, encoding: "utf8", env });
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stderr || result.stdout, /symbolic link/u);
+  assert.equal(fs.readFileSync(outsideConfig, "utf8"), '{"keep":true}\n');
+  assert.deepEqual(snapshotTreeBytes(target), projectBefore);
+  assert.deepEqual(snapshotTreeBytes(claudeConfigRoot), claudeBefore);
+});
+
+test("CLI install writes Claude project registration and user commands without changing settings or shell", () => {
   const target = createTempRoot("dove-install-claude-user-");
   const { claudeConfigRoot, claudeShellRc, env } = createClaudeHostTestEnv();
   const settings = `${JSON.stringify({ theme: "dark", fastMode: false, env: { EXISTING_ENV: "kept" } }, null, 2)}\n`;
@@ -614,6 +888,8 @@ test("CLI install writes only Claude user commands and keeps settings and shell 
   assert.deepEqual(payload.hosts, ["claude"]);
   assert.equal(Object.hasOwn(payload, "claudeCodeGateway"), false);
   assert.equal(fs.existsSync(path.join(target, ".claude", "commands", "dove")), false);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(target, DOVE_MCP_CONFIG_PATH), "utf8")), { mcpServers: { dove: INSTALLED_DOVE_MCP_SERVER } });
+  assert.ok(fs.existsSync(path.join(target, DOVE_CLAUDE_PROJECT_MARKER_PATH)));
   assert.ok(fs.existsSync(path.join(claudeConfigRoot, "commands", "dove", "status.md")));
   assert.equal(fs.readFileSync(path.join(claudeConfigRoot, "settings.json"), "utf8"), settings);
   assert.equal(fs.readFileSync(claudeShellRc, "utf8"), shell);
@@ -624,8 +900,12 @@ test("CLI install writes only Claude user commands and keeps settings and shell 
   assert.equal(fs.readFileSync(claudeShellRc, "utf8"), shell);
 
   const statusCommand = fs.readFileSync(path.join(claudeConfigRoot, "commands", "dove", "status.md"), "utf8");
-  assert.match(statusCommand, /node \.\/bin\/dove-package\.mjs status \. --json/);
+  assert.match(statusCommand, /Dove MCP tool.*`query_dove_status`/isu);
+  assert.doesNotMatch(statusCommand, /node \.\/bin\/dove(?:-package)?\.mjs|--json\b|--mutation-mode\b/iu);
   assert.match(statusCommand, /never selects an implicit latest mission/);
+  const missionCommand = fs.readFileSync(path.join(claudeConfigRoot, "commands", "dove", "mission.md"), "utf8");
+  assert.match(missionCommand, /Preserve the full original user request.*resume that same request.*current host turn/isu);
+  assert.match(missionCommand, /Stop after the Dove checkpoint only when the user explicitly asked solely to create or reevaluate the mission/iu);
 });
 
 test("CLI install all host adapters skips unsafe local artifacts", () => {
@@ -654,6 +934,43 @@ test("CLI install all host adapters skips unsafe local artifacts", () => {
   assert.equal(fs.existsSync(path.join(target, ".codex", "skills", "parallel", "SKILL.md")), false);
   assert.equal(fs.existsSync(path.join(target, ".opencode", "node_modules")), false);
   assert.equal(fs.existsSync(path.join(target, ".claude", "settings.local.json")), false);
+});
+
+test("CLI sync removes only exact retired managed paths and preserves unknown siblings", () => {
+  const target = createTempRoot("dove-sync-retired-");
+  const retiredCommand = path.join(target, ".opencode", "commands", "dove.auto.md");
+  const retiredSkill = path.join(target, ".agents", "skills", "dove-operator", "SKILL.md");
+  const unknownCommand = path.join(target, ".opencode", "commands", "dove.user-extension.md");
+  fs.mkdirSync(path.dirname(retiredCommand), { recursive: true });
+  fs.mkdirSync(path.dirname(retiredSkill), { recursive: true });
+  fs.writeFileSync(retiredCommand, "retired\n", "utf8");
+  fs.writeFileSync(retiredSkill, "retired\n", "utf8");
+  fs.writeFileSync(unknownCommand, "user extension\n", "utf8");
+
+  const result = spawnSync("node", [CLI, "sync", target, "--force", "--host", "opencode", "--host", "agents", "--json"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(fs.existsSync(retiredCommand), false);
+  assert.equal(fs.existsSync(path.dirname(retiredSkill)), false);
+  assert.equal(fs.readFileSync(unknownCommand, "utf8"), "user extension\n");
+  assert.ok(payload.removedPaths.some((entry) => entry.path === ".opencode/commands/dove.auto.md"));
+  assert.ok(payload.removedPaths.some((entry) => entry.path === ".agents/skills/dove-operator"));
+});
+
+test("CLI sync fails closed on a symlinked retired managed path before writing", () => {
+  const target = createTempRoot("dove-sync-retired-symlink-");
+  const outside = createTempRoot("dove-sync-retired-symlink-outside-");
+  const retiredCommand = path.join(target, ".opencode", "commands", "dove.auto.md");
+  fs.mkdirSync(path.dirname(retiredCommand), { recursive: true });
+  fs.symlinkSync(path.join(outside, "escape.md"), retiredCommand);
+  fs.writeFileSync(path.join(target, "README.md"), "keep bytes\n", "utf8");
+  const before = snapshotTreeBytes(target);
+
+  const result = spawnSync("node", [CLI, "sync", target, "--force", "--host", "opencode", "--json"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stderr || result.stdout, /must not (?:be|contain) symbolic links?/);
+  assert.deepEqual(snapshotTreeBytes(target), before);
+  assert.deepEqual(fs.readdirSync(outside), []);
 });
 
 test("CLI sync preserves user-owned .dove workspace state and .dove-archive state", () => {
@@ -694,15 +1011,18 @@ test("CLI doctor treats an installed runtime with absent workspace state as heal
 
 test("CLI doctor reports installed host adapters for multi-host workspaces", () => {
   const target = createTempRoot("dove-doctor-hosts-");
+  const { env } = createClaudeHostTestEnv();
   spawnSync("node", [CLI, "install", target, "--force", "--host", "cursor,codex"], {
     cwd: ROOT,
-    encoding: "utf8"
+    encoding: "utf8",
+    env
   });
   bootstrapCurrentWorkspace(target, "Doctor host adapters");
 
   const result = spawnSync("node", [CLI, "doctor", target], {
     cwd: ROOT,
-    encoding: "utf8"
+    encoding: "utf8",
+    env
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -712,7 +1032,7 @@ test("CLI doctor reports installed host adapters for multi-host workspaces", () 
   assert.ok(payload.checks.some((check) => check.check === "host-adapter:cursor" && check.ok));
   assert.ok(payload.checks.some((check) => check.check === "workspace-schema" && check.ok));
   assert.equal(payload.workspaceMode, "current-schema");
-  assert.equal(payload.workspaceSchema.schemaVersion, 8);
+  assert.equal(payload.workspaceSchema.schemaVersion, 9);
 });
 
 test("CLI doctor ignores Claude settings and shell health", () => {
@@ -731,6 +1051,45 @@ test("CLI doctor ignores Claude settings and shell health", () => {
   assert.equal(Object.hasOwn(payload, "claudeCodeGateway"), false);
   assert.equal(fs.readFileSync(path.join(claudeConfigRoot, "settings.json"), "utf8"), settings);
   assert.equal(fs.readFileSync(claudeShellRc, "utf8"), shell);
+});
+
+test("CLI doctor separates Claude pending, connected, and failed MCP states", () => {
+  for (const [reported, expectedState, healthy] of [
+    ["Pending approval (run claude to approve)", "pending-approval", false],
+    ["Connected", "connected", true],
+    ["Failed to connect", "failed", false]
+  ]) {
+    const target = createTempRoot(`dove-doctor-claude-state-${expectedState}-`);
+    const { env } = createClaudeHostTestEnv(reported);
+    const install = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude", "--json"], { cwd: ROOT, encoding: "utf8", env });
+    assert.equal(install.status, 0, install.stderr || install.stdout);
+    const before = snapshotTreeBytes(target);
+    const result = spawnSync("node", [CLI, "doctor", target, "--json"], { cwd: ROOT, encoding: "utf8", env });
+    assert.equal(result.status, healthy ? 0 : 1, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout);
+    const status = payload.checks.find((check) => check.check === "claude-mcp-status");
+    const probe = payload.checks.find((check) => check.check === "runtime:mcp-package-probe");
+    assert.equal(status.state, expectedState);
+    assert.equal(status.ok, healthy);
+    assert.equal(probe.state, healthy ? "passed" : "blocked");
+    assert.deepEqual(snapshotTreeBytes(target), before);
+  }
+});
+
+test("CLI doctor fails closed when installed MCP runtime or probe is corrupt", () => {
+  for (const relativePath of ["mcp/dove-state-server-package.mjs", "scripts/doctor-mcp-probe-package.mjs"]) {
+    const target = createTempRoot(`dove-doctor-corrupt-${path.basename(relativePath)}-`);
+    const { env } = createClaudeHostTestEnv();
+    const install = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude", "--json"], { cwd: ROOT, encoding: "utf8", env });
+    assert.equal(install.status, 0, install.stderr || install.stdout);
+    fs.writeFileSync(path.join(target, relativePath), "process.exit(0);\n", "utf8");
+    const before = snapshotTreeBytes(target);
+    const result = spawnSync("node", [CLI, "doctor", target, "--json"], { cwd: ROOT, encoding: "utf8", env });
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.checks.find((check) => check.check === "runtime:mcp-package-probe").ok, false);
+    assert.deepEqual(snapshotTreeBytes(target), before);
+  }
 });
 
 test("CLI doctor passes for a Claude-only install without requiring OpenCode", () => {
@@ -760,6 +1119,38 @@ test("CLI doctor passes for a Claude-only install without requiring OpenCode", (
   assertNoSecretValues(result.stdout);
 });
 
+test("CLI doctor reports a deleted project MCP configuration after Claude installation", () => {
+  const target = createTempRoot("dove-doctor-claude-mcp-missing-");
+  const { env } = createClaudeHostTestEnv();
+  const install = spawnSync("node", [CLI, "install", target, "--force", "--host", "claude", "--json"], { cwd: ROOT, encoding: "utf8", env });
+  assert.equal(install.status, 0, install.stderr || install.stdout);
+  fs.rmSync(path.join(target, DOVE_MCP_CONFIG_PATH));
+
+  const result = spawnSync("node", [CLI, "doctor", target, "--json"], { cwd: ROOT, encoding: "utf8", env });
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.deepEqual(payload.hostAdapters, ["claude"]);
+  assert.ok(payload.missing.includes(DOVE_MCP_CONFIG_PATH));
+  assert.ok(payload.checks.some((check) => check.check === "host-adapter:claude" && !check.ok && check.requiredPaths.includes(DOVE_MCP_CONFIG_PATH)));
+});
+
+test("CLI doctor does not infer Claude from global user commands in another project", () => {
+  const claudeTarget = createTempRoot("dove-doctor-claude-project-");
+  const otherTarget = createTempRoot("dove-doctor-other-project-");
+  const { env } = createClaudeHostTestEnv();
+  const claudeInstall = spawnSync("node", [CLI, "install", claudeTarget, "--force", "--host", "claude", "--json"], { cwd: ROOT, encoding: "utf8", env });
+  assert.equal(claudeInstall.status, 0, claudeInstall.stderr || claudeInstall.stdout);
+  const otherInstall = spawnSync("node", [CLI, "install", otherTarget, "--force", "--host", "opencode", "--json"], { cwd: ROOT, encoding: "utf8", env });
+  assert.equal(otherInstall.status, 0, otherInstall.stderr || otherInstall.stdout);
+
+  const result = spawnSync("node", [CLI, "doctor", otherTarget, "--json"], { cwd: ROOT, encoding: "utf8", env });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.deepEqual(payload.hostAdapters, ["opencode"]);
+  assert.equal(payload.checks.some((check) => check.check === "host-adapter:claude"), false);
+  assert.equal(payload.missing.includes(DOVE_MCP_CONFIG_PATH), false);
+});
+
 test("CLI doctor fails when a required Dove adapter is missing", () => {
   const target = createTempRoot("dove-doctor-missing-host-");
   spawnSync("node", [CLI, "install", target, "--force", "--host", "cursor"], {
@@ -780,17 +1171,34 @@ test("CLI doctor fails when a required Dove adapter is missing", () => {
   assert.ok(payload.checks.some((check) => check.check === "host-adapter:cursor" && !check.ok && check.requiredPaths.includes(missingAdapterPath)));
 });
 
+test("CLI doctor fails when an installed adapter content hash drifts", () => {
+  const target = createTempRoot("dove-doctor-drifted-host-");
+  const install = spawnSync("node", [CLI, "install", target, "--force", "--host", "cursor"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(install.status, 0, install.stderr || install.stdout);
+  const driftedPath = ".cursor/commands/dove-status.md";
+  fs.appendFileSync(path.join(target, driftedPath), "\nuser drift\n", "utf8");
+
+  const result = spawnSync("node", [CLI, "doctor", target, "--json"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.ok(payload.drifted.includes(driftedPath));
+  assert.ok(payload.checks.some((check) => check.check === "host-adapter:cursor" && !check.ok));
+});
+
 test("CLI doctor reports a healthy current schema without legacy orchestration diagnostics", () => {
   const target = createTempRoot("dove-doctor-current-schema-");
+  const { env } = createClaudeHostTestEnv();
   spawnSync("node", [CLI, "install", target, "--force"], {
     cwd: ROOT,
-    encoding: "utf8"
+    encoding: "utf8",
+    env
   });
   bootstrapCurrentWorkspace(target, "Doctor current schema");
 
   const result = spawnSync("node", [CLI, "doctor", target], {
     cwd: ROOT,
-    encoding: "utf8"
+    encoding: "utf8",
+    env
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -798,7 +1206,7 @@ test("CLI doctor reports a healthy current schema without legacy orchestration d
   assert.equal(payload.healthy, true);
   assert.equal(payload.workspaceMode, "current-schema");
   assert.equal(payload.workspaceSchema.state, "current-healthy");
-  assert.equal(payload.workspaceSchema.schemaVersion, 8);
+  assert.equal(payload.workspaceSchema.schemaVersion, 9);
   assert.deepEqual(payload.writes, []);
   assert.equal(payload.checks.some((check) => check.check === "meta-optimize-frontier"), false);
   assert.equal(payload.checks.some((check) => check.check === "dove-authority"), false);

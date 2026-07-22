@@ -2,9 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { normalizeProjectRelativePath } from "./artifact-integrity.mjs";
+import { missionSupersedes } from "./mission-graph.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_GUARDED_MUTATIONS } from "./schema.mjs";
 
-export const EXECUTION_RECEIPT_SCHEMA_VERSION = 2;
+export const EXECUTION_RECEIPT_SCHEMA_VERSION = 3;
 export const EXECUTION_RECEIPT_PRODUCER_KINDS = Object.freeze(["public-execution", "dove-internal"]);
 
 const RECEIPT_FIELDS = new Set([
@@ -24,7 +25,8 @@ const RECEIPT_FIELDS = new Set([
 ]);
 const ARTIFACT_FIELDS = new Set(["path", "kind", "sha256", "derivedReferences"]);
 const VALIDATION_FIELDS = new Set(["kind", "reference", "outputHash"]);
-const CRITERION_FIELDS = new Set(["criterionId", "evidenceRefs"]);
+const CRITERION_FIELDS = new Set(["criterionId", "evidenceRefs", "evidenceBindings"]);
+const EVIDENCE_BINDING_FIELDS = new Set(["reference", "sha256", "receiptId"]);
 const PRODUCER_FIELDS = new Set(["kind", "actionId"]);
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 const HASH = /^[0-9a-f]{64}$/u;
@@ -114,7 +116,12 @@ function validateStoredReceipt(value, context) {
   exactIso(value.recordedAt, `${label}.recordedAt`);
   validateProducer(value.producer, `${label}.producer`);
 
-  if (!Array.isArray(value.artifacts) || value.artifacts.length === 0) throw new Error(`${label}.artifacts must contain at least one item.`);
+  if (!Array.isArray(value.artifacts)) throw new Error(`${label}.artifacts must be an array.`);
+  if (!Array.isArray(value.validations)) throw new Error(`${label}.validations must be an array.`);
+  if (!Array.isArray(value.criteriaSatisfied)) throw new Error(`${label}.criteriaSatisfied must be an array.`);
+  if (value.artifacts.length === 0 && value.validations.length === 0 && value.criteriaSatisfied.length === 0) {
+    throw new Error(`${label} must contain at least one artifact, validation, or satisfied criterion.`);
+  }
   const artifactPaths = new Set();
   for (const [index, artifact] of value.artifacts.entries()) {
     const itemLabel = `${label}.artifacts[${index}]`;
@@ -127,7 +134,6 @@ function validateStoredReceipt(value, context) {
     canonicalStringArray(artifact.derivedReferences, `${itemLabel}.derivedReferences`, { sorted: true });
   }
 
-  if (!Array.isArray(value.validations)) throw new Error(`${label}.validations must be an array.`);
   const validationPaths = new Set();
   for (const [index, validation] of value.validations.entries()) {
     const itemLabel = `${label}.validations[${index}]`;
@@ -135,11 +141,13 @@ function validateStoredReceipt(value, context) {
     exactString(validation.kind, `${itemLabel}.kind`);
     const reference = canonicalPath(validation.reference, `${itemLabel}.reference`);
     if (validationPaths.has(reference)) throw new Error(`${label}.validations contains duplicate reference ${reference}.`);
+    if (artifactPaths.has(reference)) throw new Error(`${label} artifact and validation paths must be canonically distinct: ${reference}.`);
     validationPaths.add(reference);
     hash(validation.outputHash, `${itemLabel}.outputHash`);
   }
 
-  if (!Array.isArray(value.criteriaSatisfied)) throw new Error(`${label}.criteriaSatisfied must be an array.`);
+  const artifactHashByReference = new Map(value.artifacts.map((artifact) => [`artifact:${artifact.path}`, artifact.sha256]));
+  const validationHashByReference = new Map(value.validations.map((validation) => [`validation:${validation.reference}`, validation.outputHash]));
   const criterionIds = new Set();
   const missionCriterionIds = new Set(Array.isArray(mission.completionCriterionIds) ? mission.completionCriterionIds : []);
   for (const [index, criterion] of value.criteriaSatisfied.entries()) {
@@ -150,6 +158,19 @@ function validateStoredReceipt(value, context) {
     if (criterionIds.has(criterionId)) throw new Error(`${label}.criteriaSatisfied contains duplicate criterionId ${criterionId}.`);
     criterionIds.add(criterionId);
     const references = canonicalStringArray(criterion.evidenceRefs, `${itemLabel}.evidenceRefs`);
+    if (references.length === 0) throw new Error(`${itemLabel}.evidenceRefs must contain at least one item.`);
+    if (!Array.isArray(criterion.evidenceBindings) || criterion.evidenceBindings.length !== references.length) {
+      throw new Error(`${itemLabel}.evidenceBindings must bind every evidence reference to its original hash.`);
+    }
+    const bindingByReference = new Map();
+    for (const [bindingIndex, binding] of criterion.evidenceBindings.entries()) {
+      const bindingLabel = `${itemLabel}.evidenceBindings[${bindingIndex}]`;
+      assertSealed(binding, EVIDENCE_BINDING_FIELDS, bindingLabel);
+      const reference = exactString(binding.reference, `${bindingLabel}.reference`);
+      if (bindingByReference.has(reference)) throw new Error(`${itemLabel}.evidenceBindings contains duplicate reference ${reference}.`);
+      const receiptId = safeId(binding.receiptId, `${bindingLabel}.receiptId`);
+      bindingByReference.set(reference, { sha256: hash(binding.sha256, `${bindingLabel}.sha256`), receiptId });
+    }
     for (const [referenceIndex, reference] of references.entries()) {
       const separator = reference.indexOf(":");
       if (separator <= 0 || separator === reference.length - 1) throw new Error(`${itemLabel}.evidenceRefs[${referenceIndex}] must be a typed evidence reference.`);
@@ -158,6 +179,10 @@ function validateStoredReceipt(value, context) {
       if ((kind === "artifact" || kind === "validation") && canonicalPath(target, `${itemLabel}.evidenceRefs[${referenceIndex}]`) !== target) {
         throw new Error(`${itemLabel}.evidenceRefs[${referenceIndex}] must be canonical.`);
       }
+      if (!bindingByReference.has(reference)) throw new Error(`${itemLabel}.evidenceBindings is missing ${reference}.`);
+      const binding = bindingByReference.get(reference);
+      const declaredHash = kind === "artifact" ? artifactHashByReference.get(reference) : kind === "validation" ? validationHashByReference.get(reference) : null;
+      if (declaredHash && (binding.sha256 !== declaredHash || binding.receiptId !== receiptId)) throw new Error(`${itemLabel}.evidenceBindings does not match the receipt declaration for ${reference}.`);
     }
   }
   return value;
@@ -177,14 +202,18 @@ function readJsonStrict(fullPath, label) {
   }
 }
 
-function derivedState(manifest, receipts) {
+function derivedState(manifest, receipts, missionGraph) {
   const currentByPath = new Map();
   const artifactHistory = [];
   for (const receipt of receipts) {
     for (const artifact of receipt.artifacts) {
       const previous = currentByPath.get(artifact.path);
-      if (previous && previous.missionId !== receipt.missionId) {
-        throw new Error(`Execution receipt ledger assigns artifact path ${artifact.path} to mission ${receipt.missionId} after ownership by mission ${previous.missionId}.`);
+      if (
+        previous
+        && previous.missionId !== receipt.missionId
+        && !missionSupersedes(missionGraph, receipt.missionId, previous.missionId)
+      ) {
+        throw new Error(`Execution receipt ledger assigns artifact path ${artifact.path} to mission ${receipt.missionId} after ownership by unrelated mission ${previous.missionId}.`);
       }
       const entry = {
         path: artifact.path,
@@ -219,7 +248,8 @@ function derivedState(manifest, receipts) {
 export function readExecutionReceiptLedger(root, options = {}) {
   const manifest = options.manifest;
   const missions = options.missions;
-  if (!manifest || !(missions instanceof Map)) throw new Error("Execution receipt ledger read requires the validated manifest and mission map.");
+  const missionGraph = options.missionGraph;
+  if (!manifest || !(missions instanceof Map) || !missionGraph) throw new Error("Execution receipt ledger read requires the validated manifest, mission map, and mission graph.");
   const directory = path.resolve(root, ARTIFACT_PATHS.executionReceiptsDir);
   const receipts = fs.readdirSync(directory, { withFileTypes: true }).map((entry) => {
     const relativePath = path.posix.join(ARTIFACT_PATHS.executionReceiptsDir, entry.name);
@@ -242,7 +272,7 @@ export function readExecutionReceiptLedger(root, options = {}) {
     if (receiptIds.has(receipt.receiptId)) throw new Error(`Execution receipt ledger contains duplicate receiptId ${receipt.receiptId}.`);
     receiptIds.add(receipt.receiptId);
   }
-  return derivedState(manifest, receipts);
+  return derivedState(manifest, receipts, missionGraph);
 }
 
 export function deriveArtifactReferences(receipt, explicitByPath = new Map()) {
@@ -260,7 +290,8 @@ export function deriveArtifactReferences(receipt, explicitByPath = new Map()) {
   }));
 }
 
-export function assertReceiptAppendable(ledger, receipt) {
+export function assertReceiptAppendable(ledger, receipt, options = {}) {
+  const missionGraph = options.missionGraph;
   if (receipt.ledgerSequence !== ledger.nextLedgerSequence) {
     throw new Error(`Execution receipt ledgerSequence must be ${ledger.nextLedgerSequence}.`);
   }
@@ -273,8 +304,12 @@ export function assertReceiptAppendable(ledger, receipt) {
     if (currentReceipt?.producer?.kind === "dove-internal" && ["prepare-review-exchange", "import-review-exchange"].includes(currentReceipt.producer.actionId)) {
       throw new Error(`Artifact path ${artifact.path} is an immutable review ${currentReceipt.producer.actionId === "prepare-review-exchange" ? "preparation control" : "import record"} and cannot be overwritten.`);
     }
-    if (current && current.missionId !== receipt.missionId) {
-      throw new Error(`Artifact path ${artifact.path} is already owned by mission ${current.missionId}; mission ${receipt.missionId} cannot overwrite it.`);
+    if (
+      current
+      && current.missionId !== receipt.missionId
+      && (!missionGraph || !missionSupersedes(missionGraph, receipt.missionId, current.missionId))
+    ) {
+      throw new Error(`Artifact path ${artifact.path} is already owned by mission ${current.missionId}; unrelated mission ${receipt.missionId} cannot overwrite it.`);
     }
   }
 }

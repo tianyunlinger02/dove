@@ -1,8 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { inspectDeclaredPath } from "./artifact-integrity.mjs";
-import { assessMissionCompletion } from "./completion-gates.mjs";
+import { snapshotArtifactBuffer } from "./review-artifact-snapshot.mjs";
 import {
   assertSealedDomainArgs,
   canonicalDomainPath,
@@ -13,10 +12,11 @@ import {
   domainStringArray,
   finalizeDomainArtifacts,
   readCurrentMission,
-  resolveMissionArtifactReferences
+  resolveMissionArtifactReferences,
+  resolveMissionValidationReference
 } from "./domain-artifacts.mjs";
 import { readArtifactOwnership } from "./artifact-lineage.mjs";
-import { verifyExpectedReviewCoverage, verifyReviewCoverage } from "./review-exchange.mjs";
+import { verifyExpectedReviewCoverage } from "./review-exchange.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { evaluateNoteReferences, evaluateSourceReferences } from "./source-trust.mjs";
 import { readJson } from "./workspace.mjs";
@@ -30,7 +30,7 @@ const DRAFT_META_FIELDS = new Set(["missionId", "draftId", "title", "summary", "
 const EXPERIMENT_FIELDS = new Set(["missionId", "experimentId", "title", "goal", "hypothesis", "protocol", "successCriteria", "comparisonTargets", "result", "resultEvidenceRefs", "auditFindings", "integrityFlags", "claimId", "bridgeReason"]);
 const FIGURE_FIELDS = new Set(["missionId", "figureId", "intent", "purpose", "materials", "prompt", "outputPath", "outputSha256", "caption", "qaFindings"]);
 const REBUTTAL_FIELDS = new Set(["missionId", "issues", "strategy", "responses"]);
-const VERSION_FIELDS = new Set(["missionId", "versionId", "label", "artifactRefs", "supersedesVersionId", "finalize"]);
+const VERSION_FIELDS = new Set(["missionId", "versionId", "label", "artifactRefs", "supersedesVersionId"]);
 const COMPARE_FIELDS = new Set(["missionId", "fromVersionId", "toVersionId"]);
 
 function filePath(directory, id, extension = "json") {
@@ -85,6 +85,10 @@ function normalizeEvidenceRefs(root, missionId, values, label = "evidenceRefs") 
       if (!evaluation?.eligible) throw new Error(`${label}[${index}] is not eligible note evidence: ${evaluation?.reason ?? "unknown-note"}.`);
       return reference;
     }
+    if (reference.startsWith("validation:")) {
+      const validation = resolveMissionValidationReference(root, missionId, reference.slice("validation:".length), `${label}[${index}]`);
+      return `validation:${validation.reference}`;
+    }
     const artifactPath = reference.startsWith("artifact:") ? reference.slice("artifact:".length) : reference;
     const [artifact] = resolveMissionArtifactReferences(root, missionId, [artifactPath], `${label}[${index}]`);
     return `artifact:${artifact.path}`;
@@ -132,9 +136,10 @@ export function upsertNote(root, args = {}) {
   const relativePath = filePath(".dove/notes", noteId);
   existingBoundRecord(root, relativePath, mission.missionId, `Note ${noteId}`);
   const note = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     noteId,
     missionId: mission.missionId,
+    contractDigest: mission.contractDigest,
     title: typeof args.title === "string" && args.title.trim() ? args.title.trim() : noteId,
     summary: summary || null,
     quotes,
@@ -241,13 +246,9 @@ export function runExperienceWorkflow(root, args = {}) {
 
 function currentOutput(root, outputPath, expectedHash) {
   const canonical = canonicalDomainPath(outputPath, "outputPath");
-  const inspection = inspectDeclaredPath(root, canonical, { requireNonEmpty: true });
-  if (inspection.status !== "existing") throw new Error(`Figure outputPath must reference an existing non-empty regular file (${inspection.reason ?? inspection.status}).`);
-  const resolved = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  if (inspection.normalizedPath !== canonical || resolved !== canonical) throw new Error("Figure outputPath must use its canonical realpath-contained path and cannot use a symlink or alias.");
-  const actual = domainSha256(fs.readFileSync(path.resolve(root, resolved)));
-  if (expectedHash && expectedHash !== actual) throw new Error("Figure output hash does not match the imported file.");
-  return { path: resolved, sha256: actual };
+  const snapshot = snapshotArtifactBuffer(root, canonical, "Figure outputPath");
+  if (expectedHash && expectedHash !== snapshot.sha256) throw new Error("Figure output hash does not match the imported file.");
+  return snapshot;
 }
 
 export function runFigureWorkflow(root, args = {}) {
@@ -264,18 +265,18 @@ export function runFigureWorkflow(root, args = {}) {
   let qa = null;
   if (args.outputPath !== undefined) {
     const output = currentOutput(root, args.outputPath, args.outputSha256);
-    const sourceContent = fs.readFileSync(path.resolve(root, output.path));
+    const sourceContent = output.content;
     const extension = path.extname(output.path).toLowerCase() || ".bin";
     const finalPath = filePath(".dove/figures", `${figureId}.final`, extension.slice(1));
     const caption = domainNonEmptyText(args.caption, "caption");
     const qaFindings = domainStringArray(args.qaFindings, "qaFindings");
     const coverage = verifyExpectedReviewCoverage(root, {
       missionId: mission.missionId,
-      expectedSnapshots: [{ path: finalPath, sizeBytes: sourceContent.length, sha256: output.sha256 }],
+      expectedSnapshots: [{ path: finalPath, sizeBytes: output.sizeBytes, sha256: output.sha256 }],
       requireAuthoritative: true
     });
-    imported = { schemaVersion: 1, figureId, missionId: mission.missionId, importedFrom: output.path, finalPath, finalSha256: output.sha256, caption, provenance: { materialRefs: plan.materialRefs, promptSha256: domainSha256(prompt) }, validated: false, updatedAt: new Date().toISOString() };
-    qa = { schemaVersion: 1, figureId, missionId: mission.missionId, finalPath, finalSha256: output.sha256, findings: qaFindings, reviewCoverage: coverage, status: imported.validated ? "validated" : qaFindings.length ? "needs-fix" : "ready-for-independent-review", updatedAt: new Date().toISOString() };
+    imported = { schemaVersion: 1, figureId, missionId: mission.missionId, importedFrom: output.path, finalPath, finalSha256: output.sha256, finalSizeBytes: output.sizeBytes, caption, provenance: { materialRefs: plan.materialRefs, promptSha256: domainSha256(prompt), importedSizeBytes: output.sizeBytes }, updatedAt: new Date().toISOString() };
+    qa = { schemaVersion: 1, figureId, missionId: mission.missionId, finalPath, finalSha256: output.sha256, findings: qaFindings, reviewCoverage: coverage, status: qaFindings.length ? "needs-fix" : "ready-for-independent-review", updatedAt: new Date().toISOString() };
     writes.push({ path: finalPath, kind: "figure", content: sourceContent, derivedReferences: plan.materialRefs.map((item) => `artifact:${item}`) });
     writes.push({ path: filePath(".dove/figures", `${figureId}.caption`, "md"), kind: "document", content: `${caption}\n`, derivedReferences: [`artifact:${finalPath}`] });
     writes.push({ path: filePath(".dove/figures", `${figureId}.provenance`), kind: "data", content: domainJson(imported), derivedReferences: [`artifact:${finalPath}`, ...plan.materialRefs.map((item) => `artifact:${item}`)] });
@@ -283,7 +284,7 @@ export function runFigureWorkflow(root, args = {}) {
   } else if (args.caption !== undefined || args.qaFindings !== undefined || args.outputSha256 !== undefined) {
     throw new Error("Figure caption, QA, or hash import requires outputPath.");
   }
-  return { ...finalizeDomainArtifacts(root, { actionId: "run-figure-workflow", missionId: mission.missionId, summary: imported ? `Imported figure ${figureId} with provenance and QA.` : `Prepared figure ${figureId} materials and prompt.`, completionEligible: imported?.validated === true, writes }), plan, imported, qa, hostBoundary: { executesProvider: false, acceptsImportedOutput: true } };
+  return { ...finalizeDomainArtifacts(root, { actionId: "run-figure-workflow", missionId: mission.missionId, summary: imported ? `Imported figure ${figureId} with provenance and QA.` : `Prepared figure ${figureId} materials and prompt.`, completionEligible: false, writes }), plan, imported, qa, hostBoundary: { executesProvider: false, acceptsImportedOutput: true } };
 }
 
 export function normalizeRebuttalIssues(root, args = {}) {
@@ -355,16 +356,12 @@ export function createVersionSnapshot(root, args = {}) {
   if (supersedesVersionId) {
     currentBoundRecord(root, versionPath(supersedesVersionId), mission.missionId, `Superseded version ${supersedesVersionId}`);
   }
-  const completion = assessMissionCompletion(root, { missionId: mission.missionId });
-  const reviewCoverage = verifyReviewCoverage(root, { missionId: mission.missionId, artifactPaths: artifacts.map((item) => item.path), requireAuthoritative: true });
-  const finalization = args.finalize === true ? { eligible: completion.complete && reviewCoverage.authoritative === true && reviewCoverage.failures.length === 0, completion, reviewCoverage } : null;
-  if (args.finalize === true && !finalization.eligible) throw new Error("Version finalization requires current mission completion and current authoritative review proof.");
   const copiedArtifacts = artifacts.map(({ path: artifactPath, kind, sha256, receiptId }) => {
     const extension = path.extname(artifactPath);
     const snapshotPath = filePath(path.posix.join(".dove/versions", versionId, "artifacts"), domainSha256(artifactPath).slice(0, 20), extension ? extension.slice(1) : "bin");
     return { path: artifactPath, kind, sha256, receiptId, snapshotPath };
   });
-  const snapshot = { schemaVersion: 1, versionId, missionId: mission.missionId, label: typeof args.label === "string" && args.label.trim() ? args.label.trim() : versionId, artifacts: copiedArtifacts, supersedesVersionId, finalization, createdAt: new Date().toISOString() };
+  const snapshot = { schemaVersion: 1, versionId, missionId: mission.missionId, label: typeof args.label === "string" && args.label.trim() ? args.label.trim() : versionId, artifacts: copiedArtifacts, supersedesVersionId, createdAt: new Date().toISOString() };
   const writes = [
     ...copiedArtifacts.map((item) => ({ path: item.snapshotPath, kind: item.kind, content: fs.readFileSync(path.resolve(root, item.path)), derivedReferences: [`artifact:${item.path}`] })),
     { path: versionPath(versionId), kind: "data", content: domainJson(snapshot), derivedReferences: snapshot.artifacts.map((item) => `artifact:${item.path}`) }
@@ -389,7 +386,7 @@ export function compareVersions(root, args = {}) {
   const toMap = new Map(to.artifacts.map((item) => [item.path, item.sha256]));
   const paths = [...new Set([...fromMap.keys(), ...toMap.keys()])].sort();
   const comparison = { schemaVersion: 1, missionId: mission.missionId, fromVersionId, toVersionId, added: paths.filter((item) => !fromMap.has(item)), removed: paths.filter((item) => !toMap.has(item)), changed: paths.filter((item) => fromMap.has(item) && toMap.has(item) && fromMap.get(item) !== toMap.get(item)), comparedAt: new Date().toISOString() };
-  return finalizeDomainArtifacts(root, { actionId: "compare-versions", missionId: mission.missionId, summary: `Compared versions ${fromVersionId} and ${toVersionId}.`, completionEligible: false, writes: [{ path: filePath(".dove/versions", `${fromVersionId}--${toVersionId}.comparison`), kind: "data", content: domainJson(comparison), derivedReferences: [`version:${fromVersionId}`, `version:${toVersionId}`] }] });
+  return { status: "compared", zeroWrite: true, comparison, writes: [] };
 }
 
 export function queryDomainIntegrity(root, missionId = null) {

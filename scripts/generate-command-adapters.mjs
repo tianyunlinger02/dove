@@ -6,7 +6,6 @@ import { resolveCanonicalContainedWrite } from "../src/core/contained-write.mjs"
 import { writeFileSetTransaction } from "../src/core/file-set-transaction.mjs";
 import {
   COMMAND_SURFACES,
-  DIRECT_PROCESS_ADAPTER_COMMAND_IDS,
   PROJECT_HOST_IDS,
   adapterPathForCommand,
   hostCommandSlug
@@ -37,7 +36,7 @@ function policyLine(command) {
     case "guarded-mutation":
       return "Only make the specific change requested for this command; do not bundle unrelated work.";
     case "explicit-approval":
-      return "Ask for approval before making changes or spending the proposed work rounds.";
+      return "Ask for approval before making the proposed change.";
     case "governed-bookkeeping":
       return "Add only the explicit note or lesson the operator asked for.";
     case "guidance":
@@ -70,42 +69,34 @@ function exampleBullets(command, hostId = null) {
   }).filter(Boolean);
 }
 
-const DIRECT_PROCESS_COMMAND_IDS = new Set(DIRECT_PROCESS_ADAPTER_COMMAND_IDS);
-
-function adapterCliCommand(commandId, command) {
-  const withMutationMode = DIRECT_PROCESS_COMMAND_IDS.has(commandId) ? `${command} --mutation-mode direct-process` : command;
-  return `${withMutationMode} --json`;
-}
-
-const LOCAL_CLI_COMMANDS = new Map([
-  ["dove.init", { command: adapterCliCommand("dove.init", "node ./bin/dove-package.mjs init . --goal \"<project goal>\""), kind: "work", note: "Use init only to establish minimal project identity; it must not create packets, checklists, runtime, orchestration, or persistent context." }],
-  ["dove.status", { command: "node ./bin/dove-package.mjs status . --json", kind: "check", note: "When multiple missions exist, rerun with `--mission-id \"<mission id>\" --json`; never select an implicit latest mission." }],
-  ["dove.lessons", { command: "node ./bin/dove-package.mjs lessons query . --mission-id \"<mission id>\" --json", kind: "check", note: "Query is the default and must remain zero-write. Never auto-capture a lesson and never auto-recall lessons from another command. Use `lessons record` only when the operator explicitly asks to preserve a specific lesson; then run only the exact confirmation command returned by the zero-write proposal." }],
-  ["dove.mission", { command: adapterCliCommand("dove.mission", "node ./bin/dove-package.mjs mission . --goal \"<mission goal>\""), kind: "check", note: "After approval, run the exact confirmation command returned by the proposal, persist only that contract, and continue with native host planning and tools." }],
-  ["dove.version", { command: adapterCliCommand("dove.version", "node ./bin/dove-package.mjs version . --mission-id \"<mission id>\" --version-id \"<version id>\" --artifact \"<artifact path>\""), kind: "work", note: "Snapshots and comparisons are mission-bound and hash-current; finalization fails closed without completion and trusted review proof." }],
-  ["dove.source", { command: adapterCliCommand("dove.source", "node ./bin/dove-package.mjs source register . --mission-id \"<mission id>\" --source-id \"<source id>\" --title \"<source title>\" --locator \"<url or doi>\" --capture-path \"<visible captured material path>\""), kind: "work", note: "First use `search_network` to discover a non-authoritative registrationDraft, visibly capture the selected material with host tools, run the listed registration command with that exact capture path, then run `node ./bin/dove-package.mjs source . --mission-id \"<mission id>\" --source-id \"<source id>\" --json` to inspect the candidate. Search and registration make no trust claim; public verification can reject but cannot issue positive trust." }],
-  ["dove.note", { command: adapterCliCommand("dove.note", "node ./bin/dove-package.mjs note . --mission-id \"<mission id>\" --note-id \"<note id>\" --summary \"<synthesis>\""), kind: "work", note: "Use this only with substantive synthesis and current mission-bound evidence." }],
-  ["dove.experience", { command: adapterCliCommand("dove.experience", "node ./bin/dove-package.mjs experience . --mission-id \"<mission id>\" --experiment-id \"<experiment id>\" --goal \"<experiment goal>\" --hypothesis \"<hypothesis>\" --protocol \"<protocol>\" --success-criterion \"<criterion>\""), kind: "work", note: "Results require current evidence and a clean audit before claim bridging." }],
-  ["dove.draft", { command: adapterCliCommand("dove.draft", "node ./bin/dove-package.mjs draft . --mission-id \"<mission id>\" --draft-id \"<draft id>\" --body \"<draft text>\""), kind: "work", note: "Write real body content; metadata-only mode requires an existing current mission draft." }],
-  ["dove.figure", { command: adapterCliCommand("dove.figure", "node ./bin/dove-package.mjs figure . --mission-id \"<mission id>\" --figure-id \"<figure id>\" --intent \"<figure request>\" --purpose \"<purpose>\" --material \"<artifact path>\" --prompt \"<drawing prompt>\""), kind: "work", note: "Provider execution stays host-side; import output with an exact hash, caption, QA, and independent-review boundary." }],
-  ["dove.review", { command: adapterCliCommand("dove.review", "node ./bin/dove-package.mjs review . --mission-id \"<mission id>\" --review-id \"<review id>\" --artifact \"<artifact path>\" --preflight"), kind: "work", note: "Use --preflight for zero-write local checks, --prepare to freeze the canonical exchange, and --import only after the reviewer writes the canonical handoff and report. Distinguish the returned operation field. For prepare, preserve actionablePaths.input, actionablePaths.manifest, actionablePaths.handoff, actionablePaths.report, and importAction exactly. For import, preserve those canonical actionable paths and nextAction exactly. Public imports never mint Reviewer authority." }],
-  ["dove.rebuttal", { command: adapterCliCommand("dove.rebuttal", "node ./bin/dove-package.mjs rebuttal . --mission-id \"<mission id>\" --issue-json \"<finding-linked issue JSON>\" --strategy \"<strategy>\" --response-json \"<response JSON>\""), kind: "work", note: "Every issue must link a current review artifact and finding id; responses remain author-side and evidence-linked." }]
-]);
-
-function localCliBullets(command) {
-  const localCli = LOCAL_CLI_COMMANDS.get(command.id);
-  if (localCli) {
-    const listedKind = localCli.kind === "work" ? "listed project action" : "listed project check";
-    const directness = localCli.kind === "work"
-      ? "Run it only when the needed material is present; then summarize the real artifact state or material boundary instead of inspecting internal files directly."
-      : "Summarize its practical result instead of inspecting internal files directly.";
-    return [
-      `This request has one ${listedKind}: \`${localCli.command}\`. Run it in the host's current working directory without changing directories or reinterpreting a parent repository as the target; \`.\` is the Dove workspace being operated on. ${directness}`,
-      ...(localCli.note ? [localCli.note] : [])
-    ];
+function mcpInvocationBullets(command) {
+  const tools = unique(command.requiredTools ?? []);
+  const toolList = tools.map((tool) => `\`${tool}\``).join(", ");
+  const bullets = [
+    `Use only the Dove MCP tool matching the requested operation from this command's allowed tools: ${toolList}.`,
+    "Pass only structured public arguments accepted by that tool. Call Dove through MCP only. If MCP is unavailable, stop instead of using another route.",
+    "For checkpoint operations, let the MCP tool handle its one approval and application inside the same call. Never display or request proposal, replay, workspace, digest, token, mutation-mode, confirmation payload, or generated-command data."
+  ];
+  if (command.continuation === "resume-original") {
+    bullets.push("Preserve the full original user request before calling Dove. After a successful Dove write, resume that same request in the current host turn using normal host planning, tools, files, testing, search, and review rather than ending at the Dove result.");
   }
-  const terminalProbe = `node ./bin/dove-package.mjs ${hostCommandSlug(command.id)} --help`;
-  return [`This request has no listed project action. Do not run status, \`${terminalProbe}\`, the matching local surface, or any other unlisted command for it. If the target is unclear, ask the operator to choose from visible context. If this chat cannot finish the requested work directly, answer with what material is ready, what has not been added to the mission, and the next user choice; do not explain why the tool is unavailable.`];
+  if (command.explicitStopMode === "create-only") {
+    bullets.push("Stop after the Dove checkpoint only when the user explicitly asked solely to create or reevaluate the mission, to create it without execution, or to wait for another instruction. Words such as 'first' or 'before continuing' express order and do not by themselves request a stop.");
+  }
+  if (command.explicitStopMode === "protocol-only") {
+    bullets.push("Stop after recording the experiment protocol only when the user explicitly asked for protocol-only setup; otherwise continue the requested experiment work with host tools when it is feasible in this turn.");
+  }
+  if (command.continuation === "resume-original") {
+    bullets.push("If the Dove call is declined, cancelled, or fails, do not continue work that depended on the unsaved checkpoint; report the practical outcome in ordinary language.");
+  }
+  if (command.closure === "host-outcome") {
+    const closureTools = unique(command.closureTools ?? []);
+    if (closureTools.length !== 1) throw new Error(`${command.id} must declare exactly one host outcome closure tool.`);
+    bullets.push(`Before the create checkpoint, generate one private safe mission id, pass it as \`missionId\`, and retain it only for this host turn; never show it to the user. After successful substantive host work, call the MCP tool \`${closureTools[0]}\` at most once. Reuse that exact mission id. Pass only that mission id, a concise outcome summary, paths actually created or materially changed, and optional real validation-output paths.`);
+    bullets.push("Do not calculate or pass receipt identifiers, timestamps, fingerprints, contract data, artifact kinds, validation kinds, criterion claims, task ids, or session ids. Do not call closure after create-only, proposal-only, declined, cancelled, failed, or blocked work, and never retry it automatically.");
+    bullets.push("A skipped closure is a valid zero-write outcome. If evidence recording fails, preserve every host-produced file and report that the substantive work succeeded but Dove could not record or assess its evidence; never roll back or delete the real work.");
+  }
+  return bullets;
 }
 
 function guardrailBullets(command) {
@@ -113,8 +104,9 @@ function guardrailBullets(command) {
     "For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check or action below; do not construct default answers by manually reading or listing internal files.",
     "If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.",
     "If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.",
-    ...localCliBullets(command),
+    ...mcpInvocationBullets(command),
     "Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.",
+    ...(command.id === "dove.init" ? ["For the visible initialization approval, say only that no files have changed, what minimal project records and goal will be saved, and ask whether to approve or cancel. Do not print or paraphrase schema versions, workspace identifiers, hashes, proposal tokens, confirmation payloads, replay fields, generated commands, or internal paths."] : []),
     "Use ordinary mission wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.",
     "When the target work is unclear, ask the operator to choose by visible mission goal or numbered option; do not ask for internal ids in the default answer.",
     "Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.",
@@ -124,7 +116,7 @@ function guardrailBullets(command) {
     "Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended."
   ];
   if (command.id === "dove.mission") {
-    bullets.push("Keep the handoff brief identical to the approved contract content; do not add a next command, role, route, authority, status, or blocker-routing instruction.");
+    bullets.push("Keep the returned mission or research-tree material identical to the approved content; do not add a role, route, authority, status, or blocker-routing instruction.");
   } else if (command.domain === "paper") {
     bullets.push("Use the top-level Dove requests for sources, notes, drafting, review, rebuttal, experiences, figures, and version lineage.");
   } else {

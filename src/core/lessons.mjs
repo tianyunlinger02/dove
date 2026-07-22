@@ -21,7 +21,7 @@ import { evaluateNoteReferences, evaluateSourceReferences } from "./source-trust
 import { nowIso, readJson } from "./workspace.mjs";
 import { canonicalWorkspacePath, openDoveWorkspace, stableWorkspaceSerialize } from "./workspace-schema.mjs";
 
-export const DOVE_LESSON_SCHEMA_VERSION = 1;
+export const DOVE_LESSON_SCHEMA_VERSION = 2;
 export const DOVE_LESSON_PROPOSAL_VERSION = 1;
 export const DOVE_LESSON_SCOPES = Object.freeze(["global", "mission"]);
 export const DOVE_LESSON_KINDS = Object.freeze(["preference", "constraint", "method", "failure", "review-insight"]);
@@ -390,8 +390,11 @@ export function queryDoveLessons(root, args = {}) {
   const artifactRefs = domainStringArray(args.artifactRefs, "artifactRefs");
   if (artifactRefs.length > 0 && !missionId) throw new Error("Artifact-scoped Dove lesson queries require missionId.");
   if (missionId) readCurrentMission(root, missionId, "Dove lesson query");
-  const queryArtifacts = artifactRefs.length > 0 ? resolveMissionArtifactReferences(root, missionId, artifactRefs, "artifactRefs") : [];
-  const queryArtifactPaths = new Set(queryArtifacts.map((item) => item.path));
+  const ownership = readArtifactOwnership(root);
+  const ownedPaths = new Set(ownership.artifacts.filter((item) => item.missionId === missionId).map((item) => item.path));
+  const existingArtifactRefs = artifactRefs.filter((reference) => ownedPaths.has(reference));
+  const queryArtifacts = existingArtifactRefs.length > 0 ? resolveMissionArtifactReferences(root, missionId, existingArtifactRefs, "artifactRefs") : [];
+  const queryArtifactPaths = new Set([...queryArtifacts.map((item) => item.path), ...artifactRefs.filter((reference) => !ownedPaths.has(reference))]);
   const includeSuperseded = args.includeSuperseded === true;
   const includeUnscoped = args.includeUnscoped === true;
   const limitNumber = args.limit === undefined ? 50 : Number(args.limit);
@@ -416,6 +419,7 @@ export function queryDoveLessons(root, args = {}) {
       contractDigest: lesson.contractDigest,
       scope: lesson.scope,
       kind: lesson.kind,
+      ...(lesson.researchTreeOrigin === undefined ? {} : { researchTreeOrigin: lesson.researchTreeOrigin }),
       summary: lesson.summary,
       ...(lesson.details === undefined ? {} : { details: lesson.details }),
       nextTimeGuidance: lesson.nextTimeGuidance,

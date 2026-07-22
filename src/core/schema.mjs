@@ -1,5 +1,5 @@
-export const DOVE_WORKSPACE_SCHEMA_VERSION = 8;
-export const PACKAGE_VERSION = "0.3.0";
+export const DOVE_WORKSPACE_SCHEMA_VERSION = 9;
+export const PACKAGE_VERSION = "0.4.0";
 
 export const DOVE_RESPONSE_LANGUAGES = Object.freeze(["zh", "en"]);
 export const DEFAULT_DOVE_RESPONSE_LANGUAGE = "zh";
@@ -20,6 +20,7 @@ export const ARTIFACT_PATHS = Object.freeze({
   doveRootManifest: ".dove/manifest.json",
   projectIdentity: ".dove/project.json",
   missionsDir: ".dove/missions",
+  researchTreesDir: ".dove/research-trees",
   lessonsDir: ".dove/lessons",
   receiptsDir: ".dove/receipts",
   executionReceiptsDir: ".dove/receipts/execution",
@@ -51,6 +52,7 @@ const GUARDED_MUTATIONS = [
   ["create-dove-mission", "Persisting one minimal mission contract", ARTIFACT_PATHS.missionsDir, "createDoveMission", "create_dove_mission", ["dove.mission"], "mission-contract"],
   ["record-dove-lesson", "Recording an immutable mission-provenanced lesson", ARTIFACT_PATHS.lessonsDir, "recordDoveLesson", "record_dove_lesson", ["dove.lessons"], "mission-domain"],
   ["ingest-execution-receipt", "Ingesting an immutable execution receipt", ARTIFACT_PATHS.executionReceiptsDir, "ingestExecutionReceipt", "ingest_execution_receipt", [], "mission-receipt"],
+  ["close-host-outcome", "Recording current host-produced mission outcomes", ARTIFACT_PATHS.executionReceiptsDir, "closeHostOutcome", "close_host_outcome", [], "mission-receipt"],
   ["register-source", "Registering a mission-bound source candidate", ARTIFACT_PATHS.sourcesDir, "registerSource", "register_source", ["dove.source"], "mission-domain"],
   ["verify-source", "Rejecting a mission-bound source candidate", ARTIFACT_PATHS.sourcesDir, "verifySource", "verify_source", ["dove.source"], "mission-domain"],
   ["upsert-note", "Recording a mission-bound evidence note", ARTIFACT_PATHS.notesDir, "upsertNote", "upsert_note", ["dove.note"], "mission-domain"],
@@ -64,8 +66,7 @@ const GUARDED_MUTATIONS = [
   ["normalize-rebuttal-issues", "Normalizing mission-bound review findings", ARTIFACT_PATHS.rebuttalDir, "normalizeRebuttalIssues", "normalize_rebuttal_issues", ["dove.rebuttal"], "mission-domain"],
   ["build-rebuttal-strategy", "Recording an author-side rebuttal strategy", ARTIFACT_PATHS.rebuttalDir, "buildRebuttalStrategy", "build_rebuttal_strategy", ["dove.rebuttal"], "mission-domain"],
   ["build-rebuttal", "Writing evidence-linked author responses", ARTIFACT_PATHS.rebuttalDir, "buildRebuttal", "build_rebuttal", ["dove.rebuttal"], "mission-domain"],
-  ["create-version-snapshot", "Snapshotting current mission artifacts", ARTIFACT_PATHS.versionsDir, "createVersionSnapshot", "create_version_snapshot", ["dove.version"], "mission-domain"],
-  ["compare-versions", "Comparing mission artifact snapshots", ARTIFACT_PATHS.versionsDir, "compareVersions", "compare_versions", ["dove.version"], "mission-domain"]
+  ["create-version-snapshot", "Snapshotting current mission artifacts", ARTIFACT_PATHS.versionsDir, "createVersionSnapshot", "create_version_snapshot", ["dove.version"], "mission-domain"]
 ];
 
 export const GOVERNANCE_GUARDED_MUTATIONS = Object.freeze(GUARDED_MUTATIONS.map(([id, action, artifactPath, coreFunction, mcpTool, commandIds, scope]) => Object.freeze({
@@ -86,7 +87,8 @@ export const GOVERNANCE_READONLY_TOOLS = Object.freeze([
   "query_network_search_providers",
   "query_sources",
   "query_dove_lessons",
-  "verify_review_coverage"
+  "verify_review_coverage",
+  "compare_versions"
 ]);
 
 const NEGATIVE_TESTS = Object.freeze({
@@ -94,6 +96,7 @@ const NEGATIVE_TESTS = Object.freeze({
   "create-dove-mission": "mission confirmation rejects replay drift without writing",
   "record-dove-lesson": "lesson confirmation rejects workspace, contract, mutation mode, content, supersession, and reference drift without writing",
   "ingest-execution-receipt": "receipt ingestion validates current contracts, paths, hashes, and evidence before writing",
+  "close-host-outcome": "host outcome closure accepts only current mission-bound files, generates receipt metadata internally, and skips without writing when no uncovered artifact remains",
   "register-source": "source registration requires an explicit mission and creates candidate evidence only",
   "verify-source": "public source verification cannot mint positive trust authority",
   "upsert-note": "notes reject stale, cross-mission, or ineligible evidence before writing",
@@ -107,8 +110,7 @@ const NEGATIVE_TESTS = Object.freeze({
   "normalize-rebuttal-issues": "rebuttal issues require current mission-bound findings and evidence",
   "build-rebuttal-strategy": "rebuttal strategy requires current normalized issues",
   "build-rebuttal": "author responses preflight issues, strategy, and evidence before writing",
-  "create-version-snapshot": "version snapshots reject stale or cross-mission artifacts and finalization fails closed",
-  "compare-versions": "version comparison rejects stale snapshots before writing"
+  "create-version-snapshot": "version snapshots reject stale or cross-mission artifacts and preserve immutable copies"
 });
 
 export const GOVERNANCE_NEGATIVE_COVERAGE = Object.freeze(GOVERNANCE_GUARDED_MUTATIONS.map((entry) => Object.freeze({

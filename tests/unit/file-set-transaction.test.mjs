@@ -6,6 +6,29 @@ import path from "node:path";
 import { writeFileSetTransaction } from "../../src/core/file-set-transaction.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
+test("delete entries roll back when a later promotion fails", () => {
+  const root = createTempRoot("dove-file-set-delete-rollback-");
+  fs.writeFileSync(path.join(root, "delete.txt"), "keep me\n");
+  fs.writeFileSync(path.join(root, "replace.txt"), "old\n");
+  let promotions = 0;
+  const fsOps = {
+    ...fs,
+    renameSync(from, to, metadata) {
+      if (["delete.txt", "replace.txt"].includes(metadata?.anchoredTo)) {
+        promotions += 1;
+        if (promotions === 1) throw new Error("injected promotion failure");
+      }
+      return fs.renameSync(from, to);
+    }
+  };
+  assert.throws(() => writeFileSetTransaction([
+    { root, relativePath: "delete.txt", delete: true },
+    { root, relativePath: "replace.txt", content: "new\n", force: true }
+  ], { fsOps, transactionId: "delete-rollback" }), /all staged changes were rolled back/u);
+  assert.equal(fs.readFileSync(path.join(root, "delete.txt"), "utf8"), "keep me\n");
+  assert.equal(fs.readFileSync(path.join(root, "replace.txt"), "utf8"), "old\n");
+});
+
 test("multi-root post-commit cleanup failure preserves committed targets and reports bounded residue", () => {
   const firstRoot = createTempRoot("dove-file-set-cleanup-first-");
   const secondRoot = createTempRoot("dove-file-set-cleanup-second-");
@@ -14,11 +37,11 @@ test("multi-root post-commit cleanup failure preserves committed targets and rep
 
   const fsOps = {
     ...fs,
-    rmSync(targetPath, options) {
-      if (targetPath.startsWith(path.join(secondRoot, ".dove-file-transaction-"))) {
+    rmdirSync(targetPath, metadata) {
+      if (metadata?.recursiveCleanup === true && metadata.displayPath.startsWith(path.join(secondRoot, ".dove-file-transaction-"))) {
         throw new Error("injected second-root cleanup failure");
       }
-      return fs.rmSync(targetPath, options);
+      return fs.rmdirSync(targetPath);
     }
   };
 

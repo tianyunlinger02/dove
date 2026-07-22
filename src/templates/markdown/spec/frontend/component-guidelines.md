@@ -1,12 +1,12 @@
 # Component Guidelines
 
-> User-facing command, skill, CLI, and MCP contracts for Dove schema 8.
+> User-facing command, skill, CLI, and MCP contracts for Dove schema 9.
 
 ---
 
 ## Overview
 
-There are no browser components. Treat each generated adapter, primary responsibility skill, CLI command, and MCP tool as a small public component over the same schema 8 core.
+There are no browser components. Treat each generated adapter, primary responsibility skill, CLI command, and MCP tool as a small public component over the same schema 9 core.
 
 - Generated adapters come from `src/core/command-manifest.mjs`.
 - OpenCode responsibility skills are exactly Planner, Builder, and Reviewer.
@@ -16,7 +16,7 @@ There are no browser components. Treat each generated adapter, primary responsib
 
 ## Public Command Surface
 
-Dove exposes exactly twelve flat commands: `dove.init`, `dove.mission`, `dove.status`, `dove.lessons`, `dove.version`, `dove.source`, `dove.note`, `dove.figure`, `dove.experience`, `dove.draft`, `dove.review`, and `dove.rebuttal`. MCP discovery exposes exactly 27 tools.
+Dove exposes exactly twelve flat commands: `dove.init`, `dove.mission`, `dove.status`, `dove.lessons`, `dove.version`, `dove.source`, `dove.note`, `dove.figure`, `dove.experience`, `dove.draft`, `dove.review`, and `dove.rebuttal`. MCP discovery exposes exactly 28 tools.
 
 Do not add public aliases, hidden command tiers, or compatibility names.
 
@@ -24,7 +24,7 @@ Do not add public aliases, hidden command tiers, or compatibility names.
 
 ### Generated adapters
 
-Define title, summary, required MCP tools, artifact context, constraints, and examples in `COMMAND_SURFACES`, then run `npm run commands:generate`. Adapters should name canonical schema 8 artifacts and explain whether the action is read-only, proposal-only, patch-plan, or direct-process.
+Define title, summary, required MCP tools, artifact context, constraints, and examples in `COMMAND_SURFACES`, then run `npm run commands:generate`. Adapters should name canonical schema 9 artifacts and explain whether the action is read-only, proposal-only, patch-plan, or direct-process.
 
 ### Lessons
 
@@ -74,6 +74,6 @@ Expose one sealed tool registry. Every tool schema, including nested objects, re
 - Packaging stale role skills that name removed artifacts.
 - Adding a tool without a handler or governance classification.
 - Adding a CLI option that is absent from MCP and command contracts.
-- Mentioning a durable path that is not declared by schema 8.
+- Mentioning a durable path that is not declared by schema 9.
 - Treating compact status or review diagnostics as execution authority.
 - Reintroducing removed workflow state under a new name.

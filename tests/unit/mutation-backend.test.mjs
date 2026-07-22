@@ -74,6 +74,29 @@ test("commit rejects first-touch precondition drift without applying the overlay
   assert.equal(fs.readFileSync(path.join(root, "target.txt"), "utf8"), "drift\n");
 });
 
+test("read snapshots are single-buffer dependencies and drift is rejected before promotion", () => {
+  const root = createTempRoot("dove-mutation-read-set-");
+  fs.writeFileSync(path.join(root, "input.bin"), Buffer.from([1, 2, 3]));
+  assert.throws(() => runWithMutationContext(root, { mutationMode: "direct-process" }, (context) => {
+    const first = context.readBuffer("input.bin");
+    const second = currentMutationContext(root).readFileSnapshot("input.bin");
+    assert.deepEqual(first, Buffer.from([1, 2, 3]));
+    first[0] = 9;
+    assert.deepEqual(second.buffer, Buffer.from([1, 2, 3]));
+    writeText(root, "output.txt", "derived\n");
+    fs.writeFileSync(path.join(root, "input.bin"), Buffer.from([4, 5, 6]));
+  }), /commit precondition changed for input\.bin/u);
+  assert.equal(exists(root, "output.txt"), false);
+});
+
+test("direct-process capability failure is fail-closed while patch-plan remains available", () => {
+  const root = createTempRoot("dove-mutation-capability-");
+  assert.throws(() => createMutationContext(root, { mutationMode: "direct-process", platform: "darwin" }), /Direct-process mutation is unavailable/u);
+  const context = createMutationContext(root, { mutationMode: "patch-plan", platform: "darwin" });
+  assert.equal(context.patchPlanMode, true);
+  context.abort();
+});
+
 test("same-path writes coalesce while preserving the original precondition", () => {
   const root = createTempRoot("dove-mutation-coalesce-");
   fs.writeFileSync(path.join(root, "target.txt"), "old\n");
@@ -94,8 +117,8 @@ test("injected later promotion failure restores existing bytes and removes new d
   let targetPromotions = 0;
   const fsOps = {
     ...fs,
-    renameSync(from, to) {
-      if (to === path.join(root, "data/first.bin") || to === path.join(root, "data/second.txt") || to === path.join(root, "new/nested.txt")) {
+    renameSync(from, to, metadata) {
+      if (["data/first.bin", "data/second.txt", "new/nested.txt"].includes(metadata?.anchoredTo)) {
         targetPromotions += 1;
         if (targetPromotions === 2) throw new Error("injected later promotion failure");
       }
@@ -119,12 +142,12 @@ test("post-commit transaction and lock cleanup failures preserve committed data 
   const lockPath = path.join(root, ".commit.lock");
   const fsOps = {
     ...fs,
-    rmSync(targetPath, options) {
-      if (path.basename(targetPath).startsWith(".dove-transaction-")) throw new Error("injected transaction cleanup failure");
-      return fs.rmSync(targetPath, options);
+    rmdirSync(targetPath, metadata) {
+      if (metadata?.recursiveCleanup === true && path.basename(metadata.anchoredPath).startsWith(".dove-transaction-")) throw new Error("injected transaction cleanup failure");
+      return fs.rmdirSync(targetPath);
     },
-    unlinkSync(targetPath) {
-      if (targetPath === lockPath) throw new Error("injected lock cleanup failure");
+    unlinkSync(targetPath, metadata) {
+      if (metadata?.displayPath === lockPath) throw new Error("injected lock cleanup failure");
       return fs.unlinkSync(targetPath);
     }
   };
@@ -153,12 +176,12 @@ test("rollback failure reports both the commit and rollback errors", () => {
   let targetPromotions = 0;
   const fsOps = {
     ...fs,
-    renameSync(from, to) {
-      if (to === path.join(root, "first.txt") || to === path.join(root, "second.txt")) {
+    renameSync(from, to, metadata) {
+      if (["first.txt", "second.txt"].includes(metadata?.anchoredTo)) {
         targetPromotions += 1;
         if (targetPromotions === 2) throw new Error("promotion exploded");
       }
-      if (from.includes(`${path.sep}backups${path.sep}`) && to === path.join(root, "first.txt")) throw new Error("restore exploded");
+      if (metadata?.anchoredFrom?.includes("/backups/") && metadata?.anchoredTo === "first.txt") throw new Error("restore exploded");
       return fs.renameSync(from, to);
     }
   };

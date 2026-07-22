@@ -9,7 +9,7 @@ import {
   GOVERNANCE_GUARDED_MUTATIONS,
   GOVERNANCE_READONLY_TOOLS
 } from "../../src/core/schema.mjs";
-import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { TOOL_INTERACTION_CONTRACTS } from "../../src/core/command-manifest.mjs";
 import { dispatchTool } from "../../src/mcp/handlers.mjs";
 import {
   MUTATING_TOOL_NAMES,
@@ -18,6 +18,7 @@ import {
   toolDefinitions
 } from "../../src/mcp/tool-definitions.mjs";
 import { createMcpStdioClient } from "../../scripts/mcp-stdio-client.mjs";
+import { assertNoCompactPublicLeaks } from "../helpers/compact-public.mjs";
 import { cleanupTempRoot, createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
@@ -29,6 +30,7 @@ const EXPECTED_TOOL_NAMES = [
   "query_dove_mission",
   "query_dove_status",
   "ingest_execution_receipt",
+  "close_host_outcome",
   "assess_mission_completion",
   "search_network",
   "query_network_search_providers",
@@ -79,10 +81,69 @@ const DELETED_TOOL_NAMES = [
   "record_operator_lesson"
 ];
 
+const RETIRED_PUBLIC_CONTROL_FIELDS = [
+  "resultMode",
+  "mutationMode",
+  "confirmed",
+  "confirm",
+  "confirmArgs",
+  "proposalVersion",
+  "proposalWorkspace",
+  "proposalDigest",
+  "proposalToken",
+  "workspaceId"
+];
+
+const PUBLIC_RESULT_KEYS = new Set([
+  "status", "operation", "query", "proposalOnly", "noAutoApply", "detailsAvailable", "zeroWrite",
+  "complete", "policy", "inputBoundary", "message", "approval", "mission", "current", "attention",
+  "candidates", "providers", "sources", "lessons", "completion", "changes", "authority", "continuation",
+  "gaps", "artifacts", "verification", "outcome", "review"
+]);
+const PUBLIC_STATUS_CURRENT_KEYS = new Set(["missionCount", "missionScope", "sourceCount", "integrity", "review", "researchTree"]);
+const PUBLIC_STATUS_INTEGRITY_KEYS = new Set(["status", "complete", "gaps"]);
+const PUBLIC_STATUS_RESEARCH_TREE_KEYS = new Set(["nodeCount", "statusCounts"]);
+const PUBLIC_STATUS_ATTENTION_KEYS = new Set(["status", "summary", "reasons"]);
+
 function extractToolJson(result) {
   assert.ok(result.content?.[0]?.text, "Expected MCP text content");
   assert.notEqual(result.isError, true, result.content[0].text);
   return JSON.parse(result.content[0].text);
+}
+
+async function callTool(root, name, args = {}, options = {}) {
+  return extractToolJson(await dispatchTool(root, name, args, options));
+}
+
+function assertOnlyKeys(value, allowed, label) {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value), `${label} must be an object`);
+  for (const key of Object.keys(value)) assert.equal(allowed.has(key), true, `${label} exposed non-public key ${key}`);
+}
+
+function assertPublicResult(result) {
+  assertOnlyKeys(result, PUBLIC_RESULT_KEYS, "MCP result");
+  assertNoCompactPublicLeaks(result);
+}
+
+function assertPublicStatus(status) {
+  assertPublicResult(status);
+  assertOnlyKeys(status.current, PUBLIC_STATUS_CURRENT_KEYS, "status.current");
+  if (status.current.integrity) assertOnlyKeys(status.current.integrity, PUBLIC_STATUS_INTEGRITY_KEYS, "status.current.integrity");
+  if (status.current.researchTree) assertOnlyKeys(status.current.researchTree, PUBLIC_STATUS_RESEARCH_TREE_KEYS, "status.current.researchTree");
+  assertOnlyKeys(status.attention, PUBLIC_STATUS_ATTENTION_KEYS, "status.attention");
+}
+
+function assertPublicCompletion(completion) {
+  assertPublicResult(completion);
+  assert.equal(Object.hasOwn(completion, "dependencyCoverage"), false);
+  assert.equal(Object.hasOwn(completion, "contributingReceiptIds"), false);
+}
+
+function assertPublicApproval(approval) {
+  assertOnlyKeys(approval, new Set(["required", "noChangesApplied", "summary", "effects", "question"]), "checkpoint approval");
+  assert.equal(approval.required, true);
+  assert.equal(approval.noChangesApplied, true);
+  assertNoCompactPublicLeaks(approval);
 }
 
 function snapshot(root) {
@@ -121,26 +182,30 @@ function assertSchemaObjectsSealed(schema, inputPath = "$", seen = new WeakSet()
   }
 }
 
-function materializeMission(root, missionId = "mcp-schema-seven") {
-  const proposal = extractToolJson(dispatchTool(root, "create_dove_mission", {
+async function materializeMission(root, missionId = "mcp-schema-nine", overrides = {}) {
+  let approvalCalls = 0;
+  const created = await callTool(root, "create_dove_mission", {
     missionId,
-    goal: "Exercise the sealed schema 8 MCP contract.",
+    goal: "Exercise the sealed schema 9 MCP contract.",
     targetArtifacts: ["README.md"],
     expectedArtifacts: ["README.md"],
     completionCriteria: ["The approved artifact is current."],
     evidenceRequirements: ["artifact:README.md"],
-    resultMode: "full"
-  }));
-  return {
-    proposal,
-    created: extractToolJson(dispatchTool(root, "create_dove_mission", {
-      ...proposal.confirmation.confirmArgs,
-      resultMode: "full"
-    }))
-  };
+    ...overrides
+  }, {
+    requestCheckpointApproval: async (approval) => {
+      approvalCalls += 1;
+      assertPublicApproval(approval);
+      return "accept";
+    }
+  });
+  assert.equal(approvalCalls, 1);
+  assert.equal(created.status, "materialized");
+  assertPublicResult(created);
+  return created;
 }
 
-test("schema 8 MCP exposes one sealed registry without board or operator discovery tiers", () => {
+test("schema 9 MCP exposes one sealed lightweight registry", () => {
   assert.deepEqual(toolDefinitions.map((tool) => tool.name), EXPECTED_TOOL_NAMES);
   assert.equal(new Set(EXPECTED_TOOL_NAMES).size, EXPECTED_TOOL_NAMES.length);
   assert.deepEqual([...TOOL_INPUT_SCHEMAS.keys()], EXPECTED_TOOL_NAMES);
@@ -148,16 +213,28 @@ test("schema 8 MCP exposes one sealed registry without board or operator discove
 
   assert.deepEqual(toolDefinitions.find((tool) => tool.name === "query_dove_lessons").inputSchema.properties.kind.enum, ["preference", "constraint", "method", "failure", "review-insight"]);
   assert.deepEqual(toolDefinitions.find((tool) => tool.name === "record_dove_lesson").inputSchema.properties.kind.enum, ["preference", "constraint", "method", "failure", "review-insight"]);
-  assert.ok(toolDefinitions.find((tool) => tool.name === "query_dove_status").inputSchema.properties.missionId);
+  const missionTool = toolDefinitions.find((tool) => tool.name === "create_dove_mission");
+  assert.deepEqual(missionTool.inputSchema.required, ["missionId"]);
+  assert.equal(Object.hasOwn(missionTool.inputSchema, "allOf"), false);
+
+  const statusProperties = toolDefinitions.find((tool) => tool.name === "query_dove_status").inputSchema.properties;
+  assert.ok(statusProperties.missionId);
+  assert.deepEqual(statusProperties.detail.enum, ["compact", "full"]);
+  assert.deepEqual(statusProperties.language.enum, ["zh", "en"]);
+  for (const retired of ["intent", "view", "full", "includeDetails", "showMissions", "includeMissionDetails"]) {
+    assert.equal(Object.hasOwn(statusProperties, retired), false, `query_dove_status must not expose ${retired}`);
+  }
 
   for (const tool of toolDefinitions) {
     assert.equal(tool.inputSchema.additionalProperties, false, tool.name);
     assertSchemaObjectsSealed(tool.inputSchema);
-    assert.ok(tool.inputSchema.properties.resultMode, `${tool.name} must expose resultMode`);
-    for (const retired of ["packetId", "taskPacketId", "assignedRole", "nextAction", "route", "queue", "lease", "campaignId", "continuationId", "policyOverrideReason"]) {
+    for (const retired of [
+      ...RETIRED_PUBLIC_CONTROL_FIELDS,
+      "packetId", "taskPacketId", "assignedRole", "nextAction", "route", "queue", "lease", "campaignId",
+      "continuationId", "policyOverrideReason"
+    ]) {
       assert.equal(Object.hasOwn(tool.inputSchema.properties, retired), false, `${tool.name} must not expose ${retired}`);
     }
-    if (["create_dove_mission", "record_dove_lesson"].includes(tool.name)) assert.equal(Object.hasOwn(tool.inputSchema.properties, "confirm"), false, `${tool.name} must not expose a confirmation alias`);
     assert.equal(Object.hasOwn(tool, "operatorTier"), false);
     assert.equal(Object.hasOwn(tool, "primaryEntry"), false);
     assert.equal(Object.hasOwn(tool, "internalOnly"), false);
@@ -177,240 +254,284 @@ test("deleted MCP tools are absent and fail without creating workspace state", (
     const root = createTempRoot(`dove-mcp-deleted-${name}-`);
     const result = dispatchTool(root, name, {});
     assert.equal(result.isError, true);
-    assert.match(result.content[0].text, new RegExp(`Unknown tool: ${name}`));
+    assert.equal(result.content[0].text, "Unknown tool: The requested action");
     assert.equal(fs.existsSync(path.join(root, ".dove")), false);
     cleanupTempRoot(root);
   }
 });
 
-test("read-only mission preview and status are zero-write and reject unknown inputs", () => {
+test("read-only mission preview and status use only the public allowlist and remain zero-write", async () => {
   const root = createTempRoot("dove-mcp-readonly-");
-  const before = snapshot(root);
-  const preview = extractToolJson(dispatchTool(root, "query_dove_mission", {
-    goal: "Preview without durable state.",
-    resultMode: "full"
-  }));
-  assert.equal(preview.status, "proposal");
-  const status = extractToolJson(dispatchTool(root, "query_dove_status", { resultMode: "full" }));
-  assert.equal(status.query, true);
-  assert.equal(status.proposalOnly, true);
-  assert.equal(status.scope.state, "absent");
-  assert.deepEqual(snapshot(root), before);
+  try {
+    const before = snapshot(root);
+    const preview = await callTool(root, "query_dove_mission", { goal: "Preview without durable state." });
+    assertPublicResult(preview);
+    assert.equal(preview.status, "proposal");
+    assert.deepEqual(Object.keys(preview.mission).sort(), ["artifacts", "completionCriteria", "evidenceRequirements", "goal", "outOfScope", "scope"]);
 
-  const rejected = dispatchTool(root, "query_dove_status", { board: true });
-  assert.equal(rejected.isError, true);
-  assert.match(rejected.content[0].text, /does not accept unknown input.*\$\.board/u);
-  assert.deepEqual(snapshot(root), before);
-  cleanupTempRoot(root);
+    const status = await callTool(root, "query_dove_status");
+    assertPublicStatus(status);
+    assert.equal(status.current.missionCount, 0);
+    assert.equal(status.attention.status, "needs-init");
+    assert.deepEqual(snapshot(root), before);
+
+    for (const args of [{ board: true }, { resultMode: "full" }]) {
+      const rejected = await dispatchTool(root, "query_dove_status", args);
+      assert.equal(rejected.isError, true);
+      if (Object.hasOwn(args, "resultMode")) {
+        assert.equal(rejected.content[0].text, "The requested action could not complete because recorded internal state is unavailable or no longer current.");
+      } else {
+        assert.match(rejected.content[0].text, /does not accept unknown input/u);
+      }
+      assert.deepEqual(snapshot(root), before);
+    }
+  } finally {
+    cleanupTempRoot(root);
+  }
 });
 
-test("MCP lesson query and proposal are zero-write, with confirmed replay entering MutationContext", () => {
+test("MCP lesson query is zero-write and lesson recording is one ordinary write call", async () => {
   const root = createTempRoot("dove-mcp-lessons-");
-  materializeMission(root, "mcp-lessons");
-  const before = snapshot(root);
+  try {
+    await materializeMission(root, "mcp-lessons");
+    const before = snapshot(root);
 
-  const query = extractToolJson(dispatchTool(root, "query_dove_lessons", { missionId: "mcp-lessons", resultMode: "full" }));
-  assert.equal(query.status, "empty");
-  assert.deepEqual(snapshot(root), before);
+    const query = await callTool(root, "query_dove_lessons", { missionId: "mcp-lessons" });
+    assertPublicResult(query);
+    assert.equal(query.status, "empty");
+    assert.deepEqual(query.lessons, []);
+    assert.deepEqual(snapshot(root), before);
 
-  const proposal = extractToolJson(dispatchTool(root, "record_dove_lesson", {
-    missionId: "mcp-lessons",
-    lessonId: "mcp-lesson-one",
-    scope: "mission",
-    kind: "method",
-    summary: "Keep MCP lesson recording exact.",
-    nextTimeGuidance: ["Replay the exact confirmed proposal."],
-    sourceIds: [],
-    noteIds: [],
-    artifactRefs: [],
-    appliesToArtifactRefs: [],
-    tags: ["mcp"],
-    mutationMode: "direct-process",
-    resultMode: "full"
-  }));
-  assert.equal(proposal.status, "needs-confirmation");
-  assert.equal(Object.hasOwn(proposal.confirmation.confirmArgs, "confirm"), false);
-  assert.deepEqual(snapshot(root), before);
-
-  const alias = dispatchTool(root, "record_dove_lesson", { ...proposal.confirmation.confirmArgs, confirmed: undefined, confirm: true, resultMode: "full" });
-  assert.equal(alias.isError, true);
-  assert.match(alias.content[0].text, /unknown input.*\$\.confirm/u);
-  assert.deepEqual(snapshot(root), before);
-
-  const recorded = extractToolJson(dispatchTool(root, "record_dove_lesson", { ...proposal.confirmation.confirmArgs, resultMode: "full" }));
-  assert.equal(recorded.status, "recorded");
-  assert.equal(recorded.advisoryOnly, true);
-  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.lessonsDir, "mcp-lesson-one.json")), true);
-  cleanupTempRoot(root);
+    let approvalCalls = 0;
+    const recorded = await callTool(root, "record_dove_lesson", {
+      missionId: "mcp-lessons",
+      lessonId: "mcp-lesson-one",
+      scope: "mission",
+      kind: "method",
+      summary: "Keep MCP lesson recording exact.",
+      nextTimeGuidance: ["Use one ordinary write call."],
+      sourceIds: [],
+      noteIds: [],
+      artifactRefs: [],
+      appliesToArtifactRefs: [],
+      tags: ["mcp"]
+    }, { requestCheckpointApproval: async () => { approvalCalls += 1; return "accept"; } });
+    assert.equal(approvalCalls, 0);
+    assert.equal(recorded.status, "recorded");
+    assertPublicResult(recorded);
+    assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.lessonsDir, "mcp-lesson-one.json")), true);
+  } finally {
+    cleanupTempRoot(root);
+  }
 });
 
-test("MCP init proposal and patch-plan confirmation remain zero-write and minimal", () => {
-  const root = createTempRoot("dove-mcp-init-patch-");
-  const before = snapshot(root);
-  const proposal = extractToolJson(dispatchTool(root, "init_dove_goal", {
-    goal: "Plan sealed schema 8 initialization.",
-    mutationMode: "patch-plan",
-    resultMode: "full"
-  }));
-  assert.equal(proposal.status, "needs-confirmation");
-  assert.deepEqual(snapshot(root), before);
+test("MCP init checkpoint elicits once and applies only after acceptance", async () => {
+  const root = createTempRoot("dove-mcp-init-checkpoint-");
+  try {
+    const before = snapshot(root);
+    let declinedApprovals = 0;
+    const declined = await callTool(root, "init_dove_goal", { goal: "Plan project initialization." }, {
+      requestCheckpointApproval: async (approval) => {
+        declinedApprovals += 1;
+        assertPublicApproval(approval);
+        assert.deepEqual(approval.effects, ["Create minimal Dove project records.", "Save the current project goal."]);
+        return "decline";
+      }
+    });
+    assert.equal(declinedApprovals, 1);
+    assert.equal(declined.status, "declined");
+    assertPublicResult(declined);
+    assert.deepEqual(snapshot(root), before);
 
-  const planned = extractToolJson(dispatchTool(root, "init_dove_goal", {
-    ...proposal.confirmation.confirmArgs,
-    resultMode: "full"
-  }));
-  assert.equal(planned.status, "initialization-planned");
-  assert.equal(planned.writesApplied, false);
-  const paths = new Set(planned.mutationPlan.operations.map((operation) => operation.relativePath));
-  for (const required of [ARTIFACT_PATHS.doveRootManifest, ARTIFACT_PATHS.projectIdentity]) {
-    assert.equal(paths.has(required), true, required);
+    let acceptedApprovals = 0;
+    const initialized = await callTool(root, "init_dove_goal", { goal: "Plan project initialization." }, {
+      requestCheckpointApproval: async (approval) => {
+        acceptedApprovals += 1;
+        assertPublicApproval(approval);
+        return "accept";
+      }
+    });
+    assert.equal(acceptedApprovals, 1);
+    assert.equal(initialized.status, "initialized");
+    assertPublicResult(initialized);
+    assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.doveRootManifest)), true);
+    assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.projectIdentity)), true);
+  } finally {
+    cleanupTempRoot(root);
   }
-  for (const forbidden of [".dove/state.json", ".dove/task-packets/index.json", ".dove/orchestration/board.json", ".dove/runtime/results.json", ".dove/mutations/index.json"]) {
-    assert.equal(paths.has(forbidden), false, forbidden);
-  }
-  assert.deepEqual(snapshot(root), before);
-  cleanupTempRoot(root);
 });
 
-test("MCP archive-reset rejects patch-plan before operations or writes", () => {
-  const root = createTempRoot("dove-mcp-reset-patch-");
-  fs.mkdirSync(path.join(root, ".dove"));
-  fs.writeFileSync(path.join(root, ".dove", "state.json"), "{\"version\":6}\n");
-  const before = snapshot(root);
-  const result = runWithMutationContext(root, {
-    actionId: "init-dove-goal",
-    mutationMode: "patch-plan",
-    hostId: "test"
-  }, (context) => {
-    const rejected = dispatchTool(root, "init_dove_goal", {
-      goal: "Reject archive reset planning.",
-      archiveReset: true,
-      mutationMode: "patch-plan"
+test("MCP archive reset checkpoint remains zero-write when declined", async () => {
+  const root = createTempRoot("dove-mcp-reset-checkpoint-");
+  try {
+    fs.mkdirSync(path.join(root, ".dove"));
+    fs.writeFileSync(path.join(root, ".dove", "state.json"), "{\"version\":6}\n");
+    const before = snapshot(root);
+    let approvalCalls = 0;
+    const result = await callTool(root, "init_dove_goal", {
+      goal: "Replace invalid project records.",
+      archiveReset: true
+    }, {
+      requestCheckpointApproval: async (approval) => {
+        approvalCalls += 1;
+        assertPublicApproval(approval);
+        assert.ok(approval.effects.includes("Archive the invalid Dove project records."));
+        return "decline";
+      }
+    });
+    assert.equal(approvalCalls, 1);
+    assert.equal(result.status, "declined");
+    assertPublicResult(result);
+    assert.deepEqual(snapshot(root), before);
+  } finally {
+    cleanupTempRoot(root);
+  }
+});
+
+test("MCP mission checkpoint persists the minimal contract in one accepted call", async () => {
+  const root = createTempRoot("dove-mcp-mission-checkpoint-");
+  try {
+    const before = snapshot(root);
+    const declined = await callTool(root, "create_dove_mission", {
+      missionId: "declined-mission",
+      goal: "Do not persist this mission."
+    }, { requestCheckpointApproval: async () => "decline" });
+    assert.equal(declined.status, "declined");
+    assertPublicResult(declined);
+    assert.deepEqual(snapshot(root), before);
+
+    await materializeMission(root, "accepted-mission", {
+      goal: "Persist only this approved mission contract.",
+      scope: ["schema 9 MCP"],
+      targetArtifacts: ["README.md"],
+      completionCriteria: ["README is current"]
+    });
+    const persisted = JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.missionsDir, "accepted-mission.json"), "utf8"));
+    assert.equal(persisted.missionId, "accepted-mission");
+    assert.equal(Object.hasOwn(persisted, "executionHandoff"), false);
+    assert.deepEqual(Object.keys(snapshot(root)).sort(), [
+      ARTIFACT_PATHS.doveRootManifest,
+      `${ARTIFACT_PATHS.missionsDir}/accepted-mission.json`,
+      ARTIFACT_PATHS.projectIdentity
+    ].sort());
+    assert.equal(fs.existsSync(path.join(root, ".dove", "state.json")), false);
+    assert.equal(fs.existsSync(path.join(root, ".dove", "task-packets")), false);
+  } finally {
+    cleanupTempRoot(root);
+  }
+});
+
+test("MCP receipt ingestion is one ordinary write call with a public completion summary", async () => {
+  const root = createTempRoot("dove-mcp-receipt-single-call-");
+  try {
+    fs.writeFileSync(path.join(root, "README.md"), "committed MCP receipt artifact\n", "utf8");
+    await materializeMission(root, "mcp-receipt-single-call");
+    const missionPath = path.join(root, ARTIFACT_PATHS.missionsDir, "mcp-receipt-single-call.json");
+    const mission = JSON.parse(fs.readFileSync(missionPath, "utf8"));
+    const receiptArgs = {
+      receiptId: "mcp-receipt-current",
+      missionId: mission.missionId,
+      contractDigest: mission.contractDigest,
+      summary: "Recorded the current MCP artifact.",
+      artifacts: [{ path: "README.md", kind: "document", sha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "README.md"))).digest("hex") }],
+      validations: [],
+      criteriaSatisfied: mission.completionCriterionIds.map((criterionId) => ({ criterionId, evidenceRefs: ["artifact:README.md"] })),
+      producedAt: "2026-07-16T00:00:00.000Z"
+    };
+
+    const ingested = await callTool(root, "ingest_execution_receipt", receiptArgs);
+    assert.equal(ingested.status, "ingested");
+    assert.equal(ingested.completion.status, "complete");
+    assert.equal(ingested.completion.complete, true);
+    assert.deepEqual(ingested.completion.gaps, []);
+    assert.deepEqual(ingested.completion.artifacts, [{ path: "README.md", covered: true }]);
+    assertPublicCompletion(ingested);
+    assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir, "mcp-receipt-current.json")), true);
+
+    const lockPath = path.join(root, ".dove", ".receipt-ledger-append.lock");
+    fs.writeFileSync(lockPath, "occupied\n", "utf8");
+    const failed = await dispatchTool(root, "ingest_execution_receipt", { ...receiptArgs, receiptId: "mcp-receipt-failed" });
+    assert.equal(failed.isError, true);
+    assert.doesNotMatch(failed.content[0].text, /completion|assessment/u);
+    assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir, "mcp-receipt-failed.json")), false);
+    fs.rmSync(lockPath);
+  } finally {
+    cleanupTempRoot(root);
+  }
+});
+
+test("MCP host outcome closure uses four public fields and normalizes workspace paths", async () => {
+  const root = createTempRoot("dove-mcp-host-outcome-");
+  const missionId = "mcp-host-outcome";
+  try {
+    fs.mkdirSync(path.join(root, "outputs"), { recursive: true });
+    fs.writeFileSync(path.join(root, "outputs", "result.md"), "host outcome\n", "utf8");
+    const created = await materializeMission(root, missionId, {
+      goal: "Record a host-produced result.",
+      targetArtifacts: ["outputs/result.md"]
+    });
+    assert.equal(JSON.stringify(created).includes(missionId), false);
+    const closureTool = toolDefinitions.find((tool) => tool.name === "close_host_outcome");
+    assert.deepEqual(Object.keys(closureTool.inputSchema.properties).sort(), ["artifactPaths", "missionId", "summary", "validationPaths"]);
+    const result = await callTool(root, "close_host_outcome", {
+      missionId,
+      summary: "Recorded the host-produced result.",
+      artifactPaths: [path.join(root, "outputs", "result.md")]
+    });
+    assert.equal(result.status, "ingested");
+    assert.deepEqual(result.artifacts, [{ path: "outputs/result.md", kind: "other" }]);
+    assert.equal(result.completion.complete, false);
+    assertNoCompactPublicLeaks(result);
+
+    const beforeRepeat = snapshot(root);
+    const repeated = await callTool(root, "close_host_outcome", {
+      missionId,
+      summary: "Do not duplicate the same evidence.",
+      artifactPaths: ["outputs/result.md"]
+    });
+    assert.equal(repeated.status, "skipped");
+    assert.equal(repeated.zeroWrite, true);
+    assert.deepEqual(snapshot(root), beforeRepeat);
+
+    const rejected = await dispatchTool(root, "close_host_outcome", {
+      missionId,
+      summary: "Reject caller authority.",
+      artifactPaths: ["outputs/result.md"],
+      receiptId: "caller-controlled"
     });
     assert.equal(rejected.isError, true);
-    assert.match(rejected.content[0].text, /cannot run in patch-plan mode/u);
-    assert.equal(context.operations().length, 0);
-    return { status: "rejected" };
-  });
-  assert.equal(result.writesApplied, false);
-  assert.equal(result.mutationPlan.operations.length, 0);
-  assert.deepEqual(snapshot(root), before);
-  cleanupTempRoot(root);
-});
-
-test("MCP mission exact replay persists only the minimal contract and rejects drift", () => {
-  const root = createTempRoot("dove-mcp-mission-replay-");
-  const proposal = extractToolJson(dispatchTool(root, "create_dove_mission", {
-    missionId: "exact-replay",
-    goal: "Persist only this approved mission contract.",
-    scope: ["schema 8 MCP"],
-    targetArtifacts: ["README.md"],
-    completionCriteria: ["README is current"],
-    resultMode: "full"
-  }));
-  assert.equal(proposal.status, "needs-confirmation");
-  assert.equal(fs.existsSync(path.join(root, ".dove")), false);
-
-  for (const altered of [
-    { ...proposal.confirmation.confirmArgs, proposalDigest: "0".repeat(64) },
-    { ...proposal.confirmation.confirmArgs, goal: "Changed after approval." },
-    { ...proposal.confirmation.confirmArgs, confirmed: undefined, confirm: true },
-    { ...proposal.confirmation.confirmArgs, packetId: "retired" }
-  ]) {
-    const rejected = dispatchTool(root, "create_dove_mission", { ...altered, resultMode: "full" });
-    assert.equal(rejected.isError, true);
-    assert.match(rejected.content[0].text, /no longer matches|unknown input|not allowed/u);
-    assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+    assert.equal(fs.readdirSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir)).length, 1);
+  } finally {
+    cleanupTempRoot(root);
   }
-
-  const created = extractToolJson(dispatchTool(root, "create_dove_mission", {
-    ...proposal.confirmation.confirmArgs,
-    resultMode: "full"
-  }));
-  assert.equal(created.status, "materialized");
-  assert.equal(created.mission.missionId, "exact-replay");
-  assert.equal(created.executionHandoff.missionId, "exact-replay");
-  assert.equal(created.executionHandoff.contractDigest, created.mission.contractDigest);
-  assert.match(created.executionHandoff.receiptCliTemplate, /receipt .*--json/u);
-  assert.deepEqual(created.executionHandoff.mcpTools, { ingest: "ingest_execution_receipt", assess: "assess_mission_completion" });
-  assert.equal(Object.hasOwn(JSON.parse(fs.readFileSync(path.join(root, ARTIFACT_PATHS.missionsDir, "exact-replay.json"), "utf8")), "executionHandoff"), false);
-  assert.deepEqual(Object.keys(snapshot(root)).sort(), [
-    ARTIFACT_PATHS.doveRootManifest,
-    `${ARTIFACT_PATHS.missionsDir}/exact-replay.json`,
-    ARTIFACT_PATHS.projectIdentity
-  ].sort());
-  assert.equal(fs.existsSync(path.join(root, ".dove", "state.json")), false);
-  assert.equal(fs.existsSync(path.join(root, ".dove", "task-packets")), false);
-  cleanupTempRoot(root);
 });
 
-test("MCP receipt ingestion returns current assessment only after commit and keeps patch plans null", () => {
-  const root = createTempRoot("dove-mcp-receipt-post-commit-");
-  fs.writeFileSync(path.join(root, "README.md"), "committed MCP receipt artifact\n", "utf8");
-  const { created } = materializeMission(root, "mcp-receipt-post-commit");
-  const missionPath = path.join(root, ARTIFACT_PATHS.missionsDir, `${created.mission.missionId}.json`);
-  const mission = JSON.parse(fs.readFileSync(missionPath, "utf8"));
-  const receiptArgs = {
-    receiptId: "mcp-receipt-current",
-    missionId: mission.missionId,
-    contractDigest: mission.contractDigest,
-    summary: "Recorded the current MCP artifact.",
-    artifacts: [{ path: "README.md", kind: "document", sha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "README.md"))).digest("hex") }],
-    validations: [],
-    criteriaSatisfied: mission.completionCriterionIds.map((criterionId) => ({ criterionId, evidenceRefs: ["artifact:README.md"] })),
-    producedAt: "2026-07-16T00:00:00.000Z",
-    resultMode: "full"
-  };
-
-  const planned = extractToolJson(dispatchTool(root, "ingest_execution_receipt", { ...receiptArgs, receiptId: "mcp-receipt-planned", mutationMode: "patch-plan" }));
-  assert.equal(planned.status, "ingest-planned");
-  assert.equal(planned.completion.assessment, null);
-  assert.equal(Object.hasOwn(planned, "postCommit"), false);
-  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir, "mcp-receipt-planned.json")), false);
-
-  const direct = extractToolJson(dispatchTool(root, "ingest_execution_receipt", { ...receiptArgs, mutationMode: "direct-process" }));
-  assert.equal(direct.status, "ingested");
-  assert.equal(direct.completion.assessment.currentReceiptId, receiptArgs.receiptId);
-  assert.equal(direct.completion.assessment.complete, true);
-  assert.equal(Object.hasOwn(direct, "postCommit"), false);
-
-  const lockPath = path.join(root, ".dove", ".receipt-ledger-append.lock");
-  fs.writeFileSync(lockPath, "occupied\n", "utf8");
-  const failed = dispatchTool(root, "ingest_execution_receipt", { ...receiptArgs, receiptId: "mcp-receipt-failed", mutationMode: "direct-process" });
-  assert.equal(failed.isError, true);
-  assert.doesNotMatch(failed.content[0].text, /completion|assessment/u);
-  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir, "mcp-receipt-failed.json")), false);
-  fs.rmSync(lockPath);
-  cleanupTempRoot(root);
+test("retired MCP replay and mutation controls are rejected without writes", async () => {
+  const cases = [
+    ["query_dove_status", { resultMode: "full" }, "resultMode"],
+    ["create_dove_mission", { goal: "Reject mutation mode.", mutationMode: "direct-process" }, "mutationMode"],
+    ["create_dove_mission", { goal: "Reject confirmation state.", confirmed: true }, "confirmed"],
+    ["create_dove_mission", { goal: "Reject confirmation alias.", confirm: true }, "confirm"],
+    ["create_dove_mission", { goal: "Reject replay arguments.", confirmArgs: {} }, "confirmArgs"],
+    ["create_dove_mission", { goal: "Reject replay digest.", proposalDigest: "0".repeat(64) }, "proposalDigest"]
+  ];
+  for (const [name, args, field] of cases) {
+    const root = createTempRoot(`dove-mcp-retired-${field}-`);
+    try {
+      const result = await dispatchTool(root, name, args);
+      assert.equal(result.isError, true);
+      assert.equal(result.content[0].text, "The requested action could not complete because recorded internal state is unavailable or no longer current.");
+      assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+    } finally {
+      cleanupTempRoot(root);
+    }
+  }
 });
 
-test("MCP validates mutation modes before writes and honors an active context", () => {
-  const invalidRoot = createTempRoot("dove-mcp-invalid-mode-");
-  const invalid = dispatchTool(invalidRoot, "create_dove_mission", {
-    missionId: "invalid-mode",
-    goal: "Reject invalid mode.",
-    mutationMode: "invalid"
-  });
-  assert.equal(invalid.isError, true);
-  assert.match(invalid.content[0].text, /\$\.mutationMode must be one of/u);
-  assert.equal(fs.existsSync(path.join(invalidRoot, ".dove")), false);
-  cleanupTempRoot(invalidRoot);
-
-  const conflictRoot = createTempRoot("dove-mcp-conflict-mode-");
-  const conflict = runWithMutationContext(conflictRoot, {
-    actionId: "test",
-    mutationMode: "patch-plan",
-    hostId: "test"
-  }, () => dispatchTool(conflictRoot, "create_dove_mission", {
-    missionId: "conflict-mode",
-    goal: "Reject conflicting mode.",
-    mutationMode: "direct-process"
-  }));
-  assert.equal(conflict.isError, true);
-  assert.match(conflict.content[0].text, /does not match the active mutation context mode patch-plan/u);
-  assert.equal(conflict.mutationPlan.operations.length, 0);
-  assert.equal(fs.existsSync(path.join(conflictRoot, ".dove")), false);
-  cleanupTempRoot(conflictRoot);
+test("workspace path contracts distinguish locators and composite finding references", () => {
+  assert.deepEqual(TOOL_INTERACTION_CONTRACTS.verify_source.pathFields, []);
+  assert.equal(TOOL_INTERACTION_CONTRACTS.normalize_rebuttal_issues.pathFields.includes("issues[].findingRefs"), true);
+  assert.equal(TOOL_INTERACTION_CONTRACTS.build_rebuttal.pathFields.includes("issues[].findingRefs"), true);
 });
 
 test("mission-bound domain tools retain explicit mission inputs", () => {
@@ -432,54 +553,122 @@ test("mission-bound domain tools retain explicit mission inputs", () => {
   assert.equal(MUTATING_TOOL_NAMES.has("create_dove_mission"), true);
 });
 
-test("MCP stdio server lists the exact registry and rejects discovery tiers", async () => {
+test("MCP stdio server lists the exact registry and uses elicitation for checkpoints", async () => {
   const root = createTempRoot("dove-mcp-stdio-");
-  const client = createMcpStdioClient({ args: [SERVER], cwd: root });
+  let elicitationCount = 0;
+  const client = createMcpStdioClient({
+    args: [SERVER],
+    cwd: root,
+    onRequest: async (method, params) => {
+      elicitationCount += 1;
+      assert.equal(method, "elicitation/create");
+      assertOnlyKeys(params, new Set(["message", "requestedSchema"]), "elicitation request");
+      assert.deepEqual(params.requestedSchema, { type: "object", properties: {}, additionalProperties: false });
+      assertNoCompactPublicLeaks(params);
+      return { action: "accept", content: {} };
+    }
+  });
   try {
     const initialized = await client.call("initialize", {
-      protocolVersion: "2024-11-05",
-      capabilities: {},
-      clientInfo: { name: "schema-seven-test", version: "1.0.0" }
+      protocolVersion: "2025-06-18",
+      capabilities: { elicitation: {} },
+      clientInfo: { name: "schema-nine-test", version: "1.0.0" }
     });
+    assert.equal(initialized.protocolVersion, "2025-06-18");
     assert.equal(initialized.serverInfo.name, "dove");
     client.notify("notifications/initialized");
 
     const listed = await client.call("tools/list");
     assert.deepEqual(listed.tools.map((tool) => tool.name), EXPECTED_TOOL_NAMES);
     await assert.rejects(client.call("tools/list", { surface: "operator" }), /does not accept unknown input.*\$\.surface/u);
+    await assert.rejects(client.call("tools/list", { resultMode: "full" }), /does not accept unknown input.*\$\.resultMode/u);
 
-    const statusResult = await client.call("tools/call", {
-      name: "query_dove_status",
-      arguments: { resultMode: "full" }
-    });
-    const status = extractToolJson(statusResult);
-    assert.equal(status.scope.state, "absent");
+    const status = extractToolJson(await client.call("tools/call", { name: "query_dove_status", arguments: {} }));
+    assertPublicStatus(status);
+    assert.equal(status.current.missionCount, 0);
     assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+
+    const checkpoint = extractToolJson(await client.call("tools/call", {
+      name: "init_dove_goal",
+      arguments: { goal: "Exercise stdio checkpoint elicitation." }
+    }));
+    assert.equal(elicitationCount, 1);
+    assert.equal(checkpoint.status, "initialized");
+    assertPublicResult(checkpoint);
   } finally {
     client.kill();
     cleanupTempRoot(root);
   }
 });
 
-test("materialized mission status scopes one mission and multiple missions require explicit selection", () => {
+test("public completion and status preserve lifecycle state without raw identifiers", async () => {
+  const root = createTempRoot("dove-mcp-mission-lifecycle-");
+  try {
+    await materializeMission(root, "dependency-mission");
+    await materializeMission(root, "dependent-mission", {
+      goal: "Wait for the dependency mission.",
+      dependsOnMissionIds: ["dependency-mission"],
+      completionCriteria: [],
+      evidenceRequirements: []
+    });
+    const dependent = await callTool(root, "assess_mission_completion", { missionId: "dependent-mission" });
+    assertPublicCompletion(dependent);
+    assert.equal(dependent.complete, false);
+    assert.ok(dependent.completion.gaps.includes("A required earlier mission is not complete."));
+
+    await materializeMission(root, "successor-mission", {
+      goal: "Replace the dependency mission.",
+      supersedesMissionId: "dependency-mission",
+      completionCriteria: [],
+      evidenceRequirements: []
+    });
+    await materializeMission(root, "terminal-mission", {
+      goal: "Replace the intermediate successor mission.",
+      supersedesMissionId: "successor-mission",
+      completionCriteria: [],
+      evidenceRequirements: []
+    });
+    const historical = await callTool(root, "query_dove_status", { missionId: "dependency-mission" });
+    assertPublicStatus(historical);
+    assert.equal(historical.current.integrity.status, "superseded");
+    assert.equal(historical.attention.status, "superseded");
+    assert.ok(historical.attention.reasons.includes("This mission has been superseded."));
+    assert.equal(Object.hasOwn(historical, "nextStep"), false);
+    assert.equal(Object.hasOwn(historical.attention, "stableGaps"), false);
+
+    const blockedDependent = await callTool(root, "assess_mission_completion", { missionId: "dependent-mission" });
+    assertPublicCompletion(blockedDependent);
+    assert.ok(blockedDependent.completion.gaps.includes("A required earlier mission is not complete."));
+  } finally {
+    cleanupTempRoot(root);
+  }
+});
+
+test("materialized status uses the public mission scope and remains zero-write", async () => {
   const root = createTempRoot("dove-mcp-status-current-");
-  materializeMission(root, "status-current");
-  const status = extractToolJson(dispatchTool(root, "query_dove_status", { full: true, resultMode: "full" }));
-  assert.equal(status.currentContext.missionCount, 1);
-  assert.equal(status.currentContext.missionScope, "only-mission");
-  assert.equal(status.missions[0].missionId, "status-current");
-  assert.equal(status.diagnostics.noRefresh, true);
-  assert.equal(status.diagnostics.noSourceMutation, true);
-  materializeMission(root, "status-second");
-  const afterMissions = snapshot(root);
-  const multiple = extractToolJson(dispatchTool(root, "query_dove_status", { resultMode: "full" }));
-  assert.equal(multiple.currentContext.missionScope, "workspace");
-  assert.equal(multiple.currentContext.selectedMissionId, null);
-  assert.equal(multiple.needsAttention.status, "mission-selection-required");
-  assert.ok(multiple.needsAttention.reasons.includes("explicit-mission-required"));
-  const explicit = extractToolJson(dispatchTool(root, "query_dove_status", { missionId: "status-current", resultMode: "full" }));
-  assert.equal(explicit.currentContext.missionScope, "explicit");
-  assert.equal(explicit.currentContext.selectedMissionId, "status-current");
-  assert.deepEqual(snapshot(root), afterMissions);
-  cleanupTempRoot(root);
+  try {
+    await materializeMission(root, "status-current");
+    const status = await callTool(root, "query_dove_status", { detail: "full" });
+    assertPublicStatus(status);
+    assert.equal(status.current.missionCount, 1);
+    assert.equal(status.current.missionScope, "only-mission");
+    assert.equal(Object.hasOwn(status, "missions"), false);
+    assert.equal(Object.hasOwn(status, "diagnostics"), false);
+
+    await materializeMission(root, "status-second");
+    const afterMissions = snapshot(root);
+    const multiple = await callTool(root, "query_dove_status");
+    assertPublicStatus(multiple);
+    assert.equal(multiple.current.missionScope, "workspace");
+    assert.equal(multiple.attention.status, "mission-selection-required");
+    assert.ok(multiple.attention.reasons.includes("Choose a mission explicitly."));
+
+    const explicit = await callTool(root, "query_dove_status", { missionId: "status-current" });
+    assertPublicStatus(explicit);
+    assert.equal(explicit.current.missionScope, "explicit");
+    assert.equal(Object.hasOwn(explicit.current, "selectedMissionId"), false);
+    assert.deepEqual(snapshot(root), afterMissions);
+  } finally {
+    cleanupTempRoot(root);
+  }
 });

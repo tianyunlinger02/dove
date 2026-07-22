@@ -28,6 +28,40 @@ function assertAcyclic(byId, edgeIds, label) {
   for (const missionId of byId.keys()) visit(missionId);
 }
 
+export function terminalSuccessorMissionId(missionGraph, missionId) {
+  let current = missionId;
+  const seen = new Set();
+  while (missionGraph.successorByMission.has(current)) {
+    if (seen.has(current)) throw new Error(`Mission supersession contains a cycle at ${current}.`);
+    seen.add(current);
+    current = missionGraph.successorByMission.get(current);
+  }
+  return current === missionId ? null : current;
+}
+
+export function missionSupersedes(missionGraph, successorMissionId, ancestorMissionId) {
+  if (successorMissionId === ancestorMissionId) return false;
+  let current = ancestorMissionId;
+  const seen = new Set();
+  while (missionGraph.successorByMission.has(current)) {
+    if (seen.has(current)) throw new Error(`Mission supersession contains a cycle at ${current}.`);
+    seen.add(current);
+    current = missionGraph.successorByMission.get(current);
+    if (current === successorMissionId) return true;
+  }
+  return false;
+}
+
+export function assertMissionAcceptsWrites(workspace, mission, options = {}) {
+  const supersededByMissionId = terminalSuccessorMissionId(workspace.missionGraph, mission.missionId);
+  if (supersededByMissionId) {
+    const suffix = options.receipt === true
+      ? "and no longer accepts execution receipts."
+      : "and is read-only history.";
+    throw new Error(`Mission ${mission.missionId} has been superseded by ${supersededByMissionId} ${suffix}`);
+  }
+}
+
 export function validateMissionGraph(value) {
   const entries = missionEntries(value);
   const byId = new Map();
@@ -48,7 +82,11 @@ export function validateMissionGraph(value) {
     }
   }
 
-  assertAcyclic(byId, (mission) => Array.isArray(mission.dependsOnMissionIds) ? mission.dependsOnMissionIds : [], "Mission dependency graph");
+  const dependenciesByMission = new Map([...byId.values()].map((mission) => [
+    mission.missionId,
+    Object.freeze([...(mission.dependsOnMissionIds ?? [])])
+  ]));
+  assertAcyclic(byId, (mission) => dependenciesByMission.get(mission.missionId), "Mission dependency graph");
 
   const successorByMission = new Map();
   for (const mission of byId.values()) {
@@ -59,5 +97,5 @@ export function validateMissionGraph(value) {
     successorByMission.set(mission.supersedesMissionId, mission.missionId);
   }
   assertAcyclic(byId, (mission) => mission.supersedesMissionId ? [mission.supersedesMissionId] : [], "Mission supersession");
-  return { missions: byId, successorByMission };
+  return { missions: byId, dependenciesByMission, successorByMission };
 }

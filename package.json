@@ -1,6 +1,6 @@
 {
   "name": "dove",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Local-first Dove mission and evidence workflow pack for papers, engineering work, research, and review.",
   "type": "module",
   "bin": {
@@ -42,9 +42,10 @@
     "workflow-goals:validate": "node ./scripts/validate-workflow-goals.mjs",
     "governance:audit": "node ./scripts/audit-governance-coverage.mjs",
     "maturity:audit": "node ./scripts/validate-maturity.mjs",
+    "package:validate": "node ./scripts/validate-package.mjs",
     "test": "node --test ./tests/**/*.test.mjs",
     "check": "npm run build:check && npm run commands:check && npm run commands:validate && npm run mcp:validate && npm run workflow-goals:validate && npm run governance:audit && npm test",
-    "release:check": "npm run build:check && npm run commands:check && npm run maturity:audit && npm run pack:dry-run",
+    "release:check": "npm run build:check && npm run commands:check && npm run maturity:audit && npm run package:validate",
     "pack:dry-run": "npm pack --dry-run",
     "build": "node ./scripts/build-package.mjs",
     "build:check": "node ./scripts/build-package.mjs --check",

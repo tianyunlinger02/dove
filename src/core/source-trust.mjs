@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { inspectDeclaredPath } from "./artifact-integrity.mjs";
+import { snapshotArtifactBuffer } from "./review-artifact-snapshot.mjs";
 import {
   assertSealedDomainArgs,
   canonicalDomainPath,
@@ -22,11 +23,12 @@ const SOURCE_FIELDS = new Set([
   "schemaVersion", "sourceId", "missionId", "contractDigest", "citationKey", "title", "authors", "year", "locator", "sourceType",
   "abstract", "origin", "identityFingerprint", "capturedMaterial", "lifecycle", "currentDecision"
 ]);
-const CAPTURED_MATERIAL_FIELDS = new Set(["path", "sha256"]);
+const CAPTURED_MATERIAL_FIELDS = new Set(["path", "sizeBytes", "sha256"]);
 const CANDIDATE_DECISION_FIELDS = new Set(["decision", "decidedAt", "reason"]);
 const REJECTED_DECISION_FIELDS = new Set(["decision", "method", "checkedMaterial", "auditEvidence", "decidedAt"]);
 const AUDIT_EVIDENCE_FIELDS = new Set(["reference", "kind", "observation"]);
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
+const NOTE_FIELDS = new Set(["schemaVersion", "noteId", "missionId", "contractDigest", "title", "summary", "quotes", "claims", "openQuestions", "sourceIds", "artifactRefs", "updatedAt"]);
 
 const REGISTER_FIELDS = new Set(["missionId", "sourceId", "citationKey", "title", "authors", "year", "locator", "sourceType", "abstract", "origin", "capturePath"]);
 const REJECT_FIELDS = new Set(["missionId", "sourceId", "method", "checkedMaterial", "auditEvidence"]);
@@ -110,8 +112,9 @@ function validateStoredSource(root, source, filename, missions, label) {
   assertSealed(source.capturedMaterial, CAPTURED_MATERIAL_FIELDS, `${label}.capturedMaterial`);
   const materialPath = canonicalDomainPath(source.capturedMaterial.path, `${label}.capturedMaterial.path`, ".dove/sources/materials");
   if (!HASH_PATTERN.test(String(source.capturedMaterial.sha256 ?? ""))) throw new Error(`${label}.capturedMaterial.sha256 must be a lowercase SHA-256 hash.`);
-  const material = capturedMaterial(root, materialPath);
-  if (!material || material.path !== materialPath || material.sha256 !== source.capturedMaterial.sha256) throw new Error(`${label}.capturedMaterial is missing, aliased, empty, or hash-drifted.`);
+  if (!Number.isSafeInteger(source.capturedMaterial.sizeBytes) || source.capturedMaterial.sizeBytes <= 0) throw new Error(`${label}.capturedMaterial.sizeBytes must be a positive safe integer.`);
+  const material = capturedMaterial(root, materialPath, { includeContent: true });
+  if (!material || material.path !== materialPath || material.sizeBytes !== source.capturedMaterial.sizeBytes || material.sha256 !== source.capturedMaterial.sha256) throw new Error(`${label}.capturedMaterial is missing, aliased, empty, size-drifted, or hash-drifted.`);
   const expectedDecisionFields = source.lifecycle === "candidate" ? CANDIDATE_DECISION_FIELDS : REJECTED_DECISION_FIELDS;
   assertSealed(source.currentDecision, expectedDecisionFields, `${label}.currentDecision`);
   if (source.currentDecision.decision !== source.lifecycle) throw new Error(`${label}.currentDecision.decision must match lifecycle ${source.lifecycle}.`);
@@ -144,14 +147,11 @@ function readSourceFiles(root) {
     .sort((left, right) => String(left.sourceId).localeCompare(String(right.sourceId)));
 }
 
-function capturedMaterial(root, capturePath) {
+function capturedMaterial(root, capturePath, options = {}) {
   if (!capturePath) return null;
   const canonicalPath = canonicalDomainPath(capturePath, "capturePath");
-  const inspection = inspectDeclaredPath(root, canonicalPath, { requireNonEmpty: true });
-  if (inspection.status !== "existing") throw new Error(`capturePath must reference an existing non-empty regular file (${inspection.reason ?? inspection.status}).`);
-  const resolved = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  if (resolved !== canonicalPath) throw new Error("capturePath must use its canonical realpath-contained path.");
-  return { path: resolved, sha256: domainSha256(fs.readFileSync(path.resolve(root, resolved))) };
+  const snapshot = snapshotArtifactBuffer(root, canonicalPath, "capturePath");
+  return options.includeContent === true ? snapshot : { path: snapshot.path, sha256: snapshot.sha256 };
 }
 
 function sourceRecord(args, capturedMaterial, contractDigest, current = null) {
@@ -195,13 +195,13 @@ export function registerSource(root, args = {}) {
   const relativePath = sourcePath(sourceId);
   const existing = fs.existsSync(path.resolve(root, relativePath)) ? readJson(root, relativePath, null) : null;
   if (existing && existing.missionId !== mission.missionId) throw new Error(`Source ${args.sourceId} belongs to mission ${existing.missionId}.`);
-  const captured = capturedMaterial(root, args.capturePath);
+  const captured = capturedMaterial(root, args.capturePath, { includeContent: true });
   if (!captured) throw new Error("register_source requires capturePath for concrete non-empty captured material.");
   const materialPath = path.posix.join(".dove/sources/materials", `${sourceId}${path.extname(captured.path).toLowerCase() || ".bin"}`);
-  const sourceMaterial = { path: materialPath, sha256: captured.sha256 };
+  const sourceMaterial = { path: materialPath, sizeBytes: captured.sizeBytes, sha256: captured.sha256 };
   const source = sourceRecord(args, sourceMaterial, mission.contractDigest, existing);
   const writes = [{ path: relativePath, kind: "data", content: domainJson(source), derivedReferences: [`artifact:${source.capturedMaterial.path}`] }];
-  writes.unshift({ path: materialPath, kind: "document", content: fs.readFileSync(path.resolve(root, captured.path)), derivedReferences: [] });
+  writes.unshift({ path: materialPath, kind: "document", content: captured.content, derivedReferences: [] });
   return {
     ...finalizeDomainArtifacts(root, {
       actionId: "register-source",
@@ -274,8 +274,8 @@ export function sourceEligibility(source, _verifications = [], options = {}) {
   if (source.identityFingerprint !== sourceIdentityFingerprint(source)) return { eligible: false, reason: "source-identity-changed", source, verification: source.currentDecision ?? null };
   if (!source.capturedMaterial) return { eligible: false, reason: "source-captured-material-missing", source, verification: source.currentDecision ?? null };
   try {
-    const material = capturedMaterial(options.root, source.capturedMaterial.path);
-    if (!material || material.sha256 !== source.capturedMaterial.sha256) return { eligible: false, reason: "source-captured-material-changed", source, verification: source.currentDecision ?? null };
+    const material = capturedMaterial(options.root, source.capturedMaterial.path, { includeContent: true });
+    if (!material || material.sha256 !== source.capturedMaterial.sha256 || material.sizeBytes !== source.capturedMaterial.sizeBytes) return { eligible: false, reason: "source-captured-material-changed", source, verification: source.currentDecision ?? null };
   } catch {
     return { eligible: false, reason: "source-captured-material-invalid", source, verification: source.currentDecision ?? null };
   }
@@ -294,28 +294,58 @@ export function evaluateSourceReferences(root, references = [], missionId = null
 }
 
 export function evaluateNoteReferences(root, references = [], missionId = null) {
+  const workspace = openDoveWorkspace(root, { operation: "Note evidence receipt ledger read" });
+  const owned = new Map(workspace.receiptLedger.currentOwnership.map((item) => [item.path, item]));
+  const receiptById = new Map(workspace.receiptLedger.receipts.map((item) => [item.receiptId, item]));
   return references.map((reference) => {
-    const note = readJson(root, notePath(reference), null);
-    if (!note) return { reference, eligible: false, reason: "unknown-note", note: null, sources: [], artifacts: [] };
-    if (!missionId || note.missionId !== missionId) return { reference, eligible: false, reason: "note-mission-binding-mismatch", note, sources: [], artifacts: [] };
+    let noteId;
+    try {
+      noteId = domainSafeId(reference, "note reference");
+    } catch {
+      return { reference, eligible: false, reason: "note-reference-invalid", note: null, owner: null, sources: [], artifacts: [] };
+    }
+    const relativePath = notePath(noteId);
+    const owner = owned.get(relativePath) ?? null;
+    if (!owner) return { reference, eligible: false, reason: "note-ownership-missing", note: null, owner: null, sources: [], artifacts: [] };
+    if (!missionId || owner.missionId !== missionId) return { reference, eligible: false, reason: "note-owner-mission-mismatch", note: null, owner, sources: [], artifacts: [] };
+    let snapshot;
+    try {
+      snapshot = snapshotArtifactBuffer(root, relativePath, `note ${noteId}`);
+    } catch {
+      return { reference, eligible: false, reason: "note-path-invalid", note: null, owner, sources: [], artifacts: [] };
+    }
+    if (snapshot.sha256 !== owner.sha256) return { reference, eligible: false, reason: "note-hash-drift", note: null, owner, sources: [], artifacts: [] };
+    let note;
+    try {
+      note = JSON.parse(snapshot.content.toString("utf8"));
+      assertSealed(note, NOTE_FIELDS, `note ${noteId}`);
+    } catch {
+      return { reference, eligible: false, reason: "note-schema-invalid", note: null, owner, sources: [], artifacts: [] };
+    }
+    const ownerReceipt = receiptById.get(owner.receiptId);
+    if (note.schemaVersion !== 2 || note.noteId !== noteId || note.missionId !== missionId || note.contractDigest !== owner.contractDigest || ownerReceipt?.contractDigest !== note.contractDigest) {
+      return { reference, eligible: false, reason: "note-binding-invalid", note, owner, sources: [], artifacts: [] };
+    }
+    exactTimestamp(note.updatedAt, `note ${noteId}.updatedAt`);
     const sourceIds = Array.isArray(note.sourceIds) ? note.sourceIds : [];
     const artifactRefs = Array.isArray(note.artifactRefs) ? note.artifactRefs : [];
-    if (sourceIds.length === 0 && artifactRefs.length === 0) return { reference, eligible: false, reason: "note-evidence-missing", note, sources: [], artifacts: [] };
+    if (sourceIds.length === 0 && artifactRefs.length === 0) return { reference, eligible: false, reason: "note-evidence-missing", note, owner, sources: [], artifacts: [] };
     const sources = evaluateSourceReferences(root, sourceIds, missionId);
     const sourceFailure = sources.find((item) => !item.eligible);
-    const owned = new Map(openDoveWorkspace(root, { operation: "Note evidence receipt ledger read" }).receiptLedger.currentOwnership.map((item) => [item.path, item]));
     const artifacts = artifactRefs.map((artifactPath) => {
-      const owner = owned.get(artifactPath);
-      if (!owner) return { path: artifactPath, current: false, reason: "artifact-ownership-missing" };
-      if (owner.missionId !== missionId) return { path: artifactPath, current: false, reason: "artifact-mission-binding-mismatch" };
-      const inspection = inspectDeclaredPath(root, artifactPath, { requireNonEmpty: true });
-      if (inspection.status !== "existing") return { path: artifactPath, current: false, reason: inspection.reason ?? inspection.status };
-      const currentHash = domainSha256(fs.readFileSync(path.resolve(root, artifactPath)));
-      return { path: artifactPath, current: currentHash === owner.sha256, reason: currentHash === owner.sha256 ? "current-artifact" : "artifact-hash-drift" };
+      const artifactOwner = owned.get(artifactPath);
+      if (!artifactOwner) return { path: artifactPath, current: false, reason: "artifact-ownership-missing" };
+      if (artifactOwner.missionId !== missionId) return { path: artifactPath, current: false, reason: "artifact-mission-binding-mismatch" };
+      try {
+        const artifactSnapshot = snapshotArtifactBuffer(root, artifactPath, `note ${noteId} artifact`);
+        return { path: artifactPath, current: artifactSnapshot.sha256 === artifactOwner.sha256, reason: artifactSnapshot.sha256 === artifactOwner.sha256 ? "current-artifact" : "artifact-hash-drift" };
+      } catch (error) {
+        return { path: artifactPath, current: false, reason: error instanceof Error ? error.message : "artifact-path-invalid" };
+      }
     });
     const artifactFailure = artifacts.find((item) => !item.current);
     const failure = sourceFailure?.reason ?? artifactFailure?.reason ?? null;
-    return { reference, eligible: !failure, reason: failure ?? "verified-note", note, sources, artifacts };
+    return { reference, eligible: !failure, reason: failure ?? "verified-note", note, owner, sources, artifacts };
   });
 }
 

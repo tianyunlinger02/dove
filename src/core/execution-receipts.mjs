@@ -1,11 +1,13 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
 import { artifactEvidenceRole, inspectDeclaredPath, normalizeProjectRelativePath } from "./artifact-integrity.mjs";
 import { assessMissionCompletion } from "./completion-gates.mjs";
 import { assertCurrentMissionContract, missionCompletionCriteria } from "./mission-contracts.mjs";
+import { assertMissionAcceptsWrites, missionSupersedes } from "./mission-graph.mjs";
 import { currentMutationContext, isPatchPlanMode } from "./mutation-backend.mjs";
-import { sha256File } from "./review-artifact-snapshot.mjs";
+import { snapshotArtifactBuffer } from "./review-artifact-snapshot.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { assertNotDoveLessonArtifactPath } from "./domain-artifacts.mjs";
 import { assertReceiptAppendable, deriveArtifactReferences, EXECUTION_RECEIPT_SCHEMA_VERSION } from "./receipt-ledger.mjs";
@@ -28,6 +30,12 @@ const TOP_LEVEL_FIELDS = new Set([
   "validations",
   "criteriaSatisfied",
   "producedAt"
+]);
+const HOST_OUTCOME_FIELDS = new Set([
+  "missionId",
+  "summary",
+  "artifactPaths",
+  "validationPaths"
 ]);
 const ARTIFACT_FIELDS = new Set(["path", "kind", "sha256"]);
 const VALIDATION_FIELDS = new Set(["kind", "reference", "outputHash"]);
@@ -92,7 +100,7 @@ export function missionContractPath(missionId) {
   return path.posix.join(ARTIFACT_PATHS.missionsDir, `${missionId}.json`);
 }
 
-function inspectHashedFile(root, rawPath, expectedHash, label) {
+function inspectCurrentFile(root, rawPath, label) {
   const normalized = normalizeProjectRelativePath(rawPath);
   if (!normalized.ok) {
     throw new Error(`${label} has an unsafe path ${JSON.stringify(rawPath)}: ${normalized.reason}.`);
@@ -108,17 +116,24 @@ function inspectHashedFile(root, rawPath, expectedHash, label) {
   if (canonicalPath !== normalized.normalizedPath) {
     throw new Error(`${label} must use its canonical realpath-contained path; alias ${normalized.normalizedPath} resolves to ${canonicalPath}.`);
   }
-  const actualHash = sha256File(path.resolve(root, canonicalPath));
-  if (actualHash !== expectedHash) {
-    throw new Error(`${label} SHA-256 mismatch for ${canonicalPath}.`);
+  const snapshot = snapshotArtifactBuffer(root, canonicalPath, label);
+  return {
+    path: snapshot.path,
+    sha256: snapshot.sha256
+  };
+}
+
+function inspectHashedFile(root, rawPath, expectedHash, label) {
+  const inspected = inspectCurrentFile(root, rawPath, label);
+  if (inspected.sha256 !== expectedHash) {
+    throw new Error(`${label} SHA-256 mismatch for ${inspected.path}.`);
   }
-  return { path: canonicalPath, sha256: actualHash };
+  return inspected;
 }
 
 function normalizeArtifacts(root, mission, value) {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error("artifacts must contain at least one artifact.");
-  }
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error("artifacts must be an array.");
   const seen = new Set();
   const artifacts = value.map((item, index) => {
     const label = `artifacts[${index}]`;
@@ -135,14 +150,6 @@ function normalizeArtifacts(root, mission, value) {
     seen.add(inspected.path);
     return { path: inspected.path, kind, sha256 };
   });
-  const requiredArtifacts = new Set([
-    ...(Array.isArray(mission.targetArtifacts) ? mission.targetArtifacts : []),
-    ...(Array.isArray(mission.expectedArtifacts) ? mission.expectedArtifacts : [])
-  ]);
-  const missing = [...requiredArtifacts].filter((artifactPath) => !seen.has(artifactPath));
-  if (missing.length > 0) {
-    throw new Error(`artifacts is missing mission target or expected artifacts: ${missing.join(", ")}.`);
-  }
   return artifacts;
 }
 
@@ -176,15 +183,17 @@ function typedReferenceEvaluation(root, missionId, reference) {
   if (!match) return { eligible: false, reason: "unknown-evidence-reference-kind" };
   const [, kind, value] = match;
   if (kind === "source") {
-    return evaluateSourceReferences(root, [value], missionId)[0] ?? { eligible: false, reason: "unknown-source" };
+    const evaluation = evaluateSourceReferences(root, [value], missionId)[0] ?? { eligible: false, reason: "unknown-source" };
+    return { ...evaluation, evidenceSha256: evaluation.source?.capturedMaterial?.sha256 ?? null };
   }
   if (kind === "note") {
-    return evaluateNoteReferences(root, [value], missionId)[0] ?? { eligible: false, reason: "unknown-note" };
+    const evaluation = evaluateNoteReferences(root, [value], missionId)[0] ?? { eligible: false, reason: "unknown-note" };
+    return { ...evaluation, evidenceSha256: evaluation.owner?.sha256 ?? null };
   }
-  return { eligible: null, kind, value };
+  return { eligible: null, kind, value, evidenceSha256: null };
 }
 
-function normalizeCriteria(root, mission, value, artifacts, validations) {
+function normalizeCriteria(root, mission, value, artifacts, validations, ledger, receiptId) {
   const requiredCriteria = missionCompletionCriteria(mission);
   if (!Array.isArray(value)) throw new Error("criteriaSatisfied must be an array.");
   const requiredIds = new Set(requiredCriteria.map((item) => item.criterionId));
@@ -201,20 +210,35 @@ function normalizeCriteria(root, mission, value, artifacts, validations) {
     if (!Array.isArray(item.evidenceRefs) || item.evidenceRefs.length === 0) {
       throw new Error(`${label}.evidenceRefs must contain at least one resolvable evidence reference; summary is not evidence.`);
     }
+    const evidenceBindings = [];
     const evidenceRefs = item.evidenceRefs.map((reference, evidenceIndex) => {
       const normalized = nonEmptyString(reference, `${label}.evidenceRefs[${evidenceIndex}]`);
-      if (artifactRefs.has(normalized) || validationRefs.has(normalized)) return normalized;
+      if (artifactRefs.has(normalized)) {
+        evidenceBindings.push({ reference: normalized, sha256: artifacts.find((artifact) => `artifact:${artifact.path}` === normalized).sha256, receiptId });
+        return normalized;
+      }
+      if (validationRefs.has(normalized)) {
+        evidenceBindings.push({ reference: normalized, sha256: validations.find((validation) => `validation:${validation.reference}` === normalized).outputHash, receiptId });
+        return normalized;
+      }
+      if (normalized.startsWith("artifact:")) {
+        const artifactPath = normalized.slice("artifact:".length);
+        const owner = ledger.currentOwnership.find((item) => item.path === artifactPath);
+        if (!owner || owner.missionId !== mission.missionId) throw new Error(`${label}.evidenceRefs[${evidenceIndex}] is not current mission-owned artifact evidence: ${normalized}.`);
+        const inspected = inspectHashedFile(root, artifactPath, owner.sha256, `${label}.evidenceRefs[${evidenceIndex}]`);
+        evidenceBindings.push({ reference: normalized, sha256: inspected.sha256, receiptId: owner.receiptId });
+        return normalized;
+      }
       const evaluation = typedReferenceEvaluation(root, mission.missionId, normalized);
-      if (evaluation.eligible === true) return normalized;
+      if (evaluation.eligible === true && HASH_PATTERN.test(String(evaluation.evidenceSha256 ?? ""))) {
+        evidenceBindings.push({ reference: normalized, sha256: evaluation.evidenceSha256, receiptId: evaluation.owner?.receiptId ?? receiptId });
+        return normalized;
+      }
       throw new Error(`${label}.evidenceRefs[${evidenceIndex}] is not current eligible typed evidence: ${normalized} (${evaluation.reason ?? "unresolved"}).`);
     });
     if (new Set(evidenceRefs).size !== evidenceRefs.length) throw new Error(`${label}.evidenceRefs contains duplicates.`);
-    return { criterionId, evidenceRefs };
+    return { criterionId, evidenceRefs, evidenceBindings };
   });
-  const missing = requiredCriteria.filter((item) => !seen.has(item.criterionId));
-  if (missing.length > 0) {
-    throw new Error(`criteriaSatisfied is missing mission completion criteria: ${missing.map((item) => item.criterionId).join(", ")}.`);
-  }
   return criteria;
 }
 
@@ -232,6 +256,7 @@ export function validateExecutionReceipt(root, args = {}) {
   }
   const mission = readJson(root, missionRelativePath, null);
   if (!mission || mission.missionId !== missionId) throw new Error(`Mission contract is malformed or mismatched: ${missionId}.`);
+  assertMissionAcceptsWrites(workspace, mission, { receipt: true });
   const currentContract = assertCurrentMissionContract(mission);
   if (mission.workspaceId !== workspace.manifest.workspaceId) throw new Error(`Mission contract workspaceId does not match the current workspace for ${missionId}.`);
   if (contractDigest !== currentContract.contractDigest) throw new Error(`contractDigest does not match the current mission contract for ${missionId}.`);
@@ -246,7 +271,15 @@ export function validateExecutionReceipt(root, args = {}) {
   }
   const artifacts = normalizeArtifacts(root, mission, args.artifacts);
   const validations = normalizeValidations(root, args.validations);
-  const criteriaSatisfied = normalizeCriteria(root, mission, args.criteriaSatisfied, artifacts, validations);
+  const artifactPaths = new Set(artifacts.map((artifact) => artifact.path));
+  const overlappingValidation = validations.find((validation) => artifactPaths.has(validation.reference));
+  if (overlappingValidation) {
+    throw new Error(`Execution receipt artifact and validation paths must be canonically distinct: ${overlappingValidation.reference}.`);
+  }
+  const criteriaSatisfied = normalizeCriteria(root, mission, args.criteriaSatisfied, artifacts, validations, workspace.receiptLedger, receiptId);
+  if (artifacts.length === 0 && validations.length === 0 && criteriaSatisfied.length === 0) {
+    throw new Error("execution receipt must contain at least one artifact, validation, or satisfied criterion.");
+  }
   const baseReceipt = {
     schemaVersion: EXECUTION_RECEIPT_SCHEMA_VERSION,
     workspaceId: workspace.manifest.workspaceId,
@@ -263,7 +296,7 @@ export function validateExecutionReceipt(root, args = {}) {
     producer: { kind: "public-execution", actionId: "ingest-execution-receipt" }
   };
   const receipt = { ...baseReceipt, artifacts: deriveArtifactReferences(baseReceipt) };
-  assertReceiptAppendable(workspace.receiptLedger, receipt);
+  assertReceiptAppendable(workspace.receiptLedger, receipt, { missionGraph: workspace.missionGraph });
   return { mission, receipt };
 }
 
@@ -287,6 +320,104 @@ export function ingestExecutionReceipt(root, args = {}) {
   };
 }
 
+function hostOutcomePaths(value, label) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array.`);
+  const paths = value.map((item, index) => nonEmptyString(item, `${label}[${index}]`));
+  if (new Set(paths).size !== paths.length) throw new Error(`${label} must not contain duplicates.`);
+  return paths;
+}
+
+function inspectHostOutcomeFile(root, rawPath, label) {
+  const inspected = inspectCurrentFile(root, rawPath, label);
+  assertNotDoveLessonArtifactPath(inspected.path, label);
+  const evidenceRole = artifactEvidenceRole(inspected.path);
+  if (evidenceRole === "bookkeeping") {
+    throw new Error(`${label} must be a substantive workspace file rather than Dove bookkeeping.`);
+  }
+  if (evidenceRole === "unsupported") {
+    throw new Error(`${label} is not an eligible host-produced workspace file.`);
+  }
+  return { ...inspected, evidenceRole };
+}
+
+export function closeHostOutcome(root, args = {}) {
+  assertGovernanceMutationRegistered("close-host-outcome", "guarded");
+  assertAllowedFields(args, HOST_OUTCOME_FIELDS, "close_host_outcome");
+  const mutationContext = currentMutationContext(root);
+  if (!mutationContext) throw new Error("close_host_outcome requires an active MutationContext.");
+  const missionId = safeId(args.missionId, "missionId");
+  const summary = nonEmptyString(args.summary, "summary");
+  const artifactPaths = hostOutcomePaths(args.artifactPaths, "artifactPaths");
+  const validationPaths = hostOutcomePaths(args.validationPaths, "validationPaths");
+  const workspace = openDoveWorkspace(root, { operation: "Host outcome closure" });
+  const missionRelativePath = missionContractPath(missionId);
+  if (!mutationContext.fileExists(missionRelativePath)) throw new Error(`Mission does not exist: ${missionId}.`);
+  const mission = readJson(root, missionRelativePath, null);
+  if (!mission || mission.missionId !== missionId) throw new Error(`Mission contract is malformed or mismatched: ${missionId}.`);
+  assertMissionAcceptsWrites(workspace, mission, { receipt: true });
+  const currentContract = assertCurrentMissionContract(mission);
+  if (mission.workspaceId !== workspace.manifest.workspaceId) throw new Error(`Mission contract workspaceId does not match the current workspace for ${missionId}.`);
+
+  const ownerByPath = new Map(workspace.receiptLedger.currentOwnership.map((item) => [item.path, item]));
+  const inspectedArtifacts = artifactPaths.map((artifactPath, index) => inspectHostOutcomeFile(root, artifactPath, `artifactPaths[${index}]`));
+  const validations = validationPaths.map((validationPath, index) => inspectHostOutcomeFile(root, validationPath, `validationPaths[${index}]`));
+  const allInspectedPaths = [...inspectedArtifacts, ...validations].map((item) => item.path);
+  if (new Set(allInspectedPaths).size !== allInspectedPaths.length) {
+    throw new Error("Host outcome artifact and validation paths must be canonically distinct.");
+  }
+  const eligibleArtifacts = inspectedArtifacts.filter((artifact) => {
+    const owner = ownerByPath.get(artifact.path);
+    if (!owner) {
+      if (artifact.evidenceRole !== "external-project") {
+        throw new Error(`Host outcome cannot claim an unowned Dove domain artifact: ${artifact.path}.`);
+      }
+      return true;
+    }
+    if (owner.missionId !== missionId) {
+      if (
+        artifact.evidenceRole === "external-project"
+        && missionSupersedes(workspace.missionGraph, missionId, owner.missionId)
+      ) return true;
+      throw new Error(`Host outcome artifact is owned by another mission: ${artifact.path}.`);
+    }
+    if (owner.sha256 === artifact.sha256) return false;
+    if (artifact.evidenceRole !== "external-project") {
+      throw new Error(`Host outcome cannot claim a changed Dove domain artifact: ${artifact.path}.`);
+    }
+    return true;
+  });
+
+  if (eligibleArtifacts.length === 0) {
+    return {
+      status: "skipped",
+      zeroWrite: true,
+      reason: "no-eligible-artifacts",
+      artifacts: [],
+      validations: [],
+      completion: null,
+      postCommit: null,
+      mutation: {
+        mutationMode: mutationContext.mutationMode,
+        writesApplied: false,
+        paths: []
+      }
+    };
+  }
+
+  const generated = {
+    receiptId: `receipt-host-outcome-${crypto.randomUUID()}`,
+    missionId,
+    contractDigest: currentContract.contractDigest,
+    summary,
+    artifacts: eligibleArtifacts.map((artifact) => ({ path: artifact.path, kind: "other", sha256: artifact.sha256 })),
+    validations: validations.map((validation) => ({ kind: "validation-log", reference: validation.path, outputHash: validation.sha256 })),
+    criteriaSatisfied: [],
+    producedAt: new Date().toISOString()
+  };
+  return ingestExecutionReceipt(root, generated);
+}
+
 export function resolveExecutionReceiptPostCommit(root, result, options = {}) {
   if (!result || typeof result !== "object" || Array.isArray(result) || !Object.hasOwn(result, "postCommit")) return result;
   const unknownOptions = Object.keys(options).filter((field) => field !== "committed");
@@ -304,13 +435,24 @@ export function resolveExecutionReceiptPostCommit(root, result, options = {}) {
   if (publicResult.mutationMode === "patch-plan" || publicResult.writesApplied !== true || publicResult.mutationSummary?.transactionState?.phase !== "committed") {
     throw new Error("Execution receipt post-commit assessment requires a successfully committed direct-process mutation result.");
   }
-  return {
-    ...publicResult,
-    completion: {
-      ...publicResult.completion,
-      assessment: assessMissionCompletion(root, { missionId })
-    }
-  };
+  try {
+    return {
+      ...publicResult,
+      completion: {
+        ...publicResult.completion,
+        assessment: assessMissionCompletion(root, { missionId })
+      }
+    };
+  } catch {
+    return {
+      ...publicResult,
+      completion: {
+        ...publicResult.completion,
+        assessment: null,
+        assessmentUnavailable: true
+      }
+    };
+  }
 }
 
 export function readExecutionReceipts(root, missionId = null) {

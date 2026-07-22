@@ -69,6 +69,20 @@ function ownArtifact(root, currentMission, relativePath, content, kind = "data",
   }));
 }
 
+function ownValidation(root, currentMission, relativePath, content, receiptId = `validation-${crypto.randomUUID()}`) {
+  write(root, relativePath, content);
+  return mutate(root, "ingest-execution-receipt", () => ingestExecutionReceipt(root, {
+    receiptId,
+    missionId: currentMission.missionId,
+    contractDigest: currentMission.contractDigest,
+    summary: `Validate ${relativePath}.`,
+    artifacts: [],
+    validations: [{ kind: "test-log", reference: relativePath, outputHash: sha256(root, relativePath) }],
+    criteriaSatisfied: [],
+    producedAt: new Date().toISOString()
+  }));
+}
+
 function receiptFiles(root) {
   return fs.readdirSync(path.join(root, ".dove/receipts/execution")).filter((name) => name.endsWith(".json"));
 }
@@ -87,6 +101,7 @@ test("source candidates import captured material, public rejection is explicit, 
   }));
   assert.equal(registered.source.lifecycle, "candidate");
   assert.equal(registered.source.capturedMaterial.path, ".dove/sources/materials/paper-one.pdf");
+  assert.equal(registered.source.capturedMaterial.sizeBytes, Buffer.byteLength("captured paper material"));
   assert.equal(fs.existsSync(path.join(root, registered.source.capturedMaterial.path)), true);
   assert.equal(registered.completionEligible, false);
 
@@ -124,7 +139,28 @@ test("notes and drafts require current mission-owned evidence and preflight drif
     artifactRefs: ["outputs/evidence.txt"]
   }));
   assert.equal(note.note.summary.includes("supports"), true);
+  assert.equal(note.note.schemaVersion, 2);
+  assert.equal(note.note.contractDigest, currentMission.contractDigest);
   assert.equal(note.completionEligible, false);
+
+  const notePath = path.join(root, ".dove/notes/synthesis.json");
+  const originalNoteBytes = fs.readFileSync(notePath);
+  const storedNote = JSON.parse(originalNoteBytes.toString("utf8"));
+  storedNote.summary = "Tampered historical note.";
+  fs.writeFileSync(notePath, `${JSON.stringify(storedNote, null, 2)}\n`);
+  assert.throws(() => mutate(root, "upsert-claims", () => upsertClaims(root, {
+    missionId: currentMission.missionId,
+    claims: [{ claimId: "tampered-note", text: "Tampered note must not revive.", noteIds: ["synthesis"] }]
+  })), /note evidence: note-hash-drift/u);
+  fs.writeFileSync(notePath, originalNoteBytes);
+
+  const refreshed = mutate(root, "upsert-note", () => upsertNote(root, {
+    missionId: currentMission.missionId,
+    noteId: "synthesis",
+    summary: "The current artifact supports the implementation claim.",
+    artifactRefs: ["outputs/evidence.txt"]
+  }));
+  assert.equal(refreshed.note.schemaVersion, 2);
 
   const draft = mutate(root, "upsert-draft", () => upsertDraft(root, {
     missionId: currentMission.missionId,
@@ -135,6 +171,24 @@ test("notes and drafts require current mission-owned evidence and preflight drif
   }));
   assert.match(fs.readFileSync(path.join(root, ".dove/drafts/methods.md"), "utf8"), /We evaluate the method/u);
   assert.equal(draft.receipt.criteriaSatisfied.length, 0);
+
+  ownValidation(root, currentMission, "outputs/tests.log", "tests passed\n", "seed-validation");
+  const validatedDraft = mutate(root, "upsert-draft", () => upsertDraft(root, {
+    missionId: currentMission.missionId,
+    draftId: "validated-methods",
+    body: "The current validation output supports this methods revision.",
+    evidenceRefs: ["validation:outputs/tests.log"]
+  }));
+  assert.deepEqual(validatedDraft.draft.evidenceRefs, ["validation:outputs/tests.log"]);
+  write(root, "outputs/tests.log", "tests changed\n");
+  const beforeValidationDrift = tree(root);
+  assert.throws(() => mutate(root, "upsert-draft", () => upsertDraft(root, {
+    missionId: currentMission.missionId,
+    draftId: "drifted-validation",
+    body: "This must not be written.",
+    evidenceRefs: ["validation:outputs/tests.log"]
+  })), /changed since its validation receipt/u);
+  assert.deepEqual(tree(root), beforeValidationDrift);
 
   assert.throws(() => mutate(root, "upsert-draft", () => upsertDraft(root, {
     missionId: currentMission.missionId,
@@ -235,7 +289,8 @@ test("figure workflow keeps provider execution host-side and imports exact outpu
     qaFindings: []
   }));
   assert.equal(imported.hostBoundary.executesProvider, false);
-  assert.equal(imported.imported.validated, false);
+  assert.equal(Object.hasOwn(imported.imported, "validated"), false);
+  assert.equal(imported.imported.finalSizeBytes, Buffer.byteLength(fs.readFileSync(path.join(root, "outputs/figure.svg"))));
   assert.equal(imported.qa.status, "ready-for-independent-review");
   assert.equal(imported.qa.reviewCoverage.covered, false);
   assert.deepEqual(imported.qa.reviewCoverage.requestedArtifactPaths, [".dove/figures/main-result.final.svg"]);
@@ -265,10 +320,10 @@ test("figure workflow keeps provider execution host-side and imports exact outpu
     prompt: "Draw.",
     outputPath: "outputs/figure-alias.svg",
     caption: "Alias."
-  })), /canonical realpath-contained path|symlink or alias/u);
+  })), /canonical realpath-contained path|symlink or alias|symbolic links/u);
 });
 
-test("rebuttal requires concrete current finding linkage and version comparison uses immutable snapshot copies", () => {
+test("rebuttal requires concrete current finding linkage and version comparison is zero-write over immutable snapshot copies", () => {
   const root = createTempRoot("dove-domain-rebuttal-version-");
   const currentMission = mission(root);
   ownArtifact(root, currentMission, "outputs/evidence.md", "Evidence v1\n", "document", "seed-version-evidence");
@@ -297,13 +352,23 @@ test("rebuttal requires concrete current finding linkage and version comparison 
   mutate(root, "upsert-draft", () => upsertDraft(root, { missionId: currentMission.missionId, draftId: "revision", body: "Revision text.", artifactRefs: [".dove/rebuttal/domain-mission.response.md"] }));
   ownArtifact(root, currentMission, "outputs/evidence-v2.md", "Evidence v2\n", "document", "seed-version-evidence-v2");
   mutate(root, "create-version-snapshot", () => createVersionSnapshot(root, { missionId: currentMission.missionId, versionId: "v2", artifactRefs: ["outputs/evidence-v2.md"], supersedesVersionId: "v1" }));
-  const comparison = mutate(root, "compare-versions", () => compareVersions(root, { missionId: currentMission.missionId, fromVersionId: "v1", toVersionId: "v2" }));
-  assert.deepEqual(comparison.artifacts.map((item) => item.path), [".dove/versions/v1--v2.comparison.json"]);
-  const comparisonRecord = JSON.parse(fs.readFileSync(path.join(root, ".dove/versions/v1--v2.comparison.json"), "utf8"));
-  assert.deepEqual(comparisonRecord.added, ["outputs/evidence-v2.md"]);
-  assert.deepEqual(comparisonRecord.removed, ["outputs/evidence.md"]);
+  const beforeComparison = tree(root);
+  const comparison = compareVersions(root, { missionId: currentMission.missionId, fromVersionId: "v1", toVersionId: "v2" });
+  assert.equal(comparison.status, "compared");
+  assert.equal(comparison.zeroWrite, true);
+  assert.deepEqual(comparison.writes, []);
+  assert.deepEqual(comparison.comparison.added, ["outputs/evidence-v2.md"]);
+  assert.deepEqual(comparison.comparison.removed, ["outputs/evidence.md"]);
+  assert.deepEqual(comparison.comparison.changed, []);
+  assert.deepEqual(tree(root), beforeComparison);
+
+  const firstSnapshot = JSON.parse(fs.readFileSync(path.join(root, ".dove/versions/v1.json"), "utf8"));
+  write(root, firstSnapshot.artifacts[0].snapshotPath, "Tampered snapshot.\n");
+  const beforeStaleComparison = tree(root);
+  assert.throws(() => compareVersions(root, { missionId: currentMission.missionId, fromVersionId: "v1", toVersionId: "v2" }), /stale|hash drift|current artifact|has changed/u);
+  assert.deepEqual(tree(root), beforeStaleComparison);
 
   const beforeFinalize = tree(root);
-  assert.throws(() => mutate(root, "create-version-snapshot", () => createVersionSnapshot(root, { missionId: currentMission.missionId, versionId: "final", artifactRefs: ["outputs/evidence-v2.md"], finalize: true })), /finalization requires current mission completion and current authoritative review proof/u);
+  assert.throws(() => mutate(root, "create-version-snapshot", () => createVersionSnapshot(root, { missionId: currentMission.missionId, versionId: "final", artifactRefs: ["outputs/evidence-v2.md"], finalize: true })), /does not accept unknown input: \$\.finalize/u);
   assert.deepEqual(tree(root), beforeFinalize);
 });

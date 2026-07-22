@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { inspectDeclaredPath, normalizeProjectRelativePath } from "./artifact-integrity.mjs";
 import { readArtifactOwnership } from "./artifact-lineage.mjs";
+import { currentMutationContext } from "./mutation-backend.mjs";
 
 const HASH_PATTERN = /^[a-f0-9]{64}$/u;
 
@@ -13,6 +14,30 @@ function sha256Buffer(value) {
 
 export function sha256File(fullPath) {
   return sha256Buffer(fs.readFileSync(fullPath));
+}
+
+export function snapshotArtifactBuffer(root, relativePath, label = "artifact") {
+  const normalized = normalizeProjectRelativePath(relativePath);
+  if (!normalized.ok) throw new Error(`${label} has an unsafe path ${relativePath}: ${normalized.reason}.`);
+  const suppliedPath = String(relativePath).trim().replace(/\\/gu, "/");
+  if (normalized.normalizedPath !== suppliedPath) throw new Error(`${label} must use a normalized project-relative path.`);
+  const inspection = inspectDeclaredPath(root, suppliedPath, { requireNonEmpty: true });
+  if (inspection.status !== "existing") throw new Error(`${label} is not a usable file at ${suppliedPath}: ${inspection.reason ?? inspection.status}.`);
+  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
+  if (canonicalPath !== suppliedPath) throw new Error(`${label} must use its canonical realpath and cannot use an internal alias.`);
+
+  const mutationContext = currentMutationContext(root);
+  let content;
+  if (mutationContext && typeof mutationContext.readFileSnapshot === "function") {
+    const snapshot = mutationContext.readFileSnapshot(canonicalPath);
+    if (!snapshot.exists || snapshot.type !== "file" || !snapshot.buffer) throw new Error(`${label} must be an existing regular file.`);
+    content = Buffer.from(snapshot.buffer);
+  } else {
+    if (mutationContext) mutationContext.requireCommitPrecondition(canonicalPath);
+    content = fs.readFileSync(path.resolve(root, canonicalPath));
+  }
+  if (content.byteLength === 0) throw new Error(`${label} must be a non-empty regular file.`);
+  return { path: canonicalPath, content, sizeBytes: content.byteLength, sha256: sha256Buffer(content) };
 }
 
 export function stableSnapshotSetHash(snapshots = []) {
@@ -46,7 +71,7 @@ export function resolveReviewArtifactSnapshots(root, missionId, relativePaths, l
     if (seen.has(canonicalPath)) continue;
     seen.add(canonicalPath);
     const owner = ownerByPath.get(canonicalPath);
-    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 8 artifact: ${canonicalPath}.`);
+    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 9 artifact: ${canonicalPath}.`);
     if (owner.missionId !== missionId) throw new Error(`${label}[${index}] belongs to mission ${owner.missionId}, not ${missionId}.`);
     const inspection = inspectDeclaredPath(root, canonicalPath, { requireNonEmpty: true, rejectBookkeeping: true });
     const snapshot = {

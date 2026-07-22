@@ -215,6 +215,19 @@ function proposalResult(proposal) {
     newSchemaVersion: DOVE_WORKSPACE_SCHEMA_VERSION,
     operations: proposalOperations(proposal.envelope),
     proposalDigest: proposal.proposalDigest,
+    approval: {
+      required: true,
+      noChangesApplied: true,
+      summary: proposal.envelope.archiveReset
+        ? "Dove can replace the invalid project records and save the current project goal."
+        : "Dove can create minimal project records and save the current project goal.",
+      effects: proposal.envelope.archiveReset
+        ? ["Archive the invalid Dove project records.", "Create clean minimal project records.", "Save the current project goal."]
+        : ["Create minimal Dove project records.", "Save the current project goal."],
+      question: proposal.envelope.archiveReset
+        ? "Replace the invalid Dove project records and initialize this project?"
+        : "Create Dove project records for this project?"
+    },
     confirmation: {
       required: true,
       exactReplay: true,

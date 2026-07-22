@@ -5,7 +5,7 @@ import { validateWorkflowGoalContracts, validateWorkflowGoals, WORKFLOW_GOAL_CON
 import { dispatchTool } from "../../src/mcp/handlers.mjs";
 import { cleanupTempRoot, createTempRoot } from "../helpers/temp-root.mjs";
 
-function validateGoals() {
+async function validateGoals() {
   return validateWorkflowGoals({
     createRoot: (prefix) => createTempRoot(prefix),
     cleanupRoot: cleanupTempRoot,
@@ -25,24 +25,24 @@ test("workflow goal contracts require failure reflection metadata", () => {
   }
 });
 
-test("workflow goal validation materializes mission contracts without execution", () => {
-  const result = validateGoals();
+test("workflow goal validation materializes mission contracts without execution", async () => {
+  const result = await validateGoals();
   assert.equal(result.status, "passed");
 
   const missionGoal = result.results.find((goal) => goal.id === "mission-contract-materializes-without-execution");
   assert.ok(missionGoal);
-  assert.equal(missionGoal.evidence.proposalStatus, "needs-confirmation");
+  assert.equal(missionGoal.evidence.approvalCalls, 1);
   assert.equal(missionGoal.evidence.materializedStatus, "materialized");
-  assert.equal(missionGoal.evidence.bareConfirmationRejected, true);
-  assert.equal(missionGoal.evidence.staleConfirmationRejected, true);
-  assert.equal(missionGoal.evidence.missionAbsentAfterRejectedConfirmations, true);
+  assert.equal(missionGoal.evidence.declineStatus, "declined");
+  assert.equal(missionGoal.evidence.declineZeroWrite, true);
+  assert.equal(missionGoal.evidence.unsupportedClientRejected, true);
+  assert.equal(missionGoal.evidence.missionAbsentAfterRejectedCheckpoints, true);
   assert.equal(missionGoal.evidence.persistedPath, ".dove/missions/workflow-goal-mission-handoff.json");
   assert.equal(missionGoal.evidence.legacyStateAbsent, true);
-  assert.equal(missionGoal.evidence.handoffBriefMatches, true);
 });
 
-test("workflow goal validation rejects blocked audit bridge claims", () => {
-  const result = validateGoals();
+test("workflow goal validation rejects blocked audit bridge claims", async () => {
+  const result = await validateGoals();
   assert.equal(result.status, "passed");
 
   const experienceGoal = result.results.find((goal) => goal.id === "experience-blocked-audit-not-bridged");
@@ -53,21 +53,21 @@ test("workflow goal validation rejects blocked audit bridge claims", () => {
   assert.match(experienceGoal.evidence.rejection, /cannot bridge to a claim while integrity flags remain/u);
 });
 
-test("workflow goal validation keeps minimal status isolated from legacy packet state", () => {
-  const result = validateGoals();
+test("workflow goal validation keeps minimal status isolated from legacy packet state", async () => {
+  const result = await validateGoals();
   assert.equal(result.status, "passed");
 
   const legacyStatusGoal = result.results.find((goal) => goal.id === "status-rejects-legacy-packet-state");
   assert.ok(legacyStatusGoal);
-  assert.equal(legacyStatusGoal.evidence.errorRequiresArchiveReset, true);
+  assert.equal(legacyStatusGoal.evidence.staleStateRejected, true);
   assert.equal(legacyStatusGoal.evidence.zeroWrite, true);
   assert.equal(legacyStatusGoal.evidence.manifestAbsent, true);
   assert.equal(legacyStatusGoal.evidence.missionsAbsent, true);
   assert.equal(legacyStatusGoal.evidence.legacyPacketNotPresented, true);
 });
 
-test("workflow goal validation preserves the exact schema 8 command inventory", () => {
-  const result = validateGoals();
+test("workflow goal validation preserves the exact schema 9 command inventory", async () => {
+  const result = await validateGoals();
   assert.equal(result.status, "passed");
 
   const surfacesGoal = result.results.find((goal) => goal.id === "public-surfaces-stay-flat");

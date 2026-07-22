@@ -5,6 +5,7 @@ import path from "node:path";
 import { inspectDeclaredPath, normalizeProjectRelativePath } from "./artifact-integrity.mjs";
 import { readArtifactOwnership } from "./artifact-lineage.mjs";
 import { assertCurrentMissionContract } from "./mission-contracts.mjs";
+import { assertMissionAcceptsWrites, missionSupersedes } from "./mission-graph.mjs";
 import { currentMutationContext, isPatchPlanMode } from "./mutation-backend.mjs";
 import { sha256File } from "./review-artifact-snapshot.mjs";
 import { assertReceiptAppendable, deriveArtifactReferences, EXECUTION_RECEIPT_SCHEMA_VERSION } from "./receipt-ledger.mjs";
@@ -103,7 +104,7 @@ export function resolveMissionArtifactReferences(root, missionId, references = [
     const artifactPath = canonicalDomainPath(rawPath, `${label}[${index}]`);
     assertNotDoveLessonArtifactPath(artifactPath, `${label}[${index}]`);
     const owner = byPath.get(artifactPath);
-    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 8 artifact: ${artifactPath}.`);
+    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 9 artifact: ${artifactPath}.`);
     if (owner.missionId !== missionId) throw new Error(`${label}[${index}] belongs to mission ${owner.missionId}, not ${missionId}.`);
     const current = currentFileHash(root, artifactPath, `${label}[${index}]`);
     if (current.sha256 !== owner.sha256) throw new Error(`${label}[${index}] has changed since its latest ownership receipt: ${artifactPath}.`);
@@ -111,14 +112,37 @@ export function resolveMissionArtifactReferences(root, missionId, references = [
   });
 }
 
+export function resolveMissionValidationReference(root, missionId, rawPath, label = "validation reference") {
+  const { workspace, mission } = readCurrentMission(root, missionId, label);
+  const validationPath = canonicalDomainPath(rawPath, label);
+  const receipt = workspace.receiptLedger.receipts.toReversed().find((item) =>
+    item.missionId === mission.missionId
+    && item.contractDigest === mission.contractDigest
+    && item.validations.some((validation) => validation.reference === validationPath)
+  );
+  const validation = receipt?.validations.find((item) => item.reference === validationPath);
+  if (!validation) throw new Error(`${label} is not current mission-bound validation evidence: ${validationPath}.`);
+  const current = currentFileHash(root, validationPath, label);
+  if (current.sha256 !== validation.outputHash) throw new Error(`${label} has changed since its validation receipt: ${validationPath}.`);
+  return { reference: validationPath, outputHash: validation.outputHash, receiptId: receipt.receiptId };
+}
+
 function normalizeWrite(root, missionId, item, index, options = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`domainWrites[${index}] must be an object.`);
   const relativePath = canonicalDomainPath(item.path, `domainWrites[${index}].path`, ".dove");
-  if (isDoveLessonArtifactPath(relativePath) && options.allowLessonArtifacts !== true) {
-    throw new Error(`domainWrites[${index}].path may create a Dove lesson only through record_dove_lesson.`);
+  const isLesson = isDoveLessonArtifactPath(relativePath);
+  const isResearchTree = relativePath === ARTIFACT_PATHS.researchTreesDir || relativePath.startsWith(`${ARTIFACT_PATHS.researchTreesDir}/`);
+  if (isLesson && options.allowLessonArtifacts !== true) {
+    throw new Error(`domainWrites[${index}].path may create a Dove lesson only through an approved lesson or research-tree transaction.`);
   }
-  if (options.allowLessonArtifacts === true && !isDoveLessonArtifactPath(relativePath)) {
+  if (isResearchTree && options.allowResearchTreeArtifacts !== true) {
+    throw new Error(`domainWrites[${index}].path may create Dove research-tree bookkeeping only through reevaluate-research-tree.`);
+  }
+  if (options.restrictToLessonArtifacts === true && !isLesson) {
     throw new Error(`domainWrites[${index}].path must stay under ${ARTIFACT_PATHS.lessonsDir} for lesson recording.`);
+  }
+  if (options.restrictToResearchTreeArtifacts === true && !isLesson && !isResearchTree) {
+    throw new Error(`domainWrites[${index}].path must stay under ${ARTIFACT_PATHS.researchTreesDir} or ${ARTIFACT_PATHS.lessonsDir} for research-tree reevaluation.`);
   }
   const kind = domainNonEmptyText(item.kind, `domainWrites[${index}].kind`);
   if (!["report", "document", "code", "data", "figure", "media", "other"].includes(kind)) throw new Error(`domainWrites[${index}].kind is unsupported.`);
@@ -147,11 +171,17 @@ export function finalizeDomainArtifacts(root, options = {}) {
   const context = currentMutationContext(root);
   if (!context) throw new Error(`${actionId} requires an active MutationContext.`);
   const { workspace, mission } = readCurrentMission(root, options.missionId, options.operation ?? actionId);
+  assertMissionAcceptsWrites(workspace, mission);
   context.requireCommitPrecondition(ARTIFACT_PATHS.executionReceiptsDir);
   context.requireCommitLock(".dove/.receipt-ledger-append.lock", { label: "Execution receipt ledger append lock" });
   if (!Array.isArray(options.writes) || options.writes.length === 0) throw new Error(`${actionId} requires at least one real domain artifact write.`);
+  const lessonRecording = options.allowLessonArtifacts === true && actionId === "record-dove-lesson";
+  const researchTreeRecording = options.allowResearchTreeArtifacts === true && actionId === "create-dove-mission";
   const writes = options.writes.map((item, index) => normalizeWrite(root, mission.missionId, item, index, {
-    allowLessonArtifacts: options.allowLessonArtifacts === true && actionId === "record-dove-lesson"
+    allowLessonArtifacts: lessonRecording || researchTreeRecording,
+    allowResearchTreeArtifacts: researchTreeRecording,
+    restrictToLessonArtifacts: lessonRecording,
+    restrictToResearchTreeArtifacts: researchTreeRecording
   }));
   const duplicatePath = writes.map((item) => item.path).find((item, index, items) => items.indexOf(item) !== index);
   if (duplicatePath) throw new Error(`${actionId} contains duplicate artifact path ${duplicatePath}.`);
@@ -172,7 +202,12 @@ export function finalizeDomainArtifacts(root, options = {}) {
     if (ownerReceipt?.producer?.kind === "dove-internal" && ["prepare-review-exchange", "import-review-exchange"].includes(ownerReceipt.producer.actionId)) {
       throw new Error(`${actionId} refuses to overwrite immutable review ${ownerReceipt.producer.actionId === "prepare-review-exchange" ? "preparation control" : "import record"} ${item.path}.`);
     }
-    if (owner.missionId !== mission.missionId) throw new Error(`${actionId} refuses to overwrite artifact ${item.path} owned by mission ${owner.missionId}.`);
+    if (
+      owner.missionId !== mission.missionId
+      && !missionSupersedes(workspace.missionGraph, mission.missionId, owner.missionId)
+    ) {
+      throw new Error(`${actionId} refuses to overwrite artifact ${item.path} owned by unrelated mission ${owner.missionId}.`);
+    }
     const current = currentFileHash(root, item.path, item.path);
     if (current.sha256 !== owner.sha256) throw new Error(`${actionId} refuses to overwrite drifted artifact ${item.path}.`);
   }
@@ -199,7 +234,7 @@ export function finalizeDomainArtifacts(root, options = {}) {
     ...baseReceipt,
     artifacts: deriveArtifactReferences(baseReceipt, new Map(writes.map((item) => [item.path, item.derivedReferences])))
   };
-  assertReceiptAppendable(workspace.receiptLedger, receipt);
+  assertReceiptAppendable(workspace.receiptLedger, receipt, { missionGraph: workspace.missionGraph });
 
   for (const item of writes) {
     if (item.encoding === "binary") {

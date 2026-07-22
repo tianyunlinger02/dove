@@ -1,6 +1,6 @@
 # Type Safety
 
-> Runtime type and schema safety patterns for Dove schema 8.
+> Runtime type and schema safety patterns for Dove schema 9.
 
 ---
 
@@ -37,7 +37,7 @@ Dove uses Node.js ESM JavaScript (`.mjs`), not TypeScript. Safety comes from sea
 
 ## Durable Schema Conventions
 
-- Schema 8 has no compatibility loader for legacy business state.
+- Schema 9 has no compatibility loader for legacy business state.
 - The strict opener accepts absent state only where explicitly permitted and accepts current state only when manifest, project, required directories, missions, receipts, and receipt-derived ownership/lineage validate.
 - Current schema declarations that coexist with legacy workflow-control roots are contradictory and rejected.
 - Completion, source trust, and Reviewer authority are reassessed from current evidence and fail closed when trusted proof is unavailable.

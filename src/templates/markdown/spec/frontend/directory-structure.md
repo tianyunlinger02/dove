@@ -1,6 +1,6 @@
 # Directory Structure
 
-> Project-facing surface and module organization for `Dove` schema 8.
+> Project-facing surface and module organization for `Dove` schema 9.
 
 ---
 
@@ -22,14 +22,14 @@ This repository has no browser frontend. The Trellis `frontend` layer documents 
 ├── mcp/                      # Thin MCP executable wrapper
 ├── scripts/                  # Generators and validation gates
 ├── src/
-│   ├── core/                 # Schema 8 mission, receipt, domain, review, and workspace logic
+│   ├── core/                 # Schema 9 mission, receipt, domain, review, and workspace logic
 │   └── mcp/                  # MCP definitions, dispatch, validation, and server
 └── tests/
     ├── integration/
     └── unit/
 ```
 
-A user workspace contains only schema 8 identity, mission, advisory lesson, receipt, source, note, claim, experiment, draft, figure, review, rebuttal, and version artifacts. Ownership and lineage are derived from the immutable receipt ledger rather than persisted as current mirror files.
+A user workspace contains only schema 9 identity, mission, advisory lesson, receipt, source, note, claim, experiment, draft, figure, review, rebuttal, and version artifacts. Ownership and lineage are derived from the immutable receipt ledger rather than persisted as current mirror files.
 
 ## Module Organization
 

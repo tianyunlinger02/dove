@@ -23,7 +23,7 @@ const expectedTools = {
   "dove.status": ["query_dove_status"],
   "dove.lessons": ["query_dove_lessons", "record_dove_lesson"],
   "dove.version": ["create_version_snapshot", "compare_versions"],
-  "dove.source": ["query_sources", "register_source", "verify_source"],
+  "dove.source": ["search_network", "query_sources", "register_source", "verify_source"],
   "dove.note": ["upsert_note"],
   "dove.figure": ["run_figure_workflow"],
   "dove.experience": ["run_experience_workflow", "upsert_claims"],
@@ -96,7 +96,12 @@ for (const relativePath of runtimeSourcePaths) {
 
 const drift = checkGeneratedAdapters(ROOT);
 assert.deepEqual(drift, [], `Unexpected generated command adapter drift: ${drift.map((item) => `${item.relativePath} (${item.reason})`).join(", ")}`);
-assert.deepEqual(COMMAND_SURFACES.map((command) => command.id), expectedCommandIds, "Public schema 8 commands must stay flat and sealed");
+const initAdapters = [...generatedAdapterEntries(), ...generatedClaudeUserCommandEntries()].filter((entry) => entry.command.id === "dove.init");
+for (const entry of initAdapters) {
+  assert.match(entry.content, /no files have changed.*approve or cancel/is, `${entry.relativePath} must explain init approval in ordinary language`);
+  assert.doesNotMatch(entry.content, /schema 9|proposal digest|workspace identity|exact replay|sealed|提案摘要|工作区身份|精确重放|密封/iu, `${entry.relativePath} exposes init integrity internals`);
+}
+assert.deepEqual(COMMAND_SURFACES.map((command) => command.id), expectedCommandIds, "Public schema 9 commands must stay flat and sealed");
 
 const openCodeSkillRoot = path.join(ROOT, ".opencode", "skills");
 const installedRoleSkillPaths = fs.readdirSync(openCodeSkillRoot, { withFileTypes: true })
@@ -107,7 +112,7 @@ assert.deepEqual(installedRoleSkillPaths, [
   ".opencode/skills/dove-builder/SKILL.md",
   ".opencode/skills/dove-planner/SKILL.md",
   ".opencode/skills/dove-reviewer/SKILL.md"
-], "OpenCode role skills must expose only the three primary schema 8 responsibilities");
+], "OpenCode role skills must expose only the three primary schema 9 responsibilities");
 for (const relativePath of installedRoleSkillPaths) {
   const content = fs.readFileSync(path.join(ROOT, relativePath), "utf8");
   assert.doesNotMatch(content, /\.dove\/(?:context|meta|wiki|workspace|task-packets|orchestration|runtime|mutations|programs)|\b(?:board|route|queue|lease|continuation|review loop|automatic subagent)\b/iu, `${relativePath} references retired orchestration state`);
@@ -128,11 +133,14 @@ for (const command of COMMAND_SURFACES) {
     assert.equal(readonlyCommandIds.has(command.id), false, "mixed dove.lessons surface must not be classified wholly read-only");
   }
   const contextFields = commandResultContextFields(command);
+  if (command.id === "dove.mission") assert.ok(contextFields.some((field) => field.startsWith("tree.") || field === "diff"), "dove.mission result context must retain research-tree output");
+  if (command.id === "dove.status") assert.ok(contextFields.includes("currentContext.researchTree"), "dove.status result context must retain researchTree");
   for (const toolName of command.requiredTools) assert.ok(TOOL_RESULT_CONTEXT_FIELDS[toolName], `${toolName} lacks bounded result context fields`);
   assert.ok(contextFields.length > 0, `${command.id} lacks bounded result-scoped context`);
   for (const field of contextFields) {
     assert.doesNotMatch(field, /^\.dove\//u, `${command.id} exposes a broad durable context path instead of a result field`);
     assert.doesNotMatch(field, /(?:^|\.)(?:context|transcript|session)(?:\.|$)/iu, `${command.id} exposes persistent or private context`);
+    if (/targetArtifacts|expectedArtifacts|completionCriteria|evidenceRequirements|candidates|providers|items|artifacts|reviews|nodes|lessonDrafts/u.test(field)) assert.match(field, /\[\]/u, `${command.id} must mark array result paths explicitly: ${field}`);
   }
 }
 
@@ -142,21 +150,38 @@ const generated = [
 ];
 for (const entry of generated) {
   assert.match(entry.content, /^---\n/um, `${entry.relativePath} lacks frontmatter`);
-  assert.match(entry.content, /missionId|mission id|mission contract|schema 8|workspace/u, `${entry.relativePath} does not describe the explicit mission/schema boundary`);
+  assert.match(entry.content, /Dove MCP tool|through MCP only/iu, `${entry.relativePath} lacks MCP-first guidance`);
+  for (const toolName of entry.command.requiredTools) assert.match(entry.content, new RegExp(`\\b${toolName}\\b`, "u"), `${entry.relativePath} omits required MCP tool ${toolName}`);
+  assert.doesNotMatch(entry.content, /node\s+\.\/bin\/dove(?:-package)?\.mjs|--json\b|--mutation-mode\b|through Bash|CLI fallback|fall back to (?:the )?(?:CLI|shell)/iu, `${entry.relativePath} exposes a CLI or shell fallback`);
+  assert.doesNotMatch(entry.content, /schema 8/iu, `${entry.relativePath} contains stale schema 8 wording`);
   assert.doesNotMatch(entry.content, /--(?:packet-id|task-packet-id|mission-packet-id|target|domain|stage|status|role|policy-override)\b|\.dove\/(?:task-packets|orchestration|runtime|workspace)\b/u, `${entry.relativePath} exposes retired packet/orchestration input`);
-  const generatedCliActions = [...entry.content.matchAll(/`(node \.\/bin\/dove-package\.mjs[^`]+)`/gu)].map((match) => match[1]);
-  assert.ok(generatedCliActions.length > 0, `${entry.relativePath} lacks a structured CLI action`);
-  for (const action of generatedCliActions) assert.match(action, /(?:^|\s)--json(?:\s|$)/u, `${entry.relativePath} contains a CLI action without --json: ${action}`);
-  if (entry.command.id === "dove.review") {
-    assert.match(entry.content, /operation field/iu, `${entry.relativePath} must distinguish review operations`);
-    assert.match(entry.content, /actionablePaths\.input.*actionablePaths\.manifest.*actionablePaths\.handoff.*actionablePaths\.report.*importAction/isu, `${entry.relativePath} must preserve prepared review paths and import action`);
-    assert.match(entry.content, /nextAction/iu, `${entry.relativePath} must preserve the imported review coverage action`);
+  assert.match(entry.content, /Never display or request proposal, replay, workspace, digest, token, mutation-mode, confirmation payload, or generated-command data/iu, `${entry.relativePath} lacks the public control-data boundary`);
+  if (entry.command.continuation === "resume-original") {
+    assert.match(entry.content, /Preserve the full original user request.*resume that same request.*current host turn/isu, `${entry.relativePath} must resume the original host request`);
+  }
+  if (entry.command.explicitStopMode === "create-only") {
+    assert.match(entry.content, /Stop after the Dove checkpoint only when the user explicitly asked solely to create or reevaluate the mission/iu, `${entry.relativePath} must keep create-only explicit`);
+    assert.match(entry.content, /Words such as 'first' or 'before continuing'.*do not.*request a stop/iu, `${entry.relativePath} must not treat ordering words as create-only`);
+  }
+  if (entry.command.closure === "host-outcome") {
+    assert.deepEqual(entry.command.closureTools, ["close_host_outcome"], `${entry.relativePath} must bind one host outcome closure tool`);
+    assert.match(entry.content, /call create_dove_mission directly.*never call query_dove_mission/isu, `${entry.relativePath} must use the single checkpoint tool rather than a separate preview call`);
+    assert.match(entry.content, /Target and expected artifacts must be canonical workspace-relative file paths/iu, `${entry.relativePath} must keep mission artifact fields path-shaped`);
+    assert.match(entry.content, /Evidence requirements are optional.*omit them unless.*artifact:<path>.*validation:<path>.*note:<id>/isu, `${entry.relativePath} must not invent free-form evidence requirements`);
+    assert.match(entry.content, /generate one private safe mission id.*pass it as `missionId`.*never show it to the user/isu, `${entry.relativePath} must retain a private checkpoint mission id for closure`);
+    assert.doesNotMatch(entry.content, /missionId is explicit or deterministically proposed/iu, `${entry.relativePath} must not rely on an unrecoverable generated mission id`);
+    assert.match(entry.content, /close_host_outcome.*at most once/isu, `${entry.relativePath} must close eligible host outcomes at most once`);
+    assert.match(entry.content, /never retry it automatically/iu, `${entry.relativePath} must prohibit closure retries`);
+    assert.match(entry.content, /preserve every host-produced file/iu, `${entry.relativePath} must preserve substantive host work after closure failure`);
+    assert.match(entry.content, /Do not calculate or pass receipt identifiers/iu, `${entry.relativePath} must not ask the host to calculate closure internals`);
+  } else {
+    assert.doesNotMatch(entry.content, /close_host_outcome/u, `${entry.relativePath} must not expose host outcome closure outside mission continuation`);
   }
   if (entry.command.id === "dove.lessons") {
     assert.match(entry.content, /recording mission|recording-mission|provenance/iu, `${entry.relativePath} must preserve lesson mission provenance`);
     assert.match(entry.content, /preference.*constraint.*method.*failure.*review-insight/isu, `${entry.relativePath} must name all five lesson kinds`);
     assert.match(entry.content, /explicit read-only query|Query is the default/iu, `${entry.relativePath} must make lesson query explicit`);
-    assert.match(entry.content, /exact confirmation|exact returned proposal token/iu, `${entry.relativePath} must require exact lesson confirmation`);
+    assert.match(entry.content, /explicit record request authorizes.*without a second confirmation/iu, `${entry.relativePath} must keep lesson recording single-call`);
     assert.match(entry.content, /advisory-only|never grant authority/iu, `${entry.relativePath} must keep lessons advisory-only`);
     assert.doesNotMatch(entry.content, /\.dove\/meta\/operator-lessons|query_operator_lessons|record_operator_lesson/iu, `${entry.relativePath} exposes retired lesson surfaces`);
   }
@@ -174,6 +199,10 @@ for (const commandName of ["lessons", "source", "note", "draft", "experience", "
   for (const retired of retiredCliFields) assert.equal(optionNames.has(retired), false, `${commandName} exposes retired option ${retired}`);
 }
 for (const removedCli of ["auto", "operator", "review-loop"]) assert.equal(Object.hasOwn(CLI_COMMAND_SPECS, removedCli), false, `Removed CLI command remains: ${removedCli}`);
+const statusOptionNames = new Set(CLI_COMMAND_SPECS.status.options.map((option) => option.name));
+assert.deepEqual([...statusOptionNames].filter((name) => !["--json", "--format", "--help", "-h"].includes(name)).sort(), ["--detail", "--language", "--mission-id"]);
+assert.equal(new Set(CLI_COMMAND_SPECS.version.options.map((option) => option.name)).has("--finalize"), false, "version must not expose finalize");
+assert.equal(new Set(CLI_COMMAND_SPECS.mission.options.map((option) => option.name)).has("--operation"), true, "mission must expose nested research-tree operation");
 const lessonsSpec = CLI_COMMAND_SPECS.lessons;
 assert.ok(lessonsSpec, "Missing CLI command lessons");
 const lessonOptionNames = new Set(lessonsSpec.options.map((option) => option.name));

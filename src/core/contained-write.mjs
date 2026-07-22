@@ -5,9 +5,9 @@ function pathEscapesRoot(relativePath) {
   return relativePath === ".." || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath);
 }
 
-function existingAncestor(candidatePath) {
+function existingAncestor(fsOps, candidatePath) {
   let currentPath = candidatePath;
-  while (!fs.existsSync(currentPath)) {
+  while (!fsOps.existsSync(currentPath)) {
     const parentPath = path.dirname(currentPath);
     if (parentPath === currentPath) {
       break;
@@ -17,10 +17,15 @@ function existingAncestor(candidatePath) {
   return currentPath;
 }
 
+function realpathNative(fsOps, targetPath) {
+  return typeof fsOps.realpathSync?.native === "function" ? fsOps.realpathSync.native(targetPath) : fsOps.realpathSync(targetPath);
+}
+
 export function resolveCanonicalContainedWrite(root, candidatePath, options = {}) {
   const label = options.label ?? "Write path";
+  const fsOps = options.fsOps ?? fs;
   const resolvedRoot = path.resolve(root);
-  const canonicalRoot = fs.realpathSync.native(resolvedRoot);
+  const canonicalRoot = realpathNative(fsOps, resolvedRoot);
   const requestedPath = path.isAbsolute(candidatePath)
     ? path.resolve(candidatePath)
     : path.resolve(resolvedRoot, candidatePath);
@@ -34,7 +39,7 @@ export function resolveCanonicalContainedWrite(root, candidatePath, options = {}
     currentPath = path.join(currentPath, component);
     let stat;
     try {
-      stat = fs.lstatSync(currentPath);
+      stat = fsOps.lstatSync(currentPath);
     } catch (error) {
       if (error?.code === "ENOENT") {
         break;
@@ -46,7 +51,7 @@ export function resolveCanonicalContainedWrite(root, candidatePath, options = {}
     }
   }
 
-  const canonicalAncestor = fs.realpathSync.native(existingAncestor(requestedPath));
+  const canonicalAncestor = realpathNative(fsOps, existingAncestor(fsOps, requestedPath));
   const canonicalRelative = path.relative(canonicalRoot, canonicalAncestor);
   if (pathEscapesRoot(canonicalRelative)) {
     throw new Error(`${label} must stay inside the canonical root: ${candidatePath}`);

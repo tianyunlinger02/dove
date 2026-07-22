@@ -39,13 +39,20 @@ test("deleted CLI commands have no command specification", () => {
   }
 });
 
-test("status mutation options are unsupported", () => {
-  for (const flag of ["--request-status-adjustment", "--status-adjustment", "--show-status-adjustments", "--include-status-adjustment-preview"]) {
+test("status legacy and mutation options are unsupported", () => {
+  for (const flag of ["--request-status-adjustment", "--status-adjustment", "--show-status-adjustments", "--include-status-adjustment-preview", "--result-mode", "--full", "--missions", "--view", "--include-details", "--include-mission-details"]) {
     assert.throws(
       () => parseDoveCli(["status", flag]),
       /Unknown or unsupported CLI argument/
     );
   }
+});
+
+test("CLI parser supports research-tree reevaluation inputs without a new command", () => {
+  const parsed = parseDoveCli(["mission", "/workspace", "--operation", "reevaluate-research-tree", "--mission-id", "mission-1", "--requirement", "Investigate the remaining gap.", "--node-update-json", '{"nodeId":"node-1"}', "--node-update-json", '{"nodeId":"node-2"}']);
+  assert.deepEqual(parsed.positionals, ["/workspace"]);
+  assert.deepEqual(parsed.args.slice(0, 6), ["--operation", "reevaluate-research-tree", "--mission-id", "mission-1", "--requirement", "Investigate the remaining gap."]);
+  assert.equal(parsed.args.filter((item) => item === "--node-update-json").length, 2);
 });
 
 test("CLI parser fails closed for duplicate singleton mission options", () => {
@@ -120,7 +127,9 @@ test("CLI parser fails closed for excess positionals", () => {
   );
 });
 
-test("source subcommands allow an action and target positional with sealed verification fields", () => {
+test("source subcommands allow query, register, and verify with sealed fields", () => {
+  const query = parseDoveCli(["source", "query", "/workspace", "--mission-id", "mission-1", "--source-id", "paper-1"]);
+  assert.deepEqual(query.positionals, ["query", "/workspace"]);
   const parsed = parseDoveCli(["source", "verify", "/workspace", "--mission-id", "mission-1", "--source-id=paper-1", "--method", "manual-audit", "--checked-material", "captured PDF", "--audit-evidence-json", "{\"decision\":\"rejected\"}"]);
   assert.deepEqual(parsed.positionals, ["verify", "/workspace"]);
   assert.deepEqual(parsed.args, ["--mission-id", "mission-1", "--source-id", "paper-1", "--method", "manual-audit", "--checked-material", "captured PDF", "--audit-evidence-json", "{\"decision\":\"rejected\"}"]);

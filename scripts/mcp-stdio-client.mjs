@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import process from "node:process";
 
 export const CALL_TIMEOUT_MS = 15000;
 
-export function createMcpStdioClient({ args, cwd, command = "node", timeoutMs = CALL_TIMEOUT_MS }) {
+export function createMcpStdioClient({ args, cwd, command = process.execPath, env = process.env, timeoutMs = CALL_TIMEOUT_MS, onRequest = null, framing = "content-length" }) {
   const server = spawn(command, args, {
     cwd,
+    env,
     stdio: ["pipe", "pipe", "inherit"]
   });
   let buffer = Buffer.alloc(0);
@@ -14,6 +16,10 @@ export function createMcpStdioClient({ args, cwd, command = "node", timeoutMs = 
 
   function sendMessage(message) {
     const body = JSON.stringify(message);
+    if (framing === "jsonl") {
+      server.stdin.write(`${body}\n`);
+      return;
+    }
     server.stdin.write(`Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`);
   }
 
@@ -36,34 +42,45 @@ export function createMcpStdioClient({ args, cwd, command = "node", timeoutMs = 
     sendMessage({ jsonrpc: "2.0", method, params });
   }
 
+  function handleMessage(message) {
+    if (message.method && message.id !== undefined) {
+      Promise.resolve()
+        .then(() => typeof onRequest === "function" ? onRequest(message.method, message.params) : null)
+        .then(
+          (result) => sendMessage({ jsonrpc: "2.0", id: message.id, result }),
+          (error) => sendMessage({ jsonrpc: "2.0", id: message.id, error: { code: -32603, message: error instanceof Error ? error.message : String(error) } })
+        );
+      return;
+    }
+    const waiter = pending.get(message.id);
+    if (!waiter) return;
+    pending.delete(message.id);
+    clearTimeout(waiter.timer);
+    if (message.error) waiter.reject(new Error(`${waiter.label}: ${message.error.message}`));
+    else waiter.resolve(message.result);
+  }
+
   function parseMessages() {
     while (true) {
-      const headerEnd = buffer.indexOf("\r\n\r\n");
-      if (headerEnd === -1) {
-        return;
+      if (framing === "jsonl") {
+        const lineEnd = buffer.indexOf("\n");
+        if (lineEnd === -1) return;
+        const body = buffer.slice(0, lineEnd).toString("utf8").trim();
+        buffer = buffer.slice(lineEnd + 1);
+        if (body) handleMessage(JSON.parse(body));
+        continue;
       }
+      const headerEnd = buffer.indexOf("\r\n\r\n");
+      if (headerEnd === -1) return;
       const headerText = buffer.slice(0, headerEnd).toString("utf8");
       const match = headerText.match(/Content-Length:\s*(\d+)/i);
       assert.ok(match, "Missing Content-Length header from MCP server");
       const length = Number(match[1]);
       const totalLength = headerEnd + 4 + length;
-      if (buffer.length < totalLength) {
-        return;
-      }
+      if (buffer.length < totalLength) return;
       const body = buffer.slice(headerEnd + 4, totalLength).toString("utf8");
       buffer = buffer.slice(totalLength);
-      const message = JSON.parse(body);
-      const waiter = pending.get(message.id);
-      if (!waiter) {
-        continue;
-      }
-      pending.delete(message.id);
-      clearTimeout(waiter.timer);
-      if (message.error) {
-        waiter.reject(new Error(`${waiter.label}: ${message.error.message}`));
-      } else {
-        waiter.resolve(message.result);
-      }
+      handleMessage(JSON.parse(body));
     }
   }
 

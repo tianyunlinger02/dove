@@ -46,7 +46,7 @@ function assertZeroWriteFailure(root, callback, pattern) {
   assert.deepEqual(snapshot(root), before);
 }
 
-test("absent reads and normal init proposal are zero-write, exact confirmation creates only schema 8 minimum", () => {
+test("absent reads and normal init proposal are zero-write, exact confirmation creates only schema 9 minimum", () => {
   const root = createTempRoot("dove-schema-absent-");
   const before = snapshot(root);
   const absentStatus = queryDoveStatus(root);
@@ -59,6 +59,13 @@ test("absent reads and normal init proposal are zero-write, exact confirmation c
 
   const proposal = initDoveGoal(root, { goal: "Initialize strict workspace", mutationMode: "direct-process" });
   assert.equal(proposal.newSchemaVersion, DOVE_WORKSPACE_SCHEMA_VERSION);
+  assert.deepEqual(proposal.approval, {
+    required: true,
+    noChangesApplied: true,
+    summary: "Dove can create minimal project records and save the current project goal.",
+    effects: ["Create minimal Dove project records.", "Save the current project goal."],
+    question: "Create Dove project records for this project?"
+  });
   assert.equal(proposal.mutation.writesApplied, false);
   assert.deepEqual(snapshot(root), before);
   const patchProposal = initDoveGoal(root, { goal: "Initialize strict workspace", mutationMode: "patch-plan" });
@@ -72,7 +79,7 @@ test("absent reads and normal init proposal are zero-write, exact confirmation c
   assert.equal(initialized.status, "initialized");
   assert.equal(inspectDoveWorkspace(root).healthy, true);
   assert.deepEqual(fs.readdirSync(path.join(root, ".dove")).sort(), [
-    "artifacts", "claims", "drafts", "experiments", "figures", "manifest.json", "missions", "notes", "project.json", "rebuttal", "receipts", "reviews", "sources", "versions"
+    "artifacts", "claims", "drafts", "experiments", "figures", "manifest.json", "missions", "notes", "project.json", "rebuttal", "receipts", "research-trees", "reviews", "sources", "versions"
   ]);
   assert.equal(fs.existsSync(path.join(root, ".dove", "state.json")), false);
   assert.equal(fs.existsSync(path.join(root, ".dove", "task-packets")), false);
@@ -263,8 +270,8 @@ test("normal init, archive reset, and first mission participate in commit rollba
   const initProposal = initDoveGoal(initRoot, { goal: "Transactional init", mutationMode: "direct-process" });
   const failDovePromotion = {
     ...fs,
-    renameSync(from, to) {
-      if (to === path.join(initRoot, ".dove")) throw new Error("injected init promotion failure");
+    renameSync(from, to, metadata) {
+      if (metadata?.anchoredTo === ".dove") throw new Error("injected init promotion failure");
       return fs.renameSync(from, to);
     }
   };
@@ -279,8 +286,8 @@ test("normal init, archive reset, and first mission participate in commit rollba
   const archiveProposal = initDoveGoal(archiveRoot, { goal: "Transactional reset", archiveReset: true, mutationMode: "direct-process" });
   const failResetPromotion = {
     ...fs,
-    renameSync(from, to) {
-      if (to === path.join(archiveRoot, ".dove") && from.includes(".dove-transaction-")) throw new Error("injected reset promotion failure");
+    renameSync(from, to, metadata) {
+      if (metadata?.anchoredTo === ".dove" && metadata?.anchoredFrom?.includes(".dove-transaction-")) throw new Error("injected reset promotion failure");
       return fs.renameSync(from, to);
     }
   };
@@ -297,8 +304,8 @@ test("normal init, archive reset, and first mission participate in commit rollba
   });
   const failFirstMissionPromotion = {
     ...fs,
-    renameSync(from, to) {
-      if (to === path.join(missionRoot, ".dove")) throw new Error("injected first mission promotion failure");
+    renameSync(from, to, metadata) {
+      if (metadata?.anchoredTo === ".dove") throw new Error("injected first mission promotion failure");
       return fs.renameSync(from, to);
     }
   };
@@ -306,7 +313,7 @@ test("normal init, archive reset, and first mission participate in commit rollba
   assert.deepEqual(snapshot(missionRoot), missionBefore);
 });
 
-test("first mission patch-plan reuses the schema 8 initializer and remains zero-write", () => {
+test("first mission patch-plan reuses the schema 9 initializer and remains zero-write", () => {
   const root = createTempRoot("dove-schema-first-mission-patch-");
   const before = snapshot(root);
   const proposal = createDoveMission(root, {
@@ -376,8 +383,13 @@ test("mission graph validation rejects unknown dependencies, self edges, cycles,
   const firstProposal = createDoveMission(root, { missionId: "first", goal: "First" });
   runWithMutationContext(root, { actionId: "create-dove-mission", mutationMode: "direct-process", hostId: "test" }, () => createDoveMission(root, firstProposal.confirmation.confirmArgs));
   assertZeroWriteFailure(root, () => createDoveMission(root, { missionId: "self-edge", goal: "Self edge", dependsOnMissionIds: ["self-edge"] }), /must not depend on itself/u);
-  const successorProposal = createDoveMission(root, { missionId: "second", goal: "Second", supersedesMissionId: "first" });
+  const dependentProposal = createDoveMission(root, { missionId: "second", goal: "Second", dependsOnMissionIds: ["first"] });
+  runWithMutationContext(root, { actionId: "create-dove-mission", mutationMode: "direct-process", hostId: "test" }, () => createDoveMission(root, dependentProposal.confirmation.confirmArgs));
+  const successorProposal = createDoveMission(root, { missionId: "third", goal: "Third", supersedesMissionId: "first" });
   runWithMutationContext(root, { actionId: "create-dove-mission", mutationMode: "direct-process", hostId: "test" }, () => createDoveMission(root, successorProposal.confirmation.confirmArgs));
+  const workspace = inspectDoveWorkspace(root);
+  assert.deepEqual(workspace.missionGraph.dependenciesByMission.get("second"), ["first"]);
+  assert.equal(workspace.missionGraph.successorByMission.get("first"), "third");
   assertZeroWriteFailure(root, () => createDoveMission(root, { missionId: "fork", goal: "Fork", supersedesMissionId: "first" }), /supersession forks/u);
 
   assert.throws(() => validateMissionGraph([

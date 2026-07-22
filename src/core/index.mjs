@@ -2,7 +2,8 @@ export { ARTIFACT_PATHS, DEFAULT_DOVE_RESPONSE_LANGUAGE, DOVE_RESPONSE_LANGUAGES
 export { queryDoveMission, queryDoveStatus } from "./mission-queries.mjs";
 export { MISSION_CONTRACT_SCHEMA_VERSION, MISSION_PROPOSAL_VERSION, PROJECT_IDENTITY_SCHEMA_VERSION, MISSION_CRITERION_ID_VERSION, MISSION_EVIDENCE_REQUIREMENT_ID_VERSION, assertCurrentMissionContract, createDoveMission, currentMissionContractMetadata, initDoveGoal, missionCompletionCriteria, missionCompletionCriterionId, missionEvidenceRequirementId, missionEvidenceRequirements, previewDoveMissionContract } from "./mission-contracts.mjs";
 export { validateMissionGraph } from "./mission-graph.mjs";
-export { EXECUTION_RECEIPT_SCHEMA_VERSION, executionReceiptPath, ingestExecutionReceipt, readExecutionReceipts, validateExecutionReceipt } from "./execution-receipts.mjs";
+export { RESEARCH_TREE_NODE_STATUSES, RESEARCH_TREE_PROPOSAL_VERSION, RESEARCH_TREE_SCHEMA_VERSION, RESEARCH_TREE_WORK_KINDS, readResearchTree, reevaluateResearchTree, researchTreePath, researchTreeProjection, validateResearchTree } from "./research-tree.mjs";
+export { EXECUTION_RECEIPT_SCHEMA_VERSION, closeHostOutcome, executionReceiptPath, ingestExecutionReceipt, readExecutionReceipts, validateExecutionReceipt } from "./execution-receipts.mjs";
 export { readArtifactHistory, readArtifactLedger, readArtifactLineage, readArtifactOwnership } from "./artifact-lineage.mjs";
 export { assessMissionCompletion } from "./completion-gates.mjs";
 export { DOVE_LESSON_KINDS, DOVE_LESSON_PROPOSAL_VERSION, DOVE_LESSON_SCHEMA_VERSION, DOVE_LESSON_SCOPES, queryDoveLessons, recordDoveLesson } from "./lessons.mjs";

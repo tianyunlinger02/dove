@@ -2,9 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ARTIFACT_PATHS } from "./schema.mjs";
+import { currentMutationContext } from "./mutation-backend.mjs";
 
 const BOOKKEEPING_PREFIXES = Object.freeze([
   `${ARTIFACT_PATHS.missionsDir}/`,
+  `${ARTIFACT_PATHS.researchTreesDir}/`,
   `${ARTIFACT_PATHS.lessonsDir}/`,
   `${ARTIFACT_PATHS.receiptsDir}/`,
   `${ARTIFACT_PATHS.artifactsDir}/`
@@ -55,6 +57,7 @@ export function isBookkeepingArtifactPath(relativePath) {
 
 export function inspectDeclaredPath(root, rawPath, options = {}) {
   const normalized = normalizeProjectRelativePath(rawPath);
+  const mutationContext = currentMutationContext(root);
   if (!normalized.ok) {
     return { path: normalized.path, normalizedPath: normalized.normalizedPath ?? null, status: "unsafe", exists: false, file: false, reason: normalized.reason };
   }
@@ -69,6 +72,10 @@ export function inspectDeclaredPath(root, rawPath, options = {}) {
   let canonicalRelativePath;
   let stat;
   try {
+    if (mutationContext) {
+      const snapshot = mutationContext.readFileSnapshot(normalized.normalizedPath);
+      if (!snapshot.exists) return { path: normalized.path, normalizedPath: normalized.normalizedPath, status: "missing", exists: false, file: false, reason: "path does not exist" };
+    }
     realRootPath = fs.realpathSync.native(rootPath);
     realFullPath = fs.realpathSync.native(fullPath);
     const relativeToRealRoot = path.relative(realRootPath, realFullPath);
@@ -95,13 +102,19 @@ export function inspectDeclaredPath(root, rawPath, options = {}) {
   if (options.rejectBookkeeping === true) {
     const rejected = [evidenceRole, canonicalEvidenceRole].find((role) => role === "bookkeeping" || role === "unsupported");
     if (rejected) {
-      return { ...base, status: rejected, reason: rejected === "bookkeeping" ? "path is Dove bookkeeping rather than substantive evidence" : "path is not an approved schema 8 evidence artifact" };
+      return { ...base, status: rejected, reason: rejected === "bookkeeping" ? "path is Dove bookkeeping rather than substantive evidence" : "path is not an approved schema 9 evidence artifact" };
     }
   }
   if (options.requireNonEmpty === true && stat.size === 0) return { ...base, status: "empty", reason: "path is an empty file" };
   if (options.readText !== true) return base;
   try {
     const maxBytes = Number.isInteger(options.maxBytes) && options.maxBytes > 0 ? options.maxBytes : 24 * 1024;
+    if (mutationContext && canonicalRelativePath === normalized.normalizedPath) {
+      const content = mutationContext.readBuffer(canonicalRelativePath, null);
+      if (content === null) return { ...base, status: "missing", exists: false, file: false, reason: "path does not exist" };
+      const bytesRead = Math.min(maxBytes, content.length);
+      return { ...base, text: content.subarray(0, bytesRead).toString("utf8"), bytesRead, truncated: content.length > bytesRead };
+    }
     const descriptor = fs.openSync(realFullPath, "r");
     try {
       const buffer = Buffer.alloc(Math.min(maxBytes, stat.size));

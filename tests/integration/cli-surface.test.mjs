@@ -5,8 +5,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import { ingestExecutionReceipt } from "../../src/core/execution-receipts.mjs";
 import { createDoveMission } from "../../src/core/mission-contracts.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { createVersionSnapshot } from "../../src/core/retained-domain-workflows.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 const ROOT = process.cwd();
@@ -22,20 +24,23 @@ const DELETED_CLI_COMMANDS = [
   "return"
 ];
 
-test("plain proposal output shows the zero-write boundary and exact JSON confirmation command", () => {
+test("plain proposal output keeps init human-readable and mission replay explicit", () => {
   const workspace = createTempRoot("dove-cli-plain-proposal-");
   try {
-    for (const args of [
-      ["init", workspace, "--goal", "Initialize from plain output", "--mutation-mode", "direct-process"],
-      ["mission", workspace, "--goal", "Propose from plain output", "--mutation-mode", "direct-process"]
-    ]) {
-      const result = spawnSync(process.execPath, [CLI, ...args], { cwd: ROOT, encoding: "utf8" });
-      assert.equal(result.status, 0, result.stderr || result.stdout);
-      assert.match(result.stdout, /DOVE PROPOSAL: ZERO-WRITE BOUNDARY/u);
-      assert.match(result.stdout, /Exact confirmation command:/u);
-      assert.match(result.stdout, /--json/u);
-      assert.equal(fs.existsSync(path.join(workspace, ".dove")), false);
-    }
+    const init = spawnSync(process.execPath, [CLI, "init", workspace, "--goal", "Initialize from plain output", "--mutation-mode", "direct-process"], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(init.status, 0, init.stderr || init.stdout);
+    assert.match(init.stdout, /No files have been created or changed/u);
+    assert.match(init.stdout, /Create minimal Dove project records/u);
+    assert.match(init.stdout, /Create Dove project records for this project\?/u);
+    assert.doesNotMatch(init.stdout, /schema|workspace-[a-z0-9-]+|[0-9a-f]{64}|proposal-token|exact confirmation|\.dove\//iu);
+
+    const mission = spawnSync(process.execPath, [CLI, "mission", workspace, "--goal", "Propose from plain output", "--mutation-mode", "direct-process"], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(mission.status, 0, mission.stderr || mission.stdout);
+    assert.match(mission.stdout, /No files have been created or changed/u);
+    assert.match(mission.stdout, /Return control to the host to continue the requested work/u);
+    assert.match(mission.stdout, /Create this mission checkpoint and continue the requested work\?/u);
+    assert.doesNotMatch(mission.stdout, /schema|workspace-[a-z0-9-]+|[0-9a-f]{64}|proposal-token|exact confirmation|\.dove\//iu);
+    assert.equal(fs.existsSync(path.join(workspace, ".dove")), false);
   } finally {
     fs.rmSync(workspace, { recursive: true, force: true });
   }
@@ -82,7 +87,7 @@ test("receipt CLI assesses only committed direct-process state and keeps patch p
     assert.equal(direct.status, 0, direct.stderr || direct.stdout);
     const directPayload = JSON.parse(direct.stdout);
     assert.equal(directPayload.status, "ingested");
-    assert.equal(directPayload.completion.assessment.currentReceiptId, receipt.receiptId);
+    assert.deepEqual(directPayload.completion.assessment.contributingReceiptIds, [receipt.receiptId]);
     assert.equal(directPayload.completion.assessment.complete, true);
     assert.equal(Object.hasOwn(directPayload, "postCommit"), false);
   } finally {
@@ -104,6 +109,82 @@ test("deleted CLI commands fail as unknown without creating Dove state", () => {
     } finally {
       fs.rmSync(workspace, { recursive: true, force: true });
     }
+  }
+});
+
+test("source query is explicit, zero-write, and the default source operation", () => {
+  const workspace = createTempRoot("dove-cli-source-query-");
+  try {
+    const missionProposal = createDoveMission(workspace, { missionId: "cli-source-query", goal: "Query sources without writes.", completionCriteria: [], evidenceRequirements: [] });
+    runWithMutationContext(workspace, { actionId: "create-dove-mission", mutationMode: "direct-process", hostId: "test" }, () => createDoveMission(workspace, missionProposal.confirmation.confirmArgs));
+    const before = fs.readdirSync(path.join(workspace, ".dove"), { recursive: true }).map(String).sort();
+    for (const action of [[], ["query"]]) {
+      const result = spawnSync(process.execPath, [CLI, "source", ...action, workspace, "--mission-id", "cli-source-query", "--json"], { cwd: ROOT, encoding: "utf8" });
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assert.equal(JSON.parse(result.stdout).status, "empty");
+      assert.deepEqual(fs.readdirSync(path.join(workspace, ".dove"), { recursive: true }).map(String).sort(), before);
+    }
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test("version comparison CLI is an immediate zero-write query", () => {
+  const workspace = createTempRoot("dove-cli-version-query-");
+  try {
+    const missionProposal = createDoveMission(workspace, { missionId: "cli-version-query", goal: "Compare snapshots without writes.", completionCriteria: [], evidenceRequirements: [] });
+    const mission = runWithMutationContext(workspace, { actionId: "create-dove-mission", mutationMode: "direct-process", hostId: "test" }, () => createDoveMission(workspace, missionProposal.confirmation.confirmArgs)).mission;
+    const own = (receiptId, relativePath, content) => {
+      const fullPath = path.join(workspace, relativePath);
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, content, "utf8");
+      runWithMutationContext(workspace, { actionId: "ingest-execution-receipt", mutationMode: "direct-process", hostId: "test" }, () => ingestExecutionReceipt(workspace, {
+        receiptId,
+        missionId: mission.missionId,
+        contractDigest: mission.contractDigest,
+        summary: `Own ${relativePath}.`,
+        artifacts: [{ path: relativePath, kind: "document", sha256: crypto.createHash("sha256").update(fs.readFileSync(fullPath)).digest("hex") }],
+        validations: [],
+        criteriaSatisfied: [],
+        producedAt: "2026-07-21T00:00:00.000Z"
+      }));
+    };
+    own("cli-version-first", "outputs/first.md", "First.\n");
+    runWithMutationContext(workspace, { actionId: "create-version-snapshot", mutationMode: "direct-process", hostId: "test" }, () => createVersionSnapshot(workspace, { missionId: mission.missionId, versionId: "v1", artifactRefs: ["outputs/first.md"] }));
+    own("cli-version-second", "outputs/second.md", "Second.\n");
+    runWithMutationContext(workspace, { actionId: "create-version-snapshot", mutationMode: "direct-process", hostId: "test" }, () => createVersionSnapshot(workspace, { missionId: mission.missionId, versionId: "v2", artifactRefs: ["outputs/second.md"] }));
+    const before = fs.readdirSync(path.join(workspace, ".dove"), { recursive: true }).map(String).sort();
+
+    const result = spawnSync(process.execPath, [CLI, "version", workspace, "--mission-id", mission.missionId, "--from-version-id", "v1", "--to-version-id", "v2", "--json"], { cwd: ROOT, encoding: "utf8" });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.status, "compared");
+    assert.equal(payload.zeroWrite, true);
+    assert.deepEqual(payload.comparison.added, ["outputs/second.md"]);
+    assert.deepEqual(payload.comparison.removed, ["outputs/first.md"]);
+    assert.deepEqual(fs.readdirSync(path.join(workspace, ".dove"), { recursive: true }).map(String).sort(), before);
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test("CLI optional workflow inputs are omitted instead of passed as null", () => {
+  const workspace = createTempRoot("dove-cli-omission-");
+  try {
+    const missionProposal = createDoveMission(workspace, { missionId: "cli-omission", goal: "Exercise omitted optional CLI fields.", completionCriteria: [], evidenceRequirements: [] });
+    runWithMutationContext(workspace, { actionId: "create-dove-mission", mutationMode: "direct-process", hostId: "test" }, () => createDoveMission(workspace, missionProposal.confirmation.confirmArgs));
+    const protocol = spawnSync(process.execPath, [CLI, "experience", workspace, "--mission-id", "cli-omission", "--experiment-id", "protocol-only", "--goal", "Measure the behavior", "--hypothesis", "The behavior is stable", "--protocol", "Run the bounded protocol", "--success-criterion", "The measurement is recorded", "--mutation-mode", "patch-plan", "--json"], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(protocol.status, 0, protocol.stderr || protocol.stdout);
+    assert.equal(JSON.parse(protocol.stdout).plan.protocol, "Run the bounded protocol");
+    const status = spawnSync(process.execPath, [CLI, "status", workspace, "--detail", "compact", "--json"], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(status.status, 0, status.stderr || status.stdout);
+    for (const retired of ["--full", "--missions", "--result-mode"]) {
+      const rejected = spawnSync(process.execPath, [CLI, "status", workspace, retired], { cwd: ROOT, encoding: "utf8" });
+      assert.notEqual(rejected.status, 0);
+    }
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
   }
 });
 

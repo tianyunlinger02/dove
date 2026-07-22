@@ -1,6 +1,6 @@
 # Dove Command Output Samples
 
-This checked source-output document records representative shapes for the 12 public schema 8 host workflows. Separately, the CLI has 16 top-level subcommands; the remaining inventory is 27 MCP tools and 60 generated adapters. Exact ids, hashes, timestamps, and mutation summaries vary by workspace.
+This checked source-output document records representative shapes for the 12 public schema 9 host workflows. Separately, the CLI has 16 top-level subcommands; the remaining inventory is 28 MCP tools and 60 generated adapters. Exact ids, hashes, timestamps, and mutation summaries vary by workspace.
 
 ## Common rules
 
@@ -23,7 +23,7 @@ Representative result:
 {
   "status": "needs-confirmation",
   "kind": "init",
-  "newSchemaVersion": 8,
+  "newSchemaVersion": 9,
   "detectedSchemaState": {
     "state": "absent",
     "detectedSchema": "absent"
@@ -234,7 +234,7 @@ Dove binds materials and prepares/imports declared host-generated output. The re
 /dove:review --mission-id mission-... --artifact .dove/drafts/methods.md --verify-coverage
 ```
 
-Review-exchange format v7 operates inside the schema 8 workspace. Its four policies are `local-preflight`, `isolated-selected-artifacts`, `final-plan-results-only`, and `external`; policy controls input scope only. Results name `operation` as `preflight`, `prepare`, or `import`. Preflight maps to zero-write `local-preflight`. Prepare freezes mission, contract digest, exact classified artifact paths/sizes/hashes, set hash, privacy boundary, canonical input/manifest/handoff/report paths, and returns the exact import action. Import rejects tampering, drift, symlinks, aliases, noncanonical paths, cross-mission or cross-scope material, and repeated imports before writing, then returns imported paths and the existing coverage action. Coverage verification is read-only. Imported review material remains non-authoritative, and Dove never launches a reviewer, process, session, subagent, or loop.
+Review-exchange format v8 operates inside the schema 9 workspace. Its four policies are `local-preflight`, `isolated-selected-artifacts`, `final-plan-results-only`, and `external`; policy controls input scope only. Results name `operation` as `preflight`, `prepare`, or `import`. Preflight maps to zero-write `local-preflight`. Prepare freezes mission, contract digest, exact classified artifact paths/sizes/hashes, set hash, privacy boundary, canonical input/manifest/handoff/report paths, and returns the exact import action. Import rejects tampering, drift, symlinks, aliases, noncanonical paths, cross-mission or cross-scope material, and repeated imports before writing, then returns imported paths and the existing coverage action. Coverage verification is read-only. Imported review material remains non-authoritative, and Dove never launches a reviewer, process, session, subagent, or loop.
 
 ## `dove.rebuttal`
 
@@ -250,8 +250,8 @@ Every issue and response links to a concrete review finding. Strategy and respon
 /dove:version --mission-id mission-... --version-id v2 --artifact .dove/drafts/methods.md
 ```
 
-Snapshots copy actual artifact contents into immutable version storage. Comparison verifies those copies; finalization fails closed without live completion and authoritative review proof.
+Snapshots copy actual artifact contents into immutable version storage. Comparison verifies those copies against current hashes and returns added, removed, and changed paths without writing a comparison artifact.
 
 ## Removed public surfaces
 
-`dove.review-loop`, `dove.auto`, `dove.operator`, onboarding, public-status publishing/serving, packet mutation, board, runtime, and navigation commands are not public schema 8 surfaces. `dove.lessons` is public, but retired operator lesson storage and tools are absent. `dove.review` is the mission-bound policy-scoped prepare/import/coverage exchange only; it does not expose packet review, audio review, review-loop, reviewer execution, routing, or caller-minted authority.
+`dove.review-loop`, `dove.auto`, `dove.operator`, onboarding, public-status publishing/serving, packet mutation, board, runtime, and navigation commands are not public schema 9 surfaces. `dove.lessons` is public, but retired operator lesson storage and tools are absent. `dove.review` is the mission-bound policy-scoped prepare/import/coverage exchange only; it does not expose packet review, audio review, review-loop, reviewer execution, routing, or caller-minted authority.

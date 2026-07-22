@@ -5,13 +5,16 @@ import { assessMissionCompletion } from "./completion-gates.mjs";
 import { queryDomainIntegrity } from "./retained-domain-workflows.mjs";
 import { readExecutionReceipts } from "./execution-receipts.mjs";
 import { assertCurrentMissionContract, previewDoveMissionContract } from "./mission-contracts.mjs";
+import { readResearchTree, researchTreeProjection } from "./research-tree.mjs";
 import { verifyReviewCoverage } from "./review-exchange.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { evaluateSourceIds, querySources } from "./source-trust.mjs";
 import { openDoveWorkspace } from "./workspace-schema.mjs";
 
-function wantsFullStatus(args = {}) {
-  return args.full === true || args.includeDetails === true || args.includeMissionDetails === true || args.showMissions === true || args.detail === "full" || args.view === "full";
+function statusDetail(args = {}) {
+  const detail = args.detail ?? "compact";
+  if (detail !== "compact" && detail !== "full") throw new Error("Dove status detail must be compact or full.");
+  return detail;
 }
 
 function responseLanguage(args = {}) {
@@ -47,7 +50,7 @@ function readCurrentMissions(root, options = {}) {
   return { workspace, missions };
 }
 
-function emptyStatus(args, language) {
+function emptyStatus(args, language, detail) {
   const headline = language === "en" ? "Dove is not initialized in this workspace." : "当前 workspace 尚未初始化 Dove。";
   const result = {
     mode: "dove-status-query",
@@ -84,13 +87,18 @@ function emptyStatus(args, language) {
     optionalMissionDetails: null,
     detailsAvailable: true
   };
-  return wantsFullStatus(args) ? { ...result, detail: "full", manifest: null, project: null, missions: [], integrityAssessment: null, domainIntegrity: null, sourceIntegrity: null, reviewValidity: null, diagnostics: { artifactPathsRead: [], noRefresh: true, noCommandExecution: true, noExternalProcess: true, noGitInspection: true, noSourceMutation: true } } : result;
+  return detail === "full" ? { ...result, detail: "full", manifest: null, project: null, missions: [], integrityAssessment: null, domainIntegrity: null, sourceIntegrity: null, reviewValidity: null, diagnostics: { artifactPathsRead: [], noRefresh: true, noCommandExecution: true, noExternalProcess: true, noGitInspection: true, noSourceMutation: true } } : result;
 }
 
 export function queryDoveStatus(root, args = {}) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) throw new Error("Dove status arguments must be a plain object.");
+  const allowed = new Set(["missionId", "intent", "detail", "responseLanguage", "language"]);
+  const unknown = Object.keys(args).filter((field) => !allowed.has(field));
+  if (unknown.length > 0) throw new Error(`Dove status does not accept unknown input: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
   const language = responseLanguage(args);
+  const detail = statusDetail(args);
   const { workspace, missions } = readCurrentMissions(root, { allowAbsent: true, operation: "Dove status" });
-  if (workspace.state === "absent") return emptyStatus(args, language);
+  if (workspace.state === "absent") return emptyStatus(args, language, detail);
 
   const requestedMissionId = typeof args.missionId === "string" ? args.missionId.trim() : "";
   const selectedMission = requestedMissionId
@@ -100,6 +108,8 @@ export function queryDoveStatus(root, args = {}) {
   const missionScope = requestedMissionId ? "explicit" : missions.length === 0 ? "none" : missions.length === 1 ? "only-mission" : "workspace";
   const scopedMissions = selectedMission ? [selectedMission] : missionScope === "workspace" ? missions : [];
   const integrityAssessment = selectedMission ? assessMissionCompletion(root, { missionId: selectedMission.missionId }) : null;
+  const researchTree = selectedMission ? readResearchTree(root, selectedMission.missionId, { operation: "Dove status research tree" }) : null;
+  const compactResearchTree = researchTreeProjection(researchTree, "compact");
   const receipts = readExecutionReceipts(root, selectedMission?.missionId ?? null);
   const malformedReceipt = receipts.find((receipt) => receipt.__readFailure);
   if (malformedReceipt) throw new Error(`Malformed durable JSON in ${path.posix.join(ARTIFACT_PATHS.executionReceiptsDir, `${malformedReceipt.receiptId}.json`)}: ${malformedReceipt.__readFailure}`);
@@ -134,8 +144,11 @@ export function queryDoveStatus(root, args = {}) {
   const headline = language === "en"
     ? `Dove schema ${workspace.schemaVersion} is healthy with ${missions.length} mission contract${missions.length === 1 ? "" : "s"}.`
     : `Dove schema ${workspace.schemaVersion} 健康，当前有 ${missions.length} 个 mission contract。`;
+  const supersededByMissionId = integrityAssessment?.supersededByMissionId ?? null;
   const stableGaps = {
     completion: integrityAssessment?.incompleteReasons ?? [],
+    dependencies: integrityAssessment?.dependencyCoverage?.filter((dependency) => !dependency.complete) ?? [],
+    supersession: supersededByMissionId ? { supersededByMissionId } : null,
     sources: sourceGaps,
     domain: domainIntegrity.stalePaths ?? [],
     review: reviewGaps
@@ -153,9 +166,17 @@ export function queryDoveStatus(root, args = {}) {
     selectedMissionId: selectedMission?.missionId ?? null,
     receiptCount: receipts.length,
     sourceCount: sourceIntegrity.sourceCount,
-    integrityAssessment: integrityAssessment ? { complete: integrityAssessment.complete, staleReceiptCount: integrityAssessment.staleReceiptIds.length, incompleteReasons: integrityAssessment.incompleteReasons } : null,
+    integrityAssessment: integrityAssessment ? {
+      status: integrityAssessment.status,
+      complete: integrityAssessment.complete,
+      supersededByMissionId,
+      dependencyCoverage: integrityAssessment.dependencyCoverage,
+      staleReceiptCount: integrityAssessment.staleReceiptIds.length,
+      incompleteReasons: integrityAssessment.incompleteReasons
+    } : null,
     domainIntegrity: compactDomainIntegrity(domainIntegrity),
-    reviewValidity: { covered: reviewValidity.covered === true, authoritative: reviewValidity.authoritative === true, failures: reviewValidity.failures ?? [] }
+    reviewValidity: { covered: reviewValidity.covered === true, authoritative: reviewValidity.authoritative === true, failures: reviewValidity.failures ?? [] },
+    researchTree: compactResearchTree
   };
   const result = {
     mode: "dove-status-query",
@@ -173,18 +194,35 @@ export function queryDoveStatus(root, args = {}) {
     nextStep: missionScope === "workspace"
       ? { label: language === "en" ? "Choose a mission explicitly with dove status --mission-id <id> --json." : "使用 dove status --mission-id <id> --json 显式选择 mission。", command: "node ./bin/dove-package.mjs status . --mission-id \"<mission id>\" --json", mcpTool: "query_dove_status" }
       : selectedMission
-        ? { label: language === "en" ? "Address the listed mission gaps, then reassess completion." : "处理列出的 mission 缺口，然后重新评估完成度。", command: `node ./bin/dove-package.mjs status . --mission-id "${selectedMission.missionId}" --json`, mcpTool: "query_dove_status" }
+        ? supersededByMissionId
+          ? {
+            label: language === "en"
+              ? `Mission ${selectedMission.missionId} is read-only history; continue with successor ${supersededByMissionId}.`
+              : `Mission ${selectedMission.missionId} 已成为只读历史；请继续处理后继 mission ${supersededByMissionId}。`,
+            command: `node ./bin/dove-package.mjs status . --mission-id "${supersededByMissionId}" --json`,
+            mcpTool: "query_dove_status"
+          }
+          : { label: language === "en" ? "Address the listed mission gaps, then reassess completion." : "处理列出的 mission 缺口，然后重新评估完成度。", command: `node ./bin/dove-package.mjs status . --mission-id "${selectedMission.missionId}" --json`, mcpTool: "query_dove_status" }
         : { label: language === "en" ? "Create one minimal mission contract." : "创建一个最小 mission contract。", command: "node ./bin/dove-package.mjs mission . --goal \"<mission goal>\" --mutation-mode direct-process --json", mcpTool: "create_dove_mission" },
     needsAttention: missionScope === "workspace"
       ? { status: "mission-selection-required", summary: language === "en" ? "More than one mission exists; status did not select an implicit latest mission." : "存在多个 mission；status 不会隐式选择最新 mission。", reasons: ["explicit-mission-required"], missionOptions: missions.map((mission) => ({ missionId: mission.missionId, goal: mission.goal })) }
-      : attentionReasons.length ? { status: "incomplete", summary: language === "en" ? "Current mission or domain evidence is incomplete." : "当前 mission 或领域证据尚不完整。", reasons: attentionReasons, stableGaps } : { status: "clear", summary: language === "en" ? "No current mission or domain integrity failure is present." : "当前没有 mission 或领域完整性失败。", stableGaps },
+      : attentionReasons.length ? {
+        status: supersededByMissionId ? "superseded" : "incomplete",
+        summary: supersededByMissionId
+          ? language === "en"
+            ? `This mission was superseded by ${supersededByMissionId} and is read-only history.`
+            : `该 mission 已被 ${supersededByMissionId} 取代，现为只读历史。`
+          : language === "en" ? "Current mission or domain evidence is incomplete." : "当前 mission 或领域证据尚不完整。",
+        reasons: attentionReasons,
+        stableGaps
+      } : { status: "clear", summary: language === "en" ? "No current mission or domain integrity failure is present." : "当前没有 mission 或领域完整性失败。", stableGaps },
     changes: { intent: "none", applied: false, count: 0, rollback: "not-applicable" },
     showMore: { detailsAvailable: true },
     optionalMissionDetails: null,
     statusHome: null
   };
   result.statusHome = { presentation: "dove-project-situation-home", detail: result.detail, liveContextFirst: true, intent: result.intent, headline, scope: result.scope, currentContext, nextStep: result.nextStep, needsAttention: result.needsAttention, changes: result.changes, showMore: result.showMore, optionalMissionDetails: null, detailsAvailable: true };
-  if (!wantsFullStatus(args)) return result;
+  if (detail !== "full") return result;
   return {
     ...result,
     detail: "full",
@@ -195,8 +233,9 @@ export function queryDoveStatus(root, args = {}) {
     domainIntegrity,
     sourceIntegrity,
     reviewValidity,
+    researchTree: researchTreeProjection(researchTree, "full"),
     diagnostics: {
-      artifactPathsRead: [ARTIFACT_PATHS.doveRootManifest, ARTIFACT_PATHS.projectIdentity, ARTIFACT_PATHS.missionsDir, ARTIFACT_PATHS.executionReceiptsDir, ".dove/sources"],
+      artifactPathsRead: [ARTIFACT_PATHS.doveRootManifest, ARTIFACT_PATHS.projectIdentity, ARTIFACT_PATHS.missionsDir, ARTIFACT_PATHS.executionReceiptsDir, ARTIFACT_PATHS.researchTreesDir, ".dove/sources"],
       noRefresh: true,
       noCommandExecution: true,
       noExternalProcess: true,

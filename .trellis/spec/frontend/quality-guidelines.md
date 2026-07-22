@@ -38,10 +38,10 @@ npm run pack:dry-run
 
 ## Required Tests
 
-Broad schema 8 changes should cover:
+Broad schema 9 changes should cover:
 
 - physical deletion and static unreachability of retired modules and callables;
-- exact CLI, command, package, and MCP inventories: 12 commands, 27 MCP tools, and 60 combined generated adapters;
+- exact CLI, command, package, and MCP inventories: 12 commands, 28 MCP tools, and 60 combined generated adapters;
 - zero-write absent reads, proposals, preflights, assessments, and rejected confirmations;
 - strict opener handling for absent, malformed, legacy, future, contradictory, and symlinked state;
 - exact confirmation replay and stale workspace, contract, target, source-tree, or mutation-mode rejection;

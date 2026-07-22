@@ -3,7 +3,7 @@ import { validateWorkflowGoals } from "../src/core/workflow-goals.mjs";
 import { dispatchTool } from "../src/mcp/handlers.mjs";
 
 try {
-  const result = validateWorkflowGoals({
+  const result = await validateWorkflowGoals({
     createRoot: (prefix) => createTempWorkspace(prefix),
     cleanupRoot: cleanupTempWorkspace,
     dispatch: dispatchTool

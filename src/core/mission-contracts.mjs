@@ -6,16 +6,21 @@ import {
   MISSION_CONTRACT_SCHEMA_VERSION,
   MISSION_CRITERION_ID_VERSION,
   MISSION_EVIDENCE_REQUIREMENT_ID_VERSION,
+  MISSION_CONTRACT_INPUT_FIELDS,
+  assertCurrentMissionContract as assertCanonicalMissionContract,
+  currentMissionContractMetadata as canonicalMissionContractMetadata,
   missionCompletionCriteria,
   missionCompletionCriterionId,
   missionContractDigest,
   missionEvidenceRequirementId,
   missionEvidenceRequirements,
+  normalizeMissionContractContent,
   stableMissionSerialize
 } from "./mission-contract-integrity.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
 import { artifactEvidenceRole, normalizeProjectRelativePath } from "./artifact-integrity.mjs";
 import { validateMissionGraph } from "./mission-graph.mjs";
+import { reevaluateResearchTree } from "./research-tree.mjs";
 import { resolveCanonicalContainedWrite } from "./contained-write.mjs";
 import { currentMutationContext, isPatchPlanMode, normalizeMutationMode } from "./mutation-backend.mjs";
 import { assertGovernanceMutationRegistered, nowIso, readJson, writeJson } from "./workspace.mjs";
@@ -34,22 +39,6 @@ export { MISSION_CONTRACT_SCHEMA_VERSION, MISSION_CRITERION_ID_VERSION, MISSION_
 export const MISSION_PROPOSAL_VERSION = 1;
 export const PROJECT_IDENTITY_SCHEMA_VERSION = 1;
 
-const MISSION_CONTRACT_ARRAY_FIELDS = [
-  "scope",
-  "outOfScope",
-  "targetArtifacts",
-  "expectedArtifacts",
-  "completionCriteria",
-  "evidenceRequirements"
-];
-const MISSION_OPTIONAL_ARRAY_FIELDS = ["dependsOnMissionIds"];
-const MISSION_CONTRACT_INPUT_FIELDS = new Set([
-  "missionId",
-  "goal",
-  ...MISSION_CONTRACT_ARRAY_FIELDS,
-  ...MISSION_OPTIONAL_ARRAY_FIELDS,
-  "supersedesMissionId"
-]);
 const MISSION_REPLAY_CONTROL_FIELDS = new Set([
   "confirmed",
   "proposalVersion",
@@ -59,20 +48,6 @@ const MISSION_REPLAY_CONTROL_FIELDS = new Set([
   "workspaceId",
   "createdAt"
 ]);
-const PERSISTED_MISSION_FIELDS = new Set([
-  "schemaVersion",
-  "workspaceId",
-  "missionId",
-  "contractDigest",
-  "createdAt",
-  ...MISSION_CONTRACT_ARRAY_FIELDS,
-  ...MISSION_OPTIONAL_ARRAY_FIELDS,
-  "goal",
-  "supersedesMissionId",
-  "completionCriterionIds",
-  "evidenceRequirementIds"
-]);
-const TYPED_EVIDENCE_REQUIREMENT_PATTERN = /^(artifact|validation|source|note):(.+)$/u;
 const INIT_INPUT_FIELDS = new Set(["goal", "archiveReset", "confirmed", "proposalVersion", "proposalWorkspace", "proposalDigest", "mutationMode", "workspaceId", "createdAt", "detectedState", "detectedSchema", "sourceIdentity", "sourceTreeDigest", "archiveTarget"]);
 
 function sha256(value) {
@@ -99,48 +74,6 @@ function normalizeStringArray(value) {
     throw new Error("Mission contract array fields must contain only non-empty strings.");
   }
   return Array.from(new Set(normalized));
-}
-
-function canonicalContractPath(rawPath, label) {
-  const normalized = normalizeProjectRelativePath(rawPath);
-  if (!normalized.ok) {
-    throw new Error(`${label} has an unsafe project-relative path ${JSON.stringify(rawPath)}: ${normalized.reason}.`);
-  }
-  const supplied = String(rawPath).trim().replace(/\\/gu, "/");
-  if (normalized.normalizedPath !== supplied) {
-    throw new Error(`${label} path must be canonical: ${rawPath}.`);
-  }
-  const evidenceRole = artifactEvidenceRole(normalized.normalizedPath);
-  if (normalized.normalizedPath === ARTIFACT_PATHS.lessonsDir || normalized.normalizedPath.startsWith(`${ARTIFACT_PATHS.lessonsDir}/`)) {
-    throw new Error(`${label} must not reference advisory-only Dove lessons: ${rawPath}.`);
-  }
-  if (evidenceRole === "bookkeeping" || evidenceRole === "unsupported") {
-    throw new Error(`${label} must reference a substantive schema 8 artifact or an external project artifact, not Dove bookkeeping: ${rawPath}.`);
-  }
-  return normalized.normalizedPath;
-}
-
-function normalizeContractPaths(value, label) {
-  return normalizeStringArray(value).map((item, index) => canonicalContractPath(item, `${label}[${index}]`));
-}
-
-function normalizeEvidenceRequirements(value) {
-  return normalizeStringArray(value).map((requirement, index) => {
-    if (requirement === "review:authoritative") return requirement;
-    const match = TYPED_EVIDENCE_REQUIREMENT_PATTERN.exec(requirement);
-    if (!match) {
-      throw new Error(`evidenceRequirements[${index}] must use artifact:<path>, validation:<path>, source:<id>, note:<id>, or review:authoritative.`);
-    }
-    const [, kind, rawValue] = match;
-    const normalizedValue = normalizeString(rawValue, null);
-    if (!normalizedValue) {
-      throw new Error(`evidenceRequirements[${index}] must contain a non-empty typed reference.`);
-    }
-    if (kind === "artifact" || kind === "validation") {
-      return `${kind}:${canonicalContractPath(normalizedValue, `evidenceRequirements[${index}]`)}`;
-    }
-    return `${kind}:${normalizedValue}`;
-  });
 }
 
 function assertPlainObject(value, label) {
@@ -179,101 +112,13 @@ function normalizeMissionId(value, goal) {
 }
 
 function missionContractContent(args = {}) {
-  const goal = normalizeString(args.goal, null);
-  if (!goal) {
-    throw new Error("Dove mission requires a non-empty goal.");
-  }
-  const content = { goal };
-  for (const field of MISSION_CONTRACT_ARRAY_FIELDS) {
-    if (field === "targetArtifacts" || field === "expectedArtifacts") {
-      content[field] = normalizeContractPaths(args[field], field);
-    } else if (field === "evidenceRequirements") {
-      content[field] = normalizeEvidenceRequirements(args[field]);
-    } else {
-      content[field] = normalizeStringArray(args[field]);
-    }
-  }
-  const dependsOnMissionIds = normalizeStringArray(args.dependsOnMissionIds);
-  if (dependsOnMissionIds.length > 0) {
-    content.dependsOnMissionIds = dependsOnMissionIds;
-  }
-  const supersedesMissionId = normalizeString(args.supersedesMissionId, null);
-  if (supersedesMissionId) {
-    content.supersedesMissionId = supersedesMissionId;
-  }
-  return content;
+  return normalizeMissionContractContent(args);
 }
 
 export { missionCompletionCriteria, missionCompletionCriterionId, missionEvidenceRequirementId, missionEvidenceRequirements };
 
-export function currentMissionContractMetadata(mission = {}) {
-  assertPlainObject(mission, "Mission contract");
-  const unknown = Object.keys(mission).filter((field) => !PERSISTED_MISSION_FIELDS.has(field));
-  if (unknown.length > 0) {
-    throw new Error(`Mission contract does not accept unknown persisted fields: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
-  }
-  const missionId = normalizeString(mission.missionId, null);
-  if (!missionId || !/^[a-z0-9][a-z0-9._-]{0,127}$/u.test(missionId)) {
-    throw new Error("Mission contract has an invalid missionId.");
-  }
-  if (mission.schemaVersion !== MISSION_CONTRACT_SCHEMA_VERSION) {
-    throw new Error(`Mission contract schemaVersion ${mission.schemaVersion ?? "missing"} is unsupported.`);
-  }
-  const workspaceId = normalizeString(mission.workspaceId, null);
-  if (!workspaceId || !/^[a-z0-9][a-z0-9._-]{0,127}$/u.test(workspaceId)) {
-    throw new Error(`Mission contract has an invalid workspaceId for ${missionId}.`);
-  }
-  for (const field of ["contractDigest", "createdAt", "goal", ...MISSION_CONTRACT_ARRAY_FIELDS, "completionCriterionIds", "evidenceRequirementIds"]) {
-    if (!Object.hasOwn(mission, field)) {
-      throw new Error(`Mission contract is missing required persisted field $.${field}.`);
-    }
-  }
-  if (!/^[0-9a-f]{64}$/u.test(String(mission.contractDigest ?? ""))) {
-    throw new Error(`Mission contract has an invalid contractDigest for ${missionId}.`);
-  }
-  const createdAt = normalizeString(mission.createdAt, null);
-  if (!createdAt || !Number.isFinite(Date.parse(createdAt)) || new Date(Date.parse(createdAt)).toISOString() !== createdAt) {
-    throw new Error(`Mission contract has an invalid createdAt timestamp for ${missionId}.`);
-  }
-  const content = missionContractContent(mission);
-  const completionCriterionIds = missionCompletionCriteria(content).map(({ criterionId }) => criterionId);
-  const evidenceRequirementIds = missionEvidenceRequirements(content).map(({ requirementId }) => requirementId);
-  return {
-    missionId,
-    content,
-    contractDigest: missionContractDigest(missionId, content),
-    completionCriterionIds,
-    evidenceRequirementIds
-  };
-}
-
-export function assertCurrentMissionContract(mission = {}) {
-  const current = currentMissionContractMetadata(mission);
-  if (mission.contractDigest !== current.contractDigest) {
-    throw new Error(`Mission contract digest is stale or malformed for ${current.missionId}.`);
-  }
-  if (
-    mission.completionCriterionIds !== undefined
-    && (
-      !Array.isArray(mission.completionCriterionIds)
-      || mission.completionCriterionIds.length !== current.completionCriterionIds.length
-      || mission.completionCriterionIds.some((criterionId, index) => criterionId !== current.completionCriterionIds[index])
-    )
-  ) {
-    throw new Error(`Mission completion criterion ids are stale or malformed for ${current.missionId}.`);
-  }
-  if (
-    mission.evidenceRequirementIds !== undefined
-    && (
-      !Array.isArray(mission.evidenceRequirementIds)
-      || mission.evidenceRequirementIds.length !== current.evidenceRequirementIds.length
-      || mission.evidenceRequirementIds.some((requirementId, index) => requirementId !== current.evidenceRequirementIds[index])
-    )
-  ) {
-    throw new Error(`Mission evidence requirement ids are stale or malformed for ${current.missionId}.`);
-  }
-  return current;
-}
+export const currentMissionContractMetadata = canonicalMissionContractMetadata;
+export const assertCurrentMissionContract = assertCanonicalMissionContract;
 
 function missionPath(missionId) {
   return path.posix.join(ARTIFACT_PATHS.missionsDir, `${missionId}.json`);
@@ -502,6 +347,20 @@ function confirmArgsFor(proposal) {
   };
 }
 
+function approvalMetadata(proposal) {
+  return {
+    required: true,
+    noChangesApplied: true,
+    summary: `Dove can save this mission checkpoint: ${proposal.content.goal}`,
+    effects: [
+      "Save the approved goal and scope.",
+      "Save the expected outcomes and evidence requirements.",
+      "Return control to the host to continue the requested work."
+    ],
+    question: "Create this mission checkpoint and continue the requested work?"
+  };
+}
+
 function confirmationMetadata(proposal) {
   const confirmArgs = confirmArgsFor(proposal);
   return {
@@ -597,7 +456,7 @@ function persistedMission(proposal) {
 }
 
 export function previewDoveMissionContract(root, args = {}) {
-  assertAllowedFields(args, MISSION_CONTRACT_INPUT_FIELDS, "Dove mission preview");
+  assertAllowedFields(args, new Set(MISSION_CONTRACT_INPUT_FIELDS), "Dove mission preview");
   const proposal = buildMissionProposal(root, args);
   return {
     status: "proposal",
@@ -611,20 +470,25 @@ export function previewDoveMissionContract(root, args = {}) {
 
 export function createDoveMission(root, args = {}) {
   assertGovernanceMutationRegistered("create-dove-mission", "guarded");
-  assertAllowedFields(args, new Set([...MISSION_CONTRACT_INPUT_FIELDS, ...MISSION_REPLAY_CONTROL_FIELDS]), "create_dove_mission");
-  const confirmed = hasConfirmation(args);
-  const proposal = buildMissionProposal(root, args);
+  const operation = args.operation ?? "create";
+  if (operation === "reevaluate-research-tree") return reevaluateResearchTree(root, args);
+  if (operation !== "create") throw new Error("create_dove_mission operation must be create or reevaluate-research-tree.");
+  assertAllowedFields(args, new Set([...MISSION_CONTRACT_INPUT_FIELDS, ...MISSION_REPLAY_CONTROL_FIELDS, "operation"]), "create_dove_mission");
+  const createArgs = Object.fromEntries(Object.entries(args).filter(([field]) => field !== "operation"));
+  const confirmed = hasConfirmation(createArgs);
+  const proposal = buildMissionProposal(root, createArgs);
   if (!confirmed) {
     return {
       status: "needs-confirmation",
       mission: proposal.mission,
       contractDigest: proposal.contractDigest,
       handoffBrief: proposal.content,
+      approval: approvalMetadata(proposal),
       confirmation: confirmationMetadata(proposal),
       mutation: missionMutationMetadata(proposal, false)
     };
   }
-  assertReplayHeader(proposal, args);
+  assertReplayHeader(proposal, createArgs);
   assertMissionIdAvailable(root, proposal.mission.missionId);
   const mission = persistedMission(proposal);
   materializeProjectIdentity(root, proposal);
