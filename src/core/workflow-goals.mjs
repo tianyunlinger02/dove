@@ -1,18 +1,20 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
 import { COMMAND_SURFACES } from "./command-manifest.mjs";
+import { manageDoveWorkspace } from "./mission-contracts.mjs";
+import { runWithMutationContext } from "./mutation-backend.mjs";
 
 function reflection(regressionArtifacts, remediationTargets, summary) {
   return { remediationRequired: true, regressionArtifacts, remediationTargets, summary };
 }
 
 export const WORKFLOW_GOAL_CONTRACTS = Object.freeze([
-  { id: "mission-contract-materializes-without-execution", surface: "dove.mission", objective: "A mission persists only an exactly approved schema 9 contract.", acceptanceCriteria: ["proposal is zero-write", "bare or stale confirmation is rejected", "exact replay writes only the mission contract"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/workflow-goals.test.mjs"], ["src/core/mission-contracts.mjs"], "Restore exact proposal replay and minimal mission persistence.") },
-  { id: "experience-blocked-audit-not-bridged", surface: "dove.experience", objective: "A blocked experiment audit fails before result or claim bridge writes.", acceptanceCriteria: ["integrity flags reject claim bridging", "rejection is zero-write", "no result or bridge artifact is created"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/domain-artifacts.test.mjs"], ["src/core/retained-domain-workflows.mjs"], "Restore complete domain preflight before the first write.") },
-  { id: "status-rejects-legacy-packet-state", surface: "dove.status", objective: "Status refuses a legacy marker without importing or changing it.", acceptanceCriteria: ["legacy state requires archive-reset", "the tree is unchanged", "no schema 9 manifest or mission is synthesized"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/workspace-schema.test.mjs"], ["src/core/workspace-schema.mjs", "src/core/mission-queries.mjs"], "Restore strict shallow legacy classification and zero-write reads.") },
-  { id: "public-surfaces-stay-flat", surface: "dove.status", objective: "Dove exposes exactly the twelve approved flat command surfaces.", acceptanceCriteria: ["twelve approved commands are present", "no retired command is present", "the command order is canonical"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "scripts/validate-commands.mjs"], ["src/core/command-manifest.mjs"], "Restore the exact schema 9 command inventory.") }
+  { id: "mission-contract-materializes-without-execution", surface: "dove.mission", objective: "An explicit mission checkpoint persists one current-schema direct Mission contract without executing host work.", acceptanceCriteria: ["explicit invocation elicits once and ends terminal", "decline is zero-write", "the direct Mission contract is persisted atomically"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/workflow-goals.test.mjs"], ["src/core/mission-contracts.mjs", "src/core/operation-registry.mjs", "src/mcp/handlers.mjs"], "Restore terminal explicit mission checkpoint handling and direct Mission contract persistence.") },
+  { id: "status-defaults-to-whole-workspace-briefing", surface: "dove.status", objective: "Status returns an executive whole-workspace briefing with a bounded public task chain by default.", acceptanceCriteria: ["multiple missions do not require implicit latest selection", "public one-based workstream, requirement, and work-item relationships remain explicitly aligned", "raw durable graph fields stay internal and the query is zero-write"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/workflow-goals.test.mjs"], ["src/core/mission-queries.mjs", "src/core/public-reports.mjs", "src/mcp/handlers.mjs"], "Restore the default whole-workspace briefing and bounded public task-chain alignment without exposing the internal graph.") },
+  { id: "experiment-result-replays-frozen-protocol", surface: "dove.experiment", objective: "An experiment result must replay the exact frozen protocol before any result write.", acceptanceCriteria: ["changed protocol fields are rejected", "rejection is zero-write", "no result record is created"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/domain-artifacts.test.mjs"], ["src/core/retained-domain-workflows.mjs"], "Restore exact frozen-protocol preflight before the first result write.") },
+  { id: "status-rejects-legacy-packet-state", surface: "dove.status", objective: "Status refuses a legacy marker without importing or changing it.", acceptanceCriteria: ["legacy state requires archive-reset", "the tree is unchanged", "no current-schema manifest or mission is synthesized"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "tests/integration/workspace-schema.test.mjs"], ["src/core/workspace-schema.mjs", "src/core/mission-queries.mjs"], "Restore strict shallow legacy classification and zero-write reads.") },
+  { id: "public-surfaces-stay-flat", surface: "dove.status", objective: "Dove exposes exactly the twelve approved flat command surfaces.", acceptanceCriteria: ["twelve approved commands are present", "no retired command is present", "the command order is canonical"], failureReflection: reflection(["scripts/validate-workflow-goals.mjs", "scripts/validate-commands.mjs"], ["src/core/command-manifest.mjs"], "Restore the exact current-schema command inventory.") }
 ]);
 
 class WorkflowGoalValidationError extends Error {
@@ -27,17 +29,31 @@ export { WorkflowGoalValidationError };
 
 async function toolResult(result, action) {
   const resolved = await result;
-  const text = resolved?.content?.[0]?.text;
-  if (!text) throw new Error(`${action} returned no result.`);
-  if (resolved.isError) throw new Error(`${action} failed: ${text}`);
-  return JSON.parse(text);
+  const envelope = resolved?.structuredContent;
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope) || !envelope.report || !envelope.hostControl) throw new Error(`${action} returned no structured public envelope.`);
+  if (resolved.isError) throw new Error(`${action} failed: ${envelope.report.message ?? "The requested action failed."}`);
+  return envelope;
 }
 
 async function expectError(result, pattern, action) {
   const resolved = await result;
-  const text = resolved?.content?.[0]?.text ?? "";
-  if (resolved?.isError !== true || !pattern.test(text)) throw new Error(`${action} did not fail as expected: ${text}`);
-  return text;
+  const envelope = resolved?.structuredContent;
+  const message = envelope && typeof envelope === "object" && !Array.isArray(envelope) && typeof envelope.report?.message === "string" ? envelope.report.message : "";
+  if (resolved?.isError !== true || !pattern.test(message)) throw new Error(`${action} did not fail as expected: ${message}`);
+  return message;
+}
+
+function initializeValidationWorkspace(root) {
+  const proposal = manageDoveWorkspace(root, {
+    operation: "initialize",
+    mainline: "Validate the bounded Dove workflow contracts.",
+    mutationMode: "direct-process"
+  });
+  return runWithMutationContext(root, {
+    actionId: "manage-dove-workspace",
+    mutationMode: "direct-process",
+    hostId: "workflow-goal-validation"
+  }, () => manageDoveWorkspace(root, proposal.confirmation.confirmArgs));
 }
 
 function snapshot(root) {
@@ -55,52 +71,121 @@ function snapshot(root) {
 }
 
 async function missionGoal(root, dispatch) {
-  const missionId = "workflow-goal-mission-handoff";
-  const args = { missionId, goal: "Materialize a minimal mission contract.", completionCriteria: ["contract persisted"], evidenceRequirements: [] };
+  initializeValidationWorkspace(root);
+  const args = {
+    operation: "create-root",
+    mode: "ordinary",
+    goal: "Materialize a minimal mission contract.",
+    requirements: ["Persist the current mission requirement."],
+    assumptions: [],
+    completionCriteria: ["contract persisted"],
+    evidenceRequirements: []
+  };
   let approvalCalls = 0;
-  const created = await toolResult(dispatch(root, "create_dove_mission", args, {
+  const created = await toolResult(dispatch(root, "manage_dove_mission", args, {
     requestCheckpointApproval: async () => {
       approvalCalls += 1;
       return "accept";
     }
-  }), "mission checkpoint");
-  const rejectedId = `${missionId}-rejected`;
+  }), "explicit mission checkpoint");
+  const missionFile = fs.readdirSync(path.join(root, ".dove/missions"))[0];
+  const persistedMission = JSON.parse(fs.readFileSync(path.join(root, ".dove/missions", missionFile), "utf8"));
+  const missionId = persistedMission.missionId;
+  if (persistedMission.requirements[0] !== "Persist the current mission requirement.") throw new Error("direct Mission requirements are not current");
+
+  const checkpointArgs = {
+    ...args,
+    operation: "branch",
+    goal: "Continue the workflow validation through an explicit child mission.",
+    parentMissionNumber: 1,
+    branchKind: "continuation",
+    branchReason: "Validate the explicit child checkpoint without changing the approved parent.",
+    stopParentReason: "Stop the parent only if the explicit child checkpoint is accepted."
+  };
   const beforeRejected = snapshot(root);
-  const declined = await toolResult(dispatch(root, "create_dove_mission", { ...args, missionId: rejectedId }, {
+  const declined = await toolResult(dispatch(root, "manage_dove_mission", checkpointArgs, {
     requestCheckpointApproval: async () => "decline"
-  }), "declined mission checkpoint");
+  }), "declined supersession checkpoint");
   if (JSON.stringify(snapshot(root)) !== JSON.stringify(beforeRejected)) throw new Error("declined mission checkpoint changed the tree");
-  const unsupported = await expectError(dispatch(root, "create_dove_mission", { ...args, missionId: `${rejectedId}-unsupported` }), /requires an MCP client with elicitation support/u, "mission checkpoint without elicitation");
-  return { id: "mission-contract-materializes-without-execution", status: "passed", evidence: { approvalCalls, materializedStatus: created.status, declineStatus: declined.status, declineZeroWrite: true, unsupportedClientRejected: unsupported.includes("elicitation support"), missionAbsentAfterRejectedCheckpoints: !fs.existsSync(path.join(root, ".dove/missions", `${rejectedId}.json`)), persistedPath: `.dove/missions/${missionId}.json`, legacyStateAbsent: !["state.json", "task-packets", "orchestration", "runtime", "workspace"].some((leaf) => fs.existsSync(path.join(root, ".dove", leaf))) } };
+  const unsupported = await expectError(dispatch(root, "manage_dove_mission", checkpointArgs), /requires an MCP client with elicitation support/u, "mission checkpoint without elicitation");
+  if (approvalCalls !== 1 || created.hostControl?.classification?.continuation !== "terminal" || created.hostControl?.classification?.terminal !== true) throw new Error("explicit mission checkpoint did not return one terminal approval result");
+  return { id: "mission-contract-materializes-without-execution", status: "passed", evidence: { approvalCalls, terminal: true, materializedStatus: created.report.status, declineStatus: declined.report.status, declineZeroWrite: true, unsupportedClientRejected: unsupported.includes("elicitation support"), missionAbsentAfterRejectedCheckpoints: fs.readdirSync(path.join(root, ".dove/missions")).length === 1, directMissionContractBound: true, persistedPath: `.dove/missions/${missionId}.json`, legacyStateAbsent: !["state.json", "task-packets", "orchestration", "runtime", "workspace"].some((leaf) => fs.existsSync(path.join(root, ".dove", leaf))) } };
 }
 
-async function experienceGoal(root, dispatch) {
-  const created = await toolResult(dispatch(root, "create_dove_mission", { missionId: "workflow-goal-experience-blocked", goal: "Reject blocked audit bridging.", completionCriteria: [], evidenceRequirements: [] }, { requestCheckpointApproval: async () => "accept" }), "experience mission");
-  const missionPath = path.join(root, ".dove/missions/workflow-goal-experience-blocked.json");
-  const mission = JSON.parse(fs.readFileSync(missionPath, "utf8"));
-  if (created.status !== "materialized") throw new Error("experience mission was not materialized");
+async function wholeWorkspaceStatusGoal(root, dispatch) {
+  initializeValidationWorkspace(root);
+  await toolResult(dispatch(root, "manage_dove_mission", {
+    operation: "create-root",
+    mode: "ordinary",
+    goal: "Create the first status graph mission.",
+    requirements: ["Represent the first mission in status."],
+    completionCriteria: [], evidenceRequirements: []
+  }, { requestCheckpointApproval: async () => "accept" }), "first status mission");
+  await toolResult(dispatch(root, "manage_dove_mission", {
+    operation: "create-root",
+    mode: "ordinary",
+    goal: "Create the second status graph mission.",
+    requirements: ["Represent the second mission in status."],
+    completionCriteria: [], evidenceRequirements: []
+  }, { requestCheckpointApproval: async () => "accept" }), "second status mission");
+  const before = snapshot(root);
+  const statusEnvelope = await toolResult(dispatch(root, "query_dove_status", { operation: "status", detail: "full" }), "whole-workspace status");
+  const status = statusEnvelope.report;
+  if (JSON.stringify(snapshot(root)) !== JSON.stringify(before)) throw new Error("whole-workspace status changed the tree");
+  const appendix = status.technicalAppendix;
+  if (status.currentSituation?.scope !== "workspace portfolio" || appendix?.bounded !== true || appendix.workstreams?.totalCount !== 2 || appendix.requirements?.totalCount !== 2 || appendix.workItems?.totalCount !== 0) throw new Error("status did not return the complete bounded public task chain");
+  if (appendix.workstreams.items.some((item) => !Number.isSafeInteger(item.number) || item.number < 1) || appendix.requirements.items.some((item) => !Number.isSafeInteger(item.workstreamNumber) || item.workstreamNumber < 1) || appendix.workItems.items.some((item) => !Number.isSafeInteger(item.workstreamNumber) || item.workstreamNumber < 1)) throw new Error("status task-chain numbering is not public and one-based");
+  if (Object.hasOwn(status, "current") || Object.hasOwn(status, "durable") || Object.hasOwn(status, "workspaceGraph")) throw new Error("status exposed the internal workspace graph");
+  return { id: "status-defaults-to-whole-workspace-briefing", status: "passed", evidence: { zeroWrite: true, missionScope: status.currentSituation.scope, missionCount: appendix.workstreams.totalCount, requirementCount: appendix.requirements.totalCount, workItemCount: appendix.workItems.totalCount, oneBasedNumbering: true, internalGraphHidden: true } };
+}
+
+async function experimentGoal(root, dispatch) {
+  initializeValidationWorkspace(root);
+  const created = await toolResult(dispatch(root, "manage_dove_mission", {
+    operation: "create-root",
+    mode: "ordinary",
+    goal: "Reject an experiment result that does not match its frozen named checks.",
+    completionCriteria: ["The mismatched result is rejected before any result record is written."],
+    evidenceRequirements: []
+  }, { requestCheckpointApproval: async () => "accept" }), "experiment mission");
+  if (created.report.status !== "materialized") throw new Error("experiment mission was not materialized");
   fs.mkdirSync(path.join(root, "outputs"), { recursive: true });
   fs.writeFileSync(path.join(root, "outputs/evidence.md"), "Current host-produced evidence.\n");
-  const evidenceSha256 = crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "outputs/evidence.md"))).digest("hex");
-  await toolResult(dispatch(root, "ingest_execution_receipt", { receiptId: "seed-experience-evidence", missionId: mission.missionId, contractDigest: mission.contractDigest, summary: "Seed workflow evidence.", artifacts: [{ path: "outputs/evidence.md", kind: "document", sha256: evidenceSha256 }], validations: [], criteriaSatisfied: [], producedAt: new Date().toISOString() }), "seed evidence receipt");
-  await toolResult(dispatch(root, "upsert_draft", { missionId: mission.missionId, draftId: "evidence", body: "Current host-produced evidence.", artifactRefs: ["outputs/evidence.md"] }), "seed draft");
+  await toolResult(dispatch(root, "close_host_outcome", { missionNumber: 1, attemptId: "seed-experiment-evidence", status: "completed", summary: "Seed workflow evidence.", artifactPaths: ["outputs/evidence.md"], validationPaths: [], facts: [] }), "seed evidence outcome");
+  const protocol = {
+    question: "Does the bounded workflow preserve its evidence contract?",
+    hypothesis: "The current workflow preserves the declared evidence contract.",
+    procedure: ["Run one bounded validation pass.", "Record the complete outcome."],
+    inputs: ["outputs/evidence.md"], comparisons: ["current-contract"], metrics: ["completion"],
+    successConditions: ["The declared evidence remains current."], stopConditions: ["Stop after one bounded validation pass."],
+    constraints: ["Use the frozen input unchanged."], expectedArtifacts: ["outputs/evidence.md"], frozenAt: new Date().toISOString()
+  };
+  await toolResult(dispatch(root, "record_dove_experiment", { missionNumber: 1, experimentId: "protocol-replay", protocol }), "freeze experiment protocol");
   const before = snapshot(root);
-  const error = await expectError(dispatch(root, "run_experience_workflow", { missionId: mission.missionId, experimentId: "blocked", goal: "Check audit.", hypothesis: "Flags block bridging.", protocol: "Inspect current evidence.", successCriteria: ["No blocked bridge"], result: "Blocked result.", resultEvidenceRefs: ["artifact:.dove/drafts/evidence.md"], auditFindings: ["Integrity is incomplete."], integrityFlags: ["methodology-incomplete"], claimId: "missing", bridgeReason: "Must fail." }), /cannot bridge to a claim while integrity flags remain/u, "blocked experiment");
-  if (JSON.stringify(snapshot(root)) !== JSON.stringify(before)) throw new Error("blocked experiment changed the tree");
-  return { id: "experience-blocked-audit-not-bridged", status: "passed", evidence: { zeroWrite: true, resultAbsent: !fs.existsSync(path.join(root, ".dove/experiments/blocked.result.json")), bridgeAbsent: true, rejection: error } };
+  const changedProtocol = { ...protocol, constraints: ["Changed after protocol freeze."] };
+  const result = {
+    status: "completed", outcome: "The bounded validation completed.",
+    measurements: [{ metric: "completion", value: 1, comparison: "current-contract" }],
+    artifactRefs: ["outputs/evidence.md"], validationRefs: [],
+    denominator: { total: 1, successful: 1, failed: 0, excluded: 0 }, failures: [], deviations: [],
+    limitations: ["The result covers one bounded fixture."], recordedAt: new Date().toISOString()
+  };
+  const error = await expectError(dispatch(root, "record_dove_experiment", { missionNumber: 1, experimentId: "protocol-replay", protocol: changedProtocol, result }), /experiment is immutable once frozen.*replay the exact protocol/iu, "changed experiment protocol replay");
+  if (JSON.stringify(snapshot(root)) !== JSON.stringify(before)) throw new Error("changed experiment protocol replay changed the tree");
+  return { id: "experiment-result-replays-frozen-protocol", status: "passed", evidence: { zeroWrite: true, resultAbsent: !fs.existsSync(path.join(root, ".dove/experiments/protocol-replay.result.json")), rejection: error } };
 }
 
 async function legacyStatusGoal(root, dispatch) {
   fs.mkdirSync(path.join(root, ".dove"), { recursive: true });
   fs.writeFileSync(path.join(root, ".dove/state.json"), '{"version":6}\n');
   const before = snapshot(root);
-  const error = await expectError(dispatch(root, "query_dove_status", {}), /recorded internal state is unavailable or no longer current/u, "legacy status");
+  const error = await expectError(dispatch(root, "query_dove_status", { operation: "status" }), /recorded internal state is unavailable or no longer current/u, "legacy status");
   if (JSON.stringify(snapshot(root)) !== JSON.stringify(before)) throw new Error("legacy status changed the tree");
   return { id: "status-rejects-legacy-packet-state", status: "passed", evidence: { staleStateRejected: error.includes("no longer current"), zeroWrite: true, manifestAbsent: !fs.existsSync(path.join(root, ".dove/manifest.json")), missionsAbsent: !fs.existsSync(path.join(root, ".dove/missions")), legacyPacketNotPresented: true } };
 }
 
 function surfaceGoal() {
-  const required = ["dove.init", "dove.mission", "dove.status", "dove.lessons", "dove.version", "dove.source", "dove.note", "dove.figure", "dove.experience", "dove.draft", "dove.review", "dove.rebuttal"];
+  const required = ["dove.workspace", "dove.mission", "dove.status", "dove.lessons", "dove.source", "dove.note", "dove.experience", "dove.experiment", "dove.draft", "dove.figure", "dove.review", "dove.rebuttal"];
   const publicIds = COMMAND_SURFACES.map((item) => item.id);
   if (JSON.stringify(publicIds) !== JSON.stringify(required)) throw new Error(`unexpected command inventory: ${publicIds.join(", ")}`);
   return { id: "public-surfaces-stay-flat", status: "passed", evidence: { surfaceCount: publicIds.length, requiredPresent: required, forbiddenAbsent: ["dove.auto", "dove.operator", "dove.review-loop"], unexpectedAbsent: true } };
@@ -120,7 +205,7 @@ export function validateWorkflowGoalContracts(contracts = WORKFLOW_GOAL_CONTRACT
 export async function validateWorkflowGoals({ createRoot, cleanupRoot, dispatch } = {}) {
   if (typeof createRoot !== "function" || typeof cleanupRoot !== "function" || typeof dispatch !== "function") throw new Error("validateWorkflowGoals requires createRoot, cleanupRoot, and dispatch.");
   validateWorkflowGoalContracts();
-  const runners = [missionGoal, experienceGoal, legacyStatusGoal, surfaceGoal];
+  const runners = [missionGoal, wholeWorkspaceStatusGoal, experimentGoal, legacyStatusGoal, surfaceGoal];
   const results = [];
   const failures = [];
   for (const runner of runners) {

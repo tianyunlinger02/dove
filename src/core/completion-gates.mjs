@@ -1,20 +1,22 @@
 import path from "node:path";
 
 import { isDoveLessonArtifactPath } from "./domain-artifacts.mjs";
+import { executionFactHash } from "./execution-facts.mjs";
 import { assertCurrentMissionContract, missionCompletionCriteria, missionEvidenceRequirements } from "./mission-contracts.mjs";
-import { terminalSuccessorMissionId } from "./mission-graph.mjs";
+import { createMissionTransition, missionLifecycle, missionTransitionPath } from "./mission-lifecycle.mjs";
+import { currentMutationContext } from "./mutation-backend.mjs";
 import { snapshotArtifactBuffer } from "./review-artifact-snapshot.mjs";
-import { verifyReviewCoverage } from "./review-exchange.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
-import { evaluateNoteReferences, evaluateSourceReferences } from "./source-trust.mjs";
+import { evaluateSourceReferences } from "./source-trust.mjs";
+import { createValidationRecord, validationContributesToCompletion, VALIDATION_FIELDS } from "./validation-records.mjs";
+import { nowIso, writeJson } from "./workspace.mjs";
 import { openDoveWorkspace } from "./workspace-schema.mjs";
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const ARTIFACT_KINDS = new Set(["report", "document", "code", "data", "figure", "media", "other"]);
-const VALIDATION_KINDS = new Set(["test-log", "typecheck-log", "lint-log", "build-log", "audit-log", "validation-log", "command-output"]);
-const RECEIPT_FIELDS = new Set(["schemaVersion", "workspaceId", "receiptId", "ledgerSequence", "missionId", "contractDigest", "summary", "artifacts", "validations", "criteriaSatisfied", "producedAt", "recordedAt", "producer"]);
+const RECEIPT_FIELDS = new Set(["schemaVersion", "workspaceId", "receiptId", "ledgerSequence", "missionId", "contractDigest", "summary", "artifacts", "validations", "criteriaSatisfied", "producedAt", "recordedAt", "producer", "ordinaryHostOutcome", "researchOutcome"]);
 const ARTIFACT_FIELDS = new Set(["path", "kind", "sha256", "derivedReferences"]);
-const VALIDATION_FIELDS = new Set(["kind", "reference", "outputHash"]);
+const CURRENT_VALIDATION_FIELDS = new Set(VALIDATION_FIELDS);
 const CRITERION_FIELDS = new Set(["criterionId", "evidenceRefs", "evidenceBindings"]);
 const EVIDENCE_BINDING_FIELDS = new Set(["reference", "sha256", "receiptId"]);
 
@@ -51,11 +53,6 @@ function typedEvidenceEligibility(root, missionId, reference) {
     const evaluation = evaluateSourceReferences(root, [value], missionId)[0] ?? { eligible: false, reason: "unknown-source" };
     return { ...evaluation, evidenceSha256: evaluation.source?.capturedMaterial?.sha256 ?? null };
   }
-  if (reference.startsWith("note:")) {
-    const value = reference.slice("note:".length);
-    const evaluation = evaluateNoteReferences(root, [value], missionId)[0] ?? { eligible: false, reason: "unknown-note" };
-    return { ...evaluation, evidenceSha256: evaluation.owner?.sha256 ?? null };
-  }
   return { eligible: null, reason: null, evidenceSha256: null };
 }
 
@@ -74,10 +71,35 @@ function assessArtifact(root, mission, artifact, currentOwnerByPath) {
 }
 
 function assessValidation(root, validation) {
-  if (!sealed(validation, VALIDATION_FIELDS) || typeof validation.reference !== "string" || !validation.reference.trim() || !VALIDATION_KINDS.has(validation.kind) || !HASH_PATTERN.test(String(validation.outputHash ?? ""))) {
-    return { path: validation?.reference ?? null, current: false, reason: "validation-schema-invalid", recordedSha256: validation?.outputHash ?? null };
+  if (!sealed(validation, CURRENT_VALIDATION_FIELDS)) {
+    return { path: validation?.reference ?? null, current: false, result: "incomplete", level: null, producerKind: null, completionEligible: false, reason: "validation-schema-invalid", recordedSha256: validation?.outputHash ?? null };
   }
-  return { ...currentHashedFile(root, validation.reference, validation.outputHash), recordedSha256: validation.outputHash };
+  try {
+    const normalized = createValidationRecord(validation, { label: "validation" });
+    const output = currentHashedFile(root, normalized.reference, normalized.outputHash);
+    if (!output.current) return { ...output, path: normalized.reference, result: normalized.result, level: normalized.level, producerKind: normalized.producerKind, completionEligible: false, recordedSha256: normalized.outputHash };
+    const separator = normalized.targetReference.indexOf(":");
+    const targetPath = normalized.targetReference.slice(separator + 1);
+    const target = currentHashedFile(root, targetPath, normalized.targetHash);
+    if (!target.current) return { path: normalized.reference, current: false, result: normalized.result, level: normalized.level, producerKind: normalized.producerKind, completionEligible: false, reason: "validation-target-drift", recordedSha256: normalized.outputHash, targetReference: normalized.targetReference, targetHash: normalized.targetHash };
+    const completionEligible = validationContributesToCompletion(normalized);
+    return {
+      ...output,
+      path: normalized.reference,
+      result: normalized.result,
+      level: normalized.level,
+      producerKind: normalized.producerKind,
+      producerOperation: normalized.producerOperation,
+      observedExitStatus: normalized.observedExitStatus,
+      targetReference: normalized.targetReference,
+      targetHash: normalized.targetHash,
+      completionEligible,
+      reason: completionEligible ? null : `validation-result-${normalized.result}`,
+      recordedSha256: normalized.outputHash
+    };
+  } catch {
+    return { path: validation?.reference ?? null, current: false, result: "incomplete", level: null, producerKind: null, completionEligible: false, reason: "validation-schema-invalid", recordedSha256: validation?.outputHash ?? null };
+  }
 }
 
 function criterionAssessment(root, mission, criterion, receipt, artifactAssessments, validationAssessments, currentOwnerByPath, requiredIds, seenCriteria) {
@@ -114,7 +136,14 @@ function criterionAssessment(root, mission, criterion, receipt, artifactAssessme
       const validationPath = reference.slice("validation:".length);
       const declaration = receiptValidationByPath.get(validationPath);
       if (!declaration || declaration.recordedSha256 !== boundSha256 || boundReceiptId !== receipt.receiptId) return { reference, boundSha256, boundReceiptId, eligible: false, reason: "validation-receipt-binding-mismatch", contributingReceiptId: null };
-      return { reference, boundSha256, eligible: declaration.current, reason: declaration.current ? null : declaration.reason, contributingReceiptId: declaration.current ? receipt.receiptId : null };
+      const eligible = declaration.current && declaration.completionEligible === true;
+      return { reference, boundSha256, eligible, reason: eligible ? null : declaration.reason ?? "validation-not-passed", contributingReceiptId: eligible ? receipt.receiptId : null };
+    }
+    if (reference.startsWith("fact:")) {
+      const factId = reference.slice("fact:".length);
+      const fact = receipt.ordinaryHostOutcome?.facts?.find((item) => item.factId === factId) ?? null;
+      const eligible = Boolean(fact) && boundReceiptId === receipt.receiptId && boundSha256 === executionFactHash(fact.statement);
+      return { reference, boundSha256, boundReceiptId, eligible, reason: eligible ? null : "fact-receipt-binding-mismatch", contributingReceiptId: eligible ? receipt.receiptId : null };
     }
     const typed = typedEvidenceEligibility(root, mission.missionId, reference);
     const currentTypedReceiptId = typed.owner?.receiptId ?? receipt.receiptId;
@@ -134,19 +163,20 @@ function criterionAssessment(root, mission, criterion, receipt, artifactAssessme
 function receiptAssessment(root, mission, receipt, workspaceId, currentOwnerByPath, missionCurrent = true) {
   const failures = [];
   if (!missionCurrent) failures.push("mission-contract-invalid");
-  if (!sealed(receipt, RECEIPT_FIELDS) || receipt.schemaVersion !== 3) failures.push("receipt-schema-invalid");
+  if (!sealed(receipt, RECEIPT_FIELDS) || receipt.schemaVersion !== 5) failures.push("receipt-schema-invalid");
   if (receipt.workspaceId !== workspaceId || mission.workspaceId !== workspaceId) failures.push("workspace-binding-mismatch");
   if (receipt.missionId !== mission.missionId) failures.push("mission-binding-mismatch");
   if (receipt?.contractDigest !== mission.contractDigest || !missionCurrent) failures.push("contract-digest-stale");
   if (!Array.isArray(receipt.artifacts)) failures.push("artifacts-invalid");
   if (!Array.isArray(receipt.validations)) failures.push("validations-invalid");
   if (!Array.isArray(receipt.criteriaSatisfied)) failures.push("criteria-invalid");
-  if ((receipt.artifacts?.length ?? 0) + (receipt.validations?.length ?? 0) + (receipt.criteriaSatisfied?.length ?? 0) === 0) failures.push("progress-evidence-missing");
+  if ((receipt.artifacts?.length ?? 0) + (receipt.validations?.length ?? 0) + (receipt.criteriaSatisfied?.length ?? 0) === 0 && !receipt.ordinaryHostOutcome && !receipt.researchOutcome) failures.push("progress-evidence-missing");
 
   const artifactAssessments = (Array.isArray(receipt.artifacts) ? receipt.artifacts : []).map((artifact) => assessArtifact(root, mission, artifact, currentOwnerByPath));
   const validationAssessments = (Array.isArray(receipt.validations) ? receipt.validations : []).map((validation) => assessValidation(root, validation));
   if (artifactAssessments.some((item) => !item.current)) failures.push("artifact-drift-or-superseded");
   if (validationAssessments.some((item) => !item.current)) failures.push("validation-drift");
+  if (validationAssessments.some((item) => item.current && item.completionEligible !== true)) failures.push("validation-not-passed");
   const artifactPaths = (receipt.artifacts ?? []).map((artifact) => artifact?.path).filter(Boolean);
   const validationPaths = (receipt.validations ?? []).map((validation) => validation?.reference).filter(Boolean);
   if (new Set(artifactPaths).size !== artifactPaths.length) failures.push("artifact-path-duplicate");
@@ -170,7 +200,7 @@ function receiptAssessment(root, mission, receipt, workspaceId, currentOwnerByPa
 }
 
 function artifactCoverageAssessment(root, mission, currentOwnerByPath) {
-  const requiredPaths = [...new Set([...(mission.targetArtifacts ?? []), ...(mission.expectedArtifacts ?? [])])].sort();
+  const requiredPaths = mission.artifacts.filter((artifact) => artifact.required).map((artifact) => artifact.path).sort();
   return requiredPaths.map((artifactPath) => {
     const owner = currentOwnerByPath.get(artifactPath) ?? null;
     if (!owner) return { path: artifactPath, covered: false, reason: "artifact-current-owner-missing", receiptId: null, sha256: null };
@@ -180,11 +210,52 @@ function artifactCoverageAssessment(root, mission, currentOwnerByPath) {
   });
 }
 
-function criterionCoverageAssessment(mission, receiptAssessments) {
+function criterionCoverageAssessment(mission, receiptAssessments, receiptById) {
   return missionCompletionCriteria(mission).map(({ criterionId, criterion }) => {
-    const proofs = receiptAssessments.flatMap((receipt) => receipt.criteria.filter((item) => item.criterionId === criterionId && item.satisfied).map((item) => ({ receiptId: receipt.receiptId, evidence: item.evidence, contributingReceiptIds: [...new Set([receipt.receiptId, ...item.contributingReceiptIds])] })));
+    const proofs = receiptAssessments.flatMap((receipt) => {
+      const storedReceipt = receiptById.get(receipt.receiptId);
+      if (storedReceipt?.ordinaryHostOutcome?.status !== undefined && storedReceipt.ordinaryHostOutcome.status !== "completed") {
+        return [];
+      }
+      return receipt.criteria
+        .filter((item) => item.criterionId === criterionId && item.satisfied)
+        .map((item) => ({
+          receiptId: receipt.receiptId,
+          evidence: item.evidence,
+          contributingReceiptIds: [...new Set([receipt.receiptId, ...item.contributingReceiptIds])]
+        }));
+    });
     return { criterionId, criterion, covered: proofs.length > 0, contributingReceiptIds: [...new Set(proofs.flatMap((item) => item.contributingReceiptIds))], proofs };
   });
+}
+
+function researchOutcomeAssessment(workspace, missionId) {
+  const receipts = workspace.receiptLedger.receipts.filter((receipt) => receipt.missionId === missionId && receipt.researchOutcome);
+  const consumed = new Set([...workspace.researchDecisions.values()].filter((decision) => decision.missionId === missionId).flatMap((decision) => decision.consumedReceiptIds));
+  const unconsumed = receipts.filter((receipt) => !consumed.has(receipt.receiptId));
+  return {
+    receiptIds: receipts.map((receipt) => receipt.receiptId),
+    consumedReceiptIds: receipts.filter((receipt) => consumed.has(receipt.receiptId)).map((receipt) => receipt.receiptId),
+    unconsumedReceiptIds: unconsumed.map((receipt) => receipt.receiptId),
+    awaitingReevaluation: unconsumed.length > 0
+  };
+}
+
+function ordinaryHostReturnAssessment(receipts) {
+  const returned = receipts.filter((receipt) => receipt.ordinaryHostOutcome).map((receipt) => ({
+    receiptId: receipt.receiptId,
+    mode: receipt.ordinaryHostOutcome.mode,
+    status: receipt.ordinaryHostOutcome.status,
+    facts: receipt.ordinaryHostOutcome.facts.map((fact) => ({ factId: fact.factId, statement: fact.statement })),
+    summary: receipt.summary,
+    producedAt: receipt.producedAt
+  }));
+  const current = returned.at(-1) ?? null;
+  return {
+    present: current !== null,
+    current,
+    history: returned
+  };
 }
 
 function evidenceRequirementAssessment(root, mission, receiptAssessments, artifactCoverage) {
@@ -193,16 +264,11 @@ function evidenceRequirementAssessment(root, mission, receiptAssessments, artifa
   const validationProofs = new Map();
   for (const receipt of receiptAssessments) {
     for (const validation of receipt.validations) {
-      if (validation.current) validationProofs.set(`validation:${validation.path}`, receipt.receiptId);
+      if (validation.current && validation.completionEligible === true) validationProofs.set(`validation:${validation.path}`, receipt.receiptId);
     }
   }
   return requirements.map(({ requirementId, requirement }) => {
-    if (requirement === "review:authoritative") {
-      const coverage = verifyReviewCoverage(root, { missionId: mission.missionId, requireAuthoritative: true });
-      const satisfied = coverage.authoritative === true && coverage.failures.length === 0;
-      return { requirementId, requirement, satisfied, reason: satisfied ? null : "authoritative-review-proof-missing", contributingReceiptIds: [] };
-    }
-    if (requirement.startsWith("source:") || requirement.startsWith("note:")) {
+    if (requirement.startsWith("source:")) {
       const evaluation = typedEvidenceEligibility(root, mission.missionId, requirement);
       return { requirementId, requirement, satisfied: evaluation.eligible === true, reason: evaluation.eligible === true ? null : evaluation.reason, contributingReceiptIds: evaluation.eligible === true && evaluation.owner?.receiptId ? [evaluation.owner.receiptId] : [] };
     }
@@ -235,43 +301,71 @@ function assessMissionFromWorkspace(root, workspace, missionId, state) {
     const receipts = workspace.receiptLedger.receipts.filter((receipt) => receipt.missionId === missionId);
     const receiptAssessments = receipts.map((receipt) => receiptAssessment(root, mission, receipt, workspace.manifest.workspaceId, state.currentOwnerByPath, missionContractFailure === null));
     const artifactCoverage = artifactCoverageAssessment(root, mission, state.currentOwnerByPath);
-    const criterionCoverage = criterionCoverageAssessment(mission, receiptAssessments);
+    const ordinaryHostReturn = ordinaryHostReturnAssessment(receipts);
+    const receiptById = new Map(receipts.map((receipt) => [receipt.receiptId, receipt]));
+    const criterionCoverage = criterionCoverageAssessment(mission, receiptAssessments, receiptById);
     const requirements = evidenceRequirementAssessment(root, mission, receiptAssessments, artifactCoverage);
+    const researchDecision = mission.mode === "research"
+      ? workspace.currentResearchDecisions.get(missionId) ?? null
+      : null;
+    const researchOutcome = mission.mode === "research"
+      ? researchOutcomeAssessment(workspace, missionId)
+      : { receiptIds: [], consumedReceiptIds: [], unconsumedReceiptIds: [], awaitingReevaluation: false };
     const dependencyCoverage = (workspace.missionGraph.dependenciesByMission.get(missionId) ?? []).map((dependencyMissionId) => {
       const assessment = assessMissionFromWorkspace(root, workspace, dependencyMissionId, state);
       return {
         missionId: dependencyMissionId,
         status: assessment.status,
         complete: assessment.complete,
-        supersededByMissionId: assessment.supersededByMissionId,
+        lifecycle: assessment.lifecycle,
         incompleteReasons: assessment.incompleteReasons
       };
     });
-    const supersededByMissionId = terminalSuccessorMissionId(workspace.missionGraph, missionId);
+    const lifecycle = missionLifecycle(workspace, missionId);
     const incompleteReasons = [];
-    if (supersededByMissionId) incompleteReasons.push("mission-superseded");
+    if (lifecycle && lifecycle.status !== "completed") incompleteReasons.push(`mission-${lifecycle.status}`);
     if (missionContractFailure) incompleteReasons.push("mission-contract-invalid");
     if (receipts.length === 0) incompleteReasons.push("execution-receipt-missing");
+    if (ordinaryHostReturn.current && ordinaryHostReturn.current.status !== "completed") incompleteReasons.push(`host-outcome-${ordinaryHostReturn.current.status}`);
     if (artifactCoverage.some((item) => !item.covered)) incompleteReasons.push("mission-artifact-coverage-missing");
     if (criterionCoverage.some((item) => !item.covered)) incompleteReasons.push("criteria-coverage-missing");
     if (requirements.some((requirement) => !requirement.satisfied)) incompleteReasons.push("evidence-requirements-unmet");
+    if (mission.mode === "research" && !researchDecision) incompleteReasons.push("research-decision-missing");
+    if (mission.mode === "research" && researchOutcome.awaitingReevaluation) incompleteReasons.push("research-outcome-awaiting-reevaluation");
+    if (mission.mode === "research" && researchDecision?.disposition === "block-needs-user") incompleteReasons.push("research-user-decision-required");
+    else if (mission.mode === "research" && researchDecision?.disposition !== "stop-satisfied") incompleteReasons.push("research-decision-not-stop-satisfied");
+    if (mission.mode === "research" && researchDecision?.nextAction !== null) incompleteReasons.push("research-action-still-authorized");
+    if (mission.mode === "research" && researchDecision?.evidenceRefs.length === 0) incompleteReasons.push("research-terminal-evidence-missing");
     if (dependencyCoverage.some((dependency) => !dependency.complete)) incompleteReasons.push("mission-dependency-incomplete");
     const contributingReceiptIds = [...new Set([
       ...artifactCoverage.filter((item) => item.covered).map((item) => item.receiptId),
       ...criterionCoverage.flatMap((item) => item.contributingReceiptIds),
-      ...requirements.flatMap((item) => item.contributingReceiptIds)
+      ...requirements.flatMap((item) => item.contributingReceiptIds),
     ].filter(Boolean))].sort((left, right) => {
       const leftSequence = receipts.find((receipt) => receipt.receiptId === left)?.ledgerSequence ?? 0;
       const rightSequence = receipts.find((receipt) => receipt.receiptId === right)?.ledgerSequence ?? 0;
       return leftSequence - rightSequence;
     });
     if (receipts.length > 0 && contributingReceiptIds.length === 0 && !receiptAssessments.some((receipt) => receipt.current)) incompleteReasons.push("execution-receipts-stale-or-invalid");
+    const hostActionReturned = ordinaryHostReturn.present;
+    const receiptRecorded = receipts.length > 0;
+    const completionEvidenceSatisfied = incompleteReasons.filter((reason) => !reason.startsWith("mission-") && !reason.startsWith("host-outcome-")).length === 0;
+    const lifecycleClosed = lifecycle?.status === "completed";
+    const evidenceComplete = incompleteReasons.length === 0;
+    const complete = evidenceComplete && (lifecycle === null || lifecycle.status === "completed");
+    const operationalIntegrity = {
+      hostActionReturned,
+      receiptRecorded,
+      completionEvidenceSatisfied,
+      lifecycleClosed
+    };
     const assessment = {
-      status: supersededByMissionId ? "superseded" : incompleteReasons.length === 0 ? "complete" : "incomplete",
-      complete: incompleteReasons.length === 0,
+      status: lifecycle?.status ?? (evidenceComplete ? "complete" : "incomplete"),
+      complete,
       missionId,
+      mode: mission.mode,
       contractDigest: mission.contractDigest,
-      supersededByMissionId,
+      lifecycle,
       dependencyCoverage,
       contributingReceiptIds,
       artifactCoverage,
@@ -281,6 +375,9 @@ function assessMissionFromWorkspace(root, workspace, missionId, state) {
       receipts: receiptAssessments,
       completionCriteria: missionCompletionCriteria(mission),
       evidenceRequirements: requirements,
+      ordinaryHostReturn,
+      operationalIntegrity,
+      researchOutcome,
       incompleteReasons,
       diagnostics: {
         zeroWrite: true,
@@ -297,6 +394,14 @@ function assessMissionFromWorkspace(root, workspace, missionId, state) {
   }
 }
 
+function assessmentState(workspace) {
+  return {
+    memo: new Map(),
+    visiting: new Set(),
+    currentOwnerByPath: new Map(workspace.receiptLedger.currentOwnership.map((item) => [item.path, item]))
+  };
+}
+
 export function assessMissionCompletion(root, args = {}) {
   if (!args || typeof args !== "object" || Array.isArray(args)) throw new Error("assess_mission_completion arguments must be a plain object.");
   const unknown = Object.keys(args).filter((field) => field !== "missionId");
@@ -304,9 +409,47 @@ export function assessMissionCompletion(root, args = {}) {
   const missionId = typeof args.missionId === "string" ? args.missionId.trim() : "";
   if (!missionId) throw new Error("assess_mission_completion requires missionId.");
   const workspace = openDoveWorkspace(root, { operation: "Mission completion assessment" });
-  return assessMissionFromWorkspace(root, workspace, missionId, {
-    memo: new Map(),
-    visiting: new Set(),
-    currentOwnerByPath: new Map(workspace.receiptLedger.currentOwnership.map((item) => [item.path, item]))
-  });
+  return assessMissionFromWorkspace(root, workspace, missionId, assessmentState(workspace));
+}
+
+export function completeMissionIfEligible(root, args = {}) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) throw new Error("Mission completion transition arguments must be a plain object.");
+  const unknown = Object.keys(args).filter((field) => !["missionId", "createdAt"].includes(field));
+  if (unknown.length > 0) throw new Error(`Mission completion transition does not accept unknown input: ${unknown.map((field) => `$.${field}`).join(", ")}.`);
+  const missionId = typeof args.missionId === "string" ? args.missionId.trim() : "";
+  if (!missionId) throw new Error("Mission completion transition requires missionId.");
+  if (!currentMutationContext(root)) throw new Error("Mission completion transition requires an active MutationContext.");
+  const workspace = openDoveWorkspace(root, { operation: "Mission completion transition" });
+  if (!workspace.missions.has(missionId)) throw new Error(`Mission does not exist: ${missionId}.`);
+  const state = assessmentState(workspace);
+  const assessments = new Map([...workspace.missions.keys()].map((candidateMissionId) => [
+    candidateMissionId,
+    assessMissionFromWorkspace(root, workspace, candidateMissionId, state)
+  ]));
+  const createdAt = args.createdAt ?? nowIso();
+  const transitions = new Map();
+  for (const [candidateMissionId, assessment] of assessments) {
+    if (!assessment.complete || assessment.lifecycle) continue;
+    const mission = workspace.missions.get(candidateMissionId);
+    const transition = createMissionTransition({
+      workspaceId: workspace.manifest.workspaceId,
+      missionId: candidateMissionId,
+      contractDigest: mission.contractDigest,
+      workspaceRevisionId: mission.workspaceRevisionId,
+      status: "completed",
+      reason: "The mission completion gate closed with current contract-bound evidence.",
+      evidenceRefs: assessment.contributingReceiptIds.map((receiptId) => `receipt:${receiptId}`),
+      trigger: "completion-gate",
+      createdAt
+    });
+    writeJson(root, missionTransitionPath(transition.transitionId), transition);
+    transitions.set(candidateMissionId, transition);
+  }
+  const assessment = assessments.get(missionId);
+  const transition = transitions.get(missionId) ?? null;
+  return {
+    assessment: transition ? { ...assessment, status: "completed", lifecycle: transition } : assessment,
+    transition,
+    transitions: [...transitions.values()]
+  };
 }

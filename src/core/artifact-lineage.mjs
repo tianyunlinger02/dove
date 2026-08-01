@@ -16,16 +16,6 @@ export function readArtifactOwnership(root) {
   };
 }
 
-export function readArtifactLineage(root) {
-  const ledger = readArtifactLedger(root);
-  return {
-    schemaVersion: ledger.schemaVersion,
-    workspaceId: ledger.workspaceId,
-    artifacts: ledger.currentLineage,
-    updatedAt: ledger.updatedAt
-  };
-}
-
 export function readArtifactHistory(root) {
   return readArtifactLedger(root).artifactHistory;
 }

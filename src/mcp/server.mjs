@@ -68,6 +68,33 @@ export function startServer(root = process.cwd()) {
     sendMessage({ jsonrpc: "2.0", id, error: { code, message } });
   }
 
+  function publicSafeToolFailure() {
+    const message = "The MCP tool could not safely return its result. No completion, acceptance, or scientific judgment was recorded.";
+    return {
+      content: [{ type: "text", text: message }],
+      structuredContent: {
+        report: { status: "blocked", message },
+        hostControl: {
+          classification: {
+            outcome: "failed",
+            category: "internal-failure",
+            phase: "internal",
+            blocking: true,
+            userAction: "retry-explicitly",
+            terminal: true,
+            continuation: "terminal",
+            closure: "none",
+            retry: "explicit-request",
+            reason: "safe-projection-failure"
+          },
+          presentation: { mode: "show", reason: "failure" },
+          closureRequest: null
+        }
+      },
+      isError: true
+    };
+  }
+
   function supportsElicitation() {
     return initialized && ELICITATION_PROTOCOL_VERSIONS.has(clientProtocolVersion) && clientCapabilities?.elicitation !== undefined;
   }
@@ -140,7 +167,9 @@ export function startServer(root = process.cwd()) {
     }
 
     if (method === "tools/call") {
-      sendResponse(id, await dispatchTool(root, params?.name, params?.arguments ?? {}, { requestCheckpointApproval }));
+      const toolName = params?.name;
+      const toolArgs = params?.arguments ?? {};
+      sendResponse(id, await dispatchTool(root, toolName, toolArgs, { requestCheckpointApproval }));
       return;
     }
 
@@ -155,10 +184,13 @@ export function startServer(root = process.cwd()) {
       return;
     }
     handleMessage(message).catch((error) => {
-      if (message?.id !== undefined && message?.method !== undefined) {
-        const code = Number.isInteger(error?.code) ? error.code : -32603;
-        sendError(message.id, code, code !== -32603 && error instanceof Error ? error.message : "Internal error");
+      if (message?.id === undefined || message?.method === undefined) return;
+      const code = Number.isInteger(error?.code) ? error.code : -32603;
+      if (message.method === "tools/call" && code === -32603) {
+        sendResponse(message.id, publicSafeToolFailure());
+        return;
       }
+      sendError(message.id, code, code !== -32603 && error instanceof Error ? error.message : "Internal error");
     });
   }
 

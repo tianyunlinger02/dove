@@ -1,79 +1,94 @@
 # Component Guidelines
 
-> User-facing command, skill, CLI, and MCP contracts for Dove schema 8.
+> Direct Skill, MCP, role, CLI, and durable-entity contracts for Dove.
 
 ---
 
 ## Overview
 
-There are no browser components. Treat each generated adapter, primary responsibility skill, CLI command, and MCP tool as a small public component over the same schema 8 core.
+There are no browser components. Treat each direct Skill, generated adapter, primary responsibility Skill, CLI surface, MCP tool, and public report as a small component over shared core behavior.
 
-- Generated adapters come from `src/core/command-manifest.mjs`.
-- OpenCode responsibility skills are exactly Planner, Builder, and Reviewer.
-- CLI parsing lives in `src/cli/command-parser.mjs` and execution in `bin/dove.mjs`.
-- MCP schemas live in `src/mcp/tool-definitions.mjs`; dispatch lives in `src/mcp/handlers.mjs`.
-- Core behavior must not be duplicated in prompts, CLI branches, or MCP handlers.
+- `src/core/command-manifest.mjs` owns the 12 Skill definitions, user wording, adapter binding, and host policy.
+- `src/core/operation-registry.mjs` owns interaction, checkpoint, continuation, closure, and retry metadata.
+- `src/mcp/tool-definitions.mjs` owns the 14 sealed public MCP schemas.
+- `src/mcp/handlers.mjs` owns tool dispatch and public selector resolution.
+- `src/core/public-reports.mjs` owns `report`, optional `researchHandoff`, and `hostControl` projection.
+- `scripts/generate-command-adapters.mjs` renders canonical Skill metadata into 60 adapters.
 
-## Public Command Surface
+## Three Public Layers
 
-Dove exposes exactly twelve flat commands: `dove.init`, `dove.mission`, `dove.status`, `dove.lessons`, `dove.version`, `dove.source`, `dove.note`, `dove.figure`, `dove.experience`, `dove.draft`, `dove.review`, and `dove.rebuttal`. MCP discovery exposes exactly 28 tools.
+Keep these layers distinct:
 
-Do not add public aliases, hidden command tiers, or compatibility names.
+1. A **Skill** is a direct user-facing workflow invoked in the host, with optional text.
+2. An **MCP tool** is a sealed structured operation used by one or more Skills, ambient intake, or typed closure handling.
+3. A **durable entity** is validated current state persisted under `.dove/`.
 
-## Surface Contracts
+The mapping is not one-to-one. A Skill may call several MCP tools, Skills may share a tool, and a Skill may create a normal project artifact rather than a same-named durable entity.
 
-### Generated adapters
+## Public Inventories
 
-Define title, summary, required MCP tools, artifact context, constraints, and examples in `COMMAND_SURFACES`, then run `npm run commands:generate`. Adapters should name canonical schema 8 artifacts and explain whether the action is read-only, proposal-only, patch-plan, or direct-process.
+Dove exposes exactly 12 flat direct Skills:
 
-### Lessons
+- `dove.workspace`
+- `dove.mission`
+- `dove.status`
+- `dove.lessons`
+- `dove.source`
+- `dove.note`
+- `dove.experience`
+- `dove.experiment`
+- `dove.draft`
+- `dove.figure`
+- `dove.review`
+- `dove.rebuttal`
 
-`dove.lessons` combines two explicit operations over one advisory artifact family. Query is zero-write. Record is proposal-first and requires exact replay. Lessons always retain recording-mission provenance; `global` means broadly applicable guidance, while `mission` limits applicability to that mission. The only kinds are `preference`, `constraint`, `method`, `failure`, and `review-insight`.
+Dove exposes exactly 14 canonical MCP tools and 60 generated adapters, 12 per host format for OpenCode, Codex, Cursor, shared agents, and Claude Code.
 
-Lessons never grant authority, satisfy completion, become mission target/output artifacts, or replace current evidence validation. Do not auto-capture, auto-recall, import transcripts, write Trellis state, or create runtime/host memory integration. Retired operator lesson storage and tool names must remain absent.
+OpenCode has exactly three primary responsibility Skills: Planner, Builder/Author, and Reviewer.
 
-### Primary responsibility skills
+## Direct Skill Contract
 
-- Planner frames mission contracts, priorities, dependencies, evidence requirements, and completion criteria.
-- Builder produces substantive mission-owned artifacts using native host planning and tools.
-- Reviewer independently assesses exact frozen artifact sets through review exchanges.
-- Do not add skills that behave as a Dove scheduler, router, continuation engine, or compatibility layer.
+- Every Skill runs directly and accepts optional user text.
+- A new independent goal routes to a root Mission.
+- Continuation, narrowing, comparison, recovery, or follow-up routes to a child Mission with explicit parent provenance.
+- Existing work uses the exact visible one-based Mission number.
+- A project-wide research-direction change uses `dove.workspace`.
+- Mission contracts remain proportional to the request.
 
-### CLI
+Adapters are thin projections. They state purpose, examples, required MCP tools, Skill-specific notes, and the canonical host policy. They do not contain durable schemas, private identifiers, permission internals, direct state access, or alternative execution routes.
 
-Keep CLI branches thin: parse sealed options, call shared core functions, and print deterministic JSON or concise human-readable output. Initialization and mission creation expose exact replay tokens and commands. Unknown retired commands fail without workspace writes.
+## Domain Semantics
 
-### MCP
+- **Source** means external material discovered and captured with host-native tools before Dove registration.
+- **Note** means internal synthesis written as a substantive project artifact; Dove has no Note durable entity.
+- **Experience** means experimental conception and prevalidation before formal protocol freeze; Dove has no Experience sidecar entity.
+- **Experiment** means the formal frozen protocol and later full-denominator result with failures, raw evidence, measured effects, and declared checks.
 
-Expose one sealed tool registry. Every tool schema, including nested objects, rejects unknown properties. Mutating tools include `mutationMode`; read-only tools do not. Dispatch exact tool names to shared core functions, and classify each tool exactly once in governance.
+## Primary Responsibilities
 
-## Contract Conventions
+- Planner defines goals, scope, dependencies, evidence needs, and completion conditions.
+- Builder/Author performs substantive research, code, writing, experiments, figures, revisions, and author-side rebuttal.
+- Reviewer independently assesses a frozen declared scope and returns findings only.
 
-- Mission-bound mutations require explicit `missionId`.
-- Reads are zero-write and never repair or refresh state.
-- Exact replay mutations reject workspace, digest, contract, target, source-tree, or mutation-mode drift.
-- Public source input cannot mint positive verification authority.
-- Public review import cannot mint Reviewer authority.
-- Provider execution and substantive host work remain outside Dove; imports require current hashes and evidence.
-- Bookkeeping artifacts cannot satisfy mission target or evidence requirements.
+Dove core enforces safety, evidence, ownership, and authority boundaries. Prompts stay focused on user tasks.
 
-## Review Exchange Scenario
+## Output Contract
 
-`dove.review` supports policy-scoped preflight, preparation, import, and coverage verification.
+Human output comes from `report`. `researchHandoff` and `hostControl` remain machine-only. A supplied typed closure request fixes its tool and bound arguments and is invoked exactly once.
 
-- `local-preflight` is zero-write.
-- Prepared exchanges freeze explicit mission-owned artifact paths and hashes.
-- Independent reviewers or external processes operate outside Dove.
-- Import accepts only canonical handoff/report files after identity, scope, path, and hash validation.
-- Private writer and reviewer transcripts are not imported.
-- Imported public review material remains non-authoritative without a trusted issuer.
+All public selection uses visible one-based Mission numbers. Durable IDs, hashes, paths, and integrity controls remain internal.
 
-## Common Mistakes
+## Current Durable Model
 
-- Editing generated adapters by hand.
-- Packaging stale role skills that name removed artifacts.
-- Adding a tool without a handler or governance classification.
-- Adding a CLI option that is absent from MCP and command contracts.
-- Mentioning a durable path that is not declared by schema 8.
-- Treating compact status or review diagnostics as execution authority.
-- Reintroducing removed workflow state under a new name.
+Dove persists Workspace revisions, Missions, ResearchDecisions, execution Receipts, artifact handoffs, Sources, Claims, Experiments, Reviews, and one canonical `.dove/LESSONS.md` document. Draft, Figure, and Rebuttal bodies remain normal project artifacts; Dove archives their current paths through Receipts rather than mirrors.
+
+Review freezes one scope, launches one isolated native Reviewer, and archives one structured non-authoritative return. Schema 18 is a clean current-only cutover with no state migration or fallback runtime.
+
+## Review Checklist
+
+- Are Skill, MCP, and durable-entity terms used correctly?
+- Do all five host formats expose the same 12 Skills?
+- Does every direct Skill preserve optional text and root/child Mission routing?
+- Are the 14 MCP tools sealed and reachable through canonical operations?
+- Are Source/Note and Experience/Experiment boundaries clear?
+- Are machine channels kept out of user-facing prose?

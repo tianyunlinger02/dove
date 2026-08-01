@@ -1,257 +1,217 @@
 # Dove Command Output Samples
 
-This checked source-output document records representative shapes for the 12 public schema 9 host workflows. Separately, the CLI has 16 top-level subcommands; the remaining inventory is 28 MCP tools and 60 generated adapters. Exact ids, hashes, timestamps, and mutation summaries vary by workspace.
+These examples show the privacy-safe public result boundary shared by business CLI JSON output and MCP `structuredContent`. Dove exposes 12 direct Skills, 14 canonical MCP tools, and 60 generated adapters. Integration commands such as `init`, `sync`, `doctor`, `mcp serve`, and `hook user-prompt-submit` use direct integration or health output instead.
 
-## Common rules
-
-- Human-facing text defaults to Chinese; machine fields remain English.
-- Every proposal is zero-write until exact replay where confirmation is required.
-- Every domain mutation requires explicit `missionId`.
-- Domain writes preflight all referenced material and evidence before the first write.
-- Successful domain writes include substantive artifacts and a canonical receipt; ownership and lineage are derived from the receipt ledger.
-- Unknown or retired packet/target/domain/stage/status/role/policy fields are rejected.
-
-## `dove.init`
-
-```text
-/dove:init Initialize this research workspace
-```
-
-Representative result:
+## Common public envelope
 
 ```json
 {
-  "status": "needs-confirmation",
-  "kind": "init",
-  "newSchemaVersion": 9,
-  "detectedSchemaState": {
-    "state": "absent",
-    "detectedSchema": "absent"
+  "report": {
+    "status": "recorded",
+    "message": "The requested current result was recorded."
   },
-  "proposalDigest": "<64 lowercase hex>",
-  "confirmation": {
-    "required": true,
-    "exactReplay": true,
-    "proposalDigest": "<same 64 lowercase hex>",
-    "mutationMode": "direct-process",
-    "proposalToken": "<base64url token>"
-  },
-  "mutation": {
-    "mutationMode": "direct-process",
-    "writesApplied": false,
-    "paths": []
+  "hostControl": {
+    "classification": {
+      "outcome": "succeeded",
+      "category": "success",
+      "phase": "execution",
+      "blocking": false,
+      "userAction": "none",
+      "terminal": true,
+      "continuation": "terminal",
+      "closure": "none",
+      "retry": "none"
+    },
+    "presentation": {
+      "mode": "show",
+      "reason": "operation-result"
+    },
+    "closureRequest": null
   }
 }
 ```
 
-Exact confirmation creates only the sealed manifest, project identity, and required directories. Ownership and lineage are later derived from execution receipts.
+Present only `report` when `hostControl.presentation.mode` is `show`. A `silent` result emits no human text. Never render `researchHandoff` or `hostControl`.
 
-## `dove.mission`
+## Work ambient route
 
-```text
-/dove:mission Validate the retrieval method against the current baseline
-```
+A clear non-slash work request is classified a second time by hidden `dove-intake`. It selects explicit `ordinary` or `research` mode and calls only `create_ambient_dove_mission` before host execution.
 
-```json
-{
-  "status": "needs-confirmation",
-  "mission": {
-    "schemaVersion": 1,
-    "proposalVersion": 1,
-    "missionId": "mission-...",
-    "contractDigest": "<64 lowercase hex>",
-    "goal": "Validate the retrieval method against the current baseline",
-    "completionCriteria": ["..."],
-    "evidenceRequirements": ["artifact:...", "validation:..."],
-    "completionCriterionIds": ["criterion-..."],
-    "evidenceRequirementIds": ["evidence-...", "evidence-..."]
-  },
-  "confirmation": {
-    "required": true,
-    "proposalDigest": "<64 lowercase hex>",
-    "mutationMode": "direct-process",
-    "proposalToken": "<base64url token>"
-  },
-  "mutation": {
-    "mutationMode": "direct-process",
-    "writesApplied": false,
-    "paths": []
-  }
-}
-```
-
-Exact replay persists one mission contract and returns control to the host. Its nonpersisted result includes `executionHandoff` with mission/contract identity, target/expected artifacts, stable criterion/evidence ids, the existing receipt CLI template ending in `--json`, and the existing ingest/assess MCP names.
-
-## `dove.status`
-
-```text
-/dove:status
-```
+A successful create may return:
 
 ```json
 {
-  "mode": "dove-status-query",
-  "query": true,
-  "scope": {
-    "kind": "minimal-mission-workspace",
-    "schemaVersion": 8,
-    "missionScope": "explicit",
-    "missionId": "mission-..."
+  "report": {
+    "status": "materialized",
+    "message": "Dove recorded the work entry; the requested work has not been completed yet."
   },
-  "currentContext": {
-    "missionCount": 2,
-    "selectedMissionId": "mission-...",
-    "receiptCount": 4,
-    "sourceCount": 3,
-    "domainIntegrity": {
-      "artifactCount": 9,
-      "staleArtifactCount": 0,
-      "stalePaths": []
-    }
+  "researchHandoff": {
+    "action": "Perform one bounded action from current evidence.",
+    "rationale": "The action addresses the current Mission goal.",
+    "successConditions": ["Return the declared evidence."],
+    "stopConditions": ["Stop after this bounded action."],
+    "evidenceReturn": ["declared result"]
   },
-  "needsAttention": {
-    "status": "incomplete",
-    "stableGaps": {
-      "completion": [],
-      "sources": [],
-      "domain": [],
-      "review": ["trusted-review-issuer-missing"]
+  "hostControl": {
+    "presentation": {
+      "mode": "silent",
+      "reason": "ambient-create-succeeded"
+    },
+    "closureRequest": {
+      "tool": "record_research_outcome",
+      "exactlyOnce": true,
+      "boundArgs": {
+        "missionNumber": 1,
+        "decisionRevision": 1
+      },
+      "requiredOutcomeFields": [
+        "attemptId",
+        "status",
+        "artifactPaths",
+        "validationPaths",
+        "facts"
+      ],
+      "defaults": {}
     }
   }
 }
 ```
 
-Status is always zero-write and never refreshes or repairs state. Zero missions reports none, one mission is scoped automatically, and multiple missions return `explicit-mission-required` until `missionId` is supplied; scoped gaps cover completion, source, domain, and review.
+The host keeps both machine channels private, resumes the original request after successful creation, and invokes a supplied closure exactly once with `boundArgs` unchanged. Clarification, blocking, or failure presents only its public `report` and stops before host work.
 
-## `dove.lessons`
+## Lessons ambient route
 
-```text
-/dove:lessons Query method lessons for the current mission
-/dove:lessons Record this explicit review insight
-```
+A natural explicit request to read, remember, or reflect routes to hidden `dove-lessons-intake`. It creates no Mission and calls only `manage_dove_lessons`.
 
-Representative query:
+A read returns the complete human Markdown in `report`; its update control stays private:
 
 ```json
 {
-  "status": "ok",
-  "missionId": "mission-...",
-  "lessonCount": 1,
-  "items": [{
-    "lessonId": "review-scope-check",
-    "scope": "global",
-    "kind": "review-insight",
-    "summary": "Freeze exact artifact hashes before external review.",
-    "assessment": { "current": true }
-  }],
-  "advisoryOnly": true,
-  "writes": []
+  "report": {
+    "status": "ok",
+    "markdown": "# Dove Lessons\n\n...complete document...\n"
+  },
+  "hostControl": {
+    "presentation": {
+      "mode": "show",
+      "reason": "operation-result"
+    },
+    "lessonsDocument": {
+      "binding": "opaque-read-binding"
+    },
+    "closureRequest": null
+  }
 }
 ```
 
-Representative record proposal:
+For remember or reflect, the host reads first, preserves the complete Markdown and exact binding, edits the complete document conservatively under the five stable sections, then calls `manage_dove_lessons` once with `operation=update`. Reflection derives only supported reusable guidance from available context.
+
+## Workspace result
+
+`/dove:workspace` inspects the current project and immediately applies one concise mainline. It does not present an evidence list, risk list, or choice card.
 
 ```json
 {
-  "status": "needs-confirmation",
-  "lesson": {
-    "missionId": "mission-...",
-    "scope": "mission",
-    "kind": "method"
+  "report": {
+    "status": "updated",
+    "projectBrief": "The project contains a retrieval implementation, evaluation fixtures, and paper artifacts.",
+    "mainline": "Evidence-Grounded Evaluation of the Current Retrieval Method"
   },
-  "confirmation": {
-    "exactReplay": true,
-    "exactConfirmationCommand": "node ./bin/dove-package.mjs lessons record ... --confirmed --json"
-  },
-  "advisoryOnly": true,
-  "authority": false,
-  "completionEligible": false
+  "hostControl": {
+    "presentation": {
+      "mode": "show",
+      "reason": "operation-result"
+    },
+    "closureRequest": null
+  }
 }
 ```
 
-All lessons retain recording-mission provenance. Global scope means broadly applicable, not provenance-free. The five kinds are `preference`, `constraint`, `method`, `failure`, and `review-insight`. Query and record are explicit; there is no automatic capture, automatic recall, transcript import, Trellis write, runtime write, or hidden authority.
+## Status result
 
-## `dove.source`
-
-```text
-search_network → host visibly captures ./downloads/paper-a.pdf
-/dove:source --mission-id mission-... --source-id paper-a --title "Paper A" --locator https://... --capture-path ./downloads/paper-a.pdf
-query_sources
-```
+Status is zero-write. Adapters return `report.briefing` verbatim. Structured clients may also receive bounded fields describing current situation, outputs, evidence, blockers, research judgment, and the next action.
 
 ```json
 {
-  "status": "candidate",
-  "sourceId": "paper-a",
-  "capturedMaterial": {
-    "path": ".dove/sources/materials/paper-a.pdf",
-    "sha256": "..."
+  "report": {
+    "status": "ok",
+    "workStatus": {
+      "state": "work-produced",
+      "summary": "Current work products exist."
+    },
+    "evidenceStatus": {
+      "state": "current-needs-review",
+      "summary": "Current evidence exists, but independent Review is still needed."
+    },
+    "recommendation": "Run one isolated Review over the declared current artifacts.",
+    "briefing": "Current situation\n...\n"
   },
-  "positiveVerificationIssued": false
+  "hostControl": {
+    "presentation": {
+      "mode": "show",
+      "reason": "operation-result"
+    },
+    "closureRequest": null
+  }
 }
 ```
 
-Search candidates carry a non-authoritative `registrationDraft` and `captureRequiredForEvidence: true`. Public verification can record rejection only; neither search nor registration makes a positive trust claim.
+Public existing-work selection uses the exact visible one-based `missionNumber`. Durable IDs, hashes, paths inside `.dove/`, bindings, and control fields remain private.
 
-## `dove.note`
+## Review scope and archive
 
-```text
-/dove:note --mission-id mission-... --note-id finding-a --summary "..." --source-id paper-a
+`manage_dove_review` with `operation=scope` is zero-write and returns a machine-only request to launch exactly one dedicated fresh read-only native `dove-reviewer`. The host waits synchronously and calls `operation=archive` once with the unchanged scope binding and structured return.
+
+The archived public report may state:
+
+```json
+{
+  "report": {
+    "status": "archived",
+    "verdict": "needs-evidence",
+    "summary": "The main claim needs one additional current validation result.",
+    "findingCount": 1,
+    "authority": "not-established"
+  },
+  "hostControl": {
+    "presentation": {
+      "mode": "show",
+      "reason": "operation-result"
+    },
+    "closureRequest": null
+  }
+}
 ```
 
-The current package records substantive note text from current mission-owned artifacts or current mission notes, plus a receipt-derived ownership/lineage binding. `sourceIds` remain unavailable as eligible note evidence until a trusted positive source verifier exists.
+Review findings are non-authoritative. They do not establish Reviewer identity, sign-off, acceptance, or scientific endorsement.
 
-## `dove.experience`
+## Error result
 
-```text
-/dove:experience --mission-id mission-... --experiment-id ablation-a --goal "..." --hypothesis "..." --protocol "..." --success-criterion "..."
+```json
+{
+  "report": {
+    "status": "blocked",
+    "message": "The selected artifact is not current for this Mission."
+  },
+  "hostControl": {
+    "classification": {
+      "outcome": "failed",
+      "category": "invalid-input",
+      "phase": "validation",
+      "blocking": true,
+      "userAction": "clarify-input",
+      "terminal": true,
+      "continuation": "terminal",
+      "closure": "none",
+      "retry": "explicit-request"
+    },
+    "presentation": {
+      "mode": "show",
+      "reason": "failure"
+    },
+    "closureRequest": null
+  }
+}
 ```
 
-The canonical workflow atomically writes protocol, result evidence when supplied, audit, claim bridge, receipt, ownership, and lineage.
-
-## `dove.draft`
-
-```text
-/dove:draft --mission-id mission-... --draft-id methods --body "..." --evidence source:paper-a
-```
-
-Draft body must be substantive. Metadata-only mode is explicit and requires an existing mission-owned draft.
-
-## `dove.figure`
-
-```text
-/dove:figure --mission-id mission-... --figure-id pipeline --intent "Method overview" --material ./data/results.json --prompt "..."
-```
-
-Dove binds materials and prepares/imports declared host-generated output. The result records imported hash, caption, provenance, QA, receipt, ownership, and lineage. Clean diagnostics do not self-issue authoritative validation.
-
-## `dove.review`
-
-```text
-/dove:review --mission-id mission-... --artifact .dove/drafts/methods.md --preflight
-/dove:review --mission-id mission-... --policy external --artifact .dove/drafts/methods.md --prepare
-/dove:review --mission-id mission-... --exchange-id exchange-external-... --review-id methods-review --import
-/dove:review --mission-id mission-... --artifact .dove/drafts/methods.md --verify-coverage
-```
-
-Review-exchange format v8 operates inside the schema 9 workspace. Its four policies are `local-preflight`, `isolated-selected-artifacts`, `final-plan-results-only`, and `external`; policy controls input scope only. Results name `operation` as `preflight`, `prepare`, or `import`. Preflight maps to zero-write `local-preflight`. Prepare freezes mission, contract digest, exact classified artifact paths/sizes/hashes, set hash, privacy boundary, canonical input/manifest/handoff/report paths, and returns the exact import action. Import rejects tampering, drift, symlinks, aliases, noncanonical paths, cross-mission or cross-scope material, and repeated imports before writing, then returns imported paths and the existing coverage action. Coverage verification is read-only. Imported review material remains non-authoritative, and Dove never launches a reviewer, process, session, subagent, or loop.
-
-## `dove.rebuttal`
-
-```text
-/dove:rebuttal --mission-id mission-... --issue-json '{"findingRef":".dove/reviews/review.json#finding-1",...}' --strategy "..." --response-json '{...}'
-```
-
-Every issue and response links to a concrete review finding. Strategy and response remain author-side.
-
-## `dove.version`
-
-```text
-/dove:version --mission-id mission-... --version-id v2 --artifact .dove/drafts/methods.md
-```
-
-Snapshots copy actual artifact contents into immutable version storage. Comparison verifies those copies against current hashes and returns added, removed, and changed paths without writing a comparison artifact.
-
-## Removed public surfaces
-
-`dove.review-loop`, `dove.auto`, `dove.operator`, onboarding, public-status publishing/serving, packet mutation, board, runtime, and navigation commands are not public schema 9 surfaces. `dove.lessons` is public, but retired operator lesson storage and tools are absent. `dove.review` is the mission-bound policy-scoped prepare/import/coverage exchange only; it does not expose packet review, audio review, review-loop, reviewer execution, routing, or caller-minted authority.
+Schema 18 is the only current state model. Unsupported earlier state is archived and replaced explicitly; it is not migrated, aliased, or opened through a fallback runtime.

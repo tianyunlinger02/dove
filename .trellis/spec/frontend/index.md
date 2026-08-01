@@ -6,47 +6,42 @@
 
 ## Overview
 
-This project does not currently have a browser frontend. In this Trellis setup, the `frontend` spec layer documents the user-facing surfaces of `Dove`: generated multi-host command adapters, OpenCode role skills, CLI commands, MCP tools, durable `.dove/` artifacts, and the package quality gates that keep those surfaces aligned.
-
----
+This project has no browser frontend. The Trellis `frontend` layer documents Dove's direct Skills, generated host adapters, CLI and project integration, MCP tools, durable-state boundary, public documentation, and validation gates.
 
 ## Guidelines Index
 
 | Guide | Description | Status |
 |-------|-------------|--------|
 | [Directory Structure](./directory-structure.md) | Package surface organization and file layout | Filled |
-| [Component Guidelines](./component-guidelines.md) | Command, skill, CLI, and MCP surface patterns | Filled |
-| [Hook Guidelines](./hook-guidelines.md) | File-backed context/action patterns and reusable helpers | Filled |
-| [State Management](./state-management.md) | Durable `.dove/` state, derived state, and governance state | Filled |
-| [Quality Guidelines](./quality-guidelines.md) | Validation scripts, tests, and forbidden patterns | Filled |
-| [Type Safety](./type-safety.md) | JavaScript runtime schema/normalization conventions | Filled |
-
----
+| [Component Guidelines](./component-guidelines.md) | Skill, MCP, durable entity, role, and host-policy ownership | Filled |
+| [Hook Guidelines](./hook-guidelines.md) | Core helper pipelines and bounded ambient entry | Filled |
+| [State Management](./state-management.md) | Durable state and public read/write boundaries | Filled |
+| [Quality Guidelines](./quality-guidelines.md) | Validation scripts, inventory checks, and review rules | Filled |
+| [Type Safety](./type-safety.md) | Runtime schema, projection, privacy, and language conventions | Filled |
 
 ## Pre-Development Checklist
 
-Before changing package behavior, read the relevant documents below:
-
-- Always read [Directory Structure](./directory-structure.md), [State Management](./state-management.md), [Type Safety](./type-safety.md), and [Quality Guidelines](./quality-guidelines.md).
-- For generated host adapters, `.opencode/skills/`, CLI, or MCP surface changes, also read [Component Guidelines](./component-guidelines.md).
-- For context bundle, manifest, helper, query, or durable workflow pipeline changes, also read [Hook Guidelines](./hook-guidelines.md).
-- If a change touches multiple layers or changes command/API contracts, read `../guides/cross-layer-thinking-guide.md`.
-- Before changing any constant, artifact path, command ID, MCP tool name, role ID, or config value, search for existing references first.
-
----
+- Always read Directory Structure, State Management, Type Safety, and Quality Guidelines.
+- For Skills, adapters, CLI, MCP, or documentation changes, also read Component Guidelines.
+- For helper pipelines or ambient entry, also read Hook Guidelines.
+- For cross-layer contracts, read `../guides/cross-layer-thinking-guide.md`.
+- Search all public and template references before changing a Skill ID, MCP tool name, durable entity, inventory count, selector, installation path, or response-language rule.
+- Keep every file in this directory identical to its matching `src/templates/markdown/spec/frontend/` copy.
 
 ## Project Reality
 
-- Runtime: Node.js ESM (`.mjs`), not TypeScript.
+- Runtime: Node.js ESM (`.mjs`).
 - Package entrypoint: `bin/dove.mjs`.
 - Core logic: `src/core/`.
 - MCP interface: `src/mcp/` and `mcp/dove-state-server.mjs`.
-- Command manifest: `src/core/command-manifest.mjs`.
-- Adapter generator: `scripts/generate-command-adapters.mjs`.
-- Operator surfaces: `.opencode/commands/`, `.cursor/commands/`, `.codex/skills/`, `.agents/skills/`, and `.opencode/skills/`. Claude Code uses manifest-rendered user-level `/dove:*` entries via `dove install/sync --host claude`, not project-local `.claude/commands/dove/`.
-- Durable state model: `.dove/`.
-- Validation: `npm run check` combines generated adapter drift checks, command validation, MCP validation, workflow-goal pressure validation, governance audit, and Node tests; `npm run release:check` is the full pre-release gate.
+- Skill and host-policy source: `src/core/command-manifest.mjs`.
+- Adapter renderer: `scripts/generate-command-adapters.mjs`.
+- Public inventory: 12 direct Skills, 14 canonical MCP tools, and 60 generated adapters across five host formats.
+- The three primary responsibility Skills remain Planner, Builder/Author, and Reviewer.
+- Source is external capture; Note is internal synthesis; Experience is experimental conception/prevalidation; Experiment is the formal protocol/result record.
+- Current state is a clean Schema 18 cutover with Mission-bound ResearchDecisions, one `.dove/LESSONS.md`, thin Draft/Figure/Rebuttal archives, isolated Review records, and no migration or fallback runtime.
+- Validation: `npm run check` and `npm run release:check`.
 
 ---
 
-**Language**: All documentation should be written in **English**.
+**Language**: All Trellis documentation must be written in English.

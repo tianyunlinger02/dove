@@ -14,26 +14,26 @@ function exists(root, relativePath) {
 test("patch-plan mutations are zero-write and contain exact operations without a provenance ledger", () => {
   const root = createTempRoot("dove-mutation-patch-");
   const result = runWithMutationContext(root, { actionId: "unit-test", mutationMode: "patch-plan", hostId: "test" }, () => {
-    writeJson(root, ".dove/notes/example.json", { ok: true });
+    writeJson(root, ".dove/artifacts/example.json", { ok: true });
     writeText(root, ".dove/drafts/example.md", "hello\n");
     return { ok: true };
   });
   assert.equal(result.writesApplied, false);
   assert.equal(result.hostRollbackEligible, true);
-  assert.deepEqual(result.mutationPlan.operations.map((item) => item.relativePath), [".dove/notes/example.json", ".dove/drafts/example.md"]);
+  assert.deepEqual(result.mutationPlan.operations.map((item) => item.relativePath), [".dove/artifacts/example.json", ".dove/drafts/example.md"]);
   assert.equal(exists(root, ".dove"), false);
   assert.equal(result.mutationPlan.operations.some((item) => item.relativePath.includes("mutations")), false);
 });
 
 test("direct-process writes stay in the overlay until finish and are durable after commit", () => {
   const root = createTempRoot("dove-mutation-direct-");
-  fs.mkdirSync(path.join(root, ".dove/notes"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".dove/notes/example.md"), "old\n");
+  fs.mkdirSync(path.join(root, ".dove/artifacts"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".dove/artifacts/example.md"), "old\n");
   const result = runWithMutationContext(root, { actionId: "unit-test", mutationMode: "direct-process", hostId: "test" }, () => {
     assert.ok(currentMutationContext(root));
-    writeText(root, ".dove/notes/example.md", "hello\n");
-    assert.equal(readText(root, ".dove/notes/example.md"), "hello\n");
-    assert.equal(fs.readFileSync(path.join(root, ".dove/notes/example.md"), "utf8"), "old\n");
+    writeText(root, ".dove/artifacts/example.md", "hello\n");
+    assert.equal(readText(root, ".dove/artifacts/example.md"), "hello\n");
+    assert.equal(fs.readFileSync(path.join(root, ".dove/artifacts/example.md"), "utf8"), "old\n");
     return { ok: true };
   });
   assert.equal(result.writesApplied, true);
@@ -42,7 +42,7 @@ test("direct-process writes stay in the overlay until finish and are durable aft
   assert.equal(result.doveRestoreSupported, true);
   assert.equal(result.doveRestoreScope, "caught-commit-failures-only");
   assert.equal(result.crashConsistencyGuaranteed, false);
-  assert.equal(fs.readFileSync(path.join(root, ".dove/notes/example.md"), "utf8"), "hello\n");
+  assert.equal(fs.readFileSync(path.join(root, ".dove/artifacts/example.md"), "utf8"), "hello\n");
   assert.equal(exists(root, ".dove/mutations"), false);
   assert.equal(currentMutationContext(root), null);
 });
@@ -203,7 +203,7 @@ test("mutation paths reject traversal and symlink escape", () => {
   const outside = createTempRoot("dove-mutation-outside-");
   assert.throws(() => runWithMutationContext(root, { actionId: "escape", mutationMode: "direct-process" }, () => writeText(root, "../escape.txt", "no")), /stay inside the project/);
   fs.mkdirSync(path.join(root, ".dove"), { recursive: true });
-  fs.symlinkSync(outside, path.join(root, ".dove/notes"), "dir");
-  assert.throws(() => runWithMutationContext(root, { actionId: "escape", mutationMode: "direct-process" }, () => writeText(root, ".dove/notes/escape.md", "no")), /symbolic links|outside/u);
+  fs.symlinkSync(outside, path.join(root, ".dove/artifacts"), "dir");
+  assert.throws(() => runWithMutationContext(root, { actionId: "escape", mutationMode: "direct-process" }, () => writeText(root, ".dove/artifacts/escape.md", "no")), /symbolic links|outside/u);
   assert.deepEqual(fs.readdirSync(outside), []);
 });

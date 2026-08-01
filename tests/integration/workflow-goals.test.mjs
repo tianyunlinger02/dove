@@ -32,25 +32,42 @@ test("workflow goal validation materializes mission contracts without execution"
   const missionGoal = result.results.find((goal) => goal.id === "mission-contract-materializes-without-execution");
   assert.ok(missionGoal);
   assert.equal(missionGoal.evidence.approvalCalls, 1);
+  assert.equal(missionGoal.evidence.terminal, true);
   assert.equal(missionGoal.evidence.materializedStatus, "materialized");
   assert.equal(missionGoal.evidence.declineStatus, "declined");
   assert.equal(missionGoal.evidence.declineZeroWrite, true);
   assert.equal(missionGoal.evidence.unsupportedClientRejected, true);
   assert.equal(missionGoal.evidence.missionAbsentAfterRejectedCheckpoints, true);
-  assert.equal(missionGoal.evidence.persistedPath, ".dove/missions/workflow-goal-mission-handoff.json");
+  assert.equal(missionGoal.evidence.directMissionContractBound, true);
+  assert.match(missionGoal.evidence.persistedPath, /^\.dove\/missions\/mission-[a-f0-9-]+\.json$/u);
   assert.equal(missionGoal.evidence.legacyStateAbsent, true);
 });
 
-test("workflow goal validation rejects blocked audit bridge claims", async () => {
+test("workflow goal validation defaults status to a whole-workspace briefing and bounded task chain", async () => {
   const result = await validateGoals();
   assert.equal(result.status, "passed");
 
-  const experienceGoal = result.results.find((goal) => goal.id === "experience-blocked-audit-not-bridged");
-  assert.ok(experienceGoal);
-  assert.equal(experienceGoal.evidence.zeroWrite, true);
-  assert.equal(experienceGoal.evidence.resultAbsent, true);
-  assert.equal(experienceGoal.evidence.bridgeAbsent, true);
-  assert.match(experienceGoal.evidence.rejection, /cannot bridge to a claim while integrity flags remain/u);
+  const statusGoal = result.results.find((goal) => goal.id === "status-defaults-to-whole-workspace-briefing");
+  assert.ok(statusGoal);
+  assert.equal(statusGoal.evidence.zeroWrite, true);
+  assert.equal(statusGoal.evidence.missionScope, "workspace portfolio");
+  assert.equal(statusGoal.evidence.missionCount, 2);
+  assert.equal(statusGoal.evidence.requirementCount, 2);
+  assert.equal(statusGoal.evidence.workItemCount, 0);
+  assert.equal(statusGoal.evidence.oneBasedNumbering, true);
+  assert.equal(statusGoal.evidence.internalGraphHidden, true);
+});
+
+test("workflow goal validation rejects results that diverge from the frozen protocol", async () => {
+  const result = await validateGoals();
+  assert.equal(result.status, "passed");
+
+  const experimentGoal = result.results.find((goal) => goal.id === "experiment-result-replays-frozen-protocol");
+  assert.ok(experimentGoal);
+  assert.equal(experimentGoal.evidence.zeroWrite, true);
+  assert.equal(experimentGoal.evidence.resultAbsent, true);
+  assert.equal(typeof experimentGoal.evidence.rejection, "string");
+  assert.ok(experimentGoal.evidence.rejection.length > 0);
 });
 
 test("workflow goal validation keeps minimal status isolated from legacy packet state", async () => {
@@ -66,7 +83,7 @@ test("workflow goal validation keeps minimal status isolated from legacy packet 
   assert.equal(legacyStatusGoal.evidence.legacyPacketNotPresented, true);
 });
 
-test("workflow goal validation preserves the exact schema 9 command inventory", async () => {
+test("workflow goal validation preserves the exact current-schema command inventory", async () => {
   const result = await validateGoals();
   assert.equal(result.status, "passed");
 
@@ -74,16 +91,16 @@ test("workflow goal validation preserves the exact schema 9 command inventory", 
   assert.ok(surfacesGoal);
   assert.equal(surfacesGoal.evidence.surfaceCount, 12);
   assert.deepEqual(surfacesGoal.evidence.requiredPresent, [
-    "dove.init",
+    "dove.workspace",
     "dove.mission",
     "dove.status",
     "dove.lessons",
-    "dove.version",
     "dove.source",
     "dove.note",
-    "dove.figure",
     "dove.experience",
+    "dove.experiment",
     "dove.draft",
+    "dove.figure",
     "dove.review",
     "dove.rebuttal"
   ]);

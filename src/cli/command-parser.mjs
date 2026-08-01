@@ -1,43 +1,46 @@
 const value = (name, options = {}) => ({ name, kind: "value", ...options });
 const boolean = (name, options = {}) => ({ name, kind: "boolean", ...options });
 
+const projectOption = value("--project");
 const outputOptions = [boolean("--json"), value("--format")];
-const mutationOptions = [value("--mutation-mode"), ...outputOptions];
+const businessOutputOptions = [...outputOptions, value("--language")];
+const mutationOptions = [value("--mutation-mode"), ...businessOutputOptions];
 const missionOptions = [
-  value("--operation"), value("--requirement"), value("--node-update-json", { repeatable: true }),
-  value("--proposal-token"), value("--proposal-digest"), value("--mutation-mode"), ...outputOptions,
-  value("--mission-id"), value("--goal"), value("--scope", { repeatable: true }),
-  value("--out-of-scope", { repeatable: true }), value("--target-artifact", { repeatable: true }),
-  value("--expected-artifact", { repeatable: true }), value("--completion-criterion", { repeatable: true }),
-  value("--evidence-requirement", { repeatable: true }), value("--depends-on-mission-id", { repeatable: true }),
-  value("--supersedes-mission-id"), boolean("--confirmed")
-];
-const receiptOptions = [
-  value("--input"), value("--receipt-id"), value("--mission-id"), value("--contract-digest"),
-  value("--summary"), value("--artifact-json", { repeatable: true }), value("--validation-json", { repeatable: true }),
-  value("--criterion-json", { repeatable: true }), value("--produced-at"), ...mutationOptions
+  projectOption,
+  value("--operation"), value("--mission-number"), value("--mission-goal"),
+  value("--mode"), value("--goal"), value("--requirement", { repeatable: true }),
+  value("--assumption", { repeatable: true }), value("--scope", { repeatable: true }),
+  value("--out-of-scope", { repeatable: true }), value("--artifact-json", { repeatable: true }),
+  value("--completion-criterion", { repeatable: true }),
+  value("--evidence-requirement", { repeatable: true }), value("--depends-on-mission-number", { repeatable: true }),
+  value("--parent-mission-number"), value("--branch-kind"), value("--branch-reason"),
+  value("--stop-parent-reason"), value("--handoff-artifact", { repeatable: true }),
+  value("--requested-disposition"), value("--synthesis"),
+  value("--hypothesis-json", { repeatable: true }), value("--route-json", { repeatable: true }),
+  value("--open-question-json", { repeatable: true }), value("--evidence-ref", { repeatable: true }),
+  value("--reason-code", { repeatable: true }),
+  value("--next-action-json"), value("--mutation-mode"), ...businessOutputOptions
 ];
 function command(options = [], positional = { min: 0, max: 1 }) {
   return { options, positional };
 }
 
 export const CLI_COMMAND_SPECS = {
-  install: command([boolean("--force"), value("--host", { repeatable: true }), value("--platform", { repeatable: true }), value("--mutation-mode"), ...outputOptions]),
-  sync: command([boolean("--force"), value("--host", { repeatable: true }), value("--platform", { repeatable: true }), value("--mutation-mode"), ...outputOptions]),
-  doctor: command([...outputOptions]),
-  init: command([value("--goal"), boolean("--archive-reset"), boolean("--confirmed"), value("--proposal-token"), value("--proposal-digest"), ...mutationOptions]),
+  init: command([projectOption, value("--host", { repeatable: true }), ...outputOptions], { min: 0, max: 0 }),
+  sync: command([projectOption, value("--host", { repeatable: true }), ...outputOptions], { min: 0, max: 0 }),
+  doctor: command([projectOption, ...outputOptions], { min: 0, max: 0 }),
+  workspace: command([projectOption, value("--goal"), value("--mainline"), value("--change-reason"), boolean("--archive"), ...mutationOptions], { min: 1, max: 1 }),
+  mcp: command([projectOption], { min: 1, max: 1 }),
+  hook: command([projectOption], { min: 1, max: 1 }),
   mission: command(missionOptions),
-  receipt: command(receiptOptions),
-  status: command([value("--mission-id"), value("--detail"), value("--language"), ...outputOptions, boolean("--help", { key: "help" }), boolean("-h", { key: "help" })]),
-  lessons: command([value("--lesson-id"), value("--mission-id"), value("--scope"), value("--kind"), value("--summary"), value("--details"), value("--next-time-guidance", { repeatable: true }), value("--source-id", { repeatable: true }), value("--note-id", { repeatable: true }), value("--artifact", { repeatable: true }), value("--applies-to-artifact", { repeatable: true }), value("--tag", { repeatable: true }), value("--supersedes-lesson-id"), boolean("--include-superseded"), boolean("--include-unscoped"), value("--limit"), value("--proposal-token"), value("--mutation-mode"), boolean("--confirmed"), ...outputOptions], { min: 0, max: 2 }),
-  version: command([value("--mission-id"), value("--version-id"), value("--label"), value("--artifact", { repeatable: true }), value("--supersedes-version-id"), value("--from-version-id"), value("--to-version-id"), ...mutationOptions]),
-  source: command([value("--mission-id"), value("--source-id"), value("--citation-key"), value("--title"), value("--locator"), value("--source-type"), value("--origin"), value("--abstract"), value("--year"), value("--author", { repeatable: true }), value("--capture-path"), value("--method"), value("--checked-material"), value("--audit-evidence-json"), ...mutationOptions], { min: 0, max: 2 }),
-  note: command([value("--mission-id"), value("--note-id"), value("--title"), value("--summary"), value("--quote", { repeatable: true }), value("--claim", { repeatable: true }), value("--open-question", { repeatable: true }), value("--source-id", { repeatable: true }), value("--artifact", { repeatable: true }), ...mutationOptions]),
-  draft: command([value("--mission-id"), value("--draft-id"), value("--title"), value("--body"), value("--summary"), value("--evidence", { repeatable: true }), value("--artifact", { repeatable: true }), boolean("--metadata-only"), ...mutationOptions]),
-  experience: command([value("--mission-id"), value("--experiment-id"), value("--title"), value("--goal"), value("--hypothesis"), value("--protocol"), value("--success-criterion", { repeatable: true }), value("--comparison-target", { repeatable: true }), value("--result"), value("--result-evidence", { repeatable: true }), value("--audit-finding", { repeatable: true }), value("--integrity-flag", { repeatable: true }), value("--claim-id"), value("--bridge-reason"), ...mutationOptions]),
-  figure: command([value("--mission-id"), value("--figure-id"), value("--intent"), value("--purpose"), value("--material", { repeatable: true }), value("--prompt"), value("--output-path"), value("--output-sha256"), value("--caption"), value("--qa-finding", { repeatable: true }), ...mutationOptions]),
-  review: command([value("--mission-id"), value("--exchange-id"), value("--review-id"), value("--policy"), value("--artifact", { repeatable: true }), value("--final-plan", { repeatable: true }), value("--final-result", { repeatable: true }), boolean("--preflight"), boolean("--prepare"), boolean("--import"), boolean("--verify-coverage"), boolean("--require-authoritative"), ...mutationOptions]),
-  rebuttal: command([value("--mission-id"), value("--issue-json", { repeatable: true }), value("--strategy"), value("--response-json", { repeatable: true }), boolean("--issues-only"), boolean("--strategy-only"), ...mutationOptions])
+  status: command([projectOption, value("--mission-number"), value("--detail"), ...businessOutputOptions, boolean("--help", { key: "help" }), boolean("-h", { key: "help" })]),
+  lessons: command([projectOption, value("--binding"), value("--markdown"), value("--mutation-mode"), ...businessOutputOptions], { min: 0, max: 2 }),
+  source: command([projectOption, value("--mission-number"), value("--source-id"), value("--citation-key"), value("--title"), value("--locator"), value("--source-type"), value("--origin"), value("--abstract"), value("--year"), value("--author", { repeatable: true }), value("--capture-path"), value("--method"), value("--checked-material"), value("--audit-evidence-json"), ...mutationOptions], { min: 0, max: 2 }),
+  experiment: command([projectOption, value("--mission-number"), value("--experiment-id"), value("--title"), value("--protocol-json"), value("--result-json"), ...mutationOptions]),
+  draft: command([projectOption, value("--mission-number"), value("--artifact-path"), value("--reference-path", { repeatable: true }), value("--qa", { repeatable: true }), value("--finding", { repeatable: true }), ...mutationOptions]),
+  figure: command([projectOption, value("--mission-number"), value("--artifact-path"), value("--reference-path", { repeatable: true }), value("--caption"), value("--qa", { repeatable: true }), value("--finding", { repeatable: true }), ...mutationOptions]),
+  review: command([projectOption, value("--mission-number"), value("--review-mission-binding"), value("--host-kind"), value("--artifact", { repeatable: true }), value("--scope-binding-json"), value("--status"), value("--verdict"), value("--summary"), value("--findings-json"), value("--action-item", { repeatable: true }), value("--report"), value("--provenance-json"), boolean("--scope"), boolean("--archive"), ...mutationOptions]),
+  rebuttal: command([projectOption, value("--mission-number"), value("--artifact-path"), value("--reference-path", { repeatable: true }), value("--finding-ref", { repeatable: true }), value("--qa", { repeatable: true }), value("--finding", { repeatable: true }), ...mutationOptions])
 };
 
 function optionMap(spec) {
@@ -53,7 +56,7 @@ export function parseDoveCli(argv, specs = CLI_COMMAND_SPECS) {
   const tokens = Array.from(argv ?? [], (item) => String(item));
   if (tokens.length === 0) return { command: null, positionals: [], args: [] };
   const commandName = tokens.shift();
-  if (["help", "--help", "-h"].includes(commandName)) return { command: commandName, positionals: [], args: [] };
+  if (["help", "--help", "-h", "--version"].includes(commandName)) return { command: commandName, positionals: [], args: [] };
   const spec = specs[commandName];
   if (spec && tokens.some((token) => token === "--help" || token === "-h")) return { command: commandName, positionals: [], args: ["--help"] };
   if (!spec) return { command: commandName, positionals: tokens, args: [] };

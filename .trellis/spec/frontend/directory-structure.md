@@ -1,61 +1,68 @@
 # Directory Structure
 
-> Project-facing surface and module organization for `Dove` schema 8.
+> Project-facing surface and current durable-model organization for Dove.
 
 ---
 
 ## Overview
 
-This repository has no browser frontend. The Trellis `frontend` layer documents Dove's user-facing package surfaces: generated multi-host command adapters, the three primary OpenCode responsibility skills, CLI commands, MCP tools, and sealed `.dove/` artifacts.
+This repository has no browser frontend. The Trellis `frontend` layer covers 12 direct Skills, 60 generated adapters, three primary responsibility Skills, CLI/project integration, 14 MCP tools, public documentation, and sealed `.dove/` state.
 
 ## Directory Layout
 
 ```text
 .
-├── .opencode/commands/       # Generated OpenCode command adapters
-├── .opencode/skills/         # Planner, Builder, and Reviewer skills
-├── .cursor/commands/         # Generated Cursor adapters
-├── .codex/skills/            # Generated Codex adapters
-├── .agents/skills/           # Generated shared-agent adapters
-├── bin/                      # CLI executable
-├── docs/                     # Package documentation
-├── mcp/                      # Thin MCP executable wrapper
-├── scripts/                  # Generators and validation gates
+├── .opencode/commands/       # 12 generated OpenCode Skill adapters
+├── .opencode/skills/         # Planner, Builder/Author, and Reviewer
+├── .cursor/commands/         # 12 generated Cursor Skill adapters
+├── .codex/skills/            # 12 generated Codex Skill adapters
+├── .agents/skills/           # 12 generated shared-agent Skill adapters
+├── .claude/                  # 12 Claude Skill adapters plus ambient integration
+├── .dove-install/            # Consumer-project managed integration manifest
+├── bin/                      # CLI entrypoint and package bundle
+├── docs/                     # User and maintainer documentation
+├── mcp/                      # MCP server entrypoints
+├── scripts/                  # Generators, bundles, and validation gates
 ├── src/
-│   ├── core/                 # Schema 8 mission, receipt, domain, review, and workspace logic
-│   └── mcp/                  # MCP definitions, dispatch, validation, and server
+│   ├── core/                 # Workspace, Mission, evidence, domain, and review logic
+│   ├── mcp/                  # MCP definitions, handlers, and server
+│   └── templates/markdown/   # Installed Trellis documentation copies
 └── tests/
     ├── integration/
     └── unit/
 ```
 
-A user workspace contains only schema 8 identity, mission, advisory lesson, receipt, source, note, claim, experiment, draft, figure, review, rebuttal, and version artifacts. Ownership and lineage are derived from the immutable receipt ledger rather than persisted as current mirror files.
+## Consumer Project Roots
 
-## Module Organization
+- `.dove-install/` is Dove-managed project integration.
+- `.dove/` is user-owned current research state established through the direct Workspace Skill.
+
+Current `.dove/` state includes Workspace revisions, Missions, parent/child provenance, ResearchDecisions, execution Receipts, artifact handoffs, Sources, Claims, Experiments, Reviews, and one canonical `.dove/LESSONS.md` document.
+
+Internal Note work is a normal substantive project artifact. Experience remains conception/prevalidation until a formal Experiment protocol is frozen. Draft, Figure, and Rebuttal bodies stay in project paths and are archived through Receipts without mirrors.
+
+## Module Ownership
 
 - Keep canonical paths and governance registries in `src/core/schema.mjs`.
-- Keep strict workspace classification and initialization in `src/core/workspace-schema.mjs` and `src/core/workspace-init.mjs`.
-- Keep mission proposal/materialization in `src/core/mission-contracts.mjs`, read-only status in `src/core/mission-queries.mjs`, and explicit advisory lesson query/record in `src/core/lessons.mjs`.
-- Keep execution evidence in `src/core/execution-receipts.mjs` and ownership/lineage in narrow artifact modules.
-- Keep domain workflows in `src/core/retained-domain-workflows.mjs`, source trust in `src/core/source-trust.mjs`, and review exchange in `src/core/review-exchange.mjs`.
-- Define MCP schemas in `src/mcp/tool-definitions.mjs` and dispatch exact names in `src/mcp/handlers.mjs`.
-- Define command and host-adapter metadata in `src/core/command-manifest.mjs`; regenerate adapters rather than editing them by hand.
-- Treat `.dove/` as user-owned durable state. Install and sync must not initialize, repair, convert, or overwrite it.
+- Keep strict Workspace classification in `src/core/workspace-schema.mjs`.
+- Keep Workspace mainline mutation in Workspace modules.
+- Keep direct Mission contracts and parent/child routing in Mission modules.
+- Keep Mission-bound research judgment in ResearchDecision modules.
+- Keep execution evidence in Receipt and artifact-handoff modules.
+- Keep Source, Claim, Experiment, Draft, Figure, Review, Rebuttal, and Lesson behavior in their current domain modules.
+- Keep all 14 public MCP schemas in `src/mcp/tool-definitions.mjs` and exact dispatch in `src/mcp/handlers.mjs`.
+- Keep the 12 Skill definitions in `src/core/command-manifest.mjs` and render adapters from that source.
+- Keep every Trellis frontend spec identical to its `src/templates/markdown/spec/frontend/` copy.
 
-## Naming Conventions
+## Naming and Inventory
 
-- Node.js modules use ESM `.mjs` and descriptive kebab-case filenames.
-- Public command IDs are the twelve flat `dove.<surface>` entries in `COMMAND_SURFACES`; the generator emits 48 checked-in project adapters plus 12 Claude user commands, 60 combined.
-- MCP tool names are snake_case and core functions are camelCase.
-- Durable artifact paths come from `ARTIFACT_PATHS`; do not scatter ad hoc `.dove/...` constants.
-- Mission-bound mutations require explicit mission identity and current artifact evidence.
+- Public Skill IDs are the 12 flat `dove.<surface>` names.
+- Each Skill accepts optional text and preserves root/child Mission routing.
+- The generator emits 60 adapters: 12 for each of five host formats.
+- MCP tool names are snake_case; core functions are camelCase.
+- Durable paths come from `ARTIFACT_PATHS`.
+- Generated adapter presence does not establish host registration or readiness.
 
-## Forbidden Patterns
+## Current Model
 
-- Do not add compatibility roots, aliases, fallbacks, or hidden callable surfaces.
-- Do not add task catalogs, boards, routes, queues, leases, campaigns, background continuation, or host orchestration mirrors.
-- Do not package extra role skills that reintroduce removed workflow-control state.
-- Do not put durable invariants only in prompts; enforce them in core code and tests.
-- Do not add a command or MCP tool in only one layer.
-- Do not hand-edit generated adapters.
-- Do not let install or sync mutate user-owned `.dove/` state.
+Research direction is represented by Mission-bound ResearchDecisions. Current runtime has no ResearchTree, Note store, Experience sidecars, state-migration path, compatibility root, or fallback execution path.

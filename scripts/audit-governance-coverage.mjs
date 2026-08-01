@@ -26,7 +26,9 @@ const coreFiles = discoverCoreFiles();
 
 const WRITE_SIGNAL_REGEX = /(?:writeJson|writeText|writeBinary)\(|(?:fs(?:\.promises)?|fsPromises)\.(?:writeFile|rm|cp|copyFile|mkdir|rename|writeFileSync|rmSync|cpSync|copyFileSync|mkdirSync|renameSync)\(/;
 const EXEMPT_FUNCTIONS = new Set([
-  "finalizeDomainArtifacts"
+  "finalizeDomainArtifacts",
+  "resolveMissionValidationReference",
+  "stageConsolidatedDomainMutation"
 ]);
 
 const PUBLIC_SCHEMA7_MUTATION_FILES = new Set([
@@ -34,6 +36,9 @@ const PUBLIC_SCHEMA7_MUTATION_FILES = new Set([
   "src/core/execution-receipts.mjs",
   "src/core/lessons.mjs",
   "src/core/mission-contracts.mjs",
+  "src/core/research-decision-store.mjs",
+  "src/core/research-decision-reevaluation.mjs",
+  "src/core/research-outcome.mjs",
   "src/core/retained-domain-workflows.mjs",
   "src/core/source-trust.mjs"
 ]);
@@ -74,35 +79,47 @@ const exportedCoreFunctionNames = new Set(exports.map((entry) => entry.name));
 function collectToolBindings(entries, classification) {
   return entries.flatMap((entry) => {
     const mcpTool = entry.surfaceBindings?.mcpTool;
-    return mcpTool ? [{ name: mcpTool, classification, entryId: entry.id }] : [];
+    if (!mcpTool) return [];
+    const operations = entry.surfaceBindings.mcpOperations;
+    return [{ name: mcpTool, operations, classification, entryId: entry.id }];
   });
 }
 
 const toolBindings = [
   ...collectToolBindings(GOVERNANCE_GUARDED_MUTATIONS, "guarded"),
   ...collectToolBindings(GOVERNANCE_EXEMPT_MUTATIONS, "exempt"),
-  ...GOVERNANCE_READONLY_TOOLS.map((name) => ({ name, classification: "readonly", entryId: name }))
+  ...GOVERNANCE_READONLY_TOOLS.map((entry) => ({ name: entry.mcpTool, operations: entry.operations, classification: "readonly", entryId: `${entry.mcpTool}:readonly` }))
 ];
 const toolClassifications = new Map();
 for (const binding of toolBindings) {
-  const current = toolClassifications.get(binding.name) ?? [];
-  current.push(binding);
-  toolClassifications.set(binding.name, current);
+  const key = binding.operations === null || binding.operations === undefined
+    ? `${binding.name}:*`
+    : binding.operations.map((operation) => `${binding.name}:${operation}`);
+  for (const operationKey of Array.isArray(key) ? key : [key]) {
+    const current = toolClassifications.get(operationKey) ?? [];
+    current.push(binding);
+    toolClassifications.set(operationKey, current);
+  }
 }
 const definedToolNames = new Set(toolDefinitions.map((tool) => tool.name));
 const duplicateToolDefinitions = toolDefinitions
   .map((tool) => tool.name)
   .filter((name, index, names) => names.indexOf(name) !== index);
 const duplicateMutationToolBindings = [...toolClassifications.entries()]
-  .filter(([, bindings]) => bindings.filter((binding) => binding.classification !== "readonly").length > 1)
+  .filter(([, bindings]) => bindings.length > 1)
   .map(([name, bindings]) => `${name}:${bindings.map((binding) => `${binding.classification}/${binding.entryId}`).join(",")}`);
 const invalidToolClassifications = toolDefinitions.flatMap((tool) => {
-  const bindings = toolClassifications.get(tool.name) ?? [];
-  return bindings.length === 1
-    ? []
-    : [`${tool.name}:${bindings.length === 0 ? "unclassified" : bindings.map((binding) => `${binding.classification}/${binding.entryId}`).join(",")}`];
+  const operationNames = tool.inputSchema.properties?.operation?.enum;
+  if (Array.isArray(operationNames)) {
+    return operationNames.flatMap((operationName) => {
+      const bindings = toolClassifications.get(`${tool.name}:${operationName}`) ?? toolClassifications.get(`${tool.name}:*`) ?? [];
+      return bindings.length === 1 ? [] : [`${tool.name}:${operationName}:${bindings.length === 0 ? "unclassified" : "multiply-classified"}`];
+    });
+  }
+  const bindings = toolClassifications.get(`${tool.name}:*`) ?? [];
+  return bindings.length === 1 ? [] : [`${tool.name}:${bindings.length === 0 ? "unclassified" : "multiply-classified"}`];
 });
-const staleToolBindings = [...toolClassifications.keys()].filter((name) => !definedToolNames.has(name));
+const staleToolBindings = toolBindings.map((binding) => binding.name).filter((name) => !definedToolNames.has(name));
 
 const uncovered = mutatingCoreFunctions.filter((name) => !guarded.has(name) && !exempt.has(name) && !EXEMPT_FUNCTIONS.has(name));
 const staleRegistryBindings = [

@@ -4,22 +4,17 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { createDoveMission } from "../../src/core/mission-contracts.mjs";
 import { ingestExecutionReceipt } from "../../src/core/execution-receipts.mjs";
+import { createDoveMission } from "../../src/core/mission-contracts.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
-import { recordTrustedSourceVerification, registerSource, verifySource } from "../../src/core/source-trust.mjs";
-import {
-  buildRebuttal,
-  buildRebuttalStrategy,
-  compareVersions,
-  createVersionSnapshot,
-  normalizeRebuttalIssues,
-  runExperienceWorkflow,
-  runFigureWorkflow,
-  upsertClaims,
-  upsertDraft,
-  upsertNote
-} from "../../src/core/retained-domain-workflows.mjs";
+import { evidenceDigest } from "../../src/core/evidence-contracts.mjs";
+import { registerSource, SOURCE_USE_LIMITATION, verifySource } from "../../src/core/source-trust.mjs";
+import { recordDoveDraft, recordDoveFigure, recordDoveRebuttal, runExperienceWorkflow, upsertClaims } from "../../src/core/retained-domain-workflows.mjs";
+import { openDoveWorkspace } from "../../src/core/workspace-schema.mjs";
+import { reviewMissionBinding } from "../../src/core/review-mission-binding.mjs";
+import { archiveReviewRecord, scopeReviewRecord } from "../../src/core/review-records.mjs";
+import { inspectDoveWorkspace } from "../../src/core/workspace-schema.mjs";
+import { initializeWorkspace } from "../helpers/current-schema-workspace.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
 function write(root, relativePath, content) {
@@ -27,348 +22,153 @@ function write(root, relativePath, content) {
   fs.mkdirSync(path.dirname(fullPath), { recursive: true });
   fs.writeFileSync(fullPath, content);
 }
-
-function sha256(root, relativePath) {
-  return crypto.createHash("sha256").update(fs.readFileSync(path.join(root, relativePath))).digest("hex");
+function sha256(root, relativePath) { return crypto.createHash("sha256").update(fs.readFileSync(path.join(root, relativePath))).digest("hex"); }
+function mutate(root, actionId, callback) { return runWithMutationContext(root, { actionId, mutationMode: "direct-process", hostId: "test" }, callback); }
+function mission(root, missionId = "domain-mission") {
+  initializeWorkspace(root);
+  const proposal = createDoveMission(root, { operation: "create-root", mode: "research", missionId, goal: "Exercise current domain invariants." });
+  return mutate(root, "create-dove-mission", () => createDoveMission(root, proposal.confirmation.confirmArgs)).mission;
+}
+function own(root, currentMission, relativePath, content, kind = "data") {
+  write(root, relativePath, content);
+  return mutate(root, "ingest-execution-receipt", () => ingestExecutionReceipt(root, {
+    receiptId: `seed-${crypto.randomUUID()}`, missionId: currentMission.missionId, contractDigest: currentMission.contractDigest,
+    summary: `Own ${relativePath}.`, artifacts: [{ path: relativePath, kind, sha256: sha256(root, relativePath) }],
+    validations: [], criteriaSatisfied: [], producedAt: new Date().toISOString()
+  }));
+}
+function protocol() {
+  return {
+    question: "Does the bounded method improve score?",
+    hypothesis: "The method improves score relative to the declared baseline.",
+    procedure: ["Run every declared input once.", "Record every output and failure."],
+    inputs: ["benchmark-one"], comparisons: ["baseline-one"], metrics: ["score"],
+    successConditions: ["The score improvement is positive."], stopConditions: ["Stop after all declared inputs are accounted for."],
+    constraints: ["Use the same inputs for both methods."], expectedArtifacts: ["outputs/result.json", "outputs/failure.json"],
+    frozenAt: new Date().toISOString()
+  };
+}
+function result() {
+  return {
+    status: "completed", outcome: "The bounded run produced a score improvement.",
+    measurements: [{ metric: "score", value: 0.11, comparison: "baseline-one" }],
+    artifactRefs: ["outputs/result.json"], validationRefs: [],
+    denominator: { total: 3, successful: 2, failed: 1, excluded: 0 },
+    failures: [{ failureId: "failed-item", count: 1, reason: "No valid output was produced.", evidenceRefs: ["artifact:outputs/failure.json"] }],
+    deviations: [], limitations: ["The evidence covers one bounded benchmark only."], recordedAt: new Date().toISOString()
+  };
 }
 
 function tree(root) {
-  const result = {};
+  const output = {};
   const visit = (directory) => {
     if (!fs.existsSync(directory)) return;
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const fullPath = path.join(directory, entry.name);
-      if (entry.isDirectory()) visit(fullPath);
-      else result[path.relative(root, fullPath)] = fs.readFileSync(fullPath).toString("base64");
+      if (entry.isDirectory() && !entry.isSymbolicLink()) visit(fullPath);
+      else output[path.relative(root, fullPath)] = entry.isSymbolicLink() ? `link:${fs.readlinkSync(fullPath)}` : fs.readFileSync(fullPath).toString("base64");
     }
   };
-  visit(root);
-  return result;
+  visit(root); return output;
 }
 
-function mutate(root, actionId, callback, mutationMode = "direct-process") {
-  return runWithMutationContext(root, { actionId, mutationMode, hostId: "test" }, callback);
-}
-
-function mission(root, missionId = "domain-mission") {
-  const proposal = createDoveMission(root, { missionId, goal: `Exercise ${missionId} domain workflows.`, completionCriteria: [], evidenceRequirements: [] });
-  return mutate(root, "create-dove-mission", () => createDoveMission(root, proposal.confirmation.confirmArgs)).mission;
-}
-
-function ownArtifact(root, currentMission, relativePath, content, kind = "data", receiptId = `seed-${crypto.randomUUID()}`) {
-  write(root, relativePath, content);
-  return mutate(root, "ingest-execution-receipt", () => ingestExecutionReceipt(root, {
-    receiptId,
-    missionId: currentMission.missionId,
-    contractDigest: currentMission.contractDigest,
-    summary: `Own ${relativePath}.`,
-    artifacts: [{ path: relativePath, kind, sha256: sha256(root, relativePath) }],
-    validations: [],
-    criteriaSatisfied: [],
-    producedAt: new Date().toISOString()
-  }));
-}
-
-function ownValidation(root, currentMission, relativePath, content, receiptId = `validation-${crypto.randomUUID()}`) {
-  write(root, relativePath, content);
-  return mutate(root, "ingest-execution-receipt", () => ingestExecutionReceipt(root, {
-    receiptId,
-    missionId: currentMission.missionId,
-    contractDigest: currentMission.contractDigest,
-    summary: `Validate ${relativePath}.`,
-    artifacts: [],
-    validations: [{ kind: "test-log", reference: relativePath, outputHash: sha256(root, relativePath) }],
-    criteriaSatisfied: [],
-    producedAt: new Date().toISOString()
-  }));
-}
-
-function receiptFiles(root) {
-  return fs.readdirSync(path.join(root, ".dove/receipts/execution")).filter((name) => name.endsWith(".json"));
-}
-
-test("source candidates import captured material, public rejection is explicit, and positive trust fails closed", () => {
-  const root = createTempRoot("dove-domain-source-");
-  const currentMission = mission(root);
-  write(root, "inputs/paper.pdf", Buffer.from("captured paper material"));
-
-  const registered = mutate(root, "register-source", () => registerSource(root, {
-    missionId: currentMission.missionId,
-    sourceId: "paper-one",
-    title: "Paper One",
-    locator: "https://example.test/paper-one",
-    capturePath: "inputs/paper.pdf"
-  }));
+test("Source keeps capture metadata and candidate/rejected lifecycle without positive trust authority", () => {
+  const root = createTempRoot("dove-domain-source-"); const currentMission = mission(root);
+  write(root, "inputs/paper.txt", "captured source material\n");
+  const registered = mutate(root, "register-source", () => registerSource(root, { missionId: currentMission.missionId, sourceId: "paper-one", title: "Paper One", locator: "https://example.test/paper-one", capturePath: "inputs/paper.txt" }));
+  assert.equal(registered.source.schemaVersion, 3);
   assert.equal(registered.source.lifecycle, "candidate");
-  assert.equal(registered.source.capturedMaterial.path, ".dove/sources/materials/paper-one.pdf");
-  assert.equal(registered.source.capturedMaterial.sizeBytes, Buffer.byteLength("captured paper material"));
-  assert.equal(fs.existsSync(path.join(root, registered.source.capturedMaterial.path)), true);
-  assert.equal(registered.completionEligible, false);
-
-  const beforePositive = tree(root);
-  assert.throws(() => recordTrustedSourceVerification(root, { missionId: currentMission.missionId, sourceId: "paper-one", receiptId: registered.receipt.receiptId }), /positive source verification is unavailable/u);
-  assert.deepEqual(tree(root), beforePositive);
-
-  const rejected = mutate(root, "verify-source", () => verifySource(root, {
-    missionId: currentMission.missionId,
-    sourceId: "paper-one",
-    method: "manual material audit",
-    checkedMaterial: "captured PDF",
-    auditEvidence: [{ reference: "page 1", kind: "capture", observation: "Identity does not match the claimed paper." }]
-  }));
-  assert.equal(rejected.source.lifecycle, "rejected");
-  assert.equal(rejected.source.currentDecision.decision, "rejected");
-
-  const storedPath = path.join(root, ".dove/sources/paper-one.json");
-  const stored = JSON.parse(fs.readFileSync(storedPath, "utf8"));
-  stored.lifecycle = "verified";
-  stored.currentDecision = { decision: "verified", decidedAt: new Date().toISOString() };
-  fs.writeFileSync(storedPath, `${JSON.stringify(stored, null, 2)}\n`);
-  assert.throws(() => mutate(root, "register-source", () => registerSource(root, { missionId: currentMission.missionId, sourceId: "other", title: "Other", capturePath: "inputs/paper.pdf" })), /stored verified source state is invalid/u);
+  assert.equal(registered.source.useLimitation, SOURCE_USE_LIMITATION);
+  assert.match(registered.source.capturedMaterial.sha256, /^[0-9a-f]{64}$/u);
+  for (const removed of ["identityFingerprint", "materialVerification", "researchEligibility"]) assert.equal(Object.hasOwn(registered.source, removed), false);
+  const claim = mutate(root, "upsert-claims", () => upsertClaims(root, { missionId: currentMission.missionId, claims: [{ claimId: "source-claim", text: "The captured source reports one bounded observation.", sourceIds: ["paper-one"], artifactRefs: [], validationRefs: [], experimentEvidence: [], uncertainty: [SOURCE_USE_LIMITATION], unsupportedExtensions: ["No independent-verification claim."], currentAssessment: "inconclusive" }] }));
+  assert.deepEqual(claim.claims[0].evidenceRefs, ["source:paper-one"]);
+  assert.throws(() => mutate(root, "upsert-claims", () => upsertClaims(root, { missionId: currentMission.missionId, claims: [{ claimId: "unsafe-source-claim", text: "Unsafe source claim.", sourceIds: ["paper-one"], artifactRefs: [], validationRefs: [], experimentEvidence: [], uncertainty: [], unsupportedExtensions: [], currentAssessment: "supported" }] })), /explicit source limitation/u);
+  write(root, "inputs/rejected.txt", "misidentified source material\n");
+  mutate(root, "register-source", () => registerSource(root, { missionId: currentMission.missionId, sourceId: "paper-rejected", title: "Rejected Paper", capturePath: "inputs/rejected.txt" }));
+  mutate(root, "verify-source", () => verifySource(root, { missionId: currentMission.missionId, sourceId: "paper-rejected", method: "capture audit", checkedMaterial: "captured text", auditEvidence: [{ reference: "line 1", kind: "identity", observation: "The capture is not the claimed source." }] }));
+  assert.throws(() => mutate(root, "upsert-claims", () => upsertClaims(root, { missionId: currentMission.missionId, claims: [{ claimId: "rejected-source-claim", text: "Rejected evidence.", sourceIds: ["paper-rejected"], artifactRefs: [], validationRefs: [], experimentEvidence: [], uncertainty: [SOURCE_USE_LIMITATION], unsupportedExtensions: [], currentAssessment: "blocked" }] })), /source-rejected/u);
 });
 
-test("notes and drafts require current mission-owned evidence and preflight drift before writing", () => {
-  const root = createTempRoot("dove-domain-note-draft-");
-  const currentMission = mission(root);
-  ownArtifact(root, currentMission, "outputs/evidence.txt", "current evidence\n", "report", "seed-evidence");
-
-  const note = mutate(root, "upsert-note", () => upsertNote(root, {
-    missionId: currentMission.missionId,
-    noteId: "synthesis",
-    summary: "The current artifact supports the implementation claim.",
-    artifactRefs: ["outputs/evidence.txt"]
-  }));
-  assert.equal(note.note.summary.includes("supports"), true);
-  assert.equal(note.note.schemaVersion, 2);
-  assert.equal(note.note.contractDigest, currentMission.contractDigest);
-  assert.equal(note.completionEligible, false);
-
-  const notePath = path.join(root, ".dove/notes/synthesis.json");
-  const originalNoteBytes = fs.readFileSync(notePath);
-  const storedNote = JSON.parse(originalNoteBytes.toString("utf8"));
-  storedNote.summary = "Tampered historical note.";
-  fs.writeFileSync(notePath, `${JSON.stringify(storedNote, null, 2)}\n`);
-  assert.throws(() => mutate(root, "upsert-claims", () => upsertClaims(root, {
-    missionId: currentMission.missionId,
-    claims: [{ claimId: "tampered-note", text: "Tampered note must not revive.", noteIds: ["synthesis"] }]
-  })), /note evidence: note-hash-drift/u);
-  fs.writeFileSync(notePath, originalNoteBytes);
-
-  const refreshed = mutate(root, "upsert-note", () => upsertNote(root, {
-    missionId: currentMission.missionId,
-    noteId: "synthesis",
-    summary: "The current artifact supports the implementation claim.",
-    artifactRefs: ["outputs/evidence.txt"]
-  }));
-  assert.equal(refreshed.note.schemaVersion, 2);
-
-  const draft = mutate(root, "upsert-draft", () => upsertDraft(root, {
-    missionId: currentMission.missionId,
-    draftId: "methods",
-    title: "Methods",
-    body: "We evaluate the method against the current evidence artifact.",
-    evidenceRefs: ["artifact:outputs/evidence.txt"]
-  }));
-  assert.match(fs.readFileSync(path.join(root, ".dove/drafts/methods.md"), "utf8"), /We evaluate the method/u);
-  assert.equal(draft.receipt.criteriaSatisfied.length, 0);
-
-  ownValidation(root, currentMission, "outputs/tests.log", "tests passed\n", "seed-validation");
-  const validatedDraft = mutate(root, "upsert-draft", () => upsertDraft(root, {
-    missionId: currentMission.missionId,
-    draftId: "validated-methods",
-    body: "The current validation output supports this methods revision.",
-    evidenceRefs: ["validation:outputs/tests.log"]
-  }));
-  assert.deepEqual(validatedDraft.draft.evidenceRefs, ["validation:outputs/tests.log"]);
-  write(root, "outputs/tests.log", "tests changed\n");
-  const beforeValidationDrift = tree(root);
-  assert.throws(() => mutate(root, "upsert-draft", () => upsertDraft(root, {
-    missionId: currentMission.missionId,
-    draftId: "drifted-validation",
-    body: "This must not be written.",
-    evidenceRefs: ["validation:outputs/tests.log"]
-  })), /changed since its validation receipt/u);
-  assert.deepEqual(tree(root), beforeValidationDrift);
-
-  assert.throws(() => mutate(root, "upsert-draft", () => upsertDraft(root, {
-    missionId: currentMission.missionId,
-    draftId: "unsupported",
-    body: "Body without evidence."
-  })), /requires at least one current eligible evidence/u);
-
-  write(root, "outputs/evidence.txt", "drifted evidence\n");
+test("Experiment freezes a general protocol before immutable result and preserves failures", () => {
+  const root = createTempRoot("dove-domain-experiment-"); const currentMission = mission(root);
+  own(root, currentMission, "outputs/result.json", "{\"score\":0.11}\n");
+  own(root, currentMission, "outputs/failure.json", "{\"failed\":[3]}\n");
+  const frozenProtocol = protocol();
   const before = tree(root);
-  assert.throws(() => mutate(root, "upsert-note", () => upsertNote(root, {
-    missionId: currentMission.missionId,
-    noteId: "should-not-write",
-    summary: "This must fail.",
-    artifactRefs: ["outputs/evidence.txt"]
-  })), /changed since its latest ownership receipt/u);
+  assert.throws(() => mutate(root, "run-experience-workflow", () => runExperienceWorkflow(root, { missionId: currentMission.missionId, experimentId: "quality-run", protocol: frozenProtocol, result: result() })), /Freeze the formal experiment protocol/u);
   assert.deepEqual(tree(root), before);
+  const frozen = mutate(root, "run-experience-workflow", () => runExperienceWorkflow(root, { missionId: currentMission.missionId, experimentId: "quality-run", protocol: frozenProtocol }));
+  assert.equal(frozen.plan.protocolDigest, evidenceDigest(frozen.plan.protocol));
+  const changed = { ...frozenProtocol, constraints: ["Changed after freeze."] };
+  assert.throws(() => mutate(root, "run-experience-workflow", () => runExperienceWorkflow(root, { missionId: currentMission.missionId, experimentId: "quality-run", protocol: changed, result: result() })), /protocol is immutable/u);
+  const bad = result(); bad.denominator.failed = 0;
+  assert.throws(() => mutate(root, "run-experience-workflow", () => runExperienceWorkflow(root, { missionId: currentMission.missionId, experimentId: "quality-run", protocol: frozenProtocol, result: bad })), /full total|preserve every failed/u);
+  const completed = mutate(root, "run-experience-workflow", () => runExperienceWorkflow(root, { missionId: currentMission.missionId, experimentId: "quality-run", protocol: frozenProtocol, result: result() }));
+  assert.equal(completed.result.status, "completed");
+  assert.equal(completed.result.failures[0].count, 1);
+  assert.deepEqual(completed.result.limitations, ["The evidence covers one bounded benchmark only."]);
+  assert.equal(inspectDoveWorkspace(root).healthy, true);
+  assert.throws(() => mutate(root, "run-experience-workflow", () => runExperienceWorkflow(root, { missionId: currentMission.missionId, experimentId: "quality-run", protocol: frozenProtocol, result: result() })), /result is immutable/u);
 });
 
-test("experiment protocol result audit and claim bridge use one preflighted implementation", () => {
-  const root = createTempRoot("dove-domain-experiment-");
-  const currentMission = mission(root);
-  ownArtifact(root, currentMission, "outputs/result.json", "{\"score\":0.91}\n", "data", "seed-result");
-  mutate(root, "upsert-claims", () => upsertClaims(root, {
-    missionId: currentMission.missionId,
-    claims: [{ claimId: "quality-gain", text: "The method improves quality.", artifactRefs: ["outputs/result.json"] }]
-  }));
-
-  const beforeFailure = tree(root);
-  assert.throws(() => mutate(root, "run-experience-workflow", () => runExperienceWorkflow(root, {
-    missionId: currentMission.missionId,
-    experimentId: "quality-ablation",
-    goal: "Measure quality gain.",
-    hypothesis: "The new method improves the score.",
-    protocol: "Run the fixed benchmark once with identical inputs.",
-    successCriteria: ["Score exceeds 0.90"],
-    result: "The score reached 0.91.",
-    resultEvidenceRefs: ["artifact:outputs/result.json"],
-    auditFindings: ["The protocol and output are present."],
-    integrityFlags: ["seed mismatch"],
-    claimId: "quality-gain",
-    bridgeReason: "The audited result supports the claim."
-  })), /cannot bridge to a claim/u);
-  assert.deepEqual(tree(root), beforeFailure);
-
-  const receiptCount = receiptFiles(root).length;
-  const completed = mutate(root, "run-experience-workflow", () => runExperienceWorkflow(root, {
-    missionId: currentMission.missionId,
-    experimentId: "quality-ablation",
-    goal: "Measure quality gain.",
-    hypothesis: "The new method improves the score.",
-    protocol: "Run the fixed benchmark once with identical inputs.",
-    successCriteria: ["Score exceeds 0.90"],
-    result: "The score reached 0.91.",
-    resultEvidenceRefs: ["artifact:outputs/result.json"],
-    auditFindings: ["The protocol and output are present."],
-    integrityFlags: [],
-    claimId: "quality-gain",
-    bridgeReason: "The audited result supports the claim."
-  }));
-  assert.equal(completed.audit.passed, true);
-  assert.equal(completed.bridge.claimId, "quality-gain");
-  assert.equal(receiptFiles(root).length, receiptCount + 1);
-  for (const suffix of ["plan", "result", "audit"]) assert.equal(fs.existsSync(path.join(root, `.dove/experiments/quality-ablation.${suffix}.json`)), true);
-  assert.equal(fs.existsSync(path.join(root, ".dove/claims/quality-ablation-quality-gain.bridge.json")), true);
+test("Claims accept artifact-only evidence and check Experiment measurements only when referenced", () => {
+  const root = createTempRoot("dove-domain-claims-"); const currentMission = mission(root);
+  own(root, currentMission, "outputs/evidence.md", "bounded evidence\n", "document");
+  const artifactClaim = mutate(root, "upsert-claims", () => upsertClaims(root, { missionId: currentMission.missionId, claims: [{ claimId: "artifact-only", text: "The artifact supports a bounded observation.", sourceIds: [], artifactRefs: ["outputs/evidence.md"], validationRefs: [], experimentEvidence: [], uncertainty: ["Only one artifact is available."], unsupportedExtensions: ["No causal claim."], currentAssessment: "supported" }] }));
+  assert.deepEqual(artifactClaim.claims[0].experimentEvidence, []);
+  own(root, currentMission, "outputs/result.json", "{\"score\":0.11}\n"); own(root, currentMission, "outputs/failure.json", "{\"failed\":[3]}\n");
+  const frozenProtocol = protocol();
+  mutate(root, "run-experience-workflow", () => runExperienceWorkflow(root, { missionId: currentMission.missionId, experimentId: "claim-run", protocol: frozenProtocol }));
+  mutate(root, "run-experience-workflow", () => runExperienceWorkflow(root, { missionId: currentMission.missionId, experimentId: "claim-run", protocol: frozenProtocol, result: result() }));
+  assert.throws(() => mutate(root, "upsert-claims", () => upsertClaims(root, { missionId: currentMission.missionId, claims: [{ claimId: "wrong-measurement", text: "Wrong value.", sourceIds: [], artifactRefs: [], validationRefs: [], experimentEvidence: [{ experimentId: "claim-run", metric: "score", value: 0.12, comparison: "baseline-one" }], uncertainty: [], unsupportedExtensions: [], currentAssessment: "supported" }] })), /does not exactly match/u);
+  const measured = mutate(root, "upsert-claims", () => upsertClaims(root, { missionId: currentMission.missionId, claims: [{ claimId: "exact-measurement", text: "The measured score improvement is 0.11.", sourceIds: [], artifactRefs: [], validationRefs: [], experimentEvidence: [{ experimentId: "claim-run", metric: "score", value: 0.11, comparison: "baseline-one" }], uncertainty: ["One benchmark only."], unsupportedExtensions: ["No generalization claim."], currentAssessment: "supported" }] }));
+  assert.equal(measured.claims[0].experimentEvidence[0].value, 0.11);
 });
 
-test("figure workflow keeps provider execution host-side and imports exact output with caption QA and proof boundary", () => {
-  const root = createTempRoot("dove-domain-figure-");
-  const currentMission = mission(root);
-  ownArtifact(root, currentMission, "outputs/material.csv", "x,y\n1,2\n", "data", "seed-material");
-  write(root, "outputs/figure.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Result</text></svg>\n");
-
-  const beforeMismatch = tree(root);
-  assert.throws(() => mutate(root, "run-figure-workflow", () => runFigureWorkflow(root, {
-    missionId: currentMission.missionId,
-    figureId: "main-result",
-    intent: "Show the main result.",
-    purpose: "Explain the measured improvement.",
-    materials: ["outputs/material.csv"],
-    prompt: "Draw a clean result chart.",
-    outputPath: "outputs/figure.svg",
-    outputSha256: "0".repeat(64),
-    caption: "Main result.",
-    qaFindings: []
-  })), /hash does not match/u);
-  assert.deepEqual(tree(root), beforeMismatch);
-
-  const imported = mutate(root, "run-figure-workflow", () => runFigureWorkflow(root, {
-    missionId: currentMission.missionId,
-    figureId: "main-result",
-    intent: "Show the main result.",
-    purpose: "Explain the measured improvement.",
-    materials: ["outputs/material.csv"],
-    prompt: "Draw a clean result chart.",
-    outputPath: "outputs/figure.svg",
-    outputSha256: sha256(root, "outputs/figure.svg"),
-    caption: "Main result with measured improvement.",
-    qaFindings: []
+test("Draft, Figure, and Rebuttal archive real project artifacts through Receipts without .dove mirrors", () => {
+  const root = createTempRoot("dove-domain-archives-"); const currentMission = mission(root);
+  own(root, currentMission, "paper/draft.md", "# Draft\n", "document");
+  own(root, currentMission, "figures/result.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>\n", "figure");
+  own(root, currentMission, "paper/rebuttal.md", "# Response\n", "document");
+  const draft = mutate(root, "record-dove-draft", () => recordDoveDraft(root, { missionId: currentMission.missionId, artifactPath: "paper/draft.md", referencePaths: [], qa: ["References checked."], findings: [] }));
+  const figure = mutate(root, "record-dove-figure", () => recordDoveFigure(root, { missionId: currentMission.missionId, artifactPath: "figures/result.svg", referencePaths: [], caption: "Bounded result.", qa: ["Caption and data checked."], findings: [] }));
+  const currentWorkspace = openDoveWorkspace(root);
+  const scoped = scopeReviewRecord(root, { missionId: currentMission.missionId, reviewMissionBinding: reviewMissionBinding(currentWorkspace, currentMission), hostKind: "claude", artifactPaths: ["paper/draft.md"] });
+  const review = mutate(root, "archive-review-record", () => archiveReviewRecord(root, {
+    missionId: currentMission.missionId, scopeBinding: scoped.scopeBinding, status: "completed", verdict: "needs-revision",
+    summary: "Narrow the claim.", findings: [{ findingId: "finding-one", severity: "medium", summary: "Narrow the claim.", linkedArtifactPaths: ["paper/draft.md"] }],
+    actionItems: ["Narrow the claim."], report: "# Review\n\nNarrow the claim.\n", provenance: { hostKind: "claude", reviewedAt: "2026-01-01T00:00:00.000Z" }
   }));
-  assert.equal(imported.hostBoundary.executesProvider, false);
-  assert.equal(Object.hasOwn(imported.imported, "validated"), false);
-  assert.equal(imported.imported.finalSizeBytes, Buffer.byteLength(fs.readFileSync(path.join(root, "outputs/figure.svg"))));
-  assert.equal(imported.qa.status, "ready-for-independent-review");
-  assert.equal(imported.qa.reviewCoverage.covered, false);
-  assert.deepEqual(imported.qa.reviewCoverage.requestedArtifactPaths, [".dove/figures/main-result.final.svg"]);
-  assert.equal(imported.qa.reviewCoverage.requestedArtifactSetSha256?.length, 64);
-  assert.ok(imported.qa.reviewCoverage.failures.includes("trusted-review-issuer-missing"));
-  assert.equal(fs.existsSync(path.join(root, ".dove/figures/main-result.final.svg")), true);
-  assert.equal(fs.existsSync(path.join(root, ".dove/figures/main-result.caption.md")), true);
-
-  write(root, "outputs/empty.svg", "");
-  assert.throws(() => mutate(root, "run-figure-workflow", () => runFigureWorkflow(root, {
-    missionId: currentMission.missionId,
-    figureId: "empty-result",
-    intent: "Reject empty output.",
-    purpose: "Validate import boundary.",
-    materials: ["outputs/material.csv"],
-    prompt: "Draw.",
-    outputPath: "outputs/empty.svg",
-    caption: "Empty."
-  })), /non-empty regular file|empty file/u);
-  fs.symlinkSync("figure.svg", path.join(root, "outputs/figure-alias.svg"));
-  assert.throws(() => mutate(root, "run-figure-workflow", () => runFigureWorkflow(root, {
-    missionId: currentMission.missionId,
-    figureId: "alias-result",
-    intent: "Reject alias output.",
-    purpose: "Validate import boundary.",
-    materials: ["outputs/material.csv"],
-    prompt: "Draw.",
-    outputPath: "outputs/figure-alias.svg",
-    caption: "Alias."
-  })), /canonical realpath-contained path|symlink or alias|symbolic links/u);
+  const rebuttal = mutate(root, "record-dove-rebuttal", () => recordDoveRebuttal(root, { missionId: currentMission.missionId, artifactPath: "paper/rebuttal.md", referencePaths: [review.reviewPath], findingRefs: [`${review.reviewPath}#finding-one`], qa: [], findings: ["Claim narrowed."] }));
+  assert.equal(draft.artifact.path, "paper/draft.md"); assert.equal(figure.caption, "Bounded result."); assert.equal(rebuttal.reviewerSignoff, false);
+  for (const removed of [".dove/drafts", ".dove/figures", ".dove/rebuttal", ".dove/artifacts"]) assert.equal(fs.existsSync(path.join(root, removed)), false);
+  const workspace = inspectDoveWorkspace(root);
+  assert.equal(workspace.healthy, true);
+  assert.equal(workspace.receiptLedger.currentOwnership.find((item) => item.path === "paper/rebuttal.md").receiptId, rebuttal.receipt.receiptId);
 });
 
-test("rebuttal requires concrete current finding linkage and version comparison is zero-write over immutable snapshot copies", () => {
-  const root = createTempRoot("dove-domain-rebuttal-version-");
-  const currentMission = mission(root);
-  ownArtifact(root, currentMission, "outputs/evidence.md", "Evidence v1\n", "document", "seed-version-evidence");
-  ownArtifact(root, currentMission, ".dove/reviews/review-one.json", JSON.stringify({ schemaVersion: 1, missionId: currentMission.missionId, findings: [{ findingId: "missing-baseline", summary: "Add a baseline." }] }, null, 2), "report", "seed-review");
+test("thin Figure and Rebuttal archives reject missing specialized fields without committing staged Receipts", () => {
+  const root = createTempRoot("dove-domain-archive-preflight-"); const currentMission = mission(root);
+  own(root, currentMission, "figures/result.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>\n", "figure");
+  own(root, currentMission, "paper/rebuttal.md", "# Response\n", "document");
+  for (const [actionId, callback, pattern] of [
+    ["record-dove-figure", () => recordDoveFigure(root, { missionId: currentMission.missionId, artifactPath: "figures/result.svg", referencePaths: [], qa: [], findings: [] }), /caption.*non-empty/u],
+    ["record-dove-rebuttal", () => recordDoveRebuttal(root, { missionId: currentMission.missionId, artifactPath: "paper/rebuttal.md", referencePaths: [], qa: [], findings: [] }), /findingRefs.*at least 1/u]
+  ]) {
+    const before = tree(root);
+    assert.throws(() => mutate(root, actionId, callback), pattern);
+    assert.deepEqual(tree(root), before);
+  }
+});
 
-  const beforeBadFinding = tree(root);
-  assert.throws(() => mutate(root, "normalize-rebuttal-issues", () => normalizeRebuttalIssues(root, {
-    missionId: currentMission.missionId,
-    issues: [{ issueId: "issue-one", summary: "Address the baseline concern.", findingRefs: [".dove/reviews/review-one.json#unknown"], evidenceRefs: ["artifact:outputs/evidence.md"] }]
-  })), /does not resolve to a mission-bound review finding/u);
-  assert.deepEqual(tree(root), beforeBadFinding);
-
-  mutate(root, "normalize-rebuttal-issues", () => normalizeRebuttalIssues(root, {
-    missionId: currentMission.missionId,
-    issues: [{ issueId: "issue-one", summary: "Address the baseline concern.", findingRefs: [".dove/reviews/review-one.json#missing-baseline"], evidenceRefs: ["artifact:outputs/evidence.md"] }]
-  }));
-  mutate(root, "build-rebuttal-strategy", () => buildRebuttalStrategy(root, { missionId: currentMission.missionId, strategy: "Add the requested baseline and report the result." }));
-  mutate(root, "build-rebuttal", () => buildRebuttal(root, {
-    missionId: currentMission.missionId,
-    responses: [{ issueId: "issue-one", response: "We added the baseline and linked the evidence.", evidenceRefs: ["artifact:outputs/evidence.md"] }]
-  }));
-  assert.match(fs.readFileSync(path.join(root, `.dove/rebuttal/${currentMission.missionId}.response.md`), "utf8"), /We added the baseline/u);
-
-  mutate(root, "create-version-snapshot", () => createVersionSnapshot(root, { missionId: currentMission.missionId, versionId: "v1", artifactRefs: ["outputs/evidence.md"] }));
-  write(root, "outputs/evidence.md", "Evidence v2\n");
-  mutate(root, "upsert-draft", () => upsertDraft(root, { missionId: currentMission.missionId, draftId: "revision", body: "Revision text.", artifactRefs: [".dove/rebuttal/domain-mission.response.md"] }));
-  ownArtifact(root, currentMission, "outputs/evidence-v2.md", "Evidence v2\n", "document", "seed-version-evidence-v2");
-  mutate(root, "create-version-snapshot", () => createVersionSnapshot(root, { missionId: currentMission.missionId, versionId: "v2", artifactRefs: ["outputs/evidence-v2.md"], supersedesVersionId: "v1" }));
-  const beforeComparison = tree(root);
-  const comparison = compareVersions(root, { missionId: currentMission.missionId, fromVersionId: "v1", toVersionId: "v2" });
-  assert.equal(comparison.status, "compared");
-  assert.equal(comparison.zeroWrite, true);
-  assert.deepEqual(comparison.writes, []);
-  assert.deepEqual(comparison.comparison.added, ["outputs/evidence-v2.md"]);
-  assert.deepEqual(comparison.comparison.removed, ["outputs/evidence.md"]);
-  assert.deepEqual(comparison.comparison.changed, []);
-  assert.deepEqual(tree(root), beforeComparison);
-
-  const firstSnapshot = JSON.parse(fs.readFileSync(path.join(root, ".dove/versions/v1.json"), "utf8"));
-  write(root, firstSnapshot.artifacts[0].snapshotPath, "Tampered snapshot.\n");
-  const beforeStaleComparison = tree(root);
-  assert.throws(() => compareVersions(root, { missionId: currentMission.missionId, fromVersionId: "v1", toVersionId: "v2" }), /stale|hash drift|current artifact|has changed/u);
-  assert.deepEqual(tree(root), beforeStaleComparison);
-
-  const beforeFinalize = tree(root);
-  assert.throws(() => mutate(root, "create-version-snapshot", () => createVersionSnapshot(root, { missionId: currentMission.missionId, versionId: "final", artifactRefs: ["outputs/evidence-v2.md"], finalize: true })), /does not accept unknown input: \$\.finalize/u);
-  assert.deepEqual(tree(root), beforeFinalize);
+test("removed mirrors and unsupported prior state fail closed without fallback or migration", () => {
+  const root = createTempRoot("dove-domain-removed-dir-"); mission(root);
+  fs.mkdirSync(path.join(root, ".dove/drafts"));
+  assert.equal(inspectDoveWorkspace(root).healthy, false);
+  assert.match(inspectDoveWorkspace(root).error, /retained legacy artifact/u);
+  const legacy = createTempRoot("dove-domain-prior-schema-"); fs.mkdirSync(path.join(legacy, ".dove"));
+  write(legacy, ".dove/manifest.json", `${JSON.stringify({ schemaVersion: 17 })}\n`);
+  const inspection = inspectDoveWorkspace(legacy);
+  assert.equal(inspection.category, "legacy"); assert.equal(inspection.schemaVersion, 17);
 });

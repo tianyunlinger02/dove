@@ -1,57 +1,57 @@
 # State Management
 
-> Durable schema 9 state and strict read/write boundaries.
+> Durable state and public read/write boundaries.
 
 ---
 
 ## Overview
 
-Dove is file-first. Durable state exists only in explicit schema 9 `.dove/` artifacts. Native host planning and execution remain host responsibilities; Dove stores approved mission contracts and evidence, not a duplicate execution engine.
+Dove is file-first. The host plans and executes work; Dove stores the minimum validated state needed for Mission contracts, research judgment, evidence, substantive outputs, lessons, and review accountability.
 
-## Canonical State
+## Three-Layer Boundary
 
-- `.dove/manifest.json` and `.dove/project.json` identify the sealed workspace.
-- `.dove/missions/` contains approved mission contracts.
-- `.dove/lessons/` contains immutable advisory lessons with recording-mission provenance and mission or global applicability.
-- `.dove/receipts/execution/` contains immutable receipts bound to current contract digests, paths, hashes, criteria, and evidence.
-- Artifact ownership and lineage are derived live from the immutable `.dove/receipts/execution/` ledger; schema 9 rejects persisted `ownership.json` or `lineage.json` mirrors.
-- `.dove/sources/`, `.dove/notes/`, `.dove/claims/`, `.dove/experiments/`, `.dove/drafts/`, `.dove/figures/`, `.dove/reviews/`, `.dove/rebuttal/`, and `.dove/versions/` hold mission-bound domain artifacts.
+- A direct **Skill** expresses user intent and accepts optional text.
+- An **MCP tool** validates and performs a structured operation.
+- A **durable entity** records current validated state under `.dove/`.
 
-`ARTIFACT_PATHS` in `src/core/schema.mjs` is the canonical registry.
+Do not infer a storage entity from a Skill name. Note and Experience are Skill semantics, not durable stores.
 
-## Workspace States
+## Integration and Research State
 
-The strict opener classifies a workspace as absent, current healthy, current unhealthy, legacy, future, or invalid.
+`.dove-install/` is managed project integration. `.dove/` is user-owned current research state established by the direct Workspace Skill.
 
-- Read-only queries may inspect absent or current state only as their contracts permit.
-- Malformed, contradictory, legacy, and future state fails closed.
-- A current manifest that coexists with removed state, packet, orchestration, runtime, workspace, mutation-ledger, program, meta, context, or wiki roots is contradictory.
-- Archive-reset may identify and atomically archive an old `.dove/` tree, but it must not read, repair, convert, or import legacy business data.
-- No read operation bootstraps, refreshes, normalizes, or repairs durable state.
+Current durable state includes:
 
-## Mutation Model
+- Workspace revisions;
+- root and child Missions with explicit parent provenance;
+- Mission-bound ResearchDecisions for research work;
+- execution Receipts and artifact handoffs;
+- Sources and Claims;
+- formal Experiment protocols and results;
+- immutable non-authoritative Reviews; and
+- one canonical `.dove/LESSONS.md` document.
 
-- Proposal calls are zero-write.
-- Exact confirmation replays the returned workspace identity, contract, digest, target identities, and mutation mode.
-- `patch-plan` returns canonical contained operations for host-tracked application and performs no writes.
-- `direct-process` writes through the contained mutation context and reports that host rollback is not automatically verified.
-- Binary writes require `direct-process` except supported text-safe formats.
-- Every domain mutation validates mission ownership, current paths, hashes, and evidence before its first write.
+Research direction uses ResearchDecisions, not a ResearchTree. Note synthesis and Draft, Figure, and Rebuttal bodies remain normal project artifacts; the latter are archived through Receipts without mirrors. Experimental conception/prevalidation remains Experience Skill work until a formal Experiment exists.
 
-## Derived Assessment
+## Public Read/Write Boundary
 
-`dove.status`, completion assessment, source eligibility, domain integrity, and review coverage derive answers from current canonical artifacts. They do not persist status, select work, route roles, refresh indexes, or create lifecycle mirrors.
+Direct Skills and MCP callers use visible one-based Mission numbers. They do not inspect or edit `.dove/` directly.
 
-## Server State
+Reads are zero-write. Mutations validate the complete write set, current Mission, parent/child relationship, ownership, evidence, canonical paths, and overwrite eligibility before the first write.
 
-The MCP server has no database and no durable runtime of its own. It validates inputs and calls the same core functions as the CLI. Tool discovery exposes one sealed schema 9 registry rather than public/internal or operator tiers.
+Status and completion are derived live from current records. Host return, tests, and internal checks remain evidence inputs and do not automatically establish completion or independent authority.
 
-## Forbidden Patterns
+## Mission Routing
 
-- No fallback or compatibility state loaders.
-- No task packet, board, route, queue, lease, campaign, continuation, mutation ledger, program-control, meta-optimizer, context-manifest, or navigation state.
-- No daemon, scheduler, background loop, or hidden host hook.
-- No mutable status mirror.
-- No automatic lesson capture/recall, transcript memory, Trellis lesson mirror, runtime lesson state, or retired operator lesson store.
-- No caller-minted source, lesson, or Reviewer authority.
-- No install/sync mutation of user-owned `.dove/` data.
+- A new independent goal creates a root Mission.
+- Continuation, narrowing, comparison, recovery, and follow-up create a child Mission.
+- A child records its parent and does not silently rewrite or inherit completion from that parent.
+- A project-wide mainline change is a Workspace operation.
+
+## Output State
+
+Public results expose `report`, optional `researchHandoff`, and `hostControl`. Durable identity, hashes, paths, and mutation controls stay private. A typed closure request is the only callback route and is applied exactly once with its binding unchanged.
+
+## Current-Only Runtime
+
+Current runtime reads only current `.dove/` state. It has no ResearchTree, Note store, Experience sidecar set, secondary authoritative root, state-migration path, or fallback execution path.

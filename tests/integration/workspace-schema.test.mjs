@@ -2,27 +2,29 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 
+import * as core from "../../src/core/index.mjs";
 import { ARTIFACT_PATHS, DOVE_WORKSPACE_SCHEMA_VERSION } from "../../src/core/schema.mjs";
-import { createDoveMission, initDoveGoal } from "../../src/core/mission-contracts.mjs";
+import { closeHostOutcome } from "../../src/core/execution-receipts.mjs";
+import { createDoveMission, manageDoveWorkspace } from "../../src/core/mission-contracts.mjs";
 import { validateMissionGraph } from "../../src/core/mission-graph.mjs";
-import { queryDoveMission, queryDoveStatus } from "../../src/core/mission-queries.mjs";
-import { inspectDoveSourceTree, inspectDoveWorkspace } from "../../src/core/workspace-schema.mjs";
+import { createMissionTransition } from "../../src/core/mission-lifecycle.mjs";
 import { runWithMutationContext } from "../../src/core/mutation-backend.mjs";
+import { queryDoveStatus } from "../../src/core/mission-queries.mjs";
+import { inspectDoveWorkspace } from "../../src/core/workspace-schema.mjs";
+import { initializeWorkspace } from "../helpers/current-schema-workspace.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
-
-const ROOT = process.cwd();
-const CLI = path.join(ROOT, "bin", "dove.mjs");
 
 function snapshot(root) {
   const values = {};
   const visit = (directory) => {
     if (!fs.existsSync(directory)) return;
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const fullPath = path.join(directory, entry.name);
       if (entry.isDirectory() && !entry.isSymbolicLink()) visit(fullPath);
-      else values[path.relative(root, fullPath)] = entry.isSymbolicLink() ? `link:${fs.readlinkSync(fullPath)}` : fs.readFileSync(fullPath).toString("base64");
+      else values[path.relative(root, fullPath)] = entry.isSymbolicLink()
+        ? `link:${fs.readlinkSync(fullPath)}`
+        : fs.readFileSync(fullPath).toString("base64");
     }
   };
   visit(root);
@@ -35,9 +37,17 @@ function writeJson(root, relativePath, value) {
   fs.writeFileSync(fullPath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function initCurrent(root, goal = "Test current schema") {
-  const proposal = initDoveGoal(root, { goal, mutationMode: "direct-process" });
-  return runWithMutationContext(root, { actionId: "init-dove-goal", mutationMode: "direct-process", hostId: "test" }, () => initDoveGoal(root, proposal.confirmation.confirmArgs));
+function initCurrent(root, mainline = "Test current schema") {
+  return initializeWorkspace(root, { mainline });
+}
+
+function materialize(root, args) {
+  const proposal = createDoveMission(root, args);
+  return runWithMutationContext(root, {
+    actionId: "create-dove-mission",
+    mutationMode: args.mutationMode ?? "direct-process",
+    hostId: "test"
+  }, () => createDoveMission(root, proposal.confirmation.confirmArgs));
 }
 
 function assertZeroWriteFailure(root, callback, pattern) {
@@ -46,283 +56,99 @@ function assertZeroWriteFailure(root, callback, pattern) {
   assert.deepEqual(snapshot(root), before);
 }
 
-test("absent reads and normal init proposal are zero-write, exact confirmation creates only schema 9 minimum", () => {
-  const root = createTempRoot("dove-schema-absent-");
-  const before = snapshot(root);
-  const absentStatus = queryDoveStatus(root);
-  assert.equal(absentStatus.scope.state, "absent");
-  assert.equal(absentStatus.needsAttention.status, "needs-init");
-  assert.deepEqual(snapshot(root), before);
-  const preview = queryDoveMission(root, { goal: "Preview absent mission" });
-  assert.equal(preview.status, "proposal");
-  assert.deepEqual(snapshot(root), before);
-
-  const proposal = initDoveGoal(root, { goal: "Initialize strict workspace", mutationMode: "direct-process" });
-  assert.equal(proposal.newSchemaVersion, DOVE_WORKSPACE_SCHEMA_VERSION);
-  assert.deepEqual(proposal.approval, {
-    required: true,
-    noChangesApplied: true,
-    summary: "Dove can create minimal project records and save the current project goal.",
-    effects: ["Create minimal Dove project records.", "Save the current project goal."],
-    question: "Create Dove project records for this project?"
-  });
-  assert.equal(proposal.mutation.writesApplied, false);
-  assert.deepEqual(snapshot(root), before);
-  const patchProposal = initDoveGoal(root, { goal: "Initialize strict workspace", mutationMode: "patch-plan" });
-  const patchResult = runWithMutationContext(root, { actionId: "init-dove-goal", mutationMode: "patch-plan", hostId: "test" }, () => initDoveGoal(root, patchProposal.confirmation.confirmArgs));
-  assert.equal(patchResult.status, "initialization-planned");
-  assert.equal(patchResult.writesApplied, false);
-  assert.ok(patchResult.mutationPlan.operations.some((operation) => operation.kind === "ensure-directory"));
-  assert.deepEqual(snapshot(root), before);
-
-  const initialized = runWithMutationContext(root, { actionId: "init-dove-goal", mutationMode: "direct-process", hostId: "test" }, () => initDoveGoal(root, proposal.confirmation.confirmArgs));
-  assert.equal(initialized.status, "initialized");
-  assert.equal(inspectDoveWorkspace(root).healthy, true);
-  assert.deepEqual(fs.readdirSync(path.join(root, ".dove")).sort(), [
-    "artifacts", "claims", "drafts", "experiments", "figures", "manifest.json", "missions", "notes", "project.json", "rebuttal", "receipts", "research-trees", "reviews", "sources", "versions"
-  ]);
-  assert.equal(fs.existsSync(path.join(root, ".dove", "state.json")), false);
-  assert.equal(fs.existsSync(path.join(root, ".dove", "task-packets")), false);
-  assert.equal(fs.existsSync(path.join(root, ".dove", "artifacts", "ownership.json")), false);
-  assert.equal(fs.existsSync(path.join(root, ".dove", "artifacts", "lineage.json")), false);
-});
-
-test("strict opener rejects a dangling .dove symlink as an invalid root without writes", () => {
-  const root = createTempRoot("dove-schema-dangling-root-");
-  fs.symlinkSync("missing-dove-target", path.join(root, ".dove"), "dir");
-  assertZeroWriteFailure(root, () => queryDoveStatus(root), /invalid Dove workspace state invalid-root/u);
-  assert.equal(fs.lstatSync(path.join(root, ".dove")).isSymbolicLink(), true);
-});
-
-test("strict opener classifies missing, malformed, legacy, future, and contradictory manifests and rejects reads and mutations without writes", () => {
-  const cases = [
-    ["missing", (root) => fs.mkdirSync(path.join(root, ".dove")), /legacy Dove schema state/u],
-    ["malformed", (root) => { fs.mkdirSync(path.join(root, ".dove")); fs.writeFileSync(path.join(root, ".dove", "manifest.json"), "{bad\n"); }, /invalid Dove workspace state malformed-manifest/u],
-    ["legacy", (root) => writeJson(root, ".dove/manifest.json", { schemaVersion: 6 }), /legacy Dove schema state/u],
-    ["legacy-authority", (root) => writeJson(root, ".dove/manifest.json", { version: 1, status: "authoritative" }), /legacy Dove schema state/u],
-    ["future", (root) => writeJson(root, ".dove/manifest.json", { schemaVersion: 99 }), /future Dove schema 99/u],
-    ["contradictory", (root) => initCurrent(root), /contradicts required layout/u]
-  ];
-  for (const [name, setup, pattern] of cases) {
-    const root = createTempRoot(`dove-schema-${name}-`);
-    setup(root);
-    if (name === "contradictory") fs.rmSync(path.join(root, ".dove", "receipts", "authority"), { recursive: true });
-    assertZeroWriteFailure(root, () => queryDoveStatus(root), pattern);
-    assertZeroWriteFailure(root, () => queryDoveMission(root, { goal: "must reject" }), pattern);
-    assertZeroWriteFailure(root, () => createDoveMission(root, { goal: "must reject" }), pattern);
-  }
-});
-
-test("current schema rejects retained legacy markers and persisted ownership mirrors as a contradictory layout without writes", () => {
-  for (const legacyPath of [
-    ".dove/state.json",
-    ".dove/task-packets",
-    ".dove/orchestration",
-    ".dove/runtime",
-    ".dove/workspace",
-    ".dove/mutations",
-    ".dove/programs",
-    ".dove/meta",
-    ".dove/context",
-    ".dove/wiki",
-    ".dove/artifacts/ownership.json",
-    ".dove/artifacts/lineage.json"
+test("schema 18 public API omits retired RequirementSnapshot, ResearchTree, Note, and Version surfaces", () => {
+  for (const field of [
+    "requirementSnapshotsDir",
+    "researchTreesDir",
+    "completionReceiptsDir",
+    "authorityReceiptsDir",
+    "notesDir",
+    "versionsDir"
   ]) {
-    const root = createTempRoot("dove-schema-current-legacy-contradiction-");
-    initCurrent(root);
-    if (legacyPath.endsWith(".json")) writeJson(root, legacyPath, { version: 7 });
-    else fs.mkdirSync(path.join(root, legacyPath), { recursive: true });
-    assertZeroWriteFailure(
-      root,
-      () => queryDoveStatus(root),
-      /contradicts required layout.*retained legacy artifact/u
-    );
+    assert.equal(Object.hasOwn(ARTIFACT_PATHS, field), false);
+  }
+  for (const name of [
+    "createRequirementSnapshot",
+    "validatePersistedRequirementSnapshot",
+    "readResearchTree",
+    "reevaluateResearchTree",
+    "researchTreePath",
+    "researchTreeProjection",
+    "validateResearchTree",
+    "upsertNote",
+    "createVersionSnapshot",
+    "compareVersions",
+    "ingestExecutionReceipt"
+  ]) {
+    assert.equal(Object.hasOwn(core, name), false);
   }
 });
 
-test("manifest classification does not deep-read trees for legacy, future, or malformed schemas", () => {
-  const cases = [
-    ["legacy", { schemaVersion: 6 }, "legacy"],
-    ["future", { schemaVersion: 99 }, "future"],
-    ["malformed", null, "invalid"]
-  ];
-  for (const [name, manifest, expectedCategory] of cases) {
-    const root = createTempRoot(`dove-schema-shallow-${name}-`);
-    fs.mkdirSync(path.join(root, ".dove"));
-    if (manifest === null) fs.writeFileSync(path.join(root, ".dove", "manifest.json"), "{bad\n");
-    else writeJson(root, ".dove/manifest.json", manifest);
-    fs.symlinkSync("missing-target", path.join(root, ".dove", "unreadable-tree-entry"));
-    const inspection = inspectDoveWorkspace(root);
-    assert.equal(inspection.category, expectedCategory);
-    assert.equal(Object.hasOwn(inspection.source, "treeDigest"), false);
-  }
-});
-
-test("malformed current project, mission, and receipt JSON fail visibly without repair or backup", () => {
-  const projectRoot = createTempRoot("dove-schema-bad-project-");
-  initCurrent(projectRoot);
-  fs.writeFileSync(path.join(projectRoot, ARTIFACT_PATHS.projectIdentity), "{bad\n");
-  assertZeroWriteFailure(projectRoot, () => queryDoveStatus(projectRoot), /Malformed durable JSON in \.dove\/project\.json/u);
-  assert.equal(fs.readdirSync(path.join(projectRoot, ".dove")).some((name) => /backup|repair/iu.test(name)), false);
-
-  const missionRoot = createTempRoot("dove-schema-bad-mission-");
-  initCurrent(missionRoot);
-  fs.writeFileSync(path.join(missionRoot, ARTIFACT_PATHS.missionsDir, "broken.json"), "{bad\n");
-  assertZeroWriteFailure(missionRoot, () => queryDoveStatus(missionRoot), /Malformed durable JSON in \.dove\/missions\/broken\.json/u);
-
-  const receiptRoot = createTempRoot("dove-schema-bad-receipt-");
-  initCurrent(receiptRoot);
-  fs.writeFileSync(path.join(receiptRoot, ARTIFACT_PATHS.executionReceiptsDir, "broken.json"), "{bad\n");
-  assertZeroWriteFailure(receiptRoot, () => queryDoveStatus(receiptRoot), /Malformed durable JSON|receipt-json-malformed/u);
-});
-
-test("normal init exact replay rejects cross-workspace data before inspecting destination state", () => {
-  const source = createTempRoot("dove-schema-init-source-");
-  const target = createTempRoot("dove-schema-init-target-");
-  writeJson(target, ".dove/manifest.json", { schemaVersion: 99 });
-  const proposal = initDoveGoal(source, { goal: "Initialize source only", mutationMode: "direct-process" });
-  const before = snapshot(target);
-  assert.throws(() => runWithMutationContext(target, { actionId: "init-dove-goal", mutationMode: "direct-process" }, () => initDoveGoal(target, proposal.confirmation.confirmArgs)), /different canonical workspace/u);
-  assert.deepEqual(snapshot(target), before);
-});
-
-test("archive-reset proposal is zero-write and rejects patch-plan, drift, tamper, collision, and cross-workspace replay", () => {
-  const root = createTempRoot("dove-schema-reset-");
-  writeJson(root, ".dove/state.json", { version: 6, marker: "legacy" });
+test("schema 18 initialization creates only the minimal current workspace layout", () => {
+  const root = createTempRoot("dove-schema18-init-");
   const before = snapshot(root);
-  const proposal = initDoveGoal(root, { goal: "Fresh schema", archiveReset: true, mutationMode: "direct-process" });
-  assert.equal(proposal.kind, "archive-reset");
-  assert.equal(proposal.operations[0].type, "atomic-directory-rename");
-  const repeated = initDoveGoal(root, { goal: "Fresh schema", archiveReset: true, mutationMode: "direct-process" });
-  assert.equal(repeated.archiveTarget, proposal.archiveTarget);
-  assert.notEqual(repeated.confirmation.confirmArgs.workspaceId, proposal.confirmation.confirmArgs.workspaceId);
+  assert.equal(queryDoveStatus(root).scope.state, "absent");
   assert.deepEqual(snapshot(root), before);
-  assert.throws(() => initDoveGoal(root, { goal: "Fresh schema", archiveReset: true, mutationMode: "patch-plan" }), /cannot run in patch-plan mode/u);
 
-  const tampered = structuredClone(proposal.confirmation.confirmArgs);
-  tampered.proposalDigest = "0".repeat(64);
-  assertZeroWriteFailure(root, () => runWithMutationContext(root, { actionId: "init-dove-goal", mutationMode: "direct-process" }, () => initDoveGoal(root, tampered)), /no longer matches/u);
-
-  fs.writeFileSync(path.join(root, ".dove", "drift.txt"), "drift");
-  assertZeroWriteFailure(root, () => runWithMutationContext(root, { actionId: "init-dove-goal", mutationMode: "direct-process" }, () => initDoveGoal(root, proposal.confirmation.confirmArgs)), /no longer matches|changed after proposal/u);
-
-  const fresh = initDoveGoal(root, { goal: "Fresh schema", archiveReset: true, mutationMode: "direct-process" });
-  const tamperedTarget = structuredClone(fresh.confirmation.confirmArgs);
-  tamperedTarget.archiveTarget = path.join(root, "chosen-by-caller");
-  assertZeroWriteFailure(root, () => runWithMutationContext(root, { actionId: "init-dove-goal", mutationMode: "direct-process" }, () => initDoveGoal(root, tamperedTarget)), /no longer matches/u);
-  fs.mkdirSync(fresh.archiveTarget, { recursive: true });
-  assertZeroWriteFailure(root, () => runWithMutationContext(root, { actionId: "init-dove-goal", mutationMode: "direct-process" }, () => initDoveGoal(root, fresh.confirmation.confirmArgs)), /Archive target is already occupied/u);
-
-  const other = createTempRoot("dove-schema-reset-other-");
-  writeJson(other, ".dove/state.json", { version: 6 });
-  assertZeroWriteFailure(other, () => runWithMutationContext(other, { actionId: "init-dove-goal", mutationMode: "direct-process" }, () => initDoveGoal(other, fresh.confirmation.confirmArgs)), /different canonical workspace/u);
-});
-
-test("archive-reset refuses a symlinked archive parent without writes", () => {
-  const root = createTempRoot("dove-schema-reset-archive-link-");
-  const outside = createTempRoot("dove-schema-reset-archive-link-outside-");
-  writeJson(root, ".dove/state.json", { version: 6 });
-  fs.symlinkSync(outside, path.join(root, ".dove-archive"), "dir");
-  assertZeroWriteFailure(root, () => initDoveGoal(root, { goal: "Reject archive symlink", archiveReset: true, mutationMode: "direct-process" }), /archive parent.*symbolic link/u);
-  assert.deepEqual(fs.readdirSync(outside), []);
-});
-
-test("archive-reset exact replay rejects source mode and same-content replacement drift", () => {
-  const modeRoot = createTempRoot("dove-schema-reset-mode-drift-");
-  writeJson(modeRoot, ".dove/state.json", { version: 6 });
-  const modeProposal = initDoveGoal(modeRoot, { goal: "Reject mode drift", archiveReset: true, mutationMode: "direct-process" });
-  fs.chmodSync(path.join(modeRoot, ".dove", "state.json"), 0o640);
-  assertZeroWriteFailure(modeRoot, () => runWithMutationContext(modeRoot, { actionId: "init-dove-goal", mutationMode: "direct-process" }, () => initDoveGoal(modeRoot, modeProposal.confirmation.confirmArgs)), /no longer matches|changed after proposal/u);
-
-  const replacementRoot = createTempRoot("dove-schema-reset-replacement-drift-");
-  writeJson(replacementRoot, ".dove/state.json", { version: 6 });
-  const replacementProposal = initDoveGoal(replacementRoot, { goal: "Reject replacement drift", archiveReset: true, mutationMode: "direct-process" });
-  const statePath = path.join(replacementRoot, ".dove", "state.json");
-  const sameContent = fs.readFileSync(statePath);
-  fs.unlinkSync(statePath);
-  fs.writeFileSync(statePath, sameContent);
-  fs.chmodSync(statePath, 0o600);
-  assertZeroWriteFailure(replacementRoot, () => runWithMutationContext(replacementRoot, { actionId: "init-dove-goal", mutationMode: "direct-process" }, () => initDoveGoal(replacementRoot, replacementProposal.confirmation.confirmArgs)), /no longer matches|changed after proposal/u);
-});
-
-test("direct archive-reset preserves the archived tree byte-for-byte and initializes a clean schema", () => {
-  const root = createTempRoot("dove-schema-reset-success-");
-  writeJson(root, ".dove/state.json", { version: 6, nested: { value: true } });
-  fs.mkdirSync(path.join(root, ".dove", "nested"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".dove", "nested", "bytes.bin"), Buffer.from([0, 1, 2, 255]));
-  fs.chmodSync(path.join(root, ".dove", "nested", "bytes.bin"), 0o640);
-  fs.symlinkSync("nested/bytes.bin", path.join(root, ".dove", "bytes-link"));
-  const before = snapshot(path.join(root, ".dove"));
-  const proposal = initDoveGoal(root, { goal: "Clean schema", archiveReset: true, mutationMode: "direct-process" });
-  const result = runWithMutationContext(root, { actionId: "init-dove-goal", mutationMode: "direct-process", hostId: "test" }, () => initDoveGoal(root, proposal.confirmation.confirmArgs));
-  assert.equal(result.status, "archive-reset-complete");
-  assert.deepEqual(snapshot(result.archiveTarget), before);
-  assert.equal(fs.lstatSync(path.join(result.archiveTarget, "nested", "bytes.bin")).mode & 0o777, 0o640);
-  assert.equal(fs.readlinkSync(path.join(result.archiveTarget, "bytes-link")), "nested/bytes.bin");
-  assert.equal(inspectDoveWorkspace(root).healthy, true);
-  assert.equal(fs.existsSync(path.join(root, ".dove", "state.json")), false);
-});
-
-
-test("normal init, archive reset, and first mission participate in commit rollback", () => {
-  const initRoot = createTempRoot("dove-schema-init-transaction-failure-");
-  const initBefore = snapshot(initRoot);
-  const initProposal = initDoveGoal(initRoot, { goal: "Transactional init", mutationMode: "direct-process" });
-  const failDovePromotion = {
-    ...fs,
-    renameSync(from, to, metadata) {
-      if (metadata?.anchoredTo === ".dove") throw new Error("injected init promotion failure");
-      return fs.renameSync(from, to);
-    }
-  };
-  assert.throws(() => runWithMutationContext(initRoot, { actionId: "init-dove-goal", mutationMode: "direct-process", fsOps: failDovePromotion }, () => initDoveGoal(initRoot, initProposal.confirmation.confirmArgs)), /all staged changes were rolled back.*injected init promotion failure/u);
-  assert.deepEqual(snapshot(initRoot), initBefore);
-
-  const archiveRoot = createTempRoot("dove-schema-archive-transaction-failure-");
-  writeJson(archiveRoot, ".dove/state.json", { version: 6, marker: "retain" });
-  fs.mkdirSync(path.join(archiveRoot, ".dove/nested"));
-  fs.writeFileSync(path.join(archiveRoot, ".dove/nested/bytes.bin"), Buffer.from([0, 1, 2, 255]));
-  const archiveBefore = snapshot(archiveRoot);
-  const archiveProposal = initDoveGoal(archiveRoot, { goal: "Transactional reset", archiveReset: true, mutationMode: "direct-process" });
-  const failResetPromotion = {
-    ...fs,
-    renameSync(from, to, metadata) {
-      if (metadata?.anchoredTo === ".dove" && metadata?.anchoredFrom?.includes(".dove-transaction-")) throw new Error("injected reset promotion failure");
-      return fs.renameSync(from, to);
-    }
-  };
-  assert.throws(() => runWithMutationContext(archiveRoot, { actionId: "init-dove-goal", mutationMode: "direct-process", fsOps: failResetPromotion }, () => initDoveGoal(archiveRoot, archiveProposal.confirmation.confirmArgs)), /all staged changes were rolled back.*injected reset promotion failure/u);
-  assert.deepEqual(snapshot(archiveRoot), archiveBefore);
-
-  const missionRoot = createTempRoot("dove-schema-first-mission-transaction-failure-");
-  const missionBefore = snapshot(missionRoot);
-  const missionProposal = createDoveMission(missionRoot, {
-    goal: "Transactional first mission",
-    targetArtifacts: ["README.md"],
-    expectedArtifacts: ["README.md"],
+  const proposal = manageDoveWorkspace(root, {
+    operation: "initialize",
+    mainline: "Establish the current research mainline.",
     mutationMode: "direct-process"
   });
-  const failFirstMissionPromotion = {
-    ...fs,
-    renameSync(from, to, metadata) {
-      if (metadata?.anchoredTo === ".dove") throw new Error("injected first mission promotion failure");
-      return fs.renameSync(from, to);
-    }
-  };
-  assert.throws(() => runWithMutationContext(missionRoot, { actionId: "create-dove-mission", mutationMode: "direct-process", fsOps: failFirstMissionPromotion }, () => createDoveMission(missionRoot, missionProposal.confirmation.confirmArgs)), /all staged changes were rolled back.*injected first mission promotion failure/u);
-  assert.deepEqual(snapshot(missionRoot), missionBefore);
+  assert.equal(proposal.newSchemaVersion, DOVE_WORKSPACE_SCHEMA_VERSION);
+  assert.deepEqual(snapshot(root), before);
+
+  const result = runWithMutationContext(root, {
+    actionId: "manage-dove-workspace",
+    mutationMode: "direct-process",
+    hostId: "test"
+  }, () => manageDoveWorkspace(root, proposal.confirmation.confirmArgs));
+  assert.equal(result.status, "initialized");
+  const workspace = inspectDoveWorkspace(root);
+  assert.equal(workspace.healthy, true);
+  assert.equal(workspace.schemaVersion, 18);
+  assert.equal(workspace.project.schemaVersion, 3);
+  assert.equal(Object.hasOwn(workspace.project, "projectId"), false);
+  assert.equal(Object.hasOwn(workspace.project, "trust"), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove/requirement-snapshots")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove/research-trees")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove/receipts/completion")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove/receipts/authority")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove/notes")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove/versions")), false);
+  assert.equal(fs.existsSync(path.join(root, ARTIFACT_PATHS.lessonsDocument)), true);
+  assert.equal(fs.existsSync(path.join(root, ".dove/lessons")), false);
 });
 
-test("first mission patch-plan reuses the schema 9 initializer and remains zero-write", () => {
-  const root = createTempRoot("dove-schema-first-mission-patch-");
+test("schema 18 mission binds requirements and artifacts directly without snapshot authority", () => {
+  const root = createTempRoot("dove-schema18-direct-mission-");
+  initCurrent(root);
+  const result = materialize(root, {
+    mode: "research",
+    missionId: "direct-mission",
+    goal: "Resolve one bounded question.",
+    requirements: ["Interpret one bounded result."],
+    assumptions: ["The current file is inspectable."],
+    artifacts: [{ path: "outputs/result.md", required: true, role: "output" }],
+    completionCriteria: ["The result is interpreted."],
+    evidenceRequirements: ["artifact:outputs/result.md"]
+  });
+  assert.deepEqual(result.mission.requirements, ["Interpret one bounded result."]);
+  assert.deepEqual(result.mission.artifacts, [{ path: "outputs/result.md", required: true, role: "output" }]);
+  assert.equal(Object.hasOwn(result.mission, "requirementSnapshotId"), false);
+  assert.equal(Object.hasOwn(result.mission, "changeFrom"), false);
+  assert.equal(inspectDoveWorkspace(root).requirementSnapshots, undefined);
+  assert.equal(inspectDoveWorkspace(root).researchTrees, undefined);
+});
+
+test("mission patch plans remain zero-write and contain only Mission and Decision writes", () => {
+  const root = createTempRoot("dove-schema18-mission-plan-");
+  initCurrent(root);
   const before = snapshot(root);
   const proposal = createDoveMission(root, {
-    goal: "Plan the first mission without writes",
-    scope: ["Define the mission contract"],
-    targetArtifacts: ["README.md"],
-    expectedArtifacts: ["README.md"],
-    completionCriteria: ["The mission contract is durable"],
-    evidenceRequirements: ["artifact:README.md"],
+    mode: "research",
+    goal: "Plan one bounded research mission.",
+    artifacts: [{ path: "README.md", required: true, role: "output" }],
     mutationMode: "patch-plan"
   });
   const result = runWithMutationContext(root, {
@@ -331,108 +157,192 @@ test("first mission patch-plan reuses the schema 9 initializer and remains zero-
     hostId: "test"
   }, () => createDoveMission(root, proposal.confirmation.confirmArgs));
   assert.equal(result.status, "materialization-planned");
-  assert.equal(result.writesApplied, false);
   assert.deepEqual(snapshot(root), before);
-  const paths = new Set(result.mutationPlan.operations.map((operation) => operation.relativePath));
-  for (const requiredPath of [
-    ".dove/manifest.json",
-    ".dove/project.json",
-    `.dove/missions/${proposal.mission.missionId}.json`
-  ]) assert.equal(paths.has(requiredPath), true, requiredPath);
-  assert.equal(paths.has(".dove/state.json"), false);
-  assert.equal(paths.has(".dove/task-packets/index.json"), false);
-  assert.equal(paths.has(".dove/artifacts/ownership.json"), false);
-  assert.equal(paths.has(".dove/artifacts/lineage.json"), false);
+  const paths = result.mutationPlan.operations.map((operation) => operation.relativePath);
+  assert.ok(paths.some((item) => item.startsWith(`${ARTIFACT_PATHS.missionsDir}/`)));
+  assert.ok(paths.some((item) => item.startsWith(`${ARTIFACT_PATHS.researchDecisionsDir}/`)));
+  assert.equal(paths.some((item) => item.includes("requirement-snapshots") || item.includes("research-trees")), false);
 });
 
-test("first mission direct-process cleans a newly initialized workspace if the mission write fails", () => {
-  const root = createTempRoot("dove-schema-first-mission-failure-");
+test("mission direct-process promotion failures roll back atomically", () => {
+  const root = createTempRoot("dove-schema18-mission-rollback-");
+  initCurrent(root);
   const before = snapshot(root);
   const proposal = createDoveMission(root, {
-    goal: "Fail the first mission write cleanly",
-    scope: ["Exercise mission rollback"],
-    targetArtifacts: ["README.md"],
-    expectedArtifacts: ["README.md"],
-    completionCriteria: ["No partial first mission state remains"],
-    evidenceRequirements: ["artifact:README.md"],
-    mutationMode: "direct-process"
+    mode: "research",
+    goal: "Exercise one atomic mission write.",
+    artifacts: [{ path: "README.md", required: true, role: "output" }]
   });
-  assert.throws(
-    () => runWithMutationContext(root, {
-      actionId: "create-dove-mission",
-      mutationMode: "direct-process",
-      hostId: "test"
-    }, (context) => {
-      const originalWriteJson = context.writeJson.bind(context);
-      context.writeJson = (relativePath, value) => {
-        if (relativePath.startsWith(".dove/missions/")) throw new Error("injected first mission write failure");
-        return originalWriteJson(relativePath, value);
-      };
-      return createDoveMission(root, proposal.confirmation.confirmArgs);
-    }),
-    /injected first mission write failure/u
-  );
+  const fsOps = {
+    ...fs,
+    renameSync(from, to, metadata) {
+      if (metadata?.anchoredTo?.startsWith(`${ARTIFACT_PATHS.missionsDir}/`)) {
+        throw new Error("injected mission promotion failure");
+      }
+      return fs.renameSync(from, to);
+    }
+  };
+  assert.throws(() => runWithMutationContext(root, {
+    actionId: "create-dove-mission",
+    mutationMode: "direct-process",
+    hostId: "test",
+    fsOps
+  }, () => createDoveMission(root, proposal.confirmation.confirmArgs)), /all staged changes were rolled back.*injected mission promotion failure/u);
   assert.deepEqual(snapshot(root), before);
 });
 
-test("mission graph validation rejects unknown dependencies, self edges, cycles, and supersession forks without writes", () => {
-  const root = createTempRoot("dove-schema-mission-graph-");
+test("explicit child missions replace snapshot change maps with parent branch lineage", () => {
+  const root = createTempRoot("dove-schema18-branch-");
   initCurrent(root);
-  assertZeroWriteFailure(root, () => createDoveMission(root, { missionId: "unknown-dependency", goal: "Unknown dependency", dependsOnMissionIds: ["missing"] }), /depends on unknown mission/u);
-
-  const firstProposal = createDoveMission(root, { missionId: "first", goal: "First" });
-  runWithMutationContext(root, { actionId: "create-dove-mission", mutationMode: "direct-process", hostId: "test" }, () => createDoveMission(root, firstProposal.confirmation.confirmArgs));
-  assertZeroWriteFailure(root, () => createDoveMission(root, { missionId: "self-edge", goal: "Self edge", dependsOnMissionIds: ["self-edge"] }), /must not depend on itself/u);
-  const dependentProposal = createDoveMission(root, { missionId: "second", goal: "Second", dependsOnMissionIds: ["first"] });
-  runWithMutationContext(root, { actionId: "create-dove-mission", mutationMode: "direct-process", hostId: "test" }, () => createDoveMission(root, dependentProposal.confirmation.confirmArgs));
-  const successorProposal = createDoveMission(root, { missionId: "third", goal: "Third", supersedesMissionId: "first" });
-  runWithMutationContext(root, { actionId: "create-dove-mission", mutationMode: "direct-process", hostId: "test" }, () => createDoveMission(root, successorProposal.confirmation.confirmArgs));
+  const parent = materialize(root, {
+    mode: "research",
+    missionId: "parent",
+    goal: "Investigate the parent route."
+  }).mission;
+  const child = materialize(root, {
+    operation: "branch",
+    mode: "research",
+    missionId: "child",
+    goal: "Investigate one explicit child route.",
+    parentMissionId: parent.missionId,
+    branchKind: "alternative",
+    branchReason: "Test a distinct explanation.",
+    stopParentReason: "Stop the parent before opening its explicit child."
+  }).mission;
+  assert.equal(child.parentMissionId, parent.missionId);
+  assert.equal(child.branchKind, "alternative");
+  assert.equal(Object.hasOwn(child, "changeFrom"), false);
   const workspace = inspectDoveWorkspace(root);
-  assert.deepEqual(workspace.missionGraph.dependenciesByMission.get("second"), ["first"]);
-  assert.equal(workspace.missionGraph.successorByMission.get("first"), "third");
-  assertZeroWriteFailure(root, () => createDoveMission(root, { missionId: "fork", goal: "Fork", supersedesMissionId: "first" }), /supersession forks/u);
+  assert.deepEqual(workspace.missionGraph.childrenByMission.get(parent.missionId), [child.missionId]);
+  assert.equal(workspace.missionTransitions.get(parent.missionId).status, "stopped");
+});
 
+test("mission graph validation rejects unknown, self, and cyclic edges", () => {
+  const root = createTempRoot("dove-schema18-mission-graph-");
+  initCurrent(root);
+  assertZeroWriteFailure(root, () => createDoveMission(root, {
+    mode: "research",
+    missionId: "unknown-dependency",
+    goal: "Reject an unknown dependency.",
+    dependsOnMissionIds: ["missing"]
+  }), /depends on unknown mission/u);
+  assertZeroWriteFailure(root, () => createDoveMission(root, {
+    mode: "research",
+    missionId: "self-edge",
+    goal: "Reject a self dependency.",
+    dependsOnMissionIds: ["self-edge"]
+  }), /must not depend on itself/u);
   assert.throws(() => validateMissionGraph([
     { filename: "first.json", mission: { missionId: "first", dependsOnMissionIds: ["second"] } },
     { filename: "second.json", mission: { missionId: "second", dependsOnMissionIds: ["first"] } }
   ]), /dependency graph contains a cycle/u);
 });
 
-test("strict opener recomputes mission contract digests and rejects canonical-content tampering", () => {
-  const root = createTempRoot("dove-schema-mission-digest-tamper-");
+test("strict opener validates typed ordinary observations and mission mode boundaries", () => {
+  const root = createTempRoot("dove-schema18-host-observation-");
   initCurrent(root);
-  const proposal = createDoveMission(root, { missionId: "digest-bound", goal: "Bind this exact mission content." });
-  runWithMutationContext(root, { actionId: "create-dove-mission", mutationMode: "direct-process", hostId: "test" }, () => createDoveMission(root, proposal.confirmation.confirmArgs));
-  const missionPath = path.join(root, ".dove/missions/digest-bound.json");
-  const mission = JSON.parse(fs.readFileSync(missionPath, "utf8"));
-  mission.goal = "Hand-edited goal with the old digest.";
-  fs.writeFileSync(missionPath, `${JSON.stringify(mission, null, 2)}\n`, "utf8");
-  assertZeroWriteFailure(root, () => queryDoveStatus(root), /contractDigest does not match its canonical mission content/u);
+  const mission = materialize(root, {
+    mode: "ordinary",
+    missionId: "ordinary-observation",
+    goal: "Perform one no-file operation.",
+    completionCriteria: ["The operation returns a concrete observation."]
+  }).mission;
+  runWithMutationContext(root, {
+    actionId: "close-host-outcome",
+    mutationMode: "direct-process",
+    hostId: "test"
+  }, () => closeHostOutcome(root, {
+    missionId: mission.missionId,
+    attemptId: "ordinary-observation-attempt",
+    status: "completed",
+    summary: "The no-file operation completed.",
+    artifactPaths: [],
+    validationPaths: [],
+    facts: [{ statement: "The bounded command returned exit code zero without producing a file.", criterionNumbers: [1] }]
+  }));
+  assert.equal(inspectDoveWorkspace(root).receiptLedger.receipts[0].ordinaryHostOutcome.mode, "observation-only");
+
+  const [receiptName] = fs.readdirSync(path.join(root, ARTIFACT_PATHS.executionReceiptsDir));
+  const receiptPath = path.join(root, ARTIFACT_PATHS.executionReceiptsDir, receiptName);
+  const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
+  receipt.ordinaryHostOutcome.facts = [];
+  fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  assertZeroWriteFailure(root, () => queryDoveStatus(root), /observation-only mode requires at least one execution fact/u);
 });
 
-test("current schema rejects unsealed completion and authority receipt directories", () => {
-  for (const directory of ["completion", "authority"]) {
-    const root = createTempRoot(`dove-schema-unsealed-${directory}-`);
+test("strict opener rejects current Mission, Decision, and project identity tampering", () => {
+  const root = createTempRoot("dove-schema18-tamper-");
+  initCurrent(root);
+  const result = materialize(root, {
+    mode: "research",
+    missionId: "tamper",
+    goal: "Bind exact current content."
+  });
+
+  const missionPath = path.join(root, ARTIFACT_PATHS.missionsDir, "tamper.json");
+  const mission = JSON.parse(fs.readFileSync(missionPath, "utf8"));
+  mission.goal = "Hand-edited goal.";
+  fs.writeFileSync(missionPath, `${JSON.stringify(mission, null, 2)}\n`);
+  assertZeroWriteFailure(root, () => queryDoveStatus(root), /contractDigest does not match its canonical mission content/u);
+
+  fs.writeFileSync(missionPath, `${JSON.stringify(result.mission, null, 2)}\n`);
+  const decisionName = fs.readdirSync(path.join(root, ARTIFACT_PATHS.researchDecisionsDir))[0];
+  const decisionPath = path.join(root, ARTIFACT_PATHS.researchDecisionsDir, decisionName);
+  const decision = JSON.parse(fs.readFileSync(decisionPath, "utf8"));
+  decision.synthesis = "Tampered scientific judgment.";
+  fs.writeFileSync(decisionPath, `${JSON.stringify(decision, null, 2)}\n`);
+  assertZeroWriteFailure(root, () => queryDoveStatus(root), /canonical content|does not match/u);
+
+  fs.writeFileSync(decisionPath, `${JSON.stringify(result.currentResearchDecision, null, 2)}\n`);
+  const projectPath = path.join(root, ARTIFACT_PATHS.projectIdentity);
+  const project = JSON.parse(fs.readFileSync(projectPath, "utf8"));
+  project.projectId = `project-${project.workspaceId}`;
+  writeJson(root, ARTIFACT_PATHS.projectIdentity, project);
+  assertZeroWriteFailure(root, () => queryDoveStatus(root), /does not accept unknown fields.*projectId/u);
+});
+
+test("strict opener rejects retired Schema 16 aggregate and generic receipt directories", () => {
+  for (const relativePath of [
+    ".dove/requirement-snapshots",
+    ".dove/research-trees",
+    ".dove/receipts/completion",
+    ".dove/receipts/authority"
+  ]) {
+    const root = createTempRoot("dove-schema18-retired-path-");
     initCurrent(root);
-    writeJson(root, `.dove/receipts/${directory}/unexpected.json`, { schemaVersion: 1 });
-    assertZeroWriteFailure(root, () => queryDoveStatus(root), /must remain empty until its sealed schema is introduced/u);
+    fs.mkdirSync(path.join(root, relativePath), { recursive: true });
+    assertZeroWriteFailure(root, () => queryDoveStatus(root), /retained legacy artifact/u);
   }
 });
 
-test("CLI archive-reset exact confirmation succeeds and doctor is read-only", () => {
-  const root = createTempRoot("dove-schema-cli-");
-  writeJson(root, ".dove/state.json", { version: 6 });
-  const before = snapshot(root);
-  const proposed = spawnSync(process.execPath, [CLI, "init", root, "--archive-reset", "--goal", "CLI reset", "--mutation-mode", "direct-process", "--json"], { cwd: ROOT, encoding: "utf8" });
-  assert.equal(proposed.status, 0, proposed.stderr || proposed.stdout);
-  const payload = JSON.parse(proposed.stdout);
-  assert.match(payload.confirmation.exactConfirmationCommand, /init/u);
-  assert.deepEqual(snapshot(root), before);
-  const confirmed = spawnSync("/bin/sh", ["-c", payload.confirmation.exactConfirmationCommand], { cwd: ROOT, encoding: "utf8" });
-  assert.equal(confirmed.status, 0, confirmed.stderr || confirmed.stdout);
-  const beforeDoctor = snapshot(root);
-  const doctor = spawnSync(process.execPath, [CLI, "doctor", root], { cwd: ROOT, encoding: "utf8" });
-  const doctorPayload = JSON.parse(doctor.stdout);
-  assert.equal(doctorPayload.workspaceSchema.healthy, true);
-  assert.deepEqual(snapshot(root), beforeDoctor);
+test("schema 18 Mission transitions reject retired migration provenance", () => {
+  assert.throws(() => createMissionTransition({
+    workspaceId: "workspace-current",
+    missionId: "mission-current",
+    contractDigest: "a".repeat(64),
+    workspaceRevisionId: "workspace-revision-current",
+    status: "stopped",
+    reason: "Do not admit migration provenance into current durable state.",
+    evidenceRefs: [],
+    trigger: "migration",
+    createdAt: "2026-01-01T00:00:00.000Z"
+  }), /trigger is unsupported/u);
+});
+
+test("schema 18 runtime rejects schema 16 without a conversion surface", () => {
+  const root = createTempRoot("dove-schema18-block-schema16-");
+  fs.mkdirSync(path.join(root, ".dove"), { recursive: true });
+  writeJson(root, ARTIFACT_PATHS.doveRootManifest, { schemaVersion: 16 });
+  assertZeroWriteFailure(root, () => queryDoveStatus(root), /cannot open unsupported Dove schema 16 under schema 18.*archive the old workspace/iu);
+  assertZeroWriteFailure(root, () => manageDoveWorkspace(root, {
+    operation: "migrate-workspace",
+    mutationMode: "direct-process"
+  }), /workspace operation must be initialize or revise-mainline/u);
+});
+
+test("malformed current project JSON fails visibly without repair", () => {
+  const root = createTempRoot("dove-schema18-malformed-project-");
+  initCurrent(root);
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.projectIdentity), "{bad\n");
+  assertZeroWriteFailure(root, () => queryDoveStatus(root), /Malformed durable JSON|malformed/u);
 });

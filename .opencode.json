@@ -2,9 +2,12 @@
   "mcpServers": {
     "dove": {
       "type": "stdio",
-      "command": "node",
+      "command": "dove",
       "args": [
-        "./mcp/dove-state-server-package.mjs"
+        "mcp",
+        "serve",
+        "--project",
+        "."
       ]
     }
   }

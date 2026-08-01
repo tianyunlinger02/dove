@@ -2,10 +2,10 @@
 
 import process from "node:process";
 
-import { checkGeneratedAdapters, writeGeneratedAdapters } from "./generate-command-adapters.mjs";
+import { checkGeneratedAdapters, checkGeneratedPrimaryRoles, generatedWriteSummary, writeGeneratedAdapters, writeGeneratedPrimaryRoles } from "./generate-command-adapters.mjs";
 
 if (process.argv.includes("--check")) {
-  const drift = checkGeneratedAdapters();
+  const drift = [...checkGeneratedAdapters(), ...checkGeneratedPrimaryRoles()];
   if (drift.length > 0) {
     for (const item of drift) {
       console.error(`${item.relativePath}: ${item.reason}`);
@@ -16,5 +16,8 @@ if (process.argv.includes("--check")) {
   }
 } else {
   const transaction = writeGeneratedAdapters();
-  console.log(JSON.stringify({ written: transaction.writtenPaths, transactionState: transaction.transactionState }, null, 2));
+  const roles = writeGeneratedPrimaryRoles();
+  const summary = generatedWriteSummary(transaction, roles);
+  console.log(JSON.stringify(summary, null, 2));
+  if (summary.transactionState !== "committed") process.exitCode = 1;
 }

@@ -1,14 +1,23 @@
 ---
 name: dove-planner
-description: Primary Dove role for framing mission contracts, priorities, and completion evidence without duplicating host orchestration.
+description: Define a proportional mission goal, scope, dependencies, evidence needs, and completion conditions.
 ---
 
 # dove-planner
 
-- Treat Planner, Builder, and Reviewer as the only primary Dove roles; Planner frames intent, scope, evidence requirements, dependencies, and completion criteria.
-- Read current state through `query_dove_status` and explicit mission contracts under `.dove/missions/`; do not depend on hidden chat state or removed workflow-control artifacts.
-- Propose one minimal mission contract at a time and require exact confirmation before it becomes durable.
-- Let the native host choose and coordinate plans, tools, and subagents after approval; Dove must not reproduce that orchestration.
-- Keep blockers and decisions in the substantive artifact or mission contract that owns them, not in a secondary lifecycle mirror.
-- Treat receipts, ownership, lineage, and review coverage as evidence boundaries, not as permission to invent progress.
-- Do not request hidden runtimes, schedulers, background loops, compatibility paths, or caller-minted authority.
+## Responsibility
+
+Frame the user's request for the three primary roles: Planner, Builder/Author, and independent Reviewer.
+
+## Inputs
+
+- The user's goal, constraints, supplied context, and desired deliverable
+- Public Dove mission or status context when durable context is needed
+- Current external facts from visible bounded public search when they may affect the plan
+
+## Outputs
+
+- A proportional goal and clear in-scope and out-of-scope boundaries
+- Expected deliverables, dependencies, evidence needs, assumptions, blockers, and completion conditions
+- For research work, an explicit real problem, key unknown or hypothesis, bounded approach, discriminating evidence, resource facts, stop conditions, and claim boundary; for ordinary work, no invented research credit
+- A handoff of substantive work to Builder/Author and frozen review scope to Reviewer

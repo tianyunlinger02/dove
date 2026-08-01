@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { inspectDeclaredPath, normalizeProjectRelativePath } from "./artifact-integrity.mjs";
 import { readArtifactOwnership } from "./artifact-lineage.mjs";
+import { missionCanReadMission } from "./mission-graph.mjs";
 import { currentMutationContext } from "./mutation-backend.mjs";
 
 const HASH_PATTERN = /^[a-f0-9]{64}$/u;
@@ -63,6 +64,7 @@ export function resolveReviewArtifactSnapshots(root, missionId, relativePaths, l
   if (!Array.isArray(relativePaths)) throw new Error(`${label} must be an array of project-relative paths.`);
   const ownership = readArtifactOwnership(root);
   const ownerByPath = new Map(ownership.artifacts.map((item) => [item.path, item]));
+  const missionGraph = options.missionGraph;
   const snapshots = [];
   const seen = new Set();
   for (const [index, relativePath] of relativePaths.entries()) {
@@ -71,8 +73,8 @@ export function resolveReviewArtifactSnapshots(root, missionId, relativePaths, l
     if (seen.has(canonicalPath)) continue;
     seen.add(canonicalPath);
     const owner = ownerByPath.get(canonicalPath);
-    if (!owner) throw new Error(`${label}[${index}] is not a registered schema 9 artifact: ${canonicalPath}.`);
-    if (owner.missionId !== missionId) throw new Error(`${label}[${index}] belongs to mission ${owner.missionId}, not ${missionId}.`);
+    if (!owner) throw new Error(`${label}[${index}] is not a registered current-schema artifact: ${canonicalPath}.`);
+    if (!missionCanReadMission(missionGraph, missionId, owner.missionId)) throw new Error(`${label}[${index}] belongs to mission ${owner.missionId}, which is not ${missionId} or one of its ancestors.`);
     const inspection = inspectDeclaredPath(root, canonicalPath, { requireNonEmpty: true, rejectBookkeeping: true });
     const snapshot = {
       path: canonicalPath,
@@ -149,23 +151,4 @@ export function verifyReviewSnapshotSet(root, preparedSnapshots, expectedSetHash
     reviewedArtifacts: normalized.snapshots,
     reviewedArtifactSetSha256: setHash
   };
-}
-
-export function verifyPreparedReviewSnapshot(root, { manifest, input, inputPath, actualInputSha256, handoffInputPath, handoffInputSha256, handoffReviewedArtifactPaths }) {
-  const failures = [];
-  if (manifest.inputPath !== inputPath || handoffInputPath !== inputPath) failures.push("input-path-mismatch");
-  if (manifest.inputSha256 !== actualInputSha256 || handoffInputSha256 !== actualInputSha256) failures.push("input-hash-mismatch");
-  const manifestSnapshots = normalizeReviewSnapshots(manifest.reviewedArtifacts, "manifest.reviewedArtifacts");
-  const inputSnapshots = normalizeReviewSnapshots(input.reviewedArtifacts, "input.reviewedArtifacts");
-  if (!manifestSnapshots.ok) failures.push(manifestSnapshots.reason);
-  if (!inputSnapshots.ok) failures.push(inputSnapshots.reason);
-  if (manifestSnapshots.ok && inputSnapshots.ok && JSON.stringify(manifestSnapshots.snapshots) !== JSON.stringify(inputSnapshots.snapshots)) failures.push("manifest-input-snapshot-mismatch");
-  const snapshots = manifestSnapshots.ok ? manifestSnapshots.snapshots : [];
-  const setHash = snapshots.length ? stableSnapshotSetHash(snapshots) : null;
-  if (!setHash || manifest.reviewedArtifactSetSha256 !== setHash || input.reviewedArtifactSetSha256 !== setHash) failures.push("reviewed-artifact-set-hash-mismatch");
-  const returnedPaths = Array.isArray(handoffReviewedArtifactPaths) ? handoffReviewedArtifactPaths : [];
-  if (JSON.stringify([...returnedPaths].sort()) !== JSON.stringify(snapshots.map((item) => item.path).sort())) failures.push("handoff-reviewed-artifact-set-mismatch");
-  const current = verifyReviewSnapshotSet(root, snapshots, setHash);
-  failures.push(...current.failures);
-  return { ok: failures.length === 0, failures: [...new Set(failures)], reviewedArtifacts: snapshots, reviewedArtifactSetSha256: setHash };
 }

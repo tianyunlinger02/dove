@@ -4,7 +4,7 @@ import { DEFAULT_DOVE_RESPONSE_LANGUAGE, normalizeDoveResponseLanguage } from ".
 function explicitLanguage(...sources) {
   for (const source of sources) {
     if (!source || typeof source !== "object" || Array.isArray(source)) continue;
-    const value = source.responseLanguage ?? source.language;
+    const value = source.language;
     if (typeof value === "string" && value.trim()) return value;
   }
   return null;

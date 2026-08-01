@@ -1,41 +1,39 @@
 ---
 name: dove-note
-description: "Write substantive mission-bound synthesis from current eligible evidence."
+description: "Research and synthesize internal project material without creating note state."
 ---
 
 # Dove Note
 
-Write substantive mission-bound synthesis from current eligible evidence.
+Research and synthesize internal project material without creating note state.
 
-## Daily use
+## Use when
 
-- Synthesize current mission-owned artifacts, including current note artifacts when applicable.
-- Record claims, quotes, and open questions rather than empty bookkeeping.
-- Targeting: Provide missionId and noteId explicitly.
-- Confirmation: Ineligible or cross-mission evidence stops the write.
-- Outcome: A substantive note with current evidence lineage exists.
+- Investigate an internal project question from current files and context.
+- Synthesize project reasoning, gaps, decisions, or implications into the requested host output.
 
 ## Examples
 
-- `/dove:note Summarize the current mission artifacts`
-- `/dove:note Record the open methodological question`
+- `/dove:note Analyze the current retrieval design`
+- `/dove:note Synthesize the unresolved project questions`
 
-## Operating rules
+## Workflow
 
-1. For daily answers, answer the Dove request the operator invoked. Only use an explicitly listed project check or action below; do not construct default answers by manually reading or listing internal files.
-2. If the requested work cannot be finished here, say the practical result in ordinary language instead of reading or dumping internal files.
-3. If an explicitly listed project check or action fails, report that message in ordinary language and stop; do not recover by manually reading internal files.
-4. Use only the Dove MCP tool matching the requested operation from this command's allowed tools: `upsert_note`.
-5. Pass only structured public arguments accepted by that tool. Call Dove through MCP only. If MCP is unavailable, stop instead of using another route.
-6. For checkpoint operations, let the MCP tool handle its one approval and application inside the same call. Never display or request proposal, replay, workspace, digest, token, mutation-mode, confirmation payload, or generated-command data.
-7. Treat Dove's returned answer as the source of truth; translate it into practical operator actions instead of repeating implementation details.
-8. Use ordinary mission wording in user-facing answers: what happened, what material is ready, what is missing, and the next action; do not explain why a tool is unavailable by default.
-9. When the target work is unclear, ask the operator to choose by visible mission goal or numbered option; do not ask for internal ids in the default answer.
-10. Honor Dove's response language preference; respond in Chinese by default unless the project asks for English.
-11. When answering in Chinese, use natural Chinese section wording instead of English workflow labels such as Review Findings, Response Strategy, Draft Response, Evidence Needed, or claim impact.
-12. Only make the specific change requested for this command; do not bundle unrelated work.
-13. A note requires summary, quote, claim, or open question plus at least one current mission-owned artifact, including a current note artifact when applicable.
-14. sourceIds remain ineligible until a trusted positive source verifier exists; candidate or rejected sources cannot authorize the write.
-15. Keep Planner, Builder, and Reviewer responsibilities separate: scope, execution, and independent review should not be blended.
-16. Use this shared Dove mission flow across paper, engineering, experiment, review, and general missions; move concrete work through top-level Dove requests.
-17. Return the next action, evidence expectations, and unresolved blockers without claiming work that was not performed.
+- **The user asks for a new bounded internal analysis.**
+  1. Call `query_dove_status`. Use operation=status to read the public workspace and lifecycle context. Select an existing work number only when the requested record or artifact identifies it exactly; otherwise ask one zero-write clarification and stop.
+  2. Call `manage_dove_mission`. Use operation=start-skill and skill=note. Refine one minimal goal from the request and current context. Command text is optional constraints; clarify only material ambiguity and do not impose a fixed template. Start one research Skill Mission before reading or analyzing project material with host tools; an artifact-owning mission may be selected as its parent without stopping that parent. Preserve result.selector.missionNumber for every later mission-bound tool and use the supplied research outcome closure exactly once after host work.
+  - Clarify only if needed: Ask once only when the intended internal research question or output is materially ambiguous.
+- **The user explicitly continues an existing bounded note analysis.**
+  1. Call `query_dove_status`. Use operation=status and select the exact existing work number identified by the requested lifecycle record or artifact before the continued internal analysis. Do not call start-skill, do not guess the latest work, and ask one zero-write clarification if the owner is not unambiguous.
+  - Clarify only if needed: Ask once if the continuation does not identify one exact existing analysis mission.
+
+## Command guidance
+
+- Note is internal-project research and synthesis. Use project files and context, but do not create a Dove note store or treat note output as evidence.
+
+## Dove capsule
+
+- Dove MCP tools: `query_dove_status`, `manage_dove_mission`.
+- Use the listed public Dove MCP tools. If they are unavailable, stop and ask the user to re-enter the project host; do not substitute CLI, shell, or direct state access.
+- Present only the human `report` when directed. Keep machine channels internal and execute a supplied typed closure once with its binding unchanged.
+- Respond concisely in Chinese by default: judgment, evidence or risk, and next action.

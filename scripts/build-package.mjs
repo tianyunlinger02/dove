@@ -16,7 +16,8 @@ const EXPECTED_OUTPUTS = [
   { entry: "src/core/index.mjs", output: "dist/index.mjs", shebang: false },
   { entry: "bin/dove.mjs", output: "bin/dove-package.mjs", shebang: true },
   { entry: "mcp/dove-state-server.mjs", output: "mcp/dove-state-server-package.mjs", shebang: true },
-  { entry: "scripts/doctor-mcp-probe.mjs", output: "scripts/doctor-mcp-probe-package.mjs", shebang: false }
+  { entry: "scripts/doctor-mcp-probe.mjs", output: "scripts/doctor-mcp-probe-package.mjs", shebang: false },
+  { entry: "scripts/dove-user-prompt-submit.mjs", output: "scripts/dove-user-prompt-submit-package.mjs", shebang: true }
 ];
 
 function projectRelative(filePath) {
@@ -33,7 +34,7 @@ function assertExternalImports(metafile, label) {
     }
   }
   for (const specifier of external) {
-    assert.match(specifier, /^node:/u, `${label} has non-node external import ${specifier}`);
+    assert.match(specifier, /^(?:node:)?(?:assert|assert\/strict|async_hooks|buffer|child_process|crypto|events|fs|os|path|process|readline|stream|string_decoder|tty|url|util)$/u, `${label} has non-node external import ${specifier}`);
   }
 }
 
@@ -62,6 +63,9 @@ async function buildAll(outputRoot, write) {
       format: "esm",
       packages: "bundle",
       external: ["node:*"],
+      banner: {
+        js: "import { createRequire as __doveCreateRequire } from \"node:module\"; const require = __doveCreateRequire(import.meta.url);"
+      },
       metafile: true,
       write,
       logLevel: "silent"

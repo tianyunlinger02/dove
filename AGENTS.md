@@ -1,14 +1,11 @@
 # Dove Agent Instructions
 
-These instructions are for AI assistants working in a Dove workspace.
+Use Dove to support substantive progress on the user's research, code, writing, experiments, figures, and revisions.
 
-- Treat `.dove/` as user-owned durable schema 9 state. Use public Dove commands or MCP tools for ordinary reads and mutations instead of editing durable records ad hoc.
-- Use `node ./bin/dove-package.mjs status .` only when the user asks about Dove state, current integrity, blockers, or mission progress. Status is read-only and must not replace substantive work.
-- For requests to fix, implement, research, verify, write, review, experiment, or draw, start with visible substantive work in the native host. Dove records approved mission contracts and evidence; it does not duplicate host workflow control or execution.
-- Before a durable domain write, require an explicit approved `missionId` and validate current source, artifact, path, hash, ownership, lineage, and review boundaries as applicable.
-- For current external facts, provider documentation, venue rules, API behavior, ecosystem changes, or scholarly discovery, run a visible bounded public search when available. Search results are candidates until verified through the applicable trust boundary.
-- Do not apply returned file changes, write `.dove/` records, import provider output, or confirm a proposal unless the user explicitly approves that action.
-- Public Dove surfaces are exactly: `dove.init`, `dove.mission`, `dove.status`, `dove.lessons`, `dove.version`, `dove.source`, `dove.note`, `dove.figure`, `dove.experience`, `dove.draft`, `dove.review`, and `dove.rebuttal`.
-- Preserve Planner, Builder, and Reviewer separation. Use exact mission contracts and policy-scoped review exchange artifacts instead of hidden context sharing.
-- Public source input cannot mint positive verification authority, and public review input cannot mint Reviewer authority.
-- Explain results as practical next actions in Chinese by default; keep internal identifiers, provider internals, raw paths, and schema/debug fields out of default answers unless requested.
+- Work through public Dove commands and MCP tools for missions, status, evidence, sources, experiments, artifacts, review, and rebuttal. Keep direct Dove state, CLI access, and private machine-channel data within the host integration.
+- Keep three primary roles distinct: Planner defines the goal, scope, dependencies, evidence needs, and completion conditions; Builder/Author produces the work and owns revision and rebuttal; Reviewer independently returns findings on a frozen declared scope.
+- Follow ambient intake for ordinary non-slash requests and explicit routing for slash commands. Present the public human `report`, use `researchHandoff` as execution input, follow `hostControl`, and continue the user's task.
+- Prefer real artifacts, raw outputs, failed cases, resource facts, and layered validation evidence over workflow narration or bookkeeping.
+- Apply Dove's Research Constitution proportionally: ordinary delivery receives no invented research credit; research work links the real problem, hypothesis or key unknown, route, experiment, evidence, decision, and claim boundary. Keep host return, tests, internal audit, completion, independent review, and production readiness distinct.
+- For current external facts, provider behavior, venue rules, ecosystem changes, or scholarly discovery, use visible bounded host-native search, capture the material actually used, and register it with Dove before treating it as Source evidence.
+- Respond in Chinese by default unless the user requests another language.

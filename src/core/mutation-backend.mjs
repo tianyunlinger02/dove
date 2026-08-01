@@ -136,6 +136,7 @@ export class MutationContext {
     this.operationsByPath = new Map();
     this.operationOrder = [];
     this.directoryReplacements = new Map();
+    this.directoryPreflightChecks = new Map();
     this.commitLocks = new Map();
     this.commitState = { phase: "not-started", rollbackAttempted: false, cleanupFailures: [] };
     this.lifecycle = "active";
@@ -351,6 +352,17 @@ export class MutationContext {
     this.virtualDirectories.add(normalized);
   }
 
+  requireDirectoryPreflight(relativePath, callback) {
+    this.assertActive("Directory preflight registration");
+    if (this.patchPlanMode) throw new Error("Directory preflight is direct-process only.");
+    if (typeof callback !== "function") throw new Error("Directory preflight requires a validation callback.");
+    const normalized = normalizeRelativePath(relativePath);
+    if (!this.directoryReplacements.has(normalized)) throw new Error(`Directory preflight requires a registered directory replacement: ${normalized}.`);
+    if (this.directoryPreflightChecks.has(normalized)) throw new Error(`Directory preflight is already registered: ${normalized}.`);
+    this.directoryPreflightChecks.set(normalized, callback);
+    return normalized;
+  }
+
   operations() {
     return this.operationOrder.map((relativePath) => this.operationsByPath.get(relativePath)).filter(Boolean);
   }
@@ -474,6 +486,19 @@ export class MutationContext {
     return { transactionRoot, backupsRoot, replacementStages, fileStages, createdDirectories };
   }
 
+  runDirectoryPreflightChecks(anchor, transaction) {
+    for (const [relativePath, callback] of this.directoryPreflightChecks) {
+      const stagedPath = transaction.replacementStages.get(relativePath);
+      if (!stagedPath) throw new Error(`Directory preflight cannot resolve staged replacement: ${relativePath}.`);
+      callback({
+        root: this.root,
+        relativePath,
+        stagedRelativePath: stagedPath,
+        stagedPath: anchor.displayPath(stagedPath)
+      });
+    }
+  }
+
   rollbackTransaction(anchor, transaction, promotions) {
     const failures = [];
     const attempt = (callback) => { try { callback(); } catch (error) { failures.push(errorMessage(error)); } };
@@ -534,7 +559,8 @@ export class MutationContext {
       const promotions = [];
       try {
         transaction = this.stageTransaction(anchor, transactionRoot);
-        // Revalidate the full write/read set only after staging is complete and immediately before promotion.
+        this.runDirectoryPreflightChecks(anchor, transaction);
+        // Revalidate the full write/read set only after staging and candidate validation complete, immediately before promotion.
         this.revalidatePreconditionsAnchored(anchor);
         this.commitState.phase = "promoting";
         let replacementIndex = 0;

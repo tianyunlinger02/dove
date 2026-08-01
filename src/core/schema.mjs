@@ -1,8 +1,18 @@
-export const DOVE_WORKSPACE_SCHEMA_VERSION = 9;
+export const DOVE_WORKSPACE_SCHEMA_VERSION = 18;
 export const PACKAGE_VERSION = "0.4.0";
 
 export const DOVE_RESPONSE_LANGUAGES = Object.freeze(["zh", "en"]);
 export const DEFAULT_DOVE_RESPONSE_LANGUAGE = "zh";
+export const DOVE_RESEARCH_SKILL_IDS = Object.freeze([
+  "source",
+  "note",
+  "experience",
+  "experiment",
+  "draft",
+  "figure",
+  "review",
+  "rebuttal"
+]);
 
 export function normalizeDoveResponseLanguage(value, fallback = DEFAULT_DOVE_RESPONSE_LANGUAGE, options = {}) {
   const normalizedFallback = DOVE_RESPONSE_LANGUAGES.includes(fallback) ? fallback : DEFAULT_DOVE_RESPONSE_LANGUAGE;
@@ -19,98 +29,84 @@ export const ARTIFACT_PATHS = Object.freeze({
   doveRoot: ".dove",
   doveRootManifest: ".dove/manifest.json",
   projectIdentity: ".dove/project.json",
+  workspaceRevisionsDir: ".dove/workspace-revisions",
   missionsDir: ".dove/missions",
-  researchTreesDir: ".dove/research-trees",
-  lessonsDir: ".dove/lessons",
+  missionTransitionsDir: ".dove/mission-transitions",
+  artifactHandoffsDir: ".dove/artifact-handoffs",
+  researchDecisionsDir: ".dove/research-decisions",
+  lessonsDocument: ".dove/LESSONS.md",
   receiptsDir: ".dove/receipts",
   executionReceiptsDir: ".dove/receipts/execution",
-  completionReceiptsDir: ".dove/receipts/completion",
-  authorityReceiptsDir: ".dove/receipts/authority",
-  artifactsDir: ".dove/artifacts",
   sourcesDir: ".dove/sources",
-  notesDir: ".dove/notes",
   claimsDir: ".dove/claims",
   experimentsDir: ".dove/experiments",
-  draftsDir: ".dove/drafts",
-  figuresDir: ".dove/figures",
-  reviewsDir: ".dove/reviews",
-  reviewExchangesDir: ".dove/reviews/exchanges",
-  rebuttalDir: ".dove/rebuttal",
-  versionsDir: ".dove/versions"
+  reviewsDir: ".dove/reviews"
 });
 
 function governanceScopeMetadata(mutationScope) {
   return Object.freeze({
     mutationScope,
-    requiresMissionId: mutationScope !== "project-identity",
+    requiresMissionId: !["project-identity", "project-lessons"].includes(mutationScope),
     artifactFields: []
   });
 }
 
 const GUARDED_MUTATIONS = [
-  ["init-dove-goal", "Creating minimal Dove project identity", ARTIFACT_PATHS.projectIdentity, "initDoveGoal", "init_dove_goal", ["dove.init"], "project-identity"],
-  ["create-dove-mission", "Persisting one minimal mission contract", ARTIFACT_PATHS.missionsDir, "createDoveMission", "create_dove_mission", ["dove.mission"], "mission-contract"],
-  ["record-dove-lesson", "Recording an immutable mission-provenanced lesson", ARTIFACT_PATHS.lessonsDir, "recordDoveLesson", "record_dove_lesson", ["dove.lessons"], "mission-domain"],
-  ["ingest-execution-receipt", "Ingesting an immutable execution receipt", ARTIFACT_PATHS.executionReceiptsDir, "ingestExecutionReceipt", "ingest_execution_receipt", [], "mission-receipt"],
+  ["manage-dove-workspace", "Managing the explicit Dove workspace research mainline", ARTIFACT_PATHS.projectIdentity, "manageDoveWorkspace", "manage_dove_workspace", ["dove.workspace"], "project-identity"],
+  ["create-dove-mission", "Persisting one minimal mission contract", ARTIFACT_PATHS.missionsDir, "createDoveMission", "manage_dove_mission", ["dove.mission", "dove.source", "dove.note", "dove.experience", "dove.experiment", "dove.draft", "dove.figure", "dove.review", "dove.rebuttal"], "mission-contract", ["create-root", "branch", "start-skill"]],
+  ["create-ambient-dove-mission", "Persisting one ambient mission contract", ARTIFACT_PATHS.missionsDir, "createAmbientDoveMission", "create_ambient_dove_mission", [], "mission-contract"],
+  ["append-research-decision", "Appending one immutable mission-bound research decision", ARTIFACT_PATHS.researchDecisionsDir, "appendResearchDecision", null, [], "mission-domain"],
+  ["reevaluate-research-decision", "Recording one policy-validated mission-bound research reevaluation", ARTIFACT_PATHS.researchDecisionsDir, "reevaluateResearchDecision", "manage_dove_mission", ["dove.mission"], "mission-domain", ["reevaluate-research-decision"]],
+  ["update-dove-lessons", "Updating the canonical advisory Lessons document", ARTIFACT_PATHS.lessonsDocument, "updateDoveLessons", "manage_dove_lessons", ["dove.lessons"], "project-lessons", ["update"]],
+  ["ingest-execution-receipt", "Private core receipt ingestion used only behind canonical closure endpoints", ARTIFACT_PATHS.executionReceiptsDir, "ingestExecutionReceipt", null, [], "mission-receipt", []],
   ["close-host-outcome", "Recording current host-produced mission outcomes", ARTIFACT_PATHS.executionReceiptsDir, "closeHostOutcome", "close_host_outcome", [], "mission-receipt"],
-  ["register-source", "Registering a mission-bound source candidate", ARTIFACT_PATHS.sourcesDir, "registerSource", "register_source", ["dove.source"], "mission-domain"],
-  ["verify-source", "Rejecting a mission-bound source candidate", ARTIFACT_PATHS.sourcesDir, "verifySource", "verify_source", ["dove.source"], "mission-domain"],
-  ["upsert-note", "Recording a mission-bound evidence note", ARTIFACT_PATHS.notesDir, "upsertNote", "upsert_note", ["dove.note"], "mission-domain"],
-  ["upsert-claims", "Recording mission-bound evidence-backed claims", ARTIFACT_PATHS.claimsDir, "upsertClaims", "upsert_claims", ["dove.experience"], "mission-domain"],
-  ["run-experience-workflow", "Recording a mission-bound experiment", ARTIFACT_PATHS.experimentsDir, "runExperienceWorkflow", "run_experience_workflow", ["dove.experience"], "mission-domain"],
-  ["upsert-draft", "Writing a mission-bound draft", ARTIFACT_PATHS.draftsDir, "upsertDraft", "upsert_draft", ["dove.draft"], "mission-domain"],
-  ["upsert-draft-metadata", "Writing metadata for a mission-bound draft", ARTIFACT_PATHS.draftsDir, "upsertDraftMetadata", "upsert_draft_metadata", ["dove.draft"], "mission-domain"],
-  ["run-figure-workflow", "Preparing or importing a mission-bound figure", ARTIFACT_PATHS.figuresDir, "runFigureWorkflow", "run_figure_workflow", ["dove.figure"], "mission-domain"],
-  ["prepare-review-exchange", "Preparing a frozen mission-bound review exchange", ARTIFACT_PATHS.reviewExchangesDir, "prepareReviewExchange", "prepare_review_exchange", ["dove.review"], "mission-review"],
-  ["import-review-exchange", "Importing a verified mission-bound review exchange", ARTIFACT_PATHS.reviewsDir, "importReviewExchange", "import_review_exchange", ["dove.review"], "mission-review"],
-  ["normalize-rebuttal-issues", "Normalizing mission-bound review findings", ARTIFACT_PATHS.rebuttalDir, "normalizeRebuttalIssues", "normalize_rebuttal_issues", ["dove.rebuttal"], "mission-domain"],
-  ["build-rebuttal-strategy", "Recording an author-side rebuttal strategy", ARTIFACT_PATHS.rebuttalDir, "buildRebuttalStrategy", "build_rebuttal_strategy", ["dove.rebuttal"], "mission-domain"],
-  ["build-rebuttal", "Writing evidence-linked author responses", ARTIFACT_PATHS.rebuttalDir, "buildRebuttal", "build_rebuttal", ["dove.rebuttal"], "mission-domain"],
-  ["create-version-snapshot", "Snapshotting current mission artifacts", ARTIFACT_PATHS.versionsDir, "createVersionSnapshot", "create_version_snapshot", ["dove.version"], "mission-domain"]
+  ["record-research-outcome", "Recording one sealed research execution receipt without changing the current scientific decision", ARTIFACT_PATHS.executionReceiptsDir, "recordResearchOutcome", "record_research_outcome", [], "mission-receipt"],
+  ["register-source", "Registering a mission-bound source candidate", ARTIFACT_PATHS.sourcesDir, "registerSource", "manage_dove_sources", ["dove.source"], "mission-domain", ["register"]],
+  ["verify-source", "Rejecting a mission-bound source candidate", ARTIFACT_PATHS.sourcesDir, "verifySource", "manage_dove_sources", ["dove.source"], "mission-domain", ["reject"]],
+  ["upsert-claims", "Recording mission-bound evidence-backed claims", ARTIFACT_PATHS.claimsDir, "upsertClaims", "record_dove_claims", ["dove.experiment"], "mission-domain"],
+  ["run-experience-workflow", "Recording a mission-bound experiment", ARTIFACT_PATHS.experimentsDir, "runExperienceWorkflow", "record_dove_experiment", ["dove.experiment"], "mission-domain"],
+  ["record-dove-draft", "Archiving a current mission-owned project draft", ARTIFACT_PATHS.executionReceiptsDir, "recordDoveDraft", "record_dove_draft", ["dove.draft"], "mission-domain"],
+  ["record-dove-figure", "Archiving a current mission-owned project figure", ARTIFACT_PATHS.executionReceiptsDir, "recordDoveFigure", "record_dove_figure", ["dove.figure"], "mission-domain"],
+  ["archive-review-record", "Archiving one immutable non-authoritative Review record and report for a frozen mission-readable artifact scope", ARTIFACT_PATHS.reviewsDir, "archiveReviewRecord", "manage_dove_review", ["dove.review"], "mission-review", ["archive"]],
+  ["record-dove-rebuttal", "Archiving a current mission-owned project rebuttal with preserved findings", ARTIFACT_PATHS.executionReceiptsDir, "recordDoveRebuttal", "record_dove_rebuttal", ["dove.rebuttal"], "mission-domain"],
 ];
 
-export const GOVERNANCE_GUARDED_MUTATIONS = Object.freeze(GUARDED_MUTATIONS.map(([id, action, artifactPath, coreFunction, mcpTool, commandIds, scope]) => Object.freeze({
+export const GOVERNANCE_GUARDED_MUTATIONS = Object.freeze(GUARDED_MUTATIONS.map(([id, action, artifactPath, coreFunction, mcpTool, commandIds, scope, mcpOperations = null]) => Object.freeze({
   id,
   action,
   artifactPath,
-  surfaceBindings: Object.freeze({ coreFunction, mcpTool, commandIds: Object.freeze(commandIds) }),
+  surfaceBindings: Object.freeze({ coreFunction, mcpTool, mcpOperations: mcpOperations === null ? null : Object.freeze(mcpOperations), commandIds: Object.freeze(commandIds) }),
   ...governanceScopeMetadata(scope)
 })));
 
 export const GOVERNANCE_EXEMPT_MUTATIONS = Object.freeze([]);
 export const GOVERNANCE_READONLY_COMMANDS = Object.freeze(["dove.status"]);
 export const GOVERNANCE_READONLY_TOOLS = Object.freeze([
-  "query_dove_mission",
-  "query_dove_status",
-  "assess_mission_completion",
-  "search_network",
-  "query_network_search_providers",
-  "query_sources",
-  "query_dove_lessons",
-  "verify_review_coverage",
-  "compare_versions"
+  Object.freeze({ mcpTool: "manage_dove_mission", operations: Object.freeze(["query"]) }),
+  Object.freeze({ mcpTool: "query_dove_status", operations: Object.freeze(["status", "completion"]) }),
+  Object.freeze({ mcpTool: "manage_dove_sources", operations: Object.freeze(["query"]) }),
+  Object.freeze({ mcpTool: "manage_dove_lessons", operations: Object.freeze(["read"]) }),
+  Object.freeze({ mcpTool: "manage_dove_review", operations: Object.freeze(["scope"]) })
 ]);
 
 const NEGATIVE_TESTS = Object.freeze({
-  "init-dove-goal": "initialization rejects stale or mismatched confirmation without writing",
+  "manage-dove-workspace": "workspace initialization, mainline revision, and archive reset reject stale or mismatched confirmation without writing",
   "create-dove-mission": "mission confirmation rejects replay drift without writing",
-  "record-dove-lesson": "lesson confirmation rejects workspace, contract, mutation mode, content, supersession, and reference drift without writing",
+  "create-ambient-dove-mission": "ambient mission creation rejects caller-controlled identity, lineage, reevaluation, workspace-mainline change, and replay fields before writing",
+  "append-research-decision": "research decision append rejects malformed, stale, cross-mission, forked, gapped, or occupied state without writing",
+  "reevaluate-research-decision": "research reevaluation rejects stale revision, cross-mission evidence, policy-ineligible authorization, and non-atomic decision or lesson writes",
+  "update-dove-lessons": "Lessons update rejects malformed Markdown, a mismatched workspace binding, or a stale current hash without writing",
   "ingest-execution-receipt": "receipt ingestion validates current contracts, paths, hashes, and evidence before writing",
   "close-host-outcome": "host outcome closure accepts only current mission-bound files, generates receipt metadata internally, and skips without writing when no uncovered artifact remains",
+  "record-research-outcome": "research outcome closure rejects stale, expired, cross-mission, evidence-drifted, invalid, or same-attempt changed content and writes one immutable receipt only",
   "register-source": "source registration requires an explicit mission and creates candidate evidence only",
   "verify-source": "public source verification cannot mint positive trust authority",
-  "upsert-note": "notes reject stale, cross-mission, or ineligible evidence before writing",
   "upsert-claims": "claims reject missing, stale, or cross-mission evidence before writing",
-  "run-experience-workflow": "experiment result, audit, and claim bridge preflight one atomic write set",
-  "upsert-draft": "drafts require explicit mission binding and current evidence",
-  "upsert-draft-metadata": "draft metadata requires a current mission-owned draft",
-  "run-figure-workflow": "figure import validates current materials, output hash, and review coverage before writing",
-  "prepare-review-exchange": "review preparation rejects unsafe or cross-mission paths before writing",
-  "import-review-exchange": "review import rejects tampering, drift, symlinks, and caller-minted authority before writing",
-  "normalize-rebuttal-issues": "rebuttal issues require current mission-bound findings and evidence",
-  "build-rebuttal-strategy": "rebuttal strategy requires current normalized issues",
-  "build-rebuttal": "author responses preflight issues, strategy, and evidence before writing",
-  "create-version-snapshot": "version snapshots reject stale or cross-mission artifacts and preserve immutable copies"
+  "run-experience-workflow": "experiment protocol and result preflight one bounded write set",
+  "record-dove-draft": "draft archive requires a current exact-mission-owned project artifact and current references",
+  "record-dove-figure": "figure archive requires a current exact-mission-owned project artifact, references, caption, QA, and findings without review coverage",
+  "archive-review-record": "review archive rejects changed scope, stale ownership, invalid finding links, replay drift, and caller-minted authority before atomically writing only the record, report, and Receipt",
+  "record-dove-rebuttal": "rebuttal archive requires a current exact-mission-owned project artifact and preserved current findings without minting reviewer authority"
 });
 
 export const GOVERNANCE_NEGATIVE_COVERAGE = Object.freeze(GOVERNANCE_GUARDED_MUTATIONS.map((entry) => Object.freeze({

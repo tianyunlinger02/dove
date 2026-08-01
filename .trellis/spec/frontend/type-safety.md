@@ -1,53 +1,64 @@
 # Type Safety
 
-> Runtime type and schema safety patterns for Dove schema 8.
+> Runtime schema and public-boundary safety for Dove.
 
 ---
 
 ## Overview
 
-Dove uses Node.js ESM JavaScript (`.mjs`), not TypeScript. Safety comes from sealed runtime inputs, strict durable schemas, canonical path checks, exact hashes, explicit mutation contexts, and tests that assert complete public contracts.
+Dove uses Node.js ESM JavaScript rather than TypeScript. Safety comes from sealed public schemas, exact inventories, contained paths, current evidence checks, deterministic operation metadata, and narrow public projection.
 
-## Type Organization
+## Ownership
 
-- Keep schema versions, artifact paths, and governance registries in `src/core/schema.mjs`.
-- Keep strict workspace classification and durable shape validation in `src/core/workspace-schema.mjs`.
-- Keep mission proposal and exact replay validation in `src/core/mission-contracts.mjs`.
-- Keep contained writes in `src/core/mutation-backend.mjs` and narrow IO helpers in `src/core/workspace.mjs`.
-- Keep MCP input schemas in `src/mcp/tool-definitions.mjs`, schema evaluation in `src/mcp/schema-validation.mjs`, and exact dispatch in `src/mcp/handlers.mjs`.
+- `src/core/command-manifest.mjs` owns the 12 direct Skill definitions and host projections.
+- `src/mcp/tool-definitions.mjs` owns the 14 sealed MCP tool schemas.
+- `src/mcp/handlers.mjs` owns operation dispatch and one-based selector resolution.
+- `src/core/operation-registry.mjs` owns continuation and closure metadata.
+- `src/core/schema.mjs` owns durable path and governance registries.
+- `src/core/public-reports.mjs` owns safe human and machine channels.
 
-## Required Validation Patterns
+## Layer Types
+
+Use precise vocabulary:
+
+- **Skill**: direct host workflow with optional text.
+- **MCP tool**: sealed structured operation.
+- **Durable entity**: validated current state under `.dove/`.
+
+Do not create implied type equality between these layers. `dove.note` has no Note entity, and `dove.experience` has no Experience sidecar entity.
+
+## Required Validation
 
 - Every public input object rejects unknown properties.
-- Identifiers use explicit safe lowercase patterns.
-- Timestamps must round-trip to the exact ISO-8601 string.
-- SHA-256 values are lowercase 64-character digests.
-- Durable paths must be canonical, project-contained, realpath-contained, and appropriate for their evidence role.
-- Mission, workspace, contract, receipt, source, artifact, and review identities must match before writes.
-- Proposal confirmation must replay the exact returned fields; no aliases or partial confirmation forms. Lesson replay also binds the recording mission, applicability scope, one of five kinds, content, evidence snapshots, artifact applicability, supersession, and timestamp.
-- Read-only queries fail closed on malformed current JSON and never repair it.
+- Nested MCP objects are sealed.
+- Public Mission selectors are explicit one-based integers.
+- Root and child creation validate parent selection, branch provenance, and current Workspace binding.
+- Paths, timestamps, safe labels, evidence references, and integrity values are validated before writes.
+- Read-only calls fail closed without repair or conversion.
+- Experiment results exactly match the frozen protocol and declared checks.
+- Claims exactly match current experiment evidence and evaluated scope.
+- Public reports omit durable IDs, hashes, private paths, mutation controls, and callback internals.
+- Typed closure requests expose only the fixed tool, public bound arguments, declared dynamic fields, defaults, and exactly-once semantics.
 
-## MCP Conventions
+## Inventory Types
 
-- Tool discovery exposes one sealed registry with no public/internal or operator tiers.
-- Mutating tools include `mutationMode`; read-only tools do not.
-- Nested object schemas also set `additionalProperties: false` and enumerate their fields.
-- Domain mutation schemas require explicit `missionId`.
-- Retired routing, role, lifecycle, policy-override, packet, board, runtime, and continuation fields are absent rather than ignored.
+Validation treats these as separate exact sets:
 
-## Durable Schema Conventions
+- 12 direct Skill IDs;
+- 14 MCP tool names;
+- 60 generated adapter paths;
+- three generated Claude ambient paths;
+- canonical native Reviewer definitions; and
+- durable entity kinds.
 
-- Schema 8 has no compatibility loader for legacy business state.
-- The strict opener accepts absent state only where explicitly permitted and accepts current state only when manifest, project, required directories, missions, receipts, and receipt-derived ownership/lineage validate.
-- Current schema declarations that coexist with legacy workflow-control roots are contradictory and rejected.
-- Completion, source trust, and Reviewer authority are reassessed from current evidence and fail closed when trusted proof is unavailable.
+Generated adapter presence is not a host-readiness type.
 
-## Forbidden Patterns
+## Current Durable Vocabulary
 
-- Do not introduce TypeScript syntax into `.mjs` files.
-- Do not accept unsealed objects or silently discard unknown fields.
-- Do not normalize unsafe path aliases into accepted durable references.
-- Do not export mutation contexts, raw write helpers, or compatibility internals through the public package root.
-- Do not add fallback parsing, migration, repair, or authority inference for removed schemas.
-- Do not add a public command or MCP tool without aligned registry, handler, governance, validator, bundle, and test coverage.
-- Do not accept lesson kinds outside `preference`, `constraint`, `method`, `failure`, and `review-insight`, or fields that imply automatic capture, recall, transcript ingestion, Trellis/runtime state, authority, or completion credit.
+Current state uses Workspace, Mission, ResearchDecision, Receipt, artifact handoff, Source, Claim, Experiment, Draft, Figure, Review, Rebuttal, and Lesson records.
+
+ResearchTree, Note-store, Experience-sidecar, migration-state, compatibility-root, and fallback-runtime types are not part of the current public or durable model.
+
+## Language
+
+Canonical human output defaults to Chinese and may be explicitly requested in English. Machine keys, tool names, Skill IDs, and status tokens remain English.

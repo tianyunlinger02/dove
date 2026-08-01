@@ -6,22 +6,15 @@ import { currentMutationContext } from "./mutation-backend.mjs";
 
 const BOOKKEEPING_PREFIXES = Object.freeze([
   `${ARTIFACT_PATHS.missionsDir}/`,
-  `${ARTIFACT_PATHS.researchTreesDir}/`,
-  `${ARTIFACT_PATHS.lessonsDir}/`,
-  `${ARTIFACT_PATHS.receiptsDir}/`,
-  `${ARTIFACT_PATHS.artifactsDir}/`
+  `${ARTIFACT_PATHS.researchDecisionsDir}/`,
+  `${ARTIFACT_PATHS.receiptsDir}/`
 ]);
-const BOOKKEEPING_FILES = new Set([ARTIFACT_PATHS.doveRootManifest, ARTIFACT_PATHS.projectIdentity]);
+const BOOKKEEPING_FILES = new Set([ARTIFACT_PATHS.doveRootManifest, ARTIFACT_PATHS.projectIdentity, ARTIFACT_PATHS.lessonsDocument]);
 const DOMAIN_PREFIXES = Object.freeze([
   ARTIFACT_PATHS.sourcesDir,
-  ARTIFACT_PATHS.notesDir,
   ARTIFACT_PATHS.claimsDir,
   ARTIFACT_PATHS.experimentsDir,
-  ARTIFACT_PATHS.draftsDir,
-  ARTIFACT_PATHS.figuresDir,
-  ARTIFACT_PATHS.reviewsDir,
-  ARTIFACT_PATHS.rebuttalDir,
-  ARTIFACT_PATHS.versionsDir
+  ARTIFACT_PATHS.reviewsDir
 ]);
 
 export function normalizeProjectRelativePath(rawPath) {
@@ -102,7 +95,7 @@ export function inspectDeclaredPath(root, rawPath, options = {}) {
   if (options.rejectBookkeeping === true) {
     const rejected = [evidenceRole, canonicalEvidenceRole].find((role) => role === "bookkeeping" || role === "unsupported");
     if (rejected) {
-      return { ...base, status: rejected, reason: rejected === "bookkeeping" ? "path is Dove bookkeeping rather than substantive evidence" : "path is not an approved schema 9 evidence artifact" };
+      return { ...base, status: rejected, reason: rejected === "bookkeeping" ? "path is Dove bookkeeping rather than substantive evidence" : "path is not an approved current-schema evidence artifact" };
     }
   }
   if (options.requireNonEmpty === true && stat.size === 0) return { ...base, status: "empty", reason: "path is an empty file" };

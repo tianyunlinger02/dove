@@ -3,24 +3,33 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { artifactEvidenceRole, inspectDeclaredPath, normalizeProjectRelativePath } from "./artifact-integrity.mjs";
-import { assessMissionCompletion } from "./completion-gates.mjs";
+import { assessMissionCompletion, completeMissionIfEligible } from "./completion-gates.mjs";
 import { assertCurrentMissionContract, missionCompletionCriteria } from "./mission-contracts.mjs";
-import { assertMissionAcceptsWrites, missionSupersedes } from "./mission-graph.mjs";
-import { currentMutationContext, isPatchPlanMode } from "./mutation-backend.mjs";
+import { handoffAuthorizes } from "./artifact-handoffs.mjs";
+import { assertMissionAcceptsWrites } from "./mission-graph.mjs";
+import { currentMutationContext, isPatchPlanMode, runWithMutationContext } from "./mutation-backend.mjs";
 import { snapshotArtifactBuffer } from "./review-artifact-snapshot.mjs";
 import { ARTIFACT_PATHS } from "./schema.mjs";
+import { buildResearchNarrativeFromDecision } from "./research-narratives.mjs";
 import { assertNotDoveLessonArtifactPath } from "./domain-artifacts.mjs";
-import { assertReceiptAppendable, deriveArtifactReferences, EXECUTION_RECEIPT_SCHEMA_VERSION } from "./receipt-ledger.mjs";
-import { evaluateNoteReferences, evaluateSourceReferences } from "./source-trust.mjs";
+import { assertExecutionFactText, createExecutionFact, executionFactHash } from "./execution-facts.mjs";
+import {
+  assertReceiptAppendable,
+  deriveArtifactReferences,
+  EXECUTION_RECEIPT_SCHEMA_VERSION,
+  ordinaryHostOutcomeCallbackDigest,
+  ORDINARY_HOST_OUTCOME_STATUSES
+} from "./receipt-ledger.mjs";
+import { evaluateSourceReferences } from "./source-trust.mjs";
+import { createValidationRecord, VALIDATION_FIELDS, VALIDATION_KINDS } from "./validation-records.mjs";
 import { assertGovernanceMutationRegistered, readJson, writeJson } from "./workspace.mjs";
 import { openDoveWorkspace } from "./workspace-schema.mjs";
 
 export { EXECUTION_RECEIPT_SCHEMA_VERSION };
 export const EXECUTION_RECEIPT_ARTIFACT_KINDS = Object.freeze(["report", "document", "code", "data", "figure", "media", "other"]);
-export const EXECUTION_RECEIPT_VALIDATION_KINDS = Object.freeze(["test-log", "typecheck-log", "lint-log", "build-log", "audit-log", "validation-log", "command-output"]);
+export const EXECUTION_RECEIPT_VALIDATION_KINDS = VALIDATION_KINDS;
 
 const ARTIFACT_KIND_SET = new Set(EXECUTION_RECEIPT_ARTIFACT_KINDS);
-const VALIDATION_KIND_SET = new Set(EXECUTION_RECEIPT_VALIDATION_KINDS);
 const TOP_LEVEL_FIELDS = new Set([
   "receiptId",
   "missionId",
@@ -33,16 +42,20 @@ const TOP_LEVEL_FIELDS = new Set([
 ]);
 const HOST_OUTCOME_FIELDS = new Set([
   "missionId",
+  "attemptId",
+  "status",
   "summary",
   "artifactPaths",
-  "validationPaths"
+  "validationPaths",
+  "facts"
 ]);
+const HOST_OUTCOME_STATUS_SET = new Set(ORDINARY_HOST_OUTCOME_STATUSES);
 const ARTIFACT_FIELDS = new Set(["path", "kind", "sha256"]);
-const VALIDATION_FIELDS = new Set(["kind", "reference", "outputHash"]);
+const VALIDATION_INPUT_FIELDS = new Set(VALIDATION_FIELDS);
 const CRITERION_FIELDS = new Set(["criterionId", "evidenceRefs"]);
 const RECEIPT_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
-const EVIDENCE_REF_PATTERN = /^(artifact|validation|source|note):(.+)$/u;
+const EVIDENCE_REF_PATTERN = /^(artifact|validation|source):(.+)$/u;
 const POST_COMMIT_ASSESSMENT_FIELDS = new Set(["kind", "missionId"]);
 const POST_COMMIT_ASSESSMENT_KIND = "assess-mission-completion";
 
@@ -153,17 +166,27 @@ function normalizeArtifacts(root, mission, value) {
   return artifacts;
 }
 
+function inspectValidationTarget(root, rawReference, expectedHash, label) {
+  if (rawReference.startsWith("artifact:")) {
+    const targetPath = rawReference.slice("artifact:".length);
+    const inspected = inspectHashedFile(root, targetPath, expectedHash, label);
+    return { reference: `artifact:${inspected.path}`, hash: inspected.sha256 };
+  }
+  if (rawReference.startsWith("validation:")) {
+    const targetPath = rawReference.slice("validation:".length);
+    const inspected = inspectHashedFile(root, targetPath, expectedHash, label);
+    return { reference: `validation:${inspected.path}`, hash: inspected.sha256 };
+  }
+  throw new Error(`${label} must be an exact artifact:<path> or validation:<path> target binding.`);
+}
+
 function normalizeValidations(root, value) {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw new Error("validations must be an array.");
   const seen = new Set();
   return value.map((item, index) => {
     const label = `validations[${index}]`;
-    assertAllowedFields(item, VALIDATION_FIELDS, label);
-    const kind = nonEmptyString(item.kind, `${label}.kind`);
-    if (!VALIDATION_KIND_SET.has(kind)) {
-      throw new Error(`${label}.kind must be one of: ${EXECUTION_RECEIPT_VALIDATION_KINDS.join(", ")}.`);
-    }
+    assertAllowedFields(item, VALIDATION_INPUT_FIELDS, label);
     const reference = nonEmptyString(item.reference, `${label}.reference`);
     const outputHash = hashString(item.outputHash, `${label}.outputHash`);
     const inspected = inspectHashedFile(root, reference, outputHash, label);
@@ -174,7 +197,16 @@ function normalizeValidations(root, value) {
     }
     if (seen.has(inspected.path)) throw new Error(`validations contains duplicate canonical reference ${inspected.path}.`);
     seen.add(inspected.path);
-    return { kind, reference: inspected.path, outputHash };
+    if (item.producerKind !== "host-observed") throw new Error(`${label}.producerKind must be host-observed for public receipt ingestion.`);
+    if (item.producerOperation !== "ingest-execution-receipt") throw new Error(`${label}.producerOperation must be ingest-execution-receipt for public receipt ingestion.`);
+    const target = inspectValidationTarget(root, nonEmptyString(item.targetReference, `${label}.targetReference`), hashString(item.targetHash, `${label}.targetHash`), `${label}.targetReference`);
+    return createValidationRecord({
+      ...item,
+      reference: inspected.path,
+      outputHash: inspected.sha256,
+      targetReference: target.reference,
+      targetHash: target.hash
+    }, { label });
   });
 }
 
@@ -185,10 +217,6 @@ function typedReferenceEvaluation(root, missionId, reference) {
   if (kind === "source") {
     const evaluation = evaluateSourceReferences(root, [value], missionId)[0] ?? { eligible: false, reason: "unknown-source" };
     return { ...evaluation, evidenceSha256: evaluation.source?.capturedMaterial?.sha256 ?? null };
-  }
-  if (kind === "note") {
-    const evaluation = evaluateNoteReferences(root, [value], missionId)[0] ?? { eligible: false, reason: "unknown-note" };
-    return { ...evaluation, evidenceSha256: evaluation.owner?.sha256 ?? null };
   }
   return { eligible: null, kind, value, evidenceSha256: null };
 }
@@ -296,7 +324,7 @@ export function validateExecutionReceipt(root, args = {}) {
     producer: { kind: "public-execution", actionId: "ingest-execution-receipt" }
   };
   const receipt = { ...baseReceipt, artifacts: deriveArtifactReferences(baseReceipt) };
-  assertReceiptAppendable(workspace.receiptLedger, receipt, { missionGraph: workspace.missionGraph });
+  assertReceiptAppendable(workspace.receiptLedger, receipt, { artifactHandoffs: workspace.artifactHandoffs });
   return { mission, receipt };
 }
 
@@ -320,12 +348,36 @@ export function ingestExecutionReceipt(root, args = {}) {
   };
 }
 
-function hostOutcomePaths(value, label) {
+function hostOutcomeStrings(value, label, normalize = nonEmptyString) {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw new Error(`${label} must be an array.`);
-  const paths = value.map((item, index) => nonEmptyString(item, `${label}[${index}]`));
-  if (new Set(paths).size !== paths.length) throw new Error(`${label} must not contain duplicates.`);
-  return paths;
+  const items = value.map((item, index) => normalize(item, `${label}[${index}]`));
+  const identities = items.map((item) => typeof item === "string" ? item : item.factId);
+  if (new Set(identities).size !== identities.length) throw new Error(`${label} must not contain duplicates.`);
+  return items;
+}
+
+function hostOutcomePaths(value, label) {
+  return hostOutcomeStrings(value, label);
+}
+
+function hostOutcomeFacts(value, mission) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error("facts must be an array.");
+  const criteria = missionCompletionCriteria(mission);
+  const normalized = value.map((item, index) => {
+    const label = `facts[${index}]`;
+    assertAllowedFields(item, new Set(["statement", "criterionNumbers"]), label);
+    if (!Array.isArray(item.criterionNumbers)) throw new Error(`${label}.criterionNumbers must be an array.`);
+    const criterionNumbers = item.criterionNumbers.map((number, numberIndex) => {
+      if (!Number.isSafeInteger(number) || number < 1 || number > criteria.length) throw new Error(`${label}.criterionNumbers[${numberIndex}] must select a current one-based completion criterion.`);
+      return number;
+    });
+    if (new Set(criterionNumbers).size !== criterionNumbers.length) throw new Error(`${label}.criterionNumbers must not contain duplicates.`);
+    return { fact: createExecutionFact(item.statement, `${label}.statement`), criterionNumbers };
+  });
+  if (new Set(normalized.map((item) => item.fact.factId)).size !== normalized.length) throw new Error("facts must not contain duplicate statements.");
+  return normalized;
 }
 
 function inspectHostOutcomeFile(root, rawPath, label) {
@@ -341,23 +393,51 @@ function inspectHostOutcomeFile(root, rawPath, label) {
   return { ...inspected, evidenceRole };
 }
 
+function skippedHostOutcome(mutationContext, status, reason, outcomeStatus = null) {
+  return {
+    status,
+    zeroWrite: true,
+    reason,
+    ...(outcomeStatus ? { outcomeStatus } : {}),
+    artifacts: [],
+    validations: [],
+    completion: null,
+    postCommit: null,
+    mutation: {
+      mutationMode: mutationContext.mutationMode,
+      writesApplied: false,
+      paths: []
+    }
+  };
+}
+
 export function closeHostOutcome(root, args = {}) {
   assertGovernanceMutationRegistered("close-host-outcome", "guarded");
   assertAllowedFields(args, HOST_OUTCOME_FIELDS, "close_host_outcome");
   const mutationContext = currentMutationContext(root);
   if (!mutationContext) throw new Error("close_host_outcome requires an active MutationContext.");
   const missionId = safeId(args.missionId, "missionId");
-  const summary = nonEmptyString(args.summary, "summary");
+  const status = nonEmptyString(args.status, "status");
+  if (!HOST_OUTCOME_STATUS_SET.has(status)) throw new Error(`status must be one of: ${ORDINARY_HOST_OUTCOME_STATUSES.join(", ")}.`);
+  const summary = assertExecutionFactText(args.summary, "summary");
   const artifactPaths = hostOutcomePaths(args.artifactPaths, "artifactPaths");
   const validationPaths = hostOutcomePaths(args.validationPaths, "validationPaths");
+  if (artifactPaths.length === 0 && validationPaths.length > 0) {
+    throw new Error("validationPaths cannot close an ordinary host outcome without a substantive artifact path.");
+  }
   const workspace = openDoveWorkspace(root, { operation: "Host outcome closure" });
   const missionRelativePath = missionContractPath(missionId);
   if (!mutationContext.fileExists(missionRelativePath)) throw new Error(`Mission does not exist: ${missionId}.`);
   const mission = readJson(root, missionRelativePath, null);
   if (!mission || mission.missionId !== missionId) throw new Error(`Mission contract is malformed or mismatched: ${missionId}.`);
-  assertMissionAcceptsWrites(workspace, mission, { receipt: true });
   const currentContract = assertCurrentMissionContract(mission);
+  if (mission.mode !== "ordinary") throw new Error("close_host_outcome requires an ordinary mission; research missions close through record_research_outcome.");
   if (mission.workspaceId !== workspace.manifest.workspaceId) throw new Error(`Mission contract workspaceId does not match the current workspace for ${missionId}.`);
+  const factDeclarations = hostOutcomeFacts(args.facts, mission);
+  const facts = factDeclarations.map((item) => item.fact);
+  if (artifactPaths.length === 0 && facts.length === 0) {
+    throw new Error("close_host_outcome requires at least one substantive artifact or one concrete execution fact.");
+  }
 
   const ownerByPath = new Map(workspace.receiptLedger.currentOwnership.map((item) => [item.path, item]));
   const inspectedArtifacts = artifactPaths.map((artifactPath, index) => inspectHostOutcomeFile(root, artifactPath, `artifactPaths[${index}]`));
@@ -365,6 +445,29 @@ export function closeHostOutcome(root, args = {}) {
   const allInspectedPaths = [...inspectedArtifacts, ...validations].map((item) => item.path);
   if (new Set(allInspectedPaths).size !== allInspectedPaths.length) {
     throw new Error("Host outcome artifact and validation paths must be canonically distinct.");
+  }
+  const attemptId = safeId(args.attemptId, "attemptId");
+  const receiptId = `receipt-host-outcome-${crypto.createHash("sha256").update(`${missionId}\n${attemptId}`).digest("hex").slice(0, 24)}`;
+  const existing = workspace.receiptLedger.receipts.find((receipt) => receipt.receiptId === receiptId);
+  if (existing) {
+    const replayMode = existing.ordinaryHostOutcome?.mode ?? (inspectedArtifacts.length > 0 ? "artifact-backed" : "observation-only");
+    const replayArtifacts = existing.artifacts.map(({ path: artifactPath, sha256 }) => ({ path: artifactPath, sha256 }));
+    const replayValidations = existing.validations;
+    const callbackDigest = ordinaryHostOutcomeCallbackDigest({
+      attemptId,
+      missionId,
+      contractDigest: currentContract.contractDigest,
+      summary,
+      mode: replayMode,
+      status,
+      facts,
+      artifacts: replayArtifacts,
+      validations: replayValidations
+    });
+    if (existing.ordinaryHostOutcome?.callbackDigest === callbackDigest) {
+      return skippedHostOutcome(mutationContext, "replayed", "callback-replayed", existing.ordinaryHostOutcome.status);
+    }
+    throw new Error("The ordinary host outcome callback has already been recorded with different immutable content.");
   }
   const eligibleArtifacts = inspectedArtifacts.filter((artifact) => {
     const owner = ownerByPath.get(artifact.path);
@@ -377,45 +480,98 @@ export function closeHostOutcome(root, args = {}) {
     if (owner.missionId !== missionId) {
       if (
         artifact.evidenceRole === "external-project"
-        && missionSupersedes(workspace.missionGraph, missionId, owner.missionId)
+        && handoffAuthorizes(workspace.artifactHandoffs, artifact.path, owner.missionId, missionId, owner.receiptId, owner.sha256)
       ) return true;
       throw new Error(`Host outcome artifact is owned by another mission: ${artifact.path}.`);
     }
-    if (owner.sha256 === artifact.sha256) return false;
+    if (owner.sha256 === artifact.sha256) {
+      if (existing?.ordinaryHostOutcome && owner.receiptId === existing.receiptId) return true;
+      return false;
+    }
     if (artifact.evidenceRole !== "external-project") {
       throw new Error(`Host outcome cannot claim a changed Dove domain artifact: ${artifact.path}.`);
     }
     return true;
   });
 
-  if (eligibleArtifacts.length === 0) {
-    return {
-      status: "skipped",
-      zeroWrite: true,
-      reason: "no-eligible-artifacts",
-      artifacts: [],
-      validations: [],
-      completion: null,
-      postCommit: null,
-      mutation: {
-        mutationMode: mutationContext.mutationMode,
-        writesApplied: false,
-        paths: []
-      }
-    };
+  if (artifactPaths.length > 0 && eligibleArtifacts.length === 0 && facts.length === 0) {
+    return skippedHostOutcome(mutationContext, "no-progress-skipped", "no-eligible-artifacts", status);
   }
 
-  const generated = {
-    receiptId: `receipt-host-outcome-${crypto.randomUUID()}`,
+  const mode = eligibleArtifacts.length > 0 ? "artifact-backed" : "observation-only";
+  const artifacts = eligibleArtifacts.map((artifact) => ({ path: artifact.path, kind: "other", sha256: artifact.sha256 }));
+  const criteria = missionCompletionCriteria(mission);
+  const criteriaSatisfied = criteria.flatMap(({ criterionId }, criterionIndex) => {
+    const boundFacts = factDeclarations.filter((item) => item.criterionNumbers.includes(criterionIndex + 1)).map((item) => item.fact);
+    if (boundFacts.length === 0) return [];
+    return [{
+      criterionId,
+      evidenceRefs: boundFacts.map((fact) => `fact:${fact.factId}`),
+      evidenceBindings: boundFacts.map((fact) => ({ reference: `fact:${fact.factId}`, sha256: executionFactHash(fact.statement), receiptId }))
+    }];
+  });
+  const primaryArtifact = eligibleArtifacts[0] ?? null;
+  const receiptValidations = mode === "artifact-backed"
+    ? validations.map((validation) => createValidationRecord({
+        kind: "validation-log",
+        result: "incomplete",
+        level: "static",
+        producerKind: "host-observed",
+        producerOperation: "close-host-outcome",
+        observedExitStatus: null,
+        targetReference: `artifact:${primaryArtifact.path}`,
+        targetHash: primaryArtifact.sha256,
+        reference: validation.path,
+        outputHash: validation.sha256
+      }, { label: `validationPaths:${validation.path}` }))
+    : [];
+  const callbackDigest = ordinaryHostOutcomeCallbackDigest({
+    attemptId,
     missionId,
     contractDigest: currentContract.contractDigest,
     summary,
-    artifacts: eligibleArtifacts.map((artifact) => ({ path: artifact.path, kind: "other", sha256: artifact.sha256 })),
-    validations: validations.map((validation) => ({ kind: "validation-log", reference: validation.path, outputHash: validation.sha256 })),
-    criteriaSatisfied: [],
-    producedAt: new Date().toISOString()
+    mode,
+    status,
+    facts,
+    artifacts,
+    validations: receiptValidations
+  });
+  assertMissionAcceptsWrites(workspace, mission, { receipt: true });
+  mutationContext.requireCommitPrecondition(ARTIFACT_PATHS.executionReceiptsDir);
+  mutationContext.requireCommitLock(".dove/.receipt-ledger-append.lock", { label: "Execution receipt ledger append lock" });
+  const producedAt = new Date().toISOString();
+  const baseReceipt = {
+    schemaVersion: EXECUTION_RECEIPT_SCHEMA_VERSION,
+    workspaceId: workspace.manifest.workspaceId,
+    receiptId,
+    ledgerSequence: workspace.receiptLedger.nextLedgerSequence,
+    missionId,
+    contractDigest: currentContract.contractDigest,
+    summary,
+    artifacts,
+    validations: receiptValidations,
+    criteriaSatisfied,
+    producedAt,
+    recordedAt: producedAt,
+    producer: { kind: "public-execution", actionId: "close-host-outcome" },
+    ordinaryHostOutcome: { attemptId, mode, status, facts, callbackDigest }
   };
-  return ingestExecutionReceipt(root, generated);
+  const receipt = { ...baseReceipt, artifacts: deriveArtifactReferences(baseReceipt) };
+  assertReceiptAppendable(workspace.receiptLedger, receipt, { artifactHandoffs: workspace.artifactHandoffs });
+  writeJson(root, executionReceiptPath(receiptId), receipt);
+  return {
+    status: "ingested",
+    outcomeStatus: status,
+    outcomeMode: mode,
+    receipt,
+    completion: { missionId, assessWith: "assess_mission_completion", assessment: null },
+    postCommit: { kind: POST_COMMIT_ASSESSMENT_KIND, missionId },
+    mutation: {
+      mutationMode: mutationContext.mutationMode,
+      writesApplied: true,
+      paths: [executionReceiptPath(receiptId)]
+    }
+  };
 }
 
 export function resolveExecutionReceiptPostCommit(root, result, options = {}) {
@@ -436,21 +592,46 @@ export function resolveExecutionReceiptPostCommit(root, result, options = {}) {
     throw new Error("Execution receipt post-commit assessment requires a successfully committed direct-process mutation result.");
   }
   try {
+    let assessment = assessMissionCompletion(root, { missionId });
+    if (assessment.complete && assessment.lifecycle === null) {
+      const completionMutation = runWithMutationContext(root, {
+        actionId: "ingest-execution-receipt",
+        mutationMode: "direct-process",
+        hostId: "dove-completion-gate"
+      }, () => completeMissionIfEligible(root, { missionId }));
+      assessment = completionMutation.assessment;
+    }
+    const workspace = openDoveWorkspace(root, { operation: "Execution receipt final narrative" });
+    const decision = workspace.currentResearchDecisions.get(missionId) ?? null;
     return {
       ...publicResult,
       completion: {
         ...publicResult.completion,
-        assessment: assessMissionCompletion(root, { missionId })
-      }
+        assessment
+      },
+      ...(decision ? { researchNarrative: buildResearchNarrativeFromDecision(decision) } : {})
     };
-  } catch {
+  } catch (error) {
     return {
       ...publicResult,
+      status: "partial-commit-failure",
+      zeroWrite: false,
+      writesApplied: true,
+      partialCommit: {
+        receiptRecorded: true,
+        completionAssessmentFailed: true,
+        repeatClosureAllowed: false,
+        zeroWriteRetryAllowed: false,
+        nextAction: "assess-mission-completion-read-only"
+      },
       completion: {
         ...publicResult.completion,
         assessment: null,
-        assessmentUnavailable: true
-      }
+        assessmentUnavailable: true,
+        reassessWith: "assess_mission_completion",
+        reassessmentReadOnly: true
+      },
+      assessmentFailure: error instanceof Error ? error.message : String(error)
     };
   }
 }

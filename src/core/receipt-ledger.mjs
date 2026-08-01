@@ -1,12 +1,18 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import { handoffAuthorizes } from "./artifact-handoffs.mjs";
 import { normalizeProjectRelativePath } from "./artifact-integrity.mjs";
-import { missionSupersedes } from "./mission-graph.mjs";
+import { executionFactHash, readStoredExecutionFact } from "./execution-facts.mjs";
+import { missionCompletionCriteria } from "./mission-contract-integrity.mjs";
 import { ARTIFACT_PATHS, GOVERNANCE_GUARDED_MUTATIONS } from "./schema.mjs";
+import { createValidationRecord, VALIDATION_FIELDS } from "./validation-records.mjs";
 
-export const EXECUTION_RECEIPT_SCHEMA_VERSION = 3;
+export const EXECUTION_RECEIPT_SCHEMA_VERSION = 5;
 export const EXECUTION_RECEIPT_PRODUCER_KINDS = Object.freeze(["public-execution", "dove-internal"]);
+export const ORDINARY_HOST_OUTCOME_STATUSES = Object.freeze(["completed", "stopped", "blocked", "failed"]);
+export const ORDINARY_HOST_OUTCOME_MODES = Object.freeze(["artifact-backed", "observation-only"]);
 
 const RECEIPT_FIELDS = new Set([
   "schemaVersion",
@@ -21,17 +27,49 @@ const RECEIPT_FIELDS = new Set([
   "criteriaSatisfied",
   "producedAt",
   "recordedAt",
-  "producer"
+  "producer",
+  "ordinaryHostOutcome",
+  "researchOutcome"
 ]);
 const ARTIFACT_FIELDS = new Set(["path", "kind", "sha256", "derivedReferences"]);
-const VALIDATION_FIELDS = new Set(["kind", "reference", "outputHash"]);
+const STORED_VALIDATION_FIELDS = new Set(VALIDATION_FIELDS);
 const CRITERION_FIELDS = new Set(["criterionId", "evidenceRefs", "evidenceBindings"]);
 const EVIDENCE_BINDING_FIELDS = new Set(["reference", "sha256", "receiptId"]);
 const PRODUCER_FIELDS = new Set(["kind", "actionId"]);
+const ORDINARY_HOST_OUTCOME_FIELDS = new Set(["attemptId", "mode", "status", "facts", "callbackDigest"]);
+const RESEARCH_OUTCOME_FIELDS = new Set(["attemptId", "decisionId", "decisionDigest", "actionId", "actionDigest", "envelopeId", "status", "evidenceReturned", "actualUsage", "facts", "startedAt", "finishedAt", "callbackDigest"]);
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 const HASH = /^[0-9a-f]{64}$/u;
 const PRODUCER_KIND_SET = new Set(EXECUTION_RECEIPT_PRODUCER_KINDS);
+const ORDINARY_HOST_OUTCOME_STATUS_SET = new Set(ORDINARY_HOST_OUTCOME_STATUSES);
+const ORDINARY_HOST_OUTCOME_MODE_SET = new Set(ORDINARY_HOST_OUTCOME_MODES);
 const INTERNAL_ACTION_IDS = new Set(GOVERNANCE_GUARDED_MUTATIONS.map((entry) => entry.id));
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, stableValue(item)]));
+  }
+  return value;
+}
+
+function sha256(value) {
+  return crypto.createHash("sha256").update(JSON.stringify(stableValue(value))).digest("hex");
+}
+
+export function ordinaryHostOutcomeCallbackDigest(value) {
+  return sha256({
+    attemptId: value.attemptId,
+    missionId: value.missionId,
+    contractDigest: value.contractDigest,
+    summary: value.summary,
+    mode: value.mode,
+    status: value.status,
+    facts: value.facts,
+    artifacts: value.artifacts.map(({ path: artifactPath, sha256: artifactSha256 }) => ({ path: artifactPath, sha256: artifactSha256 })),
+    validations: value.validations.map(({ kind, result, level, producerKind, producerOperation, observedExitStatus, targetReference, targetHash, reference, outputHash }) => ({ kind, result, level, producerKind, producerOperation, observedExitStatus, targetReference, targetHash, reference, outputHash }))
+  });
+}
 
 function assertPlainObject(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be a plain object.`);
@@ -88,8 +126,8 @@ function validateProducer(value, label) {
   assertSealed(value, PRODUCER_FIELDS, label);
   if (!PRODUCER_KIND_SET.has(value.kind)) throw new Error(`${label}.kind is unsupported.`);
   const actionId = safeId(value.actionId, `${label}.actionId`);
-  if (value.kind === "public-execution" && actionId !== "ingest-execution-receipt") {
-    throw new Error(`${label} public-execution producer must use actionId ingest-execution-receipt.`);
+  if (value.kind === "public-execution" && !["ingest-execution-receipt", "close-host-outcome"].includes(actionId)) {
+    throw new Error(`${label} public-execution producer must use actionId ingest-execution-receipt or close-host-outcome.`);
   }
   if (value.kind === "dove-internal" && (!INTERNAL_ACTION_IDS.has(actionId) || actionId === "ingest-execution-receipt")) {
     throw new Error(`${label} dove-internal producer actionId is not a registered internal Dove mutation.`);
@@ -119,8 +157,65 @@ function validateStoredReceipt(value, context) {
   if (!Array.isArray(value.artifacts)) throw new Error(`${label}.artifacts must be an array.`);
   if (!Array.isArray(value.validations)) throw new Error(`${label}.validations must be an array.`);
   if (!Array.isArray(value.criteriaSatisfied)) throw new Error(`${label}.criteriaSatisfied must be an array.`);
-  if (value.artifacts.length === 0 && value.validations.length === 0 && value.criteriaSatisfied.length === 0) {
-    throw new Error(`${label} must contain at least one artifact, validation, or satisfied criterion.`);
+  const ordinaryHostOutcome = value.ordinaryHostOutcome;
+  if (ordinaryHostOutcome !== undefined) {
+    assertSealed(ordinaryHostOutcome, ORDINARY_HOST_OUTCOME_FIELDS, `${label}.ordinaryHostOutcome`);
+    safeId(ordinaryHostOutcome.attemptId, `${label}.ordinaryHostOutcome.attemptId`);
+    if (!ORDINARY_HOST_OUTCOME_MODE_SET.has(ordinaryHostOutcome.mode)) throw new Error(`${label}.ordinaryHostOutcome.mode is unsupported.`);
+    if (!ORDINARY_HOST_OUTCOME_STATUS_SET.has(ordinaryHostOutcome.status)) throw new Error(`${label}.ordinaryHostOutcome.status is unsupported.`);
+    if (!Array.isArray(ordinaryHostOutcome.facts)) throw new Error(`${label}.ordinaryHostOutcome.facts must be an array.`);
+    const facts = ordinaryHostOutcome.facts.map((fact, index) => readStoredExecutionFact(fact, `${label}.ordinaryHostOutcome.facts[${index}]`));
+    if (new Set(facts.map((fact) => fact.factId)).size !== facts.length) throw new Error(`${label}.ordinaryHostOutcome.facts must not contain duplicates.`);
+    ordinaryHostOutcome.facts = facts;
+    hash(ordinaryHostOutcome.callbackDigest, `${label}.ordinaryHostOutcome.callbackDigest`);
+    if (ordinaryHostOutcome.mode === "observation-only" && facts.length === 0) throw new Error(`${label}.ordinaryHostOutcome observation-only mode requires at least one execution fact.`);
+    if (ordinaryHostOutcome.mode === "observation-only" && (value.artifacts.length > 0 || value.validations.length > 0)) {
+      throw new Error(`${label}.ordinaryHostOutcome observation-only mode cannot own artifacts or claim validations.`);
+    }
+    if (ordinaryHostOutcome.mode === "artifact-backed" && value.artifacts.length === 0) throw new Error(`${label}.ordinaryHostOutcome artifact-backed mode requires at least one artifact.`);
+  }
+  const researchOutcome = value.researchOutcome;
+  if (researchOutcome !== undefined) {
+    assertSealed(researchOutcome, RESEARCH_OUTCOME_FIELDS, `${label}.researchOutcome`);
+    safeId(researchOutcome.attemptId, `${label}.researchOutcome.attemptId`);
+    safeId(researchOutcome.decisionId, `${label}.researchOutcome.decisionId`);
+    hash(researchOutcome.decisionDigest, `${label}.researchOutcome.decisionDigest`);
+    safeId(researchOutcome.actionId, `${label}.researchOutcome.actionId`);
+    hash(researchOutcome.actionDigest, `${label}.researchOutcome.actionDigest`);
+    safeId(researchOutcome.envelopeId, `${label}.researchOutcome.envelopeId`);
+    exactString(researchOutcome.status, `${label}.researchOutcome.status`);
+    canonicalStringArray(researchOutcome.evidenceReturned, `${label}.researchOutcome.evidenceReturned`);
+    assertPlainObject(researchOutcome.actualUsage, `${label}.researchOutcome.actualUsage`);
+    for (const [dimension, amount] of Object.entries(researchOutcome.actualUsage)) {
+      exactString(dimension, `${label}.researchOutcome.actualUsage dimension`);
+      if (!Number.isSafeInteger(amount) || amount < 0) throw new Error(`${label}.researchOutcome.actualUsage.${dimension} must be a non-negative safe integer.`);
+    }
+    canonicalStringArray(researchOutcome.facts, `${label}.researchOutcome.facts`);
+    exactIso(researchOutcome.startedAt, `${label}.researchOutcome.startedAt`);
+    exactIso(researchOutcome.finishedAt, `${label}.researchOutcome.finishedAt`);
+    hash(researchOutcome.callbackDigest, `${label}.researchOutcome.callbackDigest`);
+    const expectedResearchDigest = sha256({
+      attemptId: researchOutcome.attemptId,
+      missionId: value.missionId,
+      decisionDigest: researchOutcome.decisionDigest,
+      actionId: researchOutcome.actionId,
+      actionDigest: researchOutcome.actionDigest,
+      status: researchOutcome.status,
+      performedActionCount: researchOutcome.actualUsage.actions,
+      actualUsage: researchOutcome.actualUsage,
+      evidenceReturned: researchOutcome.evidenceReturned,
+      artifacts: value.artifacts.map(({ path: artifactPath, sha256: artifactSha256 }) => ({ path: artifactPath, sha256: artifactSha256 })),
+      validations: value.validations.map(({ reference, outputHash }) => ({ path: reference, sha256: outputHash })),
+      facts: researchOutcome.facts,
+      startedAt: researchOutcome.startedAt,
+      finishedAt: researchOutcome.finishedAt
+    });
+    if (researchOutcome.callbackDigest !== expectedResearchDigest) throw new Error(`${label}.researchOutcome.callbackDigest does not match its immutable callback content.`);
+    if (value.producer.kind !== "dove-internal" || value.producer.actionId !== "record-research-outcome") throw new Error(`${label}.researchOutcome requires the record-research-outcome producer.`);
+  }
+  if (ordinaryHostOutcome !== undefined && researchOutcome !== undefined) throw new Error(`${label} cannot contain both ordinaryHostOutcome and researchOutcome.`);
+  if (value.artifacts.length === 0 && value.validations.length === 0 && value.criteriaSatisfied.length === 0 && ordinaryHostOutcome === undefined && researchOutcome === undefined) {
+    throw new Error(`${label} must contain an artifact, validation, satisfied criterion, ordinary outcome, or research outcome.`);
   }
   const artifactPaths = new Set();
   for (const [index, artifact] of value.artifacts.entries()) {
@@ -135,21 +230,28 @@ function validateStoredReceipt(value, context) {
   }
 
   const validationPaths = new Set();
-  for (const [index, validation] of value.validations.entries()) {
+  value.validations = value.validations.map((validation, index) => {
     const itemLabel = `${label}.validations[${index}]`;
-    assertSealed(validation, VALIDATION_FIELDS, itemLabel);
-    exactString(validation.kind, `${itemLabel}.kind`);
-    const reference = canonicalPath(validation.reference, `${itemLabel}.reference`);
+    assertSealed(validation, STORED_VALIDATION_FIELDS, itemLabel);
+    const normalized = createValidationRecord(validation, { label: itemLabel });
+    const reference = canonicalPath(normalized.reference, `${itemLabel}.reference`);
     if (validationPaths.has(reference)) throw new Error(`${label}.validations contains duplicate reference ${reference}.`);
     if (artifactPaths.has(reference)) throw new Error(`${label} artifact and validation paths must be canonically distinct: ${reference}.`);
     validationPaths.add(reference);
-    hash(validation.outputHash, `${itemLabel}.outputHash`);
-  }
+    hash(normalized.outputHash, `${itemLabel}.outputHash`);
+    const separator = normalized.targetReference.indexOf(":");
+    const targetKind = normalized.targetReference.slice(0, separator);
+    const target = normalized.targetReference.slice(separator + 1);
+    if (!["artifact", "validation"].includes(targetKind) || !target) throw new Error(`${itemLabel}.targetReference must be an exact typed file binding.`);
+    canonicalPath(target, `${itemLabel}.targetReference`);
+    return normalized;
+  });
 
   const artifactHashByReference = new Map(value.artifacts.map((artifact) => [`artifact:${artifact.path}`, artifact.sha256]));
   const validationHashByReference = new Map(value.validations.map((validation) => [`validation:${validation.reference}`, validation.outputHash]));
+  const factHashByReference = new Map((ordinaryHostOutcome?.facts ?? []).map((fact) => [`fact:${fact.factId}`, executionFactHash(fact.statement)]));
   const criterionIds = new Set();
-  const missionCriterionIds = new Set(Array.isArray(mission.completionCriterionIds) ? mission.completionCriterionIds : []);
+  const missionCriterionIds = new Set(missionCompletionCriteria(mission).map((item) => item.criterionId));
   for (const [index, criterion] of value.criteriaSatisfied.entries()) {
     const itemLabel = `${label}.criteriaSatisfied[${index}]`;
     assertSealed(criterion, CRITERION_FIELDS, itemLabel);
@@ -181,8 +283,25 @@ function validateStoredReceipt(value, context) {
       }
       if (!bindingByReference.has(reference)) throw new Error(`${itemLabel}.evidenceBindings is missing ${reference}.`);
       const binding = bindingByReference.get(reference);
-      const declaredHash = kind === "artifact" ? artifactHashByReference.get(reference) : kind === "validation" ? validationHashByReference.get(reference) : null;
+      const declaredHash = kind === "artifact" ? artifactHashByReference.get(reference) : kind === "validation" ? validationHashByReference.get(reference) : kind === "fact" ? factHashByReference.get(reference) : null;
+      if (kind === "fact" && !declaredHash) throw new Error(`${itemLabel}.evidenceRefs[${referenceIndex}] references an unknown execution fact.`);
       if (declaredHash && (binding.sha256 !== declaredHash || binding.receiptId !== receiptId)) throw new Error(`${itemLabel}.evidenceBindings does not match the receipt declaration for ${reference}.`);
+    }
+  }
+  if (ordinaryHostOutcome !== undefined) {
+    const currentDigest = ordinaryHostOutcomeCallbackDigest({
+      attemptId: ordinaryHostOutcome.attemptId,
+      missionId: value.missionId,
+      contractDigest: value.contractDigest,
+      summary: value.summary,
+      mode: ordinaryHostOutcome.mode,
+      status: ordinaryHostOutcome.status,
+      facts: ordinaryHostOutcome.facts,
+      artifacts: value.artifacts,
+      validations: value.validations
+    });
+    if (ordinaryHostOutcome.callbackDigest !== currentDigest) {
+      throw new Error(`${label}.ordinaryHostOutcome.callbackDigest does not match its canonical callback content.`);
     }
   }
   return value;
@@ -202,7 +321,7 @@ function readJsonStrict(fullPath, label) {
   }
 }
 
-function derivedState(manifest, receipts, missionGraph) {
+function derivedState(manifest, receipts, artifactHandoffs) {
   const currentByPath = new Map();
   const artifactHistory = [];
   for (const receipt of receipts) {
@@ -211,9 +330,9 @@ function derivedState(manifest, receipts, missionGraph) {
       if (
         previous
         && previous.missionId !== receipt.missionId
-        && !missionSupersedes(missionGraph, receipt.missionId, previous.missionId)
+        && !handoffAuthorizes(artifactHandoffs, artifact.path, previous.missionId, receipt.missionId, previous.receiptId, previous.sha256)
       ) {
-        throw new Error(`Execution receipt ledger assigns artifact path ${artifact.path} to mission ${receipt.missionId} after ownership by unrelated mission ${previous.missionId}.`);
+        throw new Error(`Execution receipt ledger assigns artifact path ${artifact.path} to mission ${receipt.missionId} without an explicit artifact handoff from mission ${previous.missionId}.`);
       }
       const entry = {
         path: artifact.path,
@@ -239,7 +358,6 @@ function derivedState(manifest, receipts, missionGraph) {
     receipts,
     artifactHistory,
     currentOwnership: current.map(({ derivedReferences: _derivedReferences, ledgerSequence: _ledgerSequence, recordedAt: _recordedAt, producer: _producer, ...item }) => item),
-    currentLineage: current.map(({ ledgerSequence: _ledgerSequence, recordedAt: _recordedAt, producer: _producer, ...item }) => item),
     updatedAt,
     nextLedgerSequence: receipts.length + 1
   };
@@ -249,7 +367,8 @@ export function readExecutionReceiptLedger(root, options = {}) {
   const manifest = options.manifest;
   const missions = options.missions;
   const missionGraph = options.missionGraph;
-  if (!manifest || !(missions instanceof Map) || !missionGraph) throw new Error("Execution receipt ledger read requires the validated manifest, mission map, and mission graph.");
+  const artifactHandoffs = options.artifactHandoffs;
+  if (!manifest || !(missions instanceof Map) || !missionGraph || !artifactHandoffs) throw new Error("Execution receipt ledger read requires the validated manifest, mission map, mission graph, and artifact handoffs.");
   const directory = path.resolve(root, ARTIFACT_PATHS.executionReceiptsDir);
   const receipts = fs.readdirSync(directory, { withFileTypes: true }).map((entry) => {
     const relativePath = path.posix.join(ARTIFACT_PATHS.executionReceiptsDir, entry.name);
@@ -264,6 +383,8 @@ export function readExecutionReceiptLedger(root, options = {}) {
   }).sort((left, right) => left.ledgerSequence - right.ledgerSequence);
 
   const receiptIds = new Set();
+  const researchAttemptIds = new Set();
+  const ordinaryAttemptIds = new Set();
   for (const [index, receipt] of receipts.entries()) {
     const expectedSequence = index + 1;
     if (receipt.ledgerSequence !== expectedSequence) {
@@ -271,8 +392,16 @@ export function readExecutionReceiptLedger(root, options = {}) {
     }
     if (receiptIds.has(receipt.receiptId)) throw new Error(`Execution receipt ledger contains duplicate receiptId ${receipt.receiptId}.`);
     receiptIds.add(receipt.receiptId);
+    if (receipt.researchOutcome) {
+      if (researchAttemptIds.has(receipt.researchOutcome.attemptId)) throw new Error(`Execution receipt ledger contains duplicate research attemptId ${receipt.researchOutcome.attemptId}.`);
+      researchAttemptIds.add(receipt.researchOutcome.attemptId);
+    }
+    if (receipt.ordinaryHostOutcome) {
+      if (ordinaryAttemptIds.has(receipt.ordinaryHostOutcome.attemptId)) throw new Error(`Execution receipt ledger contains duplicate ordinary attemptId ${receipt.ordinaryHostOutcome.attemptId}.`);
+      ordinaryAttemptIds.add(receipt.ordinaryHostOutcome.attemptId);
+    }
   }
-  return derivedState(manifest, receipts, missionGraph);
+  return derivedState(manifest, receipts, artifactHandoffs);
 }
 
 export function deriveArtifactReferences(receipt, explicitByPath = new Map()) {
@@ -291,7 +420,7 @@ export function deriveArtifactReferences(receipt, explicitByPath = new Map()) {
 }
 
 export function assertReceiptAppendable(ledger, receipt, options = {}) {
-  const missionGraph = options.missionGraph;
+  const artifactHandoffs = options.artifactHandoffs;
   if (receipt.ledgerSequence !== ledger.nextLedgerSequence) {
     throw new Error(`Execution receipt ledgerSequence must be ${ledger.nextLedgerSequence}.`);
   }
@@ -301,15 +430,15 @@ export function assertReceiptAppendable(ledger, receipt, options = {}) {
   for (const artifact of receipt.artifacts) {
     const current = currentByPath.get(artifact.path);
     const currentReceipt = current ? receiptById.get(current.receiptId) : null;
-    if (currentReceipt?.producer?.kind === "dove-internal" && ["prepare-review-exchange", "import-review-exchange"].includes(currentReceipt.producer.actionId)) {
-      throw new Error(`Artifact path ${artifact.path} is an immutable review ${currentReceipt.producer.actionId === "prepare-review-exchange" ? "preparation control" : "import record"} and cannot be overwritten.`);
+    if (currentReceipt?.producer?.kind === "dove-internal" && currentReceipt.producer.actionId === "archive-review-record") {
+      throw new Error(`Artifact path ${artifact.path} is an immutable review archive and cannot be overwritten.`);
     }
     if (
       current
       && current.missionId !== receipt.missionId
-      && (!missionGraph || !missionSupersedes(missionGraph, receipt.missionId, current.missionId))
+      && !handoffAuthorizes(artifactHandoffs, artifact.path, current.missionId, receipt.missionId, current.receiptId, current.sha256)
     ) {
-      throw new Error(`Artifact path ${artifact.path} is already owned by mission ${current.missionId}; unrelated mission ${receipt.missionId} cannot overwrite it.`);
+      throw new Error(`Artifact path ${artifact.path} is already owned by mission ${current.missionId}; mission ${receipt.missionId} requires an explicit artifact handoff before overwriting it.`);
     }
   }
 }

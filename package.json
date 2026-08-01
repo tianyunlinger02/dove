@@ -13,6 +13,7 @@
     ".agents/skills/dove-*/SKILL.md",
     ".codex/skills/dove-*/SKILL.md",
     ".cursor/commands/dove-*.md",
+    ".claude/commands/dove/*.md",
     ".opencode/commands/dove*.md",
     ".opencode/skills/dove-*/SKILL.md",
     ".opencode.json",
@@ -21,6 +22,7 @@
     "bin/dove-package.mjs",
     "mcp/dove-state-server-package.mjs",
     "scripts/doctor-mcp-probe-package.mjs",
+    "scripts/dove-user-prompt-submit-package.mjs",
     "docs/README.md",
     "docs/INSTALL.md",
     "docs/USAGE.md",
@@ -31,21 +33,21 @@
   ],
   "scripts": {
     "dove": "node ./bin/dove.mjs",
-    "doctor": "node ./bin/dove.mjs doctor .",
+    "doctor": "node ./bin/dove.mjs doctor",
     "doctor:validate": "node ./scripts/validate-doctor.mjs",
-    "install:local": "node ./bin/dove.mjs install . --force",
-    "mcp:serve": "node ./mcp/dove-state-server.mjs",
+    "mcp:serve": "node ./bin/dove.mjs mcp serve",
     "mcp:validate": "node ./scripts/validate-mcp.mjs",
     "commands:generate": "node ./scripts/generate-command-adapters-cli.mjs",
     "commands:check": "node ./scripts/generate-command-adapters-cli.mjs --check",
     "commands:validate": "node ./scripts/validate-commands.mjs",
+    "research-constitution:validate": "node ./scripts/validate-research-constitution.mjs",
     "workflow-goals:validate": "node ./scripts/validate-workflow-goals.mjs",
     "governance:audit": "node ./scripts/audit-governance-coverage.mjs",
-    "maturity:audit": "node ./scripts/validate-maturity.mjs",
+    "release:validate": "node ./scripts/validate-release.mjs",
     "package:validate": "node ./scripts/validate-package.mjs",
     "test": "node --test ./tests/**/*.test.mjs",
-    "check": "npm run build:check && npm run commands:check && npm run commands:validate && npm run mcp:validate && npm run workflow-goals:validate && npm run governance:audit && npm test",
-    "release:check": "npm run build:check && npm run commands:check && npm run maturity:audit && npm run package:validate",
+    "check": "npm run build:check && npm run commands:check && npm run commands:validate && npm run research-constitution:validate && npm run mcp:validate && npm run workflow-goals:validate && npm run governance:audit && npm test",
+    "release:check": "npm run build:check && npm run commands:check && npm run release:validate && npm run package:validate",
     "pack:dry-run": "npm pack --dry-run",
     "build": "node ./scripts/build-package.mjs",
     "build:check": "node ./scripts/build-package.mjs --check",
@@ -72,5 +74,8 @@
   "homepage": "https://github.com/tianyunlinger02/dove#readme",
   "devDependencies": {
     "esbuild": "^0.28.1"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.10.1"
   }
 }

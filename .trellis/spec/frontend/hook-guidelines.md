@@ -1,52 +1,56 @@
 # Hook Guidelines
 
-> Reusable file-backed helpers and workflow pipelines in Dove schema 8.
+> Reusable core helpers and bounded ambient entry.
 
 ---
 
 ## Overview
 
-There are no React hooks. Hook-like abstractions are narrow core helpers for strict workspace access, contained mutation, artifact integrity, ownership/lineage, and mission-bound workflows. Do not rely on process memory or implicit host hooks.
+There are no React hooks. Hook-like abstractions are narrow helpers for Workspace access, contained mutation, evidence validation, ownership, lineage, and Mission-bound workflows.
 
-## Reusable Helper Patterns
+The sole host-hook surface is the managed project-local Claude `UserPromptSubmit` ambient entry. Direct Skills remain explicit host workflows and are not routed through this hook.
 
-- Resolve canonical contained paths before reading or writing.
-- Open workspaces through the strict schema opener.
-- Use `readJson` and `readText` only after the relevant contract establishes that a path is current and readable.
-- Use `writeJson`, `writeText`, and `writeBinary` through an active mutation context.
-- Use artifact integrity helpers to reject traversal, symlink escape, directories, empty evidence, bookkeeping evidence, and stale hashes.
-- Use ownership and lineage helpers rather than duplicating mission-binding logic.
-- Preflight the complete write set before applying the first mutation.
+## Helper Pipeline
 
-Before creating a helper, search `src/core/workspace.mjs`, `src/core/artifact-integrity.mjs`, `src/core/artifact-lineage.mjs`, `src/core/domain-artifacts.mjs`, and the relevant domain module.
+A mutation helper should:
 
-## Data Flow
+1. validate sealed public input;
+2. classify the current Workspace;
+3. load the selected root or child Mission context;
+4. resolve current target and evidence references;
+5. validate ownership, lineage, eligibility, and review coverage;
+6. build the complete write set before mutation;
+7. apply the contained write; and
+8. return a result for shared public projection.
 
-A mutation pipeline should be explicit:
+Read-only helpers stop before mutation. They do not initialize, repair, refresh, or convert state.
 
-1. Validate sealed boundary input.
-2. Open the current schema 8 workspace.
-3. Load and validate the mission contract.
-4. Resolve canonical target and evidence paths.
-5. Reassess hashes, source eligibility, ownership, lineage, and review coverage as required.
-6. Build the complete deterministic write set.
-7. Apply it through `patch-plan` or `direct-process` mutation context.
-8. Return machine-checkable results without creating a secondary workflow mirror.
+## Ambient Entry
 
-A read-only pipeline stops after assessment and must not repair, bootstrap, or refresh anything. Lesson query follows this rule. Lesson record follows the full proposal/exact-replay pipeline and remains advisory-only; it must not auto-capture, auto-recall, import transcripts, write Trellis/runtime state, or infer global provenance from global applicability.
+Ambient entry applies only to selected non-slash prompts and has two hidden routes:
 
-## Naming Conventions
+- `dove-intake` chooses `research` when work changes research understanding, experiments, evidence, or paper claims, otherwise `ordinary` for clear code, documentation, configuration, cleanup, or another bounded deliverable; it asks at most one zero-write clarification round, creates only through `create_ambient_dove_mission`, and resumes the original host task only after success.
+- `dove-lessons-intake` handles explicit Lessons read, remember, or reflect requests through `manage_dove_lessons`, preserves the read binding for one full-document update, and creates no Mission.
 
-- Core functions are verb-first camelCase: `createDoveMission`, `queryDoveStatus`, `ingestExecutionReceipt`, `prepareReviewExchange`.
-- Normalizers use `normalize<Name>` and validators use `validate<Name>` or `assert<Name>`.
-- Query MCP tools use `query_*` or assessment verbs; mutation tools use explicit domain verbs such as `register_*`, `upsert_*`, `prepare_*`, `import_*`, `build_*`, or `create_*`.
-- Avoid names that imply host orchestration, background execution, tiers, aliases, or compatibility behavior.
+A successful ambient Mission aligns with the current Workspace mainline. New independent work becomes a root Mission; continuation or follow-up uses explicit parent/child routing when the current request identifies existing work.
 
-## Common Mistakes
+The hook keeps `researchHandoff` and `hostControl` machine-only. If a typed closure request is supplied, it invokes the fixed tool exactly once with every bound argument unchanged, required outcome fields supplied, and declared defaults applied.
 
-- Reading durable JSON before strict workspace classification.
-- Writing directly with `fs` when a mutation context and contained-write helper are required.
-- Validating one output at a time and leaving partial state on later failure.
-- Accepting a path without checking evidence role, realpath containment, and current hash.
-- Creating a second index or lifecycle mirror when the answer can be derived from canonical artifacts.
-- Adding fallback parsing for removed schema layouts.
+The hook does not call direct Skill tools on the user's behalf, inspect durable files, echo the prompt, or replace normal host planning and execution.
+
+## Domain Boundaries
+
+- Source discovery and capture happen with host-native external retrieval before registration.
+- Note work is internal synthesis into a normal artifact.
+- Experience work is conception/prevalidation.
+- Experiment recording begins at formal protocol freeze.
+
+These boundaries do not create a ResearchTree, Note store, Experience sidecars, or another runtime route.
+
+## Naming
+
+- Core functions use verb-first camelCase.
+- Normalizers use `normalize<Name>`.
+- Validators use `validate<Name>` or `assert<Name>`.
+- MCP tools use explicit snake_case task verbs.
+- Public Skill IDs remain flat `dove.<surface>` names.
