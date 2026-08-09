@@ -131,17 +131,22 @@ try {
   process.exit(1);
 }
 
+function homeState(inspection) {
+  if (inspection.setup?.mode === "init") return "uninitialized";
+  if (inspection.projectIntegration?.state === "current") return "current";
+  if (inspection.projectIntegration?.state === "needs-sync") return "needs-sync";
+  return "blocked";
+}
+
 const command = parsed.command;
 const args = parsed.args;
 if (!command) {
-  let projectInitialized = false;
-  try {
-    resolveInstalledProjectRoot(process.cwd());
-    projectInitialized = true;
-  } catch {
-    projectInitialized = false;
-  }
-  console.log(renderDoveHome({ stream: process.stdout, env: process.env, projectInitialized }));
+  const inspection = inspect(process.cwd());
+  console.log(renderDoveHome({
+    stream: process.stdout,
+    env: process.env,
+    state: homeState(inspection)
+  }));
   process.exit(0);
 }
 if (command === "--help") {

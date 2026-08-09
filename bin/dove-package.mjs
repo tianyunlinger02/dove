@@ -20415,17 +20415,21 @@ try {
   operationalFailure(error, process6.argv.slice(2));
   process6.exit(1);
 }
+function homeState(inspection) {
+  if (inspection.setup?.mode === "init") return "uninitialized";
+  if (inspection.projectIntegration?.state === "current") return "current";
+  if (inspection.projectIntegration?.state === "needs-sync") return "needs-sync";
+  return "blocked";
+}
 var command2 = parsed.command;
 var args = parsed.args;
 if (!command2) {
-  let projectInitialized = false;
-  try {
-    resolveInstalledProjectRoot(process6.cwd());
-    projectInitialized = true;
-  } catch {
-    projectInitialized = false;
-  }
-  console.log(renderDoveHome({ stream: process6.stdout, env: process6.env, projectInitialized }));
+  const inspection = inspect(process6.cwd());
+  console.log(renderDoveHome({
+    stream: process6.stdout,
+    env: process6.env,
+    state: homeState(inspection)
+  }));
   process6.exit(0);
 }
 if (command2 === "--help") {

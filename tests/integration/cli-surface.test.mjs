@@ -49,6 +49,28 @@ test("CLI help exposes exactly seven runtime commands and no retired business ro
   assert.doesNotMatch(help.stdout, /--snapshot-summary|--mutation-mode|missionNumber|receipt/iu);
 });
 
+test("bare CLI reports current and needs-sync project integration without writes", () => {
+  const root = createTempRoot("dove-cli-surface-home-");
+  installProject(root);
+
+  const current = run([], { cwd: root });
+  assert.equal(current.status, 0, current.stderr || current.stdout);
+  assert.match(current.stdout, /Dove 项目集成已是当前版本/u);
+  assert.match(current.stdout, /\/dove:research/u);
+
+  const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest.package.version = "0.6.0";
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  const before = fs.readFileSync(manifestPath);
+  const needsSync = run([], { cwd: root });
+  const after = fs.readFileSync(manifestPath);
+  assert.equal(needsSync.status, 0, needsSync.stderr || needsSync.stdout);
+  assert.match(needsSync.stdout, /Dove 项目集成需要更新/u);
+  assert.match(needsSync.stdout, /dove sync/u);
+  assert.deepEqual(after, before);
+});
+
 test("CLI init and sync use the unified installation root without creating Research Format 1", () => {
   const root = createTempRoot("dove-cli-surface-install-");
   const initialized = run(["init", "--project", root, "--host", "claude", "--json"]);

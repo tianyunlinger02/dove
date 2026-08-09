@@ -38,6 +38,10 @@ test("Dove home shows the mascot only in an interactive terminal", () => {
   assert.match(interactive, /\/dove:research/u);
   assert.match(interactive, /dove --help/u);
 
+  const needsSync = renderDoveHome({ stream: { isTTY: false }, env: {}, state: "needs-sync" });
+  assert.match(needsSync, /Dove 项目集成需要更新/u);
+  assert.match(needsSync, /下一步  dove sync/u);
+
   const piped = renderDoveHome({ stream: { isTTY: false }, env: {}, projectInitialized: false });
   assert.equal(piped.includes(DOVE_PIXEL_ART[0]), false);
   assert.doesNotMatch(piped, ANSI_PATTERN);
