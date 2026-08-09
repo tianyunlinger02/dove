@@ -188,37 +188,28 @@ test("hidden Lessons intake uses read-update MCP flow without Mission or fallbac
   const skill = renderClaudeLessonsIntakeSkill();
   assert.match(skill, /user-invocable: false/u);
   assert.match(skill, /manage_dove_lessons.*operation=read/isu);
-  assert.match(skill, /operation=update.*binding unchanged.*complete replacement Markdown/isu);
-  assert.match(skill, /reflection.*read.*update/isu);
+  assert.match(skill, /operation=replace.*complete replacement Markdown/isu);
+  assert.match(skill, /preserve its existing structure.*If no structure exists.*organize.*naturally/isu);
+  assert.doesNotMatch(skill, /existing five sections/iu);
+  assert.match(skill, /reflection.*read.*replace/isu);
   assert.match(skill, /do not create a Mission/iu);
-  assert.match(skill, /do not call `create_ambient_dove_mission`/u);
   assert.match(skill, /not evidence, authority, completion proof/iu);
   assert.match(skill, /CLI, shell, or direct Dove state access/iu);
   assert.doesNotMatch(skill, /query_dove_lessons|record_dove_lesson|lessonId|scope enum|kind enum/iu);
   assert.ok(Buffer.byteLength(skill, "utf8") <= 2600);
 });
 
-test("hidden intake skill preserves five concise ambient capabilities", () => {
+test("hidden intake skill preserves concise zero-write routing", () => {
   const skill = renderClaudeAmbientSkill();
   assert.match(skill, /user-invocable: false/u);
-  const capabilities = [
-    /conservative judgment.*(?:starts new work|clear new work)|(?:starts new work|clear new work).*conservative judgment/isu,
-    /(?:ambigu.*one.*zero-write clarification|one.*zero-write clarification.*ambigu)/isu,
-    /create_ambient_dove_mission/iu,
-    /(?:successful create|success).*(?:resume|continue).*original (?:request|task)|(?:resume|continue).*original (?:request|task).*successful create/isu,
-    /closureRequest.*exactly once.*boundArgs/isu
-  ];
-  for (const capability of capabilities) assert.match(skill, capability);
-  assert.match(skill, /outcomeContract.*literally.*rather than inferring/isu);
-  assert.match(skill, /(?:hostControl|researchHandoff).*(?:machine channels|out of user-facing output)|(?:machine channels|out of user-facing output).*(?:hostControl|researchHandoff)/isu);
-  assert.match(skill, /(?:clarification|blocks|fails).*(?:show only|public human).*report.*stop|stop.*(?:clarification|blocks|fails)/isu);
-  assert.match(skill, /artifact:<path>.*validation:<path>/isu);
-  assert.doesNotMatch(skill, /note:<id>/iu);
+  assert.match(skill, /conservative judgment.*(?:starts new work|clear new work)|(?:starts new work|clear new work).*conservative judgment/isu);
+  assert.match(skill, /(?:ambigu.*one.*zero-write clarification|one.*zero-write clarification.*ambigu)/isu);
+  assert.match(skill, /smallest flat Skill/iu);
+  assert.match(skill, /Do not create a Mission merely because a prompt was selected/iu);
   assert.match(skill, /remains unclear.*no work was started.*stop/isu);
-  assert.doesNotMatch(skill, /remains unclear.*continue/isu);
-  assert.match(skill, /(?:direct (?:Dove )?state|\.dove).*(?:public tools|host integration|never|must not)|(?:public tools|host integration|never|must not).*(?:direct (?:Dove )?state|\.dove)/isu);
-  assert.match(skill, /(?:public Dove (?:MCP )?(?:tools|surfaces)).*(?:CLI|shell)|(?:CLI|shell).*(?:public Dove (?:MCP )?(?:tools|surfaces))/isu);
-  assert.doesNotMatch(skill, /when it says|terminal.*stop|resume.*same turn|generate one private safe mission id|separate Dove confirmation|evidence close|never retry|closure decision|decision table/iu);
+  assert.match(skill, /public Dove MCP research surfaces/iu);
+  assert.match(skill, /CLI, shell, or direct Dove state access/iu);
+  assert.doesNotMatch(skill, /create_ambient_dove_mission|closureRequest|hostControl|researchHandoff|outcomeContract|binding/iu);
   assert.ok(Buffer.byteLength(skill, "utf8") <= 2600);
   assert.equal(fs.existsSync(path.join(ROOT, ".claude", "skills", "dove-intake", "SKILL.md")), true);
 });

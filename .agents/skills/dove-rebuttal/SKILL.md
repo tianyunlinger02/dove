@@ -1,40 +1,33 @@
 ---
 name: dove-rebuttal
-description: "Analyze findings, revise project artifacts, and archive an author-side response."
+description: "Perform author-side rebuttal and revision work from current findings and evidence."
 ---
 
 # Dove Rebuttal
 
-Analyze findings, revise project artifacts, and archive an author-side response.
+Perform author-side rebuttal and revision work from current findings and evidence.
 
 ## Use when
 
-- Analyze current findings and make the requested author-side revisions.
-- Archive the project response with preserved finding references and remaining uncertainty.
+- Perform author-side rebuttal and revision work from current findings and evidence.
 
 ## Examples
 
-- `/dove:rebuttal Address the archived reviewer findings`
-- `/dove:rebuttal Revise the response with current evidence`
+- `/dove:rebuttal`
 
 ## Workflow
 
-- **The user asks for author-side rebuttal or revision work from archived findings.**
-  1. Call `query_dove_status`. Use operation=status to read the public workspace and lifecycle context. Select an existing work number only when the requested record or artifact identifies it exactly; otherwise ask one zero-write clarification and stop.
-  2. Call `manage_dove_mission`. Use operation=start-skill and skill=rebuttal. Refine one minimal goal from the request and current context. Command text is optional constraints; clarify only material ambiguity and do not impose a fixed template. Start one research Skill Mission before author-side rebuttal work with host tools; an artifact-owning mission may be selected as its parent without stopping that parent. Preserve result.selector.missionNumber for every later mission-bound tool and use the supplied research outcome closure exactly once after host work.
-  3. Call `record_dove_rebuttal`. After substantive host work, archive the exact current mission-owned rebuttal and preserved current findings. Findings may be non-authoritative; never mint reviewer sign-off.
-- **The user asks to revise an existing author-side rebuttal.**
-  1. Call `query_dove_status`. Use operation=status and select the exact existing work number identified by the requested lifecycle record or artifact before the rebuttal revision. Do not call start-skill, do not guess the latest work, and ask one zero-write clarification if the owner is not unambiguous.
-  2. Call `record_dove_rebuttal`. Archive the revised project rebuttal while preserving finding references and remaining uncertainty.
-  - Clarify only if needed: Ask once if the rebuttal artifact or preserved finding cannot be identified exactly.
-
-## Command guidance
-
-- Keep the substantive response and revisions author-side, preserve current finding references, and never claim independent reviewer sign-off.
+- **The user requests author-side rebuttal or revision from review findings.**
+  1. Call `query_dove_research` (read-only). Read review and claim context relevant to the requested response. No durable Dove write is required.
+  2. Call `manage_dove_reviews` (read-only). Read coverage or review records needed for the response; do not present author work as independent review. No durable Dove write is required.
+  3. Use host tools (work; rebuttal-and-revision). Analyze each finding against the actual artifact and evidence, then write the rebuttal and make requested ordinary project revisions with host-native tools. No durable Dove write is required.
+  4. Use host tools (read-only; artifact-validation). Validate that every response maps to a finding and that revisions do not overstate evidence or erase failures and uncertainty. No durable Dove write is required.
+  5. Call `manage_dove_claims` (bounded). Persist only material claim changes introduced by the author-side revision. Persist only when: material-claim-change.
+  - Clarification: Explore first. Ask one brief clarification only if material ambiguity in the goal, boundary, or deliverable remains; otherwise continue within the requested boundary.
 
 ## Dove capsule
 
-- Dove MCP tools: `query_dove_status`, `manage_dove_mission`, `record_dove_rebuttal`.
-- Use the listed public Dove MCP tools. If they are unavailable, stop and ask the user to re-enter the project host; do not substitute CLI, shell, or direct state access.
-- Present only the human `report` when directed. Keep machine channels internal and execute a supplied typed closure once with its binding unchanged.
-- Respond concisely in Chinese by default: judgment, evidence or risk, and next action.
+- Dove MCP tools: `query_dove_research`, `manage_dove_reviews`, `manage_dove_claims`.
+- Use only the eight public Dove MCP research tools for durable Dove state; never read or write `.dove` directly.
+- Use semantic IDs only when durable records are needed, and do not create a Workspace or Mission merely because a Skill was invoked.
+- Treat tests, host output, local review, and imported review as bounded evidence rather than completion or scientific authority.

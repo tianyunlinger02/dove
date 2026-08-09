@@ -17,6 +17,7 @@ import {
   COMMAND_SURFACES,
   HOST_ADAPTER_POLICY,
   PROJECT_HOST_IDS,
+  PUBLIC_RESPONSE_CAPSULE,
   adapterPathForCommand,
   hostCommandSlug
 } from "../src/core/command-manifest.mjs";
@@ -68,11 +69,18 @@ function renderWorkflow(command) {
   const lines = ["## Workflow", ""];
   for (const item of modes) {
     lines.push(`- **${item.when}**`);
-    for (const [index, call] of item.steps.entries()) {
-      lines.push(`  ${index + 1}. Call \`${call.tool}\`. ${call.instruction}`);
+    for (const [index, step] of item.steps.entries()) {
+      const persistence = step.persistWhen && step.persistWhen !== "never"
+        ? ` Persist only when: ${step.persistWhen}.`
+        : " No durable Dove write is required.";
+      if (step.type === "host") {
+        lines.push(`  ${index + 1}. Use host tools (${step.readOnly ? "read-only" : "work"}; ${step.capability}). ${step.instruction}${persistence}`);
+      } else {
+        lines.push(`  ${index + 1}. Call \`${step.tool}\` (${step.readOnly ? "read-only" : "bounded"}). ${step.instruction}${persistence}`);
+      }
     }
     for (const clarification of item.clarification ?? []) {
-      lines.push(`  - Clarify only if needed: ${clarification}`);
+      lines.push(`  - Clarification: ${clarification}`);
     }
   }
   return lines.join("\n");
@@ -83,9 +91,11 @@ function renderGuidance(command) {
   return notes.length > 0 ? `## Command guidance\n\n${renderBullets(notes)}` : "";
 }
 
-function renderCapsule(command) {
+function renderCapsule(command, hostId = null) {
+  const responsePreference = ["claude", "agents"].includes(hostId) ? [] : PUBLIC_RESPONSE_CAPSULE;
   return `## Dove capsule\n\n${renderBullets([
     ...toolBullets(command),
+    ...responsePreference,
     ...HOST_ADAPTER_POLICY.adapterBullets
   ])}`;
 }
@@ -101,7 +111,7 @@ function renderBody(command, heading, hostId = null) {
   const examples = renderExamples(command, hostId);
   const workflow = renderWorkflow(command);
   const guidance = renderGuidance(command);
-  const capsule = renderCapsule(command);
+  const capsule = renderCapsule(command, hostId);
   return `# ${heading}\n\n${purpose}\n\n## Use when\n\n${dailyUse}${examples}\n\n${workflow}${guidance ? `\n\n${guidance}` : ""}\n\n${capsule}\n`;
 }
 

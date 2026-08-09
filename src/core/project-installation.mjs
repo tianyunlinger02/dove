@@ -6,7 +6,6 @@ import {
   DOVE_CLAUDE_AMBIENT_HOOK_COMMAND,
   DOVE_CLAUDE_AMBIENT_HOOK_ENTRY,
   DOVE_CLAUDE_SETTINGS_PATH,
-  LEGACY_DOVE_CLAUDE_AMBIENT_HOOK_COMMAND,
   mergeClaudeAmbientSettings
 } from "./ambient-policy.mjs";
 import {
@@ -26,19 +25,21 @@ import { inspectDirectoryTreeDigest, writeFileSetTransaction } from "./file-set-
 import { PROJECT_HOST_IDS, normalizeHostSelection } from "./host-registry.mjs";
 import {
   LEGACY_PROJECT_BUNDLE_PROBES,
-  LEGACY_PROJECT_MARKER_PATHS,
   inspectLegacyProjectInstallation
 } from "./project-legacy-installation.mjs";
 import {
   INSTALLATION_MANIFEST_PATH,
+  LEGACY_INSTALLATION_MANIFEST_PATH,
   createProjectInstallationManifest,
   isPreviousProjectInstallationManifest,
+  readLegacyProjectInstallationManifest,
   readProjectInstallationManifest,
   serializeProjectInstallationManifest
 } from "./project-installation-manifest.mjs";
 import { resolveInstalledProjectRoot, resolveProjectRootForInit } from "./project-root.mjs";
 import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 import { generatedAdapterEntries, generatedClaudeAmbientProjectEntries } from "../../scripts/generate-command-adapters.mjs";
+import { generatedRoleDefinitionEntries } from "./role-definitions.mjs";
 
 const MCP_PATH = ".mcp.json";
 const MCP_SELECTOR = "/mcpServers/dove";
@@ -51,6 +52,20 @@ const PREVIOUS_CLAUDE_INIT_PATH = ".claude/commands/dove/init.md";
 const RETIRED_DOMAIN_COMMAND_PATHS = Object.freeze([
   ".claude/commands/dove/version.md"
 ]);
+const UPGRADE_PREVIEW_TYPE = "project-upgrade";
+const UPGRADE_PREVIEW_VERSION = 1;
+const COMPLETE_REINSTALL_PREVIEW_TYPE = "project-complete-reinstall";
+const COMPLETE_REINSTALL_PREVIEW_VERSION = 1;
+const LIFECYCLE_SHARED_JSON_PATHS = Object.freeze([
+  MCP_PATH,
+  DOVE_CLAUDE_SETTINGS_PATH,
+  DOVE_CLAUDE_LOCAL_SETTINGS_PATH,
+  ".opencode.json"
+]);
+const LEGACY_DOVE_MCP_BUNDLE_ARGS = Object.freeze(new Set([
+  "./mcp/dove-state-server-package.mjs",
+  "${CLAUDE_PROJECT_DIR:-.}/mcp/dove-state-server-package.mjs"
+]));
 const PREVIOUS_CLAUDE_INIT_DIGESTS = Object.freeze(new Set([
   "8bc54cb154048273c4e6f8b5c77ae76453d2cff788c98bab6fc4882bc2a7dc5e"
 ]));
@@ -129,9 +144,12 @@ function assertManagedResourcePath(relativePath) {
 }
 
 function claudeResources() {
+  const claudeRoleEntries = generatedRoleDefinitionEntries()
+    .filter((entry) => entry.relativePath.startsWith(".claude/agents/"));
   const exclusiveEntries = [
     ...generatedAdapterEntries().filter((entry) => entry.hostId === CLAUDE_HOST),
-    ...generatedClaudeAmbientProjectEntries()
+    ...generatedClaudeAmbientProjectEntries(),
+    ...claudeRoleEntries
   ].map((entry) => {
     assertManagedResourcePath(entry.relativePath);
     const content = normalizedGeneratedContent(entry.content);
@@ -285,15 +303,13 @@ function referencesDoveHook(entry) {
     && (hook.command.includes("dove hook user-prompt-submit") || hook.command.includes("dove-user-prompt-submit-package.mjs")));
 }
 
-function recognizedOverlayDoveHookEntry(entry) {
+function recognizedLifecycleDoveHookEntry(entry) {
   if (!plainObject(entry) || Object.keys(entry).length !== 1 || !Array.isArray(entry.hooks) || entry.hooks.length !== 1) return false;
   const hook = entry.hooks[0];
   if (!plainObject(hook) || hook.type !== "command" || typeof hook.command !== "string") return false;
   if (Object.keys(hook).some((key) => !["type", "command", "timeout"].includes(key))) return false;
   if (hook.command === DOVE_CLAUDE_AMBIENT_HOOK_COMMAND) return hook.timeout === 10;
-  const legacyCommand = hook.command === LEGACY_DOVE_CLAUDE_AMBIENT_HOOK_COMMAND
-    || hook.command === "node ./scripts/dove-user-prompt-submit-package.mjs";
-  return legacyCommand && (hook.timeout === undefined || hook.timeout === 10);
+  return hook.command === "node ./scripts/dove-user-prompt-submit-package.mjs" && (hook.timeout === undefined || hook.timeout === 10);
 }
 
 function mcpApprovalFragmentState(settings) {
@@ -516,373 +532,6 @@ function preparePlan({ root, hosts, packageName, packageVersion, now, fsOps, man
   return { entries, manifest: nextManifest, manifestChanged };
 }
 
-const OVERLAY_PREVIEW_VERSION = 1;
-const OVERLAY_MANIFEST_PATH = INSTALLATION_MANIFEST_PATH;
-const LEGACY_DOVE_MCP_BUNDLE_ARGS = Object.freeze(new Set([
-  "./mcp/dove-state-server-package.mjs",
-  "${CLAUDE_PROJECT_DIR:-.}/mcp/dove-state-server-package.mjs"
-]));
-const OVERLAY_SHARED_JSON_PATHS = Object.freeze([MCP_PATH, DOVE_CLAUDE_SETTINGS_PATH, DOVE_CLAUDE_LOCAL_SETTINGS_PATH, ".opencode.json"]);
-const LEGACY_MARKER_PATH = LEGACY_PROJECT_MARKER_PATHS[0];
-const LEGACY_RUNTIME_SIGNATURES = Object.freeze(Object.fromEntries(
-  LEGACY_PROJECT_BUNDLE_PROBES.map((probe) => [probe.path, probe.signatures])
-));
-
-function canonicalOverlayRoot(root, fsOps) {
-  if (typeof root !== "string" || !root.trim() || root.includes("\0")) throw new Error("Overlay upgrade project root must name an existing directory.");
-  const resolved = path.resolve(root);
-  const stat = fsOps.lstatSync(resolved);
-  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Overlay upgrade project root must be a real directory: ${resolved}.`);
-  return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
-}
-
-function overlayPathState(root, relativePath, fsOps) {
-  const state = inspectRegularProjectFile(root, relativePath, fsOps);
-  return { ...state, relativePath };
-}
-
-function overlayExpectedFileState(state) {
-  return state.exists
-    ? { exists: true, type: "file", sha256: state.digest, mode: state.mode }
-    : { exists: false, type: "absent", sha256: null, mode: null };
-}
-
-function bindOverlayEntryState(root, relativePath, state, entry = null) {
-  const expectedState = overlayExpectedFileState(state);
-  return entry === null
-    ? { root, relativePath, assertOnly: true, expectedState, label: `Dove overlay replay assertion ${relativePath}` }
-    : { ...entry, expectedState };
-}
-
-function overlayReservedPaths() {
-  return [...new Set([
-    ...Object.values(CURRENT_MANAGED_PATHS).flat(),
-    ...Object.values(RETIRED_MANAGED_PATHS).flat(),
-    LEGACY_MARKER_PATH
-  ])];
-}
-
-function overlayExclusiveCleanupPaths() {
-  return overlayReservedPaths()
-    .filter((relativePath) => !OVERLAY_SHARED_JSON_PATHS.includes(relativePath))
-    .filter((relativePath) => relativePath !== "AGENTS.md")
-    .filter((relativePath) => !PACKAGE_RUNTIME_PATHS.includes(relativePath))
-    .filter((relativePath) => /(?:\.md|SKILL\.md|\.json)$/u.test(relativePath))
-    .sort();
-}
-
-function overlayDirectoryCleanupPaths() {
-  return overlayReservedPaths()
-    .filter((relativePath) => !path.posix.extname(relativePath))
-    .sort((left, right) => right.split("/").length - left.split("/").length || left.localeCompare(right));
-}
-
-function inspectRealProjectDirectory(root, relativePath, fsOps) {
-  let current = root;
-  for (const component of relativePath.split("/")) {
-    current = path.join(current, component);
-    const stat = lstatOrNull(fsOps, current);
-    if (stat === null) return false;
-    if (stat.isSymbolicLink()) throw new Error(`Dove overlay reserved directory must not be a symbolic link: ${relativePath}.`);
-    if (!stat.isDirectory()) throw new Error(`Dove overlay reserved directory path must be a real directory: ${relativePath}.`);
-  }
-  return true;
-}
-
-function assertOverlayDirectoryCleanupExact(root, relativePath, entries, fsOps) {
-  const scheduledChildren = new Set(entries
-    .filter((entry) => entry.delete === true && path.posix.dirname(entry.relativePath) === relativePath)
-    .map((entry) => path.posix.basename(entry.relativePath)));
-  const children = fsOps.readdirSync(path.join(root, relativePath)).map(String);
-  const unexpected = children.filter((child) => !scheduledChildren.has(child));
-  if (unexpected.length > 0) {
-    throw new Error(`Dove overlay reserved directory contains unowned entries and cannot be removed: ${relativePath}/${unexpected.sort().join(`, ${relativePath}/`)}.`);
-  }
-}
-
-function recognizedDoveMcpFragment(fragment) {
-  if (!plainObject(fragment) || !sameArray(Object.keys(fragment).sort(), ["args", "command", "type"])) return false;
-  if (fragment.type !== "stdio") return false;
-  if (fragment.command === "dove") {
-    return sameArray(fragment.args ?? [], ["mcp", "serve", "--project", "."]);
-  }
-  return fragment.command === "node"
-    && Array.isArray(fragment.args)
-    && fragment.args.length === 1
-    && LEGACY_DOVE_MCP_BUNDLE_ARGS.has(fragment.args[0]);
-}
-
-function overlaySharedJson(root, relativePath, fsOps, { installClaude }) {
-  const state = overlayPathState(root, relativePath, fsOps);
-  const value = parseSharedJson(state, relativePath);
-  let next = value;
-  if (relativePath === MCP_PATH || relativePath === ".opencode.json") {
-    if (value.mcpServers !== undefined && !plainObject(value.mcpServers)) throw new Error(`${relativePath} mcpServers must be a JSON object.`);
-    const servers = value.mcpServers ?? {};
-    const hasDove = Object.hasOwn(servers, "dove");
-    if (hasDove && !recognizedDoveMcpFragment(servers.dove)) {
-      throw new Error(`${relativePath} contains an ambiguous non-Dove fragment at /mcpServers/dove.`);
-    }
-    if (hasDove || (relativePath === MCP_PATH && installClaude)) {
-      const nextServers = { ...servers };
-      delete nextServers.dove;
-      if (relativePath === MCP_PATH && installClaude) nextServers.dove = INSTALLED_DOVE_MCP_SERVER;
-      next = { ...value, mcpServers: nextServers };
-    }
-  } else if (relativePath === DOVE_CLAUDE_SETTINGS_PATH) {
-    if (value.hooks !== undefined && !plainObject(value.hooks)) throw new Error(`${relativePath} hooks must be a JSON object.`);
-    const promptHooks = value.hooks?.UserPromptSubmit;
-    if (promptHooks !== undefined && !Array.isArray(promptHooks)) throw new Error(`${relativePath} hooks.UserPromptSubmit must be an array.`);
-    const doveHooks = (promptHooks ?? []).filter(referencesDoveHook);
-    if (doveHooks.length > 1 || doveHooks.some((entry) => !recognizedOverlayDoveHookEntry(entry))) {
-      throw new Error(`${relativePath} contains an ambiguous Dove UserPromptSubmit hook.`);
-    }
-    if (doveHooks.length === 1) {
-      const retainedHooks = promptHooks.filter((entry) => !referencesDoveHook(entry));
-      next = { ...value, hooks: { ...value.hooks, UserPromptSubmit: retainedHooks } };
-    }
-    if (installClaude) next = mergeClaudeAmbientSettings(next).settings;
-  } else if (relativePath === DOVE_CLAUDE_LOCAL_SETTINGS_PATH) {
-    inspectClaudeMcpApprovalSettings(value);
-    const hasEnabledDove = (value.enabledMcpjsonServers ?? []).includes("dove");
-    if (hasEnabledDove) {
-      next = { ...value, enabledMcpjsonServers: value.enabledMcpjsonServers.filter((name) => name !== "dove") };
-    }
-    if (installClaude) next = mergeClaudeMcpApprovalSettings(next).settings;
-  }
-  if (canonicalJson(next) === canonicalJson(value)) return { entry: null, observedDigest: state.digest, state };
-  const content = serializeSharedJson(next);
-  return {
-    entry: { root, relativePath, content, encoding: "utf8", force: true, label: `Dove overlay shared JSON ${relativePath}` },
-    observedDigest: state.digest,
-    state
-  };
-}
-
-function assertLegacyRuntimeOwned(root, relativePath, fsOps) {
-  const state = overlayPathState(root, relativePath, fsOps);
-  if (!state.exists) return state;
-  const content = state.bytes.toString("utf8");
-  const signatures = LEGACY_RUNTIME_SIGNATURES[relativePath] ?? [];
-  const matchedSignatures = signatures.filter((signature) => content.includes(signature));
-  if (matchedSignatures.length < 2) {
-    throw new Error(`Dove overlay upgrade cannot safely remove copied runtime without affirmative Dove signatures: ${relativePath}.`);
-  }
-  return state;
-}
-
-function overlayArchiveRelativePath(treeDigest) {
-  return `.dove-archive/upgrade-${treeDigest.slice(0, 24)}`;
-}
-
-function overlayPlanBinding(plan) {
-  return semanticDigest({
-    previewVersion: OVERLAY_PREVIEW_VERSION,
-    target: plan.root,
-    hosts: plan.hosts,
-    package: plan.manifest.package,
-    manifest: plan.manifest,
-    sourceTreeDigest: plan.sourceTreeDigest,
-    archiveRelativePath: plan.archiveRelativePath,
-    operations: plan.operations
-  });
-}
-
-function prepareOverlayUpgrade(rootInput, options = {}, replay = null) {
-  const fsOps = options.fsOps ?? fs;
-  assertPackageInput(options.packageName, options.packageVersion, { required: true });
-  const hosts = normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: true });
-  const root = canonicalOverlayRoot(rootInput, fsOps);
-  const now = replay?.manifest?.createdAt ?? exactTimestamp(options.now);
-  const desiredResources = resourcesForHosts(hosts);
-  const desiredExclusive = desiredResources.filter((resource) => resource.kind === "exclusive");
-  const desiredExclusivePaths = new Set(desiredExclusive.map((resource) => resource.path));
-  const entries = [];
-  const operations = [];
-  const observedFileStates = new Map();
-  const rememberFileState = (relativePath, state) => {
-    const previous = observedFileStates.get(relativePath);
-    if (previous && (previous.exists !== state.exists || previous.digest !== state.digest || previous.mode !== state.mode)) {
-      throw new Error(`Dove overlay observed inconsistent file state while preparing ${relativePath}.`);
-    }
-    observedFileStates.set(relativePath, state);
-  };
-
-  for (const relativePath of OVERLAY_SHARED_JSON_PATHS) {
-    const planned = overlaySharedJson(root, relativePath, fsOps, { installClaude: hosts.includes(CLAUDE_HOST) });
-    rememberFileState(relativePath, planned.state);
-    operations.push({ path: relativePath, action: planned.entry ? "write" : "unchanged", observedDigest: planned.observedDigest, observedMode: planned.state.mode });
-    if (planned.entry) entries.push(planned.entry);
-  }
-
-  for (const relativePath of overlayExclusiveCleanupPaths()) {
-    const state = overlayPathState(root, relativePath, fsOps);
-    rememberFileState(relativePath, state);
-    if (!state.exists) continue;
-    if (relativePath === LEGACY_MARKER_PATH) {
-      const marker = parseJsonWithoutDuplicateKeys(state.bytes.toString("utf8"), "Legacy Dove project marker");
-      if (!plainObject(marker)
-        || !sameArray(Object.keys(marker).sort(), ["host", "version"])
-        || marker.version !== 1
-        || marker.host !== "claude") {
-        throw new Error(`Dove overlay upgrade cannot safely remove an ambiguous project marker: ${relativePath}.`);
-      }
-    }
-    operations.push({ path: relativePath, action: desiredExclusivePaths.has(relativePath) ? "replace" : "remove", observedDigest: state.digest, observedMode: state.mode });
-    if (!desiredExclusivePaths.has(relativePath)) {
-      entries.push(bindOverlayEntryState(root, relativePath, state, { root, relativePath, delete: true, force: true, label: `Dove overlay reserved resource ${relativePath}` }));
-    }
-  }
-
-  for (const relativePath of PACKAGE_RUNTIME_PATHS) {
-    const state = assertLegacyRuntimeOwned(root, relativePath, fsOps);
-    rememberFileState(relativePath, state);
-    if (!state.exists) continue;
-    operations.push({ path: relativePath, action: "remove", observedDigest: state.digest, observedMode: state.mode });
-    entries.push(bindOverlayEntryState(root, relativePath, state, { root, relativePath, delete: true, force: true, label: `Dove overlay copied runtime ${relativePath}` }));
-  }
-
-  for (const relativePath of overlayDirectoryCleanupPaths()) {
-    if (!inspectRealProjectDirectory(root, relativePath, fsOps)) {
-      operations.push({ path: relativePath, action: "unchanged", treeDigest: null });
-      entries.push({
-        root,
-        relativePath,
-        assertOnly: true,
-        expectedState: { exists: false, type: "absent", sha256: null, mode: null },
-        label: `Dove overlay replay assertion ${relativePath}`
-      });
-      continue;
-    }
-    assertOverlayDirectoryCleanupExact(root, relativePath, entries, fsOps);
-    const directoryStat = fsOps.lstatSync(path.join(root, relativePath));
-    const treeDigest = inspectDirectoryTreeDigest(root, relativePath, { fsOps });
-    operations.push({ path: relativePath, action: "remove-empty-directory", treeDigest });
-    entries.push({
-      root,
-      relativePath,
-      delete: true,
-      deleteEmptyDirectory: true,
-      expectedState: { exists: true, type: "directory", sha256: null, mode: directoryStat.mode & 0o7777 },
-      expectedTreeDigest: treeDigest,
-      force: true,
-      label: `Dove overlay retired directory ${relativePath}`
-    });
-  }
-
-  for (const resource of desiredExclusive) {
-    const state = overlayPathState(root, resource.path, fsOps);
-    rememberFileState(resource.path, state);
-    operations.push({ path: resource.path, action: state.digest === resource.digest ? "claim" : "write", observedDigest: state.digest, observedMode: state.mode, nextDigest: resource.digest });
-    if (state.digest !== resource.digest) entries.push(transactionWrite(root, resource, resource.content));
-  }
-
-  const doveStat = lstatOrNull(fsOps, path.join(root, ".dove"));
-  let sourceTreeDigest = null;
-  let archiveRelativePath = null;
-  if (doveStat !== null) {
-    if (doveStat.isSymbolicLink() || !doveStat.isDirectory()) throw new Error("Dove overlay upgrade requires .dove to be absent or a real directory.");
-    sourceTreeDigest = inspectDirectoryTreeDigest(root, ".dove", { fsOps });
-    archiveRelativePath = overlayArchiveRelativePath(sourceTreeDigest);
-    const archiveParentState = lstatOrNull(fsOps, path.join(root, ".dove-archive"));
-    if (archiveParentState !== null && (archiveParentState.isSymbolicLink() || !archiveParentState.isDirectory())) {
-      throw new Error("Dove overlay archive parent must be a real directory, not a symbolic link.");
-    }
-    const archiveState = lstatOrNull(fsOps, path.join(root, archiveRelativePath));
-    if (archiveState !== null) throw new Error(`Dove overlay archive target is already occupied: ${archiveRelativePath}.`);
-    entries.unshift({ root, relativePath: ".dove", moveTo: archiveRelativePath, expectedTreeDigest: sourceTreeDigest, label: "Dove overlay workspace archive" });
-    operations.unshift({ path: ".dove", action: "archive", destination: archiveRelativePath, treeDigest: sourceTreeDigest });
-  }
-
-  const managed = desiredResources.map((resource) => ({ path: resource.path, owner: resource.owner, mode: resource.mode, selector: resource.selector, digest: resource.digest }));
-  const manifest = replay?.manifest ?? createProjectInstallationManifest({
-    package: { name: options.packageName, version: options.packageVersion },
-    hosts,
-    managed,
-    createdAt: now,
-    updatedAt: now
-  }, { hostIds: PROJECT_HOST_IDS });
-  const manifestState = overlayPathState(root, OVERLAY_MANIFEST_PATH, fsOps);
-  rememberFileState(OVERLAY_MANIFEST_PATH, manifestState);
-  const manifestContent = serializeProjectInstallationManifest(manifest, { hostIds: PROJECT_HOST_IDS });
-  entries.push({ root, relativePath: OVERLAY_MANIFEST_PATH, content: manifestContent, encoding: "utf8", force: true, label: MANIFEST_OWNER });
-  operations.push({ path: OVERLAY_MANIFEST_PATH, action: "write", observedDigest: manifestState.digest, observedMode: manifestState.mode, nextDigest: sha256(manifestContent) });
-
-  const entryPaths = new Set(entries.map((entry) => entry.relativePath));
-  for (let index = 0; index < entries.length; index += 1) {
-    const state = observedFileStates.get(entries[index].relativePath);
-    if (state) entries[index] = bindOverlayEntryState(root, entries[index].relativePath, state, entries[index]);
-  }
-  for (const [relativePath, state] of observedFileStates) {
-    if (!entryPaths.has(relativePath)) entries.push(bindOverlayEntryState(root, relativePath, state));
-  }
-  if (doveStat === null) {
-    entries.push({
-      root,
-      relativePath: ".dove",
-      assertOnly: true,
-      expectedState: { exists: false, type: "absent", sha256: null, mode: null },
-      label: "Dove overlay replay assertion .dove"
-    });
-  }
-
-  operations.sort((left, right) => left.path.localeCompare(right.path) || left.action.localeCompare(right.action));
-  const plan = { fsOps, root, hosts, entries, operations, manifest, sourceTreeDigest, archiveRelativePath };
-  return { ...plan, previewDigest: overlayPlanBinding(plan) };
-}
-
-function overlayPreviewShape(plan) {
-  const mutationEntries = plan.entries.filter((entry) => entry.assertOnly !== true);
-  const writtenPaths = mutationEntries.filter((entry) => entry.delete !== true && entry.moveTo === undefined).map((entry) => entry.relativePath);
-  const removedPaths = mutationEntries.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
-  const movedPaths = plan.archiveRelativePath ? [{ from: ".dove", to: plan.archiveRelativePath }] : [];
-  return Object.freeze({
-    status: "ready",
-    previewVersion: OVERLAY_PREVIEW_VERSION,
-    target: plan.root,
-    hosts: Object.freeze([...plan.hosts]),
-    writtenPaths: Object.freeze(writtenPaths),
-    removedPaths: Object.freeze(removedPaths),
-    movedPaths: Object.freeze(movedPaths.map(Object.freeze)),
-    changedPaths: Object.freeze([...new Set([...writtenPaths, ...removedPaths, ...movedPaths.flatMap((move) => [move.from, move.to])])]),
-    sourceTreeDigest: plan.sourceTreeDigest,
-    archiveTarget: plan.archiveRelativePath ? path.join(plan.root, plan.archiveRelativePath) : null,
-    manifest: plan.manifest,
-    confirmation: Object.freeze({ required: true, exactReplay: true, previewDigest: plan.previewDigest })
-  });
-}
-
-export function previewProjectIntegrationOverlayUpgrade(root, options = {}) {
-  if (options.confirmed === true) throw new Error("Overlay upgrade preview does not accept confirmed execution.");
-  return overlayPreviewShape(prepareOverlayUpgrade(root, options));
-}
-
-export function overlayUpgradeProjectIntegration(root, options = {}) {
-  if (options.confirmed !== true) throw new Error("Dove project integration overlay upgrade requires confirmed: true.");
-  const preview = options.preview;
-  if (!plainObject(preview) || preview.status !== "ready" || preview.previewVersion !== OVERLAY_PREVIEW_VERSION) {
-    throw new Error("Dove project integration overlay upgrade requires the exact preview returned for approval.");
-  }
-  if (preview.manifest?.package?.name !== options.packageName || preview.manifest?.package?.version !== options.packageVersion) {
-    throw new Error("Dove project integration overlay execution package options must match the approved preview.");
-  }
-  const prepared = prepareOverlayUpgrade(root, options, preview);
-  if (preview.target !== prepared.root
-    || !sameArray(preview.hosts ?? [], prepared.hosts)
-    || preview.sourceTreeDigest !== prepared.sourceTreeDigest
-    || preview.archiveTarget !== (prepared.archiveRelativePath ? path.join(prepared.root, prepared.archiveRelativePath) : null)
-    || preview.confirmation?.previewDigest !== prepared.previewDigest) {
-    throw new Error("Dove project integration overlay preview is stale or does not match the approved project state.");
-  }
-  const transaction = writeFileSetTransaction(prepared.entries, { fsOps: prepared.fsOps });
-  return {
-    ...resultFromTransaction("overlay-upgraded", prepared.root, prepared.hosts, prepared.manifest, transaction),
-    movedPaths: [...transaction.movedPaths],
-    sourceTreeDigest: prepared.sourceTreeDigest,
-    archiveTarget: prepared.archiveRelativePath ? path.join(prepared.root, prepared.archiveRelativePath) : null
-  };
-}
-
 function resultFromTransaction(status, target, hosts, manifest, transaction) {
   return {
     status,
@@ -952,6 +601,498 @@ export function inspectProjectIntegration(start, options = {}) {
     transactionState: null,
     manifest: prepared.currentManifest
   };
+}
+
+function canonicalLifecycleRoot(start, fsOps) {
+  const resolved = path.resolve(start ?? process.cwd());
+  const stat = fsOps.lstatSync(resolved);
+  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Dove lifecycle project root must be a real directory: ${resolved}.`);
+  return typeof fsOps.realpathSync.native === "function" ? fsOps.realpathSync.native(resolved) : fsOps.realpathSync(resolved);
+}
+
+function lifecyclePathState(root, relativePath, fsOps) {
+  const state = inspectRegularProjectFile(root, relativePath, fsOps);
+  return { ...state, relativePath };
+}
+
+function expectedLifecycleFileState(state) {
+  return state.exists
+    ? { exists: true, type: "file", sha256: state.digest, mode: state.mode }
+    : { exists: false, type: "absent", sha256: null, mode: null };
+}
+
+function bindLifecycleFileState(root, relativePath, state, entry = null) {
+  const expectedState = expectedLifecycleFileState(state);
+  return entry === null
+    ? { root, relativePath, assertOnly: true, expectedState, label: `Dove lifecycle replay assertion ${relativePath}` }
+    : { ...entry, expectedState };
+}
+
+function lifecycleReservedPaths() {
+  return [...new Set([
+    ...Object.values(CURRENT_MANAGED_PATHS).flat(),
+    ...Object.values(RETIRED_MANAGED_PATHS).flat(),
+    PREVIOUS_CLAUDE_INIT_PATH,
+    ...RETIRED_DOMAIN_COMMAND_PATHS,
+    "mcp/dove-claude-project.json"
+  ])];
+}
+
+function lifecycleExclusiveCleanupPaths() {
+  return lifecycleReservedPaths()
+    .filter((relativePath) => !LIFECYCLE_SHARED_JSON_PATHS.includes(relativePath))
+    .filter((relativePath) => relativePath !== "AGENTS.md")
+    .filter((relativePath) => !PACKAGE_RUNTIME_PATHS.includes(relativePath))
+    .filter((relativePath) => /(?:\.md|SKILL\.md|\.json)$/u.test(relativePath))
+    .sort();
+}
+
+function lifecycleDirectoryCleanupPaths() {
+  return lifecycleReservedPaths()
+    .filter((relativePath) => !path.posix.extname(relativePath))
+    .filter((relativePath) => ![".dove", ".dove/install"].includes(relativePath))
+    .sort((left, right) => right.split("/").length - left.split("/").length || left.localeCompare(right));
+}
+
+function inspectRealLifecycleDirectory(root, relativePath, fsOps) {
+  let current = root;
+  for (const component of relativePath.split("/")) {
+    current = path.join(current, component);
+    const stat = lstatOrNull(fsOps, current);
+    if (stat === null) return false;
+    if (stat.isSymbolicLink()) throw new Error(`Dove lifecycle reserved directory must not be a symbolic link: ${relativePath}.`);
+    if (!stat.isDirectory()) throw new Error(`Dove lifecycle reserved directory path must be a real directory: ${relativePath}.`);
+  }
+  return true;
+}
+
+function assertLifecycleDirectoryCleanupExact(root, relativePath, entries, fsOps) {
+  const scheduledChildren = new Set(entries
+    .filter((entry) => entry.delete === true && path.posix.dirname(entry.relativePath) === relativePath)
+    .map((entry) => path.posix.basename(entry.relativePath)));
+  const unexpected = fsOps.readdirSync(path.join(root, relativePath)).map(String)
+    .filter((child) => !scheduledChildren.has(child));
+  if (unexpected.length > 0) {
+    throw new Error(`Dove lifecycle reserved directory contains unowned entries and cannot be removed: ${relativePath}/${unexpected.sort().join(`, ${relativePath}/`)}.`);
+  }
+}
+
+function recognizedLifecycleMcpFragment(fragment) {
+  if (!plainObject(fragment) || !sameArray(Object.keys(fragment).sort(), ["args", "command", "type"])) return false;
+  if (fragment.type !== "stdio") return false;
+  if (fragment.command === "dove") return sameArray(fragment.args ?? [], ["mcp", "serve", "--project", "."]);
+  return fragment.command === "node"
+    && Array.isArray(fragment.args)
+    && fragment.args.length === 1
+    && LEGACY_DOVE_MCP_BUNDLE_ARGS.has(fragment.args[0]);
+}
+
+function planLifecycleSharedJson(root, relativePath, fsOps, { installClaude }) {
+  const state = lifecyclePathState(root, relativePath, fsOps);
+  const value = parseSharedJson(state, relativePath);
+  let next = value;
+  if (relativePath === MCP_PATH || relativePath === ".opencode.json") {
+    if (value.mcpServers !== undefined && !plainObject(value.mcpServers)) throw new Error(`${relativePath} mcpServers must be a JSON object.`);
+    const servers = value.mcpServers ?? {};
+    const hasDove = Object.hasOwn(servers, "dove");
+    if (hasDove && !recognizedLifecycleMcpFragment(servers.dove)) throw new Error(`${relativePath} contains an ambiguous non-Dove fragment at /mcpServers/dove.`);
+    if (hasDove || (relativePath === MCP_PATH && installClaude)) {
+      const nextServers = { ...servers };
+      delete nextServers.dove;
+      if (relativePath === MCP_PATH && installClaude) nextServers.dove = INSTALLED_DOVE_MCP_SERVER;
+      next = { ...value, mcpServers: nextServers };
+    }
+  } else if (relativePath === DOVE_CLAUDE_SETTINGS_PATH) {
+    if (value.hooks !== undefined && !plainObject(value.hooks)) throw new Error(`${relativePath} hooks must be a JSON object.`);
+    const promptHooks = value.hooks?.UserPromptSubmit;
+    if (promptHooks !== undefined && !Array.isArray(promptHooks)) throw new Error(`${relativePath} hooks.UserPromptSubmit must be an array.`);
+    const doveHooks = (promptHooks ?? []).filter(referencesDoveHook);
+    if (doveHooks.length > 1 || doveHooks.some((entry) => !recognizedLifecycleDoveHookEntry(entry))) {
+      throw new Error(`${relativePath} contains an ambiguous Dove UserPromptSubmit hook.`);
+    }
+    if (doveHooks.length === 1) {
+      next = { ...value, hooks: { ...value.hooks, UserPromptSubmit: promptHooks.filter((entry) => !referencesDoveHook(entry)) } };
+    }
+    if (installClaude) next = mergeClaudeAmbientSettings(next).settings;
+  } else if (relativePath === DOVE_CLAUDE_LOCAL_SETTINGS_PATH) {
+    inspectClaudeMcpApprovalSettings(value);
+    if ((value.enabledMcpjsonServers ?? []).includes("dove")) {
+      next = { ...value, enabledMcpjsonServers: value.enabledMcpjsonServers.filter((name) => name !== "dove") };
+    }
+    if (installClaude) next = mergeClaudeMcpApprovalSettings(next).settings;
+  }
+  if (canonicalJson(next) === canonicalJson(value)) return { state, entry: null };
+  return {
+    state,
+    entry: { root, relativePath, content: serializeSharedJson(next), encoding: "utf8", force: true, label: `Dove lifecycle shared JSON ${relativePath}` }
+  };
+}
+
+function assertLifecycleRuntimeOwned(root, relativePath, fsOps) {
+  const state = lifecyclePathState(root, relativePath, fsOps);
+  if (!state.exists) return state;
+  const probe = LEGACY_PROJECT_BUNDLE_PROBES.find((entry) => entry.path === relativePath);
+  const content = state.bytes.toString("utf8");
+  if ((probe?.signatures ?? []).filter((signature) => content.includes(signature)).length < 2) {
+    throw new Error(`Dove lifecycle cannot safely remove copied runtime without affirmative Dove signatures: ${relativePath}.`);
+  }
+  return state;
+}
+
+function lifecycleManifest(root, options, hosts, now, replay = null) {
+  const desiredResources = resourcesForHosts(hosts);
+  const managed = desiredResources.map((resource) => ({
+    path: resource.path,
+    owner: resource.owner,
+    mode: resource.mode,
+    selector: resource.selector,
+    digest: resource.digest
+  }));
+  return replay ?? createProjectInstallationManifest({
+    package: { name: options.packageName, version: options.packageVersion },
+    hosts,
+    managed,
+    createdAt: now,
+    updatedAt: now
+  }, { hostIds: PROJECT_HOST_IDS });
+}
+
+function assertLegacyInstallationRoot(root, fsOps) {
+  const legacyRoot = path.join(root, ".dove-install");
+  const stat = lstatOrNull(fsOps, legacyRoot);
+  if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error("Dove Upgrade requires .dove-install to be a real directory.");
+  }
+  const children = fsOps.readdirSync(legacyRoot).map(String).sort();
+  if (!sameArray(children, ["manifest.json"])) {
+    throw new Error("Dove Upgrade requires .dove-install to contain only its legacy manifest.");
+  }
+  return { mode: stat.mode & 0o7777, treeDigest: inspectDirectoryTreeDigest(root, ".dove-install", { fsOps }) };
+}
+
+function installationSource(root, fsOps) {
+  const currentState = lifecyclePathState(root, INSTALLATION_MANIFEST_PATH, fsOps);
+  const legacyState = lifecyclePathState(root, LEGACY_INSTALLATION_MANIFEST_PATH, fsOps);
+  if (currentState.exists && legacyState.exists) {
+    throw new Error("Dove Upgrade found both current and legacy project installation manifests.");
+  }
+  if (currentState.exists) {
+    return { kind: "current", state: currentState, manifest: readProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS, allowPrevious: true }) };
+  }
+  if (legacyState.exists) {
+    return {
+      kind: "legacy",
+      state: legacyState,
+      rootState: assertLegacyInstallationRoot(root, fsOps),
+      manifest: readLegacyProjectInstallationManifest(root, { fsOps, hostIds: PROJECT_HOST_IDS, allowPrevious: true })
+    };
+  }
+  throw new Error("Dove Upgrade requires an installed project manifest.");
+}
+
+function prepareLifecycleIntegration(root, options, { hosts, manifest, removeOnly }) {
+  const fsOps = options.fsOps ?? fs;
+  const desiredResources = removeOnly ? [] : resourcesForHosts(hosts);
+  const desiredExclusivePaths = new Set(desiredResources.filter((resource) => resource.kind === "exclusive").map((resource) => resource.path));
+  const entries = [];
+  const operations = [];
+  const observed = new Map();
+  const remember = (relativePath, state) => {
+    const previous = observed.get(relativePath);
+    if (previous && (previous.exists !== state.exists || previous.digest !== state.digest || previous.mode !== state.mode)) {
+      throw new Error(`Dove lifecycle observed inconsistent file state while preparing ${relativePath}.`);
+    }
+    observed.set(relativePath, state);
+  };
+
+  for (const relativePath of LIFECYCLE_SHARED_JSON_PATHS) {
+    const planned = planLifecycleSharedJson(root, relativePath, fsOps, { installClaude: !removeOnly && hosts.includes(CLAUDE_HOST) });
+    remember(relativePath, planned.state);
+    operations.push({ path: relativePath, action: planned.entry ? "write" : "unchanged", observedDigest: planned.state.digest, observedMode: planned.state.mode });
+    if (planned.entry) entries.push(planned.entry);
+  }
+
+  for (const relativePath of lifecycleExclusiveCleanupPaths()) {
+    const state = lifecyclePathState(root, relativePath, fsOps);
+    remember(relativePath, state);
+    if (!state.exists) continue;
+    if (relativePath === "mcp/dove-claude-project.json") {
+      const marker = parseJsonWithoutDuplicateKeys(state.bytes.toString("utf8"), "Legacy Dove project marker");
+      if (!plainObject(marker) || !sameArray(Object.keys(marker).sort(), ["host", "version"]) || marker.host !== "claude" || marker.version !== 1) {
+        throw new Error(`Dove lifecycle cannot safely remove an ambiguous project marker: ${relativePath}.`);
+      }
+    }
+    operations.push({ path: relativePath, action: desiredExclusivePaths.has(relativePath) ? "replace" : "remove", observedDigest: state.digest, observedMode: state.mode });
+    if (!desiredExclusivePaths.has(relativePath)) {
+      entries.push(bindLifecycleFileState(root, relativePath, state, { root, relativePath, delete: true, force: true, label: `Dove lifecycle reserved resource ${relativePath}` }));
+    }
+  }
+
+  for (const relativePath of PACKAGE_RUNTIME_PATHS) {
+    const state = assertLifecycleRuntimeOwned(root, relativePath, fsOps);
+    remember(relativePath, state);
+    if (!state.exists) continue;
+    operations.push({ path: relativePath, action: "remove", observedDigest: state.digest, observedMode: state.mode });
+    entries.push(bindLifecycleFileState(root, relativePath, state, { root, relativePath, delete: true, force: true, label: `Dove lifecycle copied runtime ${relativePath}` }));
+  }
+
+  for (const relativePath of lifecycleDirectoryCleanupPaths()) {
+    if (!inspectRealLifecycleDirectory(root, relativePath, fsOps)) continue;
+    assertLifecycleDirectoryCleanupExact(root, relativePath, entries, fsOps);
+    const stat = fsOps.lstatSync(path.join(root, relativePath));
+    const treeDigest = inspectDirectoryTreeDigest(root, relativePath, { fsOps });
+    operations.push({ path: relativePath, action: "remove-empty-directory", treeDigest });
+    entries.push({
+      root,
+      relativePath,
+      delete: true,
+      deleteEmptyDirectory: true,
+      expectedState: { exists: true, type: "directory", sha256: null, mode: stat.mode & 0o7777 },
+      expectedTreeDigest: treeDigest,
+      force: true,
+      label: `Dove lifecycle retired directory ${relativePath}`
+    });
+  }
+
+  if (!removeOnly) {
+    for (const resource of desiredResources.filter((entry) => entry.kind === "exclusive")) {
+      const state = lifecyclePathState(root, resource.path, fsOps);
+      remember(resource.path, state);
+      operations.push({ path: resource.path, action: state.digest === resource.digest ? "claim" : "write", observedDigest: state.digest, observedMode: state.mode, nextDigest: resource.digest });
+      if (state.digest !== resource.digest) entries.push(transactionWrite(root, resource, resource.content));
+    }
+  }
+  return { entries, operations, observed, manifest };
+}
+
+function bindLifecycleObservedFiles(root, prepared) {
+  const entryPaths = new Set(prepared.entries.map((entry) => entry.relativePath));
+  prepared.entries = prepared.entries.map((entry) => {
+    const state = prepared.observed.get(entry.relativePath);
+    return state ? bindLifecycleFileState(root, entry.relativePath, state, entry) : entry;
+  });
+  for (const [relativePath, state] of prepared.observed) {
+    if (!entryPaths.has(relativePath)) prepared.entries.push(bindLifecycleFileState(root, relativePath, state));
+  }
+}
+
+function lifecyclePreviewShape(plan) {
+  const mutations = plan.entries.filter((entry) => entry.assertOnly !== true);
+  const writtenPaths = mutations.filter((entry) => entry.delete !== true && entry.moveTo === undefined).map((entry) => entry.relativePath);
+  const removedPaths = mutations.filter((entry) => entry.delete === true).map((entry) => entry.relativePath);
+  const movedPaths = mutations.filter((entry) => entry.moveTo !== undefined).map((entry) => ({ from: entry.relativePath, to: entry.moveTo }));
+  return Object.freeze({
+    status: "ready",
+    previewType: plan.previewType,
+    previewVersion: plan.previewVersion,
+    target: plan.root,
+    hosts: Object.freeze([...plan.hosts]),
+    writtenPaths: Object.freeze(writtenPaths),
+    removedPaths: Object.freeze(removedPaths),
+    movedPaths: Object.freeze(movedPaths.map(Object.freeze)),
+    changedPaths: Object.freeze([...new Set([...writtenPaths, ...removedPaths, ...movedPaths.flatMap((move) => [move.from, move.to])])]),
+    manifest: plan.manifest,
+    confirmation: Object.freeze({ required: plan.confirmationRequired, default: false, exactReplay: true, previewDigest: plan.previewDigest })
+  });
+}
+
+function lifecycleBinding(plan) {
+  return semanticDigest({
+    previewType: plan.previewType,
+    previewVersion: plan.previewVersion,
+    target: plan.root,
+    hosts: plan.hosts,
+    manifest: plan.manifest,
+    operations: plan.operations
+  });
+}
+
+function prepareUpgrade(start, options = {}, replay = null) {
+  const fsOps = options.fsOps ?? fs;
+  assertPackageInput(options.packageName, options.packageVersion, { required: true });
+  const root = canonicalLifecycleRoot(start, fsOps);
+  const source = installationSource(root, fsOps);
+  const hosts = options.hosts === undefined ? [...source.manifest.hosts] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
+  const now = replay?.manifest?.createdAt ?? exactTimestamp(options.now);
+  const manifest = lifecycleManifest(root, options, hosts, now, replay?.manifest);
+  const prepared = prepareLifecycleIntegration(root, options, { hosts, manifest, removeOnly: false });
+
+  if (source.kind === "legacy") {
+    prepared.entries.push(bindLifecycleFileState(root, LEGACY_INSTALLATION_MANIFEST_PATH, source.state, {
+      root,
+      relativePath: LEGACY_INSTALLATION_MANIFEST_PATH,
+      delete: true,
+      force: true,
+      label: "Legacy Dove installation manifest migration"
+    }));
+    prepared.entries.push({
+      root,
+      relativePath: ".dove-install",
+      delete: true,
+      deleteEmptyDirectory: true,
+      expectedState: { exists: true, type: "directory", sha256: null, mode: source.rootState.mode },
+      expectedTreeDigest: source.rootState.treeDigest,
+      force: true,
+      label: "Legacy Dove installation root cleanup"
+    });
+    prepared.operations.push({ path: ".dove-install", action: "remove-empty-directory", treeDigest: source.rootState.treeDigest });
+    prepared.operations.push({ path: LEGACY_INSTALLATION_MANIFEST_PATH, action: "remove", observedDigest: source.state.digest, observedMode: source.state.mode });
+  }
+
+  const manifestState = lifecyclePathState(root, INSTALLATION_MANIFEST_PATH, fsOps);
+  const manifestContent = serializeProjectInstallationManifest(manifest, { hostIds: PROJECT_HOST_IDS });
+  prepared.entries.push(bindLifecycleFileState(root, INSTALLATION_MANIFEST_PATH, manifestState, {
+    root,
+    relativePath: INSTALLATION_MANIFEST_PATH,
+    content: manifestContent,
+    encoding: "utf8",
+    force: true,
+    label: MANIFEST_OWNER
+  }));
+  prepared.operations.push({ path: INSTALLATION_MANIFEST_PATH, action: "write", observedDigest: manifestState.digest, observedMode: manifestState.mode, nextDigest: sha256(manifestContent) });
+
+  const legacyArchiveStat = lstatOrNull(fsOps, path.join(root, ".dove-archive"));
+  if (legacyArchiveStat !== null) {
+    if (legacyArchiveStat.isSymbolicLink() || !legacyArchiveStat.isDirectory()) throw new Error("Dove Upgrade requires .dove-archive to be a real directory.");
+    const archiveTarget = ".dove/archive";
+    if (lstatOrNull(fsOps, path.join(root, archiveTarget)) !== null) throw new Error(`Dove Upgrade archive destination is already occupied: ${archiveTarget}.`);
+    const treeDigest = inspectDirectoryTreeDigest(root, ".dove-archive", { fsOps });
+    prepared.entries.unshift({ root, relativePath: ".dove-archive", moveTo: archiveTarget, expectedTreeDigest: treeDigest, label: "Dove legacy archive migration" });
+    prepared.operations.unshift({ path: ".dove-archive", action: "move", destination: archiveTarget, treeDigest });
+  } else {
+    prepared.entries.push({ root, relativePath: ".dove-archive", assertOnly: true, expectedState: { exists: false, type: "absent", sha256: null, mode: null }, label: "Dove Upgrade legacy archive assertion" });
+  }
+
+  bindLifecycleObservedFiles(root, prepared);
+  prepared.operations.sort((left, right) => left.path.localeCompare(right.path) || left.action.localeCompare(right.action));
+  const plan = { ...prepared, fsOps, root, hosts, previewType: UPGRADE_PREVIEW_TYPE, previewVersion: UPGRADE_PREVIEW_VERSION, confirmationRequired: false };
+  plan.previewDigest = lifecycleBinding(plan);
+  return plan;
+}
+
+export function previewProjectUpgrade(start, options = {}) {
+  return lifecyclePreviewShape(prepareUpgrade(start, options));
+}
+
+export function upgradeProjectIntegration(start, options = {}) {
+  const preview = options.preview;
+  if (!plainObject(preview) || preview.previewType !== UPGRADE_PREVIEW_TYPE || preview.previewVersion !== UPGRADE_PREVIEW_VERSION) {
+    throw new Error("Dove Upgrade requires the exact project-upgrade preview.");
+  }
+  const prepared = prepareUpgrade(start, options, preview);
+  if (preview.target !== prepared.root || !sameArray(preview.hosts ?? [], prepared.hosts) || preview.confirmation?.previewDigest !== prepared.previewDigest) {
+    throw new Error("Dove Upgrade preview is stale or does not match the approved project state.");
+  }
+  const transaction = writeFileSetTransaction(prepared.entries, { fsOps: prepared.fsOps });
+  return { ...resultFromTransaction("upgraded", prepared.root, prepared.hosts, prepared.manifest, transaction), movedPaths: [...transaction.movedPaths] };
+}
+
+function prepareCompleteReinstall(start, options = {}, replay = null) {
+  const fsOps = options.fsOps ?? fs;
+  assertPackageInput(options.packageName, options.packageVersion, { required: true });
+  const root = canonicalLifecycleRoot(start, fsOps);
+  const hosts = options.hosts === undefined ? [CLAUDE_HOST] : normalizeSelectedHosts(options.hosts, { defaultWhenEmpty: false });
+  const now = replay?.manifest?.createdAt ?? exactTimestamp(options.now);
+  const manifest = lifecycleManifest(root, options, hosts, now, replay?.manifest);
+  const prepared = prepareLifecycleIntegration(root, options, { hosts, manifest, removeOnly: false });
+
+  const manifestState = lifecyclePathState(root, INSTALLATION_MANIFEST_PATH, fsOps);
+  const manifestContent = serializeProjectInstallationManifest(manifest, { hostIds: PROJECT_HOST_IDS });
+  prepared.entries.push(bindLifecycleFileState(root, INSTALLATION_MANIFEST_PATH, manifestState, {
+    root,
+    relativePath: INSTALLATION_MANIFEST_PATH,
+    content: manifestContent,
+    encoding: "utf8",
+    force: true,
+    label: MANIFEST_OWNER
+  }));
+  prepared.operations.push({
+    path: INSTALLATION_MANIFEST_PATH,
+    action: "write",
+    observedDigest: manifestState.digest,
+    observedMode: manifestState.mode,
+    nextDigest: sha256(manifestContent)
+  });
+
+  const legacyInstallStat = lstatOrNull(fsOps, path.join(root, ".dove-install"));
+  if (legacyInstallStat !== null) {
+    if (legacyInstallStat.isSymbolicLink() || !legacyInstallStat.isDirectory()) {
+      throw new Error("Complete Reinstall requires .dove-install to be a real directory.");
+    }
+    const treeDigest = inspectDirectoryTreeDigest(root, ".dove-install", { fsOps });
+    prepared.entries.unshift({
+      root,
+      relativePath: ".dove-install",
+      delete: true,
+      deleteTree: true,
+      expectedState: { exists: true, type: "directory", sha256: null, mode: legacyInstallStat.mode & 0o7777 },
+      expectedTreeDigest: treeDigest,
+      force: true,
+      label: "Complete Reinstall legacy installation deletion"
+    });
+    prepared.operations.unshift({ path: ".dove-install", action: "remove-tree", treeDigest });
+  } else {
+    prepared.entries.push({
+      root,
+      relativePath: ".dove-install",
+      assertOnly: true,
+      expectedState: { exists: false, type: "absent", sha256: null, mode: null },
+      label: "Complete Reinstall legacy installation assertion"
+    });
+  }
+
+  const doveStat = lstatOrNull(fsOps, path.join(root, ".dove"));
+  if (doveStat !== null) {
+    if (doveStat.isSymbolicLink() || !doveStat.isDirectory()) throw new Error("Complete Reinstall requires .dove to be a real directory.");
+    for (const child of fsOps.readdirSync(path.join(root, ".dove")).map(String).sort()) {
+      if (child === "install") continue;
+      const relativePath = `.dove/${child}`;
+      const stat = fsOps.lstatSync(path.join(root, relativePath));
+      if (stat.isSymbolicLink()) throw new Error(`Complete Reinstall refuses symbolic links in project-private Dove state: ${relativePath}.`);
+      if (stat.isFile()) {
+        const state = lifecyclePathState(root, relativePath, fsOps);
+        prepared.entries.unshift(bindLifecycleFileState(root, relativePath, state, { root, relativePath, delete: true, force: true, label: `Complete Reinstall deletion ${relativePath}` }));
+        prepared.operations.unshift({ path: relativePath, action: "remove", observedDigest: state.digest, observedMode: state.mode });
+      } else if (stat.isDirectory()) {
+        const treeDigest = inspectDirectoryTreeDigest(root, relativePath, { fsOps });
+        prepared.entries.unshift({ root, relativePath, delete: true, deleteTree: true, expectedState: { exists: true, type: "directory", sha256: null, mode: stat.mode & 0o7777 }, expectedTreeDigest: treeDigest, force: true, label: `Complete Reinstall tree deletion ${relativePath}` });
+        prepared.operations.unshift({ path: relativePath, action: "remove-tree", treeDigest });
+      } else {
+        throw new Error(`Complete Reinstall found unsupported project-private Dove state: ${relativePath}.`);
+      }
+    }
+  }
+  const archiveStat = lstatOrNull(fsOps, path.join(root, ".dove-archive"));
+  if (archiveStat !== null) {
+    if (archiveStat.isSymbolicLink() || !archiveStat.isDirectory()) throw new Error("Complete Reinstall requires .dove-archive to be a real directory.");
+    const treeDigest = inspectDirectoryTreeDigest(root, ".dove-archive", { fsOps });
+    prepared.entries.unshift({ root, relativePath: ".dove-archive", delete: true, deleteTree: true, expectedState: { exists: true, type: "directory", sha256: null, mode: archiveStat.mode & 0o7777 }, expectedTreeDigest: treeDigest, force: true, label: "Complete Reinstall legacy archive deletion" });
+    prepared.operations.unshift({ path: ".dove-archive", action: "remove-tree", treeDigest });
+  }
+
+  bindLifecycleObservedFiles(root, prepared);
+  prepared.operations.sort((left, right) => left.path.localeCompare(right.path) || left.action.localeCompare(right.action));
+  const plan = { ...prepared, fsOps, root, hosts, previewType: COMPLETE_REINSTALL_PREVIEW_TYPE, previewVersion: COMPLETE_REINSTALL_PREVIEW_VERSION, confirmationRequired: true };
+  plan.previewDigest = lifecycleBinding(plan);
+  return plan;
+}
+
+export function previewProjectCompleteReinstall(start, options = {}) {
+  return lifecyclePreviewShape(prepareCompleteReinstall(start, options));
+}
+
+export function completeReinstallProjectIntegration(start, options = {}) {
+  if (options.confirmed !== true) throw new Error("Complete Reinstall requires confirmed: true.");
+  const preview = options.preview;
+  if (!plainObject(preview) || preview.previewType !== COMPLETE_REINSTALL_PREVIEW_TYPE || preview.previewVersion !== COMPLETE_REINSTALL_PREVIEW_VERSION) {
+    throw new Error("Complete Reinstall requires the exact project-complete-reinstall preview.");
+  }
+  const prepared = prepareCompleteReinstall(start, options, preview);
+  if (preview.target !== prepared.root || !sameArray(preview.hosts ?? [], prepared.hosts) || preview.confirmation?.previewDigest !== prepared.previewDigest) {
+    throw new Error("Complete Reinstall preview is stale or does not match the approved project state.");
+  }
+  const transaction = writeFileSetTransaction(prepared.entries, { fsOps: prepared.fsOps });
+  return { ...resultFromTransaction("reinstalled", prepared.root, prepared.hosts, prepared.manifest, transaction), movedPaths: [...transaction.movedPaths] };
 }
 
 export const PROJECT_INTEGRATION_MANAGED_PATHS = Object.freeze(

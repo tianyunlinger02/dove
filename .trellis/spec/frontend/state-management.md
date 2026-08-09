@@ -1,57 +1,75 @@
 # State Management
 
-> Durable state and public read/write boundaries.
+> Research Format 1 state and public read/write boundaries.
 
 ---
 
 ## Overview
 
-Dove is file-first. The host plans and executes work; Dove stores the minimum validated state needed for Mission contracts, research judgment, evidence, substantive outputs, lessons, and review accountability.
+Dove is file-first. The host plans and executes work; Dove stores a small validated research model for Workspace direction, Mission contracts and lineage, evidence, claims, experiment records, review exchanges, and Lessons.
 
-## Three-Layer Boundary
+## Layer Boundary
 
 - A direct **Skill** expresses user intent and accepts optional text.
-- An **MCP tool** validates and performs a structured operation.
-- A **durable entity** records current validated state under `.dove/`.
+- An **MCP tool** validates and performs a structured research operation.
+- A **semantic entity** records validated Research Format 1 state under `.dove/`.
+- A **project artifact** holds substantive host-produced work in a normal project path.
+- An **installation resource** belongs to managed project integration recorded by `.dove/install/manifest.json`.
 
-Do not infer a storage entity from a Skill name. Note and Experience are Skill semantics, not durable stores.
+Do not infer a semantic entity from a Skill name or project file. Draft, Figure, Rebuttal, and internal synthesis are workflows or project artifacts rather than same-named stores.
 
-## Integration and Research State
+## Installation and Research State
 
-`.dove-install/` is managed project integration. `.dove/` is user-owned current research state established by the direct Workspace Skill.
+`.dove/` is the single project-private root. `.dove/install/manifest.json` is Dove-managed installation state and records package identity, runtime protocol, proven hosts, managed resources, and ownership. Research Format 1 is an optional sibling contract under `.dove/`, not a separate root. Routine initialization and synchronization manage installation state only. Project Upgrade preserves current research bytes; confirmed project Complete Reinstall deletes optional research state before recreating installation state. Neither lifecycle operation manages user npm.
 
-Current durable state includes:
+`.dove-install/` is recognized only as a legacy manifest root for Upgrade or Complete Reinstall cleanup. `.dove-archive/` is likewise a legacy project root that those lifecycle operations may move or remove. Neither is a current or compatibility research root.
 
-- Workspace revisions;
-- root and child Missions with explicit parent provenance;
-- Mission-bound ResearchDecisions for research work;
-- execution Receipts and artifact handoffs;
-- Sources and Claims;
-- formal Experiment protocols and results;
-- immutable non-authoritative Reviews; and
-- one canonical `.dove/LESSONS.md` document.
+Research Format 1 uses:
 
-Research direction uses ResearchDecisions, not a ResearchTree. Note synthesis and Draft, Figure, and Rebuttal bodies remain normal project artifacts; the latter are archived through Receipts without mirrors. Experimental conception/prevalidation remains Experience Skill work until a formal Experiment exists.
+- `.dove/format.json` with format marker `dove-research-v1`;
+- `.dove/workspace.json` for current Workspace direction and human-readable change history;
+- `.dove/missions/` for immutable Mission contracts and optional immutable conclusions;
+- `.dove/sources/` for captured Source records;
+- `.dove/experiments/` for frozen plans and immutable results;
+- `.dove/claims/` for evidence-bounded Claims;
+- `.dove/reviews/` for imported structured Reviews tied to frozen artifact snapshots; and
+- `.dove/LESSONS.md` for the canonical advisory Lessons document.
+
+Mission parent and dependency links form the research tree. This lineage is derived from Mission entities and does not create a second authoritative store.
+
+## Semantic Entity Rules
+
+- The Workspace is mutable through explicit initialize or mainline update operations and retains concise change history.
+- Mission contracts are immutable. A new independent goal is a root; a deliberate branch uses explicit parent provenance and may declare dependencies.
+- Mission conclusions are separate immutable synthesis records preserving failures, limitations, uncertainty, evidence IDs, and recommended branches.
+- A Source is immutable captured external material and may include a content fingerprint for a project-local capture.
+- An Experiment plan is frozen before host execution. Its result is recorded separately and preserves all declared observations, measurements, denominator data, impacts, unexpected observations, failures, deviations, limitations, and uncertainty.
+- A Claim is immutable and requires support references plus explicit cannot-say boundaries.
+- A Review is imported from a user-managed separate reviewer session and binds to frozen artifact fingerprints. It remains non-authoritative.
+- Lessons are advisory Markdown and are replaced as one complete document.
 
 ## Public Read/Write Boundary
 
-Direct Skills and MCP callers use visible one-based Mission numbers. They do not inspect or edit `.dove/` directly.
+Skills and MCP callers use semantic identifiers rather than positional numbers. They do not inspect or edit `.dove/` directly.
 
-Reads are zero-write. Mutations validate the complete write set, current Mission, parent/child relationship, ownership, evidence, canonical paths, and overwrite eligibility before the first write.
+Reads are zero-write. Mutations validate the current format, complete input, entity references, Mission lineage, canonical project paths, frozen protocol or review bindings, and overwrite eligibility before the first write.
 
-Status and completion are derived live from current records. Host return, tests, and internal checks remain evidence inputs and do not automatically establish completion or independent authority.
+The safe public result includes human text and structured `research` data. Private write diagnostics, hashes, bindings, `.dove/` paths, and integrity internals are removed. There is no public completion callback or machine control envelope.
 
-## Mission Routing
+## Review Exchange
 
-- A new independent goal creates a root Mission.
-- Continuation, narrowing, comparison, recovery, and follow-up create a child Mission.
-- A child records its parent and does not silently rewrite or inherit completion from that parent.
-- A project-wide mainline change is a Workspace operation.
+Review follows a user-mediated boundary:
 
-## Output State
+1. `local-preflight` verifies the target Mission and declared project artifact paths without creating a Review.
+2. `prepare` freezes the artifact snapshot and produces the exchange material.
+3. The user obtains a return in a separate reviewer session outside Dove's execution.
+4. `import` validates and records the structured return against the prepared exchange.
+5. `coverage` reports current review coverage and artifact validity.
 
-Public results expose `report`, optional `researchHandoff`, and `hostControl`. Durable identity, hashes, paths, and mutation controls stay private. A typed closure request is the only callback route and is applied exactly once with its binding unchanged.
+Dove never launches, impersonates, or silently substitutes for the separate reviewer. Importing a Review does not establish identity, independence, sign-off, acceptance, or scientific authority.
 
 ## Current-Only Runtime
 
-Current runtime reads only current `.dove/` state. It has no ResearchTree, Note store, Experience sidecar set, secondary authoritative root, state-migration path, or fallback execution path.
+Current research operations read and write only Research Format 1. Missing state may be initialized only through the Workspace operation. Legacy, unknown, malformed, or incomplete `.dove/` state is classified without repair and refused for mutation. There is no state migration, overlay upgrade, archive replacement, compatibility root, or fallback reader.
+
+The CLI is runtime-only: it handles installation lifecycle, diagnosis, MCP serving, and prompt-hook forwarding. Research Skills use MCP and must not fall back to CLI, shell, or direct state access.

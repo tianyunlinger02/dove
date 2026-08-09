@@ -1,54 +1,57 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-import {
-  RESEARCH_AUTHORITY_OWNERSHIP_MATRIX,
-  RESEARCH_AUTHORITY_RECORD_TYPES,
-  RESEARCH_CONSTITUTION,
-  RESEARCH_CONSTITUTION_EVIDENCE_REQUIREMENTS,
-  RESEARCH_CONSTITUTION_GUARANTEE_CLASSES,
-  RESEARCH_CONSTITUTION_OWNER_IDS,
-  RESEARCH_CONSTITUTION_VERIFICATION_CATEGORIES,
-  RESEARCH_CONSTITUTION_VERIFICATION_REQUIREMENTS
-} from "../src/core/research-constitution.mjs";
+import { buildResearchContext, queryResearchContext } from "../src/core/research-context.mjs";
+import { CLAIM_ASSESSMENTS, EXPERIMENT_RESULT_KINDS, SOURCE_RELATIONSHIPS } from "../src/core/research-stores.mjs";
+import { DOVE_RESEARCH_FORMAT } from "../src/core/schema.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SAFE_ID = /^[a-z0-9][a-z0-9-]*$/u;
-const owners = new Set(RESEARCH_CONSTITUTION_OWNER_IDS);
-const evidence = new Set(RESEARCH_CONSTITUTION_EVIDENCE_REQUIREMENTS);
-const guarantees = new Set(RESEARCH_CONSTITUTION_GUARANTEE_CLASSES);
-const categories = new Set(RESEARCH_CONSTITUTION_VERIFICATION_CATEGORIES);
-const verificationRequirements = new Set(RESEARCH_CONSTITUTION_VERIFICATION_REQUIREMENTS);
-const forbiddenOwnership = /engineering|command|prose|writing template|reviewer rubric|cutover/iu;
+const timestamp = "2026-08-08T00:00:00.000Z";
+const mission = {
+  missionId: "semantic-gate", parentMissionId: null, dependsOnMissionIds: [], branchKind: null, branchReason: null,
+  goal: "Preserve research meaning.", requirements: ["Retain adverse evidence."], assumptions: ["The fixture is bounded."],
+  scope: ["One condition."], outOfScope: ["Generalization."], evidenceRequirements: ["Denominator-aware evidence."],
+  competingHypotheses: ["effect", "artifact"], openQuestions: ["Which explanation survives?"], contextRefs: ["paper:results"],
+  contributionRole: "hypothesis-discrimination", createdAt: timestamp
+};
+const plan = {
+  experimentId: "semantic-run", missionId: mission.missionId, title: "Discriminating run", hypothesisRefs: ["effect", "artifact"],
+  protocol: ["Run once."], inputs: ["fixture"], comparisons: ["baseline"], metrics: ["quality"],
+  discriminatingObservations: ["Calibration separates the explanations."], successConditions: ["Account for every case."],
+  stopConditions: ["Stop after one pass."], constraints: ["Fixed fixture."], expectedArtifacts: ["results/run.json"],
+  cost: "One run.", risk: "The run may fail.", failureValue: "Failure identifies instability.", contributionRole: "hypothesis-discrimination", plannedAt: timestamp
+};
+const result = {
+  experimentId: plan.experimentId, missionId: mission.missionId, kind: "failed", summary: "The run failed.",
+  observations: ["Adverse evidence retained."], measurements: [], denominator: { total: 2, observed: 0, failed: 2, excluded: 0 },
+  hypothesisImpacts: [{ hypothesisRef: "effect", impact: "weaken" }], claimImpacts: [{ claimRef: "bounded-claim", impact: "weaken" }],
+  unexpectedObservations: ["Calibration failed."], uncertainty: ["Cause unresolved."], artifactRefs: [], failures: ["Both attempts crashed."],
+  deviations: ["No measurement."], limitations: ["One fixture."], recordedAt: timestamp
+};
+const claim = {
+  claimId: "bounded-claim", missionId: mission.missionId, statement: "The evidence does not establish improvement.",
+  supportRefs: ["experiment:semantic-run"], counterEvidenceRefs: ["observation:calibration-failed"], missingEvidence: ["Calibrated replication."],
+  cannotSay: ["Cannot infer population behavior."], uncertainty: ["Cause unresolved."], assessment: "weakened", storyRole: "bounded-adverse-result", artifactRefs: [], recordedAt: timestamp
+};
+const context = buildResearchContext({
+  workspace: { workspaceId: "semantic-workspace", researchQuestion: "What explains the result?", mainline: "Test competing explanations.", contributionIntent: "Bound the supported claim.", currentFocus: "Preserve adverse evidence.", changeHistory: [{ changedAt: timestamp, summary: "Established direction." }], createdAt: timestamp, updatedAt: timestamp },
+  missions: [mission], sources: [], experiments: [{ plan, result }], claims: [claim], reviews: [], lessons: "# Lessons\n"
+});
+const synthesis = queryResearchContext(context, { view: "result-synthesis" });
+const story = queryResearchContext(context, { view: "claim-story" });
 
-assert.equal(RESEARCH_CONSTITUTION.length, 9, "Research Constitution must contain only the nine cross-domain invariants");
-assert.deepEqual(RESEARCH_CONSTITUTION.map((entry) => entry.number), Array.from({ length: 9 }, (_, index) => index + 1));
-assert.equal(new Set(RESEARCH_CONSTITUTION.map((entry) => entry.clauseId)).size, 9);
-for (const [index, entry] of RESEARCH_CONSTITUTION.entries()) {
-  const label = `RESEARCH_CONSTITUTION[${index}]`;
-  assert.deepEqual(Object.keys(entry), ["number", "clauseId", "title", "canonicalOwner", "enforcementPoints", "evidenceRequirement", "verificationRequirement", "guaranteeClass", "verification"], `${label} shape`);
-  assert.match(entry.clauseId, SAFE_ID, `${label}.clauseId`);
-  assert.equal(owners.has(entry.canonicalOwner), true, `${label}.canonicalOwner`);
-  assert.equal(evidence.has(entry.evidenceRequirement), true, `${label}.evidenceRequirement`);
-  assert.equal(verificationRequirements.has(entry.verificationRequirement), true, `${label}.verificationRequirement`);
-  assert.equal(guarantees.has(entry.guaranteeClass), true, `${label}.guaranteeClass`);
-  assert.equal(categories.has(entry.verification.category), true, `${label}.verification.category`);
-  assert.equal(forbiddenOwnership.test(`${entry.title} ${entry.clauseId} ${entry.enforcementPoints.join(" ")}`), false, `${label} owns non-constitutional workflow concerns`);
-  if (/^(?:src|scripts|tests)\//u.test(entry.verification.reference)) {
-    const [relativePath] = entry.verification.reference.split("#");
-    assert.equal(fs.existsSync(path.join(ROOT, relativePath)), true, `${label} verification reference is missing`);
-  }
-}
+assert.equal(DOVE_RESEARCH_FORMAT, "dove-research-v1");
+assert.deepEqual(EXPERIMENT_RESULT_KINDS, ["positive", "negative", "null", "mixed", "failed", "stopped"]);
+assert.deepEqual(CLAIM_ASSESSMENTS, ["supported", "weakened", "refuted", "inconclusive", "blocked"]);
+assert.deepEqual(SOURCE_RELATIONSHIPS, ["consensus", "conflict", "condition-specific", "uncovered", "testable-gap"]);
+assert.equal(context.boundaries.semanticAuthority, "host-analysis-required");
+assert.equal(context.boundaries.candidateAuthorization, "none");
+assert.equal(synthesis.results[0].kind, "failed");
+assert.deepEqual(synthesis.results[0].denominator, result.denominator);
+assert.deepEqual(synthesis.results[0].failures, result.failures);
+assert.deepEqual(synthesis.results[0].uncertainty, result.uncertainty);
+assert.deepEqual(story.claimEvidenceMatrix[0].counterEvidenceRefs, claim.counterEvidenceRefs);
+assert.deepEqual(story.claimEvidenceMatrix[0].missingEvidence, claim.missingEvidence);
+assert.deepEqual(story.claimEvidenceMatrix[0].cannotSay, claim.cannotSay);
 
-assert.deepEqual(RESEARCH_AUTHORITY_OWNERSHIP_MATRIX.map((entry) => entry.recordType), RESEARCH_AUTHORITY_RECORD_TYPES);
-assert.equal(new Set(RESEARCH_AUTHORITY_OWNERSHIP_MATRIX.map((entry) => entry.authorityId)).size, RESEARCH_AUTHORITY_OWNERSHIP_MATRIX.length);
-for (const entry of RESEARCH_AUTHORITY_OWNERSHIP_MATRIX) {
-  assert.equal(owners.has(entry.canonicalOwner), true, `${entry.recordType} owner must be constitutional`);
-  assert.ok(entry.fieldAuthorities.length > 0, `${entry.recordType} needs field authorities`);
-}
-
-console.log(JSON.stringify({ status: "passed", clauseCount: RESEARCH_CONSTITUTION.length, authorityRecordCount: RESEARCH_AUTHORITY_OWNERSHIP_MATRIX.length }, null, 2));
+console.log(JSON.stringify({ status: "passed", format: DOVE_RESEARCH_FORMAT, resultKinds: EXPERIMENT_RESULT_KINDS.length, claimAssessments: CLAIM_ASSESSMENTS.length, sourceRelationships: SOURCE_RELATIONSHIPS.length }, null, 2));

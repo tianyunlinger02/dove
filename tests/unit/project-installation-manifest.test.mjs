@@ -50,7 +50,7 @@ test("project installation manifest creates stable sealed schema", () => {
   assert.equal(manifest.integrationVersion, INSTALLATION_INTEGRATION_VERSION);
   assert.equal(manifest.ownershipVersion, INSTALLATION_OWNERSHIP_VERSION);
   assert.equal(manifest.runtime.mode, "user-cli");
-  assert.equal(manifest.runtime.protocolVersion, 1);
+  assert.equal(manifest.runtime.protocolVersion, 2);
   assert.equal(Object.isFrozen(manifest), true);
   assert.equal(Object.isFrozen(manifest.managed[0]), true);
   assert.equal(serializeProjectInstallationManifest(manifest, options()).endsWith("\n"), true);
@@ -81,7 +81,7 @@ test("strict manifest reader rejects duplicate keys and symlink marker", () => {
   const root = createTempRoot("dove-install-manifest-");
   const outside = createTempRoot("dove-install-manifest-outside-");
   try {
-    fs.mkdirSync(path.join(root, ".dove-install"));
+    fs.mkdirSync(path.join(root, path.posix.dirname(INSTALLATION_MANIFEST_PATH)), { recursive: true });
     fs.writeFileSync(path.join(root, INSTALLATION_MANIFEST_PATH), '{"schemaVersion":1,"schemaVersion":1}\n');
     assert.throws(() => readProjectInstallationManifest(root, options()), /duplicate JSON object keys/u);
 
@@ -105,7 +105,7 @@ test("project installation manifest reads only complete previous version pairs d
       integrationVersion: PREVIOUS_INSTALLATION_INTEGRATION_VERSION,
       ownershipVersion: PREVIOUS_INSTALLATION_OWNERSHIP_VERSION
     };
-    fs.mkdirSync(path.join(root, ".dove-install"));
+    fs.mkdirSync(path.join(root, path.posix.dirname(INSTALLATION_MANIFEST_PATH)), { recursive: true });
     fs.writeFileSync(path.join(root, INSTALLATION_MANIFEST_PATH), `${JSON.stringify(previous, null, 2)}\n`);
     assert.throws(() => readProjectInstallationManifest(root, options()), /integrationVersion\/ownershipVersion/u);
     assert.deepEqual(readProjectInstallationManifest(root, { ...options(), allowPrevious: true }), previous);
@@ -129,7 +129,7 @@ test("project installation manifest reads a strict round trip", () => {
   const root = createTempRoot("dove-install-manifest-roundtrip-");
   try {
     const manifest = createProjectInstallationManifest(manifestInput(), options());
-    fs.mkdirSync(path.join(root, ".dove-install"));
+    fs.mkdirSync(path.join(root, path.posix.dirname(INSTALLATION_MANIFEST_PATH)), { recursive: true });
     fs.writeFileSync(path.join(root, INSTALLATION_MANIFEST_PATH), serializeProjectInstallationManifest(manifest, options()));
     assert.deepEqual(readProjectInstallationManifest(root, options()), manifest);
   } finally {

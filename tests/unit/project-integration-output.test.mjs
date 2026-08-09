@@ -29,12 +29,12 @@ test("interactive init renders the original pixel dove and a concise setup summa
   assert.match(output, /example-project/u);
   assert.doesNotMatch(output, /\/work\/example-project/u);
   assert.match(output, /Claude Code/u);
-  assert.match(output, /12 个 Dove 工作入口/u);
+  assert.match(output, /9 个 Dove 工作入口/u);
   assert.match(output, /MCP 服务已注册并仅为 Dove 批准/u);
   assert.match(output, /自然语言任务入口/u);
   assert.doesNotMatch(output, /请批准|\/mcp/u);
-  assert.match(output, /科研主线尚未建立/u);
-  assert.match(output, /\/dove:workspace/u);
+  assert.match(output, /Research Workspace 尚未建立也不影响普通项目工作/u);
+  assert.match(output, /\/dove:research/u);
   assert.match(output, /进入或重新进入 Claude Code/u);
   assertHumanBoundary(output);
 });

@@ -2,14 +2,14 @@ import process from "node:process";
 
 import { dispatchTool } from "./handlers.mjs";
 import {
+  DOVE_MCP_PROTOCOL_VERSIONS,
+  inspectRunningMcpRuntime,
+  negotiateDoveMcpProtocol
+} from "./runtime-info.mjs";
+import {
   toolDefinitions,
   toolDiscoveryInputSchema
 } from "./tool-definitions.mjs";
-
-const ELICITATION_PROTOCOL_VERSIONS = new Set([
-  "2025-06-18",
-  "2025-11-25"
-]);
 
 function protocolError(code, message) {
   const error = new Error(message);
@@ -34,22 +34,11 @@ function normalizeToolDiscoveryParams(params) {
   return params;
 }
 
-function approvalMessage(approval) {
-  return [
-    approval.summary,
-    ...(approval.effects ?? []).map((effect) => `- ${effect}`),
-    approval.question
-  ].filter(Boolean).join("\n");
-}
-
 export function startServer(root = process.cwd()) {
   let buffer = Buffer.alloc(0);
   let responseFraming = "content-length";
-  let nextRequestId = 1;
   let clientProtocolVersion = null;
-  let clientCapabilities = {};
   let initialized = false;
-  const pending = new Map();
 
   function sendMessage(message) {
     const body = JSON.stringify(message);
@@ -69,68 +58,15 @@ export function startServer(root = process.cwd()) {
   }
 
   function publicSafeToolFailure() {
-    const message = "The MCP tool could not safely return its result. No completion, acceptance, or scientific judgment was recorded.";
+    const message = "Dove 工具未能安全返回结果；没有记录任何研究判断或评审权威。";
     return {
       content: [{ type: "text", text: message }],
-      structuredContent: {
-        report: { status: "blocked", message },
-        hostControl: {
-          classification: {
-            outcome: "failed",
-            category: "internal-failure",
-            phase: "internal",
-            blocking: true,
-            userAction: "retry-explicitly",
-            terminal: true,
-            continuation: "terminal",
-            closure: "none",
-            retry: "explicit-request",
-            reason: "safe-projection-failure"
-          },
-          presentation: { mode: "show", reason: "failure" },
-          closureRequest: null
-        }
-      },
+      structuredContent: { status: "error", operation: "unknown", research: { message } },
       isError: true
     };
   }
 
-  function supportsElicitation() {
-    return initialized && ELICITATION_PROTOCOL_VERSIONS.has(clientProtocolVersion) && clientCapabilities?.elicitation !== undefined;
-  }
-
-  function requestClient(method, params) {
-    const id = `dove-${nextRequestId++}`;
-    return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
-      sendMessage({ jsonrpc: "2.0", id, method, params });
-    });
-  }
-
-  async function requestCheckpointApproval(approval) {
-    if (!supportsElicitation()) throw new Error("This Dove checkpoint requires MCP elicitation support.");
-    const response = await requestClient("elicitation/create", {
-      message: approvalMessage(approval),
-      requestedSchema: {
-        type: "object",
-        properties: {},
-        additionalProperties: false
-      }
-    });
-    return response?.action;
-  }
-
-  function resolveClientResponse(message) {
-    const waiter = pending.get(message.id);
-    if (!waiter) return false;
-    pending.delete(message.id);
-    if (message.error) waiter.reject(new Error(message.error.message ?? "MCP client request failed."));
-    else waiter.resolve(message.result);
-    return true;
-  }
-
   async function handleMessage(message) {
-    if (message?.id !== undefined && message?.method === undefined && resolveClientResponse(message)) return;
     const { id, method, params } = message ?? {};
 
     if (method === "notifications/initialized") {
@@ -142,11 +78,10 @@ export function startServer(root = process.cwd()) {
     if (method === "initialize") {
       if (clientProtocolVersion !== null) throw protocolError(-32600, "MCP server is already initialized.");
       clientProtocolVersion = params?.protocolVersion ?? null;
-      clientCapabilities = params?.capabilities ?? {};
       sendResponse(id, {
-        protocolVersion: ELICITATION_PROTOCOL_VERSIONS.has(clientProtocolVersion) ? clientProtocolVersion : "2024-11-05",
+        protocolVersion: negotiateDoveMcpProtocol(clientProtocolVersion),
         capabilities: { tools: {} },
-        serverInfo: { name: "dove", version: "0.4.0" }
+        serverInfo: { name: "dove", version: inspectRunningMcpRuntime(root, negotiateDoveMcpProtocol(clientProtocolVersion)).serverInfo.version }
       });
       return;
     }
@@ -169,7 +104,9 @@ export function startServer(root = process.cwd()) {
     if (method === "tools/call") {
       const toolName = params?.name;
       const toolArgs = params?.arguments ?? {};
-      sendResponse(id, await dispatchTool(root, toolName, toolArgs, { requestCheckpointApproval }));
+      sendResponse(id, await dispatchTool(root, toolName, toolArgs, {
+        negotiatedProtocolVersion: negotiateDoveMcpProtocol(clientProtocolVersion)
+      }));
       return;
     }
 
@@ -233,8 +170,6 @@ export function startServer(root = process.cwd()) {
   });
 
   process.stdin.on("end", () => {
-    for (const waiter of pending.values()) waiter.reject(new Error("MCP client disconnected before checkpoint approval completed."));
-    pending.clear();
     process.exit(0);
   });
 }

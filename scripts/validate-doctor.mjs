@@ -21,7 +21,7 @@ const claudeCommand = path.join(shellRoot, "claude");
 const doveCommand = path.join(shellRoot, "dove");
 const settingsBefore = '{"theme":"dark","fastMode":false,"env":{"KEEP":"unchanged"}}\n';
 const shellBefore = "# user shell\nexport KEEP=unchanged\n";
-const FORBIDDEN_PROJECT_PATHS = [".dove", "bin", "dist", "mcp", "scripts"];
+const FORBIDDEN_PROJECT_PATHS = [".dove-install", "bin", "dist", "mcp", "scripts"];
 
 function snapshotTree(root) {
   const result = {};
@@ -74,15 +74,15 @@ function assertInitializedProject(root, initResult) {
   assert.equal(initResult.target, canonicalRoot);
   assert.deepEqual(initResult.hosts, ["claude"]);
   assert.deepEqual(initResult.removedPaths, []);
-  assert.ok(initResult.changedPaths.includes(".dove-install/manifest.json"));
+  assert.ok(initResult.changedPaths.includes(".dove/install/manifest.json"));
   assert.ok(initResult.changedPaths.includes(".mcp.json"));
   assert.ok(initResult.changedPaths.includes(".claude/settings.json"));
   assert.equal(initResult.changedPaths.some((relativePath) => FORBIDDEN_PROJECT_PATHS.some((prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`))), false);
 
   assertNoCopiedRuntime(root);
-  assert.deepEqual(fs.readdirSync(root).sort(), [".claude", ".dove-install", ".mcp.json"]);
+  assert.deepEqual(fs.readdirSync(root).sort(), [".claude", ".dove", ".mcp.json"]);
 
-  const manifestPath = path.join(root, ".dove-install", "manifest.json");
+  const manifestPath = path.join(root, ".dove", "install", "manifest.json");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   assert.equal(manifest.runtime?.mode, "user-cli");
   assert.deepEqual(manifest.hosts, ["claude"]);

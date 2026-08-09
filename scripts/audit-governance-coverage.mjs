@@ -1,172 +1,42 @@
-import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
+#!/usr/bin/env node
 
-import { GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_READONLY_TOOLS } from "../src/core/schema.mjs";
+import assert from "node:assert/strict";
+
 import { toolDefinitions } from "../src/mcp/tool-definitions.mjs";
 
-const ROOT = process.cwd();
-
-function discoverCoreFiles(directory = path.join(ROOT, "src/core")) {
-  return fs.readdirSync(directory, { withFileTypes: true })
-    .flatMap((entry) => {
-      const fullPath = path.join(directory, entry.name);
-      if (entry.isDirectory()) {
-        return discoverCoreFiles(fullPath);
-      }
-      if (!entry.isFile() || !entry.name.endsWith(".mjs")) {
-        return [];
-      }
-      return [path.relative(ROOT, fullPath)];
-    })
-    .sort();
-}
-
-const coreFiles = discoverCoreFiles();
-
-const WRITE_SIGNAL_REGEX = /(?:writeJson|writeText|writeBinary)\(|(?:fs(?:\.promises)?|fsPromises)\.(?:writeFile|rm|cp|copyFile|mkdir|rename|writeFileSync|rmSync|cpSync|copyFileSync|mkdirSync|renameSync)\(/;
-const EXEMPT_FUNCTIONS = new Set([
-  "finalizeDomainArtifacts",
-  "resolveMissionValidationReference",
-  "stageConsolidatedDomainMutation"
-]);
-
-const PUBLIC_SCHEMA7_MUTATION_FILES = new Set([
-  "src/core/domain-artifacts.mjs",
-  "src/core/execution-receipts.mjs",
-  "src/core/lessons.mjs",
-  "src/core/mission-contracts.mjs",
-  "src/core/research-decision-store.mjs",
-  "src/core/research-decision-reevaluation.mjs",
-  "src/core/research-outcome.mjs",
-  "src/core/retained-domain-workflows.mjs",
-  "src/core/source-trust.mjs"
-]);
-
-function collectExportedFunctions(filePath) {
-  const content = fs.readFileSync(path.join(ROOT, filePath), "utf8");
-  const exportRegex = /export\s+(?:(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*\{|const\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|\w+)\s*=>\s*\{|const\s+(\w+)\s*=\s*(?:async\s+)?function\s*\([^)]*\)\s*\{|class\s+(\w+)\s*\{)/g;
-  const matches = [...content.matchAll(exportRegex)];
-  const functions = [];
-  let pendingClassStart = null;
-  for (const match of matches) {
-    if (match[4]) {
-      pendingClassStart = match.index ?? 0;
-      continue;
-    }
-    if (functions.length > 0) {
-      functions.at(-1).end = pendingClassStart ?? (match.index ?? content.length);
-    }
-    functions.push({ filePath, name: match[1] ?? match[2] ?? match[3], start: match.index ?? 0, end: content.length });
-    pendingClassStart = null;
-  }
-  if (functions.length > 0 && pendingClassStart !== null) {
-    functions.at(-1).end = pendingClassStart;
-  }
-  return functions.map(({ filePath: exportedFilePath, name, start, end }) => ({ filePath: exportedFilePath, name, body: content.slice(start, end) }));
-}
-
-const exports = coreFiles.flatMap(collectExportedFunctions);
-const mutatingCoreFunctions = exports
-  .filter((entry) => PUBLIC_SCHEMA7_MUTATION_FILES.has(entry.filePath) && WRITE_SIGNAL_REGEX.test(entry.body))
-  .map((entry) => entry.name)
-  .filter((name) => !name.startsWith("read") && !name.startsWith("query") && !name.startsWith("list"));
-
-const guarded = new Set(GOVERNANCE_GUARDED_MUTATIONS.map((entry) => entry.surfaceBindings.coreFunction));
-const exempt = new Set(GOVERNANCE_EXEMPT_MUTATIONS.map((entry) => entry.surfaceBindings.coreFunction));
-const exportedCoreFunctionNames = new Set(exports.map((entry) => entry.name));
-
-function collectToolBindings(entries, classification) {
-  return entries.flatMap((entry) => {
-    const mcpTool = entry.surfaceBindings?.mcpTool;
-    if (!mcpTool) return [];
-    const operations = entry.surfaceBindings.mcpOperations;
-    return [{ name: mcpTool, operations, classification, entryId: entry.id }];
-  });
-}
-
-const toolBindings = [
-  ...collectToolBindings(GOVERNANCE_GUARDED_MUTATIONS, "guarded"),
-  ...collectToolBindings(GOVERNANCE_EXEMPT_MUTATIONS, "exempt"),
-  ...GOVERNANCE_READONLY_TOOLS.map((entry) => ({ name: entry.mcpTool, operations: entry.operations, classification: "readonly", entryId: `${entry.mcpTool}:readonly` }))
-];
-const toolClassifications = new Map();
-for (const binding of toolBindings) {
-  const key = binding.operations === null || binding.operations === undefined
-    ? `${binding.name}:*`
-    : binding.operations.map((operation) => `${binding.name}:${operation}`);
-  for (const operationKey of Array.isArray(key) ? key : [key]) {
-    const current = toolClassifications.get(operationKey) ?? [];
-    current.push(binding);
-    toolClassifications.set(operationKey, current);
-  }
-}
-const definedToolNames = new Set(toolDefinitions.map((tool) => tool.name));
-const duplicateToolDefinitions = toolDefinitions
-  .map((tool) => tool.name)
-  .filter((name, index, names) => names.indexOf(name) !== index);
-const duplicateMutationToolBindings = [...toolClassifications.entries()]
-  .filter(([, bindings]) => bindings.length > 1)
-  .map(([name, bindings]) => `${name}:${bindings.map((binding) => `${binding.classification}/${binding.entryId}`).join(",")}`);
-const invalidToolClassifications = toolDefinitions.flatMap((tool) => {
-  const operationNames = tool.inputSchema.properties?.operation?.enum;
-  if (Array.isArray(operationNames)) {
-    return operationNames.flatMap((operationName) => {
-      const bindings = toolClassifications.get(`${tool.name}:${operationName}`) ?? toolClassifications.get(`${tool.name}:*`) ?? [];
-      return bindings.length === 1 ? [] : [`${tool.name}:${operationName}:${bindings.length === 0 ? "unclassified" : "multiply-classified"}`];
-    });
-  }
-  const bindings = toolClassifications.get(`${tool.name}:*`) ?? [];
-  return bindings.length === 1 ? [] : [`${tool.name}:${bindings.length === 0 ? "unclassified" : "multiply-classified"}`];
+const EXPECTED = Object.freeze({
+  query_dove_research: { readonly: ["overview", "diagnosis", "related-work", "hypotheses", "experiment-options", "result-synthesis", "claim-story", "branch-synthesis", "reviews"], mutating: [] },
+  manage_dove_workspace: { readonly: [], mutating: ["initialize", "set-mainline"] },
+  manage_dove_missions: { readonly: ["query"], mutating: ["create", "branch", "conclude"] },
+  manage_dove_sources: { readonly: ["query"], mutating: ["record"] },
+  manage_dove_experiments: { readonly: ["query"], mutating: ["freeze", "record-result"] },
+  manage_dove_claims: { readonly: ["query"], mutating: ["record"] },
+  manage_dove_reviews: { readonly: ["local-preflight", "prepare", "coverage"], mutating: ["import"] },
+  manage_dove_lessons: { readonly: ["read"], mutating: ["replace"] }
 });
-const staleToolBindings = toolBindings.map((binding) => binding.name).filter((name) => !definedToolNames.has(name));
 
-const uncovered = mutatingCoreFunctions.filter((name) => !guarded.has(name) && !exempt.has(name) && !EXEMPT_FUNCTIONS.has(name));
-const staleRegistryBindings = [
-  ...GOVERNANCE_GUARDED_MUTATIONS,
-  ...GOVERNANCE_EXEMPT_MUTATIONS
-].filter((entry) => {
-  const coreFunction = entry.surfaceBindings?.coreFunction;
-  return coreFunction && !exportedCoreFunctionNames.has(coreFunction);
-}).map((entry) => `${entry.id}:${entry.surfaceBindings.coreFunction}`);
-
-const now = Date.now();
-const VALID_REVIEW_CADENCES = new Set(["per-session", "per-change", "per-release", "per-project"]);
-
-function validTimestamp(value) {
-  return typeof value === "string" && Number.isFinite(Date.parse(value));
+const definitions = new Map();
+for (const definition of toolDefinitions) {
+  assert.equal(definitions.has(definition.name), false, `Duplicate MCP tool definition: ${definition.name}`);
+  definitions.set(definition.name, definition);
 }
+assert.deepEqual([...definitions.keys()], Object.keys(EXPECTED), "Research Format 1 exposes an unexpected public tool inventory");
 
-const invalidExemptMetadata = GOVERNANCE_EXEMPT_MUTATIONS.filter((entry) => {
-  if (!entry.ownerRole || !entry.approvedByRole || !entry.reasonCode || !VALID_REVIEW_CADENCES.has(entry.reviewCadence)) {
-    return true;
-  }
-  if (!validTimestamp(entry.approvedAt) || !validTimestamp(entry.lastReviewedAt) || !validTimestamp(entry.sunsetAt)) {
-    return true;
-  }
-  if (Date.parse(entry.approvedAt) > Date.parse(entry.lastReviewedAt)) {
-    return true;
-  }
-  return Date.parse(entry.sunsetAt) <= now;
-}).map((entry) => entry.id);
-
-assert.equal(uncovered.length, 0, `Uncovered mutating core functions: ${uncovered.join(", ")}`);
-assert.equal(staleRegistryBindings.length, 0, `Governance registry references non-exported core functions: ${staleRegistryBindings.join(", ")}`);
-assert.equal(invalidExemptMetadata.length, 0, `Invalid exempt governance metadata: ${invalidExemptMetadata.join(", ")}`);
-assert.equal(duplicateToolDefinitions.length, 0, `Duplicate MCP tool definitions: ${duplicateToolDefinitions.join(", ")}`);
-assert.equal(duplicateMutationToolBindings.length, 0, `Duplicate governance mutation MCP bindings: ${duplicateMutationToolBindings.join(", ")}`);
-assert.equal(invalidToolClassifications.length, 0, `Every MCP tool must have exactly one governance classification: ${invalidToolClassifications.join(", ")}`);
-assert.equal(staleToolBindings.length, 0, `Governance classifications reference undefined MCP tools: ${staleToolBindings.join(", ")}`);
+const classifications = [];
+for (const [name, expected] of Object.entries(EXPECTED)) {
+  const definition = definitions.get(name);
+  const operations = definition.inputSchema.properties?.operation?.enum;
+  assert.ok(Array.isArray(operations) && operations.length > 0, `${name} must declare an operation enum`);
+  assert.deepEqual([...operations].sort(), [...expected.readonly, ...expected.mutating].sort(), `${name} operation inventory changed without classification`);
+  const classified = [...expected.readonly.map((operation) => ({ name, operation, classification: "readonly" })), ...expected.mutating.map((operation) => ({ name, operation, classification: "mutating" }))];
+  assert.equal(new Set(classified.map((entry) => entry.operation)).size, operations.length, `${name} operations must be classified exactly once`);
+  classifications.push(...classified);
+}
 
 console.log(JSON.stringify({
-  mutatingCoreFunctions,
-  guarded: [...guarded],
-  exempt: [...exempt],
-  uncovered,
-  staleRegistryBindings,
-  invalidExemptMetadata,
-  duplicateToolDefinitions,
-  duplicateMutationToolBindings,
-  invalidToolClassifications,
-  staleToolBindings
+  status: "passed",
+  toolCount: definitions.size,
+  operationCount: classifications.length,
+  readonly: classifications.filter((entry) => entry.classification === "readonly"),
+  mutating: classifications.filter((entry) => entry.classification === "mutating")
 }, null, 2));

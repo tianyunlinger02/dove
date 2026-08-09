@@ -24,12 +24,23 @@ import {
   DOVE_CLAUDE_MCP_APPROVAL_SELECTOR,
   inspectClaudeMcpApprovalSettings
 } from "./claude-project-settings.mjs";
-import { inspectProjectIntegration } from "./project-installation.mjs";
-import { readProjectInstallationManifest } from "./project-installation-manifest.mjs";
+import {
+  inspectProjectIntegration,
+  previewProjectCompleteReinstall,
+  previewProjectUpgrade
+} from "./project-installation.mjs";
+import {
+  INSTALLATION_MANIFEST_PATH,
+  LEGACY_INSTALLATION_MANIFEST_PATH,
+  readLegacyProjectInstallationManifest,
+  readProjectInstallationManifest
+} from "./project-installation-manifest.mjs";
 import { inspectLegacyProjectInstallation } from "./project-legacy-installation.mjs";
 import { inspectProjectRoot } from "./project-root.mjs";
+import { classifyProjectSetup } from "./project-setup-classification.mjs";
 import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
-import { inspectDoveWorkspace } from "./workspace-schema.mjs";
+import { ARTIFACT_PATHS, DOVE_RESEARCH_FORMAT, RESEARCH_DIRECTORIES, RESEARCH_REQUIRED_FILES } from "./schema.mjs";
+import { DOVE_MCP_PROBE_PROTOCOL_VERSION } from "./mcp-runtime-identity.mjs";
 
 const MODULE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PACKAGE_ROOT = path.resolve(MODULE_DIRECTORY, "../..");
@@ -265,7 +276,16 @@ function inspectIntegrationManifest(start, options) {
       start: project.start,
       root: project.root,
       error: messageFor(error),
-      manifest: { path: ".dove-install/manifest.json", package: manifest.package, runtime: manifest.runtime, hosts: [...manifest.hosts] },
+      manifest: {
+        path: INSTALLATION_MANIFEST_PATH,
+        schemaVersion: manifest.schemaVersion,
+        integrationVersion: manifest.integrationVersion,
+        ownershipVersion: manifest.ownershipVersion,
+        installationId: manifest.installationId,
+        package: manifest.package,
+        runtime: manifest.runtime,
+        hosts: [...manifest.hosts]
+      },
       managed: [],
       missing: [],
       drifted: []
@@ -286,7 +306,7 @@ function invalidIntegration(project, error) {
   };
 }
 
-function inspectManifestOwnership(project, manifest) {
+function inspectManifestOwnership(project, manifest, manifestPath = INSTALLATION_MANIFEST_PATH) {
   const managed = manifest.managed.map((entry) => {
     try {
       const inspected = managedContentDigest(project.root, entry);
@@ -326,7 +346,11 @@ function inspectManifestOwnership(project, manifest) {
     root: project.root,
     error: null,
     manifest: {
-      path: ".dove-install/manifest.json",
+      path: manifestPath,
+      schemaVersion: manifest.schemaVersion,
+      integrationVersion: manifest.integrationVersion,
+      ownershipVersion: manifest.ownershipVersion,
+      installationId: manifest.installationId,
       package: manifest.package,
       runtime: manifest.runtime,
       hosts: [...manifest.hosts]
@@ -337,29 +361,168 @@ function inspectManifestOwnership(project, manifest) {
   };
 }
 
-function inspectWorkspace(root) {
-  if (!root) return { healthy: false, state: "unavailable", mode: "unavailable", category: "invalid", schemaVersion: null, detectedSchema: null, error: "Project root is unavailable.", zeroWrite: true };
+function previewState(callback) {
   try {
-    const workspace = inspectDoveWorkspace(root);
-    const mode = workspace.state === "absent"
-      ? "absent"
-      : workspace.healthy
-        ? "current"
-        : workspace.category === "invalid"
-          ? "invalid"
-          : "archive-reset-required";
-    return {
-      healthy: workspace.state === "absent" || workspace.healthy,
-      state: workspace.state,
-      mode,
-      category: workspace.category,
-      schemaVersion: workspace.schemaVersion,
-      detectedSchema: workspace.detectedSchema,
-      error: workspace.error ?? null,
-      zeroWrite: true
-    };
+    const preview = callback();
+    return { ready: preview.status === "ready", error: null, preview };
   } catch (error) {
-    return { healthy: false, state: "invalid", mode: "invalid", category: "invalid", schemaVersion: null, detectedSchema: null, error: messageFor(error), zeroWrite: true };
+    return { ready: false, error: messageFor(error), preview: null };
+  }
+}
+
+function inspectMigrationInstallation(root, options = {}) {
+  const currentPath = path.join(root, INSTALLATION_MANIFEST_PATH);
+  const legacyPath = path.join(root, LEGACY_INSTALLATION_MANIFEST_PATH);
+  const current = lstatOrNull(currentPath);
+  const legacy = lstatOrNull(legacyPath);
+  const legacyDirectory = lstatOrNull(path.join(root, ".dove-install"));
+  const currentDirectory = lstatOrNull(path.join(root, ".dove/install"));
+  const legacyResearch = lstatOrNull(path.join(root, ".dove/manifest.json"));
+  const requiresReinstallPreview = legacy !== null || legacyDirectory !== null || legacyResearch !== null;
+  const reinstall = requiresReinstallPreview
+    ? previewState(() => previewProjectCompleteReinstall(root, { ...options, fsOps: options.fsOps ?? fs }))
+    : { ready: false, error: null, preview: null };
+  const result = (state, fields = {}) => ({
+    state,
+    root,
+    markerPath: legacy === null ? null : LEGACY_INSTALLATION_MANIFEST_PATH,
+    upgrade: { ready: false, error: null, preview: null },
+    reinstall,
+    ...fields
+  });
+
+  if (current !== null && legacy !== null) {
+    return result("conflicting-manifests", {
+      error: "Dove found both current and legacy project installation manifests."
+    });
+  }
+  if (legacy === null) {
+    if (legacyDirectory !== null || (current === null && currentDirectory !== null)) {
+      return result("invalid-legacy", {
+        error: "Dove found an incomplete current or legacy installation directory without its manifest."
+      });
+    }
+    return result("absent", { error: null });
+  }
+  if (legacy.isSymbolicLink() || !legacy.isFile()) {
+    return result("invalid-legacy", {
+      error: `Dove legacy project installation manifest must be a regular non-symbolic-link file: ${legacyPath}.`
+    });
+  }
+  try {
+    const manifest = readLegacyProjectInstallationManifest(root, {
+      fsOps: options.fsOps,
+      hostIds: PROJECT_HOST_IDS,
+      allowPrevious: true
+    });
+    const ownership = inspectManifestOwnership({ start: root, root }, manifest, LEGACY_INSTALLATION_MANIFEST_PATH);
+    if (!ownership.healthy) {
+      return result("invalid-legacy", {
+        error: "Dove legacy project installation ownership has missing or drifted resources.",
+        manifest: ownership.manifest,
+        managed: ownership.managed,
+        missing: ownership.missing,
+        drifted: ownership.drifted
+      });
+    }
+    const upgrade = previewState(() => previewProjectUpgrade(root, { ...options, fsOps: options.fsOps ?? fs }));
+    if (!upgrade.ready) {
+      return result("invalid-legacy", {
+        error: upgrade.error,
+        manifest: ownership.manifest,
+        managed: ownership.managed,
+        missing: [],
+        drifted: []
+      });
+    }
+    return result("valid-legacy", {
+      error: null,
+      manifest: ownership.manifest,
+      managed: ownership.managed,
+      missing: [],
+      drifted: [],
+      upgrade
+    });
+  } catch (error) {
+    return result("invalid-legacy", { error: messageFor(error) });
+  }
+}
+
+function workspaceResult(fields) {
+  return { format: null, error: null, zeroWrite: true, ...fields };
+}
+
+function inspectWorkspace(root, options = {}) {
+  if (!root) return workspaceResult({ healthy: false, state: "unavailable", mode: "unavailable", category: "invalid", error: "Project root is unavailable." });
+  const fsOps = options.fsOps ?? fs;
+  const statOrNull = (targetPath) => {
+    try {
+      return fsOps.lstatSync(targetPath);
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+  };
+  const doveRoot = path.join(root, ARTIFACT_PATHS.doveRoot);
+  const formatPath = path.join(root, ARTIFACT_PATHS.format);
+  try {
+    const rootStat = statOrNull(doveRoot);
+    if (rootStat === null) return workspaceResult({ healthy: true, state: "absent", mode: "absent", category: "absent" });
+    if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+      return workspaceResult({ healthy: false, state: "invalid-root", mode: "invalid", category: "invalid", error: `${ARTIFACT_PATHS.doveRoot} must be a real directory.` });
+    }
+    const formatStat = statOrNull(formatPath);
+    if (formatStat === null) {
+      const legacyManifest = statOrNull(path.join(root, ".dove/manifest.json"));
+      if (legacyManifest !== null) return workspaceResult({ healthy: false, state: "unsupported-legacy-format", mode: "unsupported", category: "legacy", error: "unsupported-legacy-format" });
+      const doveChildren = fsOps.readdirSync(doveRoot).map(String).sort();
+      const allowedDoveChildren = new Set(["archive", "install"]);
+      if (doveChildren.length > 0 && doveChildren.every((child) => allowedDoveChildren.has(child))) {
+        const installDirectory = doveChildren.includes("install") ? statOrNull(path.join(root, ARTIFACT_PATHS.installDir)) : null;
+        const archiveStat = doveChildren.includes("archive") ? statOrNull(path.join(root, ".dove/archive")) : null;
+        let installHealthy = installDirectory === null;
+        if (installDirectory !== null && installDirectory.isDirectory() && !installDirectory.isSymbolicLink()) {
+          const installChildren = fsOps.readdirSync(path.join(root, ARTIFACT_PATHS.installDir)).map(String).sort();
+          const allowedInstallChildren = new Set(["manifest.json", "transactions"]);
+          const installManifest = installChildren.includes("manifest.json") ? statOrNull(path.join(root, INSTALLATION_MANIFEST_PATH)) : null;
+          const transactionsStat = installChildren.includes("transactions") ? statOrNull(path.join(root, ARTIFACT_PATHS.transactionsDir)) : null;
+          installHealthy = installChildren.every((child) => allowedInstallChildren.has(child))
+            && (installManifest === null || (installManifest.isFile() && !installManifest.isSymbolicLink()))
+            && (transactionsStat === null || (transactionsStat.isDirectory() && !transactionsStat.isSymbolicLink()));
+        }
+        if (installHealthy && (archiveStat === null || (archiveStat.isDirectory() && !archiveStat.isSymbolicLink()))) {
+          return workspaceResult({ healthy: true, state: "absent", mode: "absent", category: "absent" });
+        }
+      }
+      return workspaceResult({ healthy: false, state: "unknown-format", mode: "invalid", category: "unknown", error: "unknown-format" });
+    }
+    if (formatStat.isSymbolicLink() || !formatStat.isFile()) {
+      return workspaceResult({ healthy: false, state: "invalid-format", mode: "invalid", category: "invalid", error: `${ARTIFACT_PATHS.format} must be a regular file.` });
+    }
+    const marker = parseJsonWithoutDuplicateKeys(fsOps.readFileSync(formatPath, "utf8"), ARTIFACT_PATHS.format);
+    if (!plainObject(marker) || Object.keys(marker).length !== 1 || typeof marker.format !== "string" || marker.format.length === 0) {
+      return workspaceResult({ healthy: false, state: "invalid-format", mode: "invalid", category: "invalid", error: `${ARTIFACT_PATHS.format} must contain only a non-empty format discriminator.` });
+    }
+    if (marker.format !== DOVE_RESEARCH_FORMAT) {
+      return workspaceResult({ healthy: false, state: "unsupported-format", mode: "unsupported", category: "unknown", format: marker.format, error: "unsupported-format" });
+    }
+    const layoutProblems = [];
+    for (const relativePath of RESEARCH_DIRECTORIES) {
+      const stat = statOrNull(path.join(root, relativePath));
+      if (stat === null) layoutProblems.push(`${relativePath} is missing`);
+      else if (stat.isSymbolicLink() || !stat.isDirectory()) layoutProblems.push(`${relativePath} must be a real directory`);
+    }
+    for (const relativePath of RESEARCH_REQUIRED_FILES.filter((item) => item !== ARTIFACT_PATHS.format)) {
+      const stat = statOrNull(path.join(root, relativePath));
+      if (stat === null) layoutProblems.push(`${relativePath} is missing`);
+      else if (stat.isSymbolicLink() || !stat.isFile()) layoutProblems.push(`${relativePath} must be a regular file`);
+    }
+    if (layoutProblems.length > 0) {
+      return workspaceResult({ healthy: false, state: "incomplete-current-format", mode: "invalid", category: "invalid", format: marker.format, error: layoutProblems.join("; ") });
+    }
+    return workspaceResult({ healthy: true, state: "readable-current-format", mode: "current", category: "current", format: marker.format });
+  } catch (error) {
+    return workspaceResult({ healthy: false, state: "invalid-format", mode: "invalid", category: "invalid", error: messageFor(error) });
   }
 }
 
@@ -492,6 +655,109 @@ function normalizeReadiness(value) {
   return { healthy: ready, ready, state, message: typeof value.message === "string" ? value.message : null };
 }
 
+function defaultInspectMcpProbe({ packageRoot, projectRoot, packageVersion }) {
+  const sourceProbePath = path.join(packageRoot, "scripts/doctor-mcp-probe.mjs");
+  const packagedProbePath = path.join(packageRoot, "scripts/doctor-mcp-probe-package.mjs");
+  const probePath = regularNonSymlink(sourceProbePath) ? sourceProbePath : packagedProbePath;
+  if (!regularNonSymlink(probePath)) return { state: "not-run", healthy: true, message: "The MCP self-probe is not present in this package root." };
+  const result = spawnSync(process.execPath, [probePath, packageRoot, "--identity"], {
+    cwd: packageRoot,
+    env: { ...process.env, CLAUDE_PROJECT_DIR: projectRoot },
+    encoding: "utf8",
+    shell: false,
+    timeout: 30000,
+    maxBuffer: 1024 * 1024
+  });
+  if (result.error?.code === "ENOENT") return { state: "unavailable", healthy: false, message: "The Dove MCP probe is unavailable." };
+  if (result.error?.code === "ETIMEDOUT") return { state: "timeout", healthy: false, message: "The Dove MCP probe timed out." };
+  if (result.status !== 0) return { state: "failed", healthy: false, message: String(result.stderr || result.stdout || "The Dove MCP probe failed.").trim() };
+  let payload;
+  try {
+    payload = JSON.parse(result.stdout);
+  } catch (error) {
+    return { state: "invalid", healthy: false, message: `The Dove MCP probe returned invalid JSON: ${messageFor(error)}` };
+  }
+  const serverName = payload.serverName ?? null;
+  const serverVersion = payload.serverVersion ?? null;
+  const protocolVersion = payload.protocolVersion ?? null;
+  const expectedVersion = packageVersion ?? null;
+  const healthy = payload.ok === true
+    && serverName === DOVE_MCP_SERVER_NAME
+    && payload.packageVersion === expectedVersion
+    && serverVersion === expectedVersion
+    && expectedVersion !== null
+    && protocolVersion === DOVE_MCP_PROBE_PROTOCOL_VERSION;
+  return {
+    healthy,
+    state: healthy ? "current" : serverName !== DOVE_MCP_SERVER_NAME ? "server-name-mismatch" : serverVersion !== expectedVersion ? "server-version-mismatch" : protocolVersion !== DOVE_MCP_PROBE_PROTOCOL_VERSION ? "protocol-incompatible" : "invalid",
+    serverName,
+    serverVersion,
+    expectedVersion,
+    protocolVersion,
+    expectedProtocolVersion: DOVE_MCP_PROBE_PROTOCOL_VERSION,
+    scope: "launched-package-runtime",
+    runningHostInspected: false,
+    message: healthy ? null : "The launched package MCP self-probe did not match the current Dove server identity, package version, or protocol."
+  };
+}
+
+function normalizeMcpProbe(value) {
+  if (!plainObject(value)) return { healthy: false, state: "invalid-result", message: "MCP self-probe returned an invalid result." };
+  return {
+    healthy: value.healthy === true,
+    state: typeof value.state === "string" && value.state ? value.state : "unknown",
+    serverName: typeof value.serverName === "string" ? value.serverName : null,
+    serverVersion: typeof value.serverVersion === "string" ? value.serverVersion : null,
+    expectedVersion: typeof value.expectedVersion === "string" ? value.expectedVersion : null,
+    protocolVersion: typeof value.protocolVersion === "string" ? value.protocolVersion : null,
+    expectedProtocolVersion: typeof value.expectedProtocolVersion === "string" ? value.expectedProtocolVersion : DOVE_MCP_PROBE_PROTOCOL_VERSION,
+    scope: typeof value.scope === "string" ? value.scope : "launched-package-runtime",
+    runningHostInspected: false,
+    message: typeof value.message === "string" ? value.message : null
+  };
+}
+
+function inspectMcpProbe(packageRoot, projectRoot, options) {
+  if ((options.runMcpProbe !== true && options.packageRoot === undefined) && typeof options.inspectMcpProbe !== "function") {
+    return { healthy: true, state: "not-run", serverName: null, serverVersion: null, expectedVersion: options.packageVersion ?? null, protocolVersion: null, expectedProtocolVersion: DOVE_MCP_PROBE_PROTOCOL_VERSION, scope: "launched-package-runtime", runningHostInspected: false, message: "The package MCP self-probe was not requested." };
+  }
+  try {
+    const inspected = options.inspectMcpProbe
+      ? options.inspectMcpProbe({ packageRoot, projectRoot, packageVersion: options.packageVersion })
+      : defaultInspectMcpProbe({ packageRoot, projectRoot, packageVersion: options.packageVersion });
+    return normalizeMcpProbe(inspected);
+  } catch (error) {
+    return { healthy: false, state: "failed", serverName: null, serverVersion: null, expectedVersion: options.packageVersion ?? null, protocolVersion: null, expectedProtocolVersion: DOVE_MCP_PROBE_PROTOCOL_VERSION, scope: "launched-package-runtime", runningHostInspected: false, message: messageFor(error) };
+  }
+}
+
+function inspectRunningMcpSelfComparison(options) {
+  if (typeof options.inspectRunningMcpSelfComparison !== "function") {
+    return {
+      healthy: true,
+      state: "inaccessible",
+      inspected: false,
+      serverInfo: null,
+      protocolVersion: null,
+      message: "A standalone CLI cannot inspect the already-running host MCP process. Query full Dove status inside the host for MCP self-comparison."
+    };
+  }
+  try {
+    const value = options.inspectRunningMcpSelfComparison();
+    if (!plainObject(value)) throw new Error("Running MCP self-comparison returned an invalid result.");
+    return {
+      healthy: value.state === "current",
+      state: typeof value.state === "string" ? value.state : "unknown",
+      inspected: true,
+      serverInfo: plainObject(value.serverInfo) ? { name: value.serverInfo.name ?? null, version: value.serverInfo.version ?? null } : null,
+      protocolVersion: typeof value.protocolVersion === "string" ? value.protocolVersion : null,
+      message: typeof value.message === "string" ? value.message : null
+    };
+  } catch (error) {
+    return { healthy: false, state: "failed", inspected: true, serverInfo: null, protocolVersion: null, message: messageFor(error) };
+  }
+}
+
 function inspectReadiness(root, registration, options, integration = null) {
   if (integration?.state === "needs-sync") return { healthy: false, ready: false, state: "blocked", message: "Claude readiness is blocked until the project integration is synchronized with the current Dove package." };
   if (!registration.healthy) return { healthy: false, ready: false, state: "blocked", message: "Claude readiness is blocked until project registration is current." };
@@ -517,22 +783,37 @@ export function inspectProjectDoctor(start, options = {}) {
   const userCli = inspectUserCli(options);
   const projectIntegration = inspectIntegrationManifest(start, options);
   const safeRoot = projectIntegration.root ?? projectIntegration.start;
-  const workspaceState = inspectWorkspace(safeRoot);
+  const workspaceState = inspectWorkspace(safeRoot, options);
+  const migrationInstallation = safeRoot
+    ? inspectMigrationInstallation(safeRoot, options)
+    : { state: "absent", root: null, markerPath: null, upgrade: { ready: false, error: null, preview: null }, reinstall: { ready: false, error: null, preview: null }, error: "Project root is unavailable." };
+  const mcpProbe = inspectMcpProbe(userCli.package.root, safeRoot, options);
+  const runningMcpSelfComparison = inspectRunningMcpSelfComparison(options);
   const hostRegistration = inspectClaudeRegistration(projectIntegration.root, projectIntegration);
   const readiness = inspectReadiness(projectIntegration.root, hostRegistration, options, projectIntegration);
   const legacyCopiedRuntime = inspectLegacy(safeRoot);
+  const setup = classifyProjectSetup({ projectIntegration, migrationInstallation, workspaceState, legacyCopiedRuntime });
   const healthy = userCli.healthy
     && projectIntegration.healthy
     && workspaceState.healthy
+    && mcpProbe.healthy
+    && runningMcpSelfComparison.healthy
     && hostRegistration.healthy
     && readiness.healthy
     && legacyCopiedRuntime.healthy;
+  const diagnosticProbe = projectIntegration.state === "needs-sync"
+    ? { ...mcpProbe, healthy: false, state: "integration-mismatch", message: "Project integration must be synchronized with the current Dove package." }
+    : mcpProbe;
   return {
     healthy,
     state: healthy ? "healthy" : "unhealthy",
     target: safeRoot ?? (typeof start === "string" ? path.resolve(start) : null),
     userCli,
     projectIntegration,
+    migrationInstallation,
+    setup,
+    mcpProbe: diagnosticProbe,
+    runningMcpSelfComparison,
     workspaceState,
     hostRegistration,
     readiness,

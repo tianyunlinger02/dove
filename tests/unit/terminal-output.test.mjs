@@ -35,7 +35,7 @@ test("Dove home shows the mascot only in an interactive terminal", () => {
   assert.ok(interactive.includes(DOVE_PIXEL_ART[0]));
   assert.match(interactive, /围绕科研主线探索/u);
   assert.match(interactive, /项目集成已是当前版本/u);
-  assert.match(interactive, /\/dove:workspace/u);
+  assert.match(interactive, /\/dove:research/u);
   assert.match(interactive, /dove --help/u);
 
   const piped = renderDoveHome({ stream: { isTTY: false }, env: {}, projectInitialized: false });

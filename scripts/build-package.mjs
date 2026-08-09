@@ -96,7 +96,7 @@ async function checkBuild() {
       assert.ok(fs.existsSync(trackedPath), `${item.output} is missing; run npm run build`);
       const generated = outputFiles.find((file) => path.relative(tempRoot, file.path).split(path.sep).join("/") === item.output);
       assert.ok(generated, `temporary build missing ${item.output}`);
-      assert.deepEqual(fs.readFileSync(trackedPath), Buffer.from(generated.contents), `${item.output} has build drift; run npm run build`);
+      assert.ok(fs.readFileSync(trackedPath).equals(Buffer.from(generated.contents)), `${item.output} has build drift; run npm run build`);
     }
     console.error("Package bundles are up to date.");
   } finally {

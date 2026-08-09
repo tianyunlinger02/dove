@@ -5,94 +5,109 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { initializeProjectIntegration } from "../../src/core/project-installation.mjs";
-import { initializeWorkspace } from "../helpers/current-schema-workspace.mjs";
+import { INSTALLATION_MANIFEST_PATH } from "../../src/core/project-installation-manifest.mjs";
+import { createMcpStdioClient } from "../../scripts/mcp-stdio-client.mjs";
 import { createTempRoot } from "../helpers/temp-root.mjs";
 
-const ROOT = process.cwd();
+const ROOT = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(ROOT, "bin", "dove.mjs");
 const PACKAGE = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
-
-function installProject(root) {
-  initializeProjectIntegration(root, { packageName: PACKAGE.name, packageVersion: PACKAGE.version, hosts: ["claude"] });
-}
+const RUNTIME_COMMANDS = ["init", "sync", "upgrade", "reinstall", "doctor", "mcp", "hook"];
+const REMOVED_BUSINESS_COMMANDS = ["workspace", "mission", "receipt", "status", "lessons", "version", "source", "note", "draft", "experience", "experiment", "figure", "review", "rebuttal"];
+const MCP_TOOLS = [
+  "query_dove_research", "manage_dove_workspace", "manage_dove_missions", "manage_dove_sources",
+  "manage_dove_experiments", "manage_dove_claims", "manage_dove_reviews", "manage_dove_lessons"
+];
 
 function run(args, options = {}) {
-  return spawnSync(process.execPath, [CLI, ...args], { cwd: ROOT, encoding: "utf8", ...options });
+  return spawnSync(process.execPath, [CLI, ...args], {
+    cwd: options.cwd ?? ROOT,
+    encoding: "utf8",
+    input: options.input,
+    timeout: options.timeout ?? 15000,
+    env: { ...process.env, ...options.env }
+  });
 }
 
-test("CLI help exposes the current command and Schema 18 option surface", () => {
-  const result = run(["--help"]);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  for (const command of ["init", "sync", "doctor", "workspace", "mcp", "hook", "mission", "status", "lessons", "source", "experiment", "draft", "figure", "review", "rebuttal"]) {
-    assert.match(result.stdout, new RegExp(`\\b${command}\\b`, "u"));
+function installProject(root) {
+  return initializeProjectIntegration(root, {
+    packageName: PACKAGE.name,
+    packageVersion: PACKAGE.version,
+    hosts: ["claude"]
+  });
+}
+
+test("CLI help exposes exactly seven runtime commands and no retired business route", () => {
+  const help = run(["--help"]);
+  assert.equal(help.status, 0, help.stderr || help.stdout);
+  for (const command of RUNTIME_COMMANDS) assert.match(help.stdout, new RegExp(`dove ${command}\\b`, "u"));
+  assert.match(help.stdout, /nine host Skills and eight public Dove MCP tools/iu);
+  for (const command of REMOVED_BUSINESS_COMMANDS) {
+    if (["status", "experiment", "draft", "figure", "review", "rebuttal", "lessons", "source", "research"].includes(command)) continue;
+    assert.doesNotMatch(help.stdout, new RegExp(`dove ${command}\\b`, "u"));
   }
-  for (const stale of ["--snapshot-summary", "--requirement-json", "--decision-json", "--work-item-json", "--alignment-json", "--change-from-json", "--node-update-json", "--target-artifact", "--expected-artifact", "--decision-revision", "--consumed-receipt-id"]) {
-    assert.equal(result.stdout.includes(stale), false, `help exposes retired flag ${stale}`);
-  }
-  assert.doesNotMatch(result.stdout, /schema(?:\s+version)?\s*17/iu);
+  assert.doesNotMatch(help.stdout, /--snapshot-summary|--mutation-mode|missionNumber|receipt/iu);
 });
 
-test("retired CLI commands fail closed without creating research state", () => {
-  for (const command of ["install", "receipt", "version", "auto", "operator", "review-loop", "orchestrate", "audit", "return"]) {
+test("CLI init and sync use the unified installation root without creating Research Format 1", () => {
+  const root = createTempRoot("dove-cli-surface-install-");
+  const initialized = run(["init", "--project", root, "--host", "claude", "--json"]);
+  assert.equal(initialized.status, 0, initialized.stderr || initialized.stdout);
+  const payload = JSON.parse(initialized.stdout);
+  assert.equal(payload.status, "initialized");
+  assert.deepEqual(payload.hosts, ["claude"]);
+  assert.equal(fs.existsSync(path.join(root, INSTALLATION_MANIFEST_PATH)), true);
+  assert.equal(fs.existsSync(path.join(root, ".dove", "format.json")), false);
+  assert.deepEqual(fs.readdirSync(path.join(root, ".claude", "commands", "dove")).sort(), [
+    "draft.md", "experiment.md", "figure.md", "lessons.md", "rebuttal.md", "research.md", "review.md", "source.md", "status.md"
+  ]);
+
+  const synchronized = run(["sync", "--project", root, "--json"]);
+  assert.equal(synchronized.status, 0, synchronized.stderr || synchronized.stdout);
+  assert.equal(JSON.parse(synchronized.stdout).status, "unchanged");
+  assert.equal(fs.existsSync(path.join(root, ".dove", "format.json")), false);
+});
+
+test("CLI MCP and hook routes require current Claude project integration", async () => {
+  const root = createTempRoot("dove-cli-surface-routes-");
+  const uninitialized = createTempRoot("dove-cli-surface-uninitialized-");
+  installProject(root);
+
+  const hook = run(["hook", "user-prompt-submit", "--project", root], {
+    cwd: root,
+    input: JSON.stringify({ hook_event_name: "UserPromptSubmit", prompt: "Implement the bounded parser fix." })
+  });
+  assert.equal(hook.status, 0, hook.stderr || hook.stdout);
+  assert.match(JSON.parse(hook.stdout).hookSpecificOutput.additionalContext, /dove-intake|zero-write role and Skill routing/u);
+
+  for (const args of [["mcp", "serve", "--project", uninitialized], ["hook", "user-prompt-submit", "--project", uninitialized]]) {
+    const rejected = run(args, { cwd: uninitialized, input: "{}", timeout: 3000 });
+    assert.notEqual(rejected.status, 0);
+    assert.match(`${rejected.stdout}\n${rejected.stderr}`, /not initialized|Dove project integration|dove init/iu);
+  }
+
+  const client = createMcpStdioClient({ command: process.execPath, args: [CLI, "mcp", "serve", "--project", root], cwd: root });
+  try {
+    const initialized = await client.call("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "cli-surface-test", version: "1" }
+    });
+    assert.equal(initialized.serverInfo.name, "dove");
+    client.notify("notifications/initialized");
+    const listed = await client.call("tools/list");
+    assert.deepEqual(listed.tools.map((tool) => tool.name), MCP_TOOLS);
+  } finally {
+    client.kill();
+  }
+});
+
+test("retired business commands fail without creating Dove state", () => {
+  for (const command of REMOVED_BUSINESS_COMMANDS) {
     const root = createTempRoot(`dove-cli-retired-${command}-`);
-    try {
-      const result = run([command, root]);
-      assert.notEqual(result.status, 0, `${command} must fail`);
-      assert.match(result.stdout, /Usage:/u);
-      assert.equal(fs.existsSync(path.join(root, ".dove")), false);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  }
-});
-
-test("Lessons CLI reads the complete canonical document without a Mission selector", () => {
-  const root = createTempRoot("dove-cli-lessons-current-");
-  try {
-    installProject(root);
-    initializeWorkspace(root);
-    const result = run(["lessons", root, "--json"]);
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    const payload = JSON.parse(result.stdout);
-    assert.equal(payload.report.status, "ok");
-    assert.match(payload.report.markdown, /^# Dove Lessons\n/iu);
-    assert.equal(Object.hasOwn(payload.report, "missionNumber"), false);
-    assert.equal(fs.existsSync(path.join(root, ".dove", "LESSONS.md")), true);
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("status remains zero-write and public selection is one-based", () => {
-  const root = createTempRoot("dove-cli-status-current-");
-  try {
-    installProject(root);
-    initializeWorkspace(root);
-    const before = fs.readFileSync(path.join(root, ".dove", "LESSONS.md"), "utf8");
-    const result = run(["status", root, "--json"]);
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    const payload = JSON.parse(result.stdout);
-    assert.equal(payload.hostControl.classification.phase, "read");
-    assert.doesNotMatch(JSON.stringify(payload.report), /mission-[a-z0-9._-]+|contractDigest|sha256/iu);
-    assert.equal(fs.readFileSync(path.join(root, ".dove", "LESSONS.md"), "utf8"), before);
-    const invalid = run(["status", root, "--mission-number", "0"]);
-    assert.notEqual(invalid.status, 0);
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("current Review CLI accepts only scope and archive operations", () => {
-  const root = createTempRoot("dove-cli-review-current-");
-  try {
-    installProject(root);
-    initializeWorkspace(root);
-    const scope = run(["review", root, "--scope", "--mission-number", "1", "--host-kind", "claude", "--artifact", "missing.md", "--json"]);
-    assert.notEqual(scope.status, 0);
-    assert.doesNotMatch(`${scope.stdout}\n${scope.stderr}`, /exchange|prepare|import|policy/iu);
-    const stale = run(["review", root, "--prepare", "--policy", "external"]);
-    assert.notEqual(stale.status, 0);
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    const result = run([command, "--project", root], { cwd: root });
+    assert.notEqual(result.status, 0, `${command} must be rejected`);
+    assert.match(result.stdout, /Usage:/u);
+    assert.equal(fs.existsSync(path.join(root, ".dove")), false);
   }
 });

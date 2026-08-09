@@ -1,5 +1,7 @@
-const AMBIENT_CONTEXT = "Use hidden `dove-intake` for one conservative check. Clarify material ambiguity once with zero writes. For clear work, explicitly choose research for changed understanding, experiments, evidence, or paper claims; otherwise ordinary for a clear deliverable. Call `create_ambient_dove_mission` first and continue only on success. Preserve any closure binding exactly once.";
-const LESSONS_CONTEXT = "Use hidden `dove-lessons-intake` for this explicit Lessons request. Lessons maintenance creates no Mission. Follow the selected read, remember, or reflect flow using only `manage_dove_lessons`; keep the read binding and hash in their machine channel.";
+import { PUBLIC_RESPONSE_CAPSULE } from "./command-manifest.mjs";
+
+const AMBIENT_CONTEXT = "Use hidden `dove-intake` for zero-write role and Skill routing. Clarify material ambiguity once; otherwise choose the smallest flat Skill and continue with ordinary host work. Do not create a Mission or invoke a closure callback.";
+const LESSONS_CONTEXT = "Use hidden `dove-lessons-intake` for this explicit Lessons request. Use only `manage_dove_lessons`: read by default, or replace the complete document after an explicit remember or reflection request. Create no Mission.";
 
 const LESSONS_NEGATION = /(?:\b(?:do not|don't|dont|never|no need to|without)\b.{0,32}\b(?:remember|save|record|update|read|show|review|reflect|retrospect|summari[sz]e)\b|(?:不要|别|无需|不用|不必|禁止|莫).{0,24}(?:记住|保存|记录|更新|读取|查看|复盘|反思|总结))/iu;
 const LESSONS_UNCERTAIN = /^(?:maybe|perhaps|possibly|i wonder|not sure|could we maybe|we might|也许|可能|不确定|考虑一下|要不要)/iu;
@@ -148,15 +150,17 @@ export function ambientContextForPrompt(prompt) {
 }
 
 export function renderClaudeAmbientRule() {
-  return `# Dove ambient mission entry
+  return `# Dove ambient role and Skill routing
 
-For a non-slash prompt selected by the project hook, apply the hidden skill named in its context. Explicit Lessons read, remember, or reflection requests use \`dove-lessons-intake\`, create no Mission, and use only \`manage_dove_lessons\`. Other selected work uses \`dove-intake\`: make a second conservative judgment, ask one zero-write clarification round only for material ambiguity, explicitly choose \`research\` when it changes research understanding, experiments, evidence, or paper claims, and choose \`ordinary\` for clear code, documentation, configuration, cleanup, or another bounded deliverable. Create only with \`create_ambient_dove_mission\` and keep the contract proportional to the user's request.
+${PUBLIC_RESPONSE_CAPSULE.join("\n")}
 
-Call ambient intake before host execution. Continue the original task only after a successful create. If intake needs clarification, blocks, or fails, show its public report and stop instead of performing the work. Keep \`researchHandoff\` and \`hostControl\` in their machine channels. If a closure request is supplied after successful host work, invoke its tool exactly once with every supplied binding unchanged and the declared outcome fields and defaults.
+For a non-slash prompt selected by the project hook, apply the hidden skill named in its context. Explicit Lessons read, remember, or reflection requests use \`dove-lessons-intake\`, create no Mission, and use only \`manage_dove_lessons\`. Other selected work uses \`dove-intake\` for a second conservative, zero-write routing judgment across the flat Skills: research, status, source, experiment, draft, figure, review, rebuttal, and lessons.
 
-Carry the Research Constitution into host work: protect truth, safety, evidence integrity, long-term value, and claim scope; use real resources and existing assets; preserve failures and uncertainty; never equate host return, tests, or internal audit with completion, independent review, or scientific authority.
+Ask one zero-write clarification round only for material ambiguity. Otherwise select Planner, Builder/Author, or Reviewer responsibility and the smallest matching Skill, then continue with normal host work. Do not create an ambient Mission, emit a handoff, consume private controls, or invoke a closure callback.
 
-Slash commands retain their explicit routing. Use public Dove tools rather than direct state or CLI access, and keep private mission and control data out of user-facing output.
+Carry the Research Constitution into host work: protect truth, safety, evidence integrity, long-term value, and claim scope; use real resources and existing assets; preserve failures and uncertainty; never equate host return, tests, local review, or internal audit with completion, independent review, or scientific authority.
+
+Slash commands retain their explicit routing. Use public Dove tools rather than direct state or CLI access.
 `;
 }
 
@@ -171,10 +175,10 @@ user-invocable: false
 
 Use this hidden skill only for the current non-slash Lessons prompt selected by the project hook.
 
-1. Do not create a Mission and do not call \`create_ambient_dove_mission\`.
-2. For a read request, call \`manage_dove_lessons\` once with \`operation=read\`, then present only its human \`report\`. Keep \`hostControl.lessonsDocument\` private.
-3. For an explicit remember or save request, call \`manage_dove_lessons\` with \`operation=read\`; preserve the complete returned Markdown and the exact opaque \`hostControl.lessonsDocument.binding\`. Edit the complete Markdown conservatively under the existing five sections, then call \`manage_dove_lessons\` once with \`operation=update\`, the binding unchanged, and the complete replacement Markdown.
-4. For an explicit reflection, retrospective, or experience-summary request, first perform the requested host reflection from the available conversation and project context without writing Dove state. Then read the current Lessons document, integrate only supported reusable guidance into the complete Markdown, and update it once with the exact read binding.
+1. Do not create a Mission.
+2. For a read request, call \`manage_dove_lessons\` once with \`operation=read\` and present its human text.
+3. For an explicit remember or save request, read the complete Markdown, preserve its existing structure and integrate conservatively, then call \`manage_dove_lessons\` once with \`operation=replace\` and the complete replacement Markdown. If no structure exists, organize the document naturally for the content.
+4. For an explicit reflection, retrospective, or experience-summary request, first perform the requested host reflection without writing Dove state. Then read the current Lessons document, integrate only supported reusable guidance, and replace it once.
 5. Lessons are advisory only. They are not evidence, authority, completion proof, Mission artifacts, or scientific judgment. Preserve uncertainty and do not invent experience.
 6. Use only public Dove MCP surfaces for Lessons maintenance. Keep machine channels private; do not use CLI, shell, or direct Dove state access as a fallback.
 `;
@@ -193,10 +197,10 @@ Use this hidden skill only for the current non-slash prompt selected by the proj
 
 1. Make a second conservative judgment. Continue with normal host behavior unless the prompt clearly starts new work with an identifiable outcome.
 2. For material ambiguity in the goal, boundary, deliverable, or acceptance evidence, ask one concise zero-write clarification round. If the request remains unclear, explain that no work was started and stop.
-3. For clear new work, select one explicit \`mode\`: use \`research\` only when the work changes research understanding, experiments, evidence, or paper claims; use \`ordinary\` for clear code, documentation, configuration, cleanup, or another bounded deliverable. Ordinary work still aligns with the current Workspace mainline and is not rejected for low research value. Preserve the request and create only with \`create_ambient_dove_mission\` through Dove MCP. Keep the mission contract proportional. If evidence requirements are useful, format each as \`artifact:<path>\` or \`validation:<path>\`.
-4. Call ambient intake before host execution. Resume the original task only after a successful create. If the result requests clarification, blocks, or fails, show only its public human \`report\` and stop. For success, follow \`hostControl.presentation\`, use \`researchHandoff\` as planning input, and keep both machine channels out of user-facing output.
-5. Apply the Research Constitution proportionally: prioritize truth, safety, evidence integrity, and long-term value; use real resource facts and existing assets; preserve failed cases and uncertainty; keep claims within evidence; do not treat host return, tests, or internal audit as completion, independent review, or scientific authority.
-6. After host execution, when \`hostControl.closureRequest\` is supplied, invoke its \`tool\` exactly once. Preserve its complete \`boundArgs\` binding unchanged, add the declared \`requiredOutcomeFields\`, apply declared \`defaults\` for omitted optional fields, and follow any supplied \`outcomeContract\` literally rather than inferring field values from prose.
-7. Use public Dove MCP surfaces for this flow. Keep private mission and control data private, and leave direct Dove state and CLI access to the host integration.
+3. For clear work, select the smallest flat Skill: research, status, source, experiment, draft, figure, review, rebuttal, or lessons. Select Planner for framing, Builder/Author for substantive work, and Reviewer only for a user-managed independent review exchange.
+4. This routing is zero-write. Do not create a Mission merely because a prompt was selected, and do not call any ambient-create, handoff, completion, Outcome, or closure surface.
+5. Continue the original task with normal host behavior after routing. Draft, Figure, and Rebuttal produce ordinary project artifacts; they do not archive an Outcome.
+6. Apply the Research Constitution proportionally: prioritize truth, safety, evidence integrity, and long-term value; use real resource facts and existing assets; preserve failed cases and uncertainty; keep claims within evidence; do not treat host return, tests, local review, or internal audit as completion, independent review, or scientific authority.
+7. Use public Dove MCP research surfaces only when durable research state is actually needed. Do not use CLI, shell, or direct Dove state access as a fallback.
 `;
 }

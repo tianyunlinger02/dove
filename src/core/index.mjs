@@ -1,28 +1,94 @@
-export { ARTIFACT_PATHS, DEFAULT_DOVE_RESPONSE_LANGUAGE, DOVE_RESPONSE_LANGUAGES, DOVE_WORKSPACE_SCHEMA_VERSION, GOVERNANCE_EXEMPT_MUTATIONS, GOVERNANCE_GUARDED_MUTATIONS, GOVERNANCE_NEGATIVE_COVERAGE, GOVERNANCE_READONLY_COMMANDS, GOVERNANCE_READONLY_TOOLS, normalizeDoveResponseLanguage } from "./schema.mjs";
+export {
+  ARTIFACT_PATHS,
+  DOVE_RESEARCH_FORMAT,
+  LEGACY_DOVE_SCHEMA_VERSION,
+  PACKAGE_VERSION,
+  RESEARCH_DIRECTORIES,
+  RESEARCH_REQUIRED_FILES
+} from "./schema.mjs";
+
 export { userPromptSubmitOutput } from "./ambient-hook.mjs";
-export { RESEARCH_AUTHORITY_OWNERSHIP_MATRIX, RESEARCH_AUTHORITY_RECORD_TYPES, RESEARCH_CONSTITUTION, RESEARCH_CONSTITUTION_EVIDENCE_REQUIREMENTS, RESEARCH_CONSTITUTION_GUARANTEE_CLASSES, RESEARCH_CONSTITUTION_OWNER_IDS, RESEARCH_CONSTITUTION_VERIFICATION_CATEGORIES, RESEARCH_CONSTITUTION_VERIFICATION_REQUIREMENTS } from "./research-constitution.mjs";
-export { queryDoveMission, queryDoveStatus } from "./mission-queries.mjs";
-export { recordResearchOutcome } from "./research-outcome.mjs";
-export { MISSION_CONTRACT_SCHEMA_VERSION, MISSION_MODES, MISSION_PROPOSAL_VERSION, PROJECT_IDENTITY_SCHEMA_VERSION, MISSION_CRITERION_ID_VERSION, MISSION_EVIDENCE_REQUIREMENT_ID_VERSION, assertCurrentMissionContract, createAmbientDoveMission, createDoveMission, currentMissionContractMetadata, manageDoveWorkspace, missionCompletionCriteria, missionCompletionCriterionId, missionEvidenceRequirementId, missionEvidenceRequirements, newMissionId, previewDoveMissionContract } from "./mission-contracts.mjs";
-export { validateMissionGraph } from "./mission-graph.mjs";
-export { RESEARCH_DECISION_ACTION_KINDS, RESEARCH_DECISION_DISPOSITIONS, RESEARCH_DECISION_KINDS, RESEARCH_DECISION_SCHEMA_VERSION, createResearchDecisionAction, currentResearchDecisionHead, normalizeResearchDecisionAction, normalizeResearchDecisionContent, researchDecisionNarrativeDirective, validatePersistedResearchDecision, validateResearchDecisionChain } from "./research-decisions.mjs";
-export { appendResearchDecision, readCurrentResearchDecision, readResearchDecisions, researchDecisionPath } from "./research-decision-store.mjs";
-export { reevaluateResearchDecision } from "./research-decision-reevaluation.mjs";
-export { EXECUTION_RECEIPT_SCHEMA_VERSION, closeHostOutcome, executionReceiptPath, readExecutionReceipts, validateExecutionReceipt } from "./execution-receipts.mjs";
-export { readArtifactHistory, readArtifactLedger, readArtifactOwnership } from "./artifact-lineage.mjs";
-export { assessMissionCompletion } from "./completion-gates.mjs";
-export { DOVE_LESSONS_BINDING_VERSION, readDoveLessons, updateDoveLessons } from "./lessons.mjs";
-export { DOVE_INIT_PROPOSAL_VERSION, initDoveWorkspace, previewDoveInit } from "./workspace-init.mjs";
-export { DEFAULT_DOVE_LESSONS_MARKDOWN, DOVE_LESSONS_SECTIONS, DOVE_MANIFEST_SCHEMA_VERSION, DOVE_PROJECT_SCHEMA_VERSION, MINIMAL_WORKSPACE_DIRECTORIES, MINIMAL_WORKSPACE_REQUIRED_FILES, inspectDoveWorkspace, validateLessonsMarkdown } from "./workspace-schema.mjs";
-export { SOURCE_LIFECYCLE_STATES, querySources, registerSource, verifySource } from "./source-trust.mjs";
-export { queryDomainIntegrity, recordDoveDraft, recordDoveFigure, recordDoveRebuttal, runExperienceWorkflow, upsertClaims } from "./retained-domain-workflows.mjs";
-export { REVIEW_RECORD_SCHEMA_VERSION, REVIEW_STATUSES, REVIEW_VERDICTS, archiveReviewRecord, queryReviewRecords, resolveCurrentReviewFinding, scopeReviewRecord } from "./review-records.mjs";
-export { DOVE_PRIMARY_ROLES, generatedRoleDefinitionEntries, renderClaudeReviewerAgent, renderOpenCodeReviewerAgent, renderOpenCodeRoleSkill, reviewerPrompt } from "./role-definitions.mjs";
-export { classifyInvocationError, classifyInvocationOutcome, createInvocationOutcome } from "./operational-outcome.mjs";
-export { VALIDATION_FIELDS, VALIDATION_KINDS, VALIDATION_LEVELS, VALIDATION_PRODUCER_KINDS, VALIDATION_RESULTS, createValidationRecord, validationContributesToCompletion } from "./validation-records.mjs";
-export { buildProjectResearchNarrative, buildProjectResearchNarrativeFromWorkspace, normalizeProjectResearchNarrative, renderProjectResearchNarrative } from "./project-research-narratives.mjs";
-export { buildResearchNarrative, buildResearchNarrativeFromDecision, normalizeResearchNarrative, renderResearchNarrative } from "./research-narratives.mjs";
-export { publicErrorMessage, publicErrorResult, publicResult, renderPublicReport } from "./public-reports.mjs";
-export { COMMAND_OPERATIONS, OPERATION_REGISTRY, TOOL_OPERATIONS, commandOperationMetadata, operationById, operationCallback, operationClosure, operationContinuation, operationForCommand, operationForTool, operationInteraction, operationPresentation, operationPublicProjector, operationRequiresCheckpoint, operationRetry, operationStatus, operationStatuses } from "./operation-registry.mjs";
-export { loadDoveConfig, loadDoveLanguageConfig, loadExplicitDoveLanguageConfig } from "./config.mjs";
-export { isDoveChinese, resolveDoveResponseLanguage } from "./i18n.mjs";
+export {
+  ambientContextForPrompt,
+  classifyLessonsIntent,
+  isHighConfidenceAmbientWorkPrompt,
+  lessonsContextForPrompt,
+  renderClaudeAmbientRule,
+  renderClaudeAmbientSkill,
+  renderClaudeLessonsIntakeSkill
+} from "./ambient-policy.mjs";
+
+export {
+  readResearchJson,
+  readResearchText,
+  writeResearchFileAtomic,
+  writeResearchJsonAtomic
+} from "./research-records.mjs";
+export {
+  initializeResearchWorkspace,
+  updateResearchMainline
+} from "./workspace-init.mjs";
+export {
+  DEFAULT_DOVE_LESSONS_MARKDOWN,
+  inspectDoveWorkspace,
+  openDoveWorkspace,
+  validateLessonsMarkdown,
+  validateResearchFormat,
+  validateWorkspaceRecord,
+  workspaceFormatError
+} from "./workspace-schema.mjs";
+export {
+  CLAIM_ASSESSMENTS,
+  EXPERIMENT_RESULT_KINDS,
+  REVIEW_STATUSES,
+  concludeMission,
+  createExperimentPlan,
+  createMission,
+  missionReadableIds,
+  readLessons,
+  readMission,
+  readMissionTree,
+  recordClaim,
+  recordExperimentResult,
+  recordReview,
+  recordSource,
+  replaceLessons,
+  validateMission,
+  validateMissionTree,
+  verifyReview
+} from "./research-stores.mjs";
+export {
+  RESEARCH_CONTEXT_VIEWS,
+  buildResearchContext,
+  buildResearchViews,
+  queryResearchContext
+} from "./research-context.mjs";
+
+export {
+  DOVE_PRIMARY_ROLES,
+  generatedRoleDefinitionEntries,
+  renderClaudeReviewerAgent,
+  renderOpenCodeReviewerAgent,
+  renderOpenCodeRoleSkill,
+  reviewerPrompt
+} from "./role-definitions.mjs";
+export {
+  COMMAND_SURFACES,
+  COMMAND_SURFACE_BY_ID,
+  HOST_ADAPTERS,
+  HOST_ADAPTER_POLICY,
+  PROJECT_HOST_IDS,
+  allGeneratedCommandAdapterPaths,
+  commandAdapterPathsForHost
+} from "./command-manifest.mjs";
+export {
+  completeReinstallProjectIntegration,
+  initializeProjectIntegration,
+  inspectProjectIntegration,
+  previewProjectCompleteReinstall,
+  previewProjectUpgrade,
+  syncProjectIntegration,
+  upgradeProjectIntegration
+} from "./project-installation.mjs";
+export { completeReinstallDoveLifecycle, upgradeDoveLifecycle } from "./dove-lifecycle.mjs";
+export { inspectProjectDoctor } from "./project-doctor.mjs";

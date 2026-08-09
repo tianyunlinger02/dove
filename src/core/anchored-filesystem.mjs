@@ -28,23 +28,23 @@ export function anchoredFilesystemCapability(options = {}) {
   const fsOps = options.fsOps ?? fs;
   const platform = options.platform ?? process.platform;
   const procFdRoot = options.procFdRoot ?? "/proc/self/fd";
-  if (platform !== "linux") return { supported: false, reason: "direct-process anchored writes require Linux" };
+  if (platform !== "linux") return { supported: false, reason: "anchored writes require Linux" };
   const constants = fsOps.constants ?? fs.constants;
   if (!Number.isInteger(constants?.O_DIRECTORY) || !Number.isInteger(constants?.O_NOFOLLOW)) {
-    return { supported: false, reason: "direct-process anchored writes require O_DIRECTORY and O_NOFOLLOW" };
+    return { supported: false, reason: "anchored writes require O_DIRECTORY and O_NOFOLLOW" };
   }
   try {
     const stat = requiredFunction(fsOps, "statSync")(procFdRoot);
     if (!stat.isDirectory()) return { supported: false, reason: `${procFdRoot} is not a directory` };
   } catch (error) {
-    return { supported: false, reason: `direct-process anchored writes require readable ${procFdRoot}: ${errorMessage(error)}` };
+    return { supported: false, reason: `anchored writes require readable ${procFdRoot}: ${errorMessage(error)}` };
   }
   return { supported: true, reason: null, procFdRoot };
 }
 
 export function requireAnchoredFilesystemCapability(options = {}) {
   const capability = anchoredFilesystemCapability(options);
-  if (!capability.supported) throw new Error(`Direct-process mutation is unavailable: ${capability.reason}. Use mutationMode: patch-plan or a read-only operation instead.`);
+  if (!capability.supported) throw new Error(`Anchored writes are unavailable: ${capability.reason}. Use a read-only operation on this platform.`);
   return capability;
 }
 

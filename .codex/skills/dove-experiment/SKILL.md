@@ -1,42 +1,36 @@
 ---
 name: dove-experiment
-description: "Freeze one mission-bound experiment protocol or record its evidence-backed result."
+description: "Design, freeze, execute with host tools, and record experiments and supported claims."
 ---
 
 # Dove Experiment
 
-Freeze one mission-bound experiment protocol or record its evidence-backed result.
+Design, freeze, execute with host tools, and record experiments and supported claims.
 
 ## Use when
 
-- Freeze a concrete general protocol before execution.
-- Add the real full-denominator result with failures and limitations when available.
+- Design, freeze, execute with host tools, and record experiments and supported claims.
 
 ## Examples
 
-- `/dove:experiment Freeze the ablation protocol`
-- `/dove:experiment Record the completed ablation result`
+- `/dove:experiment`
 
 ## Workflow
 
-- **The user asks to freeze a new formal experiment protocol.**
-  1. Call `query_dove_status`. Use operation=status to read the public workspace and lifecycle context. Select an existing work number only when the requested record or artifact identifies it exactly; otherwise ask one zero-write clarification and stop.
-  2. Call `manage_dove_mission`. Use operation=start-skill and skill=experiment. Refine one minimal goal from the request and current context. Command text is optional constraints; clarify only material ambiguity and do not impose a fixed template. Start one research Skill Mission before the formal protocol write; an artifact-owning mission may be selected as its parent without stopping that parent. Preserve result.selector.missionNumber for every later mission-bound tool and use the supplied research outcome closure exactly once after host work.
-  3. Call `record_dove_experiment`. For the new Skill Mission, generate a safe experiment label and provide the complete general protocol before execution.
-- **The user asks to record the evidence-backed result for an existing frozen protocol.**
-  1. Call `query_dove_status`. Use operation=status and select the exact existing work number identified by the requested lifecycle record or artifact before the experiment result write. Do not call start-skill, do not guess the latest work, and ask one zero-write clarification if the owner is not unambiguous.
-  2. Call `record_dove_experiment`. Use the exact protocol work number and experiment label, replay the frozen protocol unchanged, and add the status, outcome, measurements, current evidence references, full denominator, failures, deviations, and limitations from real execution evidence.
-- **The user separately asks to record evidence-backed claims from an existing experiment.**
-  1. Call `query_dove_status`. Use operation=status and select the exact existing work number identified by the requested lifecycle record or artifact before the experiment claim write. Do not call start-skill, do not guess the latest work, and ask one zero-write clarification if the owner is not unambiguous.
-  2. Call `record_dove_claims`. Use the exact protocol work number, generate safe claim labels, and include only claims with current evidence lineage and exact experiment bindings.
-
-## Command guidance
-
-- Freeze one concrete general protocol before execution. Record the full-denominator result only from current execution evidence; record any matching claim separately.
+- **The user requests experiment design, execution, analysis, or recording.**
+  1. Call `query_dove_research` (read-only). Read hypotheses, experiment options, or result context when available. No durable Dove write is required.
+  2. Use host tools (work; experiment-execution). Design the smallest discriminating experiment and execute it with normal host tools. Preserve raw outputs, failures, denominator accounting, deviations, bias, and uncertainty. No durable Dove write is required.
+  3. Call `manage_dove_experiments` (bounded). Freeze a plan before execution and record the full result only when a durable experiment record is needed. Persist only when: durable-experiment-record.
+  4. Call `manage_dove_claims` (bounded). Record or revise only claims supported by the observed evidence, including counter-evidence, missing evidence, and cannot-say boundaries. Persist only when: durable-claim-update.
+  - Clarification: Explore first. Ask one brief clarification only if material ambiguity in the goal, boundary, or deliverable remains; otherwise continue within the requested boundary.
 
 ## Dove capsule
 
-- Dove MCP tools: `query_dove_status`, `manage_dove_mission`, `record_dove_experiment`, `record_dove_claims`.
-- Use the listed public Dove MCP tools. If they are unavailable, stop and ask the user to re-enter the project host; do not substitute CLI, shell, or direct state access.
-- Present only the human `report` when directed. Keep machine channels internal and execute a supplied typed closure once with its binding unchanged.
-- Respond concisely in Chinese by default: judgment, evidence or risk, and next action.
+- Dove MCP tools: `query_dove_research`, `manage_dove_experiments`, `manage_dove_claims`.
+- Unless the user requests another language or format, respond in natural, clear Chinese.
+- Use internal terms, paths, and machine identifiers only when they materially improve precision, and explain them plainly.
+- Adapt the response structure to the task instead of forcing a fixed report template; explicit user instructions and local machine-readable contracts take priority.
+- Access durable Dove state only through public MCP tools. Use normal host tools to read, create, edit, and validate ordinary project materials and artifacts outside `.dove`.
+- Use only the eight public Dove MCP research tools for durable Dove state; never read or write `.dove` directly.
+- Use semantic IDs only when durable records are needed, and do not create a Workspace or Mission merely because a Skill was invoked.
+- Treat tests, host output, local review, and imported review as bounded evidence rather than completion or scientific authority.

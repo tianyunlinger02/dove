@@ -18,14 +18,12 @@ import {
 import { inspectProjectDoctor } from "../../src/core/project-doctor.mjs";
 import {
   INSTALLATION_MANIFEST_PATH,
+  LEGACY_INSTALLATION_MANIFEST_PATH,
   createProjectInstallationManifest,
   serializeProjectInstallationManifest
 } from "../../src/core/project-installation-manifest.mjs";
 import { PROJECT_HOST_IDS } from "../../src/core/host-registry.mjs";
-import {
-  createMinimalWorkspaceDocuments,
-  materializeMinimalWorkspaceDirectory
-} from "../../src/core/workspace-schema.mjs";
+import { ARTIFACT_PATHS, DOVE_RESEARCH_FORMAT, RESEARCH_DIRECTORIES } from "../../src/core/schema.mjs";
 import { cleanupTempRoot, createTempRoot } from "../helpers/temp-root.mjs";
 
 const NOW = "2026-07-26T00:00:00.000Z";
@@ -106,9 +104,16 @@ function healthyProject(root) {
     createdAt: NOW,
     updatedAt: NOW
   }, { hostIds: PROJECT_HOST_IDS });
-  fs.mkdirSync(path.join(root, ".dove-install"), { recursive: true });
+  fs.mkdirSync(path.join(root, path.posix.dirname(INSTALLATION_MANIFEST_PATH)), { recursive: true });
   fs.writeFileSync(path.join(root, INSTALLATION_MANIFEST_PATH), serializeProjectInstallationManifest(manifest, { hostIds: PROJECT_HOST_IDS }));
   return { manifest, settings };
+}
+
+function writeResearchLayout(root) {
+  for (const relativePath of RESEARCH_DIRECTORIES) fs.mkdirSync(path.join(root, relativePath), { recursive: true });
+  writeJson(root, ARTIFACT_PATHS.format, { format: DOVE_RESEARCH_FORMAT });
+  writeJson(root, ARTIFACT_PATHS.workspace, {});
+  fs.writeFileSync(path.join(root, ARTIFACT_PATHS.lessons), "# Lessons\n");
 }
 
 function healthyOptions(overrides = {}) {
@@ -175,13 +180,41 @@ test("project doctor returns diagnostics instead of throwing for uninitialized p
   assert.equal(result.readiness.state, "blocked");
 }));
 
-test("project doctor accepts a healthy current workspace", () => withRoot("dove-doctor-workspace-", (root) => {
+test("project doctor classifies a manifest-owned legacy installation as upgrade-ready without changing old research state", () => withRoot("dove-doctor-valid-legacy-", (root) => {
+  const { manifest } = healthyProject(root);
+  const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
+  const legacyPath = path.join(root, LEGACY_INSTALLATION_MANIFEST_PATH);
+  fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+  fs.renameSync(manifestPath, legacyPath);
+  fs.rmSync(path.join(root, ".dove", "install"), { recursive: true, force: true });
+  writeJson(root, ".dove/manifest.json", { schemaVersion: 17 });
+  const before = treeBytes(root);
+  const result = inspectProjectDoctor(root, healthyOptions({
+    packageName: PACKAGE.name,
+    packageVersion: PACKAGE.version
+  }));
+
+  assert.deepEqual(treeBytes(root), before);
+  assert.equal(result.projectIntegration.state, "uninitialized");
+  assert.equal(result.migrationInstallation.state, "valid-legacy");
+  assert.equal(result.migrationInstallation.upgrade.ready, true);
+  assert.equal(result.migrationInstallation.reinstall.ready, true);
+  assert.equal(result.setup.mode, "upgrade");
+  assert.equal(result.setup.reason, "valid-legacy");
+  assert.deepEqual(result.setup.allowedActions, ["upgrade", "reinstall", "exit"]);
+  assert.equal(result.workspaceState.state, "unsupported-legacy-format");
+  assert.equal(result.zeroWrite, true);
+  assert.deepEqual(result.writes, []);
+  assert.equal(manifest.hosts.includes("claude"), true);
+}));
+
+test("project doctor accepts a readable current format discriminator", () => withRoot("dove-doctor-workspace-", (root) => {
   healthyProject(root);
-  const documents = createMinimalWorkspaceDocuments({ workspaceId: "workspace-doctor", mainline: "Validate doctor", createdAt: NOW });
-  materializeMinimalWorkspaceDirectory(path.join(root, ".dove"), documents);
+  writeResearchLayout(root);
   const result = inspectProjectDoctor(root, healthyOptions());
-  assert.equal(result.workspaceState.state, "current-healthy");
+  assert.equal(result.workspaceState.state, "readable-current-format");
   assert.equal(result.workspaceState.mode, "current");
+  assert.equal(result.workspaceState.format, DOVE_RESEARCH_FORMAT);
   assert.equal(result.workspaceState.healthy, true);
   assert.equal(result.healthy, true);
 }));
@@ -193,7 +226,7 @@ test("project doctor reports self-consistent old integration as needs-sync", () 
       status: "needs-sync",
       target,
       hosts: ["claude"],
-      changedPaths: [".claude/commands/dove/workspace.md", ".dove-install/manifest.json"]
+      changedPaths: [".claude/commands/dove/workspace.md", INSTALLATION_MANIFEST_PATH]
     })
   }));
   assert.equal(result.projectIntegration.healthy, false);
@@ -238,21 +271,66 @@ test("project doctor reports malformed managed JSON as drift and continues regis
   assert.equal(result.readiness.state, "blocked");
 }));
 
-test("project doctor requires archive reset for every legacy workspace schema", () => {
-  withRoot("dove-doctor-schema10-", (root) => {
+test("project doctor reports an explicit legacy research marker as unsupported-legacy-format", () => withRoot("dove-doctor-legacy-format-", (root) => {
+  healthyProject(root);
+  writeJson(root, ".dove/manifest.json", { schemaVersion: 20 });
+  const result = inspectProjectDoctor(root, healthyOptions());
+  assert.equal(result.workspaceState.state, "unsupported-legacy-format");
+  assert.equal(result.workspaceState.mode, "unsupported");
+  assert.equal(result.workspaceState.error, "unsupported-legacy-format");
+  assert.equal(result.workspaceState.healthy, false);
+}));
+
+test("project doctor checks the shallow layout without reading research entities or .dove-archive", () => withRoot("dove-doctor-shallow-workspace-", (root) => {
+  healthyProject(root);
+  writeResearchLayout(root);
+  fs.writeFileSync(path.join(root, ".dove", "missions", "malformed.json"), "{not-json\n");
+  fs.mkdirSync(path.join(root, ".dove-archive"));
+  fs.writeFileSync(path.join(root, ".dove-archive", "unreadable.json"), "archive\n");
+  const forbiddenReads = [path.join(root, ".dove", "missions"), path.join(root, ".dove-archive")];
+  const accesses = [];
+  const assertNotRead = (target) => {
+    if (typeof target !== "string") return;
+    const resolved = path.resolve(target);
+    if (forbiddenReads.some((prefix) => resolved === prefix || resolved.startsWith(`${prefix}${path.sep}`))) {
+      accesses.push(resolved);
+      throw new Error(`unexpected deep doctor read: ${resolved}`);
+    }
+  };
+  const fsOps = {
+    ...fs,
+    readFileSync(target, ...args) { assertNotRead(target); return fs.readFileSync(target, ...args); },
+    readdirSync(target, ...args) { assertNotRead(target); return fs.readdirSync(target, ...args); }
+  };
+  const result = inspectProjectDoctor(root, healthyOptions({ fsOps }));
+  assert.deepEqual(accesses, []);
+  assert.equal(result.workspaceState.state, "readable-current-format");
+  assert.equal(result.workspaceState.healthy, true);
+  assert.equal(result.healthy, true);
+}));
+
+test("project doctor rejects an incomplete current Research Format layout", () => withRoot("dove-doctor-incomplete-workspace-", (root) => {
+  healthyProject(root);
+  writeJson(root, ARTIFACT_PATHS.format, { format: DOVE_RESEARCH_FORMAT });
+  const result = inspectProjectDoctor(root, healthyOptions());
+  assert.equal(result.workspaceState.state, "incomplete-current-format");
+  assert.equal(result.workspaceState.healthy, false);
+  assert.match(result.workspaceState.error, /workspace\.json is missing|missions is missing/u);
+  assert.equal(result.healthy, false);
+}));
+
+test("project doctor rejects malformed, expanded, and unsupported format discriminators", () => {
+  for (const [label, content, state] of [
+    ["malformed", "{not-json\n", "invalid-format"],
+    ["expanded", '{"format":"dove-research-v1","packageVersion":"0.7.0"}\n', "invalid-format"],
+    ["unsupported", '{"format":"future-research-format"}\n', "unsupported-format"]
+  ]) withRoot(`dove-doctor-format-${label}-`, (root) => {
     healthyProject(root);
-    fs.mkdirSync(path.join(root, ".dove"));
-    writeJson(root, ".dove/manifest.json", { schemaVersion: 10 });
+    const formatPath = path.join(root, ".dove", "format.json");
+    fs.mkdirSync(path.dirname(formatPath), { recursive: true });
+    fs.writeFileSync(formatPath, content);
     const result = inspectProjectDoctor(root, healthyOptions());
-    assert.equal(result.workspaceState.mode, "archive-reset-required");
-    assert.equal(result.workspaceState.healthy, false);
-  });
-  withRoot("dove-doctor-schema9-", (root) => {
-    healthyProject(root);
-    fs.mkdirSync(path.join(root, ".dove"));
-    writeJson(root, ".dove/manifest.json", { schemaVersion: 9 });
-    const result = inspectProjectDoctor(root, healthyOptions());
-    assert.equal(result.workspaceState.mode, "archive-reset-required");
+    assert.equal(result.workspaceState.state, state);
     assert.equal(result.workspaceState.healthy, false);
   });
 });
@@ -300,7 +378,7 @@ test("project doctor reports missing package runtime files", () => withRoot("dov
 })));
 
 test("project doctor continues safely after a malformed installation marker", () => withRoot("dove-doctor-malformed-marker-", (root) => {
-  fs.mkdirSync(path.join(root, ".dove-install"));
+  fs.mkdirSync(path.join(root, path.posix.dirname(INSTALLATION_MANIFEST_PATH)), { recursive: true });
   fs.writeFileSync(path.join(root, INSTALLATION_MANIFEST_PATH), "{malformed\n");
   const result = inspectProjectDoctor(root, healthyOptions());
   assert.equal(result.projectIntegration.state, "invalid");

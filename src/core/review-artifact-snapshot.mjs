@@ -2,10 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { inspectDeclaredPath, normalizeProjectRelativePath } from "./artifact-integrity.mjs";
-import { readArtifactOwnership } from "./artifact-lineage.mjs";
-import { missionCanReadMission } from "./mission-graph.mjs";
-import { currentMutationContext } from "./mutation-backend.mjs";
+import { normalizedRelativePath } from "./research-records.mjs";
 
 const HASH_PATTERN = /^[a-f0-9]{64}$/u;
 
@@ -13,32 +10,30 @@ function sha256Buffer(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
-export function sha256File(fullPath) {
-  return sha256Buffer(fs.readFileSync(fullPath));
+function canonicalRoot(root) {
+  return fs.realpathSync.native(path.resolve(root));
 }
 
-export function snapshotArtifactBuffer(root, relativePath, label = "artifact") {
-  const normalized = normalizeProjectRelativePath(relativePath);
-  if (!normalized.ok) throw new Error(`${label} has an unsafe path ${relativePath}: ${normalized.reason}.`);
-  const suppliedPath = String(relativePath).trim().replace(/\\/gu, "/");
-  if (normalized.normalizedPath !== suppliedPath) throw new Error(`${label} must use a normalized project-relative path.`);
-  const inspection = inspectDeclaredPath(root, suppliedPath, { requireNonEmpty: true });
-  if (inspection.status !== "existing") throw new Error(`${label} is not a usable file at ${suppliedPath}: ${inspection.reason ?? inspection.status}.`);
-  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  if (canonicalPath !== suppliedPath) throw new Error(`${label} must use its canonical realpath and cannot use an internal alias.`);
-
-  const mutationContext = currentMutationContext(root);
-  let content;
-  if (mutationContext && typeof mutationContext.readFileSnapshot === "function") {
-    const snapshot = mutationContext.readFileSnapshot(canonicalPath);
-    if (!snapshot.exists || snapshot.type !== "file" || !snapshot.buffer) throw new Error(`${label} must be an existing regular file.`);
-    content = Buffer.from(snapshot.buffer);
-  } else {
-    if (mutationContext) mutationContext.requireCommitPrecondition(canonicalPath);
-    content = fs.readFileSync(path.resolve(root, canonicalPath));
+function containedFile(root, relativePath, label) {
+  const normalized = normalizedRelativePath(relativePath, label);
+  const canonical = canonicalRoot(root);
+  let current = canonical;
+  for (const segment of normalized.split("/")) {
+    current = path.join(current, segment);
+    const stat = fs.lstatSync(current);
+    if (stat.isSymbolicLink()) throw new Error(`${label} must not contain symbolic links: ${normalized}.`);
   }
-  if (content.byteLength === 0) throw new Error(`${label} must be a non-empty regular file.`);
-  return { path: canonicalPath, content, sizeBytes: content.byteLength, sha256: sha256Buffer(content) };
+  const stat = fs.lstatSync(current);
+  if (!stat.isFile() || stat.size === 0) throw new Error(`${label} must be an existing non-empty regular file: ${normalized}.`);
+  const real = fs.realpathSync.native(current);
+  const relative = path.relative(canonical, real);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error(`${label} must stay inside the project: ${normalized}.`);
+  if (relative.split(path.sep).join("/") !== normalized) throw new Error(`${label} must use its canonical project-relative path: ${normalized}.`);
+  return { fullPath: real, path: normalized, sizeBytes: stat.size };
+}
+
+export function sha256File(fullPath) {
+  return sha256Buffer(fs.readFileSync(fullPath));
 }
 
 export function stableSnapshotSetHash(snapshots = []) {
@@ -48,60 +43,16 @@ export function stableSnapshotSetHash(snapshots = []) {
   return sha256Buffer(`${JSON.stringify(canonical)}\n`);
 }
 
-export function canonicalReviewArtifactPath(root, relativePath, label = "review artifact") {
-  const normalized = normalizeProjectRelativePath(relativePath);
-  if (!normalized.ok) throw new Error(`${label} has an unsafe path ${relativePath}: ${normalized.reason}.`);
-  const suppliedPath = String(relativePath).trim().replace(/\\/gu, "/");
-  if (normalized.normalizedPath !== suppliedPath) throw new Error(`${label} must use a normalized project-relative path.`);
-  const inspection = inspectDeclaredPath(root, normalized.normalizedPath, { requireNonEmpty: true, rejectBookkeeping: true });
-  if (inspection.status !== "existing") throw new Error(`${label} is not a usable file at ${normalized.normalizedPath}: ${inspection.reason ?? inspection.status}.`);
-  const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-  if (canonicalPath !== normalized.normalizedPath) throw new Error(`${label} must use its canonical realpath and cannot use an internal alias.`);
-  return canonicalPath;
-}
-
-export function resolveReviewArtifactSnapshots(root, missionId, relativePaths, label = "reviewed artifacts", options = {}) {
-  if (!Array.isArray(relativePaths)) throw new Error(`${label} must be an array of project-relative paths.`);
-  const ownership = readArtifactOwnership(root);
-  const ownerByPath = new Map(ownership.artifacts.map((item) => [item.path, item]));
-  const missionGraph = options.missionGraph;
+export function snapshotReviewedArtifacts(root, relativePaths, label = "reviewed artifacts") {
+  if (!Array.isArray(relativePaths) || relativePaths.length === 0) throw new Error(`${label} requires at least one project-relative path.`);
   const snapshots = [];
   const seen = new Set();
   for (const [index, relativePath] of relativePaths.entries()) {
-    if (typeof relativePath !== "string" || !relativePath.trim()) throw new Error(`${label}[${index}] must be a non-empty path.`);
-    const canonicalPath = canonicalReviewArtifactPath(root, relativePath, `${label}[${index}]`);
-    if (seen.has(canonicalPath)) continue;
-    seen.add(canonicalPath);
-    const owner = ownerByPath.get(canonicalPath);
-    if (!owner) throw new Error(`${label}[${index}] is not a registered current-schema artifact: ${canonicalPath}.`);
-    if (!missionCanReadMission(missionGraph, missionId, owner.missionId)) throw new Error(`${label}[${index}] belongs to mission ${owner.missionId}, which is not ${missionId} or one of its ancestors.`);
-    const inspection = inspectDeclaredPath(root, canonicalPath, { requireNonEmpty: true, rejectBookkeeping: true });
-    const snapshot = {
-      path: canonicalPath,
-      sizeBytes: inspection.sizeBytes,
-      sha256: sha256File(path.resolve(root, canonicalPath))
-    };
-    if (options.requireOwnershipCurrent !== false && snapshot.sha256 !== owner.sha256) {
-      throw new Error(`${label}[${index}] has changed since its latest ownership receipt: ${canonicalPath}.`);
-    }
-    snapshots.push(snapshot);
+    const file = containedFile(root, relativePath, `${label}[${index}]`);
+    if (seen.has(file.path)) continue;
+    seen.add(file.path);
+    snapshots.push({ path: file.path, sizeBytes: file.sizeBytes, sha256: sha256File(file.fullPath) });
   }
-  if (snapshots.length === 0) throw new Error(`${label} requires at least one existing non-empty non-bookkeeping mission-owned artifact.`);
-  snapshots.sort((left, right) => left.path.localeCompare(right.path));
-  return { reviewedArtifacts: snapshots, reviewedArtifactSetSha256: stableSnapshotSetHash(snapshots) };
-}
-
-export function snapshotReviewedArtifacts(root, relativePaths, label = "reviewed artifacts") {
-  const snapshots = [];
-  const seen = new Set();
-  for (const relativePath of relativePaths ?? []) {
-    const canonicalPath = canonicalReviewArtifactPath(root, relativePath, label);
-    if (seen.has(canonicalPath)) continue;
-    seen.add(canonicalPath);
-    const inspection = inspectDeclaredPath(root, canonicalPath, { requireNonEmpty: true, rejectBookkeeping: true });
-    snapshots.push({ path: canonicalPath, sizeBytes: inspection.sizeBytes, sha256: sha256File(path.resolve(root, canonicalPath)) });
-  }
-  if (snapshots.length === 0) throw new Error(`${label} requires at least one existing non-empty non-bookkeeping reviewed artifact.`);
   snapshots.sort((left, right) => left.path.localeCompare(right.path));
   return { reviewedArtifacts: snapshots, reviewedArtifactSetSha256: stableSnapshotSetHash(snapshots) };
 }
@@ -113,13 +64,13 @@ export function normalizeReviewSnapshots(value, label = "reviewedArtifacts") {
   for (const [index, item] of value.entries()) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return { ok: false, snapshots: [], reason: `${label}[${index}] must be an object` };
     if (Object.keys(item).some((field) => !["path", "sizeBytes", "sha256"].includes(field))) return { ok: false, snapshots: [], reason: `${label}[${index}] has unknown fields` };
-    const normalized = normalizeProjectRelativePath(item.path);
-    if (!normalized.ok || normalized.normalizedPath !== item.path || !Number.isSafeInteger(item.sizeBytes) || item.sizeBytes <= 0 || !HASH_PATTERN.test(String(item.sha256 ?? ""))) {
-      return { ok: false, snapshots: [], reason: `${label}[${index}] is invalid` };
-    }
-    if (seen.has(item.path)) return { ok: false, snapshots: [], reason: `${label} contains duplicate paths` };
-    seen.add(item.path);
-    snapshots.push({ path: item.path, sizeBytes: item.sizeBytes, sha256: item.sha256 });
+    let artifactPath;
+    try { artifactPath = normalizedRelativePath(item.path, `${label}[${index}].path`); }
+    catch (error) { return { ok: false, snapshots: [], reason: error instanceof Error ? error.message : String(error) }; }
+    if (!Number.isSafeInteger(item.sizeBytes) || item.sizeBytes <= 0 || !HASH_PATTERN.test(String(item.sha256 ?? ""))) return { ok: false, snapshots: [], reason: `${label}[${index}] is invalid` };
+    if (seen.has(artifactPath)) return { ok: false, snapshots: [], reason: `${label} contains duplicate paths` };
+    seen.add(artifactPath);
+    snapshots.push({ path: artifactPath, sizeBytes: item.sizeBytes, sha256: item.sha256 });
   }
   snapshots.sort((left, right) => left.path.localeCompare(right.path));
   return { ok: true, snapshots, reason: null };
@@ -127,28 +78,17 @@ export function normalizeReviewSnapshots(value, label = "reviewedArtifacts") {
 
 export function verifyReviewSnapshotSet(root, preparedSnapshots, expectedSetHash) {
   const normalized = normalizeReviewSnapshots(preparedSnapshots);
-  const failures = [];
   if (!normalized.ok) return { ok: false, failures: [normalized.reason], reviewedArtifacts: [], reviewedArtifactSetSha256: null };
+  const failures = [];
   const setHash = stableSnapshotSetHash(normalized.snapshots);
   if (setHash !== expectedSetHash) failures.push("reviewed-artifact-set-hash-mismatch");
   for (const prepared of normalized.snapshots) {
-    const inspection = inspectDeclaredPath(root, prepared.path, { requireNonEmpty: true, rejectBookkeeping: true });
-    if (inspection.status !== "existing") {
-      failures.push(`reviewed-artifact-${inspection.status}:${prepared.path}`);
-      continue;
+    try {
+      const current = snapshotReviewedArtifacts(root, [prepared.path]).reviewedArtifacts[0];
+      if (JSON.stringify(current) !== JSON.stringify(prepared)) failures.push(`reviewed-artifact-changed:${prepared.path}`);
+    } catch {
+      failures.push(`reviewed-artifact-unavailable:${prepared.path}`);
     }
-    const canonicalPath = inspection.canonicalRelativePath ?? inspection.normalizedPath;
-    if (inspection.normalizedPath !== prepared.path || canonicalPath !== prepared.path) {
-      failures.push(`reviewed-artifact-path-changed:${prepared.path}`);
-      continue;
-    }
-    const current = { path: canonicalPath, sizeBytes: inspection.sizeBytes, sha256: sha256File(path.resolve(root, canonicalPath)) };
-    if (JSON.stringify(current) !== JSON.stringify(prepared)) failures.push(`reviewed-artifact-changed:${prepared.path}`);
   }
-  return {
-    ok: failures.length === 0,
-    failures: [...new Set(failures)],
-    reviewedArtifacts: normalized.snapshots,
-    reviewedArtifactSetSha256: setHash
-  };
+  return { ok: failures.length === 0, failures: [...new Set(failures)], reviewedArtifacts: normalized.snapshots, reviewedArtifactSetSha256: setHash };
 }

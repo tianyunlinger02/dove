@@ -1,21 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
 import { DOVE_CLAUDE_AMBIENT_HOOK_ENTRY } from "../../src/core/ambient-policy.mjs";
 import { INSTALLED_DOVE_MCP_SERVER } from "../../src/core/command-manifest.mjs";
+import { LEGACY_PROJECT_BUNDLE_PROBES } from "../../src/core/project-legacy-installation.mjs";
 import {
+  completeReinstallProjectIntegration,
   initializeProjectIntegration,
   inspectProjectIntegration,
-  overlayUpgradeProjectIntegration,
-  previewProjectIntegrationOverlayUpgrade,
-  syncProjectIntegration
+  previewProjectCompleteReinstall,
+  previewProjectUpgrade,
+  syncProjectIntegration,
+  upgradeProjectIntegration
 } from "../../src/core/project-installation.mjs";
 import {
   INSTALLATION_INTEGRATION_VERSION,
   INSTALLATION_MANIFEST_PATH,
+  LEGACY_INSTALLATION_MANIFEST_PATH,
   INSTALLATION_OWNERSHIP_VERSION,
   PREVIOUS_INSTALLATION_INTEGRATION_VERSION,
   PREVIOUS_INSTALLATION_OWNERSHIP_VERSION
@@ -27,7 +30,7 @@ import {
 } from "../helpers/previous-project-installation.mjs";
 import { cleanupTempRoot, createTempRoot } from "../helpers/temp-root.mjs";
 
-const PACKAGE = { packageName: "dove", packageVersion: "0.4.0" };
+const PACKAGE = { packageName: "dove", packageVersion: "0.4.1" };
 const INIT_NOW = "2026-07-26T01:00:00.000Z";
 const SYNC_NOW = "2026-07-26T02:00:00.000Z";
 
@@ -45,33 +48,6 @@ function readJson(root, relativePath) {
   return JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
 }
 
-function managedSort(left, right) {
-  return `${left.path}\0${left.mode}\0${left.selector ?? ""}\0${left.owner}`.localeCompare(`${right.path}\0${right.mode}\0${right.selector ?? ""}\0${right.owner}`);
-}
-
-function seedLegacyDomainCommandOwnership(root) {
-  const manifest = readJson(root, INSTALLATION_MANIFEST_PATH);
-  const templateEntry = manifest.managed.find((entry) => entry.path === ".claude/commands/dove/experiment.md");
-  for (const relativePath of [".claude/commands/dove/note.md", ".claude/commands/dove/experience.md"]) {
-    const content = `---\ndescription: Legacy retired ${path.basename(relativePath, ".md")} workflow\n---\n`;
-    write(root, relativePath, content);
-    const entry = manifest.managed.find((item) => item.path === relativePath);
-    entry.digest = crypto.createHash("sha256").update(content).digest("hex");
-  }
-  const retiredPath = ".claude/commands/dove/version.md";
-  const content = "---\ndescription: Retired version workflow\n---\n";
-  write(root, retiredPath, content);
-  manifest.managed.push({
-    ...templateEntry,
-    path: retiredPath,
-    owner: `host:claude:file:${retiredPath}`,
-    digest: crypto.createHash("sha256").update(content).digest("hex")
-  });
-  manifest.managed.sort(managedSort);
-  write(root, INSTALLATION_MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
-  return manifest;
-}
-
 test("project integration clean init owns only Claude project resources and manifest", () => {
   const root = createTempRoot("dove-project-integration-clean-");
   try {
@@ -79,7 +55,7 @@ test("project integration clean init owns only Claude project resources and mani
     assert.equal(result.status, "initialized");
     assert.equal(result.target, fs.realpathSync.native(root));
     assert.deepEqual(result.hosts, ["claude"]);
-    assert.equal(result.manifest.managed.length, 18);
+    assert.equal(result.manifest.managed.length, 16);
     assert.equal(result.changedPaths.includes(INSTALLATION_MANIFEST_PATH), true);
     assert.deepEqual(readJson(root, ".mcp.json"), { mcpServers: { dove: INSTALLED_DOVE_MCP_SERVER } });
     assert.deepEqual(readJson(root, ".claude/settings.local.json"), { enabledMcpjsonServers: ["dove"] });
@@ -88,9 +64,13 @@ test("project integration clean init owns only Claude project resources and mani
     assert.equal(fs.existsSync(path.join(root, ".claude/rules/dove.md")), true);
     assert.equal(fs.existsSync(path.join(root, ".claude/skills/dove-intake/SKILL.md")), true);
     assert.equal(fs.existsSync(path.join(root, ".claude/skills/dove-lessons-intake/SKILL.md")), true);
-    for (const relativePath of ["bin/dove-package.mjs", "dist/index.mjs", "mcp/dove-state-server-package.mjs", "scripts/dove-user-prompt-submit-package.mjs", "mcp/dove-claude-project.json", ".dove"]) {
+    const reviewer = fs.readFileSync(path.join(root, ".claude/agents/dove-reviewer.md"), "utf8");
+    assert.match(reviewer, /^---\nname: dove-reviewer\n[\s\S]*\ntools: Read\n---/u);
+    assert.match(reviewer, /Do not edit files or invoke Dove tools/u);
+    for (const relativePath of ["bin/dove-package.mjs", "dist/index.mjs", "mcp/dove-state-server-package.mjs", "scripts/dove-user-prompt-submit-package.mjs", "mcp/dove-claude-project.json", ".dove-install"]) {
       assert.equal(fs.existsSync(path.join(root, relativePath)), false, relativePath);
     }
+    assert.deepEqual(fs.readdirSync(path.join(root, ".dove", "install")), ["manifest.json"]);
   } finally {
     cleanupTempRoot(root);
   }
@@ -183,21 +163,19 @@ test("project integration claims pre-existing exact resources without rewriting 
   try {
     initialize(source);
     for (const relativePath of [
-      ".claude/commands/dove/workspace.md",
-      ".claude/commands/dove/mission.md",
+      ".claude/commands/dove/research.md",
       ".claude/commands/dove/status.md",
-      ".claude/commands/dove/lessons.md",
       ".claude/commands/dove/source.md",
-      ".claude/commands/dove/note.md",
-      ".claude/commands/dove/experience.md",
       ".claude/commands/dove/experiment.md",
       ".claude/commands/dove/draft.md",
       ".claude/commands/dove/figure.md",
       ".claude/commands/dove/review.md",
       ".claude/commands/dove/rebuttal.md",
+      ".claude/commands/dove/lessons.md",
       ".claude/rules/dove.md",
       ".claude/skills/dove-intake/SKILL.md",
-      ".claude/skills/dove-lessons-intake/SKILL.md"
+      ".claude/skills/dove-lessons-intake/SKILL.md",
+      ".claude/agents/dove-reviewer.md"
     ]) {
       write(target, relativePath, fs.readFileSync(path.join(source, relativePath)));
     }
@@ -240,50 +218,7 @@ test("project integration sync is byte-idempotent and does not refresh updatedAt
   }
 });
 
-test("project integration sync restores Note and Experience while removing only the retired Version path", () => {
-  const root = createTempRoot("dove-project-integration-domain-cutover-");
-  try {
-    initialize(root);
-    seedLegacyDomainCommandOwnership(root);
-
-    const inspected = inspectProjectIntegration(root, { now: SYNC_NOW });
-    assert.equal(inspected.status, "needs-sync");
-    assert.deepEqual(inspected.removedPaths, [".claude/commands/dove/version.md"]);
-    assert.equal(inspected.writtenPaths.includes(".claude/commands/dove/note.md"), true);
-    assert.equal(inspected.writtenPaths.includes(".claude/commands/dove/experience.md"), true);
-
-    const result = syncProjectIntegration(root, { now: SYNC_NOW });
-    assert.equal(result.status, "synchronized");
-    assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/version.md")), false);
-    assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/note.md")), true);
-    assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/experience.md")), true);
-    assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/experiment.md")), true);
-    assert.equal(result.manifest.managed.length, 18);
-    assert.equal(inspectProjectIntegration(root).status, "current");
-  } finally {
-    cleanupTempRoot(root);
-  }
-});
-
-test("project integration retired-path cleanup is zero-write when Version drifted", () => {
-  const root = createTempRoot("dove-project-integration-domain-cutover-drift-");
-  try {
-    initialize(root);
-    seedLegacyDomainCommandOwnership(root);
-    write(root, ".claude/commands/dove/version.md", "user modified retired command\n");
-    const beforeManifest = fs.readFileSync(path.join(root, INSTALLATION_MANIFEST_PATH));
-
-    assert.throws(() => syncProjectIntegration(root, { now: SYNC_NOW }), /ownership drift.*version\.md/iu);
-    assert.equal(fs.readFileSync(path.join(root, ".claude/commands/dove/version.md"), "utf8"), "user modified retired command\n");
-    assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/note.md")), true);
-    assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/experience.md")), true);
-    assert.deepEqual(fs.readFileSync(path.join(root, INSTALLATION_MANIFEST_PATH)), beforeManifest);
-  } finally {
-    cleanupTempRoot(root);
-  }
-});
-
-test("project integration migrates a valid previous manifest, retires its owned init command, and installs workspace atomically", () => {
+test("project integration migrates a valid previous manifest and retires its owned init command atomically", () => {
   const root = createTempRoot("dove-project-integration-previous-");
   try {
     const initialized = initialize(root);
@@ -307,7 +242,7 @@ test("project integration migrates a valid previous manifest, retires its owned 
     const result = syncProjectIntegration(root, { now: SYNC_NOW });
     assert.equal(result.status, "synchronized");
     assert.equal(fs.existsSync(path.join(root, retiredPath)), false);
-    assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/workspace.md")), true);
+    assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/research.md")), true);
     assert.equal(result.manifest.integrationVersion, INSTALLATION_INTEGRATION_VERSION);
     assert.equal(result.manifest.ownershipVersion, INSTALLATION_OWNERSHIP_VERSION);
     assert.equal(result.manifest.createdAt, initialized.manifest.createdAt);
@@ -444,152 +379,279 @@ test("project integration rejects symlinked managed files and parent directories
   }
 });
 
-test("overlay upgrade archives .dove whole, ignores malformed manifest claims, and installs a fresh identity", () => {
-  const root = createTempRoot("dove-project-overlay-upgrade-");
+test("project Upgrade preserves research bytes and unrelated shared JSON while refreshing integration", () => {
+  const root = createTempRoot("dove-project-upgrade-");
   try {
-    const previousInstallation = initialize(root);
-    write(root, ".dove/state/private.json", "{\"keep\":true}\n");
-    fs.symlinkSync("state/private.json", path.join(root, ".dove", "private-link"));
-    write(root, ".dove-archive/existing/keep.txt", "existing archive\n");
-    write(root, ".claude/commands/dove/init.md", "old reserved command\n");
+    write(root, ".mcp.json", `${JSON.stringify({ metadata: { keep: true }, mcpServers: { other: { command: "keep" } } }, null, 2)}\n`);
+    write(root, ".claude/settings.json", `${JSON.stringify({
+      theme: "dark",
+      hooks: {
+        SessionStart: [{ hooks: [{ type: "command", command: "keep-session" }] }],
+        UserPromptSubmit: [{ matcher: "keep", hooks: [{ type: "command", command: "keep-prompt" }] }]
+      }
+    }, null, 2)}\n`);
+    write(root, ".claude/settings.local.json", `${JSON.stringify({ permissions: { allow: ["Read"] }, enabledMcpjsonServers: ["other"] }, null, 2)}\n`);
+    write(root, ".opencode.json", `${JSON.stringify({ keep: true, mcpServers: { other: { command: "keep" } } }, null, 2)}\n`);
+    initialize(root);
+
+    const mcp = readJson(root, ".mcp.json");
+    mcp.mcpServers.dove = { type: "stdio", command: "node", args: ["./mcp/dove-state-server-package.mjs"] };
+    write(root, ".mcp.json", `${JSON.stringify(mcp, null, 2)}\n`);
+    const settings = readJson(root, ".claude/settings.json");
+    settings.hooks.UserPromptSubmit.at(-1).hooks[0] = { type: "command", command: "node ./scripts/dove-user-prompt-submit-package.mjs" };
+    write(root, ".claude/settings.json", `${JSON.stringify(settings, null, 2)}\n`);
+
+    write(root, ".dove/format.json", "{\"format\":\"dove-research-v1\"}\r\n");
+    write(root, ".dove/workspace.json", "{\"keep\":true}\n");
+    write(root, ".dove/missions/result.bin", Buffer.from([0, 255, 1, 128]));
+    write(root, ".dove-archive/existing/private.json", "{\"archive\":true}\r\n");
     write(root, "ordinary.txt", "keep ordinary\n");
-    const malformedClaims = readJson(root, INSTALLATION_MANIFEST_PATH);
-    malformedClaims.managed.push({
-      path: "ordinary.txt",
-      owner: "malformed:untrusted-claim",
-      mode: "exclusive-file",
-      selector: null,
-      digest: crypto.createHash("sha256").update("keep ordinary\n").digest("hex")
-    });
-    write(root, INSTALLATION_MANIFEST_PATH, `${JSON.stringify(malformedClaims, null, 2)}\n`);
-    write(root, ".mcp.json", `${JSON.stringify({ keep: true, mcpServers: { dove: { type: "stdio", command: "node", args: ["./mcp/dove-state-server-package.mjs"] }, other: { command: "keep" } } }, null, 2)}\n`);
-    write(root, ".claude/settings.json", `${JSON.stringify({ keep: true, hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: "node ./scripts/dove-user-prompt-submit-package.mjs" }] }] } }, null, 2)}\n`);
+    const researchBefore = new Map([
+      [".dove/format.json", fs.readFileSync(path.join(root, ".dove/format.json"))],
+      [".dove/workspace.json", fs.readFileSync(path.join(root, ".dove/workspace.json"))],
+      [".dove/missions/result.bin", fs.readFileSync(path.join(root, ".dove/missions/result.bin"))]
+    ]);
+    const managedPath = ".claude/commands/dove/status.md";
+    const installedContent = fs.readFileSync(path.join(root, managedPath), "utf8");
+    write(root, managedPath, `${installedContent}stale installed content\n`);
 
-    const preview = previewProjectIntegrationOverlayUpgrade(root, { hosts: ["claude"], ...PACKAGE, now: SYNC_NOW });
+    const preview = previewProjectUpgrade(root, { ...PACKAGE, now: SYNC_NOW });
     assert.equal(preview.status, "ready");
-    assert.match(preview.sourceTreeDigest, /^[a-f0-9]{64}$/u);
-    assert.match(preview.archiveTarget, /\.dove-archive[/\\]upgrade-[a-f0-9]{24}$/u);
-    assert.equal(fs.existsSync(path.join(root, ".dove")), true);
-    assert.equal(fs.existsSync(preview.archiveTarget), false);
-    assert.throws(() => overlayUpgradeProjectIntegration(root, { preview, hosts: ["claude"], ...PACKAGE, now: SYNC_NOW }), /confirmed: true/u);
+    assert.equal(preview.previewType, "project-upgrade");
+    assert.equal(preview.previewVersion, 1);
+    assert.deepEqual(preview.confirmation, {
+      required: false,
+      default: false,
+      exactReplay: true,
+      previewDigest: preview.confirmation.previewDigest
+    });
+    assert.equal(preview.changedPaths.includes(".dove/workspace.json"), false);
+    assert.deepEqual(preview.movedPaths, [{ from: ".dove-archive", to: ".dove/archive" }]);
 
-    const result = overlayUpgradeProjectIntegration(root, { confirmed: true, preview, hosts: ["claude"], ...PACKAGE, now: SYNC_NOW });
-    assert.equal(result.status, "overlay-upgraded");
-    assert.equal(result.archiveTarget, preview.archiveTarget);
-    assert.deepEqual(result.movedPaths, [{ from: ".dove", to: path.relative(root, preview.archiveTarget).split(path.sep).join("/") }]);
-    assert.equal(fs.existsSync(path.join(root, ".dove")), false);
-    assert.equal(fs.readFileSync(path.join(preview.archiveTarget, "state/private.json"), "utf8"), "{\"keep\":true}\n");
-    assert.equal(fs.readlinkSync(path.join(preview.archiveTarget, "private-link")), "state/private.json");
-    assert.equal(fs.readFileSync(path.join(root, ".dove-archive/existing/keep.txt"), "utf8"), "existing archive\n");
+    const result = upgradeProjectIntegration(root, { ...PACKAGE, now: SYNC_NOW, preview });
+    assert.equal(result.status, "upgraded");
+    for (const [relativePath, bytes] of researchBefore) {
+      assert.deepEqual(fs.readFileSync(path.join(root, relativePath)), bytes, relativePath);
+    }
+    assert.equal(fs.readFileSync(path.join(root, ".dove/archive/existing/private.json"), "utf8"), "{\"archive\":true}\r\n");
+    assert.equal(fs.existsSync(path.join(root, ".dove-archive")), false);
     assert.equal(fs.readFileSync(path.join(root, "ordinary.txt"), "utf8"), "keep ordinary\n");
-    assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/init.md")), false);
-    assert.notEqual(result.manifest.installationId, previousInstallation.manifest.installationId);
-    assert.equal(result.manifest.installationId, readJson(root, INSTALLATION_MANIFEST_PATH).installationId);
-    assert.equal(readJson(root, ".mcp.json").keep, true);
-    assert.deepEqual(readJson(root, ".mcp.json").mcpServers.other, { command: "keep" });
-    assert.deepEqual(readJson(root, ".mcp.json").mcpServers.dove, INSTALLED_DOVE_MCP_SERVER);
-    assert.equal(readJson(root, ".claude/settings.json").keep, true);
-    assert.deepEqual(readJson(root, ".claude/settings.json").hooks.UserPromptSubmit, [DOVE_CLAUDE_AMBIENT_HOOK_ENTRY]);
+    assert.equal(fs.readFileSync(path.join(root, managedPath), "utf8"), installedContent);
+
+    const upgradedMcp = readJson(root, ".mcp.json");
+    assert.deepEqual(upgradedMcp.metadata, { keep: true });
+    assert.deepEqual(upgradedMcp.mcpServers.other, { command: "keep" });
+    assert.deepEqual(upgradedMcp.mcpServers.dove, INSTALLED_DOVE_MCP_SERVER);
+    const upgradedSettings = readJson(root, ".claude/settings.json");
+    assert.equal(upgradedSettings.theme, "dark");
+    assert.equal(upgradedSettings.hooks.SessionStart[0].hooks[0].command, "keep-session");
+    assert.equal(upgradedSettings.hooks.UserPromptSubmit[0].matcher, "keep");
+    assert.deepEqual(upgradedSettings.hooks.UserPromptSubmit[1], DOVE_CLAUDE_AMBIENT_HOOK_ENTRY);
+    assert.deepEqual(readJson(root, ".claude/settings.local.json"), {
+      permissions: { allow: ["Read"] },
+      enabledMcpjsonServers: ["other", "dove"]
+    });
+    assert.deepEqual(readJson(root, ".opencode.json"), { keep: true, mcpServers: { other: { command: "keep" } } });
+    assert.equal(inspectProjectIntegration(root, PACKAGE).status, "current");
   } finally {
     cleanupTempRoot(root);
   }
 });
 
-test("overlay upgrade rejects stale approval, ambiguous shared JSON, and symlinked archive parents before writes", () => {
-  for (const mode of ["stale", "stale-mode", "ambiguous-json", "archive-parent-symlink"]) {
-    const root = createTempRoot(`dove-project-overlay-reject-${mode}-`);
-    const outside = createTempRoot(`dove-project-overlay-outside-${mode}-`);
+test("Complete Reinstall deletes research and archive state then recreates only installation metadata", () => {
+  const root = createTempRoot("dove-project-complete-reinstall-");
+  try {
+    initialize(root);
+    write(root, ".dove/format.json", "{\"format\":\"dove-research-v1\"}\n");
+    write(root, ".dove/workspace.json", "{\"secret\":true}\n");
+    write(root, ".dove-archive/existing/private.json", "{\"archive\":true}\n");
+    write(root, "paper.md", "keep\n");
+    const preview = previewProjectCompleteReinstall(root, { ...PACKAGE, now: SYNC_NOW });
+    assert.throws(() => completeReinstallProjectIntegration(root, { ...PACKAGE, now: SYNC_NOW, preview }), /confirmed: true/u);
+    const result = completeReinstallProjectIntegration(root, { ...PACKAGE, now: SYNC_NOW, preview, confirmed: true });
+    assert.equal(result.status, "reinstalled");
+    assert.deepEqual(fs.readdirSync(path.join(root, ".dove")), ["install"]);
+    assert.deepEqual(fs.readdirSync(path.join(root, ".dove", "install")), ["manifest.json"]);
+    assert.equal(fs.existsSync(path.join(root, ".dove-archive")), false);
+    assert.equal(fs.readFileSync(path.join(root, "paper.md"), "utf8"), "keep\n");
+  } finally {
+    cleanupTempRoot(root);
+  }
+});
+
+test("Upgrade and Complete Reinstall require exact fresh lifecycle previews", () => {
+  for (const lifecycle of ["upgrade", "complete-reinstall"]) {
+    const root = createTempRoot(`dove-project-${lifecycle}-stale-`);
     try {
-      write(root, ".dove/state.json", "{\"keep\":true}\n");
-      write(root, ".mcp.json", mode === "ambiguous-json"
-        ? `${JSON.stringify({ mcpServers: { dove: { command: "unrelated" } } })}\n`
-        : `${JSON.stringify({ mcpServers: { dove: INSTALLED_DOVE_MCP_SERVER } })}\n`);
-      if (mode === "archive-parent-symlink") fs.symlinkSync(outside, path.join(root, ".dove-archive"));
-      const before = fs.readFileSync(path.join(root, ".dove/state.json"), "utf8");
-      if (mode === "ambiguous-json") {
-        assert.throws(() => previewProjectIntegrationOverlayUpgrade(root, { hosts: ["claude"], ...PACKAGE, now: SYNC_NOW }), /ambiguous non-Dove fragment/iu);
-      } else if (mode === "archive-parent-symlink") {
-        assert.throws(() => previewProjectIntegrationOverlayUpgrade(root, { hosts: ["claude"], ...PACKAGE, now: SYNC_NOW }), /archive target is already occupied|real directory|symbolic/iu);
-      } else {
-        const preview = previewProjectIntegrationOverlayUpgrade(root, { hosts: ["claude"], ...PACKAGE, now: SYNC_NOW });
-        if (mode === "stale-mode") fs.chmodSync(path.join(root, ".mcp.json"), 0o600);
-        else write(root, ".dove/state.json", "{\"changed\":true}\n");
-        assert.throws(() => overlayUpgradeProjectIntegration(root, { confirmed: true, preview, hosts: ["claude"], ...PACKAGE, now: SYNC_NOW }), /stale|digest changed/iu);
-      }
-      assert.equal(fs.existsSync(path.join(root, ".dove")), true);
-      if (mode !== "stale") assert.equal(fs.readFileSync(path.join(root, ".dove/state.json"), "utf8"), before);
-      assert.equal(fs.existsSync(path.join(root, ".dove-install/manifest.json")), false);
-      assert.deepEqual(fs.readdirSync(outside), []);
+      initialize(root);
+      write(root, ".dove/workspace.json", "{\"before\":true}\n");
+      const preview = lifecycle === "upgrade"
+        ? previewProjectUpgrade(root, { ...PACKAGE, now: SYNC_NOW })
+        : previewProjectCompleteReinstall(root, { ...PACKAGE, now: SYNC_NOW });
+      const execute = (approvedPreview) => lifecycle === "upgrade"
+        ? upgradeProjectIntegration(root, { ...PACKAGE, now: SYNC_NOW, preview: approvedPreview })
+        : completeReinstallProjectIntegration(root, { ...PACKAGE, now: SYNC_NOW, confirmed: true, preview: approvedPreview });
+
+      assert.throws(
+        () => execute({ ...preview, previewType: "retired-reinstall" }),
+        lifecycle === "upgrade" ? /exact project-upgrade preview/iu : /exact project-complete-reinstall preview/iu
+      );
+      write(root, ".claude/commands/dove/status.md", "changed after preview\n");
+      assert.throws(() => execute(preview), /preview is stale|approved precondition changed/iu);
+      assert.equal(fs.readFileSync(path.join(root, ".dove/workspace.json"), "utf8"), "{\"before\":true}\n");
     } finally {
       cleanupTempRoot(root);
-      cleanupTempRoot(outside);
     }
   }
 });
 
-test("overlay upgrade preserves unrelated shared JSON bytes and rejects lookalike ownership", () => {
-  const root = createTempRoot("dove-project-overlay-precise-ownership-");
-  try {
-    const opencodeBytes = "{\"keep\":true,\"mcpServers\":{\"other\":{\"command\":\"keep\"}}}\n";
-    write(root, ".opencode.json", opencodeBytes);
-    const preview = previewProjectIntegrationOverlayUpgrade(root, { hosts: ["claude"], ...PACKAGE, now: SYNC_NOW });
-    overlayUpgradeProjectIntegration(root, { confirmed: true, preview, hosts: ["claude"], ...PACKAGE, now: SYNC_NOW });
-    assert.equal(fs.readFileSync(path.join(root, ".opencode.json"), "utf8"), opencodeBytes);
-  } finally {
-    cleanupTempRoot(root);
-  }
-
-  for (const [relativePath, content, expected] of [
-    [".mcp.json", `${JSON.stringify({ mcpServers: { dove: { type: "stdio", command: "dove", args: ["mcp", "serve", "--project", ".", "--extra"] } } })}\n`, /ambiguous non-Dove fragment/iu],
-    [".opencode.json", `${JSON.stringify({ mcpServers: { dove: { type: "stdio", command: "node", args: ["/unrelated/mcp/dove-state-server-package.mjs"] } } })}\n`, /ambiguous non-Dove fragment/iu],
-    [".claude/settings.json", `${JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: "dove hook user-prompt-submit --project . --extra", timeout: 10 }] }] } })}\n`, /ambiguous Dove UserPromptSubmit hook/iu],
-    ["scripts/dove-user-prompt-submit-package.mjs", "// unrelated UserPromptSubmit helper\n", /affirmative Dove signatures/iu],
-    ["mcp/dove-claude-project.json", '{"version":1,"host":"claude","extra":true}\n', /ambiguous project marker/iu]
-  ]) {
-    const ambiguousRoot = createTempRoot("dove-project-overlay-lookalike-");
+test("Complete Reinstall ignores absent or malformed manifests and defaults to Claude", () => {
+  for (const mode of ["absent", "malformed-current", "malformed-legacy"]) {
+    const root = createTempRoot(`dove-project-complete-reinstall-${mode}-`);
     try {
-      write(ambiguousRoot, relativePath, content);
-      assert.throws(
-        () => previewProjectIntegrationOverlayUpgrade(ambiguousRoot, { hosts: ["claude"], ...PACKAGE, now: SYNC_NOW }),
-        expected
-      );
-      assert.equal(fs.readFileSync(path.join(ambiguousRoot, relativePath), "utf8"), content);
-      assert.equal(fs.existsSync(path.join(ambiguousRoot, INSTALLATION_MANIFEST_PATH)), false);
+      write(root, ".dove/workspace.json", "{\"delete\":true}\n");
+      write(root, ".dove-archive/existing/private.json", "{\"delete\":true}\n");
+      write(root, "ordinary.txt", "keep\n");
+      if (mode === "malformed-current") write(root, INSTALLATION_MANIFEST_PATH, "{not valid json\n");
+      if (mode === "malformed-legacy") write(root, ".dove-install/manifest.json", "{not valid json\n");
+
+      const preview = previewProjectCompleteReinstall(root, { ...PACKAGE, now: SYNC_NOW });
+      assert.deepEqual(preview.hosts, ["claude"]);
+      assert.equal(preview.removedPaths.includes(".dove/workspace.json"), true);
+      if (mode === "malformed-legacy") assert.equal(preview.removedPaths.includes(".dove-install"), true);
+      const result = completeReinstallProjectIntegration(root, { ...PACKAGE, now: SYNC_NOW, confirmed: true, preview });
+
+      assert.deepEqual(result.hosts, ["claude"]);
+      assert.deepEqual(fs.readdirSync(path.join(root, ".dove")), ["install"]);
+      assert.deepEqual(fs.readdirSync(path.join(root, ".dove/install")), ["manifest.json"]);
+      assert.equal(fs.existsSync(path.join(root, ".dove-install")), false);
+      assert.equal(fs.existsSync(path.join(root, ".dove-archive")), false);
+      assert.equal(fs.readFileSync(path.join(root, "ordinary.txt"), "utf8"), "keep\n");
+      assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/status.md")), true);
     } finally {
-      cleanupTempRoot(ambiguousRoot);
+      cleanupTempRoot(root);
     }
   }
 });
 
-test("overlay upgrade rejects a replay-to-transaction race before Dove writes", () => {
-  const root = createTempRoot("dove-project-overlay-transaction-race-");
+test("legacy Upgrade removes its whole old root and preserves unsupported research bytes", () => {
+  const root = createTempRoot("dove-project-upgrade-valid-legacy-");
   try {
-    write(root, ".dove/state.json", "{\"keep\":true}\n");
-    write(root, ".mcp.json", `${JSON.stringify({ mcpServers: { dove: INSTALLED_DOVE_MCP_SERVER } })}\n`);
-    const preview = previewProjectIntegrationOverlayUpgrade(root, { hosts: ["claude"], ...PACKAGE, now: SYNC_NOW });
-    let injected = false;
-    const fsOps = {
-      ...fs,
-      openSync(targetPath, flags, ...rest) {
-        if (!injected && path.resolve(String(targetPath)) === path.resolve(root) && (flags & fs.constants.O_DIRECTORY) !== 0) {
-          injected = true;
-          write(root, ".mcp.json", `${JSON.stringify({ changedAfterReplay: true, mcpServers: { dove: INSTALLED_DOVE_MCP_SERVER } })}\n`);
-        }
-        return fs.openSync(targetPath, flags, ...rest);
-      }
-    };
-
-    assert.throws(
-      () => overlayUpgradeProjectIntegration(root, { confirmed: true, preview, hosts: ["claude"], ...PACKAGE, now: SYNC_NOW, fsOps }),
-      /approved precondition changed.*\.mcp\.json/iu
-    );
-    assert.equal(injected, true);
-    assert.equal(fs.readFileSync(path.join(root, ".dove/state.json"), "utf8"), "{\"keep\":true}\n");
-    assert.equal(fs.existsSync(preview.archiveTarget), false);
-    assert.equal(fs.existsSync(path.join(root, INSTALLATION_MANIFEST_PATH)), false);
-    assert.equal(fs.existsSync(path.join(root, ".claude/commands/dove/status.md")), false);
+    initialize(root);
+    const currentManifest = fs.readFileSync(path.join(root, INSTALLATION_MANIFEST_PATH));
+    fs.mkdirSync(path.join(root, path.dirname(LEGACY_INSTALLATION_MANIFEST_PATH)), { recursive: true });
+    fs.writeFileSync(path.join(root, LEGACY_INSTALLATION_MANIFEST_PATH), currentManifest);
+    fs.rmSync(path.join(root, ".dove", "install"), { recursive: true, force: true });
+    write(root, ".dove/manifest.json", "{\"schemaVersion\":17}\n");
+    write(root, ".dove/missions/old.json", "old research bytes\n");
+    const before = fs.readFileSync(path.join(root, ".dove/missions/old.json"));
+    const preview = previewProjectUpgrade(root, { ...PACKAGE, now: SYNC_NOW });
+    assert.equal(preview.removedPaths.includes(LEGACY_INSTALLATION_MANIFEST_PATH), true);
+    assert.equal(preview.removedPaths.includes(".dove-install"), true);
+    upgradeProjectIntegration(root, { ...PACKAGE, now: SYNC_NOW, preview });
+    assert.equal(fs.existsSync(path.join(root, ".dove-install")), false);
+    assert.equal(fs.existsSync(path.join(root, INSTALLATION_MANIFEST_PATH)), true);
+    assert.deepEqual(fs.readFileSync(path.join(root, ".dove/missions/old.json")), before);
   } finally {
     cleanupTempRoot(root);
+  }
+});
+
+test("legacy Upgrade rejects unknown files in its old root", () => {
+  const root = createTempRoot("dove-project-upgrade-legacy-residue-");
+  try {
+    initialize(root);
+    const currentManifest = fs.readFileSync(path.join(root, INSTALLATION_MANIFEST_PATH));
+    fs.mkdirSync(path.join(root, path.dirname(LEGACY_INSTALLATION_MANIFEST_PATH)), { recursive: true });
+    fs.writeFileSync(path.join(root, LEGACY_INSTALLATION_MANIFEST_PATH), currentManifest);
+    fs.writeFileSync(path.join(root, ".dove-install/unknown.txt"), "do not remove\n");
+    fs.rmSync(path.join(root, ".dove", "install"), { recursive: true, force: true });
+    assert.throws(() => previewProjectUpgrade(root, { ...PACKAGE, now: SYNC_NOW }), /contain only its legacy manifest/u);
+  } finally {
+    cleanupTempRoot(root);
+  }
+});
+
+test("Upgrade remains strict about missing, malformed, or conflicting installation manifests", () => {
+  for (const mode of ["absent", "malformed-current", "both"]) {
+    const root = createTempRoot(`dove-project-upgrade-strict-${mode}-`);
+    try {
+      write(root, ".dove/workspace.json", "{\"keep\":true}\n");
+      if (mode === "malformed-current") write(root, INSTALLATION_MANIFEST_PATH, "{not valid json\n");
+      if (mode === "both") {
+        initialize(root);
+        write(root, ".dove-install/manifest.json", fs.readFileSync(path.join(root, INSTALLATION_MANIFEST_PATH)));
+      }
+      const before = fs.readFileSync(path.join(root, ".dove/workspace.json"));
+      assert.throws(
+        () => previewProjectUpgrade(root, { ...PACKAGE, now: SYNC_NOW }),
+        mode === "absent" ? /requires an installed project manifest/iu : mode === "both" ? /both current and legacy/iu : /Invalid Dove project installation manifest/iu
+      );
+      assert.deepEqual(fs.readFileSync(path.join(root, ".dove/workspace.json")), before);
+    } finally {
+      cleanupTempRoot(root);
+    }
+  }
+});
+
+test("project Upgrade removes known retired paths and affirmatively signed copied runtime", () => {
+  const root = createTempRoot("dove-project-upgrade-retired-");
+  try {
+    initialize(root);
+    const retiredPaths = [
+      ".claude/commands/dove/workspace.md",
+      PREVIOUS_CLAUDE_INIT_PATH,
+      ".claude/commands/dove/version.md"
+    ];
+    for (const retiredPath of retiredPaths) write(root, retiredPath, "retired Dove command\n");
+    const runtimeProbe = LEGACY_PROJECT_BUNDLE_PROBES.find((entry) => entry.path === "bin/dove-package.mjs");
+    write(root, runtimeProbe.path, `${runtimeProbe.signatures.slice(0, 2).join("\n")}\nlocally modified legacy runtime\n`);
+
+    const preview = previewProjectUpgrade(root, { ...PACKAGE, now: SYNC_NOW });
+    for (const retiredPath of retiredPaths) assert.equal(preview.removedPaths.includes(retiredPath), true, retiredPath);
+    assert.equal(preview.removedPaths.includes(runtimeProbe.path), true);
+    const result = upgradeProjectIntegration(root, { ...PACKAGE, now: SYNC_NOW, preview });
+
+    assert.equal(result.status, "upgraded");
+    for (const retiredPath of retiredPaths) assert.equal(fs.existsSync(path.join(root, retiredPath)), false, retiredPath);
+    assert.equal(fs.existsSync(path.join(root, runtimeProbe.path)), false);
+  } finally {
+    cleanupTempRoot(root);
+  }
+});
+
+test("Upgrade and Complete Reinstall reject symlinked reserved paths and unsigned copied runtime", () => {
+  for (const lifecycle of ["upgrade", "complete-reinstall"]) {
+    for (const mode of ["symlink", "unsigned-runtime"]) {
+      const root = createTempRoot(`dove-project-${lifecycle}-block-${mode}-`);
+      const outside = createTempRoot(`dove-project-${lifecycle}-outside-${mode}-`);
+      try {
+        initialize(root);
+        if (mode === "symlink") {
+          write(outside, "status.md", "outside\n");
+          fs.rmSync(path.join(root, ".claude/commands/dove/status.md"));
+          fs.symlinkSync(path.join(outside, "status.md"), path.join(root, ".claude/commands/dove/status.md"));
+        } else {
+          write(root, "bin/dove-package.mjs", "unsigned ordinary project runtime\n");
+        }
+        const beforeManifest = fs.readFileSync(path.join(root, INSTALLATION_MANIFEST_PATH));
+        const preview = () => lifecycle === "upgrade"
+          ? previewProjectUpgrade(root, { ...PACKAGE, now: SYNC_NOW })
+          : previewProjectCompleteReinstall(root, { ...PACKAGE, now: SYNC_NOW });
+        assert.throws(
+          preview,
+          mode === "symlink"
+            ? /must not be a symbolic link.*status\.md/iu
+            : /cannot safely remove copied runtime.*bin\/dove-package\.mjs/iu
+        );
+        assert.deepEqual(fs.readFileSync(path.join(root, INSTALLATION_MANIFEST_PATH)), beforeManifest);
+        if (mode === "symlink") assert.equal(fs.readFileSync(path.join(outside, "status.md"), "utf8"), "outside\n");
+        else assert.equal(fs.readFileSync(path.join(root, "bin/dove-package.mjs"), "utf8"), "unsigned ordinary project runtime\n");
+      } finally {
+        cleanupTempRoot(root);
+        cleanupTempRoot(outside);
+      }
+    }
   }
 });
 

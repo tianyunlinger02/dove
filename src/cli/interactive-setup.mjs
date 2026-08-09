@@ -4,6 +4,8 @@ import { confirm, select } from "@inquirer/prompts";
 
 import { renderDoveDoctor } from "./doctor-output.mjs";
 import {
+  renderCompleteReinstallInventory,
+  renderDoveLifecycleResult,
   renderDovePixelArt,
   terminalColorEnabled,
   terminalStyle
@@ -13,61 +15,74 @@ function safeProjectName(target) {
   return path.basename(target || process.cwd()).replace(/[\x00-\x1f\x7f-\x9f]/gu, "?");
 }
 
-function setupCompleteLines(result, color, options = {}) {
+function setupCompleteLines(result, color) {
   const workspaceAbsent = result.workspaceState?.mode === "absent";
-  const researchLine = options.overlayUpgrade
-    ? options.archiveTarget
-      ? "✓ 当前科研状态已归档并重置"
-      : "✓ 科研主线仍保持未建立"
-    : workspaceAbsent ? "✓ 科研主线仍保持未建立" : "✓ 现有科研状态未被修改";
-  const lines = [
+  const researchLine = workspaceAbsent ? "✓ Workspace 仍保持未建立" : "✓ 现有科研状态未被修改";
+  return [
     "",
     terminalStyle("项目配置完成", "bold", { color }),
     "",
     "✓ Dove 项目集成已是当前版本",
     "✓ Dove MCP 已注册并仅在当前项目为你批准",
     "✓ Claude Code 自然语言入口已配置",
-    researchLine
-  ];
-  if (options.overlayUpgrade) lines.push("✓ 项目文件和已有归档均已保留");
-  const hostAction = options.overlayUpgrade ? "重新进入" : "进入或重新进入";
-  lines.push(
+    researchLine,
     "",
-    `${terminalStyle("下一步", "bold", { color })}  从当前项目${hostAction} Claude Code`,
-    "进入后直接运行 /dove:workspace。"
-  );
-  return lines.join("\n");
+    `${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code`,
+    "进入后直接使用 Dove 项目入口。"
+  ].join("\n");
 }
 
-function blockedMessage(result, color, stream, env, options = {}) {
-  const lines = [renderDoveDoctor(result, { stream, env }), ""];
-  if (options.overlayPreviewFailed) {
-    lines.push(terminalStyle("Dove 无法明确判定覆盖升级是否安全，未进行覆盖。", "bold", { color }));
-    if (options.previewErrorMessage) lines.push(options.previewErrorMessage);
-  } else if (result.legacyCopiedRuntime?.detected) {
-    lines.push(terminalStyle("Dove 不会自动覆盖旧项目内运行时或科研状态。", "bold", { color }));
-  } else {
-    lines.push(terminalStyle("Dove 检测到项目文件已被修改，未进行覆盖。", "bold", { color }));
+function blockedMessage(result, color, stream, env) {
+  return [
+    renderDoveDoctor(result, { stream, env }),
+    "",
+    terminalStyle("Dove 检测到项目集成需要人工处理，未进行修改。", "bold", { color })
+  ].join("\n");
+}
+
+function lifecycleTarget(result, fallback) {
+  return result?.target ?? fallback;
+}
+
+async function runUpgrade({ target, upgrade, stream, env }) {
+  if (typeof upgrade !== "function") {
+    throw new Error("Dove 项目配置升级核心尚未接入。");
   }
-  return lines.join("\n");
+  const result = await upgrade(target);
+  stream.write(`\n${renderDoveLifecycleResult("upgrade", {
+    ...result,
+    target: lifecycleTarget(result, target)
+  }, { stream, env })}\n`);
+  return { status: "upgraded", action: "upgrade", result };
 }
 
-function safePreviewErrorMessage(error) {
-  const candidates = [error?.publicMessage, error?.report?.message];
-  return candidates.find((value) => typeof value === "string" && value.trim().length > 0)?.trim() ?? null;
-}
-
-async function confirmAction(message, promptConfirm, defaultValue = true) {
-  return promptConfirm({ message, default: defaultValue });
+async function runCompleteReinstall({ target, completeReinstall, promptConfirm, stream, env, color }) {
+  stream.write(`\n${renderCompleteReinstallInventory(target, { color })}\n\n`);
+  const approved = await promptConfirm({
+    message: "警告：这会永久删除当前项目中的全部 Dove 配置、研究状态和旧归档。确认完全重新安装项目配置？",
+    default: false
+  });
+  if (!approved) {
+    stream.write("未修改任何文件。\n");
+    return { status: "cancelled", action: "reinstall", result: null };
+  }
+  if (typeof completeReinstall !== "function") {
+    throw new Error("Dove 项目配置完全重装核心尚未接入。");
+  }
+  const result = await completeReinstall(target);
+  stream.write(`\n${renderDoveLifecycleResult("reinstall", {
+    ...result,
+    target: lifecycleTarget(result, target)
+  }, { stream, env })}\n`);
+  return { status: "reinstalled", action: "reinstall", result };
 }
 
 export async function runInteractiveDoveSetup(options) {
   const {
     inspect,
     initialize,
-    synchronize,
-    previewOverlayUpgrade,
-    overlayUpgrade,
+    upgrade,
+    completeReinstall,
     target = process.cwd(),
     promptConfirm = confirm,
     promptSelect = select,
@@ -76,131 +91,70 @@ export async function runInteractiveDoveSetup(options) {
   } = options;
   const color = terminalColorEnabled(stream, env);
   const initial = await inspect(target);
-  const projectName = safeProjectName(initial.target ?? target);
+  const setupTarget = initial.target ?? target;
+  const projectName = safeProjectName(setupTarget);
 
   stream.write(`${renderDovePixelArt({ color })}\n\n`);
   stream.write(`${terminalStyle("Dove", "bold", { color })}\n`);
-  stream.write(`围绕科研主线探索，带回证据与经验。\n\n`);
+  stream.write("围绕科研主线探索，带回证据与经验。\n\n");
   stream.write(`${terminalStyle("项目", "dim", { color })}  ${projectName}\n\n`);
 
-  const overlayEligibleState = initial.legacyCopiedRuntime?.detected
-    || ["invalid", "drifted"].includes(initial.projectIntegration?.state);
-  let overlayPreview = null;
-  let overlayPreviewFailed = false;
-  let previewErrorMessage = null;
-  if (overlayEligibleState) {
-    try {
-      overlayPreview = await previewOverlayUpgrade(target);
-    } catch (error) {
-      overlayPreviewFailed = true;
-      previewErrorMessage = safePreviewErrorMessage(error);
-    }
+  const setup = initial.setup ?? (
+    ["invalid", "drifted"].includes(initial.projectIntegration?.state) || initial.legacyCopiedRuntime?.detected
+      ? { mode: "blocked", reason: initial.projectIntegration?.state ?? "legacy-copied-runtime", allowedActions: ["exit"] }
+      : {
+        mode: initial.projectIntegration?.state === "uninitialized" ? "init" : "upgrade",
+        reason: initial.projectIntegration?.state ?? "unknown",
+        allowedActions: initial.projectIntegration?.state === "uninitialized" ? ["init", "exit"] : ["upgrade", "reinstall", "exit"]
+      }
+  );
+  if (setup.mode === "blocked") {
+    stream.write(`${blockedMessage(initial, color, stream, env)}\n`);
+    return { status: "blocked", action: null, result: initial };
   }
-  const canOverlayUpgrade = overlayPreview?.status === "ready" && overlayPreviewFailed === false;
 
-  if (overlayEligibleState) {
-    stream.write(`${blockedMessage(initial, color, stream, env, {
-      overlayPreviewFailed: !canOverlayUpgrade,
-      previewErrorMessage
-    })}\n`);
-    if (!canOverlayUpgrade) {
-      return { status: "blocked", action: null, result: initial, preview: null };
-    }
-    const blockedAction = await promptSelect({
-      message: "请选择如何继续：",
+  if (setup.allowedActions.includes("init")) {
+    const action = await promptSelect({
+      message: "当前项目尚未配置 Dove。请选择：",
       choices: [
-        { name: "覆盖升级 Dove（归档当前科研状态）", value: "overlay" },
+        { name: "初始化项目配置", value: "init" },
         { name: "退出", value: "exit" }
       ]
     });
-    if (blockedAction === "exit") {
+    if (action === "exit") {
       stream.write("未修改任何文件。\n");
-      return { status: "exited", action: "exit", result: initial, preview: overlayPreview };
+      return { status: "exited", action: "exit", result: initial };
     }
-  }
-
-  async function runOverlay(preview = null) {
-    let currentPreview = preview;
-    if (currentPreview === null) {
-      try {
-        currentPreview = await previewOverlayUpgrade(target);
-      } catch (error) {
-        stream.write(`${blockedMessage(initial, color, stream, env, {
-          overlayPreviewFailed: true,
-          previewErrorMessage: safePreviewErrorMessage(error)
-        })}\n`);
-        return { status: "blocked", action: "overlay", result: initial, preview: null };
-      }
-    }
-    if (currentPreview?.status !== "ready") {
-      stream.write(`${blockedMessage(initial, color, stream, env, { overlayPreviewFailed: true })}\n`);
-      return { status: "blocked", action: "overlay", result: initial, preview: null };
-    }
-    const confirmed = await confirmAction(
-      "覆盖升级会替换项目集成的本地修改，归档并重置当前科研状态；项目文件和已有归档会保留。继续？",
-      promptConfirm,
-      false
-    );
-    if (!confirmed) {
-      stream.write("未修改任何文件。\n");
-      return { status: "cancelled", action: "overlay", result: initial, preview: currentPreview };
-    }
-    const upgrade = await overlayUpgrade(target, currentPreview);
-    const current = await inspect(target);
-    stream.write(`${setupCompleteLines(current, color, {
-      overlayUpgrade: true,
-      archiveTarget: upgrade?.archiveTarget ?? null
-    })}\n`);
-    return { status: "overlay-upgraded", action: "overlay", result: current, preview: currentPreview, upgrade };
-  }
-
-  if (overlayEligibleState) return runOverlay(overlayPreview);
-
-  if (initial.projectIntegration?.state === "uninitialized") {
-    const confirmed = await confirmAction("为当前项目启用 Dove 的 Claude Code 集成？", promptConfirm);
-    if (!confirmed) {
-      stream.write("未修改任何文件。\n");
-      return { status: "cancelled", action: "init", result: initial };
-    }
-    await initialize(target);
-    const current = await inspect(target);
+    await initialize(setupTarget);
+    const current = await inspect(setupTarget);
     stream.write(`${setupCompleteLines(current, color)}\n`);
     return { status: "initialized", action: "init", result: current };
   }
 
-  if (initial.projectIntegration?.state === "needs-sync") {
-    const confirmed = await confirmAction("检测到旧版 Dove 项目集成。现在安全更新？", promptConfirm);
-    if (!confirmed) {
-      stream.write("未修改任何文件。下次输入 dove 可以继续更新。\n");
-      return { status: "cancelled", action: "sync", result: initial };
-    }
-    await synchronize(target);
-    const current = await inspect(target);
-    stream.write(`${setupCompleteLines(current, color)}\n`);
-    return { status: "synchronized", action: "sync", result: current };
-  }
-
+  const legacy = setup.reason === "valid-legacy";
   const action = await promptSelect({
-    message: "Dove 已在当前项目配置。请选择：",
+    message: setup.allowedActions.includes("upgrade")
+      ? legacy ? "检测到旧版 Dove 项目配置。请选择：" : "当前项目已配置 Dove。请选择："
+      : "当前项目中的 Dove 状态需要完全重新安装。请选择：",
     choices: [
-      { name: "检查连接与科研主线", value: "doctor" },
-      { name: "重新同步项目集成", value: "sync" },
-      { name: "覆盖升级 Dove（归档当前科研状态）", value: "overlay" },
+      ...(setup.allowedActions.includes("upgrade") ? [{ name: "升级项目配置", value: "upgrade" }] : []),
+      ...(setup.allowedActions.includes("reinstall") ? [{ name: "完全重新安装项目配置", value: "reinstall" }] : []),
       { name: "退出", value: "exit" }
     ]
   });
 
-  if (action === "sync") {
-    await synchronize(target);
-    const current = await inspect(target);
-    stream.write(`${setupCompleteLines(current, color)}\n`);
-    return { status: "synchronized", action: "sync", result: current };
+  if (action === "upgrade") {
+    return runUpgrade({ target: setupTarget, upgrade, stream, env });
   }
-  if (action === "overlay") return runOverlay();
-  if (action === "doctor") {
-    const current = await inspect(target);
-    stream.write(`\n${renderDoveDoctor(current, { stream, env })}\n`);
-    return { status: "inspected", action: "doctor", result: current };
+  if (action === "reinstall") {
+    return runCompleteReinstall({
+      target: setupTarget,
+      completeReinstall,
+      promptConfirm,
+      stream,
+      env,
+      color
+    });
   }
   stream.write("未修改任何文件。\n");
   return { status: "exited", action: "exit", result: initial };

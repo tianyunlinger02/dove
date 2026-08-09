@@ -2,15 +2,17 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import { ARTIFACT_PATHS } from "./schema.mjs";
 import { parseJsonWithoutDuplicateKeys } from "./strict-json.mjs";
 
-export const INSTALLATION_MANIFEST_PATH = ".dove-install/manifest.json";
+export const INSTALLATION_MANIFEST_PATH = ARTIFACT_PATHS.installationManifest;
+export const LEGACY_INSTALLATION_MANIFEST_PATH = ".dove-install/manifest.json";
 export const INSTALLATION_MANIFEST_SCHEMA_VERSION = 1;
 export const INSTALLATION_INTEGRATION_VERSION = 2;
 export const INSTALLATION_OWNERSHIP_VERSION = 2;
 export const PREVIOUS_INSTALLATION_INTEGRATION_VERSION = 1;
 export const PREVIOUS_INSTALLATION_OWNERSHIP_VERSION = 1;
-export const INSTALLATION_RUNTIME_PROTOCOL_VERSION = 1;
+export const INSTALLATION_RUNTIME_PROTOCOL_VERSION = 2;
 
 const MANIFEST_FIELDS = new Set([
   "schemaVersion", "integrationVersion", "ownershipVersion", "installationId", "package", "runtime", "hosts", "managed", "createdAt", "updatedAt"
@@ -175,7 +177,13 @@ export function validateProjectInstallationManifest(value, options = {}) {
 
   assertSealed(value.runtime, RUNTIME_FIELDS, "Project installation manifest runtime");
   if (value.runtime.mode !== "user-cli") throw new Error("Project installation manifest runtime.mode must be user-cli.");
-  exactPositiveInteger(value.runtime.protocolVersion, INSTALLATION_RUNTIME_PROTOCOL_VERSION, "Project installation manifest runtime.protocolVersion");
+  const acceptedRuntimeProtocolVersions = options.acceptedRuntimeProtocolVersions ?? [INSTALLATION_RUNTIME_PROTOCOL_VERSION];
+  if (!Array.isArray(acceptedRuntimeProtocolVersions)
+    || acceptedRuntimeProtocolVersions.length === 0
+    || acceptedRuntimeProtocolVersions.some((version) => !Number.isSafeInteger(version) || version < 1)
+    || !acceptedRuntimeProtocolVersions.includes(value.runtime.protocolVersion)) {
+    throw new Error(`Project installation manifest runtime.protocolVersion must equal one accepted version: ${acceptedRuntimeProtocolVersions.join(", ")}.`);
+  }
 
   validateHosts(value.hosts, allowedHosts);
   validateManaged(value.managed);
@@ -235,27 +243,27 @@ export function isPreviousProjectInstallationManifest(value) {
     && value?.ownershipVersion === PREVIOUS_INSTALLATION_OWNERSHIP_VERSION;
 }
 
-function inspectManifestFile(root, fsOps) {
-  const installationDirectory = path.join(root, path.posix.dirname(INSTALLATION_MANIFEST_PATH));
+function inspectManifestFile(root, fsOps, manifestRelativePath = INSTALLATION_MANIFEST_PATH) {
+  const installationDirectory = path.join(root, path.posix.dirname(manifestRelativePath));
   const directoryStat = fsOps.lstatSync(installationDirectory);
   if (directoryStat.isSymbolicLink()) throw new Error(`Dove project installation directory must not be a symbolic link: ${installationDirectory}.`);
   if (!directoryStat.isDirectory()) throw new Error(`Dove project installation path must be a directory: ${installationDirectory}.`);
-  const manifestPath = path.join(root, INSTALLATION_MANIFEST_PATH);
+  const manifestPath = path.join(root, manifestRelativePath);
   let stat;
   try {
     stat = fsOps.lstatSync(manifestPath);
   } catch (error) {
-    if (error?.code === "ENOENT") throw new Error(`Dove project installation manifest is missing: ${INSTALLATION_MANIFEST_PATH}.`);
+    if (error?.code === "ENOENT") throw new Error(`Dove project installation manifest is missing: ${manifestRelativePath}.`);
     throw error;
   }
-  if (stat.isSymbolicLink()) throw new Error(`Dove project installation manifest must not be a symbolic link: ${INSTALLATION_MANIFEST_PATH}.`);
-  if (!stat.isFile()) throw new Error(`Dove project installation manifest must be a regular file: ${INSTALLATION_MANIFEST_PATH}.`);
+  if (stat.isSymbolicLink()) throw new Error(`Dove project installation manifest must not be a symbolic link: ${manifestRelativePath}.`);
+  if (!stat.isFile()) throw new Error(`Dove project installation manifest must be a regular file: ${manifestRelativePath}.`);
   return manifestPath;
 }
 
-export function readProjectInstallationManifest(root, options = {}) {
+function readInstallationManifestAt(root, manifestRelativePath, options = {}) {
   const fsOps = options.fsOps ?? fs;
-  const manifestPath = inspectManifestFile(root, fsOps);
+  const manifestPath = inspectManifestFile(root, fsOps, manifestRelativePath);
   let parsed;
   try {
     parsed = parseJsonWithoutDuplicateKeys(fsOps.readFileSync(manifestPath, "utf8"), "Dove project installation manifest");
@@ -264,10 +272,19 @@ export function readProjectInstallationManifest(root, options = {}) {
       acceptedVersionPairs: [
         [PREVIOUS_INSTALLATION_INTEGRATION_VERSION, PREVIOUS_INSTALLATION_OWNERSHIP_VERSION],
         [INSTALLATION_INTEGRATION_VERSION, INSTALLATION_OWNERSHIP_VERSION]
-      ]
+      ],
+      acceptedRuntimeProtocolVersions: [1, INSTALLATION_RUNTIME_PROTOCOL_VERSION]
     } : options);
   } catch (error) {
     throw new Error(`Invalid Dove project installation manifest at ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
   return deepFreezeManifest(structuredClone(parsed));
+}
+
+export function readProjectInstallationManifest(root, options = {}) {
+  return readInstallationManifestAt(root, INSTALLATION_MANIFEST_PATH, options);
+}
+
+export function readLegacyProjectInstallationManifest(root, options = {}) {
+  return readInstallationManifestAt(root, LEGACY_INSTALLATION_MANIFEST_PATH, options);
 }

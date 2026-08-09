@@ -39,8 +39,8 @@ const ROLE_DEFINITIONS = Object.freeze({
     id: "reviewer",
     publicName: "Reviewer",
     title: "dove-reviewer",
-    description: "Independently assess one frozen declared artifact scope and return structured findings without edits.",
-    responsibility: "Review independently from Planner and Builder/Author, assessing only the frozen declared scope and concise rubric supplied in the launch prompt.",
+    description: "Assess one frozen declared artifact scope and return structured findings without edits; this native role is a convenience definition, not evidence of independence or authority.",
+    responsibility: "Act as Reviewer, separate in responsibility from Planner and Builder/Author. A user-managed separate exchange establishes the review boundary; merely using this native definition does not establish independence, identity, authority, sign-off, or acceptance.",
     inputs: Object.freeze([
       "Only the declared project-relative artifact paths and their frozen fingerprints in the launch prompt",
       "The concise review rubric and structured output contract in that prompt"
@@ -49,7 +49,7 @@ const ROLE_DEFINITIONS = Object.freeze({
       "One structured status and verdict with a concise summary",
       "Findings only, each with a stable finding label, severity, concise rationale, and one or more declared artifact paths",
       "Action items, explicit unknowns, and a Markdown report within the declared scope",
-      "Execution, rewriting, rebuttal, and scheduling stay outside Reviewer responsibility; make no edits or Dove mutation, perform no self-fix or nested reviewer launch, and access no parent transcript, Trellis task material, ResearchHandoff, or undeclared files"
+      "Execution, rewriting, rebuttal, and scheduling stay outside Reviewer responsibility; make no edits or Dove mutation, perform no self-fix or nested reviewer launch, and access no parent transcript, Trellis task material, undeclared Dove state, or undeclared files"
     ])
   })
 });
@@ -82,9 +82,9 @@ export function renderOpenCodeReviewerAgent() {
   return `---\ndescription: ${role.description}\nmode: subagent\npermission:\n  read: allow\n  write: deny\n  edit: deny\n  bash: deny\n  glob: deny\n  grep: deny\n  task: deny\n  skill: deny\n---\n# Dove Reviewer\n\n${role.responsibility}\n\n${REVIEWER_BOUNDARY}\n\nReturn only the structured review object requested by the launch prompt, followed by its Markdown report.\n`;
 }
 
-export function reviewerPrompt(scopeBinding) {
-  const declared = scopeBinding.reviewedArtifacts.map((item) => `- ${item.path} (${item.sizeBytes} bytes; SHA-256 ${item.sha256})`).join("\n");
-  return `You are the dedicated fresh Dove Reviewer.\n\nDeclared frozen content boundary:\n${declared}\n\nRead only those exact project-relative files. Their content must match the supplied fingerprints. Do not access the parent transcript, Trellis task or specs, ResearchHandoff, Dove state, directories, or any undeclared file. Do not edit, write, self-fix, rebut, invoke Dove, launch another reviewer, or delegate.\n\nRubric: assess correctness and internal coherence; evidence and claim scope; omissions and material risk; reproducibility; fairness or information leakage; and preservation of failures, denominators, and uncertainty. Do not claim authority, identity, sign-off, or acceptance.\n\nReturn exactly one JSON object with this shape, then a Markdown report:\n{\n  "status": "completed|blocked|failed",\n  "verdict": "coherent|needs-revision|needs-evidence|blocked",\n  "summary": "concise summary",\n  "findings": [{"findingId":"safe-label","severity":"low|medium|high","summary":"concise finding","linkedArtifactPaths":["one-or-more-declared-paths"]}],\n  "actionItems": ["action"],\n  "report": "complete Markdown report",\n  "provenance": {"hostKind":"${scopeBinding.hostKind}","reviewedAt":"ISO-8601 UTC","provider":"optional","model":"optional"}\n}\nCompleted status cannot use blocked verdict. Blocked or failed status must use blocked verdict. needs-revision and needs-evidence require at least one finding and action item.`;
+export function reviewerPrompt(reviewScope) {
+  const declared = reviewScope.reviewedArtifacts.map((item) => `- ${item.path} (${item.sizeBytes} bytes; SHA-256 ${item.sha256})`).join("\n");
+  return `You are acting in the Dove Reviewer role for a user-managed separate review exchange. This prompt and native role definition do not prove independence, identity, or authority.\n\nDeclared frozen content boundary:\n${declared}\n\nRead only those exact project-relative files. Their content must match the supplied fingerprints. Do not access the parent transcript, Trellis task or specs, Dove state, directories, or any undeclared file. Do not edit, write, self-fix, rebut, invoke Dove, launch another reviewer, or delegate.\n\nRubric: assess correctness and internal coherence; evidence and claim scope; omissions and material risk; reproducibility; fairness or information leakage; and preservation of failures, denominators, and uncertainty. Do not claim authority, identity, sign-off, acceptance, or independence from this prompt alone.\n\nReturn exactly one JSON object with this shape, then a Markdown report:\n{\n  "status": "completed|blocked|failed",\n  "verdict": "coherent|needs-revision|needs-evidence|blocked",\n  "summary": "concise summary",\n  "rubric": ["rubric item assessed"],\n  "findings": [{"findingId":"safe-label","severity":"low|medium|high","summary":"concise finding","linkedArtifactPaths":["one-or-more-declared-paths"]}],\n  "actionItems": ["action"],\n  "report": "complete Markdown report",\n  "provenance": {"hostKind":"${reviewScope.hostKind}","provider":"optional","model":"optional"},\n  "limitations": ["scope or evidence limitation"],\n  "reviewedAt": "ISO-8601 UTC"\n}\nDo not add any other JSON fields. Completed status cannot use blocked verdict. Blocked or failed status must use blocked verdict. needs-revision and needs-evidence require at least one finding and action item.`;
 }
 
 export function generatedRoleDefinitionEntries() {

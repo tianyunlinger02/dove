@@ -45,13 +45,56 @@ export function renderDovePixelArt(options = {}) {
   return DOVE_PIXEL_ART.map((line) => terminalStyle(line, "cyan", { color })).join("\n");
 }
 
+export function renderCompleteReinstallInventory(target, options = {}) {
+  const color = options.color === true;
+  return [
+    terminalStyle("完全重新安装项目配置将永久删除", "bold", { color }),
+    "",
+    `- 当前项目中的 Dove commands、Skills、agents、MCP、Hook 与安装记录`,
+    `- ${target}/.dove/ 中的项目私有研究状态`,
+    `- ${target}/.dove-archive/ 中的旧归档（如存在）`,
+    `- 旧的 .dove-install/ 项目安装标记（如存在）`,
+    "",
+    "用户级 Dove 安装不会被删除或修改。"
+  ].join("\n");
+}
+
+export function renderDoveLifecycleResult(command, result, options = {}) {
+  const stream = options.stream ?? process.stdout;
+  const env = options.env ?? process.env;
+  const color = terminalColorEnabled(stream, env);
+  if (command === "upgrade") return [
+    terminalStyle("Dove 项目配置升级完成", "bold", { color }),
+    "",
+    "✓ 项目集成已刷新到当前版本",
+    "✓ 研究状态已保留",
+    "✓ Upgrade 仅修改当前项目，不管理用户级 npm 安装"
+  ].join("\n");
+  if (command === "reinstall") return [
+    terminalStyle("Dove 项目配置完全重新安装完成", "bold", { color }),
+    "",
+    "✓ 旧 Dove 集成和研究状态已按确认删除",
+    "✓ 新项目私有状态仅从 .dove/install/ 开始",
+    "✓ 用户级 Dove 安装未被修改"
+  ].join("\n");
+  throw new Error(`Unsupported Dove lifecycle presentation: ${command}/${result?.status ?? "unknown"}.`);
+}
+
 export function renderDoveHome(options = {}) {
   const stream = options.stream ?? process.stdout;
   const env = options.env ?? process.env;
   const interactive = isInteractiveTerminal(stream);
   const color = terminalColorEnabled(stream, env);
   const state = options.state ?? (options.projectInitialized === true ? "current" : "uninitialized");
-  const nextCommand = options.nextCommand ?? (state === "uninitialized" ? "dove" : "/dove:workspace");
+  const nextCommand = options.nextCommand ?? (
+    state === "uninitialized"
+      ? "dove"
+      : state === "needs-sync"
+        ? "dove sync"
+        : state === "blocked"
+          ? "dove doctor"
+          : "/dove:research"
+  );
   const stateLabel = {
     uninitialized: "尚未配置 Dove",
     "needs-sync": "Dove 项目集成需要更新",

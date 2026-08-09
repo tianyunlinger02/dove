@@ -1,92 +1,131 @@
 # Dove
 
-Dove is a local-first research workflow toolkit for papers, experiments, engineering, and review-driven work.
+Dove is a local-first research context toolkit for papers, engineering work, experiments, figures, review, and revision. It helps hosts preserve a clear research direction, immutable Mission branches, sources, experiment evidence, bounded claims, review returns, and reusable Lessons without replacing the substantive work.
 
-It gives host agents a small durable layer for Workspace direction, Mission contracts, evidence, substantive outputs, Lessons, and independent Review findings. Planning and execution remain host work.
+Dove keeps three responsibilities distinct:
 
-## Public model
+- **Planner** frames the goal, scope, unknowns, evidence needs, and stop conditions.
+- **Builder/Author** performs research, coding, experiments, writing, figure production, revision, and rebuttal.
+- **Reviewer** returns findings on a frozen declared scope through a user-managed separate exchange.
 
-Dove exposes exactly:
+Passing tests, host output, local review, or imported review are bounded evidence. They are not automatically completion, scientific correctness, independence, or authority.
 
-- **12 direct Skills**;
-- **14 canonical MCP tools**; and
-- **60 generated adapters**, 12 for each of OpenCode, Codex, Cursor, shared-agent hosts, and Claude Code.
+## Current public inventory
 
-Generated adapters are package artifacts. Their presence does not establish host registration or readiness.
+Dove 0.7.0 exposes:
 
-The three primary responsibilities remain distinct:
+- **9 flat Skills**: `research`, `status`, `source`, `experiment`, `draft`, `figure`, `review`, `rebuttal`, and `lessons`;
+- **8 public MCP tools**;
+- **45 generated adapters**, nine for each of five host formats;
+- **7 runtime CLI commands**: `init`, `sync`, `upgrade`, `reinstall`, `doctor`, `mcp`, and `hook`;
+- **5 standalone package bundles**; and
+- **7 Research Format 1 entities**: Workspace, Mission, Source, Experiment, Claim, Review, and Lessons.
 
-- **Planner** defines the goal, scope, dependencies, evidence needs, and completion conditions.
-- **Builder/Author** performs substantive research, code, writing, experiments, figures, revisions, and author-side rebuttal.
-- **Reviewer** independently assesses one frozen declared artifact scope and returns findings without edits.
+Generated adapters do not prove project installation, MCP registration, connection, or readiness. Claude Code is the only host with a complete project initialization and registration path in this release.
 
 ## Install and initialize
 
-Requirements are Node.js `>=22`, npm, and Claude Code for the currently accepted project initialization path.
+Requirements: Node.js `>=22`, npm, and Claude Code for the supported project integration path.
 
-The bare public npm package named `dove` is unrelated. Install an exact Dove release artifact supplied by a trusted release channel:
+Install an exact trusted Dove artifact for the current user. The bare public npm package named `dove` is unrelated, so do not treat bare `npm install -g dove` or bare `npx dove` as trusted release instructions.
 
 ```bash
 npm install --global <exact-dove-package-specifier>
 cd <target-project>
 dove init --host claude
-dove doctor
 ```
 
-Project initialization writes managed integration under `.dove-install/` plus project-local Claude and MCP configuration. It does not create `.dove/` or a Mission. Re-enter Claude Code from the project, approve Dove MCP if prompted, then run:
+Current project integration is recorded at `.dove/install/manifest.json`. Initialization installs project-local Claude adapters, Reviewer definition, ambient resources, MCP registration, and the prompt hook. It does not initialize Research Format 1, create a Workspace, or create a Mission.
+
+Leave and re-enter Claude Code after initialization so the host can load the project MCP registration. Then continue normal project work or invoke a Skill such as:
 
 ```text
-/dove:workspace
+/dove:research
+/dove:status
+/dove:experiment
+/dove:draft
 ```
 
-The Workspace Skill inspects the project, states its overall situation and structure, and immediately establishes or replaces one concise research mainline. An explicit archive reset is required for unsupported prior state.
+A Research Workspace is optional. `/dove:research` first requests a zero-write Dove projection. If no Workspace or relevant Mission exists, the host may inspect ordinary project material outside `.dove`—README, docs, source, tests, configuration, results, and existing artifacts—to form a provisional research frame. It does not initialize a Workspace or create a Mission automatically.
 
-## Direct Skills
+## Skills and real host work
 
-Every Skill runs directly and accepts optional user text.
-
-| Skill | Purpose |
+| Skill | Responsibility |
 |---|---|
-| `dove.workspace` | Establish or replace the project research mainline. |
-| `dove.mission` | Create a root or child Mission, or reevaluate current research judgment. |
-| `dove.status` | Read current Workspace and Mission status without writes. |
-| `dove.lessons` | Read or explicitly update the complete canonical Lessons document. |
-| `dove.source` | Discover external material, register a captured candidate, or record rejection. |
-| `dove.note` | Research and synthesize internal project material into a normal artifact. |
-| `dove.experience` | Conceive and prevalidate experiments before protocol freeze. |
-| `dove.experiment` | Freeze a formal protocol or record its full-denominator result. |
-| `dove.draft` | Write or revise a project draft, then archive its current path and references. |
-| `dove.figure` | Gather materials, draw a figure, and archive it with caption and QA. |
-| `dove.review` | Freeze scope, run one isolated Reviewer, and archive its findings. |
-| `dove.rebuttal` | Perform author-side revision and archive a response tied to current findings. |
+| `research` | Read the smallest Dove projection, explore ordinary project material when durable context is absent, and perform bounded research work. |
+| `status` | Read current research context without writes. |
+| `source` | Discover, read, and verify real material with host tools; record only Sources actually used when durable citation context is needed. |
+| `experiment` | Design and execute real experiments with host tools; preserve failures, denominators, deviations, and uncertainty; persist plans/results only when needed. |
+| `draft` | Create or revise ordinary project draft files from current evidence. |
+| `figure` | Gather materials, produce an ordinary figure artifact and caption, and validate labels and provenance. |
+| `review` | Prepare a frozen scope, let the user manage a separate reviewer exchange, import the strict return, and inspect coverage. |
+| `rebuttal` | Perform author-side response and revision work tied to actual findings and evidence. |
+| `lessons` | Read or explicitly replace the complete advisory Markdown document while preserving its existing structure. |
 
-A new independent goal creates a root Mission. Continuation, narrowing, comparison, recovery, or follow-up creates a child Mission with explicit parent provenance. Existing work is selected by the exact visible one-based Mission number shown by status.
+Dove state is accessed only through public MCP tools. Ordinary project materials and artifacts are read, created, edited, and validated with normal host tools. Skills must never read or write `.dove` directly.
 
-## Lessons and ambient entry
+## Eight MCP tools
 
-Dove has one canonical advisory document: `.dove/LESSONS.md`. A read is zero-write. An explicit update reads the complete Markdown first, preserves its machine-only binding, and atomically replaces the complete document under its five stable sections. Lessons create no Mission and are not evidence, authority, or completion proof.
+1. `query_dove_research`
+2. `manage_dove_workspace`
+3. `manage_dove_missions`
+4. `manage_dove_sources`
+5. `manage_dove_experiments`
+6. `manage_dove_claims`
+7. `manage_dove_reviews`
+8. `manage_dove_lessons`
 
-Claude installs two hidden non-slash routes:
+Each tool returns natural human text plus `structuredContent` with stable English machine keys. Every tool accepts an optional `language` of `zh` or `en`; otherwise Dove resolves project configuration, environment settings, and the default Chinese preference.
 
-- ordinary clear work uses `dove-intake`, chooses `ordinary` or `research`, creates through `create_ambient_dove_mission`, then resumes the original task only after success;
-- natural Lessons requests such as “remember this experience” or “reflect on what we learned” use `dove-lessons-intake` and only `manage_dove_lessons`, without creating a Mission.
+`query_dove_research` treats a completely absent Research Workspace and install-only `.dove` state as normal zero-write results with `status: "absent"`. A healthy Workspace with no Missions is also a successful empty overview. Unknown Missions, invalid input, unsupported formats, and blocked operations return stable safe categories without leaking absolute paths or raw storage errors. Legacy, unknown, malformed, and incomplete research formats continue to fail closed.
 
-Both routes may ask one zero-write clarification round for material ambiguity. Slash commands retain explicit routing.
+## Research Format 1
 
-## Domain boundaries
+Current research state is identified by:
 
-- **Source** is external material discovered and visibly captured with host-native tools before registration. A registered Source is a candidate, not positive trust.
-- **Note** is internal project research and synthesis. It is a normal project artifact, not a Dove Note store.
-- **Experience** is experimental conception and prevalidation.
-- **Experiment** begins at formal protocol freeze and records the real result with denominator, failures, deviations, limitations, and declared checks.
-- **Draft**, **Figure**, and **Rebuttal** are thin archive workflows: the host produces the substantive artifact; Dove records its current project path, references, QA, and findings without a parallel mirror.
-- **Review** starts one Review Skill Mission, freezes one exact current artifact scope without writes, launches exactly one fresh read-only native `dove-reviewer`, waits synchronously, and atomically archives its structured non-authoritative findings.
+```json
+{"format":"dove-research-v1"}
+```
 
-## Output and state
+under `.dove/format.json`. The optional research siblings are:
 
-Human output comes from `report`. Optional `researchHandoff` and `hostControl` remain machine-only. When a typed closure request is supplied, the host invokes its fixed tool exactly once with bound arguments unchanged and declared outcome fields and defaults.
+- `.dove/workspace.json`
+- `.dove/missions/*.json`
+- `.dove/sources/*.json`
+- `.dove/experiments/*.plan.json` and `*.result.json`
+- `.dove/claims/*.json`
+- `.dove/reviews/*.json`
+- `.dove/LESSONS.md`
 
-`.dove-install/` is managed project integration. `.dove/` is user-owned current research state. Dove 0.4.0 reads **Schema 18 only**: unsupported earlier state must be explicitly archived and replaced. There is no state migration, compatibility root, alias, or fallback runtime.
+Drafts, notes, code, datasets, logs, papers, figures, and rebuttals remain ordinary project files. Research Format 1 has no Outcome, execution receipt, callback, handoff envelope, private host-control channel, mutable completion gate, or positional public selector.
+
+`.dove-install/` and `.dove-archive/` are legacy project-lifecycle inputs only. Upgrade may converge valid legacy installation metadata while preserving current Research Format 1 bytes. Complete Reinstall deletes selected-project Dove state only after one explicit confirmation whose default is No. Neither lifecycle operation manages the user's npm installation.
+
+## Reviewer boundary
+
+Review is a user-managed separate exchange:
+
+1. `local-preflight` checks an explicit artifact boundary without writes.
+2. `prepare` freezes project-relative paths, sizes, and fingerprints.
+3. The user gives that package to a separately selected reviewer session or person.
+4. `import` accepts the strict object containing `status`, `verdict`, `summary`, `rubric`, `findings`, `actionItems`, `report`, `provenance`, `limitations`, and `reviewedAt`.
+5. `coverage` checks whether reviewed bytes are still current.
+
+Dove never launches or impersonates the reviewer. A prompt, agent definition, provenance string, or imported report does not establish independence, identity, authority, acceptance, or sign-off.
+
+## Runtime CLI
+
+```text
+dove init
+dove sync
+dove upgrade
+dove reinstall
+dove doctor
+dove mcp serve
+dove hook user-prompt-submit
+```
+
+The runtime CLI manages integration, diagnosis, lifecycle, MCP serving, and the Claude prompt hook. Research business operations are MCP/Skill surfaces, not CLI commands.
 
 ## Documentation
 
@@ -94,21 +133,17 @@ Human output comes from `report`. Optional `researchHandoff` and `hostControl` r
 - [Usage](docs/USAGE.md)
 - [Packaging](docs/PACKAGING.md)
 - [Capability matrix](docs/CAPABILITY_MATRIX.md)
-- [Safe output samples](docs/DOVE_COMMAND_OUTPUT_SAMPLES.md)
+- [Output samples](docs/DOVE_COMMAND_OUTPUT_SAMPLES.md)
 
 ## Source-checkout validation
 
 ```bash
-npm ci
-npm run build:check
 npm run commands:check
 npm run commands:validate
 npm run mcp:validate
-npm run workflow-goals:validate
-npm run governance:audit
-npm test
+npm run check
 npm run release:check
 npm run pack:dry-run
 ```
 
-Generated adapters and standalone bundles are checked release artifacts and are not regenerated during consumer installation.
+These checks validate software contracts and generated artifacts. They do not certify research claims or establish independent review.

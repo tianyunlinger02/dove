@@ -10,21 +10,11 @@ import { createTempRoot } from "../helpers/temp-root.mjs";
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const PACKAGE = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
 const CLAUDE_COMMAND_NAMES = Object.freeze([
-  "draft",
-  "experience",
-  "figure",
-  "lessons",
-  "mission",
-  "note",
-  "rebuttal",
-  "review",
-  "source",
-  "status",
-  "experiment",
-  "workspace"
+  "draft", "experiment", "figure", "lessons", "rebuttal", "research", "review", "source", "status"
 ]);
 const CLAUDE_EXCLUSIVE_PATHS = Object.freeze([
   ...CLAUDE_COMMAND_NAMES.map((name) => `.claude/commands/dove/${name}.md`),
+  ".claude/agents/dove-reviewer.md",
   ".claude/rules/dove.md",
   ".claude/skills/dove-intake/SKILL.md",
   ".claude/skills/dove-lessons-intake/SKILL.md"
@@ -174,7 +164,9 @@ function initializeClaudeProject(root, options = {}) {
 }
 
 function assertNoProjectRuntime(root) {
-  assert.equal(fs.existsSync(path.join(root, ".dove")), false, "project init must not create research state");
+  assert.equal(fs.existsSync(path.join(root, ".dove", "install", "manifest.json")), true, "project init must create only current integration state");
+  assert.equal(fs.existsSync(path.join(root, ".dove", "format.json")), false, "project init must not create Research Format 1");
+  assert.deepEqual(fs.readdirSync(path.join(root, ".dove")), ["install"]);
   for (const directory of ["bin", "dist", "mcp", "scripts"]) {
     assert.equal(fs.existsSync(path.join(root, directory)), false, `project init created runtime directory: ${directory}`);
   }
@@ -223,8 +215,8 @@ test("packed init defaults to clean human text while JSON remains machine-readab
   assertSuccess(human, "human project initialization");
   assert.match(human.stdout, /Dove 已在此项目启用/u);
   assert.match(human.stdout, /Claude Code/u);
-  assert.match(human.stdout, /科研主线尚未建立/u);
-  assert.match(human.stdout, /\/dove:workspace/u);
+  assert.match(human.stdout, /Research Workspace 尚未建立也不影响普通项目工作/u);
+  assert.match(human.stdout, /\/dove:research/u);
   assert.match(human.stdout, /重新进入 Claude Code/u);
   assert.doesNotMatch(human.stdout, /\[|writtenPaths|changedPaths|transactionState|\.claude\/commands|\.mcp\.json/u);
   assertNoProjectRuntime(humanRoot);
@@ -240,7 +232,7 @@ test("packed init defaults to clean human text while JSON remains machine-readab
   const home = runCli([], { cwd: humanRoot });
   assertSuccess(home, "initialized project home");
   assert.match(home.stdout, /项目集成已是当前版本/u);
-  assert.match(home.stdout, /\/dove:workspace/u);
+  assert.match(home.stdout, /\/dove:research/u);
   assert.doesNotMatch(home.stdout, /Usage:|\[/u);
 
   const repeated = runCli(["init", "--project", humanRoot, "--host", "claude"]);
@@ -256,7 +248,7 @@ test("packed init defaults to clean human text while JSON remains machine-readab
   assert.doesNotMatch(sync.stdout, /\[|writtenPaths|transactionState/u);
 });
 
-test("clean Claude project init writes only manifest, 12 adapters, ambient files, and shared JSON fragments", () => {
+test("clean Claude project init writes only current manifest, nine adapters, ambient files, and shared JSON fragments", () => {
   const root = createTempRoot("dove-cli-clean-project-");
   const existingMcp = {
     projectMetadata: { keep: true, values: [1, 2, 3] },
@@ -275,13 +267,13 @@ test("clean Claude project init writes only manifest, 12 adapters, ambient files
 
   initializeClaudeProject(root);
 
-  const manifest = JSON.parse(fs.readFileSync(path.join(root, ".dove-install", "manifest.json"), "utf8"));
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, ".dove", "install", "manifest.json"), "utf8"));
   assert.equal(manifest.schemaVersion, 1);
   assert.equal(manifest.package.name, PACKAGE.name);
   assert.equal(manifest.package.version, PACKAGE.version);
-  assert.deepEqual(manifest.runtime, { mode: "user-cli", protocolVersion: 1 });
+  assert.deepEqual(manifest.runtime, { mode: "user-cli", protocolVersion: 2 });
   assert.deepEqual(manifest.hosts, ["claude"]);
-  assert.equal(manifest.managed.length, 18);
+  assert.equal(manifest.managed.length, 16);
   assert.deepEqual(
     new Set(manifest.managed.map((entry) => entry.path)),
     new Set([...CLAUDE_EXCLUSIVE_PATHS, ...CLAUDE_FRAGMENT_PATHS])
@@ -330,20 +322,20 @@ test("sync resolves the installed root from nested cwd and is byte-idempotent", 
   assertNoProjectRuntime(root);
 });
 
-test("business, MCP, and hook routes fail closed outside an initialized project", () => {
-  for (const [label, args, options] of [
-    ["manifest-driven sync", ["sync", "--project", "PROJECT", "--json"], {}],
-    ["business status", ["status", "--json"], {}],
-    ["MCP serve", ["mcp", "serve", "--project", "PROJECT"], { timeout: 3000 }],
+test("removed business CLI, MCP, and hook routes fail closed outside an initialized project", () => {
+  for (const [label, args, options, pattern] of [
+    ["manifest-driven sync", ["sync", "--project", "PROJECT", "--json"], {}, /not initialized|run ['"]?dove init|Dove project integration/iu],
+    ["removed business status", ["status", "--json"], {}, /Usage:/u],
+    ["MCP serve", ["mcp", "serve", "--project", "PROJECT"], { timeout: 3000 }, /not initialized|run ['"]?dove init|Dove project integration/iu],
     ["UserPromptSubmit hook", ["hook", "user-prompt-submit", "--project", "PROJECT"], {
       input: `${JSON.stringify({ hook_event_name: "UserPromptSubmit", prompt: "Implement the parser and add regression tests." })}\n`
-    }]
+    }, /not initialized|run ['"]?dove init|Dove project integration/iu]
   ]) {
     const root = createTempRoot(`dove-cli-uninitialized-${label.replaceAll(" ", "-")}-`);
     const argsWithProject = args.map((item) => item === "PROJECT" ? root : item);
     const before = snapshotTree(root);
     const result = runCli(argsWithProject, { cwd: root, ...options });
-    assertFailure(result, label, /not initialized|run ['"]?dove init|Dove project integration/iu);
+    assertFailure(result, label, pattern);
     assert.deepEqual(snapshotTree(root), before, `${label} wrote to an uninitialized project`);
     assert.equal(fs.existsSync(path.join(root, ".dove")), false);
   }
@@ -377,8 +369,8 @@ test("installed hook output and PATH-based MCP route are minimally connected wit
   });
   const hookPayload = parseJsonOutput(hook, "installed UserPromptSubmit route");
   assert.equal(hookPayload.hookSpecificOutput.hookEventName, "UserPromptSubmit");
-  assert.match(hookPayload.hookSpecificOutput.additionalContext, /dove-intake|create_ambient_dove_mission/u);
-  assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+  assert.match(hookPayload.hookSpecificOutput.additionalContext, /dove-intake|zero-write role and Skill routing/u);
+  assert.equal(fs.existsSync(path.join(root, ".dove", "format.json")), false);
 
   const fixture = installPackedFixture();
   const client = createMcpStdioClient({
@@ -397,12 +389,14 @@ test("installed hook output and PATH-based MCP route are minimally connected wit
     client.notify("notifications/initialized");
     const listed = await client.call("tools/list");
     const toolNames = new Set(listed.tools.map((tool) => tool.name));
-    assert.equal(toolNames.has("query_dove_status"), true);
-    assert.equal(toolNames.has("create_ambient_dove_mission"), true);
+    assert.deepEqual([...toolNames].sort(), [
+      "manage_dove_claims", "manage_dove_experiments", "manage_dove_lessons", "manage_dove_missions",
+      "manage_dove_reviews", "manage_dove_sources", "manage_dove_workspace", "query_dove_research"
+    ]);
   } finally {
     client.kill();
   }
-  assert.equal(fs.existsSync(path.join(root, ".dove")), false);
+  assert.equal(fs.existsSync(path.join(root, ".dove", "format.json")), false);
 });
 
 test("doctor is zero-write and requires Connected Claude readiness", () => {
@@ -472,5 +466,6 @@ test("legacy copied runtime is rejected by init and reported unhealthy by zero-w
   assert.equal(payload.legacyCopiedRuntime.detected, true);
   assert.equal(payload.legacyCopiedRuntime.healthy, false);
   assert.deepEqual(snapshotTree(initializedRoot), doctorBefore);
-  assert.equal(fs.existsSync(path.join(initializedRoot, ".dove")), false);
+  assert.equal(fs.existsSync(path.join(initializedRoot, ".dove", "install", "manifest.json")), true);
+  assert.equal(fs.existsSync(path.join(initializedRoot, ".dove", "format.json")), false);
 });

@@ -6,10 +6,16 @@ import path from "node:path";
 import { PROJECT_HOST_IDS } from "../../src/core/host-registry.mjs";
 import {
   INSTALLATION_MANIFEST_PATH,
+  LEGACY_INSTALLATION_MANIFEST_PATH,
   createProjectInstallationManifest,
   serializeProjectInstallationManifest
 } from "../../src/core/project-installation-manifest.mjs";
-import { inspectProjectRoot, resolveInstalledProjectRoot, resolveProjectRootForInit } from "../../src/core/project-root.mjs";
+import {
+  inspectProjectRoot,
+  resolveInstalledProjectRoot,
+  resolveProjectRootForInit,
+  resolveProjectRootForSetup
+} from "../../src/core/project-root.mjs";
 import { cleanupTempRoot, createTempRoot } from "../helpers/temp-root.mjs";
 
 const OPTIONS = { hostIds: PROJECT_HOST_IDS };
@@ -23,7 +29,7 @@ function writeManifest(root) {
     createdAt: "2026-07-26T00:00:00.000Z",
     updatedAt: "2026-07-26T00:00:00.000Z"
   }, OPTIONS);
-  fs.mkdirSync(path.join(root, ".dove-install"), { recursive: true });
+  fs.mkdirSync(path.join(root, path.posix.dirname(INSTALLATION_MANIFEST_PATH)), { recursive: true });
   fs.writeFileSync(path.join(root, INSTALLATION_MANIFEST_PATH), serializeProjectInstallationManifest(manifest, OPTIONS));
 }
 
@@ -67,6 +73,40 @@ test("implicit init recognizes Git worktree .git files", () => {
   }
 });
 
+test("setup resolver selects the nearest installation marker or Git root without trusting a manifest", () => {
+  const root = createTempRoot("dove-project-root-setup-");
+  try {
+    fs.mkdirSync(path.join(root, ".git"));
+    const nested = path.join(root, "docs", "nested");
+    fs.mkdirSync(nested, { recursive: true });
+    assert.equal(resolveProjectRootForSetup(nested), fs.realpathSync.native(root));
+
+    const inner = path.join(root, "packages", "paper");
+    fs.mkdirSync(path.join(inner, path.posix.dirname(INSTALLATION_MANIFEST_PATH)), { recursive: true });
+    fs.writeFileSync(path.join(inner, INSTALLATION_MANIFEST_PATH), "not valid JSON\n", "utf8");
+    const innerNested = path.join(inner, "drafts");
+    fs.mkdirSync(innerNested);
+    assert.equal(resolveProjectRootForSetup(innerNested), fs.realpathSync.native(inner));
+  } finally {
+    cleanupTempRoot(root);
+  }
+});
+
+test("setup resolver finds a legacy marker from a nested directory without granting runtime authority", () => {
+  const root = createTempRoot("dove-project-root-legacy-setup-");
+  try {
+    const nested = path.join(root, "drafts", "nested");
+    fs.mkdirSync(nested, { recursive: true });
+    fs.mkdirSync(path.join(root, path.posix.dirname(LEGACY_INSTALLATION_MANIFEST_PATH)), { recursive: true });
+    fs.writeFileSync(path.join(root, LEGACY_INSTALLATION_MANIFEST_PATH), "{malformed legacy marker\n", "utf8");
+    assert.equal(resolveProjectRootForSetup(nested), fs.realpathSync.native(root));
+    assert.throws(() => resolveInstalledProjectRoot(nested), /Run 'dove init'/u);
+    assert.throws(() => resolveProjectRootForInit(root, OPTIONS), /legacy project installation.*dove upgrade/iu);
+  } finally {
+    cleanupTempRoot(root);
+  }
+});
+
 test("installed resolver searches upward and defaults manifest host inventory", () => {
   const root = createTempRoot("dove-project-root-installed-");
   try {
@@ -86,16 +126,17 @@ test("installed resolver searches upward and defaults manifest host inventory", 
   }
 });
 
-test("installed resolver does not skip malformed inner installation marker", () => {
-  const root = createTempRoot("dove-project-root-inner-invalid-");
+test("installed resolver ignores an inner install-directory residue without a current marker", () => {
+  const root = createTempRoot("dove-project-root-inner-residue-");
   try {
     writeManifest(root);
     const inner = path.join(root, "packages", "inner");
-    fs.mkdirSync(path.join(inner, ".dove-install"), { recursive: true });
-    assert.throws(() => resolveInstalledProjectRoot(inner), /incomplete.*manifest\.json is missing/iu);
+    fs.mkdirSync(path.join(inner, path.posix.dirname(INSTALLATION_MANIFEST_PATH)), { recursive: true });
+    assert.equal(resolveInstalledProjectRoot(inner), fs.realpathSync.native(root));
+    assert.throws(() => resolveProjectRootForInit(inner), /incomplete.*manifest\.json is missing/iu);
     const inspected = inspectProjectRoot(inner);
-    assert.equal(inspected.state, "invalid");
-    assert.match(inspected.error, /manifest\.json is missing/u);
+    assert.equal(inspected.state, "initialized");
+    assert.equal(inspected.root, fs.realpathSync.native(root));
   } finally {
     cleanupTempRoot(root);
   }
@@ -105,7 +146,7 @@ test("installed resolver rejects symlink marker and inspection reports uninitial
   const root = createTempRoot("dove-project-root-symlink-");
   const outside = createTempRoot("dove-project-root-symlink-outside-");
   try {
-    fs.mkdirSync(path.join(root, ".dove-install"));
+    fs.mkdirSync(path.join(root, path.posix.dirname(INSTALLATION_MANIFEST_PATH)), { recursive: true });
     fs.writeFileSync(path.join(outside, "manifest.json"), "{}\n");
     fs.symlinkSync(path.join(outside, "manifest.json"), path.join(root, INSTALLATION_MANIFEST_PATH));
     assert.throws(() => resolveInstalledProjectRoot(root), /must not be a symbolic link/u);

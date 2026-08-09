@@ -4,6 +4,8 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 
 import { renderClaudeReviewerAgent, renderOpenCodeReviewerAgent, reviewerPrompt } from "../../src/core/role-definitions.mjs";
+import { TOOL_INPUT_SCHEMAS } from "../../src/mcp/tool-definitions.mjs";
+import { assertMcpInputSchema } from "../../src/mcp/schema-validation.mjs";
 
 const ROOT = process.cwd();
 
@@ -22,10 +24,36 @@ test("dedicated Reviewer prompt declares only frozen content and structured retu
   });
   assert.match(prompt, /paper\/result\.md \(42 bytes; SHA-256 [a-f0-9]{64}\)/u);
   assert.match(prompt, /Read only those exact project-relative files/u);
-  for (const forbiddenAccess of ["parent transcript", "Trellis task", "ResearchHandoff", "undeclared file"]) assert.match(prompt, new RegExp(forbiddenAccess, "iu"));
+  for (const forbiddenAccess of ["parent transcript", "Trellis task", "Dove state", "undeclared file"]) assert.match(prompt, new RegExp(forbiddenAccess, "iu"));
   for (const forbiddenAction of ["edit", "rebut", "self-fix", "launch another reviewer", "delegate"]) assert.match(prompt, new RegExp(forbiddenAction, "iu"));
-  for (const field of ["status", "verdict", "summary", "findings", "actionItems", "report", "provenance"]) assert.match(prompt, new RegExp(`"${field}"`, "u"));
-  assert.match(prompt, /Do not claim authority, identity, sign-off, or acceptance/u);
+  for (const field of ["status", "verdict", "summary", "rubric", "findings", "actionItems", "report", "provenance", "limitations", "reviewedAt"]) assert.match(prompt, new RegExp(`"${field}"`, "u"));
+  assert.match(prompt, /Do not claim authority, identity, sign-off, acceptance, or independence/u);
+});
+
+test("Reviewer prompt field set passes the strict review import schema", () => {
+  const review = {
+    status: "completed",
+    verdict: "coherent",
+    summary: "The declared artifact is internally coherent.",
+    rubric: ["Correctness and internal coherence"],
+    findings: [],
+    actionItems: [],
+    report: "# Review\n\nNo material finding in the declared scope.\n",
+    provenance: { hostKind: "claude" },
+    limitations: ["Only the declared artifact was reviewed."],
+    reviewedAt: "2026-08-09T00:00:00.000Z"
+  };
+  assert.doesNotThrow(() => assertMcpInputSchema("manage_dove_reviews", {
+    operation: "import",
+    missionId: "mission-review",
+    exchangeId: "exchange-review",
+    review
+  }, TOOL_INPUT_SCHEMAS.get("manage_dove_reviews")));
+  const prompt = reviewerPrompt({ hostKind: "claude", reviewedArtifacts: [{ path: "paper.md", sizeBytes: 1, sha256: "a".repeat(64) }] });
+  assert.deepEqual(
+    [...prompt.matchAll(/^  "([A-Za-z]+)":/gmu)].map((match) => match[1]),
+    Object.keys(review)
+  );
 });
 
 test("Claude and OpenCode Reviewer agents are dedicated and read-only", () => {

@@ -1,401 +1,144 @@
-import { assessMissionCompletion } from "../core/completion-gates.mjs";
-import { operationForTool, operationInteraction, operationPublicProjector, operationRequiresCheckpoint, operationRoute, operationTargetTool } from "../core/operation-registry.mjs";
 import { resolveDoveResponseLanguage } from "../core/i18n.mjs";
-import { ARTIFACT_PATHS, DEFAULT_DOVE_RESPONSE_LANGUAGE } from "../core/schema.mjs";
-import { classifyInvocationError, classifyInvocationOutcome, createInvocationOutcome } from "../core/operational-outcome.mjs";
-import { publicErrorMessage, publicErrorResult, publicResult, renderPublicReport } from "../core/public-reports.mjs";
-import { publicMissionNumberForCandidate, queryDoveMission, queryDoveStatus, resolveMissionNumber } from "../core/mission-queries.mjs";
-import { closeHostOutcome, resolveExecutionReceiptPostCommit } from "../core/execution-receipts.mjs";
-import { prepareResearchDecisionReevaluation, reevaluateResearchDecision } from "../core/research-decision-reevaluation.mjs";
-import { recordResearchOutcome } from "../core/research-outcome.mjs";
-import { normalizeHostWorkspaceArtifactPath, normalizeHostWorkspaceFilePath, normalizeHostWorkspacePath } from "../core/host-path-normalizer.mjs";
-import { readDoveLessons, updateDoveLessons } from "../core/lessons.mjs";
-import { createAmbientDoveMission, createDoveMission, manageDoveWorkspace, newMissionId, startDoveSkillMission } from "../core/mission-contracts.mjs";
-import {
-  recordDoveDraft,
-  recordDoveFigure,
-  recordDoveRebuttal,
-  runExperienceWorkflow,
-  upsertClaims
-} from "../core/retained-domain-workflows.mjs";
-import { querySources, registerSource, verifySource } from "../core/source-trust.mjs";
-import { archiveReviewRecord, scopeReviewRecord } from "../core/review-records.mjs";
-import { currentMutationContext, runWithMutationContext } from "../core/mutation-backend.mjs";
-import { TOOL_INPUT_SCHEMAS, TOOL_OPERATION_SCHEMAS } from "./tool-definitions.mjs";
+import { normalizeHostWorkspaceFilePath } from "../core/host-path-normalizer.mjs";
+import { TOOL_INPUT_SCHEMAS } from "./tool-definitions.mjs";
 import { assertMcpInputSchema } from "./schema-validation.mjs";
+import { invokeResearchAdapter } from "./research-adapter.mjs";
 
-function textResult(envelope, { isError = false, language = DEFAULT_DOVE_RESPONSE_LANGUAGE } = {}) {
-  if (!isPlainObject(envelope?.report) || !isPlainObject(envelope?.hostControl) || !isPlainObject(envelope.hostControl.presentation)) {
-    throw new Error("MCP public output requires a sealed report, presentation, and hostControl envelope.");
-  }
-  const rendered = envelope.hostControl.presentation.mode === "silent"
-    ? ""
-    : renderPublicReport(envelope.report, { language });
-  return {
-    content: rendered ? [{ type: "text", text: rendered }] : [],
-    structuredContent: envelope,
-    ...(isError ? { isError: true } : {})
-  };
-}
+const PRIVATE_KEYS = new Set([
+  "writes",
+  "diagnostics",
+  "reviewedArtifactSetSha256"
+]);
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function dispatchData(root, name, args) {
-  switch (name) {
-    case "manage_dove_workspace": return manageDoveWorkspace(root, args);
-    case "create_dove_mission": return createDoveMission(root, args);
-    case "start_dove_skill_mission": return startDoveSkillMission(root, args);
-    case "reevaluate_research_decision": return reevaluateResearchDecision(root, args);
-    case "query_dove_mission": return queryDoveMission(root, args);
-    case "query_dove_status": return queryDoveStatus(root, args);
-    case "assess_mission_completion": return assessMissionCompletion(root, args);
-    case "close_host_outcome": return closeHostOutcome(root, args);
-    case "record_research_outcome": return recordResearchOutcome(root, args);
-    case "query_sources": return querySources(root, args);
-    case "read_dove_lessons": return readDoveLessons(root, args);
-    case "update_dove_lessons": return updateDoveLessons(root, args);
-    case "register_source": return registerSource(root, args);
-    case "verify_source": return verifySource(root, args);
-    case "upsert_claims": return upsertClaims(root, args);
-    case "run_experience_workflow": return runExperienceWorkflow(root, args);
-    case "record_dove_draft": return recordDoveDraft(root, args);
-    case "record_dove_figure": return recordDoveFigure(root, args);
-    case "scope_review_record": return scopeReviewRecord(root, args);
-    case "archive_review_record": return archiveReviewRecord(root, args);
-    case "record_dove_rebuttal": return recordDoveRebuttal(root, args);
-    default: throw new Error(`Unknown tool: ${name}`);
+function publicValue(value) {
+  if (Array.isArray(value)) return value.map((item) => publicValue(item)).filter((item) => item !== undefined);
+  if (!isPlainObject(value)) {
+    if (typeof value === "string" && (value.startsWith(".dove/") || value.startsWith("/"))) return undefined;
+    return value;
   }
+  const projected = {};
+  for (const [field, item] of Object.entries(value)) {
+    if (PRIVATE_KEYS.has(field) || /(?:Digest|Token|Binding)$/u.test(field)) continue;
+    const next = publicValue(item);
+    if (next !== undefined) projected[field] = next;
+  }
+  return projected;
 }
 
-function invokeMutation(root, name, callback) {
-  const existing = currentMutationContext(root);
-  if (existing) return { data: callback(existing), committed: false };
-  return {
-    data: runWithMutationContext(root, {
-      actionId: name.replaceAll("_", "-"),
-      mutationMode: "direct-process",
-      hostId: "mcp"
-    }, callback),
-    committed: true
+function successMessage(name, data, language) {
+  if (typeof data?.markdown === "string") return data.markdown;
+  if (data?.status === "absent") {
+    return language === "en"
+      ? "No Dove Research Workspace has been established. Nothing was written; you can first inspect ordinary project materials and initialize research state only if explicitly needed."
+      : "当前尚未建立 Dove Research Workspace。本次没有写入任何内容；可以先查看普通项目材料，只有明确需要时再初始化研究状态。";
+  }
+  const messages = language === "en" ? {
+    query_dove_research: "The requested research context was read without changing it.",
+    manage_dove_workspace: "The research direction was updated.",
+    manage_dove_missions: "The requested Mission operation completed.",
+    manage_dove_sources: "The requested Source operation completed.",
+    manage_dove_experiments: "The requested Experiment operation completed.",
+    manage_dove_claims: "The requested Claim operation completed.",
+    manage_dove_reviews: "The requested review exchange operation completed.",
+    manage_dove_lessons: "The Lessons document was updated."
+  } : {
+    query_dove_research: "已读取所需研究上下文，没有修改研究状态。",
+    manage_dove_workspace: "已更新研究方向。",
+    manage_dove_missions: "已完成所请求的 Mission 操作。",
+    manage_dove_sources: "已完成所请求的 Source 操作。",
+    manage_dove_experiments: "已完成所请求的 Experiment 操作。",
+    manage_dove_claims: "已完成所请求的 Claim 操作。",
+    manage_dove_reviews: "已完成所请求的评审交换操作。",
+    manage_dove_lessons: "已更新 Lessons 文档。"
   };
+  return messages[name] ?? (language === "en" ? "The requested Dove operation completed." : "已完成所请求的 Dove 操作。");
 }
 
-function missionRelationshipArgs(root, args) {
-  const result = { ...args };
-  if (Object.hasOwn(result, "dependsOnMissionNumbers")) {
-    result.dependsOnMissionIds = result.dependsOnMissionNumbers.map((missionNumber) => resolveMissionNumber(root, missionNumber, { operation: "Dove mission dependency selection" }).missionId);
-    delete result.dependsOnMissionNumbers;
-  }
-  if (Object.hasOwn(result, "parentMissionNumber")) {
-    const parent = resolveMissionNumber(root, result.parentMissionNumber, { operation: "Dove parent mission selection" });
-    result.parentMissionId = parent.missionId;
-    delete result.parentMissionNumber;
-  }
-  return result;
-}
-
-function coreCheckpointArgs(root, name, args) {
-  if (name !== "create_dove_mission") return args;
-  if (typeof args.goal !== "string" || !args.goal) {
-    throw new Error("Mission creation requires a goal.");
-  }
-  return { ...missionRelationshipArgs(root, args), missionId: newMissionId() };
-}
-
-function checkpointProposal(root, name, args) {
-  return dispatchData(root, name, { ...coreCheckpointArgs(root, name, args), mutationMode: "direct-process" });
-}
-
-function applyCheckpoint(root, name, args, proposal) {
-  const confirmArgs = proposal?.confirmation?.confirmArgs;
-  if (!isPlainObject(confirmArgs)) throw new Error(`${name} did not return private exact replay data.`);
-  return invokeMutation(root, name, () => dispatchData(root, name, confirmArgs));
-}
-
-function normalizeApprovalAction(value) {
-  if (value === "accept" || value === "decline" || value === "cancel") return value;
-  throw new Error("Checkpoint approval returned an unsupported action.");
-}
-
-function publicCheckpointProposalError(name, args, error) {
+function knownFailure(error) {
   const message = error instanceof Error ? error.message : String(error);
-  if (/\.dove\/|\b(?:proposal(?:Digest|Workspace|Version|Token)|confirmArgs|mutationMode|MutationContext|workspaceId|sourceTreeDigest|archiveTarget)\b/u.test(message)) {
-    return new Error("The checkpoint could not be prepared because its validated workspace state is not current.");
-  }
-  return new Error(message);
+  if (/Unknown missionId|unknown Mission/iu.test(message)) return "unknown-mission";
+  if (/does not allow|requires|must be|unknown input|not allowed/iu.test(message)) return "invalid-input";
+  if (/legacy|unsupported.*format/iu.test(message)) return "unsupported-format";
+  if (/invalid Dove Research|malformed|unknown-format|invalid-root/iu.test(message)) return "invalid-research-state";
+  if (/refuses|blocked|conflict/iu.test(message)) return "blocked";
+  return "internal-error";
 }
 
-function checkpointApplyError() {
-  return new Error("The approved checkpoint could not be applied because its validated inputs or workspace state changed.");
+function failureMessage(reason, language) {
+  const messages = language === "en" ? {
+    "unknown-mission": "The requested Mission is not present in the current research records.",
+    "invalid-input": "The request does not match the public Dove tool contract. Check the supplied fields and try again.",
+    "unsupported-format": "The project uses a Dove research format that this version will not read or modify.",
+    "invalid-research-state": "The Dove research state is incomplete or invalid, so the operation was stopped without changes.",
+    blocked: "The operation was stopped by a Dove safety boundary without applying changes.",
+    "internal-error": "The Dove operation could not safely return a result. No research judgment or review authority was recorded."
+  } : {
+    "unknown-mission": "当前研究记录中不存在所请求的 Mission。",
+    "invalid-input": "请求不符合公开 Dove 工具合同，请检查所提供的字段后重试。",
+    "unsupported-format": "项目使用了当前版本不读取、也不修改的 Dove 研究格式。",
+    "invalid-research-state": "Dove 研究状态不完整或无效，操作已停止且未做修改。",
+    blocked: "操作触发了 Dove 安全边界，已停止且未应用修改。",
+    "internal-error": "Dove 操作未能安全返回结果；没有记录任何研究判断或评审权威。"
+  };
+  return messages[reason];
 }
 
-function projectInvocation(root, projectorName, data, operation, options = {}) {
-  return publicResult(projectorName, data, classifyInvocationOutcome(data, operation, options.invocationArgs ?? data), {
-    operation,
-    includeTechnicalAppendix: projectorName === "query_dove_status" && data?.detail === "full",
-    callbackRoot: root,
-    ...(options.callbackResolvers ? { callbackResolvers: options.callbackResolvers } : {}),
-    ...(options.selector ? { selector: options.selector } : {})
-  });
-}
-
-function projectAmbientMissionBeforeCommit(root, name, data, operation, context, options = {}) {
-  context.requireCommitPrecondition(ARTIFACT_PATHS.missionsDir);
-  const missionNumber = publicMissionNumberForCandidate(root, data.mission, { operation: "Mission result selector preparation" });
-  const injectedMissionNumber = options.callbackResolvers?.missionNumber;
-  const callbackResolvers = {
-    missionNumber: (missionId) => {
-      if (missionId !== data.mission.missionId) throw new Error("Mission callback projection does not bind the created candidate.");
-      const resolved = typeof injectedMissionNumber === "function" ? injectedMissionNumber(missionId) : missionNumber;
-      if (resolved !== missionNumber) throw new Error("Mission callback and result selector do not bind the same public mission.");
-      return resolved;
+function toolResult(name, data, language) {
+  const research = publicValue(data);
+  return {
+    content: [{ type: "text", text: successMessage(name, research, language) }],
+    structuredContent: {
+      status: research.status ?? "ok",
+      operation: name,
+      research
     }
   };
-  return projectInvocation(root, name, data, operation, {
-    callbackResolvers,
-    ...(data.operation === "start-skill" ? { selector: { missionNumber } } : {})
-  });
 }
 
-function resolveCheckpointPostCommit(root, applied, data) {
-  return resolveExecutionReceiptPostCommit(root, data, { committed: applied.committed });
+function toolFailure(name, error, language) {
+  const reason = knownFailure(error);
+  return {
+    content: [{ type: "text", text: failureMessage(reason, language) }],
+    structuredContent: {
+      status: "error",
+      operation: name,
+      research: { status: "error", reason }
+    },
+    isError: true
+  };
 }
 
-function routedInvocation(operation, args) {
-  const route = operationRoute(operation, args);
-  const targetName = operationTargetTool(operation, args);
-  const projectorName = operationPublicProjector(operation, args);
-  const targetArgs = { ...args, ...(route?.fixedArgs ?? {}) };
-  if (route && !["create_dove_mission", "start_dove_skill_mission", "reevaluate_research_decision"].includes(targetName)) delete targetArgs.operation;
-  return { targetName, projectorName, targetArgs };
-}
-
-function executeTool(root, name, args, options = {}) {
-  const operation = operationForTool(name);
-  const interaction = operationInteraction(operation, args);
-  const { targetName, projectorName, targetArgs } = routedInvocation(operation, args);
-  const project = (data, projectionOptions = {}) => projectInvocation(root, projectorName, data, operation, { invocationArgs: args, ...projectionOptions });
-  if (name === "manage_dove_workspace" && args.operation === "set-mainline") {
-    const invoked = invokeMutation(root, name, () => manageDoveWorkspace(root, targetArgs));
-    return project(resolveExecutionReceiptPostCommit(root, invoked.data, { committed: invoked.committed }));
-  }
-  if (name === "create_ambient_dove_mission" || targetName === "start_dove_skill_mission") {
-    const invoked = invokeMutation(root, name, (context) => {
-      const data = targetName === "start_dove_skill_mission" ? startDoveSkillMission(root, targetArgs) : createAmbientDoveMission(root, targetArgs);
-      return {
-        data,
-        publicEnvelope: projectAmbientMissionBeforeCommit(root, projectorName, data, operation, context, options)
-      };
-    });
-    resolveExecutionReceiptPostCommit(root, invoked.data.data, { committed: invoked.committed });
-    return invoked.data.publicEnvelope;
-  }
-  if (operationRequiresCheckpoint(operation, args)) {
-    let proposal;
-    try {
-      proposal = checkpointProposal(root, targetName, targetArgs);
-    } catch (error) {
-      throw publicCheckpointProposalError(name, args, error);
-    }
-    const approval = publicResult(projectorName, proposal, classifyInvocationOutcome(proposal, operation, args), { operation }).report.approval;
-    if (!approval) throw new Error(`${name} did not return a public approval card.`);
-    if (typeof options.requestCheckpointApproval !== "function") throw new Error("This Dove checkpoint requires an MCP client with elicitation support.");
-    return Promise.resolve(options.requestCheckpointApproval(approval)).then((value) => {
-      const action = normalizeApprovalAction(value);
-      if (action !== "accept") {
-        const data = { status: action === "decline" ? "declined" : "cancelled", zeroWrite: true, message: "No changes were made.", approval };
-        return project(data);
-      }
-      let applied;
-      try {
-        applied = applyCheckpoint(root, targetName, targetArgs, proposal);
-      } catch {
-        throw checkpointApplyError();
-      }
-      const resolvePostCommit = (data) => resolveCheckpointPostCommit(root, applied, data);
-      if (applied.data && typeof applied.data.then === "function") {
-        return applied.data.then((data) => project(resolvePostCommit(data))).catch(() => { throw checkpointApplyError(); });
-      }
-      return project(resolvePostCommit(applied.data));
-    });
-  }
-  if (interaction === "read") {
-    const data = dispatchData(root, targetName, targetArgs);
-    return data && typeof data.then === "function" ? data.then((value) => project(value)) : project(data);
-  }
-  const invoked = invokeMutation(root, name, () => dispatchData(root, targetName, targetName === "reevaluate_research_decision"
-    ? prepareResearchDecisionReevaluation(root, targetArgs)
-    : targetArgs));
-  if (invoked.data && typeof invoked.data.then === "function") {
-    return invoked.data.then((data) => project(resolveExecutionReceiptPostCommit(root, data, { committed: invoked.committed })));
-  }
-  return project(resolveExecutionReceiptPostCommit(root, invoked.data, { committed: invoked.committed }));
-}
-
-function hostFile(root, value, label) {
-  return normalizeHostWorkspaceFilePath(root, value, label);
-}
-
-function hostFiles(root, values, label) {
-  return Array.isArray(values) ? values.map((value, index) => hostFile(root, value, `${label}[${index}]`)) : values;
-}
-
-function hostArtifact(root, value, label) {
-  return normalizeHostWorkspaceArtifactPath(root, value, label);
-}
-
-function hostArtifacts(root, values, label) {
-  return Array.isArray(values) ? values.map((value, index) => hostArtifact(root, value, `${label}[${index}]`)) : values;
-}
-
-function hostPaths(root, values, label) {
-  return Array.isArray(values) ? values.map((value, index) => normalizeHostWorkspacePath(root, value, `${label}[${index}]`)) : values;
-}
-
-function typedEvidence(root, reference, label) {
-  if (typeof reference !== "string") return reference;
-  for (const prefix of ["source:"]) if (reference.startsWith(prefix)) return reference;
-  for (const prefix of ["artifact:", "validation:"]) {
-    if (reference.startsWith(prefix)) return `${prefix}${hostFile(root, reference.slice(prefix.length), label)}`;
-  }
-  return hostFile(root, reference, label);
-}
-
-function typedEvidenceList(root, values, label) {
-  return Array.isArray(values) ? values.map((value, index) => typedEvidence(root, value, `${label}[${index}]`)) : values;
-}
-
-function missionEvidence(root, reference, label) {
-  if (typeof reference !== "string") return reference;
-  for (const prefix of ["source:"]) if (reference.startsWith(prefix)) return reference;
-  for (const prefix of ["artifact:", "validation:"]) {
-    if (reference.startsWith(prefix)) return `${prefix}${hostArtifact(root, reference.slice(prefix.length), label)}`;
-  }
-  return reference;
-}
-
-function missionEvidenceList(root, values, label) {
-  return Array.isArray(values) ? values.map((value, index) => missionEvidence(root, value, `${label}[${index}]`)) : values;
-}
-
-function findingReference(root, reference, label) {
-  if (typeof reference !== "string") return reference;
-  const separator = reference.lastIndexOf("#");
-  if (separator <= 0 || separator === reference.length - 1) return reference;
-  return `${hostFile(root, reference.slice(0, separator), label)}#${reference.slice(separator + 1)}`;
-}
-
-function normalizeHostPathInputs(root, name, args) {
+function normalizePaths(root, name, args) {
   const result = structuredClone(args);
-  switch (name) {
-    case "register_source":
-      if (result.capturePath !== undefined) result.capturePath = hostFile(root, result.capturePath, "capturePath");
-      break;
-    case "ingest_execution_receipt":
-      if (Array.isArray(result.artifacts)) result.artifacts = result.artifacts.map((item, index) => ({ ...item, path: hostFile(root, item.path, `artifacts[${index}].path`) }));
-      if (Array.isArray(result.validations)) result.validations = result.validations.map((item, index) => ({ ...item, reference: hostFile(root, item.reference, `validations[${index}].reference`) }));
-      if (Array.isArray(result.criteriaSatisfied)) result.criteriaSatisfied = result.criteriaSatisfied.map((item, index) => ({ ...item, evidenceRefs: typedEvidenceList(root, item.evidenceRefs, `criteriaSatisfied[${index}].evidenceRefs`) }));
-      break;
-    case "close_host_outcome": {
-      result.artifactPaths = hostFiles(root, result.artifactPaths, "artifactPaths");
-      const artifactPaths = new Set(result.artifactPaths ?? []);
-      result.validationPaths = hostFiles(root, result.validationPaths, "validationPaths")?.filter((validationPath) => !artifactPaths.has(validationPath));
-      break;
-    }
-    case "record_research_outcome": {
-      result.artifactPaths = hostFiles(root, result.artifactPaths, "artifactPaths");
-      const artifactPaths = new Set(result.artifactPaths ?? []);
-      result.validationPaths = hostFiles(root, result.validationPaths, "validationPaths")?.filter((validationPath) => !artifactPaths.has(validationPath));
-      break;
-    }
-    case "upsert_claims":
-      if (Array.isArray(result.claims)) result.claims = result.claims.map((item, index) => ({
-        ...item,
-        artifactRefs: hostFiles(root, item.artifactRefs, `claims[${index}].artifactRefs`),
-        validationRefs: hostFiles(root, item.validationRefs, `claims[${index}].validationRefs`)
-      }));
-      break;
-    case "run_experience_workflow":
-      if (result.result) {
-        result.result.artifactRefs = hostFiles(root, result.result.artifactRefs, "result.artifactRefs");
-        result.result.validationRefs = hostFiles(root, result.result.validationRefs, "result.validationRefs");
-        result.result.failures = result.result.failures?.map((item, index) => ({ ...item, evidenceRefs: typedEvidenceList(root, item.evidenceRefs, `result.failures[${index}].evidenceRefs`) }));
-      }
-      break;
-    case "record_dove_draft":
-    case "record_dove_figure":
-    case "record_dove_rebuttal":
-      result.artifactPath = hostFile(root, result.artifactPath, "artifactPath");
-      result.referencePaths = hostFiles(root, result.referencePaths, "referencePaths");
-      if (Array.isArray(result.findingRefs)) result.findingRefs = result.findingRefs.map((value, index) => findingReference(root, value, `findingRefs[${index}]`));
-      break;
-    case "scope_review_record":
-      result.artifactPaths = hostFiles(root, result.artifactPaths, "artifactPaths");
-      break;
-    case "archive_review_record":
-      if (Array.isArray(result.findings)) result.findings = result.findings.map((item, index) => ({
-        ...item,
-        linkedArtifactPaths: hostFiles(root, item.linkedArtifactPaths, `findings[${index}].linkedArtifactPaths`)
-      }));
-      break;
-    case "reevaluate_research_decision":
-      result.evidenceRefs = typedEvidenceList(root, result.evidenceRefs, "evidenceRefs");
-      if (Array.isArray(result.hypotheses)) result.hypotheses = result.hypotheses.map((item, index) => ({
-        ...item,
-        supportingEvidence: typedEvidenceList(root, item.supportingEvidence, `hypotheses[${index}].supportingEvidence`),
-        counterEvidence: typedEvidenceList(root, item.counterEvidence, `hypotheses[${index}].counterEvidence`)
-      }));
-      break;
-    case "query_dove_mission":
-    case "create_dove_mission":
-    case "create_ambient_dove_mission":
-    case "start_dove_skill_mission":
-      if (Array.isArray(result.artifacts)) result.artifacts = result.artifacts.map((item, index) => ({ ...item, path: hostArtifact(root, item.path, `artifacts[${index}].path`) }));
-      if (result.evidenceRequirements !== undefined) result.evidenceRequirements = missionEvidenceList(root, result.evidenceRequirements, "evidenceRequirements");
-      if (Array.isArray(result.contextArtifactPaths)) result.contextArtifactPaths = hostFiles(root, result.contextArtifactPaths, "contextArtifactPaths");
-      break;
-    default:
-      break;
-  }
+  delete result.language;
+  const file = (value, label) => normalizeHostWorkspaceFilePath(root, value, label);
+  const files = (values, label) => Array.isArray(values) ? values.map((value, index) => file(value, `${label}[${index}]`)) : values;
+  if (name === "manage_dove_sources" && result.capturePath !== undefined) result.capturePath = file(result.capturePath, "capturePath");
+  if (name === "manage_dove_reviews") result.artifactPaths = files(result.artifactPaths, "artifactPaths");
+  if (name === "manage_dove_experiments" && result.artifactRefs !== undefined) result.artifactRefs = files(result.artifactRefs, "artifactRefs");
+  if (name === "manage_dove_claims" && Array.isArray(result.claims)) result.claims = result.claims.map((claim, index) => ({
+    ...claim,
+    artifactRefs: files(claim.artifactRefs, `claims[${index}].artifactRefs`)
+  }));
   return result;
 }
 
 export function dispatchTool(root, name, args = {}, options = {}) {
-  let operation = null;
-  let language = DEFAULT_DOVE_RESPONSE_LANGUAGE;
+  let language;
   try {
-    const inputSchema = TOOL_INPUT_SCHEMAS.get(name);
-    if (!inputSchema) throw new Error(`Unknown tool: ${name}`);
-    operation = operationForTool(name);
-    const schemaArgs = args;
-    assertMcpInputSchema(name, schemaArgs, inputSchema);
-    const operationSchemas = TOOL_OPERATION_SCHEMAS.get(name);
-    if (operationSchemas) {
-      assertMcpInputSchema(name, schemaArgs, { oneOf: operationSchemas });
-    }
-    language = resolveDoveResponseLanguage(root, schemaArgs, options);
-    const targetName = operationTargetTool(operation, schemaArgs);
-    let normalizedArgs = normalizeHostPathInputs(root, targetName, schemaArgs);
-    if (["query_dove_mission", "start_dove_skill_mission"].includes(targetName)) normalizedArgs = missionRelationshipArgs(root, normalizedArgs);
-    if (Object.hasOwn(normalizedArgs, "missionNumber") && !["create_dove_mission", "reevaluate_research_decision"].includes(targetName)) {
-      normalizedArgs.missionId = resolveMissionNumber(root, normalizedArgs.missionNumber, { operation: `${name} public mission selection` }).missionId;
-      delete normalizedArgs.missionNumber;
-    }
-    const result = executeTool(root, name, normalizedArgs, options);
-    return result && typeof result.then === "function"
-      ? result.then((value) => textResult(value, { language })).catch((error) => {
-        const invocation = operation
-          ? classifyInvocationError(error, operation)
-          : createInvocationOutcome({ kind: "failed", category: "not-found", phase: "selection", blocking: true, userAction: "select-target", reason: "not-found" });
-        return textResult(publicErrorResult(name, error, invocation), { isError: true, language });
-      })
-      : textResult(result, { language });
+    language = resolveDoveResponseLanguage(root, args, { env: options.env, configLanguage: options.language });
+    const schema = TOOL_INPUT_SCHEMAS.get(name);
+    if (!schema) throw new Error(`Unknown tool: ${name}`);
+    assertMcpInputSchema(name, args, schema);
+    const data = invokeResearchAdapter(root, name, normalizePaths(root, name, args));
+    return data && typeof data.then === "function"
+      ? data.then((value) => toolResult(name, value, language)).catch((error) => toolFailure(name, error, language))
+      : toolResult(name, data, language);
   } catch (error) {
-    const invocation = operation
-      ? classifyInvocationError(error, operation)
-      : createInvocationOutcome({ kind: "failed", category: "not-found", phase: "selection", blocking: true, userAction: "select-target", reason: "not-found" });
-    return textResult(publicErrorResult(name, error, invocation), { isError: true, language });
+    return toolFailure(name, error, language ?? "zh");
   }
 }

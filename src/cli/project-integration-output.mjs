@@ -53,7 +53,7 @@ function setupLines(command, status) {
   }
   if (command === "init") {
     return [
-      "✓ 12 个 Dove 工作入口已安装",
+      "✓ 9 个 Dove 工作入口已安装",
       "✓ 项目 MCP 服务已注册并仅为 Dove 批准",
       "✓ 自然语言任务入口已启用",
       "✓ 安全的项目集成记录已建立"
@@ -94,11 +94,11 @@ export function renderProjectIntegrationResult(command, result, options = {}) {
     lines.push("如需刷新项目集成，请运行 dove sync。科研记录未被修改。");
   } else {
     lines.push(command === "init"
-      ? "科研主线尚未建立。进入 Claude Code 后显式运行 /dove:workspace。"
+      ? "Research Workspace 尚未建立也不影响普通项目工作。进入 Claude Code 后可直接处理项目，或按需运行 /dove:research。"
       : "科研记录未被修改。重新进入 Claude Code 后可直接使用更新后的 Dove。"
     );
   }
   lines.push("");
-  lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code，然后运行 /dove:workspace。`);
+  lines.push(`${terminalStyle("下一步", "bold", { color })}  从当前项目进入或重新进入 Claude Code，直接继续项目工作；需要研究路由时可运行 /dove:research。`);
   return lines.join("\n");
 }
